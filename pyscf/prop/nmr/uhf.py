@@ -212,7 +212,7 @@ def gen_vind(mf, mo_coeff, mo_occ):
 class NMR(rhf_nmr.NMR):
 
     def shielding(self, mo1=None):
-        if hasattr(self._scf, 'spin_square'):
+        if getattr(self._scf, 'spin_square', None):
             s2 = self._scf.spin_square()[0]
             if s2 > 1e-4:
                 logger.warn(self, '<S^2> = %s. UHF-NMR shielding may have large error.\n'

@@ -165,12 +165,12 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     >>> scf.uhf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
     '''
-    if hasattr(mo_coeff[0], 'orbsym'):
+    if getattr(mo_coeff[0], 'orbsym', None) is not None:
         orbsyma = mo_coeff[0].orbsym
     else:
         orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                       mo_coeff[0], s, False)
-    if hasattr(mo_coeff[1], 'orbsym'):
+    if getattr(mo_coeff[1], 'orbsym', None) is not None:
         orbsymb = mo_coeff[1].orbsym
     else:
         orbsymb = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -202,8 +202,9 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
 
-    if (hasattr(mo_coeff, 'orbsym') or
-        (hasattr(mo_coeff[0], 'orbsym') and hasattr(mo_coeff[1], 'orbsym'))):
+    if (getattr(mo_coeff, 'orbsym', None) is not None or
+        (getattr(mo_coeff[0], 'orbsym', None) is not None and
+         getattr(mo_coeff[1], 'orbsym', None) is not None)):
         orbsyma, orbsymb = get_orbsym(mol, mo_coeff)
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
@@ -244,7 +245,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     return mo_e, mo
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = numpy.asarray(mo_coeff.orbsym)
     else:
         orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),

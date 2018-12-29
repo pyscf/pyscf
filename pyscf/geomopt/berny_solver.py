@@ -47,7 +47,7 @@ def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
         coords = mol.atom_coords()[atmlst] * lib.param.BOHR
 
     # geomlib.Geometry is available in the new version of pyberny solver. (issue #212)
-    if hasattr(geomlib, 'Geometry'):
+    if getattr(geomlib, 'Geometry', None):
         return geomlib.Geometry(species, coords)
     else:
         return geomlib.Molecule(species, coords)
@@ -79,7 +79,7 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
     mol = method.mol.copy()
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif hasattr(method, 'nuc_grad_method'):
+    elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
     else:
         raise NotImplementedError('Nuclear gradients of %s not available' % method)

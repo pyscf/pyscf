@@ -162,7 +162,7 @@ class GMP2(mp2.MP2):
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff, verbose=self.verbose)
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             raise NotImplementedError
         else:
             return _make_eris_outcore(self, mo_coeff, self.verbose)
@@ -178,7 +178,7 @@ class _PhysicistsERIs:
         if mo_coeff is None:
             mo_coeff = mp.mo_coeff
         mo_idx = mp.get_frozen_mask()
-        if hasattr(mo_coeff, 'orbspin'):
+        if getattr(mo_coeff, 'orbspin', None) is not None:
             self.orbspin = mo_coeff.orbspin[mo_idx]
             mo_coeff = lib.tag_array(mo_coeff[:,mo_idx], orbspin=self.orbspin)
             self.mo_coeff = mo_coeff

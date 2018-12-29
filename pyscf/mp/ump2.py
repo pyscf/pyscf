@@ -364,7 +364,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
             eris.ovOV = ao2mo.general(mp._scf._eri, (orboa,orbva,orbob,orbvb))
             eris.OVOV = ao2mo.general(mp._scf._eri, (orbob,orbvb,orbob,orbvb))
 
-    elif hasattr(mp._scf, 'with_df'):
+    elif getattr(mp._scf, 'with_df', None):
         logger.warn(mp, 'UMP2 detected DF being used in the HF object. '
                     'MO integrals are computed based on the DF 3-index tensors.\n'
                     'It\'s recommended to use DF-UMP2 module.')

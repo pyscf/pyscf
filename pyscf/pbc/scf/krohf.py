@@ -124,7 +124,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''
 
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
-    if hasattr(mo_energy_kpts[0], 'mo_ea'):
+    if getattr(mo_energy_kpts[0], 'mo_ea', None) is not None:
         mo_ea_kpts = [x.mo_ea for x in mo_energy_kpts]
         mo_eb_kpts = [x.mo_eb for x in mo_energy_kpts]
     else:
@@ -242,7 +242,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                 e, c = scipy.linalg.eigh(f1)
                 mo1[:,idx] = np.dot(orb, c)
                 mo_e[idx] = e
-        if hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is not None:
             fa, fb = fock.focka[k], fock.fockb[k]
             mo_ea = np.einsum('pi,pi->i', mo1.conj(), fa.dot(mo1)).real
             mo_eb = np.einsum('pi,pi->i', mo1.conj(), fb.dot(mo1)).real
@@ -357,7 +357,7 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
-        if hasattr(dm_kpts, 'mo_coeff'):
+        if getattr(dm_kpts, 'mo_coeff', None) is not None:
             mo_coeff = dm_kpts.mo_coeff
             mo_occ_a = [(x > 0).astype(np.double) for x in dm_kpts.mo_occ]
             mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
@@ -372,7 +372,7 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
-        if hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is not None:
             focka = fock.focka
             fockb = fock.fockb
         elif getattr(fock, 'ndim', None) == 4:
@@ -391,7 +391,7 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
 
     def eig(self, fock, s):
         e, c = khf.KSCF.eig(self, fock, s)
-        if hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is not None:
             for k, mo in enumerate(c):
                 fa, fb = fock.focka[k], fock.fockb[k]
                 mo_ea = np.einsum('pi,pi->i', mo.conj(), fa.dot(mo)).real

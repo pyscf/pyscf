@@ -452,7 +452,7 @@ class KSCF(pbchf.SCF):
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        if not hasattr(self.with_df, 'build'):
+        if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
             self.with_df.dump_flags()
         return self

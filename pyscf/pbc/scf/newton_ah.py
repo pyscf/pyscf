@@ -139,7 +139,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             numpy.hstack([x.ravel() for x in h_diag]))
 
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-    if not hasattr(fock_ao, 'focka'):
+    if getattr(fock_ao, 'focka', None) is None:
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
     fock_ao = fock_ao.focka, fock_ao.fockb
@@ -199,7 +199,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     cell = mf.cell
     kpts = mf.kpts
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
@@ -300,7 +300,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     cell = mf.cell
     kpts = mf.kpts
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 

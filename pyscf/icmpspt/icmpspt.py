@@ -1133,7 +1133,7 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
       print("AAAVsplit only works with CASSCF natural orbitals and NEVPT")
       print("")
       exit(0)
-    if (hasattr(mc,'with_df')):
+    if (getattr(mc, 'with_df', None)):
       df=True
     else:
       df=False

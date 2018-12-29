@@ -81,7 +81,7 @@ def sfx2c1e(mf):
         def get_hcore(self, cell=None, kpts=None, kpt=None):
             if cell is None: cell = self.cell
             if kpts is None:
-                if hasattr(self, 'kpts'):
+                if getattr(self, 'kpts', None) is not None:
                     kpts = self.kpts
                 else:
                     if kpt is None:

@@ -87,7 +87,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         civec = ci[0]
     else:
         civec = ci
-    if hasattr(casscf.fcisolver, 'make_rdm1s'):
+    if getattr(casscf.fcisolver, 'make_rdm1s', None):
         casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(civec, ncas, nelecas)
         casdm1 = casdm1a + casdm1b
         dm1b = numpy.dot(mocore, mocore.T)
@@ -134,7 +134,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         if casscf._scf.mo_coeff is not None:
             addons.map2hf(casscf, casscf._scf.mo_coeff)
 
-        if hasattr(casscf.fcisolver, 'large_ci') and ci is not None:
+        if getattr(casscf.fcisolver, 'large_ci', None) and ci is not None:
             log.info('** Largest CI components **')
             if isinstance(ci, (tuple, list)):
                 for i, civec in enumerate(ci):
@@ -205,7 +205,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
 
     if casdm1 is None:
         casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
-    if eris is not None and hasattr(eris, 'ppaa'):
+    if getattr(eris, 'ppaa', None) is not None:
         vj = numpy.empty((nmo,nmo))
         vk = numpy.empty((nmo,nmo))
         for i in range(nmo):
@@ -264,7 +264,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = numpy.copy(mo_coeff.orbsym)
         if sort:
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
@@ -284,7 +284,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         ecore = mc.energy_nuc()
         ecore+= numpy.einsum('ij,ji', hcore, dm_core)
         h1eff = reduce(numpy.dot, (mocas.T, hcore, mocas))
-        if eris is not None and hasattr(eris, 'ppaa'):
+        if getattr(eris, 'ppaa', None) is not None:
             ecore += eris.vhf_c[:ncore,:ncore].trace()
             h1eff += reduce(numpy.dot, (ucas.T, eris.vhf_c[ncore:nocc,ncore:nocc], ucas))
             aaaa = ao2mo.restore(4, eris.ppaa[ncore:nocc,ncore:nocc,:,:], ncas)
@@ -300,7 +300,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         # See label_symmetry_ function in casci_symm.py which initialize the
         # orbital symmetry information in fcisolver.  This orbital symmetry
         # labels should be reordered to match the sorted active space orbitals.
-        if hasattr(mo_coeff1, 'orbsym') and sort:
+        if sort and getattr(mo_coeff1, 'orbsym', None) is not None:
             mc.fcisolver.orbsym = mo_coeff1.orbsym[ncore:nocc]
 
         max_memory = max(400, mc.max_memory-lib.current_memory()[0])
@@ -421,7 +421,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     core_idx = numpy.where(mask[:ncore])[0]
     vir_idx = numpy.where(mask[nocc:])[0] + nocc
 
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
         orbsym = numpy.zeros(nmo, dtype=int)
@@ -450,7 +450,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1[:,vir_idx] = numpy.dot(mo_coeff1[:,vir_idx], c1)
         mo_energy[vir_idx] = w
 
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 
     if log.verbose >= logger.DEBUG:
@@ -696,7 +696,7 @@ class CASCI(lib.StreamObject):
         log.info('canonicalization = %s', self.canonicalization)
         log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
         log.info('max_memory %d (MB)', self.max_memory)
-        if hasattr(self.fcisolver, 'dump_flags'):
+        if getattr(self.fcisolver, 'dump_flags', None):
             self.fcisolver.dump_flags(log.verbose)
         if self.mo_coeff is None:
             log.error('Orbitals for CASCI are not specified. The relevant SCF '
@@ -803,7 +803,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
                                sort=self.sorting_mo_energy,
                                cas_natorb=self.natorb, verbose=log)
 
-        if hasattr(self.fcisolver, 'converged'):
+        if getattr(self.fcisolver, 'converged', None) is not None:
             self.converged = numpy.all(self.fcisolver.converged)
             if self.converged:
                 log.info('CASCI converged')
@@ -816,7 +816,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
-        if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
+        if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             if isinstance(self.e_cas, (float, numpy.number)):
                 ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
                 log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',

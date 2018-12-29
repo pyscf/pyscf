@@ -2025,7 +2025,7 @@ class Mole(lib.StreamObject):
 
         # avoid to open output file twice
         if (parse_arg and self.output is not None and
-            not (hasattr(self.stdout, 'name') and  # to handle StringIO().name bug
+            not (getattr(self.stdout, 'name', None) and  # to handle StringIO().name bug
                  self.stdout.name == self.output)):
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')

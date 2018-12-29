@@ -395,7 +395,10 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         head, space = space, space+rnow
 
         if dtype is None:
-            dtype = numpy.result_type(axt[0], xt[0], ax[0])
+            try:
+                dtype = numpy.result_type(axt[0], xt[0])
+            except IndexError:
+                dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
         if heff is None:  # Lazy initilize heff to determine the dtype
             heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
@@ -751,7 +754,10 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         head, space = space, space+rnow
 
         if dtype is None:
-            dtype = numpy.result_type(axt[0], xt[0], ax[0])
+            try:
+                dtype = numpy.result_type(axt[0], xt[0])
+            except IndexError:
+                dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
         if heff is None:  # Lazy initilize heff to determine the dtype
             heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:

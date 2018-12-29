@@ -738,7 +738,7 @@ class SelectedCI(direct_spin1.FCISolver):
 # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
 # Save and patch self._strs to make this contract_2e function compatible to
 # FCISolver.contract_2e.
-        if hasattr(civec_strs, '_strs'):
+        if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:
             assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
@@ -897,7 +897,7 @@ def _as_SCIvector(civec, ci_strs):
     civec._strs = ci_strs
     return civec
 def _as_SCIvector_if_not(civec, ci_strs):
-    if not hasattr(civec, '_strs'):
+    if getattr(civec, '_strs', None) is None:
         civec = _as_SCIvector(civec, ci_strs)
     return civec
 

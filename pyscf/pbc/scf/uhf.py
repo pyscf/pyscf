@@ -178,7 +178,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
         if kpt is None: kpt = self.kpt
 
         kpts_band = np.asarray(kpts_band)
-        single_kpt_band = (hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1)
+        single_kpt_band = (getattr(kpts_band, 'ndim', None) == 1)
         kpts_band = kpts_band.reshape(-1,3)
 
         fock = self.get_hcore(cell, kpts_band)

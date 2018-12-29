@@ -27,7 +27,7 @@ from pyscf import scf
 
 
 def TDHF(mf):
-    if hasattr(mf, 'xc'):
+    if getattr(mf, 'xc', None):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)  # To remove newton decoration
@@ -39,13 +39,13 @@ def TDHF(mf):
 def TDA(mf):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
-        if hasattr(mf, 'xc'):
+        if getattr(mf, 'xc', None):
             return uks.TDA(mf)
         else:
             return uhf.TDA(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)
-        if hasattr(mf, 'xc'):
+        if getattr(mf, 'xc', None):
             return rks.TDA(mf)
         else:
             return rhf.TDA(mf)
@@ -53,7 +53,7 @@ def TDA(mf):
 def TDDFT(mf):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
-        if hasattr(mf, 'xc'):
+        if getattr(mf, 'xc', None):
             if mf._numint.libxc.is_hybrid_xc(mf.xc):
                 return uks.TDDFT(mf)
             else:
@@ -62,7 +62,7 @@ def TDDFT(mf):
             return uhf.TDHF(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)
-        if hasattr(mf, 'xc'):
+        if getattr(mf, 'xc', None):
             if mf._numint.libxc.is_hybrid_xc(mf.xc):
                 return rks.TDDFT(mf)
             else:

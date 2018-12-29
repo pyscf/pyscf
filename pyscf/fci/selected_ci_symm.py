@@ -144,7 +144,7 @@ class SelectedCI(selected_ci.SelectedCI):
                     orbsym=None, **kwargs):
         if orbsym is None:
             orbsym = self.orbsym
-        if hasattr(civec_strs, '_strs'):
+        if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:
             assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))

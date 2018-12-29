@@ -1109,7 +1109,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             logger.warn(self, 'CCSD detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
                         'It\'s recommended to use dfccsd.CCSD for the '

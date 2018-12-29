@@ -427,7 +427,7 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
     nocca, noccb, nvira, nvirb = t2ab.shape
 
     if mycc.direct:  # AO direct CCSD
-        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
+        if getattr(eris, 'mo_coeff', None) is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
@@ -464,7 +464,7 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         assert(t2sym is None)
         if with_ovvv:
             raise NotImplementedError
-        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
+        if getattr(eris, 'mo_coeff', None) is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
@@ -667,7 +667,7 @@ class UCCSD(ccsd.CCSD):
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             logger.warn(self, 'UCCSD detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
                         'It\'s recommended to use dfccsd.CCSD for the '

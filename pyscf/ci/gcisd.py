@@ -363,7 +363,7 @@ class GCISD(cisd.CISD):
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return gccsd._make_eris_incore(self, mo_coeff)
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             raise NotImplementedError
         else:
             return gccsd._make_eris_outcore(self, mo_coeff)

@@ -105,7 +105,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
 
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
-    if hasattr(mo[0], 'ndim') and mo[0].ndim == 1:  # RHF
+    if getattr(mo[0], 'ndim', None) == 1:  # RHF
         if numpy.iscomplexobj(mo):
             raise NotImplementedError('TODO: project DHF orbital to UHF orbital')
         mo_coeff = fproj(mo)
@@ -113,7 +113,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         mo_occb = mo_occ - mo_occa
         dm = make_rdm1([mo_coeff,mo_coeff], [mo_occa,mo_occb])
     else: #UHF
-        if hasattr(mo[0][0], 'ndim') and mo[0][0].ndim == 2:  # KUHF
+        if getattr(mo[0][0], 'ndim', None) == 2:  # KUHF
             logger.warn(mol, 'k-point UHF results are found.  Density matrix '
                         'at Gamma point is used for the molecular SCF initial guess')
             mo = mo[0]

@@ -1349,7 +1349,7 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
     '''
     #assert(isinstance(mf, dft.krks.KRKS))
     cell = mf.cell
-    if hasattr(mf, 'kpts'):
+    if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
@@ -1381,7 +1381,7 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     '''
     #assert(isinstance(mf, dft.kuks.KUKS))
     cell = mf.cell
-    if hasattr(mf, 'kpts'):
+    if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)

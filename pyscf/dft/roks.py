@@ -30,7 +30,7 @@ from pyscf.dft import uks
 
 @lib.with_doc(uks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-    if hasattr(dm, 'mo_coeff'):
+    if getattr(dm, 'mo_coeff', None) is not None:
         mo_coeff = dm.mo_coeff
         mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
         mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)

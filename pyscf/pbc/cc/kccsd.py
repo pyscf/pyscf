@@ -393,7 +393,7 @@ class GCCSD(gccsd.GCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, **kwargs):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
-        if hasattr(eris, 'orbspin') and eris.orbspin is not None:
+        if getattr(eris, 'orbspin', None) is not None:
             self.t1 = lib.tag_array(self.t1, orbspin=eris.orbspin)
             self.t2 = lib.tag_array(self.t2, orbspin=eris.orbspin)
         return e_corr, self.t1, self.t2
@@ -428,7 +428,7 @@ class GCCSD(gccsd.GCCSD):
 
     def spatial2spin(self, tx, orbspin=None, kconserv=None):
         if orbspin is None:
-            if hasattr(self.mo_coeff[0], 'orbspin'):
+            if getattr(self.mo_coeff[0], 'orbspin', None) is not None:
                 orbspin = [self.mo_coeff[k].orbspin[idx]
                            for k, idx in enumerate(self.get_frozen_mask())]
             else:
@@ -440,7 +440,7 @@ class GCCSD(gccsd.GCCSD):
 
     def spin2spatial(self, tx, orbspin=None, kconserv=None):
         if orbspin is None:
-            if hasattr(self.mo_coeff[0], 'orbspin'):
+            if getattr(self.mo_coeff[0], 'orbspin', None) is not None:
                 orbspin = [self.mo_coeff[k].orbspin[idx]
                            for k, idx in enumerate(self.get_frozen_mask())]
             else:
@@ -510,7 +510,7 @@ def _make_eris_incore(cc, mo_coeff=None):
 
         mo = numpy.zeros((nao, nmo), dtype=dtype)
         mo[:, kpt_padded_moidx] = mo_coeff[k][:, kpt_moidx]
-        if hasattr(mo_coeff[k], 'orbspin'):
+        if getattr(mo_coeff[k], 'orbspin', None) is not None:
             orbspin_dtype = mo_coeff[k].orbspin[kpt_moidx].dtype
             orbspin = numpy.zeros(nmo, dtype=orbspin_dtype)
             orbspin[kpt_padded_moidx] = mo_coeff[k].orbspin[kpt_moidx]
@@ -560,7 +560,7 @@ def _make_eris_incore(cc, mo_coeff=None):
                         'May cause issues in convergence.', gap)
 
     kconserv = kpts_helper.get_kconserv(cell, kpts)
-    if not hasattr(mo_coeff[0], 'orbspin'):
+    if getattr(mo_coeff[0], 'orbspin', None) is None:
         # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
         mo_a_coeff = [mo[:nao // 2] for mo in eris.mo_coeff]
         mo_b_coeff = [mo[nao // 2:] for mo in eris.mo_coeff]

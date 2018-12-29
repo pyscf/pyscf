@@ -50,7 +50,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                   with_symmetry=True):
     mo_coeff0 = mo_coeff
     mol = mf.mol
-    if hasattr(mf, '_scf') and mf._scf.mol != mol:
+    if getattr(mf, '_scf', None) and mf._scf.mol != mol:
         #TODO: construct vind with dual-basis treatment, (see also JCP, 118, 9497)
         # To project Hessians from another basis if different basis sets are used
         # in newton solver and underlying mean-filed solver.
@@ -116,7 +116,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                    with_symmetry=True):
-    if not hasattr(fock_ao, 'focka'):
+    if getattr(fock_ao, 'focka', None) is None:
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
     fock_ao = fock_ao.focka, fock_ao.fockb
@@ -155,7 +155,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                   with_symmetry=True):
     mol = mf.mol
     mo_coeff0 = mo_coeff
-    if hasattr(mf, '_scf') and mf._scf.mol != mol:
+    if getattr(mf, '_scf', None) and mf._scf.mol != mol:
         #TODO: construct vind with dual-basis treatment, (see also JCP, 118, 9497)
         mo_coeff = (addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[0], mol),
                     addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[1], mol))
@@ -294,7 +294,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint
@@ -403,7 +403,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         from pyscf.dft import rks
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -474,7 +474,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         from pyscf.dft import numint
         raise NotImplementedError
 
@@ -861,7 +861,7 @@ class _CIAH_SOSCF(hf.SCF):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if hasattr(self, '_scf') and self._scf.mol != mol:
+        if getattr(self, '_scf', None) and self._scf.mol != mol:
             self.opt = self.init_direct_scf(mol)
             self._eri = None
         self._scf.build(mol)
@@ -1051,7 +1051,7 @@ def newton(mf):
                 if mo_coeff is None:
                     mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
                                 self.mo_coeff[1][:,self.mo_occ[1]>0])
-                if hasattr(self, '_scf') and self._scf.mol != self.mol:
+                if getattr(self, '_scf', None) and self._scf.mol != self.mol:
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)
 

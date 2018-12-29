@@ -95,7 +95,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
-        if hasattr(dm, 'mo_coeff'):
+        if getattr(dm, 'mo_coeff', None) is not None:
             mo_coeff = dm.mo_coeff
             mo_occ_a = (dm.mo_occ > 0).astype(np.double)
             mo_occ_b = (dm.mo_occ ==2).astype(np.double)

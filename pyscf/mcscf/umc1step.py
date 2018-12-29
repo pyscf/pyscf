@@ -701,7 +701,7 @@ class UCASSCF(ucasci.UCASCI):
         nelecas = self.nelecas
         ncore = self.ncore
         nocc = (ncas + ncore[0], ncas + ncore[1])
-        if hasattr(self.fcisolver, 'approx_kernel'):
+        if getattr(self.fcisolver, 'approx_kernel', None):
             ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]
             return ci1, None
 

@@ -313,7 +313,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
             occs = ([occa[i] for i in where], [occb[i] for i in where])
             return make_rdm1(mos, occs)
 
-    if hasattr(mo[0], 'ndim') and mo[0].ndim == 2:  # KRHF
+    if getattr(mo[0], 'ndim', None) == 2:  # KRHF
         mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
         mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
         dm = makedm((mo, mo), (mo_occa, mo_occb))

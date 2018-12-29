@@ -162,7 +162,7 @@ def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
     if kpt is None: kpt = mf.kpt
 
     kpts_band = np.asarray(kpts_band)
-    single_kpt_band = (hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1)
+    single_kpt_band = (getattr(kpts_band, 'ndim', None) == 1)
     kpts_band = kpts_band.reshape(-1,3)
 
     fock = mf.get_hcore(cell, kpts_band)
@@ -534,7 +534,7 @@ class SCF(mol_hf.SCF):
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        if not hasattr(self.with_df, 'build'):
+        if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
             self.with_df.dump_flags()
         return self
@@ -769,6 +769,6 @@ def _format_jks(vj, dm, kpts_band):
         vj = vj.reshape(dm.shape)
     elif kpts_band.ndim == 1:  # a single k-point on bands
         vj = vj.reshape(dm.shape)
-    elif hasattr(dm, "ndim") and dm.ndim == 2:
+    elif getattr(dm, "ndim", 0) == 2:
         vj = vj[0]
     return vj

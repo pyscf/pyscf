@@ -940,7 +940,7 @@ class UCISD(cisd.CISD):
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return uccsd._make_eris_incore(self, mo_coeff)
 
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             raise NotImplementedError
 
         else:

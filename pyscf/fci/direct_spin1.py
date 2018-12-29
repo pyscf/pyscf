@@ -241,9 +241,9 @@ def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
 
     unknown = {}
     for k in kwargs:
-        setattr(cis, k, kwargs[k])
         if not hasattr(cis, k):
             unknown[k] = kwargs[k]
+        setattr(cis, k, kwargs[k])
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))

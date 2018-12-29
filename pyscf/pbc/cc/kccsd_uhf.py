@@ -540,7 +540,7 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
     t2aa, t2ab, t2bb = t2
     Ht2aa, Ht2ab, Ht2bb = Ht2
 
-    if cc.direct and hasattr(eris, 'Lpv'):
+    if cc.direct and getattr(eris, 'Lpv', None) is not None:
         def get_Wvvvv(ka, kc, kb):
             kd = kconserv[ka,kc,kb]
             Lpv = eris.Lpv

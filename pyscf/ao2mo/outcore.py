@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import time
-import tempfile
 import numpy
 import h5py
 from pyscf import gto

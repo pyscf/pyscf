@@ -223,7 +223,7 @@ def new_logger(rec=None, verbose=None):
     if isinstance(verbose, Logger):
         log = verbose
     elif isinstance(verbose, int):
-        if hasattr(rec, 'stdout'):
+        if getattr(rec, 'stdout', None):
             log = Logger(rec.stdout, verbose)
         else:
             log = Logger(sys.stdout, verbose)

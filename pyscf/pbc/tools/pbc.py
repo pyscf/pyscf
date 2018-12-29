@@ -254,7 +254,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
-    if mf is not None and hasattr(mf, 'kpts'):
+    if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
         kpts = k.reshape(1,3)
@@ -268,7 +268,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
 
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert(cell.dimension == 3)
-        if not hasattr(mf, '_ws_exx'):
+        if not getattr(mf, '_ws_exx', None):
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
         exx_kcell = mf._ws_exx['kcell']
