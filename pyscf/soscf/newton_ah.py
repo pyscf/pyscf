@@ -106,11 +106,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         x2 += reduce(numpy.dot, (orbv.conj().T, v1, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
-        # The displacement x2 corresponds to the response of rotation for bra.
-        # Hessian*x also provides the rotation for ket which equals to
-        # x2.T.conj(). The overall displacement is x2 + x2.T.conj(). This is
-        # the reason of x2.real below
-        return x2.real.ravel() * 2
+        return x2.ravel() * 2
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
@@ -222,11 +218,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         x2a += reduce(numpy.dot, (orbva.conj().T, v1[0], orboa))
         x2b += reduce(numpy.dot, (orbvb.conj().T, v1[1], orbob))
 
-        # The displacement x2 corresponds to the response of rotation for bra.
-        # Hessian*x also provides the rotation for ket which equals to
-        # x2.T.conj(). The overall displacement is x2 + x2.T.conj(). This is
-        # the reason of x2.real below
-        x2 = numpy.hstack((x2a.real.ravel(), x2b.real.ravel()))
+        x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
         return x2
@@ -278,11 +270,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         x2 += reduce(numpy.dot, (orbv.conj().T, v1, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
-        # The displacement x2 corresponds to the response of rotation for bra.
-        # Hessian*x also provides the rotation for ket which equals to
-        # x2.T.conj(). The overall displacement is x2 + x2.T.conj(). This is
-        # the reason of x2.real below
-        return x2.real.ravel()
+        return x2.ravel()
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 

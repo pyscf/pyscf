@@ -135,7 +135,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     def query(target, nelec_atmost, spin, orbsym):
         norb = len(orbsym)
         for excite_level in range(1, nelec_atmost+1):
-            for beta_only in gen_str_iter(range(norb), excite_level):
+            for beta_only in gen_str_iter(list(range(norb)), excite_level):
                 alpha_allow = [i for i in range(norb) if i not in beta_only]
                 alpha_orbsym = orbsym[alpha_allow]
                 alpha_target = target

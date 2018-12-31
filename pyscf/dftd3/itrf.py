@@ -29,6 +29,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf import __config__
 
 try:
     from pyscf.dftd3 import settings

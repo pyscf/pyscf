@@ -892,10 +892,17 @@ def _all_linkstr_index(ci_strs, norb, nelec):
 class _SCIvector(numpy.ndarray):
     def __array_finalize__(self, obj):
         self._strs = getattr(obj, '_strs', None)
+
+    # Whenever the contents of the array was modified (through ufunc), the tag
+    # should be expired. Overwrite the output of ufunc to restore ndarray type.
+    def __array_wrap__(self, out, context=None):
+        return numpy.ndarray.__array_wrap__(self, out, context).view(numpy.ndarray)
+
 def _as_SCIvector(civec, ci_strs):
     civec = civec.view(_SCIvector)
     civec._strs = ci_strs
     return civec
+
 def _as_SCIvector_if_not(civec, ci_strs):
     if getattr(civec, '_strs', None) is None:
         civec = _as_SCIvector(civec, ci_strs)

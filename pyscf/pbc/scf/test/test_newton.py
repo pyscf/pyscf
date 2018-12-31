@@ -169,7 +169,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.newton(mf)
         mf.grids.build()
         g, hop, hdiag = mf.gen_g_hop(mo, mo_occ, mf.get_hcore())
-        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 37.85853688439607, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 37.967972033738519, 7)
 
     def test_uks_gen_g_hop(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
@@ -184,7 +184,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.newton(mf)
         mf.grids.build()
         g, hop, hdiag = mf.gen_g_hop(mo, mo_occ, [mf.get_hcore()]*2)
-        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 27.873396489332002, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 28.01954683540594, 7)
 
 
 if __name__ == "__main__":

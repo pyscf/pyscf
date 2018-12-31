@@ -53,13 +53,20 @@ def rhf_internal(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rhf(mf, mf.mo_coeff, mf.mo_occ)
     def precond(dx, e, x0):
-        hdiagd = hdiag - e
+        hdiagd = hdiag*2 - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return dx/hdiagd
+    # The results of hop(x) corresponds to a displacement that reduces
+    # gradients g.  It is the vir-occ block of the matrix vector product
+    # (Hessian*x). The occ-vir block equals to x2.T.conj(). The overall
+    # Hessian for internal reotation is x2 + x2.T.conj(). This is
+    # the reason we apply (.real * 2) below
+    def hessian_x(x):
+        return hop(x).real * 2
 
     x0 = numpy.zeros_like(g)
     x0[g!=0] = 1. / hdiag[g!=0]
-    e, v = lib.davidson(hop, x0, precond, tol=1e-4, verbose=log)
+    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
     if e < -1e-5:
         log.log('KRHF/KRKS wavefunction has an internal instablity')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
@@ -160,13 +167,15 @@ def uhf_internal(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_uhf(mf, mf.mo_coeff, mf.mo_occ)
     def precond(dx, e, x0):
-        hdiagd = hdiag - e
+        hdiagd = hdiag*2 - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return dx/hdiagd
+    def hessian_x(x): # See comments in function rhf_internal
+        return hop(x).real * 2
 
     x0 = numpy.zeros_like(g)
     x0[g!=0] = 1. / hdiag[g!=0]
-    e, v = lib.davidson(hop, x0, precond, tol=1e-4, verbose=log)
+    e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
     if e < -1e-5:
         log.log('KUHF/KUKS wavefunction has an internal instablity.')
         tot_x_a = sum((occ>0).sum()*(occ==0).sum() for occ in mf.mo_occ[0])

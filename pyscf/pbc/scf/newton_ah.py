@@ -64,12 +64,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             x2[k] = numpy.einsum('ps,sq->pq', fvv[k], x1[k]) * 2
             x2[k]-= numpy.einsum('ps,rp->rs', foo[k], x1[k]) * 2
             x2[k] += reduce(numpy.dot, (orbv[k].conj().T, v1[k], orbo[k])) * 2
-
-        # The displacement x2 corresponds to the response of rotation for bra.
-        # Hessian*x also provides the rotation for ket which equals to
-        # x2.T.conj(). The overall displacement is x2 + x2.T.conj(). This is
-        # the reason of x2.real below
-        return numpy.hstack([x.real.ravel() for x in x2])
+        return numpy.hstack([x.ravel() for x in x2])
 
     return (numpy.hstack([x.ravel() for x in g]), h_op,
             numpy.hstack([x.ravel() for x in h_diag]))
@@ -132,8 +127,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
             x2a[k] += reduce(numpy.dot, (orbva[k].conj().T, v1[0][k], orboa[k]))
             x2b[k] += reduce(numpy.dot, (orbvb[k].conj().T, v1[1][k], orbob[k]))
-
-        return numpy.hstack([x.real.ravel() for x in (x2a+x2b)])
+        return numpy.hstack([x.ravel() for x in (x2a+x2b)])
 
     return (numpy.hstack([x.ravel() for x in g]), h_op,
             numpy.hstack([x.ravel() for x in h_diag]))

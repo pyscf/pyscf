@@ -5,7 +5,7 @@ from pyscf.cc import eom_gccsd
 import unittest
 
 class Test(unittest.TestCase):
-    def test_dmd(self):
+    def test_dmd_high_cost(self):
         cell = gto.Cell()
         cell.atom='''
         C 0.000000000000   0.000000000000   0.000000000000
