@@ -76,7 +76,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
                     and kpts_band is None)
 
-# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+# Use grids.non0tab to detect whether grids are initialized.  For
+# UniformGrids, grids.coords as a property cannot indicate whehter grids are
+# initialized.
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and

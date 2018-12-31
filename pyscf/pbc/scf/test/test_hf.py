@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
     def test_rhf_exx_ewald(self):
         self.assertAlmostEqual(mf.e_tot, -4.3511582284698633, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
-        self.assertAlmostEqual(mf.e_tot, kmf.e_tot, 9)
+        self.assertAlmostEqual(mf.e_tot, kmf.e_tot, 8)
 
         # test bands
         numpy.random.seed(1)
