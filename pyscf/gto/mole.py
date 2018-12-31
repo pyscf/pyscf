@@ -42,7 +42,7 @@ from pyscf import __config__
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
         _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
 
-# For code compatiblity in python-2 and python-3
+# For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
 
