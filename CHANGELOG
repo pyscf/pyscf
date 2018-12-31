@@ -20,6 +20,25 @@ PySCF 1.6 alpha (2018-09-??)
   - Integral transformation performance in GW
 
 
+PySCF 1.5.5 (2018-12-31)
+------------------------
+* Improved
+  - Fix symmetrization for k-point density in pbc.dft.numint.
+  - Molden parser to handel UHF orbitals
+* Bugfix
+  - OpenMP race condition in FCI
+  - Data structure of TDDFT response amplitudes (X, Y vectors)
+  - Get_fermi in KHF and KUHF
+  - Execute call in dmrgci
+  - Directories and paths in dmrgci
+  - Read of 3-pdm and 4-pdm produced by block-1.5
+  - Initialization wrapper in pbc.scf.__init__
+  - Complex density in pbc.get_j function
+  - Initial guess of KROHF method
+  - PBC get_jk interface when calling molecular MCSCF with pbc scf object
+  - keyword argument with_df of pbc.dft density_fit wrapper
+
+
 PySCF 1.5.4 (2018-11-16)
 ------------------------
 * Improved
