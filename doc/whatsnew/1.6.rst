@@ -1,0 +1,6 @@
+***************************
+  What's New in PySCF 1.6
+***************************
+
+This article lists new features in PySCF 1.6.
+
