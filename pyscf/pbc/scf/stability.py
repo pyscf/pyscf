@@ -25,6 +25,8 @@ JCP, 104, 9047
 See also tddft/rhf.py and scf/newton_ah.py
 '''
 
+raise RuntimeError('Stablity analysis in pyscf-1.5 has bugs.')
+
 from functools import reduce
 import numpy
 import scipy.linalg
