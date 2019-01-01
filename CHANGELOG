@@ -57,7 +57,7 @@ PySCF 1.5.5 (2018-12-31)
 ------------------------
 * Improved
   - Fix symmetrization for k-point density in pbc.dft.numint.
-  - Molden parser to handel UHF orbitals
+  - Molden parser to handle UHF orbitals
 * Bugfix
   - Get_fermi in KHF and KUHF
   - Execute call in dmrgci
