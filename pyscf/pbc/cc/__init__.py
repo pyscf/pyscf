@@ -43,7 +43,6 @@ def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 KCCSD = KRCCSD
 
 def KUCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    raise NotImplementedError
     from pyscf.pbc.cc import kccsd_uhf
     mf = scf.addons.convert_to_uhf(mf)
     return kccsd_uhf.UCCSD(mf, frozen, mo_coeff, mo_occ)

@@ -84,7 +84,7 @@ class KnownValues(unittest.TestCase):
 
         grid.radi_method = radi.becke
         grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 45009387.132578261, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 45009387.132578261, 6)
 
     def test_prune(self):
         grid = gen_grid.Grids(h2o)

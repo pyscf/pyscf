@@ -14,7 +14,12 @@
 
 from __future__ import print_function, division
 import numpy as np
-from numpy import sqrt
+
+try:
+    from pyscf.nao.m_numba_utils import ls_contributing_numba
+    use_numba = True
+except:
+    use_numba = False
 
 def ls_contributing(pb, sp12, ra12):
   """
@@ -25,6 +30,10 @@ def ls_contributing(pb, sp12, ra12):
   """
   ra3 = 0.5*(ra12[0,:] + ra12[1,:])
   ia2dist = np.zeros(pb.sv.natoms)
-  for ia,rvec in enumerate(pb.sv.atom2coord-ra3): ia2dist[ia] = sqrt((rvec**2).sum())
-  return np.argsort(ia2dist)[0:pb.ac_npc_max]
 
+  if use_numba:
+      ls_contributing_numba(pb.sv.atom2coord-ra3, ia2dist)
+  else:
+      for ia,rvec in enumerate(pb.sv.atom2coord-ra3): ia2dist[ia] = np.sqrt(np.dot(rvec, rvec))
+  
+  return np.argsort(ia2dist)[0:pb.ac_npc_max]

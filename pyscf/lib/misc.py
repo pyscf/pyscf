@@ -473,7 +473,7 @@ class StreamObject(object):
         method set is the object itself.  This allows a series of
         functions/methods to be executed in pipe.
         '''
-        #if hasattr(self, '_keys'):
+        #if getattr(self, '_keys', None):
         #    for k,v in kwargs.items():
         #        setattr(self, k, v)
         #        if k not in self._keys:
@@ -505,7 +505,7 @@ class StreamObject(object):
         of functions/methods to be executed in pipe.
         '''
         if (self.verbose > 0 and  # logger.QUIET
-            hasattr(self, '_keys')):
+            getattr(self, '_keys', None)):
             check_sanity(self, self._keys, self.stdout)
         return self
 
@@ -524,7 +524,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(obj.__class__.__dict__)
+        class_attr = set(dir(obj.__class__))
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('Overwritten attributes  %s  of %s\n' %
@@ -556,10 +556,45 @@ def with_doc(doc):
 
         fn.__doc__ = doc
     '''
-    def make_fn(fn):
+    def fn_with_doc(fn):
         fn.__doc__ = doc
         return fn
-    return make_fn
+    return fn_with_doc
+
+def alias(fn, alias_name=None):
+    '''
+    The statement "fn1 = alias(fn)" in a class is equivalent to define the
+    following method in the class:
+
+    .. code-block:: python
+        def fn1(self, *args, **kwargs):
+            return self.fn(*args, **kwargs)
+
+    Using alias function instead of fn1 = fn because some methods may be
+    overloaded in the child class. Using "alias" can make sure that the
+    overloaded mehods were called when calling the aliased method.
+    '''
+    def aliased_fn(*args, **kwargs):
+        return fn(*args, **kwargs)
+
+    if alias_name is not None:
+        aliased_fn.__name__ = alias_name
+
+    doc_str = 'An alias to method %s\n' % fn.__name__
+    if sys.version_info >= (3,):
+        from inspect import signature
+        sig = str(signature(fn))
+        if alias_name is None:
+            doc_str += 'Function Signature: %s\n' % sig
+        else:
+            doc_str += 'Function Signature: %s%s\n' % (alias_name, sig)
+    doc_str += '----------------------------------------\n\n'
+
+    if fn.__doc__ is not None:
+        doc_str += fn.__doc__
+
+    aliased_fn.__doc__ = doc_str
+    return aliased_fn
 
 def import_as_method(fn, default_keys=None):
     '''
@@ -859,7 +894,43 @@ class GradScanner:
         conv = getattr(self.base, 'converged', True)
         return conv
 
-class light_speed(object):
+class temporary_env(object):
+    '''Within the context of this macro, the attributes of the object are
+    temporarily updated. When the program goes out of the scope of the
+    context, the original value of each attribute will be restored.
+
+    Examples:
+
+    >>> with temporary_env(lib.param, LIGHT_SPEED=15., BOHR=2.5):
+    ...     print(lib.param.LIGHT_SPEED, lib.param.BOHR)
+    15. 2.5
+    >>> print(lib.param.LIGHT_SPEED, lib.param.BOHR)
+    137.03599967994 0.52917721092
+    '''
+    def __init__(self, obj, **kwargs):
+        self.obj = obj
+
+        # Should I skip the keys which are not presented in obj?
+        #keys = [key for key in kwargs.keys() if hasattr(obj, key)]
+        #self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in keys]
+        #self.env_new = [(key, kwargs[key]) for key in keys]
+
+        self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in kwargs]
+        self.env_new = [(key, kwargs[key]) for key in kwargs]
+
+    def __enter__(self):
+        for k, v in self.env_new:
+            setattr(self.obj, k, v)
+        return self
+
+    def __exit__(self, type, value, traceback):
+        for k, v in self.env_bak:
+            if isinstance(v, str) and v == 'TO_DEL':
+                delattr(self.obj, k)
+            else:
+                setattr(self.obj, k, v)
+
+class light_speed(temporary_env):
     '''Within the context of this macro, the environment varialbe LIGHT_SPEED
     can be customized.
 
@@ -872,13 +943,11 @@ class light_speed(object):
     137.03599967994
     '''
     def __init__(self, c):
-        self.bak = param.LIGHT_SPEED
+        temporary_env.__init__(self, param, LIGHT_SPEED=c)
         self.c = c
     def __enter__(self):
-        param.LIGHT_SPEED = self.c
+        temporary_env.__enter__(self)
         return self.c
-    def __exit__(self, type, value, traceback):
-        param.LIGHT_SPEED = self.bak
 
 
 if __name__ == '__main__':

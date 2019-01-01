@@ -49,7 +49,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
         pyscf/examples/loc_orb/40-hubbard_model_PM_localization.py for the PM
         localization of site-based population for hubbard model.
     '''
-    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
         s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
     else:
         s = mol.intor_symmetric('int1e_ovlp')

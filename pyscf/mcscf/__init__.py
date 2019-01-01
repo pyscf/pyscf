@@ -187,19 +187,17 @@ mc1step_uhf = umc1step  # for backward compatibility
 from pyscf.mcscf.addons import *
 from pyscf.mcscf import chkfile
 
-def CASSCF(mf, ncas, nelecas, ncore=None, frozen=None):
+def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf, gto.Mole):
-        raise RuntimeError('''
-You see this error message because of the API updates in pyscf v0.10.
-In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
-        mc = mcscf.CASSCF(mf, norb, nelec)
-Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
-of API conventions''')
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol)
+    else:
+        mf = mf_or_mol
 
-    mf = scf.addons.convert_to_rhf(mf)
-    if hasattr(mf, 'with_df') and mf.with_df:
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf)
+    if getattr(mf, 'with_df', None):
         return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
 
     if mf.mol.symmetry:
@@ -211,19 +209,18 @@ of API conventions''')
 RCASSCF = CASSCF
 
 
-def CASCI(mf, ncas, nelecas, ncore=None):
+def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
-    if isinstance(mf, gto.Mole):
-        raise RuntimeError('''
-You see this error message because of the API updates in pyscf v0.10.
-In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
-        mc = mcscf.CASCI(mf, norb, nelec)
-Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
-of API conventions''')
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol)
+    else:
+        mf = mf_or_mol
 
-    mf = scf.addons.convert_to_rhf(mf)
-    if hasattr(mf, 'with_df') and mf.with_df:
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
+    if getattr(mf, 'with_df', None):
         return DFCASCI(mf, ncas, nelecas, ncore)
 
     if mf.mol.symmetry:
@@ -235,16 +232,28 @@ of API conventions''')
 RCASCI = CASCI
 
 
-def UCASCI(mf, ncas, nelecas, ncore=None):
+def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
+    from pyscf import gto
     from pyscf import scf
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.UHF(mf_or_mol)
+    else:
+        mf = mf_or_mol
+
     if not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf, remove_df=True)
     mc = ucasci.UCASCI(mf, ncas, nelecas, ncore)
     return mc
 
 
-def UCASSCF(mf, ncas, nelecas, ncore=None, frozen=None):
+def UCASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+    from pyscf import gto
     from pyscf import scf
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.UHF(mf_or_mol)
+    else:
+        mf = mf_or_mol
+
     if not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf, remove_df=True)
     mc = umc1step.UCASSCF(mf, ncas, nelecas, ncore, frozen)
@@ -255,18 +264,35 @@ def newton(mc):
 
 
 from pyscf.mcscf import df
-def DFCASSCF(mf, ncas, nelecas, auxbasis=None, ncore=None, frozen=None):
+def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
+             frozen=None):
+    from pyscf import gto
     from pyscf import scf
-    mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol).density_fit()
+    else:
+        mf = mf_or_mol
+
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+
     if mf.mol.symmetry:
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
     else:
         mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
     return df.density_fit(mc, auxbasis)
 
-def DFCASCI(mf, ncas, nelecas, auxbasis=None, ncore=None):
+def DFCASCI(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None):
+    from pyscf import gto
     from pyscf import scf
-    mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol).density_fit()
+    else:
+        mf = mf_or_mol
+
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+
     if mf.mol.symmetry:
         mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
     else:

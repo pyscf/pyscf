@@ -83,7 +83,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
                            mo_coeff[:,caslst],
                            mo_coeff[:,idx[ncore:]]))
 
-        if hasattr(mo_coeff, 'orbsym'):
+        if getattr(mo_coeff, 'orbsym', None) is not None:
             orbsym = mo_coeff.orbsym
             orbsym = numpy.hstack((orbsym[idx[:ncore]], orbsym[caslst],
                                    orbsym[idx[ncore:]]))
@@ -109,7 +109,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
                              mo_coeff[1][:,caslst[1]],
                              mo_coeff[1][:,idxb[ncore[1]:]]))
 
-        if hasattr(mo_coeff[0], 'orbsym'):
+        if getattr(mo_coeff[0], 'orbsym', None) is not None:
             orbsyma, orbsymb = mo_coeff[0].orbsym, mo_coeff[1].orbsym
             orbsyma = numpy.hstack((orbsyma[idxa[:ncore[0]]], orbsyma[caslst[0]],
                                     orbsyma[idxa[ncore[0]:]]))
@@ -443,7 +443,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     return mo
 
 # on AO representation
-def make_rdm1(casscf, mo_coeff=None, ci=None):
+def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
     '''One-particle densit matrix in AO representation
 
     Args:
@@ -469,13 +469,13 @@ def make_rdm1(casscf, mo_coeff=None, ci=None):
     [ 0.0121563   0.0494735   0.0494735   1.95040395  1.95040395  1.98808879
       2.          2.          2.          2.        ]
     '''
-    return casscf.make_rdm1(mo_coeff, ci)
+    return casscf.make_rdm1(mo_coeff, ci, **kwargs)
 
 # make both alpha and beta density matrices
-def make_rdm1s(casscf, mo_coeff=None, ci=None):
+def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
     '''Alpha and beta one-particle densit matrices in AO representation
     '''
-    return casscf.make_rdm1s(mo_coeff, ci)
+    return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)
@@ -612,7 +612,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
                         '    mc.state_average_()\n' %
                         (casscf.fcisolver, fcibase_class.__base__.__module__,
                          fcibase_class.__base__.__name__))
-    has_spin_square = hasattr(casscf.fcisolver, 'spin_square')
+    has_spin_square = getattr(casscf.fcisolver, 'spin_square', None)
     e_states = [None]
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
@@ -729,7 +729,7 @@ def state_specific_(casscf, state=1):
                 c = [c]
             self._civec = c
             if casscf.verbose >= logger.DEBUG:
-                if hasattr(fcibase_class, 'spin_square'):
+                if getattr(fcibase_class, 'spin_square', None):
                     ss = fcibase_class.spin_square(self, c[state], norb, nelec)
                     logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
                                  state, e[state], ss[0])
@@ -767,7 +767,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
 #        fcibase_class = fcibase_class.__base__
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
-    has_spin_square = all(hasattr(solver, 'spin_square')
+    has_spin_square = all(getattr(solver, 'spin_square', None)
                           for solver in fcisolvers)
     e_states = [None]
 

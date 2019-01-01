@@ -21,6 +21,7 @@ module m_rsphar
 #include "m_define_macro.F90"
   
   integer(c_int64_t) :: lmx = -1
+
   real(c_double), allocatable  :: lm2aa(:), lm2bb(:), l2tlp1(:), l2tlm1(:), l21mhl(:)
 
   contains

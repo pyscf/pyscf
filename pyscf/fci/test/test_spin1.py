@@ -20,6 +20,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
+from pyscf.fci import fci_slow
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -58,6 +59,10 @@ numpy.random.seed(15)
 ci2 = numpy.random.random((na,nb))
 ci3 = numpy.random.random((na,nb))
 
+def tearDownModule():
+    global mol, m, h1e, g2e, ci0, ci1, ci2, ci3
+    del mol, m, h1e, g2e, ci0, ci1, ci2, ci3
+
 class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1ref = fci.direct_spin0.contract_1e(h1e, ci0, norb, mol.nelectron)
@@ -77,7 +82,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -8.9347029192929, 8)
         e = fci.direct_spin1.energy(h1e, g2e, c, norb, nelec)
         self.assertAlmostEqual(e, -8.9347029192929, 8)
-        e, c = fci.direct_spin1.kernel(h1e, g2e, norb, neleci)
+
+        sol = fci.direct_spin1.FCI(mol)
+        sol.get_init_guess = None
+        sol.davidson_only = True
+        e, c = sol.kernel(h1e, g2e, norb, neleci)
         self.assertAlmostEqual(e, -8.7498253981782, 8)
 
     def test_hdiag(self):
@@ -85,6 +94,10 @@ class KnownValues(unittest.TestCase):
         hdiag = fci.direct_spin1.make_hdiag(h1e, g2e, norb, nelec)
         self.assertTrue(numpy.allclose(hdiag, hdiagref))
         self.assertAlmostEqual(numpy.linalg.norm(hdiag), 133.95118651178, 9)
+
+        ref = fci_slow.make_hdiag(h1e, g2e, norb, nelec)
+        self.assertTrue(numpy.allclose(hdiag, ref))
+
         hdiag = fci.direct_spin1.make_hdiag(h1e, g2e, norb, neleci)
         self.assertAlmostEqual(numpy.linalg.norm(hdiag), 113.85080162587, 9)
 
@@ -135,6 +148,52 @@ class KnownValues(unittest.TestCase):
         dm1, dm2 = fci.direct_spin1.trans_rdm12(ci3, ci2, norb, neleci)
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 193.703051323676, 10)
         self.assertAlmostEqual(numpy.linalg.norm(dm2), 512.111790469461, 10)
+
+    def test_gen_linkstr(self):
+        sol = fci.direct_spin1.FCI(mol)
+        link1a, link1b = sol.gen_linkstr(7, 7, tril=True)
+        link1a[:,:,1] = 0
+        link1b[:,:,1] = 0
+        link2a, link2b = sol.gen_linkstr(7, (4,3), tril=False)
+        self.assertAlmostEqual(abs(link1a - fci.cistring.reform_linkstr_index(link2a)).max(), 0, 12)
+        self.assertAlmostEqual(abs(link1b - fci.cistring.reform_linkstr_index(link2b)).max(), 0, 12)
+
+    def test_large_ci(self):
+        norb = 6
+        nelec = (3,3)
+        numpy.random.seed(10)
+        h1e = numpy.random.random((norb,norb))
+        h1e = h1e + h1e.T
+        g2e = numpy.random.random((norb,norb,norb,norb))
+        eri = .5* ao2mo.restore(1, ao2mo.restore(8, g2e, norb), norb)
+
+        sol = fci.direct_spin1.FCI(mol)
+        e, c1 = sol.kernel(h1e, eri, norb, nelec)
+        self.assertAlmostEqual(e, -4.742664117996546, 9)
+        val = sol.large_ci(c1, norb, nelec)
+        self.assertAlmostEqual(val[0][0], c1[0,0], 9)
+
+    def test_pspace(self):
+        norb = 6
+        nelec = (3,3)
+        numpy.random.seed(10)
+        h1e = numpy.random.random((norb,norb))
+        g2e = numpy.random.random((norb,norb,norb,norb))
+        g2e = g2e + g2e.transpose(1,0,3,2)
+        h = fci.direct_spin1.pspace(h1e, g2e, norb, nelec)[1]
+        # Non-hermitian Hamiltonian
+        self.assertTrue(abs(h-h.T).max() > .1)
+
+        norb = 6
+        nelec = (3,3)
+        numpy.random.seed(10)
+        h1e = numpy.random.random((norb,norb))
+        h1e = h1e + h1e.T
+        g2e = numpy.random.random((norb,norb,norb,norb))
+        g2e = ao2mo.restore(1, ao2mo.restore(8, g2e, norb), norb)
+        # hermitian Hamiltonian
+        h = fci.direct_spin1.pspace(h1e, g2e, norb, nelec)[1]
+        self.assertAlmostEqual(abs(h-h.T).max(), 0, 12)
 
 
 if __name__ == "__main__":

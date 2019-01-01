@@ -261,7 +261,7 @@ def _response_dm1(mycc, Xvo, eris=None):
             return numpy.hstack((va.ravel(), vb.ravel()))
     else:
         moidx = mycc.get_frozen_mask()
-        mo_energy = (eris.focka.diagonal(), eris.fockb.diagonal())
+        mo_energy = eris.mo_energy
         mo_occ = (mycc.mo_occ[0][moidx[0]], mycc.mo_occ[1][moidx[1]])
         ovvo = numpy.empty((nocca,nvira,nvira,nocca))
         ovVO = numpy.empty((nocca,nvira,nvirb,noccb))

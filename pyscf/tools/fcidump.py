@@ -15,6 +15,7 @@
 
 from functools import reduce
 import numpy
+from pyscf import ao2mo
 from pyscf import __config__
 
 DEFAULT_FLOAT_FORMAT = getattr(__config__, 'fcidump_float_format', ' %.16g')
@@ -34,7 +35,6 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=None):
 
 
 def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
-    from pyscf import ao2mo
     npair = nmo*(nmo+1)//2
     output_format = float_format + ' %4d %4d %4d %4d\n'
     if eri.size == nmo**4:
@@ -77,12 +77,12 @@ def write_hcore(fout, h, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
                 fout.write(output_format % (h[i,j], i+1, j+1))
 
 
-def from_chkfile(output, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+def from_chkfile(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     '''Read SCF results from PySCF chkfile and transform 1-electron,
     2-electron integrals using the SCF orbitals.  The transformed integrals is
     written to FCIDUMP'''
-    from pyscf import scf, ao2mo, symm
-    with open(output, 'w') as fout:
+    from pyscf import scf, symm
+    with open(filename, 'w') as fout:
         mol, scf_rec = scf.chkfile.load_scf(chkfile)
         mo_coeff = numpy.array(scf_rec['mo_coeff'])
         nmo = mo_coeff.shape[1]
@@ -103,15 +103,45 @@ def from_chkfile(output, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
         output_format = ' ' + float_format + '  0  0  0  0\n'
         fout.write(output_format % mol.energy_nuc())
 
-def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
+def from_integrals(filename, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=None,
                    tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     '''Convert the given 1-electron and 2-electron integrals to FCIDUMP format'''
-    with open(output, 'w') as fout:
+    with open(filename, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
         write_eri(fout, h2e, nmo, tol=tol, float_format=float_format)
         write_hcore(fout, h1e, nmo, tol=tol, float_format=float_format)
         output_format = float_format + '  0  0  0  0\n'
         fout.write(output_format % nuc)
+
+def from_mo(mol, filename, mo_coeff, orbsym=None,
+            tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+    '''Use the given MOs to transfrom the 1-electron and 2-electron integrals
+    then dump them to FCIDUMP.
+    '''
+    if orbsym is None:
+        orbsym = getattr(mo_coeff, 'orbsym', None)
+    t = mol.intor_symmetric('int1e_kin')
+    v = mol.intor_symmetric('int1e_nuc')
+    h1e = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
+    eri = ao2mo.full(mol, mo_coeff, verbose=0)
+    nuc = mol.energy_nuc()
+    from_integrals(filename, h1e, eri, h1e.shape[0], mol.nelec, nuc, 0, orbsym,
+                   tol, float_format)
+
+def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+    '''Use the given SCF object to transfrom the 1-electron and 2-electron
+    integrals then dump them to FCIDUMP.
+    '''
+    mo_coeff = mf.mo_coeff
+    h1e = reduce(numpy.dot, (mo_coeff.T, mf.get_hcore(), mo_coeff))
+    if mf._eri is None:
+        eri = ao2mo.full(mol, mo_coeff)
+    else:
+        eri = ao2mo.full(mf._eri, mo_coeff)
+    orbsym = getattr(mo_coeff, 'orbsym', None)
+    nuc = mf.energy_nuc()
+    from_integrals(filename, h1e, eri, h1e.shape[0], mf.mol.nelec, nuc, 0, orbsym,
+                   tol, float_format)
 
 def read(filename):
     '''Parse FCIDUMP.  Return a dictionary to hold the integrals and

@@ -44,7 +44,7 @@ CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 canonical_occ = canonical_occ_ = addons.canonical_occ_
 
 
-def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     '''Alpha and beta spin one particle density matrices for all k-points.
 
     Returns:
@@ -129,9 +129,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
-    nkpts = len(mo_energy_kpts[0])
-
-    nocc_a = mf.nelec[0] * nkpts
+    nocc_a, nocc_b = mf.nelec
     mo_energy = np.sort(np.hstack(mo_energy_kpts[0]))
     fermi_a = mo_energy[nocc_a-1]
     mo_occ_kpts = [[], []]
@@ -142,8 +140,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     else:
         logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
 
-    if mf.nelec[1] > 0:
-        nocc_b = mf.nelec[1] * nkpts
+    if nocc_b > 0:
         mo_energy = np.sort(np.hstack(mo_energy_kpts[1]))
         fermi_b = mo_energy[nocc_b-1]
         for mo_e in mo_energy_kpts[1]:
@@ -316,7 +313,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
             occs = ([occa[i] for i in where], [occb[i] for i in where])
             return make_rdm1(mos, occs)
 
-    if hasattr(mo[0], 'ndim') and mo[0].ndim == 2:  # KRHF
+    if getattr(mo[0], 'ndim', None) == 2:  # KRHF
         mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
         mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
         dm = makedm((mo, mo), (mo_occa, mo_occb))
@@ -329,6 +326,24 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     return dm
 
 
+def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpts=np.zeros((1,3))):
+    ''' Dipole moment in the unit cell.
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm_kpts (two lists of ndarrays) : KUHF density matrices of k-points
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    dm_kpts = dm_kpts[0] + dm_kpts[1]
+    return khf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
+
+get_rho = khf.get_rho
+
+
 class KUHF(pbcuhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
     '''
@@ -339,8 +354,26 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
-        self.nelec = cell.nelec
-        self._keys = self._keys.union(['nelec'])
+        self.nelec = None
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            cell = self.cell
+            nkpts = len(self.kpts)
+            ne = cell.tot_electrons(nkpts)
+            nalpha = (ne + cell.spin) // 2
+            nbeta = nalpha - cell.spin
+            if nalpha + nbeta != ne:
+                raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                                   'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                                   (ne, cell.spin))
+            return nalpha, nbeta
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
 
     def dump_flags(self):
         khf.KSCF.dump_flags(self)
@@ -383,16 +416,19 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
             assert dm_kpts.shape[0]==2
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell)).real
-            nelec = np.asarray(cell.nelec).reshape(2,1)
-            if np.any(abs(ne - nelec) > 1e-7):
+            ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
+            # FIXME: consider the fractional num_electron or not? This maybe
+            # relates to the charged system.
+            nkpts = len(self.kpts)
+            nelec = np.asarray(self.nelec)
+            if np.any(abs(ne - nelec) > 1e-7*nkpts):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne.mean())
-                dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
+                            'systems.\n  DM is normalized to the number '
+                            'of electrons', ne.sum()/nkpts)
+                dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
     get_hcore = khf.KSCF.get_hcore
@@ -404,6 +440,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     get_fermi = get_fermi
     get_occ = get_occ
     energy_elec = energy_elec
+
+    get_rho = khf.KSCF.get_rho
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
@@ -441,10 +479,10 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         e_b, c_b = khf.KSCF.eig(self, h_kpts[1], s_kpts)
         return (e_a,e_b), (c_a,c_b)
 
-    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
+    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
         if mo_coeff_kpts is None: mo_coeff_kpts = self.mo_coeff
         if mo_occ_kpts is None: mo_occ_kpts = self.mo_occ
-        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs)
 
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
         '''Get energy bands at the given (arbitrary) 'band' k-points.
@@ -479,6 +517,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
+    @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
@@ -487,10 +526,15 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
     @lib.with_doc(mol_uhf.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):

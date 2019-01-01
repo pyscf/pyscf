@@ -27,6 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
+from pyscf import gto
 from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
@@ -112,8 +113,13 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
 class UCASCI(casci.CASCI):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
-    def __init__(self, mf, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         #assert('UHF' == mf.__class__.__name__)
+        if isinstance(mf_or_mol, gto.Mole):
+            mf = scf.UHF(mf_or_mol)
+        else:
+            mf = mf_or_mol
+
         mol = mf.mol
         self.mol = mol
         self._scf = mf
@@ -245,7 +251,7 @@ class UCASCI(casci.CASCI):
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
-        if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
+        if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             ncore = self.ncore
             ncas = self.ncas
             mocas = (self.mo_coeff[0][:,ncore[0]:ncore[0]+ncas],
@@ -351,7 +357,7 @@ class UCASCI(casci.CASCI):
             for i,j in idx:
                 log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
-            if hasattr(self.fcisolver, 'large_ci') and ci is not None:
+            if getattr(self.fcisolver, 'large_ci', None) and ci is not None:
                 log.info('\n** Largest CI components **')
                 if isinstance(ci, (tuple, list)):
                     for i, state in enumerate(ci):
@@ -379,7 +385,7 @@ class UCASCI(casci.CASCI):
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                   ncore=None):
+                   ncore=None, **kwargs):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
         if ncas is None: ncas = self.ncas
@@ -400,7 +406,7 @@ class UCASCI(casci.CASCI):
         return dm1a, dm1b
 
     def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                  ncore=None):
+                  ncore=None, **kwargs):
         dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
         return dm1a+dm1b
 
@@ -410,8 +416,6 @@ del(WITH_META_LOWDIN, LARGE_CI_TOL)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"

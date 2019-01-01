@@ -112,9 +112,12 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nov = nocc * nvir
-    foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
-    fvv = eris.fock[nocc:,nocc:]
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:] + mycc.level_shift
+    v1 = imds.v1 - numpy.diag(mo_e_v)
+    v2 = imds.v2 - numpy.diag(mo_e_o)
+
     l1new = numpy.zeros_like(l1)
     l2new = numpy.zeros_like(l2)
 
@@ -137,20 +140,20 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     tmp = tmp - tmp.transpose(1,0,2,3)
     l2new += tmp - tmp.transpose(0,1,3,2)
     tmp = einsum('ka,ijkb->ijab', l1, eris.ooov)
-    tmp+= einsum('ijca,cb->ijab', l2, imds.v1)
+    tmp+= einsum('ijca,cb->ijab', l2, v1)
     tmp1vv = mba + einsum('ka,kb->ba', l1, t1)
     tmp+= einsum('ca,ijcb->ijab', tmp1vv, oovv)
     l2new -= tmp - tmp.transpose(0,1,3,2)
     tmp = einsum('ic,jcba->jiba', l1, eris.ovvv)
-    tmp+= einsum('kiab,jk->ijab', l2, imds.v2)
+    tmp+= einsum('kiab,jk->ijab', l2, v2)
     tmp1oo = mij + einsum('ic,kc->ik', l1, t1)
     tmp-= einsum('ik,kjab->ijab', tmp1oo, oovv)
     l2new += tmp - tmp.transpose(1,0,2,3)
 
     l1new += fov
     l1new += einsum('jb,ibaj->ia', l1, eris.ovvo)
-    l1new += einsum('ib,ba->ia', l1, imds.v1)
-    l1new -= einsum('ja,ij->ia', l1, imds.v2)
+    l1new += einsum('ib,ba->ia', l1, v1)
+    l1new -= einsum('ja,ij->ia', l1, v2)
     l1new -= einsum('kjca,icjk->ia', l2, imds.wovoo)
     l1new -= einsum('ikbc,bcak->ia', l2, imds.wvvvo)
     l1new += einsum('ijab,jb->ia', m3, t1)
@@ -165,12 +168,9 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     l1new -= numpy.einsum('ik,ka->ia', mij, tmp)
     l1new -= numpy.einsum('ca,ic->ia', mba, tmp)
 
-    mo_e = eris.fock.diagonal().real
-    eia = lib.direct_sum('i-j->ij', mo_e[:nocc], mo_e[nocc:])
+    eia = lib.direct_sum('i-j->ij', mo_e_o, mo_e_v)
     l1new /= eia
-    l1new += l1
     l2new /= lib.direct_sum('ia+jb->ijab', eia, eia)
-    l2new += l2
 
     time0 = log.timer_debug1('update l1 l2', *time0)
     return l1new, l2new

@@ -93,7 +93,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         def get_hcore(self, mol=None):
             if mol is None: mol = self.mol
-            if hasattr(scf_method, 'get_hcore'):
+            if getattr(scf_method, 'get_hcore', None):
                 h1e = method_class.get_hcore(self, mol)
             else:  # DO NOT modify post-HF objects to avoid the MM charges applied twice
                 raise RuntimeError('mm_charge function cannot be applied on post-HF methods')
@@ -110,7 +110,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
                     intor = 'int3c2e_sph'
                 nao = mol.nao
                 max_memory = self.max_memory - lib.current_memory()[0]
-                blksize = int(max(max_memory*1e6/8/nao**2, 400))
+                blksize = int(min(max_memory*1e6/8/nao**2, 200))
                 v = 0
                 for i0, i1 in lib.prange(0, charges.size, blksize):
                     fakemol = gto.fakemol_for_charges(coords[i0:i1])
@@ -212,7 +212,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
                     intor = 'int3c2e_ip1_sph'
                 nao = mol.nao
                 max_memory = self.max_memory - lib.current_memory()[0]
-                blksize = int(max(max_memory*1e6/8/nao**2, 400))
+                blksize = int(min(max_memory*1e6/8/nao**2, 200))
                 v = 0
                 for i0, i1 in lib.prange(0, charges.size, blksize):
                     fakemol = gto.fakemol_for_charges(coords[i0:i1])

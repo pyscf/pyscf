@@ -60,7 +60,6 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
     mf_class = mf.__class__
     is_uhf = isinstance(mf, uhf.UHF)
     is_khf = isinstance(mf, khf.KSCF)
-    cell_nelec = mf.cell.nelectron
 
     def fermi_smearing_occ(m, mo_energy_kpts, sigma):
         occ = numpy.zeros_like(mo_energy_kpts)
@@ -92,12 +91,13 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
             nkpts = len(mf.kpts)
         else:
             nkpts = 1
+        nelectron = mf.cell.tot_electrons(nkpts)
         if is_uhf:
-            nocc = cell_nelec * nkpts
+            nocc = nelectron
             mo_es = numpy.append(numpy.hstack(mo_energy_kpts[0]),
                                  numpy.hstack(mo_energy_kpts[1]))
         else:
-            nocc = cell_nelec * nkpts // 2
+            nocc = nelectron // 2
             mo_es = numpy.hstack(mo_energy_kpts)
 
         if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
@@ -112,7 +112,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
             mo_occ_kpts = f_occ(m, mo_es, sigma)
             if not is_uhf:
                 mo_occ_kpts *= 2
-            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
+            return (mo_occ_kpts.sum() - nelectron)**2
         res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
         mu = res.x
         mo_occs = f = f_occ(mu, mo_es, sigma)
@@ -144,7 +144,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
                 mo_occ_kpts = mo_occs
 
         logger.debug(mf, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
-                     fermi, mo_occs.sum()/nkpts, cell_nelec)
+                     fermi, mo_occs.sum(), nelectron)
         logger.info(mf, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
                     mf.sigma, mu, mf.entropy)
 
@@ -179,7 +179,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
     def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
         if (mf.sigma and mf.smearing_method and
-            mf.entropy is not None and mf.verbose >= logger.INFO):
+            mf.entropy is not None):
             mf.e_free = e_tot - mf.sigma * mf.entropy
             mf.e_zero = e_tot - mf.sigma * mf.entropy * .5
             logger.info(mf, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
@@ -200,7 +200,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
     return mf
 
 
-def canonical_occ_(mf):
+def canonical_occ_(mf, nelec=None):
     '''Label the occupancies for each orbital for sampled k-points.
     This is for KUHF objects.
     Each k-point has a fixed number of up and down electrons in this,
@@ -213,10 +213,10 @@ def canonical_occ_(mf):
     def get_occ(mo_energy_kpts=None, mo_coeff=None):
         if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
-        if getattr(mf, 'nelec', None) is None:
-            nelec = mf.cell.nelec
+        if nelec is None:
+            cell_nelec = mf.cell.nelec
         else:
-            nelec = mf.nelec
+            cell_nelec = nelec
 
         homo=[-1e8,-1e8]
         lumo=[1e8,1e8]
@@ -225,7 +225,7 @@ def canonical_occ_(mf):
             for k, mo_energy in enumerate(mo_energy_kpts[s]):
                 e_idx = numpy.argsort(mo_energy)
                 e_sort = mo_energy[e_idx]
-                n = nelec[s]
+                n = cell_nelec[s]
                 mo_occ = numpy.zeros_like(mo_energy)
                 mo_occ[e_idx[:n]] = 1
                 homo[s] = max(homo[s], e_sort[n-1])
@@ -302,7 +302,7 @@ def convert_to_rhf(mf, out=None):
             assert(not isinstance(out, scf.khf.KSCF))
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
-        if hasattr(mf, '_scf'):
+        if getattr(mf, '_scf', None):
             return mol_addons._update_mf_without_soscf(mf, copy.copy(mf._scf), False)
         else:
             return copy.copy(mf)

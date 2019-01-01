@@ -84,7 +84,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     if not mol.symmetry:
         return ghf.canonicalize(mf, mo_coeff, mo_occ, fock)
 
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         return hf_symm.canonicalize(mf, mo_coeff, mo_occ, fock)
     else:
         raise NotImplementedError
@@ -273,7 +273,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     if mo_coeff is None:
         orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
                                for i, ir in enumerate(mol.irrep_id)])
-    elif hasattr(mo_coeff, 'orbsym'):
+    elif getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
         nao = mo_coeff.shape[0] // 2

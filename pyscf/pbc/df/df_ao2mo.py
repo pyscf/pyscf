@@ -24,7 +24,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
 from pyscf import __config__
 
 
@@ -43,14 +44,14 @@ def get_eri(mydf, kpts=None,
 
     kpti, kptj, kptk, kptl = kptijkl
     nao_pair = nao * (nao+1) // 2
-    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*8/1e6)
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*16/1e6)
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
     if gamma_point(kptijkl):
         eriR = numpy.zeros((nao_pair,nao_pair))
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, True):
-            lib.ddot(LpqR.T, LpqR, 1, eriR, 1)
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, True):
+            lib.ddot(LpqR.T, LpqR, sign, eriR, 1)
             LpqR = LpqI = None
         if not compact:
             eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
@@ -59,8 +60,8 @@ def get_eri(mydf, kpts=None,
     elif is_zero(kpti-kptk) and is_zero(kptj-kptl):
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
-            zdotNN(LpqR.T, LpqI.T, LpqR, LpqI, 1, eriR, eriI, 1)
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
+            zdotNN(LpqR.T, LpqI.T, LpqR, LpqI, sign, eriR, eriI, 1)
             LpqR = LpqI = None
         return eriR + eriI*1j
 
@@ -74,8 +75,8 @@ def get_eri(mydf, kpts=None,
     elif is_zero(kpti-kptl) and is_zero(kptj-kptk):
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
-            zdotNC(LpqR.T, LpqI.T, LpqR, LpqI, 1, eriR, eriI, 1)
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
+            zdotNC(LpqR.T, LpqI.T, LpqR, LpqI, sign, eriR, eriI, 1)
             LpqR = LpqI = None
 # transpose(0,1,3,2) because
 # j == k && i == l  =>
@@ -94,10 +95,11 @@ def get_eri(mydf, kpts=None,
     else:
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for (LpqR, LpqI), (LrsR, LrsI) in \
-                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
-                         mydf.sr_loop(kptijkl[2:], max_memory, False)):
-            zdotNN(LpqR.T, LpqI.T, LrsR, LrsI, 1, eriR, eriI, 1)
+        blksize = int(max_memory*.4e6/16/nao**2)
+        for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
+                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),
+                         mydf.sr_loop(kptijkl[2:], max_memory, False, blksize)):
+            zdotNN(LpqR.T, LpqI.T, LrsR, LrsI, sign, eriR, eriI, 1)
             LpqR = LpqI = LrsR = LrsI = None
         return eriR + eriI*1j
 
@@ -119,7 +121,7 @@ def general(mydf, mo_coeffs, kpts=None,
         return numpy.zeros([mo.shape[1] for mo in mo_coeffs])
 
     all_real = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
-    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
@@ -130,10 +132,10 @@ def general(mydf, mo_coeffs, kpts=None,
         sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
                iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
         ijR = klR = None
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, True):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, True):
             ijR, klR = _dtrans(LpqR, ijR, ijmosym, moij, ijslice,
                                LpqR, klR, klmosym, mokl, klslice, sym)
-            lib.ddot(ijR.T, klR, 1, eri_mo, 1)
+            lib.ddot(ijR.T, klR, sign, eri_mo, 1)
             LpqR = LpqI = None
         return eri_mo
 
@@ -146,11 +148,11 @@ def general(mydf, mo_coeffs, kpts=None,
                iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
 
         zij = zkl = None
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
             buf = LpqR+LpqI*1j
             zij, zkl = _ztrans(buf, zij, moij, ijslice,
                                buf, zkl, mokl, klslice, sym)
-            lib.dot(zij.T, zkl, 1, eri_mo, 1)
+            lib.dot(zij.T, zkl, sign, eri_mo, 1)
             LpqR = LpqI = buf = None
         return eri_mo
 
@@ -167,11 +169,11 @@ def general(mydf, mo_coeffs, kpts=None,
                iden_coeffs(mo_coeffs[1], mo_coeffs[2]))
 
         zij = zlk = None
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
             buf = LpqR+LpqI*1j
             zij, zlk = _ztrans(buf, zij, moij, ijslice,
                                buf, zlk, molk, lkslice, sym)
-            lib.dot(zij.T, zlk.conj(), 1, eri_mo, 1)
+            lib.dot(zij.T, zlk.conj(), sign, eri_mo, 1)
             LpqR = LpqI = buf = None
         nmok = mo_coeffs[2].shape[1]
         nmol = mo_coeffs[3].shape[1]
@@ -189,17 +191,88 @@ def general(mydf, mo_coeffs, kpts=None,
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
+        nao = mo_coeffs[0].shape[0]
         eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
 
+        blksize = int(min(max_memory*.3e6/16/nij_pair,
+                          max_memory*.3e6/16/nkl_pair,
+                          max_memory*.3e6/16/nao**2))
         zij = zkl = None
-        for (LpqR, LpqI), (LrsR, LrsI) in \
-                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
-                         mydf.sr_loop(kptijkl[2:], max_memory, False)):
+        for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
+                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),
+                         mydf.sr_loop(kptijkl[2:], max_memory, False, blksize)):
             zij, zkl = _ztrans(LpqR+LpqI*1j, zij, moij, ijslice,
                                LrsR+LrsI*1j, zkl, mokl, klslice, False)
-            lib.dot(zij.T, zkl, 1, eri_mo, 1)
+            lib.dot(zij.T, zkl, sign, eri_mo, 1)
             LpqR = LpqI = LrsR = LrsI = None
         return eri_mo
+
+def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
+    cell = mydf.cell
+    if kpts is None:
+        kpts = mydf.kpts
+    nkpts = len(kpts)
+
+    if isinstance(mo_coeff_kpts, numpy.ndarray) and mo_coeff_kpts.ndim == 3:
+        mo_coeff_kpts = [mo_coeff_kpts] * 4
+    else:
+        mo_coeff_kpts = list(mo_coeff_kpts)
+
+    # Shape of the orbitals can be different on different k-points. The
+    # orbital coefficients must be formatted (padded by zeros) so that the
+    # shape of the orbital coefficients are the same on all k-points. This can
+    # be achieved by calling pbc.mp.kmp2.padded_mo_coeff function
+    nmoi, nmoj, nmok, nmol = [x.shape[2] for x in mo_coeff_kpts]
+    eri_shape = (nkpts, nkpts, nkpts, nmoi, nmoj, nmok, nmol)
+    if gamma_point(kpts):
+        dtype = numpy.result_type(*mo_coeff_kpts)
+    else:
+        dtype = numpy.complex128
+
+    if out is None:
+        out = numpy.empty(eri_shape, dtype=dtype)
+    else:
+        assert(out.shape == eri_shape)
+
+    kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
+    kptis_lst = kptij_lst[:,0]
+    kptjs_lst = kptij_lst[:,1]
+    kpt_ji = kptjs_lst - kptis_lst
+    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
+    ngrids = numpy.prod(mydf.mesh)
+
+    nao = cell.nao_nr()
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*16/1e6) * .5
+
+    tao = []
+    ao_loc = None
+    kconserv = kpts_helper.get_kconserv(cell, kpts)
+    for uniq_id, kpt in enumerate(uniq_kpts):
+        q = uniq_kpts[uniq_id]
+        adapted_ji_idx = numpy.where(uniq_inverse == uniq_id)[0]
+
+        for ji, ji_idx in enumerate(adapted_ji_idx):
+            ki = ji_idx // nkpts
+            kj = ji_idx % nkpts
+
+            moij, ijslice = _conc_mos(mo_coeff_kpts[0][ki], mo_coeff_kpts[1][kj])[2:]
+            zij = []
+            for LpqR, LpqI, sign in mydf.sr_loop(kpts[[ki,kj]], max_memory, False, mydf.blockdim):
+                zij.append(_ao2mo.r_e2(LpqR+LpqI*1j, moij, ijslice, tao, ao_loc))
+
+            for kk in range(nkpts):
+                kl = kconserv[ki, kj, kk]
+                mokl, klslice = _conc_mos(mo_coeff_kpts[2][kk], mo_coeff_kpts[3][kl])[2:]
+                eri_mo = numpy.zeros((nmoi*nmoj,nmok*nmol), dtype=numpy.complex128)
+                for i, (LrsR, LrsI, sign) in \
+                        enumerate(mydf.sr_loop(kpts[[kk,kl]], max_memory, False, mydf.blockdim)):
+                    zkl = _ao2mo.r_e2(LrsR+LrsI*1j, mokl, klslice, tao, ao_loc)
+                    lib.dot(zij[i].T, zkl, sign*factor, eri_mo, 1)
+
+                if dtype == numpy.double:
+                    eri_mo = eri_mo.real
+                out[ki,kj,kk] = eri_mo.reshape(eri_shape[3:])
+    return out
 
 
 def _mo_as_complex(mo_coeffs):
@@ -234,13 +307,13 @@ def _ztrans(Lpq, zij, moij, ijslice, Lrs, zkl, mokl, klslice, sym):
 class PBC2DIntegralsWarning(RuntimeWarning):
     pass
 def warn_pbc2d_eri(mydf):
-    if mydf.cell.dimension in (1, 2):
+    cell = mydf.cell
+    if cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum':
         with warnings.catch_warnings():
             warnings.simplefilter('once', PBC2DIntegralsWarning)
-            warnings.warn('\n2-electron integrals for 1D and 2D PBC systems '
-                          'were designed for SCF methods only.\n'
-                          'The post-HF treatment for low-dimension system is '
-                          'problematic in pyscf-1.5.* or any older version.\n')
+            warnings.warn('\nERIs of PBC-2D systems with infinity vacuum are '
+                          'singular.  cell.low_dim_ft_type = None  should be '
+                          'set.\n')
 
 
 if __name__ == '__main__':

@@ -68,7 +68,7 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     log = logger.new_logger(mol, verbose)
     assert(exponent in (2, 4))
 
-    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
         if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
             ovlpS = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:
@@ -196,7 +196,7 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
     >>> pm = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0])
     >>> loc_orb = pm.kernel()
     '''
-    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
         if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
             s = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:

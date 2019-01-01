@@ -16,7 +16,11 @@
 from pyscf.prop.ssc import rhf
 from pyscf.prop.ssc import uhf
 from pyscf.prop.ssc import dhf
+from pyscf.prop.ssc import rks
+from pyscf.prop.ssc import uks
 
-from pyscf.prop.ssc.rhf import SSC as RHF
-from pyscf.prop.ssc.uhf import SSC as UHF
-from pyscf.prop.ssc.dhf import SSC as DHF
+RHF = rhf.SSC
+UHF = uhf.SSC
+DHF = dhf.SSC
+RKS = rks.SSC
+UKS = uks.SSC

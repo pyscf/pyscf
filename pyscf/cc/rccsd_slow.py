@@ -297,7 +297,7 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return w[idx].real, v[:,idx].real, idx
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             eip, evecs = eig(matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots, verbose=self.verbose)
@@ -321,7 +321,7 @@ class RCCSD(ccsd.CCSD):
 
     def ipccsd_matvec(self, vector):
         # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
@@ -367,7 +367,7 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def lipccsd_matvec(self, vector):
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
@@ -413,7 +413,7 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def ipccsd_diag(self):
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
@@ -582,7 +582,7 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return w[idx].real, v[:,idx].real, idx
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             eea, evecs = eig(matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots, verbose=self.verbose)
@@ -607,7 +607,7 @@ class RCCSD(ccsd.CCSD):
 
     def eaccsd_matvec(self,vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
@@ -660,7 +660,7 @@ class RCCSD(ccsd.CCSD):
         # Small changes were made so that the same type L2 basis was used for both the
         # left EA and left IP equations.  You will note more similarity for these
         # equations to the left IP equations than for the left EA equations by Nooijen.
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
@@ -709,7 +709,7 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def eaccsd_diag(self):
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
@@ -893,7 +893,7 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return w[idx].real, v[:,idx].real, idx
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots, verbose=self.verbose)

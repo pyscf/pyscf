@@ -30,7 +30,7 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     eris_ovoo = numpy.asarray(eris.ovoo)
     eris_ovov = numpy.asarray(eris.ovov)
 
-    mo_e = eris.fock.diagonal()
+    mo_e = eris.mo_energy
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 
@@ -74,7 +74,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     eris_ovoo = numpy.asarray(eris.ovoo)
     eris_ovov = numpy.asarray(eris.ovov)
 
-    mo_e = eris.fock.diagonal()
+    mo_e = eris.mo_energy
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 
@@ -107,9 +107,9 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
 def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
     return _gamma2_intermediates(mycc, t1, t2, l1, l2, eris, compress_vvvv)
 
-def make_rdm1(mycc, t1, t2, l1, l2, eris=None):
+def make_rdm1(mycc, t1, t2, l1, l2, eris=None, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
-    return ccsd_rdm._make_rdm1(mycc, d1, True)
+    return ccsd_rdm._make_rdm1(mycc, d1, True, ao_repr=ao_repr)
 
 # rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2, eris=None):

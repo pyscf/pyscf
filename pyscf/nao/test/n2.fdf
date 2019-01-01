@@ -1,0 +1,27 @@
+SystemName          Nitrogen dimer 
+SystemLabel         n2
+
+%block ChemicalSpeciesLabel
+ 1  7  N.gga
+%endblock ChemicalSpeciesLabel
+
+AtomicCoordinatesFormat  Ang
+AtomCoorFormatOut Ang
+
+NumberOfAtoms       2
+NumberOfSpecies     1
+
+%block AtomicCoordinatesAndAtomicSpecies
+    0.55843945    0.63860400    0.00000000   1       1  N.gga
+   -0.55843944    0.63860400    0.00000000   1       2  N.gga
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+### Molecular dynamics 
+ElectronicTemperature      300 K
+MD.TypeOfRun               CG
+MD.NumCGsteps              0
+MaxSCFIterations           100
+
+COOP.Write     .true.
+WriteDenchar   .true.
+xml.write      .true.

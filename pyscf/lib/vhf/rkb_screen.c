@@ -249,7 +249,7 @@ static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
                        double direct_scf_cutoff, int nset, int *ao_loc,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nao = ao_loc[nbas];
+        const size_t nao = ao_loc[nbas];
         double dmax, dmaxi, tmp;
         int i, j, ish, jsh;
         int iset;

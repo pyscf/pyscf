@@ -31,7 +31,7 @@ from pyscf.pbc.dft.kuks import energy_elec
 @lib.with_doc(kuks.get_veff.__doc__)
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
-    if hasattr(dm, 'mo_coeff'):
+    if getattr(dm, 'mo_coeff', None) is not None:
         mo_coeff = dm.mo_coeff
         mo_occ_a = [(x > 0).astype(np.double) for x in dm.mo_occ]
         mo_occ_b = [(x ==2).astype(np.double) for x in dm.mo_occ]
@@ -54,6 +54,8 @@ class KROKS(krohf.KROHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
+    get_rho = kuks.get_rho
+
     define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(krohf.KROHF.density_fit)

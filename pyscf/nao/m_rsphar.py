@@ -45,7 +45,7 @@ def rsphar(r,lmax,res):
   dd=np.sqrt(xxpyy + r[2]**2)
 
   if dd < 1e-10:
-    res.fill(0.0);
+    res[:]  =0.0            # compatible with numba in contrary to fill method
     res[0]=onedivsqrt4pi
     return 0
 

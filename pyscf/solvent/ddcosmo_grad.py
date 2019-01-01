@@ -50,28 +50,29 @@ from pyscf.grad import rks as rks_grad
 # extended and used as the general interface to initialize solvent gradients.
 def ddcosmo_grad(grad_method, pcmobj=None):
     grad_method_class = grad_method.__class__
-    class WithSolventGrad(grad_method.__class__, _SolventGradients):
+    class WithSolventGrad(grad_method.__class__):
         def __init__(self, pcmobj):
             self.__dict__.update(grad_method.__dict__)
-            self._solvent = pcmobj
+            self.with_solvent = pcmobj
             self.de_solvent = None
             self.de_solute = None
             self._keys = self._keys.union(['de_solvent', 'de_solute'])
 
         def kernel(self, dm=None, atmlst=None):
             if dm is None:
-                dm = grad_method.base.make_rdm1()
+                dm = grad_method.base.make_rdm1(ao_repr=True)
+
             # de_solvent needs to be called first because _finalize method
             # is called in the grad_method.kernel function.  de_solvent is
             # required by the _finalize method.
-            self.de_solvent = kernel(self._solvent, dm)
+            self.de_solvent = kernel(self.with_solvent, dm)
             self.de_solute = grad_method_class.kernel(self, atmlst=atmlst)
             self.de = self.de_solute + self.de_solvent
 
             if self.verbose >= logger.NOTE:
                 logger.note(self, '--------------- %s (%s) gradients ---------------',
                             grad_method.base.__class__.__name__,
-                            self._solvent.__class__.__name__)
+                            self.with_solvent.__class__.__name__)
                 rhf_grad._write(self, self.mol, self.de, self.atmlst)
                 logger.note(self, '----------------------------------------------')
             return self.de
@@ -85,9 +86,6 @@ def ddcosmo_grad(grad_method, pcmobj=None):
         pcmobj = ddcosmo.DDCOSMO(mf.mol)
     return WithSolventGrad(pcmobj)
 
-class _SolventGradients:
-    pass
-
 
 def kernel(pcmobj, dm, verbose=None):
     mol = pcmobj.mol
@@ -95,6 +93,10 @@ def kernel(pcmobj, dm, verbose=None):
     lmax = pcmobj.lmax
     if pcmobj.grids.coords is None:
         pcmobj.grids.build(with_non0tab=True)
+
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF density matrix
+        dm = dm[0] + dm[1]
 
     r_vdw = ddcosmo.get_atomic_radii(pcmobj)
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)
@@ -362,17 +364,17 @@ if __name__ == '__main__':
     mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
     mf.kernel()
     de = mf.nuc_grad_method().kernel()
-    de_cosmo = kernel(mf._solvent, mf.make_rdm1())
+    de_cosmo = kernel(mf.with_solvent, mf.make_rdm1())
     dm1 = mf.make_rdm1()
 
     mol = gto.M(atom='H 0 0 -0.001; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
     mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
     e1 = mf.kernel()
-    e1_cosmo = mf._solvent.energy(dm1)
+    e1_cosmo = mf.with_solvent.energy(dm1)
 
     mol = gto.M(atom='H 0 0 0.001; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
     mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
     e2 = mf.kernel()
-    e2_cosmo = mf._solvent.energy(dm1)
+    e2_cosmo = mf.with_solvent.energy(dm1)
     print(abs((e2-e1)/0.002 - de[0,2]).max())
     print(abs((e2_cosmo-e1_cosmo)/0.002 - de_cosmo[0,2]).max())

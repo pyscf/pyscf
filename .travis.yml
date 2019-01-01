@@ -57,6 +57,7 @@ script:
   - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
     nosetests -v
     -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
+    -e cornell_shci
     -e test_bz
     -e h2o_vdz
     -e test_mc2step_4o4e
@@ -66,5 +67,9 @@ script:
     -e test_j_kpts
     -e test_k_kpts
     -e high_cost
+    -e skip
     -e call_in_background
     -e libxc_cam_beta_bug
+    -I test_kuccsd_supercell_vs_kpts\.py
+    -I test_kccsd_ghf\.py
+    -I test_h_.*\.py

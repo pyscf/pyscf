@@ -29,6 +29,11 @@ class KnownValues(unittest.TestCase):
         for i, x in enumerate(cistring.gen_strings4orblist(range(5), 2)):
             self.assertEqual(bin(x), ref[i])
 
+        strs = cistring.gen_strings4orblist(range(8), 4)
+        occlst = cistring._gen_occslst(range(8), 4)
+        self.assertAlmostEqual(abs(occlst - cistring._strs2occslst(strs, 8)).sum(), 0, 12)
+        self.assertAlmostEqual(abs(strs - cistring._occslst2strs(occlst)).sum(), 0, 12)
+
     def test_linkstr_index(self):
         idx1 = cistring.gen_linkstr_index_o0(range(4), 2)
         idx2 = cistring.gen_linkstr_index(range(4), 2)
@@ -47,15 +52,42 @@ class KnownValues(unittest.TestCase):
         idx3[:,:,1] = 0
         self.assertTrue(numpy.all(idx2 == idx3))
 
+        tab1 = cistring.gen_cre_str_index_o0(range(8), 4)
+        tab2 = cistring.gen_cre_str_index_o1(range(8), 4)
+        self.assertAlmostEqual(abs(tab1 - tab2).max(), 0, 12)
+        tab1 = cistring.gen_des_str_index_o0(range(8), 4)
+        tab2 = cistring.gen_des_str_index_o1(range(8), 4)
+        self.assertAlmostEqual(abs(tab1 - tab2).max(), 0, 12)
+
+        tab1 = cistring.gen_linkstr_index_o0(range(8), 4)
+        tab2 = cistring.gen_linkstr_index(range(8), 4)
+        self.assertAlmostEqual(abs(tab1 - tab2).sum(), 0, 12)
+        tab3 = cistring.gen_linkstr_index_o1(range(8), 4)
+        self.assertAlmostEqual(abs(tab1 - tab3).sum(), 0, 12)
+
     def test_addr2str(self):
         self.assertEqual(bin(cistring.addr2str(6, 3, 7)), '0b11001')
         self.assertEqual(bin(cistring.addr2str(6, 3, 8)), '0b11010')
         self.assertEqual(bin(cistring.addr2str(7, 4, 9)), '0b110011')
 
+        self.assertEqual(cistring.addr2str_o0(6, 3, 7), cistring.addr2str(6, 3, 7))
+        self.assertEqual(cistring.addr2str_o0(6, 3, 8), cistring.addr2str(6, 3, 8))
+        self.assertEqual(cistring.addr2str_o0(7, 4, 9), cistring.addr2str(7, 4, 9))
+
+        self.assertEqual(bin(cistring.addr2str_o1(6, 3, 7)), '0b11001')
+        self.assertEqual(bin(cistring.addr2str_o1(6, 3, 8)), '0b11010')
+        self.assertEqual(bin(cistring.addr2str_o1(7, 4, 9)), '0b110011')
+
     def test_str2addr(self):
         self.assertEqual(cistring.str2addr(6, 3, int('0b11001' ,2)), 7)
         self.assertEqual(cistring.str2addr(6, 3, int('0b11010' ,2)), 8)
         self.assertEqual(cistring.str2addr(7, 4, int('0b110011',2)), 9)
+        self.assertEqual(cistring.str2addr(6, 3, cistring.addr2str(6, 3, 7)), 7)
+        self.assertEqual(cistring.str2addr(6, 3, cistring.addr2str(6, 3, 8)), 8)
+        self.assertEqual(cistring.str2addr(7, 4, cistring.addr2str(7, 4, 9)), 9)
+
+        self.assertTrue(all(numpy.arange(20) ==
+                            cistring.strs2addr(6, 3, cistring.addrs2str(6, 3, range(20)))))
 
     def test_gen_cre_str_index(self):
         idx = cistring.gen_cre_str_index(range(4), 2)
@@ -103,6 +135,15 @@ class KnownValues(unittest.TestCase):
         addrs = cistring.sub_addrs(6, 3, (0,2,3,5), 1)
         self.assertEqual([bin(x) for x in cistring.addrs2str(6, 3, addrs)],
                          ['0b10011', '0b10110', '0b11010', '0b110010'])
+
+    def test_parity(self):
+        strs = cistring.gen_strings4orblist(range(5), 3)
+        links = cistring.gen_linkstr_index(range(5), 3)
+        parity = []
+        for addr0, link in enumerate(links):
+            parity.append([cistring.parity(strs[addr0], strs[addr1])
+                           for addr1 in link[:,2]])
+        self.assertEqual(parity, links[:,:,3].tolist())
 
 def t1strs(norb, nelec):
     nocc = nelec

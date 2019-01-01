@@ -115,7 +115,7 @@ class CheMPS2(object):
         if isinstance(nelec, (int, numpy.integer)):
             spin2 = 0
         else:
-            spin2 = (nelec[0]-nelec[1]) * 2
+            spin2 = (nelec[0]-nelec[1])
             nelec = sum(nelec)
 
         Prob = PyCheMPS2.PyProblem(Ham, spin2, nelec, self.wfn_irrep)

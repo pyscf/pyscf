@@ -16,3 +16,5 @@
 from pyscf.prop.gtensor import uhf
 from pyscf.prop.gtensor import uks
 
+UHF = uhf.GTensor
+UKS = uks.GTensor

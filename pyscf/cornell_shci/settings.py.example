@@ -1,0 +1,6 @@
+import os
+
+SHCIEXE = '/path/to/shci'
+SHCIRUNTIMEDIR = '/path/to/scratch'
+MPIPREFIX = '' #'mpirun -np 2'  # change to srun for SLURM job system
+

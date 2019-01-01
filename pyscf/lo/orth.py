@@ -270,7 +270,7 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=None, scf_method=None,
             mf = mf_or_mol
 
     if s is None:
-        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
             s = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:
             s = mol.intor_symmetric('int1e_ovlp')

@@ -29,7 +29,7 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 class RCCSD(ccsd.CCSD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        if hasattr(mf, 'with_df') and mf.with_df:
+        if getattr(mf, 'with_df', None):
             self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)

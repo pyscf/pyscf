@@ -35,10 +35,25 @@ from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
 
-def ddpcm_for_scf(mf, pcmobj=None):
-    if pcmobj is None:
-        pcmobj = DDPCM(mf.mol)
-    return ddcosmo.ddcosmo_for_scf(mf, pcmobj)
+def ddpcm_for_scf(mf, solvent_obj=None, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(mf.mol)
+    return ddcosmo.ddcosmo_for_scf(mf, solvent_obj, dm)
+
+def ddpcm_for_casscf(mc, solvent_obj, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(mc.mol)
+    return ddcosmo.ddcosmo_for_casscf(mc, solvent_obj, dm)
+
+def ddpcm_for_casci(mc, solvent_obj, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(mc.mol)
+    return ddcosmo.ddcosmo_for_casci(mc, solvent_obj, dm)
+
+def ddpcm_for_post_scf(method, solvent_obj, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(method.mol)
+    return ddcosmo.ddcosmo_for_post_scf(method, solvent_obj, dm)
 
 def gen_ddpcm_solver(pcmobj, verbose=None):
     mol = pcmobj.mol
@@ -145,9 +160,22 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
 class DDPCM(ddcosmo.DDCOSMO):
     def __init__(self, mol):
         ddcosmo.DDCOSMO.__init__(self, mol)
+
+    def dump_flags(self):
+        logger.info(self, '******** %s (In testing) ********', self.__class__)
         logger.warn(self, 'ddPCM is an experimental feature. It is '
                     'still in testing.\nFeatures and APIs may be changed '
                     'in the future.')
+        logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
+                    self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
+        logger.info(self, 'lmax = %s'         , self.lmax)
+        logger.info(self, 'eta = %s'          , self.eta)
+        logger.info(self, 'eps = %s'          , self.eps)
+        logger.debug2(self, 'radii_table %s', self.radii_table)
+        if self.atom_radii:
+            logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
+        self.grids.dump_flags()
+        return self
 
     gen_solver = as_solver = gen_ddpcm_solver
 

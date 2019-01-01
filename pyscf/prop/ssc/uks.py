@@ -18,6 +18,60 @@
 
 '''
 Non-relativistic UKS spin-spin coupling (SSC) constants
+(In testing)
 '''
 
-raise NotImplementedError
+from pyscf.lib import logger
+from pyscf.prop.ssc import uhf as uhf_ssc
+
+
+class SpinSpinCoupling(uhf_ssc.SpinSpinCoupling):
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        log.info('******** %s for %s (In testing) ********',
+                 self.__class__, self._scf.__class__)
+        logger.info(self, 'nuc_pair %s', self.nuc_pair)
+        logger.info(self, 'with Fermi-contact  %s', self.with_fc)
+        logger.info(self, 'with Fermi-contact + spin-dipole  %s', self.with_fcsd)
+        if self.cphf:
+            log.info('Solving MO10 eq with CPHF.')
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        if not self._scf.converged:
+            log.warn('Ground state SCF is not converged')
+        return self
+
+    def kernel(self, mo1=None):
+        assert(uhf_ssc.ZZ_ONLY)
+        return uhf_ssc.SpinSpinCoupling.kernel(self, mo1)
+
+SSC = SpinSpinCoupling
+
+if __name__ == '__main__':
+    from pyscf import lib, gto, dft
+
+    mol = gto.M(atom='''
+                O 0 0      0
+                H 0 -0.757 0.587
+                H 0  0.757 0.587''',
+                basis='6-31g')
+
+    mf1 = dft.UKS(mol).set(xc='b3lyp').run()
+    ssc = SSC(mf1)
+    ssc.with_fc = True
+    ssc.with_fcsd = True
+    jj = ssc.kernel()
+
+    from pyscf.prop.ssc import rks
+    mol = gto.M(atom='''
+                O 0 0      0
+                H 0 -0.757 0.587
+                H 0  0.757 0.587''',
+                basis='6-31g')
+
+    mf = dft.RKS(mol).set(xc='b3lyp').run()
+    ssc = rks.SSC(mf)
+    ssc.with_fc = True
+    ssc.with_fcsd = True
+    jj = ssc.kernel()

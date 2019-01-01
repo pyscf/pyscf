@@ -327,7 +327,7 @@ def _get_r2(s0_roots, sa0, s1i, sa1i, s1j, sa1j, s2, sa2, r0_roots):
     R2 += lib.einsum('ip,pj,j->ij' , s1i_invsqrt, R1j_mid, w_sqrt)
     R2 += lib.einsum('ip,pq,qj->ij', s1i_invsqrt, R0_mid , s1j_sqrt)
     R2 += lib.einsum('ip,pj,j->ij' , s1j_invsqrt, R1i_mid, w_sqrt)
-    R2 += lib.einsum('i,ij,j->ij'  , w_invsqrt  , R2_mid , w_sqrt)
+    R2 += numpy.einsum('i,ij,j->ij', w_invsqrt  , R2_mid , w_sqrt)
     R2 += lib.einsum('i,iq,qj->ij' , w_invsqrt  , R1i_mid, s1j_sqrt)
     R2 += lib.einsum('ip,pq,qj->ij', s1j_invsqrt, R0_mid , s1i_sqrt)
     R2 += lib.einsum('i,iq,qj->ij' , w_invsqrt  , R1j_mid, s1i_sqrt)

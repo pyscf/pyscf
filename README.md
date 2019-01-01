@@ -1,14 +1,15 @@
 <div align="left">
-  <img src="https://github.com/sunqm/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
+  <img src="https://github.com/pyscf/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
 </div>
 
 Python-based Simulations of Chemistry Framework
 ===============================================
-[![Build Status](https://travis-ci.org/sunqm/pyscf.svg?branch=master)](https://travis-ci.org/sunqm/pyscf)
+[![Build Status](https://travis-ci.org/pyscf/pyscf.svg?branch=master)](https://travis-ci.org/pyscf/pyscf)
 
 2018-12-31
 
-* [Stable release 1.5.5](https://github.com/sunqm/pyscf/releases/tag/v1.5.5)
+* [Stable release 1.6.0](https://github.com/pyscf/pyscf/releases/tag/v1.6.0)
+* [1.7 alpha](https://github.com/pyscf/pyscf/tree/dev)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
@@ -66,8 +67,8 @@ Installation
   After installing the NECI, create a file future/fciqmc/settings.py
   to store the path where the NECI was installed.
 
-* Using optimized integral library on X86 platform.  Qcint
-  (https://github.com/sunqm/qcint.git) is a branch of libcint library.
+* Using optimized integral library on X86 platform.  [Qcint](https://github.com/sunqm/qcint.git)
+  is a branch of libcint library.
   It is heavily optimized against X86_64 platforms.  To replace the
   default libcint library with qcint library, edit the URL of the
   integral library in lib/CMakeLists.txt file
@@ -88,7 +89,7 @@ Installation
 
 Tutorials
 ---------
-* An Ipython notebook of user-guide can be found in https://github.com/nmardirossian/PySCF_Tutorial.
+* A user-guide written in Ipython notebook can be found in https://github.com/nmardirossian/PySCF_Tutorial.
   This repository documents the basic structure of PySCF input script and the
   use of regular methods which were routinely executed in most quantum chemistry
   packages.  It also provides an implementation to drive PySCF program in a
@@ -100,6 +101,10 @@ Tutorials
 
 Known problems
 --------------
+
+* mkl-2018.0.0-intel_3 from intelpython gives segfault update to mkl-2018.0.1-intel_4 or superior relaease
+
+        conda update mkl
 
 * Error message "Library not loaded: libcint.3.0.dylib" On OS X.
 

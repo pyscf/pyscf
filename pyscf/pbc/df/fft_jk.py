@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf.pbc import tools
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
-from pyscf.pbc.df.df_jk import _ewald_exxdiv_3d
+from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
@@ -50,7 +50,6 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     '''
     cell = mydf.cell
     mesh = mydf.mesh
-    low_dim_ft_type = mydf.low_dim_ft_type
 
     ni = mydf._numint
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm_kpts, hermi)
@@ -58,7 +57,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh)
     ngrids = len(coulG)
 
     if hermi == 1 or gamma_point(kpts):
@@ -135,11 +134,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     '''
     cell = mydf.cell
     mesh = mydf.mesh
-    low_dim_ft_type = mydf.low_dim_ft_type
     coords = cell.gen_uniform_grids(mesh)
     ngrids = coords.shape[0]
 
-    if hasattr(dm_kpts, 'mo_coeff'):
+    if getattr(dm_kpts, 'mo_coeff', None) is not None:
         mo_coeff = dm_kpts.mo_coeff
         mo_occ   = dm_kpts.mo_occ
     else:
@@ -202,11 +200,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             # that arise from the FFT.
             mydf.exxdiv = exxdiv
             if exxdiv == 'ewald' or exxdiv is None:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh,
-                                        low_dim_ft_type=low_dim_ft_type)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh,
-                                        low_dim_ft_type=low_dim_ft_type)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -231,12 +227,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         t1 = lib.logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
     # Function _ewald_exxdiv_for_G0 to add back in the G=0 component to vk_kpts
-    # Note in the _ewald_exxdiv_G0 implementation, the G=0 treatments are
+    # Note in the _ewald_exxdiv_for_G0 implementation, the G=0 treatments are
     # different for 1D/2D and 3D systems.  The special treatments for 1D and 2D
     # can only be used with AFTDF/GDF/MDF method.  In the FFTDF method, 1D, 2D
     # and 3D should use the ewald probe charge correction.
     if exxdiv == 'ewald':
-        _ewald_exxdiv_3d(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
+        _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 

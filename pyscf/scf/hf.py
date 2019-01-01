@@ -264,10 +264,10 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm).real
-    e_coul = numpy.einsum('ij,ji', vhf, dm).real * .5
-    logger.debug(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
+    e1 = numpy.einsum('ij,ji', h1e, dm)
+    e_coul = numpy.einsum('ij,ji', vhf, dm) * .5
+    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
+    return (e1+e_coul).real, e_coul
 
 
 def energy_tot(mf, dm=None, h1e=None, vhf=None):
@@ -289,8 +289,17 @@ def get_hcore(mol):
     array([[-0.93767904, -0.59316327],
            [-0.59316327, -0.93767904]])
     '''
-    h = mol.intor_symmetric('int1e_kin') + mol.intor_symmetric('int1e_nuc')
-    if mol.has_ecp():
+    h = mol.intor_symmetric('int1e_kin')
+
+    if mol._pseudo:
+        # Although mol._pseudo for GTH PP is only available in Cell, GTH PP
+        # may exist if mol is converted from cell object.
+        from pyscf.gto import pp_int
+        h += pp_int.get_gth_pp(mol)
+    else:
+        h+= mol.intor_symmetric('int1e_nuc')
+
+    if len(mol._ecpbas) > 0:
         h += mol.intor_symmetric('ECPscalar')
     return h
 
@@ -532,7 +541,7 @@ def damping(s, d, f, factor):
 
 
 # full density matrix for RHF
-def make_rdm1(mo_coeff, mo_occ):
+def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle density matrix in AO representation
 
     Args:
@@ -543,9 +552,9 @@ def make_rdm1(mo_coeff, mo_occ):
     '''
     mocc = mo_coeff[:,mo_occ>0]
 # DO NOT make tag_array for dm1 here because this DM array may be modified and
-# passed to functions like get_jk, get_vxc.  These function may take the tag
-# (mo_coeff, mo_occ) to compute the potential if tags was found in the DM
-# matrix and modifications to DM matrix may be ignored.
+# passed to functions like get_jk, get_vxc.  These functions may take the tags
+# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
+# array and modifications to DM array may be ignored.
     return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.T.conj())
 
 
@@ -746,7 +755,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
             Level shift (in AU) for virtual space.  Default is 0.
     '''
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(dm=dm)
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     f = h1e + vhf
     if cycle < 0 and diis is None:  # Not inside the SCF iteration
         return f
@@ -990,10 +999,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         A list: the dipole moment on x, y and z component
     '''
 
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
 
     if 'unit_symbol' in kwargs:  # pragma: no cover
         log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
@@ -1089,14 +1095,14 @@ def as_scanner(mf):
             mf_obj = self
             # partial deepcopy to avoid overwriting existing object
             while mf_obj is not None:
-                if hasattr(mf_obj, 'with_df'):
+                if getattr(mf_obj, 'with_df', None):
                     mf_obj.with_df = copy.copy(mf_obj.with_df)
-                if hasattr(mf_obj, 'with_x2c'):
+                if getattr(mf_obj, 'with_x2c', None):
                     mf_obj.with_x2c = copy.copy(mf_obj.with_x2c)
-                if hasattr(mf_obj, 'grids'):  # DFT
+                if getattr(mf_obj, 'grids', None):  # DFT
                     mf_obj.grids = copy.copy(mf_obj.grids)
                     mf_obj._numint = copy.copy(mf_obj._numint)
-                if hasattr(mf_obj, '_scf'):
+                if getattr(mf_obj, '_scf', None):
                     mf_obj._scf = copy.copy(mf_obj._scf)
                     mf_obj = mf_obj._scf
                 else:
@@ -1113,13 +1119,13 @@ def as_scanner(mf):
                 mf_obj.mol = mol
                 mf_obj.opt = None
                 mf_obj._eri = None
-                if hasattr(mf_obj, 'with_df') and mf_obj.with_df:
+                if getattr(mf_obj, 'with_df', None):
                     mf_obj.with_df.mol = mol
                     mf_obj.with_df.auxmol = None
                     mf_obj.with_df._cderi = None
-                if hasattr(mf_obj, 'with_x2c') and mf_obj.with_x2c:
+                if getattr(mf_obj, 'with_x2c', None):
                     mf_obj.with_x2c.mol = mol
-                if hasattr(mf_obj, 'grids'):  # DFT
+                if getattr(mf_obj, 'grids', None):  # DFT
                     mf_obj.grids.mol = mol
                     mf_obj.grids.coords = None
                     mf_obj.grids.weights = None
@@ -1291,7 +1297,7 @@ class SCF(lib.StreamObject):
             return self
 
         logger.info(self, '\n')
-        logger.info(self, '******** %s flags ********', self.__class__)
+        logger.info(self, '******** %s ********', self.__class__)
         method = []
         cls = self.__class__
         while cls != SCF:
@@ -1424,10 +1430,10 @@ class SCF(lib.StreamObject):
 
     # full density matrix for RHF
     @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm1(mo_coeff, mo_occ)
+        return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
     energy_tot = energy_tot
@@ -1442,7 +1448,7 @@ class SCF(lib.StreamObject):
     check_convergence = None
 
     def scf(self, dm0=None, **kwargs):
-        '''main routine for SCF
+        '''SCF main driver
 
         Kwargs:
             dm0 : ndarray
@@ -1472,9 +1478,7 @@ class SCF(lib.StreamObject):
         logger.timer(self, 'SCF', *cput0)
         self._finalize()
         return self.e_tot
-    def kernel(self, dm0=None, **kwargs):
-        return self.scf(dm0, **kwargs)
-    kernel.__doc__ = scf.__doc__
+    kernel = lib.alias(scf, alias_name='kernel')
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -1526,9 +1530,9 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            ddm = numpy.asarray(dm) - dm_last
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.asarray(vhf_last) + vj - vk * .5
+            return vhf_last + vj - vk * .5
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5

@@ -61,9 +61,12 @@ def siesta_hsx_read(fname, force_gamma=None):
 #
 #
 class siesta_hsx_c():
-  def __init__(self, fname='siesta.HSX', force_gamma=None):
+
+  def __init__(self, **kw):
+    #fname='siesta.HSX', force_gamma=None
+    self.fname = fname = kw['fname'] if 'fname' in kw else 'siesta.HSX'
+    force_gamma = kw['force_gamma'] if 'force_gamma' in kw else None
     
-    self.fname = fname
     dat, row_ptr, col_ind, dimensions = siesta_hsx_read(fname, force_gamma)
     if dat is None or row_ptr is None or col_ind is None:
       raise RuntimeError('file HSX not found '+ fname)

@@ -41,7 +41,7 @@ class X2C(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.mol.stdout, self.mol.verbose)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('exp_drop = %g', self.exp_drop)
         log.info('approx = %s',    self.approx)
         log.info('xuncontract = %d', self.xuncontract)
@@ -69,6 +69,9 @@ class X2C(lib.StreamObject):
         spin-free and spin-dependent terms) in the j-adapted spinor basis.
         '''
         if mol is None: mol = self.mol
+        if mol.has_ecp():
+            raise NotImplementedError
+
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
@@ -107,6 +110,36 @@ class X2C(lib.StreamObject):
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
         return h1
 
+    def get_xmat(self, mol=None):
+        if mol is None:
+            xmol = self.get_xmol(mol)[0]
+        else:
+            xmol = mol
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+
+        if 'ATOM' in self.approx.upper():
+            atom_slices = xmol.offset_2c_by_atom()
+            n2c = xmol.nao_2c()
+            x = numpy.zeros((n2c,n2c), dtype=numpy.complex)
+            for ia in range(xmol.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
+                t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
+                with xmol.with_rinv_as_nucleus(ia):
+                    z = -xmol.atom_charge(ia)
+                    v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
+                    w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
+                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+        else:
+            s = xmol.intor_symmetric('int1e_ovlp_spinor')
+            t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
+            v = xmol.intor_symmetric('int1e_nuc_spinor')
+            w = xmol.intor_symmetric('int1e_spnucsp_spinor')
+            x = _x2c1e_xmatrix(t, v, w, s, c)
+        return x
+
 
 def get_hcore(mol):
     '''2-component X2c hcore Hamiltonian (including spin-free and
@@ -128,7 +161,7 @@ def get_jk(mol, dm, hermi=1, mf_opt=None):
                                 mol._atm, mol._bas, mol._env, mf_opt)
     return dhf._jk_triu_(vj, vk, hermi)
 
-def make_rdm1(mo_coeff, mo_occ):
+def make_rdm1(mo_coeff, mo_occ, **kwargs):
     return numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
 
 def init_guess_by_minao(mol):
@@ -225,10 +258,10 @@ class X2C_UHF(hf.SCF):
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ)
+        return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol

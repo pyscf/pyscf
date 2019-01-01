@@ -6,11 +6,18 @@ Library of tools for Managing the numerical atomic orbitals (NAO)
 Installation
 ------------
 
+* Dependence
+
+    * Fortran, C, Python
+    * CMake
+    * BLAS, Lapack, FFTW
+    * numpy, scipy 
+
 * Default compilation of pySCF's low-level libraries with NAO support is possible with custom
   architecture file.
   
         cd pyscf/lib
-        cp cmake_arch_config/cmake.arch.inc-gnu cmake.arch.inc
+        cp cmake_user_inc_examples/cmake.user.inc-nao-gnu cmake.user.inc
         mkdir build
         cd build
         export FC=gfortran   # (just to be sure)
@@ -66,7 +73,7 @@ Peak performance builds/runs
   findable as "ifort", the sequence of commands to build the library would be as following:
   
         cd pyscf/lib
-        cp cmake_arch_config/cmake.arch.inc-anaconda-gnu cmake.arch.inc
+        cp cmake_user_inc_examples/cmake.user.inc-anaconda-gnu cmake.user.inc
         rm *.so                # (just to be sure)
         mkdir anaconda_build
         cd anaconda_build
@@ -88,7 +95,7 @@ Peak performance builds/runs
   the script activate in the IntelPython's bin subdirectory. There is an example of CMakeLists.txt file. 
 
         cd pyscf/lib
-        cp cmake_arch_config/cmake.arch.inc-intelpython-ifort cmake.arch.inc
+        cp cmake_user_inc_examples/cmake.user.inc-intelpython-ifort cmake.user.inc
         rm *.so                              # (just to be sure)
         mkdir intelpython_ifort
         cd mkl_intelpython_ifort

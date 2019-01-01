@@ -22,7 +22,7 @@ from pyscf.dft import libxc
 #
 #
 #
-def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kvargs):
+def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
   from pyscf.dft.libxc import eval_xc
   """
     Computes overlap for an atom pair. The atom pair is given by a pair of species indices
@@ -34,10 +34,12 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kvargs):
       matrix of orbital overlaps
     The procedure uses the numerical integration in coordinate space.
   """
-  grids = build_3dgrid(me, sp1, R1, sp2, R2, **kvargs)
+  grids = build_3dgrid(me, sp1, R1, sp2, R2, **kw)
   rho = dens_libnao(grids.coords, me.sv.nspin)
   exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, rho.T, spin=me.sv.nspin-1, deriv=deriv)
+
   ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
+ 
   if deriv==1 :
     #print(' vxc[0].shape ', vxc[0].shape)
     ao1 = ao1 * grids.weights * vxc[0]
@@ -48,7 +50,6 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kvargs):
     raise RuntimeError('!deriv!')
 
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
-  #overlaps = np.einsum("ij,kj->ik", ao1, ao2)
   overlaps = blas.dgemm(1.0, ao1, ao2.T)
 
   return overlaps

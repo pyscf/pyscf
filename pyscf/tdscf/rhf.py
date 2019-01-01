@@ -144,7 +144,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * 2
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint
@@ -496,7 +496,7 @@ def transition_velocity_octupole(tdobj, xy=None):
 def _charge_center(mol):
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
-    return gto.charge_center(mol, charges, coords)
+    return numpy.einsum('z,zr->r', charges, coords)/charges.sum()
 
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     if xy is None: xy = tdobj.xy
@@ -929,8 +929,10 @@ class TDHF(TDA):
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            idx = realidx[w[realidx].real.argsort()]
-            return w[idx].real, v[:,idx].real, idx
+            # If the complex eigenvalue has small imaginary part, both the
+            # real part and the imaginary part of the eigenvector can
+            # approximately be used as the "real" eigen solutions.
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

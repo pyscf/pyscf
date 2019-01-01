@@ -31,7 +31,8 @@ def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     '''
     neleca, nelecb = _unpack(nelec)
     addra, addrb = numpy.where(abs(ci) > tol)
-    if addra.size == 0: # No large CI coefficient > tol
+    if addra.size == 0:
+        # No large CI coefficient > tol, search for the largest coefficient
         addra, addrb = numpy.unravel_index(numpy.argmax(abs(ci)), ci.shape)
         addra = numpy.asarray([addra])
         addrb = numpy.asarray([addrb])
@@ -134,7 +135,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     def query(target, nelec_atmost, spin, orbsym):
         norb = len(orbsym)
         for excite_level in range(1, nelec_atmost+1):
-            for beta_only in gen_str_iter(range(norb), excite_level):
+            for beta_only in gen_str_iter(list(range(norb)), excite_level):
                 alpha_allow = [i for i in range(norb) if i not in beta_only]
                 alpha_orbsym = orbsym[alpha_allow]
                 alpha_target = target
@@ -377,8 +378,8 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
         2D array which is the symmetrized CI coefficients
     '''
     neleca, nelecb = _unpack(nelec)
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
+    strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     return _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym)
 
 def _guess_wfnsym(ci, strsa, strsb, orbsym):
@@ -420,8 +421,8 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
         Irrep ID
     '''
     neleca, nelecb = _unpack(nelec)
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
+    strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     return _guess_wfnsym(ci, strsa, strsb, orbsym)
 
 
@@ -583,40 +584,10 @@ def cre_b(ci0, norb, neleca_nelecb, ap_id):
     ci1[:,addr_ci1] = ci0[:,addr_ci0] * sign
     return ci1
 
-
-def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
-    '''Compute the FCI electronic energy for given Hamiltonian and FCI vector.
-    '''
-    from pyscf.fci import direct_spin1
-    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
-    ci1 = direct_spin1.contract_2e(h2e, fcivec, norb, nelec, link_index)
-    return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
-
-
-def reorder(ci, nelec, orbidxa, orbidxb=None):
-    '''Reorder the CI coefficients, to adapt the reordered orbitals (The relation
-    of the reordered orbitals and original orbitals is  new = old[idx]).  Eg.
-
-    The orbital ordering indices ``orbidx = [2,0,1]`` indicates the map
-    old orbital  a b c  ->   new orbital  c a b.  The strings are reordered as
-    old-strings   0b011, 0b101, 0b110 ==  (1,2), (1,3), (2,3)   <= apply orbidx to get orb-strings
-    orb-strings   (3,1), (3,2), (1,2) ==  0B101, 0B110, 0B011   <= by gen_strings4orblist
-    then argsort to translate the string representation to the address
-    [2(=0B011), 0(=0B101), 1(=0B110)]
-    '''
-    neleca, nelecb = _unpack(nelec)
-    if orbidxb is None:
-        orbidxb = orbidxa
-    guide_stringsa = cistring.gen_strings4orblist(orbidxa, neleca)
-    guide_stringsb = cistring.gen_strings4orblist(orbidxb, nelecb)
-    old_det_idxa = numpy.argsort(guide_stringsa)
-    old_det_idxb = numpy.argsort(guide_stringsb)
-    return lib.take_2d(ci, old_det_idxa, old_det_idxb)
-
 def det_overlap(string1, string2, norb, s=None):
     '''Determinants overlap on non-orthogonal one-particle basis'''
     if s is None:  # orthogonal basis with s_ij = delta_ij
-        return string1 == string2
+        return float(string1 == string2)
     else:
         if isinstance(string1, str):
             nelec = string1.count('1')
@@ -726,8 +697,8 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
             one-particle basis
     '''
     neleca, nelecb = _unpack(nelec)
-    strsa = numpy.asarray(cistring.gen_strings4orblist(range(norb), neleca))
-    strsb = numpy.asarray(cistring.gen_strings4orblist(range(norb), nelecb))
+    strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
+    strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
     na = len(strsa)
     nb = len(strsb)
@@ -747,10 +718,10 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
         #    for j in range(na):
         #        uij = u[occ_masks[i]][:,occ_masks[j]]
         #        trans_ci_a[i,j] = numpy.linalg.det(uij)
-        occ_idx_all_strs = numpy.where(occ_masks)[1]
+        occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(na,neleca)
         for i in range(na):
             ui = ua[occ_masks[i]].T.copy()
-            minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(na,neleca,neleca)
+            minors = ui[occ_idx_all_strs]
             trans_ci_a[i,:] = numpy.linalg.det(minors)
 
     if neleca == nelecb and numpy.allclose(ua, ub):
@@ -765,10 +736,10 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
             #    for j in range(nb):
             #        uij = u[occ_masks[i]][:,occ_masks[j]]
             #        trans_ci_b[i,j] = numpy.linalg.det(uij)
-            occ_idx_all_strs = numpy.where(occ_masks)[1]
+            occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(nb,nelecb)
             for i in range(nb):
                 ui = ub[occ_masks[i]].T.copy()
-                minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(nb,nelecb,nelecb)
+                minors = ui[occ_idx_all_strs]
                 trans_ci_b[i,:] = numpy.linalg.det(minors)
 
     # Transform old basis to new basis for all alpha-electron excitations
@@ -790,70 +761,4 @@ def _unpack(nelec, spin=None):
     return nelec
 
 del(LARGE_CI_TOL, RETURN_STRS, PENALTY)
-
-
-if __name__ == '__main__':
-    a4 = 10*numpy.arange(4)[:,None]
-    a6 = 10*numpy.arange(6)[:,None]
-    b4 = numpy.arange(4)
-    b6 = numpy.arange(6)
-    print([bin(i) for i in cistring.gen_strings4orblist(range(4), 3)])
-    print([bin(i) for i in cistring.gen_strings4orblist(range(4), 2)])
-    print(des_a(a4+b4, 4, (3,3), 0))
-    print(des_a(a4+b4, 4, (3,3), 1))
-    print(des_a(a4+b4, 4, (3,3), 2))
-    print(des_a(a4+b4, 4, (3,3), 3))
-    print('-------------')
-    print(des_b(a6+b4, 4, (2,3), 0))
-    print(des_b(a6+b4, 4, (2,3), 1))
-    print(des_b(a6+b4, 4, (2,3), 2))
-    print(des_b(a6+b4, 4, (2,3), 3))
-    print('-------------')
-    print(cre_a(a6+b4, 4, (2,3), 0))
-    print(cre_a(a6+b4, 4, (2,3), 1))
-    print(cre_a(a6+b4, 4, (2,3), 2))
-    print(cre_a(a6+b4, 4, (2,3), 3))
-    print('-------------')
-    print(cre_b(a6+b6, 4, (2,2), 0))
-    print(cre_b(a6+b6, 4, (2,2), 1))
-    print(cre_b(a6+b6, 4, (2,2), 2))
-    print(cre_b(a6+b6, 4, (2,2), 3))
-
-    print(numpy.where(symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=1,
-                                     irrep_nelec=None)!=0), [0], [2])
-    print(numpy.where(symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=0,
-                                irrep_nelec={0:[3,2],3:2})!=0), [2,3], [5,4])
-    print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=2,
-                                     irrep_nelec={1:[0,1],3:[1,0]})!=0), [5], [0])
-    print(numpy.where(symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3,
-                                     irrep_nelec={5:[0,1],3:[1,0]})!=0), [4,7], [2,0])
-    try:
-        symm_initguess(6, (3,2), [3,3,3,3,3,3], wfnsym=2)
-    except RuntimeError:
-        pass
-    ci1 = symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3, irrep_nelec={5:[0,1],3:[1,0]})
-    print(guess_wfnsym(ci1, 6, (3,3), [0,1,5,4,3,7]) == 3)
-
-    def finger(ci1):
-        numpy.random.seed(1)
-        fact = numpy.random.random(ci1.shape).ravel()
-        return numpy.dot(ci1.ravel(), fact.ravel())
-    norb = 6
-    nelec = neleca, nelecb = 4,3
-    na = cistring.num_strings(norb, neleca)
-    nb = cistring.num_strings(norb, nelecb)
-    ci = numpy.ones((na,nb))
-    print(finger(symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2)), 3.010642818688976,)
-    s1 = numpy.random.seed(1)
-    s1 = numpy.random.random((6,6))
-    s1 = s1 + s1.T
-    print(det_overlap(int('0b10011',2), int('0b011010',2), 6, s1) - -0.273996425116)
-    numpy.random.seed(12)
-    s = numpy.random.random((6,6))
-    s = s.dot(s.T) / 3
-    bra = numpy.random.random((15,15))
-    ket = numpy.random.random((15,15))
-    bra /= numpy.linalg.norm(bra)
-    ket /= numpy.linalg.norm(ket)
-    print(overlap(bra, ket, 6, 4), overlap(bra, ket, 6, 4, (s,s)),0.025906419720918766)
 

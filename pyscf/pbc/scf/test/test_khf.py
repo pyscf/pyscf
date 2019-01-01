@@ -142,6 +142,7 @@ class KnownValues(unittest.TestCase):
                    mesh = [8,20,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
@@ -163,6 +164,7 @@ class KnownValues(unittest.TestCase):
                    mesh = [10,10,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
@@ -184,6 +186,7 @@ class KnownValues(unittest.TestCase):
                    mesh = [8,20,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
@@ -205,6 +208,7 @@ class KnownValues(unittest.TestCase):
                    mesh = [8,20,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
@@ -248,6 +252,25 @@ class KnownValues(unittest.TestCase):
         f = kumf.get_fermi(mo_e_kpts, mo_occ_kpts)
         self.assertAlmostEqual(f[0], 3, 9)
         self.assertAlmostEqual(f[1], 1.5, 9)
+
+    def test_dipole_moment(self):
+        dip = kmf.dip_moment()
+        self.assertAlmostEqual(lib.finger(dip), 0.729751581497479, 9)
+
+    def test_krhf_vs_rhf(self):
+        np.random.seed(1)
+        k = np.random.random(3)
+        mf = pscf.RHF(cell, k, exxdiv='vcut_sph')
+        mf.max_cycle = 1
+        mf.diis = None
+        e1 = mf.kernel()
+
+        kmf = pscf.KRHF(cell, [k], exxdiv='vcut_sph')
+        kmf.max_cycle = 1
+        kmf.diis = None
+        e2 = kmf.kernel()
+        self.assertAlmostEqual(e1, e2, 9)
+        self.assertAlmostEqual(e1, -11.451354250609718, 9)
 
 
 if __name__ == '__main__':

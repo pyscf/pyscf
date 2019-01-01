@@ -36,7 +36,7 @@ WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 
 
-def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     '''Alpha and beta spin one particle density matrices for all k-points.
 
     Returns:
@@ -124,16 +124,13 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''
 
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
-    if hasattr(mo_energy_kpts[0], 'mo_ea'):
+    if getattr(mo_energy_kpts[0], 'mo_ea', None) is not None:
         mo_ea_kpts = [x.mo_ea for x in mo_energy_kpts]
         mo_eb_kpts = [x.mo_eb for x in mo_energy_kpts]
     else:
         mo_ea_kpts = mo_eb_kpts = mo_energy_kpts
 
-    nkpts = len(mo_energy_kpts)
-    nocc_a = mf.nelec[0] * nkpts
-    nocc_b = mf.nelec[1] * nkpts
-
+    nocc_a, nocc_b = mf.nelec
     mo_energy_kpts1 = np.hstack(mo_energy_kpts)
     mo_energy = np.sort(mo_energy_kpts1)
     if nocc_b > 0:
@@ -206,6 +203,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
 
 energy_elec = kuhf.energy_elec
+dip_moment = kuhf.dip_moment
+get_rho = kuhf.get_rho
 
 
 @lib.with_doc(khf.mulliken_meta.__doc__)
@@ -243,10 +242,11 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                 e, c = scipy.linalg.eigh(f1)
                 mo1[:,idx] = np.dot(orb, c)
                 mo_e[idx] = e
-        if hasattr(fock, 'focka'):
-            mo_ea = np.einsum('pi,pi->i', mo1.conj(), fock.focka[k].dot(mo1))
-            mo_eb = np.einsum('pi,pi->i', mo1.conj(), fock.fockb[k].dot(mo1))
-            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea.real, mo_eb=mo_eb.real)
+        if getattr(fock, 'focka', None) is not None:
+            fa, fb = fock.focka[k], fock.fockb[k]
+            mo_ea = np.einsum('pi,pi->i', mo1.conj(), fa.dot(mo1)).real
+            mo_eb = np.einsum('pi,pi->i', mo1.conj(), fb.dot(mo1)).real
+            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         mo_coeff.append(mo1)
         mo_energy.append(mo_e)
     return mo_energy, mo_coeff
@@ -264,8 +264,26 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
-        self.nelec = cell.nelec
-        self._keys = self._keys.union(['nelec'])
+        self.nelec = None
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            cell = self.cell
+            nkpts = len(self.kpts)
+            ne = cell.tot_electrons(nkpts)
+            nalpha = (ne + cell.spin) // 2
+            nbeta = nalpha - cell.spin
+            if nalpha + nbeta != ne:
+                raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                                   'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                                   (ne, cell.spin))
+            return nalpha, nbeta
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
 
     def dump_flags(self):
         khf.KSCF.dump_flags(self)
@@ -311,16 +329,19 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell)).real
-            nelec = np.asarray(cell.nelec).reshape(2,1)
-            if np.any(abs(ne - nelec) > 1e-7):
+            ne = np.einsum('xkij,kji->', dm_kpts, self.get_ovlp(cell)).real
+            # FIXME: consider the fractional num_electron or not? This maybe
+            # relates to the charged system.
+            nkpts = len(self.kpts)
+            nelec = sum(self.nelec)
+            if np.any(abs(ne - nelec) > 1e-7*nkpts):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne.mean())
-                dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
+                            'systems.\n  DM is normalized to the number '
+                            'of electrons', ne/nkpts)
+                dm_kpts *= nelec / ne
         return dm_kpts
 
     get_hcore = khf.KSCF.get_hcore
@@ -332,9 +353,11 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
     get_occ = get_occ
     energy_elec = energy_elec
 
+    get_rho = khf.KSCF.get_rho
+
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
-        if hasattr(dm_kpts, 'mo_coeff'):
+        if getattr(dm_kpts, 'mo_coeff', None) is not None:
             mo_coeff = dm_kpts.mo_coeff
             mo_occ_a = [(x > 0).astype(np.double) for x in dm_kpts.mo_occ]
             mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
@@ -349,7 +372,7 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             dm1 = self.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
             fock = self.get_hcore(self.cell, self.kpts) + self.get_veff(self.cell, dm1)
 
-        if hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is not None:
             focka = fock.focka
             fockb = fock.fockb
         elif getattr(fock, 'ndim', None) == 4:
@@ -368,17 +391,18 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
 
     def eig(self, fock, s):
         e, c = khf.KSCF.eig(self, fock, s)
-        if hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is not None:
             for k, mo in enumerate(c):
-                mo_ea = np.einsum('pi,pi->i', mo.conj(), fock.focka[k].dot(mo))
-                mo_eb = np.einsum('pi,pi->i', mo.conj(), fock.fockb[k].dot(mo))
-                e[k] = lib.tag_array(e[k], mo_ea=mo_ea.real, mo_eb=mo_eb.real)
+                fa, fb = fock.focka[k], fock.fockb[k]
+                mo_ea = np.einsum('pi,pi->i', mo.conj(), fa.dot(mo)).real
+                mo_eb = np.einsum('pi,pi->i', mo.conj(), fb.dot(mo)).real
+                e[k] = lib.tag_array(e[k], mo_ea=mo_ea, mo_eb=mo_eb)
         return e, c
 
-    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
+    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
         if mo_coeff_kpts is None: mo_coeff_kpts = self.mo_coeff
         if mo_occ_kpts is None: mo_occ_kpts = self.mo_occ
-        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs)
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
         if chk is None: chk = self.chkfile
@@ -399,19 +423,17 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
-    @lib.with_doc(pbcrohf.ROHF.spin_square.__doc__)
-    def spin_square(self, mo_coeff=None, s=None):
-        '''Treating the k-point sampling wfn as a giant Slater determinant,
-        the spin_square value is the <S^2> of the giant determinant.
-        '''
-        ss, s = pbcrohf.ROHF.spin_square(self, mo_coeff, s)
-        nkpts = len(self.kpts)
-        return ss * nkpts, s * nkpts
+    spin_square = pbcrohf.ROHF.spin_square
 
     get_bands = khf.KSCF.get_bands
 

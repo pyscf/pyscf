@@ -53,7 +53,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
         conv_tol_grad = localizer.conv_tol_grad
 
     if mo_coeff is None:
-        if hasattr(localizer, 'mol') and localizer.mol.natm == 0:
+        if getattr(localizer, 'mol', None) and localizer.mol.natm == 0:
             # For customized Hamiltonian
             u0 = localizer.get_init_guess('random')
         else:
@@ -151,7 +151,7 @@ class Boys(ciah.CIAHOptimizer):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('conv_tol = %s'       , self.conv_tol       )
         log.info('conv_tol_grad = %s'  , self.conv_tol_grad  )
         log.info('max_cycle = %s'      , self.max_cycle      )

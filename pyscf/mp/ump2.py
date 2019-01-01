@@ -162,7 +162,7 @@ def get_frozen_mask(mp):
         raise NotImplementedError
     return moidxa,moidxb
 
-def make_rdm1(mp, t2=None):
+def make_rdm1(mp, t2=None, ao_repr=False):
     r'''
     One-particle spin density matrices dm1a, dm1b in MO basis (the
     occupied-virtual blocks due to the orbital response contribution are not
@@ -180,7 +180,7 @@ def make_rdm1(mp, t2=None):
     dov = numpy.zeros((nocca,nvira))
     dOV = numpy.zeros((noccb,nvirb))
     d1 = (doo, (dov, dOV), (dov.T, dOV.T), dvv)
-    return uccsd_rdm._make_rdm1(mp, d1, with_frozen=True)
+    return uccsd_rdm._make_rdm1(mp, d1, with_frozen=True, ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2):
     t2aa, t2ab, t2bb = t2
@@ -364,7 +364,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
             eris.ovOV = ao2mo.general(mp._scf._eri, (orboa,orbva,orbob,orbvb))
             eris.OVOV = ao2mo.general(mp._scf._eri, (orbob,orbvb,orbob,orbvb))
 
-    elif hasattr(mp._scf, 'with_df'):
+    elif getattr(mp._scf, 'with_df', None):
         logger.warn(mp, 'UMP2 detected DF being used in the HF object. '
                     'MO integrals are computed based on the DF 3-index tensors.\n'
                     'It\'s recommended to use DF-UMP2 module.')

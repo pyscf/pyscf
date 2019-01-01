@@ -123,7 +123,7 @@ class DMRGCI(lib.StreamObject):
         self.integralFile = "FCIDUMP"
         self.configFile = "dmrg.conf"
         self.outputFile = "dmrg.out"
-        if hasattr(settings, 'BLOCKRUNTIMEDIR'):
+        if getattr(settings, 'BLOCKRUNTIMEDIR', None):
             self.runtimeDir = settings.BLOCKRUNTIMEDIR
         else:
             self.runtimeDir = '.'
@@ -938,7 +938,7 @@ def readEnergy(DMRGCI):
 def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     '''Shortcut function to setup CASSCF using the DMRG solver.  The DMRG
     solver is properly initialized in this function so that the 1-step
-    algorithm can applied with DMRG-CASSCF.
+    algorithm can be applied with DMRG-CASSCF.
 
     Examples:
 
@@ -948,10 +948,10 @@ def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     >>> mc.kernel()
     -74.414908818611522
     '''
-    if (hasattr(mf,'with_df')):
-      mc = mcscf.DFCASSCF(mf, norb, nelec, *args, **kwargs)
+    if getattr(mf, 'with_df', None):
+        mc = mcscf.DFCASSCF(mf, norb, nelec, *args, **kwargs)
     else:
-      mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
+        mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol, maxM, tol=tol)
     mc.callback = mc.fcisolver.restart_scheduler_()
     if mc.chkfile == mc._scf._chkfile.name:

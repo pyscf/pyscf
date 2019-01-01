@@ -1,0 +1,6 @@
+#
+# This file is an example to set the environment for DFT-D3 library.
+# Compile the DFTD3 shared library
+#       https://github.com/cuanto/libdftd3
+# Then set
+DFTD3PATH = '/path/to/libdftd3/directory'

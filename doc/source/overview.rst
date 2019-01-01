@@ -22,7 +22,7 @@ Bibtex entry::
   @Misc{PYSCF,
     title = {PySCF: the Python‐based simulations of chemistry framework},
     author = {Qiming Sun and Timothy C. Berkelbach and Nick S. Blunt and George H. Booth and Sheng Guo and Zhendong Li and Junzi Liu and James D. McClain and Elvira R. Sayfutyarova and Sandeep Sharma and Sebastian Wouters and Garnet Kin‐Lic Chan},
-    year = {2017}
+    year = {2017},
     journal = {Wiley Interdisciplinary Reviews: Computational Molecular Science},
     volume = {8},
     number = {1},

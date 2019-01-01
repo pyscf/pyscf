@@ -186,6 +186,23 @@ class KnownValues(unittest.TestCase):
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol), pcm).run()
         self.assertAlmostEqual(mf.e_tot, -112.35450855007909, 9)
 
+    def test_ddcosmo_scf_with_overwritten_attributes(self):
+        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -75.57036436805902, 9)
+
+        mf.with_solvent.lebedev_order = 15
+        mf.with_solvent.lmax = 5
+        mf.with_solvent.eps = .5
+        mf.with_solvent.conv_tol = 1e-8
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -75.55326109712902, 9)
+
+        mf.with_solvent.grids.radi_method = dft.mura_knowles
+        mf.with_solvent.grids.atom_grid = {"H": (8, 50), "O": (8, 50),}
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -75.55216799624262, 9)
+
     def test_make_ylm(self):
         numpy.random.seed(1)
         lmax = 6
@@ -316,6 +333,8 @@ class KnownValues(unittest.TestCase):
             vmat1[i,i] = (e1 - e0) / dx
             dm1[i,i] -= dx
         self.assertAlmostEqual(abs(vmat0-vmat1).max(), 0, 4)
+
+# TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 
 
 if __name__ == "__main__":

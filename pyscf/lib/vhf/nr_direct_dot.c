@@ -71,28 +71,23 @@
         int nket = ao_loc[shls_slice[oket##SH1]] - ao_loc[shls_slice[oket##SH0]]; \
         return nbra * nket; \
 }
+JKOP_DATA_SIZE(K, L)
+JKOP_DATA_SIZE(L, K)
+JKOP_DATA_SIZE(I, J)
+JKOP_DATA_SIZE(J, I)
+JKOP_DATA_SIZE(K, J)
+JKOP_DATA_SIZE(J, K)
+JKOP_DATA_SIZE(I, L)
+JKOP_DATA_SIZE(L, I)
+JKOP_DATA_SIZE(K, I)
+JKOP_DATA_SIZE(I, K)
+JKOP_DATA_SIZE(J, L)
+JKOP_DATA_SIZE(L, J)
 
 #define ADD_JKOP(fname, ibra, iket, obra, oket, type) \
 JKOperator CVHF##fname = {JKOperator_allocate_##ibra##iket##obra##oket, \
         JKOperator_deallocate, fname, JKOperator_data_size_##obra##oket, \
         JKOperator_sanity_check_##type}
-
-JKOP_ALLOCATE(J, I, K, L)
-JKOP_ALLOCATE(L, K, I, J)
-JKOP_ALLOCATE(L, I, K, J)
-JKOP_ALLOCATE(J, K, I, L)
-JKOP_ALLOCATE(J, L, I, K)
-JKOP_ALLOCATE(L, J, K, I)
-JKOP_ALLOCATE(I, K, J, L)
-JKOP_ALLOCATE(K, I, L, J)
-JKOP_DATA_SIZE(K, L)
-JKOP_DATA_SIZE(I, J)
-JKOP_DATA_SIZE(K, J)
-JKOP_DATA_SIZE(I, L)
-JKOP_DATA_SIZE(K, I)
-JKOP_DATA_SIZE(I, K)
-JKOP_DATA_SIZE(J, L)
-JKOP_DATA_SIZE(L, J)
 
 static void JKOperator_deallocate(JKArray *jkarray)
 {
@@ -152,6 +147,29 @@ static void JKOperator_sanity_check_s8(int *shls_slice)
         int *_poutptr; \
         LOCATE(v, i, j)
 
+#define DEF_NRS1_CONTRACT(D1, D2, V1, V2) \
+static void nrs1_##D1##D2##_s1##V1##V2(double *eri, double *dm, JKArray *out, int *shls, \
+                         int i0, int i1, int j0, int j1, \
+                         int k0, int k1, int l0, int l1) \
+{ \
+        DECLARE(v, V1, V2); \
+        V1##0 = 0; \
+        V1##1 = d##V1; \
+        V2##0 = 0; \
+        V2##1 = d##V2; \
+        int i, j, k, l, ijkl, icomp; \
+ \
+        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) { \
+                for (l = l0; l < l1; l++) { \
+                for (k = k0; k < k1; k++) { \
+                for (j = j0; j < j1; j++) { \
+                for (i = i0; i < i1; i++, ijkl++) { \
+                        v[V1*d##V2+V2] += eri[ijkl] * dm[D1*ncol+D2]; \
+                } } } } \
+                v += d##V1##V2; \
+        } \
+}
+
 /* eri in Fortran order; dm, out in C order */
 
 static void nrs1_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
@@ -180,6 +198,7 @@ static void nrs1_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 v += dkl;
         }
 }
+JKOP_ALLOCATE(J, I, K, L);
 ADD_JKOP(nrs1_ji_s1kl, J, I, K, L, s1);
 
 static void nrs1_ji_s2kl(double *eri, double *dm, JKArray *out, int *shls,
@@ -219,6 +238,7 @@ static void nrs1_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 v += dij;
         }
 }
+JKOP_ALLOCATE(L, K, I, J);
 ADD_JKOP(nrs1_lk_s1ij, L, K, I, J, s1);
 
 static void nrs1_lk_s2ij(double *eri, double *dm, JKArray *out, int *shls,
@@ -249,7 +269,34 @@ static void nrs1_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 v += dil;
         }
 }
+JKOP_ALLOCATE(J, K, I, L);
 ADD_JKOP(nrs1_jk_s1il, J, K, I, L, s1);
+
+//DEF_NRS1_CONTRACT(j, k, i, l); JKOP_ALLOCATE(J, K, I, L); ADD_JKOP(nrs1_jk_s1il, J, K, I, L, s1);
+DEF_NRS1_CONTRACT(j, k, l, i); JKOP_ALLOCATE(J, K, L, I); ADD_JKOP(nrs1_jk_s1li, J, K, L, I, s1);
+DEF_NRS1_CONTRACT(k, j, i, l); JKOP_ALLOCATE(K, J, I, L); ADD_JKOP(nrs1_kj_s1il, K, J, I, L, s1);
+DEF_NRS1_CONTRACT(k, j, l, i); JKOP_ALLOCATE(K, J, L, I); ADD_JKOP(nrs1_kj_s1li, K, J, L, I, s1);
+DEF_NRS1_CONTRACT(i, k, j, l); JKOP_ALLOCATE(I, K, J, L); ADD_JKOP(nrs1_ik_s1jl, I, K, J, L, s1);
+DEF_NRS1_CONTRACT(i, k, l, j); JKOP_ALLOCATE(I, K, L, J); ADD_JKOP(nrs1_ik_s1lj, I, K, L, J, s1);
+DEF_NRS1_CONTRACT(k, i, l, j); JKOP_ALLOCATE(K, I, L, J); ADD_JKOP(nrs1_ki_s1lj, K, I, L, J, s1);
+DEF_NRS1_CONTRACT(k, i, j, l); JKOP_ALLOCATE(K, I, J, L); ADD_JKOP(nrs1_ki_s1jl, K, I, J, L, s1);
+DEF_NRS1_CONTRACT(j, l, k, i); JKOP_ALLOCATE(J, L, K, I); ADD_JKOP(nrs1_jl_s1ki, J, L, K, I, s1);
+DEF_NRS1_CONTRACT(j, l, i, k); JKOP_ALLOCATE(J, L, I, K); ADD_JKOP(nrs1_jl_s1ik, J, L, I, K, s1);
+DEF_NRS1_CONTRACT(l, j, k, i); JKOP_ALLOCATE(L, J, K, I); ADD_JKOP(nrs1_lj_s1ki, L, J, K, I, s1);
+DEF_NRS1_CONTRACT(l, j, i, k); JKOP_ALLOCATE(L, J, I, K); ADD_JKOP(nrs1_lj_s1ik, L, J, I, K, s1);
+DEF_NRS1_CONTRACT(l, i, k, j); JKOP_ALLOCATE(L, I, K, J); ADD_JKOP(nrs1_li_s1kj, L, I, K, J, s1);
+DEF_NRS1_CONTRACT(l, i, j, k); JKOP_ALLOCATE(L, I, J, K); ADD_JKOP(nrs1_li_s1jk, L, I, J, K, s1);
+DEF_NRS1_CONTRACT(i, l, k, j); JKOP_ALLOCATE(I, L, K, J); ADD_JKOP(nrs1_il_s1kj, I, L, K, J, s1);
+DEF_NRS1_CONTRACT(i, l, j, k); JKOP_ALLOCATE(I, L, J, K); ADD_JKOP(nrs1_il_s1jk, I, L, J, K, s1);
+
+//DEF_NRS1_CONTRACT(j, i, k, l); JKOP_ALLOCATE(J, I, K, L); ADD_JKOP(nrs1_ji_s1kl, J, I, K, L, s1);
+//DEF_NRS1_CONTRACT(l, k, i, j); JKOP_ALLOCATE(L, K, I, J); ADD_JKOP(nrs1_lk_s1ij, L, K, I, J, s1);
+DEF_NRS1_CONTRACT(i, j, k, l); JKOP_ALLOCATE(I, J, K, L); ADD_JKOP(nrs1_ij_s1kl, I, J, K, L, s1);
+DEF_NRS1_CONTRACT(i, j, l, k); JKOP_ALLOCATE(I, J, L, K); ADD_JKOP(nrs1_ij_s1lk, I, J, L, K, s1);
+DEF_NRS1_CONTRACT(j, i, l, k); JKOP_ALLOCATE(J, I, L, K); ADD_JKOP(nrs1_ji_s1lk, J, I, L, K, s1);
+DEF_NRS1_CONTRACT(l, k, j, i); JKOP_ALLOCATE(L, K, J, I); ADD_JKOP(nrs1_lk_s1ji, L, K, J, I, s1);
+DEF_NRS1_CONTRACT(k, l, i, j); JKOP_ALLOCATE(K, L, I, J); ADD_JKOP(nrs1_kl_s1ij, K, L, I, J, s1);
+DEF_NRS1_CONTRACT(k, l, j, i); JKOP_ALLOCATE(K, L, J, I); ADD_JKOP(nrs1_kl_s1ji, K, L, J, I, s1);
 
 static void nrs1_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                          int i0, int i1, int j0, int j1,
@@ -261,24 +308,17 @@ static void nrs1_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
 }
 ADD_JKOP(nrs1_jk_s2il, J, K, I, L, s1);
 
-static void nrs1_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
+
+static void nrs1_kj_s2il(double *eri, double *dm, JKArray *out, int *shls,
                          int i0, int i1, int j0, int j1,
                          int k0, int k1, int l0, int l1)
 {
-        DECLARE(v, k, j);
-        int i, j, k, l, ijkl, icomp;
-
-        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                for (l = l0; l < l1; l++) {
-                for (k = 0; k < dk; k++) {
-                for (j = 0; j < dj; j++) {
-                for (i = i0; i < i1; i++, ijkl++) {
-                        v[k*dj+j] += eri[ijkl] * dm[l*ncol+i];
-                } } } }
-                v += dkj;
+        if (i0 >= l0) {
+                nrs1_kj_s1il  (eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         }
 }
-ADD_JKOP(nrs1_li_s1kj, L, I, K, J, s1);
+ADD_JKOP(nrs1_kj_s2il, J, K, I, L, s1);
+
 
 static void nrs1_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                          int i0, int i1, int j0, int j1,
@@ -289,83 +329,6 @@ static void nrs1_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
         }
 }
 ADD_JKOP(nrs1_li_s2kj, L, I, K, J, s1);
-
-
-static void nrs1_jl_s1ik(double *eri, double *dm, JKArray *out, int *shls,
-                         int i0, int i1, int j0, int j1,
-                         int k0, int k1, int l0, int l1)
-{
-        DECLARE(v, i, k);
-        int i, j, k, l, ijkl, icomp;
-
-        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                for (l = l0; l < l1; l++) {
-                for (k = 0; k < dk; k++) {
-                for (j = j0; j < j1; j++) {
-                for (i = 0; i < di; i++, ijkl++) {
-                        v[i*dk+k] += eri[ijkl] * dm[j*ncol+l];
-                } } } }
-                v += dik;
-        }
-}
-ADD_JKOP(nrs1_jl_s1ik, J, L, I, K, s1);
-
-static void nrs1_lj_s1ki(double *eri, double *dm, JKArray *out, int *shls,
-                         int i0, int i1, int j0, int j1,
-                         int k0, int k1, int l0, int l1)
-{
-        DECLARE(v, k, i);
-        int i, j, k, l, ijkl, icomp;
-
-        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                for (l = l0; l < l1; l++) {
-                for (k = 0; k < dk; k++) {
-                for (j = j0; j < j1; j++) {
-                for (i = 0; i < di; i++, ijkl++) {
-                        v[k*di+i] += eri[ijkl] * dm[l*ncol+j];
-                } } } }
-                v += dki;
-        }
-}
-ADD_JKOP(nrs1_lj_s1ki, L, J, K, I, s1);
-
-static void nrs1_ik_s1jl(double *eri, double *dm, JKArray *out, int *shls,
-                         int i0, int i1, int j0, int j1,
-                         int k0, int k1, int l0, int l1)
-{
-        DECLARE(v, j, l);
-        int i, j, k, l, ijkl, icomp;
-
-        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                for (l = 0; l < dl; l++) {
-                for (k = k0; k < k1; k++) {
-                for (j = 0; j < dj; j++) {
-                for (i = i0; i < i1; i++, ijkl++) {
-                        v[j*dl+l] += eri[ijkl] * dm[i*ncol+k];
-                } } } }
-                v += djl;
-        }
-}
-ADD_JKOP(nrs1_ik_s1jl, I, K, J, L, s1);
-
-static void nrs1_ki_s1lj(double *eri, double *dm, JKArray *out, int *shls,
-                         int i0, int i1, int j0, int j1,
-                         int k0, int k1, int l0, int l1)
-{
-        DECLARE(v, l, j);
-        int i, j, k, l, ijkl, icomp;
-
-        for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                for (l = 0; l < dl; l++) {
-                for (k = k0; k < k1; k++) {
-                for (j = 0; j < dj; j++) {
-                for (i = i0; i < i1; i++, ijkl++) {
-                        v[l*dj+j] += eri[ijkl] * dm[k*ncol+i];
-                } } } }
-                v += dlj;
-        }
-}
-ADD_JKOP(nrs1_ki_s1lj, K, I, L, J, s1);
 
 static void nrs2ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                            int i0, int i1, int j0, int j1,

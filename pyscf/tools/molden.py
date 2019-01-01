@@ -67,12 +67,14 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
 
 def from_mo(mol, filename, mo_coeff, spin='Alpha', symm=None, ene=None,
             occ=None, ignore_h=IGNORE_H):
+    '''Dump the given MOs in Molden format'''
     with open(filename, 'w') as f:
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, spin, symm, ene, occ, ignore_h)
 
 
 def from_scf(mf, filename, ignore_h=IGNORE_H):
+    '''Dump the given SCF object in Molden format'''
     dump_scf(mf, filename, ignore_h)
 def dump_scf(mf, filename, ignore_h=IGNORE_H):
     import pyscf.scf

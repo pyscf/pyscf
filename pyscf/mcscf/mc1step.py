@@ -29,7 +29,8 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
-from pyscf import scf
+from pyscf import gto
+from pyscf import fci
 from pyscf.soscf import ciah
 from pyscf import __config__
 
@@ -492,7 +493,6 @@ def as_scanner(mc):
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
     from pyscf.mcscf.addons import project_init_guess
     if isinstance(mc, lib.SinglePointScanner):
         return mc
@@ -670,12 +670,12 @@ class CASSCF(casci.CASCI):
     canonicalization = getattr(__config__, 'mcscf_mc1step_CASSCF_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_mc1step_CASSCF_sorting_mo_energy', False)
 
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
         self.callback = None
-        self.chkfile = mf.chkfile
+        self.chkfile = self._scf.chkfile
 
         self.fcisolver.max_cycle = getattr(__config__,
                                            'mcscf_mc1step_CASSCF_fcisolver_max_cycle', 50)
@@ -687,8 +687,8 @@ class CASSCF(casci.CASCI):
         self.e_tot = None
         self.e_cas = None
         self.ci = None
-        self.mo_coeff = mf.mo_coeff
-        self.mo_energy = mf.mo_energy
+        self.mo_coeff = self._scf.mo_coeff
+        self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
 
@@ -703,10 +703,10 @@ class CASSCF(casci.CASCI):
                     'sorting_mo_energy'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
@@ -737,11 +737,22 @@ class CASSCF(casci.CASCI):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('internal_rotation = %s', self.internal_rotation)
-        if hasattr(self.fcisolver, 'dump_flags'):
+        if getattr(self.fcisolver, 'dump_flags', None):
             self.fcisolver.dump_flags(self.verbose)
         if self.mo_coeff is None:
             log.error('Orbitals for CASCI are not specified. The relevant SCF '
                       'object may not be initialized.')
+
+        if (getattr(self._scf, 'with_solvent', None) and
+            not getattr(self, 'with_solvent', None)):
+            log.warn('''Solvent model %s was found in SCF object.
+It is not applied to the CASSCF object. The CASSCF result is not affected by the SCF solvent model.
+To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs be called
+        from pyscf import solvent
+        mc = mcscf.CASSCF(...)
+        mc = solvent.ddCOSMO(mc)
+''',
+                     self._scf.with_solvent.__class__)
         return self
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
@@ -803,7 +814,7 @@ class CASSCF(casci.CASCI):
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_cas)
 
-            if hasattr(self.fcisolver,'spin_square'):
+            if getattr(self.fcisolver, 'spin_square', None):
                 ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
             else:
                 ss = None
@@ -1013,29 +1024,45 @@ class CASSCF(casci.CASCI):
             tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:
             tol = None
-        if hasattr(self.fcisolver, 'approx_kernel'):
+        if getattr(self.fcisolver, 'approx_kernel', None):
             fn = self.fcisolver.approx_kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
-                     tol=tol, max_memory=self.max_memory)[1]
+            e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
+                        tol=tol, max_memory=self.max_memory)
             return ci1, None
-        elif not (hasattr(self.fcisolver, 'contract_2e') and
-                  hasattr(self.fcisolver, 'absorb_h1e')):
+        elif not (getattr(self.fcisolver, 'contract_2e', None) and
+                  getattr(self.fcisolver, 'absorb_h1e', None)):
             fn = self.fcisolver.kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
-                     tol=tol, max_memory=self.max_memory,
-                     max_cycle=self.ci_response_space)[1]
+            e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
+                        tol=tol, max_memory=self.max_memory,
+                        max_cycle=self.ci_response_space)
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
-        hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
+        # Be careful with the symmetry adapted contract_2e function. When the
+        # symmetry adapted FCI solver is used, the symmetry of ci0 may be
+        # different to fcisolver.wfnsym. This function may output 0.
+        if getattr(self.fcisolver, 'guess_wfnsym', None):
+            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0)
+        else:
+            wfnsym = None
+        def contract_2e(c):
+            if wfnsym is None:
+                hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            else:
+                with lib.temporary_env(self.fcisolver, wfnsym=wfnsym):
+                    hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            return hc.ravel()
+
+        hc = contract_2e(ci0)
         g = hc - (e_cas-ecore) * ci0.ravel()
+
         if self.ci_response_space > 7:
             logger.debug(self, 'CI step by full response')
             # full response
             max_memory = max(400, self.max_memory-lib.current_memory()[0])
-            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0,
-                                           tol=tol, max_memory=max_memory)
+            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ecore=ecore,
+                                           ci0=ci0, tol=tol, max_memory=max_memory)
         else:
             nd = min(max(self.ci_response_space, 2), ci0.size)
             logger.debug(self, 'CI step by %dD subspace response', nd)
@@ -1047,8 +1074,7 @@ class CASSCF(casci.CASCI):
             seff[0,0] = 1
             for i in range(1, nd):
                 xs.append(ax[i-1] - xs[i-1] * e_cas)
-                ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
-                                                     nelecas).ravel())
+                ax.append(contract_2e(xs[i]))
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
@@ -1070,7 +1096,7 @@ class CASSCF(casci.CASCI):
             casdm1, casdm2 = self.fcisolver.make_rdm12(civec, self.ncas, self.nelecas)
         else:
             casdm1, casdm2 = casdm1_casdm2
-        return gen_g_hop(self, mo_coeff, 1, casdm1, casdm2, eris)[0]
+        return self.gen_g_hop(mo_coeff, 1, casdm1, casdm2, eris)[0]
 
     def _exact_paaa(self, mo, u, out=None):
         nmo = mo.shape[1]
@@ -1095,7 +1121,7 @@ class CASSCF(casci.CASCI):
         if not self.chkfile:
             return self
 
-        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+        if getattr(self.fcisolver, 'nevpt_intermediate', None):
             civec = None
         elif self.chk_ci:
             civec = envs['fcivec']
@@ -1222,7 +1248,8 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     energy_core = casscf.energy_nuc()
     energy_core += numpy.einsum('ij,ji', core_dm, hcore)
     energy_core += eris.vhf_c[:ncore,:ncore].trace()
-    h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas)) + eris.vhf_c[ncore:nocc,ncore:nocc]
+    h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas))
+    h1eff += eris.vhf_c[ncore:nocc,ncore:nocc]
     mc.get_h1eff = lambda *args: (h1eff, energy_core)
 
     ncore = casscf.ncore
@@ -1236,9 +1263,8 @@ def expmat(a):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
-    import pyscf.fci
+    from pyscf import fci
     from pyscf.mcscf import addons
 
     mol = gto.Mole()
@@ -1267,8 +1293,8 @@ if __name__ == '__main__':
 
     mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]
     print(emc - -15.950852049859-mol.energy_nuc())
 
@@ -1296,8 +1322,8 @@ if __name__ == '__main__':
     mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
     mc.natorb = 1
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]
     print(emc - -3.62638367550087)
 
@@ -1313,7 +1339,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASSCF(m, 6, 4)
-    mc.fcisolver = pyscf.fci.solver(mol)
+    mc.fcisolver = fci.solver(mol)
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
     emc = mc.mc1step(mo)[0]
@@ -1323,8 +1349,8 @@ if __name__ == '__main__':
 
     mc = CASSCF(m, 6, (3,1))
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     mc.verbose = 4
     emc = mc.mc1step(mo)[0]
     #mc.analyze()

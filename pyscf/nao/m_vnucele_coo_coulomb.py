@@ -14,7 +14,7 @@
 
 from __future__ import print_function, division
 
-def vnucele_coo_coulomb(sv, **kvargs):
+def vnucele_coo_coulomb(sv, **kw):
   """
   Computes the matrix elements defined by 
     Vne = f(r) sum_a   Z_a/|r-R_a|  g(r)
@@ -25,7 +25,7 @@ def vnucele_coo_coulomb(sv, **kvargs):
   """
   from numpy import einsum, dot
   from scipy.sparse import coo_matrix
-  g = sv.build_3dgrid_ae(**kvargs)
+  g = sv.build_3dgrid_ae(**kw)
   ca2o = sv.comp_aos_den(g.coords)
   vnuc = sv.comp_vnuc_coulomb(g.coords)
   vnuc_w = g.weights*vnuc

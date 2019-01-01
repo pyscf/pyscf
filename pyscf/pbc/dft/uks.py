@@ -32,6 +32,7 @@ from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -44,6 +45,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
+                                       kpt.reshape(1,3), kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
     ground_state = (dm.ndim == 3 and dm.shape[0] == 2 and kpts_band is None)
 
@@ -51,8 +63,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and
             ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
-                                                  ks.grids, kpt)
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     if not isinstance(dm, numpy.ndarray):
@@ -68,8 +79,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
+    if not hybrid:
         vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpt, kpts_band)
         vxc += vj
     else:
@@ -91,6 +101,12 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
+@lib.with_doc(pbcuhf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpt=None):
+    if dm is None:
+        dm = self.make_rdm1()
+    return rks.get_rho(mf, dm[0]+dm[1], grids, kpt)
+
 
 class UKS(pbcuhf.UHF):
     '''UKS class adapted for PBCs.
@@ -109,6 +125,8 @@ class UKS(pbcuhf.UHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
+    get_rho = get_rho
+
     define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)

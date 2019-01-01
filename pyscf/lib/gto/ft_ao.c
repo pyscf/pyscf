@@ -53,18 +53,56 @@
 #define NCTRMAX         72
 
 
-void CINTg1e_index_xyz(int *idx, const CINTEnvVars *envs);
 double CINTsquare_dist(const double *r1, const double *r2);
 double CINTcommon_fac_sp(int l);
-int CINTinit_int1e_EnvVars(CINTEnvVars *envs, const int *ng, const int *shls,
-                           const int *atm, const int natm,
-                           const int *bas, const int nbas, const double *env);
 
-void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
-                        const int *atm, const int natm,
-                        const int *bas, const int nbas, const double *env)
+/*
+ * Pyscf-1.5 (and older) use libcint function CINTinit_int1e_EnvVars and
+ * CINTg1e_index_xyz. It's unsafe since the CINTEnvVars type was redefined
+ * in ft_ao.h.  Copy the contents of CINTinit_int1e_EnvVars and
+ * CINTg1e_index_xyz here.
+ */
+#define IINC            0
+#define JINC            1
+#define GSHIFT          4
+#define POS_E1          5
+#define RYS_ROOTS       6
+#define TENSOR          7
+void GTO_ft_init1e_envs(CINTEnvVars *envs, int *ng, int *shls,
+                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        CINTinit_int1e_EnvVars(envs, ng, shls, atm, natm, bas, nbas, env);
+        envs->natm = natm;
+        envs->nbas = nbas;
+        envs->atm = atm;
+        envs->bas = bas;
+        envs->env = env;
+        envs->shls = shls;
+
+        const int i_sh = shls[0];
+        const int j_sh = shls[1];
+        envs->i_l = bas(ANG_OF, i_sh);
+        envs->j_l = bas(ANG_OF, j_sh);
+        envs->x_ctr[0] = bas(NCTR_OF, i_sh);
+        envs->x_ctr[1] = bas(NCTR_OF, j_sh);
+        envs->nfi = (envs->i_l+1)*(envs->i_l+2)/2;
+        envs->nfj = (envs->j_l+1)*(envs->j_l+2)/2;
+        envs->nf = envs->nfi * envs->nfj;
+        envs->common_factor = 1;
+
+        envs->gbits = ng[GSHIFT];
+        envs->ncomp_e1 = ng[POS_E1];
+        envs->ncomp_tensor = ng[TENSOR];
+
+        envs->li_ceil = envs->i_l + ng[IINC];
+        envs->lj_ceil = envs->j_l + ng[JINC];
+        if (ng[RYS_ROOTS] > 0) {
+                envs->nrys_roots = ng[RYS_ROOTS];
+        } else {
+                envs->nrys_roots = (envs->li_ceil + envs->lj_ceil)/2 + 1;
+        }
+
+        envs->ri = env + atm(PTR_COORD, bas(ATOM_OF, i_sh));
+        envs->rj = env + atm(PTR_COORD, bas(ATOM_OF, j_sh));
 
         int dli, dlj;
         if (envs->li_ceil < envs->lj_ceil) {
@@ -77,8 +115,49 @@ void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
         envs->g_stride_i = 1;
         envs->g_stride_j = dli;
         envs->g_size     = dli * dlj;
+
+        envs->lk_ceil = 1;
+        envs->ll_ceil = 1;
+        envs->g_stride_k = 0;
+        envs->g_stride_l = 0;
 }
 
+#define CART_MAX        128 // > (ANG_MAX*(ANG_MAX+1)/2)
+void CINTcart_comp(int *nx, int *ny, int *nz, const int lmax);
+static void _g2c_index_xyz(int *idx, const CINTEnvVars *envs)
+{
+        int i_l = envs->i_l;
+        int j_l = envs->j_l;
+        int nfi = envs->nfi;
+        int nfj = envs->nfj;
+        int di = envs->g_stride_i;
+        int dj = envs->g_stride_j;
+        int i, j, n;
+        int ofx, ofjx;
+        int ofy, ofjy;
+        int ofz, ofjz;
+        int i_nx[CART_MAX], i_ny[CART_MAX], i_nz[CART_MAX];
+        int j_nx[CART_MAX], j_ny[CART_MAX], j_nz[CART_MAX];
+
+        CINTcart_comp(i_nx, i_ny, i_nz, i_l);
+        CINTcart_comp(j_nx, j_ny, j_nz, j_l);
+
+        ofx = 0;
+        ofy = envs->g_size;
+        ofz = envs->g_size * 2;
+        n = 0;
+        for (j = 0; j < nfj; j++) {
+                ofjx = ofx + dj * j_nx[j];
+                ofjy = ofy + dj * j_ny[j];
+                ofjz = ofz + dj * j_nz[j];
+                for (i = 0; i < nfi; i++) {
+                        idx[n+0] = ofjx + di * i_nx[i];
+                        idx[n+1] = ofjy + di * i_ny[i];
+                        idx[n+2] = ofjz + di * i_nz[i];
+                        n += 3;
+                }
+        }
+}
 
 static const int _LEN_CART[] = {
         1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120, 136
@@ -282,47 +361,6 @@ static int vrr1d_withGv(double complex *g, double *rijri, double aij,
  * (10 + X*00 -> 01):
  *  gs + X*fs -> fp
  */
-static void plain_vrr2d_ket_inc1(double *out, const double *g,
-                                 double *rirj, int li, int lj)
-{
-        if (lj == 0) {
-                memcpy(out, g, sizeof(double)*_LEN_CART[li]);
-                return;
-        }
-        const int row_10 = _LEN_CART[li+1];
-        const int row_00 = _LEN_CART[li  ];
-        const int col_00 = _LEN_CART[lj-1];
-        const double *g00 = g;
-        const double *g10 = g + row_00*col_00;
-        int i, j;
-        const double *p00, *p10;
-        double *p01 = out;
-
-        for (j = STARTX_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
-                for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i);
-                        p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i));
-                        p01[i] = p10[0] + rirj[0] * p00[0];
-                }
-                p01 += row_00;
-        }
-        for (j = STARTY_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
-                for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i);
-                        p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i));
-                        p01[i] = p10[0] + rirj[1] * p00[0];
-                }
-                p01 += row_00;
-        }
-        j = STARTZ_IF_L_DEC1(lj);
-        if (j < _LEN_CART[lj-1]) {
-                for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i);
-                        p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i));
-                        p01[i] = p10[0] + rirj[2] * p00[0];
-                }
-        }
-}
 
 static void vrr2d_ket_inc1_withGv(double complex *out, const double complex *g,
                                   double *rirj, int li, int lj, size_t NGv)
@@ -424,51 +462,11 @@ static void vrr2d_inc1_swapij(double complex *out, const double complex *g,
         }
 }
 
-/* (li+lj,0) => (li,lj) */
-void GTOplain_vrr2d(double *out, double *g, double *gbuf2, CINTEnvVars *envs)
-{
-        const int li = envs->li_ceil;
-        const int lj = envs->lj_ceil;
-        const int nmax = li + lj;
-        const double *ri = envs->ri;
-        const double *rj = envs->rj;
-        double *g00, *g01, *gswap, *pg00, *pg01;
-        int row_01, col_01, row_00, col_00;
-        int i, j;
-        double rirj[3];
-        rirj[0] = ri[0] - rj[0];
-        rirj[1] = ri[1] - rj[1];
-        rirj[2] = ri[2] - rj[2];
-
-        g00 = gbuf2;
-        g01 = g;
-        for (j = 1; j < lj; j++) {
-                gswap = g00;
-                g00 = g01;
-                g01 = gswap;
-                pg00 = g00;
-                pg01 = g01;
-                for (i = li; i <= nmax-j; i++) {
-                        plain_vrr2d_ket_inc1(pg01, pg00, rirj, i, j);
-                        row_01 = _LEN_CART[i];
-                        col_01 = _LEN_CART[j];
-                        row_00 = _LEN_CART[i  ];
-                        col_00 = _LEN_CART[j-1];
-                        pg00 += row_00*col_00;
-                        pg01 += row_01*col_01;
-                }
-        }
-        plain_vrr2d_ket_inc1(out, g01, rirj, li, lj);
-}
-
 static void vrr2d_withGv(double complex *out, double complex *g,
-                         double complex *gbuf2, CINTEnvVars *envs, size_t NGv)
+                         double complex *gbuf2, const int li, const int lj,
+                         const double *ri, const double *rj, size_t NGv)
 {
-        const int li = envs->li_ceil;
-        const int lj = envs->lj_ceil;
         const int nmax = li + lj;
-        const double *ri = envs->ri;
-        const double *rj = envs->rj;
         double complex *g00, *g01, *gswap, *pg00, *pg01;
         int row_01, col_01, row_00, col_00;
         int i, j;
@@ -499,13 +497,10 @@ static void vrr2d_withGv(double complex *out, double complex *g,
 }
 /* (0,li+lj) => (li,lj) */
 static void hrr2d_withGv(double complex *out, double complex *g,
-                         double complex *gbuf2, CINTEnvVars *envs, size_t NGv)
+                         double complex *gbuf2, const int li, const int lj,
+                         const double *ri, const double *rj, size_t NGv)
 {
-        const int li = envs->li_ceil;
-        const int lj = envs->lj_ceil;
         const int nmax = li + lj;
-        const double *ri = envs->ri;
-        const double *rj = envs->rj;
         double complex *g00, *g01, *gswap, *pg00, *pg01;
         int row_01, col_01, row_00, col_00;
         int i, j;
@@ -534,6 +529,7 @@ static void hrr2d_withGv(double complex *out, double complex *g,
         }
         vrr2d_inc1_swapij(out, g01, rjri, lj, li, NGv);
 }
+
 
 /*
  * Recursive relation
@@ -921,9 +917,11 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                 g1d = gctrj;
                 for (n = 0; n < i_ctr*j_ctr; n++) {
                         if (i_l >= j_l) {
-                                vrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj, envs, NGv);
+                                vrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj,
+                                             envs->li_ceil, envs->lj_ceil, ri, rj, NGv);
                         } else {
-                                hrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj, envs, NGv);
+                                hrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj,
+                                             envs->li_ceil, envs->lj_ceil, ri, rj, NGv);
                         }
                         g1d += len_g1d * NGv;
                 }
@@ -1002,7 +1000,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
         }
 
         int *idx = malloc(sizeof(int) * nf * 3);
-        CINTg1e_index_xyz(idx, envs);
+        _g2c_index_xyz(idx, envs);
 
         double rrij = CINTsquare_dist(ri, rj);
         double fac1 = SQRTPI * M_PI * CINTcommon_fac_sp(i_l) * CINTcommon_fac_sp(j_l);
@@ -1663,5 +1661,92 @@ void GTO_ft_fill_shls_drv(int (*intor)(), FPtr_eval_gz eval_gz,
         }
 }
         free(ijloc);
+}
+
+
+
+
+/*
+ * Reversed vrr2d. They are used by numint_uniform_grid.c
+ */
+void GTOplain_vrr2d_ket_inc1(double *out, const double *g,
+                             double *rirj, int li, int lj)
+{
+        if (lj == 0) {
+                memcpy(out, g, sizeof(double)*_LEN_CART[li]);
+                return;
+        }
+        const int row_10 = _LEN_CART[li+1];
+        const int row_00 = _LEN_CART[li  ];
+        const int col_00 = _LEN_CART[lj-1];
+        const double *g00 = g;
+        const double *g10 = g + row_00*col_00;
+        int i, j;
+        const double *p00, *p10;
+        double *p01 = out;
+
+        for (j = STARTX_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i));
+                        p01[i] = p10[0] + rirj[0] * p00[0];
+                }
+                p01 += row_00;
+        }
+        for (j = STARTY_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i));
+                        p01[i] = p10[0] + rirj[1] * p00[0];
+                }
+                p01 += row_00;
+        }
+        j = STARTZ_IF_L_DEC1(lj);
+        if (j < _LEN_CART[lj-1]) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i));
+                        p01[i] = p10[0] + rirj[2] * p00[0];
+                }
+        }
+}
+
+void GTOreverse_vrr2d_ket_inc1(double *g01, double *g00,
+                               double *rirj, int li, int lj)
+{
+        const int row_10 = _LEN_CART[li+1];
+        const int row_00 = _LEN_CART[li  ];
+        const int col_00 = _LEN_CART[lj-1];
+        double *g10 = g00 + row_00*col_00;
+        double *p00, *p10;
+        int i, j;
+
+        for (j = STARTX_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i));
+                        p10[0] += g01[i];
+                        p00[0] += g01[i] * rirj[0];
+                }
+                g01 += row_00;
+        }
+        for (j = STARTY_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i));
+                        p10[0] += g01[i];
+                        p00[0] += g01[i] * rirj[1];
+                }
+                g01 += row_00;
+        }
+        j = STARTZ_IF_L_DEC1(lj);
+        if (j < _LEN_CART[lj-1]) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i));
+                        p10[0] += g01[i];
+                        p00[0] += g01[i] * rirj[2];
+                }
+        }
 }
 
