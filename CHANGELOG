@@ -23,6 +23,10 @@ PySCF 1.6 beta (2018-11-26)
   - PBC KUCCSD
   - PBC EOM-IP/EA-KRCCSD
   - PBC EOM-IP/EA-KUCCSD
+  - Non-relativistic static and dynamic polarizability and hyper-polarizability tensor
+* Improved
+  - The treatment of HF exchange in PBC system when calling PBC MP2, CISD, CCSD code
+  - Convergence performance of KCCSD iterations for low-dimension systems
 * Bugfix
   - Complex density in pbc.get_j function
 
@@ -55,8 +59,6 @@ PySCF 1.5.5 (2018-12-31)
   - Fix symmetrization for k-point density in pbc.dft.numint.
   - Molden parser to handel UHF orbitals
 * Bugfix
-  - OpenMP race condition in FCI
-  - Data structure of TDDFT response amplitudes (X, Y vectors)
   - Get_fermi in KHF and KUHF
   - Execute call in dmrgci
   - Directories and paths in dmrgci
@@ -72,7 +74,7 @@ PySCF 1.5.4 (2018-11-16)
 ------------------------
 * Improved
   - Add support for GTH pseudopotentials beyond d electrons
-  - TDDFT amplitudes convention: X[nvir,nocc] -> X[nocc,nvir]
+  - Data structure of TDDFT response amplitudes (X, Y vectors): X[nvir,nocc] -> X[nocc,nvir]
 * Bugfix
   - OpenMP race condition in FCI solver
   - Undefined HDF5 dataset in PBC MDF initialization
@@ -100,13 +102,13 @@ PySCF 1.5.2 (2018-08-15)
   - IO performance of pbc.GDF initialization
   - Default linear dependence treatment in GDF to improve accuracy
 * Bugfix
-  - selected_ci 2-particle density matrices for two electron systems
+  - Selected-ci 2-particle density matrices for two electron systems
 
 
 PySCF 1.5.1 (2018-07-01)
 ------------------------
 * Improved
-  - the memory usage for a large number of MM particles (issue #193)
+  - The memory usage for a large number of MM particles (issue #193)
 * Bugfix
   - Frozen orbitals in MCSCF canonicalization
   - Dimension error when initializing DF-CCSD integral tensor
