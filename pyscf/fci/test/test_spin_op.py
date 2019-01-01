@@ -39,8 +39,8 @@ e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
 
 
 def tearDownModule():
-    global h1, h2, c0
-    del h1, h2, c0
+    global h1, h2, c0, ci0
+    del h1, h2, c0, ci0
 
 class KnownValues(unittest.TestCase):
     def test_spin_squre(self):
@@ -60,6 +60,24 @@ class KnownValues(unittest.TestCase):
         e1, ci1 = fci.direct_uhf.kernel((h1a,h1b), (h2aa,h2ab,h2bb), 6, (3,2))
         ss = fci.spin_op.spin_square(ci1, 6, (3,2), mo_coeff=(numpy.eye(6),v))[0]
         self.assertAlmostEqual(ss, 3.75, 8)
+
+        numpy.random.seed(1)
+        n = fci.cistring.num_strings(6,3)
+        ci1 = numpy.random.random((n,n))
+        ss1 = numpy.einsum('ij,ij->', ci1, fci.spin_op.contract_ss(ci1, 6, 6))
+        self.assertAlmostEqual(ss1, fci.spin_op.spin_square(ci1, 6, 6)[0], 12)
+
+        na = fci.cistring.num_strings(6,4)
+        nb = fci.cistring.num_strings(6,2)
+        ci1 = numpy.random.random((na,nb))
+        ss1 = numpy.einsum('ij,ij->', ci1, fci.spin_op.contract_ss(ci1, 6, (4,2)))
+        self.assertAlmostEqual(ss1, fci.spin_op.spin_square(ci1, 6, (4,2))[0], 12)
+
+        numpy.random.seed(1)
+        n = fci.cistring.num_strings(10,5)
+        ci1 = numpy.random.random((n,n))
+        ss1 = numpy.einsum('ij,ij->', ci1, fci.spin_op.contract_ss(ci1, 10, 10))
+        self.assertAlmostEqual(ss1, fci.spin_op.spin_square(ci1, 10, 10)[0], 8)
 
     def test_contract_ss(self):
         self.assertAlmostEqual(e0, -25.4538751043, 9)
@@ -90,6 +108,59 @@ class KnownValues(unittest.TestCase):
         fci.direct_spin1.contract_2e = bak1
         self.assertAlmostEqual(e, -25.4095560762, 7)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 7)
+
+    def test_rdm2_baab(self):
+        numpy.random.seed(9)
+        nelec = 5, 4
+        na = fci.cistring.num_strings(norb, nelec[0])
+        nb = fci.cistring.num_strings(norb, nelec[1])
+        ci0 = numpy.random.random((na,nb))
+        ci0 /= numpy.linalg.norm(ci0)
+        dm2baab = fci.spin_op.make_rdm2_baab(ci0, norb, nelec)
+        dm2abba = fci.spin_op.make_rdm2_abba(ci0, norb, nelec)
+        self.assertAlmostEqual(lib.finger(dm2baab), -0.04113790921902272, 12)
+        self.assertAlmostEqual(lib.finger(dm2abba), -0.10910630874863614, 12)
+
+        dm2ab = fci.direct_spin1.make_rdm12s(ci0, norb, nelec)[1][1]
+        self.assertAlmostEqual(abs(dm2baab - -dm2ab.transpose(2,1,0,3)).max(), 0, 12)
+        self.assertAlmostEqual(abs(dm2abba - -dm2ab.transpose(0,3,2,1)).max(), 0, 12)
+
+    def test_local_spin(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['H', ( 0 ,  0    , 0.   )],
+            ['H', ( 0 ,  0    , 8.   )],
+        ]
+
+        mol.basis = {'H': 'cc-pvdz'}
+        mol.spin = 0
+        mol.build()
+
+        m = scf.RHF(mol)
+        ehf = m.scf()
+
+        cis = fci.direct_spin0.FCISolver(mol)
+        #cis.verbose = 5
+        norb = m.mo_coeff.shape[1]
+        nelec = (mol.nelectron, 0)
+        nelec = mol.nelectron
+        h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
+        eri = ao2mo.incore.full(m._eri, m.mo_coeff)
+        e, ci0 = cis.kernel(h1e, eri, norb, nelec)
+        ss = fci.spin_op.spin_square(ci0, norb, nelec, m.mo_coeff, m.get_ovlp())
+        print('local spin for H1+H2 = 0')
+        self.assertAlmostEqual(ss[0], 0, 9)
+        ss = fci.spin_op.local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5))
+        print('local spin for H1 = 0.75')
+        self.assertAlmostEqual(ss[0], .75, 9)
+        ss = fci.spin_op.local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5,10))
+        print('local spin for H2 = 0.75')
+        self.assertAlmostEqual(ss[0], .75, 9)
+
+        ss = fci.spin_op.spin_square0(ci0, norb, nelec)
+        print('tot spin for HH = 0')
+        self.assertAlmostEqual(ss[0], 0, 9)
 
 
 if __name__ == "__main__":

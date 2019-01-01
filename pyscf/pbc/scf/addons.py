@@ -302,7 +302,7 @@ def convert_to_rhf(mf, out=None):
             assert(not isinstance(out, scf.khf.KSCF))
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
-        if hasattr(mf, '_scf'):
+        if getattr(mf, '_scf', None):
             return mol_addons._update_mf_without_soscf(mf, copy.copy(mf._scf), False)
         else:
             return copy.copy(mf)

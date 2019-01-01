@@ -60,7 +60,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
     casscf_class = casscf.__class__
 
     if with_df is None:
-        if (hasattr(casscf._scf, 'with_df') and
+        if (getattr(casscf._scf, 'with_df', None) and
             (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
             with_df = casscf._scf.with_df
         else:
@@ -167,7 +167,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
     if 'CASCI' in str(casscf_class):
         return casscf  # because CASCI does not need orbital optimization
 
-    if hasattr(casscf, 'with_df') and casscf.with_df:
+    if getattr(casscf, 'with_df', None):
         return casscf
 
     if with_df is None:

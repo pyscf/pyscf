@@ -93,7 +93,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         def get_hcore(self, mol=None):
             if mol is None: mol = self.mol
-            if hasattr(scf_method, 'get_hcore'):
+            if getattr(scf_method, 'get_hcore', None):
                 h1e = method_class.get_hcore(self, mol)
             else:  # DO NOT modify post-HF objects to avoid the MM charges applied twice
                 raise RuntimeError('mm_charge function cannot be applied on post-HF methods')

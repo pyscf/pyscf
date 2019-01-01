@@ -81,7 +81,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     nao = chk_mol.nao_nr()
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
-    if hasattr(mo[0], 'ndim') and mo[0].ndim == 1:  # RHF/GHF/DHF
+    if getattr(mo[0], 'ndim', None) == 1:  # RHF/GHF/DHF
         if nao*2 == mo.shape[0]:  # GHF or DHF
             if project:
                 raise NotImplementedError('Project initial guess from '
@@ -95,7 +95,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
             dma, dmb = uhf.make_rdm1([mo_coeff]*2, (mo_occa, mo_occb))
             dm = scipy.linalg.block_diag(dma, dmb)
     else: #UHF
-        if hasattr(mo[0][0], 'ndim') and mo[0][0].ndim == 2:  # KUHF
+        if getattr(mo[0][0], 'ndim', None) == 2:  # KUHF
             logger.warn(mol, 'k-point UHF results are found.  Density matrix '
                         'at Gamma point is used for the molecular SCF initial guess')
             mo = mo[0]

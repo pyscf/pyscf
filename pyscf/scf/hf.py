@@ -1095,14 +1095,14 @@ def as_scanner(mf):
             mf_obj = self
             # partial deepcopy to avoid overwriting existing object
             while mf_obj is not None:
-                if hasattr(mf_obj, 'with_df'):
+                if getattr(mf_obj, 'with_df', None):
                     mf_obj.with_df = copy.copy(mf_obj.with_df)
-                if hasattr(mf_obj, 'with_x2c'):
+                if getattr(mf_obj, 'with_x2c', None):
                     mf_obj.with_x2c = copy.copy(mf_obj.with_x2c)
-                if hasattr(mf_obj, 'grids'):  # DFT
+                if getattr(mf_obj, 'grids', None):  # DFT
                     mf_obj.grids = copy.copy(mf_obj.grids)
                     mf_obj._numint = copy.copy(mf_obj._numint)
-                if hasattr(mf_obj, '_scf'):
+                if getattr(mf_obj, '_scf', None):
                     mf_obj._scf = copy.copy(mf_obj._scf)
                     mf_obj = mf_obj._scf
                 else:
@@ -1119,13 +1119,13 @@ def as_scanner(mf):
                 mf_obj.mol = mol
                 mf_obj.opt = None
                 mf_obj._eri = None
-                if hasattr(mf_obj, 'with_df') and mf_obj.with_df:
+                if getattr(mf_obj, 'with_df', None):
                     mf_obj.with_df.mol = mol
                     mf_obj.with_df.auxmol = None
                     mf_obj.with_df._cderi = None
-                if hasattr(mf_obj, 'with_x2c') and mf_obj.with_x2c:
+                if getattr(mf_obj, 'with_x2c', None):
                     mf_obj.with_x2c.mol = mol
-                if hasattr(mf_obj, 'grids'):  # DFT
+                if getattr(mf_obj, 'grids', None):  # DFT
                     mf_obj.grids.mol = mol
                     mf_obj.grids.coords = None
                     mf_obj.grids.weights = None

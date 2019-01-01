@@ -132,7 +132,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     '''
 
     if mo_energy is None: mo_energy = mf.mo_energy
-    if hasattr(mo_energy, 'mo_ea'):
+    if getattr(mo_energy, 'mo_ea', None) is not None:
         mo_ea = mo_energy.mo_ea
         mo_eb = mo_energy.mo_eb
     else:
@@ -204,7 +204,7 @@ def get_grad(mo_coeff, mo_occ, fock):
     uniq_var_a = viridxa.reshape(-1,1) & occidxa
     uniq_var_b = viridxb.reshape(-1,1) & occidxb
 
-    if hasattr(fock, 'focka'):
+    if getattr(fock, 'focka', None) is not None:
         focka = fock.focka
         fockb = fock.fockb
     elif isinstance(fock, (tuple, list)) or getattr(fock, 'ndim', None) == 3:
@@ -224,8 +224,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''
     mo_a = mo_coeff[:,mo_occ>0]
     mo_b = mo_coeff[:,mo_occ==2]
-    dm_a = numpy.dot(mo_a, mo_a.T)
-    dm_b = numpy.dot(mo_b, mo_b.T)
+    dm_a = numpy.dot(mo_a, mo_a.conj().T)
+    dm_b = numpy.dot(mo_b, mo_b.conj().T)
     return numpy.array((dm_a, dm_b))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
@@ -249,7 +249,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
         log.note('**** MO energy ****')
-        if hasattr(mo_energy, 'mo_ea'):
+        if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea
             mo_eb = mo_energy.mo_eb
             log.note('                Roothaan           | alpha              | beta')
@@ -287,14 +287,14 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
     virtual subspaces separatedly (without change occupancy).
     '''
-    if not hasattr(fock, 'focka'):
+    if getattr(fock, 'focka', None) is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_fock(dm=dm)
     mo_e, mo_coeff = hf.canonicalize(mf, mo_coeff, mo_occ, fock)
-    if hasattr(fock, 'focka'):
-        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
-        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
-        mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+    fa, fb = fock.focka, fock.fockb
+    mo_ea = numpy.einsum('pi,pi->i', mo_coeff.conj(), fa.dot(mo_coeff)).real
+    mo_eb = numpy.einsum('pi,pi->i', mo_coeff.conj(), fb.dot(mo_coeff)).real
+    mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
     return mo_e, mo_coeff
 
 dip_moment = hf.dip_moment
@@ -312,7 +312,7 @@ class ROHF(hf.RHF):
 
     @property
     def nelec(self):
-        if self._nelec is not None:
+        if getattr(self, '_nelec', None) is not None:
             return self._nelec
         else:
             return self.mol.nelec
@@ -366,9 +366,9 @@ class ROHF(hf.RHF):
     @lib.with_doc(hf.eig.__doc__)
     def eig(self, fock, s):
         e, c = self._eigh(fock, s)
-        if hasattr(fock, 'focka'):
-            mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
-            mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
+        if getattr(fock, 'focka', None) is not None:
+            mo_ea = numpy.einsum('pi,pi->i', c.conj(), fock.focka.dot(c)).real
+            mo_eb = numpy.einsum('pi,pi->i', c.conj(), fock.fockb.dot(c)).real
             e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
         return e, c
 
@@ -396,7 +396,7 @@ class ROHF(hf.RHF):
 
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
-            if hasattr(dm, 'mo_coeff'):
+            if getattr(dm, 'mo_coeff', None) is not None:
                 mo_coeff = dm.mo_coeff
                 mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
                 mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
@@ -421,10 +421,7 @@ class ROHF(hf.RHF):
 
     def spin_square(self, mo_coeff=None, s=None):
         '''Spin square and multiplicity of RHF determinant'''
-        if getattr(self, 'nelec', None) is None:
-            neleca, nelecb = self.mol.nelec
-        else:
-            neleca, nelecb = self.nelec
+        neleca, nelecb = self.nelec
         ms = (neleca - nelecb) * .5
         ss = ms * (ms + 1)
         return ss, ms*2+1

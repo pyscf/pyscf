@@ -47,7 +47,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
     '''
     from pyscf.pbc.df import df
     if with_df is None:
-        if hasattr(mf, 'kpts'):
+        if getattr(mf, 'kpts', None) is not None:
             kpts = mf.kpts
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))
@@ -374,7 +374,7 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
     if kpts_band is kpts or kpts_band is None:
         return v_kpts.reshape(dm_kpts.shape)
     else:
-        if hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1:
+        if getattr(kpts_band, 'ndim', None) == 1:
             v_kpts = v_kpts[:,0]
 # A temporary solution for issue 242. Looking for better way to sort out the
 # dimension of the output

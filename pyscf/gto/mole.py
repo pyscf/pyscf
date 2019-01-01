@@ -42,7 +42,7 @@ from pyscf import __config__
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
         _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
 
-# For code compatiblity in python-2 and python-3
+# For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
 
@@ -2025,7 +2025,7 @@ class Mole(lib.StreamObject):
 
         # avoid to open output file twice
         if (parse_arg and self.output is not None and
-            not (hasattr(self.stdout, 'name') and  # to handle StringIO().name bug
+            not (getattr(self.stdout, 'name', None) and  # to handle StringIO().name bug
                  self.stdout.name == self.output)):
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')

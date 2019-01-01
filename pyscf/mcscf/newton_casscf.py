@@ -46,7 +46,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     nmo = mo.shape[1]
     ci0 = ci0.ravel()
 
-    if hasattr(casscf.fcisolver, 'gen_linkstr'):
+    if getattr(casscf.fcisolver, 'gen_linkstr', None):
         linkstrl = casscf.fcisolver.gen_linkstr(ncas, nelecas, True)
         linkstr  = casscf.fcisolver.gen_linkstr(ncas, nelecas, False)
     else:
@@ -700,7 +700,7 @@ class CASSCF(mc1step.CASSCF):
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_cas)
 
-            if hasattr(self.fcisolver,'spin_square'):
+            if getattr(self.fcisolver, 'spin_square', None):
                 ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
             else:
                 ss = None

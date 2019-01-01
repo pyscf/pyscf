@@ -150,9 +150,9 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
 
     unknown = {}
     for k, v in kwargs.items():
-        setattr(cis, k, v)
         if not hasattr(cis, k):
             unknown[k] = v
+        setattr(cis, k, v)
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))

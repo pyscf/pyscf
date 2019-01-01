@@ -449,7 +449,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         else:
             eris.ovov = ao2mo.general(mp._scf._eri, (co,cv,co,cv))
 
-    elif hasattr(mp._scf, 'with_df') and mp._scf.with_df:
+    elif getattr(mp._scf, 'with_df', None):
         # To handle the PBC or custom 2-electron with 3-index tensor.
         # Call dfmp2.MP2 for efficient DF-MP2 implementation.
         log.warn('DF-HF is found. (ia|jb) is computed based on the DF '

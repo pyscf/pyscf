@@ -18,7 +18,6 @@
 
 '''
 Non-relativistic static and dynamic polarizability and hyper-polarizability tensor
-(In testing)
 '''
 
 

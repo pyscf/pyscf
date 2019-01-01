@@ -1349,7 +1349,7 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
     '''
     #assert(isinstance(mf, dft.krks.KRKS))
     cell = mf.cell
-    if hasattr(mf, 'kpts'):
+    if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
@@ -1381,7 +1381,7 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     '''
     #assert(isinstance(mf, dft.kuks.KUKS))
     cell = mf.cell
-    if hasattr(mf, 'kpts'):
+    if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
@@ -1614,6 +1614,8 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         ke1 *= KE_RATIO
         ke_delimeter.append(ke1)
 
+    print(kecuts_pgto)
+    print(ke_delimeter)
     tasks = []
     for ke0, ke1 in zip(ke_delimeter[:-1], ke_delimeter[1:]):
         # shells which have high exps (small rcut)
@@ -1622,6 +1624,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         if len(shls_dense) == 0:
             continue
 
+        print(ke0, ke1, shls_dense)
         mesh = tools.cutoff_to_mesh(a, ke1)
         if TO_EVEN_GRIDS:
             mesh = (mesh+1)//2 * 2  # to the nearest even number

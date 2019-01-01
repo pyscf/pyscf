@@ -307,7 +307,7 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
         h1e_v = eris['h1eff'][nocc:,ncore:nocc] - numpy.einsum('mbbn->mn',h2e_v)
 
 
-    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
+    if getattr(mc.fcisolver, 'nevpt_intermediate', None):
         a16 = mc.fcisolver.nevpt_intermediate('A16',mc.ncas,mc.nelecas,ci)
     else:
         a16 = make_a16(h1e,h2e, dms, ci, mc.ncas, mc.nelecas)
@@ -348,7 +348,7 @@ def Si(mc, ci, dms, eris=None, verbose=None):
         h2e_v = eris['ppaa'][ncore:nocc,:ncore].transpose(0,2,1,3)
         h1e_v = eris['h1eff'][ncore:nocc,:ncore]
 
-    if hasattr(mc.fcisolver, 'nevpt_intermediate'):
+    if getattr(mc.fcisolver, 'nevpt_intermediate', None):
         #mc.fcisolver.make_a22(mc.ncas, state)
         a22 = mc.fcisolver.nevpt_intermediate('A22',mc.ncas,mc.nelecas,ci)
     else:
@@ -643,7 +643,7 @@ class NEVPT(lib.StreamObject):
         '''
         #TODO
         #Some preprocess for compressed perturber
-        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+        if getattr(self.fcisolver, 'nevpt_intermediate', None):
             logger.info(self, 'Use compressed mps perturber as an approximation')
         else:
             msg = 'Compressed mps perturber can be only used with DMRG wave function'
@@ -669,7 +669,7 @@ class NEVPT(lib.StreamObject):
                                'CASCI calculation is required for NEVPT2 method. '
                                'See examples/mrpt/41-for_state_average.py.')
 
-        if hasattr(self._mc, 'frozen') and self._mc.frozen is not None:
+        if getattr(self._mc, 'frozen', None) is not None:
             raise NotImplementedError
 
         if isinstance(self.verbose, logger.Logger):
@@ -683,7 +683,7 @@ class NEVPT(lib.StreamObject):
         if (not self.canonicalized):
             self.mo_coeff,_, self.mo_energy = self.canonicalize(self.mo_coeff,ci=self.load_ci(),verbose=self.verbose)
 
-        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+        if getattr(self.fcisolver, 'nevpt_intermediate', None):
             logger.info(self, 'DMRG-NEVPT')
             dm1, dm2, dm3 = self.fcisolver._make_dm123(self.load_ci(),self.ncas,self.nelecas,None)
         else:
@@ -700,7 +700,7 @@ class NEVPT(lib.StreamObject):
         time1 = log.timer('integral transformation', *time1)
         nocc = self.ncore + self.ncas
 
-        if not hasattr(self.fcisolver, 'nevpt_intermediate'):  # regular FCI solver
+        if not getattr(self.fcisolver, 'nevpt_intermediate', None):  # regular FCI solver
             link_indexa = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[0])
             link_indexb = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[1])
             aaaa = eris['ppaa'][self.ncore:nocc,self.ncore:nocc].copy()

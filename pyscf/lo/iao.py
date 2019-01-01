@@ -59,7 +59,7 @@ def iao(mol, orbocc, minao=MINAO):
     # DO NOT import pbcgto early and check whether mol is a cell object.
     # "from pyscf.pbc import gto as pbcgto and isinstance(mol, pbcgto.Cell)"
     # The code should work even pbc module is not availabe.
-    if hasattr(mol, 'pbc_intor'):  # cell object has pbc_intor method
+    if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
         from pyscf.pbc import gto as pbcgto
         s1 = mol.pbc_intor('int1e_ovlp', hermi=1)
         s2 = pmol.pbc_intor('int1e_ovlp', hermi=1)
@@ -91,7 +91,7 @@ def iao(mol, orbocc, minao=MINAO):
 def reference_mol(mol, minao=MINAO):
     '''Create a molecule which uses reference minimal basis'''
     pmol = mol.copy()
-    if hasattr(pmol, 'rcut'):
+    if getattr(pmol, 'rcut', None) is not None:
         pmol.rcut = None
     pmol.build(False, False, basis=minao)
     return pmol
@@ -109,7 +109,7 @@ def fast_iao_mullikan_pop(mol, dm, iaos, verbose=logger.DEBUG):
         mullikan population analysis in the basis IAO
     '''
     pmol = reference_mol(mol)
-    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
         ovlpS = mol.pbc_intor('int1e_ovlp')
     else:
         ovlpS = mol.intor_symmetric('int1e_ovlp')

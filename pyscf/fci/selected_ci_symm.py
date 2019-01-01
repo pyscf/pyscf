@@ -144,7 +144,7 @@ class SelectedCI(selected_ci.SelectedCI):
                     orbsym=None, **kwargs):
         if orbsym is None:
             orbsym = self.orbsym
-        if hasattr(civec_strs, '_strs'):
+        if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:
             assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
@@ -196,10 +196,12 @@ class SelectedCI(selected_ci.SelectedCI):
                 wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
                 strsa, strsb = c._strs
                 if nroots > 1:
-                    c = [addons._symmetrize_wfn(ci, strsa, strsb, self.orbsym, wfnsym0)
-                         for ci in c]
+                    for i, ci in enumerate(c):
+                        ci = addons._symmetrize_wfn(ci, strsa, strsb, self.orbsym, wfnsym0)
+                        c[i] = selected_ci._as_SCIvector(ci, c._strs)
                 else:
-                    c = addons._symmetrize_wfn(c, strsa, strsb, self.orbsym, wfnsym0)
+                    ci = addons._symmetrize_wfn(c, strsa, strsb, self.orbsym, wfnsym0)
+                    c = selected_ci._as_SCIvector(ci, c._strs)
 
         self.eci, self.ci = e, c
         return e, c

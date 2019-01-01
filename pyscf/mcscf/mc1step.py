@@ -737,7 +737,7 @@ class CASSCF(casci.CASCI):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('internal_rotation = %s', self.internal_rotation)
-        if hasattr(self.fcisolver, 'dump_flags'):
+        if getattr(self.fcisolver, 'dump_flags', None):
             self.fcisolver.dump_flags(self.verbose)
         if self.mo_coeff is None:
             log.error('Orbitals for CASCI are not specified. The relevant SCF '
@@ -814,7 +814,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_cas)
 
-            if hasattr(self.fcisolver,'spin_square'):
+            if getattr(self.fcisolver, 'spin_square', None):
                 ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
             else:
                 ss = None
@@ -1024,13 +1024,13 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:
             tol = None
-        if hasattr(self.fcisolver, 'approx_kernel'):
+        if getattr(self.fcisolver, 'approx_kernel', None):
             fn = self.fcisolver.approx_kernel
             e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
                         tol=tol, max_memory=self.max_memory)
             return ci1, None
-        elif not (hasattr(self.fcisolver, 'contract_2e') and
-                  hasattr(self.fcisolver, 'absorb_h1e')):
+        elif not (getattr(self.fcisolver, 'contract_2e', None) and
+                  getattr(self.fcisolver, 'absorb_h1e', None)):
             fn = self.fcisolver.kernel
             e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
                         tol=tol, max_memory=self.max_memory,
@@ -1042,7 +1042,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         # Be careful with the symmetry adapted contract_2e function. When the
         # symmetry adapted FCI solver is used, the symmetry of ci0 may be
         # different to fcisolver.wfnsym. This function may output 0.
-        if hasattr(self.fcisolver, 'guess_wfnsym'):
+        if getattr(self.fcisolver, 'guess_wfnsym', None):
             wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0)
         else:
             wfnsym = None
@@ -1121,7 +1121,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         if not self.chkfile:
             return self
 
-        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+        if getattr(self.fcisolver, 'nevpt_intermediate', None):
             civec = None
         elif self.chk_ci:
             civec = envs['fcivec']

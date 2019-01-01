@@ -602,6 +602,7 @@ XC_ALIAS = {
     'SOGGA'             : 'SOGGA,PBE',
     'BLOC'              : 'BLOC,TPSSLOC',
     'OLYP'              : 'OPTX,LYP',
+    'OPBE'              : 'OPTX,PBE',
     'RPBE'              : 'RPBE,PBE',
     'BPBE'              : 'B88,PBE',
     'MPW91'             : 'MPW91,PW91',

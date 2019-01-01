@@ -156,14 +156,14 @@ class GCCSD(ccsd.CCSD):
             return self.e_corr, self.t1, self.t2
 
         # Initialize orbspin so that we can attach it to t1, t2
-        if not hasattr(self.mo_coeff, 'orbspin'):
+        if getattr(self.mo_coeff, 'orbspin', None) is None:
             orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
             if not np.any(orbspin == -1):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
         if eris is None: eris = self.ao2mo(self.mo_coeff)
 
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
-        if hasattr(eris, 'orbspin') and eris.orbspin is not None:
+        if getattr(eris, 'orbspin', None) is not None:
             self.t1 = lib.tag_array(self.t1, orbspin=eris.orbspin)
             self.t2 = lib.tag_array(self.t2, orbspin=eris.orbspin)
         return e_corr, self.t1, self.t2
@@ -259,7 +259,7 @@ class GCCSD(ccsd.CCSD):
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff)
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             raise NotImplementedError
         else:
             return _make_eris_outcore(self, mo_coeff)
@@ -310,7 +310,7 @@ class _PhysicistsERIs:
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
         mo_idx = ccsd.get_frozen_mask(mycc)
-        if hasattr(mo_coeff, 'orbspin'):
+        if getattr(mo_coeff, 'orbspin', None) is not None:
             self.orbspin = mo_coeff.orbspin[mo_idx]
             mo_coeff = lib.tag_array(mo_coeff[:,mo_idx], orbspin=self.orbspin)
             self.mo_coeff = mo_coeff

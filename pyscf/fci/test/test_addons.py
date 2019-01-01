@@ -16,6 +16,7 @@
 import unittest
 from functools import reduce
 import numpy
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
@@ -42,6 +43,10 @@ g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
 na = fci.cistring.num_strings(norb, nelec//2)
 e, ci0 = fci.direct_spin1.kernel(h1e, g2e, norb, nelec, tol=1e-15)
 
+def tearDownModule():
+    global mol, m, h1e, g2e, ci0
+    del mol, m, h1e, g2e, ci0
+
 class KnownValues(unittest.TestCase):
     def test_large_ci(self):
         res = fci.addons.large_ci(ci0, norb, nelec, tol=.1)
@@ -61,8 +66,18 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.all([x[1] for x in res] == refa))
         self.assertTrue(numpy.all([x[2] for x in res] == refb))
 
+        na = fci.cistring.num_strings(6, 3)
+        numpy.random.seed(9)
+        ci1 = numpy.random.random((na,na))
+        ci1 /= numpy.linalg.norm(ci1)
+        res = fci.addons.large_ci(ci1, 6, (3,3), tol=.2)
+        self.assertEqual(res[0][1:], ('0b110100', '0b1101'))
+
     def test__init__file(self):
         c1 = fci.FCI(mol, m.mo_coeff)
+        self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)
+
+        c1 = fci.FCI(m)
         self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)
 
     def test_init_triplet(self):
@@ -191,6 +206,12 @@ class KnownValues(unittest.TestCase):
         mci.kernel(nelec=(3,3))
         self.assertAlmostEqual(mci.spin_square(mci.ci, mol.nao_nr(), (3,3))[0], 0, 7)
 
+        mci = fci.addons.fix_spin_(mci, .2, ss=2)
+        # Change initial guess to triplet state
+        ci0 = fci.addons.initguess_triplet(norb, (3,3), '0b10011')
+        mci.kernel(nelec=(3,3), ci0=ci0)
+        self.assertAlmostEqual(mci.spin_square(mci.ci, mol.nao_nr(), (3,3))[0], 2, 7)
+
     def test_fix_spin_high_cost(self):
         def check(mci):
             mci = fci.addons.fix_spin_(mci, .2, 0)
@@ -222,16 +243,76 @@ class KnownValues(unittest.TestCase):
 
     def test_transform_ci_for_orbital_rotation(self):
         numpy.random.seed(12)
-        norb = nelec = 6
+        norb = 6
+        nelec = (4,2)
         u = numpy.linalg.svd(numpy.random.random((norb,norb)))[0]
         mo1 = m.mo_coeff.dot(u)
         h1e_new = reduce(numpy.dot, (mo1.T, m.get_hcore(), mo1))
         g2e_new = ao2mo.incore.general(m._eri, (mo1,)*4, compact=False)
         e1ref, ci1ref = fci.direct_spin1.kernel(h1e_new, g2e_new, norb, nelec, tol=1e-15)
+
+        ci0 = fci.direct_spin1.kernel(h1e, g2e, norb, nelec)[1]
         ci1 = fci.addons.transform_ci_for_orbital_rotation(ci0, norb, nelec, u)
         e1 = fci.direct_spin1.energy(h1e_new, g2e_new, ci1, norb, nelec)
         self.assertAlmostEqual(e1, e1ref, 9)
         self.assertAlmostEqual(abs(abs(ci1ref)-abs(ci1)).sum(), 0, 9)
+
+    def test_overlap(self):
+        numpy.random.seed(12)
+        s = numpy.random.random((6,6))
+        s = s.dot(s.T) / 3
+        bra = numpy.random.random((15,15))
+        ket = numpy.random.random((15,15))
+        bra /= numpy.linalg.norm(bra)
+        ket /= numpy.linalg.norm(ket)
+        self.assertAlmostEqual(fci.addons.overlap(bra, ket, 6, 4), 0.7767249258737043, 9)
+        self.assertAlmostEqual(fci.addons.overlap(bra, ket, 6, 4, (s,s)), 0.025906419720918766, 9)
+
+        norb = 4
+        nelec = (1,0)
+        ua = numpy.linalg.svd(numpy.random.random((norb+1,norb+1)))[0]
+        ub = numpy.linalg.svd(numpy.random.random((norb+1,norb+1)))[0]
+        s = numpy.dot(ua[:,:norb].T, ub[:,:norb])
+        ci0 = numpy.random.random((norb,1))
+        ci0 /= numpy.linalg.norm(ci0)
+        ci1 = numpy.random.random((norb,1))
+        ci1 /= numpy.linalg.norm(ci1)
+        ovlp = fci.addons.overlap(ci0, ci1, norb, nelec, s)
+        self.assertAlmostEqual(ovlp, (ci0*ci1.T*s).sum(), 9)
+
+    def test_det_overlap(self):
+        numpy.random.seed(12)
+        norb = 4
+        nelec = (2,2)
+        ua = numpy.linalg.svd(numpy.random.random((norb+1,norb+1)))[0]
+        ub = numpy.linalg.svd(numpy.random.random((norb+1,norb+1)))[0]
+        s = numpy.dot(ua[:,:norb].T, ub[:,:norb])
+
+        strs = fci.cistring.make_strings(range(norb), nelec[0])
+        na = len(strs)
+        ci0 = numpy.random.random((na,na))
+        ci0 /= numpy.linalg.norm(ci0)
+        ci1 = numpy.random.random((na,na))
+        ci1 /= numpy.linalg.norm(ci1)
+
+        ovlpa = numpy.zeros((na,na))
+        ovlpb = numpy.zeros((na,na))
+        for ia in range(na):
+            for ja in range(na):
+                ovlpa[ia,ja] = fci.addons.det_overlap(strs[ia], strs[ja], norb, s)
+        for ib in range(na):
+            for jb in range(na):
+                ovlpb[ib,jb] = fci.addons.det_overlap(strs[ib], strs[jb], norb, s)
+        ovlp = numpy.einsum('ab,ij,ai,bj->', ci0, ci1, ovlpa, ovlpb)
+
+        ref = fci.addons.overlap(ci0, ci1, norb, nelec, s)
+        self.assertAlmostEqual(ovlp, ref, 9)
+
+        s1 = numpy.random.seed(1)
+        s1 = numpy.random.random((6,6))
+        s1 = s1 + s1.T
+        val = fci.addons.det_overlap(int('0b10011',2), int('0b011010',2), 6, s1)
+        self.assertAlmostEqual(val, -0.273996425116, 12)
 
     def test_guess_wfnsym(self):
         orbsym = [2,3,6,7]
@@ -243,9 +324,90 @@ class KnownValues(unittest.TestCase):
                                          len(orbsym), (4,2), orbsym)
         self.assertEqual(wfnsym, 1)
 
+    def test_cylindrical_init_guess(self):
+        mol = gto.M(atom='O; O 1 1.2', spin=2, symmetry=True)
+        orbsym = [6,7,2,3]
+        ci0 = fci.addons.cylindrical_init_guess(mol, 4, (3,3), orbsym, wfnsym=10)
+        ci0 = ci0[0].reshape(4,4)
+        self.assertAlmostEqual(ci0[0,0],  .5**.5, 12)
+        self.assertAlmostEqual(ci0[1,1], -.5**.5, 12)
+
+        ci0 = fci.addons.cylindrical_init_guess(mol, 4, (3,3), orbsym, wfnsym=10, singlet=False)
+        ci0 = ci0[0].reshape(4,4)
+        self.assertAlmostEqual(ci0[0,1],  .5**.5, 12)
+        self.assertAlmostEqual(ci0[1,0], -.5**.5, 12)
+
+    def test_symmetrize_wfn(self):
+        def finger(ci1):
+            numpy.random.seed(1)
+            fact = numpy.random.random(ci1.shape).ravel()
+            return numpy.dot(ci1.ravel(), fact.ravel())
+        norb = 6
+        nelec = neleca, nelecb = 4,3
+        na = fci.cistring.num_strings(norb, neleca)
+        nb = fci.cistring.num_strings(norb, nelecb)
+        ci = numpy.ones((na,nb))
+        val = finger(fci.addons.symmetrize_wfn(ci, norb, nelec, [0,6,0,3,5,2], 2))
+        self.assertAlmostEqual(val, 3.010642818688976, 12)
+
+    def test_symm_initguess(self):
+        norb = 6
+        nelec = (4,2)
+        orbsym = [6,5,7,2,3,0]
+        ci1 = fci.addons.symm_initguess(norb, nelec, orbsym, wfnsym=0)
+        ci2 = fci.addons.symmetrize_wfn(ci1, norb, nelec, orbsym, wfnsym=0)
+        self.assertEqual(abs(ci1-ci2).max(), 0)
+
+        ci1 = fci.addons.symm_initguess(norb, nelec, orbsym, wfnsym=5)
+        ci2 = fci.addons.symmetrize_wfn(ci1, norb, nelec, orbsym, wfnsym=5)
+        self.assertEqual(abs(ci1-ci2).max(), 0)
+
+        ci1 = fci.addons.symm_initguess(norb, nelec, orbsym, wfnsym=3)
+        ci2 = fci.addons.symmetrize_wfn(ci1, norb, nelec, orbsym, wfnsym=3)
+        self.assertEqual(abs(ci1-ci2).max(), 0)
+
+        ci1 = fci.addons.symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=1, irrep_nelec=None)
+        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[0,2]])
+        ci1 = fci.addons.symm_initguess(6, (4,3), [0,1,5,4,3,7], wfnsym=0, irrep_nelec={0:[3,2],3:2})
+        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[2,5], [3,4]])
+        ci1 = fci.addons.symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=2, irrep_nelec={1:[0,1],3:[1,0]})
+        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[5,0]])
+        ci1 = fci.addons.symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3, irrep_nelec={5:[0,1],3:[1,0]})
+        self.assertEqual(numpy.argwhere(ci1!=0).tolist(), [[4,2], [7,0]])
+
+        self.assertRaises(RuntimeError, fci.addons.symm_initguess, 6, (3,2), [3,3,3,3,3,3], wfnsym=2)
+
+        ci1 = fci.addons.symm_initguess(6, (3,3), [0,1,5,4,3,7], wfnsym=3, irrep_nelec={5:[0,1],3:[1,0]})
+        self.assertEqual(fci.addons.guess_wfnsym(ci1, 6, (3,3), [0,1,5,4,3,7]), 3)
+
+    def test_des_and_cre(self):
+        a4 = 10*numpy.arange(4)[:,None]
+        a6 = 10*numpy.arange(6)[:,None]
+        b4 = numpy.arange(4)
+        b6 = numpy.arange(6)
+
+        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 0)), -31.99739808931113, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 1)), -68.97044878458135, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 2)), -41.22836642162049, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.des_a(a4+b4, 4, (3,3), 3)), -29.88708752568659, 12)
+
+        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 0)), -163.5210711323742, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 1)), -187.1999296644511, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 2)), 285.3422683187559 , 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.des_b(a6+b4, 4, (2,3), 3)), 311.44080890546695, 12)
+
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 0)), -39.48915822224921, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 1)), 12.45125619610399 , 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 2)), 12.016451871939289, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_a(a6+b4, 4, (2,3), 3)), 4.44581041782693  , 12)
+
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 0)), -56.76161034968627, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 1)), 23.167401126371875, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 2)), 30.522245459279716, 12)
+        self.assertAlmostEqual(lib.finger(fci.addons.cre_b(a6+b6, 4, (2,2), 3)), -57.04404450083064, 12)
+
 
 if __name__ == "__main__":
     print("Full Tests for fci.addons")
     unittest.main()
-
 

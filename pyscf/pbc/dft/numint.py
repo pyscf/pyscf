@@ -527,7 +527,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
 
 def _format_uks_dm(dms):
     dma, dmb = dms
-    if hasattr(dms, 'mo_coeff'):
+    if getattr(dms, 'mo_coeff', None) is not None:
 #TODO: test whether dm.mo_coeff matching dm
         mo_coeff = dms.mo_coeff
         mo_occ = dms.mo_occ
@@ -1213,7 +1213,7 @@ class KNumInt(numint.NumInt):
             ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
-        if hasattr(dms, 'mo_coeff'):
+        if getattr(dms, 'mo_coeff', None) is not None:
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ
             if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:

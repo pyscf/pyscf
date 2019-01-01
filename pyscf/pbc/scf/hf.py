@@ -162,7 +162,7 @@ def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
     if kpt is None: kpt = mf.kpt
 
     kpts_band = np.asarray(kpts_band)
-    single_kpt_band = (hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1)
+    single_kpt_band = (getattr(kpts_band, 'ndim', None) == 1)
     kpts_band = kpts_band.reshape(-1,3)
 
     fock = mf.get_hcore(cell, kpts_band)
@@ -202,7 +202,7 @@ energy_elec = mol_hf.energy_elec
 
 def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpt=np.zeros(3), origin=None):
-    ''' Dipole moment in the unit cell.
+    ''' Dipole moment in the unit cell (is it well defined)?
 
     Args:
          cell : an instance of :class:`Cell`
@@ -360,6 +360,8 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     from pyscf.pbc.dft import numint
     if dm is None:
         dm = mf.make_rdm1()
+    if getattr(dm, 'ndim', None) != 2:  # UHF
+        dm = dm[0] + dm[1]
     if grids is None:
         grids = gen_grid.UniformGrids(mf.cell)
     if kpt is None:
@@ -442,10 +444,11 @@ def makov_payne_correction(mf):
     if cell.dimension != 3:
         logger.warn(mf, 'Correction for low-dimension PBC systems'
                     'is not available.')
-        return mf
+        return 0
+
+    de_mono, de_dip, de_quad, de = _dip_correction(mf)
 
     if mf.verbose >= logger.NOTE:
-        de_mono, de_dip, de_quad, de = _dip_correction(mf)
         write = mf.stdout.write
         write('Corrections (AU)\n')
         write('       Monopole      Dipole          Quadrupole    total\n')
@@ -455,7 +458,7 @@ def makov_payne_correction(mf):
               (de_mono[1], de_dip   , de_quad   , de[1]))
         write('FCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
               (de_mono[2], de_dip   , de_quad   , de[2]))
-    return mf
+    return de
 
 
 class SCF(mol_hf.SCF):
@@ -531,7 +534,7 @@ class SCF(mol_hf.SCF):
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        if not hasattr(self.with_df, 'build'):
+        if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
             self.with_df.dump_flags()
         return self
@@ -651,7 +654,7 @@ class SCF(mol_hf.SCF):
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         return vj - vk * .5
 
-    def get_jk_incore(self, cell=None, dm=None, hermi=1, verbose=logger.DEBUG, kpt=None):
+    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         *Incore* version of Coulomb and exchange build only.
@@ -662,7 +665,7 @@ class SCF(mol_hf.SCF):
         if kpt is None: kpt = self.kpt
         if self._eri is None:
             self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-        return self.get_jk(cell, dm, hermi, verbose, kpt)
+        return self.get_jk(cell, dm, hermi, kpt)
 
     def energy_nuc(self):
         return self.cell.energy_nuc()
@@ -675,10 +678,10 @@ class SCF(mol_hf.SCF):
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
         rho = kwargs.pop('rho', None)
-        if cell is None:
-            cell = self.cell
         if rho is None:
             rho = self.get_rho(dm)
+        if cell is None:
+            cell = self.cell
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
     def _finalize(self):
@@ -766,6 +769,6 @@ def _format_jks(vj, dm, kpts_band):
         vj = vj.reshape(dm.shape)
     elif kpts_band.ndim == 1:  # a single k-point on bands
         vj = vj.reshape(dm.shape)
-    elif hasattr(dm, "ndim") and dm.ndim == 2:
+    elif getattr(dm, "ndim", 0) == 2:
         vj = vj[0]
     return vj

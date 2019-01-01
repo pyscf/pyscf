@@ -38,7 +38,7 @@ df.outcore.cholesky_eri(mol, ftmp.name, auxbasis='ccpvdz-fit')
 
 with h5py.File(ftmp.name, 'r') as file1:
     mf = scf.density_fit(scf.RHF(mol))
-# Note, here the integral object file1['j3c'] are not loaded in memory.
+# Note, here the integral object file1 are not loaded in memory.
 # It is still the HDF5 array object held on disk.  The HDF5 array can be used
 # the same way as the regular numpy ndarray stored in memory.
     mf.with_df._cderi = file1

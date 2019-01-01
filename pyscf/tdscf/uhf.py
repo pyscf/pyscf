@@ -182,7 +182,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         a_ab += numpy.einsum('iabj->iajb', eri_ab[:nocc_a,nocc_a:,nocc_b:,:nocc_b])
         b_ab += numpy.einsum('iajb->iajb', eri_ab[:nocc_a,nocc_a:,:nocc_b,nocc_b:])
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint

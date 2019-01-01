@@ -225,7 +225,7 @@ def Wovoo(t1, t2, eris):
     return Wkbij
 
 def _get_vvvv(eris):
-    if eris.vvvv is None and hasattr(eris, 'vvL'):  # DF eris
+    if eris.vvvv is None and getattr(eris, 'vvL', None) is not None:  # DF eris
         vvL = np.asarray(eris.vvL)
         nvir = int(np.sqrt(eris.vvL.shape[0]*2))
         return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)

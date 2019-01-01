@@ -1,4 +1,37 @@
-PySCF 1.6 alpha (2018-09-??)
+PySCF 1.6 (2018-12-31)
+----------------------
+* Added
+  - DFT-D3 interface
+  - semi_incore ao2mo transformation
+* Improved
+  - Linear dependency threshold of qr decomposition in davidson solver
+  - Optimized KUCCSD, EOM-KUCCSD performance
+* Bugfix
+  - hasattr issue for attributes with @property
+  - DDCOSMO wrapper and kernel function
+  - Num eletrons bug in PBC smearing function for custom systems
+  - return value of NPTaggedArray ufunc (returning np array now)
+  - PBC density fitting dimension error caused by numerical noise when handling linear dependency
+  - Parsers for molpro basis and gaussian basis
+  - Selected-CI returned data type
+
+
+PySCF 1.6 beta (2018-11-26)
+---------------------------
+* Added
+  - PBC k-point SCF stability analysis
+  - PBC KUCCSD
+  - PBC EOM-IP/EA-KRCCSD
+  - PBC EOM-IP/EA-KUCCSD
+  - Non-relativistic static and dynamic polarizability and hyper-polarizability tensor
+* Improved
+  - The treatment of HF exchange in PBC system when calling PBC MP2, CISD, CCSD code
+  - Convergence performance of KCCSD iterations for low-dimension systems
+* Bugfix
+  - Complex density in pbc.get_j function
+
+
+PySCF 1.6 alpha (2018-08-15)
 ----------------------------
 * Added
   - X2C-UKS (LDA functional only)
@@ -20,11 +53,28 @@ PySCF 1.6 alpha (2018-09-??)
   - Integral transformation performance in GW
 
 
+PySCF 1.5.5 (2018-12-31)
+------------------------
+* Improved
+  - Fix symmetrization for k-point density in pbc.dft.numint.
+  - Molden parser to handle UHF orbitals
+* Bugfix
+  - Get_fermi in KHF and KUHF
+  - Execute call in dmrgci
+  - Directories and paths in dmrgci
+  - Read of 3-pdm and 4-pdm produced by block-1.5
+  - Initialization wrapper in pbc.scf.__init__
+  - Complex density in pbc.get_j function
+  - Initial guess of KROHF method
+  - PBC get_jk interface when calling molecular MCSCF with pbc scf object
+  - keyword argument with_df of pbc.dft density_fit wrapper
+
+
 PySCF 1.5.4 (2018-11-16)
 ------------------------
 * Improved
   - Add support for GTH pseudopotentials beyond d electrons
-  - TDDFT amplitudes convention: X[nvir,nocc] -> X[nocc,nvir]
+  - Data structure of TDDFT response amplitudes (X, Y vectors): X[nvir,nocc] -> X[nocc,nvir]
 * Bugfix
   - OpenMP race condition in FCI solver
   - Undefined HDF5 dataset in PBC MDF initialization
@@ -52,13 +102,13 @@ PySCF 1.5.2 (2018-08-15)
   - IO performance of pbc.GDF initialization
   - Default linear dependence treatment in GDF to improve accuracy
 * Bugfix
-  - selected_ci 2-particle density matrices for two electron systems
+  - Selected-ci 2-particle density matrices for two electron systems
 
 
 PySCF 1.5.1 (2018-07-01)
 ------------------------
 * Improved
-  - the memory usage for a large number of MM particles (issue #193)
+  - The memory usage for a large number of MM particles (issue #193)
 * Bugfix
   - Frozen orbitals in MCSCF canonicalization
   - Dimension error when initializing DF-CCSD integral tensor

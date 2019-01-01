@@ -1038,7 +1038,7 @@ def _format_uks_dm(dms):
         dma = dmb = dms * .5
     else:
         dma, dmb = dms
-    if hasattr(dms, 'mo_coeff'):
+    if getattr(dms, 'mo_coeff', None) is not None:
         mo_coeff = dms.mo_coeff
         mo_occ = dms.mo_occ
         if mo_coeff[0].ndim < dma.ndim: # handle ROKS
@@ -1910,7 +1910,7 @@ class NumInt(object):
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0):
-        if hasattr(dms, 'mo_coeff'):
+        if getattr(dms, 'mo_coeff', None) is not None:
 #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ

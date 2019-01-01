@@ -55,12 +55,12 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
         kpts = scf_rec['kpts'] # the closest kpt from KRHF results
         where = np.argmin(lib.norm(kpts-kpt, axis=1))
         chk_kpt = kpts[where]
-        if mo[0].ndim == 2:  # KRHF
+        if getattr(mo[0], 'ndim', None) == 2:  # KRHF
             mo = mo[where]
             mo_occ = mo_occ[where]
-        else:
-            mo = mo[:,where]
-            mo_occ = mo_occ[:,where]
+        else:  # KUHF
+            mo = [mo[0][where], mo[1][where]]
+            mo_occ = [mo_occ[0][where], mo_occ[1][where]]
     else:  # from molecular code
         chk_kpt = np.zeros(3)
 
@@ -73,7 +73,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
             mo /= np.sqrt(norm)
         return mo
 
-    if mo.ndim == 2:
+    if getattr(mo, 'ndim', None) == 2:
         mo = fproj(mo)
         mo_occa = (mo_occ>1e-8).astype(np.double)
         mo_occb = mo_occ - mo_occa
@@ -102,12 +102,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     dm = dm[0] + dm[1]
     return pbchf.dip_moment(cell, dm, unit, verbose, grids, rho, kpt)
 
-def get_rho(mf, dm=None, grids=None, kpt=None):
-    '''Compute density in real space
-    '''
-    if dm is None:
-        dm = mf.make_rdm1()
-    return pbchf.get_rho(dm[0] + dm[1], grids, kpt)
+get_rho = pbchf.get_rho
 
 
 class UHF(mol_uhf.UHF, pbchf.SCF):
@@ -155,6 +150,8 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     get_jk_incore = pbchf.SCF.get_jk_incore
     energy_tot = pbchf.SCF.energy_tot
     _finalize = pbchf.SCF._finalize
+    make_rdm1 = mol_uhf.UHF.make_rdm1
+    get_rho = pbchf.SCF.get_rho
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
@@ -181,7 +178,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
         if kpt is None: kpt = self.kpt
 
         kpts_band = np.asarray(kpts_band)
-        single_kpt_band = (hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1)
+        single_kpt_band = (getattr(kpts_band, 'ndim', None) == 1)
         kpts_band = kpts_band.reshape(-1,3)
 
         fock = self.get_hcore(cell, kpts_band)
@@ -206,16 +203,14 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
             mo_coeff = (mo_coeff[0][0], mo_coeff[1][0])
         return mo_energy, mo_coeff
 
-    get_rho = get_rho
-
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        if dm is None:
-            dm = self.make_rdm1()
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
-            rho = self.get_rho(dm[0] + dm[1])
+            rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
     def get_init_guess(self, cell=None, key='minao'):
@@ -261,6 +256,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
         addons.convert_to_uhf(mf, self)
         return self
 
-    stability = None
+    stability = mol_uhf.UHF.stability
+
     nuc_grad_method = None
 

@@ -410,6 +410,20 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(ref.shape, v.shape)
         self.assertAlmostEqual(abs(v-ref).max(), 0, 7)
 
+    def test_rcut_vs_ke_cut(self):
+        xc = 'lda,'
+        with lib.temporary_env(multigrid, TASKS_TYPE='rcut'):
+            mg_df = multigrid.MultiGridFFTDF(cell_orth)
+            n1, exc1, v1 = multigrid.nr_rks(mg_df, xc, dm1, kpts=kpts)
+            self.assertEqual(len(mg_df.tasks), 3)
+        with lib.temporary_env(multigrid, TASKS_TYPE='ke_cut'):
+            mg_df = multigrid.MultiGridFFTDF(cell_orth)
+            n2, exc2, v2 = multigrid.nr_rks(mg_df, xc, dm1, kpts=kpts)
+            self.assertEqual(len(mg_df.tasks), 6)
+        self.assertAlmostEqual(n1, n2, 8)
+        self.assertAlmostEqual(exc1, exc2, 8)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 8)
+
 
 if __name__ == '__main__':
     print("Full Tests for multigrid")

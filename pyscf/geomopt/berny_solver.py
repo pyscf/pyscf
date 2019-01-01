@@ -19,10 +19,12 @@ Interface to geometry optimizer pyberny https://github.com/azag0/pyberny
 
 from __future__ import absolute_import
 try:
-    from berny import Berny, geomlib, Logger, optimize as optimize_berny
+    from berny import Berny, geomlib, Logger
 except ImportError:
-    raise ImportError('Geometry optimizer pyberny not found.\npyberny library '
-                      'can be found on github https://github.com/azag0/pyberny')
+    msg = ('Geometry optimizer pyberny not found.\npyberny library '
+           'can be found on github https://github.com/azag0/pyberny.\n'
+           'You can install pyberny with "pip install pyberny"')
+    raise ImportError(msg)
 
 import numpy
 from pyscf import lib
@@ -47,7 +49,7 @@ def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
         coords = mol.atom_coords()[atmlst] * lib.param.BOHR
 
     # geomlib.Geometry is available in the new version of pyberny solver. (issue #212)
-    if hasattr(geomlib, 'Geometry'):
+    if getattr(geomlib, 'Geometry', None):
         return geomlib.Geometry(species, coords)
     else:
         return geomlib.Molecule(species, coords)
@@ -79,7 +81,7 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
     mol = method.mol.copy()
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif hasattr(method, 'nuc_grad_method'):
+    elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
     else:
         raise NotImplementedError('Nuclear gradients of %s not available' % method)
@@ -147,8 +149,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         log = lib.logger.new_logger(method, kwargs['verbose'])
     else:
         log = lib.logger.new_logger(method)
-#    geom = optimize_berny(as_berny_solver(method), to_berny_geom(mol),
-#                          log=to_berny_log(log), **kwargs)
+
 # temporary interface, taken from berny.py optimize function
     log = to_berny_log(log)
     solver = as_berny_solver(method, assert_convergence, include_ghost)

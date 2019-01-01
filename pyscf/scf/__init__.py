@@ -224,7 +224,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         mf1 = density_fit(newton(mf), auxbasis)
     mf1.direct_scf_tol = 1e-7
 
-    if hasattr(mf, 'grids'):
+    if getattr(mf, 'grids', None):
         from pyscf.dft import gen_grid
         approx_grids = gen_grid.Grids(mf.mol)
         approx_grids.verbose = 0
@@ -256,7 +256,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         mf0.conv_tol_grad = 1.
         if mf0.level_shift == 0:
             mf0.level_shift = .2
-        if hasattr(mf, 'grids'):
+        if getattr(mf, 'grids', None):
             mf0.grids = approx_grids
             mf0._numint = approx_numint
 # Note: by setting small_rho_cutoff, dft.get_veff function may overwrite

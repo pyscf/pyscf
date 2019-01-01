@@ -96,7 +96,7 @@ def frac_occ_(mf, tol=1e-3):
             uniq_var_a = viridxa.reshape(-1,1) & occidxa
             uniq_var_b = viridxb.reshape(-1,1) & occidxb
 
-            if hasattr(fock, 'focka'):
+            if getattr(fock, 'focka', None) is not None:
                 focka = fock.focka
                 fockb = fock.fockb
             elif getattr(fock, 'ndim', None) == 3:
@@ -459,7 +459,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
                 mf1.mo_occ = mf.mo_occ
                 mf1.mo_coeff = mf.mo_coeff
                 mf1.mo_energy = mf.mo_energy
-            elif not hasattr(mf, 'kpts'):  # UHF
+            elif getattr(mf, 'kpts', None) is None:  # UHF
                 mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
                 mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
                 mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
@@ -485,7 +485,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
 # with_df in SOSCF is used in orbital hessian approximation only.  For the
 # returned SCF object, whehter with_df exists in SOSCF has no effects on the
 # mean-field energy and other properties.
-        if hasattr(mf, '_scf'):
+        if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
             return copy.copy(mf)
@@ -526,7 +526,7 @@ def _object_without_soscf(mf, known_class, remove_df=False):
         elif 'SecondOrder' in cls.__name__:
 # SOSCF is not a necessary part
             # obj = obj.newton()
-            remove_df = remove_df or (not hasattr(mf._scf, 'with_df'))
+            remove_df = remove_df or (not getattr(mf._scf, 'with_df', None))
         elif 'SFX2C1E' in cls.__name__:
             obj = obj.sfx2c1e()
     return _update_mf_without_soscf(mf, obj, remove_df)
@@ -541,7 +541,7 @@ def _update_mf_without_soscf(mf, out, remove_df=False):
 
     out.__dict__.update(mf_dic)
 
-    if remove_df and hasattr(out, 'with_df'):
+    if remove_df and getattr(out, 'with_df', None):
         delattr(out, 'with_df')
     return out
 
@@ -576,11 +576,11 @@ def convert_to_rhf(mf, out=None, remove_df=False):
                 mf1.mo_occ = mf.mo_occ
                 mf1.mo_coeff = mf.mo_coeff
                 mf1.mo_energy = mf.mo_energy
-            elif not hasattr(mf, 'kpts'):  # UHF
+            elif getattr(mf, 'kpts', None) is None:  # UHF
                 mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
                 mf1.mo_energy = mf.mo_energy[0]
                 mf1.mo_coeff =  mf.mo_coeff[0]
-                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                if getattr(mf.mo_coeff[0], 'orbsym', None) is not None:
                     mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
             else:  # KUHF
                 mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
@@ -602,7 +602,7 @@ def convert_to_rhf(mf, out=None, remove_df=False):
 
     elif (isinstance(mf, scf.hf.RHF) or
           (nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF))):
-        if hasattr(mf, '_scf'):
+        if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
             return copy.copy(mf)
@@ -667,7 +667,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                 mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff
                 mo_coeff[nao:,orbspin==1] = mf.mo_coeff
-                if hasattr(mf.mo_coeff, 'orbsym'):
+                if getattr(mf.mo_coeff, 'orbsym', None) is not None:
                     orbsym = numpy.zeros_like(orbspin)
                     orbsym[orbspin==0] = mf.mo_coeff.orbsym
                     orbsym[orbspin==1] = mf.mo_coeff.orbsym
@@ -688,7 +688,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                 mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff[0].dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff[0]
                 mo_coeff[nao:,orbspin==1] = mf.mo_coeff[1]
-                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                if getattr(mf.mo_coeff[0], 'orbsym', None) is not None:
                     orbsym = numpy.zeros_like(orbspin)
                     orbsym[orbspin==0] = mf.mo_coeff[0].orbsym
                     orbsym[orbspin==1] = mf.mo_coeff[1].orbsym
@@ -701,7 +701,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.ghf.GHF):
-        if hasattr(mf, '_scf'):
+        if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
             return copy.copy(mf)

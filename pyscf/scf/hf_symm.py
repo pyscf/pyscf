@@ -160,7 +160,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.size)
 
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
         irreps = set(orbsym)
         for ir in irreps:
@@ -315,7 +315,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     if mo_coeff is None:
         orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
                                for i, ir in enumerate(mol.irrep_id)])
-    elif hasattr(mo_coeff, 'orbsym'):
+    elif getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -541,7 +541,7 @@ class SymAdaptedROHF(rohf.ROHF):
     @lib.with_doc(eig.__doc__)
     def eig(self, fock, s):
         e, c = eig(self, fock, s)
-        if hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is not None:
             mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
             mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
             e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
@@ -569,7 +569,7 @@ class SymAdaptedROHF(rohf.ROHF):
         if not self.mol.symmetry:
             return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
 
-        if hasattr(mo_energy, 'mo_ea'):
+        if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea
             mo_eb = mo_energy.mo_eb
         else:
@@ -684,7 +684,7 @@ class SymAdaptedROHF(rohf.ROHF):
         idx = numpy.hstack((idx[self.mo_occ==2][c_sort],
                             idx[self.mo_occ==1][o_sort],
                             idx[self.mo_occ==0][v_sort]))
-        if hasattr(self.mo_energy, 'mo_ea'):
+        if getattr(self.mo_energy, 'mo_ea', None) is not None:
             mo_ea = self.mo_energy.mo_ea[idx]
             mo_eb = self.mo_energy.mo_eb[idx]
             self.mo_energy = lib.tag_array(self.mo_energy[idx],
@@ -738,7 +738,7 @@ class SymAdaptedROHF(rohf.ROHF):
             for k,ir in enumerate(mol.irrep_id):
                 irname_full[ir] = mol.irrep_name[k]
             irorbcnt = {}
-            if hasattr(mo_energy, 'mo_ea'):
+            if getattr(mo_energy, 'mo_ea', None) is not None:
                 mo_ea = mo_energy.mo_ea
                 mo_eb = mo_energy.mo_eb
                 log.note('                          Roothaan           | alpha              | beta')
@@ -802,13 +802,12 @@ class SymAdaptedROHF(rohf.ROHF):
 
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
-        if not hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is None:
             fock = self.get_fock(dm=self.make_rdm1(mo_coeff, mo_occ))
         mo_e, mo_coeff = canonicalize(self, mo_coeff, mo_occ, fock)
-        if hasattr(fock, 'focka'):
-            mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
-            mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
-            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
+        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+        mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         return mo_e, mo_coeff
 
     def get_orbsym(self, mo_coeff=None):

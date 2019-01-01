@@ -632,7 +632,7 @@ def _add_vvvv_ea(mycc, r2, eris):
     nocca, noccb = mycc.nocc
 
     if mycc.direct:
-        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
+        if getattr(eris, 'mo_coeff', None) is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()

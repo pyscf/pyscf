@@ -76,7 +76,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
                     and kpts_band is None)
 
-# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+# Use grids.non0tab to detect whether grids are initialized.  For
+# UniformGrids, grids.coords as a property cannot indicate whehter grids are
+# initialized.
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and
@@ -113,8 +115,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return vxc
 
 def _patch_df_beckegrids(density_fit):
-    def new_df(self, auxbasis=None, mesh=None, with_df=None):
-        mf = density_fit(self, auxbasis, mesh, with_df)
+    def new_df(self, auxbasis=None, with_df=None):
+        mf = density_fit(self, auxbasis, with_df)
         mf.with_df._j_only = True
         mf.grids = gen_grid.BeckeGrids(self.cell)
         mf.grids.level = getattr(__config__, 'pbc_dft_rks_RKS_grids_level',

@@ -251,7 +251,7 @@ class UCASCI(casci.CASCI):
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
-        if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
+        if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             ncore = self.ncore
             ncas = self.ncas
             mocas = (self.mo_coeff[0][:,ncore[0]:ncore[0]+ncas],
@@ -357,7 +357,7 @@ class UCASCI(casci.CASCI):
             for i,j in idx:
                 log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
-            if hasattr(self.fcisolver, 'large_ci') and ci is not None:
+            if getattr(self.fcisolver, 'large_ci', None) and ci is not None:
                 log.info('\n** Largest CI components **')
                 if isinstance(ci, (tuple, list)):
                     for i, state in enumerate(ci):

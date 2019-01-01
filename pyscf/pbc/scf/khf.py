@@ -341,7 +341,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpts=np.zeros((1,3))):
-    ''' Dipole moment in the unit cell.
+    ''' Dipole moment in the unit cell (is it well defined)?
 
     Args:
          cell : an instance of :class:`Cell`
@@ -366,8 +366,10 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     from pyscf.pbc.dft import numint
     if dm is None:
         dm = mf.make_rdm1()
+    if getattr(dm[0], 'ndim', None) != 2:  # KUHF
+        dm = dm[0] + dm[1]
     if grids is None:
-        grids = gen_grid.UniformGrids(cell)
+        grids = gen_grid.UniformGrids(mf.cell)
     if kpts is None:
         kpts = mf.kpts
     ni = numint.KNumInt()
@@ -450,7 +452,7 @@ class KSCF(pbchf.SCF):
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        if not hasattr(self.with_df, 'build'):
+        if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
             self.with_df.dump_flags()
         return self
@@ -655,6 +657,8 @@ class KSCF(pbchf.SCF):
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
+        if cell is None:
+            cell = self.cell
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
     canonicalize = canonicalize

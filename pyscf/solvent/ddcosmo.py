@@ -144,7 +144,7 @@ def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
 
     oldCAS = mc.__class__
     if solvent_obj is None:
-        if hasattr(mc._scf, 'with_solvent'):
+        if getattr(mc._scf, 'with_solvent', None):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)
@@ -257,7 +257,7 @@ def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
 
     oldCAS = mc.__class__
     if solvent_obj is None:
-        if hasattr(mc._scf, 'with_solvent'):
+        if getattr(mc._scf, 'with_solvent', None):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)

@@ -313,7 +313,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
             occs = ([occa[i] for i in where], [occb[i] for i in where])
             return make_rdm1(mos, occs)
 
-    if hasattr(mo[0], 'ndim') and mo[0].ndim == 2:  # KRHF
+    if getattr(mo[0], 'ndim', None) == 2:  # KRHF
         mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
         mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
         dm = makedm((mo, mo), (mo_occa, mo_occb))
@@ -341,12 +341,7 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
     dm_kpts = dm_kpts[0] + dm_kpts[1]
     return khf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
 
-def get_rho(mf, dm=None, grids=None, kpts=None):
-    '''Compute density in real space
-    '''
-    if dm is None:
-        dm = mf.make_rdm1()
-    return khf.get_rho(dm[0] + dm[1], grids, kpts)
+get_rho = khf.get_rho
 
 
 class KUHF(pbcuhf.UHF, khf.KSCF):
@@ -446,6 +441,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     get_occ = get_occ
     energy_elec = energy_elec
 
+    get_rho = khf.KSCF.get_rho
+
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
@@ -520,6 +517,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
+    @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
@@ -528,13 +526,11 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    get_rho = get_rho
-
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        if dm is None:
-            dm = self.make_rdm1()
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
