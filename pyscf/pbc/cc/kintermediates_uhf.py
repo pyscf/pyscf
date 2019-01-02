@@ -338,11 +338,18 @@ def cc_Wovvo(cc, t1, t2, eris):
                 WOvvO[km,ke,kb] += 0.5*einsum('xnjbf,xnemf->mebj', tauab[:,kj,kb], eris.ovOV[:,ke,km])
                 WovVO[km,ke,kb] -= 0.5*einsum('xnjbf,xmenf->mebj', taubb[:,kj,kb], eris.ovOV[km,ke,:])
 
+                temp_ovOV_1 = np.zeros([nkpts, nocca, nvira, noccb, nvirb], dtype=dtype)
+                temp_ovOV_2 = np.zeros([nkpts, nocca, nvira, noccb, nvirb], dtype=dtype)
+                for kn in range(nkpts):
+                    kf = kconserv[km,ke,kn]
+                    temp_ovOV_1[kn] += eris.ovOV[kn,kf,km].copy()
+                    temp_ovOV_2[kn] += eris.ovOV[km,kf,kn].copy()
+                
                 kn = range(nkpts)
                 kf = kconserv[km,ke][kn]
-                WOVVO[km,ke,kb] += 0.5*einsum('xnjfb,xnfme->mebj', t2ab[kn,kj,kf], eris.ovOV[kn,kf,km])
-                WOVvo[km,ke,kb] -= 0.5*einsum('xnjbf,xnfme->mebj', tauaa[:,kj,kb], eris.ovOV[kn,kf,km])
-                WoVVo[km,ke,kb] += 0.5*einsum('xjnfb,xmfne->mebj', tauab[kj,kn,kf], eris.ovOV[km,kf,kn])
+                WOVVO[km,ke,kb] += 0.5*einsum('xnjfb,xnfme->mebj', t2ab[kn,kj,kf], temp_ovOV_1)
+                WOVvo[km,ke,kb] -= 0.5*einsum('xnjbf,xnfme->mebj', tauaa[:,kj,kb], temp_ovOV_1)
+                WoVVo[km,ke,kb] += 0.5*einsum('xjnfb,xmfne->mebj', tauab[kj,kn,kf], temp_ovOV_2)
 
                 temp_OVOV = eris.OVOV[km,ke,:] - eris.OVOV[:,ke,km].transpose((0,3,2,1,4))
                 WOVVO[km,ke,kb] -= 0.5*einsum('xnjbf,xmenf->mebj', taubb[:,kj,kb], temp_OVOV)
@@ -353,7 +360,7 @@ def cc_Wovvo(cc, t1, t2, eris):
                 Wovvo[km,ke,kb] += 0.5*einsum('xnjbf,xnemf->mebj', tauaa[:,kj,kb], temp_ovov)
                 WovVO[km,ke,kb] -= 0.5*einsum('xnjfb,xnemf->mebj', t2ab[kn,kj,kf], temp_ovov)
                 temp_ovov = None
- 
+
     return Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO
 
 def _cc_Wovvo_k0k2(cc, t1, t2, eris, k0, k2):
