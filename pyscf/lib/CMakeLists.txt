@@ -185,7 +185,7 @@ option(ENABLE_cppe "Using CPPE for Polarizable Embedding" OFF)
 if(ENABLE_cppe)
 ExternalProject_Add(cppe
             GIT_REPOSITORY https://github.com/maxscheurer/cppe
-            GIT_TAG master
+            GIT_TAG eigen_iface
             PREFIX ${PROJECT_BINARY_DIR}/deps
             INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>

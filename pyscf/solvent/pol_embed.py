@@ -71,7 +71,6 @@ class PolEmbed(lib.StreamObject):
         self.cppe_state.calculate_static_energies_and_fields()
         self.potentials = self.cppe_state.get_potentials()
         self.V_es = None
-        self.iteration = 0
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -106,10 +105,12 @@ class PolEmbed(lib.StreamObject):
                                                                     m.k,
                                                                     moments)
             self.V_es = V_es
-            self.cppe_state.set_es_operator(self.V_es)
-            numpy.savetxt("V_es_pyscf.txt", self.V_es)
-        
-        self.cppe_state.update_energies(dm)
+
+        pe_energies = self.cppe_state.get_energies()
+        pe_energies.set("Electrostatic/Electronic",
+                        numpy.einsum('ij,ij->', self.V_es, dm))
+        self.cppe_state.set_energies(pe_energies)
+
         n_sitecoords = 3 * self.cppe_state.get_polarizable_site_number()
         V_ind = numpy.zeros((self.mol.nao, self.mol.nao),
                             dtype=numpy.float64)
@@ -124,9 +125,8 @@ class PolEmbed(lib.StreamObject):
                 elec_fields_s = self._compute_field(site, dm)
                 elec_fields[3*current_polsite:3*current_polsite + 3] = elec_fields_s
                 current_polsite += 1
-            self.cppe_state.update_induced_moments(elec_fields, self.iteration,
-                                                   elec_only)
-            induced_moments = self.cppe_state.get_induced_moments()
+            self.cppe_state.update_induced_moments(elec_fields, elec_only)
+            induced_moments = numpy.array(self.cppe_state.get_induced_moments())
             current_polsite = 0
             for p in self.potentials:
                 if not p.is_polarizable():
@@ -135,11 +135,10 @@ class PolEmbed(lib.StreamObject):
                 V_ind += self._compute_field_integrals(site=site,
                                                        moment=induced_moments[3*current_polsite:3*current_polsite + 3])
                 current_polsite += 1
-        e = self.cppe_state.get_current_energies().get_total_energy()
+        e = self.cppe_state.get_energies().get_total_energy()
         if not elec_only:
             vmat = self.V_es + V_ind
         else:
-            print("resp contribution")
             vmat = V_ind
             e = self.cppe_state.get_current_energies().get("Polarization/Electronic")
         return e, vmat
