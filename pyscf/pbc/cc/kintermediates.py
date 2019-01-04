@@ -117,7 +117,7 @@ def cc_Woooo(cc,t1,t2,eris,kconserv):
             kj = kconserv[km,ki,kn]
             kij = [ki,kj]
             Wmnij[km,kn,:] += 0.25*einsum('yxijef,xmnef->ymnij',tau[kij],eris.oovv[km,kn])
-            
+
             for ki in range(nkpts):
                 kj = kconserv[km,ki,kn]
                 Wmnij[km,kn,ki] += tmp[ki,kj]
@@ -151,7 +151,6 @@ def cc_Wovvo(cc,t1,t2,eris,kconserv):
     nkpts, nocc, nvir = t1.shape
     eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc),dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc),dtype=t2.dtype)
-    tau = make_tau(cc,t2,t1,t1,kconserv)
     for km in range(nkpts):
         for kb in range(nkpts):
             for ke in range(nkpts):
@@ -168,10 +167,13 @@ def cc_Wovvo(cc,t1,t2,eris,kconserv):
                 kj = kconserv[km,ke,kb]
                 Wmbej[km,kb,ke] += einsum('jf,mbef->mbej',t1[kj,:,:],eris.ovvv[km,kb,ke])
                 Wmbej[km,kb,ke] += -einsum('nb,mnej->mbej',t1[kb,:,:],eris_oovo[km,kb,ke])
-                kn = numpy.arange(nkpts)
-                kf = kconserv[km, ke, kn]
-                knf = tuple([kn, kf])#[kn, kf]
-                Wmbej[km,kb,ke] += -0.5* einsum('xjnfb, xmnef->mbej', tau[kj][knf], eris.oovv[km][kn][ke])
+                temp = numpy.zeros([nkpts, nocc, nocc, nvir, nvir], dtype=t2.dtype)
+                for kn in range(nkpts):
+                    kf = kconserv[km,ke,kn]
+                    temp[kn] = -0.5*t2[kj,kn,kf].copy()
+                    if kn == kb and kf == kj:
+                        temp[kn] -= einsum('jf,nb->jnfb', t1[kj], t1[kn])
+                Wmbej[km,kb,ke] += einsum('xjnfb, xmnef->mbej', temp, eris.oovv[km,:,ke])
     return Wmbej
 
 def cc_Wovvo_jk(cc, t1, t2, eris, kconserv):
