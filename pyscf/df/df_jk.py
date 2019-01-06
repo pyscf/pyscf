@@ -22,6 +22,7 @@ import time
 import ctypes
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf import scf
 from pyscf.lib import logger
@@ -106,36 +107,18 @@ def density_fit(mf, auxbasis=None, with_df=None):
             self.__dict__.update(mf.__dict__)
             self._eri = None
             self.auxbasis = auxbasis
-            self.direct_scf = False
             self.with_df = with_df
             self._keys = self._keys.union(['auxbasis', 'with_df'])
 
-        def get_jk(self, mol=None, dm=None, hermi=1):
+        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                vj, vk = self.with_df.get_jk(dm, hermi)
+                vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
+                                             self.direct_scf_tol)
                 return vj, vk
             else:
-                return mf_class.get_jk(self, mol, dm, hermi)
-
-        def get_j(self, mol=None, dm=None, hermi=1):
-            if self.with_df:
-                if mol is None: mol = self.mol
-                if dm is None: dm = self.make_rdm1()
-                vj = self.with_df.get_jk(dm, hermi, with_k=False)[0]
-                return vj
-            else:
-                return mf_class.get_j(self, mol, dm, hermi)
-
-        def get_k(self, mol=None, dm=None, hermi=1):
-            if self.with_df:
-                if mol is None: mol = self.mol
-                if dm is None: dm = self.make_rdm1()
-                vk = self.with_df.get_jk(dm, hermi, with_j=False)[1]
-                return vk
-            else:
-                return mf_class.get_k(self, mol, dm, hermi)
+                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k)
 
 # _cderi accesser for pyscf 1.0, 1.1 compatibility
         @property
@@ -152,11 +135,15 @@ class _DFHF:
     pass
 
 
-def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
+def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
+    assert(with_j or with_k)
+    if (not with_k and not dfobj.mol.incore_anyway and
+        # 3-center integral tensor is not initialized
+        dfobj._cderi is None):
+        return get_j(dfobj, dm, hermi, direct_scf_tol), None
+
     t0 = t1 = (time.clock(), time.time())
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
-    assert(with_j or with_k)
-
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
     ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
@@ -167,21 +154,18 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
     nao = dm_shape[-1]
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
-    vj = [0] * nset
-    vk = [0] * nset
+    vj = 0
+    vk = numpy.zeros_like(dms)
+
+    if with_j:
+        idx = numpy.arange(nao)
+        dmtril = lib.pack_tril(dms + dms.conj().transpose(0,2,1))
+        dmtril[:,idx*(idx+1)//2+idx] *= .5
 
     if not with_k:
-        dmtril = []
-        idx = numpy.arange(nao)
-        for k in range(nset):
-            dm = lib.pack_tril(dms[k]+dms[k].T)
-            dm[idx*(idx+1)//2+idx] *= .5
-            dmtril.append(dm)
         for eri1 in dfobj.loop():
-            naux, nao_pair = eri1.shape
-            for k in range(nset):
-                rho = numpy.einsum('px,x->p', eri1, dmtril[k])
-                vj[k] += numpy.einsum('p,px->x', rho, eri1)
+            rho = numpy.einsum('ix,px->ip', dmtril, eri1)
+            vj += numpy.einsum('ip,px->ix', rho, eri1)
 
     elif getattr(dm, 'mo_coeff', None) is not None:
 #TODO: test whether dm.mo_coeff matching dm
@@ -197,14 +181,8 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
             assert(mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
             mo_occ = numpy.vstack((mo_occa, mo_occb))
 
-        dmtril = []
         orbo = []
         for k in range(nset):
-            if with_j:
-                dmtril.append(lib.pack_tril(dms[k]+dms[k].T))
-                i = numpy.arange(nao)
-                dmtril[k][i*(i+1)//2+i] *= .5
-
             c = numpy.einsum('pi,i->pi', mo_coeff[k][:,mo_occ[k]>0],
                              numpy.sqrt(mo_occ[k][mo_occ[k]>0]))
             orbo.append(numpy.asarray(c, order='F'))
@@ -213,11 +191,11 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         for eri1 in dfobj.loop():
             naux, nao_pair = eri1.shape
             assert(nao_pair == nao*(nao+1)//2)
-            for k in range(nset):
-                if with_j:
-                    rho = numpy.einsum('px,x->p', eri1, dmtril[k])
-                    vj[k] += numpy.einsum('p,px->x', rho, eri1)
+            if with_j:
+                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
+                vj += numpy.einsum('ip,px->ix', rho, eri1)
 
+            for k in range(nset):
                 nocc = orbo[k].shape[1]
                 if nocc > 0:
                     buf1 = buf[:naux*nocc]
@@ -239,6 +217,10 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         buf = numpy.empty((2,dfobj.blockdim,nao,nao))
         for eri1 in dfobj.loop():
             naux, nao_pair = eri1.shape
+            if with_j:
+                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
+                vj += numpy.einsum('ip,px->ix', rho, eri1)
+
             for k in range(nset):
                 buf1 = buf[0,:naux]
                 fdrv(ftrans, fmmm,
@@ -246,9 +228,6 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                      eri1.ctypes.data_as(ctypes.c_void_p),
                      dms[k].ctypes.data_as(ctypes.c_void_p),
                      ctypes.c_int(naux), *rargs)
-                if with_j:
-                    rho = numpy.einsum('kii->k', buf1)
-                    vj[k] += numpy.einsum('p,px->x', rho, eri1)
 
                 buf2 = lib.unpack_tril(eri1, out=buf[1])
                 vk[k] += lib.dot(buf1.reshape(-1,nao).T,
@@ -256,12 +235,110 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
             t1 = log.timer_debug1('jk', *t1)
 
     if with_j: vj = lib.unpack_tril(vj, 1).reshape(dm_shape)
-    if with_k: vk = numpy.asarray(vk).reshape(dm_shape)
-    logger.timer(dfobj, 'vj and vk', *t0)
+    if with_k: vk = vk.reshape(dm_shape)
+    logger.timer(dfobj, 'df vj and vk', *t0)
     return vj, vk
 
+def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
+    from pyscf.scf import _vhf
+    from pyscf.scf import jk
+    from pyscf.df import addons
+    t0 = t1 = (time.clock(), time.time())
 
-def r_get_jk(dfobj, dms, hermi=1):
+    mol = dfobj.mol
+    if dfobj._vjopt is None:
+        dfobj.auxmol = auxmol = addons.make_auxmol(mol, dfobj.auxbasis)
+        # == opt = _vhf.VHFOpt(mol, 'int3c2e','CVHFnr3c2e_schwarz_cond')
+        opt = _vhf.VHFOpt(mol, 'int3c2e')
+        opt.direct_scf_tol = direct_scf_tol
+
+        j2c = auxmol.intor('int2c2e', hermi=1)
+
+        # Use regular int2e (ij|ij) to initialize vhfopt.q_cond for mol's basis
+        fsetqcond = _vhf.libcvhf.CVHFsetnr_direct_scf
+        fsetqcond(opt._this, _vhf.libcvhf.int2e_sph, lib.c_null_ptr(),
+                  mol.ao_loc.ctypes.data_as(ctypes.c_void_p),
+                  mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+                  mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+                  mol._env.ctypes.data_as(ctypes.c_void_p))
+        mol_q_cond = lib.frompointer(opt._this.contents.q_cond, mol.nbas**2)
+
+        # Update q_cond to include the 2e-integrals (auxmol|auxmol)
+        j2c_diag = numpy.sqrt(abs(j2c.diagonal()))
+        aux_loc = auxmol.ao_loc
+        aux_q_cond = [j2c_diag[i0:i1].max()
+                      for i0, i1 in zip(aux_loc[:-1], aux_loc[1:])]
+        q_cond = numpy.hstack((mol_q_cond, aux_q_cond))
+        fsetqcond = _vhf.libcvhf.CVHFset_q_cond
+        fsetqcond(opt._this, q_cond.ctypes.data_as(ctypes.c_void_p),
+                  ctypes.c_int(q_cond.size))
+
+        try:
+            opt.j2c = j2c = scipy.linalg.cho_factor(j2c, lower=True)
+            opt.j2c_type = 'cd'
+        except scipy.linalg.LinAlgError:
+            opt.j2c = j2c
+            opt.j2c_type = 'regular'
+
+        # jk.get_jk function supports 4-index integrals. Use bas_placeholder
+        # (l=0, nctr=1, 1 function) to hold the last index.
+        bas_placeholder = numpy.array([0, 0, 1, 1, 0, 0, 0, 0],
+                                      dtype=numpy.int32)
+        fakemol = mol + auxmol
+        fakemol._bas = numpy.vstack((fakemol._bas, bas_placeholder))
+        opt.fakemol = fakemol
+        dfobj._vjopt = opt
+        t1 = logger.timer_debug1(dfobj, 'df-vj init_direct_scf', *t1)
+
+    opt = dfobj._vjopt
+    fakemol = opt.fakemol
+    dm = numpy.asarray(dm, order='C')
+    dm_shape = dm.shape
+    nao = dm_shape[-1]
+    dm = dm.reshape(-1,nao,nao)
+    n_dm = dm.shape[0]
+
+    nbas = mol.nbas
+    nbas1 = mol.nbas + dfobj.auxmol.nbas
+    shls_slice = (0, nbas, 0, nbas, nbas, nbas1, nbas1, nbas1+1)
+    with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass1_prescreen',
+                           _dmcondname='CVHFsetnr_direct_scf_dm'):
+        jaux = jk.get_jk(fakemol, dm, ['ijkl,ji->kl']*n_dm, 'int3c2e',
+                         aosym='s2ij', hermi=0, shls_slice=shls_slice,
+                         vhfopt=opt)
+    # remove the index corresponding to bas_placeholder
+    jaux = numpy.array(jaux)[:,:,0]
+    t1 = logger.timer_debug1(dfobj, 'df-vj pass 1', *t1)
+
+    if opt.j2c_type == 'cd':
+        rho = scipy.linalg.cho_solve(opt.j2c, jaux.T)
+    else:
+        rho = scipy.linalg.solve(opt.j2c, jaux.T)
+    # transform rho to shape (:,1,naux), to adapt to 3c2e integrals (ij|k)
+    rho = rho.T[:,numpy.newaxis,:]
+    t1 = logger.timer_debug1(dfobj, 'df-vj solve ', *t1)
+
+    with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass2_prescreen',
+                           _dmcondname=None):
+        # CVHFnr3c2e_vj_pass2_prescreen requires custom dm_cond
+        aux_loc = dfobj.auxmol.ao_loc
+        dm_cond = [abs(rho[:,:,i0:i1]).max()
+                   for i0, i1 in zip(aux_loc[:-1], aux_loc[1:])]
+        dm_cond = numpy.array(dm_cond)
+        fsetcond = _vhf.libcvhf.CVHFset_dm_cond
+        fsetcond(opt._this, dm_cond.ctypes.data_as(ctypes.c_void_p),
+                  ctypes.c_int(dm_cond.size))
+
+        vj = jk.get_jk(fakemol, rho, ['ijkl,lk->ij']*n_dm, 'int3c2e',
+                       aosym='s2ij', hermi=1, shls_slice=shls_slice,
+                       vhfopt=opt)
+
+    t1 = logger.timer_debug1(dfobj, 'df-vj pass 2', *t1)
+    logger.timer(dfobj, 'df-vj', *t0)
+    return numpy.asarray(vj).reshape(dm_shape)
+
+
+def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
     '''Relativistic density fitting JK'''
     t0 = (time.clock(), time.time())
     mol = dfobj.mol
@@ -373,6 +450,10 @@ if __name__ == '__main__':
     method = density_fit(pyscf.scf.DHF(mol), 'weigend')
     energy = method.scf()
     print(energy, -76.0807386770) # normal DHF energy is -76.0815679438127
+
+    method = density_fit(pyscf.scf.UKS(mol), 'weigend')
+    energy = method.scf()
+    print(energy, -75.8547753298)
 
     mol.build(
         verbose = 0,

@@ -476,7 +476,7 @@ class UHF(hf.SCF):
         opt_gaunt = None
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
