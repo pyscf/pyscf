@@ -86,6 +86,7 @@ class DF(lib.StreamObject):
         self._cderi = None
         self._call_count = getattr(__config__, 'df_df_DF_call_count', None)
         self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
+        self._vjopt = None
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -189,8 +190,9 @@ class DF(lib.StreamObject):
         with addons.load(self._cderi, 'j3c') as feri:
             return feri.shape[0]
 
-    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-        return df_jk.get_jk(self, dm, hermi, vhfopt, with_j, with_k)
+    def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
+               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)):
+        return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
 
     def get_eri(self):
         nao = self.mol.nao_nr()
@@ -253,7 +255,8 @@ class DF4C(DF):
                     eriss = numpy.asarray(feriss[b0:b1], order='C')
                     yield erill, eriss
 
-    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
+    def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
+               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)):
         return df_jk.r_get_jk(self, dm, hermi, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):

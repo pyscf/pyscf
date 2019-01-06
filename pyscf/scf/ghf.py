@@ -421,14 +421,19 @@ class GHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         nao = mol.nao
         dm = numpy.asarray(dm)
-        if nao * 2 == dm.shape[-1]:  # GHF density matrix, shape (2N,2N)
-            vj, vk = get_jk(mol, dm, hermi, with_j, with_k, self.get_jk)
-        elif self._eri is not None or mol.incore_anyway or self._is_mem_enough():
-            if self._eri is None:
-                self._eri = mol.intor('int2e', aosym='s8')
-            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
-        else:
-            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
+
+        def jkbuild(mol, dm, hermi, with_j, with_k):
+            if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+                if self._eri is None:
+                    self._eri = mol.intor('int2e', aosym='s8')
+                return hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
+            else:
+                return hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
+
+        if nao == dm.shape[-1]:
+            vj, vk = jkbuild(mol, dm, hermi, with_j, with_k)
+        else:  # GHF density matrix, shape (2N,2N)
+            vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):

@@ -617,7 +617,7 @@ def dot_eri_dm(eri, dm, hermi=0, with_j=True, with_k=True):
     else:
         vj, vk = _vhf.incore(eri, dm.real, hermi, with_j, with_k)
         if dm.dtype == numpy.complex128:
-            vs = _vhf.incore(eri, dm.imag, hermi, with_j, with_k)
+            vs = _vhf.incore(eri, dm.imag, 0, with_j, with_k)
             if with_j:
                 vj = vj + vs[0] * 1j
             if with_k:

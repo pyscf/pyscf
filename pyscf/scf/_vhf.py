@@ -121,11 +121,10 @@ def incore(eri, dms, hermi=0, with_j=True, with_k=True):
     eri = numpy.asarray(eri, order='C')
     dms = numpy.asarray(dms, order='C')
     dms_shape = dms.shape
-
-    if dms.ndim == 2:
-        dms = dms[numpy.newaxis,:,:]
-    n_dm = dms.shape[0]
     nao = dms_shape[-1]
+
+    dms = dms.reshape(-1,nao,nao)
+    n_dm = dms.shape[0]
 
     vj = vk = None
     if with_j:
@@ -300,7 +299,6 @@ def direct_mapdm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    nao = dms[0].shape[0]
     dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
@@ -382,7 +380,6 @@ def direct_bindm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    nao = dms[0].shape[0]
     dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)

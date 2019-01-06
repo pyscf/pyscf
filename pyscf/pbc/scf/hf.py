@@ -622,7 +622,7 @@ class SCF(mol_hf.SCF):
         where r,s are orbitals on kpt. p and q are orbitals on kpts_band
         if kpts_band is given otherwise p and q are orbitals on kpt.
         '''
-        return self.get_jk(mol, dm, hermi, kpt, kpts_band, with_k=False)[0]
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_k=False)[0]
 
     def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
         '''Compute K matrix for the given density matrix.

@@ -42,7 +42,7 @@ def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None,
             without the opt for the 3rd index.  It can be precomputed to
             reduce the overhead of cintopt initialization repeatedly.
 
-            cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
+            cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     '''
     from pyscf.gto.moleintor import getints, make_cintopt
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
