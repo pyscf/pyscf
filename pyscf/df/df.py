@@ -254,7 +254,7 @@ class DF4C(DF):
                     yield erill, eriss
 
     def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-        return df_jk.r_get_jk(self, dm, hermi)
+        return df_jk.r_get_jk(self, dm, hermi, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError

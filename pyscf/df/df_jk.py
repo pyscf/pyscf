@@ -110,32 +110,14 @@ def density_fit(mf, auxbasis=None, with_df=None):
             self.with_df = with_df
             self._keys = self._keys.union(['auxbasis', 'with_df'])
 
-        def get_jk(self, mol=None, dm=None, hermi=1):
+        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
             if self.with_df:
                 if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
-                vj, vk = self.with_df.get_jk(dm, hermi)
+                vj, vk = self.with_df.get_jk(dm, hermi, self.opt, with_j, with_k)
                 return vj, vk
             else:
-                return mf_class.get_jk(self, mol, dm, hermi)
-
-        def get_j(self, mol=None, dm=None, hermi=1):
-            if self.with_df:
-                if mol is None: mol = self.mol
-                if dm is None: dm = self.make_rdm1()
-                vj = self.with_df.get_jk(dm, hermi, with_k=False)[0]
-                return vj
-            else:
-                return mf_class.get_j(self, mol, dm, hermi)
-
-        def get_k(self, mol=None, dm=None, hermi=1):
-            if self.with_df:
-                if mol is None: mol = self.mol
-                if dm is None: dm = self.make_rdm1()
-                vk = self.with_df.get_jk(dm, hermi, with_j=False)[1]
-                return vk
-            else:
-                return mf_class.get_k(self, mol, dm, hermi)
+                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k)
 
 # _cderi accesser for pyscf 1.0, 1.1 compatibility
         @property
@@ -167,21 +149,18 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
     nao = dm_shape[-1]
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
-    vj = [0] * nset
-    vk = [0] * nset
+    vj = 0
+    vk = numpy.zeros_like(dms)
+
+    if with_j:
+        idx = numpy.arange(nao)
+        dmtril = lib.pack_tril(dms + dms.conj().transpose(0,2,1))
+        dmtril[:,idx*(idx+1)//2+idx] *= .5
 
     if not with_k:
-        dmtril = []
-        idx = numpy.arange(nao)
-        for k in range(nset):
-            dm = lib.pack_tril(dms[k]+dms[k].T)
-            dm[idx*(idx+1)//2+idx] *= .5
-            dmtril.append(dm)
         for eri1 in dfobj.loop():
-            naux, nao_pair = eri1.shape
-            for k in range(nset):
-                rho = numpy.einsum('px,x->p', eri1, dmtril[k])
-                vj[k] += numpy.einsum('p,px->x', rho, eri1)
+            rho = numpy.einsum('ix,px->ip', dmtril, eri1)
+            vj += numpy.einsum('ip,px->ix', rho, eri1)
 
     elif getattr(dm, 'mo_coeff', None) is not None:
 #TODO: test whether dm.mo_coeff matching dm
@@ -197,14 +176,8 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
             assert(mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
             mo_occ = numpy.vstack((mo_occa, mo_occb))
 
-        dmtril = []
         orbo = []
         for k in range(nset):
-            if with_j:
-                dmtril.append(lib.pack_tril(dms[k]+dms[k].T))
-                i = numpy.arange(nao)
-                dmtril[k][i*(i+1)//2+i] *= .5
-
             c = numpy.einsum('pi,i->pi', mo_coeff[k][:,mo_occ[k]>0],
                              numpy.sqrt(mo_occ[k][mo_occ[k]>0]))
             orbo.append(numpy.asarray(c, order='F'))
@@ -213,11 +186,11 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         for eri1 in dfobj.loop():
             naux, nao_pair = eri1.shape
             assert(nao_pair == nao*(nao+1)//2)
-            for k in range(nset):
-                if with_j:
-                    rho = numpy.einsum('px,x->p', eri1, dmtril[k])
-                    vj[k] += numpy.einsum('p,px->x', rho, eri1)
+            if with_j:
+                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
+                vj += numpy.einsum('ip,px->ix', rho, eri1)
 
+            for k in range(nset):
                 nocc = orbo[k].shape[1]
                 if nocc > 0:
                     buf1 = buf[:naux*nocc]
@@ -239,6 +212,10 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
         buf = numpy.empty((2,dfobj.blockdim,nao,nao))
         for eri1 in dfobj.loop():
             naux, nao_pair = eri1.shape
+            if with_j:
+                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
+                vj += numpy.einsum('ip,px->ix', rho, eri1)
+
             for k in range(nset):
                 buf1 = buf[0,:naux]
                 fdrv(ftrans, fmmm,
@@ -246,9 +223,6 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                      eri1.ctypes.data_as(ctypes.c_void_p),
                      dms[k].ctypes.data_as(ctypes.c_void_p),
                      ctypes.c_int(naux), *rargs)
-                if with_j:
-                    rho = numpy.einsum('kii->k', buf1)
-                    vj[k] += numpy.einsum('p,px->x', rho, eri1)
 
                 buf2 = lib.unpack_tril(eri1, out=buf[1])
                 vk[k] += lib.dot(buf1.reshape(-1,nao).T,
@@ -256,12 +230,12 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
             t1 = log.timer_debug1('jk', *t1)
 
     if with_j: vj = lib.unpack_tril(vj, 1).reshape(dm_shape)
-    if with_k: vk = numpy.asarray(vk).reshape(dm_shape)
+    if with_k: vk = vk.reshape(dm_shape)
     logger.timer(dfobj, 'vj and vk', *t0)
     return vj, vk
 
 
-def r_get_jk(dfobj, dms, hermi=1):
+def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
     '''Relativistic density fitting JK'''
     t0 = (time.clock(), time.time())
     mol = dfobj.mol

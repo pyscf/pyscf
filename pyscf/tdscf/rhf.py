@@ -18,6 +18,7 @@
 # Ref:
 # Chem Phys Lett, 256, 454
 # J. Mol. Struct. THEOCHEM, 914, 3
+# Recent Advances in Density Functional Methods, Chapter 5, M. E. Casida
 #
 
 from functools import reduce

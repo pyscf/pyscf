@@ -564,7 +564,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # hermi = 1 : hermitian
 # hermi = 2 : anti-hermitian
 ################################################
-def dot_eri_dm(eri, dm, hermi=0):
+def dot_eri_dm(eri, dm, hermi=0, with_j=True, with_k=True):
     '''Compute J, K matrices in terms of the given 2-electron integrals and
     density matrix:
 
@@ -604,27 +604,28 @@ def dot_eri_dm(eri, dm, hermi=0):
     '''
     dm = numpy.asarray(dm)
     nao = dm.shape[-1]
-    dms = dm.reshape(-1,nao,nao)
     if eri.dtype == numpy.complex128 or eri.size == nao**4:
         eri = eri.reshape((nao,)*4)
-        vj = numpy.empty(dms.shape, dtype=eri.dtype)
-        vk = numpy.empty(dms.shape, dtype=eri.dtype)
-        for i, dmi in enumerate(dms):
-            vj[i] = numpy.einsum('ijkl,ji->kl', eri, dmi)
-            vk[i] = numpy.einsum('ijkl,jk->il', eri, dmi)
+        dms = dm.reshape(-1,nao,nao)
+        vj = vk = None
+        if with_j:
+            vj = numpy.einsum('ijkl,xji->xkl', eri, dms)
+            vj = vj.reshape(dm.shape)
+        if with_k:
+            vk = numpy.einsum('ijkl,xjk->xil', eri, dms)
+            vk = vk.reshape(dm.shape)
     else:
-        vj = numpy.empty_like(dms)
-        vk = numpy.empty_like(dms)
-        for i, dmi in enumerate(dms):
-            vj[i], vk[i] = _vhf.incore(eri, dmi.real, hermi=hermi)
-            if dms.dtype == numpy.complex128:
-                jk = _vhf.incore(eri, dmi.imag, hermi=0)
-                vj[i] += jk[0] * 1j
-                vk[i] += jk[1] * 1j
-    return vj.reshape(dm.shape), vk.reshape(dm.shape)
+        vj, vk = _vhf.incore(eri, dm.real, hermi, with_j, with_k)
+        if dm.dtype == numpy.complex128:
+            vs = _vhf.incore(eri, dm.imag, hermi, with_j, with_k)
+            if with_j:
+                vj = vj + vs[0] * 1j
+            if with_k:
+                vk = vk + vs[1] * 1j
+    return vj, vk
 
 
-def get_jk(mol, dm, hermi=1, vhfopt=None):
+def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
     '''Compute J, K matrices for the given density matrix
 
     Args:
@@ -665,15 +666,19 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     if dm.dtype == numpy.complex128:
         dms = numpy.vstack((dm.real, dm.imag)).reshape(-1,nao,nao)
         vj, vk = _vhf.direct(dms, mol._atm, mol._bas, mol._env,
-                             vhfopt=vhfopt, hermi=0, cart=mol.cart)
-        vj = vj.reshape(2,-1,nao,nao)
-        vk = vk.reshape(2,-1,nao,nao)
-        vj = vj[0] + vj[1] * 1j
-        vk = vk[0] + vk[1] * 1j
+                             vhfopt, 0, mol.cart, with_j, with_k)
+        if with_j:
+            vj = vj.reshape(2,-1)
+            vj = vj[0] + vj[1] * 1j
+            vj = vj.reshape(dm.shape)
+        if with_k:
+            vk = vk.reshape(2,-1)
+            vk = vk[0] + vk[1] * 1j
+            vk = vk.reshape(dm.shape)
     else:
-        vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
-                             vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
-    return vj.reshape(dm.shape), vk.reshape(dm.shape)
+        vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
+                             vhfopt, hermi, mol.cart, with_j, with_k)
+    return vj, vk
 
 
 def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
@@ -1502,27 +1507,35 @@ class SCF(lib.StreamObject):
         return opt
 
     @lib.with_doc(get_jk.__doc__)
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
-        dm = numpy.asarray(dm)
-        nao = dm.shape[-1]
-        vj, vk = get_jk(mol, dm.reshape(-1,nao,nao), hermi, self.opt)
+
+        if with_j and with_k:
+            vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
+        else:
+            if with_j:
+                prescreen = 'CVHFnrs8_vj_prescreen'
+            else:
+                prescreen = 'CVHFnrs8_vk_prescreen'
+            with lib.temporary_env(self.opt, prescreen=prescreen):
+                vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
+
         logger.timer(self, 'vj and vk', *cpu0)
-        return vj.reshape(dm.shape), vk.reshape(dm.shape)
+        return vj, vk
 
     def get_j(self, mol=None, dm=None, hermi=1):
         '''Compute J matrix for the given density matrix.
         '''
-        return self.get_jk(mol, dm, hermi)[0]
+        return self.get_jk(mol, dm, hermi, with_k=False)[0]
 
     def get_k(self, mol=None, dm=None, hermi=1):
         '''Compute K matrix for the given density matrix.
         '''
-        return self.get_jk(mol, dm, hermi)[1]
+        return self.get_jk(mol, dm, hermi, with_j=False)[1]
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -1673,16 +1686,16 @@ class RHF(SCF):
         return SCF.check_sanity(self)
 
     @lib.with_doc(get_jk.__doc__)
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
-            vj, vk = dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
         else:
-            vj, vk = SCF.get_jk(self, mol, dm, hermi)
+            vj, vk = SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
         return vj, vk
 
     def convert_from_(self, mf):
