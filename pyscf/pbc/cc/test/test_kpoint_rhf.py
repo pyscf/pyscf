@@ -23,6 +23,7 @@ import numpy as np
 from pyscf.lib import finger
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
+from pyscf.pbc import dft as pbcdft
 from pyscf.pbc import df as pbc_df
 
 import pyscf.cc
@@ -409,6 +410,85 @@ class KnownValues(unittest.TestCase):
         # Run CC calculations
         self._test_cu_metallic_nonequal_occ(kmf, cell, -0.96676526820520137)
 
+    def test_ccsd_t_non_hf(self):
+        '''Tests ccsd and ccsd_t for non-Hartree-Fock references.'''
+        n = 14
+        cell = make_test_cell.test_cell_n3([n]*3)
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcdft.KRKS(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KRCCSD(khf)
+        eris = mycc.ao2mo()
+        ekcc, t1, t2 = mycc.kernel(eris=eris)
+
+        ekcc_t = mycc.ccsd_t(eris=eris)
+
+        # Run supercell
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nk)
+        rks = pbcdft.RKS(supcell)
+        erks = rks.kernel()
+
+        rhf = pbcscf.RHF(supcell)
+        rhf.__dict__.update(rks.__dict__)
+
+        mycc = pbcc.RCCSD(rhf)
+        eris = mycc.ao2mo()
+        ercc, t1, t2 = mycc.kernel(eris=eris)
+
+        self.assertAlmostEqual(ercc/np.prod(nk), -0.15632445245405927, 6)
+        self.assertAlmostEqual(ercc/np.prod(nk), ekcc, 6)
+
+        ercc_t = mycc.ccsd_t(eris=eris)
+
+        self.assertAlmostEqual(ercc_t/np.prod(nk), -0.00114619248449, 6)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
+
+    def test_ccsd_t_hf(self):
+        '''Tests ccsd and ccsd_t for Hartree-Fock references.'''
+        n = 14
+        cell = make_test_cell.test_cell_n3([n]*3)
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcscf.KRHF(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KRCCSD(khf)
+        eris = mycc.ao2mo()
+        ekcc, t1, t2 = mycc.kernel(eris=eris)
+        ekcc_t = mycc.ccsd_t(eris=eris)
+
+        # Run supercell
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nk)
+        rks = pbcscf.RHF(supcell)
+        erks = rks.kernel()
+
+        rhf = pbcscf.RHF(supcell)
+        rhf.__dict__.update(rks.__dict__)
+
+        mycc = pbcc.RCCSD(rhf)
+        eris = mycc.ao2mo()
+        ercc, t1, t2 = mycc.kernel(eris=eris)
+        self.assertAlmostEqual(ercc/np.prod(nk), -0.15530756381467772, 6)
+        self.assertAlmostEqual(ercc/np.prod(nk), ekcc, 6)
+
+        ercc_t = mycc.ccsd_t(eris=eris)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), -0.0011112735513837887, 6)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
+
     def test_ccsd_t_high_cost(self):
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
@@ -418,10 +498,12 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KRHF(cell, kpts=kpts)
         ehf = kmf.kernel()
 
-        rand_cc = pbcc.KRCCSD(kmf)
-        ecc, t1, t2 = rand_cc.kernel()
+        mycc = pbcc.KRCCSD(kmf)
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
 
-        energy_t = kccsd_t_rhf.kernel(rand_cc)
+        eris.mo_energy = [eris.fock[i].diagonal() for i in range(len(kpts))]
+        energy_t = kccsd_t_rhf.kernel(mycc, eris=eris)
         energy_t_bench = -0.00191443154358
         self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 
