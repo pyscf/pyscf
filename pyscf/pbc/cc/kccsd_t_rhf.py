@@ -28,7 +28,7 @@ einsum = lib.einsum
 #     and the equation should read [ia] >= [jb] >= [kc] (since the only
 #     symmetry in spin-less operators is the exchange of a column of excitation
 #     ooperators).
-def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
+def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     '''Returns the CCSD(T) for restricted closed-shell systems with k-points.
 
     Note:
@@ -54,7 +54,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     else:
         log = logger.Logger(mycc.stdout, verbose)
 
-    if eris is None: eris = mycc.eris
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
 
@@ -74,8 +73,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
     nkpts, nocc, nvir = t1.shape
 
-    mo_energy_occ = [eris.fock[i].diagonal()[:nocc] for i in range(nkpts)]
-    mo_energy_vir = [eris.fock[i].diagonal()[nocc:] for i in range(nkpts)]
+    mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
+    mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
     fov = eris.fock[:, :nocc, nocc:]
 
     # Set up class for k-point conservation
@@ -85,8 +84,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts'''
         km = kconserv[ki, ka, kj]
         kf = kconserv[kk, kc, kj]
-        ret = einsum('kjf,fi->ijk', t2[kk, kj, kc, :, :, c, :], -eris.vovv[kf, ki, kb, :, :, b, a].conj())
-        ret = ret - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], -eris.ooov[kj, ki, km, :, :, :, a].conj())
+        ret = einsum('kjf,fi->ijk', t2[kk, kj, kc, :, :, c, :], eris.vovv[kf, ki, kb, :, :, b, a].conj())
+        ret = ret - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, ki, km, :, :, :, a].conj())
         return ret
 
     def get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c):
@@ -115,7 +114,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         kf = kconserv[ki, ka, kj]
         ret = np.zeros((nocc, nocc, nocc), dtype=dtype)
         if kk == kc:
-            ret = ret + einsum('k,ij->ijk', t1[kk, :, c], -eris.oovv[ki, kj, ka, :, :, a, b].conj())
+            ret = ret + einsum('k,ij->ijk', t1[kk, :, c], eris.oovv[ki, kj, ka, :, :, a, b].conj())
             ret = ret + einsum('k,ij->ijk', fov[kk, :, c], t2[ki, kj, ka, :, :, a, b])
         return ret
 
