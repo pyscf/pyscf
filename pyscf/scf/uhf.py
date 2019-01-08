@@ -437,11 +437,12 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
+    nmo = len(mo_occ[0])
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
         log.note('**** MO energy ****')
         log.note('                             alpha | beta                alpha | beta')
-        for i in range(mo_occ.shape[1]):
+        for i in range(nmo):
             log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
                      i+MO_BASE, mo_energy[0][i], mo_energy[1][i],
                      mo_occ[0][i], mo_occ[1][i])

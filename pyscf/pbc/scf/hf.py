@@ -220,7 +220,8 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     from pyscf.pbc.dft import numint
     if cell.dimension != 3:
         # raise NotImplementedError
-        return numpy.zeros(3)
+        logger.warn(cell, 'Dipole moment for low-dimension system is not supported.')
+        return np.zeros(3)
 
     log = logger.new_logger(cell, verbose)
     a = cell.lattice_vectors()
