@@ -470,6 +470,13 @@ class KnownValues(unittest.TestCase):
         dip = mf.dip_moment()
         self.assertAlmostEqual(lib.finger(dip), 0.03847620192010277, 9)
 
+        # For test cover only. Results for low-dimesion system are not
+        # implemented.
+        with lib.temporary_env(cell, dimension=1):
+            kdm = kmf.get_init_guess(key='minao')
+            dip = kmf.dip_moment(cell, kdm)
+        #self.assertAlmostEqual(lib.finger(dip), 0, 9)
+
     def test_makov_payne_correction(self):
         de = pbchf.makov_payne_correction(mf)
         self.assertAlmostEqual(de[0], -0.1490687416177664, 9)
