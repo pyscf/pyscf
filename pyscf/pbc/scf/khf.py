@@ -291,7 +291,11 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     if s is None:
         s = get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for the gamma point')
+    log.note('Analyze output for *gamma point*')
+    log.info('    To include the contributions from k-points, transform to a '
+             'supercell then run the population analysis on the supercell\n'
+             '        from pyscf.pbc.tools import k2gamma\n'
+             '        k2gamma.k2gamma(mf).mulliken_pop()')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
