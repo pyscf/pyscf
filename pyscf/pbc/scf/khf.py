@@ -283,7 +283,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
 
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
-    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
@@ -296,7 +296,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     log.info('    To include the contributions from k-points, transform to a '
              'supercell then run the population analysis on the supercell\n'
              '        from pyscf.pbc.tools import k2gamma\n'
-             '        k2gamma.k2gamma(mf).mulliken_pop()')
+             '        k2gamma.k2gamma(mf).mulliken_meta()')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
@@ -649,6 +649,9 @@ class KSCF(pbchf.SCF):
         if s is None: s = self.get_ovlp(cell)
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
+
+    def mulliken_pop(self):
+        raise NotImplementedError
 
     get_rho = get_rho
 
