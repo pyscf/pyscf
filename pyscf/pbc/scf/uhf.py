@@ -128,7 +128,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
             if nalpha + nbeta != ne:
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                    'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
-                                   (ne, self.spin))
+                                   (ne, cell.spin))
             return nalpha, nbeta
     @nelec.setter
     def nelec(self, x):
