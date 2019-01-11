@@ -313,7 +313,7 @@ class TDRHF(object):
         self.xy = {}
         self.e = {}
 
-    def kernel(self, k):
+    def kernel(self, k=None):
         """
         Calculates eigenstates and eigenvalues of the TDHF problem.
         Args:
@@ -322,11 +322,16 @@ class TDRHF(object):
         Returns:
             Positive eigenvalues and eigenvectors.
         """
-        self.e[k], self.xy[k], self.eri = kernel(
-            self._scf if self.eri is None else self.eri,
-            k,
-            driver=self.driver,
-            nroots=self.nroots,
-            return_eri=True,
-        )
-        return self.e[k], self.xy[k]
+        if k is None:
+            for k in range(len(self._scf.kpts)):
+                self.kernel(k)
+            return self.e, self.xy
+        else:
+            self.e[k], self.xy[k], self.eri = kernel(
+                self._scf if self.eri is None else self.eri,
+                k,
+                driver=self.driver,
+                nroots=self.nroots,
+                return_eri=True,
+            )
+            return self.e[k], self.xy[k]
