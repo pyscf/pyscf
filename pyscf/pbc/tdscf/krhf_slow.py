@@ -189,6 +189,7 @@ def get_block_k_ix(eri, k):
         | k12=nk-1,r2[-1] |                                                   |                                                   |
         +-----------------+---------------------------------------------------+---------------------------------------------------+
     """
+    # All checks here are for debugging purposes
     if isinstance(k, int):
         k = (0, k)
     r1, c1 = eri.get_k_ix("knmj", k)
@@ -208,6 +209,8 @@ def get_block_k_ix(eri, k):
 
     assert abs(r1 - c1).max() == 0
     assert abs(r2 - c2).max() == 0
+    assert abs(r1[r2] - numpy.arange(len(r1))).max() == 0
+    # The output is, basically, r1, argsort(r1), r1, argsort(r1)
     return r1, r2, c1, c2
 
 
