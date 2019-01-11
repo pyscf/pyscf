@@ -278,7 +278,6 @@ def eig(m, driver=None, nroots=None):
     if driver is None:
         driver = 'eig'
     if driver == 'eig':
-        logger.debug1("Diagonalizing a {:d}x{:d} matrix with eig ...".format(*m.shape))
         vals, vecs = numpy.linalg.eig(m)
         order = numpy.argsort(vals)
         vals = vals[order][len(vals) // 2:][:nroots]
@@ -328,7 +327,10 @@ def kernel(model, driver=None, nroots=None, return_eri=False):
         else:
             logger.debug1(model, "8-fold symmetry used (real orbitals)")
             eri = PhysERI8(model)
-    vals, vecs = eig(build_matrix(eri), driver=driver, nroots=nroots)
+    logger.debug1(model, "Preparing TDHF matrix ...")
+    m = build_matrix(eri)
+    logger.debug1(model, "Diagonalizing a {} matrix with '{}' ...".format('x'.join(map(str, m.shape)), driver))
+    vals, vecs = eig(m, driver=driver, nroots=nroots)
     vecs = vector_to_amplitudes(vecs, eri.nocc, eri.nmo)
     if return_eri:
         return vals, vecs, eri
