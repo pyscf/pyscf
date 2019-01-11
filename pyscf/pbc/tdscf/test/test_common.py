@@ -34,7 +34,7 @@ def phase_difference(a, b, axis=0, threshold=1e-5):
     g12 = numpy.logical_and(g1, g2)
     if numpy.any(g12.sum(axis=1) == 0):
         desired_threshold = numpy.minimum(abs(v1), abs(v2)).max(axis=1).min()
-        raise ValueError("Cannot find an anchor for the rotation, minimal value for the threshold is: {:.3e}".format(
+        raise ValueError("Cannot find an anchor for the rotation, maximal value for the threshold is: {:.3e}".format(
             desired_threshold
         ))
     anchor_index = tuple(numpy.where(i)[0][0] for i in g12)
@@ -70,6 +70,56 @@ def adjust_mf_phase(model1, model2, threshold=1e-5):
             fr = to
     else:
         model2.mo_coeff[:, o2] /= p[numpy.newaxis, :]
+
+
+def adjust_td_phase(model1, model2, threshold=1e-5):
+    """Tunes the phase of the 2 time-dependent models to a common value."""
+    signatures = []
+    orders = []
+
+    for m in (model1, model2):
+        # Are there k-points?
+        if "kpts" in dir(m._scf):
+            # Is it a supercell model, Gamma model or a true k-model?
+            if isinstance(m.xy, dict):
+                # A true k-model, take k = 0
+                raise NotImplementedError("Implement me")
+            elif len(m.xy.shape) == 6:
+                # A supercell model
+                xy = m.xy.reshape(len(m.e), -1)
+                xy = xy[:, ov_order(m._scf)]
+                signatures.append(xy)
+                orders.append(numpy.argsort(m.e))
+            elif len(m.xy.shape) == 5:
+                # Gamma model
+                raise NotImplementedError("Implement me")
+            else:
+                raise ValueError("Unknown vectors: {}".format(repr(m.xy)))
+        else:
+            signatures.append(m.xy.reshape(len(m.e), -1))
+            orders.append(numpy.argsort(m.e))
+
+    m1, m2 = signatures
+    o1, o2 = orders
+    m1, m2 = m1[o1, :], m2[o2, :]
+
+    p = phase_difference(m1, m2, axis=0, threshold=threshold)
+
+    if "kpts" in dir(model2._scf):
+        # Is it a supercell model, Gamma model or a true k-model?
+        if isinstance(m.xy, dict):
+            # A true k-model, take k = 0
+            raise NotImplementedError("Implement me")
+        elif len(m.xy.shape) == 6:
+            # A supercell model
+            model2.xy[o2, ...] /= p[(slice(None),) + (numpy.newaxis,) * 5]
+        elif len(m.xy.shape) == 5:
+            # Gamma model
+            raise NotImplementedError("Implement me")
+        else:
+            raise ValueError("Unknown vectors: {}".format(repr(m.xy)))
+    else:
+        model2.xy[o2, ...] /= p[(slice(None),) + (numpy.newaxis,) * 5]
 
 
 def remove_phase_difference(v1, v2, axis=0, threshold=1e-5):
