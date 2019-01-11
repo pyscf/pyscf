@@ -278,6 +278,7 @@ def eig(m, driver=None, nroots=None):
     if driver is None:
         driver = 'eig'
     if driver == 'eig':
+        logger.debug1("Diagonalizing a {:d}x{:d} matrix with eig ...".format(*m.shape))
         vals, vecs = numpy.linalg.eig(m)
         order = numpy.argsort(vals)
         vals = vals[order][len(vals) // 2:][:nroots]
