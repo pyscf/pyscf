@@ -124,7 +124,14 @@ class PhysERI4(PhysERI):
         ((3, 2, 1, 0), True),
     ]
 
-    __calc_block__ = td.PhysERI4.__calc_block__.im_func
+    def __calc_block__(self, item, k):
+        if self.kconserv[k[:3]] == k[3]:
+            return td.PhysERI4.__calc_block__.im_func(self, item, k)
+        else:
+            raise ValueError("K is not conserved: {}, expected {}".format(
+                repr(k),
+                k[:3] + (self.kconserv[k[:3]],),
+            ))
 
 
 class PhysERI8(PhysERI4):
