@@ -294,7 +294,6 @@ def kernel(model, driver=None, nroots=None, return_eri=False):
     """
     if isinstance(model, PhysERI):
         eri = model
-        model = eri.model
     else:
         if numpy.iscomplexobj(model.mo_coeff):
             logger.debug1(model, "4-fold symmetry used (complex orbitals)")
