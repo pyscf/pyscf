@@ -2500,7 +2500,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             symmetry = mol.symmetry
 
         if isinstance(atoms_or_coords, numpy.ndarray):
-            mol.atom = list(zip([x[0] for x in mol._atom], atoms_or_coords))
+            mol.atom = list(zip([x[0] for x in mol._atom],
+                                atoms_or_coords.tolist()))
         else:
             mol.atom = atoms_or_coords
 
