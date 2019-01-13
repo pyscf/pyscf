@@ -21,20 +21,15 @@ procedure. Several variants of TDHF are available:
 # Convention for these modules:
 # * PhysERI, PhysERI4, PhysERI8 are 2-electron integral routines computed directly (for debug purposes), with a 4-fold
 #   symmetry and with an 8-fold symmetry
-# * build_matrix builds the full TDHF matrix
-# * eig performs diagonalization and selects roots
 # * vector_to_amplitudes reshapes and normalizes the solution
-# * kernel assembles everything
+# * TDRHF provides a container
 
 # This module is simply an alias of the molecular code
-from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, vector_to_amplitudes, kernel, TDRHF
+from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, vector_to_amplitudes, TDRHF
 
 PhysERI = PhysERI
 PhysERI4 = PhysERI4
 PhysERI8 = PhysERI8
 
-build_matrix = build_matrix
-eig = eig
 vector_to_amplitudes = vector_to_amplitudes
-kernel = kernel
 TDRHF = TDRHF

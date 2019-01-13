@@ -1,7 +1,7 @@
 from pyscf.gto import Mole
 from pyscf.scf import RHF
 from pyscf.tdscf import TDHF
-from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel, TDRHF
+from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, eig, TDRHF
 
 from numpy import testing
 import unittest
@@ -43,7 +43,7 @@ class H20Test(unittest.TestCase):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (PhysERI, PhysERI4, PhysERI8):
             e = eri(self.model_rhf)
-            m = build_matrix(e)
+            m = e.tdhf_matrix()
             try:
                 testing.assert_allclose(self.ref_m, m, atol=1e-14)
                 vals, vecs = eig(m, nroots=self.td_model_rhf.nroots)
@@ -51,12 +51,6 @@ class H20Test(unittest.TestCase):
             except Exception:
                 print("When testing {} the following exception occurred:".format(eri))
                 raise
-
-    def test_eig_kernel(self):
-        """Tests default eig kernel behavior."""
-        vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
-        testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
-        assert_vectors_close(vecs, self.td_model_rhf.xy, atol=1e-2)
 
     def test_class(self):
         """Tests container behavior."""

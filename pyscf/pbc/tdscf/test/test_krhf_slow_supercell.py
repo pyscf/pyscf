@@ -3,6 +3,7 @@ from pyscf.pbc.scf import RHF, KRHF
 from pyscf.pbc.tdscf import KTDHF
 from pyscf.pbc.tdscf import krhf_slow_supercell as ktd, rhf_slow as td
 from pyscf.pbc.tools.pbc import super_cell
+from pyscf.tdscf.rhf_slow import eig
 
 from test_common import retrieve_m, adjust_mf_phase, ov_order, assert_vectors_close
 
@@ -53,27 +54,14 @@ class DiamondTestGamma(unittest.TestCase):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
             e = eri(self.model_krhf)
-            m = ktd.build_matrix(e)
+            m = e.tdhf_matrix()
             try:
                 testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
-                vals, vecs = ktd.eig(m, nroots=self.td_model_krhf.nroots)
+                vals, vecs = eig(m, nroots=self.td_model_krhf.nroots)
                 testing.assert_allclose(vals, self.td_model_krhf.e, atol=1e-5)
             except Exception:
                 print("When testing {} the following exception occurred:".format(eri))
                 raise
-
-    def test_eig_kernel(self):
-        """Tests default eig kernel behavior."""
-        vals, vecs = ktd.kernel(self.model_krhf, driver='eig', nroots=self.td_model_krhf.nroots)
-        testing.assert_allclose(vals, self.td_model_krhf.e, atol=1e-5)
-        nocc = nvirt = 4
-        testing.assert_equal(vecs.shape, (self.td_model_krhf.nroots, 2, 1, 1, nocc, nvirt))
-        try:
-            assert_vectors_close(vecs.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze(), atol=1e-12)
-        except Exception:
-            # TODO: this exception is triggered in case of fft density fitting
-            print("This is a known bug: vectors from davidson are wrong")
-            raise
 
     def test_class(self):
         """Tests container behavior."""
@@ -118,9 +106,6 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         model_rhf.conv_tol = 1e-14
         model_rhf.kernel()
 
-        cls.ref_e, cls.ref_v, eri = td.kernel(model_rhf, return_eri=True)
-        cls.ref_m = td.build_matrix(eri)
-
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
         model_krhf.conv_tol = 1e-14
@@ -131,9 +116,15 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         testing.assert_allclose(model_rhf.mo_energy, model_krhf.mo_energy[0])
         testing.assert_allclose(model_rhf.mo_coeff, model_krhf.mo_coeff[0])
 
+        # The Gamma-point TD
+        cls.td_model_rhf = td_model_rhf = td.TDRHF(model_rhf)
+        td_model_rhf.kernel()
+        cls.ref_m = td_model_rhf.eri.tdhf_matrix()
+
     @classmethod
     def tearDownClass(cls):
         # These are here to remove temporary files
+        del cls.td_model_rhf
         del cls.model_krhf
         del cls.model_rhf
         del cls.cell
@@ -142,7 +133,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (ktd.PhysERI, ktd.PhysERI4):
             e = eri(self.model_krhf)
-            m = ktd.build_matrix(e)
+            m = e.tdhf_matrix()
 
             try:
                 testing.assert_allclose(self.ref_m, m, atol=1e-10)
@@ -150,13 +141,15 @@ class DiamondTestShiftedGamma(unittest.TestCase):
                 print("When testing {} the following exception occurred:".format(eri))
                 raise
 
-    def test_eig_kernel(self):
-        """Tests default eig kernel behavior."""
-        vals, vecs = ktd.kernel(self.model_krhf, driver='eig')
-        testing.assert_allclose(vals, self.ref_e, atol=1e-12)
+    def test_class(self):
+        """Tests container behavior."""
+        model = ktd.TDRHF(self.model_krhf)
+        model.nroots = self.td_model_rhf.nroots
+        model.kernel()
+        testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
         nocc = nvirt = 4
-        testing.assert_equal(vecs.shape, (len(vals), 2, 1, 1, nocc, nvirt))
-        assert_vectors_close(vecs.squeeze(), self.ref_v, atol=1e-9)
+        testing.assert_equal(model.xy.shape, (len(model.e), 2, 1, 1, nocc, nvirt))
+        assert_vectors_close(model.xy.squeeze(), numpy.array(self.td_model_rhf.xy).squeeze(), atol=1e-9)
 
 
 class DiamondTestSupercell2(unittest.TestCase):
@@ -209,12 +202,15 @@ class DiamondTestSupercell2(unittest.TestCase):
 
         cls.ov_order = ov_order(model_krhf)
 
-        cls.ref_e, cls.ref_v, eri = td.kernel(model_rhf, return_eri=True)
-        cls.ref_m = td.build_matrix(eri)
+        # The Gamma-point TD
+        cls.td_model_rhf = td_model_rhf = td.TDRHF(model_rhf)
+        td_model_rhf.kernel()
+        cls.ref_m = td_model_rhf.eri.tdhf_matrix()
 
     @classmethod
     def tearDownClass(cls):
         # These are here to remove temporary files
+        del cls.td_model_rhf
         del cls.model_krhf
         del cls.model_rhf
         del cls.cell
@@ -223,7 +219,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
             e = eri(self.model_krhf)
-            m = ktd.build_matrix(e)
+            m = e.tdhf_matrix()
 
             try:
                 testing.assert_allclose(self.ref_m, m[numpy.ix_(self.ov_order, self.ov_order)], atol=1e-5)
@@ -231,14 +227,16 @@ class DiamondTestSupercell2(unittest.TestCase):
                 print("When testing {} the following exception occurred:".format(eri))
                 raise
 
-    def test_eig_kernel(self):
-        """Tests default eig kernel behavior."""
-        vals, vecs = ktd.kernel(self.model_krhf, driver='eig')
-        testing.assert_allclose(vals, self.ref_e, atol=1e-7)
+    def test_class(self):
+        """Tests container behavior."""
+        model = ktd.TDRHF(self.model_krhf)
+        model.nroots = self.td_model_rhf.nroots
+        model.kernel()
+        testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
         nocc = nvirt = 4
-        testing.assert_equal(vecs.shape, (len(vals), 2, self.k, self.k, nocc, nvirt))
-        vecs = vecs.reshape(len(vecs), -1)[:, self.ov_order]
-        assert_vectors_close(vecs.reshape(len(vals), -1), self.ref_v.reshape(len(self.ref_v), -1), atol=1e-6)
+        testing.assert_equal(model.xy.shape, (len(model.e), 2, self.k, self.k, nocc, nvirt))
+        vecs = model.xy.reshape(len(model.xy), -1)[:, self.ov_order]
+        assert_vectors_close(vecs, numpy.array(self.td_model_rhf.xy).squeeze(), atol=1e-6)
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):

@@ -1,7 +1,8 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF
 from pyscf.pbc.tdscf import TDHF
-from pyscf.pbc.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel, TDRHF
+from pyscf.pbc.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, TDRHF
+from pyscf.tdscf.rhf_slow import eig
 
 from test_common import retrieve_m, assert_vectors_close
 
@@ -51,7 +52,7 @@ class DiamondTestGamma(unittest.TestCase):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (PhysERI, PhysERI4, PhysERI8):
             e = eri(self.model_rhf)
-            m = build_matrix(e)
+            m = e.tdhf_matrix()
 
             try:
                 testing.assert_allclose(self.ref_m_rhf, m, atol=1e-14)
@@ -60,12 +61,6 @@ class DiamondTestGamma(unittest.TestCase):
             except Exception:
                 print("When testing {} the following exception occurred:".format(eri))
                 raise
-
-    def test_eig_kernel(self):
-        """Tests default eig kernel behavior."""
-        vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
-        testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-12)
-        assert_vectors_close(vecs, self.td_model_rhf.xy, atol=1e-12)
 
     def test_class(self):
         """Tests container behavior."""

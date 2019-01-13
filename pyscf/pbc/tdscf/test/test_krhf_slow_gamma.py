@@ -61,27 +61,12 @@ class DiamondTest(unittest.TestCase):
             try:
 
                 e = eri(self.model_krhf)
-                m = ktd.build_matrix(e)
+                m = e.tdhf_matrix()
 
                 testing.assert_allclose(self.ref_m, m, atol=1e-5)
             except Exception:
                 print("When testing {} the following exception occurred:".format(eri))
                 raise
-
-    def test_eig_kernel(self):
-        """Tests default eig kernel behavior."""
-        vals, vecs = ktd.kernel(self.model_krhf, driver='eig', nroots=self.td_model_krhf.nroots)
-        testing.assert_allclose(vals, self.ref_e, atol=1e-7)
-        nocc = nvirt = 4
-        testing.assert_equal(vecs.shape, (len(vals), 2, self.k, nocc, nvirt))
-        vecs_ref = numpy.asarray(self.td_model_krhf.xy)
-        testing.assert_equal(vecs_ref.shape, (len(vals), 2, self.k, nocc, nvirt))
-        try:
-            assert_vectors_close(vecs, vecs_ref, atol=1e-2)
-        except Exception:
-            # TODO
-            print("This is a known bug: vector #1 from davidson is way off.")
-            raise
 
     def test_class(self):
         """Tests container behavior."""
@@ -89,6 +74,8 @@ class DiamondTest(unittest.TestCase):
         model.nroots = self.td_model_krhf.nroots
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-5)
+        nocc = nvirt = 4
+        testing.assert_equal(model.xy.shape, (len(model.e), 2, self.k, nocc, nvirt))
         try:
             assert_vectors_close(model.xy, numpy.array(self.td_model_krhf.xy), atol=1e-2)
         except Exception:

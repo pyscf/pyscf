@@ -19,19 +19,14 @@ procedure. Several variants of TDHF are available:
 """
 
 from pyscf.pbc.tdscf import krhf_slow_supercell as td
-from pyscf.lib import logger
 
 import numpy
-import scipy
 
 
 # Convention for these modules:
 # * PhysERI, PhysERI4, PhysERI8 are 2-electron integral routines computed directly (for debug purposes), with a 4-fold
 #   symmetry and with an 8-fold symmetry
-# * build_matrix builds the full TDHF matrix
-# * eig performs diagonalization and selects roots
 # * vector_to_amplitudes reshapes and normalizes the solution
-# * kernel assembles everything
 # * TDRHF provides a container
 
 
@@ -102,6 +97,32 @@ class PhysERI(td.PhysERI):
             item,
             pairs_row=enumerate(pair_row),
             pairs_column=enumerate(pair_column),
+        )
+
+    def tdhf_matrix(self, k):
+        """
+        Full matrix of the TDRHF problem.
+        Args:
+            k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
+            vector or a single integer with the second index assuming the first index being zero;
+
+        Returns:
+            The matrix.
+        """
+        r1, r2, c1, c2 = get_block_k_ix(self, k)
+
+        d1 = self.tdhf_diag(r1)
+        d2 = self.tdhf_diag(r2)
+
+        m11 = d1 + 2 * self["knmj", r1, c1] - self["knjm", r1, c1]
+        m12 = 2 * self["kjmn", r1, c2] - self["kjnm", r1, c2]
+        m21 = 2 * self["mnkj", r2, c1] - self["mnjk", r2, c1]
+        m22 = d2 + 2 * self["mjkn", r2, c2] - self["mjnk", r2, c2]
+
+        m = numpy.array([[m11, m12], [-m21, -m22]])
+
+        return m.transpose((0, 2, 1, 3)).reshape(
+            (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
         )
 
 
@@ -214,37 +235,6 @@ def get_block_k_ix(eri, k):
     return r1, r2, c1, c2
 
 
-def build_matrix(eri, k):
-    """
-    Full matrix of the TDRHF problem.
-    Args:
-        eri (TDDFTMatrixBlocks): ERI of the problem;
-        k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
-        vector or a single integer with the second index assuming the first index being zero;
-
-    Returns:
-        The matrix.
-    """
-    r1, r2, c1, c2 = get_block_k_ix(eri, k)
-
-    d1 = eri.tdhf_diag(r1)
-    d2 = eri.tdhf_diag(r2)
-
-    m11 = d1 + 2 * eri["knmj", r1, c1] - eri["knjm", r1, c1]
-    m12 = 2 * eri["kjmn", r1, c2] - eri["kjnm", r1, c2]
-    m21 = 2 * eri["mnkj", r2, c1] - eri["mnjk", r2, c1]
-    m22 = d2 + 2 * eri["mjkn", r2, c2] - eri["mjnk", r2, c2]
-
-    m = numpy.array([[m11, m12], [-m21, -m22]])
-
-    return m.transpose((0, 2, 1, 3)).reshape(
-        (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
-    )
-
-
-eig = td.eig
-
-
 def vector_to_amplitudes(vectors, nocc, nmo):
     """
     Transforms (reshapes) and normalizes vectors into amplitudes.
@@ -272,69 +262,37 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     return vectors.transpose(4, 0, 1, 2, 3)
 
 
-def kernel(model, k, driver=None, nroots=None, return_eri=False):
-    """
-    Calculates eigenstates and eigenvalues of the TDHF problem.
-    Args:
-        model (RHF, PhysERI): the HF model or ERI;
-        k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer;
-        driver (str): one of the drivers;
-        nroots (int): the number of roots to calculate;
-        return_eri (bool): will also return ERI if True;
+class TDRHF(td.TDRHF):
+    eri4 = PhysERI4
+    eri8 = PhysERI8
+    v2a = staticmethod(vector_to_amplitudes)
 
-    Returns:
-        Positive eigenvalues and eigenvectors.
-    """
-    if isinstance(model, PhysERI):
-        eri = model
-    else:
-        if numpy.iscomplexobj(model.mo_coeff):
-            logger.debug1(model, "4-fold symmetry used (complex orbitals)")
-            eri = PhysERI4(model)
-        else:
-            logger.debug1(model, "8-fold symmetry used (real orbitals)")
-            eri = PhysERI8(model)
-    vals, vecs = eig(build_matrix(eri, k), driver=driver, nroots=nroots)
-    vecs = vector_to_amplitudes(vecs, eri.nocc, eri.nmo)
-    if return_eri:
-        return vals, vecs, eri
-    else:
-        return vals, vecs
-
-
-class TDRHF(object):
     def __init__(self, mf):
         """
         Performs TDHF calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf (RHF): the base restricted Hartree-Fock model;
         """
-        self._scf = mf
-        self.driver = None
-        self.nroots = None
-        self.eri = None
-        self.xy = {}
+        super(TDRHF, self).__init__(mf)
         self.e = {}
+        self.xy = {}
 
     def kernel(self, k=None):
         """
         Calculates eigenstates and eigenvalues of the TDHF problem.
         Args:
-            k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer;
+            k (tuple, int): momentum transfer: either an index specifying the momentum transfer or a list of such
+            indexes;
 
         Returns:
             Positive eigenvalues and eigenvectors.
         """
         if k is None:
-            for k in range(len(self._scf.kpts)):
-                self.kernel(k)
-            return self.e, self.xy
-        else:
-            self.e[k], self.xy[k], self.eri = kernel(
-                self._scf if self.eri is None else self.eri,
-                k,
-                driver=self.driver,
-                nroots=self.nroots,
-                return_eri=True,
-            )
-            return self.e[k], self.xy[k]
+            k = numpy.arange(len(self._scf.kpts))
+
+        if isinstance(k, int):
+            k = [k]
+
+        for kk in k:
+            self.e[kk], self.xy[kk] = self.__kernel__(k=kk)
+        return self.e, self.xy

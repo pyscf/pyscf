@@ -27,10 +27,7 @@ import numpy
 # Convention for these modules:
 # * PhysERI, PhysERI4, PhysERI8 are 2-electron integral routines computed directly (for debug purposes), with a 4-fold
 #   symmetry and with an 8-fold symmetry
-# * build_matrix builds the full TDHF matrix
-# * eig performs diagonalization and selects roots
 # * vector_to_amplitudes reshapes and normalizes the solution
-# * kernel assembles everything
 # * TDRHF provides a container
 
 
@@ -140,6 +137,22 @@ class TDDFTMatrixBlocks(object):
         else:
             raise ValueError("Unknown item: {}".format(repr(item)))
 
+    def tdhf_matrix(self):
+        """
+        Full matrix of the TDRHF problem.
+        Returns:
+            The matrix.
+        """
+        d = self.tdhf_diag()
+        m = numpy.array([
+            [d + 2 * self["knmj"] - self["knjm"], 2 * self["kjmn"] - self["kjnm"]],
+            [- 2 * self["mnkj"] + self["mnjk"], - 2 * self["mjkn"] + self["mjnk"] - d],
+        ])
+
+        return m.transpose(0, 2, 1, 3).reshape(
+            (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
+        )
+
 
 class PhysERI(TDDFTMatrixBlocks):
 
@@ -244,26 +257,6 @@ class PhysERI8(PhysERI4):
         super(PhysERI8, self).__init__(model)
 
 
-def build_matrix(eri):
-    """
-    Full matrix of the TDRHF problem.
-    Args:
-        eri (TDDFTMatrixBlocks): ERI of the problem;
-
-    Returns:
-        The matrix.
-    """
-    d = eri.tdhf_diag()
-    m = numpy.array([
-        [d + 2 * eri["knmj"] - eri["knjm"],   2 * eri["kjmn"] - eri["kjnm"]],
-        [  - 2 * eri["mnkj"] + eri["mnjk"], - 2 * eri["mjkn"] + eri["mjnk"] - d],
-    ])
-
-    return m.transpose(0, 2, 1, 3).reshape(
-        (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
-    )
-
-
 def eig(m, driver=None, nroots=None):
     """
     Diagonalizes TDHF matrix.
@@ -306,39 +299,32 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     return vectors.transpose(3, 0, 1, 2)
 
 
-def kernel(model, driver=None, nroots=None, return_eri=False):
+def kernel(eri, driver=None, nroots=None, **kwargs):
     """
     Calculates eigenstates and eigenvalues of the TDHF problem.
     Args:
-        model (RHF, PhysERI): the HF model or ERI;
+        eri (TDDFTMatrixBlocks): ERI;
         driver (str): one of the drivers;
         nroots (int): the number of roots to calculate;
-        return_eri (bool): will also return ERI if True;
+        **kwargs: arguments to `eri.tdhf_matrix`;
 
     Returns:
         Positive eigenvalues and eigenvectors.
     """
-    if isinstance(model, PhysERI):
-        eri = model
-    else:
-        if numpy.iscomplexobj(model.mo_coeff):
-            logger.debug1(model, "4-fold symmetry used (complex orbitals)")
-            eri = PhysERI4(model)
-        else:
-            logger.debug1(model, "8-fold symmetry used (real orbitals)")
-            eri = PhysERI8(model)
-    logger.debug1(model, "Preparing TDHF matrix ...")
-    m = build_matrix(eri)
-    logger.debug1(model, "Diagonalizing a {} matrix with '{}' ...".format('x'.join(map(str, m.shape)), driver))
+    if not isinstance(eri, TDDFTMatrixBlocks):
+        raise ValueError("The argument must be ERI object")
+    logger.debug1(eri.model, "Preparing TDHF matrix ...")
+    m = eri.tdhf_matrix(**kwargs)
+    logger.debug1(eri.model, "Diagonalizing a {} matrix with '{}' ...".format('x'.join(map(str, m.shape)), driver))
     vals, vecs = eig(m, driver=driver, nroots=nroots)
-    vecs = vector_to_amplitudes(vecs, eri.nocc, eri.nmo)
-    if return_eri:
-        return vals, vecs, eri
-    else:
-        return vals, vecs
+    return vals, vecs
 
 
 class TDRHF(object):
+    eri4 = PhysERI4
+    eri8 = PhysERI8
+    v2a = staticmethod(vector_to_amplitudes)
+
     def __init__(self, mf):
         """
         Performs TDHF calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
@@ -352,6 +338,20 @@ class TDRHF(object):
         self.xy = None
         self.e = None
 
+    def __kernel__(self, **kwargs):
+        """Silent implementation of kernel."""
+        if self.eri is None:
+            self.eri = self.ao2mo()
+
+        e, xy = kernel(
+            self.eri,
+            driver=self.driver,
+            nroots=self.nroots,
+            **kwargs
+        )
+        xy = self.vector_to_amplitudes(xy)
+        return e, xy
+
     def kernel(self):
         """
         Calculates eigenstates and eigenvalues of the TDHF problem.
@@ -359,10 +359,30 @@ class TDRHF(object):
         Returns:
             Positive eigenvalues and eigenvectors.
         """
-        self.e, self.xy, self.eri = kernel(
-            self._scf if self.eri is None else self.eri,
-            driver=self.driver,
-            nroots=self.nroots,
-            return_eri=True,
-        )
+        self.e, self.xy = self.__kernel__()
         return self.e, self.xy
+
+    def ao2mo(self):
+        """
+        Picks ERI: either 4-fold or 8-fold symmetric.
+
+        Returns:
+            A suitable ERI.
+        """
+        if numpy.iscomplexobj(self._scf.mo_coeff):
+            logger.debug1(self._scf, "4-fold symmetry used (complex orbitals)")
+            return self.eri4(self._scf)
+        else:
+            logger.debug1(self._scf, "8-fold symmetry used (real orbitals)")
+            return self.eri8(self._scf)
+
+    def vector_to_amplitudes(self, vectors):
+        """
+        Transforms (reshapes) and normalizes vectors into amplitudes.
+        Args:
+            vectors (numpy.ndarray): raw eigenvectors to transform;
+
+        Returns:
+            Amplitudes with the following shape: (# of roots, 2 (x or y), # of occupied orbitals, # of virtual orbitals).
+        """
+        return self.v2a(vectors, self.eri.nocc, self.eri.nmo)

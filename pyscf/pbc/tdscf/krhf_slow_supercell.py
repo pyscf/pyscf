@@ -20,7 +20,6 @@ procedure. Several variants of TDHF are available:
 
 from pyscf.pbc.tools import get_kconserv
 from pyscf.tdscf import rhf_slow as td
-from pyscf.lib import logger
 
 from pyscf.pbc.lib.kpts_helper import loop_kkk
 
@@ -32,10 +31,7 @@ from itertools import product
 # Convention for these modules:
 # * PhysERI, PhysERI4, PhysERI8 are 2-electron integral routines computed directly (for debug purposes), with a 4-fold
 #   symmetry and with an 8-fold symmetry
-# * build_matrix builds the full TDHF matrix
-# * eig performs diagonalization and selects roots
 # * vector_to_amplitudes reshapes and normalizes the solution
-# * kernel assembles everything
 # * TDRHF provides a container
 
 
@@ -249,10 +245,6 @@ class PhysERI8(PhysERI4):
         super(PhysERI8, self).__init__(model)
 
 
-build_matrix = td.build_matrix
-eig = td.eig
-
-
 def vector_to_amplitudes(vectors, nocc, nmo):
     """
     Transforms (reshapes) and normalizes vectors into amplitudes.
@@ -280,60 +272,7 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     return vectors.transpose(5, 0, 1, 2, 3, 4)
 
 
-def kernel(model, driver=None, nroots=None, return_eri=False):
-    """
-    Calculates eigenstates and eigenvalues of the TDHF problem.
-    Args:
-        model (RHF, PhysERI): the HF model or ERI;
-        driver (str): one of the drivers;
-        nroots (int): the number of roots to calculate;
-        return_eri (bool): will also return ERI if True;
-
-    Returns:
-        Positive eigenvalues and eigenvectors.
-    """
-    if isinstance(model, PhysERI):
-        eri = model
-    else:
-        if numpy.iscomplexobj(model.mo_coeff):
-            logger.debug1(model, "4-fold symmetry used (complex orbitals)")
-            eri = PhysERI4(model)
-        else:
-            logger.debug1(model, "8-fold symmetry used (real orbitals)")
-            eri = PhysERI8(model)
-    vals, vecs = eig(build_matrix(eri), driver=driver, nroots=nroots)
-    vecs = vector_to_amplitudes(vecs, eri.nocc, eri.nmo)
-    if return_eri:
-        return vals, vecs, eri
-    else:
-        return vals, vecs
-
-
-class TDRHF(object):
-    def __init__(self, mf):
-        """
-        Performs TDHF calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
-        Args:
-            mf (RHF): the base restricted Hartree-Fock model;
-        """
-        self._scf = mf
-        self.driver = None
-        self.nroots = None
-        self.eri = None
-        self.xy = None
-        self.e = None
-
-    def kernel(self):
-        """
-        Calculates eigenstates and eigenvalues of the TDHF problem.
-
-        Returns:
-            Positive eigenvalues and eigenvectors.
-        """
-        self.e, self.xy, self.eri = kernel(
-            self._scf if self.eri is None else self.eri,
-            driver=self.driver,
-            nroots=self.nroots,
-            return_eri=True,
-        )
-        return self.e, self.xy
+class TDRHF(td.TDRHF):
+    eri4 = PhysERI4
+    eri8 = PhysERI8
+    v2a = staticmethod(vector_to_amplitudes)
