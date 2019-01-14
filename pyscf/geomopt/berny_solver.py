@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,6 +83,7 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
         g_scanner = method
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
+        g_scanner.verbose -= 1
     else:
         raise NotImplementedError('Nuclear gradients of %s not available' % method)
 
@@ -90,7 +91,6 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
         g_scanner.atmlst = numpy.where(mol.atom_charges() != 0)[0]
 
     geom = yield
-    cout = 0
     while True:
         mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
         energy, gradients = g_scanner(mol)
@@ -151,13 +151,17 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         log = lib.logger.new_logger(method)
 
 # temporary interface, taken from berny.py optimize function
-    log = to_berny_log(log)
+    berny_log = to_berny_log(log)
     solver = as_berny_solver(method, assert_convergence, include_ghost)
     geom = to_berny_geom(mol, include_ghost)
     next(solver)
-    optimizer = Berny(geom, log=log, **kwargs)
-    for geom in optimizer:
+    optimizer = Berny(geom, log=berny_log, **kwargs)
+    e_last = 0
+    for cycle, geom in enumerate(optimizer):
         energy, gradients = solver.send(geom)
+        log.note('cycle %d: dE = %g  norm(grad) = %g', cycle+1,
+                 energy - e_last, numpy.linalg.norm(gradients))
+        e_last = energy
         optimizer.send((energy, gradients))
     mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
     return mol
