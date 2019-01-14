@@ -413,6 +413,13 @@ class GCCSD(gccsd.GCCSD):
         else:
             raise NotImplementedError
 
+    def ccsd_t(self, t1=None, t2=None, eris=None):
+        from pyscf.pbc.cc import kccsd_t
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return kccsd_t.kernel(self, eris, t1, t2, self.verbose)
+
     def amplitudes_to_vector(self, t1, t2):
         return numpy.hstack((t1.ravel(), t2.ravel()))
 
