@@ -11,7 +11,7 @@ integrals are stored in memory. Several variants of GW are available:
 """
 
 from pyscf.gw import gw_slow
-from pyscf.lib import einsum
+from pyscf.lib import einsum, temporary_env
 
 import numpy
 
@@ -39,7 +39,8 @@ class IMDS(gw_slow.IMDS):
         self.nocc = sum(self.eri.nocc)
         self.o = numpy.concatenate(tuple(e[:nocc] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc)))
         self.v = numpy.concatenate(tuple(e[nocc:] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc)))
-        self.v_mf = self.mf.get_veff() - self.mf.get_j()
+        with temporary_env(self.mf, exxdiv=None):
+            self.v_mf = self.mf.get_veff() - self.mf.get_j()
 
         # TD
         nroots, _, k1, k2, o, v = self.tdhf.xy.shape

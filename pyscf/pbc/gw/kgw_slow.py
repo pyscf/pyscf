@@ -12,11 +12,10 @@ integrals are stored in memory. Several variants of GW are available:
 
 from pyscf.gw import gw_slow
 from pyscf.pbc.gw import kgw_slow_supercell
-from pyscf.lib import einsum, direct_sum
+from pyscf.lib import einsum, direct_sum, temporary_env
 from pyscf.pbc.tdscf.krhf_slow import get_block_k_ix
 
 import numpy
-from itertools import product
 
 
 # Convention for these modules:
@@ -40,7 +39,8 @@ class IMDS(kgw_slow_supercell.IMDS):
         self.nocc = self.eri.nocc
         self.o = tuple(e[:nocc] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc))
         self.v = tuple(e[nocc:] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc))
-        self.v_mf = self.mf.get_veff() - self.mf.get_j()
+        with temporary_env(self.mf, exxdiv=None):
+            self.v_mf = self.mf.get_veff() - self.mf.get_j()
 
         # TD
         self.td_xy = self.tdhf.xy
