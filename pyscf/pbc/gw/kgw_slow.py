@@ -40,6 +40,7 @@ class IMDS(kgw_slow_supercell.IMDS):
         self.nocc = self.eri.nocc
         self.o = tuple(e[:nocc] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc))
         self.v = tuple(e[nocc:] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc))
+        self.v_mf = self.mf.get_veff() - self.mf.get_j()
 
         # TD
         self.td_xy = self.tdhf.xy
@@ -69,8 +70,7 @@ class IMDS(kgw_slow_supercell.IMDS):
                 for ki in range(self.nk)
             )
         # 3
-        v_mf = self.mf.get_veff() - self.mf.get_j()
-        v_mf = einsum("i,ij,j", self.mf.mo_coeff[k][:, kp].conj(), v_mf[k], self.mf.mo_coeff[k][:, kp])
+        v_mf = einsum("i,ij,j", self.mf.mo_coeff[k][:, kp].conj(), self.v_mf[k], self.mf.mo_coeff[k][:, kp])
         if components:
             return moe, vk, -v_mf
         else:

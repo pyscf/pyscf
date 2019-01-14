@@ -111,6 +111,7 @@ class IMDS(AbstractIMDS):
         # MF
         self.nocc = self.eri.nocc
         self.o, self.v = self.mf.mo_energy[:self.nocc], self.mf.mo_energy[self.nocc:]
+        self.v_mf = self.mf.get_veff() - self.mf.get_j()
 
         # TD
         self.td_xy = self.tdhf.xy
@@ -130,8 +131,7 @@ class IMDS(AbstractIMDS):
         else:
             vk = - numpy.trace(self["ovvo"][:, p-self.nocc, p-self.nocc, :])
         # 3
-        v_mf = self.mf.get_veff() - self.mf.get_j()
-        v_mf = einsum("i,ij,j", self.mf.mo_coeff[:, p].conj(), v_mf, self.mf.mo_coeff[:, p])
+        v_mf = einsum("i,ij,j", self.mf.mo_coeff[:, p].conj(), self.v_mf, self.mf.mo_coeff[:, p])
         if components:
             return moe, vk, -v_mf
         else:

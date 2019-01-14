@@ -39,6 +39,7 @@ class IMDS(gw_slow.IMDS):
         self.nocc = sum(self.eri.nocc)
         self.o = numpy.concatenate(tuple(e[:nocc] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc)))
         self.v = numpy.concatenate(tuple(e[nocc:] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc)))
+        self.v_mf = self.mf.get_veff() - self.mf.get_j()
 
         # TD
         nroots, _, k1, k2, o, v = self.tdhf.xy.shape
@@ -91,8 +92,7 @@ class IMDS(gw_slow.IMDS):
         else:
             vk = - numpy.trace(self["ovvo"][:, p_plain, p_plain, :])
         # 3
-        v_mf = self.mf.get_veff() - self.mf.get_j()
-        v_mf = einsum("i,ij,j", self.mf.mo_coeff[k][:, kp].conj(), v_mf[k], self.mf.mo_coeff[k][:, kp])
+        v_mf = einsum("i,ij,j", self.mf.mo_coeff[k][:, kp].conj(), self.v_mf[k], self.mf.mo_coeff[k][:, kp])
         if components:
             return moe, vk, -v_mf
         else:
