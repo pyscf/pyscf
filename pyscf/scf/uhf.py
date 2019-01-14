@@ -88,7 +88,9 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
                                   mol.atom_coords())
         return scipy.linalg.eigh(im)[0]
-    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
+    im1 = inertia_momentum(mol)
+    im2 = inertia_momentum(chk_mol)
+    if abs((im1-im2)/im1).max() > 0.01:
         logger.warn(mol, "Large deviations found between the input "
                     "molecule and the molecule from chkfile\n"
                     "Initial guess density matrix may have large error.")
