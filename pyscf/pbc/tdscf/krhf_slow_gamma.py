@@ -36,7 +36,7 @@ k_nmo = td.k_nmo
 
 class PhysERI(td.PhysERI):
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a full transformation of integrals to Bloch functions. No symmetries are
         employed in this class. Only a subset of transformed ERI is returned, corresponding to oscillations without a
@@ -46,8 +46,10 @@ class PhysERI(td.PhysERI):
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI, self).__init__(model)
+        super(PhysERI, self).__init__(model, frozen=frozen)
 
     def tdhf_diag(self):
         """
@@ -82,7 +84,7 @@ class PhysERI(td.PhysERI):
 
 class PhysERI4(PhysERI):
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing partial transformations of integrals to Bloch functions. A 4-fold
         symmetry of complex-valued functions is employed in this class. Only a subset of transformed ERI is returned,
@@ -92,8 +94,10 @@ class PhysERI4(PhysERI):
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI4, self).__init__(model)
+        super(PhysERI4, self).__init__(model, frozen=frozen)
 
     symmetries = [
         ((0, 1, 2, 3), False),
@@ -110,7 +114,7 @@ class PhysERI4(PhysERI):
 
 
 class PhysERI8(PhysERI4):
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing partial transformations of integrals to Bloch functions. An 8-fold
         symmetry of real-valued functions is employed in this class. Only a subset of transformed ERI is returned,
@@ -120,8 +124,10 @@ class PhysERI8(PhysERI4):
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI8, self).__init__(model)
+        super(PhysERI8, self).__init__(model, frozen=frozen)
 
     symmetries = [
         ((0, 1, 2, 3), False),
