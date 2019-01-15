@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1098,7 +1098,7 @@ def as_scanner(mf):
         def __init__(self, mf_obj):
             self.__dict__.update(mf_obj.__dict__)
             mf_obj = self
-            # partial deepcopy to avoid overwriting existing object
+            # partial deepcopy to avoid overwriting existing objects
             while mf_obj is not None:
                 if getattr(mf_obj, 'with_df', None):
                     mf_obj.with_df = copy.copy(mf_obj.with_df)
@@ -1135,15 +1135,41 @@ def as_scanner(mf):
                     mf_obj.grids.coords = None
                     mf_obj.grids.weights = None
                     mf_obj._dm_last = None
+                if getattr(mf_obj, 'with_solvent', None):
+                    mf_obj.with_solvent.mol = mol
+                    mf_obj.with_solvent.grids.mol = mol
+                    mf_obj.with_solvent.grids.coords = None
+                    mf_obj.with_solvent.grids.weights = None
+                    mf_obj.with_solvent._solver_ = None
                 mf_obj = getattr(mf_obj, '_scf', None)
 
-            if self.mo_coeff is None:
+            if 'dm0' in kwargs:
+                dm0 = kwargs.pop('dm0')
+            elif self.mo_coeff is None:
                 dm0 = None
             elif self.chkfile:
                 dm0 = self.from_chk(self.chkfile)
             #elif mol.natm == 0: self._eri = mol._eri?
             else:
+                from pyscf.scf import addons
                 dm0 = self.make_rdm1()
+                # dm0 form last calculation cannot be used in the current
+                # calculation if a completely different system is given.
+                # Obviously, the systems are very different if the number of
+                # basis functions are different.
+                # TODO: A robust check should include more comparison on
+                # various attributes between current `mol` and the `mol` in
+                # last calculation.
+                if dm0.shape[-1] != mol.nao:
+                    #TODO:
+                    #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
+                    #    dm0 = None
+                    #elif non-relativistic:
+                    #    addons.project_dm_nr2nr(last_mol, dm0, last_mol)
+                    #else:
+                    #    addons.project_dm_r2r(last_mol, dm0, last_mol)
+                    dm0 = None
+            self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
             e_tot = self.kernel(dm0=dm0, **kwargs)
             return e_tot
 
@@ -1291,8 +1317,7 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if (self.direct_scf and not mol.incore_anyway and
-            not self._is_mem_enough()):
+        if not mol.incore_anyway and not self._is_mem_enough():
 # Should I lazy initialize direct SCF?
             self.opt = self.init_direct_scf(mol)
         return self
@@ -1697,6 +1722,20 @@ class RHF(SCF):
         else:
             vj, vk = SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
         return vj, vk
+
+    @lib.with_doc(get_veff.__doc__)
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if self._eri is not None or not self.direct_scf:
+            vj, vk = self.get_jk(mol, dm, hermi)
+            vhf = vj - vk * .5
+        else:
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            vj, vk = self.get_jk(mol, ddm, hermi)
+            vhf = vj - vk * .5
+            vhf += numpy.asarray(vhf_last)
+        return vhf
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''

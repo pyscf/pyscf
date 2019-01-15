@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -697,7 +697,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 
 # Copy the integral file to soscf object to avoid the integrals being cached
 # twice.
-    if mol == mf.mol and mf._eri is None:
+    if mol == mf.mol and not getattr(mf, 'with_df', None):
         mf._eri = mf._scf._eri
 
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
@@ -849,10 +849,13 @@ class _CIAH_SOSCF(hf.SCF):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if getattr(self, '_scf', None) and self._scf.mol != mol:
-            self.opt = self.init_direct_scf(mol)
-            self._eri = None
         self._scf.build(mol)
+        if self._scf.mol == mol:
+            self.opt = self._scf.opt
+        else:
+            self.opt = self.init_direct_scf(mol)
+        self._eri = None
+        return self
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (time.clock(), time.time())
