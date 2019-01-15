@@ -765,8 +765,7 @@ class UHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.asarray((dm*.5,dm*.5))
-        if (self._eri is not None or not self.direct_scf or
-            mol.incore_anyway or self._is_mem_enough()):
+        if self._eri is not None or not self.direct_scf:
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj[0] + vj[1] - vk
         else:

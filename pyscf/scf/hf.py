@@ -1164,7 +1164,7 @@ def as_scanner(mf):
                     #else:
                     #    addons.project_dm_r2r(last_mol, dm0, last_mol)
                     dm0 = None
-            self.mo_coeff = None
+            self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
             e_tot = self.kernel(dm0=dm0, **kwargs)
             return e_tot
 
@@ -1312,8 +1312,7 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if (self.direct_scf and not mol.incore_anyway and
-            not self._is_mem_enough()):
+        if not mol.incore_anyway and not self._is_mem_enough():
 # Should I lazy initialize direct SCF?
             self.opt = self.init_direct_scf(mol)
         return self
@@ -1710,6 +1709,20 @@ class RHF(SCF):
         else:
             vj, vk = SCF.get_jk(self, mol, dm, hermi)
         return vj, vk
+
+    @lib.with_doc(get_veff.__doc__)
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if self._eri is not None or not self.direct_scf:
+            vj, vk = self.get_jk(mol, dm, hermi)
+            vhf = vj - vk * .5
+        else:
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            vj, vk = self.get_jk(mol, ddm, hermi)
+            vhf = vj - vk * .5
+            vhf += numpy.asarray(vhf_last)
+        return vhf
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''
