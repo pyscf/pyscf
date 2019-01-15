@@ -154,27 +154,59 @@ class TDDFTMatrixBlocks(object):
         )
 
 
+def format_frozen(frozen, nmo):
+    """
+    Formats the argument into a mask array of bools where False values correspond to frozen orbitals.
+    Args:
+        frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+        nmo (int): the total number of molecular orbitals;
+
+    Returns:
+        The mask array.
+    """
+    space = numpy.ones(nmo, dtype=bool)
+    if frozen is None:
+        pass
+    elif isinstance(frozen, int):
+        space[:frozen] = False
+    elif isinstance(frozen, (tuple, list, numpy.ndarray)):
+        space[frozen] = False
+    else:
+        raise ValueError("Cannot recognize the 'frozen' argument: expected None, int or Iterable")
+    return space
+
+
 class PhysERI(TDDFTMatrixBlocks):
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a full AO-MO transformation of integrals. No symmetries are employed in
         this class.
 
         Args:
             model (RHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
         super(PhysERI, self).__init__()
         self.model = model
-        self.__full_eri__ = self.ao2mo((self.model.mo_coeff,) * 4)
+        self.space = format_frozen(frozen, len(model.mo_energy))
+        self.__full_eri__ = self.ao2mo((self.mo_coeff,) * 4)
+
+    @property
+    def mo_coeff(self):
+        return self.model.mo_coeff[:, self.space]
+
+    @property
+    def mo_energy(self):
+        return self.model.mo_energy[self.space]
 
     @property
     def nocc(self):
-        return int(self.model.mo_occ.sum()) // 2
+        return int(self.model.mo_occ[self.space].sum() // 2)
 
     @property
     def nmo(self):
-        return self.model.mo_coeff.shape[0]
+        return self.space.sum()
 
     def ao2mo(self, coeff):
         """
@@ -200,7 +232,7 @@ class PhysERI(TDDFTMatrixBlocks):
         ).swapaxes(1, 2)
 
     def __get_mo_energies__(self):
-        return self.model.mo_energy[:self.nocc], self.model.mo_energy[self.nocc:]
+        return self.mo_energy[:self.nocc], self.mo_energy[self.nocc:]
 
     def __calc_block__(self, item):
         slc = tuple(slice(self.nocc) if i == 'o' else slice(self.nocc, None) for i in item)
@@ -215,20 +247,22 @@ class PhysERI4(PhysERI):
         ((3, 2, 1, 0), True),
     ]
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a partial AO-MO transformation of integrals of a molecular system. A
         4-fold symmetry of complex-valued orbitals is used.
 
         Args:
             model (RHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
-        super(PhysERI, self).__init__()
+        TDDFTMatrixBlocks.__init__(self)
         self.model = model
+        self.space = format_frozen(frozen, len(model.mo_energy))
 
     def __calc_block__(self, item):
-        o = self.model.mo_coeff[:, :self.nocc]
-        v = self.model.mo_coeff[:, self.nocc:]
+        o = self.mo_coeff[:, :self.nocc]
+        v = self.mo_coeff[:, self.nocc:]
         logger.info(self.model, "Computing {} ...".format(item))
         return self.ao2mo(tuple(o if i == "o" else v for i in item))
 
@@ -246,7 +280,7 @@ class PhysERI8(PhysERI4):
         ((1, 2, 3, 0), False),
     ]
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a partial AO-MO transformation of integrals of a molecular system. An
         8-fold symmetry of real-valued orbitals is used.
@@ -254,7 +288,7 @@ class PhysERI8(PhysERI4):
         Args:
             model (RHF): the base model;
         """
-        super(PhysERI8, self).__init__(model)
+        super(PhysERI8, self).__init__(model, frozen=frozen)
 
 
 def eig(m, driver=None, nroots=None):
@@ -328,11 +362,12 @@ class TDRHF(object):
     eri8 = PhysERI8
     v2a = staticmethod(vector_to_amplitudes)
 
-    def __init__(self, mf):
+    def __init__(self, mf, frozen=None):
         """
         Performs TDHF calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf (RHF): the base restricted Hartree-Fock model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
         self._scf = mf
         self.driver = None
@@ -340,6 +375,8 @@ class TDRHF(object):
         self.eri = None
         self.xy = None
         self.e = None
+        format_frozen(frozen, len(mf.mo_energy))
+        self.frozen = frozen
 
     def __kernel__(self, **kwargs):
         """Silent implementation of kernel."""
@@ -374,10 +411,10 @@ class TDRHF(object):
         """
         if numpy.iscomplexobj(self._scf.mo_coeff):
             logger.debug1(self._scf, "4-fold symmetry used (complex orbitals)")
-            return self.eri4(self._scf)
+            return self.eri4(self._scf, frozen=self.frozen)
         else:
             logger.debug1(self._scf, "8-fold symmetry used (real orbitals)")
-            return self.eri8(self._scf)
+            return self.eri8(self._scf, frozen=self.frozen)
 
     def vector_to_amplitudes(self, vectors):
         """

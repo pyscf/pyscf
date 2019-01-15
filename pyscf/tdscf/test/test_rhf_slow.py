@@ -1,12 +1,25 @@
 from pyscf.gto import Mole
 from pyscf.scf import RHF
 from pyscf.tdscf import TDHF
-from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, eig, TDRHF
+from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, eig, TDRHF, format_frozen
 
+import numpy
 from numpy import testing
 import unittest
 
 from test_common import retrieve_m, assert_vectors_close
+
+
+def tdhf_frozen_mask(eri, kind="ov"):
+    nocc = int(eri.model.mo_occ.sum() // 2)
+    mask = eri.space
+    mask_o = mask[:nocc]
+    mask_v = mask[nocc:]
+    if kind == "ov":
+        mask_ov = numpy.outer(mask_o, mask_v).reshape(-1)
+        return numpy.tile(mask_ov, 2)
+    elif kind == "o,v":
+        return mask_o, mask_v
 
 
 class H20Test(unittest.TestCase):
@@ -42,15 +55,31 @@ class H20Test(unittest.TestCase):
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (PhysERI, PhysERI4, PhysERI8):
-            e = eri(self.model_rhf)
-            m = e.tdhf_matrix()
+
+            # Test plain
             try:
+                e = eri(self.model_rhf)
+                m = e.tdhf_matrix()
                 testing.assert_allclose(self.ref_m, m, atol=1e-14)
                 vals, vecs = eig(m, nroots=self.td_model_rhf.nroots)
                 testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
+
             except Exception:
                 print("When testing {} the following exception occurred:".format(eri))
                 raise
+
+            # Test frozen
+            for frozen in (1, [0, -1]):
+                try:
+                    e = eri(self.model_rhf, frozen=frozen)
+                    m = e.tdhf_matrix()
+                    ov_mask = tdhf_frozen_mask(e)
+                    ref_m = self.ref_m[numpy.ix_(ov_mask, ov_mask)]
+                    testing.assert_allclose(ref_m, m, atol=1e-14)
+
+                except Exception:
+                    print("When testing {} with frozen={} the following exception occurred:".format(eri, repr(frozen)))
+                    raise
 
     def test_class(self):
         """Tests container behavior."""
@@ -59,6 +88,21 @@ class H20Test(unittest.TestCase):
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
         assert_vectors_close(model.xy, self.td_model_rhf.xy, atol=1e-2)
+
+    def test_class_frozen(self):
+        """Tests container behavior."""
+        for frozen in (1, [0, -1]):
+            try:
+                model = TDRHF(self.model_rhf, frozen=frozen)
+                model.nroots = self.td_model_rhf.nroots
+                model.kernel()
+                mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
+                testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-3)
+                assert_vectors_close(model.xy, numpy.array(self.td_model_rhf.xy)[..., mask_o, :][..., mask_v], atol=1e-2)
+
+            except Exception:
+                print("When testing class with frozen={} the following exception occurred:".format(repr(frozen)))
+                raise
 
     def test_symm(self):
         """Tests 8-fold symmetry."""
