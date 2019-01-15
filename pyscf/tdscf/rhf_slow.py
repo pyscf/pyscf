@@ -229,7 +229,7 @@ class PhysERI4(PhysERI):
     def __calc_block__(self, item):
         o = self.model.mo_coeff[:, :self.nocc]
         v = self.model.mo_coeff[:, self.nocc:]
-        logger.info(self.model, "Calculating {} ...".format(item))
+        logger.info(self.model, "Computing {} ...".format(item))
         return self.ao2mo(tuple(o if i == "o" else v for i in item))
 
 
@@ -315,7 +315,10 @@ def kernel(eri, driver=None, nroots=None, **kwargs):
         raise ValueError("The argument must be ERI object")
     logger.debug1(eri.model, "Preparing TDHF matrix ...")
     m = eri.tdhf_matrix(**kwargs)
-    logger.debug1(eri.model, "Diagonalizing a {} matrix with '{}' ...".format('x'.join(map(str, m.shape)), driver))
+    logger.debug1(eri.model, "Diagonalizing a {} matrix with {} ...".format(
+        'x'.join(map(str, m.shape)),
+        "'{}'".format(driver if driver is not None else "a default method"),
+    ))
     vals, vecs = eig(m, driver=driver, nroots=nroots)
     return vals, vecs
 
