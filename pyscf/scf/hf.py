@@ -1097,21 +1097,6 @@ def as_scanner(mf):
     class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
         def __init__(self, mf_obj):
             self.__dict__.update(mf_obj.__dict__)
-            mf_obj = self
-            # partial deepcopy to avoid overwriting existing objects
-            while mf_obj is not None:
-                if getattr(mf_obj, 'with_df', None):
-                    mf_obj.with_df = copy.copy(mf_obj.with_df)
-                if getattr(mf_obj, 'with_x2c', None):
-                    mf_obj.with_x2c = copy.copy(mf_obj.with_x2c)
-                if getattr(mf_obj, 'grids', None):  # DFT
-                    mf_obj.grids = copy.copy(mf_obj.grids)
-                    mf_obj._numint = copy.copy(mf_obj._numint)
-                if getattr(mf_obj, '_scf', None):
-                    mf_obj._scf = copy.copy(mf_obj._scf)
-                    mf_obj = mf_obj._scf
-                else:
-                    break
 
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
@@ -1121,26 +1106,15 @@ def as_scanner(mf):
 
             mf_obj = self
             while mf_obj is not None:
-                mf_obj.mol = mol
-                mf_obj.opt = None
-                mf_obj._eri = None
-                if getattr(mf_obj, 'with_df', None):
-                    mf_obj.with_df.mol = mol
-                    mf_obj.with_df.auxmol = None
-                    mf_obj.with_df._cderi = None
-                if getattr(mf_obj, 'with_x2c', None):
-                    mf_obj.with_x2c.mol = mol
-                if getattr(mf_obj, 'grids', None):  # DFT
-                    mf_obj.grids.mol = mol
-                    mf_obj.grids.coords = None
-                    mf_obj.grids.weights = None
-                    mf_obj._dm_last = None
-                if getattr(mf_obj, 'with_solvent', None):
-                    mf_obj.with_solvent.mol = mol
-                    mf_obj.with_solvent.grids.mol = mol
-                    mf_obj.with_solvent.grids.coords = None
-                    mf_obj.with_solvent.grids.weights = None
-                    mf_obj.with_solvent._solver_ = None
+                mf_obj.reset(mol)
+                for key in ('with_df', 'with_x2c', 'grids', 'nlcgrids',
+                            'with_solvent'):
+                    sub_mod = getattr(mf_obj, key, None)
+                    if sub_mod:
+                        if getattr(sub_mod, 'reset', None):
+                            sub_mod.reset(mol)
+                        else:
+                            sub_mod.mol = mol
                 mf_obj = getattr(mf_obj, '_scf', None)
 
             if 'dm0' in kwargs:
@@ -1149,7 +1123,6 @@ def as_scanner(mf):
                 dm0 = None
             elif self.chkfile:
                 dm0 = self.from_chk(self.chkfile)
-            #elif mol.natm == 0: self._eri = mol._eri?
             else:
                 from pyscf.scf import addons
                 dm0 = self.make_rdm1()
@@ -1643,6 +1616,13 @@ class SCF(lib.StreamObject):
     update_from_chk = update_from_chk_ = update = update_
 
     as_scanner = as_scanner
+
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        self.opt = None
+        self._eri = None
+        return self
 
     @property
     def hf_energy(self):  # pragma: no cover

@@ -157,6 +157,14 @@ class DF(lib.StreamObject):
     def kernel(self, *args, **kwargs):
         return self.build(*args, **kwargs)
 
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        self.auxmol = None
+        self._cderi = None
+        self._vjopt = None
+        return self
+
     def loop(self, blksize=None):
         if self._cderi is None:
             self.build()

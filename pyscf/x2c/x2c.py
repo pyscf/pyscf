@@ -140,6 +140,11 @@ class X2C(lib.StreamObject):
             x = _x2c1e_xmatrix(t, v, w, s, c)
         return x
 
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        return self
+
 
 def get_hcore(mol):
     '''2-component X2c hcore Hamiltonian (including spin-free and

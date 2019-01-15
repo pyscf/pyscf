@@ -901,6 +901,13 @@ class DDCOSMO(lib.StreamObject):
         epcm, vpcm = self._solver_(dm)
         return epcm, vpcm
 
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        self._solver_ = None
+        self.grids.reset(mol)
+        return self
+
     energy = energy
     gen_solver = as_solver = gen_ddcosmo_solver
     get_atomic_radii = get_atomic_radii
