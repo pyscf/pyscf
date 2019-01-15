@@ -110,8 +110,11 @@ class IMDS(AbstractIMDS):
 
         # MF
         self.nocc = self.eri.nocc
-        self.o, self.v = self.mf.mo_energy[:self.nocc], self.mf.mo_energy[self.nocc:]
+        self.o, self.v = self.eri.mo_energy[:self.nocc], self.eri.mo_energy[self.nocc:]
+        backup = self.mf.mo_occ.copy()
+        self.mf.mo_occ[~self.eri.space] = 0
         self.v_mf = self.mf.get_veff() - self.mf.get_j()
+        self.mf.mo_occ = backup
 
         # TD
         self.td_xy = self.tdhf.xy
@@ -124,14 +127,14 @@ class IMDS(AbstractIMDS):
 
     def get_rhs(self, p, components=False):
         # 1
-        moe = self.mf.mo_energy[p]
+        moe = self.eri.mo_energy[p]
         # 2
         if p < self.nocc:
             vk = - numpy.trace(self["oooo"][p, :, :, p])
         else:
             vk = - numpy.trace(self["ovvo"][:, p-self.nocc, p-self.nocc, :])
         # 3
-        v_mf = einsum("i,ij,j", self.mf.mo_coeff[:, p].conj(), self.v_mf, self.mf.mo_coeff[:, p])
+        v_mf = einsum("i,ij,j", self.eri.mo_coeff[:, p].conj(), self.v_mf, self.eri.mo_coeff[:, p])
         if components:
             return moe, vk, -v_mf
         else:
@@ -166,7 +169,7 @@ class IMDS(AbstractIMDS):
         return sigma
 
     def initial_guess(self, p):
-        return self.mf.mo_energy[p]
+        return self.eri.mo_energy[p]
 
     @property
     def entire_space(self):
