@@ -72,10 +72,23 @@ def adjust_mf_phase(model1, model2, threshold=1e-5):
         model2.mo_coeff[:, o2] /= p[numpy.newaxis, :]
 
 
+def tdhf_frozen_mask(eri, kind="ov"):
+    nocc = int(eri.model.mo_occ.sum() // 2)
+    mask = eri.space
+    mask_o = mask[:nocc]
+    mask_v = mask[nocc:]
+    if kind == "ov":
+        mask_ov = numpy.outer(mask_o, mask_v).reshape(-1)
+        return numpy.tile(mask_ov, 2)
+    elif kind == "o,v":
+        return mask_o, mask_v
+
+
 def adjust_td_phase(model1, model2, threshold=1e-5):
     """Tunes the phase of the 2 time-dependent models to a common value."""
     signatures = []
     orders = []
+    space = []
 
     for m in (model1, model2):
         # Are there k-points?
@@ -90,6 +103,7 @@ def adjust_td_phase(model1, model2, threshold=1e-5):
                 xy = xy[:, ov_order(m._scf)]
                 signatures.append(xy)
                 orders.append(numpy.argsort(m.e))
+                space.append(None)
             elif len(m.xy.shape) == 5:
                 # Gamma model
                 raise NotImplementedError("Implement me")
@@ -98,10 +112,25 @@ def adjust_td_phase(model1, model2, threshold=1e-5):
         else:
             signatures.append(m.xy.reshape(len(m.e), -1))
             orders.append(numpy.argsort(m.e))
+            space.append(tdhf_frozen_mask(m.eri))
+
+    common_space = None
+    for i in space:
+        if i is not None:
+            if common_space is None:
+                common_space = i.copy()
+            else:
+                common_space = numpy.logical_and(common_space, i)
 
     m1, m2 = signatures
     o1, o2 = orders
     m1, m2 = m1[o1, :], m2[o2, :]
+
+    if common_space is not None:
+        space = list(common_space[i] if i is not None else common_space for i in space)
+        s1, s2 = space
+        m1 = m1[:, s1]
+        m2 = m2[:, s2]
 
     p = phase_difference(m1, m2, axis=0, threshold=threshold)
 
@@ -119,7 +148,7 @@ def adjust_td_phase(model1, model2, threshold=1e-5):
         else:
             raise ValueError("Unknown vectors: {}".format(repr(m.xy)))
     else:
-        model2.xy[o2, ...] /= p[(slice(None),) + (numpy.newaxis,) * 5]
+        model2.xy[o2, ...] /= p[(slice(None),) + (numpy.newaxis,) * 3]
 
 
 def remove_phase_difference(v1, v2, axis=0, threshold=1e-5):

@@ -7,19 +7,7 @@ import numpy
 from numpy import testing
 import unittest
 
-from test_common import retrieve_m, assert_vectors_close
-
-
-def tdhf_frozen_mask(eri, kind="ov"):
-    nocc = int(eri.model.mo_occ.sum() // 2)
-    mask = eri.space
-    mask_o = mask[:nocc]
-    mask_v = mask[nocc:]
-    if kind == "ov":
-        mask_ov = numpy.outer(mask_o, mask_v).reshape(-1)
-        return numpy.tile(mask_ov, 2)
-    elif kind == "o,v":
-        return mask_o, mask_v
+from test_common import retrieve_m, assert_vectors_close, tdhf_frozen_mask
 
 
 class H20Test(unittest.TestCase):
