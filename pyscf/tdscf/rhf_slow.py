@@ -79,7 +79,7 @@ class TDDFTMatrixBlocks(object):
         if len(item) != 4 or not isinstance(item, str) or not set(item).issubset('ov'):
             raise ValueError("Unknown item: {}".format(repr(item)))
 
-        args = (item, ) + args
+        args = (tuple(item), ) + args
         if args in self.__eri__:
             return self.__eri__[args]
 
