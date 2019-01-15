@@ -151,7 +151,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
 
     def __get_mo_energies__(self, k1, k2):
         """This routine collects occupied and virtual MO energies."""
-        return self.model.mo_energy[k1][:self.nocc[k1]], self.model.mo_energy[k2][self.nocc[k2]:]
+        return self.mo_energy[k1][:self.nocc[k1]], self.mo_energy[k2][self.nocc[k2]:]
 
     def tdhf_diag_k(self, k1, k2):
         """
@@ -240,22 +240,25 @@ class PhysERI4(PhysERI):
         ((3, 2, 1, 0), True),
     ]
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a partial transformation of integrals to Bloch functions. A 4-fold
         symmetry of complex-valued wavefunctions is employed in this class.
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI, self).__init__()
+        td.TDDFTMatrixBlocks.__init__(self)
         self.model = model
+        self.space = format_frozen(frozen, len(model.mo_energy[0]), len(model.kpts))
         self.kconserv = get_kconserv(self.model.cell, self.model.kpts).swapaxes(1, 2)
 
     def __calc_block__(self, item, k):
         if self.kconserv[k[:3]] == k[3]:
             return self.ao2mo_k(tuple(
-                self.model.mo_coeff[_k][:, :self.nocc[_k]] if i == "o" else self.model.mo_coeff[_k][:, self.nocc[_k]:]
+                self.mo_coeff[_k][:, :self.nocc[_k]] if i == "o" else self.mo_coeff[_k][:, self.nocc[_k]:]
                 for i, _k in zip(item, k)
             ), k)
         else:
@@ -278,15 +281,17 @@ class PhysERI8(PhysERI4):
         ((1, 2, 3, 0), False),
     ]
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a partial transformation of integrals to Bloch functions. An 8-fold
         symmetry of real-valued wavefunctions is employed in this class.
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI8, self).__init__(model)
+        super(PhysERI8, self).__init__(model, frozen=frozen)
 
 
 def vector_to_amplitudes(vectors, nocc, nmo):

@@ -73,8 +73,15 @@ def adjust_mf_phase(model1, model2, threshold=1e-5):
 
 
 def tdhf_frozen_mask(eri, kind="ov"):
-    nocc = int(eri.model.mo_occ.sum() // 2)
-    mask = eri.space
+    if isinstance(eri.nocc, int):
+        nocc = int(eri.model.mo_occ.sum() // 2)
+        mask = eri.space
+    else:
+        nocc = numpy.array(tuple(int(i.sum() // 2) for i in eri.model.mo_occ))
+        assert numpy.all(nocc == nocc[0])
+        assert numpy.all(eri.space == eri.space[0, numpy.newaxis, :])
+        nocc = nocc[0]
+        mask = eri.space[0]
     mask_o = mask[:nocc]
     mask_v = mask[nocc:]
     if kind == "ov":
