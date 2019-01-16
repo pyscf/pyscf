@@ -156,6 +156,7 @@ class DiamondTestSupercell2(unittest.TestCase):
     """Compare this (supercell_slow) @2kp vs rhf_slow (2x1x1 supercell)."""
     k = 2
     k_c = (0, 0, 0)
+    test8 = True
 
     @classmethod
     def setUpClass(cls):
@@ -218,14 +219,15 @@ class DiamondTestSupercell2(unittest.TestCase):
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
-            e = eri(self.model_krhf)
-            m = e.tdhf_matrix()
+            if not eri == ktd.PhysERI8 or self.test8:
+                e = eri(self.model_krhf)
+                m = e.tdhf_matrix()
 
-            try:
-                testing.assert_allclose(self.ref_m, m[numpy.ix_(self.ov_order, self.ov_order)], atol=1e-5)
-            except Exception:
-                print("When testing {} the following exception occurred:".format(eri))
-                raise
+                try:
+                    testing.assert_allclose(self.ref_m, m[numpy.ix_(self.ov_order, self.ov_order)], atol=1e-5)
+                except Exception:
+                    print("When testing {} the following exception occurred:".format(eri))
+                    raise
 
     def test_class(self):
         """Tests container behavior."""
@@ -243,6 +245,7 @@ class DiamondTestSupercell3(DiamondTestSupercell2):
     """Compare this (supercell_slow) @3kp vs rhf_slow (3x1x1 supercell)."""
     k = 3
     k_c = (.1, 0, 0)
+    test8 = False
 
 
 class FrozenTest(unittest.TestCase):
@@ -296,10 +299,13 @@ class FrozenTest(unittest.TestCase):
                 model.nroots = self.td_model_krhf.nroots
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
-                testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-3)
-                assert_vectors_close(model.xy, numpy.array(self.td_model_krhf.xy)[..., mask_o, :][..., mask_v], atol=1e-2)
+                testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-4)
+                assert_vectors_close(
+                    model.xy,
+                    numpy.array(self.td_model_krhf.xy)[..., mask_o, :][..., mask_v],
+                    atol=1e-3,
+                )
 
             except Exception:
                 print("When testing class with frozen={} the following exception occurred:".format(repr(frozen)))
                 raise
-
