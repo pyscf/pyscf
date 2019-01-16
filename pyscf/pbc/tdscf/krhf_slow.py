@@ -35,15 +35,17 @@ k_nocc = td.k_nocc
 
 class PhysERI(td.PhysERI):
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a full transformation of integrals to Bloch functions. No symmetries are
         employed in this class. The ERIs are returned in blocks of k-points.
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI, self).__init__(model)
+        super(PhysERI, self).__init__(model, frozen=frozen)
 
     def get_k_ix(self, item, like):
         """
@@ -128,15 +130,17 @@ class PhysERI(td.PhysERI):
 
 class PhysERI4(PhysERI):
 
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing partial transformations of integrals to Bloch functions. A 4-fold
         symmetry of complex-valued functions is employed in this class. The ERIs are returned in blocks of k-points.
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI4, self).__init__(model)
+        super(PhysERI4, self).__init__(model, frozen=frozen)
 
     symmetries = [
         ((0, 1, 2, 3), False),
@@ -156,15 +160,17 @@ class PhysERI4(PhysERI):
 
 
 class PhysERI8(PhysERI4):
-    def __init__(self, model):
+    def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing partial transformations of integrals to Bloch functions. An 8-fold
         symmetry of real-valued functions is employed in this class. The ERIs are returned in blocks of k-points.
 
         Args:
             model (KRHF): the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI8, self).__init__(model)
+        super(PhysERI8, self).__init__(model, frozen=frozen)
 
     symmetries = [
         ((0, 1, 2, 3), False),
@@ -267,13 +273,15 @@ class TDRHF(td.TDRHF):
     eri8 = PhysERI8
     v2a = staticmethod(vector_to_amplitudes)
 
-    def __init__(self, mf):
+    def __init__(self, mf, frozen=None):
         """
         Performs TDHF calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf (RHF): the base restricted Hartree-Fock model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
+            k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(TDRHF, self).__init__(mf)
+        super(TDRHF, self).__init__(mf, frozen=frozen)
         self.e = {}
         self.xy = {}
 
