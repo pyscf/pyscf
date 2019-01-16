@@ -69,3 +69,25 @@ class DiamondTestGamma(unittest.TestCase):
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-12)
         assert_vectors_close(model.xy, self.td_model_rhf.xy, atol=1e-12)
+
+    def test_cplx(self):
+        """Tests whether complex conjugation in symmetry is handled correctly."""
+        # Perform mf calculation
+        model_rhf = RHF(self.cell)
+        model_rhf.kernel()
+
+        # Add random phases
+        import numpy
+        numpy.random.seed(0)
+        p = numpy.exp(2.j * numpy.pi * numpy.random.rand(model_rhf.mo_coeff.shape[1]))
+        model_rhf.mo_coeff = model_rhf.mo_coeff * p[numpy.newaxis, :]
+
+        m_ref = PhysERI(model_rhf).tdhf_matrix()
+
+        td_model_rhf = TDRHF(model_rhf)
+        td_model_rhf.kernel()
+
+        self.assertIsInstance(td_model_rhf.eri, PhysERI4)
+        m = td_model_rhf.eri.tdhf_matrix()
+
+        testing.assert_allclose(m, m_ref, atol=1e-14)
