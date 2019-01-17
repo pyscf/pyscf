@@ -860,14 +860,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecc, ecc_bench, 6)
 
         e, v = cc.ipccsd(nroots=1, kptlist=(0,))
-        self.assertAlmostEqual(e, -1.1316152294295743, 6)
+        self.assertAlmostEqual(e[0][0], -1.1316152294295743, 6)
         e, v = cc.eaccsd(nroots=1, kptlist=(0,))
-        self.assertAlmostEqual(e, 1.2572812499753756, 6)
+        self.assertAlmostEqual(e[0][0], 1.2572812499753756, 6)
 
         e, v = cc.ipccsd(nroots=1, kptlist=(1,))
-        self.assertAlmostEqual(e, -1.0154003170719554, 6)
+        self.assertAlmostEqual(e[0][0], -1.0154003170719554, 6)
         e, v = cc.eaccsd(nroots=1, kptlist=(1,))
-        self.assertAlmostEqual(e, 1.2298026337620558, 6)
+        self.assertAlmostEqual(e[0][0], 1.2298026337620558, 6)
 
     def test_h4_fcc_k2(self):
         '''Metallic hydrogen fcc lattice.  Checks versus a corresponding
