@@ -283,6 +283,11 @@ def as_scanner(mp):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            for key in ('with_df', 'with_solvent'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
