@@ -351,7 +351,7 @@ def kernel(eri, driver=None, nroots=None, **kwargs):
     m = eri.tdhf_matrix(**kwargs)
     logger.debug1(eri.model, "Diagonalizing a {} matrix with {} ...".format(
         'x'.join(map(str, m.shape)),
-        "'{}'".format(driver if driver is not None else "a default method"),
+        "'{}'".format(driver) if driver is not None else "a default method",
     ))
     vals, vecs = eig(m, driver=driver, nroots=nroots)
     return vals, vecs
