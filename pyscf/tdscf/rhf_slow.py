@@ -375,7 +375,6 @@ class TDRHF(object):
         self.eri = None
         self.xy = None
         self.e = None
-        format_frozen(frozen, len(mf.mo_energy))
         self.frozen = frozen
 
     def __kernel__(self, **kwargs):
