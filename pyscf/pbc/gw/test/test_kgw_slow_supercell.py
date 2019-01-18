@@ -213,7 +213,7 @@ class FrozenTest(unittest.TestCase):
             for i in test_energies
         ))
 
-        testing.assert_allclose(ref_samples, frozen_samples, atol=5e-5)
+        testing.assert_allclose(ref_samples, frozen_samples, atol=1e-4)
         testing.assert_allclose(
             self.gw_model_krhf.imds.get_rhs(sample_ref),
             gw_frozen.imds.get_rhs(sample_frozen),
