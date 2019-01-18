@@ -5,6 +5,7 @@ from pyscf.gw.gw_slow import GW as GW_slow
 from pyscf.tdscf import TDRHF
 from pyscf.tdscf.rhf_slow import TDRHF as TDRHF_slow
 
+import numpy
 from numpy import testing
 import unittest
 
@@ -79,14 +80,16 @@ class H20Test(unittest.TestCase):
         gw_slow_frozen.kernel()
 
         testing.assert_allclose(gw_slow_ref.imds.tdm[..., 1:, 1:], gw_slow_frozen.imds.tdm, atol=1e-4)
-        testing.assert_allclose(
-            gw_slow_ref.imds.get_sigma_element(-1, 1, 0.01),
-            gw_slow_frozen.imds.get_sigma_element(-1, 0, 0.01),
-            atol=1e-4,
-        )
+
+        test_energies = numpy.linspace(-2, 3, 300)
+        ref_samples = numpy.array(tuple(gw_slow_ref.imds.get_sigma_element(i, 1, 0.01) for i in test_energies))
+        frozen_samples = numpy.array(tuple(gw_slow_frozen.imds.get_sigma_element(i, 0, 0.01) for i in test_energies))
+
+        testing.assert_allclose(ref_samples, frozen_samples, atol=5e-4)
         testing.assert_allclose(
             gw_slow_ref.imds.get_rhs(1),
             gw_slow_frozen.imds.get_rhs(0),
+            atol=1e-13,
         )
 
     def test_gw_frozen(self):
@@ -101,4 +104,4 @@ class H20Test(unittest.TestCase):
         gw_slow_frozen = GW_slow(td)
         gw_slow_frozen.kernel()
 
-        testing.assert_allclose(gw_slow_frozen.mo_energy, gw_slow_ref.mo_energy[1:], atol=1e-3)
+        testing.assert_allclose(gw_slow_frozen.mo_energy, gw_slow_ref.mo_energy[1:], atol=1e-4)
