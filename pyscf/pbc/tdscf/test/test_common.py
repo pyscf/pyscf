@@ -1,4 +1,5 @@
 from pyscf.pbc.tdscf.krhf_slow_supercell import k_nocc
+from pyscf.pbc.tdscf.krhf_slow import get_block_k_ix
 
 import numpy
 from numpy import testing
@@ -95,6 +96,20 @@ def tdhf_frozen_mask(eri, kind="ov"):
         return mask_o, mask_v
 
 
+def convert_k2s(vectors, k, eri):
+    """Converts vectors from k-representation to the supercell space by padding with zeros."""
+    nv, _, nk, nocc, nvirt = vectors.shape
+    # _ = 2
+    result = numpy.zeros((nv, _, nk, nk, nocc, nvirt), dtype=vectors.dtype)
+    r1, r2, _, _ = get_block_k_ix(eri, k)
+    for k1 in range(nk):
+        k2_x = r1[k1]
+        result[:, 0, k1, k2_x] = vectors[:, 0, k1]
+        k2_y = r2[k1]
+        result[:, 1, k1, k2_y] = vectors[:, 1, k1]
+    return result
+
+
 def adjust_td_phase(model1, model2, threshold=1e-5):
     """Tunes the phase of the 2 time-dependent models to a common value."""
     signatures = []
@@ -105,17 +120,26 @@ def adjust_td_phase(model1, model2, threshold=1e-5):
         # Are there k-points?
         if "kpts" in dir(m._scf):
             # Is it a supercell model, Gamma model or a true k-model?
-            if isinstance(m.xy, dict):
-                # A true k-model
-                raise NotImplementedError("Implement me")
-            elif len(m.xy.shape) == 6:
-                # A supercell model
-                xy = m.xy.reshape(len(m.e), -1)
+            if isinstance(m.xy, dict) or len(m.xy.shape) == 6:
+                if isinstance(m.xy, dict):
+                    # A true k-model
+                    xy = []
+                    e = []
+                    for k in range(len(m.e)):
+                        xy.append(convert_k2s(m.xy[k], k, m.eri))
+                        e.append(m.e[k])
+                    xy = numpy.concatenate(xy)
+                    e = numpy.concatenate(e)
+                else:
+                    # A supercell model
+                    xy = m.xy
+                    e = m.e
+                xy = xy.reshape(len(e), -1)
                 order_truncated = ov_order(m._scf, m.eri.space)
                 order_orig = ov_order(m._scf)
                 xy = xy[:, order_truncated]
                 signatures.append(xy)
-                orders.append(numpy.argsort(m.e))
+                orders.append(numpy.argsort(e))
                 space.append(tdhf_frozen_mask(m.eri, "sov")[order_orig])
             elif len(m.xy.shape) == 5:
                 # Gamma model
@@ -150,8 +174,13 @@ def adjust_td_phase(model1, model2, threshold=1e-5):
     if "kpts" in dir(model2._scf):
         # Is it a supercell model, Gamma model or a true k-model?
         if isinstance(m.xy, dict):
-            # A true k-model, take k = 0
-            raise NotImplementedError("Implement me")
+            # A true k-model
+            nvec_per_kp = len(m.e[0])
+            for k in range(len(m.e)):
+                o2_kp_mask = o2 // nvec_per_kp == k
+                o2_kp = o2[o2_kp_mask] % nvec_per_kp
+                p_kp = p[o2_kp_mask]
+                model2.xy[k][o2_kp, ...] /= p_kp[(slice(None),) + (numpy.newaxis,) * 4]
         elif len(m.xy.shape) == 6:
             # A supercell model
             model2.xy[o2, ...] /= p[(slice(None),) + (numpy.newaxis,) * 5]
