@@ -87,6 +87,10 @@ def tdhf_frozen_mask(eri, kind="ov"):
     if kind == "ov":
         mask_ov = numpy.outer(mask_o, mask_v).reshape(-1)
         return numpy.tile(mask_ov, 2)
+    elif kind == "sov":
+        mask_ov = numpy.outer(mask_o, mask_v).reshape(-1)
+        nk = len(eri.model.mo_occ)
+        return numpy.tile(mask_ov, 2 * nk ** 2)
     elif kind == "o,v":
         return mask_o, mask_v
 
@@ -102,15 +106,17 @@ def adjust_td_phase(model1, model2, threshold=1e-5):
         if "kpts" in dir(m._scf):
             # Is it a supercell model, Gamma model or a true k-model?
             if isinstance(m.xy, dict):
-                # A true k-model, take k = 0
+                # A true k-model
                 raise NotImplementedError("Implement me")
             elif len(m.xy.shape) == 6:
                 # A supercell model
                 xy = m.xy.reshape(len(m.e), -1)
-                xy = xy[:, ov_order(m._scf)]
+                order_truncated = ov_order(m._scf, m.eri.space)
+                order_orig = ov_order(m._scf)
+                xy = xy[:, order_truncated]
                 signatures.append(xy)
                 orders.append(numpy.argsort(m.e))
-                space.append(None)
+                space.append(tdhf_frozen_mask(m.eri, "sov")[order_orig])
             elif len(m.xy.shape) == 5:
                 # Gamma model
                 raise NotImplementedError("Implement me")
@@ -180,10 +186,12 @@ def assert_vectors_close(v1, v2, axis=0, threshold=1e-5, atol=1e-8):
         ))
 
 
-def ov_order(model):
+def ov_order(model, slc=None):
     nocc = k_nocc(model)
-    e_occ = tuple(e[:o] for e, o in zip(model.mo_energy, nocc))
-    e_virt = tuple(e[o:] for e, o in zip(model.mo_energy, nocc))
+    if slc is None:
+        slc = numpy.ones((len(model.mo_coeff), model.mo_coeff[0].shape[1]), dtype=bool)
+    e_occ = tuple(e[:o][s[:o]] for e, o, s in zip(model.mo_energy, nocc, slc))
+    e_virt = tuple(e[o:][s[o:]] for e, o, s in zip(model.mo_energy, nocc, slc))
     sort_o = []
     sort_v = []
     for o in e_occ:
