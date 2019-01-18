@@ -37,10 +37,15 @@ class IMDS(kgw_slow_supercell.IMDS):
 
         # MF
         self.nocc = self.eri.nocc
-        self.o = tuple(e[:nocc] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc))
-        self.v = tuple(e[nocc:] for e, nocc in zip(self.mf.mo_energy, self.eri.nocc))
+        self.o = tuple(e[:nocc] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc))
+        self.v = tuple(e[nocc:] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc))
+
+        backup = map(numpy.copy, self.mf.mo_occ)
+        for mo_occ, space in zip(self.mf.mo_occ, self.eri.space):
+            mo_occ[~space] = 0
         with temporary_env(self.mf, exxdiv=None):
             self.v_mf = self.mf.get_veff() - self.mf.get_j()
+        self.mf.mo_occ = backup
 
         # TD
         self.td_xy = self.tdhf.xy
@@ -57,7 +62,7 @@ class IMDS(kgw_slow_supercell.IMDS):
     def get_rhs(self, p, components=False):
         k, kp = p
         # 1
-        moe = self.mf.mo_energy[k][kp]
+        moe = self.eri.mo_energy[k][kp]
         # 2
         if kp < self.nocc[k]:
             vk = - sum(
@@ -70,27 +75,11 @@ class IMDS(kgw_slow_supercell.IMDS):
                 for ki in range(self.nk)
             )
         # 3
-        v_mf = einsum("i,ij,j", self.mf.mo_coeff[k][:, kp].conj(), self.v_mf[k], self.mf.mo_coeff[k][:, kp])
+        v_mf = einsum("i,ij,j", self.eri.mo_coeff[k][:, kp].conj(), self.v_mf[k], self.eri.mo_coeff[k][:, kp])
         if components:
             return moe, vk, -v_mf
         else:
             return moe + vk - v_mf
-
-    def construct_vmf(self):
-        v_mf = self.mf.get_veff() - self.mf.get_j()
-        return list(
-            einsum("ia,ij,ja->a", mo.conj(), v, mo)
-            for mo, v in zip(self.mf.mo_coeff, v_mf)
-        )
-
-    def construct_vk(self):
-        result = []
-        for k in range(self.nk):
-            result.append( - numpy.concatenate([
-                sum(einsum('piip->p', self["oooo", k, ki, ki, k]) for ki in range(self.nk)),
-                sum(einsum('ippi->p', self["ovvo", ki, k, k, ki]) for ki in range(self.nk)),
-            ]))
-        return result
 
     def construct_tdm(self):
 

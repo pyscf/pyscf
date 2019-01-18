@@ -177,3 +177,102 @@ class DiamondTestSupercell3(DiamondTestSupercell2):
     """Compare this (k-version) @3kp vs rhf_slow_supercell."""
     k = 3
     k_c = (.1, 0, 0)
+
+
+class FrozenTest(unittest.TestCase):
+    """Tests frozen behavior."""
+    k = 2
+    k_c = (0, 0, 0)
+    df_file = "../../tdscf/test/frozen_test_cderi.h5"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cell = cell = Cell()
+        # Lift some degeneracies
+        cell.atom = '''
+        C 0.000000000000   0.000000000000   0.000000000000
+        C 1.67   1.68   1.69
+        '''
+        cell.basis = 'sto-3g'
+        cell.a = '''
+        0.000000000, 3.370137329, 3.370137329
+        3.370137329, 0.000000000, 3.370137329
+        3.370137329, 3.370137329, 0.000000000'''
+        cell.unit = 'B'
+        cell.verbose = 5
+        cell.build()
+
+        k = cell.make_kpts([cls.k, 1, 1], scaled_center=cls.k_c)
+
+        # K-points
+        cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
+        model_krhf.with_df._cderi = cls.df_file
+        model_krhf.conv_tol = 1e-14
+        model_krhf.kernel()
+
+        cls.td_model_krhf = td_model_krhf = ktd.TDRHF(model_krhf)
+        td_model_krhf.nroots = 5
+        td_model_krhf.kernel()
+
+        cls.gw_model_krhf = gw_model_krhf = kgw.GW(td_model_krhf)
+        gw_model_krhf.kernel()
+
+    @classmethod
+    def tearDownClass(cls):
+        # These are here to remove temporary files
+        del cls.gw_model_krhf
+        del cls.td_model_krhf
+        del cls.model_krhf
+        del cls.cell
+
+    def test_imds_frozen(self):
+        """Tests intermediates: frozen vs non-frozen."""
+        frozen = 2
+        sample_ref = (0, 2)
+        sample_frozen = (0, 0)
+
+        td = ktd.TDRHF(self.model_krhf, frozen=frozen)
+        td.nroots = self.td_model_krhf.nroots
+        td.kernel()
+
+        adjust_td_phase(self.td_model_krhf, td)
+
+        for k in range(self.k):
+            testing.assert_allclose(self.td_model_krhf.e[k], td.e[k], atol=1e-4)
+            testing.assert_allclose(self.td_model_krhf.xy[k][..., 2:, :], td.xy[k], atol=1e-3)
+
+        gw_frozen = kgw.GW(td)
+        gw_frozen.kernel()
+
+        selection = gw_frozen.imds.eri.space[0]
+
+        imd_ref = self.gw_model_krhf.imds.tdm[..., selection, :][..., selection]
+        testing.assert_allclose(gw_frozen.imds.tdm, imd_ref, atol=1e-4)
+
+        test_energies = numpy.linspace(-2, 3, 300)
+        ref_samples = numpy.array(tuple(
+            self.gw_model_krhf.imds.get_sigma_element(i, sample_ref, 0.01)
+            for i in test_energies
+        ))
+        frozen_samples = numpy.array(tuple(
+            gw_frozen.imds.get_sigma_element(i, sample_frozen, 0.01)
+            for i in test_energies
+        ))
+
+        testing.assert_allclose(ref_samples, frozen_samples, atol=1e-4)
+        testing.assert_allclose(
+            self.gw_model_krhf.imds.get_rhs(sample_ref),
+            gw_frozen.imds.get_rhs(sample_frozen),
+            atol=1e-14,
+        )
+
+    def test_class(self):
+        """Tests container behavior (frozen vs non-frozen)."""
+        model = ktd.TDRHF(self.model_krhf, frozen=2)
+        model.nroots = self.td_model_krhf.nroots
+        model.kernel()
+
+        gw_model = kgw.GW(model)
+        gw_model.kernel()
+
+        testing.assert_allclose(gw_model.mo_energy, self.gw_model_krhf.mo_energy[:, 2:], atol=1e-4)
