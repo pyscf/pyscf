@@ -107,8 +107,8 @@ class DiamondTestSupercell2(unittest.TestCase):
     def test_imds(self):
 
         testing.assert_allclose(
-            tuple(self.gw.imds.get_rhs(i, components=True) for i in self.gw.imds.entire_space[0]),
-            tuple(self.kgw.imds.get_rhs(i, components=True) for i in zip(self.order_k, self.order_p)),
+            tuple(self.gw.imds.get_rhs(i) for i in self.gw.imds.entire_space[0]),
+            tuple(self.kgw.imds.get_rhs(i) for i in zip(self.order_k, self.order_p)),
             atol=1e-8
         )
         testing.assert_allclose(

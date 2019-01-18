@@ -36,14 +36,12 @@ class AbstractIMDS(object):
         """
         self.eri = tdhf.eri
         self.tdhf = tdhf
-        self.mf = tdhf._scf
 
-    def get_rhs(self, p, components=False):
+    def get_rhs(self, p):
         """
         The right-hand side of the quasiparticle equation.
         Args:
             p (int, tuple): the orbital;
-            components (bool): if True, returns separate components which have to be summed to obtain the rhs;
 
         Returns:
             Right-hand sides of the quasiparticle equation
@@ -111,14 +109,6 @@ class IMDS(AbstractIMDS):
         # MF
         self.nocc = self.eri.nocc
         self.o, self.v = self.eri.mo_energy[:self.nocc], self.eri.mo_energy[self.nocc:]
-        backup = self.mf.mo_occ.copy()
-        self.mf.mo_occ[~self.eri.space] = 0
-        if "exxdiv" in dir(self.mf):
-            with temporary_env(self.mf, exxdiv=None):
-                self.v_mf = self.mf.get_veff() - self.mf.get_j()
-        else:
-            self.v_mf = self.mf.get_veff() - self.mf.get_j()
-        self.mf.mo_occ = backup
 
         # TD
         self.td_xy = self.tdhf.xy
@@ -129,20 +119,8 @@ class IMDS(AbstractIMDS):
     def __getitem__(self, item):
         return self.eri[item]
 
-    def get_rhs(self, p, components=False):
-        # 1
-        moe = self.eri.mo_energy[p]
-        # 2
-        if p < self.nocc:
-            vk = - numpy.trace(self["oooo"][p, :, :, p])
-        else:
-            vk = - numpy.trace(self["ovvo"][:, p-self.nocc, p-self.nocc, :])
-        # 3
-        v_mf = einsum("i,ij,j", self.eri.mo_coeff[:, p].conj(), self.v_mf, self.eri.mo_coeff[:, p])
-        if components:
-            return moe, vk, -v_mf
-        else:
-            return moe + vk - v_mf
+    def get_rhs(self, p):
+        return self.eri.mo_energy[p]
 
     def construct_tdm(self):
         td_xy = 2 * numpy.asarray(self.td_xy)
@@ -302,7 +280,7 @@ def kernel(imds, orbs=None, linearized=False, eta=1e-3, tol=1e-9, method="fallba
                 try:
                     gw_energies[i_p] = newton(debug, imds.initial_guess(p), tol=tol, maxiter=100)
                 except RuntimeError:
-                    logger.warn(imds.mf, "Failed to converge with newton, using bisect on the interval [{:.3e}, {:.3e}]".format(
+                    logger.warn(imds.tdhf._scf, "Failed to converge with newton, using bisect on the interval [{:.3e}, {:.3e}]".format(
                         min(debug.x), max(debug.x),
                     ))
                     gw_energies[i_p] = bisect(debug, min(debug.x), max(debug.x), xtol=tol, maxiter=100)

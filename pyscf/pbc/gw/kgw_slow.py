@@ -33,19 +33,12 @@ class IMDS(kgw_slow_supercell.IMDS):
         """
         gw_slow.AbstractIMDS.__init__(self, tdhf)
 
-        self.nk = len(self.mf.kpts)
+        self.nk = len(self.tdhf._scf.mo_energy)
 
         # MF
         self.nocc = self.eri.nocc
         self.o = tuple(e[:nocc] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc))
         self.v = tuple(e[nocc:] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc))
-
-        backup = map(numpy.copy, self.mf.mo_occ)
-        for mo_occ, space in zip(self.mf.mo_occ, self.eri.space):
-            mo_occ[~space] = 0
-        with temporary_env(self.mf, exxdiv=None):
-            self.v_mf = self.mf.get_veff() - self.mf.get_j()
-        self.mf.mo_occ = backup
 
         # TD
         self.td_xy = self.tdhf.xy
@@ -55,31 +48,13 @@ class IMDS(kgw_slow_supercell.IMDS):
 
     def eri_ov(self, item):
         item, k1, k2, k3, k4 = item
-        return self.eri.eri_ov(item, (k1, k2, k3, k4)) / len(self.mf.kpts)
+        return self.eri.eri_ov(item, (k1, k2, k3, k4)) / self.nk
 
     __getitem__ = eri_ov
 
     def get_rhs(self, p, components=False):
         k, kp = p
-        # 1
-        moe = self.eri.mo_energy[k][kp]
-        # 2
-        if kp < self.nocc[k]:
-            vk = - sum(
-                numpy.trace(self["oooo", k, ki, ki, k][kp, :, :, kp])
-                for ki in range(self.nk)
-            )
-        else:
-            vk = - sum(
-                numpy.trace(self["ovvo", ki, k, k, ki][:, kp-self.nocc[k], kp-self.nocc[k], :])
-                for ki in range(self.nk)
-            )
-        # 3
-        v_mf = einsum("i,ij,j", self.eri.mo_coeff[k][:, kp].conj(), self.v_mf[k], self.eri.mo_coeff[k][:, kp])
-        if components:
-            return moe, vk, -v_mf
-        else:
-            return moe + vk - v_mf
+        return self.eri.mo_energy[k][kp]
 
     def construct_tdm(self):
 

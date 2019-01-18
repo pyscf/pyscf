@@ -33,19 +33,12 @@ class IMDS(gw_slow.IMDS):
         """
         gw_slow.AbstractIMDS.__init__(self, tdhf)
 
-        self.nk = len(self.mf.kpts)
+        self.nk = len(self.tdhf._scf.mo_energy)
 
         # MF
         self.nocc = sum(self.eri.nocc)
         self.o = numpy.concatenate(tuple(e[:nocc] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc)))
         self.v = numpy.concatenate(tuple(e[nocc:] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc)))
-
-        backup = map(numpy.copy, self.mf.mo_occ)
-        for mo_occ, space in zip(self.mf.mo_occ, self.eri.space):
-            mo_occ[~space] = 0
-        with temporary_env(self.mf, exxdiv=None):
-            self.v_mf = self.mf.get_veff() - self.mf.get_j()
-        self.mf.mo_occ = backup
 
         # TD
         nroots, _, k1, k2, o, v = self.tdhf.xy.shape
@@ -89,20 +82,7 @@ class IMDS(gw_slow.IMDS):
 
     def get_rhs(self, p, components=False):
         k, kp = p
-        kind, p_plain = self.__plain_index__(p)
-        # 1
-        moe = self.eri.mo_energy[k][kp]
-        # 2
-        if kind == "o":
-            vk = - numpy.trace(self["oooo"][p_plain, :, :, p_plain])
-        else:
-            vk = - numpy.trace(self["ovvo"][:, p_plain, p_plain, :])
-        # 3
-        v_mf = einsum("i,ij,j", self.eri.mo_coeff[k][:, kp].conj(), self.v_mf[k], self.eri.mo_coeff[k][:, kp])
-        if components:
-            return moe, vk, -v_mf
-        else:
-            return moe + vk - v_mf
+        return self.eri.mo_energy[k][kp]
 
     def get_sigma_element(self, omega, p, eta, vir_sgn=1):
         return super(IMDS, self).get_sigma_element(omega, self.__plain_index__(p, spec=False), eta, vir_sgn=vir_sgn)
