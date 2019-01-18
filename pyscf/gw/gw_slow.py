@@ -12,7 +12,7 @@ integrals are stored in memory. Several variants of GW are available:
 """
 
 from pyscf.lib import einsum, direct_sum
-from pyscf.lib import logger
+from pyscf.lib import logger, temporary_env
 
 import numpy
 from scipy.optimize import newton, bisect
@@ -113,7 +113,11 @@ class IMDS(AbstractIMDS):
         self.o, self.v = self.eri.mo_energy[:self.nocc], self.eri.mo_energy[self.nocc:]
         backup = self.mf.mo_occ.copy()
         self.mf.mo_occ[~self.eri.space] = 0
-        self.v_mf = self.mf.get_veff() - self.mf.get_j()
+        if "exxdiv" in dir(self.mf):
+            with temporary_env(self.mf, exxdiv=None):
+                self.v_mf = self.mf.get_veff() - self.mf.get_j()
+        else:
+            self.v_mf = self.mf.get_veff() - self.mf.get_j()
         self.mf.mo_occ = backup
 
         # TD
