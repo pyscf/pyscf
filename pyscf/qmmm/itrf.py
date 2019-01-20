@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -187,7 +187,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
             self.__dict__.update(scf_grad.__dict__)
 
         def dump_flags(self):
-            grad_class.dump_flags()
+            grad_class.dump_flags(self)
             logger.info(self, '** Add background charges for %s **', grad_class)
             if self.verbose >= logger.DEBUG1:
                 logger.debug1(self, 'Charge      Location')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -115,10 +115,10 @@ if __name__ == '__main__':
         [1   , (0. , 0.757  , 0.587)] ]
     mol.basis = '631g'
     mol.build()
-    rhf = scf.UHF(mol)
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-14
+    e0 = mf.scf()
+    g = Gradients(mf)
     print(g.grad())
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]
@@ -133,10 +133,10 @@ if __name__ == '__main__':
     mol.charge = 1
     mol.spin = 1
     mol.build()
-    rhf = scf.UHF(mol)
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-14
+    e0 = mf.scf()
+    g = Gradients(mf)
     print(g.grad())
 #[[ 0   0                3.27774948e-03]
 # [ 0   4.31591309e-02  -1.63887474e-03]
