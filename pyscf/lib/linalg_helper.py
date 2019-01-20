@@ -359,6 +359,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     lessio = lessio and not _incore
     log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
                max_cycle, max_space, max_memory, _incore)
+    dtype = None
     heff = None
     fresh_start = True
     e = 0
@@ -378,12 +379,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
-            xt, x0 = _qr(x0, dot)[0], None
+            xt, x0 = _qr(x0, dot, lindep)[0], None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
         elif len(xt) > 1:
-            xt = _qr(xt, dot)[0]
+            xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt = aop(xt)
@@ -393,10 +394,15 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         rnow = len(xt)
         head, space = space, space+rnow
 
+        if dtype is None:
+            try:
+                dtype = numpy.result_type(axt[0], xt[0])
+            except IndexError:
+                dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
         if heff is None:  # Lazy initilize heff to determine the dtype
-            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=ax[0].dtype)
+            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
-            heff = numpy.asarray(heff, dtype=ax[0].dtype)
+            heff = numpy.asarray(heff, dtype=dtype)
 
         elast = e
         vlast = v
@@ -463,7 +469,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
         if all(conv):
-            log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
@@ -712,6 +718,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     lessio = lessio and not _incore
     log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
                max_cycle, max_space, max_memory, _incore)
+    dtype = None
     heff = None
     fresh_start = True
     e = 0
@@ -731,12 +738,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
-            xt, x0 = _qr(x0, dot)[0], None
+            xt, x0 = _qr(x0, dot, lindep)[0], None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
         elif len(xt) > 1:
-            xt = _qr(xt, dot)[0]
+            xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt = aop(xt)
@@ -746,10 +753,15 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         rnow = len(xt)
         head, space = space, space+rnow
 
+        if dtype is None:
+            try:
+                dtype = numpy.result_type(axt[0], xt[0])
+            except IndexError:
+                dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
         if heff is None:  # Lazy initilize heff to determine the dtype
-            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=axt[0].dtype)
+            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
-            heff = numpy.asarray(heff, dtype=axt[0].dtype)
+            heff = numpy.asarray(heff, dtype=dtype)
 
         elast = e
         vlast = v
@@ -813,7 +825,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
         if all(conv):
-            log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
@@ -1044,11 +1056,11 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             space = 0
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 are very likely non-orthogonal when A is non-Hermitian.
-            xt, x0 = _qr(x0, dot)[0], None
+            xt, x0 = _qr(x0, dot, lindep)[0], None
             e = numpy.zeros(nroots)
             fresh_start = False
         elif len(xt) > 1:
-            xt = _qr(xt, dot)[0]
+            xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt, bxt = abop(xt)
@@ -1114,7 +1126,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 
         ide = numpy.argmax(abs(de))
         if abs(de[ide]) < tol:
-            log.debug('converge %d %d  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  e= %s  max|de|= %4.3g',
                       icyc, space, e, de[ide])
             conv = True
             break
@@ -1131,7 +1143,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         ax0 = bx0 = None
 
         if max(dx_norm) < toloose:
-            log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max(dx_norm), e, de[ide])
             conv = True
             break
@@ -1244,7 +1256,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     nroots, ndim = x1.shape
 
     # Not exactly QR, vectors are orthogonal but not normalized
-    x1, rmat = _qr(x1, dot)
+    x1, rmat = _qr(x1, dot, lindep)
     for i in range(len(x1)):
         x1[i] *= rmat[i,i]
 
@@ -1350,8 +1362,9 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     xs = [precond(b)]
     ax = [aop(xs[-1])]
 
-    aeff = numpy.zeros((max_cycle,max_cycle), dtype=ax[0].dtype)
-    beff = numpy.zeros((max_cycle), dtype=ax[0].dtype)
+    dtype = numpy.result_type(ax[0], xs[0])
+    aeff = numpy.zeros((max_cycle,max_cycle), dtype=dtype)
+    beff = numpy.zeros((max_cycle), dtype=dtype)
     for istep in range(max_cycle):
         beff[istep] = dot(xs[istep], b)
         for i in range(istep+1):
@@ -1381,7 +1394,7 @@ def cho_solve(a, b):
     return scipy.linalg.solve(a, b, sym_pos=True)
 
 
-def _qr(xs, dot):
+def _qr(xs, dot, lindep=1e-14):
     '''QR decomposition for a list of vectors (for linearly independent vectors only).
     xs = (r.T).dot(qs)
     '''
@@ -1399,8 +1412,9 @@ def _qr(xs, dot):
             prod = dot(qs[j].conj(), xi)
             xi -= qs[j] * prod
             rmat[:,nv] -= rmat[:,j] * prod
-        norm = numpy.sqrt(dot(xi.conj(), xi).real)
-        if norm > 1e-7:
+        innerprod = dot(xi.conj(), xi).real
+        norm = numpy.sqrt(innerprod)
+        if innerprod > lindep:
             qs[nv] = xi/norm
             rmat[:nv+1,nv] /= norm
             nv += 1

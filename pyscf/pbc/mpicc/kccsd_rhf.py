@@ -1168,7 +1168,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         kconserv = self.kconserv
 
         if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
+            if not getattr(self, 'imds', None):
                 self.imds = _IMDS(self)
             self.imds.make_ip(self)
             self.made_ip_imds = True
@@ -1301,7 +1301,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         kconserv = self.kconserv
 
         if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
+            if not getattr(self, 'imds', None):
                 self.imds = _IMDS(self)
             self.imds.make_ip(self)
             self.made_ip_imds = True
@@ -1450,7 +1450,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         kconserv = self.kconserv
 
         if not self.made_ip_imds:
-            if not hasattr(self,'imds'):
+            if not getattr(self, 'imds', None):
                 self.imds = _IMDS(self)
             self.imds.make_ip(self)
             self.made_ip_imds = True
@@ -1909,7 +1909,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         kconserv = self.kconserv
 
         if not self.made_ea_imds:
-            if not hasattr(self,'imds'):
+            if not getattr(self, 'imds', None):
                 self.imds = _IMDS(self)
             self.imds.make_ea(self)
             self.made_ea_imds = True
@@ -2027,7 +2027,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         kconserv = self.kconserv
 
         if not self.made_ea_imds:
-            if not hasattr(self,'imds'):
+            if not getattr(self, 'imds', None):
                 self.imds = _IMDS(self)
             self.imds.make_ea(self)
             self.made_ea_imds = True
@@ -2198,7 +2198,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         kconserv = self.kconserv
 
         if not self.made_ea_imds:
-            if not hasattr(self,'imds'):
+            if not getattr(self, 'imds', None):
                 self.imds = _IMDS(self)
             self.imds.make_ea(self)
             self.made_ea_imds = True
@@ -3089,7 +3089,7 @@ class _ERIS:
         log.timer('CCSD integral transformation', *cput0)
 
     def __del__(self):
-        if hasattr(self, 'feri1'):
+        if getattr(self, 'feri1', None):
             #for key in self.feri1.keys(): del(self.feri1[key])
             self.feri1.close()
 
@@ -3104,7 +3104,7 @@ class _IMDS:
         t1,t2,eris = cc.t1, cc.t2, cc.eris
         nkpts,nocc,nvir = t1.shape
 
-        if not hasattr(self, 'fint1'):
+        if not getattr(self, 'fint1', None):
             self.fint1 = None
 
         tmpfile1_name = "eom_intermediates_IP.hdf5"
@@ -3174,10 +3174,10 @@ class _IMDS:
         self.fint1.close()
 
     def __del__(self):
-        if hasattr(self, 'fint1'):
+        if getattr(self, 'fint1', None):
             #for key in self.feri1.keys(): del(self.feri1[key])
             self.fint1.close()
-        if hasattr(self, 'fint2'):
+        if getattr(self, 'fint2', None):
             #for key in self.feri1.keys(): del(self.feri1[key])
             self.fint2.close()
 
@@ -3185,7 +3185,7 @@ class _IMDS:
         t1,t2,eris = cc.t1, cc.t2, cc.eris
         nkpts,nocc,nvir = t1.shape
 
-        if not hasattr(self, 'fint2'):
+        if not getattr(self, 'fint2', None):
             self.fint2 = None
 
         tmpfile1_name = "eom_intermediates_EA.hdf5"

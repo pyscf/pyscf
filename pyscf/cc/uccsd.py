@@ -427,7 +427,7 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
     nocca, noccb, nvira, nvirb = t2ab.shape
 
     if mycc.direct:  # AO direct CCSD
-        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
+        if getattr(eris, 'mo_coeff', None) is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
@@ -464,7 +464,7 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         assert(t2sym is None)
         if with_ovvv:
             raise NotImplementedError
-        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
+        if getattr(eris, 'mo_coeff', None) is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
@@ -667,7 +667,7 @@ class UCCSD(ccsd.CCSD):
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             logger.warn(self, 'UCCSD detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
                         'It\'s recommended to use dfccsd.CCSD for the '
@@ -731,6 +731,20 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_from_rccsd(self, t1, t2):
         return amplitudes_from_rccsd(t1, t2)
 
+    def get_t1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_t1_diagnostic(t1)
+
+    def get_d1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_d1_diagnostic(t1)
+
+    def get_d2_diagnostic(self, t2=None):
+        if t2 is None: t2 = self.t2
+        raise NotImplementedError
+        #return get_d2_diagnostic(t2)
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
     def __init__(self, mol=None):

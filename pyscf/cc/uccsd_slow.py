@@ -179,7 +179,7 @@ class UCCSD(ccsd.CCSD):
 
     def ipccsd_matvec(self, vector):
         # Ref: Tu, Wang, and Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip()
@@ -205,7 +205,7 @@ class UCCSD(ccsd.CCSD):
         return vector
 
     def ipccsd_diag(self):
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip()
@@ -261,7 +261,7 @@ class UCCSD(ccsd.CCSD):
 
     def eaccsd_matvec(self,vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea()
@@ -289,7 +289,7 @@ class UCCSD(ccsd.CCSD):
         return vector
 
     def eaccsd_diag(self):
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea()
@@ -348,7 +348,7 @@ class UCCSD(ccsd.CCSD):
         # Ref: Wang, Tu, and Wang, J. Chem. Theory Comput. 10, 5567 (2014) Eqs.(9)-(10)
         # Note: Last line in Eq. (10) is superfluous.
         # See, e.g. Gwaltney, Nooijen, and Barlett, Chem. Phys. Lett. 248, 189 (1996)
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ee_imds:
             self.imds.make_ee()
@@ -386,7 +386,7 @@ class UCCSD(ccsd.CCSD):
         return vector
 
     def eeccsd_diag(self):
-        if not hasattr(self,'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ee_imds:
             self.imds.make_ee()

@@ -46,7 +46,7 @@ def trans(eri, mos):
     eriref = lib.einsum('ijkp,pl->ijkl', eriref, mos[3])
     return eriref
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_incore(self):
         numpy.random.seed(15)
         nmo = 12

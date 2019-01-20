@@ -112,7 +112,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
     mo_coeff_with_orbsym = lib.tag_array(mo_coeff, orbsym=orbsym)
 
     active_orbsym = getattr(mc.fcisolver, 'orbsym', [])
-    if (not hasattr(active_orbsym, '__len__')) or len(active_orbsym) == 0:
+    if (not getattr(active_orbsym, '__len__', None)) or len(active_orbsym) == 0:
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         mc.fcisolver.orbsym = orbsym[ncore:nocc]
@@ -132,7 +132,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
                 wfnsym ^= ir
             mc.fcisolver.wfnsym = wfnsym
             log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
-        elif hasattr(mo_coeff, 'orbsym'):  # It may be reordered SCF orbitals
+        elif getattr(mo_coeff, 'orbsym', None) is not None:  # It may be reordered SCF orbitals
             ncore = mc.ncore
             nocc = mc.ncore + mc.ncas
             cas_orb = mo_coeff[:,ncore:nocc]
@@ -149,7 +149,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
                           'orbitals %s', idx)
                 log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
 
-    elif hasattr(mc.fcisolver, 'guess_wfnsym'):
+    elif getattr(mc.fcisolver, 'guess_wfnsym', None):
         wfnsym = mc.fcisolver.guess_wfnsym(mc.ncas, mc.nelecas, ci0, verbose=log)
         log.debug('CASCI wfnsym %s (based on CI initial guess)', wfnsym)
 

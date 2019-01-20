@@ -344,7 +344,7 @@ class SHCI(lib.StreamObject):
 
     def contract_2e(self, eri, civec, norb, nelec, client=None, **kwargs):
         if client is None:
-            if hasattr(self, '_client'):
+            if getattr(self, '_client', None):
                 if not (os.path.isfile(os.path.join(self.runtimedir, self.integralfile)) and
                         os.path.isfile(os.path.join(self.runtimedir, self.configfile))):
                     raise RuntimeError('FCIDUMP or config.json not found')

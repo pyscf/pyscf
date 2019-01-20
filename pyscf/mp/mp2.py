@@ -175,18 +175,23 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
             dm2[oidx[i],vidx[:,None,None],oidx[:,None],vidx] = dovov
             dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.conj().transpose(0,2,1)
 
+    # Be careful with convention of dm1 and dm2
+    #   dm1[q,p] = <p^\dagger q>
+    #   dm2[p,q,r,s] = < p^\dagger r^\dagger s q >
+    #   E = einsum('pq,qp', h1, dm1) + .5 * einsum('pqrs,pqrs', eri, dm2)
+    # When adding dm1 contribution, dm1 subscripts need to be flipped
     for i in range(nocc0):
         dm2[i,i,:,:] += dm1.T * 2
         dm2[:,:,i,i] += dm1.T * 2
-        dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1.T
+        dm2[:,i,i,:] -= dm1.T
+        dm2[i,:,:,i] -= dm1
 
     for i in range(nocc0):
         for j in range(nocc0):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
 
-    return dm2
+    return dm2#.transpose(1,0,3,2)
 
 
 def get_nocc(mp):
@@ -444,7 +449,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         else:
             eris.ovov = ao2mo.general(mp._scf._eri, (co,cv,co,cv))
 
-    elif hasattr(mp._scf, 'with_df') and mp._scf.with_df:
+    elif getattr(mp._scf, 'with_df', None):
         # To handle the PBC or custom 2-electron with 3-index tensor.
         # Call dfmp2.MP2 for efficient DF-MP2 implementation.
         log.warn('DF-HF is found. (ia|jb) is computed based on the DF '

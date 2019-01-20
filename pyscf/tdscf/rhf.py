@@ -18,6 +18,7 @@
 # Ref:
 # Chem Phys Lett, 256, 454
 # J. Mol. Struct. THEOCHEM, 914, 3
+# Recent Advances in Density Functional Methods, Chapter 5, M. E. Casida
 #
 
 from functools import reduce
@@ -144,7 +145,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * 2
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint

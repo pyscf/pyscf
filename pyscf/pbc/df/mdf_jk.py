@@ -46,7 +46,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
     '''
     from pyscf.pbc.df import mdf
     if with_df is None:
-        if hasattr(mf, 'kpts'):
+        if getattr(mf, 'kpts', None) is not None:
             kpts = mf.kpts
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))

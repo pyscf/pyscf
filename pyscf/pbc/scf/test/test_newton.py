@@ -66,6 +66,12 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.137043711032916, 8)
 
+    def test_nr_rohf(self):
+        mf = scf.ROHF(cell).newton()
+        mf.conv_tol_grad = 1e-4
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -10.137043711032916, 8)
+
     def test_nr_rks_lda(self):
         mf = dft.RKS(cell)
         mf.xc = 'lda,'
@@ -108,6 +114,12 @@ class KnowValues(unittest.TestCase):
     def test_nr_kuhf(self):
         mf = scf.KUHF(cell, cell.make_kpts([2,1,1]))
         mf = scf.newton(mf)
+        mf.conv_tol_grad = 1e-4
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -10.5309059210831, 8)
+
+    def test_nr_krohf(self):
+        mf = scf.KROHF(cell, cell.make_kpts([2,1,1])).newton()
         mf.conv_tol_grad = 1e-4
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.5309059210831, 8)

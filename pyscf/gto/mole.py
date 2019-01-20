@@ -42,7 +42,7 @@ from pyscf import __config__
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
         _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
 
-# For code compatiblity in python-2 and python-3
+# For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
 
@@ -69,6 +69,7 @@ PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
 PTR_RANGE_OMEGA = 8
 PTR_F12_ZETA    = 9
+PTR_GTG_ZETA    = 10
 AS_RINV_ORIG_ATOM = 17
 AS_ECPBAS_OFFSET = 18
 AS_NECPBAS     = 19
@@ -1898,6 +1899,7 @@ class Mole(lib.StreamObject):
         ne = self.nelectron
         nalpha = (ne + self.spin) // 2
         nbeta = nalpha - self.spin
+        assert(nalpha >= 0 and nbeta >= 0)
         if nalpha + nbeta != ne:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
@@ -2024,7 +2026,7 @@ class Mole(lib.StreamObject):
 
         # avoid to open output file twice
         if (parse_arg and self.output is not None and
-            not (hasattr(self.stdout, 'name') and  # to handle StringIO().name bug
+            not (getattr(self.stdout, 'name', None) and  # to handle StringIO().name bug
                  self.stdout.name == self.output)):
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
@@ -2493,10 +2495,20 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol._env = mol._env.copy()
         if unit is None:
             unit = mol.unit
+        else:
+            mol.unit = unit
         if symmetry is None:
             symmetry = mol.symmetry
 
+        if isinstance(atoms_or_coords, numpy.ndarray):
+            mol.atom = list(zip([x[0] for x in mol._atom],
+                                atoms_or_coords.tolist()))
+        else:
+            mol.atom = atoms_or_coords
+
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
+            mol._atom = mol.atom
+
             if isinstance(unit, (str, unicode)):
                 if unit.upper().startswith(('B', 'AU')):
                     unit = 1.
@@ -2509,11 +2521,6 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
             mol._env[ptr+2] = unit * atoms_or_coords[:,2]
         else:
-            if isinstance(atoms_or_coords, numpy.ndarray):
-                mol.atom = list(zip([x[0] for x in mol._atom], atoms_or_coords))
-            else:
-                mol.atom = atoms_or_coords
-            mol.unit = unit
             mol.symmetry = symmetry
             mol.build(False, False)
 

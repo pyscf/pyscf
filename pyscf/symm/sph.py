@@ -70,7 +70,7 @@ def multipoles(r, lmax, reorder_dipole=True):
 
     Kwargs:
         reorder_p : bool
-            sort dipole to x,y,z
+            sort dipole to the order (x,y,z)
     '''
     from pyscf import gto
 
@@ -103,10 +103,10 @@ def multipoles(r, lmax, reorder_dipole=True):
         ylms[1] = ylms[1][[1,2,0]]
     return ylms
 
-def sph_pure2real(l):
+def sph_pure2real(l, reorder_p=True):
     r'''
-    Transformation matrix: from pure spherical harmonic function Y_m
-    to real spherical harmonic function O_m.
+    Transformation matrix: from the pure spherical harmonic functions Y_m to
+    the real spherical harmonic functions O_m.
           O_m = \sum Y_m' * U(m',m)
     Y(-1) = 1/\sqrt(2){-iO(-1) + O(1)}; Y(1) = 1/\sqrt(2){-iO(-1) - O(1)}
     Y(-2) = 1/\sqrt(2){-iO(-2) + O(2)}; Y(2) = 1/\sqrt(2){iO(-2) + O(2)}
@@ -116,11 +116,12 @@ def sph_pure2real(l):
     Returns:
         2D array U_{complex,real}
     '''
-    u = numpy.zeros((2*l+1,2*l+1),dtype=complex)
+    n = 2 * l + 1
+    u = numpy.zeros((n,n), dtype=complex)
     sqrthfr = numpy.sqrt(.5)
     sqrthfi = numpy.sqrt(.5)*1j
 
-    if l == 1:
+    if reorder_p and l == 1:
         u[1,2] = 1
         u[0,1] =  sqrthfi
         u[2,1] =  sqrthfi
@@ -128,12 +129,12 @@ def sph_pure2real(l):
         u[2,0] = -sqrthfr
     else:
         u[l,l] = 1
-        for m in range(1,l+1,2):
+        for m in range(1, l+1, 2):
             u[l-m,l-m] =  sqrthfi
             u[l+m,l-m] =  sqrthfi
             u[l-m,l+m] =  sqrthfr
             u[l+m,l+m] = -sqrthfr
-        for m in range(2,l+1,2):
+        for m in range(2, l+1, 2):
             u[l-m,l-m] =  sqrthfi
             u[l+m,l-m] = -sqrthfi
             u[l-m,l+m] =  sqrthfr
@@ -141,18 +142,27 @@ def sph_pure2real(l):
 
     return u
 
-def sph_real2pure(l):
-    return sph_pure2real(l).T.conj()
+def sph_real2pure(l, reorder_p=True):
+    ''' 
+    Transformation matrix: from real spherical harmonic functions to the pure
+    spherical harmonic functions.
+
+    Kwargs:
+        reorder_p (bool): Whether the real p functions are presented in the
+            (x,y,z) order.
+    '''
+    # numpy.linalg.inv(sph_pure2real(l))
+    return sph_pure2real(l, reorder_p).conj().T
 
 # |spinor> = (|real_sph>, |real_sph>) * / u_alpha \
 #                                       \ u_beta  /
 # Return 2D array U_{sph,spinor}
-def sph2spinor(l):
+def sph2spinor(l, reorder_p=True):
     if l == 0:
         return numpy.array((0., 1.)).reshape(1,-1), \
                numpy.array((1., 0.)).reshape(1,-1)
     else:
-        u1 = sph_real2pure(l)
+        u1 = sph_real2pure(l, reorder_p)
         ua = numpy.zeros((2*l+1,4*l+2),dtype=complex)
         ub = numpy.zeros((2*l+1,4*l+2),dtype=complex)
         j = l * 2 - 1
@@ -201,7 +211,7 @@ def sph2spinor_coeff(mol):
     ualst = []
     ublst = []
     for l in range(lmax+1):
-        u1, u2 = sph2spinor(l)
+        u1, u2 = sph2spinor(l, reorder_p=True)
         ualst.append(u1)
         ublst.append(u2)
 

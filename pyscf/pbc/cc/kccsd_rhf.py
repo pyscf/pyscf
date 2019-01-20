@@ -385,7 +385,7 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
     kconserv = cc.khelper.kconserv
 
     mem_now = lib.current_memory()[0]
-    if cc.direct and hasattr(eris, 'Lpv'):
+    if cc.direct and getattr(eris, 'Lpv', None) is not None:
         #: If memory is not enough to hold eris.Lpv
         #:def get_Wvvvv(ka, kb, kc):
         #:    kd = kconserv[ka,kc,kb]
@@ -612,6 +612,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self._finalize()
         return self.e_corr, self.t1, self.t2
 
+    def ccsd_t(self, t1=None, t2=None, eris=None):
+        from pyscf.pbc.cc import kccsd_t_rhf
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return kccsd_t_rhf.kernel(self, eris, t1, t2, self.verbose)
+
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
@@ -730,7 +737,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ipccsd_matvec(self, vector, kshift):
         '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.'''
         # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-        if not hasattr(self, 'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
@@ -797,7 +804,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return self.mask_frozen_ip(self.ip_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
     def ipccsd_diag(self, kshift):
-        if not hasattr(self, 'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
@@ -969,7 +976,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def eaccsd_matvec(self, vector, kshift):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
-        if not hasattr(self, 'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
@@ -1045,7 +1052,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return self.mask_frozen_ea(self.ea_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
     def eaccsd_diag(self, kshift):
-        if not hasattr(self, 'imds'):
+        if not getattr(self, 'imds', None):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
@@ -1390,7 +1397,10 @@ class _IMDS:
         self.made_ea_imds = False
         self._made_shared_2e = False
         # TODO: check whether to hold all stuff in memory
-        self._fimd = lib.H5TmpFile() if hasattr(self.eris, "feri1") else None
+        if getattr(self.eris, "feri1", None):
+            self._fimd = lib.H5TmpFile()
+        else:
+            self._fimd = None
 
     def _make_shared_1e(self):
         cput0 = (time.clock(), time.time())

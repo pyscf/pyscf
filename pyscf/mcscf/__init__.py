@@ -197,7 +197,7 @@ def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
 
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_rhf(mf)
-    if hasattr(mf, 'with_df') and mf.with_df:
+    if getattr(mf, 'with_df', None):
         return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
 
     if mf.mol.symmetry:
@@ -220,7 +220,7 @@ def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_rhf(mf)
 
-    if hasattr(mf, 'with_df') and mf.with_df:
+    if getattr(mf, 'with_df', None):
         return DFCASCI(mf, ncas, nelecas, ncore)
 
     if mf.mol.symmetry:

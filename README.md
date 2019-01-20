@@ -1,15 +1,15 @@
 <div align="left">
-  <img src="https://github.com/sunqm/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
+  <img src="https://github.com/pyscf/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
 </div>
 
 Python-based Simulations of Chemistry Framework
 ===============================================
-[![Build Status](https://travis-ci.org/sunqm/pyscf.svg?branch=master)](https://travis-ci.org/sunqm/pyscf)
+[![Build Status](https://travis-ci.org/pyscf/pyscf.svg?branch=master)](https://travis-ci.org/pyscf/pyscf)
 
-2018-11-16
+2018-12-31
 
-* [Stable release 1.5.4](https://github.com/sunqm/pyscf/releases/tag/v1.5.4)
-* [1.6 alpha](https://github.com/sunqm/pyscf/tree/dev)
+* [Stable release 1.6.0](https://github.com/pyscf/pyscf/releases/tag/v1.6.0)
+* [1.7 alpha](https://github.com/pyscf/pyscf/tree/dev)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
@@ -67,8 +67,8 @@ Installation
   After installing the NECI, create a file future/fciqmc/settings.py
   to store the path where the NECI was installed.
 
-* Using optimized integral library on X86 platform.  Qcint
-  (https://github.com/sunqm/qcint.git) is a branch of libcint library.
+* Using optimized integral library on X86 platform.  [Qcint](https://github.com/sunqm/qcint.git)
+  is a branch of libcint library.
   It is heavily optimized against X86_64 platforms.  To replace the
   default libcint library with qcint library, edit the URL of the
   integral library in lib/CMakeLists.txt file

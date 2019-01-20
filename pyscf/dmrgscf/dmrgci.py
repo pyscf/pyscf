@@ -123,7 +123,7 @@ class DMRGCI(lib.StreamObject):
         self.integralFile = "FCIDUMP"
         self.configFile = "dmrg.conf"
         self.outputFile = "dmrg.out"
-        if hasattr(settings, 'BLOCKRUNTIMEDIR'):
+        if getattr(settings, 'BLOCKRUNTIMEDIR', None):
             self.runtimeDir = settings.BLOCKRUNTIMEDIR
         else:
             self.runtimeDir = '.'
@@ -478,7 +478,7 @@ class DMRGCI(lib.StreamObject):
           #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE3_BLOCK" (see below)
-          if 'stackblock' in settings.BLOCKEXE:
+          if block_version(self.executable).startswith('1.5'):
             print('Reading binary 3RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
@@ -557,7 +557,7 @@ class DMRGCI(lib.StreamObject):
           #   using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE4_BLOCK" (see below)
-          if 'stackblock' in settings.BLOCKEXE:
+          if block_version(self.executable).startswith('1.5'):
             print('Reading binary 4RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
@@ -948,10 +948,10 @@ def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     >>> mc.kernel()
     -74.414908818611522
     '''
-    if (hasattr(mf,'with_df')):
-      mc = mcscf.DFCASSCF(mf, norb, nelec, *args, **kwargs)
+    if getattr(mf, 'with_df', None):
+        mc = mcscf.DFCASSCF(mf, norb, nelec, *args, **kwargs)
     else:
-      mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
+        mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = DMRGCI(mf.mol, maxM, tol=tol)
     mc.callback = mc.fcisolver.restart_scheduler_()
     if mc.chkfile == mc._scf._chkfile.name:

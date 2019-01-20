@@ -137,7 +137,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     coords = cell.gen_uniform_grids(mesh)
     ngrids = coords.shape[0]
 
-    if hasattr(dm_kpts, 'mo_coeff'):
+    if getattr(dm_kpts, 'mo_coeff', None) is not None:
         mo_coeff = dm_kpts.mo_coeff
         mo_occ   = dm_kpts.mo_occ
     else:

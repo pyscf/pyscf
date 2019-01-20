@@ -497,6 +497,14 @@ class Grids(lib.StreamObject):
     def size(self):
         return getattr(self.weights, 'size', 0)
 
+    def __setattr__(self, key, val):
+        if key in ('atom_grid', 'atomic_radii', 'radii_adjust', 'radi_method',
+                   'becke_scheme', 'prune', 'level'):
+            self.coords = None
+            self.weights = None
+            self.non0tab = None
+        super(Grids, self).__setattr__(key, val)
+
     def dump_flags(self):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
@@ -532,6 +540,14 @@ class Grids(lib.StreamObject):
     def kernel(self, mol=None, with_non0tab=False):
         self.dump_flags()
         return self.build(mol, with_non0tab)
+
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        self.coords = None
+        self.weights = None
+        self.non0tab = None
+        return self
 
     @lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,

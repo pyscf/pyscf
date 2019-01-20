@@ -56,7 +56,7 @@ def ddcosmo_grad(grad_method, pcmobj=None):
             self.with_solvent = pcmobj
             self.de_solvent = None
             self.de_solute = None
-            self._keys = self._keys.union(['de_solvent', 'de_solute'])
+            self._keys = self._keys.union(['with_solvent', 'de_solvent', 'de_solute'])
 
         def kernel(self, dm=None, atmlst=None):
             if dm is None:

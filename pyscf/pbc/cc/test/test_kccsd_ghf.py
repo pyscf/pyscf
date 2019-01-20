@@ -1,4 +1,5 @@
 import unittest
+import itertools
 import numpy as np
 
 from pyscf.lib import finger
@@ -12,7 +13,6 @@ import make_test_cell
 from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd as kccsd
 import pyscf.pbc.cc.eom_kccsd_ghf as kccsd_ghf
-
 
 cell = pbcgto.Cell()
 cell.atom = '''
@@ -39,32 +39,46 @@ def get_idx_r2(nkpts,nocc,nvir,ki,kj,i,j,a):
     return ki*o4 + ki*o3 + i*o2 + i*o1 + a
 
 def get_ip_identity(nocc,nvir,nkpts,I):
-    count = 0
     indices = []
+
     for i in range(nocc):
         indices.append(i)
-    for ki in range(nkpts):
-        for kj in range(nkpts):
-            for i in range(nocc):
-                for j in range(nocc):
-                    for a in range(nvir):
-                        r1 = np.zeros(nocc,dtype=complex)
-                        r2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir),dtype=complex)
-                        if j >= i:
-                            pass
-                        else:
-                            r2[ki,kj,i,j,a] = 1.0
-                            r2[kj,ki,j,i,a] = -1.0
-                            I[:,nocc + count] = kccsd_ghf.amplitudes_to_vector_ip(r1,r2)
-                            indices.append(nocc + count)
-                        count = count + 1
+    count = nocc
+
+    for ki, kj, i, j, a in itertools.product(range(nkpts),range(nkpts),range(nocc),range(nocc),range(nvir)):
+        if j < i:
+            r1 = np.zeros(nocc,dtype=complex)
+            r2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir),dtype=complex)
+            r2[ki,kj,i,j,a] = 1.0
+            r2[kj,ki,j,i,a] = -1.0
+            I[:,count] = kccsd_ghf.amplitudes_to_vector_ip(r1,r2)
+            indices.append(count)
+        count = count + 1
+
+    return indices
+
+def get_ea_identity(nocc,nvir,nkpts,I,kshift,kconserv):
+    indices = []
+
+    for a in range(nvir):
+        indices.append(a)
+    count = nvir
+
+    for ki, ka, i, a, b in itertools.product(range(nkpts),range(nkpts),range(nocc),range(nvir),range(nvir)):
+        if b < a:
+            kb = kconserv[kshift,ka,ki]
+            r1 = np.zeros(nvir,dtype=complex)
+            r2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir),dtype=complex)
+            r2[ki,ka,i,a,b] = 1.0
+            r2[ki,kb,i,b,a] = -1.0
+            I[:,count] = kccsd_ghf.amplitudes_to_vector_ea(r1,r2)
+            indices.append(count)
+        count = count + 1
+
     return indices
 
 class TestHe(unittest.TestCase):
-    def _test_ip_diag(self,kmf):
-        cc = kccsd.KGCCSD(kmf)
-        Ecc = cc.kernel()[0]
-
+    def _test_ip_diag(self,cc):
         eom = kccsd_ghf.EOMIP(cc)
         imds = eom.make_imds()
         nkpts, nocc, nvir = imds.t1.shape
@@ -72,7 +86,7 @@ class TestHe(unittest.TestCase):
         
         I = np.zeros((diag.shape[0],diag.shape[0]),dtype=complex)
         I[:nocc,:nocc] = np.identity(nocc,dtype=complex)
-        indices = get_identity(nocc,nvir,nkpts,I)
+        indices = get_ip_identity(nocc,nvir,nkpts,I)
         H = np.zeros((I.shape[0],len(indices)),dtype=complex)
         for j,idx in enumerate(indices):
             H[:,j] = kccsd_ghf.ipccsd_matvec(eom,I[:,idx],0,imds=imds)
@@ -85,23 +99,56 @@ class TestHe(unittest.TestCase):
         diff = np.linalg.norm(diag_ref - diag_out)
         self.assertTrue(abs(diff) < thresh,"Difference in IP diag: {}".format(diff))
 
-    def test_he_112_ip_diag(self):
+    def _test_ea_diag(self,cc):
+       eom = kccsd_ghf.EOMEA(cc)
+       imds = eom.make_imds()
+       nkpts, nocc, nvir = imds.t1.shape
+       diag = kccsd_ghf.eaccsd_diag(eom,0,imds=imds)
+
+       I = np.zeros((diag.shape[0],diag.shape[0]),dtype=complex)
+       I[:nvir,:nvir] = np.identity(nvir,dtype=complex)
+       indices = get_ea_identity(nocc,nvir,nkpts,I,0,imds.kconserv)
+       H = np.zeros((I.shape[0],len(indices)),dtype=complex)
+       for j,idx in enumerate(indices):
+           H[:,j] = kccsd_ghf.eaccsd_matvec(eom,I[:,idx],0,imds=imds)
+
+       diag_ref = np.zeros(len(indices),dtype=complex)
+       diag_out = np.zeros(len(indices),dtype=complex)
+       for j,idx in enumerate(indices):
+           diag_ref[j] = H[idx,j]
+           diag_out[j] = diag[idx]
+       diff = np.linalg.norm(diag_ref - diag_out)
+       self.assertTrue(abs(diff) < thresh,"Difference in EA diag: {}".format(diff))
+
+    def test_he_112_diag(self):
         kpts = cell.make_kpts([1,1,2])
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
-        self._test_diag(kmf)
+        cc = kccsd.KGCCSD(kmf)
+        Ecc = cc.kernel()[0]
 
-    def test_he_212_ip_diag(self):
+        self._test_ip_diag(cc)
+        self._test_ea_diag(cc)
+
+    def test_he_212_diag(self):
         kpts = cell.make_kpts([2,1,2])
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
-        self._test_diag(kmf)
+        cc = kccsd.KGCCSD(kmf)
+        Ecc = cc.kernel()[0]
 
-    def test_he_131_ip_diag(self):
+        self._test_ip_diag(cc)
+        self._test_ea_diag(cc)
+
+    def test_he_131_diag(self):
         kpts = cell.make_kpts([1,3,1])
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
-        self._test_diag(kmf)
+        cc = kccsd.KGCCSD(kmf)
+        Ecc = cc.kernel()[0]
+
+        self._test_ip_diag(cc)
+        self._test_ea_diag(cc)
 
     def test_supercell_vs_kpt(self):
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
@@ -112,8 +159,8 @@ class TestHe(unittest.TestCase):
         mycc.conv_tol_normt = 1e-10
         ecc2, t1, t2 = mycc.kernel()
         ecc_ref = -0.01044680113334205
-        print ecc2
-        self.assertAlmostEqual(abs(ecc_ref/2. - ecc2), 0, 10)
+        print(ecc2)
+        self.assertAlmostEqual(abs(ecc_ref - ecc2), 0, 10)
 
 
 if __name__ == '__main__':

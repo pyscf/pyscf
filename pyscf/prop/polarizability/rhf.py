@@ -18,7 +18,6 @@
 
 '''
 Non-relativistic static and dynamic polarizability and hyper-polarizability tensor
-(In testing)
 '''
 
 
@@ -123,7 +122,6 @@ def hyper_polarizability(polobj, with_cphf=True):
 # Solve the frequency-dependent CPHF problem
 # [A-wI, B   ] [X] + [h1] = [0]
 # [B   , A+wI] [Y]   [h1]   [0]
-#FIXME:
 def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
                    max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
     log = logger.new_logger(verbose=verbose)
@@ -132,8 +130,15 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
     occidx = mo_occ > 0
     viridx = mo_occ == 0
     e_ai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
-    diag = (1. / (e_ai - freq),
-            1. / (e_ai + freq))
+
+    # e_ai - freq may produce very small elements which can cause numerical
+    # issue in krylov solver
+    LEVEL_SHIF = 0.1
+    diag = (e_ai - freq,
+            e_ai + freq)
+    diag[0][diag[0] < LEVEL_SHIF] += LEVEL_SHIF
+    diag[1][diag[1] < LEVEL_SHIF] += LEVEL_SHIF
+
     nvir, nocc = e_ai.shape
     mo_coeff = mf.mo_coeff
     nao, nmo = mo_coeff.shape
@@ -142,8 +147,8 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
     h1 = h1.reshape(-1,nvir,nocc)
     ncomp = h1.shape[0]
 
-    mo1base = numpy.stack((-h1*diag[0],
-                           -h1*diag[1]), axis=1)
+    mo1base = numpy.stack((-h1/diag[0],
+                           -h1/diag[1]), axis=1)
     mo1base = mo1base.reshape(ncomp,nocc*nvir*2)
 
     vresp = _gen_rhf_response(mf, hermi=0)
@@ -160,12 +165,21 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
         v1ao = vresp(dms)
         v1vo = lib.einsum('xpq,pi,qj->xij', v1ao, orbv, orbo)  # ~c1
         v1ov = lib.einsum('xpq,pi,qj->xji', v1ao, orbo, orbv)  # ~c1^T
-        v = numpy.stack((v1vo*diag[0],
-                         v1ov*diag[1]), axis=1)
+
+        for i in range(nz):
+            x, y = xys[i].reshape(2,nvir,nocc)
+            v1vo[i] += (e_ai - freq - diag[0]) * x
+            v1vo[i] /= diag[0]
+            v1ov[i] += (e_ai + freq - diag[1]) * y
+            v1ov[i] /= diag[1]
+        v = numpy.stack((v1vo, v1ov), axis=1)
         return v.reshape(nz,-1)
 
+    # FIXME: krylov solver is not accurate enough for many freqs. Using tight
+    # tol and lindep could offer small help. A better linear equation solver
+    # is needed.
     mo1 = lib.krylov(vind, mo1base, tol=tol, max_cycle=max_cycle,
-                     hermi=hermi, verbose=log)
+                     hermi=hermi, lindep=1e-18, verbose=log)
     mo1 = mo1.reshape(-1,2,nvir,nocc)
     log.timer('krylov solver in CPHF', *t0)
 

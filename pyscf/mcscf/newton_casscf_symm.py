@@ -49,9 +49,9 @@ class CASSCF(newton_casscf.CASSCF):
 
         mo_coeff = self.mo_coeff = casci_symm.label_symmetry_(self, mo_coeff)
 #
-#        if (hasattr(self.fcisolver, 'wfnsym') and
+#        if (getattr(self.fcisolver, 'wfnsym', None) and
 #            self.fcisolver.wfnsym is None and
-#            hasattr(self.fcisolver, 'guess_wfnsym')):
+#            getattr(self.fcisolver, 'guess_wfnsym', None)):
 #            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
 #                                                 verbose=log)
 #            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)

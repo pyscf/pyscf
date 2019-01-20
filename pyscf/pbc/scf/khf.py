@@ -116,7 +116,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
+def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -132,7 +132,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
         vk : (nkpts, nao, nao) ndarray
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
-    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, exxdiv=mf.exxdiv)
+    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_j, with_k,
+                                 exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -282,7 +283,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
 
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
-    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
@@ -291,7 +292,11 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     if s is None:
         s = get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for the gamma point')
+    log.note('Analyze output for *gamma point*')
+    log.info('    To include the contributions from k-points, transform to a '
+             'supercell then run the population analysis on the supercell\n'
+             '        from pyscf.pbc.tools import k2gamma\n'
+             '        k2gamma.k2gamma(mf).mulliken_meta()')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
@@ -341,7 +346,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpts=np.zeros((1,3))):
-    ''' Dipole moment in the unit cell.
+    ''' Dipole moment in the unit cell (is it well defined)?
 
     Args:
          cell : an instance of :class:`Cell`
@@ -366,8 +371,10 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     from pyscf.pbc.dft import numint
     if dm is None:
         dm = mf.make_rdm1()
+    if getattr(dm[0], 'ndim', None) != 2:  # KUHF
+        dm = dm[0] + dm[1]
     if grids is None:
-        grids = gen_grid.UniformGrids(cell)
+        grids = gen_grid.UniformGrids(mf.cell)
     if kpts is None:
         kpts = mf.kpts
     ni = numint.KNumInt()
@@ -450,7 +457,7 @@ class KSCF(pbchf.SCF):
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        if not hasattr(self.with_df, 'build'):
+        if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
             self.with_df.dump_flags()
         return self
@@ -501,19 +508,19 @@ class KSCF(pbchf.SCF):
             dm_kpts = lib.asarray([dm]*len(self.kpts))
 
         if cell.dimension < 3:
-            ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
+            ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
             # FIXME: consider the fractional num_electron or not? This maybe
             # relates to the charged system.
             nkpts = len(self.kpts)
-            nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
-            if np.any(abs(ne - nelectron) > 1e-7):
+            nelectron = self.cell.tot_electrons(nkpts)
+            if abs(ne - nelectron) > 1e-7*nkpts:
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne.mean())
-                dm_kpts *= nelectron / ne.reshape(-1,1,1)
+                            'systems.\n  DM is normalized to the number '
+                            'of electrons', ne.mean()/nkpts)
+                dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 
     def init_guess_by_1e(self, cell=None):
@@ -531,24 +538,20 @@ class KSCF(pbchf.SCF):
     get_fermi = get_fermi
 
     def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
         vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band, with_k=False)[0]
-        logger.timer(self, 'vj', *cpu0)
         return vj
 
     def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)[1]
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band, with_j=False)[1]
 
-    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
+               with_j=True, with_k=True):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                     exxdiv=self.exxdiv)
+                                     with_j, with_k, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -647,6 +650,9 @@ class KSCF(pbchf.SCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
+    def mulliken_pop(self):
+        raise NotImplementedError
+
     get_rho = get_rho
 
     @lib.with_doc(dip_moment.__doc__)
@@ -655,6 +661,8 @@ class KSCF(pbchf.SCF):
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
+        if cell is None:
+            cell = self.cell
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
     canonicalize = canonicalize

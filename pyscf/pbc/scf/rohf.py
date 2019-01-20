@@ -86,6 +86,8 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
     energy_tot = pbchf.SCF.energy_tot
     _finalize = pbchf.SCF._finalize
 
+    get_rho = pbchf.SCF.get_rho
+
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
         if cell is None: cell = self.cell
@@ -93,7 +95,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
-        if hasattr(dm, 'mo_coeff'):
+        if getattr(dm, 'mo_coeff', None) is not None:
             mo_coeff = dm.mo_coeff
             mo_occ_a = (dm.mo_occ > 0).astype(np.double)
             mo_occ_b = (dm.mo_occ ==2).astype(np.double)
@@ -114,13 +116,11 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         '''
         raise NotImplementedError
 
-    get_rho = get_rho
-
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        if dm is None:
-            dm = self.make_rdm1()
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
@@ -139,7 +139,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
+                            'systems.\n  DM is normalized to the number '
                             'of electrons', ne)
                 dm *= cell.nelectron / ne
         return dm
@@ -149,7 +149,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return mol_uhf.UHF.init_guess_by_1e(cell)
+        return mol_rohf.ROHF.init_guess_by_1e(self, cell)
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile
@@ -170,6 +170,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         addons.convert_to_rhf(mf, self)
         return self
 
-    stability = None
+    stability = mol_rohf.ROHF.stability
+
     nuc_grad_method = None
 

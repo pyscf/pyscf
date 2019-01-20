@@ -91,7 +91,7 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
 
     # CVCV
     eriscvcv = eris['cvcv']
-    if (not isinstance(eris['cvcv'], type(eris_sp['h1eff']))):
+    if (not isinstance(eris_sp['h1eff'], type(eris['cvcv']))):
       eriscvcv = lib.chkfile.load(eris['cvcv'].name, "eri_mo")#h5py.File(eris['cvcv'].name,'r')["eri_mo"]
     eris_sp['cvcv'] = eriscvcv.reshape(ncor, nvir, ncor, nvir)
     end = time.time()
@@ -399,7 +399,7 @@ def writeFCIDUMPs_NEVPT(mc,eris,eris_sp,aaavsplit,energy_core,energyE0,nfro):
     if (mol.symmetry):
         orbsym = symm.label_orb_symm(mol, mol.irrep_id,
                                      mol.symm_orb, mo, s=mc._scf.get_ovlp())
-    if mol.symmetry and orbsym:
+    if mol.symmetry and orbsym.any():
         if mol.groupname.lower() == 'dooh':
             orbsymout = [dmrg_sym.IRREP_MAP['D2h'][i % 10] for i in orbsym]
         elif mol.groupname.lower() == 'coov':
@@ -479,7 +479,7 @@ def writeFCIDUMPs_MRLCC(mc,eris,eris_sp,int1,energy_core,energyE0,nfro):
     if (mol.symmetry):
         orbsym = symm.label_orb_symm(mol, mol.irrep_id,
                                      mol.symm_orb, mo, s=mc._scf.get_ovlp())
-    if mol.symmetry and orbsym:
+    if mol.symmetry and orbsym.any():
         if mol.groupname.lower() == 'dooh':
             orbsymout = [dmrg_sym.IRREP_MAP['D2h'][i % 10] for i in orbsym]
         elif mol.groupname.lower() == 'coov':
@@ -551,7 +551,7 @@ def writeNEVPTIntegralsLEGACY(mc, E1, E2, E1eff, aaavsplit, nfro):
       print("")
 
     eriscvcv = eris['cvcv']
-    if (not isinstance(eris['cvcv'], type(eris_sp['h1eff']))):
+    if (not isinstance(eris_sp['h1eff'], type(eris['cvcv']))):
       eriscvcv = lib.chkfile.load(eris['cvcv'].name, "eri_mo")
     eris_sp['cvcv'] = eriscvcv.reshape(ncor, nvir, ncor, nvir)
 
@@ -1110,6 +1110,13 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
     # =========================================
     # SANITY CHECKS OF KEYWORDS
     # =========================================
+    if (pttype == "NEVPT2"):
+      print("pttype = NEVPT2 is deprecated, use pttype = NEVPT")
+      print("")
+      pttype = "NEVPT"
+    if (pttype != "NEVPT" and pttype != "MRLCC"):
+      print("pttype = ", pttype, " is not supported, use NEVPT or MRLCC")
+      exit()
     if (do_dm4):
       do_dm3=False
     elif (do_dm3):
@@ -1126,7 +1133,7 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
       print("AAAVsplit only works with CASSCF natural orbitals and NEVPT")
       print("")
       exit(0)
-    if (hasattr(mc,'with_df')):
+    if (getattr(mc, 'with_df', None)):
       df=True
     else:
       df=False
@@ -1184,6 +1191,7 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
     intfolder=mc.fcisolver.scratchDirectory+'/int/'
     os.system("mkdir -p "+intfolder)
     if intfolder!='int/':
+      os.system("mv int int_old_$$")
       os.system("ln -s "+intfolder+" int")
 
     # =========================================
@@ -1310,13 +1318,13 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
         sys.stdout.flush()
 
         totalE = 0.0;
-        totalE += execute(nelec, mc.ncore, mc.ncas, nfro, mc.mol.spin,\
+        totalE += execute(nelec, mc.ncore, mc.ncas, nfro, mc.mol.spin, 'NEVPT2',\
                           naux=naux, memory=mc.fcisolver.memory,\
                           fully_ic=fully_ic, third_order=third_order,\
                           cumulantE4=cumulantE4, df=df, no_handcoded_E3=no_handcoded_E3)
         if (not fully_ic):
           totalE +=  executeUC(mc,reorder,fciExtraLine,root,norb,\
-                               type="NEVPT",\
+                               type="NEVPT2",\
                                AAAVsplit=1)
         print("Total PT       --  %18.9f"%(totalE))
         print("Total energy   --  %18.9f"%(totalE+energyE0))

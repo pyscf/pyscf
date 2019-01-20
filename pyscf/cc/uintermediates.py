@@ -803,7 +803,7 @@ def Wvvvo(t1, t2, eris):
     return wvvvo, wvvVO, wVVvo, wVVVO
 
 def _get_vvVV(eris):
-    if eris.vvVV is None and hasattr(eris, 'VVL'):  # DF eris
+    if eris.vvVV is None and getattr(eris, 'VVL', None) is not None:  # DF eris
         vvL = np.asarray(eris.vvL)
         VVL = np.asarray(eris.VVL)
         vvVV = lib.dot(vvL, VVL.T)
@@ -824,7 +824,7 @@ def _get_vvVV(eris):
     return vvVV1.reshape(nvira,nvira,nvirb,nvirb)
 
 def _get_VVVV(eris):
-    if eris.VVVV is None and hasattr(eris, 'VVL'):  # DF eris
+    if eris.VVVV is None and getattr(eris, 'VVL', None) is not None:  # DF eris
         VVL = np.asarray(eris.VVL)
         nvir = int(np.sqrt(eris.VVL.shape[0]*2))
         return ao2mo.restore(1, lib.dot(VVL, VVL.T), nvir)

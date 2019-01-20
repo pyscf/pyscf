@@ -369,9 +369,11 @@ class KnownValues(unittest.TestCase):
         ehf = kmf.kernel()
 
         mycc = pbcc.KGCCSD(kmf)
-        ecc, t1, t2 = mycc.kernel()
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
 
-        energy_t = kccsd_t.kernel(mycc)
+        eris.mo_energy = [eris.fock[i].diagonal() for i in range(len(kpts))]
+        energy_t = kccsd_t.kernel(mycc, eris=eris)
         energy_t_bench = -0.00191440345386
         self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 

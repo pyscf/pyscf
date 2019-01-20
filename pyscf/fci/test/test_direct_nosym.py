@@ -23,16 +23,21 @@ from pyscf import fci
 from pyscf.fci import fci_slow
 
 nelec = (3,4)
-norb = 8
+norb = 7
+numpy.random.seed(10)
 h1e = numpy.random.random((norb,norb))
 h2e = numpy.random.random((norb,norb,norb,norb))
 h2e = h2e + h2e.transpose(2,3,0,1)
 na = fci.cistring.num_strings(norb, nelec[0])
 nb = fci.cistring.num_strings(norb, nelec[1])
-ci0 = numpy.random.random((na,nb))
+
+def tearDownModule():
+    global h1e, h2e
+    del h1e, h2e
 
 class KnownValues(unittest.TestCase):
     def test_contract(self):
+        ci0 = numpy.random.random((na,nb))
         ci1ref = fci_slow.contract_1e(h1e, ci0, norb, nelec)
         ci1 = fci.direct_nosym.contract_1e(h1e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
@@ -40,6 +45,22 @@ class KnownValues(unittest.TestCase):
         ci1ref = fci_slow.contract_2e(h2e, ci0, norb, nelec)
         ci1 = fci.direct_nosym.contract_2e(h2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
+
+    def test_absorb_h1e(self):
+        href = fci_slow.absorb_h1e(h1e, h2e, norb, nelec)
+        h1 = fci.direct_nosym.absorb_h1e(h1e, h2e, norb, nelec)
+        self.assertTrue(numpy.allclose(href, h1))
+
+    def test_kernel(self):
+        h1 = h1e + h1e.T
+        eri = .5* ao2mo.restore(1, ao2mo.restore(8, h2e, norb), norb)
+        h = fci.direct_spin1.pspace(h1, eri, norb, nelec, np=5000)[1]
+        eref, c0 = numpy.linalg.eigh(h)
+
+        sol = fci.direct_nosym.FCI()
+        e, c1 = sol.kernel(h1, eri, norb, nelec, max_space=40)
+        self.assertAlmostEqual(eref[0], e, 9)
+        self.assertAlmostEqual(abs(c0[:,0].dot(c1.ravel())), 1, 9)
 
 
 if __name__ == "__main__":

@@ -202,7 +202,7 @@ class TDDFTNoHybrid(TDA):
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
-        if not hasattr(mf, 'xc'):
+        if not getattr(mf, 'xc', None):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_uhf(mf)
@@ -213,7 +213,7 @@ TDH = dRPA
 
 class dTDA(TDA):
     def __init__(self, mf):
-        if not hasattr(mf, 'xc'):
+        if not getattr(mf, 'xc', None):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_uhf(mf)

@@ -8,8 +8,8 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 
 from pyscf.pbc.dft.multigrid import eval_mat, eval_rho
-multigrid.EXPDROP = 1e-14
-multigrid.EXTRA_PREC = 1e-3
+multigrid.EXPDROP, bak_EXPDROP = 1e-14, multigrid.EXPDROP
+multigrid.EXTRA_PREC, bak_EXTRA_PREC = 1e-3, multigrid.EXTRA_PREC
 
 def uncontract(cell):
     pcell, contr_coeff = cell.to_uncontracted_cartesian_basis()
@@ -63,6 +63,9 @@ ao_gamma_north = cell_north.pbc_eval_gto('GTOval_sph_deriv1', grids_north.coords
 def tearDownModule():
     global cell_orth, cell_north, mol_orth, mol_north
     del cell_orth, cell_north, mol_orth, mol_north
+    # They affect multigrid tests when using nosetests
+    multigrid.EXPDROP = bak_EXPDROP
+    multigrid.EXTRA_PREC = bak_EXTRA_PREC
 
 class KnownValues(unittest.TestCase):
     def test_pbc_orth_lda_ints(self):

@@ -191,7 +191,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
 
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
-    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
@@ -200,7 +200,11 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     if s is None:
         s = khf.get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for the gamma point')
+    log.note('Analyze output for *gamma point*.')
+    log.info('    To include the contributions from k-points, transform to a '
+             'supercell then run the population analysis on the supercell\n'
+             '        from pyscf.pbc.tools import k2gamma\n'
+             '        k2gamma.k2gamma(mf).mulliken_meta()')
     log.note("KUHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[:,0,:,:].real
     s_gamma = s[0,:,:].real
@@ -313,7 +317,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
             occs = ([occa[i] for i in where], [occb[i] for i in where])
             return make_rdm1(mos, occs)
 
-    if hasattr(mo[0], 'ndim') and mo[0].ndim == 2:  # KRHF
+    if getattr(mo[0], 'ndim', None) == 2:  # KRHF
         mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
         mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
         dm = makedm((mo, mo), (mo_occa, mo_occb))
@@ -341,12 +345,7 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
     dm_kpts = dm_kpts[0] + dm_kpts[1]
     return khf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
 
-def get_rho(mf, dm=None, grids=None, kpts=None):
-    '''Compute density in real space
-    '''
-    if dm is None:
-        dm = mf.make_rdm1()
-    return khf.get_rho(dm[0] + dm[1], grids, kpts)
+get_rho = khf.get_rho
 
 
 class KUHF(pbcuhf.UHF, khf.KSCF):
@@ -393,14 +392,15 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if cell is None:
             cell = self.cell
         dm_kpts = None
-        if key.lower() == '1e':
+        key = key.lower()
+        if key == '1e' or key == 'hcore':
             dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
-        elif key.lower() == 'atom':
+        elif key == 'atom':
             dm = self.init_guess_by_atom(cell)
-        elif key.lower().startswith('chk'):
+        elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
@@ -413,26 +413,26 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if dm_kpts is None:
             nao = dm[0].shape[-1]
             nkpts = len(self.kpts)
-            dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
-            dm_kpts = dm_kpts.transpose(1,0,2,3)
+            # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
+            dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
             dm_kpts[0,:] *= 1.01
-            dm_kpts[1,:] *= 0.99  # To break spin symmetry
+            dm_kpts[1,:] *= 0.99  # To slightly break spin symmetry
             assert dm_kpts.shape[0]==2
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell)).real
+            ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
             # FIXME: consider the fractional num_electron or not? This maybe
             # relates to the charged system.
             nkpts = len(self.kpts)
-            nelec = np.asarray(self.nelec).reshape(2,1) / float(nkpts)
-            if np.any(abs(ne - nelec) > 1e-7):
+            nelec = np.asarray(self.nelec)
+            if np.any(abs(ne - nelec) > 1e-7*nkpts):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne.mean())
-                dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
+                            'systems.\n  DM is normalized to the number '
+                            'of electrons', ne.sum()/nkpts)
+                dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
     get_hcore = khf.KSCF.get_hcore
@@ -444,6 +444,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     get_fermi = get_fermi
     get_occ = get_occ
     energy_elec = energy_elec
+
+    get_rho = khf.KSCF.get_rho
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
@@ -519,6 +521,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
+    @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
@@ -527,13 +530,14 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    get_rho = get_rho
+    def mulliken_pop(self):
+        raise NotImplementedError
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        if dm is None:
-            dm = self.make_rdm1()
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)

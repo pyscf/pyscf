@@ -153,14 +153,21 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
     viridxa = ~occidxa
     viridxb = ~occidxb
     mo_ea, mo_eb = mo_energy
-    e_ai_a = lib.direct_sum('a-i->ai', mo_ea[viridxa], mo_ea[occidxa])
-    e_ai_b = lib.direct_sum('a-i->ai', mo_eb[viridxb], mo_eb[occidxb])
-    diag = (1. / (e_ai_a.ravel() - freq),
-            1. / (e_ai_b.ravel() - freq),
-            1. / (e_ai_a.ravel() + freq),
-            1. / (e_ai_b.ravel() + freq))
-    nvira, nocca = e_ai_a.shape
-    nvirb, noccb = e_ai_b.shape
+
+    # e_ai - freq may produce very small elements which can cause numerical
+    # issue in krylov solver
+    LEVEL_SHIF = 0.1
+    e_ai_a = lib.direct_sum('a-i->ai', mo_ea[viridxa], mo_ea[occidxa]).ravel()
+    e_ai_b = lib.direct_sum('a-i->ai', mo_eb[viridxb], mo_eb[occidxb]).ravel()
+    diag = (e_ai_a - freq,
+            e_ai_b - freq,
+            e_ai_a + freq,
+            e_ai_b + freq)
+    diag[0][diag[0] < LEVEL_SHIF] += LEVEL_SHIF
+    diag[1][diag[1] < LEVEL_SHIF] += LEVEL_SHIF
+    diag[2][diag[2] < LEVEL_SHIF] += LEVEL_SHIF
+    diag[3][diag[3] < LEVEL_SHIF] += LEVEL_SHIF
+
     mo0a, mo0b = mf.mo_coeff
     nao, nmoa = mo0a.shape
     nmob = mo0b.shape
@@ -168,14 +175,18 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
     orbvb = mo0b[:,viridxb]
     orboa = mo0a[:,occidxa]
     orbob = mo0b[:,occidxb]
+    nvira = orbva.shape[1]
+    nvirb = orbvb.shape[1]
+    nocca = orboa.shape[1]
+    noccb = orbob.shape[1]
     h1a = h1[0].reshape(-1,nvira*nocca)
     h1b = h1[1].reshape(-1,nvirb*noccb)
     ncomp = h1a.shape[0]
 
-    mo1base = numpy.hstack((-h1a*diag[0],
-                            -h1b*diag[1],
-                            -h1a*diag[2],
-                            -h1b*diag[3]))
+    mo1base = numpy.hstack((-h1a/diag[0],
+                            -h1b/diag[1],
+                            -h1a/diag[2],
+                            -h1b/diag[3]))
 
     offsets = numpy.cumsum((nocca*nvira, noccb*nvirb, nocca*nvira))
     vresp = _gen_uhf_response(mf, hermi=0)
@@ -193,18 +204,29 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
             dm1b[i] = dmx + dmy  # AX + BY
 
         v1ao = vresp(numpy.stack((dm1a,dm1b)))
-        v1voa = lib.einsum('xpq,pi,qj->xij', v1ao[0], orbva, orboa)
-        v1vob = lib.einsum('xpq,pi,qj->xij', v1ao[1], orbvb, orbob)
-        v1ova = lib.einsum('xpq,pi,qj->xji', v1ao[0], orboa, orbva)
-        v1ovb = lib.einsum('xpq,pi,qj->xji', v1ao[1], orbob, orbvb)
-        v = numpy.hstack((v1voa.reshape(nz,-1)*diag[0],
-                          v1vob.reshape(nz,-1)*diag[1],
-                          v1ova.reshape(nz,-1)*diag[2],
-                          v1ovb.reshape(nz,-1)*diag[3]))
-        return v.reshape(nz,-1)
+        v1voa = lib.einsum('xpq,pi,qj->xij', v1ao[0], orbva, orboa).reshape(nz,-1)
+        v1vob = lib.einsum('xpq,pi,qj->xij', v1ao[1], orbvb, orbob).reshape(nz,-1)
+        v1ova = lib.einsum('xpq,pi,qj->xji', v1ao[0], orboa, orbva).reshape(nz,-1)
+        v1ovb = lib.einsum('xpq,pi,qj->xji', v1ao[1], orbob, orbvb).reshape(nz,-1)
 
+        for i in range(nz):
+            xa, xb, ya, yb = numpy.split(xys[i], offsets)
+            v1voa[i] += (e_ai_a - freq - diag[0]) * xa
+            v1voa[i] /= diag[0]
+            v1vob[i] += (e_ai_b - freq - diag[1]) * xb
+            v1vob[i] /= diag[1]
+            v1ova[i] += (e_ai_a + freq - diag[2]) * ya
+            v1ova[i] /= diag[2]
+            v1ovb[i] += (e_ai_b + freq - diag[3]) * yb
+            v1ovb[i] /= diag[3]
+        v = numpy.hstack((v1voa, v1vob, v1ova, v1ovb))
+        return v
+
+    # FIXME: krylov solver is not accurate enough for many freqs. Using tight
+    # tol and lindep could offer small help. A better linear equation solver
+    # is needed.
     mo1 = lib.krylov(vind, mo1base, tol=tol, max_cycle=max_cycle,
-                     hermi=hermi, verbose=log)
+                     hermi=hermi, lindep=1e-18, verbose=log)
     log.timer('krylov solver in CPHF', *t0)
 
     dm1a = numpy.empty((ncomp,nao,nao))

@@ -473,7 +473,7 @@ class StreamObject(object):
         method set is the object itself.  This allows a series of
         functions/methods to be executed in pipe.
         '''
-        #if hasattr(self, '_keys'):
+        #if getattr(self, '_keys', None):
         #    for k,v in kwargs.items():
         #        setattr(self, k, v)
         #        if k not in self._keys:
@@ -505,7 +505,7 @@ class StreamObject(object):
         of functions/methods to be executed in pipe.
         '''
         if (self.verbose > 0 and  # logger.QUIET
-            hasattr(self, '_keys')):
+            getattr(self, '_keys', None)):
             check_sanity(self, self._keys, self.stdout)
         return self
 

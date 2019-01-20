@@ -275,14 +275,14 @@ def make_rdm2(mp, t2=None):
     for i in range(nocca0):
         dm2aa[i,i,:,:] += dm1a.T
         dm2aa[:,:,i,i] += dm1a.T
-        dm2aa[:,i,i,:] -= dm1a
-        dm2aa[i,:,:,i] -= dm1a.T
+        dm2aa[:,i,i,:] -= dm1a.T
+        dm2aa[i,:,:,i] -= dm1a
         dm2ab[i,i,:,:] += dm1b.T
     for i in range(noccb0):
         dm2bb[i,i,:,:] += dm1b.T
         dm2bb[:,:,i,i] += dm1b.T
-        dm2bb[:,i,i,:] -= dm1b
-        dm2bb[i,:,:,i] -= dm1b.T
+        dm2bb[:,i,i,:] -= dm1b.T
+        dm2bb[i,:,:,i] -= dm1b
         dm2ab[:,:,i,i] += dm1a.T
 
     for i in range(nocca0):
@@ -364,7 +364,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
             eris.ovOV = ao2mo.general(mp._scf._eri, (orboa,orbva,orbob,orbvb))
             eris.OVOV = ao2mo.general(mp._scf._eri, (orbob,orbvb,orbob,orbvb))
 
-    elif hasattr(mp._scf, 'with_df'):
+    elif getattr(mp._scf, 'with_df', None):
         logger.warn(mp, 'UMP2 detected DF being used in the HF object. '
                     'MO integrals are computed based on the DF 3-index tensors.\n'
                     'It\'s recommended to use DF-UMP2 module.')

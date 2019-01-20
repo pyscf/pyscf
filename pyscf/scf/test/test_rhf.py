@@ -519,6 +519,12 @@ H     0    0.757    0.587'''
         mf_scanner.chkfile = None
         self.assertAlmostEqual(mf_scanner(mol.atom), -76.075408156235909, 9)
 
+        mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
+        ref = scf.RHF(mol1).x2c().density_fit().kernel()
+        e1 = mf_scanner('H 0 0 0; H 0 0 .9')
+        self.assertAlmostEqual(e1, -1.116394048204042, 9)
+        self.assertAlmostEqual(e1, ref, 9)
+
     def test_natm_eq_0(self):
         mol = gto.M()
         mol.nelectron = 2
@@ -629,6 +635,25 @@ H     0    0.757    0.587'''
         ss, s = mf1.spin_square()
         self.assertAlmostEqual(ss, 2, 12)
         self.assertAlmostEqual(s, 3, 12)
+
+    def test_get_vj(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        ref = mf.get_j(mol, dm)
+
+        mf1 = scf.RHF(mol)
+        mf1.max_memory = 0
+        vj1 = mf1.get_j(mol, dm)
+
+        self.assertAlmostEqual(abs(ref-vj1).max(), 0, 12)
+        self.assertAlmostEqual(numpy.linalg.norm(vj1), 77.035779188661465, 9)
+
+        orig = mf1.opt.prescreen
+        self.assertEqual(orig, scf._vhf._fpointer('CVHFnrs8_prescreen').value)
+        mf1.opt.prescreen = orig
+        mf1.opt.prescreen = 'CVHFnoscreen'
+        self.assertEqual(mf1.opt.prescreen, scf._vhf._fpointer('CVHFnoscreen').value)
 
 
 if __name__ == "__main__":

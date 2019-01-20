@@ -109,7 +109,7 @@ def make_rdm2(mp, t2=None):
         oidx = numpy.where(moidx & (mp.mo_occ > 0))[0]
         vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
 
-        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist notation
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist's notation
         dm2[oidx[:,None,None,None],vidx[:,None,None],oidx[:,None],vidx] = \
                 t2.transpose(0,2,1,3)
         dm2[nocc0:,:nocc0,nocc0:,:nocc0] = \
@@ -124,11 +124,16 @@ def make_rdm2(mp, t2=None):
     dm1 = make_rdm1(mp, t2)
     dm1[numpy.diag_indices(nocc0)] -= 1
 
+    # Be careful with convention of dm1 and dm2
+    #   dm1[q,p] = <p^\dagger q>
+    #   dm2[p,q,r,s] = < p^\dagger r^\dagger s q >
+    #   E = einsum('pq,qp', h1, dm1) + .5 * einsum('pqrs,pqrs', eri, dm2)
+    # When adding dm1 contribution, dm1 subscripts need to be flipped
     for i in range(nocc0):
         dm2[i,i,:,:] += dm1.T
         dm2[:,:,i,i] += dm1.T
-        dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1.T
+        dm2[:,i,i,:] -= dm1.T
+        dm2[i,:,:,i] -= dm1
 
     for i in range(nocc0):
         for j in range(nocc0):
@@ -157,7 +162,7 @@ class GMP2(mp2.MP2):
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff, verbose=self.verbose)
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             raise NotImplementedError
         else:
             return _make_eris_outcore(self, mo_coeff, self.verbose)
@@ -173,7 +178,7 @@ class _PhysicistsERIs:
         if mo_coeff is None:
             mo_coeff = mp.mo_coeff
         mo_idx = mp.get_frozen_mask()
-        if hasattr(mo_coeff, 'orbspin'):
+        if getattr(mo_coeff, 'orbspin', None) is not None:
             self.orbspin = mo_coeff.orbspin[mo_idx]
             mo_coeff = lib.tag_array(mo_coeff[:,mo_idx], orbspin=self.orbspin)
             self.mo_coeff = mo_coeff

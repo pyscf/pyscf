@@ -244,7 +244,7 @@ class GW(lib.StreamObject):
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff)
 
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             logger.warn(self, 'GW detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
                         'Developer TODO:  Write dfgw.GW for the '

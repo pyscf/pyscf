@@ -179,7 +179,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
     def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
         e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
         if (mf.sigma and mf.smearing_method and
-            mf.entropy is not None and mf.verbose >= logger.INFO):
+            mf.entropy is not None):
             mf.e_free = e_tot - mf.sigma * mf.entropy
             mf.e_zero = e_tot - mf.sigma * mf.entropy * .5
             logger.info(mf, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
@@ -302,7 +302,7 @@ def convert_to_rhf(mf, out=None):
             assert(not isinstance(out, scf.khf.KSCF))
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
-        if hasattr(mf, '_scf'):
+        if getattr(mf, '_scf', None):
             return mol_addons._update_mf_without_soscf(mf, copy.copy(mf._scf), False)
         else:
             return copy.copy(mf)

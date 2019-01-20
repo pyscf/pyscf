@@ -38,16 +38,33 @@ cell.build(unit = 'B',
                             [0, (1.0, 1.0)],
                             [0, (1.2, 1.0)]]})
 
+mf = pbchf.RHF(cell, exxdiv='ewald').run()
+kmf = pscf.KRHF(cell, [[0,0,0]], exxdiv='ewald').run()
+
 def tearDownModule():
-    global cell
+    global cell, mf, kmf
     cell.stdout.close()
-    del cell
+    del cell, mf, kmf
 
 class KnownValues(unittest.TestCase):
     def test_hcore(self):
         h1ref = pbchf.get_hcore(cell)
         h1 = pbchf.RHF(cell).get_hcore()
         self.assertAlmostEqual(abs(h1-h1ref).max(), 0, 9)
+        self.assertAlmostEqual(lib.finger(h1), 0.14116483012673137, 9)
+
+        cell1 = cell.copy()
+        cell1.ecp = {'He': (2, ((-1, (((7.2, .3),),)),))}
+        cell1.build(0, 0)
+        kpt = numpy.ones(3) * .5
+        h1ref = pbchf.get_hcore(cell1, kpt)
+        h1 = pbchf.RHF(cell1).get_hcore(kpt=kpt)
+        self.assertAlmostEqual(abs(h1-h1ref).max(), 0, 9)
+        self.assertAlmostEqual(lib.finger(h1), -2.708431894877279-0.395390980665125j, 9)
+
+        h1 = pscf.KRHF(cell1).get_hcore(kpts=[kpt])
+        self.assertEqual(h1.ndim, 3)
+        self.assertAlmostEqual(abs(h1[0]-h1ref).max(), 0, 9)
 
     def test_rhf_vcut_sph(self):
         mf = pbchf.RHF(cell, exxdiv='vcut_sph')
@@ -71,14 +88,9 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(e0,e1))
 
     def test_rhf_exx_ewald(self):
-        mf = pbchf.RHF(cell, exxdiv='ewald')
-        e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.3511582284698633, 8)
+        self.assertAlmostEqual(mf.e_tot, -4.3511582284698633, 8)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
-
-        kmf = pscf.KRHF(cell, [[0,0,0]], exxdiv='ewald')
-        e0 = kmf.kernel()
-        self.assertTrue(numpy.allclose(e0,e1))
+        self.assertAlmostEqual(mf.e_tot, kmf.e_tot, 8)
 
         # test bands
         numpy.random.seed(1)
@@ -90,6 +102,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(e1[0]), -6.2986775452228283, 7)
         self.assertAlmostEqual(lib.finger(e1[1]), -7.6616273746782362, 7)
 
+    def test_rhf_exx_ewald_with_kpt(self):
         numpy.random.seed(1)
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='ewald')
@@ -103,13 +116,11 @@ class KnownValues(unittest.TestCase):
 
         # test bands
         numpy.random.seed(1)
-        kpts_band = numpy.random.random((2,3))
-        e1, c1 = mf.get_bands(kpts_band)
-        e0, c0 = kmf.get_bands(kpts_band)
-        self.assertAlmostEqual(abs(e0[0]-e1[0]).max(), 0, 7)
-        self.assertAlmostEqual(abs(e0[1]-e1[1]).max(), 0, 7)
-        self.assertAlmostEqual(lib.finger(e1[0]), -6.8312867098806249, 7)
-        self.assertAlmostEqual(lib.finger(e1[1]), -6.1120214505413086, 7)
+        kpt_band = numpy.random.random(3)
+        e1, c1 = mf.get_bands(kpt_band)
+        e0, c0 = kmf.get_bands(kpt_band)
+        self.assertAlmostEqual(abs(e0-e1).max(), 0, 7)
+        self.assertAlmostEqual(lib.finger(e1), -6.8312867098806249, 7)
 
     def test_rhf_exx_None(self):
         mf = pbchf.RHF(cell, exxdiv=None)
@@ -138,14 +149,18 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
+        mf.max_cycle = 1
+        mf.diis = None
         e1 = mf.kernel()
-        dm1 = mf.make_rdm1()
+        self.assertAlmostEqual(e1, -4.132914531737784, 9)
 
         mf1 = pbchf.RHF(cell, exxdiv='vcut_sph')
         mf1.chkfile = mf.chkfile
         mf1.init_guess = 'chkfile'
+        mf1.diis = None
+        mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -4.29190260870812, 8)
+        self.assertAlmostEqual(e1, -4.291691793916943, 9)
         self.assertTrue(mf1.mo_coeff.dtype == numpy.double)
 
     def test_uhf_exx_ewald(self):
@@ -450,6 +465,51 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(pscf.HF   (cell_u), pscf.uhf.UHF    ))
         self.assertTrue(isinstance(pscf.KHF  (cell  ), pscf.khf.KRHF   ))
         self.assertTrue(isinstance(pscf.KHF  (cell_u), pscf.kuhf.KUHF  ))
+
+    def test_dipole_moment(self):
+        dip = mf.dip_moment()
+        self.assertAlmostEqual(lib.finger(dip), 0.03847620192010277, 9)
+
+        # For test cover only. Results for low-dimesion system are not
+        # implemented.
+        with lib.temporary_env(cell, dimension=1):
+            kdm = kmf.get_init_guess(key='minao')
+            dip = kmf.dip_moment(cell, kdm)
+        #self.assertAlmostEqual(lib.finger(dip), 0, 9)
+
+    def test_makov_payne_correction(self):
+        de = pbchf.makov_payne_correction(mf)
+        self.assertAlmostEqual(de[0], -0.1490687416177664, 9)
+        self.assertAlmostEqual(de[0], de[1], 9)
+        self.assertAlmostEqual(de[0], de[2], 9)
+
+    def test_init_guess_by_1e(self):
+        dm = mf.get_init_guess(key='1e')
+        self.assertAlmostEqual(lib.finger(dm), 0.025922864381755062, 9)
+
+        dm = kmf.get_init_guess(key='1e')
+        self.assertEqual(dm.ndim, 3)
+        self.assertAlmostEqual(lib.finger(dm), 0.025922864381755062, 9)
+
+    def test_init_guess_by_atom(self):
+        with lib.temporary_env(cell, dimension=1):
+            dm = mf.get_init_guess(key='minao')
+            kdm = kmf.get_init_guess(key='minao')
+
+        self.assertAlmostEqual(lib.finger(dm), -1.714952331211208, 8)
+
+        self.assertEqual(kdm.ndim, 3)
+        self.assertAlmostEqual(lib.finger(dm), -1.714952331211208, 8)
+
+    def test_jk(self):
+        nao = cell.nao
+        numpy.random.seed(2)
+        dm = numpy.random.random((2,nao,nao)) + .5j*numpy.random.random((2,nao,nao))
+        dm = dm + dm.conj().transpose(0,2,1)
+        ref = pbchf.get_jk(mf, cell, dm)
+        vj, vk = mf.get_jk_incore(cell, dm)
+        self.assertAlmostEqual(abs(vj - ref[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(vk - ref[1]).max(), 0, 9)
 
 
 if __name__ == '__main__':

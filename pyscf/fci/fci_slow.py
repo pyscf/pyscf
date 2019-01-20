@@ -61,8 +61,9 @@ def contract_2e(eri, fcivec, norb, nelec, opt=None):
     for str0, tab in enumerate(link_indexb):
         for a, i, str1, sign in tab:
             t1[a,i,:,str1] += sign * ci0[:,str0]
-    t1 = numpy.dot(eri.reshape(norb*norb,-1), t1.reshape(norb*norb,-1))
-    t1 = t1.reshape(norb,norb,na,nb)
+
+    t1 = lib.einsum('bjai,aiAB->bjAB', eri.reshape([norb]*4), t1)
+
     fcinew = numpy.zeros_like(ci0)
     for str0, tab in enumerate(link_indexa):
         for a, i, str1, sign in tab:
@@ -129,8 +130,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''
     if not isinstance(nelec, (int, numpy.integer)):
         nelec = sum(nelec)
-    eri = eri.copy()
-    h2e = ao2mo.restore(1, eri, norb)
+    h2e = ao2mo.restore(1, eri.copy(), norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
@@ -145,10 +145,9 @@ def make_hdiag(h1e, g2e, norb, nelec, opt=None):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    occslista = [[i for i in range(neleca) if str0 & (1<<i)]
-                 for str0 in cistring.gen_strings4orblist(range(norb), neleca)]
-    occslistb = [[i for i in range(nelecb) if str0 & (1<<i)]
-                 for str0 in cistring.gen_strings4orblist(range(norb), nelecb)]
+
+    occslista = cistring._gen_occslst(range(norb), neleca)
+    occslistb = cistring._gen_occslst(range(norb), nelecb)
     g2e = ao2mo.restore(1, g2e, norb)
     diagj = numpy.einsum('iijj->ij',g2e)
     diagk = numpy.einsum('ijji->ij',g2e)
@@ -163,7 +162,6 @@ def make_hdiag(h1e, g2e, norb, nelec, opt=None):
     return numpy.array(hdiag)
 
 def kernel(h1e, g2e, norb, nelec, ecore=0):
-
     h2e = absorb_h1e(h1e, g2e, norb, nelec, .5)
 
     na = cistring.num_strings(norb, nelec//2)
@@ -181,8 +179,8 @@ def kernel(h1e, g2e, norb, nelec, ecore=0):
 
 # dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, opt=None):
-    link_index = gen_linkstr_index(range(norb), nelec//2)
-    na = num_strings(norb, nelec//2)
+    link_index = cistring.gen_linkstr_index(range(norb), nelec//2)
+    na = cistring.num_strings(norb, nelec//2)
     fcivec = fcivec.reshape(na,na)
     rdm1 = numpy.zeros((norb,norb))
     for str0, tab in enumerate(link_index):
@@ -195,8 +193,8 @@ def make_rdm1(fcivec, norb, nelec, opt=None):
 
 # dm_pq,rs = <|p^+ q r^+ s|>
 def make_rdm12(fcivec, norb, nelec, opt=None):
-    link_index = gen_linkstr_index(range(norb), nelec//2)
-    na = num_strings(norb, nelec//2)
+    link_index = cistring.gen_linkstr_index(range(norb), nelec//2)
+    na = cistring.num_strings(norb, nelec//2)
     fcivec = fcivec.reshape(na,na)
 
     rdm1 = numpy.zeros((norb,norb))
@@ -216,7 +214,7 @@ def make_rdm12(fcivec, norb, nelec, opt=None):
     return reorder_rdm(rdm1, rdm2)
 
 
-def reorder_rdm(rdm1, rdm2):
+def reorder_rdm(rdm1, rdm2, inplace=True):
     '''reorder from rdm2(pq,rs) = <E^p_q E^r_s> to rdm2(pq,rs) = <e^{pr}_{qs}>.
     Although the "reoredered rdm2" is still in Mulliken order (rdm2[e1,e1,e2,e2]),
     it is the true 2e DM (dotting it with int2e gives the energy of 2e parts)
