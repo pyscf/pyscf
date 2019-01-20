@@ -57,6 +57,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
+        logger.debug1(ks_grad, 'sum(grids response) %s', exc.sum(axis=0))
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
@@ -208,6 +209,22 @@ class Gradients(uhf_grad.Gradients):
         return self
 
     get_veff = get_veff
+
+    def extra_force(self, atom_id, envs):
+        '''Hook for extra contributions in analytical gradients.
+
+        Contributions like the response of auxiliary basis in density fitting
+        method, the grid response in DFT numerical integration can be put in
+        this function.
+        '''
+        if self.grid_response:
+            vhf = envs['vhf']
+            log = envs['log']
+            log.debug('grids response for atom %d %s',
+                      atom_id, vhf.exc1_grid[atom_id])
+            return vhf.exc1_grid[atom_id]
+        else:
+            return 0
 
 Grad = Gradients
 
