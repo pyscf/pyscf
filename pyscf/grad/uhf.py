@@ -59,15 +59,12 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 # s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
         de[k] += numpy.einsum('sxij,sij->x', vhf[:,:,p0:p1], dm0[:,p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0_sf[p0:p1]) * 2
-        if mf_grad.grid_response:
-            de[k] += vhf.exc1_grid[ia]
+
+        de[k] += mf_grad.extra_force(ia, locals())
+
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         rhf_grad._write(log, mol, de, atmlst)
-        if mf_grad.grid_response:
-            log.debug('grids response contributions')
-            rhf_grad._write(log, mol, vhf.exc1_grid[atmlst], atmlst)
-            log.debug1('sum(de) %s', vhf.exc1_grid.sum(axis=0))
     return de
 
 def get_veff(mf_grad, mol, dm):

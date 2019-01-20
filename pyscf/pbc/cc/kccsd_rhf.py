@@ -612,6 +612,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self._finalize()
         return self.e_corr, self.t1, self.t2
 
+    def ccsd_t(self, t1=None, t2=None, eris=None):
+        from pyscf.pbc.cc import kccsd_t_rhf
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return kccsd_t_rhf.kernel(self, eris, t1, t2, self.verbose)
+
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 

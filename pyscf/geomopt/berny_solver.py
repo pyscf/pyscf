@@ -159,8 +159,8 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     e_last = 0
     for cycle, geom in enumerate(optimizer):
         energy, gradients = solver.send(geom)
-        log.note('cycle %d: dE = %g  norm(grad) = %g', cycle+1,
-                 energy - e_last, numpy.linalg.norm(gradients))
+        log.note('cycle %d: E = %.12g  dE = %g  norm(grad) = %g', cycle+1,
+                 energy, energy - e_last, numpy.linalg.norm(gradients))
         e_last = energy
         optimizer.send((energy, gradients))
     mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
