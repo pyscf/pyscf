@@ -4,7 +4,6 @@
 #
 """Module for running restricted closed-shell k-point ccsd(t)"""
 
-import ctypes
 import h5py
 import itertools
 import numpy as np
@@ -13,7 +12,7 @@ import time
 
 from itertools import product
 from pyscf import lib
-from pyscf.cc import _ccsd
+#from pyscf import _ccsd
 from pyscf.lib import logger
 from pyscf.lib.misc import tril_product
 from pyscf.lib.misc import flatten
@@ -83,35 +82,33 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
-    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)], dtype=np.float, order='C')
-    fock_mo_energy = np.asarray([x.diagonal().real for x in eris.fock], dtype=np.float, order='C')
     fov = eris.fock[:, :nocc, nocc:]
 
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
 
     # Create necessary temporary eris for fast read
-    feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
-    t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
-    fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
+    feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(nkpts, nocc, nvir, kconserv)
+    t1T = np.array([x.T for x in t1])
+    fvo = np.array([x.T for x in fov])
     cpu1 = log.timer_debug1('CCSD(T) tmp eri creation', *cpu1)
 
-    #def get_w_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1, out=None):
-    #    '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts'''
-    #    km = kconserv[kc, kk, kb]
-    #    kf = kconserv[kk, kc, kj]
-    #    ret = einsum('kjcf,fiba->abcijk', t2[kk,kj,kc,:,:,c0:c1,:], eris.vovv[kf,ki,kb,:,:,b0:b1,a0:a1].conj())
-    #    ret = ret - einsum('mkbc,jima->abcijk', t2[km,kk,kb,:,:,b0:b1,c0:c1], eris.ooov[kj,ki,km,:,:,:,a0:a1].conj())
-    #    return ret
+    def get_w_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1, out=None):
+        '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts'''
+        km = kconserv[ki, ka, kj]
+        kf = kconserv[kk, kc, kj]
+        ret = einsum('kjcf,fiba->abcijk', t2[kk,kj,kc,:,:,c0:c1,:], eris.vovv[kf,ki,kb,:,:,b0:b1,a0:a1].conj())
+        ret = ret - einsum('mkbc,jima->abcijk', t2[km,kk,kb,:,:,b0:b1,c0:c1], eris.ooov[kj,ki,km,:,:,:,a0:a1].conj())
+        return ret
 
     def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts
 
         Uses tranposed eris for fast data access.'''
-        km = kconserv[kc, kk, kb]
+        km = kconserv[ki, ka, kj]
         kf = kconserv[kk, kc, kj]
         out = einsum('cfjk,abif->abcijk', t2T[kc,kf,kj,c0:c1,:,:,:], eris_vvop[ka,kb,ki,a0:a1,b0:b1,:,nocc:])
-        out = out - einsum('cbmk,aijm->abcijk', t2T[kc,kb,km,c0:c1,b0:b1,:,:], eris_vooo_C[ka,ki,kj,a0:a1,:,:,:])
+        out = out - einsum('bckm,aijm->abcijk', t2T[kb,kc,kk,b0:b1,c0:c1,:,:], eris_vooo_C[ka,ki,kj,a0:a1,:,:,:])
         return out
 
     def get_permuted_w(ki, kj, kk, ka, kb, kc, orb_indices):
@@ -136,15 +133,15 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                2. * get_permuted_w(kj,ki,kk,ka,kb,kc,orb_indices).transpose(0,1,2,4,3,5))
         return ret
 
-    #def get_v_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
-    #    '''Vijkabc intermediate as described in Scuseria paper'''
-    #    km = kconserv[ki,ka,kj]
-    #    kf = kconserv[ki,ka,kj]
-    #    out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
-    #    if kk == kc:
-    #        out = out + einsum('kc,ijab->abcijk', 0.5*t1[kk,:,c0:c1], eris.oovv[ki,kj,ka,:,:,a0:a1,b0:b1].conj())
-    #        out = out + einsum('kc,ijab->abcijk', 0.5*fov[kk,:,c0:c1], t2[ki,kj,ka,:,:,a0:a1,b0:b1])
-    #    return out
+    def get_v_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
+        '''Vijkabc intermediate as described in Scuseria paper'''
+        km = kconserv[ki,ka,kj]
+        kf = kconserv[ki,ka,kj]
+        out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
+        if kk == kc:
+            out = out + einsum('kc,ijab->abcijk', t1[kk,:,c0:c1], eris.oovv[ki,kj,ka,:,:,a0:a1,b0:b1].conj())
+            out = out + einsum('kc,ijab->abcijk', fov[kk,:,c0:c1], t2[ki,kj,ka,:,:,a0:a1,b0:b1])
+        return out
 
     def get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
         '''Vijkabc intermediate as described in Scuseria paper'''
@@ -152,17 +149,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         kf = kconserv[ki,ka,kj]
         out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
         if kk == kc:
-            out = out + einsum('ck,baji->abcijk', 0.5*t1T[kk,c0:c1,:], eris_vvop[kb,ka,kj,b0:b1,a0:a1,:,:nocc])
-            # We see this is the same t2T term needed for the `w` contraction:
-            #     einsum('cbmk,aijm->abcijk', t2T[kc,kb,km,c0:c1,b0:b1], eris_vooo_C[ka,ki,kj,a0:a1])
-            #
-            # For the kpoint indices [kk,ki,kj,kc,ka,kb] we have that we need
-            #     t2T[kb,ka,km], where km = kconserv[kb,kj,ka]
-            # The remaining k-point not used in t2T, i.e. kc, has the condition kc == kk in the case of
-            # get_v.  So, we have from 3-particle conservation
-            #     (kk-kc) + ki + kj - ka - kb = 0,
-            # i.e. ki = km.
-            out = out + einsum('ck,baij->abcijk', 0.5*fvo[kk,c0:c1,:], t2T[kb,ka,ki,b0:b1,a0:a1,:,:])
+            out = out + einsum('ck,baji->abcijk', t1T[kk,c0:c1,:], eris_vvop[kb,ka,kj,b0:b1,a0:a1,:,:nocc])
+            out = out + einsum('ck,abji->abcijk', fvo[kk,c0:c1,:], t2T[ka,kb,kj,a0:a1,b0:b1,:,:])
         return out
 
     def get_permuted_v(ki, kj, kk, ka, kb, kc, orb_indices):
@@ -177,76 +165,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         ret = ret + get_v(kj, ki, kk, kb, ka, kc, b0, b1, a0, a1, c0, c1).transpose(1,0,2,4,3,5)
         return ret
 
-    def contract_t3Tv(kpt_indices, orb_indices, data):
-        '''Calculate t3T(ransposed) array using C driver.'''
-        ki, kj, kk, ka, kb, kc = kpt_indices
-        a0, a1, b0, b1, c0, c1 = orb_indices
-        slices = np.array([a0, a1, b0, b1, c0, c1], dtype=np.int32)
-
-        mo_offset = np.array([ki,kj,kk,ka,kb,kc], dtype=np.int32)
-
-        vvop_ab = np.asarray(data[0][0], dtype=np.complex, order='C')
-        vvop_ac = np.asarray(data[0][1], dtype=np.complex, order='C')
-        vvop_ba = np.asarray(data[0][2], dtype=np.complex, order='C')
-        vvop_bc = np.asarray(data[0][3], dtype=np.complex, order='C')
-        vvop_ca = np.asarray(data[0][4], dtype=np.complex, order='C')
-        vvop_cb = np.asarray(data[0][5], dtype=np.complex, order='C')
-
-        vooo_aj = np.asarray(data[1][0], dtype=np.complex, order='C')
-        vooo_ak = np.asarray(data[1][1], dtype=np.complex, order='C')
-        vooo_bi = np.asarray(data[1][2], dtype=np.complex, order='C')
-        vooo_bk = np.asarray(data[1][3], dtype=np.complex, order='C')
-        vooo_ci = np.asarray(data[1][4], dtype=np.complex, order='C')
-        vooo_cj = np.asarray(data[1][5], dtype=np.complex, order='C')
-
-        t2T_cj = np.asarray(data[2][0], dtype=np.complex, order='C')
-        t2T_bk = np.asarray(data[2][1], dtype=np.complex, order='C')
-        t2T_ci = np.asarray(data[2][2], dtype=np.complex, order='C')
-        t2T_ak = np.asarray(data[2][3], dtype=np.complex, order='C')
-        t2T_bi = np.asarray(data[2][4], dtype=np.complex, order='C')
-        t2T_aj = np.asarray(data[2][5], dtype=np.complex, order='C')
-
-        t2T_cb = np.asarray(data[3][0], dtype=np.complex, order='C')
-        t2T_bc = np.asarray(data[3][1], dtype=np.complex, order='C')
-        t2T_ca = np.asarray(data[3][2], dtype=np.complex, order='C')
-        t2T_ac = np.asarray(data[3][3], dtype=np.complex, order='C')
-        t2T_ba = np.asarray(data[3][4], dtype=np.complex, order='C')
-        t2T_ab = np.asarray(data[3][5], dtype=np.complex, order='C')
-
-        data = [vvop_ab, vvop_ac, vvop_ba, vvop_bc, vvop_ca, vvop_cb,
-                vooo_aj, vooo_ak, vooo_bi, vooo_bk, vooo_ci, vooo_cj,
-                t2T_cj, t2T_cb, t2T_bk, t2T_bc, t2T_ci, t2T_ca, t2T_ak,
-                t2T_ac, t2T_bi, t2T_ba, t2T_aj, t2T_ab]
-        data_ptrs = [x.ctypes.data_as(ctypes.c_void_p) for x in data]
-        data_ptrs = (ctypes.c_void_p*24)(*data_ptrs)
-
-        a0, a1, b0, b1, c0, c1 = task
-        t3Tw = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex, order='C')
-        t3Tv = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex, order='C')
-
-        drv = _ccsd.libcc.CCsd_zcontract_t3T
-        drv(t3Tw.ctypes.data_as(ctypes.c_void_p),
-            t3Tv.ctypes.data_as(ctypes.c_void_p),
-            mo_energy.ctypes.data_as(ctypes.c_void_p),
-            t1T.ctypes.data_as(ctypes.c_void_p),
-            fvo.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nocc), ctypes.c_int(nvir),
-            ctypes.c_int(nkpts),
-            mo_offset.ctypes.data_as(ctypes.c_void_p),
-            slices.ctypes.data_as(ctypes.c_void_p),
-            data_ptrs)
-        return t3Tw, t3Tv
-
-    def get_data(kpt_indices):
-        idx_args = get_data_slices(kpt_indices, task, kconserv)
-        vvop_indices, vooo_indices, t2T_vvop_indices, t2T_vooo_indices = idx_args
-        vvop_data = [eris_vvop[tuple(x)] for x in vvop_indices]
-        vooo_data = [eris_vooo_C[tuple(x)] for x in vooo_indices]
-        t2T_vvop_data = [t2T[tuple(x)] for x in t2T_vvop_indices]
-        t2T_vooo_data = [t2T[tuple(x)] for x in t2T_vooo_indices]
-        data = [vvop_data, vooo_data, t2T_vvop_data, t2T_vooo_data]
-        return data
-
     energy_t = 0.0
 
     # Get location of padded elements in occupied and virtual space
@@ -255,8 +173,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
     blkmin = 4
-    # temporary t3 array is size:    2 * nkpts**3 * blksize**3 * nocc**3 * 16
-    vir_blksize = min(nvir, max(blkmin, int((max_memory*.9e6/16/nocc**3/nkpts**3/2)**(1./3))))
+    # temporary t3 array is size:    blksize**3 * nocc**3 * 16
+    vir_blksize = min(nvir, max(blkmin, int((max_memory*.9e6/16/nocc**3)**(1./3))))
     tasks = []
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     log.debug('virtual blksize = %d (nvir = %d)', nvir, vir_blksize)
@@ -267,57 +185,36 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     for ka in range(nkpts):
         for kb in range(ka+1):
-            for task_id, task in enumerate(tasks):
-                a0,a1,b0,b1,c0,c1 = task
-                my_permuted_w = np.zeros((nkpts,)*3 + (a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
-                my_permuted_v = np.zeros((nkpts,)*3 + (a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
-                for ki, kj, kk in product(range(nkpts), repeat=3):
-                    # Find momentum conservation condition for triples
-                    # amplitude t3ijkabc
-                    kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
-                    if not (ka >= kb and kb >= kc):
-                        continue
 
-                    kpt_indices = [ki,kj,kk,ka,kb,kc]
-                    data = get_data(kpt_indices)
-                    t3Tw, t3Tv = contract_t3Tv(kpt_indices, task, data)
-                    my_permuted_w[ki,kj,kk] = t3Tw
-                    my_permuted_v[ki,kj,kk] = t3Tv
-                    #my_permuted_w[ki,kj,kk] = get_permuted_w(ki,kj,kk,ka,kb,kc,task)
-                    #my_permuted_v[ki,kj,kk] = get_permuted_v(ki,kj,kk,ka,kb,kc,task)
+            for ki, kj, kk in product(range(nkpts), repeat=3):
+                # eigenvalue denominator: e(i) + e(j) + e(k)
+                eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_energy_occ[0].dtype)
+                n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
+                eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])[n0_ovp_ijk]
 
-                for ki, kj, kk in product(range(nkpts), repeat=3):
-                    # eigenvalue denominator: e(i) + e(j) + e(k)
-                    eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_energy_occ[0].dtype)
-                    n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
-                    eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])[n0_ovp_ijk]
+                # Find momentum conservation condition for triples
+                # amplitude t3ijkabc
+                kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
 
-                    # Find momentum conservation condition for triples
-                    # amplitude t3ijkabc
-                    kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
-                    if not (ka >= kb and kb >= kc):
-                        continue
+                if not (ka >= kb and kb >= kc):
+                    continue
 
-                    if ka == kb and kb == kc:
-                        symm_kpt = 1.
-                    elif ka == kb or kb == kc:
-                        symm_kpt = 3.
-                    else:
-                        symm_kpt = 6.
+                if ka == kb and kb == kc:
+                    symm_kpt = 1.
+                elif ka == kb or kb == kc:
+                    symm_kpt = 3.
+                else:
+                    symm_kpt = 6.
 
+                for task_id, task in enumerate(tasks):
+                    orb_indices = a0,a1,b0,b1,c0,c1
                     eijkabc = (eijk[None,None,None,:,:,:] -
                                mo_energy_vir[ka][a0:a1][:,None,None,None,None,None] -
                                mo_energy_vir[kb][b0:b1][None,:,None,None,None,None] -
                                mo_energy_vir[kc][c0:c1][None,None,:,None,None,None])
-
-                    pwijk = my_permuted_w[ki,kj,kk] + my_permuted_v[ki,kj,kk]
-                    rwijk = (4. * my_permuted_w[ki,kj,kk] +
-                             1. * my_permuted_w[kj,kk,ki].transpose(0,1,2,5,3,4) +
-                             1. * my_permuted_w[kk,ki,kj].transpose(0,1,2,4,5,3) -
-                             2. * my_permuted_w[ki,kk,kj].transpose(0,1,2,3,5,4) -
-                             2. * my_permuted_w[kk,kj,ki].transpose(0,1,2,5,4,3) -
-                             2. * my_permuted_w[kj,ki,kk].transpose(0,1,2,4,3,5))
-                    rwijk = rwijk / eijkabc
+                    pwijk = (       get_permuted_w(ki,kj,kk,ka,kb,kc,task) +
+                              0.5 * get_permuted_v(ki,kj,kk,ka,kb,kc,task) )
+                    rwijk = get_rw(ki,kj,kk,ka,kb,kc,task) / eijkabc
                     energy_t += symm_kpt * einsum('abcijk,abcijk', pwijk, rwijk.conj())
 
     energy_t *= (1. / 3)
@@ -329,8 +226,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     log.note('CCSD(T) correction per cell = %.15g', energy_t.real)
     log.note('CCSD(T) correction per cell (imag) = %.15g', energy_t.imag)
     return energy_t.real
-
-
 
 ###################################
 # Helper function for t3 creation
@@ -414,19 +309,12 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
     return out
 
 
-def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
+def create_t3_eris(nkpts, nocc, nvir, kconserv, tmpfile='tmp_t3_eris.h5', dtype=np.complex):
     '''Create/transpose necessary eri integrals needed for fast read-in by CCSD(T).'''
-    eris_vovv, eris_oovv, eris_ooov, t2 = eris
-    nkpts = mycc.nkpts
-    nocc = mycc.nocc
-    nmo = mycc.nmo
-    nvir = nmo - nocc
-
     nmo = nocc + nvir
     feri_tmp = None
     h5py_kwargs = {}
     feri_tmp_filename = tmpfile
-    dtype = np.result_type(eris_vovv, eris_oovv, eris_ooov, t2)
     if not check_read_success(feri_tmp_filename):
         feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'w', **h5py_kwargs)
         t2T_out = feri_tmp.create_dataset('t2T',
@@ -437,8 +325,8 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
                               (nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=dtype)
 
         transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=t2T_out)
-        create_eris_vvop(eris_vovv, eris_oovv, nkpts, nocc, nvir, kconserv, out=eris_vvop_out)
-        create_eris_vooo(eris_ooov, nkpts, nocc, nvir, kconserv, out=eris_vooo_C_out)
+        create_eris_vvop(eris.vovv, eris.oovv, nkpts, nocc, nvir, kconserv, out=eris_vvop_out)
+        create_eris_vooo(eris.ooov, nkpts, nocc, nvir, kconserv, out=eris_vooo_C_out)
 
         feri_tmp.attrs['completed'] = True
         feri_tmp.close()
@@ -458,94 +346,6 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
 
     return feri_tmp, t2T, eris_vvop, eris_vooo_C
 
-
-def _convert_to_int(kpt_indices):
-    '''Convert all kpoint indices for 3-particle operator to integers.'''
-    out_indices = [0]*6
-    for ix, x in enumerate(kpt_indices):
-        assert isinstance(x, (int, np.int, np.ndarray, list))
-        if isinstance(x, (np.ndarray)) and (x.ndim == 0):
-            out_indices[ix] = int(x)
-        else:
-            out_indices[ix] = x
-    return out_indices
-
-
-def _tile_list(kpt_indices):
-    '''Similar to a cartesian product but for a list of kpoint indices for
-    a 3-particle operator.'''
-    max_length = 0
-    out_indices = [0]*6
-    for ix, x in enumerate(kpt_indices):
-        if hasattr(x, '__len__'):
-            max_length = max(max_length, len(x))
-
-    if max_length == 0:
-        return kpt_indices
-    else:
-        for ix, x in enumerate(kpt_indices):
-            if isinstance(x, (int, np.int)):
-                out_indices[ix] = [x] * max_length
-            else:
-                out_indices[ix] = x
-
-    return map(list, zip(*out_indices))
-
-
-def zip_kpoints(kpt_indices):
-    '''Similar to a cartesian product but for a list of kpoint indices for
-    a 3-particle operator.  Ensures all indices are integers.'''
-    out_indices = _convert_to_int(kpt_indices)
-    out_indices = _tile_list(out_indices)
-    return out_indices
-
-
-def get_data_slices(kpt_indices, orb_indices, kconserv):
-    kpt_indices = zip_kpoints(kpt_indices)
-    if isinstance(kpt_indices[0], (int, np.int)):  # Ensure we are working
-        kpt_indices = [kpt_indices]                # with a list of lists
-
-    a0,a1,b0,b1,c0,c1 = orb_indices
-    length = len(kpt_indices)*6
-
-    def _vijk_indices(kpt_indices, orb_indices, transpose=(0, 1, 2)):
-        '''Get indices needed for t3 construction and a given transpose of (a,b,c).'''
-        kpt_indices = ([kpt_indices[x] for x in transpose] +
-                       [kpt_indices[x+3] for x in transpose])
-        orb_indices = lib.flatten([[orb_indices[2*x], orb_indices[2*x+1]]
-                                   for x in transpose])
-
-        ki, kj, kk, ka, kb, kc = kpt_indices
-        a0, a1, b0, b1, c0, c1 = orb_indices
-
-        kf = kconserv[ka,ki,kb]
-        km = kconserv[kc,kk,kb]
-        sl00 = slice(None, None)
-
-        vvop_idx = [ka, kb, ki, slice(a0,a1), slice(b0,b1), sl00, sl00]
-        vooo_idx = [ka, ki, kj, slice(a0,a1), sl00, sl00, sl00]
-        t2T_vvop_idx = [kc, kf, kj, slice(c0,c1), sl00, sl00, sl00]
-        t2T_vooo_idx = [kc, kb, km, slice(c0,c1), sl00, sl00, sl00]
-        return vvop_idx, vooo_idx, t2T_vvop_idx, t2T_vooo_idx
-
-    vvop_indices = [0] * length
-    vooo_indices = [0] * length
-    t2T_vvop_indices = [0] * length
-    t2T_vooo_indices = [0] * length
-
-    transpose = [(0, 1, 2), (0, 2, 1), (1, 0, 2),
-                 (1, 2, 0), (2, 0, 1), (2, 1, 0)]
-    count = 0
-    for kpt in kpt_indices:
-        for t in transpose:
-            vvop_idx, vooo_idx, t2T_vvop_idx, t2T_vooo_idx = _vijk_indices(kpt, orb_indices, t)
-            vvop_indices[count] = vvop_idx
-            vooo_indices[count] = vooo_idx
-            t2T_vvop_indices[count] = t2T_vvop_idx
-            t2T_vooo_indices[count] = t2T_vooo_idx
-            count += 1
-
-    return vvop_indices, vooo_indices, t2T_vvop_indices, t2T_vooo_indices
 
 # Gamma point calculation
 #
@@ -587,17 +387,17 @@ if __name__ == '__main__':
     0.000000000, 3.370137329, 3.370137329
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
+    cell.conv_tol = 1e-12
+    cell.conv_tol_grad = 1e-12
+    cell.direct_scf_tol = 1e-16
     cell.unit = 'B'
-    cell.verbose = 3
+    cell.verbose = 4
     cell.mesh = [24, 24, 24]
     cell.build()
 
     kpts = cell.make_kpts([1, 1, 3])
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
-    kmf.conv_tol = 1e-12
-    kmf.conv_tol_grad = 1e-12
-    kmf.direct_scf_tol = 1e-16
     ehf = kmf.kernel()
 
     mycc = cc.KRCCSD(kmf)
