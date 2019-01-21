@@ -22,6 +22,7 @@ from pyscf.pbc.tools import get_kconserv
 from pyscf.tdscf import rhf_slow as td
 
 from pyscf.pbc.lib.kpts_helper import loop_kkk
+from pyscf.lib import logger
 
 import numpy
 import scipy
@@ -257,6 +258,7 @@ class PhysERI4(PhysERI):
 
     def __calc_block__(self, item, k):
         if self.kconserv[k[:3]] == k[3]:
+            logger.info(self.model, "Computing {} {} ...".format(''.join(item), repr(k)))
             return self.ao2mo_k(tuple(
                 self.mo_coeff[_k][:, :self.nocc[_k]] if i == "o" else self.mo_coeff[_k][:, self.nocc[_k]:]
                 for i, _k in zip(item, k)

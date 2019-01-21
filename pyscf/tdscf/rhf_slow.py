@@ -263,7 +263,7 @@ class PhysERI4(PhysERI):
     def __calc_block__(self, item):
         o = self.mo_coeff[:, :self.nocc]
         v = self.mo_coeff[:, self.nocc:]
-        logger.info(self.model, "Computing {} ...".format(item))
+        logger.info(self.model, "Computing {} ...".format(''.join(item)))
         return self.ao2mo(tuple(o if i == "o" else v for i in item))
 
 
