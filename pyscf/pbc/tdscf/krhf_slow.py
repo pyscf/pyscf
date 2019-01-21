@@ -140,7 +140,7 @@ class PhysERI4(PhysERI):
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
             k-points or multiple lists of frozen orbitals for each k-point;
         """
-        super(PhysERI4, self).__init__(model, frozen=frozen)
+        td.PhysERI4.__init__.im_func(self, model, frozen=frozen)
 
     symmetries = [
         ((0, 1, 2, 3), False),

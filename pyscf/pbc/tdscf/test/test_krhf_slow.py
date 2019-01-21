@@ -86,6 +86,8 @@ class DiamondTest(unittest.TestCase):
         """Tests container behavior (gamma-point only)."""
         model = ktd.TDRHF(self.model_krhf)
         model.kernel(k=0)
+        self.assertNotIn("__full_eri_k__", dir(model.eri))
+        self.assertNotIn("__full_eri__", dir(model.eri))
         testing.assert_allclose(model.e[0], self.td_model_rhf_gamma.e, atol=1e-12)
         nocc = nvirt = 4
         testing.assert_equal(model.xy[0].shape, (len(model.e[0]), 2, self.k, nocc, nvirt))
@@ -98,6 +100,11 @@ class DiamondTest(unittest.TestCase):
             if eri is not ktd.PhysERI8 or self.test8:
                 try:
                     e = eri(self.model_krhf)
+                    if eri is ktd.PhysERI:
+                        self.assertIn("__full_eri_k__", dir(e))
+                    else:
+                        self.assertNotIn("__full_eri_k__", dir(e))
+                    self.assertNotIn("__full_eri__", dir(e))
 
                     s = (2 * self.k * self.k, 2 * self.k * self.k, o*v, o*v)
                     m = numpy.zeros(s, dtype=complex)
