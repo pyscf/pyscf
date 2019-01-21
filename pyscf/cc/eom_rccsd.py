@@ -124,6 +124,71 @@ class EOM(lib.StreamObject):
         return self
 
 
+def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
+                                 left_converged, left_evals, left_evecs, tol=1e-6):
+    '''Ensures the left and right eigenvectors correspond to the same eigenvalue.
+
+    Note:
+        Useful for perturbative methods that need both eigenstates.  Right now, just
+        simply checks for equality between left and right eigenvalues, but can be
+        extended to make sure the overlap between states is sufficiently large.
+
+    Kwargs:
+        eom : :class:`EOM`
+            Class holding EOM results.
+        right_converged : array-like of bool
+            Whether the right eigenstates converged.
+        right_evals : array-like
+            Eigenvalues of right eigenstates.
+        right_evecs : array-like of ndarray
+            Eigenvectors of right eigenstates.
+        left_converged : array-like of bool
+            Whether the left eigenstates converged.
+        left_evals : array-like
+            Eigenvalues of left eigenstates.
+        left_evecs : array-like of ndarray
+            Eigenvectors of left eigenstates.
+        tol : float
+            Tolerance for determining whether a left and right eigenvalue
+            should be considered equal.
+    '''
+    log = logger.Logger(eom.stdout, eom.verbose)
+
+    right_evecs, left_evecs = [np.atleast_2d(x) for x in [right_evecs, left_evecs]]
+    right_evals, left_evals = [np.atleast_1d(x) for x in [right_evals, left_evals]]
+
+    srt_right_idx = []
+    srt_left_idx = []
+    left_idx = [idx for idx in range(len(left_evals)) if left_converged[idx]]
+    right_idx = [idx for idx in range(len(right_evals)) if right_converged[idx]]
+    if len(right_idx) != len(left_idx):
+        log.warn('Number of converged left and right eigenvalues are not equal.\n'
+                 '    No. Left = %3d, No. Right = %3d.' %
+                 (len(left_idx), len(right_idx)))
+
+    for ir_idx, ir in enumerate(right_idx):
+        found = False
+        for il_idx, il in enumerate(left_idx):
+            if abs(right_evals[ir] - left_evals[il]) < tol:
+                found = True
+                srt_right_idx.append(ir)
+                srt_left_idx.append(il)
+                break
+        if found:
+            left_idx.pop(il_idx)
+        else:
+            log.warn('No converged left eigenvalue corresponding to right eigenvalue '
+                     '%.6g (right idx=%3d).\nWill not perform perturbation on this state.'
+                     % (right_evals[ir], ir))
+
+    log.info('Resulting left/right eigenstates:')
+    log.info('Left Eigen (idx) <-> Right Eigen (idx)')
+    for il, ir in zip(srt_left_idx, srt_right_idx):
+        log.info('%10.6g (%3d)      %10.6g (%3d)',
+                 left_evals[il], il, right_evals[ir], ir)
+    return (right_evals[srt_right_idx], right_evecs[srt_right_idx], left_evecs[srt_left_idx])
+
+
 ########################################
 # EOM-IP-CCSD
 ########################################
@@ -313,6 +378,8 @@ def ipccsd_star(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
     ipccsd_evecs  = np.array(ipccsd_evecs)
     lipccsd_evecs = np.array(lipccsd_evecs)
     e = []
+    ipccsd_evecs, lipccsd_evecs = [np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs]]
+    ipccsd_evals = np.atleast_1d(ipccsd_evals)
     for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         l1, l2 = eom.vector_to_amplitudes(_levec)
         r1, r2 = eom.vector_to_amplitudes(_evec)
@@ -350,8 +417,8 @@ def ipccsd_star(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
 
         deltaE = 0.5*np.einsum('ijkab,ijkab,ijkab', lijkab, rijkab, _eijkab)
         deltaE = deltaE.real
-        logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
-                    _eval+deltaE, deltaE)
+        logger.info(eom, "ipccsd energy, star energy, delta energy = %16.12f, %16.12f, %16.12f",
+                    _eval, _eval+deltaE, deltaE)
         e.append(_eval+deltaE)
     return e
 
@@ -592,6 +659,8 @@ def eaccsd_star(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
     eaccsd_evecs  = np.array(eaccsd_evecs)
     leaccsd_evecs = np.array(leaccsd_evecs)
     e = []
+    eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
+    eaccsd_evals = np.atleast_1d(eaccsd_evals)
     for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         l1, l2 = eom.vector_to_amplitudes(_levec)
         r1, r2 = eom.vector_to_amplitudes(_evec)
@@ -629,8 +698,8 @@ def eaccsd_star(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
                 + 1.*lijabc.transpose(0,1,4,2,3)
         deltaE = 0.5*np.einsum('ijabc,ijabc,ijabc', lijabc,rijabc,_eijabc)
         deltaE = deltaE.real
-        logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
-                    _eval+deltaE, deltaE)
+        logger.info(eom, "eaccsd energy, star energy, delta energy = %16.12f, %16.12f, %16.12f",
+                    _eval, _eval+deltaE, deltaE)
         e.append(_eval+deltaE)
     return e
 
