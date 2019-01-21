@@ -189,6 +189,32 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
     return (right_evals[srt_right_idx], right_evecs[srt_right_idx], left_evecs[srt_left_idx])
 
 
+def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
+            left_guess=None, eris=None, imds=None, type1=False,
+            type2=False, with_t3p2=True, with_t3p2_imds=True):
+    '''Wrapper for running perturbative excited-states that require both left
+    and right amplitudes.'''
+    if imds is None:
+        imds = eom.make_imds()
+        #imds = eom.make_imds(with_t3p2=with_t3p2, with_t3p2_imds=with_t3p2_imds)
+
+    # Right eigenvectors
+    r_converged, r_e, r_v = \
+               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
+                      eris=eris, imds=imds, with_t3p2=with_t3p2,
+                      copy_amps_t3p2=True, with_t3p2_imds=with_t3p2_imds)
+    # Left eigenvectors
+    l_converged, l_e, l_v = \
+               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
+                      eris=eris, imds=imds, with_t3p2=with_t3p2,
+                      copy_amps_t3p2=True, with_t3p2_imds=with_t3p2_imds)
+
+    e, r_v, l_v = _sort_left_right_eigensystem(eom, r_converged, r_e, r_v, l_converged, l_e, l_v)
+    #e_star = eom._get_star_energy(e, r_v, l_v, eris=imds.eris, type1=type1, type2=type2)
+    e_star = eom.ccsd_star_contract(e, r_v, l_v, eris=imds.eris)
+    return e_star
+
+
 ########################################
 # EOM-IP-CCSD
 ########################################
@@ -216,6 +242,23 @@ def ipccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
     eom.converged, eom.e, eom.v \
             = kernel(eom, nroots, koopmans, guess, left, eris=eris, imds=imds)
     return eom.e, eom.v
+
+def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
+            left_guess=None, eris=None, imds=None, type1=False,
+            type2=False, with_t3p2=True, with_t3p2_imds=True):
+    """Calculates CCSD* perturbative correction.
+
+    Simply calls the relevant `kernel()` function and `perturb_star` of the
+    `eom` class.
+
+    Returns:
+        e_t_a_star (list of float):
+            The IP-CCSD* energy.
+    """
+    return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
+               right_guess=right_guess, left_guess=left_guess, eris=eris,
+               imds=imds, type1=typ1, type2=type2, with_t3p2=with_t3p2,
+               with_t3p2_imds=with_t3p2_imds)
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -349,7 +392,7 @@ def ipccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
-def ipccsd_star(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
+def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
     assert(eom.partition == None)
     if eris is None:
         eris = eom._cc.ao2mo()
@@ -446,6 +489,8 @@ class EOMIP(EOM):
     matvec = ipccsd_matvec
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
+    ipccsd_star_contract = ipccsd_star_contract
+    ccsd_star_contract = ipccsd_star_contract
     ipccsd_star = ipccsd_star
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
@@ -492,6 +537,19 @@ def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
         See also ipccd()
     '''
     return ipccsd(eom, nroots, left, koopmans, guess, partition, eris, imds)
+
+def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
+            left_guess=None, eris=None, imds=None, type1=False,
+            type2=False, with_t3p2=True, with_t3p2_imds=True):
+    """Calculates CCSD* perturbative correction.
+
+    Kwargs:
+        See also ipccd_star()
+    """
+    return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
+               right_guess=right_guess, left_guess=left_guess, eris=eris,
+               imds=imds, type1=typ1, type2=type2, with_t3p2=with_t3p2,
+               with_t3p2_imds=with_t3p2_imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -630,7 +688,7 @@ def eaccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ea(Hr1,Hr2)
     return vector
 
-def eaccsd_star(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
+def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
     assert(eom.partition == None)
     if eris is None:
         eris = eom._cc.ao2mo()
@@ -728,6 +786,8 @@ class EOMEA(EOM):
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
+    eaccsd_star_contract = eaccsd_star_contract
+    ccsd_star_contract = eaccsd_star_contract
     eaccsd_star = eaccsd_star
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
@@ -1745,7 +1805,7 @@ if __name__ == '__main__':
     print(le[1] - 0.51876597800180335)
     print(le[2] - 0.67828755013874864)
 
-    e = myeom.ipccsd_star(e, v, lv)
+    e = myeom.ipccsd_star_contract(e, v, lv)
     print(e[0] - 0.43793202073189047)
     print(e[1] - 0.52287073446559729)
     print(e[2] - 0.67994597948852287)
@@ -1763,7 +1823,7 @@ if __name__ == '__main__':
     print(le[1] - 0.24027634198123343)
     print(le[2] - 0.51006809015066612)
 
-    e = myeom.eaccsd_star(e,v,lv)
+    e = myeom.eaccsd_star_contract(e,v,lv)
     print(e[0] - 0.16656250953550664)
     print(e[1] - 0.23944144521387614)
     print(e[2] - 0.41399436888830721)
@@ -1817,7 +1877,7 @@ if __name__ == '__main__':
     print(le[1] - 0.51876597800180335)
     print(le[2] - 0.67828755013874864)
 
-    e = myeom.ipccsd_star(e, v, lv)
+    e = myeom.ipccsd_star_contract(e, v, lv)
     print(e[0] - 0.43793202073189047)
     print(e[1] - 0.52287073446559729)
     print(e[2] - 0.67994597948852287)
@@ -1835,7 +1895,7 @@ if __name__ == '__main__':
     print(le[1] - 0.24027634198123343)
     print(le[2] - 0.51006809015066612)
 
-    e = myeom.eaccsd_star(e,v,lv)
+    e = myeom.eaccsd_star_contract(e,v,lv)
     print(e[0] - 0.16656250953550664)
     print(e[1] - 0.23944144521387614)
     print(e[2] - 0.41399436888830721)

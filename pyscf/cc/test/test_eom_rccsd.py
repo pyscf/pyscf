@@ -111,7 +111,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
         self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
         self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
@@ -162,7 +162,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMEA(mycc)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
-        e = myeom.eaccsd_star(e, v, lv)
+        e = myeom.eaccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
         self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
         self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
@@ -378,7 +378,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc2)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
         self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
         self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
@@ -417,7 +417,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMEA(mycc2)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
-        e = myeom.eaccsd_star(e, v, lv)
+        e = myeom.eaccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
         self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
         self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
@@ -577,7 +577,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc3)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
         self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
         self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
@@ -616,7 +616,7 @@ class KnownValues(unittest.TestCase):
 #
 #        myeom = eom_rccsd.EOMEA(mycc3)
 #        lv = myeom.eaccsd(nroots=3, left=True)[1]
-#        e = myeom.eaccsd_star(e, v, lv)
+#        e = myeom.eaccsd_star_contract(e, v, lv)
 #        self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
 #        self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
 #        self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
