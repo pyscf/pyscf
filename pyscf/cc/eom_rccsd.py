@@ -393,76 +393,127 @@ def ipccsd_diag(eom, imds=None):
     return vector
 
 def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
+    from pyscf.cc.ccsd_t import _sort_eri, _sort_t2_vooo_
+    cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
     assert(eom.partition == None)
     if eris is None:
         eris = eom._cc.ao2mo()
     t1, t2 = eom._cc.t1, eom._cc.t2
     fock = eris.fock
     nocc, nvir = t1.shape
+    nmo = nocc + nvir
+
+    dtype = np.result_type(t1, t2, eris.ovoo.dtype)
+    if eom._cc.incore_complete:
+        ftmp = None
+        eris_vvop = numpy.zeros((nvir,nvir,nocc,nmo), dtype)
+    else:
+        ftmp = lib.H5TmpFile()
+        eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), dtype)
+
+    orbsym = _sort_eri(eom._cc, eris, nocc, nvir, eris_vvop, log)
+    mo_energy, t1T, t2T, vooo, fvo, restore_t2_inplace = \
+            _sort_t2_vooo_(eom._cc, orbsym, t1, t2, eris)
+
+    cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)
 
     fov = fock[:nocc,nocc:]
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
 
-    oovv = _cp(eris.ovov).transpose(0,2,1,3)
-    ovvv = _cp(eris.get_ovvv()).transpose(0,2,1,3)
-    ovov = _cp(eris.oovv).transpose(0,2,1,3)
-    ovvo = _cp(eris.ovvo).transpose(0,2,1,3)
-    ooov = _cp(eris.ovoo).transpose(2,0,3,1)
-    vooo = ooov.conj().transpose(3,2,1,0)
-    vvvo = ovvv.transpose(3,2,1,0).conj()
-    oooo = _cp(eris.oooo).transpose(0,2,1,3)
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nocc**3*6))))
 
-    eijkab = np.zeros((nocc,nocc,nocc,nvir,nvir))
-    for i,j,k in lib.cartesian_prod([range(nocc),range(nocc),range(nocc)]):
-        for a,b in lib.cartesian_prod([range(nvir),range(nvir)]):
-            eijkab[i,j,k,a,b] = foo[i,i] + foo[j,j] + foo[k,k] - fvv[a,a] - fvv[b,b]
+    fock_mo_energy = np.asarray(eris.fock.diagonal())
+    mo_e_occ = np.asarray(mo_energy[:nocc])
+    mo_e_vir = np.asarray(mo_energy[nocc:])
+
+    def contract_l2p(l1, l2, a0, a1, b0, b1, cache_vvop, out=None):
+        '''Create perturbed l2.'''
+        if out is None:
+            out = np.zeros((nocc,)*3 + (a1-a0,b1-b0), dtype=dtype)
+        out += 0.5*np.einsum('abij,k->ijkab', cache_vvop[:,:,:,:nocc].conj(), l1)
+        out += lib.einsum('abie,jke->ijkab', cache_vvop[:,:,:,nocc:].conj(), l2)
+        out += -lib.einsum('bjkm,ima->ijkab', vooo[b0:b1], l2[:,:,a0:a1])
+        out += -lib.einsum('bjim,mka->ijkab', vooo[b0:b1], l2[:,:,a0:a1])
+        return out
+
+    def contract_pl2p(l1, l2, a0, a1, b0, b1, cache_vvop_a, cache_vvop_b):
+        '''Create P(ia|jb) of perturbed l2.'''
+        out = contract_l2p(l1, l2, a0, a1, b0, b1, cache_vvop_a)
+        out += contract_l2p(l1, l2, b0, b1, a0, a1, cache_vvop_b).transpose(1,0,2,4,3)  # P(ia|jb)
+        return out
+
+    def contract_r2p(r1, r2, a0, a1, b0, b1, cache_vvop, out=None):
+        '''Create perturbed r2.'''
+        if out is None:
+            out = np.zeros((nocc,)*3 + (a1-a0,b1-b0), dtype=dtype)
+        tmp = np.einsum('mkbe,m->bke', eris.oovv[:,:,b0:b1,:], r1)
+        out += -lib.einsum('bke,aeji->ijkab', tmp, t2T[a0:a1])
+        tmp = np.einsum('mebj,m->bej', eris.ovvo[:,:,b0:b1,:], r1)
+        out += -lib.einsum('bej,aeki->ijkab', tmp, t2T[a0:a1])
+        tmp = np.einsum('mjnk,n->mjk', eris.oooo, r1)
+        out += lib.einsum('mjk,abmi->ijkab', tmp, t2T[a0:a1,b0:b1])
+        out += lib.einsum('abie,kje->ijkab', cache_vvop[:,:,:,nocc:], r2)
+        out += -lib.einsum('bjkm,mia->ijkab', vooo[b0:b1].conj(), r2[:,:,a0:a1])
+        out += -lib.einsum('bjim,kma->ijkab', vooo[b0:b1].conj(), r2[:,:,a0:a1])
+        return out
+
+    def contract_pr2p(r1, r2, a0, a1, b0, b1, cache_ovvv_a, cache_ovvv_b):
+        '''Create P(ia|jb) of perturbed r2.'''
+        out = contract_r2p(r1, r2, a0, a1, b0, b1, cache_ovvv_a)
+        out += contract_r2p(r1, r2, b0, b1, a0, a1, cache_ovvv_b).transpose(1,0,2,4,3)  # P(ia|jb)
+        return out
 
     ipccsd_evecs  = np.array(ipccsd_evecs)
     lipccsd_evecs = np.array(lipccsd_evecs)
     e = []
     ipccsd_evecs, lipccsd_evecs = [np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs]]
     ipccsd_evals = np.atleast_1d(ipccsd_evals)
-    for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
-        l1, l2 = eom.vector_to_amplitudes(_levec)
-        r1, r2 = eom.vector_to_amplitudes(_evec)
+    for eval_, evec_, levec_ in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
+        l1, l2 = eom.vector_to_amplitudes(levec_)
+        r1, r2 = eom.vector_to_amplitudes(evec_)
         ldotr = np.dot(l1, r1) + np.dot(l2.ravel(), r2.ravel())
         l1 /= ldotr
         l2 /= ldotr
         l2 = 1./3*(l2 + 2.*l2.transpose(1,0,2))
 
-        _eijkab = eijkab + _eval
-        _eijkab = 1./_eijkab
+        deltaE = 0.0
+        eijk = (mo_e_occ[:,None,None,None,None] +
+                mo_e_occ[None,:,None,None,None] +
+                mo_e_occ[None,None,:,None,None] + eval_)
+        for a0, a1 in lib.prange_tril(0, nvir, blksize):
+            b0, b1 = 0, a1
+            eijkab = (eijk - mo_e_vir[a0:a1][None,None,None,:,None] -
+                      mo_e_vir[b0:b1][None,None,None,None,:])
+            eijkab = 1./eijkab
+            vvov_a = eris_vvop[a0:a1,b0:b1,:,:]
+            vvov_b = eris_vvop[b0:b1,a0:a1,:,:]
+            lijkab = contract_pl2p(l1, l2, a0, a1, b0, b1, vvov_a, vvov_b)
+            rijkab = contract_pr2p(r1, r2, a0, a1, b0, b1, vvov_a, vvov_b)
 
-        lijkab = 0.5*np.einsum('ijab,k->ijkab', oovv, l1)
-        lijkab += lib.einsum('ieab,jke->ijkab', ovvv, l2)
-        lijkab += -lib.einsum('kjmb,ima->ijkab', ooov, l2)
-        lijkab += -lib.einsum('ijmb,mka->ijkab', ooov, l2)
-        lijkab = lijkab + lijkab.transpose(1,0,2,4,3)
+            lijkab = 4.*lijkab \
+                   - 2.*lijkab.transpose(1,0,2,3,4) \
+                   - 2.*lijkab.transpose(2,1,0,3,4) \
+                   - 2.*lijkab.transpose(0,2,1,3,4) \
+                   + 1.*lijkab.transpose(1,2,0,3,4) \
+                   + 1.*lijkab.transpose(2,0,1,3,4)
 
-        tmp = np.einsum('mbke,m->bke', ovov, r1)
-        rijkab = -lib.einsum('bke,ijae->ijkab', tmp, t2)
-        tmp = np.einsum('mbej,m->bej', ovvo, r1)
-        rijkab += -lib.einsum('bej,ikae->ijkab', tmp, t2)
-        tmp = np.einsum('mnjk,n->mjk', oooo, r1)
-        rijkab += lib.einsum('mjk,imab->ijkab', tmp, t2)
-        rijkab += lib.einsum('baei,kje->ijkab', vvvo, r2)
-        rijkab += -lib.einsum('bmjk,mia->ijkab', vooo, r2)
-        rijkab += -lib.einsum('bmji,kma->ijkab', vooo, r2)
-        rijkab = rijkab + rijkab.transpose(1,0,2,4,3)
+            # Symmetry factors (1 for a == b, 2 for a < b)
+            fac = 2.*np.ones_like(rijkab)
+            triu_idx = np.triu_indices(a1-a0,a0+1,m=b1-b0)
+            fac[:,:,:,triu_idx[0],triu_idx[1]] = 0.
+            fac[:,:,:,np.arange(a1-a0),np.arange(a0,b1)] = 1.
+            eijkab *= fac
 
-        lijkab = 4.*lijkab \
-               - 2.*lijkab.transpose(1,0,2,3,4) \
-               - 2.*lijkab.transpose(2,1,0,3,4) \
-               - 2.*lijkab.transpose(0,2,1,3,4) \
-               + 1.*lijkab.transpose(1,2,0,3,4) \
-               + 1.*lijkab.transpose(2,0,1,3,4)
-
-        deltaE = 0.5*np.einsum('ijkab,ijkab,ijkab', lijkab, rijkab, _eijkab)
-        deltaE = deltaE.real
+            deltaE += np.einsum('ijkab,ijkab,ijkab', lijkab, rijkab, eijkab)
+        deltaE = 0.5*deltaE.real
         logger.info(eom, "ipccsd energy, star energy, delta energy = %16.12f, %16.12f, %16.12f",
-                    _eval, _eval+deltaE, deltaE)
-        e.append(_eval+deltaE)
+                    eval_, eval_+deltaE, deltaE)
+        e.append(eval_+deltaE)
+    t2 = restore_t2_inplace(t2T)
     return e
 
 class EOMIP(EOM):
