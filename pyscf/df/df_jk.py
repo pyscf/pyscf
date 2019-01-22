@@ -16,11 +16,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import sys
 import copy
 import time
 import ctypes
-from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -112,7 +110,6 @@ def density_fit(mf, auxbasis=None, with_df=None):
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
             if self.with_df:
-                if mol is None: mol = self.mol
                 if dm is None: dm = self.make_rdm1()
                 vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
                                              self.direct_scf_tol)
