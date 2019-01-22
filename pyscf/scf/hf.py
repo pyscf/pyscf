@@ -1108,13 +1108,10 @@ def as_scanner(mf):
             while mf_obj is not None:
                 mf_obj.reset(mol)
                 for key in ('with_df', 'with_x2c', 'grids', 'nlcgrids',
-                            'with_solvent'):
+                            'with_solvent', 'with_dftd3'):
                     sub_mod = getattr(mf_obj, key, None)
                     if sub_mod:
-                        if getattr(sub_mod, 'reset', None):
-                            sub_mod.reset(mol)
-                        else:
-                            sub_mod.mol = mol
+                        sub_mod.reset(mol)
                 mf_obj = getattr(mf_obj, '_scf', None)
 
             if 'dm0' in kwargs:

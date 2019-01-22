@@ -533,6 +533,16 @@ def as_scanner(mc):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            # These properties can be updated when calling mf_scanner(mol) if
+            # they are shared with mc._scf. In certain scenario the properties
+            # may be created for mc separately, e.g. when mcscf.approx_hessian is
+            # called. For safety, the code below explicitly resets these
+            # properties.
+            for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
             if mo_coeff is None:
                 mf_scanner = self._scf
                 mf_scanner(mol)

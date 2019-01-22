@@ -291,6 +291,11 @@ class _DFTD3(object):
         self.grads = grads
         return edisp.value, grads
 
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        return self
+
 class _DFTD3Grad:
     pass
 
