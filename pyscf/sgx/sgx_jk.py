@@ -83,8 +83,10 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
         sn += lib.dot(ao.T, wao)
 
         fg = lib.einsum('gi,xij->xgj', wao, dms)
-        mask = (numpy.any(fg[0]>gthrd, axis=1) |
-                numpy.any(fg[0]<-gthrd, axis=1))
+        mask = numpy.zeros(i1-i0, dtype=bool)
+        for i in range(nset):
+            mask |= numpy.any(fg[i]>gthrd, axis=1)
+            mask |= numpy.any(fg[i]<-gthrd, axis=1)
         if not numpy.all(mask):
             ao = ao[mask]
             wao = wao[mask]
@@ -157,8 +159,10 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
         wao = ao * grids.weights[i0:i1,None]
 
         fg = lib.einsum('gi,xij->xgj', wao, proj_dm)
-        mask = (numpy.any(fg[0]>gthrd, axis=1) |
-                numpy.any(fg[0]<-gthrd, axis=1))
+        mask = numpy.zeros(i1-i0, dtype=bool)
+        for i in range(nset):
+            mask |= numpy.any(fg[i]>gthrd, axis=1)
+            mask |= numpy.any(fg[i]<-gthrd, axis=1)
         if not numpy.all(mask):
             ao = ao[mask]
             fg = fg[:,mask]

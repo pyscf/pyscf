@@ -28,7 +28,7 @@ from pyscf.sgx import sgx_jk
 from pyscf.df import df_jk
 from pyscf import __config__
 
-def sgx(mf, auxbasis=None, with_df=None):
+def sgx_fit(mf, auxbasis=None, with_df=None):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding SGX or density fitting integrals.
 
@@ -48,15 +48,15 @@ def sgx(mf, auxbasis=None, with_df=None):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
-    >>> mf = sgx(scf.RHF(mol))
+    >>> mf = sgx_fit(scf.RHF(mol))
     >>> mf.scf()
-    -100.005306000435510
+    -100.00978770917165
 
     >>> mol.symmetry = 1
     >>> mol.build(0, 0)
-    >>> mf = sgx(scf.UHF(mol))
+    >>> mf = sgx_fit(scf.UHF(mol))
     >>> mf.scf()
-    -100.005306000435510
+    -100.00978770951018
     '''
     from pyscf import scf
     from pyscf import df
@@ -216,16 +216,16 @@ class SGX(lib.StreamObject):
 
 
 if __name__ == '__main__':
-    import pyscf.gto
-    import pyscf.scf
-    mol = pyscf.gto.Mole()
+    from pyscf import gto
+    from pyscf import scf
+    mol = gto.Mole()
     mol.build(
         atom = [["O" , (0. , 0.     , 0.)],
                 [1   , (0. , -0.757 , 0.587)],
                 [1   , (0. , 0.757  , 0.587)] ],
         basis = 'ccpvdz',
     )
-    method = sgx(pyscf.scf.RHF(mol), 'weigend')
+    method = sgx_fit(scf.RHF(mol), 'weigend')
     energy = method.scf()
     print(energy - -76.02673747045691)
 
