@@ -740,76 +740,137 @@ def eaccsd_diag(eom, imds=None):
     return vector
 
 def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
+    from pyscf.cc.ccsd_t import _sort_eri, _sort_t2_vooo_
+    cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
     assert(eom.partition == None)
     if eris is None:
         eris = eom._cc.ao2mo()
     t1, t2 = eom._cc.t1, eom._cc.t2
     fock = eris.fock
     nocc, nvir = t1.shape
+    nmo = nocc + nvir
+    dtype = np.result_type(t1, t2, eris.ovoo.dtype)
+    # The sort_eri does not produce eri's that are read-in quickly for the current contraction
+    # scheme.  Here, we have that the block loop is over occupied indices whereas in the
+    # sort_eri it is done over virtual indices (due to the permutation over occupied indices
+    # in ipccsd_star versus virtual indices in eaccsd_star).
+    cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)  # Left if new sort_eri implemented
 
     fov = fock[:nocc,nocc:]
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
 
-    oovv = _cp(eris.ovov).transpose(0,2,1,3)
-    ovvv = _cp(eris.get_ovvv()).transpose(0,2,1,3)
-    vvov = ovvv.transpose(2,3,0,1).conj()
-    ooov = _cp(eris.ovoo).transpose(2,0,3,1)
-    vooo = ooov.conj().transpose(3,2,1,0)
-    ovov = _cp(eris.oovv).transpose(0,2,1,3)
-    vvvv = imd._get_vvvv(eris).transpose(0,2,1,3)
-    ovvo = _cp(eris.ovvo).transpose(0,2,1,3)
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*6))))
 
-    eijabc = np.zeros((nocc,nocc,nvir,nvir,nvir))
-    for i,j in lib.cartesian_prod([range(nocc),range(nocc)]):
-        for a,b,c in lib.cartesian_prod([range(nvir),range(nvir),range(nvir)]):
-            eijabc[i,j,a,b,c] = foo[i,i] + foo[j,j] - fvv[a,a] - fvv[b,b] - fvv[c,c]
+    mo_energy = np.asarray(eris.mo_energy)
+    fock_mo_energy = np.asarray(eris.fock.diagonal())
+    mo_e_occ = np.asarray(mo_energy[:nocc])
+    mo_e_vir = np.asarray(mo_energy[nocc:])
+
+    def contract_l2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j, out=None):
+        '''Create perturbed l2.'''
+        if out is None:
+            out = np.zeros((i1-i0,j1-j0) + (nvir,)*3, dtype=dtype)
+        out += -0.5*np.einsum('iajb,c->ijabc', eris.ovov[i0:i1,:,j0:j1], l1)
+        out += lib.einsum('iajm,mbc->ijabc', eris.ovoo[i0:i1,:,j0:j1], l2)
+        out -= lib.einsum('iaeb,jec->ijabc', cache_ovvv_i, l2[j0:j1])
+        out -= lib.einsum('jbec,iae->ijabc', cache_ovvv_j, l2[i0:i1])
+        return out
+
+    def contract_pl2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j):
+        '''Create P(ia|jb) of perturbed l2.'''
+        out = contract_l2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
+        tmp = contract_l2p(l1, l2, j0, j1, i0, i1, cache_ovvv_j, cache_ovvv_i)
+        tmp = tmp.transpose(1,0,3,2,4)  # P(ia|jb)
+        out = out + tmp
+        return out
+
+    def _get_vvvv(eris):
+        if eris.vvvv is None and getattr(eris, 'vvL', None) is not None:  # DF eris
+            vvL = np.asarray(eris.vvL)
+            nvir = int(np.sqrt(eris.vvL.shape[0]*2))
+            return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)
+        elif len(eris.vvvv.shape) == 2:  # DO not use .ndim here for h5py library
+                                         # backward compatbility
+            nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
+            return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
+        else:
+            return eris.vvvv
+
+    def contract_r2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j, out=None):
+        '''Create perturbed r2.'''
+        if out is None:
+            out = np.zeros((i1-i0,j1-j0) + (nvir,)*3, dtype=dtype)
+        tmp = np.einsum('becf,f->bce', _get_vvvv(eris), r1)
+        out += -lib.einsum('bce,ijae->ijabc', tmp, t2[i0:i1,j0:j1])
+        tmp = np.einsum('mjce,e->mcj', eris.oovv[:,j0:j1], r1)
+        out += lib.einsum('mcj,imab->ijabc', tmp, t2[i0:i1])
+        tmp = np.einsum('jbem,e->mbj', eris.ovvo[j0:j1].conj(), r1)
+        out += lib.einsum('mbj,imac->ijabc', tmp, t2[i0:i1])
+        out += lib.einsum('iajm,mbc->ijabc', eris.ovoo.conj()[i0:i1,:,j0:j1], r2)
+        out += -lib.einsum('iaeb,jec->ijabc', cache_ovvv_i.conj(), r2[j0:j1])
+        out += -lib.einsum('jbec,iae->ijabc', cache_ovvv_j.conj(), r2[i0:i1])
+        return out
+
+    def contract_pr2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j):
+        '''Create P(ia|jb) of perturbed r2.'''
+        out = contract_r2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
+        tmp = contract_r2p(r1, r2, j0, j1, i0, i1, cache_ovvv_j, cache_ovvv_i)
+        tmp = tmp.transpose(1,0,3,2,4)  # P(ia|jb)
+        out = out + tmp
+        return out
 
     eaccsd_evecs  = np.array(eaccsd_evecs)
     leaccsd_evecs = np.array(leaccsd_evecs)
     e = []
     eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
     eaccsd_evals = np.atleast_1d(eaccsd_evals)
-    for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
-        l1, l2 = eom.vector_to_amplitudes(_levec)
-        r1, r2 = eom.vector_to_amplitudes(_evec)
+    for eval_, evec_, levec_ in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+        l1, l2 = eom.vector_to_amplitudes(levec_)
+        r1, r2 = eom.vector_to_amplitudes(evec_)
         ldotr = np.dot(l1, r1) + np.dot(l2.ravel(),r2.ravel())
         l1 /= ldotr
         l2 /= ldotr
         l2 = 1./3*(1.*l2 + 2.*l2.transpose(0,2,1))
         r2 = r2.transpose(0,2,1)
 
-        _eijabc = eijabc + _eval
-        _eijabc = 1./_eijabc
+        deltaE = 0.0
+        eabc = (mo_e_vir[None,None,:,None,None] +
+                mo_e_vir[None,None,None,:,None] +
+                mo_e_vir[None,None,None,None,:] - eval_)
 
-        lijabc = -0.5*np.einsum('ijab,c->ijabc', oovv, l1)
-        lijabc += lib.einsum('jima,mbc->ijabc', ooov, l2)
-        lijabc -= lib.einsum('ieab,jec->ijabc', ovvv, l2)
-        lijabc -= lib.einsum('jebc,iae->ijabc', ovvv, l2)
-        lijabc = lijabc + lijabc.transpose(1,0,3,2,4)
+        for i0, i1 in lib.prange_tril(0, nocc, blksize):
+            j0, j1 = 0, i1
+            eijabc = (mo_e_occ[i0:i1][:,None,None,None,None] +
+                      mo_e_occ[j0:j1][None,:,None,None,None] - eabc)
+            eijabc = 1./eijabc
+            cache_ovvv_i = eris.ovvv[i0:i1]
+            cache_ovvv_j = eris.ovvv[j0:j1]
+            lijabc = contract_pl2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
+            rijabc = contract_pr2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
 
-        tmp = np.einsum('bcef,f->bce', vvvv, r1)
-        rijabc = -lib.einsum('bce,ijae->ijabc', tmp, t2)
-        tmp = np.einsum('mcje,e->mcj', ovov, r1)
-        rijabc += lib.einsum('mcj,imab->ijabc', tmp, t2)
-        tmp = np.einsum('mbej,e->mbj', ovvo, r1)
-        rijabc += lib.einsum('mbj,imac->ijabc', tmp, t2)
-        rijabc += lib.einsum('amij,mbc->ijabc', vooo, r2)
-        rijabc += -lib.einsum('bcje,iae->ijabc', vvov, r2)
-        rijabc += -lib.einsum('abie,jec->ijabc', vvov, r2)
-        rijabc = rijabc + rijabc.transpose(1,0,3,2,4)
+            lijabc =  4.*lijabc \
+                    - 2.*lijabc.transpose(0,1,3,2,4) \
+                    - 2.*lijabc.transpose(0,1,4,3,2) \
+                    - 2.*lijabc.transpose(0,1,2,4,3) \
+                    + 1.*lijabc.transpose(0,1,3,4,2) \
+                    + 1.*lijabc.transpose(0,1,4,2,3)
 
-        lijabc =  4.*lijabc \
-                - 2.*lijabc.transpose(0,1,3,2,4) \
-                - 2.*lijabc.transpose(0,1,4,3,2) \
-                - 2.*lijabc.transpose(0,1,2,4,3) \
-                + 1.*lijabc.transpose(0,1,3,4,2) \
-                + 1.*lijabc.transpose(0,1,4,2,3)
-        deltaE = 0.5*np.einsum('ijabc,ijabc,ijabc', lijabc,rijabc,_eijabc)
-        deltaE = deltaE.real
+            # Symmetry factors (1 for a == b, 2 for a < b)
+            fac = 2.*np.ones_like(rijabc)
+            triu_idx = np.triu_indices(i1-i0,i0+1,m=j1-j0)
+            fac[triu_idx[0],triu_idx[1],:,:,:] = 0.
+            fac[np.arange(i1-i0),np.arange(i0,j1)] = 1.
+            eijabc *= fac
+
+            deltaE += np.einsum('ijabc,ijabc,ijabc',lijabc,rijabc,eijabc)
+        deltaE = 0.5*deltaE.real
         logger.info(eom, "eaccsd energy, star energy, delta energy = %16.12f, %16.12f, %16.12f",
-                    _eval, _eval+deltaE, deltaE)
-        e.append(_eval+deltaE)
+                    eval_, eval_+deltaE, deltaE)
+        e.append(eval_+deltaE)
     return e
 
 
