@@ -100,12 +100,14 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             self._keys = self._keys.union(['auxbasis', 'with_df'])
 
         def build(self, mol=None, **kwargs):
-            self._in_scf = True
             if self.direct_scf:
                 self.with_df.build(self.with_df.grids_level_f)
             else:
                 self.with_df.build(self.with_df.grids_level_i)
             return mf_class.build(self, mol, **kwargs)
+
+        def pre_kernel(self, envs):
+            self._in_scf = True
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
             if dm is None: dm = self.make_rdm1()
@@ -124,10 +126,9 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
 
             return with_df.get_jk(dm, hermi, with_j, with_k, self.direct_scf_tol)
 
-        def _finalize(self):
+        def post_kernel(self):
             self._in_scf = False
             self._last_dm = 0
-            return mf_class._finalize(self)
 
     return SGXHF(mf)
 
