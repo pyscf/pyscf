@@ -818,7 +818,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=No
         out += lib.einsum('mcj,imab->ijabc', tmp, t2[i0:i1])
         tmp = np.einsum('jbem,e->mbj', eris.ovvo[j0:j1].conj(), r1)
         out += lib.einsum('mbj,imac->ijabc', tmp, t2[i0:i1])
-        out += lib.einsum('iajm,mbc->ijabc', eris.ovoo.conj()[i0:i1,:,j0:j1], r2)
+        out += lib.einsum('iajm,mbc->ijabc', eris.ovoo[i0:i1,:,j0:j1].conj(), r2)
         out += -lib.einsum('iaeb,jec->ijabc', cache_ovvv_i.conj(), r2[j0:j1])
         out += -lib.einsum('jbec,iae->ijabc', cache_ovvv_j.conj(), r2[i0:i1])
         return out
