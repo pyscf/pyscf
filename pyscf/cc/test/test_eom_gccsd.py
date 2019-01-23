@@ -95,6 +95,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.42789089871467728, 5)
         self.assertAlmostEqual(e[2], 0.50226873136932748, 5)
 
+        e,v = myeom.ipccsd(nroots=3, left=True)
+        self.assertAlmostEqual(e[0], 0.4278908208680458, 5)
+        self.assertAlmostEqual(e[1], 0.4278908208680482, 5)
+        self.assertAlmostEqual(e[2], 0.5022686041399118, 5)
+
+
     def test_ipccsd_koopmans(self):
         e,v = mycc.ipccsd(nroots=3, koopmans=True)
         self.assertAlmostEqual(e[0], 0.42789089871467728, 5)

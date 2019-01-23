@@ -64,6 +64,33 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
+def lipccsd_matvec(eom, vector, imds=None, diag=None):
+    '''IP-CCSD left eigenvector equation.
+
+    For description of args, see ipccsd_matvec.'''
+    if imds is None:
+        imds = eom.make_imds()
+    nocc = eom.nocc
+    nmo = eom.nmo
+    r1, r2 = vector_to_amplitudes_ip(vector, nmo, nocc)
+
+    Hr1 = -lib.einsum('mi,i->m', imds.Foo, r1)
+    Hr1 += -0.5 * lib.einsum('maji,ija->m', imds.Wovoo, r2)
+
+    Hr2 = lib.einsum('me,i->mie', imds.Fov, r1)
+    Hr2 -= lib.einsum('ie,m->mie', imds.Fov, r1)
+    Hr2 += -lib.einsum('nmie,i->mne', imds.Wooov, r1)
+    Hr2 += lib.einsum('ae,ija->ije', imds.Fvv, r2)
+    tmp1 = lib.einsum('mi,ija->mja', imds.Foo, r2)
+    Hr2 += (-tmp1 + tmp1.transpose(1, 0, 2))
+    Hr2 += 0.5 * lib.einsum('mnij,ija->mna', imds.Woooo, r2)
+    tmp2 = lib.einsum('maei,ija->mje', imds.Wovvo, r2)
+    Hr2 += (tmp2 - tmp2.transpose(1, 0, 2))
+    Hr2 += 0.5 * lib.einsum('mnef,ija,ijae->mnf', imds.Woovv, r2, imds.t2)
+
+    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    return vector
+
 def ipccsd_diag(eom, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -89,7 +116,7 @@ def ipccsd_diag(eom, imds=None):
 
 class EOMIP(eom_rccsd.EOMIP):
     matvec = ipccsd_matvec
-    l_matvec = None
+    l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
     ipccsd_star = None
 
