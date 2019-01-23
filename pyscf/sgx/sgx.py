@@ -126,7 +126,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
 
             return with_df.get_jk(dm, hermi, with_j, with_k, self.direct_scf_tol)
 
-        def post_kernel(self):
+        def post_kernel(self, envs):
             self._in_scf = False
             self._last_dm = 0
 

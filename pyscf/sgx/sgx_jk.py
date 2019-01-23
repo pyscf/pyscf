@@ -52,6 +52,7 @@ from pyscf.df.incore import aux_e2
 
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
+    t0 = time.clock(), time.time()
     mol = sgx.mol
     grids = sgx.grids
     gthrd = sgx.grids_thrd
@@ -67,6 +68,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
         fakemol = gto.fakemol_for_charges(grid_coords)
         j3c = aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij', cintopt=cintopt)
         return lib.unpack_tril(j3c.T, out=out)
+    t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
 
     sn = numpy.zeros((nao,nao))
     vj = numpy.zeros_like(dms)
@@ -76,6 +78,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     max_memory = sgx.max_memory - lib.current_memory()[0]
     sblk = sgx.blockdim
     blksize = min(ngrids, max(4, int(min(sblk, max_memory*1e6/8/nao**2))))
+    tnuc = 0, 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
         ao = mol.eval_gto('GTOval', coords)
@@ -93,7 +96,9 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
             fg = fg[:,mask]
             coords = coords[mask]
 
+        tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
         gbn = batch_nuc(mol, coords)
+        tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
 
         if with_j:
             jg = numpy.einsum('gij,xij->xg', gbn, dms)
@@ -105,6 +110,11 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
             gv = lib.einsum('gvt,xgt->xgv', gbn, fg)
             for i in range(nset):
                 vk[i] += lib.einsum('gu,gv->uv', ao, gv[i])
+    t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
+    tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
+    logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
+                  'for tensor contraction (%.2f, %.2f)',
+                  tnuc[0], tnuc[1], tdot[0], tdot[1])
 
     ovlp = mol.intor_symmetric('int1e_ovlp')
     proj = scipy.linalg.solve(sn, ovlp)
@@ -116,10 +126,12 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
         vk = lib.einsum('pi,xpj->xij', proj, vk)
         if hermi == 1:
             vk = (vk + vk.transpose(0,2,1))*.5
+    logger.timer(mol, "vj and vk", *t0)
     return vj.reshape(dm_shape), vk.reshape(dm_shape)
 
 
 def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
+    t0 = time.clock(), time.time()
     mol = sgx.mol
     grids = sgx.grids
     gthrd = sgx.grids_thrd
@@ -151,9 +163,12 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     proj = scipy.linalg.solve(sn, ovlp)
     proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
 
+    t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
     vj = numpy.zeros_like(dms)
     vk = numpy.zeros_like(dms)
+    tnuc = 0, 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
+        print i0
         coords = grids.coords[i0:i1]
         ao = mol.eval_gto('GTOval', coords)
         wao = ao * grids.weights[i0:i1,None]
@@ -168,7 +183,9 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
             fg = fg[:,mask]
             coords = coords[mask]
 
+        tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
         gbn = batch_nuc(mol, coords)
+        tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
 
         if with_j:
             rhog = numpy.einsum('xgu,gu->xg', fg, ao)
@@ -178,9 +195,15 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
             for i in range(nset):
                 gv = lib.einsum('gtv,gt->gv', gbn, fg[i])
                 vk[i] += lib.einsum('gu,gv->uv', ao, gv)
+    t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
+    tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
+    logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
+                  'for tensor contraction (%.2f, %.2f)',
+                  tnuc[0], tnuc[1], tdot[0], tdot[1])
 
     if with_k and hermi == 1:
         vk = (vk + vk.transpose(0,2,1))*.5
+    logger.timer(mol, "vj and vk", *t0)
     return vj.reshape(dm_shape), vk.reshape(dm_shape)
 
 
@@ -196,13 +219,12 @@ def get_gridss(mol, level=1, gthrd=1e-10):
     ao_v *= grids.weights[:,None]
     wao_v0 = ao_v
 
-    # threshold for Xg and Fg
-    logger.debug(mol, 'threshold for grids screening %g', gthrd)
-
     mask = numpy.any(wao_v0>gthrd, axis=1) | numpy.any(wao_v0<-gthrd, axis=1)
     grids.coords = grids.coords[mask]
     grids.weights = grids.weights[mask]
-    logger.timer(mol, "Xg screening", *Ktime)
+    logger.debug(mol, 'threshold for grids screening %g', gthrd)
+    logger.debug(mol, 'number of grids %d', grids.weights.size)
+    logger.timer_debug1(mol, "Xg screening", *Ktime)
     return grids
 
 get_jk = get_jk_favorj
