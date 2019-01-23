@@ -502,10 +502,10 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=No
                    + 1.*lijkab.transpose(2,0,1,3,4)
 
             # Symmetry factors (1 for a == b, 2 for a < b)
-            fac = 2.*np.ones_like(rijkab)
+            fac = 2*np.ones_like(rijkab, dtype=int)
             triu_idx = np.triu_indices(a1-a0,a0+1,m=b1-b0)
-            fac[:,:,:,triu_idx[0],triu_idx[1]] = 0.
-            fac[:,:,:,np.arange(a1-a0),np.arange(a0,b1)] = 1.
+            fac[:,:,:,triu_idx[0],triu_idx[1]] = 0
+            fac[:,:,:,np.arange(a1-a0),np.arange(a0,b1)] = 1
             eijkab *= fac
 
             deltaE += np.einsum('ijkab,ijkab,ijkab', lijkab, rijkab, eijkab)
@@ -860,10 +860,10 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=No
                     + 1.*lijabc.transpose(0,1,4,2,3)
 
             # Symmetry factors (1 for a == b, 2 for a < b)
-            fac = 2.*np.ones_like(rijabc)
+            fac = 2*np.ones_like(rijabc, dtype=int)
             triu_idx = np.triu_indices(i1-i0,i0+1,m=j1-j0)
-            fac[triu_idx[0],triu_idx[1],:,:,:] = 0.
-            fac[np.arange(i1-i0),np.arange(i0,j1)] = 1.
+            fac[triu_idx[0],triu_idx[1],:,:,:] = 0
+            fac[np.arange(i1-i0),np.arange(i0,j1)] = 1
             eijabc *= fac
 
             deltaE += np.einsum('ijabc,ijabc,ijabc',lijabc,rijabc,eijabc)
