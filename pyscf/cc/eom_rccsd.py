@@ -847,8 +847,8 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=No
             eijabc = (mo_e_occ[i0:i1][:,None,None,None,None] +
                       mo_e_occ[j0:j1][None,:,None,None,None] - eabc)
             eijabc = 1./eijabc
-            cache_ovvv_i = eris.ovvv[i0:i1]
-            cache_ovvv_j = eris.ovvv[j0:j1]
+            cache_ovvv_i = eris.get_ovvv(slice(i0,i1))
+            cache_ovvv_j = eris.get_ovvv(slice(j0,j1))
             lijabc = contract_pl2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
             rijabc = contract_pr2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
 
