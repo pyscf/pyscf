@@ -168,7 +168,6 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     vk = numpy.zeros_like(dms)
     tnuc = 0, 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
-        print i0
         coords = grids.coords[i0:i1]
         ao = mol.eval_gto('GTOval', coords)
         wao = ao * grids.weights[i0:i1,None]
