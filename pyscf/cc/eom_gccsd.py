@@ -138,6 +138,14 @@ class EOMIP(eom_rccsd.EOMIP):
         imds.make_ip()
         return imds
 
+class EOMIP_Ta(EOMIP):
+    '''Class for EOM IPCCSD(T)(a) method by Devin Matthews.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_ip()
+        imds.add_t3p2_ip()
+        return imds
+
 ########################################
 # EOM-EA-CCSD
 ########################################
@@ -258,6 +266,14 @@ class EOMEA(eom_rccsd.EOMEA):
         imds.make_ea()
         return imds
 
+
+class EOMEA_Ta(EOMEA):
+    '''Class for EOM EACCSD(T)(a) method by Devin Matthews.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_ea()
+        imds.add_t3p2_ea()
+        return imds
 
 ########################################
 # EOM-EE-CCSD
@@ -439,6 +455,19 @@ class _IMDS:
         logger.timer_debug1(self, 'EOM-CCSD IP intermediates', *cput0)
         return self
 
+    def add_t3p2_ip(self):
+        raise NotImplementedError
+        if not self.made_ip_imds:
+            self.make_ip()
+
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+
+        logger.timer_debug1(self, 'EOM-CCSD(T)a IP intermediates', *cput0)
+        return self
+
+
     def make_ea(self):
         if not self._made_shared:
             self._make_shared()
@@ -455,6 +484,19 @@ class _IMDS:
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-CCSD EA intermediates', *cput0)
         return self
+
+    def add_t3p2_ea(self):
+        raise NotImplementedError
+        if not self.made_ea_imds:
+            self.make_ea()
+
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+
+        logger.timer_debug1(self, 'EOM-CCSD(T)a EA intermediates', *cput0)
+        return self
+
 
     def make_ee(self):
         if not self._made_shared:

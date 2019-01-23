@@ -576,6 +576,14 @@ class EOMIP(EOM):
         return self.e
 
 
+class EOMIP_Ta(EOMIP):
+    '''Class for EOM IPCCSD(T)(a) method by Devin Matthews.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_ip(self.partition)
+        imds.add_t3p2_ip(self.partition)
+        return imds
+
 ########################################
 # EOM-EA-CCSD
 ########################################
@@ -933,6 +941,14 @@ class EOMEA(EOM):
     def eea(self):
         return self.e
 
+
+class EOMEA_Ta(EOMEA):
+    '''Class for EOM EACCSD(T)(a) method by Devin Matthews.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_ea(self.partition)
+        imds.add_t3p2_ea(self.partition)
+        return imds
 
 ########################################
 # EOM-EE-CCSD
@@ -1698,6 +1714,20 @@ class _IMDS:
         log.timer_debug1('EOM-CCSD IP intermediates', *cput0)
         return self
 
+    def add_t3p2_ip(self, ip_partition=None):
+        raise NotImplementedError
+        assert(ip_partition is None)
+        if not hasattr(self, 'Wovoo'):
+            self.make_ip(ip_partition=ip_partition)
+
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+
+        logger.timer_debug1(self, 'EOM-CCSD(T)a IP intermediates', *cput0)
+        return self
+
+
     def make_ea(self, ea_partition=None):
         self._make_shared_1e()
         if not self._made_shared_2e and ea_partition != 'mp':
@@ -1716,6 +1746,19 @@ class _IMDS:
             self.Wvvvv = imd.Wvvvv(t1, t2, eris)
             self.Wvvvo = imd.Wvvvo(t1, t2, eris, self.Wvvvv)
         log.timer_debug1('EOM-CCSD EA intermediates', *cput0)
+        return self
+
+    def add_t3p2_ea(self, ea_partition=None):
+        raise NotImplementedError
+        assert(ea_partition is None)
+        if not hasattr(self, 'Wvovv'):
+            self.make_ea(ea_partition=ea_partition)
+
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+
+        logger.timer_debug1(self, 'EOM-CCSD(T)a EA intermediates', *cput0)
         return self
 
 
