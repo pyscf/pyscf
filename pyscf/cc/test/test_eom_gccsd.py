@@ -117,6 +117,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.19050592141957523, 6)
         self.assertAlmostEqual(e[2], 0.28345228596676159, 6)
 
+        e,v = myeom.eaccsd(nroots=3, left=True)
+        self.assertAlmostEqual(e[0], 0.1905059282334537, 6)
+        self.assertAlmostEqual(e[1], 0.1905059282334538, 6)
+        self.assertAlmostEqual(e[2], 0.2834522921515028, 6)
+
     def test_eaccsd_koopmans(self):
         e,v = mycc.eaccsd(nroots=3, koopmans=True)
         self.assertAlmostEqual(e[0], 0.19050592141957523, 6)

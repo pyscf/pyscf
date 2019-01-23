@@ -153,6 +153,36 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
 
+def leaccsd_matvec(eom, vector, imds=None, diag=None):
+    '''EA-CCSD left eigenvector equation.
+
+    For description of args, see eaccsd_matvec.'''
+    # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(32)-(33)
+    if imds is None:
+        imds = eom.make_imds()
+    nocc = eom.nocc
+    nmo = eom.nmo
+    nvir = nmo - nocc
+    r1, r2 = vector_to_amplitudes_ea(vector, nmo, nocc)
+
+    # Eq. (32)
+    Hr1 = lib.einsum('ac,a->c',imds.Fvv,r1)
+    Hr1 += 0.5*lib.einsum('abcj,jab->c',imds.Wvvvo,r2)
+    # Eq. (33)
+    Hr2 = lib.einsum('alcd,a->lcd',imds.Wvovv,r1)
+    Hr2 += lib.einsum('ld,a->lad',imds.Fov,r1)
+    Hr2 -= lib.einsum('la,d->lad',imds.Fov,r1)
+    tmp1 = lib.einsum('ac,jab->jcb',imds.Fvv,r2)
+    Hr2 += (tmp1 - tmp1.transpose(0,2,1))
+    Hr2 += -lib.einsum('lj,jab->lab',imds.Foo,r2)
+    tmp2 = lib.einsum('lbdj,jab->lad',imds.Wovvo,r2)
+    Hr2 += (tmp2 - tmp2.transpose(0,2,1))
+    Hr2 += 0.5*lib.einsum('abcd,jab->jcd',imds.Wvvvv,r2)
+    Hr2 += -0.5*lib.einsum('klcd,jab,kjab->lcd',imds.Woovv,r2,imds.t2)
+
+    vector = amplitudes_to_vector_ea(Hr1,Hr2)
+    return vector
+
 def eaccsd_diag(eom, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -179,7 +209,7 @@ def eaccsd_diag(eom, imds=None):
 
 class EOMEA(eom_rccsd.EOMEA):
     matvec = eaccsd_matvec
-    l_matvec = None
+    l_matvec = eaccsd_matvec
     get_diag = eaccsd_diag
     eaccsd_star = None
 
