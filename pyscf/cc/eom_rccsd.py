@@ -257,7 +257,7 @@ def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
                right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds, type1=typ1, type2=type2, with_t3p2=with_t3p2,
+               imds=imds, type1=type1, type2=type2, with_t3p2=with_t3p2,
                with_t3p2_imds=with_t3p2_imds)
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
@@ -461,10 +461,10 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=No
         out += -lib.einsum('bjim,kma->ijkab', vooo[b0:b1].conj(), r2[:,:,a0:a1])
         return out
 
-    def contract_pr2p(r1, r2, a0, a1, b0, b1, cache_ovvv_a, cache_ovvv_b):
+    def contract_pr2p(r1, r2, a0, a1, b0, b1, cache_vvop_a, cache_vvop_b):
         '''Create P(ia|jb) of perturbed r2.'''
-        out = contract_r2p(r1, r2, a0, a1, b0, b1, cache_ovvv_a)
-        out += contract_r2p(r1, r2, b0, b1, a0, a1, cache_ovvv_b).transpose(1,0,2,4,3)  # P(ia|jb)
+        out = contract_r2p(r1, r2, a0, a1, b0, b1, cache_vvop_a)
+        out += contract_r2p(r1, r2, b0, b1, a0, a1, cache_vvop_b).transpose(1,0,2,4,3)  # P(ia|jb)
         return out
 
     ipccsd_evecs  = np.array(ipccsd_evecs)
@@ -599,7 +599,7 @@ def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
                right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds, type1=typ1, type2=type2, with_t3p2=with_t3p2,
+               imds=imds, type1=type1, type2=type2, with_t3p2=with_t3p2,
                with_t3p2_imds=with_t3p2_imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
