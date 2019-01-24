@@ -156,6 +156,7 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
 
     right_evecs, left_evecs = [np.atleast_2d(x) for x in [right_evecs, left_evecs]]
     right_evals, left_evals = [np.atleast_1d(x) for x in [right_evals, left_evals]]
+    right_converged, left_converged = [np.atleast_1d(x) for x in [right_converged, left_converged]]
 
     srt_right_idx = []
     srt_left_idx = []
