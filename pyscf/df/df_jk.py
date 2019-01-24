@@ -145,6 +145,9 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def _cderi(self, x):
             self.with_df._cderi = x
 
+        def nuc_grad_method(self):
+            raise NotImplementedError
+
     return DFHF(mf)
 
 # A tag to label the derived SCF class
