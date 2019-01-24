@@ -23,7 +23,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
-from pyscf.cc import gccsd, eom_gccsd
+from pyscf.cc import gccsd, eom_gccsd, gintermediates
 
 mol = gto.Mole()
 mol.atom = [
@@ -229,6 +229,53 @@ class KnownValues(unittest.TestCase):
     def test_eomee_diag(self):
         vec = eom_gccsd.EOMEE(mycc1).get_diag()
         self.assertAlmostEqual(lib.finger(vec), 1853.7201843910152+4488.8163311564713j, 9)
+
+    #def test_t3p2_intermediates(self):
+    #    e, pt1, pt2, Wmcik, Wacek = gintermediates.get_t3p2_imds_slow(mycc1, mycc1.t1, mycc1.t2)
+    #    self.assertAlmostEqual(e.real, , 6)
+    #    self.assertAlmostEqual(lib.finger(pt1), , 6)
+    #    self.assertAlmostEqual(lib.finger(pt2), , 6)
+    #    self.assertAlmostEqual(lib.finger(Wmcik), , 6)
+    #    self.assertAlmostEqual(lib.finger(Wacek), , 6)
+
+    def test_h2o_star(self):
+        mol_h2o = gto.Mole()
+        mol_h2o.atom = [
+                [8, [0.000000000000000, -0.000000000000000, -0.124143731294022]],
+                [1, [0.000000000000000, -1.430522735894536,  0.985125550040314]],
+                [1, [0.000000000000000,  1.430522735894536,  0.985125550040314]]]
+        mol_h2o.unit = 'B'
+        mol_h2o.basis = {'H' : [[0,
+                               [5.4471780, 0.156285],
+                               [0.8245472, 0.904691]],
+                               [0, [0.1831916, 1.0]]],
+                        'O' : '3-21G'}
+        mol_h2o.verbose = 7
+        mol_h2o.output = '/dev/null'
+        mol_h2o.build()
+        mol.conv_tol = 1e-12
+        mf_h2o = scf.RHF(mol_h2o)
+        mf_h2o.conv_tol_grad = 1e-12
+        mf_h2o.kernel()
+        mycc_h2o = cc.GCCSD(mf_h2o).run()
+        mycc_h2o.conv_tol_normt = 1e-12
+        mycc_h2o.kernel()
+
+        myeom = eom_gccsd.EOMIP(mycc_h2o)
+        e = myeom.ipccsd_star(nroots=2)
+        self.assertAlmostEqual(e[0], 0.41066198624319733, 6)  # CFOUR: 0.41066196630606711
+
+        myeom = eom_gccsd.EOMIP_Ta(mycc_h2o)
+        e = myeom.ipccsd_star(nroots=2)
+        self.assertAlmostEqual(e[0], 0.41169566773392446, 6)  # CFOUR: 0.41169584994017255
+
+        myeom = eom_gccsd.EOMEA(mycc_h2o)
+        e = myeom.eaccsd_star(nroots=2)
+        self.assertAlmostEqual(e[0], 0.2505898373154793, 6)  # CFOUR: 0.25058985399561007
+
+        myeom = eom_gccsd.EOMEA_Ta(mycc_h2o)
+        e = myeom.eaccsd_star(nroots=2)
+        self.assertAlmostEqual(e[0], 0.2507202761960313, 6)  # CFOUR: 0.25072181725671577
 
 if __name__ == "__main__":
     print("Tests for EOM GCCSD")
