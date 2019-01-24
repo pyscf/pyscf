@@ -56,9 +56,9 @@ if rank == 0:
 # Running EACCSD and EACCSD*
 lew, lev = kcc.leaccsd(nroots=1, kptlist=[0])
 ew, ev   = kcc.eaccsd(nroots=1,  kptlist=[0])
-kcc.eaccsd_star(ew, ev, lev)
+kcc.eaccsd_star_contract(ew, ev, lev)
 
 # Running IPCCSD and IPCCSD*
 lew, lev = kcc.lipccsd(nroots=1, kptlist=[0])
 ew, ev   = kcc.ipccsd(nroots=1,  kptlist=[0])
-kcc.ipccsd_star(ew, ev, lev)
+kcc.ipccsd_star_contract(ew, ev, lev)
