@@ -129,6 +129,9 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             else:
                 return casscf_class._exact_paaa(self, mol, u, out)
 
+        def nuc_grad_method(self):
+            raise NotImplementedError
+
     return DFCASSCF()
 
 # A tag to label the derived MCSCF class
