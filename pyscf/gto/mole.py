@@ -2494,10 +2494,20 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol._env = mol._env.copy()
         if unit is None:
             unit = mol.unit
+        else:
+            mol.unit = unit
         if symmetry is None:
             symmetry = mol.symmetry
 
+        if isinstance(atoms_or_coords, numpy.ndarray):
+            mol.atom = list(zip([x[0] for x in mol._atom],
+                                atoms_or_coords.tolist()))
+        else:
+            mol.atom = atoms_or_coords
+
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
+            mol._atom = mol.atom
+
             if isinstance(unit, (str, unicode)):
                 if unit.upper().startswith(('B', 'AU')):
                     unit = 1.
@@ -2510,11 +2520,6 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
             mol._env[ptr+2] = unit * atoms_or_coords[:,2]
         else:
-            if isinstance(atoms_or_coords, numpy.ndarray):
-                mol.atom = list(zip([x[0] for x in mol._atom], atoms_or_coords))
-            else:
-                mol.atom = atoms_or_coords
-            mol.unit = unit
             mol.symmetry = symmetry
             mol.build(False, False)
 

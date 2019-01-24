@@ -23,6 +23,7 @@ import numpy as np
 from pyscf.lib import finger
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
+from pyscf.pbc import dft as pbcdft
 from pyscf.pbc import df as pbc_df
 
 import pyscf.cc
@@ -156,26 +157,25 @@ def _run_ea_matvec(cc, r1, r2, kshift):
         Hr1, Hr2 = cc.vector_to_amplitudes_ea(vector)
     return Hr1, Hr2
 
+
 def run_kcell(cell, n, nk):
     #############################################
     # Do a k-point calculation                  #
     #############################################
     abs_kpts = cell.make_kpts(nk, wrap_around=True)
+    #cell.verbose = 7
 
-    #############################################
-    # Running HF                                #
-    #############################################
+    # HF
     kmf = pbcscf.KRHF(cell, abs_kpts, exxdiv=None)
     kmf.conv_tol = 1e-14
-    #kmf.verbose = 7
     ekpt = kmf.scf()
 
-
+    # CCSD
     cc = pbcc.kccsd_rhf.RCCSD(kmf)
-    cc.conv_tol=1e-8
-    #cc.verbose = 7
+    cc.conv_tol = 1e-8
     ecc, t1, t2 = cc.kernel()
     return ekpt, ecc
+
 
 class KnownValues(unittest.TestCase):
     def test_311_n1_high_cost(self):
@@ -409,6 +409,225 @@ class KnownValues(unittest.TestCase):
         # Run CC calculations
         self._test_cu_metallic_nonequal_occ(kmf, cell, -0.96676526820520137)
 
+    def test_ccsd_t_non_hf(self):
+        '''Tests ccsd and ccsd_t for non-Hartree-Fock references.'''
+        n = 14
+        cell = make_test_cell.test_cell_n3([n]*3)
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcdft.KRKS(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KRCCSD(khf)
+        eris = mycc.ao2mo()
+        ekcc, t1, t2 = mycc.kernel(eris=eris)
+
+        ekcc_t = mycc.ccsd_t(eris=eris)
+
+        # Run supercell
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nk)
+        rks = pbcdft.RKS(supcell)
+        erks = rks.kernel()
+
+        rhf = pbcscf.RHF(supcell)
+        rhf.__dict__.update(rks.__dict__)
+
+        mycc = pbcc.RCCSD(rhf)
+        eris = mycc.ao2mo()
+        ercc, t1, t2 = mycc.kernel(eris=eris)
+        self.assertAlmostEqual(ercc/np.prod(nk), -0.15632445245405927, 6)
+        self.assertAlmostEqual(ercc/np.prod(nk), ekcc, 6)
+
+        ercc_t = mycc.ccsd_t(eris=eris)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), -0.00114619248449, 6)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
+
+    def test_ccsd_t_non_hf_frozen(self):
+        '''Tests ccsd and ccsd_t for non-Hartree-Fock references with frozen orbitals.'''
+        n = 14
+        cell = make_test_cell.test_cell_n3([n]*3)
+        #import sys
+        #cell.stdout = sys.stdout
+        #cell.verbose = 7
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcdft.KRKS(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KRCCSD(khf, frozen=1)
+        eris = mycc.ao2mo()
+        ekcc, t1, t2 = mycc.kernel(eris=eris)
+
+        ekcc_t = mycc.ccsd_t(eris=eris)
+
+        # Run supercell
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nk)
+        rks = pbcdft.RKS(supcell)
+        erks = rks.kernel()
+
+        rhf = pbcscf.RHF(supcell)
+        rhf.__dict__.update(rks.__dict__)
+
+        mycc = pbcc.RCCSD(rhf, frozen=2)
+        eris = mycc.ao2mo()
+        ercc, t1, t2 = mycc.kernel(eris=eris)
+        self.assertAlmostEqual(ercc/np.prod(nk), -0.11467718013872311, 6)
+        self.assertAlmostEqual(ercc/np.prod(nk), ekcc, 6)
+
+        ercc_t = mycc.ccsd_t(eris=eris)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), -0.00066503872045200996, 6)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
+
+    def test_ccsd_t_hf(self):
+        '''Tests ccsd and ccsd_t for Hartree-Fock references.'''
+        n = 14
+        cell = make_test_cell.test_cell_n3([n]*3)
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcscf.KRHF(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KRCCSD(khf)
+        eris = mycc.ao2mo()
+        ekcc, t1, t2 = mycc.kernel(eris=eris)
+        ekcc_t = mycc.ccsd_t(eris=eris)
+
+        # Run supercell
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nk)
+        rks = pbcscf.RHF(supcell)
+        erks = rks.kernel()
+
+        rhf = pbcscf.RHF(supcell)
+        rhf.__dict__.update(rks.__dict__)
+
+        mycc = pbcc.RCCSD(rhf)
+        eris = mycc.ao2mo()
+        ercc, t1, t2 = mycc.kernel(eris=eris)
+        self.assertAlmostEqual(ercc/np.prod(nk), -0.15530756381467772, 6)
+        self.assertAlmostEqual(ercc/np.prod(nk), ekcc, 6)
+
+        ercc_t = mycc.ccsd_t(eris=eris)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), -0.0011112735513837887, 6)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
+
+    def test_ccsd_t_hf_frozen(self):
+        '''Tests ccsd and ccsd_t for Hartree-Fock references with frozen orbitals.'''
+        n = 14
+        cell = make_test_cell.test_cell_n3([n]*3)
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcscf.KRHF(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KRCCSD(khf, frozen=1)
+        eris = mycc.ao2mo()
+        ekcc, t1, t2 = mycc.kernel(eris=eris)
+        ekcc_t = mycc.ccsd_t(eris=eris)
+
+        # Run supercell
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nk)
+        rks = pbcscf.RHF(supcell)
+        erks = rks.kernel()
+
+        rhf = pbcscf.RHF(supcell)
+        rhf.__dict__.update(rks.__dict__)
+
+        mycc = pbcc.RCCSD(rhf, frozen=2)
+        eris = mycc.ao2mo()
+        ercc, t1, t2 = mycc.kernel(eris=eris)
+        self.assertAlmostEqual(ercc/np.prod(nk), -0.1137362020855094, 6)
+        self.assertAlmostEqual(ercc/np.prod(nk), ekcc, 6)
+
+        ercc_t = mycc.ccsd_t(eris=eris)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), -0.0006758642528821, 6)
+        self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
+
+    def test_rccsd_t_hf_against_so(self):
+        '''Tests restricted ccsd and ccsd_t for Hartree-Fock references against
+        the general spin-orbital implementation.'''
+        n = 7
+        cell = make_test_cell.test_cell_n3([n]*3)
+        #import sys
+        #cell.stdout = sys.stdout
+        #cell.verbose = 7
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcscf.KRHF(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KGCCSD(khf, frozen=0)
+        eris = mycc.ao2mo()
+        ekgcc, t1, t2 = mycc.kernel(eris=eris)
+        ekgcc_t = mycc.ccsd_t(eris=eris)
+
+        mycc = pbcc.KRCCSD(khf, frozen=0)
+        eris = mycc.ao2mo()
+        ekrcc, t1, t2 = mycc.kernel(eris=eris)
+        ekrcc_t = mycc.ccsd_t(eris=eris)
+
+        self.assertAlmostEqual(ekrcc_t, -0.00216678709982, 6)
+        self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
+
+    def test_rccsd_t_non_hf_against_so(self):
+        '''Tests restricted ccsd and ccsd_t for non Hartree-Fock references against
+        the general spin-orbital implementation.'''
+        n = 7
+        cell = make_test_cell.test_cell_n3([n]*3)
+        #import sys
+        #cell.stdout = sys.stdout
+        #cell.verbose = 7
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcscf.KRKS(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KGCCSD(khf, frozen=0)
+        eris = mycc.ao2mo()
+        ekgcc, t1, t2 = mycc.kernel(eris=eris)
+        ekgcc_t = mycc.ccsd_t(eris=eris)
+
+        mycc = pbcc.KRCCSD(khf, frozen=0)
+        eris = mycc.ao2mo()
+        ekrcc, t1, t2 = mycc.kernel(eris=eris)
+        ekrcc_t = mycc.ccsd_t(eris=eris)
+
+        self.assertAlmostEqual(ekrcc_t, -0.0021709465899365336, 6)
+        self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
+
     def test_ccsd_t_high_cost(self):
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
@@ -418,10 +637,12 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KRHF(cell, kpts=kpts)
         ehf = kmf.kernel()
 
-        rand_cc = pbcc.KRCCSD(kmf)
-        ecc, t1, t2 = rand_cc.kernel()
+        mycc = pbcc.KRCCSD(kmf)
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
 
-        energy_t = kccsd_t_rhf.kernel(rand_cc)
+        eris.mo_energy = [eris.fock[i].diagonal() for i in range(len(kpts))]
+        energy_t = kccsd_t_rhf.kernel(mycc, eris=eris)
         energy_t_bench = -0.00191443154358
         self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 
@@ -684,7 +905,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0][1], -4.254298274388934, 6)
         self.assertAlmostEqual(e[0][2], -3.471710821688812, 6)
         self.assertAlmostEqual(e[0][3], -3.462817764320668, 6)
-
 
     def test_h4_fcc_k2_frozen(self):
         '''Metallic hydrogen fcc lattice with frozen lowest lying occupied

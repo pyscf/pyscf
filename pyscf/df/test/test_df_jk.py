@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ class KnownValues(unittest.TestCase):
     def test_rhf(self):
         mf = scf.density_fit(scf.RHF(mol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+        self.assertTrue(mf._eri is None)
 
     def test_uhf(self):
         mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
