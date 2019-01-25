@@ -537,12 +537,15 @@ class EOMIP(EOM):
 
     kernel = ipccsd
     ipccsd = ipccsd
+    ipccsd_star = ipccsd_star
+
     matvec = ipccsd_matvec
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
-    ipccsd_star_contract = ipccsd_star_contract
     ccsd_star_contract = ipccsd_star_contract
-    ipccsd_star = ipccsd_star
+
+    def ipccsd_star_contract(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
+        return self.ccsd_star_contract(ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=imds)
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()
@@ -902,12 +905,15 @@ class EOMEA(EOM):
 
     kernel = eaccsd
     eaccsd = eaccsd
+    eaccsd_star = eaccsd_star
+
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
-    eaccsd_star_contract = eaccsd_star_contract
     ccsd_star_contract = eaccsd_star_contract
-    eaccsd_star = eaccsd_star
+
+    def eaccsd_star_contract(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
+        return self.ccsd_star_contract(eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=imds)
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()

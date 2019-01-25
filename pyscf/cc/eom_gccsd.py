@@ -230,7 +230,6 @@ class EOMIP(eom_rccsd.EOMIP):
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
     ccsd_star_contract = ipccsd_star_contract
-    ipccsd_star_contract = ipccsd_star_contract
 
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
@@ -464,7 +463,6 @@ class EOMEA(eom_rccsd.EOMEA):
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
-    eaccsd_star_contract = eaccsd_star_contract
     ccsd_star_contract = eaccsd_star_contract
 
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
