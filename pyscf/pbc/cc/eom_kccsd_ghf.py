@@ -32,11 +32,13 @@ from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_rccsd
-from pyscf.pbc.cc import kccsd
 from pyscf.pbc.lib import kpts_helper
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib.kpts_helper import member, gamma_point
 from pyscf import __config__
 from pyscf.pbc.cc import kintermediates as imd
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 
 einsum = lib.einsum
 
@@ -75,7 +77,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     eom.dump_flags()
 
     if imds is None:
-        imds = eom.make_imds(eris)
+        imds = eom.make_imds(eris=eris)
 
     size = eom.vector_size()
     nroots = min(nroots,size)
@@ -83,6 +85,12 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
     if kptlist is None:
         kptlist = range(nkpts)
+
+    # Make the max number of roots the maximum number of occupied orbitals at any given
+    # kpoint in the list
+    for k, kshift in enumerate(kptlist):
+        nfrozen = np.sum(eom.mask_frozen(np.zeros(size, dtype=int), kshift, const=1))
+        nroots = min(nroots, size - nfrozen)
 
     if dtype is None:
         dtype = np.result_type(*imds.t1)
@@ -93,6 +101,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
     for k, kshift in enumerate(kptlist):
         matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
+        diag = eom.mask_frozen(diag, kshift, const=LARGE_DENOM)
 
         user_guess = False
         if guess:
@@ -102,7 +111,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
                 assert g.size == size
         else:
             user_guess = False
-            guess = eom.get_init_guess(nroots, koopmans, diag)
+            guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
 
         def precond(r, e0, x0):
             return r/(e0-diag+1e-12)
@@ -126,8 +135,6 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         evecs[k] = evecs_k
         convs[k] = conv_k
 
-        if nroots == 1:
-            evals_k, evecs_k = [evals_k], [evecs_k]
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
             r1, r2 = eom.vector_to_amplitudes(vn)
             qp_weight = np.linalg.norm(r1)**2
@@ -191,6 +198,9 @@ def enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, excitation):
             r2[kj, ka] = r2_tmp.reshape(nocc, nvir, nvir)
             r2[kj, kb] = -r2[kj, ka].transpose(0, 2, 1)  # Enforce antisymmetry
     return r2
+
+def get_padding_k_idx(eom, cc):
+    return padding_k_idx(cc, kind="split")
 
 ########################################
 # EOM-IP-CCSD
@@ -402,17 +412,44 @@ def ipccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
                      partition=partition, kptlist=kptlist, dtype=dtype)
     return eom.e, eom.v
 
+def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
+    '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
+    r1, r2 = eom.vector_to_amplitudes(vector)
+    nkpts = eom.nkpts
+    nocc, nmo = eom.nocc, eom.nmo
+    nvir = nmo - nocc
+    kconserv = eom.kconserv
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = eom.nonzero_opadding, eom.nonzero_vpadding
+
+    new_r1 = const * np.ones_like(r1)
+    new_r2 = const * np.ones_like(r2)
+
+    new_r1[nonzero_opadding[kshift]] = r1[nonzero_opadding[kshift]]
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            kb = kconserv[ki, kshift, kj]
+            idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
+            new_r2[idx] = r2[idx]
+
+    return eom.amplitudes_to_vector(new_r1, new_r2)
+
 class EOMIP(eom_rccsd.EOM):
     def __init__(self, cc):
         self.kpts = cc.kpts
+        self.nonzero_opadding, self.nonzero_vpadding = self.get_padding_k_idx(cc)
+        self.kconserv = cc.khelper.kconserv
         eom_rccsd.EOM.__init__(self, cc)
 
     kernel = ipccsd
     ipccsd = ipccsd
     get_diag = ipccsd_diag
     matvec = ipccsd_matvec
+    mask_frozen = mask_frozen_ip
+    get_padding_k_idx = get_padding_k_idx
 
-    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
@@ -421,12 +458,14 @@ class EOMIP(eom_rccsd.EOM):
             for n in range(nroots):
                 g = np.zeros(int(size), dtype)
                 g[self.nocc-n-1] = 1.0
+                g = self.mask_frozen(g, kshift, const=0.0)
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
             for i in idx:
                 g = np.zeros(int(size), dtype)
                 g[i] = 1.0
+                g = self.mask_frozen(g, kshift, const=0.0)
                 guess.append(g)
         return guess
 
@@ -459,8 +498,8 @@ class EOMIP(eom_rccsd.EOM):
         nkpts = self.nkpts
         return nocc + nkpts**2*nocc*nocc*nvir
 
-    def make_imds(self, eris=None, t1=None, t2=None):
-        imds = _IMDS(self._cc, eris, t1, t2)
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
         imds.make_ip()
         return imds
 
@@ -660,32 +699,60 @@ def eaccsd_diag(eom, kshift, imds=None):
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
 
+def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
+    '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
+    r1, r2 = eom.vector_to_amplitudes(vector)
+    kconserv = eom.kconserv
+    nkpts = eom.nkpts
+    nocc, nmo = eom.nocc, eom.nmo
+    nvir = nmo - nocc
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = eom.nonzero_opadding, eom.nonzero_vpadding
+
+    new_r1 = const * np.ones_like(r1)
+    new_r2 = const * np.ones_like(r2)
+
+    new_r1[nonzero_vpadding[kshift]] = r1[nonzero_vpadding[kshift]]
+    for kj in range(nkpts):
+        for ka in range(nkpts):
+            kb = kconserv[kshift, ka, kj]
+            idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
+            new_r2[idx] = r2[idx]
+
+    return eom.amplitudes_to_vector(new_r1, new_r2)
+
 class EOMEA(eom_rccsd.EOM):
     def __init__(self, cc):
         self.kpts = cc.kpts
+        self.nonzero_opadding, self.nonzero_vpadding = self.get_padding_k_idx(cc)
+        self.kconserv = cc.khelper.kconserv
         eom_rccsd.EOM.__init__(self, cc)
-        self.kshift = 0
 
     kernel = eaccsd
     eaccsd = eaccsd
     get_diag = eaccsd_diag
     matvec = eaccsd_matvec
+    mask_frozen = mask_frozen_ea
+    get_padding_k_idx = get_padding_k_idx
 
-    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
             for n in range(nroots):
-                g = np.zeros(size, dtype=dtype)
+                g = np.zeros(int(size), dtype=dtype)
                 g[n] = 1.0
+                g = self.mask_frozen(g, kshift, const=0.0)
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
             for i in idx:
-                g = np.zeros(size, dtype=dtype)
+                g = np.zeros(int(size), dtype=dtype)
                 g[i] = 1.0
+                g = self.mask_frozen(g, kshift, const=0.0)
                 guess.append(g)
         return guess
 
@@ -718,8 +785,8 @@ class EOMEA(eom_rccsd.EOM):
         nkpts = self.nkpts
         return nocc + nkpts**2*nocc*nocc*nvir
 
-    def make_imds(self, eris=None, t1=None, t2=None):
-        imds = _IMDS(self._cc, eris, t1, t2)
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris)
         imds.make_ea()
         return imds
 
@@ -728,17 +795,12 @@ class _IMDS:
     # -- rintermediates --> gintermediates
     # -- Loo, Lvv, cc_Fov --> Foo, Fvv, Fov
     # -- One less 2-virtual intermediate
-    def __init__(self, cc, eris=None, t1=None, t2=None):
+    def __init__(self, cc, eris=None):
         self._cc = cc
         self.verbose = cc.verbose
         self.kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
         self.stdout = cc.stdout
-        if t1 is None:
-            t1 = cc.t1
-        self.t1 = t1
-        if t2 is None:
-            t2 = cc.t2
-        self.t2 = t2
+        self.t1, self.t2 = cc.t1, cc.t2
         if eris is None:
             eris = cc.ao2mo()
         self.eris = eris
