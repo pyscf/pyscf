@@ -137,11 +137,11 @@ def padded_mo_coeff(mp, mo_coeff):
     padding_convention = padding_k_idx(mp, kind="joint")
     nkpts = mp.nkpts
 
-    result = (np.zeros((nkpts, mo_coeff[0][0].shape[0], mp.nmo), dtype=mo_coeff[0][0].dtype),
-              np.zeros((nkpts, mo_coeff[1][0].shape[0], mp.nmo), dtype=mo_coeff[0][0].dtype))
+    result = (np.zeros((nkpts, mo_coeff[0][0].shape[0], mp.nmo[0]), dtype=mo_coeff[0][0].dtype),
+              np.zeros((nkpts, mo_coeff[1][0].shape[0], mp.nmo[1]), dtype=mo_coeff[0][0].dtype))
     for spin in [0, 1]:
         for k in range(nkpts):
-            result[spin][np.ix_([k], np.arange(result.shape[1]), padding_convention[k])] = \
+            result[spin][np.ix_([k], np.arange(result[spin].shape[1]), padding_convention[spin][k])] = \
                 mo_coeff[spin][k][:, frozen_mask[spin][k]]
 
     return result
