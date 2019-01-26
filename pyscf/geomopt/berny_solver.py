@@ -76,28 +76,25 @@ def to_berny_log(pyscf_log):
 
 def as_berny_solver(method, assert_convergence=ASSERT_CONV,
                     include_ghost=INCLUDE_GHOST):
-    '''Generate a solver for berny optimize function.
+    '''Generate a solver to compute energy and gradients for the berny
+    optimization function.
     '''
-    mol = method.mol.copy()
     if isinstance(method, lib.GradScanner):
         g_scanner = method
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
-        g_scanner.verbose -= 1
     else:
         raise NotImplementedError('Nuclear gradients of %s not available' % method)
 
     if not include_ghost:
-        g_scanner.atmlst = numpy.where(mol.atom_charges() != 0)[0]
+        g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
 
-    geom = yield
-    while True:
-        mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
+    def solver(mol):
         energy, gradients = g_scanner(mol)
         if assert_convergence and not g_scanner.converged:
             raise RuntimeError('Nuclear gradients of %s not converged' % method)
-
-        geom = yield energy, gradients
+        return energy, gradients
+    return solver
 
 def as_pyscf_method(mol, scan_function):
     '''Creat an wrapper for the given scan_function, to make it work as a
@@ -139,7 +136,7 @@ def as_pyscf_method(mol, scan_function):
 
 
 def optimize(method, assert_convergence=ASSERT_CONV,
-             include_ghost=INCLUDE_GHOST, **kwargs):
+             include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
     '''Optimize the geometry with the given method.
     '''
     mol = method.mol.copy()
@@ -154,20 +151,38 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     berny_log = to_berny_log(log)
     solver = as_berny_solver(method, assert_convergence, include_ghost)
     geom = to_berny_geom(mol, include_ghost)
-    next(solver)
     optimizer = Berny(geom, log=berny_log, **kwargs)
     e_last = 0
     for cycle, geom in enumerate(optimizer):
-        energy, gradients = solver.send(geom)
+        if log.verbose >= lib.logger.NOTE:
+            log.note('\nGeometry optimization cycle %d', cycle+1)
+            _dump_mol_geometry(mol, geom, log)
+        mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
+        energy, gradients = solver(mol)
         log.note('cycle %d: E = %.12g  dE = %g  norm(grad) = %g', cycle+1,
                  energy, energy - e_last, numpy.linalg.norm(gradients))
         e_last = energy
         optimizer.send((energy, gradients))
-    mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
+        if callable(callback):
+            callback(locals())
     return mol
 kernel = optimize
 
 del(INCLUDE_GHOST, ASSERT_CONV)
+
+def _dump_mol_geometry(mol, geom, log):
+    atoms = list(geom)
+    new_coords = numpy.array([x[1] for x in atoms])
+    old_coords = mol.atom_coords() * lib.param.BOHR
+    dx = new_coords - old_coords
+
+    log.stdout.write('Cartesian coordinates (Angstrom)\n')
+    log.stdout.write(' Atom        New coordinates             dX        dY        dZ\n')
+    for i in range(mol.natm):
+        log.stdout.write('%4s %10.6f %10.6f %10.6f   %9.6f %9.6f %9.6f\n' %
+                         (mol.atom_symbol(i),
+                          new_coords[i,0], new_coords[i,1], new_coords[i,2],
+                          dx[i,0], dx[i,1], dx[i,2]))
 
 
 if __name__ == '__main__':

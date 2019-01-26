@@ -111,7 +111,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
         self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
         self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
@@ -162,7 +162,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMEA(mycc)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
-        e = myeom.eaccsd_star(e, v, lv)
+        e = myeom.eaccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
         self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
         self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
@@ -378,7 +378,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc2)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
         self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
         self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
@@ -417,7 +417,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMEA(mycc2)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
-        e = myeom.eaccsd_star(e, v, lv)
+        e = myeom.eaccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
         self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
         self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
@@ -577,7 +577,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc3)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
         self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
         self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
@@ -616,7 +616,7 @@ class KnownValues(unittest.TestCase):
 #
 #        myeom = eom_rccsd.EOMEA(mycc3)
 #        lv = myeom.eaccsd(nroots=3, left=True)[1]
-#        e = myeom.eaccsd_star(e, v, lv)
+#        e = myeom.eaccsd_star_contract(e, v, lv)
 #        self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
 #        self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
 #        self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
@@ -738,6 +738,36 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
         self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
 
+    def test_sort_left_right_eigensystem(self):
+        myeom = eom_rccsd.EOMIP(mycc)
+        right_evecs = [numpy.ones(10)] * 4
+        left_evecs = [numpy.ones(10)] * 5
+        right_evecs = [x*i for i, x in enumerate(right_evecs)]
+        left_evecs = [x*i for i, x in enumerate(left_evecs)]
+        revals, revecs, levecs = eom_rccsd._sort_left_right_eigensystem(
+            myeom,
+            [True, False, True, True], [-1.1, 0, 1.1, 2.2], right_evecs,
+            [True, True, True, False, True], [-2.2, -1.1, 0, 1.1, 2.2], left_evecs)
+        self.assertEqual(revals[0], -1.1)
+        self.assertEqual(revals[1], 2.2)
+        self.assertEqual(revecs[0][0], 0)
+        self.assertEqual(revecs[1][0], 3)
+        self.assertEqual(levecs[0][0], 1)
+        self.assertEqual(levecs[1][0], 4)
+
+        revals, revecs, levecs = eom_rccsd._sort_left_right_eigensystem(
+            myeom,
+            [True, False, True, True], [-1.1, 0, 1.1, 2.2], right_evecs,
+            [True, True, False, True, True], [-2.2, -1.1, 0, 1.1, 2.2], left_evecs)
+        self.assertEqual(revals[0], -1.1)
+        self.assertEqual(revals[1], 1.1)
+        self.assertEqual(revals[2], 2.2)
+        self.assertEqual(revecs[0][0], 0)
+        self.assertEqual(revecs[1][0], 2)
+        self.assertEqual(revecs[2][0], 3)
+        self.assertEqual(levecs[0][0], 1)
+        self.assertEqual(levecs[1][0], 3)
+        self.assertEqual(levecs[2][0], 4)
 
 #    def test_ea_matvec3(self):
 #        numpy.random.seed(12)

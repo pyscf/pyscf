@@ -95,6 +95,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.42789089871467728, 5)
         self.assertAlmostEqual(e[2], 0.50226873136932748, 5)
 
+        e,lv = myeom.ipccsd(nroots=3, left=True)
+        self.assertAlmostEqual(e[0], 0.4278908208680458, 5)
+        self.assertAlmostEqual(e[1], 0.4278908208680482, 5)
+        self.assertAlmostEqual(e[2], 0.5022686041399118, 5)
+
+        e = myeom.ipccsd_star_contract(e, v, lv)
+        self.assertAlmostEqual(e[0], 0.4358615224789573, 5)
+        self.assertAlmostEqual(e[1], 0.4358615224789594, 5)
+        #self.assertAlmostEqual(e[2], 0.5095767839056080, 5)  # Sometimes left and right
+                                                              # evecs have small (~zero) overlap,
+                                                              # causing numerical error
+
+
     def test_ipccsd_koopmans(self):
         e,v = mycc.ipccsd(nroots=3, koopmans=True)
         self.assertAlmostEqual(e[0], 0.42789089871467728, 5)
@@ -116,6 +129,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0], 0.19050592141957523, 6)
         self.assertAlmostEqual(e[1], 0.19050592141957523, 6)
         self.assertAlmostEqual(e[2], 0.28345228596676159, 6)
+
+        e,lv = myeom.eaccsd(nroots=3, left=True)
+        self.assertAlmostEqual(e[0], 0.1905059282334537, 6)
+        self.assertAlmostEqual(e[1], 0.1905059282334538, 6)
+        self.assertAlmostEqual(e[2], 0.2834522921515028, 6)
+
+        e = myeom.eaccsd_star_contract(e, v, lv)
+        self.assertAlmostEqual(e[0], 0.1894169322207168, 6)
+        self.assertAlmostEqual(e[1], 0.1894169322207168, 6)
+        self.assertAlmostEqual(e[2], 0.2820757599337823, 6)
 
     def test_eaccsd_koopmans(self):
         e,v = mycc.eaccsd(nroots=3, koopmans=True)

@@ -149,8 +149,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         # Note in pbc.scf, mf.mol == mf.cell, cell is saved under key "mol"
         chkfile.save_mol(mol, mf.chkfile)
 
-#    # A preprocessing hook before the SCF iteration
-#    mf.pre_kernel(locals())
+    # A preprocessing hook before the SCF iteration
+    mf.pre_kernel(locals())
 
     scf_conv = False
     cycle = 0
@@ -221,8 +221,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
             mf.dump_chk(locals())
 
     logger.timer(mf, 'scf_cycle', *cput0)
-#    # A post-processing hook before return
-#    mf.post_kernel(locals())
+    # A post-processing hook before return
+    mf.post_kernel(locals())
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 
