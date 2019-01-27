@@ -32,6 +32,8 @@ from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import member, gamma_point
+from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
+                                padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf import __config__
 
@@ -76,6 +78,11 @@ def update_amps(cc, t1, t2, eris):
     fOO_ = eris.fock[1][:,:noccb,:noccb]
     fov_ = eris.fock[0][:,:nocca,nocca:]
     fOV_ = eris.fock[1][:,:noccb,noccb:]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_padding_alpha, nonzero_padding_beta = padding_k_idx(cc, kind="split")
+    nonzero_opadding_alpha, nonzero_vpadding_alpha = nonzero_padding_alpha
+    nonzero_opadding_beta, nonzero_vpadding_beta = nonzero_padding_beta
 
     mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
     mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
@@ -261,7 +268,7 @@ def update_amps(cc, t1, t2, eris):
         ky = kconserv[kz, kx, ku]
         Ht2ab[ky,kx,ku] -= lib.einsum('ie, ma, bjme->jiba', t1b[kx], t1b[kz], eris.voOV[ku,kw,kz])
 
-    
+
     #:Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO, P, P)
     #:Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, eris.OOvv, P, P)
     #for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
@@ -381,25 +388,36 @@ def update_amps(cc, t1, t2, eris):
     eia = []
     eIA = []
     for ki in range(nkpts):
-        eia.append([mo_ea_o[ki][:,None] - mo_ea_v[ka] for ka in range(nkpts)])
-        eIA.append([mo_eb_o[ki][:,None] - mo_eb_v[ka] for ka in range(nkpts)])
+        tmp_alpha = []
+        tmp_beta = []
+        for ka in range(nkpts):
+            tmp_eia = LARGE_DENOM * np.ones((nocca, nvira), dtype=eris.mo_energy[0][0].dtype)
+            tmp_eIA = LARGE_DENOM * np.ones((noccb, nvirb), dtype=eris.mo_energy[0][0].dtype)
+            n0_ovp_ia = np.ix_(nonzero_opadding_alpha[ki], nonzero_vpadding_alpha[ka])
+            n0_ovp_IA = np.ix_(nonzero_opadding_beta[ki], nonzero_vpadding_beta[ka])
+
+            tmp_eia = (mo_ea_o[ki][:,None] - mo_ea_v[ka])[n0_ovp_ia]
+            tmp_eIA = (mo_eb_o[ki][:,None] - mo_eb_v[ka])[n0_ovp_IA]
+            tmp_alpha.append(tmp_eia)
+            tmp_beta.append(tmp_eIA)
+        eia.append(tmp_alpha)
+        eIA.append(tmp_beta)
 
     for ki in range(nkpts):
-        Ht1a[ki] /= eia[ki][ki]
-        Ht1b[ki] /= eIA[ki][ki]
+        ka = ki
+        # Remove zero/padded elements from denominator
+        Ht1a[ki] /= eia[ki][ka]
+        Ht1b[ki] /= eIA[ki][ka]
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
         eijab = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2aa[ki,kj,ka] /= eijab
 
         eijab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2ab[ki,kj,ka] /= eijab
 
         eijab = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2bb[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
@@ -706,17 +724,37 @@ class KUCCSD(uccsd.UCCSD):
         mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
         mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
 
+        # Get location of padded elements in occupied and virtual space
+        nonzero_padding_alpha, nonzero_padding_beta = padding_k_idx(self, kind="split")
+        nonzero_opadding_alpha, nonzero_vpadding_alpha = nonzero_padding_alpha
+        nonzero_opadding_beta, nonzero_vpadding_beta = nonzero_padding_beta
+
+        eia = []
+        eIA = []
+        # Create denominators, ignoring padded elements
+        for ki in range(nkpts):
+            tmp_alpha = []
+            tmp_beta = []
+            for ka in range(nkpts):
+                tmp_eia = LARGE_DENOM * np.ones((nocca, nvira), dtype=eris.mo_energy[0][0].dtype)
+                tmp_eIA = LARGE_DENOM * np.ones((noccb, nvirb), dtype=eris.mo_energy[0][0].dtype)
+                n0_ovp_ia = np.ix_(nonzero_opadding_alpha[ki], nonzero_vpadding_alpha[ka])
+                n0_ovp_IA = np.ix_(nonzero_opadding_beta[ki], nonzero_vpadding_beta[ka])
+
+                tmp_eia = (mo_ea_o[ki][:,None] - mo_ea_v[ka])[n0_ovp_ia]
+                tmp_eIA = (mo_eb_o[ki][:,None] - mo_eb_v[ka])[n0_ovp_IA]
+                tmp_alpha.append(tmp_eia)
+                tmp_beta.append(tmp_eIA)
+            eia.append(tmp_alpha)
+            eIA.append(tmp_beta)
+
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            Daa = (mo_ea_o[ki][:,None,None,None] + mo_ea_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_ea_v[kb][None,None,None,:])
-            Dab = (mo_ea_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
-            Dbb = (mo_eb_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_eb_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
+            Daa = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
+            Dab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
+            Dbb = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
 
-            # Due to padding; see above discussion concerning t1new in update_amps()
             idx = np.where(abs(Daa) < LOOSE_ZERO_TOL)[0]
             Daa[idx] = LARGE_DENOM
             idx = np.where(abs(Dab) < LOOSE_ZERO_TOL)[0]
@@ -829,6 +867,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     nkpts = cc.nkpts
     mo_coeff = eris.mo_coeff
     mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
+    mo_coeff = padded_mo_coeff(cc, mo_coeff)
     nocca, noccb = eris.nocc
     nmoa, nmob = cc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
