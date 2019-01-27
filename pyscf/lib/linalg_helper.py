@@ -562,14 +562,17 @@ def pick_real_eigs(w, v, nroots, x0):
     imaginary component, then constructs approximate real eigenvectors if
     quasi-real eigenvalues were found.
     '''
+    threshold = 1e-3
     abs_imag = abs(w.imag)
-    max_imag_tol = max(1e-3, min(abs_imag)*1.1)
-    realidx = numpy.where((abs_imag < max_imag_tol))[0]
-    if len(realidx) < nroots and w.size >= nroots:
-        warnings.warn('%d eigenvalues with imaginary part > 0.01\n' %
-                      numpy.count_nonzero(abs_imag > 1e-2))
+    # Grab `nroots` number of e with small(est) imaginary components
+    max_imag_tol = max(threshold, numpy.sort(abs_imag)[min(w.size,nroots)-1])
+    real_idx = numpy.where((abs_imag <= max_imag_tol))[0]
+    nbelow_thresh = numpy.count_nonzero(abs_imag[real_idx] < threshold)
+    if nbelow_thresh < nroots and w.size >= nroots:
+        warnings.warn('%d eigenvalues with imaginary part < %4.3g\n' %
+                      (nbelow_thresh, threshold))
 
-    w, v, idx = _eigs_cmplx2real(w, v, realidx)
+    w, v, idx = _eigs_cmplx2real(w, v, real_idx)
     return w, v, idx
 
 # If the complex eigenvalue has small imaginary part, both the real part
