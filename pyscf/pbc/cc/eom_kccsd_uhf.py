@@ -53,6 +53,8 @@ def amplitudes_to_vector_ip(r1, r2):
     nkpts = r2aaa.shape[0]
     nocca, noccb = r1a.shape[0], r1b.shape[0]
     nvira, nvirb = r2aaa.shape[2], r2bbb.shape[2]
+    # From symmetry for aaa and bbb terms, only store lower
+    # triangular part (ki,i) < (kj,j)
     idxa, idya = np.tril_indices(nkpts*nocca, -1)
     idxb, idyb = np.tril_indices(nkpts*noccb, -1)
     r2aaa = r2aaa.transpose(0,2,1,3,4).reshape(nkpts*nocca,nkpts*nocca,nvira)
@@ -80,14 +82,14 @@ def vector_to_amplitudes_ip(vector, nkpts, nmo, nocc):
 
     r2aaa = np.zeros((nkpts*nocca,nkpts*nocca,nvira), dtype=r2a.dtype)
     r2aaa[idxa,idya] = r2a.copy()
-    r2aaa[idya,idxa] = -r2a.copy()  # Fill in value :  kj, j <= ki, i
+    r2aaa[idya,idxa] = -r2a.copy()  # Fill in value :  kj, j < ki, i
     r2aaa = r2aaa.reshape(nkpts,nocca,nkpts,nocca,nvira)
     r2aaa = r2aaa.transpose(0,2,1,3,4)
     r2baa = r2baa.reshape(nkpts,nkpts,noccb,nocca,nvira).copy()
     r2abb = r2abb.reshape(nkpts,nkpts,nocca,noccb,nvirb).copy()
     r2bbb = np.zeros((nkpts*noccb,nkpts*noccb,nvirb), dtype=r2b.dtype)
     r2bbb[idxb,idyb] = r2b.copy()
-    r2bbb[idyb,idxb] = -r2b.copy()  # Fill in value :  kj, j <= ki, i
+    r2bbb[idyb,idxb] = -r2b.copy()  # Fill in value :  kj, j < ki, i
     r2bbb = r2bbb.reshape(nkpts,noccb,nkpts,noccb,nvirb)
     r2bbb = r2bbb.transpose(0,2,1,3,4)
 
@@ -508,9 +510,6 @@ class EOMIP(eom_kgccsd.EOMIP):
             g[i] = 1.0
             g = self.mask_frozen(g, kshift, const=0.0)
             guess.append(g)
-        print "guess"
-        for i in range(nroots):
-            print guess[i][:nocca + noccb]
         return guess
 
     def gen_matvec(self, kshift, imds=None, left=False, **kwargs):
@@ -537,9 +536,6 @@ class EOMIP(eom_kgccsd.EOMIP):
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
         nkpts = self.nkpts
-        #return nocca + noccb + nkpts**2*nocca*nocca*nvira + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts**2*noccb*noccb*nvirb
-        #return nocca + noccb + nkpts**2*nocca*(nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts**2*noccb*noccb*nvirb
-        #return nocca + noccb + nkpts**2*nocca*(nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts**2*noccb*(noccb-1)*nvirb//2
         return nocca + noccb + nkpts*nocca*(nkpts*nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts*noccb*(nkpts*noccb-1)*nvirb//2
 
     def make_imds(self, eris=None, t1=None, t2=None):

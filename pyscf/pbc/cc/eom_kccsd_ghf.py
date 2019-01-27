@@ -147,7 +147,6 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
                 qp_weight = np.linalg.norm(r1)**2
             else: # for EOM-UCCSD
                 r1 = np.hstack([x.ravel() for x in r1])
-                print np.linalg.norm(r1), [np.linalg.norm(x) for x in r2]
                 qp_weight = np.linalg.norm(r1)**2
             logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %0.6g',
                         n, en, qp_weight)
