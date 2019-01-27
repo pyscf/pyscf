@@ -89,8 +89,14 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     # Make the max number of roots the maximum number of occupied orbitals at any given
     # kpoint in the list
     for k, kshift in enumerate(kptlist):
-        nfrozen = np.sum(eom.mask_frozen(np.zeros(size, dtype=int), kshift, const=1))
-        nroots = min(nroots, size - nfrozen)
+        frozen_orbs = eom.mask_frozen(np.zeros(size, dtype=int), kshift, const=1)
+        if isinstance(frozen_orbs, tuple):
+            nfrozen  = (np.sum(frozen_orbs[0]), np.sum(frozen_orbs[1]))
+            nroots = min(nroots, size - nfrozen[0])
+            nroots = min(nroots, size - nfrozen[1])
+        else:
+            nfrozen = np.sum(frozen_orbs)
+            nroots = min(nroots, size - nfrozen)
 
     if dtype is None:
         dtype = np.result_type(*imds.t1)
@@ -137,7 +143,12 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
             r1, r2 = eom.vector_to_amplitudes(vn)
-            qp_weight = np.linalg.norm(r1)**2
+            if isinstance(r1, np.ndarray):
+                qp_weight = np.linalg.norm(r1)**2
+            else: # for EOM-UCCSD
+                r1 = np.hstack([x.ravel() for x in r1])
+                print np.linalg.norm(r1), [np.linalg.norm(x) for x in r2]
+                qp_weight = np.linalg.norm(r1)**2
             logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %0.6g',
                         n, en, qp_weight)
     log.timer('EOM-CCSD', *cput0)
