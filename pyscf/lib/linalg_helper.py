@@ -576,10 +576,12 @@ def pick_real_eigs(w, v, nroots, x0):
 # and the imaginary part of the eigenvector can approximately be used as
 # the "real" eigen solutions.
 def _eigs_cmplx2real(w, v, real_idx):
+    '''Note: Problems can arise when we take the imaginary part of the
+    eigenvector when it has zero-norm.'''
     idx = real_idx[w[real_idx].real.argsort()]
     w = w[idx]
     v = v[:,idx]
-    degen_idx = numpy.where(w.imag != 0)[0]
+    degen_idx = numpy.where(abs(w.imag) > 1e-8)[0]
     if degen_idx.size > 0:
         # Take the imaginary part of the "degenerated" eigenvectors as an
         # independent eigenvector
@@ -687,7 +689,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             return e, x
 davidson_nosym = eig
 
-def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
+def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=3, max_space=12,
                     lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
                     dot=numpy.dot, callback=None,
                     nroots=1, lessio=False, left=False, pick=pick_real_eigs,
@@ -849,6 +851,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
+                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
         else:
             for k, ek in enumerate(e):
                 if dx_norm[k]**2 > lindep:

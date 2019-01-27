@@ -34,9 +34,12 @@ from pyscf.cc import eom_uccsd
 from pyscf.pbc.cc import eom_kccsd_ghf as eom_kgccsd
 from pyscf.pbc.cc import kccsd
 from pyscf.pbc.lib import kpts_helper
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib.kpts_helper import member, gamma_point
 from pyscf import __config__
 from pyscf.pbc.cc import kintermediates_uhf
+from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
+                                padded_mo_coeff, padding_k_idx)
 
 einsum = lib.einsum
 
@@ -47,24 +50,46 @@ einsum = lib.einsum
 def amplitudes_to_vector_ip(r1, r2):
     r1a, r1b = r1
     r2aaa, r2baa, r2abb, r2bbb = r2
-    return np.hstack((r1a, r1b,
-                      r2aaa.ravel(), r2baa.ravel(),
-                      r2abb.ravel(), r2bbb.ravel()))
+    nkpts = r2aaa.shape[0]
+    nocca, noccb = r1a.shape[0], r1b.shape[0]
+    nvira, nvirb = r2aaa.shape[2], r2bbb.shape[2]
+    idxa, idya = np.tril_indices(nkpts*nocca, -1)
+    idxb, idyb = np.tril_indices(nkpts*noccb, -1)
+    r2aaa = r2aaa.transpose(0,2,1,3,4).reshape(nkpts*nocca,nkpts*nocca,nvira)
+    r2bbb = r2bbb.transpose(0,2,1,3,4).reshape(nkpts*noccb,nkpts*noccb,nvirb)
+    return np.hstack((r1a, r1b, r2aaa[idxa,idya].ravel(),
+                      r2baa.ravel(), r2abb.ravel(),
+                      r2bbb[idxb,idyb].ravel()))
 
 def vector_to_amplitudes_ip(vector, nkpts, nmo, nocc):
     nocca, noccb = nocc
     nmoa, nmob = nmo
     nvira, nvirb = nmoa-nocca, nmob-noccb
 
-    sizes = (nocca, noccb, nkpts**2*nocca*nocca*nvira, nkpts**2*noccb*nocca*nvira,
-             nkpts**2*nocca*noccb*nvirb, nkpts**2*noccb*noccb*nvirb)
+    sizes = (nocca, noccb, (nkpts*nocca)*(nkpts*nocca-1)*nvira//2,
+             nkpts**2*noccb*nocca*nvira, nkpts**2*nocca*noccb*nvirb,
+             nkpts*noccb*(nkpts*noccb-1)*nvirb//2)
     sections = np.cumsum(sizes[:-1])
-    r1a, r1b, r2aaa, r2baa, r2abb, r2bbb = np.split(vector, sections)
+    r1a, r1b, r2a, r2baa, r2abb, r2b = np.split(vector, sections)
 
-    r2aaa = r2aaa.reshape(nkpts,nkpts,nocca,nocca,nvira).copy()
+    r2a = r2a.reshape(nkpts*nocca*(nkpts*nocca-1)//2,nvira)
+    r2b = r2b.reshape(nkpts*noccb*(nkpts*noccb-1)//2,nvirb)
+
+    idxa, idya = np.tril_indices(nkpts*nocca, -1)
+    idxb, idyb = np.tril_indices(nkpts*noccb, -1)
+
+    r2aaa = np.zeros((nkpts*nocca,nkpts*nocca,nvira), dtype=r2a.dtype)
+    r2aaa[idxa,idya] = r2a.copy()
+    r2aaa[idya,idxa] = -r2a.copy()  # Fill in value :  kj, j <= ki, i
+    r2aaa = r2aaa.reshape(nkpts,nocca,nkpts,nocca,nvira)
+    r2aaa = r2aaa.transpose(0,2,1,3,4)
     r2baa = r2baa.reshape(nkpts,nkpts,noccb,nocca,nvira).copy()
     r2abb = r2abb.reshape(nkpts,nkpts,nocca,noccb,nvirb).copy()
-    r2bbb = r2bbb.reshape(nkpts,nkpts,noccb,noccb,nvirb).copy()
+    r2bbb = np.zeros((nkpts*noccb,nkpts*noccb,nvirb), dtype=r2b.dtype)
+    r2bbb[idxb,idyb] = r2b.copy()
+    r2bbb[idyb,idxb] = -r2b.copy()  # Fill in value :  kj, j <= ki, i
+    r2bbb = r2bbb.reshape(nkpts,noccb,nkpts,noccb,nvirb)
+    r2bbb = r2bbb.transpose(0,2,1,3,4)
 
     r1 = (r1a.copy(), r1b.copy())
     r2 = (r2aaa, r2baa, r2abb, r2bbb)
@@ -374,6 +399,73 @@ def ipccsd_diag(eom, kshift, imds=None):
     vector = amplitudes_to_vector_ip((Hr1a,Hr1b), (Hr2aaa,Hr2baa,Hr2abb,Hr2bbb))
     return vector
 
+def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
+    '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
+    r1, r2 = eom.vector_to_amplitudes(vector)
+    r1a, r1b = r1
+    r2aaa, r2baa, r2abb, r2bbb = r2
+    nkpts = eom.nkpts
+    nocca, noccb = eom.nocc
+    nmoa, nmob = eom.nmo
+    nvira = nmoa - nocca
+    nvirb = nmob - noccb
+    kconserv = eom.kconserv
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = eom.nonzero_opadding, eom.nonzero_vpadding
+    nonzero_opadding_a, nonzero_opadding_b = nonzero_opadding
+    nonzero_vpadding_a, nonzero_vpadding_b = nonzero_vpadding
+
+    new_r1a = const * np.ones_like(r1a)
+    new_r1b = const * np.ones_like(r1b)
+    new_r2aaa = const * np.ones_like(r2aaa)
+    new_r2baa = const * np.ones_like(r2baa)
+    new_r2abb = const * np.ones_like(r2abb)
+    new_r2bbb = const * np.ones_like(r2bbb)
+
+    # r1a/b case
+    new_r1a[nonzero_opadding_a[kshift]] = r1a[nonzero_opadding_a[kshift]]
+    new_r1b[nonzero_opadding_b[kshift]] = r1b[nonzero_opadding_b[kshift]]
+
+    # r2aaa case
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            kb = kconserv[ki, kshift, kj]
+            idx = np.ix_([ki], [kj], nonzero_opadding_a[ki], nonzero_opadding_a[kj], nonzero_vpadding_a[kb])
+            new_r2aaa[idx] = r2aaa[idx]
+
+    # r2baa case
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            kb = kconserv[ki, kshift, kj]
+            idx = np.ix_([ki], [kj], nonzero_opadding_b[ki], nonzero_opadding_a[kj], nonzero_vpadding_a[kb])
+            new_r2baa[idx] = r2baa[idx]
+
+    # r2abb case
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            kb = kconserv[ki, kshift, kj]
+            idx = np.ix_([ki], [kj], nonzero_opadding_a[ki], nonzero_opadding_b[kj], nonzero_vpadding_b[kb])
+            new_r2abb[idx] = r2abb[idx]
+
+    # r2bbb case
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            kb = kconserv[ki, kshift, kj]
+            idx = np.ix_([ki], [kj], nonzero_opadding_b[ki], nonzero_opadding_b[kj], nonzero_vpadding_b[kb])
+            new_r2bbb[idx] = r2bbb[idx]
+
+    return eom.amplitudes_to_vector((new_r1a,new_r1b), (new_r2aaa,new_r2baa,new_r2abb,new_r2bbb))
+
+
+def get_padding_k_idx(eom, cc):
+    # Get location of padded elements in occupied and virtual space
+    nonzero_padding_alpha, nonzero_padding_beta = padding_k_idx(cc, kind="split")
+    nonzero_opadding_alpha, nonzero_vpadding_alpha = nonzero_padding_alpha
+    nonzero_opadding_beta, nonzero_vpadding_beta = nonzero_padding_beta
+    return ((nonzero_opadding_alpha, nonzero_opadding_beta),
+            (nonzero_vpadding_alpha, nonzero_vpadding_beta))
+
 
 class EOMIP(eom_kgccsd.EOMIP):
     def __init__(self, cc):
@@ -384,21 +476,41 @@ class EOMIP(eom_kgccsd.EOMIP):
 
     get_diag = ipccsd_diag
     matvec = ipccsd_matvec
-    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+    get_padding_k_idx = get_padding_k_idx
+    mask_frozen = mask_frozen_ip
+
+    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
         #TODO check this
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
+        nocca, noccb = self.nocc
         guess = []
         if koopmans:
-            nocca, noccb = self.nocc
-            idx = diag[:nocca + noccb].argsort()
+            idx = np.zeros(nroots, dtype=np.int)
+            idxa = self.nocc[0] - 1  # Starting point for putting in guess
+            idxb = self.nocc[0] + self.nocc[1] - 1
+            count = 0
+            while( count < nroots ):
+                if count % 2 == 0:  # Place an alpha spin guess
+                    idx[count] = idxa
+                    idxa -= 1
+                else:  # Place a beta spin guess
+                    idx[count] = idxb
+                    idxb -= 1
+                count += 1
         else:
+            nocca, noccb = self.nocc
             idx = diag.argsort()
+
         for i in idx[:nroots]:
             g = np.zeros(size, dtype)
             g[i] = 1.0
+            g = self.mask_frozen(g, kshift, const=0.0)
             guess.append(g)
+        print "guess"
+        for i in range(nroots):
+            print guess[i][:nocca + noccb]
         return guess
 
     def gen_matvec(self, kshift, imds=None, left=False, **kwargs):
@@ -425,7 +537,10 @@ class EOMIP(eom_kgccsd.EOMIP):
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
         nkpts = self.nkpts
-        return nocca + noccb + nkpts**2*nocca*nocca*nvira + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts**2*noccb*noccb*nvirb
+        #return nocca + noccb + nkpts**2*nocca*nocca*nvira + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts**2*noccb*noccb*nvirb
+        #return nocca + noccb + nkpts**2*nocca*(nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts**2*noccb*noccb*nvirb
+        #return nocca + noccb + nkpts**2*nocca*(nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts**2*noccb*(noccb-1)*nvirb//2
+        return nocca + noccb + nkpts*nocca*(nkpts*nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts*noccb*(nkpts*noccb-1)*nvirb//2
 
     def make_imds(self, eris=None, t1=None, t2=None):
         imds = _IMDS(self._cc, eris, t1, t2)
@@ -740,6 +855,8 @@ def eaccsd_diag(eom, kshift, imds=None):
     vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
     return vector
 
+def mask_frozen_ea():
+    raise NotImplementedError
 
 class EOMEA(eom_kgccsd.EOMEA):
     def __init__(self, cc):
@@ -750,22 +867,37 @@ class EOMEA(eom_kgccsd.EOMEA):
 
     get_diag = eaccsd_diag
     matvec = eaccsd_matvec
+    get_padding_k_idx = get_padding_k_idx
+    mask_frozen = mask_frozen_ea
 
-    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
+        nocca, noccb = self.nocc
         guess = []
         if koopmans:
-            nocca, noccb = self.nocc
+            idx = np.zeros(nroots, dtype=np.int)
+            idxa = 0  # Starting point for putting in guess
+            idxb = nocca + 0
+            count = 0
+            while( count < nroots ):
+                if count % 2 == 0:  # Place an alpha spin guess
+                    idx[count] = idxa
+                    idxa += 1
+                else:  # Place a beta spin guess
+                    idx[count] = idxb
+                    idxb += 1
+                count += 1
+        else:
             nmoa, nmob = self.nmo
             nvira, nvirb = nmoa - nocca, nmob - noccb
-            idx = diag[:nvira+nvirb].argsort()
-        else:
             idx = diag.argsort()
+
         for i in idx[:nroots]:
             g = np.zeros(size, dtype)
             g[i] = 1.0
+            g = self.mask_frozen(g, kshift, const=0.0)
             guess.append(g)
         return guess
 
