@@ -253,9 +253,9 @@ class KnownValues(unittest.TestCase):
         mol_h2o.verbose = 7
         mol_h2o.output = '/dev/null'
         mol_h2o.build()
-        mol.conv_tol = 1e-12
         mf_h2o = scf.RHF(mol_h2o)
         mf_h2o.conv_tol_grad = 1e-12
+        mf_h20.conv_tol = 1e-12
         mf_h2o.kernel()
         mycc_h2o = cc.GCCSD(mf_h2o).run()
         mycc_h2o.conv_tol_normt = 1e-12
