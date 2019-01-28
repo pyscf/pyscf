@@ -1169,7 +1169,7 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
     import os
     os.system("rm -f %s/node0/Rotation*.state-1.tmp"%(mc.fcisolver.scratchDirectory))
     os.system("rm -f %s/node0/wave*.-1.tmp"         %(mc.fcisolver.scratchDirectory))
-    os.system("rm -f %s/node0/RestartReorder.dat_1" %(mc.fcisolver.scratchDirectory))
+    # os.system("rm -f %s/node0/RestartReorder.dat_1" %(mc.fcisolver.scratchDirectory))
 
     # FCIsolver initiation
     mc.fcisolver.startM = 100
@@ -1281,24 +1281,24 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
     sys.stdout.flush()
 
     # =========================================
-    # BACKUP FILE TO -1
+    # BACKUP RestartReorder.dat FILE TO _1
     # =========================================
-    #backup the restartreorder file to -1. this is because responseaaav and responseaaac both overwrite this file
+    #backup the restartreorder file to _1. this is because responseaaav and responseaaac both overwrite this file
     #this means that when we want to restart a calculation after lets say responseaaav didnt finish, the new calculaitons
     #will use the restartreorder file that was written by the incomplete responseaaav run instead of the original dmrg run.
     reorder=[]
-    reorderf1 = "%s/node0/RestartReorder.dat_1"%(mc.fcisolver.scratchDirectory)
+    reorder_bak_f = "%s/node0/RestartReorder.dat_1"%(mc.fcisolver.scratchDirectory)
     reorderf = "%s/node0/RestartReorder.dat"%(mc.fcisolver.scratchDirectory)
     import os.path
-    reorder1present = os.path.isfile(reorderf1)
-    if (reorder1present):
+    reorder_bak_present = os.path.isfile(reorder_bak_f)
+    if (reorder_bak_present):
         from subprocess import check_call
-        if os.path.isfile(reorderf1):
-          check_call("cp %s %s"%(reorderf1, reorderf), shell=True)
+        if os.path.isfile(reorder_bak_f):
+          check_call("cp -p %s %s"%(reorder_bak_f, reorderf), shell=True)
     else :
         from subprocess import check_call
         if os.path.isfile(reorderf):
-          check_call("cp %s %s"%(reorderf, reorderf1), shell=True)
+          check_call("cp -p %s %s"%(reorderf, reorder_bak_f), shell=True)
     if os.path.isfile(reorderf):
       reorder = numpy.loadtxt(reorderf)
 
