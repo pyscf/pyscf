@@ -142,7 +142,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         convs[k] = conv_k
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-            r1, r2 = eom.vector_to_amplitudes(vn)
+            r1, r2 = eom.vector_to_amplitudes(vn, kshift=kshift)
             if isinstance(r1, np.ndarray):
                 qp_weight = np.linalg.norm(r1)**2
             else: # for EOM-UCCSD
@@ -493,7 +493,7 @@ class EOMIP(eom_rccsd.EOM):
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, nkpts=None, nmo=None, nocc=None):
+    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         if nkpts is None: nkpts = self.nkpts
@@ -711,7 +711,7 @@ def eaccsd_diag(eom, kshift, imds=None):
 
 def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-    r1, r2 = eom.vector_to_amplitudes(vector)
+    r1, r2 = eom.vector_to_amplitudes(vector, kshift=kshift)
     kconserv = eom.kconserv
     nkpts = eom.nkpts
     nocc, nmo = eom.nocc, eom.nmo
@@ -780,7 +780,7 @@ class EOMEA(eom_rccsd.EOM):
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, nkpts=None, nmo=None, nocc=None):
+    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         if nkpts is None: nkpts = self.nkpts
