@@ -382,6 +382,9 @@ class gw(scf):
         out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')
         if self.nspin==1:
             out_file.write('Energy-sorted MO indices \t {}'.format(self.argsort[0]))
+            if (np.allclose(self.argsort,np.sort(self.argsort))==False):
+                    print ("Warning: Swapping in orbital energies are obtained!")
+                    out_file.write("\nWarning: Swapping in orbital energies are obtained!")
             print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
             out_file.write("\n   n  %14s %14s %7s \n" % ("E_mf", "E_gw", "occ") )
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -397,7 +400,10 @@ class gw(scf):
             out_file.write('G0W0 HOMO-LUMO gap  (eV):%16.7f\n'%(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
         elif self.nspin==2:
             for s in range(2):
-              out_file.write('\nEnergy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
+                out_file.write('\nEnergy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
+                if (np.allclose(self.argsort[s],np.sort(self.argsort[s]))==False):
+                    print ("Warning: Swapping in orbital energies are obtained at spin {} channel!".format(s+1))
+                    out_file.write("\nWarning: Swapping in orbital energies are obtained at spin {} channel!\n".format(s+1))         
             print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -417,7 +423,7 @@ class gw(scf):
         out_file.write('G0W0 Total energy   (eV):%16.7f\n'%(self.etot_gw*HARTREE2EV))
         elapsed_time = time.time() - start_time
         print('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
-        out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
+        out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))         
         out_file.close
  
     
