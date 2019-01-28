@@ -569,8 +569,8 @@ def pick_real_eigs(w, v, nroots, x0):
     real_idx = numpy.where((abs_imag <= max_imag_tol))[0]
     nbelow_thresh = numpy.count_nonzero(abs_imag[real_idx] < threshold)
     if nbelow_thresh < nroots and w.size >= nroots:
-        warnings.warn('%d eigenvalues with imaginary part < %4.3g\n' %
-                      (nbelow_thresh, threshold))
+        warnings.warn('Only %d eigenvalues (out of %3d requested roots) with imaginary part < %4.3g.\n'
+                      % (nbelow_thresh, min(w.size,nroots), threshold))
 
     w, v, idx = _eigs_cmplx2real(w, v, real_idx)
     return w, v, idx
