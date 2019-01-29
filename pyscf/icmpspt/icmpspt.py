@@ -673,10 +673,9 @@ def writeMRLCCIntegralsLEGACY(mc, E1, E2, nfro):
 
     return energyE0, norb
 
-
-def execute(nelec, ncor, ncas, nfro, ms2, type,\
-                naux=0, memory=10,\
-                fully_ic=False, third_order=False, cumulantE4=False, df=False, no_handcoded_E3=False):
+def write_ic_inputs(nelec, ncor, ncas, nfro, ms2, type, naux=0, memory=10,
+                    fully_ic=False, third_order=False, cumulantE4=False,
+                    df=False, no_handcoded_E3=False):
     methods = ['_CCVV', '_CCAV', '_ACVV', '_CCAA', '_AAVV', '_CAAV']
     domains = ['eecc','ccae','eeca','ccaa','eeaa','caae']
     if (fully_ic):
@@ -688,10 +687,6 @@ def execute(nelec, ncor, ncas, nfro, ms2, type,\
     if (third_order):
         methods+=['3']
 
-    # For each method
-    totalE = 0.0
-    print("--ICPT executable:%s\n"%(executable))
-    print("Second-order:")
     for method in methods:
         # Prepare Input
         f = open("%s.inp"%(type+method), 'w')
@@ -723,7 +718,40 @@ def execute(nelec, ncor, ncas, nfro, ms2, type,\
         if (no_handcoded_E3 and not df):
           f.write('handcodedE3 0\n')
         f.close();
+    sys.stdout.flush()
 
+def write_uc_inputs(mc, reorder,fciExtraLine,root,norb, nfro=0, totalE=0,
+                   type="MRLCC", AAAVsplit=1, PTM=1000):
+    for k in range(AAAVsplit):
+      writeAAAConfFile(mc.nelecas[0], mc.nelecas[1], mc.ncore,        mc.ncas,  norb,\
+                       mc.fcisolver, PTM, "AAAV", mc.fcisolver.memory,\
+                       mc.fcisolver.num_thrds, reorder, fciExtraLine,\
+                       root=root, name = type,\
+                       aaavsplit=AAAVsplit, aaavIter=k)
+    writeAAAConfFile(  mc.nelecas[0], mc.nelecas[1], mc.ncore-nfro, mc.ncas,  norb-nfro,\
+                       mc.fcisolver, PTM, "AAAC", mc.fcisolver.memory,\
+                       mc.fcisolver.num_thrds, reorder, fciExtraLine,\
+                       root=root, name=type)
+    sys.stdout.flush()
+
+
+def executeIC(nelec, ncor, ncas, nfro, type, fully_ic=False, third_order=False):
+    methods = ['_CCVV', '_CCAV', '_ACVV', '_CCAA', '_AAVV', '_CAAV']
+    domains = ['eecc','ccae','eeca','ccaa','eeaa','caae']
+    if (fully_ic):
+        methods+=['_AAAV', '_AAAC']
+        domains+=['eaaa','caaa']
+    if (ncor - nfro) == 0:
+        methods = ['_AAVV']
+        domains = ['eeaa']
+    if (third_order):
+        methods+=['3']
+
+    # For each method
+    totalE = 0.0
+    print("--ICPT executable:%s\n"%(executable))
+    print("Second-order:")
+    for method in methods:
         # Run icpt
         from subprocess import check_call,CalledProcessError
         infile="%s.inp"%(type+method)
@@ -764,24 +792,7 @@ def execute(nelec, ncor, ncas, nfro, ms2, type,\
       return 0.0
 
 
-def executeUC(mc, reorder,fciExtraLine,root,norb,\
-                  nfro=0,\
-                  totalE=0,\
-                  type="MRLCC",\
-                  AAAVsplit=0,\
-                  PTM=1000):
-    for k in range(AAAVsplit):
-      writeAAAConfFile(mc.nelecas[0], mc.nelecas[1], mc.ncore,        mc.ncas,  norb,\
-                       mc.fcisolver, PTM, "AAAV", mc.fcisolver.memory,\
-                       mc.fcisolver.num_thrds, reorder, fciExtraLine,\
-                       root=root, name = type,\
-                       aaavsplit=AAAVsplit, aaavIter=k)
-    writeAAAConfFile(  mc.nelecas[0], mc.nelecas[1], mc.ncore-nfro, mc.ncas,  norb-nfro,\
-                       mc.fcisolver, PTM, "AAAC", mc.fcisolver.memory,\
-                       mc.fcisolver.num_thrds, reorder, fciExtraLine,\
-                       root=root, name=type)
-    sys.stdout.flush()
-
+def executeUC(mc, nfro=0, totalE=0, type="MRLCC", AAAVsplit=1):
     from subprocess import check_call
     import struct
     try:
@@ -792,7 +803,7 @@ def executeUC(mc, reorder,fciExtraLine,root,norb,\
         energy = struct.unpack('d', file1.read(8))[0]
         file1.close()
         totalE += energy
-        print("perturber AAAV%i --  %18.9f"%(k,energy))
+        print("perturber AAAV%i -- %18.9f"%(k,energy))
     except ValueError:
         print("perturber AAAV -- NA")
 
@@ -808,7 +819,7 @@ def executeUC(mc, reorder,fciExtraLine,root,norb,\
     except ValueError:
         print("perturber AAAC -- NA")
     print("")
-    print("Total:             %18.9f"%(totalE))
+    print("Total uncontr.:    %18.9f"%(totalE))
     print("")
     return totalE
 
@@ -1317,16 +1328,20 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
           norb, energyE0 = writeNEVPTIntegrals(mc, dm1, dm2, dm1eff, AAAVsplit, nfro, fully_ic=fully_ic, third_order=third_order)
         sys.stdout.flush()
 
-        totalE = 0.0;
         mc_spin = mc.nelecas[0]-mc.nelecas[1]
-        totalE += execute(nelec, mc.ncore, mc.ncas, nfro, mc_spin, 'NEVPT2',\
-                          naux=naux, memory=mc.fcisolver.memory,\
-                          fully_ic=fully_ic, third_order=third_order,\
-                          cumulantE4=cumulantE4, df=df, no_handcoded_E3=no_handcoded_E3)
+        write_ic_inputs(nelec, mc.ncore, mc.ncas, nfro, mc_spin, 'NEVPT2',
+                        naux=naux, memory=mc.fcisolver.memory,
+                        fully_ic=fully_ic, third_order=third_order,
+                        cumulantE4=cumulantE4, df=df,
+                        no_handcoded_E3=no_handcoded_E3)
         if (not fully_ic):
-          totalE +=  executeUC(mc,reorder,fciExtraLine,root,norb,\
-                               type="NEVPT2",\
-                               AAAVsplit=1)
+            write_uc_inputs(mc, reorder, fciExtraLine, root, norb, nfro=nfro,
+                            type="NEVPT2", AAAVsplit=AAAVsplit, PTM=PTM)
+        totalE = 0.0;
+        totalE += executeIC(nelec, mc.ncore, mc.ncas, nfro, 'NEVPT2',
+                            fully_ic=fully_ic, third_order=third_order)
+        if (not fully_ic):
+            totalE += executeUC(mc, nfro=nfro, type="NEVPT2", AAAVsplit=AAAVsplit)
         print("Total PT       --  %18.9f"%(totalE))
         print("Total energy   --  %18.9f"%(totalE+energyE0))
         print("")
@@ -1352,16 +1367,20 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
           energyE0, norb = writeMRLCCIntegrals(mc, dm1, dm2, nfro, fully_ic=fully_ic, third_order=third_order)
         sys.stdout.flush()
 
-        totalE = 0.0
         mc_spin = mc.nelecas[0]-mc.nelecas[1]
-        totalE +=  execute(nelec, mc.ncore, mc.ncas, nfro, mc_spin,'MRLCC',\
-                           naux=naux, memory=mc.fcisolver.memory,\
-                           fully_ic=fully_ic, third_order=third_order,\
-                           cumulantE4=cumulantE4, df=df, no_handcoded_E3=no_handcoded_E3)
+        write_ic_inputs(nelec, mc.ncore, mc.ncas, nfro, mc_spin, 'MRLCC',
+                        naux=naux, memory=mc.fcisolver.memory,
+                        fully_ic=fully_ic, third_order=third_order,
+                        cumulantE4=cumulantE4, df=df,
+                        no_handcoded_E3=no_handcoded_E3)
         if (not fully_ic):
-          totalE +=  executeUC(mc,reorder,fciExtraLine,root,norb,\
-                               type="MRLCC",\
-                               AAAVsplit=0)
+            write_uc_inputs(mc, reorder, fciExtraLine, root, norb, nfro=nfro,
+                            type="MRLCC", AAAVsplit=1, PTM=PTM)
+        totalE = 0.0
+        totalE += executeIC(nelec, mc.ncore, mc.ncas, nfro, 'MRLCC',
+                            fully_ic=fully_ic, third_order=third_order)
+        if (not fully_ic):
+            totalE += executeUC(mc, nfro=nfro, type="MRLCC", AAAVsplit=1)
 
         print("Total PT       --  %18.9f"%(totalE))
         print("Total energy   --  %18.9f"%(totalE+energyE0))
