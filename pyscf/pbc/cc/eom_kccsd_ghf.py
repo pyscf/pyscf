@@ -42,7 +42,7 @@ from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
 
 einsum = lib.einsum
 
-def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
+def kernel(eom, nroots=1, koopmans=True, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None, **kwargs):
     '''Calculate excitation energy via eigenvalue solver
@@ -408,7 +408,7 @@ def ipccsd_diag(eom, kshift, imds=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
-def ipccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
+def ipccsd(eom, nroots=1, koopmans=True, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None, **kwargs):
     '''See `kernel()` for a description of arguments.'''
@@ -623,7 +623,7 @@ def amplitudes_to_vector_ea(r1, r2):
     vector = np.hstack((r1, r2.ravel()))
     return vector
 
-def eaccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
+def eaccsd(eom, nroots=1, koopmans=True, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None):
     '''See `ipccsd()` for a description of arguments.'''
