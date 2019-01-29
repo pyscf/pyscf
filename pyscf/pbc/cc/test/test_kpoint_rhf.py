@@ -839,36 +839,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(Hr1), (0.0070404498167285 + -0.1646809321907418j), 6)
         self.assertAlmostEqual(finger(Hr2), (0.4518315588945250 + -0.5508323185152750j), 6)
 
-    def test_eom_ccsd(self):
-        cell = make_test_cell.test_cell_n3_diffuse()
-        nk = (1, 1, 2)
-        ehf_bench = -6.1870676561720721
-        ecc_bench = -0.0442506265840587
-
-        abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
-
-        # RHF calculation
-        kmf = pbcscf.KRHF(cell, abs_kpts, exxdiv=None)
-        kmf.conv_tol = 1e-10
-        ehf = kmf.scf()
-
-        cc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=[[0],[0,1]])
-        cc.conv_tol = 1e-10
-        eris = cc.ao2mo()
-        ecc, t1, t2 = cc.kernel(eris=eris)
-        self.assertAlmostEqual(ehf, ehf_bench, 6)
-        self.assertAlmostEqual(ecc, ecc_bench, 6)
-
-        e, v = cc.ipccsd(nroots=1, kptlist=(0,))
-        self.assertAlmostEqual(e[0][0], -1.1316152294295743, 6)
-        e, v = cc.eaccsd(nroots=1, kptlist=(0,))
-        self.assertAlmostEqual(e[0][0], 1.2572812499753756, 6)
-
-        e, v = cc.ipccsd(nroots=1, kptlist=(1,))
-        self.assertAlmostEqual(e[0][0], -1.0154003170719554, 6)
-        e, v = cc.eaccsd(nroots=1, kptlist=(1,))
-        self.assertAlmostEqual(e[0][0], 1.2298026337620558, 6)
-
     def test_h4_fcc_k2(self):
         '''Metallic hydrogen fcc lattice.  Checks versus a corresponding
         supercell calculation.
