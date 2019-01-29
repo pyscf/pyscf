@@ -465,15 +465,16 @@ class EOMIP(eom_rccsd.EOM):
         nroots = min(nroots, size)
         guess = []
         if koopmans:
-            for n in range(nroots):
-                g = np.zeros(int(size), dtype)
-                g[self.nocc-n-1] = 1.0
+            for n in self.nonzero_opadding[kshift][::-1][:nroots]:
+                g = np.zeros(int(size), dtype=dtype)
+                g[n] = 1.0
                 g = self.mask_frozen(g, kshift, const=0.0)
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
+            print np.sort(diag)
             for i in idx:
-                g = np.zeros(int(size), dtype)
+                g = np.zeros(int(size), dtype=dtype)
                 g[i] = 1.0
                 g = self.mask_frozen(g, kshift, const=0.0)
                 guess.append(g)
@@ -752,7 +753,7 @@ class EOMEA(eom_rccsd.EOM):
         nroots = min(nroots, size)
         guess = []
         if koopmans:
-            for n in range(nroots):
+            for n in self.nonzero_vpadding[kshift][:nroots]:
                 g = np.zeros(int(size), dtype=dtype)
                 g[n] = 1.0
                 g = self.mask_frozen(g, kshift, const=0.0)
