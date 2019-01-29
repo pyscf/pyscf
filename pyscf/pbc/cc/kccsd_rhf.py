@@ -619,7 +619,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         return kccsd_t_rhf.kernel(self, eris, t1, t2, self.verbose)
 
-    def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
+    def ipccsd(self, nroots=1, left=False, koopmans=True, guess=None,
                partition=None, eris=None, kptlist=None):
         from pyscf.pbc.cc import eom_kccsd_rhf
         return eom_kccsd_rhf.EOMIP(self).kernel(nroots=nroots, left=left,
@@ -627,7 +627,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                                 partition=partition, eris=eris,
                                                 kptlist=kptlist)
 
-    def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None,
+    def eaccsd(self, nroots=1, left=False, koopmans=True, guess=None,
                partition=None, eris=None, kptlist=None):
         from pyscf.pbc.cc import eom_kccsd_rhf
         return eom_kccsd_rhf.EOMEA(self).kernel(nroots=nroots, left=left,
