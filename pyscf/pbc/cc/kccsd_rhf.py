@@ -358,12 +358,12 @@ def energy(cc, t1, t2, eris):
     e = 0.0 + 1j * 0.0
     for ki in range(nkpts):
         e += 2 * einsum('ia,ia', fock[ki, :nocc, nocc:], t1[ki])
-    tau = t1t1 = np.zeros(shape=t2.shape, dtype=t2.dtype)
+    tau = np.zeros(shape=t2.shape, dtype=t2.dtype)
     for ki in range(nkpts):
         ka = ki
         for kj in range(nkpts):
             # kb = kj
-            t1t1[ki, kj, ka] = einsum('ia,jb->ijab', t1[ki], t1[kj])
+            tau[ki, kj, ka] = einsum('ia,jb->ijab', t1[ki], t1[kj])
     tau += t2
     for ki in range(nkpts):
         for kj in range(nkpts):
@@ -1515,8 +1515,7 @@ if __name__ == '__main__':
     C 0.000000000000   0.000000000000   0.000000000000
     C 1.685068664391   1.685068664391   1.685068664391
     '''
-    cell.basis = {'C': [[0, (0.8, 1.0)],
-                        [1, (1.0, 1.0)]]}
+    cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
     cell.a = '''
     0.000000000, 3.370137329, 3.370137329
@@ -1532,8 +1531,8 @@ if __name__ == '__main__':
     ehf = kmf.kernel()
 
     mycc = cc.KRCCSD(kmf)
-    mycc.conv_tol = 1e-10
-    mycc.conv_tol_normt = 1e-10
+    #mycc.conv_tol = 1e-10
+    #mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
