@@ -472,7 +472,6 @@ class EOMIP(eom_rccsd.EOM):
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
-            print np.sort(diag)
             for i in idx:
                 g = np.zeros(int(size), dtype=dtype)
                 g[i] = 1.0
