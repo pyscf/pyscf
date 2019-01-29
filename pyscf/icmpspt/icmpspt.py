@@ -1318,7 +1318,8 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
         sys.stdout.flush()
 
         totalE = 0.0;
-        totalE += execute(nelec, mc.ncore, mc.ncas, nfro, mc.mol.spin, 'NEVPT2',\
+        mc_spin = mc.nelecas[0]-mc.nelecas[1]
+        totalE += execute(nelec, mc.ncore, mc.ncas, nfro, mc_spin, 'NEVPT2',\
                           naux=naux, memory=mc.fcisolver.memory,\
                           fully_ic=fully_ic, third_order=third_order,\
                           cumulantE4=cumulantE4, df=df, no_handcoded_E3=no_handcoded_E3)
@@ -1352,7 +1353,8 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
         sys.stdout.flush()
 
         totalE = 0.0
-        totalE +=  execute(nelec, mc.ncore, mc.ncas, nfro, mc.mol.spin,'MRLCC',\
+        mc_spin = mc.nelecas[0]-mc.nelecas[1]
+        totalE +=  execute(nelec, mc.ncore, mc.ncas, nfro, mc_spin,'MRLCC',\
                            naux=naux, memory=mc.fcisolver.memory,\
                            fully_ic=fully_ic, third_order=third_order,\
                            cumulantE4=cumulantE4, df=df, no_handcoded_E3=no_handcoded_E3)
