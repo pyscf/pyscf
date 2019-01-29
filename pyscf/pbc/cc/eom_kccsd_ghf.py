@@ -793,7 +793,7 @@ class EOMEA(eom_rccsd.EOM):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        return nocc + nkpts**2*nocc*nocc*nvir
+        return nvir + nkpts**2*nocc*nvir*nvir
 
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris)
