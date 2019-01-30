@@ -310,17 +310,25 @@ def spatial2spin_ip_doublet(r1, r2, kconserv, kshift, orbspin=None):
     r2 = r2.reshape(nkpts, nkpts, nocc, nocc, nvir)
     return r1, r2
 
-def vector_to_amplitudes_ip(vector, nkpts, nmo, nocc):
+def vector_to_amplitudes_ip(vector, kshift, nkpts, nmo, nocc, kconserv):
     nvir = nmo - nocc
 
-    # TODO: some redundancy; can use symmetry of operator to reduce size
     r1 = vector[:nocc].copy()
-    r2 = vector[nocc:].copy().reshape(nkpts,nkpts,nocc,nocc,nvir)
+    r2_tril = vector[nocc:].copy().reshape(nkpts*nocc*(nkpts*nocc-1)//2,nvir)
+    idx, idy = np.tril_indices(nkpts*nocc, -1)
+    r2 = np.zeros((nkpts*nocc,nkpts*nocc,nvir), dtype=vector.dtype)
+    r2[idx, idy] = r2_tril
+    r2[idy, idx] = -r2_tril
+    r2 = r2.reshape(nkpts,nocc,nkpts,nocc,nvir).transpose(0,2,1,3,4)
     return [r1,r2]
 
-def amplitudes_to_vector_ip(r1,r2):
-    vector = np.hstack((r1, r2.ravel()))
-    return vector
+def amplitudes_to_vector_ip(r1, r2, kshift, kconserv):
+    nkpts, nocc, nvir = np.asarray(r2.shape)[[0,2,4]]
+    # From symmetry for aaa and bbb terms, only store lower
+    # triangular part (ki,i) < (kj,j)
+    idx, idy = np.tril_indices(nkpts*nocc, -1)
+    r2 = r2.transpose(0,2,1,3,4).reshape(nkpts*nocc,nkpts*nocc,nvir)
+    return np.hstack((r1, r2[idx,idy].ravel()))
 
 def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2ph operators are of the form s_{ij}^{a }, i.e. 'ia' indices are coupled.
@@ -331,7 +339,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     nvir = nmo - nocc
     nkpts = eom.nkpts
     kconserv = imds.kconserv
-    r1, r2 = vector_to_amplitudes_ip(vector, nkpts, nmo, nocc)
+    r1, r2 = vector_to_amplitudes_ip(vector, kshift, nkpts, nmo, nocc, kconserv)
 
     Hr1 = -np.einsum('mi,m->i', imds.Foo[kshift], r1)
     for km in range(nkpts):
@@ -368,7 +376,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
     Hr2[:, :] += 0.5 * lib.einsum('e,yxjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
 
-    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
 
 def ipccsd_diag(eom, kshift, imds=None):
@@ -405,7 +413,7 @@ def ipccsd_diag(eom, kshift, imds=None):
 
                 Hr2[ki, kj] += lib.einsum('ijea,jiea->ija',imds.Woovv[ki,kj,kshift], imds.t2[kj,ki,kshift])
 
-    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
 
 def ipccsd(eom, nroots=1, koopmans=True, guess=None, left=False,
@@ -424,7 +432,7 @@ def ipccsd(eom, nroots=1, koopmans=True, guess=None, left=False,
 
 def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-    r1, r2 = eom.vector_to_amplitudes(vector)
+    r1, r2 = eom.vector_to_amplitudes(vector, kshift=kshift)
     nkpts = eom.nkpts
     nocc, nmo = eom.nocc, eom.nmo
     nvir = nmo - nocc
@@ -443,7 +451,7 @@ def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
             idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
-    return eom.amplitudes_to_vector(new_r1, new_r2)
+    return eom.amplitudes_to_vector(new_r1, new_r2, kshift, kconserv)
 
 class EOMIP(eom_rccsd.EOM):
     def __init__(self, cc):
@@ -493,20 +501,22 @@ class EOMIP(eom_rccsd.EOM):
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None):
+    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None, kconserv=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         if nkpts is None: nkpts = self.nkpts
-        return vector_to_amplitudes_ip(vector, nkpts, nmo, nocc)
+        if kconserv is None: kconserv = self.kconserv
+        return vector_to_amplitudes_ip(vector, kshift, nkpts, nmo, nocc, kconserv)
 
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ip(r1, r2)
+    def amplitudes_to_vector(self, r1, r2, kshift, kconserv=None):
+        if kconserv is None: kconserv = self.kconserv
+        return amplitudes_to_vector_ip(r1, r2, kshift, kconserv)
 
     def vector_size(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        return nocc + nkpts**2*nocc*nocc*nvir
+        return nocc + nkpts*nocc*(nkpts*nocc-1)*nvir//2
 
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
@@ -611,17 +621,41 @@ def spatial2spin_ea_doublet(r1, r2, kconserv, kshift, orbspin=None):
     r2 = r2.reshape(nkpts, nkpts, nocc, nvir, nvir)
     return r1, r2
 
-def vector_to_amplitudes_ea(vector, nkpts, nmo, nocc):
+def amplitudes_to_vector_ea(r1, r2, kshift, kconserv):
+    nkpts, nocc, nvir = np.asarray(r2.shape)[[0,2,3]]
+    r2_tril = np.zeros((nocc*nkpts*nvir*(nkpts*nvir-1)//2), dtype=r2.dtype)
+    index = 0
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        if ka < kb:
+            idx, idy = np.tril_indices(nvir, 0)
+        else:
+            idx, idy = np.tril_indices(nvir, -1)
+        r2_tril[index:index + nocc*len(idy)] = r2[kj,ka,:,idx,idy].reshape(-1)
+        index = index + nocc*len(idy)
+    vector = np.hstack((r1, r2_tril))
+    return vector
+
+def vector_to_amplitudes_ea(vector, kshift, nkpts, nmo, nocc, kconserv):
     nvir = nmo - nocc
 
-    # TODO: some redundancy; can use symmetry of operator to reduce size
     r1 = vector[:nvir].copy()
-    r2 = vector[nvir:].copy().reshape(nkpts,nkpts,nocc,nvir,nvir)
-    return [r1,r2]
+    r2_tril = vector[nvir:].copy().reshape(nocc*nkpts*nvir*(nkpts*nvir-1)//2)
+    r2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), dtype=vector.dtype)
 
-def amplitudes_to_vector_ea(r1, r2):
-    vector = np.hstack((r1, r2.ravel()))
-    return vector
+    index = 0
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        if ka < kb:
+            idx, idy = np.tril_indices(nvir, 0)
+        else:
+            idx, idy = np.tril_indices(nvir, -1)
+        tmp = r2_tril[index:index + nocc*len(idy)].reshape(-1,nocc)
+        r2[kj,ka,:,idx,idy] = tmp
+        r2[kj,kb,:,idy,idx] = -tmp
+        index = index + nocc*len(idy)
+
+    return [r1,r2]
 
 def eaccsd(eom, nroots=1, koopmans=True, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
@@ -639,7 +673,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     nvir = nmo - nocc
     nkpts = eom.nkpts
     kconserv = imds.kconserv
-    r1, r2 = vector_to_amplitudes_ea(vector, nkpts, nmo, nocc)
+    r1, r2 = vector_to_amplitudes_ea(vector, kshift, nkpts, nmo, nocc, kconserv)
 
     Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
     for kl in range(nkpts):
@@ -669,7 +703,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     tmp = lib.einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])  # contract_{kl, kc}
     Hr2[:, :] -= 0.5*lib.einsum('k,xykjab->xyjab', tmp, imds.t2[kshift, :, :])  # sum_{kj, ka]
 
-    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    vector = eom.amplitudes_to_vector(Hr1, Hr2, kshift)
     return vector
 
 def eaccsd_diag(eom, kshift, imds=None):
@@ -706,7 +740,7 @@ def eaccsd_diag(eom, kshift, imds=None):
 
                 Hr2[kj,ka] -= np.einsum('kjab,kjab->jab',imds.Woovv[kshift,kj,ka],imds.t2[kshift,kj,ka])
 
-    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    vector = amplitudes_to_vector_ea(Hr1, Hr2, kshift, kconserv)
     return vector
 
 def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
@@ -730,7 +764,7 @@ def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
             idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
-    return eom.amplitudes_to_vector(new_r1, new_r2)
+    return eom.amplitudes_to_vector(new_r1, new_r2, kshift, kconserv)
 
 class EOMEA(eom_rccsd.EOM):
     def __init__(self, cc):
@@ -780,20 +814,22 @@ class EOMEA(eom_rccsd.EOM):
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None):
+    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None, kconserv=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         if nkpts is None: nkpts = self.nkpts
-        return vector_to_amplitudes_ea(vector, nkpts, nmo, nocc)
+        if kconserv is None: kconserv = self.kconserv
+        return vector_to_amplitudes_ea(vector, kshift, nkpts, nmo, nocc, kconserv)
 
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ea(r1, r2)
+    def amplitudes_to_vector(self, r1, r2, kshift, kconserv=None):
+        if kconserv is None: kconserv = self.kconserv
+        return amplitudes_to_vector_ea(r1, r2, kshift, kconserv)
 
     def vector_size(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        return nvir + nkpts**2*nocc*nvir*nvir
+        return nvir + nocc*nkpts*nvir*(nkpts*nvir-1)//2
 
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris)
