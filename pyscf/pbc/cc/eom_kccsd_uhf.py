@@ -52,7 +52,7 @@ def amplitudes_to_vector_ip(r1, r2, kshift, kconserv):
     r2aaa, r2baa, r2abb, r2bbb = r2
     nkpts = r2aaa.shape[0]
     nocca, noccb = r1a.shape[0], r1b.shape[0]
-    nvira, nvirb = r2aaa.shape[2], r2bbb.shape[2]
+    nvira, nvirb = r2aaa.shape[-1], r2bbb.shape[-1]
     # From symmetry for aaa and bbb terms, only store lower
     # triangular part (ki,i) < (kj,j)
     idxa, idya = np.tril_indices(nkpts*nocca, -1)
@@ -490,17 +490,23 @@ class EOMIP(eom_kgccsd.EOMIP):
         guess = []
         if koopmans:
             idx = np.zeros(nroots, dtype=np.int)
-            idxa = self.nocc[0] - 1
-            idxb = self.nocc[0] + self.nocc[1] - 1
-            count = 0
-            while( count < nroots ):
-                if count % 2 == 0:  # Place an alpha spin guess
-                    idx[count] = idxa
-                    idxa -= 1
-                else:  # Place a beta spin guess
-                    idx[count] = idxb
-                    idxb -= 1
-                count += 1
+            tmp_oalpha, tmp_obeta = self.nonzero_opadding[kshift]
+            tmp_oalpha = list(tmp_oalpha)
+            tmp_obeta = list(tmp_obeta)
+            if len(tmp_obeta) + len(tmp_oalpha) < nroots:
+                raise ValueError("Max number of roots for k-point (idx=%3d) for koopmans "
+                                 "is %3d.\nRequested %3d." %
+                                 (kshift, len(tmp_obeta)+len(tmp_oalpha), nroots))
+
+            total_count = 0
+            while(total_count < nroots):
+                if total_count % 2 == 0 and len(tmp_oalpha) > 0:
+                    idx[total_count] = tmp_oalpha.pop()
+                else:
+                    # Careful! index depends on how we create vector
+                    # (here the first elements are r1a, then r1b)
+                    idx[total_count] = nocca + tmp_obeta.pop()
+                total_count += 1
         else:
             idx = diag.argsort()
 
@@ -553,8 +559,8 @@ def amplitudes_to_vector_ea(r1, r2, kshift, kconserv):
     r1a, r1b = r1
     r2a, r2aba, r2bab, r2b = r2
     nkpts = r2a.shape[0]
-    nocca, noccb = r1a.shape[0], r1b.shape[0]
-    nvira, nvirb = r2a.shape[2], r2b.shape[2]
+    nocca, noccb = r2a.shape[2], r2b.shape[2]
+    nvira, nvirb = r2a.shape[3], r2b.shape[3]
     # From symmetry for aaa and bbb terms, only store lower
     # triangular part (ka,a) < (kb,b)
     r2aaa = np.zeros((nocca*nkpts*nvira*(nkpts*nvira-1))//2, dtype=r2a.dtype)
@@ -980,22 +986,30 @@ class EOMEA(eom_kgccsd.EOMEA):
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
         nocca, noccb = self.nocc
+        nmoa, nmob = self.nmo
+        nvira, nvirb = nmoa-nocca, nmob-noccb
         guess = []
         if koopmans:
             idx = np.zeros(nroots, dtype=np.int)
-            idxa = 0
-            idxb = nocca + 0
-            count = 0
-            while( count < nroots ):
-                if count % 2 == 0:  # Place an alpha spin guess
-                    idx[count] = idxa
-                    idxa += 1
-                else:  # Place a beta spin guess
-                    idx[count] = idxb
-                    idxb += 1
-                count += 1
+            tmp_valpha, tmp_vbeta = self.nonzero_vpadding[kshift]
+            tmp_valpha = list(tmp_valpha)
+            tmp_vbeta = list(tmp_vbeta)
+            if len(tmp_vbeta) + len(tmp_valpha) < nroots:
+                raise ValueError("Max number of roots for k-point (idx=%3d) for koopmans "
+                                 "is %3d.\nRequested %3d." %
+                                 (kshift, len(tmp_vbeta)+len(tmp_valpha), nroots))
+
+            total_count = 0
+            while(total_count < nroots):
+                if total_count % 2 == 0 and len(tmp_valpha) > 0:
+                    idx[total_count] = tmp_valpha.pop(0)
+                else:
+                    # Careful! index depends on how we create vector
+                    # (here the first elements are r1a, then r1b)
+                    idx[total_count] = nvira + tmp_vbeta.pop(0)
+                total_count += 1
         else:
-            idx = diag.argsort()[::-1]
+            idx = diag.argsort()
 
         for i in idx[:nroots]:
             g = np.zeros(size, dtype)

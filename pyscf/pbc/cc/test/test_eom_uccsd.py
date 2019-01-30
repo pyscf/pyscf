@@ -67,3 +67,37 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e2_obt[0][0], 1.227583017460536, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.227583017460617, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.383037918699404, 6)
+
+    def test_n3_diffuse_frozen(self):
+        ehf2 = kmf.e_tot
+        self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
+
+        mycc = pbcc.KUCCSD(kmf, frozen=([[0,],[0,1]],[[0],[0,1]]))
+        mycc.conv_tol = 1e-7
+        mycc.conv_tol_normt = 1e-7
+        ecc2, t1, t2 = mycc.kernel()
+        self.assertAlmostEqual(ecc2, -0.0442506265840587, 6)
+
+        eom = EOMIP(mycc)
+        e1_obt, v = eom.ipccsd(nroots=3, kptlist=[0])
+        self.assertAlmostEqual(e1_obt[0][0], -1.1316152294295743, 6)
+        self.assertAlmostEqual(e1_obt[0][1], -1.1041637212148683, 6)
+        self.assertAlmostEqual(e1_obt[0][2], -1.104163717600433, 6)
+
+        eom = EOMEA(mycc)
+        e2_obt, v = eom.eaccsd(nroots=3, kptlist=[0])
+        self.assertAlmostEqual(e2_obt[0][0], 1.2572812499753756, 6)
+        self.assertAlmostEqual(e2_obt[0][1], 1.257281253091707, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.2807473549827182, 6)
+
+        eom = EOMIP(mycc)
+        e1_obt, v = eom.ipccsd(nroots=3, koopmans=True, kptlist=[1])
+        self.assertAlmostEqual(e1_obt[0][0], -0.8983145129187627, 6)
+        self.assertAlmostEqual(e1_obt[0][1], -0.8983145129187627, 6)
+        self.assertAlmostEqual(e1_obt[0][2], -0.8983145129187627, 6)
+
+        eom = EOMEA(mycc)
+        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1])
+        self.assertAlmostEqual(e2_obt[0][0], 1.229802629928757, 6)
+        self.assertAlmostEqual(e2_obt[0][1], 1.229802629928764, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.384394578043613, 6)
