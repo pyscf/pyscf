@@ -294,8 +294,7 @@ def get_nmo(mp, per_kpoint=False):
                                    'mean-field/correlated calculation.  \n\nCalculation nkpts = %d, frozen'
                                    'list = %s (length = %d)' % (mp.nkpts, mp.frozen, nkpts))
         for spin in [0,1]:
-            [_frozen_sanity_check(frozen, mo_occ, ikpt)
-             for ikpt, frozen, mo_occ in zip(range(nkpts), mp.frozen[spin], mp.mo_occ[spin])]
+            [_frozen_sanity_check(mp.frozen[spin][ikpt], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             nmo[spin] = [len(mp.mo_occ[spin][ikpt]) - len(mp.frozen[spin][ikpt]) for ikpt in range(nkpts)]
 
     else:
@@ -354,7 +353,7 @@ def get_frozen_mask(mp):
                                    'mean-field/correlated calculation.  \n\nCalculation nkpts = %d, frozen'
                                    'list = %s (length = %d)' % (mp.nkpts, mp.frozen, nkpts))
         for spin in [0,1]:
-            [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
+            [_frozen_sanity_check(mp.frozen[spin][ikpt], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             for ikpt, kpt_occ in enumerate(moidx[spin]):
                 kpt_occ[mp.frozen[spin][ikpt]] = False
     else:
