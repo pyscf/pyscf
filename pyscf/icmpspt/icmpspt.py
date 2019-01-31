@@ -301,10 +301,10 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
     print("Basic ingredients written to "+intfolder)
     numpy.save(intfolder+"W:ccae", numpy.asfortranarray(eris['pcpc'][ncor:nocc,     :    , nocc:    ,     :    ].transpose(1,3,0,2)))
     numpy.save(intfolder+"W:eecc", numpy.asfortranarray(eris['pcpc'][nocc:    ,     :    , nocc:    ,     :    ].transpose(0,2,1,3)))
-    if (third_order):
-      numpy.save(intfolder+"W:ceec", numpy.asfortranarray(eris['pcpc'][nocc:    ,     :    , nocc:    ,     :    ].transpose(1,2,0,3)))
-      numpy.save(intfolder+"W:cccc", numpy.asfortranarray(eris['ppcc'][nfro:ncor, nfro:ncor,     :    ,     :    ].transpose(2,0,3,1)))
-      numpy.save(intfolder+"W:cece", numpy.asfortranarray(eris['ppcc'][nocc:    , nocc:    ,     :    ,     :    ].transpose(2,0,3,1)))
+    #
+    numpy.save(intfolder+"W:ceec", numpy.asfortranarray(eris['pcpc'][nocc:    ,     :    , nocc:    ,     :    ].transpose(1,2,0,3)))
+    numpy.save(intfolder+"W:cccc", numpy.asfortranarray(eris['ppcc'][nfro:ncor, nfro:ncor,     :    ,     :    ].transpose(2,0,3,1)))
+    numpy.save(intfolder+"W:cece", numpy.asfortranarray(eris['ppcc'][nocc:    , nocc:    ,     :    ,     :    ].transpose(2,0,3,1)))
     if (third_order):
       numpy.save(intfolder+"W:ccca", numpy.asfortranarray(eris['ppcc'][nfro:ncor, ncor:nocc,     :    ,     :    ].transpose(2,0,3,1)))
       numpy.save(intfolder+"W:ccce", numpy.asfortranarray(eris['ppcc'][nfro:ncor, nocc:    ,     :    ,     :    ].transpose(2,0,3,1)))
@@ -317,9 +317,9 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
     numpy.save(intfolder+"W:aaaa", numpy.asfortranarray(eris['ppaa'][ncor:nocc, ncor:nocc,     :    ,     :    ].transpose(0,2,1,3)))
     numpy.save(intfolder+"W:eaca", numpy.asfortranarray(eris['ppaa'][nocc:    , nfro:ncor,     :    ,     :    ].transpose(0,2,1,3)))
     numpy.save(intfolder+"W:caca", numpy.asfortranarray(eris['ppaa'][nfro:ncor, nfro:ncor,     :    ,     :    ].transpose(0,2,1,3)))
-    if (third_order):
-      numpy.save(intfolder+"W:aeea", numpy.asfortranarray(eris['papa'][nocc:    ,     :    , nocc:    ,     :    ].transpose(1,2,0,3)))
-      numpy.save(intfolder+"W:aeae", numpy.asfortranarray(eris['ppaa'][nocc:    , nocc:    ,     :    ,     :    ].transpose(2,0,3,1)))
+    #
+    numpy.save(intfolder+"W:aeea", numpy.asfortranarray(eris['papa'][nocc:    ,     :    , nocc:    ,     :    ].transpose(1,2,0,3)))
+    numpy.save(intfolder+"W:aeae", numpy.asfortranarray(eris['ppaa'][nocc:    , nocc:    ,     :    ,     :    ].transpose(2,0,3,1)))
     if (fully_ic):
       numpy.save(intfolder+"W:eaaa", numpy.asfortranarray(eris['ppaa'][nocc:    , ncor:nocc,     :    ,     :    ].transpose(0,2,1,3)))
       numpy.save(intfolder+"W:caaa", numpy.asfortranarray(eris['ppaa'][nfro:ncor, ncor:nocc,     :    ,     :    ].transpose(0,2,1,3)))
