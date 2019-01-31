@@ -355,12 +355,13 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     return vectors.transpose(3, 0, 1, 2)
 
 
-def kernel(eri, driver=None, nroots=None, **kwargs):
+def kernel(eri, driver=None, fast=True, nroots=None, **kwargs):
     """
     Calculates eigenstates and eigenvalues of the TDHF problem.
     Args:
         eri (TDDFTMatrixBlocks): ERI;
-        driver (str): one of the drivers;
+        driver (str): one of the eigenvalue problem drivers;
+        fast (bool): whether to run diagonalization on smaller matrixes;
         nroots (int): the number of roots to calculate;
         **kwargs: arguments to `eri.tdhf_matrix`;
 
@@ -369,14 +370,35 @@ def kernel(eri, driver=None, nroots=None, **kwargs):
     """
     if not isinstance(eri, TDDFTMatrixBlocks):
         raise ValueError("The argument must be ERI object")
-    logger.debug1(eri.model, "Preparing TDHF matrix ...")
-    m = eri.tdhf_matrix(**kwargs)
-    logger.debug1(eri.model, "Diagonalizing a {} matrix with {} ...".format(
-        'x'.join(map(str, m.shape)),
-        "'{}'".format(driver) if driver is not None else "a default method",
-    ))
-    vals, vecs = eig(m, driver=driver, nroots=nroots)
-    return vals, vecs
+    if fast:
+        logger.debug1(eri.model, "Preparing the A matrix ...")
+        tdhf_a = eri.tdhf_a(**kwargs)
+        logger.debug1(eri.model, "Preparing the B matrix ...")
+        tdhf_b = eri.tdhf_b(**kwargs)
+        tdhf_k, tdhf_m = tdhf_a - tdhf_b, tdhf_a + tdhf_b
+        del tdhf_a, tdhf_b
+        tdhf_mk = tdhf_m.dot(tdhf_k)
+        del tdhf_m
+
+        logger.debug1(eri.model, "Diagonalizing a MK {} matrix with {} ...".format(
+            'x'.join(map(str, tdhf_mk.shape)),
+            "'{}'".format(driver) if driver is not None else "a default method",
+        ))
+        vals, vecs_x = eig(tdhf_mk, driver=driver, nroots=nroots, half=False)
+
+        vals = vals ** .5
+        vecs_y = (1. / vals)[numpy.newaxis, :] * tdhf_k.dot(vecs_x)
+        vecs_u, vecs_v = vecs_y + vecs_x, vecs_y - vecs_x
+        return vals, numpy.concatenate((vecs_u, vecs_v), axis=0)
+
+    else:
+        logger.debug1(eri.model, "Preparing TDHF matrix ...")
+        m = eri.tdhf_matrix(**kwargs)
+        logger.debug1(eri.model, "Diagonalizing a {} matrix with {} ...".format(
+            'x'.join(map(str, m.shape)),
+            "'{}'".format(driver) if driver is not None else "a default method",
+        ))
+        return eig(m, driver=driver, nroots=nroots)
 
 
 class TDRHF(object):
@@ -399,6 +421,7 @@ class TDRHF(object):
         self.xy = None
         self.e = None
         self.frozen = frozen
+        self.fast = True
 
     def __kernel__(self, **kwargs):
         """Silent implementation of kernel."""
@@ -409,6 +432,7 @@ class TDRHF(object):
             self.eri,
             driver=self.driver,
             nroots=self.nroots,
+            fast=self.fast,
             **kwargs
         )
         xy = self.vector_to_amplitudes(xy)
