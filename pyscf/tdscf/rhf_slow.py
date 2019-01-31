@@ -358,6 +358,7 @@ def kernel(eri, driver=None, nroots=None, **kwargs):
 
 
 class TDRHF(object):
+    eri1 = None
     eri4 = PhysERI4
     eri8 = PhysERI8
     v2a = staticmethod(vector_to_amplitudes)
@@ -409,11 +410,23 @@ class TDRHF(object):
             A suitable ERI.
         """
         if numpy.iscomplexobj(self._scf.mo_coeff):
-            logger.debug1(self._scf, "4-fold symmetry used (complex orbitals)")
-            return self.eri4(self._scf, frozen=self.frozen)
+            if self.eri4 is not None:
+                logger.debug1(self._scf, "4-fold symmetry used (complex orbitals)")
+                return self.eri4(self._scf, frozen=self.frozen)
+            elif self.eri1 is not None:
+                logger.debug1(self._scf, "fallback: no symmetry used (complex orbitals)")
+                return self.eri1(self._scf, frozen=self.frozen)
+            else:
+                raise RuntimeError("Failed to pick ERI for complex MOs: both eri1 and eri4 are None")
         else:
-            logger.debug1(self._scf, "8-fold symmetry used (real orbitals)")
-            return self.eri8(self._scf, frozen=self.frozen)
+            if self.eri8 is not None:
+                logger.debug1(self._scf, "8-fold symmetry used (real orbitals)")
+                return self.eri8(self._scf, frozen=self.frozen)
+            elif self.eri1 is not None:
+                logger.debug1(self._scf, "fallback: no symmetry used (real orbitals)")
+                return self.eri1(self._scf, frozen=self.frozen)
+            else:
+                raise RuntimeError("Failed to pick ERI for real MOs: both eri1 and eri8 are None")
 
     def vector_to_amplitudes(self, vectors):
         """
