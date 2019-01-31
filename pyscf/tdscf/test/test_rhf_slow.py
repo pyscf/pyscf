@@ -73,7 +73,12 @@ class H20Test(unittest.TestCase):
         """Tests container behavior."""
         model = TDRHF(self.model_rhf)
         model.nroots = self.td_model_rhf.nroots
+        model.fast = True
+        e, xy = model.kernel()
+        model.fast = False
         model.kernel()
+        testing.assert_allclose(model.e, e)
+        assert_vectors_close(model.xy, xy)
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
         assert_vectors_close(model.xy, self.td_model_rhf.xy, atol=1e-2)
 
