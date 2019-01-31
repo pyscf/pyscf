@@ -1312,7 +1312,7 @@ class SCF(lib.StreamObject):
             logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
             logger.info(self, 'DIIS space = %d', self.diis.space)
         elif self.diis:
-            logger.info(self, 'DIIS = %s', diis.SCF_DIIS)
+            logger.info(self, 'DIIS = %s', self.DIIS)
             logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
             logger.info(self, 'DIIS space = %d', self.diis_space)
         logger.info(self, 'SCF tol = %g', self.conv_tol)
