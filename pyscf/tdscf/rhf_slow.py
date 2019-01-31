@@ -137,16 +137,34 @@ class TDDFTMatrixBlocks(object):
         else:
             raise ValueError("Unknown item: {}".format(repr(item)))
 
-    def tdhf_matrix(self):
+    def tdhf_a(self):
         """
-        Full matrix of the TDRHF problem.
+        The TDHF A-matrix.
         Returns:
             The matrix.
         """
         d = self.tdhf_diag()
+        return d + 2 * self["knmj"] - self["knjm"]
+
+    def tdhf_b(self):
+        """
+        The TDHF B-matrix.
+        Returns:
+            The matrix.
+        """
+        return 2 * self["kjmn"] - self["kjnm"]
+
+    def tdhf_matrix(self):
+        """
+        The full matrix of the TDRHF problem.
+        Returns:
+            The matrix.
+        """
+        a = self.tdhf_a()
+        b = self.tdhf_b()
         m = numpy.array([
-            [d + 2 * self["knmj"] - self["knjm"], 2 * self["kjmn"] - self["kjnm"]],
-            [- 2 * self["mnkj"] + self["mnjk"], - 2 * self["mjkn"] + self["mjnk"] - d],
+            [a, b],
+            [-b, -a],
         ])
 
         return m.transpose(0, 2, 1, 3).reshape(
