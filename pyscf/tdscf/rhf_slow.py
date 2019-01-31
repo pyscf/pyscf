@@ -309,13 +309,14 @@ class PhysERI8(PhysERI4):
         super(PhysERI8, self).__init__(model, frozen=frozen)
 
 
-def eig(m, driver=None, nroots=None):
+def eig(m, driver=None, nroots=None, half=True):
     """
     Diagonalizes TDHF matrix.
     Args:
         m (numpy.ndarray): the matrix to diagonalize;
         driver (str): one of the drivers;
         nroots (int): the number of roots ot calculate (ignored for `driver` == 'eig');
+        half (bool): if True, implies spectrum symmetry and takes only a half of eigenvalues;
 
     Returns:
 
@@ -325,8 +326,11 @@ def eig(m, driver=None, nroots=None):
     if driver == 'eig':
         vals, vecs = numpy.linalg.eig(m)
         order = numpy.argsort(vals)
-        vals = vals[order][len(vals) // 2:][:nroots]
-        vecs = vecs[:, order][:, vecs.shape[1] // 2:][:, :nroots]
+        vals, vecs = vals[order], vecs[:, order]
+        if half:
+            vals, vecs = vals[len(vals) // 2:], vecs[:, vecs.shape[1] // 2:]
+            vecs = vecs[:, ]
+        vals, vecs = vals[:nroots], vecs[:, :nroots]
     else:
         raise ValueError("Unknown driver: {}".format(driver))
     return vals, vecs
