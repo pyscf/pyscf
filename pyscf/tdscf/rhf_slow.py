@@ -137,7 +137,7 @@ class TDDFTMatrixBlocks(object):
         else:
             raise ValueError("Unknown item: {}".format(repr(item)))
 
-    def tdhf_a(self):
+    def tdhf_a(self, *args, **kwargs):
         """
         The TDHF A-matrix.
         Returns:
@@ -146,7 +146,15 @@ class TDDFTMatrixBlocks(object):
         d = self.tdhf_diag()
         return d + 2 * self["knmj"] - self["knjm"]
 
-    def tdhf_b(self):
+    def tdhf_a_star(self, *args, **kwargs):
+        """
+        The TDHF A-matrix (second block).
+        Returns:
+            The matrix.
+        """
+        return self.tdhf_a().conj()
+
+    def tdhf_b(self, *args, **kwargs):
         """
         The TDHF B-matrix.
         Returns:
@@ -154,20 +162,29 @@ class TDDFTMatrixBlocks(object):
         """
         return 2 * self["kjmn"] - self["kjnm"]
 
-    def tdhf_matrix(self):
+    def tdhf_b_star(self, *args, **kwargs):
         """
-        The full matrix of the TDRHF problem.
+        The TDHF B-matrix (second block).
         Returns:
             The matrix.
         """
-        a = self.tdhf_a()
-        b = self.tdhf_b()
+        return 2 * self["mnkj"] - self["mnjk"]
+
+    def tdhf_matrix(self, *args, **kwargs):
+        """
+        Full matrix of the TDRHF problem.
+        Args:
+            *args, **kwargs: optional arguments for a- and b- matrixes;
+
+        Returns:
+            The matrix.
+        """
         m = numpy.array([
-            [a, b],
-            [-b, -a],
+            [self.tdhf_a(*args, **kwargs), self.tdhf_b(*args, **kwargs)],
+            [-self.tdhf_b_star(*args, **kwargs), -self.tdhf_a_star(*args, **kwargs)]
         ])
 
-        return m.transpose(0, 2, 1, 3).reshape(
+        return m.transpose((0, 2, 1, 3)).reshape(
             (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
         )
 
@@ -370,7 +387,10 @@ def kernel(eri, driver=None, fast=True, nroots=None, **kwargs):
     """
     if not isinstance(eri, TDDFTMatrixBlocks):
         raise ValueError("The argument must be ERI object")
+
     if fast:
+        if numpy.iscomplexobj(eri.mo_coeff):
+            raise ValueError("The fast diagonalization works only for real-valued oribtals")
         logger.debug1(eri.model, "Preparing the A matrix ...")
         tdhf_a = eri.tdhf_a(**kwargs)
         logger.debug1(eri.model, "Preparing the B matrix ...")
@@ -421,7 +441,7 @@ class TDRHF(object):
         self.xy = None
         self.e = None
         self.frozen = frozen
-        self.fast = True
+        self.fast = not numpy.iscomplexobj(mf.mo_coeff)
 
     def __kernel__(self, **kwargs):
         """Silent implementation of kernel."""

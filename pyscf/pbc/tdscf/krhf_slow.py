@@ -101,9 +101,9 @@ class PhysERI(td.PhysERI):
             pairs_column=enumerate(pair_column),
         )
 
-    def tdhf_matrix(self, k):
+    def tdhf_a(self, k):
         """
-        Full matrix of the TDRHF problem.
+        The TDHF A-matrix.
         Args:
             k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
             vector or a single integer with the second index assuming the first index being zero;
@@ -112,20 +112,48 @@ class PhysERI(td.PhysERI):
             The matrix.
         """
         r1, r2, c1, c2 = get_block_k_ix(self, k)
+        d = self.tdhf_diag(r1)
+        return d + 2 * self["knmj", r1, c1] - self["knjm", r1, c1]
 
-        d1 = self.tdhf_diag(r1)
-        d2 = self.tdhf_diag(r2)
+    def tdhf_a_star(self, k):
+        """
+        The TDHF A-matrix (second block).
+        Args:
+            k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
+            vector or a single integer with the second index assuming the first index being zero;
 
-        m11 = d1 + 2 * self["knmj", r1, c1] - self["knjm", r1, c1]
-        m12 = 2 * self["kjmn", r1, c2] - self["kjnm", r1, c2]
-        m21 = 2 * self["mnkj", r2, c1] - self["mnjk", r2, c1]
-        m22 = d2 + 2 * self["mjkn", r2, c2] - self["mjnk", r2, c2]
+        Returns:
+            The matrix.
+        """
+        r1, r2, c1, c2 = get_block_k_ix(self, k)
+        d = self.tdhf_diag(r2)
+        return d + 2 * self["mjkn", r2, c2] - self["mjnk", r2, c2]
 
-        m = numpy.array([[m11, m12], [-m21, -m22]])
+    def tdhf_b(self, k):
+        """
+        The TDHF B-matrix.
+        Args:
+            k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
+            vector or a single integer with the second index assuming the first index being zero;
 
-        return m.transpose((0, 2, 1, 3)).reshape(
-            (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
-        )
+        Returns:
+            The matrix.
+        """
+        r1, r2, c1, c2 = get_block_k_ix(self, k)
+        return 2 * self["kjmn", r1, c2] - self["kjnm", r1, c2]
+
+    def tdhf_b_star(self, k):
+        """
+        The TDHF B-matrix.
+        Args:
+            k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
+            vector or a single integer with the second index assuming the first index being zero;
+
+        Returns:
+            The matrix.
+        """
+        r1, r2, c1, c2 = get_block_k_ix(self, k)
+        return 2 * self["mnkj", r2, c1] - self["mnjk", r2, c1]
 
 
 class PhysERI4(PhysERI):

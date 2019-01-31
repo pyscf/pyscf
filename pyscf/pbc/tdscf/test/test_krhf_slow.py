@@ -6,7 +6,7 @@ import unittest
 from numpy import testing
 import numpy
 
-from test_common import assert_vectors_close, tdhf_frozen_mask
+from test_common import retrieve_m_khf, assert_vectors_close, tdhf_frozen_mask
 
 
 def k2k(*indexes):
@@ -73,10 +73,13 @@ class DiamondTest(unittest.TestCase):
         for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
             if eri is not ktd.PhysERI8 or self.test8:
                 try:
-
                     e = eri(self.model_krhf)
                     m = e.tdhf_matrix(0)
 
+                    # Test matrix vs ref
+                    testing.assert_allclose(m, retrieve_m_khf(e, 0), atol=1e-11)
+
+                    # Test matrix vs pyscf
                     testing.assert_allclose(self.ref_m_gamma, m, atol=1e-12)
                 except Exception:
                     print("When testing {} the following exception occurred:".format(eri))
@@ -123,7 +126,7 @@ class DiamondTest(unittest.TestCase):
                         m[numpy.ix_(r, c)] = _m.reshape((2*self.k, o*v, 2*self.k, o*v)).transpose(0, 2, 1, 3)
 
                     m = m.transpose(0, 2, 1, 3).reshape(self.ref_m_supercell.shape)
-                    testing.assert_allclose(self.ref_m_supercell, m, atol=1e-12)
+                    testing.assert_allclose(self.ref_m_supercell, m, atol=1e-11)
                 except Exception:
                     print("When testing {} the following exception occurred:".format(eri))
                     raise
@@ -131,6 +134,7 @@ class DiamondTest(unittest.TestCase):
     def test_eig_kernel(self):
         """Tests container behavior (supercell)."""
         model = ktd.TDRHF(self.model_krhf)
+        assert not model.fast
         model.kernel()
         # vals = []
         # vecs = []

@@ -5,11 +5,51 @@ import numpy
 from numpy import testing
 
 
-def retrieve_m(model, **kwargs):
+def retrieve_m(model, phase=1, **kwargs):
     """Retrieves TDSCF matrix."""
     vind, hdiag = model.gen_vind(model._scf, **kwargs)
     size = model.init_guess(model._scf, 1).shape[1]
-    return vind(numpy.eye(size)).T
+    return vind(phase * numpy.eye(size)).T
+
+
+def retrieve_m_hf(eri):
+    """Retrieves TDHF matrix directly."""
+    d = eri.tdhf_diag()
+    m = numpy.array([
+        [d + 2 * eri["knmj"] - eri["knjm"], 2 * eri["kjmn"] - eri["kjnm"]],
+        [- 2 * eri["mnkj"] + eri["mnjk"], - 2 * eri["mjkn"] + eri["mjnk"] - d],
+    ])
+
+    return m.transpose(0, 2, 1, 3).reshape(
+        (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
+    )
+
+
+def retrieve_m_khf(eri, k):
+    """Retrieves TDHF matrix directly (K-version)."""
+    r1, r2, c1, c2 = get_block_k_ix(eri, k)
+
+    d1 = eri.tdhf_diag(r1)
+    d2 = eri.tdhf_diag(r2)
+
+    m11 = d1 + 2 * eri["knmj", r1, c1] - eri["knjm", r1, c1]
+    m12 = 2 * eri["kjmn", r1, c2] - eri["kjnm", r1, c2]
+    m21 = 2 * eri["mnkj", r2, c1] - eri["mnjk", r2, c1]
+    m22 = d2 + 2 * eri["mjkn", r2, c2] - eri["mjnk", r2, c2]
+
+    m = numpy.array([[m11, m12], [-m21, -m22]])
+
+    return m.transpose((0, 2, 1, 3)).reshape(
+        (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
+    )
+
+
+def test_m_complex_support(model, phase=None, **kwargs):
+    if phase is None:
+        phase = numpy.exp(2.j * numpy.pi * 0.2468) * 1.3579
+    m1 = retrieve_m(model, **kwargs)
+    m2 = retrieve_m(model, phase=phase, **kwargs)
+    testing.assert_allclose(m2, phase * m1, atol=1e-12)
 
 
 def sign(x):

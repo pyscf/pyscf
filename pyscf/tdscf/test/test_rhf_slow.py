@@ -7,7 +7,7 @@ import numpy
 from numpy import testing
 import unittest
 
-from test_common import retrieve_m, assert_vectors_close, tdhf_frozen_mask
+from test_common import retrieve_m, retrieve_m_hf, assert_vectors_close, tdhf_frozen_mask
 
 
 class H20Test(unittest.TestCase):
@@ -48,6 +48,11 @@ class H20Test(unittest.TestCase):
             try:
                 e = eri(self.model_rhf)
                 m = e.tdhf_matrix()
+
+                # Test matrix vs ref
+                testing.assert_allclose(m, retrieve_m_hf(e), atol=1e-14)
+
+                # Test matrix vs pyscf
                 testing.assert_allclose(self.ref_m, m, atol=1e-14)
                 vals, vecs = eig(m, nroots=self.td_model_rhf.nroots)
                 testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
@@ -73,14 +78,18 @@ class H20Test(unittest.TestCase):
         """Tests container behavior."""
         model = TDRHF(self.model_rhf)
         model.nroots = self.td_model_rhf.nroots
-        model.fast = True
+        assert model.fast
         e, xy = model.kernel()
         model.fast = False
         model.kernel()
+        # Slow vs fast
         testing.assert_allclose(model.e, e)
         assert_vectors_close(model.xy, xy)
+        # ... vs ref
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
         assert_vectors_close(model.xy, self.td_model_rhf.xy, atol=1e-2)
+        # Test real-valued
+        testing.assert_allclose(model.e.imag, 0, atol=1e-8)
 
     def test_class_frozen(self):
         """Tests container behavior."""
