@@ -347,6 +347,30 @@ F   1   1.00
         ref = gto.basis.load('631g(3df,3pd)', 'C')
         self.assertEqual(ref, basis1)
 
+    def test_basis_truncation(self):
+        b = gto.basis.load('ano@3s1p1f', 'C')
+        self.assertEqual(len(b), 3)
+        self.assertEqual(len(b[0][1]), 4)
+        self.assertEqual(len(b[1][1]), 2)
+        self.assertEqual(b[2][0], 3)
+        self.assertEqual(len(b[2][1]), 2)
+
+        b = gto.basis.load('631g(3df,3pd)@3s2p1f', 'C')
+        self.assertEqual(len(b), 6)
+        self.assertEqual(len(b[0][1]), 2)
+        self.assertEqual(len(b[1][1]), 2)
+        self.assertEqual(len(b[2][1]), 2)
+        self.assertEqual(len(b[3][1]), 2)
+        self.assertEqual(len(b[4][1]), 2)
+        self.assertEqual(b[5][0], 3)
+        self.assertEqual(len(b[5][1]), 2)
+
+        b = gto.basis.load('aug-ccpvtz@4s3p', 'C')
+        self.assertEqual(len(b), 6)
+        self.assertEqual(b[3][0], 1)
+
+        self.assertRaises(AssertionError, gto.basis.load, 'aug-ccpvtz@4s3f', 'C')
+
 
 if __name__ == "__main__":
     print("test basis module")

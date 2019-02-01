@@ -350,7 +350,7 @@ def convert_contraction(contr_string):
     for (l, n_contr) in zip(basis_l, num_contr):
         contraction_list[l] = n_contr
     return contraction_list
-    
+
 
 def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
@@ -385,7 +385,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         contr_scheme = convert_contraction(split_name[1])
     else:
         contr_scheme = 'Full'
-        
+
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
