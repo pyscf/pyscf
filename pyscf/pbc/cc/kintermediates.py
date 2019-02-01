@@ -117,7 +117,7 @@ def cc_Woooo(cc,t1,t2,eris,kconserv):
             kj = kconserv[km,ki,kn]
             kij = [ki,kj]
             Wmnij[km,kn,:] += 0.25*einsum('yxijef,xmnef->ymnij',tau[kij],eris.oovv[km,kn])
-            
+
             for ki in range(nkpts):
                 kj = kconserv[km,ki,kn]
                 Wmnij[km,kn,ki] += tmp[ki,kj]
@@ -167,13 +167,13 @@ def cc_Wovvo(cc,t1,t2,eris,kconserv):
                 kj = kconserv[km,ke,kb]
                 Wmbej[km,kb,ke] += einsum('jf,mbef->mbej',t1[kj,:,:],eris.ovvv[km,kb,ke])
                 Wmbej[km,kb,ke] += -einsum('nb,mnej->mbej',t1[kb,:,:],eris_oovo[km,kb,ke])
+                temp = numpy.zeros([nkpts, nocc, nocc, nvir, nvir], dtype=t2.dtype)
                 for kn in range(nkpts):
                     kf = kconserv[km,ke,kn]
-                    Wmbej[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej',t2[kj,kn,kf],
-                                                   eris.oovv[km,kn,ke])
+                    temp[kn] = -0.5*t2[kj,kn,kf].copy()
                     if kn == kb and kf == kj:
-                        Wmbej[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1[kj],t1[kn],
-                                                   eris.oovv[km,kn,ke])
+                        temp[kn] -= einsum('jf,nb->jnfb', t1[kj], t1[kn])
+                Wmbej[km,kb,ke] += einsum('xjnfb, xmnef->mbej', temp, eris.oovv[km,:,ke])
     return Wmbej
 
 def cc_Wovvo_jk(cc, t1, t2, eris, kconserv):

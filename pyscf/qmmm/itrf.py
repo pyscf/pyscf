@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -181,14 +181,14 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
         coords = numpy.asarray(coords, order='C') / unit
     charges = numpy.asarray(charges)
 
-    class QMMM(scf_grad.__class__, _QMMMGrad):
-        def __init__(self):
+    grad_class = scf_grad.__class__
+    class QMMM(grad_class, _QMMMGrad):
+        def __init__(self, scf_grad):
             self.__dict__.update(scf_grad.__dict__)
 
         def dump_flags(self):
-            scf_grad.dump_flags()
-            logger.info(self, '** Add background charges for %s **',
-                        scf_grad)
+            grad_class.dump_flags(self)
+            logger.info(self, '** Add background charges for %s **', grad_class)
             if self.verbose >= logger.DEBUG1:
                 logger.debug1(self, 'Charge      Location')
                 for i, z in enumerate(charges):
@@ -198,7 +198,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
         def get_hcore(self, mol=None):
             ''' (QM 1e grad) + <-d/dX i|q_mm/r_mm|j>'''
             if mol is None: mol = self.mol
-            g_qm = scf_grad.get_hcore(mol)
+            g_qm = grad_class.get_hcore(self, mol)
             nao = g_qm.shape[1]
             if pyscf.DEBUG:
                 v = 0
@@ -221,8 +221,8 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
             return g_qm + v
 
         def grad_nuc(self, mol=None, atmlst=None):
-            if mol is None: mol = scf_grad.mol
-            g_qm = scf_grad.grad_nuc(mol, atmlst)
+            if mol is None: mol = self.mol
+            g_qm = grad_class.grad_nuc(self, mol, atmlst)
 # nuclei lattice interaction
             g_mm = numpy.empty((mol.natm,3))
             for i in range(mol.natm):
@@ -233,7 +233,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
             if atmlst is not None:
                 g_mm = g_mm[atmlst]
             return g_qm + g_mm
-    return QMMM()
+    return QMMM(scf_grad)
 
 # A tag to label the derived class
 class _QMMM:
@@ -265,6 +265,7 @@ if __name__ == '__main__':
              H                 -0.00000000    0.89830571    0.52404783 ''')
     print((e1 - e2)/0.002 * lib.param.BOHR)
     mf.nuc_grad_method().kernel()
+    exit()
 
 
     mycc = cc.ccsd.CCSD(mf)

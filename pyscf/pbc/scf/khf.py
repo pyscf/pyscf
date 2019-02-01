@@ -116,7 +116,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
+def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -132,7 +132,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
         vk : (nkpts, nao, nao) ndarray
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
-    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, exxdiv=mf.exxdiv)
+    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_j, with_k,
+                                 exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -282,7 +283,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
 
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
-    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
@@ -291,7 +292,11 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     if s is None:
         s = get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for the gamma point')
+    log.note('Analyze output for *gamma point*')
+    log.info('    To include the contributions from k-points, transform to a '
+             'supercell then run the population analysis on the supercell\n'
+             '        from pyscf.pbc.tools import k2gamma\n'
+             '        k2gamma.k2gamma(mf).mulliken_meta()')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
@@ -533,24 +538,20 @@ class KSCF(pbchf.SCF):
     get_fermi = get_fermi
 
     def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
         vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band, with_k=False)[0]
-        logger.timer(self, 'vj', *cpu0)
         return vj
 
     def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)[1]
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band, with_j=False)[1]
 
-    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
+               with_j=True, with_k=True):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                     exxdiv=self.exxdiv)
+                                     with_j, with_k, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -648,6 +649,9 @@ class KSCF(pbchf.SCF):
         if s is None: s = self.get_ovlp(cell)
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
+
+    def mulliken_pop(self):
+        raise NotImplementedError
 
     get_rho = get_rho
 

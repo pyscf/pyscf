@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,21 +52,18 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = aoslices[ia]
+        p0, p1 = aoslices [ia,2:]
         h1ao = hcore_deriv(ia)
         de[k] += numpy.einsum('xij,ij->x', h1ao, dm0)
 # nabla was applied on bra in vhf, *2 for the contributions of nabla|ket>
         de[k] += numpy.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
-        if mf_grad.grid_response: # Only effective in DFT gradients
-            de[k] += vhf.exc1_grid[ia]
+
+        de[k] += mf_grad.extra_force(ia, locals())
+
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
-        if mf_grad.grid_response:
-            log.debug('grids response contributions')
-            _write(log, mol, vhf.exc1_grid[atmlst], atmlst)
-            log.debug1('sum(de) %s', vhf.exc1_grid.sum(axis=0))
     return de
 
 def _write(dev, mol, de, atmlst):
@@ -208,9 +205,6 @@ class Gradients(lib.StreamObject):
         self.mol = scf_method.mol
         self.base = scf_method
         self.max_memory = self.mol.max_memory
-# This parameter has no effects for HF gradients. Add this attribute so that
-# the kernel function can be reused in the DFT gradients code.
-        self.grid_response = False
 
         self.atmlst = None
         self.de = None
@@ -271,6 +265,15 @@ class Gradients(lib.StreamObject):
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
+
+    def extra_force(self, atom_id, envs):
+        '''Hook for extra contributions in analytical gradients.
+
+        Contributions like the response of auxiliary basis in density fitting
+        method, the grid response in DFT numerical integration can be put in
+        this function.
+        '''
+        return 0
 
     grad_elec = grad_elec
 

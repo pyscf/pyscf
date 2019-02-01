@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -140,6 +140,11 @@ class X2C(lib.StreamObject):
             x = _x2c1e_xmatrix(t, v, w, s, c)
         return x
 
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        return self
+
 
 def get_hcore(mol):
     '''2-component X2c hcore Hamiltonian (including spin-free and
@@ -148,7 +153,7 @@ def get_hcore(mol):
     x2c = X2C(mol)
     return x2c.get_hcore(mol)
 
-def get_jk(mol, dm, hermi=1, mf_opt=None):
+def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
@@ -207,8 +212,7 @@ class X2C_UHF(hf.SCF):
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if self.direct_scf:
-            self.opt = self.init_direct_scf(self.mol)
+        self.opt = self.init_direct_scf(self.mol)
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -274,13 +278,13 @@ class X2C_UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt)
+        vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 

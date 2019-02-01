@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ class KnownValues(unittest.TestCase):
     def test_rhf(self):
         mf = scf.density_fit(scf.RHF(mol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+        self.assertTrue(mf._eri is None)
 
     def test_uhf(self):
         mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
@@ -181,6 +182,17 @@ class KnownValues(unittest.TestCase):
 
         mf = mf.newton().density_fit(auxbasis='sto3g')
         self.assertEqual(mf.with_df.auxbasis, 'sto3g')
+
+    def test_get_j(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr()
+        dms = numpy.random.random((2,nao,nao))
+
+        mf = scf.RHF(mol).density_fit(auxbasis='weigend')
+        vj0 = mf.get_j(mol, dms)
+        vj1 = mf.get_jk(mol, dms)[0]
+        self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 12)
+        self.assertAlmostEqual(lib.finger(vj0), -194.15910890730052, 9)
 
 
 if __name__ == "__main__":

@@ -191,7 +191,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
 
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
-    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
@@ -200,7 +200,11 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     if s is None:
         s = khf.get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for the gamma point')
+    log.note('Analyze output for *gamma point*.')
+    log.info('    To include the contributions from k-points, transform to a '
+             'supercell then run the population analysis on the supercell\n'
+             '        from pyscf.pbc.tools import k2gamma\n'
+             '        k2gamma.k2gamma(mf).mulliken_meta()')
     log.note("KUHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[:,0,:,:].real
     s_gamma = s[0,:,:].real
@@ -525,6 +529,9 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if s is None: s = self.get_ovlp(cell)
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
+
+    def mulliken_pop(self):
+        raise NotImplementedError
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,

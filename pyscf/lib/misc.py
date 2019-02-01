@@ -82,6 +82,11 @@ def num_threads(n=None):
     '''Set the number of OMP threads.  If argument is not specified, the
     function will return the total number of available OMP threads.
 
+    It's recommended to call this function to set OMP threads than
+    "os.environ['OMP_NUM_THREADS'] = int(n)". This is because environment
+    variables like OMP_NUM_THREADS were read when a module was imported. They
+    cannot be reset through os.environ after the module was loaded.
+
     Examples:
 
     >>> from pyscf import lib

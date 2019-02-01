@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -900,6 +900,13 @@ class DDCOSMO(lib.StreamObject):
 
         epcm, vpcm = self._solver_(dm)
         return epcm, vpcm
+
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        self._solver_ = None
+        self.grids.reset(mol)
+        return self
 
     energy = energy
     gen_solver = as_solver = gen_ddcosmo_solver

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,7 +88,10 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
                                   mol.atom_coords())
         return scipy.linalg.eigh(im)[0]
-    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
+    im1 = inertia_momentum(mol)
+    im2 = inertia_momentum(chk_mol)
+    # im1+1e-7 to avoid 'divide by zero' error
+    if abs((im1-im2)/(im1+1e-7)).max() > 0.01:
         logger.warn(mol, "Large deviations found between the input "
                     "molecule and the molecule from chkfile\n"
                     "Initial guess density matrix may have large error.")
@@ -437,11 +440,12 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
+    nmo = len(mo_occ[0])
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
         log.note('**** MO energy ****')
         log.note('                             alpha | beta                alpha | beta')
-        for i in range(mo_occ.shape[1]):
+        for i in range(nmo):
             log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
                      i+MO_BASE, mo_energy[0][i], mo_energy[1][i],
                      mo_occ[0][i], mo_occ[1][i])
@@ -738,7 +742,7 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
         '''Coulomb (J) and exchange (K)
 
         Args:
@@ -750,10 +754,10 @@ class UHF(hf.SCF):
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
-            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
         else:
-            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi)
-        return numpy.asarray(vj), numpy.asarray(vk)
+            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
+        return vj, vk
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -761,8 +765,7 @@ class UHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.asarray((dm*.5,dm*.5))
-        if (self._eri is not None or not self.direct_scf or
-            mol.incore_anyway or self._is_mem_enough()):
+        if self._eri is not None or not self.direct_scf:
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj[0] + vj[1] - vk
         else:

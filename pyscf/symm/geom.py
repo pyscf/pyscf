@@ -26,7 +26,7 @@
 # type of cartesian functions.  Based on the degeneracy of cartesian function
 # basis, one can quickly filter out a few candidates of point groups for the
 # given molecule.  Regular operations (rotation, mirror etc) can be applied
-# next to identify the symmetry.  Current implementation only checks the
+# then to identify the symmetry.  Current implementation only checks the
 # rotation functions and it's roughly enough for D2h and subgroups.
 # 
 # There are special cases this detection method may break down, eg two H8 cube
