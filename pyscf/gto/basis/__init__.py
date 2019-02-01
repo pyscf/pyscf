@@ -420,12 +420,25 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
             mod = importlib.import_module('.'+basmod, __package__)
             b = mod.__getattribute__(symb)
     if contr_scheme != 'Full':
-        # keep only exponents and the first n_fun columns for each l
+        # keep only first n_keep contractions for each l
         contr_b = []
-        for l, n_fun in enumerate(contr_scheme):
-            if n_fun > 0:
-                l_basis = [line[:n_fun+1] for line in b[l][:][1:]]
-                contr_b.append([l] + l_basis)
+        b_index = 0
+        for l, n_keep in enumerate(contr_scheme):
+            n_saved = 0
+            if n_keep > 0:
+                for segm in b:
+                    segm_l = segm[0]
+                    if segm_l == l:
+                        segm_len = len(segm[1][1:])
+                        n_save = min(segm_len, n_keep - n_saved)
+                        if n_save > 0:
+                            save_segm = [line[:n_save+1] for line in
+                                         segm[:][1:]]
+                            contr_b.append([l] + save_segm)
+                            n_saved += n_save
+                assert n_saved == n_keep, 'Only ' + str(n_saved) +\
+                    ' l=' + str(l) + ' functions available for ' +\
+                    symb + ' ' + name + ', cannot truncate to ' + split_name[1]
         b = contr_b
     return b
 
