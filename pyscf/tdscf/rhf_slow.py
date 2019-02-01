@@ -188,6 +188,23 @@ class TDDFTMatrixBlocks(object):
             (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
         )
 
+    def fast_tdhf_matrix_set(self, *args, **kwargs):
+        """
+        A set of real tdhf matrixes to perform an optimized diagonlaization.
+        Args:
+            *args, **kwargs: optional arguments for a- and b- matrixes;
+
+        Returns:
+            The matrix to diagonalize as well as the matrix to determine the second half of the TD HF solution.
+        """
+        tdhf_a = self.tdhf_a(*args, **kwargs)
+        tdhf_b = self.tdhf_b(*args, **kwargs)
+        if numpy.iscomplexobj(tdhf_a) or numpy.iscomplexobj(tdhf_b):
+            raise ValueError("A- and/or B-matrixes are complex-valued: no fast diagonalization int his case")
+        tdhf_k, tdhf_m = tdhf_a - tdhf_b, tdhf_a + tdhf_b
+        tdhf_mk = tdhf_m.dot(tdhf_k)
+        return tdhf_mk, tdhf_k
+
 
 def format_frozen(frozen, nmo):
     """
@@ -391,16 +408,9 @@ def kernel(eri, driver=None, fast=True, nroots=None, **kwargs):
     if fast:
         if numpy.iscomplexobj(eri.mo_coeff):
             raise ValueError("The fast diagonalization works only for real-valued oribtals")
-        logger.debug1(eri.model, "Preparing the A matrix ...")
-        tdhf_a = eri.tdhf_a(**kwargs)
-        logger.debug1(eri.model, "Preparing the B matrix ...")
-        tdhf_b = eri.tdhf_b(**kwargs)
-        tdhf_k, tdhf_m = tdhf_a - tdhf_b, tdhf_a + tdhf_b
-        del tdhf_a, tdhf_b
-        tdhf_mk = tdhf_m.dot(tdhf_k)
-        del tdhf_m
-
-        logger.debug1(eri.model, "Diagonalizing a MK {} matrix with {} ...".format(
+        logger.debug1(eri.model, "Preparing TDHF matrix (fast) ...")
+        tdhf_mk, tdhf_k = eri.fast_tdhf_matrix_set(**kwargs)
+        logger.debug1(eri.model, "Diagonalizing a {} matrix with {} ...".format(
             'x'.join(map(str, tdhf_mk.shape)),
             "'{}'".format(driver) if driver is not None else "a default method",
         ))
