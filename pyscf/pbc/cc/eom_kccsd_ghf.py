@@ -451,6 +451,7 @@ def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
             idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
+    print eom
     return eom.amplitudes_to_vector(new_r1, new_r2, kshift, kconserv)
 
 class EOMIP(eom_rccsd.EOM):
