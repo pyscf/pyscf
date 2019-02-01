@@ -252,7 +252,6 @@ if __name__ == '__main__':
     print(numpy.einsum('ij,ji->', vk, dm))
     print(abs(vjref-vj).max().max())
     print(abs(vkref-vk).max().max())
-    print '--------'
 
     vj, vk = get_jk_favorj(sgxobj, dm)
     print(numpy.einsum('ij,ji->', vj, dm))
