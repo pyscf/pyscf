@@ -247,6 +247,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
 
     For description of arguments, see `get_t3p2_imds_slow` in `gintermediates.py`.
     """
+    logger.warn(cc, 'T3[2]-corrected T1/T2 amplitudes needs further checks for accuracy.')
     if eris is None:
         eris = cc.ao2mo()
     fock = eris.fock
