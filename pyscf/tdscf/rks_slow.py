@@ -65,6 +65,14 @@ class PhysERI(tdhf.PhysERI):
         self.proxy_model = proxy.TDDFT(model)
         self.space = tdhf.format_frozen(frozen, len(model.mo_energy))
 
+    @property
+    def nocc_full(self):
+        return int(self.model.mo_occ.sum() // 2)
+
+    @property
+    def nmo_full(self):
+        return len(self.model.mo_occ)
+
     def ao2mo(self, coeff):
         """
         Phys ERI in MO basis.
@@ -96,26 +104,57 @@ class PhysERI(tdhf.PhysERI):
 
     def tdhf_matrix(self, *args, **kwargs):
         """
-        Full matrix of the TDKS problem.
+        Full matrix of the TDKS problem. For ProxyERI, only one of `tdhf_matrix`, `fast_tdhf_matrix_set` works,
+        depending on whether `proxy_model.gen_vind` returns half- or full-sized matrixes.
         Returns:
             The matrix.
         """
-        raise RuntimeError("This is a proxy class: no calls to the full TDHF matrix expected: only"
-                           " 'fast_tdhf_matrix_set' can be used")
+        # Retrieve matrix in the active space specified
+        vind, hdiag = self.proxy_model.gen_vind(self.model)
+
+        nmo_full = self.nmo_full
+        nocc_full = self.nocc_full
+        nvirt_full = nmo_full - nocc_full
+        size_full = 2 * nocc_full * nvirt_full
+
+        if len(hdiag) != size_full:
+            raise RuntimeError("The underlying TD* matvec routine returns arrays of unexpected size: {:d} vs "
+                               "{:d} (expected)".format(len(hdiag), size_full))
+
+        nmo = self.nmo
+        nocc = self.nocc
+        nvirt = nmo - nocc
+        size = 2 * nocc * nvirt
+
+        probe = numpy.zeros((size, size_full))
+
+        o = self.space[:nocc_full]
+        v = self.space[nocc_full:]
+        ov = numpy.tile((o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1), 2)
+
+        probe[numpy.arange(size), numpy.argwhere(ov)[:, 0]] = 1
+        result = vind(probe).T[ov, :]
+
+        return result
 
     def fast_tdhf_matrix_set(self):
         """
-        A set of real tdks matrixes to perform an optimized diagonlaization.
+        A set of real tdks matrixes to perform an optimized diagonlaization. For ProxyERI, only one of `tdhf_matrix`,
+        `fast_tdhf_matrix_set` works, depending on whether `proxy_model.gen_vind` returns half- or full-sized matrixes.
         Returns:
             The matrix to diagonalize as well as the matrix to determine the second half of the TD KS solution.
         """
         # Retrieve matrix in the active space specified
         vind, hdiag = self.proxy_model.gen_vind(self.model)
 
-        nmo_full = len(self.space)
-        nocc_full = int(self.model.mo_occ.sum() // 2)
+        nmo_full = self.nmo_full
+        nocc_full = self.nocc_full
         nvirt_full = nmo_full - nocc_full
         size_full = nocc_full * nvirt_full
+
+        if len(hdiag) != size_full:
+            raise RuntimeError("The underlying TD* matvec routine returns arrays of unexpected size: {:d} vs "
+                               "{:d} (expected)".format(len(hdiag), size_full))
 
         nmo = self.nmo
         nocc = self.nocc
@@ -143,3 +182,13 @@ vector_to_amplitudes = tdhf.vector_to_amplitudes
 class TDRKS(tdhf.TDRHF):
     eri1 = PhysERI
     eri4 = eri8 = None
+
+    def __init__(self, mf, frozen=None):
+        """
+        Performs TDKS calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
+        Args:
+            mf (RKS): the base restricted DFT model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+        """
+        super(TDRKS, self).__init__(mf, frozen=frozen)
+        self.fast = True
