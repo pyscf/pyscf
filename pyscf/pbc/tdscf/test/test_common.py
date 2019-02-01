@@ -128,6 +128,8 @@ def tdhf_frozen_mask(eri, kind="ov"):
     if kind == "ov":
         mask_ov = numpy.outer(mask_o, mask_v).reshape(-1)
         return numpy.tile(mask_ov, 2)
+    elif kind == "1ov":
+        return numpy.outer(mask_o, mask_v).reshape(-1)
     elif kind == "sov":
         mask_ov = numpy.outer(mask_o, mask_v).reshape(-1)
         nk = len(eri.model.mo_occ)
