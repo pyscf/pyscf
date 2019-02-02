@@ -118,6 +118,15 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         else:
             user_guess = False
             guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
+        for ig, g in enumerate(guess):
+            guess_norm = np.linalg.norm(g)
+            guess_norm *= 0.0
+            guess_norm_tol = LOOSE_ZERO_TOL
+            if guess_norm < guess_norm_tol:
+                raise ValueError('Guess vector (id=%d) with norm %.4g is below threshold %.4g.\n'
+                                 'This could possibly be due to masking/freezing orbitals.\n'
+                                 'Check your guess vector to make sure it has sufficiently large norm.'
+                                 % (ig, guess_norm, guess_norm_tol))
 
         def precond(r, e0, x0):
             return r/(e0-diag+1e-12)
@@ -340,11 +349,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     nkpts = eom.nkpts
     kconserv = imds.kconserv
     r1, r2 = vector_to_amplitudes_ip(vector, kshift, nkpts, nmo, nocc, kconserv)
-    #print 'matvec '
-    #for ki,kj in itertools.product(range(nkpts), repeat=2):
-    #    ka = kconserv[ki, kshift, kj]
-    #    print ki,kj,np.linalg.norm(r2[ki,kj]+r2[kj,ki].transpose(1,0,2)), np.linalg.norm(r2[ki,kj])
-    #    if( abs(np.linalg.norm(r2[ki,kj]+r2[kj,ki].transpose(1,0,2))) > 1e-8): exit()
 
     Hr1 = -np.einsum('mi,m->i', imds.Foo[kshift], r1)
     for km in range(nkpts):
@@ -380,12 +384,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
     Hr2[:, :] += 0.5 * lib.einsum('e,yxjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
-
-    #print 'matvec Hr'
-    #for ki,kj in itertools.product(range(nkpts), repeat=2):
-    #    ka = kconserv[ki, kshift, kj]
-    #    print ki,kj,np.linalg.norm(Hr2[ki,kj]+Hr2[kj,ki].transpose(1,0,2)), np.linalg.norm(Hr2[ki,kj])
-    #    if( abs(np.linalg.norm(Hr2[ki,kj]+Hr2[kj,ki].transpose(1,0,2))) > 1e-8): exit()
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
