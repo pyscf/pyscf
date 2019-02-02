@@ -482,7 +482,7 @@ class EOMIP(eom_kgccsd.EOMIP):
     get_padding_k_idx = get_padding_k_idx
     mask_frozen = mask_frozen_ip
 
-    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
@@ -981,7 +981,7 @@ class EOMEA(eom_kgccsd.EOMEA):
     get_padding_k_idx = get_padding_k_idx
     mask_frozen = mask_frozen_ea
 
-    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)

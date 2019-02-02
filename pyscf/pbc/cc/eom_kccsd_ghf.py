@@ -42,7 +42,7 @@ from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
 
 einsum = lib.einsum
 
-def kernel(eom, nroots=1, koopmans=True, guess=None, left=False,
+def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None, **kwargs):
     '''Calculate excitation energy via eigenvalue solver
@@ -340,6 +340,11 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     nkpts = eom.nkpts
     kconserv = imds.kconserv
     r1, r2 = vector_to_amplitudes_ip(vector, kshift, nkpts, nmo, nocc, kconserv)
+    #print 'matvec '
+    #for ki,kj in itertools.product(range(nkpts), repeat=2):
+    #    ka = kconserv[ki, kshift, kj]
+    #    print ki,kj,np.linalg.norm(r2[ki,kj]+r2[kj,ki].transpose(1,0,2)), np.linalg.norm(r2[ki,kj])
+    #    if( abs(np.linalg.norm(r2[ki,kj]+r2[kj,ki].transpose(1,0,2))) > 1e-8): exit()
 
     Hr1 = -np.einsum('mi,m->i', imds.Foo[kshift], r1)
     for km in range(nkpts):
@@ -375,6 +380,12 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
     Hr2[:, :] += 0.5 * lib.einsum('e,yxjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
+
+    #print 'matvec Hr'
+    #for ki,kj in itertools.product(range(nkpts), repeat=2):
+    #    ka = kconserv[ki, kshift, kj]
+    #    print ki,kj,np.linalg.norm(Hr2[ki,kj]+Hr2[kj,ki].transpose(1,0,2)), np.linalg.norm(Hr2[ki,kj])
+    #    if( abs(np.linalg.norm(Hr2[ki,kj]+Hr2[kj,ki].transpose(1,0,2))) > 1e-8): exit()
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
@@ -413,10 +424,17 @@ def ipccsd_diag(eom, kshift, imds=None):
 
                 Hr2[ki, kj] += lib.einsum('ijea,jiea->ija',imds.Woovv[ki,kj,kshift], imds.t2[kj,ki,kshift])
 
+    #print 'diag Hr'
+    #for ki,kj in itertools.product(range(nkpts), repeat=2):
+    #    ka = kconserv[ki, kshift, kj]
+    #    #print ki,kj,np.linalg.norm(Hr2[ki,kj]-Hr2[kj,ki].transpose(1,0,2)), np.linalg.norm(Hr2[ki,kj])
+    #    ##if( abs(np.linalg.norm(Hr2[ki,kj]+Hr2[kj,ki].transpose(1,0,2))) > 1e-8): exit()
+
+    #exit()
     vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
 
-def ipccsd(eom, nroots=1, koopmans=True, guess=None, left=False,
+def ipccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None, **kwargs):
     '''See `kernel()` for a description of arguments.'''
@@ -467,7 +485,7 @@ class EOMIP(eom_rccsd.EOM):
     mask_frozen = mask_frozen_ip
     get_padding_k_idx = get_padding_k_idx
 
-    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
@@ -657,7 +675,7 @@ def vector_to_amplitudes_ea(vector, kshift, nkpts, nmo, nocc, kconserv):
 
     return [r1,r2]
 
-def eaccsd(eom, nroots=1, koopmans=True, guess=None, left=False,
+def eaccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None):
     '''See `ipccsd()` for a description of arguments.'''
@@ -780,7 +798,7 @@ class EOMEA(eom_rccsd.EOM):
     mask_frozen = mask_frozen_ea
     get_padding_k_idx = get_padding_k_idx
 
-    def get_init_guess(self, kshift, nroots=1, koopmans=True, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
