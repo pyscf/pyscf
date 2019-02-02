@@ -26,7 +26,11 @@ cell.a = '''
 3.370137329, 3.370137329, 0.000000000'''
 cell.unit = 'B'
 cell.build()
-thresh = 1e-8
+KGCCSD_TEST_THRESHOLD = 1e-8
+
+def tearDownModule():
+    global cell, KGCCSD_TEST_THRESHOLD
+    del cell, KGCCSD_TEST_THRESHOLD
 
 def get_ip_identity(nocc_a,nocc_b,nvir_a,nvir_b,nkpts,I):
     count = 0
@@ -214,7 +218,7 @@ def get_ea_identity(kshift,nocc_a,nocc_b,nvir_a,nvir_b,nkpts,I,cc):
                         count = count + 1
     return indices
 
-class TestHe(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def _test_ip_diag(self,kmf,kshift=0):
         cc = kccsd.KUCCSD(kmf)
         Ecc = cc.kernel()[0]
@@ -226,10 +230,9 @@ class TestHe(unittest.TestCase):
         nkpts, nocc_b, nvir_b = t1b.shape
         nocc = nocc_a + nocc_b
         diag = kccsd_uhf.ipccsd_diag(eom,kshift,imds=imds)
-        
-        I = np.zeros((diag.shape[0],diag.shape[0]),dtype=complex)
-        I[:nocc,:nocc] = np.identity(nocc,dtype=complex)
-        indices = get_ip_identity(nocc_a,nocc_b,nvir_a,nvir_b,nkpts,I)
+
+        I = np.identity(diag.shape[0],dtype=complex)
+        indices = np.arange(diag.shape[0])
         H = np.zeros((I.shape[0],len(indices)),dtype=complex)
         for j,idx in enumerate(indices):
             H[:,j] = kccsd_uhf.ipccsd_matvec(eom,I[:,idx],kshift,imds=imds)
@@ -240,7 +243,7 @@ class TestHe(unittest.TestCase):
             diag_ref[j] = H[idx,j]
             diag_out[j] = diag[idx]
         diff = np.linalg.norm(diag_ref - diag_out)
-        self.assertTrue(abs(diff) < thresh,"Difference in IP diag: {}".format(diff))
+        self.assertTrue(abs(diff) < KGCCSD_TEST_THRESHOLD,"Difference in IP diag: {}".format(diff))
 
     def _test_ea_diag(self,kmf,kshift=0):
         cc = kccsd.KUCCSD(kmf)
@@ -254,10 +257,9 @@ class TestHe(unittest.TestCase):
         nocc = nocc_a + nocc_b
         nvir = nvir_a + nvir_b
         diag = kccsd_uhf.eaccsd_diag(eom,kshift,imds=imds)
- 
-        I = np.zeros((diag.shape[0],diag.shape[0]),dtype=complex)
-        I[:nvir,:nvir] = np.identity(nvir,dtype=complex)
-        indices = get_ea_identity(kshift,nocc_a,nocc_b,nvir_a,nvir_b,nkpts,I,cc)
+
+        I = np.identity(diag.shape[0],dtype=complex)
+        indices = np.arange(diag.shape[0])
         H = np.zeros((I.shape[0],len(indices)),dtype=complex)
         for j,idx in enumerate(indices):
             H[:,j] = kccsd_uhf.eaccsd_matvec(eom,I[:,idx],kshift,imds=imds)
@@ -268,7 +270,7 @@ class TestHe(unittest.TestCase):
             diag_ref[j] = H[idx,j]
             diag_out[j] = diag[idx]
         diff = np.linalg.norm(diag_ref - diag_out)
-        self.assertTrue(abs(diff) < thresh,"Difference in EA diag: {}".format(diff))
+        self.assertTrue(abs(diff) < KGCCSD_TEST_THRESHOLD,"Difference in EA diag: {}".format(diff))
 
     def test_he_112_ip_diag(self):
         kpts = cell.make_kpts([1,1,2])
