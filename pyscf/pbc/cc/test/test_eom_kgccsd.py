@@ -2,6 +2,7 @@ import make_test_cell
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.pbc import gto, scf, cc
 from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP, EOMEA
+from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP_Ta, EOMEA_Ta
 from pyscf.cc import eom_gccsd
 import unittest
 
@@ -103,3 +104,55 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e2_obt[0][0], 1.229802629928757, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.229802629928764, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.384394578043613, 6)
+
+    def test_n3_diffuse_Ta(self):
+        '''Tests EOM-CCSD(T)*a method.'''
+        cell = make_test_cell.test_cell_n3_diffuse()
+
+        nmp = [1,1,2]
+        '''
+        # treating 1*1*2 supercell at gamma point
+        supcell = super_cell(cell,nmp)
+        gmf  = scf.GHF(supcell,exxdiv=None)
+        ehf  = gmf.kernel()
+        gcc  = cc.GCCSD(gmf)
+        gcc.conv_tol=1e-12
+        gcc.conv_tol_normt=1e-10
+        gcc.max_cycle=250
+        ecc, t1, t2 = gcc.kernel()
+        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
+        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
+
+        eom = eom_gccsd.EOMIP_Ta(gcc)
+        e1, v = eom.ipccsd(nroots=6, koopmans=True)
+        eom = eom_gccsd.EOMEA_Ta(gcc)
+        e2, v = eom.eaccsd(nroots=6, koopmans=True)
+        '''
+        # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
+        ehf2 = kmf.e_tot
+        self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
+
+        mycc = cc.KGCCSD(kmf)
+        mycc.conv_tol = 1e-7
+        mycc.conv_tol_normt = 1e-7
+        ecc2, t1, t2 = mycc.kernel()
+        self.assertAlmostEqual(ecc2, -0.0676483716898783, 6)
+
+        eom = EOMIP_Ta(mycc)
+        e1_obt, v = eom.ipccsd(nroots=3, koopmans=True, kptlist=[0])
+        self.assertAlmostEqual(e1_obt[0][0], -1.146351234409813, 6)
+        self.assertAlmostEqual(e1_obt[0][1], -1.146351234404151, 6)
+        self.assertAlmostEqual(e1_obt[0][2], -1.107255699646373, 6)
+
+        eom = EOMEA_Ta(mycc)
+        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[0])
+        self.assertAlmostEqual(e2_obt[0][0], 1.267728934041309, 6)
+        self.assertAlmostEqual(e2_obt[0][1], 1.267728934041309, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.280954980102639, 6)
+
+        eom = EOMEA_Ta(mycc)
+        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1])
+        self.assertAlmostEqual(e2_obt[0][0], 1.2290479727093149, 6)
+        self.assertAlmostEqual(e2_obt[0][1], 1.2290479727093468, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.384154366703175, 6)
+
