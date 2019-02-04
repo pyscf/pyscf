@@ -387,6 +387,62 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
 
+def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
+    '''2ph operators are of the form s_{ij}^{a }, i.e. 'ia' indices are coupled.
+    This differs from the restricted case that uses s_{ij}^{ b}.
+
+    See also `ipccsd_matvec`'''
+    if imds is None: imds = eom.make_imds()
+    nocc = eom.nocc
+    nmo = eom.nmo
+    nvir = nmo - nocc
+    nkpts = eom.nkpts
+    kconserv = imds.kconserv
+    r1, r2 = vector_to_amplitudes_ip(vector, kshift, nkpts, nmo, nocc, kconserv)
+    dtype = np.result_type(r1, r2)
+
+    Hr1 = -lib.einsum('mi,i->m', imds.Foo[kshift], r1)
+    for ki, kj in itertools.product(range(nkpts), repeat=2):
+        ka = kconserv[ki, kshift, kj]
+        Hr1 += -0.5 * lib.einsum('maji,ija->m', imds.Wovoo[kshift,ka,kj], r2[ki,kj])
+
+    Hr2 = np.zeros_like(r2)
+    for km, kn in itertools.product(range(nkpts), repeat=2):
+        ke = kconserv[km, kshift, kn]
+        Hr2[km,kn] += -lib.einsum('nmie,i->mne', imds.Wooov[kn,km,kshift], r1)
+        Hr2[km,kshift] += (km==ke)*lib.einsum('me,n->mne', imds.Fov[km], r1)
+        Hr2[kshift,kn] -= (kn==ke)*lib.einsum('ne,m->mne', imds.Fov[kn], r1)
+
+    for km, kn in itertools.product(range(nkpts), repeat=2):
+        ke = kconserv[km, kshift, kn]
+        Hr2[km,kn] += lib.einsum('ae,mna->mne', imds.Fvv[ke], r2[km,kn])
+        tmp1 = lib.einsum('im,ine->mne', imds.Foo[km], r2[km,kn])
+        tmp1T = lib.einsum('in,ime->mne', imds.Foo[kn], r2[kn,km])
+        Hr2[km,kn] += (-tmp1 + tmp1T)
+
+        for ki in range(nkpts):
+            kj = kconserv[km,ki,kn]
+            Hr2[km,kn] += 0.5 * lib.einsum('ijmn,ije->mne', imds.Woooo[ki,kj,km], r2[ki,kj])
+
+            ka = kconserv[ke,km,ki]
+            tmp2 = lib.einsum('maei,ina->mne', imds.Wovvo[km,ka,ke], r2[ki,kn])
+            ka = kconserv[ke,kn,ki]
+            tmp2T = lib.einsum('naei,ima->mne', imds.Wovvo[kn,ka,ke], r2[ki,km])
+            Hr2[km,kn] += (tmp2 - tmp2T)
+
+    tmp = np.zeros(nvir, dtype=dtype)
+    for ki, kj in itertools.product(range(nkpts), repeat=2):
+        ka = kconserv[ki,kshift,kj]
+        kf = kshift
+        tmp += lib.einsum('ija,ijaf->f',r2[ki,kj],imds.t2[ki,kj,ka])
+
+    for km, kn in itertools.product(range(nkpts), repeat=2):
+        ke = kconserv[km, kshift, kn]
+        Hr2[km,kn] += 0.5 * lib.einsum('mnfe,f->mne', imds.Woovv[km,kn,kf], tmp)
+
+    vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
+    return vector
+
 def ipccsd_diag(eom, kshift, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -509,7 +565,7 @@ class EOMIP(eom_rccsd.EOMIP):
 
     get_diag = ipccsd_diag
     matvec = ipccsd_matvec
-    l_matvec = None
+    l_matvec = lipccsd_matvec
     mask_frozen = mask_frozen_ip
     get_padding_k_idx = get_padding_k_idx
 
@@ -541,7 +597,6 @@ class EOMIP(eom_rccsd.EOMIP):
         if imds is None: imds = self.make_imds()
         diag = self.get_diag(kshift, imds)
         if left:
-            raise NotImplementedError
             matvec = lambda xs: [self.l_matvec(x, kshift, imds, diag) for x in xs]
         else:
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
@@ -718,8 +773,7 @@ def eaccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
                   partition, kptlist, dtype)
 
 def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
-    '''2ph operators are of the form s_{ij}^{a }, i.e. 'ia' indices are coupled.
-    This differs from the restricted case that uses s_{ij}^{ b}.'''
+    '''2hp operators are of the form s_{ j}^{ab}, i.e. 'jb' indices are coupled.'''
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
@@ -758,6 +812,61 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     vector = eom.amplitudes_to_vector(Hr1, Hr2, kshift)
     return vector
+
+def leaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
+    '''2hp operators are of the form s_{ j}^{ab}, i.e. 'jb' indices are coupled.
+
+    See also `eaccsd_matvec`'''
+    if imds is None: imds = eom.make_imds()
+    nocc = eom.nocc
+    nmo = eom.nmo
+    nvir = nmo - nocc
+    nkpts = eom.nkpts
+    kconserv = imds.kconserv
+    r1, r2 = vector_to_amplitudes_ea(vector, kshift, nkpts, nmo, nocc, kconserv)
+    dtype = np.result_type(r1, r2)
+
+    Hr1 = np.einsum('ca,c->a', imds.Fvv[kshift], r1)
+    for kj, kb in itertools.product(range(nkpts), repeat=2):
+        kc = kconserv[kshift,kb,kj]
+        Hr1 += 0.5*lib.einsum('cbaj,jcb->a',imds.Wvvvo[kc,kb,kshift],r2[kj,kc])
+
+    Hr2 = np.zeros_like(r2)
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        Hr2[kj,ka] += lib.einsum('cjab,c->jab',imds.Wvovv[kshift,kj,ka],r1)
+        Hr2[kj,kshift] += (kj==kb)*lib.einsum('jb,a->jab',imds.Fov[kj],r1)
+        Hr2[kj,ka] -= (kj==ka)*lib.einsum('ja,b->jab',imds.Fov[kj],r1)
+
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        tmp1 = lib.einsum('ca,jcb->jab',imds.Fvv[ka],r2[kj,ka])
+        tmp1T = lib.einsum('cb,jca->jab',imds.Fvv[kb],r2[kj,kb])
+        Hr2[kj,ka] += (tmp1 - tmp1T)
+        Hr2[kj,ka] += -lib.einsum('jl,lab->jab',imds.Foo[kj],r2[kj,ka])
+
+        for kd in range(nkpts):
+            km = kconserv[kj,kb,kd]
+            tmp2 = lib.einsum('jdbm,mad->jab',imds.Wovvo[kj,kd,kb],r2[km,ka])
+            km = kconserv[kj,ka,kd]
+            tmp2T = lib.einsum('jdam,mbd->jab',imds.Wovvo[kj,kd,ka],r2[km,kb])
+            Hr2[kj,ka] += (tmp2 - tmp2T)
+
+            kc = kconserv[ka,kd,kb]
+            Hr2[kj,ka] += 0.5*lib.einsum('cdab,jcd->jab',imds.Wvvvv[kc,kd,ka],r2[kj,kc])
+
+    tmp = np.zeros(nocc, dtype=dtype)
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        tmp += lib.einsum('jab,kjab->k',r2[kj,ka],imds.t2[kshift,kj,ka])
+
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        Hr2[kj,ka] += -0.5*lib.einsum('kjab,k->jab',imds.Woovv[kshift,kj,ka],tmp)
+
+    vector = eom.amplitudes_to_vector(Hr1, Hr2, kshift)
+    return vector
+
 
 def eaccsd_diag(eom, kshift, imds=None):
     if imds is None: imds = eom.make_imds()
@@ -832,7 +941,7 @@ class EOMEA(eom_rccsd.EOMEA):
 
     get_diag = eaccsd_diag
     matvec = eaccsd_matvec
-    l_matvec = None
+    l_matvec = leaccsd_matvec
     mask_frozen = mask_frozen_ea
     get_padding_k_idx = get_padding_k_idx
 
@@ -864,7 +973,6 @@ class EOMEA(eom_rccsd.EOMEA):
         if imds is None: imds = self.make_imds()
         diag = self.get_diag(kshift, imds)
         if left:
-            raise NotImplementedError
             matvec = lambda xs: [self.l_matvec(x, kshift, imds, diag) for x in xs]
         else:
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
