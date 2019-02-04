@@ -120,7 +120,6 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
             guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
         for ig, g in enumerate(guess):
             guess_norm = np.linalg.norm(g)
-            guess_norm *= 0.0
             guess_norm_tol = LOOSE_ZERO_TOL
             if guess_norm < guess_norm_tol:
                 raise ValueError('Guess vector (id=%d) with norm %.4g is below threshold %.4g.\n'
@@ -422,13 +421,6 @@ def ipccsd_diag(eom, kshift, imds=None):
 
                 Hr2[ki, kj] += lib.einsum('ijea,jiea->ija',imds.Woovv[ki,kj,kshift], imds.t2[kj,ki,kshift])
 
-    #print 'diag Hr'
-    #for ki,kj in itertools.product(range(nkpts), repeat=2):
-    #    ka = kconserv[ki, kshift, kj]
-    #    #print ki,kj,np.linalg.norm(Hr2[ki,kj]-Hr2[kj,ki].transpose(1,0,2)), np.linalg.norm(Hr2[ki,kj])
-    #    ##if( abs(np.linalg.norm(Hr2[ki,kj]+Hr2[kj,ki].transpose(1,0,2))) > 1e-8): exit()
-
-    #exit()
     vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
 
@@ -445,6 +437,40 @@ def ipccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
             = kernel(eom, nroots, koopmans, guess, left, eris=eris, imds=imds,
                      partition=partition, kptlist=kptlist, dtype=dtype)
     return eom.e, eom.v
+
+def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
+                          left_guess=None, eris=None, imds=None, partition=None,
+                          kptlist=None, dtype=None):
+    '''Wrapper for running perturbative excited-states that require both left
+    and right amplitudes.'''
+    if imds is None:
+        imds = eom.make_imds(eris=eris)
+
+    # Right eigenvectors
+    r_converged, r_e, r_v = \
+               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
+                      eris=eris, imds=imds, partition=partition, kptlist=kptlist, dtype=dtype)
+    # Left eigenvectors
+    l_converged, l_e, l_v = \
+               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
+                      eris=eris, imds=imds, partition=partition, kptlist=kptlist, dtype=dtype)
+
+    e_star = []
+    for k, kshift in enumerate(kptlist):
+        ek, r_vk, l_vk = _sort_left_right_eigensystem(eom, r_converged[k], r_e[k], r_v[k],
+                                                      l_converged[k], l_e[k], l_v[k])
+        e_star = eom.ccsd_star_contract(ek, r_vk, l_vk, imds=imds)
+    return e_star
+
+def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None, left_guess=None,
+           eris=None, imds=None, partition=None, kptlist=None,
+           dtype=None, **kwargs):
+    '''See `kernel()` for a description of arguments.'''
+    if partition:
+        raise NotImplementedError
+    return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
+                                 right_guess=right_guess, left_guess=left_guess, eris=eris,
+                                 imds=imds, partition=partition, kptlist=kptlist, dtype=dtype)
 
 def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
@@ -469,7 +495,7 @@ def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
 
     return eom.amplitudes_to_vector(new_r1, new_r2, kshift, kconserv)
 
-class EOMIP(eom_rccsd.EOM):
+class EOMIP(eom_rccsd.EOMIP):
     def __init__(self, cc):
         self.kpts = cc.kpts
         self.nonzero_opadding, self.nonzero_vpadding = self.get_padding_k_idx(cc)
@@ -478,8 +504,12 @@ class EOMIP(eom_rccsd.EOM):
 
     kernel = ipccsd
     ipccsd = ipccsd
+    ipccsd_star = ipccsd_star
+    ipccsd_star_contract = None
+
     get_diag = ipccsd_diag
     matvec = ipccsd_matvec
+    l_matvec = None
     mask_frozen = mask_frozen_ip
     get_padding_k_idx = get_padding_k_idx
 
@@ -537,6 +567,13 @@ class EOMIP(eom_rccsd.EOM):
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
         imds.make_ip()
+        return imds
+
+class EOMIP_Ta(EOMIP):
+    '''Class for EOM IPCCSD(T)*(a) method by Matthews and Stanton.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_t3p2_ip(self._cc)
         return imds
 
 ########################################
@@ -782,7 +819,7 @@ def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
 
     return eom.amplitudes_to_vector(new_r1, new_r2, kshift, kconserv)
 
-class EOMEA(eom_rccsd.EOM):
+class EOMEA(eom_rccsd.EOMEA):
     def __init__(self, cc):
         self.kpts = cc.kpts
         self.nonzero_opadding, self.nonzero_vpadding = self.get_padding_k_idx(cc)
@@ -791,8 +828,11 @@ class EOMEA(eom_rccsd.EOM):
 
     kernel = eaccsd
     eaccsd = eaccsd
+    eaccsd_star_contract = None
+
     get_diag = eaccsd_diag
     matvec = eaccsd_matvec
+    l_matvec = None
     mask_frozen = mask_frozen_ea
     get_padding_k_idx = get_padding_k_idx
 
@@ -852,6 +892,13 @@ class EOMEA(eom_rccsd.EOM):
         imds.make_ea()
         return imds
 
+class EOMEA_Ta(EOMEA):
+    '''Class for EOM EACCSD(T)*(a) method by Matthews and Stanton.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_t3p2_ea(self._cc)
+        return imds
+
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
     # -- rintermediates --> gintermediates
@@ -907,6 +954,22 @@ class _IMDS:
         logger.timer_debug1(self, 'EOM-CCSD IP intermediates', *cput0)
         return self
 
+    def make_t3p2_ip(self, cc):
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
+
+        self.make_ip()  # Make after t1/t2 updated
+        self.Wovoo = self.Wovoo + Wovoo
+
+        self.made_ip_imds = True
+        logger.timer_debug1(self, 'EOM-CCSD(T)a IP intermediates', *cput0)
+        return self
+
     def make_ea(self):
         if not self._made_shared:
             self._make_shared()
@@ -926,6 +989,22 @@ class _IMDS:
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-CCSD EA intermediates', *cput0)
+        return self
+
+    def make_t3p2_ea(self, cc):
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
+
+        self.make_ea()  # Make after t1/t2 updated
+        self.Wvvvo = self.Wvvvo + Wvvvo
+
+        self.made_ea_imds = True
+        logger.timer_debug1(self, 'EOM-CCSD(T)a EA intermediates', *cput0)
         return self
 
     def make_ee(self):
