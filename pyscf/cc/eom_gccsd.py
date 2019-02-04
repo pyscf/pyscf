@@ -250,7 +250,7 @@ class EOMIP(eom_rccsd.EOMIP):
         return imds
 
 class EOMIP_Ta(EOMIP):
-    '''Class for EOM IPCCSD(T)(a) method by Devin Matthews.'''
+    '''Class for EOM IPCCSD(T)*(a) method by Matthews and Stanton.'''
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
         imds.make_t3p2_ip(self._cc)
@@ -485,7 +485,7 @@ class EOMEA(eom_rccsd.EOMEA):
 
 
 class EOMEA_Ta(EOMEA):
-    '''Class for EOM EACCSD(T)(a) method by Devin Matthews.'''
+    '''Class for EOM EACCSD(T)*(a) method by Matthews and Stanton.'''
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
         imds.make_t3p2_ea(self._cc)
