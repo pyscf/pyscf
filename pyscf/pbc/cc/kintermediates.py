@@ -18,11 +18,13 @@
 #
 
 #import numpy as np
+from itertools import product
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
 import numpy
 
-#einsum = np.einsum
+#einsum = numpy.einsum
 einsum = lib.einsum
 
 #################################################
@@ -347,64 +349,51 @@ def Wvvvo(cc,t1,t2,eris,kconserv,WWvvvv=None):
                                               tau[km, kn, ka])
     return Wabei
 
-def get_full_t3p2(cc, t1, t2, eris, using_erisT=False):
+def get_full_t3p2(mycc, t1, t2, eris):
     '''Build the entire T3[2] array in memory.
-
-    Args:
-        using_erisT (bool):
-            If True, uses the transposed electron-repulsion integrals used in
-            the C-code implementation (useful for debugging).
     '''
-    nkpts = cc.nkpts
-    nocc = cc.nocc
-    nmo = cc.nmo
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
     nvir = nmo - nocc
-    kconserv = cc.khelper.kconserv
+    kconserv = mycc.khelper.kconserv
 
-    if not using_erisT:
-        def get_wijkabc(ki, kj, kk, ka, kb, kc):
-            '''Build T3[2] for `ijkabc` at a given set of k-points'''
-            km = kconserv[ki, ka, kj]
-            kf = kconserv[kk, kc, kj]
-            ret = einsum('kjcf,fiba->ijkabc', t2[kk,kj,kc], eris.vovv[kf,ki,kb].conj())
-            ret = ret - einsum('jima,mkbc->ijkabc', eris.ooov[kj,ki,km].conj(), t2[km,kk,kb])
-            return ret
-    else:
-        from pyscf.pbc.cc.kccsd_t_rhf import create_t3_eris
-        # Create necessary temporary eris for fast read
-        feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv,        eris.ooov, t2])
-
-        def get_wijkabc(ki, kj, kk, ka, kb, kc):
-            '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts
-
-            Uses tranposed eris for fast data access.'''
-            km = kconserv[ki, ka, kj]
-            kf = kconserv[kk, kc, kj]
-            out = einsum('cfjk,abif->ijkabc', t2T[kc,kf,kj], eris_vvop[ka,kb,ki,:,:,:,nocc:])
-            out = out - einsum('cbmk,aijm->ijkabc', t2T[kc,kb,km], eris_vooo_C[ka,ki,kj])
-            return ret
+    def get_wijkabc(ki, kj, kk, ka, kb, kc):
+        '''Build T3[2] for `ijkabc` at a given set of k-points'''
+        km = kconserv[kc, kk, kb]
+        kf = kconserv[kk, kc, kj]
+        ret = einsum('kjcf,ifab->ijkabc', t2[kk,kj,kc], eris.ovvv[ki,kf,ka].conj())
+        ret = ret - einsum('jima,mkbc->ijkabc', eris.ooov[kj,ki,km].conj(), t2[km,kk,kb])
+        return ret
 
     fock = eris.fock
     fov = fock[:, :nocc, nocc:]
-    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
-    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    foo = numpy.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    fvv = numpy.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
 
-    t3 = np.empty((nkpts, nkpts, nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir, nvir, nvir),
-                   dtype = t2.dtype)
+    t3 = numpy.empty((nkpts,nkpts,nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir,nvir),
+                      dtype=t2.dtype)
     for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
-        kc = kpts_helper.get_kconserv3(cc._scf.cell, cc.kpts,
+        kc = kpts_helper.get_kconserv3(mycc._scf.cell, mycc.kpts,
                                        [ki, kj, kk, ka, kb])
-        t3[ki, kj, kk, ka, kb] = get_wijkabc(ki, kj, kk, ka, kb, kc)
-        t3[ki, kj, kk, ka, kb] += get_wijkabc(ki, kk, kj, ka, kc, kb).transpose(0, 2, 1, 3, 5, 4)
-        t3[ki, kj, kk, ka, kb] += get_wijkabc(kj, ki, kk, kb, ka, kc).transpose(1, 0, 2, 4, 3, 5)
-        t3[ki, kj, kk, ka, kb] += get_wijkabc(kj, kk, ki, kb, kc, ka).transpose(2, 0, 1, 5, 3, 4)
-        t3[ki, kj, kk, ka, kb] += get_wijkabc(kk, ki, kj, kc, ka, kb).transpose(1, 2, 0, 4, 5, 3)
-        t3[ki, kj, kk, ka, kb] += get_wijkabc(kk, kj, ki, kc, kb, ka).transpose(2, 1, 0, 5, 4, 3)
+        # Perform P(abc)
+        t3[ki,kj,kk,ka,kb] =  get_wijkabc(ki,kj,kk,ka,kb,kc)
+        t3[ki,kj,kk,ka,kb] += get_wijkabc(ki,kj,kk,kb,kc,ka).transpose(0,1,2,5,3,4)
+        t3[ki,kj,kk,ka,kb] += get_wijkabc(ki,kj,kk,kc,ka,kb).transpose(0,1,2,4,5,3)
 
+    # Perform P(ijk)
+    t3 = (t3.transpose(0,1,2,3,4,5,6,7,8,9,10) +
+          t3.transpose(1,2,0,3,4,6,7,5,8,9,10) +
+          t3.transpose(2,0,1,3,4,7,5,6,8,9,10))
+
+    for ki, kj, kk in product(range(nkpts), repeat=3):
         eijk = foo[ki][:, None, None] + foo[kj][None, :, None] + foo[kk][None, None, :]
-        eabc = fvv[ka][:, None, None] + fvv[kb][None, :, None] + fvv[kc][None, None, :]
-        eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
-        t3[ki, kj, kk, ka, kb] /= eijkabc
+        for ka, kb in product(range(nkpts), repeat=2):
+            kc = kpts_helper.get_kconserv3(mycc._scf.cell, mycc.kpts,
+                                           [ki, kj, kk, ka, kb])
+            eabc = fvv[ka][:, None, None] + fvv[kb][None, :, None] + fvv[kc][None, None, :]
+            eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
+            t3[ki,kj,kk,ka,kb] /= eijkabc
 
     return t3
 
@@ -414,14 +403,14 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     and intermediates used in IP/EA-CCSD(T)a
 
     Args:
-        cc (:obj:`KRCCSD`):
+        cc (:obj:`KGCCSD`):
             Object containing coupled-cluster results.
         t1 (:obj:`ndarray`):
             T1 amplitudes.
         t2 (:obj:`ndarray`):
             T2 amplitudes from which the T3[2] amplitudes are formed.
         eris (:obj:`_PhysicistsERIs`):
-            Electron-repulsion spatial integrals in physicist's notation.
+            Antisymmetrized electron-repulsion integrals in physicist's notation.
         t3p2_ip_out (:obj:`ndarray`):
             Store results of the intermediate used in IP-EOM-CCSD(T)a.
         t3p2_ea_out (:obj:`ndarray`):
@@ -449,38 +438,40 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     nkpts, nocc, nvir = t1.shape
     kconserv = cc.khelper.kconserv
 
-    fov = fock[:nocc, nocc:]
-    foo = fock[:nocc, :nocc].diagonal()
-    fvv = fock[nocc:, nocc:].diagonal()
+    fov = [fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)]
+    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
 
     ccsd_energy = cc.energy(t1, t2, eris)
-    dtype = np.result_type(t1, t2)
+    dtype = numpy.result_type(t1, t2)
 
     if t3p2_ip_out is None:
-        t3p2_ip_out = np.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
+        t3p2_ip_out = numpy.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
     Wmcik = t3p2_ip_out
 
     if t3p2_ea_out is None:
-        t3p2_ea_out = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), dtype=dtype)
+        t3p2_ea_out = numpy.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), dtype=dtype)
     Wacek = t3p2_ea_out
 
-    t3 = get_full_t3p2(cc, t1, t2, eris, using_erisT=False)
+    t3 = get_full_t3p2(cc, t1, t2, eris)
 
-    pt1 = np.zeros((nkpts, nocc, nvir), dtype=dtype)
+    pt1 = numpy.zeros((nkpts, nocc, nvir), dtype=dtype)
     for ki in range(nkpts):
+        ka = ki
         for km, kn, ke in product(range(nkpts), repeat=3):
-            pt1[ki] += lib.einsum('mnef,imnaef->ia', eris.oovv[km,kn,ke], t3)
+            pt1[ki] += 0.25 * lib.einsum('mnef,imnaef->ia', eris.oovv[km,kn,ke], t3[ki,km,kn,ka,ke])
         eii = foo[ki][:, None] - fvv[ki][None, :]
         pt1[ki] /= eii
 
-    pt2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=dtype)
+    pt2 = numpy.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=dtype)
     for ki, kj, ka in product(range(nkpts), repeat=3):
-        kb = kconserv[ki, ka, kj]
+        kb = kconserv[ki,ka,kj]
         for km in range(nkpts):
             pt2[ki,kj,ka] += lib.einsum('ijmabe,me->ijab', t3[ki,kj,km,ka,kb], fov[km])
             for ke in range(nkpts):
                 kf = kconserv[km,ke,kb]
                 pt2[ki,kj,ka] += 0.5 * lib.einsum('ijmaef,mbfe->ijab', t3[ki,kj,km,ka,ke], eris.ovvv[km,kb,kf])
+                kf = kconserv[km,ke,ka]
                 pt2[ki,kj,ka] -= 0.5 * lib.einsum('ijmbef,mafe->ijab', t3[ki,kj,km,kb,ke], eris.ovvv[km,ka,kf])
 
             for kn in range(nkpts):
@@ -490,7 +481,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
         eia = foo[ki][:, None] - fvv[ka][None, :]
         ejb = foo[kj][:, None] - fvv[kb][None, :]
         eijab = eia[:, None, :, None] + ejb[None, :, None, :]
-        pt2[ki, kj, ka] /= eijab
+        pt2[ki,kj,ka] /= eijab
 
     pt1 += t1
     pt2 += t2
@@ -498,9 +489,9 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
         kc = kpts_helper.get_kconserv3(cc._scf.cell, cc.kpts,
                                        [ki, kj, kk, ka, kb])
-        tmp = t3[ki,kj,kk,ka,kb,kc]
-        km = kconserv[kc,ki,ka]
-        ke = kconserv[ki,ka,kk]
+        tmp = t3[ki,kj,kk,ka,kb]
+        km = kconserv[ki,kc,kk]
+        ke = kconserv[ka,kk,kc]
 
         Wmcik[km,kc,ki] += 0.5*lib.einsum('ijkabc,mjab->mcik', tmp, eris.oovv[km,kj,ka])
         Wacek[ka,kc,ke] += -0.5*lib.einsum('ijkabc,ijeb->acek', tmp, eris.oovv[ki,kj,ke])
