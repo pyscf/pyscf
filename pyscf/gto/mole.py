@@ -411,7 +411,7 @@ def uncontracted_basis(_basis):
     Examples:
 
     >>> gto.uncontract(gto.load('sto3g', 'He'))
-    [[0, [6.3624213899999997, 1]], [0, [1.1589229999999999, 1]], [0, [0.31364978999999998, 1]]]
+    [[0, [6.36242139, 1]], [0, [1.158923, 1]], [0, [0.31364979, 1]]]
     '''
     ubasis = []
     for b in _basis:
@@ -425,6 +425,7 @@ def uncontracted_basis(_basis):
                 ubasis.append([angl, [p[0], 1]])
     return ubasis
 uncontract = uncontracted_basis
+contract = contracted_basis = basis.to_general_contraction
 
 def to_uncontracted_cartesian_basis(mol):
     '''Decontract the basis of a Mole or a Cell.  Returns a Mole (Cell) object

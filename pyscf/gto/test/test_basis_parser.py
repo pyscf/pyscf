@@ -371,6 +371,12 @@ F   1   1.00
 
         self.assertRaises(AssertionError, gto.basis.load, 'aug-ccpvtz@4s3f', 'C')
 
+    def test_to_general_contraction(self):
+        b = gto.basis.to_general_contraction(gto.load('cc-pvtz', 'H'))
+        self.assertEqual(len(b), 3)
+        self.assertEqual(len(b[0]), 6)
+        self.assertEqual(len(b[1]), 3)
+        self.assertEqual(len(b[2]), 2)
 
 if __name__ == "__main__":
     print("test basis module")

@@ -351,6 +351,9 @@ def convert_contraction(contr_string):
         contraction_list[l] = n_contr
     return contraction_list
 
+optimize_contraction = parse_nwchem.optimize_contraction
+to_general_contraction = parse_nwchem.to_general_contraction
+
 
 def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
