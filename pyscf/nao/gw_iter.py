@@ -42,6 +42,20 @@ class gw_iter(gw):
       if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
     return si0
 
+  def si_c_lgmres_matvec(self):
+    from scipy.sparse.linalg import lgmres
+    from scipy.sparse.linalg import LinearOperator
+    import numpy as np
+    ww = 1j*self.ww_ia
+    #rf0 = si0 = self.rf0(ww)
+    for iw,w in enumerate(ww):   
+      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
+      b = np.dot(k_c_opt, self.kernel_sq)   
+      k_c_opt2 = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec2, dtype=self.dtypeComplex)
+      for m in range(self.nprod): 
+         si0[iw,m,:],exitCode = lgmres(k_c_opt2, b[m,:])   
+      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+    return si0
 
   def si_c_check (self, tol = 1e-5):
     """
@@ -252,7 +266,7 @@ class gw_iter(gw):
     from scipy.sparse.linalg import lgmres
     from numpy.linalg import solve
     ww = 1j*self.ww_ia
-    rf0 = self.rf0(ww)
+    #rf0 = self.rf0(ww)
  
     v_pd  = self.pb.get_dp_vertex_array()       #dominant product basis: V_{\widetilde{\mu}}^{ab}
     c = self.pb.get_da2cc_den()                 #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
@@ -273,7 +287,8 @@ class gw_iter(gw):
         from pyscf.nao import ndcoo
         nc = ndcoo((data, (i0, i1, i2)))
         m0 = nc.tocoo_pa_b('p,a,b->ap,b')
-        vx1 = m0*(xmb.T)
+        #vx1 = m0*(xmb.T)
+        vx1 = m0.dot(xmb.T)
         vx1 = vx1.reshape(ndp, self.norbs, self.norbs)      
         vx1 = vx1.reshape(self.norbs,-1)                     
         #Second Step
@@ -283,17 +298,23 @@ class gw_iter(gw):
         xvx = np.dot(xvx,c)                                 #XVX=xvx.c
  
         for iw,w in enumerate(ww):                              #iw is number of grid and w is complex plane                                
-            k_c = np.dot(self.kernel_sq, rf0[iw,:,:])           #v\chi_{0}
+            #k_c = np.dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
             self.comega_current = w                             #appropriate ferequency for self.vext2veff_matvec
-            k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
+            k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)    #using k_c=v\chi_{0} as operator instead of full matrix
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
                     a = np.dot(self.kernel_sq, xvx[n,m,:])      #v XVX
-                    b = self.apply_rf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
-                    a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
+                    if (self.nspin==1):
+                        b = self.apply_rf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
+                        a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
+                    elif (self.nspin==2):
+                        a = np.concatenate((a,np.zeros(self.nprod)), axis=None) #adds same shape to a for satisfying the assertion of apply_rf0
+                        b = self.apply_rf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
+                        b = b.reshape(2,self.nprod)                 #removes added shape  
+                        a = np.dot(self.kernel_sq, b[0])            #v\chi_{0}v XVX, this should be aquals to bxvx in last approach        
                     sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, tol=1e-06)
             if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
-            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)   #I= XVX I_aux
+            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)        #I= XVX I_aux
         snm2i.append(np.real(inm))
     return snm2i
 
@@ -406,7 +427,7 @@ class gw_iter(gw):
         if self.verbosity>0: print('-'*43,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*43,'\n')
         break
       if err>=self.tol_ev and i+1==self.niter_max_ev:
-        if self.verbosity>0: print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
+        if self.verbosity>0: print('-'*30,' |  TAKE CARE! Convergence to tolerance {} not achieved after {}-iterations  | '.format(self.tol_ev,self.niter_max_ev),'-'*30,'\n')
     return sn2eval_gw
 
 
@@ -474,7 +495,7 @@ if __name__=='__main__':
     from pyscf import gto, scf
     from pyscf.nao import gw_iter   
 
-    mol = gto.M(atom='''C 0.0, 0.0, -0.611046 ; N 0.0, 0.0, 0.52375''', basis='ccpvdz',spin=1)
+    mol = gto.M(atom='''C 0.049798, -0.576272, 0.0 ; C 0.049798, 0.710988, 0.0 ; H -0.87675, -1.151844, 0.0 ; H 0.969183, -1.154639, 0.0 ; H -0.690013, 1.498185, 0.0''', basis='ccpvdz',spin=1)
     gto_mf = scf.ROHF(mol)
     gto_mf.kernel()
 

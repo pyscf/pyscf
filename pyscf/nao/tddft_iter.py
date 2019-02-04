@@ -156,6 +156,12 @@ class tddft_iter(chi0_matvec):
     dn0 = self.apply_rf0(vin, self.comega_current)
     vcre,vcim = self.apply_kernel(dn0)
     return vin - (vcre + 1.0j*vcim)
+  
+  def vext2veff_matvec2(self, vin):
+    self.matvec_ncalls+=1
+    dn0 = self.apply_rf0(vin, self.comega_current)
+    vcre,vcim = self.apply_kernel(dn0)
+    return 1- (vin - (vcre + 1.0j*vcim))
 
   def apply_kernel(self, dn):
     if self.nspin==1:
