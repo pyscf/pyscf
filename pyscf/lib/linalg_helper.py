@@ -379,7 +379,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
+            x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
+            if len(xt) != x0len:
+                log.warn('QR decomposition removed %d vectors.  The davidson may fail.'
+                         'Check to see if `pick` function %s is providing linear dependent'
+                         'vectors' % (pick))
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
@@ -500,6 +505,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
+                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
         xt = [xi for xi in xt if xi is not None]
 
         for i in range(space):
@@ -584,7 +590,7 @@ def _eigs_cmplx2real(w, v, real_idx):
     idx = real_idx[w[real_idx].real.argsort()]
     w = w[idx]
     v = v[:,idx]
-    degen_idx = numpy.where(abs(w.imag) > 1e-8)[0]
+    degen_idx = numpy.where(abs(w.imag) > 1e-10)[0]
     if degen_idx.size > 0:
         # Take the imaginary part of the "degenerated" eigenvectors as an
         # independent eigenvector
@@ -743,7 +749,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=3, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
+            x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
+            if len(xt) != x0len:
+                log.warn('QR decomposition removed %d vectors.  The davidson may fail.'
+                         'Check to see if `pick` function %s is providing linear dependent'
+                         'vectors' % (pick))
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
