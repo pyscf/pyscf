@@ -478,7 +478,6 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
         Shavitt and Bartlett "Many-body Methods in Physics and Chemistry"
             2009, Equation 10.33
     """
-    logger.warn(cc, 'T3[2]-corrected T1/T2 amplitudes needs further checks for accuracy.')
     if eris is None:
         eris = cc.ao2mo()
     fock = eris.fock
