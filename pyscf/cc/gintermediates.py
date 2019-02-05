@@ -253,12 +253,12 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     tmp = lib.einsum('ijmaef,mbfe->ijab', tmp_t3, tmp2)
     tmp = tmp - tmp.transpose(0, 1, 3, 2)  # P(ab)
     tmp *= 0.5
-    pt2 += tmp
+    pt2 = pt2 + tmp
     tmp2 = ooov + 0.0*lib.einsum('mnef,jf->nmje', oovv, t1)
     tmp = lib.einsum('inmabe,nmje->ijab', tmp_t3, tmp2)
     tmp *= -0.5
     tmp = tmp - tmp.transpose(1, 0, 2, 3)  # P(ij)
-    pt2 += tmp
+    pt2 = pt2 + tmp
 
     eia = foo[:, None] - fvv[None, :]
     eijab = eia[:, None, :, None] + eia[None, :, None, :]
@@ -266,12 +266,12 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     pt1 /= eia
     pt2 /= eijab
 
-    pt1 += t1
-    pt2 += t2
+    pt1 = pt1 + t1
+    pt2 = pt2 + t2
 
     Wmcik += 0.5*lib.einsum('ijkabc,mjab->mcik', tmp_t3, oovv)
     Wacek += -0.5*lib.einsum('ijkabc,ijeb->acek', tmp_t3, oovv)
 
     delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
-    logger.info(cc, 'CCSD energy T3[2] correction : %14.8e', delta_ccsd_energy)
+    logger.info(cc, 'CCSD energy T3[2] correction : %16.12e', delta_ccsd_energy)
     return delta_ccsd_energy, pt1, pt2, Wmcik, Wacek
