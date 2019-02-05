@@ -230,13 +230,38 @@ class KnownValues(unittest.TestCase):
         vec = eom_gccsd.EOMEE(mycc1).get_diag()
         self.assertAlmostEqual(lib.finger(vec), 1853.7201843910152+4488.8163311564713j, 9)
 
-    #def test_t3p2_intermediates(self):
-    #    e, pt1, pt2, Wmcik, Wacek = gintermediates.get_t3p2_imds_slow(mycc1, mycc1.t1, mycc1.t2)
-    #    self.assertAlmostEqual(e.real, , 6)
-    #    self.assertAlmostEqual(lib.finger(pt1), , 6)
-    #    self.assertAlmostEqual(lib.finger(pt2), , 6)
-    #    self.assertAlmostEqual(lib.finger(Wmcik), , 6)
-    #    self.assertAlmostEqual(lib.finger(Wacek), , 6)
+    def test_t3p2_intermediates_complex(self):
+        '''Although this has not been tested strictly for complex values, it
+        was written to be correct for complex values and differences in the complex
+        values between versions should be taken into account and corrected.'''
+        myt1 = mycc1.t1.copy()
+        myt2 = mycc1.t2.copy()
+        e, pt1, pt2, Wmcik, Wacek = gintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=eris1)
+        self.assertAlmostEqual(lib.finger(e), -13810450.064880637, 5)
+        self.assertAlmostEqual(lib.finger(pt1), (14525.466845738476+1145.7490899866602j), 6)
+        self.assertAlmostEqual(lib.finger(pt2), (-34943.95360794282+29728.34747703709j), 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), (271010.439304044-201703.96483952703j), 6)
+        self.assertAlmostEqual(lib.finger(Wacek), (316710.3913587458+99554.48507036189j), 6)
+
+    def test_t3p2_intermediates_real(self):
+        myt1 = mycc1.t1.real.copy()
+        myt2 = mycc1.t2.real.copy()
+        new_eris = mycc1.ao2mo()
+        new_eris.oooo = eris1.oooo.real
+        new_eris.oooo = eris1.oooo.real
+        new_eris.ooov = eris1.ooov.real
+        new_eris.oovv = eris1.oovv.real
+        new_eris.ovov = eris1.ovov.real
+        new_eris.ovvv = eris1.ovvv.real
+        new_eris.vvvv = eris1.vvvv.real
+        new_eris.vvvv = eris1.vvvv.real
+        new_eris.fock = eris1.fock.real
+        e, pt1, pt2, Wmcik, Wacek = gintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=new_eris)
+        self.assertAlmostEqual(lib.finger(e), 8588977.565611511, 5)
+        self.assertAlmostEqual(lib.finger(pt1), 14407.896043949795, 6)
+        self.assertAlmostEqual(lib.finger(pt2), -34967.36031768824, 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), 271029.6000933048, 6)
+        self.assertAlmostEqual(lib.finger(Wacek), 316110.05463216535, 6)
 
     def test_h2o_star(self):
         mol_h2o = gto.Mole()
