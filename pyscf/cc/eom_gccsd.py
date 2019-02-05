@@ -675,11 +675,12 @@ class _IMDS:
         cput0 = (time.clock(), time.time())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
-        delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
             imd.get_t3p2_imds_slow(cc, t1, t2, eris)
         self.t1 = pt1
         self.t2 = pt2
 
+        self._made_shared = False  # Force update
         self.make_ip()  # Make after t1/t2 updated
         self.Wovoo = self.Wovoo + Wovoo
 
@@ -709,11 +710,12 @@ class _IMDS:
         cput0 = (time.clock(), time.time())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
-        delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
             imd.get_t3p2_imds_slow(cc, t1, t2, eris)
         self.t1 = pt1
         self.t2 = pt2
 
+        self._made_shared = False  # Force update
         self.make_ea()  # Make after t1/t2 updated
         self.Wvvvo = self.Wvvvo + Wvvvo
 
