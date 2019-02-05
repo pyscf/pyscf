@@ -388,8 +388,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     return vector
 
 def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
-    '''2ph operators are of the form s_{ij}^{a }, i.e. 'ia' indices are coupled.
-    This differs from the restricted case that uses s_{ij}^{ b}.
+    '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.
 
     See also `ipccsd_matvec`'''
     if imds is None: imds = eom.make_imds()
@@ -416,13 +415,13 @@ def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     for km, kn in itertools.product(range(nkpts), repeat=2):
         ke = kconserv[km, kshift, kn]
         Hr2[km,kn] += lib.einsum('ae,mna->mne', imds.Fvv[ke], r2[km,kn])
-        tmp1 = lib.einsum('im,ine->mne', imds.Foo[km], r2[km,kn])
-        tmp1T = lib.einsum('in,ime->mne', imds.Foo[kn], r2[kn,km])
+        tmp1 = lib.einsum('mi,ine->mne', imds.Foo[km], r2[km,kn])
+        tmp1T = lib.einsum('ni,ime->mne', imds.Foo[kn], r2[kn,km])
         Hr2[km,kn] += (-tmp1 + tmp1T)
 
         for ki in range(nkpts):
             kj = kconserv[km,ki,kn]
-            Hr2[km,kn] += 0.5 * lib.einsum('ijmn,ije->mne', imds.Woooo[ki,kj,km], r2[ki,kj])
+            Hr2[km,kn] += 0.5 * lib.einsum('mnij,ije->mne', imds.Woooo[km,kn,ki], r2[ki,kj])
 
             ka = kconserv[ke,km,ki]
             tmp2 = lib.einsum('maei,ina->mne', imds.Wovvo[km,ka,ke], r2[ki,kn])
@@ -480,6 +479,125 @@ def ipccsd_diag(eom, kshift, imds=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2, kshift, kconserv)
     return vector
 
+
+def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift, imds=None):
+    """
+    Returns:
+        e_star (list of float):
+            The IP-CCSD* energy.
+
+    Notes:
+        The user should check to make sure the right and left eigenvalues
+        before running the perturbative correction.
+
+        The 2hp right amplitudes are assumed to be of the form s^{a }_{ij}, i.e.
+        the (ia) indices are coupled.
+
+    Reference:
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+    """
+    assert (eom.partition == None)
+    cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
+    fock = eris.fock
+    nkpts, nocc, nvir = t1.shape
+    nmo = nocc + nvir
+    dtype = np.result_type(t1, t2)
+    kconserv = eom.kconserv
+
+    fov = np.array([fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)])
+    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+
+    ipccsd_evecs = np.array(ipccsd_evecs)
+    lipccsd_evecs = np.array(lipccsd_evecs)
+    e_star = []
+    ipccsd_evecs, lipccsd_evecs = [np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs]]
+    ipccsd_evals = np.atleast_1d(ipccsd_evals)
+    for ip_eval, ip_evec, ip_levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
+        # Enforcing <L|R> = 1
+        l1, l2 = vector_to_amplitudes_ip(ip_levec, kshift, nkpts, nmo, nocc, kconserv)
+        r1, r2 = vector_to_amplitudes_ip(ip_evec, kshift, nkpts, nmo, nocc, kconserv)
+        ldotr = np.dot(l1, r1) + 0.5 * np.dot(l2.ravel(), r2.ravel())
+
+        logger.info(eom, 'Left-right amplitude overlap : %14.8e + 1j %14.8e',
+                    ldotr.real, ldotr.imag)
+        if abs(ldotr) < 1e-7:
+            logger.warn(eom, 'Small %s left-right amplitude overlap. Results '
+                             'may be inaccurate.', ldotr)
+
+        l1 /= ldotr
+        l2 /= ldotr
+
+        deltaE = 0.0 + 1j*0.0
+        for ka, kb in itertools.product(range(nkpts), repeat=2):
+            lijkab = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            rijkab = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
+                          [ka,kb,kshift,range(nkpts),range(nkpts)])
+
+            for ki, kj in itertools.product(range(nkpts), repeat=2):
+                kk = kklist[ki,kj]
+
+                # lijkab update
+                lijkab[ki,kj,kk] += lib.einsum('ijab,k->ijkab', eris.oovv[ki,kj,ka], l1)
+                km = kconserv[kj,ka,ki]
+                tmp = lib.einsum('jima,mkb->ijkab', eris.ooov[kj,ki,km], l2[km,kk])
+                km = kconserv[kj,kb,ki]
+                tmpT = lib.einsum('jimb,mka->ijkab', eris.ooov[kj,ki,km], l2[km,kk])
+                lijkab[ki,kj,kk] += (-tmp + tmpT)
+                ke = kconserv[ka,ki,kb]
+                lijkab[ki,kj,kk] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka], l2[kj,kk])
+
+                # rijkab update
+                tmp = lib.einsum('mbke,m->bke', eris.ovov[kshift,kb,kk], r1)
+                tmp = lib.einsum('bke,ijae->ijkab', tmp, t2[ki,kj,ka])
+                rijkab[ki,kj,kk] -= tmp
+                tmp = lib.einsum('make,m->ake', eris.ovov[kshift,kb,kk], r1)
+                tmp = lib.einsum('ake,ijbe->ijkab', tmp, t2[ki,kj,kb])
+                rijkab[ki,kj,kk] += tmp
+
+                km = kconserv[kj,kshift,kk]
+                tmp = lib.einsum('mnjk,n->mjk', eris.oooo[km,kshift,kj], r1)
+                tmp = lib.einsum('mjk,imab->ijkab', tmp, t2[ki,km,ka])
+                rijkab[ki,kj,kk] += tmp
+
+                km = kconserv[kj,ka,ki]
+                tmp = lib.einsum('jima,mkb->ijkab', eris.ooov[kj,ki,km], r2[km,kk])
+                km = kconserv[kj,kb,ki]
+                tmpT = lib.einsum('jimb,mka->ijkab', eris.ooov[kj,ki,km], r2[km,kk])
+                rijkab[ki,kj,kk] -= (tmp - tmpT)
+
+                ke = kconserv[ka,ki,kb]
+                rijkab[ki,kj,kk] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka], r2[kj,kk])
+
+            # P(ijk)
+            lijkab = lijkab + lijkab.transpose(1,2,0,4,5,3,6,7) + lijkab.transpose(2,0,1,5,3,4,6,7)
+            rijkab = rijkab + rijkab.transpose(1,2,0,4,5,3,6,7) + rijkab.transpose(2,0,1,5,3,4,6,7)
+
+            # Creating denominator
+            eijk = (foo[:, None, None, :, None, None] + foo[None, :, None, None, :, None] +
+                    foo[None, None, :, None, None, :])
+            eab = fvv[ka][:, None] + fvv[kb][None, :]
+            eijkab = (eijk[:, :, :, :, :, :, None, None] -
+                      eab[None, None, None, None, None, None, :, :])
+            denom = eijkab + ip_eval
+            denom = 1. / denom
+
+            deltaE += lib.einsum('xyzijkab,xyzijkab,xyzijkab', lijkab, rijkab, denom)
+
+        deltaE *= 1./12
+        deltaE = deltaE.real
+        logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
+        ip_eval + deltaE, deltaE)
+        e_star.append(ip_eval + deltaE)
+    return e_star
+
+
 def ipccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None, **kwargs):
@@ -494,11 +612,13 @@ def ipccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
                      partition=partition, kptlist=kptlist, dtype=dtype)
     return eom.e, eom.v
 
+
 def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
                           left_guess=None, eris=None, imds=None, partition=None,
                           kptlist=None, dtype=None):
     '''Wrapper for running perturbative excited-states that require both left
     and right amplitudes.'''
+    from pyscf.cc.eom_rccsd import _sort_left_right_eigensystem
     if imds is None:
         imds = eom.make_imds(eris=eris)
 
@@ -515,8 +635,9 @@ def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
     for k, kshift in enumerate(kptlist):
         ek, r_vk, l_vk = _sort_left_right_eigensystem(eom, r_converged[k], r_e[k], r_v[k],
                                                       l_converged[k], l_e[k], l_v[k])
-        e_star = eom.ccsd_star_contract(ek, r_vk, l_vk, imds=imds)
+        e_star = eom.ccsd_star_contract(ek, r_vk, l_vk, kshift, imds=imds)
     return e_star
+
 
 def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None, left_guess=None,
            eris=None, imds=None, partition=None, kptlist=None,
@@ -527,6 +648,7 @@ def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None, left_guess=None
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
                                  right_guess=right_guess, left_guess=left_guess, eris=eris,
                                  imds=imds, partition=partition, kptlist=kptlist, dtype=dtype)
+
 
 def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
@@ -561,13 +683,16 @@ class EOMIP(eom_rccsd.EOMIP):
     kernel = ipccsd
     ipccsd = ipccsd
     ipccsd_star = ipccsd_star
-    ipccsd_star_contract = None
+    ccsd_star_contract = ipccsd_star_contract
 
     get_diag = ipccsd_diag
     matvec = ipccsd_matvec
     l_matvec = lipccsd_matvec
     mask_frozen = mask_frozen_ip
     get_padding_k_idx = get_padding_k_idx
+
+    def ipccsd_star_contract(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift, imds=None):
+        return self.ccsd_star_contract(ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift, imds=imds)
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
