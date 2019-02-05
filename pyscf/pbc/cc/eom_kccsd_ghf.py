@@ -542,24 +542,27 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
 
             for ki, kj in itertools.product(range(nkpts), repeat=2):
                 kk = kklist[ki,kj]
+                #TODO: can reduce size of ijkab arrays since `kk` fixed from other k-points
 
                 # lijkab update
-                lijkab[ki,kj,kk] += lib.einsum('ijab,k->ijkab', eris.oovv[ki,kj,ka], l1)
+                if kk == kshift and kb == kconserv[ki,ka,kj]:
+                    lijkab[ki,kj,kk] += lib.einsum('ijab,k->ijkab', eris.oovv[ki,kj,ka], l1)
+
                 km = kconserv[kj,ka,ki]
                 tmp = lib.einsum('jima,mkb->ijkab', eris.ooov[kj,ki,km], l2[km,kk])
                 km = kconserv[kj,kb,ki]
                 tmpT = lib.einsum('jimb,mka->ijkab', eris.ooov[kj,ki,km], l2[km,kk])
                 lijkab[ki,kj,kk] += (-tmp + tmpT)
+
                 ke = kconserv[ka,ki,kb]
                 lijkab[ki,kj,kk] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka], l2[kj,kk])
 
                 # rijkab update
                 tmp = lib.einsum('mbke,m->bke', eris.ovov[kshift,kb,kk], r1)
                 tmp = lib.einsum('bke,ijae->ijkab', tmp, t2[ki,kj,ka])
-                rijkab[ki,kj,kk] -= tmp
-                tmp = lib.einsum('make,m->ake', eris.ovov[kshift,kb,kk], r1)
-                tmp = lib.einsum('ake,ijbe->ijkab', tmp, t2[ki,kj,kb])
-                rijkab[ki,kj,kk] += tmp
+                tmpT = lib.einsum('make,m->ake', eris.ovov[kshift,ka,kk], r1)
+                tmpT = lib.einsum('ake,ijbe->ijkab', tmpT, t2[ki,kj,kb])
+                rijkab[ki,kj,kk] -= (tmp - tmpT)
 
                 km = kconserv[kj,kshift,kk]
                 tmp = lib.einsum('mnjk,n->mjk', eris.oooo[km,kshift,kj], r1)
@@ -567,13 +570,13 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
                 rijkab[ki,kj,kk] += tmp
 
                 km = kconserv[kj,ka,ki]
-                tmp = lib.einsum('jima,mkb->ijkab', eris.ooov[kj,ki,km], r2[km,kk])
+                tmp = lib.einsum('jima,mkb->ijkab', eris.ooov[kj,ki,km].conj(), r2[km,kk])
                 km = kconserv[kj,kb,ki]
-                tmpT = lib.einsum('jimb,mka->ijkab', eris.ooov[kj,ki,km], r2[km,kk])
+                tmpT = lib.einsum('jimb,mka->ijkab', eris.ooov[kj,ki,km].conj(), r2[km,kk])
                 rijkab[ki,kj,kk] -= (tmp - tmpT)
 
                 ke = kconserv[ka,ki,kb]
-                rijkab[ki,kj,kk] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka], r2[kj,kk])
+                rijkab[ki,kj,kk] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka].conj(), r2[kj,kk])
 
             # P(ijk)
             lijkab = lijkab + lijkab.transpose(1,2,0,4,5,3,6,7) + lijkab.transpose(2,0,1,5,3,4,6,7)
@@ -622,20 +625,20 @@ def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
     if imds is None:
         imds = eom.make_imds(eris=eris)
 
-    # Right eigenvectors
-    r_converged, r_e, r_v = \
-               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
-                      eris=eris, imds=imds, partition=partition, kptlist=kptlist, dtype=dtype)
-    # Left eigenvectors
-    l_converged, l_e, l_v = \
-               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
-                      eris=eris, imds=imds, partition=partition, kptlist=kptlist, dtype=dtype)
-
     e_star = []
     for k, kshift in enumerate(kptlist):
-        ek, r_vk, l_vk = _sort_left_right_eigensystem(eom, r_converged[k], r_e[k], r_v[k],
-                                                      l_converged[k], l_e[k], l_v[k])
-        e_star = eom.ccsd_star_contract(ek, r_vk, l_vk, kshift, imds=imds)
+        # Right eigenvectors
+        r_converged, r_e, r_v = \
+                   kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
+                          eris=eris, imds=imds, partition=partition, kptlist=[kshift,], dtype=dtype)
+        # Left eigenvectors
+        l_converged, l_e, l_v = \
+                   kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
+                          eris=eris, imds=imds, partition=partition, kptlist=[kshift,], dtype=dtype)
+
+        ek, r_vk, l_vk = _sort_left_right_eigensystem(eom, r_converged[0], r_e[0], r_v[0],
+                                                      l_converged[0], l_e[0], l_v[0])
+        e_star.append(eom.ccsd_star_contract(ek, r_vk, l_vk, kshift, imds=imds))
     return e_star
 
 
@@ -1030,6 +1033,136 @@ def eaccsd_diag(eom, kshift, imds=None):
     vector = amplitudes_to_vector_ea(Hr1, Hr2, kshift, kconserv)
     return vector
 
+def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift, imds=None):
+    """
+    Returns:
+        e_star (list of float):
+            The EA-CCSD* energy.
+
+    Notes:
+        The user should check to make sure the right and left eigenvalues
+        before running the perturbative correction.
+
+    Reference:
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+    """
+    assert (eom.partition == None)
+    cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
+    fock = eris.fock
+    nkpts, nocc, nvir = t1.shape
+    nmo = nocc + nvir
+    dtype = np.result_type(t1, t2)
+    kconserv = eom.kconserv
+
+    fov = np.array([fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)])
+    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+
+    eaccsd_evecs = np.array(eaccsd_evecs)
+    leaccsd_evecs = np.array(leaccsd_evecs)
+    e_star = []
+    eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
+    eaccsd_evals = np.atleast_1d(eaccsd_evals)
+    for ea_eval, ea_evec, ea_levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+        # Enforcing <L|R> = 1
+        l1, l2 = vector_to_amplitudes_ea(ea_levec, kshift, nkpts, nmo, nocc, kconserv)
+        r1, r2 = vector_to_amplitudes_ea(ea_evec, kshift, nkpts, nmo, nocc, kconserv)
+        ldotr = np.dot(l1, r1) + 0.5 * np.dot(l2.ravel(), r2.ravel())
+
+        logger.info(eom, 'Left-right amplitude overlap : %14.8e + 1j %14.8e',
+                    ldotr.real, ldotr.imag)
+        if abs(ldotr) < 1e-7:
+            logger.warn(eom, 'Small %s left-right amplitude overlap. Results '
+                             'may be inaccurate.', ldotr)
+
+        l1 /= ldotr
+        l2 /= ldotr
+
+        deltaE = 0.0 + 1j*0.0
+        for ki, kj in itertools.product(range(nkpts), repeat=2):
+            lijabc = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
+            rijabc = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
+            kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
+                          [ki,kj,kshift,range(nkpts),range(nkpts)])
+
+            for ka, kb in itertools.product(range(nkpts), repeat=2):
+                #TODO: can reduce size of ijabc arrays since `kc` fixed from other k-points
+                kc = kklist[ka,kb]
+
+                # lijabc update
+                if kc == kshift and kb == kconserv[ki,ka,kj]:
+                    lijabc[ka,kb,kc] -= lib.einsum('ijab,c->ijabc', eris.oovv[ki,kj,ka], l1)
+
+                km = kconserv[kj,ka,ki]
+                lijabc[ka,kb,kc] -= lib.einsum('jima,mbc->ijabc', eris.ooov[kj,ki,km], l2[km,kb])
+
+                ke = kconserv[ka,ki,kb]
+                tmp = lib.einsum('ieab,jce->ijabc', eris.ovvv[ki,ke,ka], l2[kj,kc])
+                ke = kconserv[ka,kj,kb]
+                tmpT = lib.einsum('jeab,ice->ijabc', eris.ovvv[kj,ke,ka], l2[ki,kc])
+                lijabc[ka,kb,kc] -= (tmp - tmpT)
+
+                # rijabc update
+                ke = kconserv[kb,kshift,kc]
+                tmp = lib.einsum('bcef,f->bce', eris.vvvv[kb,kc,ke], r1)
+                tmp = lib.einsum('bce,ijae->ijabc', tmp, t2[ki,kj,ka])
+                rijabc[ka,kb,kc] -= tmp
+
+                km = kconserv[kj,kc,kshift]
+                tmp = lib.einsum('mcje,e->mcj', eris.ovov[km,kc,kj], r1)
+                tmp = lib.einsum('mcj,imab->ijabc', tmp, t2[ki,km,ka])
+                km = kconserv[ki,kc,kshift]
+                tmpT = lib.einsum('mcie,e->mci', eris.ovov[km,kc,ki], r1)
+                tmpT = lib.einsum('mci,jmab->ijabc', tmpT, t2[kj,km,ka])
+                rijabc[ka,kb,kc] += (tmp - tmpT)
+
+                km = kconserv[kj,ka,ki]
+                rijabc[ka,kb,kc] += lib.einsum('jima,mcb->ijabc', eris.ooov[kj,ki,km].conj(), r2[km,kc])
+
+                ke = kconserv[ka,ki,kb]
+                tmp = lib.einsum('ieab,jce->ijabc', eris.ovvv[ki,ke,ka].conj(), r2[kj,kc])
+                ke = kconserv[ka,kj,kb]
+                tmpT = lib.einsum('jeab,ice->ijabc', eris.ovvv[kj,ke,ka].conj(), r2[ki,kc])
+                rijabc[ka,kb,kc] -= (tmp - tmpT)
+
+            # P(ijk)
+            lijabc = lijabc + lijabc.transpose(1,2,0,3,4,6,7,5) + lijabc.transpose(2,0,1,3,4,7,5,6)
+            rijabc = rijabc + rijabc.transpose(1,2,0,3,4,6,7,5) + rijabc.transpose(2,0,1,3,4,7,5,6)
+
+            # Creating denominator
+            eabc = (fvv[:, None, None, :, None, None] + fvv[None, :, None, None, :, None] +
+                    fvv[None, None, :, None, None, :])
+            eij = foo[ki][:, None] + foo[kj][None, :]
+            eijabc = (eij[None, None, None, :, :, None, None, None] -
+                      eabc[:, :, :, None, None, :, :, :])
+            denom = eijabc + ea_eval
+            denom = 1. / denom
+
+            deltaE += lib.einsum('xyzijabc,xyzijabc,xyzijabc', lijabc, rijabc, denom)
+
+        deltaE *= 1./12
+        deltaE = deltaE.real
+        logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
+        ea_eval + deltaE, deltaE)
+        e_star.append(ea_eval + deltaE)
+    return e_star
+
+def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None, left_guess=None,
+           eris=None, imds=None, partition=None, kptlist=None,
+           dtype=None, **kwargs):
+    '''See `kernel()` for a description of arguments.'''
+    if partition:
+        raise NotImplementedError
+    return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
+                                 right_guess=right_guess, left_guess=left_guess, eris=eris,
+                                 imds=imds, partition=partition, kptlist=kptlist, dtype=dtype)
+
+
 def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
     r1, r2 = eom.vector_to_amplitudes(vector, kshift=kshift)
@@ -1062,13 +1195,17 @@ class EOMEA(eom_rccsd.EOMEA):
 
     kernel = eaccsd
     eaccsd = eaccsd
-    eaccsd_star_contract = None
+    eaccsd_star = eaccsd_star
+    ccsd_star_contract = eaccsd_star_contract
 
     get_diag = eaccsd_diag
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     mask_frozen = mask_frozen_ea
     get_padding_k_idx = get_padding_k_idx
+
+    def eaccsd_star_contract(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift, imds=None):
+        return self.ccsd_star_contract(eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift, imds=imds)
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
