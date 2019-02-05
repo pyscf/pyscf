@@ -791,15 +791,30 @@ class KnownValues(unittest.TestCase):
 #        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
 #        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
 
-    #def test_t3p2_intermediates(self):
-    #    myt1 = mycc1.t1 + 1j * numpy.sin(mycc1.t1) * mycc1.t1
-    #    myt2 = mycc1.t2 + 1j * numpy.sin(mycc1.t2) * mycc1.t2
-    #    e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
-    #    self.assertAlmostEqual(e.real, , 6)
-    #    self.assertAlmostEqual(lib.finger(pt1), , 6)
-    #    self.assertAlmostEqual(lib.finger(pt2), , 6)
-    #    self.assertAlmostEqual(lib.finger(Wmcik), , 6)
-    #    self.assertAlmostEqual(lib.finger(Wacek), , 6)
+    def test_t3p2_intermediates_complex(self):
+        '''Although this has not been tested strictly for complex values, it
+        was written to be correct for complex values and differences in the complex
+        values between versions should be taken into account and corrected.'''
+        myt1 = mycc1.t1 + 1j * numpy.sin(mycc1.t1) * mycc1.t1
+        myt2 = mycc1.t2 + 1j * numpy.sin(mycc1.t2) * mycc1.t2
+        myt2 = myt2 + myt2.transpose(1,0,3,2)
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
+        self.assertAlmostEqual(lib.finger(e), 23230.479347478944, 6)
+        self.assertAlmostEqual(lib.finger(pt1), (-5.218888542372856+6.26563618296775e-05j), 6)
+        self.assertAlmostEqual(lib.finger(pt2), (46.19512409968981-0.0007574997568293397j), 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), (-18.479280056078426+0.00039725891265209376j), 6)
+        self.assertAlmostEqual(lib.finger(Wacek), (-7.101360230612007-0.00019032711858324745j), 6)
+
+    def test_t3p2_intermediates_real(self):
+        myt1 = mycc1.t1.copy()
+        myt2 = mycc1.t2.copy()
+        myt2 = myt2 + myt2.transpose(1,0,3,2)
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
+        self.assertAlmostEqual(lib.finger(e), 23230.479350851536, 6)
+        self.assertAlmostEqual(lib.finger(pt1), -5.218888542335442, 6)
+        self.assertAlmostEqual(lib.finger(pt2), 46.19512409958347, 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), -18.47928005593598, 6)
+        self.assertAlmostEqual(lib.finger(Wacek), -7.101360230151883, 6)
 
     def test_h2o_star(self):
         mol_h2o = gto.Mole()
@@ -822,23 +837,24 @@ class KnownValues(unittest.TestCase):
         mf_h2o.kernel()
         mycc_h2o = cc.RCCSD(mf_h2o).run()
         mycc_h2o.conv_tol_normt = 1e-12
+        mycc_h2o.conv_tol = 1e-12
         mycc_h2o.kernel()
 
         myeom = eom_rccsd.EOMIP(mycc_h2o)
-        e = myeom.ipccsd_star(nroots=2)
-        self.assertAlmostEqual(e[0], 0.4106619646458363, 6)  # CFOUR: 0.41066196630606711
+        e = myeom.ipccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.410661965883, 6)
 
         myeom = eom_rccsd.EOMIP_Ta(mycc_h2o)
-        e = myeom.ipccsd_star(nroots=2)
-        self.assertAlmostEqual(e[0], 0.4116956462984342, 6)  # CFOUR: 0.41169584994017255
+        e = myeom.ipccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.411695647736, 6)
 
         myeom = eom_rccsd.EOMEA(mycc_h2o)
-        e = myeom.eaccsd_star(nroots=2)
-        self.assertAlmostEqual(e[0], 0.2505898373154793, 6)  # CFOUR: 0.25058985399561007
+        e = myeom.eaccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.250589854185, 6)
 
         myeom = eom_rccsd.EOMEA_Ta(mycc_h2o)
-        e = myeom.eaccsd_star(nroots=2)
-        self.assertAlmostEqual(e[0], 0.25072028785246847, 6)  # CFOUR: 0.25072181725671577
+        e = myeom.eaccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.250720295150, 6)
 
 if __name__ == "__main__":
     print("Tests for EOM RCCSD")
