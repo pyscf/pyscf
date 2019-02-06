@@ -277,17 +277,15 @@ class _DFTD3(object):
         edisp = ctypes.c_double(0)
         grads = numpy.zeros((mol.natm,3))
 
-        drv = self.libdftd3.wrapper_
-        drv(ctypes.byref(ctypes.c_int(mol.natm)),
+        drv = self.libdftd3.wrapper
+        drv(ctypes.c_int(mol.natm),
             coords.ctypes.data_as(ctypes.c_void_p),
             nuc_types.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_char_p(func),
-            ctypes.byref(ctypes.c_int(self.version)),
-            ctypes.byref(ctypes.c_int(tz)),
+            ctypes.c_int(self.version),
+            ctypes.c_int(tz),
             ctypes.byref(edisp),
-            grads.ctypes.data_as(ctypes.c_void_p),
-            # Fortran character len
-            ctypes.c_int(len(func)))
+            grads.ctypes.data_as(ctypes.c_void_p))
         self.edisp = edisp.value
         self.grads = grads
         return edisp.value, grads
