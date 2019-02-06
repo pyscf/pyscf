@@ -26,6 +26,7 @@ except ImportError:
            'You can install pyberny with "pip install pyberny"')
     raise ImportError(msg)
 
+import time
 import numpy
 from pyscf import lib
 from pyscf import __config__
@@ -74,28 +75,6 @@ def to_berny_log(pyscf_log):
                 pyscf_log.info('%d %s', self.n, msg)
     return BernyLogger()
 
-def as_berny_solver(method, assert_convergence=ASSERT_CONV,
-                    include_ghost=INCLUDE_GHOST):
-    '''Generate a solver to compute energy and gradients for the berny
-    optimization function.
-    '''
-    if isinstance(method, lib.GradScanner):
-        g_scanner = method
-    elif getattr(method, 'nuc_grad_method', None):
-        g_scanner = method.nuc_grad_method().as_scanner()
-    else:
-        raise NotImplementedError('Nuclear gradients of %s not available' % method)
-
-    if not include_ghost:
-        g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
-
-    def solver(mol):
-        energy, gradients = g_scanner(mol)
-        if assert_convergence and not g_scanner.converged:
-            raise RuntimeError('Nuclear gradients of %s not converged' % method)
-        return energy, gradients
-    return solver
-
 def as_pyscf_method(mol, scan_function):
     '''Creat an wrapper for the given scan_function, to make it work as a
     pyscf gradients scanner. The wrapper can be passed to :func:`optimize`.
@@ -139,6 +118,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
     '''Optimize the geometry with the given method.
     '''
+    t0 = time.clock(), time.time()
     mol = method.mol.copy()
     if 'log' in kwargs:
         log = lib.logger.new_logger(method, kwargs['log'])
@@ -147,24 +127,40 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     else:
         log = lib.logger.new_logger(method)
 
+    if isinstance(method, lib.GradScanner):
+        g_scanner = method
+    elif getattr(method, 'nuc_grad_method', None):
+        g_scanner = method.nuc_grad_method().as_scanner()
+    else:
+        raise NotImplementedError('Nuclear gradients of %s not available' % method)
+    if not include_ghost:
+        g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
+
 # temporary interface, taken from berny.py optimize function
     berny_log = to_berny_log(log)
-    solver = as_berny_solver(method, assert_convergence, include_ghost)
     geom = to_berny_geom(mol, include_ghost)
     optimizer = Berny(geom, log=berny_log, **kwargs)
+
+    t1 = t0
     e_last = 0
     for cycle, geom in enumerate(optimizer):
         if log.verbose >= lib.logger.NOTE:
             log.note('\nGeometry optimization cycle %d', cycle+1)
             _dump_mol_geometry(mol, geom, log)
         mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
-        energy, gradients = solver(mol)
+        energy, gradients = g_scanner(mol)
         log.note('cycle %d: E = %.12g  dE = %g  norm(grad) = %g', cycle+1,
                  energy, energy - e_last, numpy.linalg.norm(gradients))
         e_last = energy
-        optimizer.send((energy, gradients))
         if callable(callback):
             callback(locals())
+
+        if assert_convergence and not g_scanner.converged:
+            raise RuntimeError('Nuclear gradients of %s not converged' % method)
+        optimizer.send((energy, gradients))
+        t1 = log.timer('geomoetry optimization cycle %d'%cycle, *t1)
+
+    t0 = log.timer('geomoetry optimization', *t0)
     return mol
 kernel = optimize
 
