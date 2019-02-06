@@ -28,6 +28,10 @@ class NSR(uhf_nsr.NSR):
     get_fock = uks_nmr.get_fock
     solve_mo1 = uks_nmr.solve_mo1
 
+from pyscf import lib
+from pyscf import dft
+dft.uks.UKS.NSR = dft.uks_symm.UKS.NSR = lib.class_as_method(NSR)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -43,7 +47,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dft.UKS(mol).run(xc='b3lyp')
-    rotg = NSR(mf)
+    rotg = mf.NSR()
     m = rotg.kernel()
     print(m[1,0,0] - -301.49652448221707)
     print(lib.finger(m) - 28.57893850199683)

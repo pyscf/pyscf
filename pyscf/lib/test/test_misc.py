@@ -39,5 +39,16 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.all(i0 == i1))
         self.assertTrue(numpy.all(j0 == j1))
 
+    def test_class_as_method(self):
+        class A:
+            def f1(self):
+                return 'a'
+            f2 = lib.alias(f1)
+        class B(A):
+            def f1(self):
+                return 'b'
+        b = B()
+        self.assertEqual(b.f2(), 'b')
+
 if __name__ == "__main__":
     unittest.main()

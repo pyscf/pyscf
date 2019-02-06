@@ -178,6 +178,7 @@ def dftd3(scf_method):
         def nuc_grad_method(self):
             scf_grad = method_class.nuc_grad_method(self)
             return grad(scf_grad)
+        Gradients = lib.alias(nuc_grad_method, alias_name='Gradients')
 
     mf = DFTD3.__new__(DFTD3)
     mf.__dict__.update(scf_method.__dict__)
