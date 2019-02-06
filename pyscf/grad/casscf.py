@@ -218,6 +218,9 @@ class Gradients(lib.StreamObject):
 
 Grad = Gradients
 
+from pyscf import mcscf
+mcscf.mc1step.CASSCF.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -230,7 +233,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.RHF(mol).run()
     mc = mcscf.CASSCF(mf, 4, 4).run()
-    de = Grad(mc).kernel()
+    de = mc.Gradients().kernel()
     print(lib.finger(de) - 0.019602220578635747)
 
     mol = gto.Mole()

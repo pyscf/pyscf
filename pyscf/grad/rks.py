@@ -368,6 +368,9 @@ class Gradients(rhf_grad.Gradients):
 
 Grad = Gradients
 
+from pyscf import dft
+dft.rks.RKS.Gradients = dft.rks_symm.RKS.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -384,7 +387,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     #mf.grids.atom_grid = (20,86)
     e0 = mf.scf()
-    g = Gradients(mf)
+    g = mf.Gradients()
     print(lib.finger(g.kernel()) - -0.049887865971659243)
 #[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
 # [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]

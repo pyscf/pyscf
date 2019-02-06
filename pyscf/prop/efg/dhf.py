@@ -83,6 +83,9 @@ def kernel(method, efg_nuc=None):
 
 EFG = kernel
 
+from pyscf import scf
+scf.dhf.UHF.EFG = lib.class_as_method(EFG)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -101,4 +104,4 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.DHF(mol).run()
-    kernel(mf)
+    mf.EFG()

@@ -95,6 +95,9 @@ class Gradients(rhf_grad.Gradients):
 
 Grad = Gradients
 
+from pyscf import scf
+scf.uhf.UHF.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -105,7 +108,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.UHF(mol)
     mf.scf()
-    g = Gradients(mf)
+    g = mf.Gradients()
     print(g.grad())
 
     mol = gto.Mole()

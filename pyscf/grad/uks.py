@@ -227,6 +227,9 @@ class Gradients(uhf_grad.Gradients):
 
 Grad = Gradients
 
+from pyscf import dft
+dft.uks.UKS.Gradients = dft.uks_symm.UKS.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -245,7 +248,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-12
     #mf.grids.atom_grid = (20,86)
     e0 = mf.scf()
-    g = Gradients(mf)
+    g = mf.Gradients()
     print(lib.finger(g.kernel()) - -0.12090786243525126)
 #[[-5.23195019e-16 -5.70291415e-16  5.32918387e-02]
 # [ 1.33417513e-16  6.75277008e-02 -2.66519852e-02]

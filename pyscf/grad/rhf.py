@@ -315,6 +315,10 @@ class Gradients(lib.StreamObject):
 
 Grad = Gradients
 
+from pyscf import scf
+# Inject to RHF class
+scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -338,19 +342,19 @@ if __name__ == '__main__':
     h2o.basis = {'H': '631g',
                  'O': '631g',}
     h2o.build()
-    rhf = scf.RHF(h2o)
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
+    mf = scf.RHF(h2o)
+    mf.conv_tol = 1e-14
+    e0 = mf.scf()
+    g = Gradients(mf)
     print(g.grad())
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]
 # [ 0  -4.39690522e-03   1.20567128e-02]]
 
-    rhf = scf.RHF(h2o).x2c()
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
+    mf = scf.RHF(h2o).x2c()
+    mf.conv_tol = 1e-14
+    e0 = mf.scf()
+    g = mf.Gradients()
     print(g.grad())
 #[[ 0   0               -2.40286232e-02]
 # [ 0   4.27908498e-03   1.20143116e-02]
