@@ -1586,7 +1586,7 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
 
     def finger(mol, chgs, coord):
         center = numpy.einsum('z,zr->r', chgs, coord) / chgs.sum()
-        im = inertia_momentum(mol, chgs, coord)
+        im = inertia_moment(mol, chgs, coord)
         # Divid im by chgs.sum(), to normalize im. Otherwise the input tol may
         # not reflect the actual deviation.
         im /= chgs.sum()
@@ -1645,14 +1645,15 @@ def chiral_mol(mol1, mol2=None):
     return (not same_mol(mol1, mol2, ignore_chiral=False) and
             same_mol(mol1, mol2, ignore_chiral=True))
 
-def inertia_momentum(mol, mass=None, coords=None):
+def inertia_moment(mol, mass=None, coords=None):
     if mass is None:
-        mass = atom_mass_list(mol)
+        mass = mol.atom_mass_list()
     if coords is None:
         coords = mol.atom_coords()
     mass_center = numpy.einsum('i,ij->j', mass, coords)/mass.sum()
     coords = coords - mass_center
     im = numpy.einsum('i,ij,ik->jk', mass, coords, coords)
+    im = numpy.eye(3) * im.trace() - im
     return im
 
 def atom_mass_list(mol, isotope_avg=False):
@@ -2821,6 +2822,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
     ao_loc = property(ao_loc_nr)
 
     tmap = time_reversal_map = time_reversal_map
+
+    inertia_moment = inertia_moment
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None):
