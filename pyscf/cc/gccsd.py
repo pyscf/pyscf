@@ -363,8 +363,10 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
             eri[sym_forbid,:] = 0
             eri[:,sym_forbid] = 0
 
-        eri = ao2mo.restore(1, eri, nmo)
+        if eri.dtype == np.double:
+            eri = ao2mo.restore(1, eri, nmo)
 
+    eri = eri.reshape(nmo,nmo,nmo,nmo)
     eri = eri.transpose(0,2,1,3) - eri.transpose(0,2,3,1)
 
     eris.oooo = eri[:nocc,:nocc,:nocc,:nocc].copy()
@@ -391,12 +393,13 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     orbspin = eris.orbspin
 
     feri = eris.feri = lib.H5TmpFile()
-    eris.oooo = feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
-    eris.ooov = feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), 'f8')
-    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
-    eris.ovov = feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8')
-    eris.ovvo = feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8')
-    eris.ovvv = feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8')
+    dtype = np.result_type(eris.mo_coeff).char
+    eris.oooo = feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), dtype)
+    eris.ooov = feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), dtype)
+    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), dtype)
+    eris.ovov = feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), dtype)
+    eris.ovvo = feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), dtype)
+    eris.ovvv = feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), dtype)
 
     if orbspin is None:
         orbo_a = mo_a[:,:nocc]
@@ -439,7 +442,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), dtype)
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
         fswap = lib.H5TmpFile()
         ao2mo.kernel(mycc.mol, (orbv_a,orbv_a,orbv_a,orbv_a), fswap, 'aaaa',
@@ -507,7 +510,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), dtype)
         sym_forbid = (orbspin[nocc:,None]!=orbspin[nocc:])[np.tril_indices(nvir)]
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
 

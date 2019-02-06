@@ -241,7 +241,8 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     orbspin = eris.orbspin
 
     feri = eris.feri = lib.H5TmpFile()
-    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
+    dtype = numpy.result_type(eris.mo_coeff).char
+    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), dtype)
 
     if orbspin is None:
         max_memory = mp.max_memory-lib.current_memory()[0]
