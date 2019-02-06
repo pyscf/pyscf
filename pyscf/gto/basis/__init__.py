@@ -326,6 +326,35 @@ def parse_ecp(string, symb=None):
     return parse_nwchem.parse_ecp(string, symb)
 parse_ecp.__doc__ = parse_nwchem.parse_ecp.__doc__
 
+def convert_contraction(contr_string):
+    '''Parse contraction scheme string into a list
+
+    Args:
+        contr_string : str
+            Desired contraction scheme in conventional 'XsYpZd...' form,
+            where X, Y, Z are the total numbers of corresponding functions.
+    '''
+    import re
+    l_fun={'s': 0, 'p': 1, 'd': 2, 'f': 3, 'g': 4, 'h': 5, 'i': 6}
+    l_fun.update({chr(num): num-100 for num in range(ord('k'), ord('p'))})
+    num_contr = [int(digit) for digit in re.findall(r'\d+', contr_string)]
+    basis_labels = re.findall(r'[d-z]+', contr_string)
+    assert len(num_contr)==len(basis_labels)
+    basis_l = [l_fun[basis] for basis in basis_labels]
+    assert basis_l == sorted(basis_l), 'Contraction scheme ' + contr_string +\
+        ' has to be ordered by l'
+    assert len(basis_l) == len(set(basis_l)), 'Some of l in ' + contr_string +\
+        ' appears more than once'
+    # Prepare zero list to ensure the total length is equal to the highest l+1
+    contraction_list = [0] * (1+max(basis_l))
+    for (l, n_contr) in zip(basis_l, num_contr):
+        contraction_list[l] = n_contr
+    return contraction_list
+
+optimize_contraction = parse_nwchem.optimize_contraction
+to_general_contraction = parse_nwchem.to_general_contraction
+
+
 def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
 
@@ -352,6 +381,14 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
                 return parse_nwchem.parse(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
+    if '@' in name:
+        split_name = name.split('@')
+        assert len(split_name) == 2
+        name = split_name[0]
+        contr_scheme = convert_contraction(split_name[1])
+    else:
+        contr_scheme = 'Full'
+
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
@@ -385,6 +422,27 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         else:
             mod = importlib.import_module('.'+basmod, __package__)
             b = mod.__getattribute__(symb)
+    if contr_scheme != 'Full':
+        # keep only first n_keep contractions for each l
+        contr_b = []
+        b_index = 0
+        for l, n_keep in enumerate(contr_scheme):
+            n_saved = 0
+            if n_keep > 0:
+                for segm in b:
+                    segm_l = segm[0]
+                    if segm_l == l:
+                        segm_len = len(segm[1][1:])
+                        n_save = min(segm_len, n_keep - n_saved)
+                        if n_save > 0:
+                            save_segm = [line[:n_save+1] for line in
+                                         segm[:][1:]]
+                            contr_b.append([l] + save_segm)
+                            n_saved += n_save
+                assert n_saved == n_keep, 'Only ' + str(n_saved) +\
+                    ' l=' + str(l) + ' functions available for ' +\
+                    symb + ' ' + name + ', cannot truncate to ' + split_name[1]
+        b = contr_b
     return b
 
 def load_ecp(filename_or_basisname, symb):

@@ -22,6 +22,7 @@ Parsers for basis set in the NWChem format
 
 import re
 import numpy
+import scipy.linalg
 from pyscf.data.elements import _std_symbol
 
 MAXL = 10
@@ -249,8 +250,12 @@ def _parse(raw_basis, optimize=True):
     return basis_sorted
 
 def optimize_contraction(basis):
-    '''
-    Optimize contraction: segment contraction -> general contraction
+    '''Search the basis segments which have the same exponents then merge them
+    to the general contracted sets.
+
+    Note the difference to the function :func:`to_general_contraction`. The
+    return value of this function may still have multiple segments for each
+    angular moment section.
     '''
     basdic = {}
     for b in basis:
@@ -284,9 +289,49 @@ def optimize_contraction(basis):
             basis.append(b)
     return basis
 
+def to_general_contraction(basis):
+    '''Segmented contracted basis -> general contracted basis.
+
+    Combine multiple basis segments to one segment for each angular moment
+    section.
+
+    Examples:
+
+    >>> gto.contract(gto.uncontract(gto.load('sto3g', 'He')))
+    [[0, [6.36242139, 1.0, 0.0, 0.0], [1.158923, 0.0, 1.0, 0.0], [0.31364979, 0.0, 0.0, 1.0]]]
+    '''
+    basdic = {}
+    for b in basis:
+        if isinstance(b[1], int):  # kappa = b[1]
+            key = tuple(b[:2])
+            ec = numpy.array(b[2:])
+        else:
+            key = tuple(b[:1])
+            ec = numpy.array(b[1:])
+        if key in basdic:
+            basdic[key].append(ec)
+        else:
+            basdic[key] = [ec]
+
+    basis = []
+    for key in sorted(basdic.keys()):
+        l_kappa = list(key)
+        l = l_kappa[0]
+
+        es = numpy.hstack([ec[:,0] for ec in basdic[key]])
+        cs = scipy.linalg.block_diag(*[ec[:,1:] for ec in basdic[key]])
+
+        idx = numpy.unique(es.round(9), return_index=True)[1]
+        idx = idx[::-1]  # sort the exponents from large to small
+        ec = numpy.hstack((es[idx,None], cs[idx,:]))
+
+        basis.append(l_kappa + ec.tolist())
+
+    return basis
+
 def remove_zero(basis):
     '''
-    Remove the exponets if their contraction coefficients are all zeros.
+    Remove exponents if their contraction coefficients are all zeros.
     '''
     new_basis = []
     for b in basis:
