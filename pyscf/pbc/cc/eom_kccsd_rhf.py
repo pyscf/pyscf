@@ -586,6 +586,7 @@ class _IMDS:
         self.t1 = pt1
         self.t2 = pt2
 
+        self._made_shared_2e = False  # Force update
         self.make_ip()  # Make after t1/t2 updated
         self.Wovoo = self.Wovoo + Wovoo
 
@@ -632,6 +633,7 @@ class _IMDS:
         self.t1 = pt1
         self.t2 = pt2
 
+        self._made_shared_2e = False  # Force update
         self.make_ea()  # Make after t1/t2 updated
         self.Wvvvo = self.Wvvvo + Wvvvo
 
