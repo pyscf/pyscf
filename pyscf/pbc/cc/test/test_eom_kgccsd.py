@@ -8,11 +8,18 @@ import unittest
 
 cell = make_test_cell.test_cell_n3_diffuse()
 kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2], with_gamma_point=True), exxdiv=None)
+kmf.conv_tol = 1e-10
+kmf.conv_tol_grad = 1e-6
 kmf.scf()
 
+mycc = cc.KGCCSD(kmf)
+mycc.conv_tol = 1e-7
+mycc.conv_tol_normt = 1e-7
+mycc.run()
+
 def tearDownModule():
-    global cell, kmf
-    del cell, kmf
+    global cell, kmf, mycc
+    del cell, kmf, mycc
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
@@ -41,10 +48,7 @@ class KnownValues(unittest.TestCase):
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
 
-        mycc = cc.KGCCSD(kmf)
-        mycc.conv_tol = 1e-7
-        mycc.conv_tol_normt = 1e-7
-        ecc2, t1, t2 = mycc.kernel()
+        ecc2 = mycc.e_corr
         self.assertAlmostEqual(ecc2, -0.0676483716898783, 6)
 
         eom = EOMIP(mycc)
@@ -91,38 +95,39 @@ class KnownValues(unittest.TestCase):
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
 
-        mycc = cc.KGCCSD(kmf, frozen=[[0,1],[0,1,2,3]])
-        mycc.conv_tol = 1e-7
-        mycc.conv_tol_normt = 1e-7
-        ecc2, t1, t2 = mycc.kernel()
+        mycc_frozen = cc.KGCCSD(kmf, frozen=[[0,1],[0,1,2,3]])
+        mycc_frozen.conv_tol = 1e-7
+        mycc_frozen.conv_tol_normt = 1e-7
+        ecc2, t1, t2 = mycc_frozen.kernel()
         self.assertAlmostEqual(ecc2, -0.0442506265840587, 6)
 
-        eom = EOMIP(mycc)
-        e1_obt, v = eom.ipccsd(nroots=3, koopmans=False, kptlist=[0])
+        eom = EOMIP(mycc_frozen)
+        imds = eom.make_imds()
+        e1_obt, v = eom.ipccsd(nroots=3, koopmans=False, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e1_obt[0][0], -1.1316152294295743, 6)
         self.assertAlmostEqual(e1_obt[0][1], -1.1316152294295743, 6)
         self.assertAlmostEqual(e1_obt[0][2], -1.104163717600433, 6)
 
-        eom = EOMEA(mycc)
-        e2_obt, v = eom.eaccsd(nroots=3, kptlist=[0])
-        self.assertAlmostEqual(e2_obt[0][0], 1.2572812499753756, 6)
-        self.assertAlmostEqual(e2_obt[0][1], 1.2572812532456588, 6)
-        self.assertAlmostEqual(e2_obt[0][2], 1.280747357928012, 6)
-
-        eom = EOMIP(mycc)
-        e1_obt, v = eom.ipccsd(nroots=3, koopmans=True, kptlist=[1])
+        e1_obt, v = eom.ipccsd(nroots=3, koopmans=True, kptlist=[1], imds=imds)
         self.assertAlmostEqual(e1_obt[0][0], -0.8983145129187627, 6)
         self.assertAlmostEqual(e1_obt[0][1], -0.8983145129187627, 6)
         self.assertAlmostEqual(e1_obt[0][2], -0.8983139520017552, 6)
 
-        eom = EOMEA(mycc)
-        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1])
+        eom = EOMEA(mycc_frozen)
+        imds = eom.make_imds()
+        e2_obt, v = eom.eaccsd(nroots=3, kptlist=[0], imds=imds)
+        self.assertAlmostEqual(e2_obt[0][0], 1.2572812499753756, 6)
+        self.assertAlmostEqual(e2_obt[0][1], 1.2572812532456588, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.280747357928012, 6)
+
+        eom = EOMEA(mycc_frozen)
+        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.229802629928757, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.229802629928764, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.384394578043613, 6)
 
-    def test_n3_diffuse_Ta(self):
-        '''Tests EOM-CCSD(T)*a method.'''
+    def test_n3_diffuse_star(self):
+        '''Tests EOM-CCSD* method.'''
         cell = make_test_cell.test_cell_n3_diffuse()
 
         nmp = [1,1,2]
@@ -139,36 +144,88 @@ class KnownValues(unittest.TestCase):
         print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
         print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
 
+        #eom = eom_gccsd.EOMIP(gcc)
+        #e1, v = eom.ipccsd_star(nroots=6, koopmans=True)
+        eom = eom_gccsd.EOMEA(gcc)
+        e2, v = eom.eaccsd_star(nroots=9, koopmans=True)
+        '''
+        ehf2 = kmf.e_tot
+        self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
+
+        ecc2 = mycc.e_corr
+        self.assertAlmostEqual(ecc2, -0.0676483716898783, 6)
+
+        eom = EOMIP(mycc)
+        e1_obt = eom.ipccsd_star(nroots=3, koopmans=True, kptlist=[0])
+        self.assertAlmostEqual(e1_obt[0][0], -1.1452481194582802, 6)
+        self.assertAlmostEqual(e1_obt[0][1], -1.1452481194456137, 6)
+        self.assertAlmostEqual(e1_obt[0][2], -1.1174912094746994, 6)
+
+        eom = EOMEA(mycc)
+        e1_obt = eom.eaccsd_star(nroots=2, koopmans=True, kptlist=[0,1])
+        self.assertAlmostEqual(e1_obt[0][0], 1.260627794895514, 6)
+        self.assertAlmostEqual(e1_obt[0][1], 1.260627794895514, 6)
+        self.assertAlmostEqual(e1_obt[1][0], 1.2222607619733454, 6)
+        self.assertAlmostEqual(e1_obt[1][1], 1.2222607619733026, 6)
+
+    def test_n3_diffuse_Ta(self):
+        '''Tests EOM-CCSD(T)*a method.'''
+        cell = make_test_cell.test_cell_n3_diffuse()
+
+        nmp = [1,1,2]
+        '''
+        # treating 1*1*2 supercell at gamma point
+        supcell = super_cell(cell,nmp)
+        gmf  = scf.GHF(supcell,exxdiv=None)
+        gmf.conv_tol = 1e-10
+        gmf.conv_tol_grad = gmf.conv_tol * 10**2
+        ehf  = gmf.kernel()
+        gcc  = cc.GCCSD(gmf)
+        gcc.conv_tol=1e-12
+        gcc.conv_tol_normt=1e-10
+        gcc.max_cycle=250
+        ecc, t1, t2 = gcc.kernel()
+        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
+        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
+
         eom = eom_gccsd.EOMIP_Ta(gcc)
-        e1, v = eom.ipccsd(nroots=6, koopmans=True)
+        e1 = eom.ipccsd_star(nroots=6, koopmans=True)
         eom = eom_gccsd.EOMEA_Ta(gcc)
-        e2, v = eom.eaccsd(nroots=6, koopmans=True)
+        e2 = eom.eaccsd_star(nroots=6, koopmans=True)
         '''
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
 
-        mycc = cc.KGCCSD(kmf)
-        mycc.conv_tol = 1e-7
-        mycc.conv_tol_normt = 1e-7
-        ecc2, t1, t2 = mycc.kernel()
+        ecc2 = mycc.e_corr
         self.assertAlmostEqual(ecc2, -0.0676483716898783, 6)
 
         eom = EOMIP_Ta(mycc)
-        e1_obt, v = eom.ipccsd(nroots=3, koopmans=True, kptlist=[0])
+        imds = eom.make_imds()
+        e1_obt, v = eom.ipccsd(nroots=3, koopmans=True, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e1_obt[0][0], -1.146351234409813, 6)
         self.assertAlmostEqual(e1_obt[0][1], -1.146351234404151, 6)
         self.assertAlmostEqual(e1_obt[0][2], -1.107255699646373, 6)
 
+        e1_obt = eom.ipccsd_star(nroots=3, koopmans=True, kptlist=[0], imds=imds)
+        self.assertAlmostEqual(e1_obt[0][0], -1.143510075691, 6)
+        self.assertAlmostEqual(e1_obt[0][1], -1.143510075684, 6)
+        self.assertAlmostEqual(e1_obt[0][2], -1.116991306080, 6)
+
         eom = EOMEA_Ta(mycc)
-        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[0])
+        imds = eom.make_imds()
+        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.267728934041309, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.267728934041309, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.280954980102639, 6)
 
-        eom = EOMEA_Ta(mycc)
-        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1])
+        e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.2290479727093149, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.2290479727093468, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.384154366703175, 6)
+
+        e2_obt = eom.eaccsd_star(nroots=3, koopmans=True, kptlist=[1], imds=imds)
+        self.assertAlmostEqual(e2_obt[0][0], 1.2229050426609025, 6)
+        self.assertAlmostEqual(e2_obt[0][1], 1.2229050426609025, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.374851059956632, 6)
 
