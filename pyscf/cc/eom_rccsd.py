@@ -761,6 +761,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     nocc, nvir = t1.shape
     nmo = nocc + nvir
     dtype = np.result_type(t1, t2, eris.ovoo.dtype)
+    # Notice we do not use `sort_eri` as compared to the eaccsd_star.
     # The sort_eri does not produce eri's that are read-in quickly for the current contraction
     # scheme.  Here, we have that the block loop is over occupied indices whereas in the
     # sort_eri it is done over virtual indices (due to the permutation over occupied indices
