@@ -191,8 +191,7 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
 
 
 def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None, type1=False,
-            type2=False, with_t3p2=True, with_t3p2_imds=True):
+            left_guess=None, eris=None, imds=None):
     '''Wrapper for running perturbative excited-states that require both left
     and right amplitudes.'''
     if imds is None:
@@ -201,13 +200,11 @@ def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
     # Right eigenvectors
     r_converged, r_e, r_v = \
                kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
-                      eris=eris, imds=imds, with_t3p2=with_t3p2,
-                      copy_amps_t3p2=True, with_t3p2_imds=with_t3p2_imds)
+                      eris=eris, imds=imds)
     # Left eigenvectors
     l_converged, l_e, l_v = \
                kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
-                      eris=eris, imds=imds, with_t3p2=with_t3p2,
-                      copy_amps_t3p2=True, with_t3p2_imds=with_t3p2_imds)
+                      eris=eris, imds=imds)
 
     e, r_v, l_v = _sort_left_right_eigensystem(eom, r_converged, r_e, r_v, l_converged, l_e, l_v)
     e_star = eom.ccsd_star_contract(e, r_v, l_v, imds=imds)
@@ -243,8 +240,7 @@ def ipccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
     return eom.e, eom.v
 
 def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None, type1=False,
-            type2=False, with_t3p2=True, with_t3p2_imds=True):
+                left_guess=None, eris=None, imds=None):
     """Calculates CCSD* perturbative correction.
 
     Simply calls the relevant `kernel()` function and `perturb_star` of the
@@ -256,8 +252,7 @@ def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
                right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds, type1=type1, type2=type2, with_t3p2=with_t3p2,
-               with_t3p2_imds=with_t3p2_imds)
+               imds=imds)
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -594,23 +589,21 @@ def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
            partition=None, eris=None, imds=None):
     '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
 
-    Kwargs:
+    Args:
         See also ipccd()
     '''
     return ipccsd(eom, nroots, left, koopmans, guess, partition, eris, imds)
 
 def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None, type1=False,
-            type2=False, with_t3p2=True, with_t3p2_imds=True):
+        left_guess=None, eris=None, imds=None, **kwargs):
     """Calculates CCSD* perturbative correction.
 
-    Kwargs:
+    Args:
         See also ipccd_star()
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
                right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds, type1=type1, type2=type2, with_t3p2=with_t3p2,
-               with_t3p2_imds=with_t3p2_imds)
+               imds=imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
     nvir = nmo - nocc
