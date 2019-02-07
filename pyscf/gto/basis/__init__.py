@@ -295,8 +295,12 @@ def _parse_pople_basis(basis, symb):
         mbas = basis
         extension = ''
 
+    # polarized functions are defined based on pople basis name prefix like
+    # 6-31G, 6-311G etc.
+    basename = mbas[0] + '-' + mbas[1:].upper()
+    basename = basename.replace('+', '').replace('*', '')
     pathtmp = os.path.join('pople-basis',
-                           mbas[0]+'-'+mbas[1:].upper() + '-polarization-%s.dat')
+                            basename + '-polarization-%s.dat')
     def convert(s):
         if len(s) == 0:
             return []
