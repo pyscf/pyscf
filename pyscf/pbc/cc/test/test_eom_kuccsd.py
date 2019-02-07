@@ -91,9 +91,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e2_obt[0][2], 1.2807473549827182, 6)
 
         eom = EOMIP(mycc)
-        e1_obt, v = eom.ipccsd(nroots=2, koopmans=True, kptlist=[1])
-        self.assertAlmostEqual(e1_obt[0][0], -0.8983145129187627, 6)
-        self.assertAlmostEqual(e1_obt[0][1], -0.8983145129187627, 6)
+        e1_obt, v = eom.ipccsd(nroots=2, kptlist=[1])
+        self.assertAlmostEqual(e1_obt[0][0], -1.04309071165136, 6)
+        self.assertAlmostEqual(e1_obt[0][1], -1.04309071165136, 6)
         #self.assertAlmostEqual(e1_obt[0][2], -0.09623848794144876, 6)
 
         eom = EOMEA(mycc)
