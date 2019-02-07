@@ -124,7 +124,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0][1], 1.384154370672317, 6)
 
     def test_n3_diffuse_Ta_against_so(self):
-        nk = (1, 1, 2)
         ehf_bench = -6.1870676561720721
         ecc_bench = -0.06764836939412185
 
@@ -136,13 +135,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ehf, ehf_bench, 6)
         self.assertAlmostEqual(ecc, ecc_bench, 6)
 
+        eom = EOMEA_Ta(cc)
+        eea_rccsd = eom.eaccsd_star(nroots=1, koopmans=True, kptlist=(0,), eris=eris)
         eom = EOMIP_Ta(cc)
-        e, v = eom.ipccsd_star(nroots=2, koopmans=True, kptlist=(0,))
-        #self.assertAlmostEqual(e[0][0], -1.146351230068405, 6)
-        #self.assertAlmostEqual(e[0][1], -1.10725570884212, 6)
+        eip_rccsd = eom.ipccsd_star(nroots=1, koopmans=True, kptlist=(0,), eris=eris)
+        self.assertAlmostEqual(eea_rccsd[0][0], 1.2610123166324307, 6)
+        self.assertAlmostEqual(eip_rccsd[0][0], -1.1435100754903331, 6)
 
         from pyscf.pbc.cc import kccsd
-        cc = pbcc.kccsd.KGCCSD(kmf)
+        cc = pbcc.KGCCSD(kmf)
         cc.conv_tol = 1e-10
         eris = cc.ao2mo()
         ecc, t1, t2 = cc.kernel(eris=eris)
@@ -151,19 +152,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecc, ecc_bench, 6)
 
         from pyscf.pbc.cc import eom_kccsd_ghf
+        eom = eom_kccsd_ghf.EOMEA_Ta(cc)
+        eea_gccsd = eom.eaccsd_star(nroots=1, koopmans=True, kptlist=(0,), eris=eris)
         eom = eom_kccsd_ghf.EOMIP_Ta(cc)
-        e_ghf, v_ghf = eom.ipccsd_star(nroots=4, koopmans=True, kptlist=(0,), eris=eris)
-        #self.assertAlmostEqual(e_ghf[0][0], -1.146351230068405, 6)
-        #self.assertAlmostEqual(e_ghf[0][1], -1.10725570884212, 6)
-        print "%20.16f" % e_ghf[0][0]
-        print "%20.16f" % e[0][0]
+        eip_gccsd = eom.ipccsd_star(nroots=1, koopmans=True, kptlist=(0,), eris=eris)
+        self.assertAlmostEqual(eea_gccsd[0][0], 1.2610123166324307, 6)
+        self.assertAlmostEqual(eip_gccsd[0][0], -1.1435100754903331, 6)
 
-        #eom = EOMEA_Ta(cc)
-        #e, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[0])
-        #self.assertAlmostEqual(e[0][0], 1.267728933294929, 6)
-        #self.assertAlmostEqual(e[0][1], 1.280954973687476, 6)
-
-        #eom = EOMEA_Ta(cc)
-        #e, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[1])
-        #self.assertAlmostEqual(e[0][0], 1.229047959680129, 6)
-        #self.assertAlmostEqual(e[0][1], 1.384154370672317, 6)
+        # Usually slightly higher agreement when comparing directly against one another
+        self.assertAlmostEqual(eea_gccsd[0][0], eea_rccsd[0][0], 9)
+        self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 9)

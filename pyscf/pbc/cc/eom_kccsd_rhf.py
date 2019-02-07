@@ -304,23 +304,6 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
         out += contract_r3p(r1,r2,kptvec[[1,0,2,4,3]]).transpose(1,0,2,4,3)  # P(ia|jb)
         return out
 
-    def permute_ijk(array):
-        '''Perform the following operation (shown without k-points for clarity):
-
-            lijkab = 4.*lijkab \
-                   - 2.*lijkab.transpose(1,0,2,3,4) \
-                   - 2.*lijkab.transpose(2,1,0,3,4) \
-                   - 2.*lijkab.transpose(0,2,1,3,4) \
-                   + 1.*lijkab.transpose(1,2,0,3,4) \
-                   + 1.*lijkab.transpose(2,0,1,3,4)
-        '''
-        return (  4.*array
-                - 2.*array.transpose(1,0,2,4,3,5,6,7)
-                - 2.*array.transpose(2,1,0,5,4,3,6,7)
-                - 2.*array.transpose(0,2,1,3,5,4,6,7)
-                + 1.*array.transpose(1,2,0,4,5,3,6,7)
-                + 1.*array.transpose(2,0,1,5,3,4,6,7))
-
     ipccsd_evecs = np.array(ipccsd_evecs)
     lipccsd_evecs = np.array(lipccsd_evecs)
     e_star = []
@@ -349,43 +332,42 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
         l2 /= ldotr
 
         deltaE = 0.0 + 1j*0.0
-        eijk = (mo_e_o[:, None, None, :, None, None] + mo_e_o[None, :, None, None, :, None] +
-                mo_e_o[None, None, :, None, None, :])
+        eij = (mo_e_o[:, None, :, None, None] + mo_e_o[None, :, None, :, None])
+                #mo_e_o[None, None, :, None, None, :])
         for ka, kb in itertools.product(range(nkpts), repeat=2):
-            lijkab = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
-            Plijkab = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
-            rijkab = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            lijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            Plijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            rijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            eijk = np.zeros((nkpts,nkpts,nocc,nocc,nocc),dtype=mo_e_o.dtype)
             kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
                          [ka,kb,kshift,range(nkpts),range(nkpts)])
 
             for ki, kj in itertools.product(range(nkpts), repeat=2):
-                #TODO: can reduce size of ijkab arrays since `kk` fixed from other k-points
                 kk = kklist[ki,kj]
 
                 kptvec = [ki,kj,kk,ka,kb]
-                lijkab[ki,kj,kk] = contract_pl3p(l1,l2,kptvec)
+                lijkab[ki,kj] = contract_pl3p(l1,l2,kptvec)
 
-                rijkab[ki,kj,kk] = contract_pr3p(r1,r2,kptvec)
+                rijkab[ki,kj] = contract_pr3p(r1,r2,kptvec)
 
             for ki, kj in itertools.product(range(nkpts), repeat=2):
                 kk = kklist[ki,kj]
-                Plijkab[ki,kj,kk] = (4.*lijkab[ki,kj,kk] +
-                                     1.*lijkab[kj,kk,ki].transpose(2,0,1,3,4) +
-                                     1.*lijkab[kk,ki,kj].transpose(1,2,0,3,4) -
-                                     2.*lijkab[ki,kk,kj].transpose(0,2,1,3,4) -
-                                     2.*lijkab[kk,kj,ki].transpose(2,1,0,3,4) -
-                                     2.*lijkab[kj,ki,kk].transpose(1,0,2,3,4))
+                Plijkab[ki,kj] = (4.*lijkab[ki,kj] +
+                                  1.*lijkab[kj,kk].transpose(2,0,1,3,4) +
+                                  1.*lijkab[kk,ki].transpose(1,2,0,3,4) -
+                                  2.*lijkab[ki,kk].transpose(0,2,1,3,4) -
+                                  2.*lijkab[kk,kj].transpose(2,1,0,3,4) -
+                                  2.*lijkab[kj,ki].transpose(1,0,2,3,4))
+                eijk[ki,kj] = eij[ki,kj] + mo_e_o[kk][None,None,None,None,:]
 
             # Creating denominator
             eab = mo_e_v[ka][:, None] + mo_e_v[kb][None, :]
-            eijkab = (eijk[:, :, :, :, :, :, None, None] -
-                      eab[None, None, None, None, None, None, :, :])
+            eijkab = (eijk[:, :, :, :, :, None, None] -
+                      eab[None, None, None, None, None, :, :])
             denom = eijkab + ip_eval
             denom = 1. / denom
-            print lib.finger(denom), lib.finger(Plijkab), lib.finger(rijkab)
 
-            #deltaE += lib.einsum('xyzijkab,xyzijkab,xyzijkab', lijkab, rijkab, denom)
-            deltaE += lib.einsum('xyzijkab,xyzijkab,xyzijkab', Plijkab, rijkab, denom)
+            deltaE += lib.einsum('xyijkab,xyijkab,xyijkab', Plijkab, rijkab, denom)
 
         deltaE *= 0.5
         deltaE = deltaE.real
@@ -631,11 +613,178 @@ def eaccsd_diag(eom, kshift, imds=None, diag=None):
 
     return eom.amplitudes_to_vector(Hr1, Hr2, kshift)
 
+def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift, imds=None):
+    '''For descreation of arguments, see `eaccsd_star_contract` in `kccsd_ghf.py`.'''
+    assert (eom.partition == None)
+    cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
+    fock = eris.fock
+    nkpts, nocc, nvir = t1.shape
+    nmo = nocc + nvir
+    dtype = np.result_type(t1, t2)
+    kconserv = eom.kconserv
+
+    fov = np.array([fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)])
+    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    #mo_e_o = mo_energy_occ
+    #mo_e_v = mo_energy_vir
+    mo_e_o = foo
+    mo_e_v = fvv
+
+    def contract_l3p(l1,l2,kptvec):
+        '''Create perturbed left 3h2p amplitude.
+
+        Args:
+            kptvec (`ndarray`):
+                Array of k-vectors [ki,kj,ka,kb,kc]
+        '''
+        ki, kj, ka, kb, kc = kptvec
+        out = np.zeros((nocc,)*2 + (nvir,)*3, dtype=dtype)
+        if kc == kshift and kb == kconserv[ki,ka,kj]:
+            out -= 0.5*lib.einsum('ijab,c->ijabc', eris.oovv[ki,kj,ka], l1)
+        km = kconserv[ki,ka,kj]
+        out += lib.einsum('jima,mbc->ijabc', eris.ooov[kj,ki,km], l2[km,kb])
+        ke = kconserv[kshift,ka,ki]
+        out -= lib.einsum('ejcb,iae->ijabc', eris.vovv[ke,kj,kc], l2[ki,ka])
+        ke = kconserv[kshift,kc,ki]
+        out -= lib.einsum('ejab,iec->ijabc', eris.vovv[ke,kj,ka], l2[ki,ke])
+        return out
+
+    def contract_pl3p(l1,l2,kptvec):
+        '''Create P(ia|jb) of perturbed left 3h2p amplitude.
+
+        Args:
+            kptvec (`ndarray`):
+                Array of k-vectors [ki,kj,ka,kb,kc]
+        '''
+        kptvec = np.asarray(kptvec)
+        out = contract_l3p(l1,l2,kptvec)
+        out += contract_l3p(l1,l2,kptvec[[1,0,3,2,4]]).transpose(1,0,3,2,4)  # P(ia|jb)
+        return out
+
+    def contract_r3p(r1,r2,kptvec):
+        '''Create perturbed right 3j2p amplitude.
+
+        Args:
+            kptvec (`ndarray`):
+                Array of k-vectors [ki,kj,ka,kb,kc]
+        '''
+        ki, kj, ka, kb, kc = kptvec
+        out = np.zeros((nocc,)*2 + (nvir,)*3, dtype=dtype)
+        ke = kconserv[ki,ka,kj]
+        tmp = lib.einsum('bcef,f->bce', eris.vvvv[kb,kc,ke], r1)
+        out -= lib.einsum('bce,ijae->ijabc', tmp, t2[ki,kj,ka])
+        km = kconserv[kshift,kc,kj]
+        tmp = einsum('mcje,e->mcj',eris.ovov[km,kc,kj],r1)
+        out += einsum('mcj,imab->ijabc',tmp,t2[ki,km,ka])
+        km = kconserv[kc,ki,ka]
+        tmp = einsum('bmje,e->mbj',eris.voov[kb,km,kj],r1)
+        out += einsum('mbj,imac->ijabc',tmp,t2[ki,km,ka])
+        km = kconserv[ki,ka,kj]
+        out += einsum('jima,mcb->ijabc',eris.ooov[kj,ki,km].conj(),r2[km,kc])
+        ke = kconserv[kshift,ka,ki]
+        out += -einsum('ejcb,iea->ijabc',eris.vovv[ke,kj,kc].conj(),r2[ki,ke])
+        ke = kconserv[kshift,kc,kj]
+        out += -einsum('eiba,jce->ijabc',eris.vovv[ke,ki,kb].conj(),r2[kj,kc])
+        return out
+
+    def contract_pr3p(r1,r2,kptvec):
+        '''Create P(ia|jb) of perturbed right 3h2p amplitude.
+
+        Args:
+            kptvec (`ndarray`):
+                Array of k-vectors [ki,kj,ka,kb,kc]
+        '''
+        kptvec = np.asarray(kptvec)
+        out = contract_r3p(r1,r2,kptvec)
+        out += contract_r3p(r1,r2,kptvec[[1,0,3,2,4]]).transpose(1,0,3,2,4)  # P(ia|jb)
+        return out
+
+    eaccsd_evecs = np.array(eaccsd_evecs)
+    leaccsd_evecs = np.array(leaccsd_evecs)
+    e_star = []
+    eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
+    eaccsd_evals = np.atleast_1d(eaccsd_evals)
+    for ea_eval, ea_evec, ea_levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+        # Enforcing <L|R> = 1
+        l1, l2 = eom.vector_to_amplitudes(ea_levec, kshift)
+        r1, r2 = eom.vector_to_amplitudes(ea_evec, kshift)
+        ldotr = np.dot(l1, r1) + np.dot(l2.ravel(), r2.ravel())
+
+        # Transposing the l2 operator
+        l2T = np.zeros_like(l2)
+        for kj, ka in itertools.product(range(nkpts), repeat=2):
+            kb = kconserv[ka,kj,kshift]
+            l2T[kj,kb] = l2[kj,ka].transpose(0,2,1)
+        l2 = (l2 + 2.*l2T)/3.
+
+        logger.info(eom, 'Left-right amplitude overlap : %14.8e + 1j %14.8e',
+                    ldotr.real, ldotr.imag)
+        if abs(ldotr) < 1e-7:
+            logger.warn(eom, 'Small %s left-right amplitude overlap. Results '
+                             'may be inaccurate.', ldotr)
+        l1 /= ldotr
+        l2 /= ldotr
+
+        deltaE = 0.0 + 1j*0.0
+        eab = (mo_e_v[:, None, :, None, None] + mo_e_v[None, :, None, :, None])
+        for ki, kj in itertools.product(range(nkpts), repeat=2):
+            lijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
+            Plijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
+            rijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
+            eabc = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=dtype)
+            kclist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
+                         [ki,kj,kshift,range(nkpts),range(nkpts)])
+
+            for ka, kb in itertools.product(range(nkpts), repeat=2):
+                kc = kclist[ka,kb]
+
+                kptvec = [ki,kj,ka,kb,kc]
+                lijabc[ka,kb] = contract_pl3p(l1,l2,kptvec)
+
+                rijabc[ka,kb] = contract_pr3p(r1,r2,kptvec)
+
+            for ka, kb in itertools.product(range(nkpts), repeat=2):
+                kc = kclist[ka,kb]
+                Plijabc[ka,kb] = (4.*lijabc[ka,kb] +
+                                  1.*lijabc[kb,kc].transpose(0,1,4,2,3) +
+                                  1.*lijabc[kc,ka].transpose(0,1,3,4,2) -
+                                  2.*lijabc[ka,kc].transpose(0,1,2,4,3) -
+                                  2.*lijabc[kc,kb].transpose(0,1,4,3,2) -
+                                  2.*lijabc[kb,ka].transpose(0,1,3,2,4))
+                eabc[ka,kb] = eab[ka,kb] + mo_e_v[kc][None,None,None,None,:]
+
+            # Creating denominator
+            eij = mo_e_o[ki][:, None] + mo_e_o[kj][None, :]
+            eijabc = (eij[None, None, :, :, None, None, None] -
+                      eabc[:, :, None, None, :, :, :])
+            denom = eijabc + ea_eval
+            denom = 1. / denom
+
+            deltaE += lib.einsum('xyijabc,xyijabc,xyijabc', Plijabc, rijabc, denom)
+
+        deltaE *= 0.5
+        deltaE = deltaE.real
+        logger.info(eom, "eaccsd energy, star energy, delta energy = %16.12f, %16.12f, %16.12f",
+                    ea_eval, ea_eval + deltaE, deltaE)
+        e_star.append(ea_eval + deltaE)
+    return e_star
+
+
+
 class EOMEA(eom_kgccsd.EOMEA):
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
-    ccsd_star_contract = None
+    ccsd_star_contract = eaccsd_star_contract
 
     @property
     def nkpts(self):
