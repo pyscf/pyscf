@@ -148,7 +148,8 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def nuc_grad_method(self):
             raise NotImplementedError
 
-    DFHF.__dict__.update(_METHODS_TO_ASSIGN)
+    for k, v in _METHODS_TO_ASSIGN.items():
+        setattr(DFHF, k, v)
     return DFHF(mf)
 
 # A tag to label the derived SCF class
