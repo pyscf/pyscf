@@ -402,6 +402,10 @@ class MP2(lib.StreamObject):
 
 RMP2 = MP2
 
+from pyscf import scf
+scf.hf.RHF.MP2 = lib.class_as_method(MP2)
+scf.rohf.ROHF.MP2 = None
+
 
 def _mo_energy_without_core(mp, mo_energy):
     return mo_energy[get_frozen_mask(mp)]

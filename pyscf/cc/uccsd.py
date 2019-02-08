@@ -731,6 +731,10 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_from_rccsd(self, t1, t2):
         return amplitudes_from_rccsd(t1, t2)
 
+CCSD = UCCSD
+from pyscf import scf
+scf.uhf.UHF.CCSD = lib.class_as_method(CCSD)
+
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
     def __init__(self, mol=None):

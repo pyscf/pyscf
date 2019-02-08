@@ -288,6 +288,11 @@ class GCCSD(ccsd.CCSD):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+CCSD = GCCSD
+
+from pyscf import scf
+scf.ghf.GHF.CCSD = lib.class_as_method(CCSD)
+
 
 class _PhysicistsERIs:
     '''<pq||rs> = <pq|rs> - <pq|sr>'''

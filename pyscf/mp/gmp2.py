@@ -170,6 +170,11 @@ class GMP2(mp2.MP2):
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+MP2 = GMP2
+
+from pyscf import scf
+scf.ghf.GHF.MP2 = lib.class_as_method(MP2)
+
 
 class _PhysicistsERIs:
     def __init__(self, mp, mo_coeff=None):

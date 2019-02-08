@@ -1234,6 +1234,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         mc1.max_cycle_micro = 10
         return mc1
 
+from pyscf import scf
+scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
+scf.uhf.UHF.CASSCF = None
+
 
 # to avoid calculating AO integrals
 def _fake_h_for_fast_casci(casscf, mo, eris):

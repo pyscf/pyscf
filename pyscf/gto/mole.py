@@ -3039,13 +3039,23 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
             from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
+            # Import all available modules. Some methods are registered when
+            # loading these modules.
+            from pyscf import grad, hessian, solvent, qmmm, prop
             for mod in (scf, dft):
                 method = getattr(mod, fn.upper(), None)
                 if method is not None and callable(method):
                     return method(self, *args, **kwargs)
 
-            for mod in (mp, cc, ci, mcscf, tdscf):
+            for mod in (mp, cc, ci, mcscf):
                 method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(scf.HF(self).run(), *args, **kwargs)
+
+            if fn.upper() == 'TDHF':
+                return tdscf.TDHF(scf.HF(self).run(), *args, **kwargs)
+            else:
+                method = getattr(tdscf, fn.upper(), None)
                 if method is not None and callable(method):
                     return method(scf.HF(self).run(), *args, **kwargs)
 

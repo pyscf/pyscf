@@ -19,11 +19,15 @@
 from pyscf.prop.magnetizability import rhf
 from pyscf.prop.magnetizability import uhf
 #from pyscf.prop.magnetizability import dhf
-from pyscf.prop.magnetizability import rks
-from pyscf.prop.magnetizability import uks
 
 RHF = rhf.Magnetizability
 UHF = uhf.Magnetizability
 #DHF = dhf.Magnetizability
-RKS = rks.Magnetizability
-UKS = uks.Magnetizability
+
+try:
+    from pyscf.prop.magnetizability import rks
+    from pyscf.prop.magnetizability import uks
+    RKS = rks.Magnetizability
+    UKS = uks.Magnetizability
+except ImportError:
+    pass

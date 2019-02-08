@@ -18,8 +18,8 @@ mol = gto.M(
         ['H' , 0. ,  0.757 , 0.587]],
     basis = '631g')
 
-grad = dft.RKS(mol).run(xc='b3lyp').nuc_grad_method()
-grad.kernel()
+g = dft.RKS(mol).run(xc='b3lyp').nuc_grad_method()
+g.kernel()
 # O     0.0000000000     0.0000000000     0.0124683365
 # H     0.0000000000     0.0213007595    -0.0062381016
 # H    -0.0000000000    -0.0213007595    -0.0062381016
@@ -27,10 +27,10 @@ grad.kernel()
 #
 # Second grids can be used in the nuclear gradients method.
 #
-grad.grids = dft.gen_grid.Grids(mol)
-grad.grids.level = 6
-grad.grids.prune = None
-grad.kernel()
+g.grids = dft.gen_grid.Grids(mol)
+g.grids.level = 6
+g.grids.prune = None
+g.kernel()
 # O     0.0000000000     0.0000000000     0.0124749929
 # H     0.0000000000     0.0213007958    -0.0062375176
 # H    -0.0000000000    -0.0213007958    -0.0062375176
@@ -47,7 +47,11 @@ dft.RKS(mol).run(xc='b3lyp').nuc_grad_method().run(grid_response=True)
 #
 # Range-separated XC functional is supported
 #
-dft.RKS(mol).run(xc='wb97x').nuc_grad_method().run()
+# PySCF-1.6.1 and newer supports the .Gradients method to create a grad
+# object after grad module was imported. It is equivalent to call the
+# .nuc_grad_method method.
+from pyscf import grad
+dft.RKS(mol).run(xc='wb97x').Gradients().run()
 # O    -0.0000000000     0.0000000000     0.0041289735
 # H    -0.0000000000     0.0178316686    -0.0020388217
 # H     0.0000000000    -0.0178316686    -0.0020388217
