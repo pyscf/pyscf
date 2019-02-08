@@ -31,6 +31,10 @@ from pyscf.hessian import rhf as rhf_hess
 _get_jk = rhf_hess._get_jk
 
 
+# import pyscf.grad.uhf to activate nuc_grad_method method
+from pyscf.grad import uhf
+
+
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
               mo1=None, mo_e1=None, h1ao=None,
               atmlst=None, max_memory=4000, verbose=None):
@@ -445,6 +449,8 @@ class Hessian(rhf_hess.Hessian):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                          fx, atmlst, max_memory, verbose)
 
+from pyscf import scf
+scf.uhf.UHF.Hessian = lib.class_as_method(Hessian)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -465,7 +471,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     mf.scf()
     n3 = mol.natm * 3
-    hobj = Hessian(mf)
+    hobj = mf.Hessian()
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.50693144355876429)
 

@@ -175,6 +175,11 @@ class Gradients(rhf_grad.Gradients):
         if mo_occ is None: mo_occ = self.base.mo_occ
         return grad_elec(self, mo_energy, mo_coeff, mo_occ, atmlst)
 
+Grad = Gradients
+
+from pyscf import scf
+scf.dhf.UHF.Gradients = lib.class_as_method(Gradients)
+
 
 def _call_vhf1_llll(mol, dm):
     n2c = dm.shape[0] // 2
@@ -234,7 +239,7 @@ if __name__ == "__main__":
                      "O": '6-31g',}
         h2o.build()
         method = scf.dhf.UHF(h2o).run()
-        g = Gradients(method).kernel()
+        g = method.Gradients().kernel()
         print(g)
 
         ms = method.as_scanner()

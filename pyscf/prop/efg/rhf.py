@@ -204,6 +204,9 @@ def _get_sfx2c_quadrupole_integrals(mol, atm_id):
 
 EFG = kernel
 
+from pyscf import scf
+scf.hf.RHF.EFG = scf.rohf.ROHF.EFG = scf.uhf.UHF.EFG = lib.class_as_method(EFG)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -222,4 +225,4 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.UHF(mol).x2c().run()
-    kernel(mf)
+    mf.EFG()

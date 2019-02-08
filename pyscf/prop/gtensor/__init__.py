@@ -14,7 +14,10 @@
 # limitations under the License.
 
 from pyscf.prop.gtensor import uhf
-from pyscf.prop.gtensor import uks
-
 UHF = uhf.GTensor
-UKS = uks.GTensor
+
+try:
+    from pyscf.prop.gtensor import uks
+    UKS = uks.GTensor
+except ImportError:
+    pass

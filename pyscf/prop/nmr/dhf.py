@@ -26,7 +26,6 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import scf
 from pyscf.scf import _vhf
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.data import nist
@@ -363,6 +362,9 @@ class NMR(rhf_nmr.NMR):
 
     solve_mo1 = solve_mo1
 
+from pyscf import scf
+scf.dhf.UHF.NMR = lib.class_as_method(NMR)
+
 
 def _call_rmb_vhf1(mol, dm, key='giao'):
     c1 = .5 / lib.param.LIGHT_SPEED
@@ -447,7 +449,7 @@ if __name__ == '__main__':
 
     mf = scf.dhf.UHF(mol)
     mf.scf()
-    nmr = NMR(mf)
+    nmr = mf.NMR()
     nmr.mb = 'RMB'
     nmr.cphf = True
     msc = nmr.shielding()

@@ -411,7 +411,7 @@ def uncontracted_basis(_basis):
     Examples:
 
     >>> gto.uncontract(gto.load('sto3g', 'He'))
-    [[0, [6.3624213899999997, 1]], [0, [1.1589229999999999, 1]], [0, [0.31364978999999998, 1]]]
+    [[0, [6.36242139, 1]], [0, [1.158923, 1]], [0, [0.31364979, 1]]]
     '''
     ubasis = []
     for b in _basis:
@@ -425,6 +425,7 @@ def uncontracted_basis(_basis):
                 ubasis.append([angl, [p[0], 1]])
     return ubasis
 uncontract = uncontracted_basis
+contract = contracted_basis = basis.to_general_contraction
 
 def to_uncontracted_cartesian_basis(mol):
     '''Decontract the basis of a Mole or a Cell.  Returns a Mole (Cell) object
@@ -1585,7 +1586,7 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
 
     def finger(mol, chgs, coord):
         center = numpy.einsum('z,zr->r', chgs, coord) / chgs.sum()
-        im = inertia_momentum(mol, chgs, coord)
+        im = inertia_moment(mol, chgs, coord)
         # Divid im by chgs.sum(), to normalize im. Otherwise the input tol may
         # not reflect the actual deviation.
         im /= chgs.sum()
@@ -1644,14 +1645,15 @@ def chiral_mol(mol1, mol2=None):
     return (not same_mol(mol1, mol2, ignore_chiral=False) and
             same_mol(mol1, mol2, ignore_chiral=True))
 
-def inertia_momentum(mol, mass=None, coords=None):
+def inertia_moment(mol, mass=None, coords=None):
     if mass is None:
-        mass = atom_mass_list(mol)
+        mass = mol.atom_mass_list()
     if coords is None:
         coords = mol.atom_coords()
     mass_center = numpy.einsum('i,ij->j', mass, coords)/mass.sum()
     coords = coords - mass_center
     im = numpy.einsum('i,ij,ik->jk', mass, coords, coords)
+    im = numpy.eye(3) * im.trace() - im
     return im
 
 def atom_mass_list(mol, isotope_avg=False):
@@ -2821,6 +2823,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
 
     tmap = time_reversal_map = time_reversal_map
 
+    inertia_moment = inertia_moment
+
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None):
         '''Integral generator.
@@ -3035,13 +3039,23 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
             from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
+            # Import all available modules. Some methods are registered when
+            # loading these modules.
+            from pyscf import grad, hessian, solvent, qmmm, prop
             for mod in (scf, dft):
                 method = getattr(mod, fn.upper(), None)
                 if method is not None and callable(method):
                     return method(self, *args, **kwargs)
 
-            for mod in (mp, cc, ci, mcscf, tdscf):
+            for mod in (mp, cc, ci, mcscf):
                 method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(scf.HF(self).run(), *args, **kwargs)
+
+            if fn.upper() == 'TDHF':
+                return tdscf.TDHF(scf.HF(self).run(), *args, **kwargs)
+            else:
+                method = getattr(tdscf, fn.upper(), None)
                 if method is not None and callable(method):
                     return method(scf.HF(self).run(), *args, **kwargs)
 

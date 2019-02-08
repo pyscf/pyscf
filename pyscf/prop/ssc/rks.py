@@ -33,7 +33,7 @@ if __name__ == '__main__':
                 basis='6-31g', verbose=3)
 
     mf = dft.RKS(mol).set(xc='b3lyp').run()
-    ssc = SSC(mf)
+    ssc = mf.SSC()
     ssc.with_fc = True
     ssc.with_fcsd = True
     jj = ssc.kernel()

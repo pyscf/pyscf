@@ -1172,6 +1172,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
 CC = RCCSD = CCSD
 
+from pyscf import scf
+scf.hf.RHF.CCSD = lib.class_as_method(CCSD)
+scf.rohf.ROHF.CCSD = None
+
 
 class _ChemistsERIs:
     '''(pq|rs)'''
@@ -1397,12 +1401,6 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     nvir_pair = nvir*(nvir+1)//2
     orbo = mo_coeff[:,:nocc]
     orbv = mo_coeff[:,nocc:]
-    oooo = numpy.zeros((nocc*nocc,nocc*nocc))
-    ovoo = numpy.zeros((nocc*nvir,nocc*nocc))
-    oovv = numpy.zeros((nocc*nocc,nvir*nvir))
-    ovvo = numpy.zeros((nocc*nvir,nvir*nocc))
-    ovvv = numpy.zeros((nocc*nvir,nvir_pair))
-    vvvv = numpy.zeros((nvir_pair,nvir_pair))
 
     naux = mycc._scf.with_df.get_naoaux()
     Loo = numpy.empty((naux,nocc,nocc))

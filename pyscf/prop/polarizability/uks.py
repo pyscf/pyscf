@@ -35,8 +35,8 @@ if __name__ == '__main__':
                         H      0.   0.757    0.587''',
                 basis='6-31g')
     mf = dft.UKS(mol).run(xc='b3lyp', conv_tol=1e-14)
-    polar = Polarizability(mf).polarizability()
-    hpol = Polarizability(mf).hyper_polarizability()
+    polar = mf.Polarizability().polarizability()
+    hpol = mf.Polarizability().hyper_polarizability()
     print(polar)
 
     mf.verbose = 0

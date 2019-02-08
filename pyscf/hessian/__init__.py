@@ -22,3 +22,8 @@ from pyscf.hessian.rhf import Hessian as RHF
 from pyscf.hessian.uhf import Hessian as UHF
 from pyscf.hessian.rhf import hess_nuc
 
+try:
+    from . import rks
+    from . import uks
+except ImportError:
+    pass

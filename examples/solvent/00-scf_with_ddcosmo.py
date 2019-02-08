@@ -23,3 +23,9 @@ solvent.ddCOSMO(mf).run()
 mf = dft.UKS(mol)
 mf.xc = 'b3lyp'
 solvent.ddPCM(mf).run()
+
+# Once solvent module is imported, PySCF-1.6.1 and newer supports the .DDCOSMO
+# and .DDPCM methods to create solvent model.
+from pyscf import solvent
+mf = mf.DDCOSMO()
+mf.run()

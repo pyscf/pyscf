@@ -20,7 +20,6 @@ from functools import reduce
 import numpy
 from pyscf import symm
 from pyscf import lib
-from pyscf import dft
 from pyscf.dft import numint
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
@@ -221,6 +220,15 @@ class dTDA(TDA):
         TDA.__init__(self, mf)
 
 
+from pyscf import dft
+dft.uks.UKS.TDA           = dft.uks_symm.UKS.TDA           = lib.class_as_method(TDA)
+dft.uks.UKS.TDHF          = dft.uks_symm.UKS.TDHF          = None
+dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = lib.class_as_method(TDDFT)
+dft.uks.UKS.TDDFTNoHybrid = dft.uks_symm.UKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.uks.UKS.dTDA          = dft.uks_symm.UKS.dTDA          = lib.class_as_method(dTDA)
+dft.uks.UKS.dRPA          = dft.uks_symm.UKS.dRPA          = lib.class_as_method(dRPA)
+
+
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
@@ -237,7 +245,7 @@ if __name__ == '__main__':
     mf = dft.UKS(mol)
     mf.xc = 'lda, vwn_rpa'
     mf.scf()
-    td = TDDFTNoHybrid(mf)
+    td = mf.TDDFTNoHybrid()
     #td.verbose = 5
     td.nstates = 5
     print(td.kernel()[0] * 27.2114)
@@ -246,7 +254,7 @@ if __name__ == '__main__':
     mf = dft.UKS(mol)
     mf.xc = 'b88,p86'
     mf.scf()
-    td = TDDFT(mf)
+    td = mf.TDDFT()
     td.nstates = 5
     #td.verbose = 5
     print(td.kernel()[0] * 27.2114)
@@ -255,7 +263,7 @@ if __name__ == '__main__':
     mf = dft.UKS(mol)
     mf.xc = 'lda,vwn'
     mf.scf()
-    td = TDA(mf)
+    td = mf.TDA()
     td.nstates = 5
     print(td.kernel()[0] * 27.2114)
 # [  9.01393088   9.01393088   9.68872733   9.68872733  12.42444633]

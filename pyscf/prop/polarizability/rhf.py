@@ -262,6 +262,8 @@ class Polarizability(lib.StreamObject):
 
     hyper_polarizability = hyper_polarizability
 
+from pyscf import scf
+scf.hf.RHF.Polarizability = lib.class_as_method(Polarizability)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -273,8 +275,8 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.RHF(mol).run(conv_tol=1e-14)
-    polar = Polarizability(mf).polarizability()
-    hpol = Polarizability(mf).hyper_polarizability()
+    polar = mf.Polarizability().polarizability()
+    hpol = mf.Polarizability().hyper_polarizability()
     print(polar)
 
     mf.verbose = 0

@@ -446,6 +446,10 @@ class Gradients(lib.StreamObject):
 
     as_scanner = as_scanner
 
+Grad = Gradients
+
+ccsd.CCSD.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -460,7 +464,7 @@ if __name__ == '__main__':
     )
     mf = scf.RHF(mol).run()
     mycc = ccsd.CCSD(mf).run()
-    g1 = Gradients(mycc).kernel()
+    g1 = mycc.Gradients().kernel()
 #[[ 0   0                1.00950925e-02]
 # [ 0   2.28063426e-02  -5.04754623e-03]
 # [ 0  -2.28063426e-02  -5.04754623e-03]]

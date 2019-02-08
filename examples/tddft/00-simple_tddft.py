@@ -7,7 +7,7 @@
 A simple example to run TDDFT calculation.
 '''
 
-from pyscf import gto, dft, tddft
+from pyscf import gto, scf, dft, tddft
 
 mol = gto.Mole()
 mol.build(
@@ -23,5 +23,10 @@ mf.kernel()
 mytd = tddft.TDDFT(mf)
 #mytd.nstates = 10
 mytd.kernel()
-
 mytd.analyze()
+
+# PySCF-1.6.1 and newer supports the .TDDFT method to create a TDDFT
+# object after importing tdscf module.
+from pyscf import tddft
+mytd = mf.TDDFT().run()
+mytd = scf.RHF(mol).run().TDHF().run()
