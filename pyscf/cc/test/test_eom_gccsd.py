@@ -258,11 +258,11 @@ class KnownValues(unittest.TestCase):
         new_eris.fock = eris1.fock.real
         new_eris.mo_energy = new_eris.fock.diagonal()
         e, pt1, pt2, Wmcik, Wacek = gintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=new_eris)
-        self.assertAlmostEqual(lib.finger(e), 8588977.565611511, 5)
-        self.assertAlmostEqual(lib.finger(pt1), 14407.896043949795, 6)
-        self.assertAlmostEqual(lib.finger(pt2), -34967.36031768824, 6)
-        self.assertAlmostEqual(lib.finger(Wmcik), 271029.6000933048, 6)
-        self.assertAlmostEqual(lib.finger(Wacek), 316110.05463216535, 6)
+        self.assertAlmostEqual(lib.finger(e), 8588977.565611511, 4)
+        self.assertAlmostEqual(lib.finger(pt1), 14407.896043949795, 5)
+        self.assertAlmostEqual(lib.finger(pt2), -34967.36031768824, 5)
+        self.assertAlmostEqual(lib.finger(Wmcik), 271029.6000933048, 5)
+        self.assertAlmostEqual(lib.finger(Wacek), 316110.05463216535, 5)
 
     def test_h2o_star(self):
         mol_h2o = gto.Mole()
