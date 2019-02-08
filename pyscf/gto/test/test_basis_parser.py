@@ -30,6 +30,8 @@ class KnownValues(unittest.TestCase):
                          ('pople-basis/6-31Gss.dat',))
         self.assertEqual(gto.basis._parse_pople_basis('631++g**', 'C'),
                          ('pople-basis/6-31++Gss.dat',))
+        self.assertEqual(gto.basis._parse_pople_basis('6311+g(d,p)', 'C'),
+                         ('pople-basis/6-311+G.dat', 'pople-basis/6-311G-polarization-d.dat'))
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):

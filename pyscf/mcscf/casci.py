@@ -958,6 +958,9 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         from pyscf.grad import casci
         return casci.Gradients(self)
 
+scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
+scf.uhf.UHF.CASCI = None
+
 del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 

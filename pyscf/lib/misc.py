@@ -613,6 +613,7 @@ def class_as_method(cls):
     def fn(obj, *args, **kwargs):
         return cls(obj, *args, **kwargs)
     fn.__doc__ = cls.__doc__
+    fn.__name__ = cls.__name__
     return fn
 
 def import_as_method(fn, default_keys=None):

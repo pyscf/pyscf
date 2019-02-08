@@ -1032,6 +1032,10 @@ class CISD(lib.StreamObject):
 class RCISD(CISD):
     pass
 
+from pyscf import scf
+scf.hf.RHF.CISD = lib.class_as_method(RCISD)
+scf.rohf.ROHF.CISD = None
+
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 

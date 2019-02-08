@@ -970,6 +970,9 @@ class UCISD(cisd.CISD):
 
 CISD = UCISD
 
+from pyscf import scf
+scf.uhf.UHF.CISD = lib.class_as_method(CISD)
+
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
