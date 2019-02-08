@@ -488,6 +488,11 @@ class Gradients(ccsd_grad.Gradients):
         return ccsd_grad.Gradients.kernel(self, t1, t2, l1, l2, eris, atmlst,
                                           mf_grad, verbose, _kern=kernel)
 
+Grad = Gradients
+
+from pyscf.cc import uccsd
+uccsd.UCCSD.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -504,7 +509,7 @@ if __name__ == '__main__':
     )
     mf = scf.UHF(mol).run()
     mycc = uccsd.UCCSD(mf).run()
-    g1 = Gradients(mycc).kernel()
+    g1 = mycc.Gradients().kernel()
 # O    -0.0000000000    -0.0000000000     0.1474630318
 # H     0.0000000000     0.1118073694    -0.0737315159
 # H     0.0000000000    -0.1118073694    -0.0737315159

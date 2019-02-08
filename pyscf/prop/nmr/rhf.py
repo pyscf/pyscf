@@ -327,6 +327,9 @@ class NMR(lib.StreamObject):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         return get_ovlp(mol, gauge_orig)
 
+from pyscf import scf
+scf.hf.RHF.NMR = lib.class_as_method(NMR)
+
 
 def _write(stdout, msc3x3, title):
     stdout.write('%s\n' % title)
@@ -352,7 +355,7 @@ if __name__ == '__main__':
     mol.build()
 
     rhf = scf.RHF(mol).run()
-    nmr = NMR(rhf)
+    nmr = rhf.NMR()
     nmr.cphf = True
     #nmr.gauge_orig = (0,0,0)
     msc = nmr.kernel() # _xx,_yy = 375.232839, _zz = 483.002139

@@ -213,9 +213,13 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
 
 
 class Gradients(tdrhf_grad.Gradients):
-
     def grad_elec(self, xy, singlet, atmlst=None):
         return kernel(self, xy, atmlst, self.max_memory, self.verbose)
+
+Grad = Gradients
+
+from pyscf import tdscf
+tdscf.uhf.TDA.Gradients = tdscf.uhf.TDHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -239,7 +243,7 @@ if __name__ == '__main__':
     td = tddft.TDA(mf)
     td.conv_tol = 1e-14
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     #tdg.verbose = 5
     g1 = tdg.kernel(z[1])
     print(g1)

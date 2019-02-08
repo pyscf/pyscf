@@ -37,40 +37,18 @@ def run_cell(cell, n, nk):
     #############################################
     supcell = pyscf.pbc.tools.super_cell(cell, nk)
     supcell.build()
-
-
     gamma = [0,0,0]
-
-    #############################################
-    # Running HF                                #
-    #############################################
-#    print ""
-#    print "*********************************"
-#    print "STARTING HF                      "
-#    print "*********************************"
-#    print ""
 
     mf = pbchf.RHF(supcell, exxdiv=None)
     mf.conv_tol = 1e-14
     #mf.verbose = 7
     escf = mf.scf()
     escf_per_cell = escf/np.prod(nk)
-#    print "scf energy (per unit cell) = %.17g" % escf_per_cell
 
-    #############################################
-    # Running CCSD                              #
-    #############################################
-#    print ""
-#    print "*********************************"
-#    print "STARTING CCSD                    "
-#    print "*********************************"
-#    print ""
     cc = pyscf.pbc.cc.CCSD(mf)
     cc.conv_tol=1e-8
-    #cc.verbose = 7
     ecc, t1, it2 = cc.kernel()
     ecc_per_cell = ecc/np.prod(nk)
-#    print "cc energy (per unit cell) = %.17g" % ecc_per_cell
     return escf_per_cell, ecc_per_cell
 
 class KnownValues(unittest.TestCase):

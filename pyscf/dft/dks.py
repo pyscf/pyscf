@@ -123,17 +123,8 @@ energy_elec = rks.energy_elec
 class UKS(dhf.UHF):
     def __init__(self, mol):
         dhf.UHF.__init__(self, mol)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.Grids(self.mol)
-        self.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
-                                   self.grids.level)
-        # Use rho to filter grids
-        self.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff',
-                                        1e-7)
-##################################################
-# don't modify the following attributes, they are not input options
+        rks._dft_common_init_(self)
         self._numint = r_numint.RNumInt()
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self):
         dhf.UHF.dump_flags(self)

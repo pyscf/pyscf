@@ -333,6 +333,7 @@ class GCCSD(gccsd.GCCSD):
         if not isinstance(mf, scf.kghf.KGHF):
             mf = scf.addons.convert_to_ghf(mf)
         self.kpts = mf.kpts
+        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         gccsd.GCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @property

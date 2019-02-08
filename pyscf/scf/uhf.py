@@ -84,12 +84,8 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         project = not gto.same_basis_set(chk_mol, mol)
 
     # Check whether the two molecules are similar
-    def inertia_momentum(mol):
-        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
-                                  mol.atom_coords())
-        return scipy.linalg.eigh(im)[0]
-    im1 = inertia_momentum(mol)
-    im2 = inertia_momentum(chk_mol)
+    im1 = scipy.linalg.eigvalsh(mol.inertia_moment())
+    im2 = scipy.linalg.eigvalsh(chk_mol.inertia_moment())
     # im1+1e-7 to avoid 'divide by zero' error
     if abs((im1-im2)/(im1+1e-7)).max() > 0.01:
         logger.warn(mol, "Large deviations found between the input "

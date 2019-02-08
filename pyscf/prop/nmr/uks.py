@@ -159,6 +159,10 @@ class NMR(uhf_nmr.NMR):
     get_fock = get_fock
     solve_mo1 = solve_mo1
 
+from pyscf import dft
+dft.uks.UKS.NMR = dft.uks_symm.UKS.NMR = lib.class_as_method(NMR)
+del(dft)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -174,7 +178,7 @@ if __name__ == '__main__':
 
     mf = dft.UKS(mol)
     mf.kernel()
-    nmr = NMR(mf)
+    nmr = mf.NMR()
     msc = nmr.kernel() # _xx,_yy,_zz = 55.131555
     print(lib.finger(msc) -  110.73521186810918)
 
