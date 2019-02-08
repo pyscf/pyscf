@@ -100,12 +100,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.4278908208680482, 5)
         self.assertAlmostEqual(e[2], 0.5022686041399118, 5)
 
+        # Sometimes these tests can fail due to left and right evecs
+        # having small (~zero) overlap, causing numerical error. FIXME
         e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.4358615224789573, 5)
         self.assertAlmostEqual(e[1], 0.4358615224789594, 5)
-        #self.assertAlmostEqual(e[2], 0.5095767839056080, 5)  # Sometimes left and right
-                                                              # evecs have small (~zero) overlap,
-                                                              # causing numerical error
+        #self.assertAlmostEqual(e[2], 0.5095767839056080, 5)
 
 
     def test_ipccsd_koopmans(self):
@@ -256,6 +256,7 @@ class KnownValues(unittest.TestCase):
         new_eris.vvvv = eris1.vvvv.real
         new_eris.vvvv = eris1.vvvv.real
         new_eris.fock = eris1.fock.real
+        new_eris.mo_energy = new_eris.fock.diagonal()
         e, pt1, pt2, Wmcik, Wacek = gintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=new_eris)
         self.assertAlmostEqual(lib.finger(e), 8588977.565611511, 5)
         self.assertAlmostEqual(lib.finger(pt1), 14407.896043949795, 6)
@@ -276,7 +277,7 @@ class KnownValues(unittest.TestCase):
                                [0, [0.1831916, 1.0]]],
                         'O' : '3-21G'}
         mol_h2o.verbose = 9
-        #mol_h2o.output = '/dev/null'
+        mol_h2o.output = '/dev/null'
         mol_h2o.build()
         mf_h2o = scf.RHF(mol_h2o)
         mf_h2o.conv_tol_grad = 1e-12
