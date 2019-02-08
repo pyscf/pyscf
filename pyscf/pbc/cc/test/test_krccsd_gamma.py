@@ -39,6 +39,7 @@ def run_cell(cell, n, nk):
     supcell.build()
     gamma = [0,0,0]
 
+    mf = pbchf.RHF(supcell, exxdiv=None)
     mf.conv_tol = 1e-14
     #mf.verbose = 7
     escf = mf.scf()

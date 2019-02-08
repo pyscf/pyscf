@@ -66,9 +66,14 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     nkpts, nocc, nvir = t1.shape
 
+    mo_energy = [eris.mo_energy[ki] for ki in range(nkpts)]
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
     fov = eris.fock[:, :nocc, nocc:]
+
+    mo_e = mo_energy
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
@@ -79,7 +84,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         for kj in range(ki + 1):
             for kk in range(kj + 1):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
-                eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
+                eijk = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])
 
                 # Factors to include for permutational symmetry among k-points for occupied space
                 if ki == kj and kj == kk:
@@ -142,7 +147,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                                     symm_abc = 2.
 
                             # Form energy denominator
-                            eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
+                            eijkabc = (eijk - mo_e_v[ka][a] - mo_e_v[kb][b] - mo_e_v[kc][c])
                             # When padding for non-equal nocc per k-point, some fock elements will be zero
                             idx = np.where(abs(eijkabc) < LOOSE_ZERO_TOL)[0]
                             eijkabc[idx] = LARGE_DENOM

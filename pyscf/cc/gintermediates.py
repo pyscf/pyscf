@@ -169,8 +169,7 @@ def Wvvvo(t1, t2, eris, _Wvvvv=None):
 def _cp(a):
     return np.array(a, copy=False, order='C')
 
-def get_t3p2_imds_slow(cc, t1, t2, eris=None,
-                       t3p2_ip_out=None, t3p2_ea_out=None):
+def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
     and intermediates used in IP/EA-CCSD(T)a
 
@@ -212,6 +211,9 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     foo = fock[:nocc, :nocc].diagonal()
     fvv = fock[nocc:, nocc:].diagonal()
 
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:]
+
     oovv = _cp(eris.oovv)
     ovvv = _cp(eris.ovvv)
     ooov = _cp(eris.ooov)
@@ -240,7 +242,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     tmp_t3 = (tmp_t3 + tmp_t3.transpose(0, 1, 2, 4, 5, 3) +
                        tmp_t3.transpose(0, 1, 2, 5, 3, 4))
 
-    eia = foo[:, None] - fvv[None, :]
+    eia = mo_e_o[:, None] - mo_e_v[None, :]
     eijab = eia[:, None, :, None] + eia[None, :, None, :]
     eijkabc = eijab[:, :, None, :, :, None] + eia[None, None, :, None, None, :]
     tmp_t3 /= eijkabc
@@ -259,7 +261,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     tmp = tmp - tmp.transpose(1, 0, 2, 3)  # P(ij)
     pt2 = pt2 + tmp
 
-    eia = foo[:, None] - fvv[None, :]
+    eia = mo_e_o[:, None] - mo_e_v[None, :]
     eijab = eia[:, None, :, None] + eia[None, :, None, :]
 
     pt1 /= eia

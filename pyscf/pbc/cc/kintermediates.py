@@ -397,8 +397,7 @@ def get_full_t3p2(mycc, t1, t2, eris):
 
     return t3
 
-def get_t3p2_imds_slow(cc, t1, t2, eris=None,
-                       t3p2_ip_out=None, t3p2_ea_out=None):
+def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
     and intermediates used in IP/EA-CCSD(T)a
 
@@ -440,6 +439,11 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     fov = [fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)]
     foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
     fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     ccsd_energy = cc.energy(t1, t2, eris)
     dtype = numpy.result_type(t1, t2)
@@ -459,7 +463,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
         ka = ki
         for km, kn, ke in product(range(nkpts), repeat=3):
             pt1[ki] += 0.25 * lib.einsum('mnef,imnaef->ia', eris.oovv[km,kn,ke], t3[ki,km,kn,ka,ke])
-        eii = foo[ki][:, None] - fvv[ki][None, :]
+        eii = mo_e_o[ki][:, None] - mo_e_v[ki][None, :]
         pt1[ki] /= eii
 
     pt2 = numpy.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=dtype)
@@ -477,8 +481,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
                 pt2[ki,kj,ka] -= 0.5 * lib.einsum('inmabe,nmje->ijab', t3[ki,kn,km,ka,kb], eris.ooov[kn,km,kj])
                 pt2[ki,kj,ka] += 0.5 * lib.einsum('jnmabe,nmie->ijab', t3[kj,kn,km,ka,kb], eris.ooov[kn,km,ki])
 
-        eia = foo[ki][:, None] - fvv[ka][None, :]
-        ejb = foo[kj][:, None] - fvv[kb][None, :]
+        eia = mo_e_o[ki][:, None] - mo_e_v[ka][None, :]
+        ejb = mo_e_o[kj][:, None] - mo_e_v[kb][None, :]
         eijab = eia[:, None, :, None] + ejb[None, :, None, :]
         pt2[ki,kj,ka] /= eijab
 

@@ -231,10 +231,8 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
-    #mo_e_o = mo_energy_occ
-    #mo_e_v = mo_energy_vir
-    mo_e_o = foo
-    mo_e_v = fvv
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     def contract_l3p(l1,l2,kptvec):
         '''Create perturbed left 3p2h amplitude.
@@ -634,10 +632,8 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
-    #mo_e_o = mo_energy_occ
-    #mo_e_v = mo_energy_vir
-    mo_e_o = foo
-    mo_e_v = fvv
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     def contract_l3p(l1,l2,kptvec):
         '''Create perturbed left 3h2p amplitude.
@@ -777,7 +773,6 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
                     ea_eval, ea_eval + deltaE, deltaE)
         e_star.append(ea_eval + deltaE)
     return e_star
-
 
 
 class EOMEA(eom_kgccsd.EOMEA):

@@ -509,9 +509,14 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
 
-    fov = np.array([fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)])
-    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
-    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    fov = fock[:, :nocc, nocc:]
+    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     ipccsd_evecs = np.array(ipccsd_evecs)
     lipccsd_evecs = np.array(lipccsd_evecs)
@@ -583,9 +588,9 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
             rijkab = rijkab + rijkab.transpose(1,2,0,4,5,3,6,7) + rijkab.transpose(2,0,1,5,3,4,6,7)
 
             # Creating denominator
-            eijk = (foo[:, None, None, :, None, None] + foo[None, :, None, None, :, None] +
-                    foo[None, None, :, None, None, :])
-            eab = fvv[ka][:, None] + fvv[kb][None, :]
+            eijk = (mo_e_o[:, None, None, :, None, None] + mo_e_o[None, :, None, None, :, None] +
+                    mo_e_o[None, None, :, None, None, :])
+            eab = mo_e_v[ka][:, None] + mo_e_v[kb][None, :]
             eijkab = (eijk[:, :, :, :, :, :, None, None] -
                       eab[None, None, None, None, None, None, :, :])
             denom = eijkab + ip_eval
@@ -1059,9 +1064,14 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
 
-    fov = np.array([fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)])
-    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
-    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    fov = fock[:, :nocc, nocc:]
+    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     eaccsd_evecs = np.array(eaccsd_evecs)
     leaccsd_evecs = np.array(leaccsd_evecs)
@@ -1135,9 +1145,9 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
             rijabc = rijabc + rijabc.transpose(1,2,0,3,4,6,7,5) + rijabc.transpose(2,0,1,3,4,7,5,6)
 
             # Creating denominator
-            eabc = (fvv[:, None, None, :, None, None] + fvv[None, :, None, None, :, None] +
-                    fvv[None, None, :, None, None, :])
-            eij = foo[ki][:, None] + foo[kj][None, :]
+            eabc = (mo_e_v[:, None, None, :, None, None] + mo_e_v[None, :, None, None, :, None] +
+                    mo_e_v[None, None, :, None, None, :])
+            eij = mo_e_o[ki][:, None] + mo_e_o[kj][None, :]
             eijabc = (eij[None, None, None, :, :, None, None, None] -
                       eabc[:, :, :, None, None, :, :, :])
             denom = eijabc + ea_eval

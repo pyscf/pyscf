@@ -16,10 +16,12 @@ mycc = cc.KGCCSD(kmf)
 mycc.conv_tol = 1e-7
 mycc.conv_tol_normt = 1e-7
 mycc.run()
+eris = mycc.ao2mo()
+eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc.nkpts)]
 
 def tearDownModule():
-    global cell, kmf, mycc
-    del cell, kmf, mycc
+    global cell, kmf, mycc, eris
+    del cell, kmf, mycc, eris
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
@@ -52,7 +54,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecc2, -0.0676483716898783, 6)
 
         eom = EOMIP(mycc)
-        imds = eom.make_imds()
+        imds = eom.make_imds(eris=eris)
         # Basic ipccsd
         e1_obt, v = eom.ipccsd(nroots=3, left=True, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e1_obt[0][0],-1.14894700482871,6)
@@ -72,7 +74,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1_obt[0][2], -0.9074331788469051, 6)
 
         eom = EOMEA(mycc)
-        imds = eom.make_imds()
+        imds = eom.make_imds(eris=eris)
         # Basic eaccsd
         e2_obt, v = eom.eaccsd(nroots=3, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.2669788613362731, 6)
@@ -98,11 +100,13 @@ class KnownValues(unittest.TestCase):
         mycc_frozen = cc.KGCCSD(kmf, frozen=[[0,1],[0,1,2,3]])
         mycc_frozen.conv_tol = 1e-7
         mycc_frozen.conv_tol_normt = 1e-7
-        ecc2, t1, t2 = mycc_frozen.kernel()
+        eris = mycc_frozen.ao2mo()
+        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc_frozen.nkpts)]
+        ecc2, t1, t2 = mycc_frozen.kernel(eris=eris)
         self.assertAlmostEqual(ecc2, -0.0442506265840587, 6)
 
         eom = EOMIP(mycc_frozen)
-        imds = eom.make_imds()
+        imds = eom.make_imds(eris=eris)
         e1_obt, v = eom.ipccsd(nroots=3, koopmans=False, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e1_obt[0][0], -1.1316152294295743, 6)
         self.assertAlmostEqual(e1_obt[0][1], -1.1316152294295743, 6)
@@ -114,7 +118,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1_obt[0][2], -0.8983139520017552, 6)
 
         eom = EOMEA(mycc_frozen)
-        imds = eom.make_imds()
+        imds = eom.make_imds(eris=eris)
         e2_obt, v = eom.eaccsd(nroots=3, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.2572812499753756, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.2572812532456588, 6)
@@ -156,13 +160,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecc2, -0.0676483716898783, 6)
 
         eom = EOMIP(mycc)
-        e1_obt = eom.ipccsd_star(nroots=3, koopmans=True, kptlist=[0])
+        e1_obt = eom.ipccsd_star(nroots=3, koopmans=True, kptlist=[0], eris=eris)
         self.assertAlmostEqual(e1_obt[0][0], -1.1452481194582802, 6)
         self.assertAlmostEqual(e1_obt[0][1], -1.1452481194456137, 6)
         self.assertAlmostEqual(e1_obt[0][2], -1.1174912094746994, 6)
 
         eom = EOMEA(mycc)
-        e1_obt = eom.eaccsd_star(nroots=2, koopmans=True, kptlist=[0,1])
+        e1_obt = eom.eaccsd_star(nroots=2, koopmans=True, kptlist=[0,1], eris=eris)
         self.assertAlmostEqual(e1_obt[0][0], 1.260627794895514, 6)
         self.assertAlmostEqual(e1_obt[0][1], 1.260627794895514, 6)
         self.assertAlmostEqual(e1_obt[1][0], 1.2222607619733454, 6)
@@ -201,7 +205,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecc2, -0.0676483716898783, 6)
 
         eom = EOMIP_Ta(mycc)
-        imds = eom.make_imds()
+        imds = eom.make_imds(eris=eris)
         e1_obt, v = eom.ipccsd(nroots=3, koopmans=True, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e1_obt[0][0], -1.146351234409813, 6)
         self.assertAlmostEqual(e1_obt[0][1], -1.146351234404151, 6)
@@ -213,7 +217,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1_obt[0][2], -1.116991306080, 6)
 
         eom = EOMEA_Ta(mycc)
-        imds = eom.make_imds()
+        imds = eom.make_imds(eris=eris)
         e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[0], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.267728934041309, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.267728934041309, 6)

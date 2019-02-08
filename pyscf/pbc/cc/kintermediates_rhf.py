@@ -444,39 +444,9 @@ def _new(shape, dtype, out):
         assert(out.dtype == dtype)
     return out
 
-def get_t3p2_imds_slow(cc, t1, t2, eris=None,
-                       t3p2_ip_out=None, t3p2_ea_out=None):
-    """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
-    and intermediates used in IP/EA-CCSD(T)a
-
-    Args:
-        cc (:obj:`KRCCSD`):
-            Object containing coupled-cluster results.
-        t1 (:obj:`ndarray`):
-            T1 amplitudes.
-        t2 (:obj:`ndarray`):
-            T2 amplitudes from which the T3[2] amplitudes are formed.
-        eris (:obj:`_PhysicistsERIs`):
-            Electron-repulsion spatial integrals in physicist's notation.
-        t3p2_ip_out (:obj:`ndarray`):
-            Store results of the intermediate used in IP-EOM-CCSD(T)a.
-        t3p2_ea_out (:obj:`ndarray`):
-            Store results of the intermediate used in EA-EOM-CCSD(T)a.
-
-    Returns:
-        delta_ccsd (float):
-            Difference of perturbed and unperturbed CCSD ground-state energy,
-                energy(T1 + T1[2], T2 + T2[2]) - energy(T1, T2)
-        pt1 (:obj:`ndarray`):
-            Perturbatively corrected T1 amplitudes.
-        pt2 (:obj:`ndarray`):
-            Perturbatively corrected T2 amplitudes.
-
-    Reference:
-        D. A. Matthews, J. F. Stanton "A new approach to approximate..."
-            JCP 145, 124102 (2016), Equation 14
-        Shavitt and Bartlett "Many-body Methods in Physics and Chemistry"
-            2009, Equation 10.33
+def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
+    """For a description of arguments, see `get_t3p2_imds_slow` in
+    the corresponding `kintermediates.py`.
     """
     if eris is None:
         eris = cc.ao2mo()
@@ -488,6 +458,11 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
     fov = fock[:, :nocc, nocc:]
     foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
     fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     ccsd_energy = cc.energy(t1, t2, eris)
 
@@ -520,8 +495,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
         tmp_t3[ki, kj, kk, ka, kb] += get_v(kk, ki, kj, kc, ka, kb).transpose(1, 2, 0, 4, 5, 3)
         tmp_t3[ki, kj, kk, ka, kb] += get_v(kk, kj, ki, kc, kb, ka).transpose(2, 1, 0, 5, 4, 3)
 
-        eijk = foo[ki][:, None, None] + foo[kj][None, :, None] + foo[kk][None, None, :]
-        eabc = fvv[ka][:, None, None] + fvv[kb][None, :, None] + fvv[kc][None, None, :]
+        eijk = mo_e_o[ki][:, None, None] + mo_e_o[kj][None, :, None] + mo_e_o[kk][None, None, :]
+        eabc = mo_e_v[ka][:, None, None] + mo_e_v[kb][None, :, None] + mo_e_v[kc][None, None, :]
         eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
         tmp_t3[ki, kj, kk, ka, kb] /= eijkabc
 
@@ -605,14 +580,14 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None,
                                               eris.vovv[ka, km, ke])
 
     for ki in range(nkpts):
-        eii = foo[ki][:, None] - fvv[ki][None, :]
+        eii = mo_e_o[ki][:, None] - mo_e_v[ki][None, :]
         pt1[ki] /= eii
 
     for ki, ka in product(range(nkpts), repeat=2):
-        eia = foo[ki][:, None] - fvv[ka][None, :]
+        eia = mo_e_o[ki][:, None] - mo_e_v[ka][None, :]
         for kj in range(nkpts):
             kb = kconserv[ki, ka, kj]
-            ejb = foo[kj][:, None] - fvv[kb][None, :]
+            ejb = mo_e_o[kj][:, None] - mo_e_v[kb][None, :]
             eijab = eia[:, None, :, None] + ejb[None, :, None, :]
             pt2[ki, kj, ka] /= eijab
 

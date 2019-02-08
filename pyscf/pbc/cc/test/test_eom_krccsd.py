@@ -103,23 +103,24 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf)
         cc.conv_tol = 1e-8
         eris = cc.ao2mo()
+        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
         self.assertAlmostEqual(ecc, ecc_bench, 6)
 
         eom = EOMIP_Ta(cc)
-        e, v = eom.ipccsd(nroots=2, koopmans=True, kptlist=(0,))
+        e, v = eom.ipccsd(nroots=2, koopmans=True, kptlist=(0,), eris=eris)
         self.assertAlmostEqual(e[0][0], -1.146351230068405, 6)
         self.assertAlmostEqual(e[0][1], -1.10725570884212, 6)
 
         eom = EOMEA_Ta(cc)
-        e, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[0])
+        e, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[0], eris=eris)
         self.assertAlmostEqual(e[0][0], 1.267728933294929, 6)
         self.assertAlmostEqual(e[0][1], 1.280954973687476, 6)
 
         eom = EOMEA_Ta(cc)
-        e, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[1])
+        e, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[1], eris=eris)
         self.assertAlmostEqual(e[0][0], 1.229047959680129, 6)
         self.assertAlmostEqual(e[0][1], 1.384154370672317, 6)
 
@@ -130,6 +131,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf)
         cc.conv_tol = 1e-10
         eris = cc.ao2mo()
+        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
@@ -146,6 +148,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.KGCCSD(kmf)
         cc.conv_tol = 1e-10
         eris = cc.ao2mo()
+        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
