@@ -191,28 +191,23 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
 
 
 def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None, type1=False,
-            type2=False, with_t3p2=True, with_t3p2_imds=True):
+            left_guess=None, eris=None, imds=None):
     '''Wrapper for running perturbative excited-states that require both left
     and right amplitudes.'''
     if imds is None:
-        imds = eom.make_imds()
-        #imds = eom.make_imds(with_t3p2=with_t3p2, with_t3p2_imds=with_t3p2_imds)
+        imds = eom.make_imds(eris=eris)
 
     # Right eigenvectors
     r_converged, r_e, r_v = \
                kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
-                      eris=eris, imds=imds, with_t3p2=with_t3p2,
-                      copy_amps_t3p2=True, with_t3p2_imds=with_t3p2_imds)
+                      eris=eris, imds=imds)
     # Left eigenvectors
     l_converged, l_e, l_v = \
                kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
-                      eris=eris, imds=imds, with_t3p2=with_t3p2,
-                      copy_amps_t3p2=True, with_t3p2_imds=with_t3p2_imds)
+                      eris=eris, imds=imds)
 
     e, r_v, l_v = _sort_left_right_eigensystem(eom, r_converged, r_e, r_v, l_converged, l_e, l_v)
-    #e_star = eom._get_star_energy(e, r_v, l_v, eris=imds.eris, type1=type1, type2=type2)
-    e_star = eom.ccsd_star_contract(e, r_v, l_v, eris=imds.eris)
+    e_star = eom.ccsd_star_contract(e, r_v, l_v, imds=imds)
     return e_star
 
 
@@ -245,8 +240,7 @@ def ipccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
     return eom.e, eom.v
 
 def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None, type1=False,
-            type2=False, with_t3p2=True, with_t3p2_imds=True):
+                left_guess=None, eris=None, imds=None):
     """Calculates CCSD* perturbative correction.
 
     Simply calls the relevant `kernel()` function and `perturb_star` of the
@@ -258,8 +252,7 @@ def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
                right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds, type1=type1, type2=type2, with_t3p2=with_t3p2,
-               with_t3p2_imds=with_t3p2_imds)
+               imds=imds)
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -393,14 +386,15 @@ def ipccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
-def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
+def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
     from pyscf.cc.ccsd_t import _sort_eri, _sort_t2_vooo_
     cpu1 = cpu0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
-    assert(eom.partition == None)
-    if eris is None:
-        eris = eom._cc.ao2mo()
-    t1, t2 = eom._cc.t1, eom._cc.t2
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
+
     fock = eris.fock
     nocc, nvir = t1.shape
     nmo = nocc + nvir
@@ -538,12 +532,15 @@ class EOMIP(EOM):
 
     kernel = ipccsd
     ipccsd = ipccsd
+    ipccsd_star = ipccsd_star
+
     matvec = ipccsd_matvec
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
-    ipccsd_star_contract = ipccsd_star_contract
     ccsd_star_contract = ipccsd_star_contract
-    ipccsd_star = ipccsd_star
+
+    def ipccsd_star_contract(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
+        return self.ccsd_star_contract(ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=imds)
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()
@@ -578,11 +575,10 @@ class EOMIP(EOM):
 
 
 class EOMIP_Ta(EOMIP):
-    '''Class for EOM IPCCSD(T)(a) method by Devin Matthews.'''
+    '''Class for EOM IPCCSD(T)*(a) method by Matthews and Stanton.'''
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
-        imds.make_ip(self.partition)
-        imds.add_t3p2_ip(self.partition)
+        imds.make_t3p2_ip(self._cc, self.partition)
         return imds
 
 ########################################
@@ -593,23 +589,21 @@ def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
            partition=None, eris=None, imds=None):
     '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
 
-    Kwargs:
+    Args:
         See also ipccd()
     '''
     return ipccsd(eom, nroots, left, koopmans, guess, partition, eris, imds)
 
 def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None, type1=False,
-            type2=False, with_t3p2=True, with_t3p2_imds=True):
+        left_guess=None, eris=None, imds=None, **kwargs):
     """Calculates CCSD* perturbative correction.
 
-    Kwargs:
+    Args:
         See also ipccd_star()
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
                right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds, type1=type1, type2=type2, with_t3p2=with_t3p2,
-               with_t3p2_imds=with_t3p2_imds)
+               imds=imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -748,18 +742,19 @@ def eaccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ea(Hr1,Hr2)
     return vector
 
-def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
-    from pyscf.cc.ccsd_t import _sort_eri, _sort_t2_vooo_
+def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
     cpu1 = cpu0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
-    assert(eom.partition == None)
-    if eris is None:
-        eris = eom._cc.ao2mo()
-    t1, t2 = eom._cc.t1, eom._cc.t2
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
+
     fock = eris.fock
     nocc, nvir = t1.shape
     nmo = nocc + nvir
     dtype = np.result_type(t1, t2, eris.ovoo.dtype)
+    # Notice we do not use `sort_eri` as compared to the eaccsd_star.
     # The sort_eri does not produce eri's that are read-in quickly for the current contraction
     # scheme.  Here, we have that the block loop is over occupied indices whereas in the
     # sort_eri it is done over virtual indices (due to the permutation over occupied indices
@@ -817,7 +812,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=No
         out += -lib.einsum('bce,ijae->ijabc', tmp, t2[i0:i1,j0:j1])
         tmp = np.einsum('mjce,e->mcj', eris.oovv[:,j0:j1], r1)
         out += lib.einsum('mcj,imab->ijabc', tmp, t2[i0:i1])
-        tmp = np.einsum('jbem,e->mbj', eris.ovvo[j0:j1].conj(), r1)
+        tmp = np.einsum('jbem,e->mbj', eris.ovvo[j0:j1], r1)
         out += lib.einsum('mbj,imac->ijabc', tmp, t2[i0:i1])
         out += lib.einsum('iajm,mbc->ijabc', eris.ovoo[i0:i1,:,j0:j1].conj(), r2)
         out += -lib.einsum('iaeb,jec->ijabc', cache_ovvv_i.conj(), r2[j0:j1])
@@ -904,12 +899,15 @@ class EOMEA(EOM):
 
     kernel = eaccsd
     eaccsd = eaccsd
+    eaccsd_star = eaccsd_star
+
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
-    eaccsd_star_contract = eaccsd_star_contract
     ccsd_star_contract = eaccsd_star_contract
-    eaccsd_star = eaccsd_star
+
+    def eaccsd_star_contract(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
+        return self.ccsd_star_contract(eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=imds)
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()
@@ -944,11 +942,10 @@ class EOMEA(EOM):
 
 
 class EOMEA_Ta(EOMEA):
-    '''Class for EOM EACCSD(T)(a) method by Devin Matthews.'''
+    '''Class for EOM EACCSD(T)*(a) method by Matthews and Stanton.'''
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
-        imds.make_ea(self.partition)
-        imds.add_t3p2_ea(self.partition)
+        imds.make_t3p2_ea(self._cc, self.partition)
         return imds
 
 ########################################
@@ -1715,15 +1712,19 @@ class _IMDS:
         log.timer_debug1('EOM-CCSD IP intermediates', *cput0)
         return self
 
-    def add_t3p2_ip(self, ip_partition=None):
-        raise NotImplementedError
+    def make_t3p2_ip(self, cc, ip_partition=None):
         assert(ip_partition is None)
-        if not hasattr(self, 'Wovoo'):
-            self.make_ip(ip_partition=ip_partition)
-
         cput0 = (time.clock(), time.time())
 
-        t1, t2, eris = self.t1, self.t2, self.eris
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
+
+        self._made_shared_2e = False  # Force update
+        self.make_ip()  # Make after t1/t2 updated
+        self.Wovoo = self.Wovoo + Wovoo
 
         logger.timer_debug1(self, 'EOM-CCSD(T)a IP intermediates', *cput0)
         return self
@@ -1749,15 +1750,19 @@ class _IMDS:
         log.timer_debug1('EOM-CCSD EA intermediates', *cput0)
         return self
 
-    def add_t3p2_ea(self, ea_partition=None):
-        raise NotImplementedError
+    def make_t3p2_ea(self, cc, ea_partition=None):
         assert(ea_partition is None)
-        if not hasattr(self, 'Wvovv'):
-            self.make_ea(ea_partition=ea_partition)
-
         cput0 = (time.clock(), time.time())
 
-        t1, t2, eris = self.t1, self.t2, self.eris
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
+
+        self._made_shared_2e = False  # Force update
+        self.make_ea()  # Make after t1/t2 updated
+        self.Wvvvo = self.Wvvvo + Wvvvo
 
         logger.timer_debug1(self, 'EOM-CCSD(T)a EA intermediates', *cput0)
         return self

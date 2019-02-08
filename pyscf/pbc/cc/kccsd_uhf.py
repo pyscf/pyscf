@@ -32,6 +32,8 @@ from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import member, gamma_point
+from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
+                                padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf import __config__
 
@@ -76,6 +78,11 @@ def update_amps(cc, t1, t2, eris):
     fOO_ = eris.fock[1][:,:noccb,:noccb]
     fov_ = eris.fock[0][:,:nocca,nocca:]
     fOV_ = eris.fock[1][:,:noccb,noccb:]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_padding_alpha, nonzero_padding_beta = padding_k_idx(cc, kind="split")
+    nonzero_opadding_alpha, nonzero_vpadding_alpha = nonzero_padding_alpha
+    nonzero_opadding_beta, nonzero_vpadding_beta = nonzero_padding_beta
 
     mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
     mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
@@ -261,7 +268,7 @@ def update_amps(cc, t1, t2, eris):
         ky = kconserv[kz, kx, ku]
         Ht2ab[ky,kx,ku] -= lib.einsum('ie, ma, bjme->jiba', t1b[kx], t1b[kz], eris.voOV[ku,kw,kz])
 
-    
+
     #:Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO, P, P)
     #:Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, eris.OOvv, P, P)
     #for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
@@ -381,25 +388,36 @@ def update_amps(cc, t1, t2, eris):
     eia = []
     eIA = []
     for ki in range(nkpts):
-        eia.append([mo_ea_o[ki][:,None] - mo_ea_v[ka] for ka in range(nkpts)])
-        eIA.append([mo_eb_o[ki][:,None] - mo_eb_v[ka] for ka in range(nkpts)])
+        tmp_alpha = []
+        tmp_beta = []
+        for ka in range(nkpts):
+            tmp_eia = LARGE_DENOM * np.ones((nocca, nvira), dtype=eris.mo_energy[0][0].dtype)
+            tmp_eIA = LARGE_DENOM * np.ones((noccb, nvirb), dtype=eris.mo_energy[0][0].dtype)
+            n0_ovp_ia = np.ix_(nonzero_opadding_alpha[ki], nonzero_vpadding_alpha[ka])
+            n0_ovp_IA = np.ix_(nonzero_opadding_beta[ki], nonzero_vpadding_beta[ka])
+
+            tmp_eia[n0_ovp_ia] = (mo_ea_o[ki][:,None] - mo_ea_v[ka])[n0_ovp_ia]
+            tmp_eIA[n0_ovp_IA] = (mo_eb_o[ki][:,None] - mo_eb_v[ka])[n0_ovp_IA]
+            tmp_alpha.append(tmp_eia)
+            tmp_beta.append(tmp_eIA)
+        eia.append(tmp_alpha)
+        eIA.append(tmp_beta)
 
     for ki in range(nkpts):
-        Ht1a[ki] /= eia[ki][ki]
-        Ht1b[ki] /= eIA[ki][ki]
+        ka = ki
+        # Remove zero/padded elements from denominator
+        Ht1a[ki] /= eia[ki][ka]
+        Ht1b[ki] /= eIA[ki][ka]
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
         eijab = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2aa[ki,kj,ka] /= eijab
 
         eijab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2ab[ki,kj,ka] /= eijab
 
         eijab = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2bb[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
@@ -453,60 +471,60 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
-def get_nocc(cc, per_kpoint=False):
-    '''See also function get_nocc in pyscf/pbc/mp2/kmp2.py'''
-    if cc._nocc is not None:
-        return cc._nocc
-
-    assert(cc.frozen == 0)
-
-    if isinstance(cc.frozen, (int, np.integer)):
-        nocca = [(np.count_nonzero(cc.mo_occ[0][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
-        noccb = [(np.count_nonzero(cc.mo_occ[1][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
-
-    else:
-        raise NotImplementedError
-
-    if not per_kpoint:
-        nocca = np.amax(nocca)
-        noccb = np.amax(noccb)
-    return nocca, noccb
-
-def get_nmo(cc, per_kpoint=False):
-    '''See also function get_nmo in pyscf/pbc/mp2/kmp2.py'''
-    if cc._nmo is not None:
-        return cc._nmo
-
-    assert(cc.frozen == 0)
-
-    if isinstance(cc.frozen, (int, np.integer)):
-        nmoa = [(cc.mo_occ[0][k].size - cc.frozen) for k in range(cc.nkpts)]
-        nmob = [(cc.mo_occ[1][k].size - cc.frozen) for k in range(cc.nkpts)]
-
-    else:
-        raise NotImplementedError
-
-    if not per_kpoint:
-        nmoa = np.amax(nmoa)
-        nmob = np.amax(nmob)
-    return nmoa, nmob
-
-def get_frozen_mask(cc):
-    '''See also get_frozen_mask function in pyscf/pbc/mp2/kmp2.py'''
-
-    moidxa = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[0]]
-    moidxb = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[1]]
-    assert(cc.frozen == 0)
-
-    if isinstance(cc.frozen, (int, np.integer)):
-        for idx in moidxa:
-            idx[:cc.frozen] = False
-        for idx in moidxb:
-            idx[:cc.frozen] = False
-    else:
-        raise NotImplementedError
-
-    return moidxa, moisxb
+#def get_nocc(cc, per_kpoint=False):
+#    '''See also function get_nocc in pyscf/pbc/mp2/kmp2.py'''
+#    if cc._nocc is not None:
+#        return cc._nocc
+#
+#    assert(cc.frozen == 0)
+#
+#    if isinstance(cc.frozen, (int, np.integer)):
+#        nocca = [(np.count_nonzero(cc.mo_occ[0][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
+#        noccb = [(np.count_nonzero(cc.mo_occ[1][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
+#
+#    else:
+#        raise NotImplementedError
+#
+#    if not per_kpoint:
+#        nocca = np.amax(nocca)
+#        noccb = np.amax(noccb)
+#    return nocca, noccb
+#
+#def get_nmo(cc, per_kpoint=False):
+#    '''See also function get_nmo in pyscf/pbc/mp2/kmp2.py'''
+#    if cc._nmo is not None:
+#        return cc._nmo
+#
+#    assert(cc.frozen == 0)
+#
+#    if isinstance(cc.frozen, (int, np.integer)):
+#        nmoa = [(cc.mo_occ[0][k].size - cc.frozen) for k in range(cc.nkpts)]
+#        nmob = [(cc.mo_occ[1][k].size - cc.frozen) for k in range(cc.nkpts)]
+#
+#    else:
+#        raise NotImplementedError
+#
+#    if not per_kpoint:
+#        nmoa = np.amax(nmoa)
+#        nmob = np.amax(nmob)
+#    return nmoa, nmob
+#
+#def get_frozen_mask(cc):
+#    '''See also get_frozen_mask function in pyscf/pbc/mp2/kmp2.py'''
+#
+#    moidxa = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[0]]
+#    moidxb = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[1]]
+#    assert(cc.frozen == 0)
+#
+#    if isinstance(cc.frozen, (int, np.integer)):
+#        for idx in moidxa:
+#            idx[:cc.frozen] = False
+#        for idx in moidxb:
+#            idx[:cc.frozen] = False
+#    else:
+#        raise NotImplementedError
+#
+#    return moidxa, moisxb
 
 def amplitudes_to_vector(t1, t2):
     return np.hstack((t1[0].ravel(), t1[1].ravel(),
@@ -706,23 +724,36 @@ class KUCCSD(uccsd.UCCSD):
         mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
         mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
 
+        # Get location of padded elements in occupied and virtual space
+        nonzero_padding_alpha, nonzero_padding_beta = padding_k_idx(self, kind="split")
+        nonzero_opadding_alpha, nonzero_vpadding_alpha = nonzero_padding_alpha
+        nonzero_opadding_beta, nonzero_vpadding_beta = nonzero_padding_beta
+
+        eia = []
+        eIA = []
+        # Create denominators, ignoring padded elements
+        for ki in range(nkpts):
+            tmp_alpha = []
+            tmp_beta = []
+            for ka in range(nkpts):
+                tmp_eia = LARGE_DENOM * np.ones((nocca, nvira), dtype=eris.mo_energy[0][0].dtype)
+                tmp_eIA = LARGE_DENOM * np.ones((noccb, nvirb), dtype=eris.mo_energy[0][0].dtype)
+                n0_ovp_ia = np.ix_(nonzero_opadding_alpha[ki], nonzero_vpadding_alpha[ka])
+                n0_ovp_IA = np.ix_(nonzero_opadding_beta[ki], nonzero_vpadding_beta[ka])
+
+                tmp_eia[n0_ovp_ia] = (mo_ea_o[ki][:,None] - mo_ea_v[ka])[n0_ovp_ia]
+                tmp_eIA[n0_ovp_IA] = (mo_eb_o[ki][:,None] - mo_eb_v[ka])[n0_ovp_IA]
+                tmp_alpha.append(tmp_eia)
+                tmp_beta.append(tmp_eIA)
+            eia.append(tmp_alpha)
+            eIA.append(tmp_beta)
+
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            Daa = (mo_ea_o[ki][:,None,None,None] + mo_ea_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_ea_v[kb][None,None,None,:])
-            Dab = (mo_ea_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
-            Dbb = (mo_eb_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_eb_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
-
-            # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = np.where(abs(Daa) < LOOSE_ZERO_TOL)[0]
-            Daa[idx] = LARGE_DENOM
-            idx = np.where(abs(Dab) < LOOSE_ZERO_TOL)[0]
-            Dab[idx] = LARGE_DENOM
-            idx = np.where(abs(Dbb) < LOOSE_ZERO_TOL)[0]
-            Dbb[idx] = LARGE_DENOM
+            Daa = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
+            Dab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
+            Dbb = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
 
             t2aa[ki,kj,ka] = eris.ovov[ki,ka,kj].conj().transpose((0,2,1,3)) / Daa
             t2aa[ki,kj,ka]-= eris.ovov[kj,ka,ki].conj().transpose((2,0,1,3)) / Daa
@@ -761,6 +792,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
     mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
+    mo_coeff = padded_mo_coeff(cc, mo_coeff)
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
@@ -817,8 +849,8 @@ def _make_eris_incore(cc, mo_coeff=None):
 def _kuccsd_eris_common_(cc, eris, buf=None):
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
-    if not (cc.frozen is None or cc.frozen == 0):
-        raise NotImplementedError('cc.frozen = %s' % cc.frozen)
+    #if not (cc.frozen is None or cc.frozen == 0):
+    #    raise NotImplementedError('cc.frozen = %s' % cc.frozen)
 
     cput0 = (time.clock(), time.time())
     log = logger.new_logger(cc)
@@ -828,7 +860,6 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     kpts = cc.kpts
     nkpts = cc.nkpts
     mo_coeff = eris.mo_coeff
-    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     nocca, noccb = eris.nocc
     nmoa, nmob = cc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
@@ -933,6 +964,7 @@ def _make_eris_outcore(cc, mo_coeff=None):
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
     mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
+    mo_coeff = padded_mo_coeff(cc, mo_coeff)
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
@@ -1004,6 +1036,7 @@ def _make_df_eris(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
+    mo_coeff = padded_mo_coeff(cc, mo_coeff)
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
     thisdf = cc._scf.with_df

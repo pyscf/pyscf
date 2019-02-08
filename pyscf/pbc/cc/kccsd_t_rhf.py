@@ -84,8 +84,11 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
     mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)], dtype=np.float, order='C')
-    fock_mo_energy = np.asarray([x.diagonal().real for x in eris.fock], dtype=np.float, order='C')
     fov = eris.fock[:, :nocc, nocc:]
+
+    mo_e = mo_energy
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
@@ -227,7 +230,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         drv = _ccsd.libcc.CCsd_zcontract_t3T
         drv(t3Tw.ctypes.data_as(ctypes.c_void_p),
             t3Tv.ctypes.data_as(ctypes.c_void_p),
-            mo_energy.ctypes.data_as(ctypes.c_void_p),
+            mo_e.ctypes.data_as(ctypes.c_void_p),
             t1T.ctypes.data_as(ctypes.c_void_p),
             fvo.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nocc), ctypes.c_int(nvir),
@@ -288,9 +291,9 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
                 for ki, kj, kk in product(range(nkpts), repeat=3):
                     # eigenvalue denominator: e(i) + e(j) + e(k)
-                    eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_energy_occ[0].dtype)
+                    eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_e_o[0].dtype)
                     n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
-                    eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])[n0_ovp_ijk]
+                    eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])[n0_ovp_ijk]
 
                     # Find momentum conservation condition for triples
                     # amplitude t3ijkabc
@@ -306,9 +309,9 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                         symm_kpt = 6.
 
                     eijkabc = (eijk[None,None,None,:,:,:] -
-                               mo_energy_vir[ka][a0:a1][:,None,None,None,None,None] -
-                               mo_energy_vir[kb][b0:b1][None,:,None,None,None,None] -
-                               mo_energy_vir[kc][c0:c1][None,None,:,None,None,None])
+                               mo_e_v[ka][a0:a1][:,None,None,None,None,None] -
+                               mo_e_v[kb][b0:b1][None,:,None,None,None,None] -
+                               mo_e_v[kc][c0:c1][None,None,:,None,None,None])
 
                     pwijk = my_permuted_w[ki,kj,kk] + my_permuted_v[ki,kj,kk]
                     rwijk = (4. * my_permuted_w[ki,kj,kk] +
