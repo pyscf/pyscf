@@ -723,6 +723,15 @@ class EOMEA(eom_rccsd.EOM):
         imds.make_ea()
         return imds
 
+########################################
+# EOM-EE-CCSD
+########################################
+
+class EOMEE(eom_rccsd.EOM):
+    def __init__(self, cc):
+        self.kpts = cc.kpts
+        eom_rccsd.EOM.__init__(self, cc)
+
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
     # -- rintermediates --> gintermediates
