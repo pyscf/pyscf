@@ -19,7 +19,7 @@ Interface to geometry optimizer pyberny https://github.com/azag0/pyberny
 
 from __future__ import absolute_import
 try:
-    from berny import Berny, geomlib, Logger
+    from berny import Berny, geomlib, Logger, coords
 except ImportError:
     msg = ('Geometry optimizer pyberny not found.\npyberny library '
            'can be found on github https://github.com/azag0/pyberny.\n'
@@ -29,7 +29,10 @@ except ImportError:
 import time
 import numpy
 from pyscf import lib
+from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
 from pyscf import __config__
+# Overwrite pyberny's atomic unit
+coords.angstrom = 1./lib.param.BOHR
 
 INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
 ASSERT_CONV = getattr(__config__, 'geomopt_berny_solver_optimize_assert_convergence', True)
@@ -75,48 +78,10 @@ def to_berny_log(pyscf_log):
                 pyscf_log.info('%d %s', self.n, msg)
     return BernyLogger()
 
-def as_pyscf_method(mol, scan_function):
-    '''Creat an wrapper for the given scan_function, to make it work as a
-    pyscf gradients scanner. The wrapper can be passed to :func:`optimize`.
-
-    Args:
-        scan_function : [mol] => (e_tot, grad)
-
-    Examples::
-    >>> mol = gto.M(atom='H; H 1 1.2', basis='ccpvdz')
-    >>> scan_fn = scf.RHF(mol).nuc_grad_method().as_scanner()
-    >>> m = as_pyscf_method(mol, scan_fn)
-    >>> berny_solver.kernel(m)
-    '''
-    class OmniGrad(lib.GradScanner):
-        def __init__(self, g):
-            self.base = g.base
-        def __call__(self, mol):
-            self.e_tot, grad = scan_function(mol)
-            return self.e_tot, grad
-        @property
-        def converged(self):
-            return True
-
-    class Grad(object):
-        def __init__(self, base):
-            self.base = base
-        def as_scanner(self):
-            return OmniGrad(self)
-
-    class OmniMethod(object):
-        def __init__(self, mol):
-            self.mol = mol
-            self.verbose = mol.verbose
-            self.stdout = mol.stdout
-        def nuc_grad_method(self):
-            return Grad(self)
-    return OmniMethod(mol)
-
 
 def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
-    '''Optimize the geometry with the given method.
+    '''Optimize geometry with the given method.
     '''
     t0 = time.clock(), time.time()
     mol = method.mol.copy()
@@ -146,7 +111,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     for cycle, geom in enumerate(optimizer):
         if log.verbose >= lib.logger.NOTE:
             log.note('\nGeometry optimization cycle %d', cycle+1)
-            _dump_mol_geometry(mol, geom, log)
+            dump_mol_geometry(mol, geom.coords, log)
         mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
         energy, gradients = g_scanner(mol)
         log.note('cycle %d: E = %.12g  dE = %g  norm(grad) = %g', cycle+1,
@@ -165,20 +130,6 @@ def optimize(method, assert_convergence=ASSERT_CONV,
 kernel = optimize
 
 del(INCLUDE_GHOST, ASSERT_CONV)
-
-def _dump_mol_geometry(mol, geom, log):
-    atoms = list(geom)
-    new_coords = numpy.array([x[1] for x in atoms])
-    old_coords = mol.atom_coords() * lib.param.BOHR
-    dx = new_coords - old_coords
-
-    log.stdout.write('Cartesian coordinates (Angstrom)\n')
-    log.stdout.write(' Atom        New coordinates             dX        dY        dZ\n')
-    for i in range(mol.natm):
-        log.stdout.write('%4s %10.6f %10.6f %10.6f   %9.6f %9.6f %9.6f\n' %
-                         (mol.atom_symbol(i),
-                          new_coords[i,0], new_coords[i,1], new_coords[i,2],
-                          dx[i,0], dx[i,1], dx[i,2]))
 
 
 if __name__ == '__main__':

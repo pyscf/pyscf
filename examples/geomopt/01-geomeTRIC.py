@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 '''
-Use pyberny to get the molecular equilibrium geometry.
+Use geomeTRIC library to optimize the molecular geometry.
 '''
 
 from pyscf import gto, scf
-from pyscf.geomopt.berny_solver import optimize
+from pyscf.geomopt.geometric_solver import optimize
 
 mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='ccpvdz')
 mf = scf.RHF(mol)
@@ -13,7 +13,7 @@ mf = scf.RHF(mol)
 #
 # geometry optimization for HF
 #
-mol_eq = berny_solver.optimize(mf)
+mol_eq = optimize(mf)
 print(mol_eq.atom_coords())
 
 #
@@ -22,5 +22,5 @@ print(mol_eq.atom_coords())
 from pyscf import mcscf
 mf = scf.RHF(mol)
 mc = mcscf.CASSCF(mf, 4, 4)
-mol_eq = berny_solver.optimize(mc)
+mol_eq = optimize(mc)
 
