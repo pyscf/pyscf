@@ -698,7 +698,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             return e, x
 davidson_nosym = eig
 
-def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=3, max_space=12,
+def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
                     dot=numpy.dot, callback=None,
                     nroots=1, lessio=False, left=False, pick=pick_real_eigs,
