@@ -58,7 +58,23 @@ class PySCFEngine(geometric.engine.Engine):
         return energy, gradient.ravel()
 
 def kernel(method, assert_convergence=ASSERT_CONV,
-           include_ghost=INCLUDE_GHOST, constraints=None):
+           include_ghost=INCLUDE_GHOST, constraints=None, **kwargs):
+    '''Optimize geometry with geomeTRIC library for the given method.
+    
+    To adjust the convergence threshold, parameters can be set in kwargs as
+    below:
+
+    .. code-block:: python
+        conv_params = {  # They are default settings
+            'convergence_energy': 1e-6,  # Eh
+            'convergence_grms': 3e-4,    # Eh/Bohr
+            'convergence_gmax': 4.5e-4,  # Eh/Bohr
+            'convergence_drms': 1.2e-3,  # Angstrom
+            'convergence_dmax': 1.8e-3,  # Angstrom
+        }
+        from pyscf import geometric_solver
+        geometric_solver.optimize(method, **conv_params)
+    '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
     elif getattr(method, 'nuc_grad_method', None):
@@ -71,7 +87,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     tmpf = tempfile.mktemp(dir=lib.param.TMPDIR)
     m = geometric.optimize.run_optimizer(customengine=PySCFEngine(g_scanner),
-                                         input=tmpf, constraints=constraints)
+                                         input=tmpf, constraints=constraints,
+                                         **kwargs)
 
     #FIXME: geomeTRIC library keeps running until converged. We need a function
     # to terminate the program even not converged.
@@ -102,7 +119,14 @@ H       -0.0227 1.1812  -0.8852
                 basis='3-21g')
 
     mf = scf.RHF(mol)
-    mol1 = optimize(mf)
+    conv_params = {
+        'convergence_energy': 1e-4,  # Eh
+        'convergence_grms': 3e-3,    # Eh/Bohr
+        'convergence_gmax': 4.5e-3,  # Eh/Bohr
+        'convergence_drms': 1.2e-2,  # Angstrom
+        'convergence_dmax': 1.8e-2,  # Angstrom
+    }
+    mol1 = optimize(mf, **conv_params)
     print(mf.kernel() - -153.219208484874)
     print(scf.RHF(mol1).kernel() - -153.222680852335)
 

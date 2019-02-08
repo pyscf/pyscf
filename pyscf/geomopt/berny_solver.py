@@ -81,7 +81,20 @@ def to_berny_log(pyscf_log):
 
 def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
-    '''Optimize geometry with the given method.
+    '''Optimize geometry with pyberny for the given method.
+    
+    To adjust the convergence threshold, parameters can be set in kwargs as
+    below:
+
+    .. code-block:: python
+        conv_params = {  # They are default settings
+            'gradientmax': 0.45e-3,  # Eh/Angstrom
+            'gradientrms': 0.15e-3,  # Eh/Angstrom
+            'stepmax': 1.8e-3,       # Angstrom
+            'steprms': 1.2e-3,       # Angstrom
+        }
+        from pyscf import geometric_solver
+        geometric_solver.optimize(method, **conv_params)
     '''
     t0 = time.clock(), time.time()
     mol = method.mol.copy()
@@ -149,7 +162,13 @@ H       -0.0227 1.1812  -0.8852
                 basis='3-21g')
 
     mf = scf.RHF(mol)
-    mol1 = optimize(mf)
+    conv_params = {
+        'gradientmax': 6e-3,  # Eh/AA
+        'gradientrms': 2e-3,  # Eh/AA
+        'stepmax': 2e-2,      # AA
+        'steprms': 1.5e-2,    # AA
+    }
+    mol1 = optimize(mf, **conv_params)
     print(mf.kernel() - -153.219208484874)
     print(scf.RHF(mol1).kernel() - -153.222680852335)
 

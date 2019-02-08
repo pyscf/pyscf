@@ -22,5 +22,12 @@ print(mol_eq.atom_coords())
 from pyscf import mcscf
 mf = scf.RHF(mol)
 mc = mcscf.CASSCF(mf, 4, 4)
-mol_eq = optimize(mc)
+conv_params = {
+    'convergence_energy': 1e-4,  # Eh
+    'convergence_grms': 3e-3,    # Eh/Bohr
+    'convergence_gmax': 4.5e-3,  # Eh/Bohr
+    'convergence_drms': 1.2e-2,  # Angstrom
+    'convergence_dmax': 1.8e-2,  # Angstrom
+}
+mol_eq = optimize(mc, **conv_params)
 
