@@ -823,7 +823,6 @@ class EOMEA_Ta(EOMEA):
         imds.make_t3p2_ea(self._cc)
         return imds
 
-
 imd = imdk
 
 class _IMDS:
@@ -969,6 +968,26 @@ class _IMDS:
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-CCSD(T)a EA intermediates', *cput0)
+        return self
+
+    def make_t3p2_ip_ea(self, cc):
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
+
+        self._made_shared_2e = False  # Force update
+        self.make_ip()  # Make after t1/t2 updated
+        self.make_ea()  # Make after t1/t2 updated
+        self.Wovoo = self.Wovoo + Wovoo
+        self.Wvvvo = self.Wvvvo + Wvvvo
+
+        self.made_ip_imds = True
+        self.made_ea_imds = True
+        logger.timer_debug1(self, 'EOM-CCSD(T)a IP/EA intermediates', *cput0)
         return self
 
     def make_ee(self):
