@@ -321,6 +321,11 @@ class UMP2(mp2.MP2):
         from pyscf.grad import ump2
         return ump2.Gradients(self)
 
+MP2 = UMP2
+
+from pyscf import scf
+scf.uhf.UHF.MP2 = lib.class_as_method(MP2)
+
 
 class _ChemistsERIs(mp2._ChemistsERIs):
     def __init__(self, mp, mo_coeff=None):

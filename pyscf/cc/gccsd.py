@@ -303,6 +303,12 @@ class GCCSD(ccsd.CCSD):
         raise NotImplementedError
         #return get_d2_diagnostic(self.spin2spatial(t2))
 
+CCSD = GCCSD
+
+from pyscf import scf
+scf.ghf.GHF.CCSD = lib.class_as_method(CCSD)
+
+
 class _PhysicistsERIs:
     '''<pq||rs> = <pq|rs> - <pq|sr>'''
     def __init__(self, mol=None):

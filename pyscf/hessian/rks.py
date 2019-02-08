@@ -166,7 +166,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
-    hcore_deriv = hessobj.base.Gradients().hcore_generator(mol)
+    hcore_deriv = hessobj.base.nuc_grad_method().hcore_generator(mol)
 
     mf = hessobj.base
     ni = mf._numint

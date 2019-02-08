@@ -19,11 +19,15 @@
 from pyscf.prop.rotational_gtensor import rhf
 from pyscf.prop.rotational_gtensor import uhf
 #from pyscf.prop.magnetizability import dhf
-from pyscf.prop.rotational_gtensor import rks
-from pyscf.prop.rotational_gtensor import uks
 
 RHF = rhf.RotationalGTensor
 UHF = uhf.RotationalGTensor
 #DHF = dhf.RotationalGTensor
-RKS = rks.RotationalGTensor
-UKS = uks.RotationalGTensor
+
+try:
+    from pyscf.prop.rotational_gtensor import rks
+    from pyscf.prop.rotational_gtensor import uks
+    RKS = rks.RotationalGTensor
+    UKS = uks.RotationalGTensor
+except ImportError:
+    pass

@@ -281,10 +281,10 @@ class KnownValues(unittest.TestCase):
         mf = dft.UKS(h4_z1_s)
         mf.xc = 'b3lyp'
         mf1 = scf.fast_newton(mf)
-        self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 9)
+        self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 8)
 
         mf1 = scf.fast_newton(dft.UKS(h4_z1_s))
-        self.assertAlmostEqual(mf1.e_tot, -39.330377813428001, 9)
+        self.assertAlmostEqual(mf1.e_tot, -39.330377813428001, 8)
 
     def test_nr_rks_fast_newton(self):
         mf = dft.RKS(h4_z0_s)

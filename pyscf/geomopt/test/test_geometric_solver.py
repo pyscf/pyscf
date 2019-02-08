@@ -13,15 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyscf.prop.freq import rhf
-from pyscf.prop.freq import uhf
-RHF = rhf.Freq
-UHF = uhf.Freq
+import unittest
+from pyscf import lib
+from pyscf import gto, scf
+from pyscf.geomopt import geometric_solver
 
-try:
-    from pyscf.prop.freq import rks
-    from pyscf.prop.freq import uks
-    RKS = rks.Freq
-    UKS = uks.Freq
-except ImportError:
-    pass
+class KnownValues(unittest.TestCase):
+    def test_as_pyscf_method(self):
+        mol = gto.M(atom='''
+            O  0.   0.       0.
+            H  0.   -0.757   0.587
+            H  0.   0.757    0.587
+                    ''', verbose=0)
+        mol1 = geometric_solver.optimize(scf.RHF(mol))
+        self.assertAlmostEqual(lib.finger(mol1.atom_coords()),
+                               2.19951175503979, 4)
+
+if __name__ == "__main__":
+    print("Tests for geometric_solver")
+    unittest.main()
+
