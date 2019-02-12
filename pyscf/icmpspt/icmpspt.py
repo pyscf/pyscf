@@ -261,6 +261,9 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
     vhfcore  = reduce(numpy.dot, (mo.T, vj-vk*0.5, mo))
     int1     = reduce(numpy.dot, (mo.T, hcore    , mo))+vhfcore
     numpy.save(intfolder+"int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
+    # energy_core_fro = numpy.einsum('ij,ji', dmcore, hcore) \
+    #                   + numpy.einsum('ij,ji', dmcore, vj-0.5*vk) * .5
+    # print("Energy_fro1 = %13.8f"%(energy_core_fro))
 
     # energy_core
     hcore  = mc.get_hcore()
@@ -512,8 +515,23 @@ def writeFCIDUMPs_MRLCC(mc,eris,eris_sp,int1,energy_core,energyE0,nfro):
     print("Wrote FCIDUMP_aaav0 file")
 
     eri1cas = ao2mo.outcore.general_iofree(mol, (mo[:,nfro:nocc], mo[:,nfro:nocc], mo[:,nfro:nocc], mo[:,nfro:nocc]), compact=True)
-    tools.fcidump.from_integrals("FCIDUMP_aaac", int1[nfro:nocc,nfro:nocc], eri1cas,\
-            nocc-nfro, mol.nelectron-2*nfro, nuc=mol.energy_nuc()-energyE0, orbsym = orbsymout[nfro:nocc], tol=1e-8)
+    core_only_1e = numpy.einsum('ii', int1[nfro:ncor, nfro:ncor])*2.0
+    core_only_2e = 2.0 * numpy.einsum('iijj', eris['ppcc'][nfro:ncor,
+                                                           nfro:ncor,
+                                                           :ncor-nfro,
+                                                           :ncor-nfro]) \
+                       - numpy.einsum('ijij', eris['pcpc'][nfro:ncor,
+                                                           :ncor-nfro,
+                                                           nfro:ncor,
+                                                           :ncor-nfro])
+    energy_fro = energy_core - core_only_1e - core_only_2e
+    # print("Energy_fro2 = %13.8f"%(energy_fro))
+    # print("E_nuc_aaac  = %13.8f"%(mol.energy_nuc() + energy_fro - energyE0))
+    tools.fcidump.from_integrals("FCIDUMP_aaac", int1[nfro:nocc,nfro:nocc],
+                                 eri1cas, nocc-nfro, mol.nelectron-2*nfro,
+                                 nuc=mol.energy_nuc() + energy_fro - energyE0,
+                                 orbsym=orbsymout[nfro:nocc], tol=1e-8,
+                                 float_format=' %17.9e')
     print("Wrote FCIDUMP_aaac  file")
     print("")
 
