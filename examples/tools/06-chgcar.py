@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 '''
-Write orbitals, electron density, molecular electrostatic potential in
-Gaussian cube file format.
+Write orbitals, electron density in VASP CHGCAR format.
 '''
 
 import numpy as np
