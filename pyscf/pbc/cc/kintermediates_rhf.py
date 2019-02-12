@@ -20,6 +20,7 @@
 import tempfile
 import numpy as np
 import h5py
+from itertools import product
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
@@ -613,6 +614,215 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
         Wacek[kc, kb, ke] -= 2. * lib.einsum('ijkabc,ikae->cbej', tmp_t3[ki, kj, kk, ka, kb], _oovv)
         Wacek[kc, kb, ke] +=      lib.einsum('jikabc,ikae->cbej', tmp_t3[kj, ki, kk, ka, kb], _oovv)
         Wacek[kc, kb, ke] +=      lib.einsum('kjiabc,ikae->cbej', tmp_t3[kk, kj, ki, ka, kb], _oovv)
+
+    delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
+    lib.logger.info(cc, 'CCSD energy T3[2] correction : %16.12e', delta_ccsd_energy)
+
+    return delta_ccsd_energy, pt1, pt2, Wmcik, Wacek
+
+def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
+    '''Adds term P(ia|jb)[tmp] to pt2..
+
+    P(ia|jb)(tmp[i,j,a,b]) = tmp[i,j,a,b] + tmp[j,i,b,a]
+
+    or equivalently for each i,j,a,b, pt2 is defined as
+
+    pt2[i,j,a,b] += tmp[i,j,a,b]
+    pt2[j,i,b,a] += tmp[i,j,a,b].transpose(1,0,3,2)
+
+    If pt2 is lower-triangular, only adds the RHS term that contributes
+    to the lower-triangular pt2.
+
+    Args:
+        pt2 (ndarray or HDF5 dataset):
+            Full or lower triangular T2 array to which one is adding to.
+        kpt_indices (array-like):
+            K-point indices ki, kj, ka.
+        orb_indices (array-like):
+            Array-like of four tuples describing the range for i,j,a,b.  An
+            element of None will convert to slice(None,None).
+        val (ndarray):
+            Values to be added to pt2.
+    '''
+    assert(len(orb_indices) == 4)
+    ki, kj, ka = kpt_indices
+    kb = kconserv[ki,ka,kj]
+    idxi, idxj, idxa, idxb = [slice(None, None)
+                              if x is None else slice(x[0],x[1])
+                              for x in orb_indices]
+    if len(pt2.shape) == 7 and pt2.shape[:2] == (nkpts, nkpts):
+        pt2[ki,kj,ka,idxi,idxj,idxa,idxb] += val
+        pt2[kj,ki,kb,idxi,idxj,idxb,idxa] += val.transpose(1,0,3,2)
+    elif len(pt2.shape) == 6 and pt2.shape[:2] == (nkpts*(nkpts+1)//2, nkpts):
+        if ki <= kj:  # Add tmp[i,j,a,b] to pt2[i,j,a,b]
+            idx = (kj*(kj+1))//2 + ki
+            pt2[idx,ka,idxi,idxj,idxa,idxb] += val
+            if ki == kj:
+                pt2[idx,kb,idxj,idxi,idxb,idxa] += val.transpose(1,0,3,2)
+        else:  # pt2[i,a,j,b] += tmp[j,i,a,b].transpose(1,0,3,2)
+            idx = (ki*(ki+1))//2 + kj
+            pt2[idx,kb,idxj,idxi,idxb,idxa] += val.transpose(1,0,3,2)
+    else:
+        raise ValueError('No known conversion for t2 shape %s' % t2.shape)
+
+def get_t3p2_imds(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
+    """For a description of arguments, see `get_t3p2_imds_slow` in
+    the corresponding `kintermediates.py`.
+    """
+    cpu1 = cpu0 = (time.clock(), time.time())
+    if eris is None:
+        eris = cc.ao2mo()
+    fock = eris.fock
+    nkpts, nocc, nvir = t1.shape
+    kconserv = cc.khelper.kconserv
+    dtype = np.result_type(t1, t2)
+
+    fov = fock[:, :nocc, nocc:]
+    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
+
+    ccsd_energy = cc.energy(t1, t2, eris)
+
+    if t3p2_ip_out is None:
+        t3p2_ip_out = np.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc),dtype=dtype)
+    Wmcik = t3p2_ip_out
+
+    if t3p2_ea_out is None:
+        t3p2_ea_out = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc),dtype=dtype)
+    Wacek = t3p2_ea_out
+
+    # Create necessary temporary eris for fast read
+    feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv,  [eris.vovv, eris.oovv, eris.ooov, t2])
+    t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
+    fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
+    cpu1 = log.timer_debug1('CCSD(T) tmp eri creation', *cpu1)
+
+    def get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
+        '''Vijkabc intermediate as described in Scuseria paper.
+
+        Function copied for `kccsd_t_rhf.py`'''
+        km = kconserv[ki,ka,kj]
+        kf = kconserv[ki,ka,kj]
+        out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
+        if kk == kc:
+            out = out + einsum('ck,baji->abcijk', 0.5*t1T[kk,c0:c1,:], eris_vvop[kb,ka,kj,b0:b1,a0:a1,:,:nocc])
+            # We see this is the same t2T term needed for the `w` contraction:
+            #     einsum('cbmk,aijm->abcijk', t2T[kc,kb,km,c0:c1,b0:b1], eris_vooo_C[ka,ki,kj,a0:a1])
+            #
+            # For the kpoint indices [kk,ki,kj,kc,ka,kb] we have that we need
+            #     t2T[kb,ka,km], where km = kconserv[kb,kj,ka]
+            # The remaining k-point not used in t2T, i.e. kc, has the condition kc == kk in the case of
+            # get_v.  So, we have from 3-particle conservation
+            #     (kk-kc) + ki + kj - ka - kb = 0,
+            # i.e. ki = km.
+            out = out + einsum('ck,baij->abcijk', 0.5*fvo[kk,c0:c1,:], t2T[kb,ka,ki,b0:b1,a0:a1,:,:])
+        return out
+
+    def get_permuted_v(ki, kj, kk, ka, kb, kc, orb_indices):
+        '''Pijkabc operating on Vijkabc intermediate as described in Scuseria paper
+
+        Function copied for `kccsd_t_rhf.py`'''
+        a0, a1, b0, b1, c0, c1 = orb_indices
+        tmp = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
+        ret = get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1)
+        ret = ret + get_v(kj, kk, ki, kb, kc, ka, b0, b1, c0, c1, a0, a1).transpose(2,0,1,5,3,4)
+        ret = ret + get_v(kk, ki, kj, kc, ka, kb, c0, c1, a0, a1, b0, b1).transpose(1,2,0,4,5,3)
+        ret = ret + get_v(ki, kk, kj, ka, kc, kb, a0, a1, c0, c1, b0, b1).transpose(0,2,1,3,5,4)
+        ret = ret + get_v(kk, kj, ki, kc, kb, ka, c0, c1, b0, b1, a0, a1).transpose(2,1,0,5,4,3)
+        ret = ret + get_v(kj, ki, kk, kb, ka, kc, b0, b1, a0, a1, c0, c1).transpose(1,0,2,4,3,5)
+        return ret
+
+    def get_data(kpt_indices):
+        idx_args = get_data_slices(kpt_indices, task, kconserv)
+        vvop_indices, vooo_indices, t2T_vvop_indices, t2T_vooo_indices = idx_args
+        vvop_data = [eris_vvop[tuple(x)] for x in vvop_indices]
+        vooo_data = [eris_vooo_C[tuple(x)] for x in vooo_indices]
+        t2T_vvop_data = [t2T[tuple(x)] for x in t2T_vvop_indices]
+        t2T_vooo_data = [t2T[tuple(x)] for x in t2T_vooo_indices]
+        data = [vvop_data, vooo_data, t2T_vvop_data, t2T_vooo_data]
+        return data
+
+    def add_and_permute(kpt_indices, orb_indices, data):
+        '''Performs permutation and addition of t3 temporary arrays.'''
+        ki, kj, kk, ka, kb, kc = kpt_indices
+        a0, a1, b0, b1, c0, c1 = orb_indices
+        tmp_t3Tv_ijk = np.asarray(data[0], dtype=dtype, order='C')
+        tmp_t3Tv_jik = np.asarray(data[1], dtype=dtype, order='C')
+        tmp_t3Tv_kji = np.asarray(data[2], dtype=dtype, order='C')
+        out_ijk = np.empty(data[0].shape, dtype=dtype, order='C')
+
+        #drv = _ccsd.libcc.MPICCadd_and_permute_t3T
+        #drv(ctypes.c_int(nocc), ctypes.c_int(nvir),
+        #    ctypes.c_int(0),
+        #    out_ijk.ctypes.data_as(ctypes.c_void_p),
+        #    tmp_t3Tv_ijk.ctypes.data_as(ctypes.c_void_p),
+        #    tmp_t3Tv_jik.ctypes.data_as(ctypes.c_void_p),
+        #    tmp_t3Tv_kji.ctypes.data_as(ctypes.c_void_p),
+        #    mo_offset.ctypes.data_as(ctypes.c_void_p),
+        #    slices.ctypes.data_as(ctypes.c_void_p))
+        return (2.*tmp_t3Tv_ijk -
+                   tmp_t3Tv_jik.transpose(0,1,2,4,3,5) -
+                   tmp_t3Tv_kji.transpose(0,1,2,5,4,3))
+        #return out_ijk
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
+
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - mem_now)
+    blkmin = 4
+    # temporary t3 array is size:    2 * nkpts**3 * blksize**3 * nocc**3 * 16
+    vir_blksize = min(nvir, max(blkmin, int((max_memory*.9e6/16/nocc**3/nkpts**3/  2)**(1./3))))
+    tasks = []
+    log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
+    log.debug('virtual blksize = %d (nvir = %d)', nvir, vir_blksize)
+    for a0, a1 in lib.prange(0, nvir, vir_blksize):
+        for b0, b1 in lib.prange(0, nvir, vir_blksize):
+            for c0, c1 in lib.prange(0, nvir, vir_blksize):
+                tasks.append((a0,a1,b0,b1,c0,c1))
+
+    for ka, kb in product(range(nkpts), repeat=2):
+        for task_id, task in enumerate(tasks):
+            a0,a1,b0,b1,c0,c1 = task
+            my_permuted_v = np.zeros((nkpts,)*3 + (a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
+            for ki, kj, kk in product(range(nkpts), repeat=3):
+                # Find momentum conservation condition for triples
+                # amplitude t3ijkabc
+                kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
+
+                kpt_indices = [ki,kj,kk,ka,kb,kc]
+                data = get_data(kpt_indices)
+                t3Tw, t3Tv = contract_t3Tv(kpt_indices, task, data)
+                my_permuted_v[ki,kj,kk] = get_permuted_v(ki,kj,kk,ka,kb,kc,task)
+
+            for ki, kj, kk in product(range(nkpts), repeat=3):
+                # eigenvalue denominator: e(i) + e(j) + e(k)
+                eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_e_o[0].dtype)
+                n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
+                eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])[n0_ovp_ijk]
+
+                # Find momentum conservation condition for triples
+                # amplitude t3ijkabc
+                kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
+
+                kpt_indices = [ki,kj,kk,ka,kb,kc]
+                eijkabc = (eijk[None,None,None,:,:,:] -
+                           mo_e_v[ka][a0:a1][:,None,None,None,None,None] -
+                           mo_e_v[kb][b0:b1][None,:,None,None,None,None] -
+                           mo_e_v[kc][c0:c1][None,None,:,None,None,None])
+
+                tmp_t3Tv_ijk = my_permuted_v[ki,kj,kk]
+                tmp_t3Tv_jik = my_permuted_v[kj,ki,kk]
+                tmp_t3Tv_kji = my_permuted_v[kk,kj,ki]
+                Ptmp_t3Tv = add_and_permute(kpt_indices, task,
+                                (tmp_t3Tv_ijk,tmp_t3Tv_jik,tmp_t3Tv_kji))
+
+    log.timer('EOM-CCSD(T) imds', *cpu0)
 
     delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
     lib.logger.info(cc, 'CCSD energy T3[2] correction : %16.12e', delta_ccsd_energy)
