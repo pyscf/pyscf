@@ -23,7 +23,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
-from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates
+from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates, gintermediates
 
 mol = gto.Mole()
 mol.atom = [
@@ -84,13 +84,13 @@ mycc2.__dict__.update(mycc.__dict__)
 mycc21.__dict__.update(mycc1.__dict__)
 eris21 = mycc21.ao2mo()
 
-mycc3 = ccsd.CCSD(mf)
-mycc31 = ccsd.CCSD(mf1)
-mycc3.__dict__.update(mycc.__dict__)
-mycc31.__dict__.update(mycc1.__dict__)
-mycc3 = mycc3.set(max_memory=0, direct=True)
-mycc31 = mycc31.set(max_memory=0, direct=True)
-eris31 = mycc31.ao2mo()
+#mycc3 = ccsd.CCSD(mf)
+#mycc31 = ccsd.CCSD(mf1)
+#mycc3.__dict__.update(mycc.__dict__)
+#mycc31.__dict__.update(mycc1.__dict__)
+#mycc3 = mycc3.set(max_memory=0, direct=True)
+#mycc31 = mycc31.set(max_memory=0, direct=True)
+#eris31 = mycc31.ao2mo()
 
 
 def tearDownModule():
@@ -815,6 +815,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(pt2), 46.19512409958347, 6)
         self.assertAlmostEqual(lib.finger(Wmcik), -18.47928005593598, 6)
         self.assertAlmostEqual(lib.finger(Wacek), -7.101360230151883, 6)
+
+    def test_t3p2_intermediates_against_so(self):
+        from pyscf.cc.addons import convert_to_gccsd
+        myt1 = mycc1.t1.copy()
+        myt2 = mycc1.t2.copy()
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
+
+        mygcc = convert_to_gccsd(mycc1)
+        mygt1 = mygcc.t1.copy()
+        mygt2 = mygcc.t2.copy()
+        ge, gpt1, gpt2, gWmcik, gWacek = gintermediates.get_t3p2_imds_slow(mygcc, mygt1, mygt2)
+        self.assertAlmostEqual(lib.finger(pt1), -2.6094405706617727, 6)
+        self.assertAlmostEqual(lib.finger(pt2), 23.097562049844235, 6)
+        self.assertAlmostEqual(lib.finger(pt1), lib.finger(gpt1[::2,::2]), 6)
+        self.assertAlmostEqual(lib.finger(pt2), lib.finger(gpt2[::2,1::2,::2,1::2]), 6)
 
     def test_h2o_star(self):
         mol_h2o = gto.Mole()
