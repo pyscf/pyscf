@@ -243,7 +243,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eea_gccsd[0][0], eea_rccsd[0][0], 9)
         self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 9)
 
-    def test_t3p2_intermediates_complex(self):
+    def test_t3p2_intermediates_complex_slow(self):
         rand_cc = pbcc.kccsd_rhf.RCCSD(rand_kmf)
         eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
@@ -251,8 +251,22 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds_slow(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.finger(e),47165803.3938429802656174+  0.0000000000000000j, 5)
+        self.assertAlmostEqual(lib.finger(e),47165803.39384298, 5)
+        self.assertAlmostEqual(lib.finger(pt1),10444.351837617747+20016.35108560657j, 5)
+        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 4)
+        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 5)
+        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 5)
+
+    def test_t3p2_intermediates_complex(self):
+        rand_cc = pbcc.kccsd_rhf.RCCSD(rand_kmf)
+        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
+        self.assertAlmostEqual(lib.finger(e),47165803.39386989, 5)
         self.assertAlmostEqual(lib.finger(pt1),10444.3518376177471509+20016.3510856065695407j, 5)
-        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 5)
+        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 4)
         self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 5)
         self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 5)

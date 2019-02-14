@@ -20,10 +20,14 @@
 import tempfile
 import numpy as np
 import h5py
+import time
 from itertools import product
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -479,22 +483,22 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     tmp_t3 = np.empty((nkpts, nkpts, nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir, nvir, nvir),
                       dtype = t2.dtype)
 
-    def get_v(ki, kj, kk, ka, kb, kc):
-        kd = kconserv[kb, kk, kc]
-        ret = lib.einsum('dkbc,ijad->ijkabc', eris.vovv[kd, kk, kb].conj(), t2[ki, kj, ka])
-        km = kconserv[ka, ki, kb]
-        ret -= lib.einsum('jkmc,imab->ijkabc', eris.ooov[kj, kk, km].conj(), t2[ki, km, ka])
+    def get_w(ki, kj, kk, ka, kb, kc):
+        kf = kconserv[ka,ki,kb]
+        ret = lib.einsum('fiba,kjcf->ijkabc', eris.vovv[kf, ki, kb].conj(), t2[kk, kj, kc])
+        km = kconserv[kc,kk,kb]
+        ret -= lib.einsum('jima,mkbc->ijkabc', eris.ooov[kj, ki, km].conj(), t2[km, kk, kb])
         return ret
 
     for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
         kc = kpts_helper.get_kconserv3(cc._scf.cell, cc.kpts,
                                        [ki, kj, kk, ka, kb])
-        tmp_t3[ki, kj, kk, ka, kb] = get_v(ki, kj, kk, ka, kb, kc)
-        tmp_t3[ki, kj, kk, ka, kb] += get_v(ki, kk, kj, ka, kc, kb).transpose(0, 2, 1, 3, 5, 4)
-        tmp_t3[ki, kj, kk, ka, kb] += get_v(kj, ki, kk, kb, ka, kc).transpose(1, 0, 2, 4, 3, 5)
-        tmp_t3[ki, kj, kk, ka, kb] += get_v(kj, kk, ki, kb, kc, ka).transpose(2, 0, 1, 5, 3, 4)
-        tmp_t3[ki, kj, kk, ka, kb] += get_v(kk, ki, kj, kc, ka, kb).transpose(1, 2, 0, 4, 5, 3)
-        tmp_t3[ki, kj, kk, ka, kb] += get_v(kk, kj, ki, kc, kb, ka).transpose(2, 1, 0, 5, 4, 3)
+        tmp_t3[ki, kj, kk, ka, kb] = get_w(ki, kj, kk, ka, kb, kc)
+        tmp_t3[ki, kj, kk, ka, kb] += get_w(ki, kk, kj, ka, kc, kb).transpose(0, 2, 1, 3, 5, 4)
+        tmp_t3[ki, kj, kk, ka, kb] += get_w(kj, ki, kk, kb, ka, kc).transpose(1, 0, 2, 4, 3, 5)
+        tmp_t3[ki, kj, kk, ka, kb] += get_w(kj, kk, ki, kb, kc, ka).transpose(2, 0, 1, 5, 3, 4)
+        tmp_t3[ki, kj, kk, ka, kb] += get_w(kk, ki, kj, kc, ka, kb).transpose(1, 2, 0, 4, 5, 3)
+        tmp_t3[ki, kj, kk, ka, kb] += get_w(kk, kj, ki, kc, kb, ka).transpose(2, 1, 0, 5, 4, 3)
 
         eijk = mo_e_o[ki][:, None, None] + mo_e_o[kj][None, :, None] + mo_e_o[kk][None, None, :]
         eabc = mo_e_v[ka][:, None, None] + mo_e_v[kb][None, :, None] + mo_e_v[kc][None, None, :]
@@ -620,15 +624,16 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
 
     return delta_ccsd_energy, pt1, pt2, Wmcik, Wacek
 
-def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
-    '''Adds term P(ia|jb)[tmp] to pt2..
 
-    P(ia|jb)(tmp[i,j,a,b]) = tmp[i,j,a,b] + tmp[j,i,b,a]
+def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
+    '''Adds term P(ia|jb)[tmp] to pt2.
+
+        P(ia|jb)(tmp[i,j,a,b]) = tmp[i,j,a,b] + tmp[j,i,b,a]
 
     or equivalently for each i,j,a,b, pt2 is defined as
 
-    pt2[i,j,a,b] += tmp[i,j,a,b]
-    pt2[j,i,b,a] += tmp[i,j,a,b].transpose(1,0,3,2)
+        pt2[i,j,a,b] += tmp[i,j,a,b]
+        pt2[j,i,b,a] += tmp[i,j,a,b].transpose(1,0,3,2)
 
     If pt2 is lower-triangular, only adds the RHS term that contributes
     to the lower-triangular pt2.
@@ -652,7 +657,7 @@ def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
                               for x in orb_indices]
     if len(pt2.shape) == 7 and pt2.shape[:2] == (nkpts, nkpts):
         pt2[ki,kj,ka,idxi,idxj,idxa,idxb] += val
-        pt2[kj,ki,kb,idxi,idxj,idxb,idxa] += val.transpose(1,0,3,2)
+        pt2[kj,ki,kb,idxj,idxi,idxb,idxa] += val.transpose(1,0,3,2)
     elif len(pt2.shape) == 6 and pt2.shape[:2] == (nkpts*(nkpts+1)//2, nkpts):
         if ki <= kj:  # Add tmp[i,j,a,b] to pt2[i,j,a,b]
             idx = (kj*(kj+1))//2 + ki
@@ -665,28 +670,31 @@ def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
     else:
         raise ValueError('No known conversion for t2 shape %s' % t2.shape)
 
-def get_t3p2_imds(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
+
+def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     """For a description of arguments, see `get_t3p2_imds_slow` in
     the corresponding `kintermediates.py`.
     """
     cpu1 = cpu0 = (time.clock(), time.time())
     if eris is None:
-        eris = cc.ao2mo()
+        eris = mycc.ao2mo()
     fock = eris.fock
     nkpts, nocc, nvir = t1.shape
-    kconserv = cc.khelper.kconserv
+    cell = mycc._scf.cell
+    kpts = mycc.kpts
+    kconserv = mycc.khelper.kconserv
     dtype = np.result_type(t1, t2)
 
     fov = fock[:, :nocc, nocc:]
-    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
-    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    foo = np.asarray([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    fvv = np.asarray([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
     mo_e_o = mo_energy_occ
     mo_e_v = mo_energy_vir
 
-    ccsd_energy = cc.energy(t1, t2, eris)
+    ccsd_energy = mycc.energy(t1, t2, eris)
 
     if t3p2_ip_out is None:
         t3p2_ip_out = np.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc),dtype=dtype)
@@ -697,45 +705,34 @@ def get_t3p2_imds(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     Wacek = t3p2_ea_out
 
     # Create necessary temporary eris for fast read
-    feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv,  [eris.vovv, eris.oovv, eris.ooov, t2])
+    from kccsd_t_rhf import create_t3_eris, get_data_slices
+    feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
     t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
     fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
-    cpu1 = log.timer_debug1('CCSD(T) tmp eri creation', *cpu1)
+    cpu1 = logger.timer_debug1(mycc, 'CCSD(T) tmp eri creation', *cpu1)
 
-    def get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
-        '''Vijkabc intermediate as described in Scuseria paper.
+    def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
+        '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts
 
         Function copied for `kccsd_t_rhf.py`'''
-        km = kconserv[ki,ka,kj]
-        kf = kconserv[ki,ka,kj]
-        out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
-        if kk == kc:
-            out = out + einsum('ck,baji->abcijk', 0.5*t1T[kk,c0:c1,:], eris_vvop[kb,ka,kj,b0:b1,a0:a1,:,:nocc])
-            # We see this is the same t2T term needed for the `w` contraction:
-            #     einsum('cbmk,aijm->abcijk', t2T[kc,kb,km,c0:c1,b0:b1], eris_vooo_C[ka,ki,kj,a0:a1])
-            #
-            # For the kpoint indices [kk,ki,kj,kc,ka,kb] we have that we need
-            #     t2T[kb,ka,km], where km = kconserv[kb,kj,ka]
-            # The remaining k-point not used in t2T, i.e. kc, has the condition kc == kk in the case of
-            # get_v.  So, we have from 3-particle conservation
-            #     (kk-kc) + ki + kj - ka - kb = 0,
-            # i.e. ki = km.
-            out = out + einsum('ck,baij->abcijk', 0.5*fvo[kk,c0:c1,:], t2T[kb,ka,ki,b0:b1,a0:a1,:,:])
+        km = kconserv[kc, kk, kb]
+        kf = kconserv[kk, kc, kj]
+        out = einsum('cfjk,abif->abcijk', t2T[kc,kf,kj,c0:c1,:,:,:], eris_vvop[ka,kb,ki,a0:a1,b0:b1,:,nocc:])
+        out = out - einsum('cbmk,aijm->abcijk', t2T[kc,kb,km,c0:c1,b0:b1,:,:], eris_vooo_C[ka,ki,kj,a0:a1,:,:,:])
         return out
 
-    def get_permuted_v(ki, kj, kk, ka, kb, kc, orb_indices):
-        '''Pijkabc operating on Vijkabc intermediate as described in Scuseria paper
+    def get_permuted_w(ki, kj, kk, ka, kb, kc, orb_indices):
+        '''Pijkabc operating on Wijkabc intermediate as described in Scuseria paper
 
         Function copied for `kccsd_t_rhf.py`'''
         a0, a1, b0, b1, c0, c1 = orb_indices
-        tmp = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
-        ret = get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1)
-        ret = ret + get_v(kj, kk, ki, kb, kc, ka, b0, b1, c0, c1, a0, a1).transpose(2,0,1,5,3,4)
-        ret = ret + get_v(kk, ki, kj, kc, ka, kb, c0, c1, a0, a1, b0, b1).transpose(1,2,0,4,5,3)
-        ret = ret + get_v(ki, kk, kj, ka, kc, kb, a0, a1, c0, c1, b0, b1).transpose(0,2,1,3,5,4)
-        ret = ret + get_v(kk, kj, ki, kc, kb, ka, c0, c1, b0, b1, a0, a1).transpose(2,1,0,5,4,3)
-        ret = ret + get_v(kj, ki, kk, kb, ka, kc, b0, b1, a0, a1, c0, c1).transpose(1,0,2,4,3,5)
-        return ret
+        out = get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1)
+        out = out + get_w(kj, kk, ki, kb, kc, ka, b0, b1, c0, c1, a0, a1).transpose(2,0,1,5,3,4)
+        out = out + get_w(kk, ki, kj, kc, ka, kb, c0, c1, a0, a1, b0, b1).transpose(1,2,0,4,5,3)
+        out = out + get_w(ki, kk, kj, ka, kc, kb, a0, a1, c0, c1, b0, b1).transpose(0,2,1,3,5,4)
+        out = out + get_w(kk, kj, ki, kc, kb, ka, c0, c1, b0, b1, a0, a1).transpose(2,1,0,5,4,3)
+        out = out + get_w(kj, ki, kk, kb, ka, kc, b0, b1, a0, a1, c0, c1).transpose(1,0,2,4,3,5)
+        return out
 
     def get_data(kpt_indices):
         idx_args = get_data_slices(kpt_indices, task, kconserv)
@@ -776,20 +773,29 @@ def get_t3p2_imds(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
     blkmin = 4
-    # temporary t3 array is size:    2 * nkpts**3 * blksize**3 * nocc**3 * 16
-    vir_blksize = min(nvir, max(blkmin, int((max_memory*.9e6/16/nocc**3/nkpts**3/  2)**(1./3))))
+    # temporary t3 array is size:  nkpts**3 * blksize**3 * nocc**3 * 16
+    vir_blksize = min(nvir, max(blkmin, int((max_memory*.9e6/16/nocc**3/nkpts**3)**(1./3))))
     tasks = []
-    log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    log.debug('virtual blksize = %d (nvir = %d)', nvir, vir_blksize)
+    logger.debug(mycc, 'max_memory %d MB (%d MB in use)', max_memory, mem_now)
+    logger.debug(mycc, 'virtual blksize = %d (nvir = %d)', nvir, vir_blksize)
     for a0, a1 in lib.prange(0, nvir, vir_blksize):
         for b0, b1 in lib.prange(0, nvir, vir_blksize):
             for c0, c1 in lib.prange(0, nvir, vir_blksize):
                 tasks.append((a0,a1,b0,b1,c0,c1))
 
+    eaa = []
+    for ka in range(nkpts):
+        eaa.append(mo_e_o[ka][:, None] - mo_e_v[ka][None, :])
+
+    pt1 = np.zeros((nkpts,nocc,nvir), dtype=dtype)
+    pt2 = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+    print ""
     for ka, kb in product(range(nkpts), repeat=2):
         for task_id, task in enumerate(tasks):
+            cput2 = (time.clock(), time.time())
             a0,a1,b0,b1,c0,c1 = task
-            my_permuted_v = np.zeros((nkpts,)*3 + (a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
+            my_permuted_w = np.zeros((nkpts,)*3 + (a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
+
             for ki, kj, kk in product(range(nkpts), repeat=3):
                 # Find momentum conservation condition for triples
                 # amplitude t3ijkabc
@@ -797,8 +803,7 @@ def get_t3p2_imds(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
 
                 kpt_indices = [ki,kj,kk,ka,kb,kc]
                 data = get_data(kpt_indices)
-                t3Tw, t3Tv = contract_t3Tv(kpt_indices, task, data)
-                my_permuted_v[ki,kj,kk] = get_permuted_v(ki,kj,kk,ka,kb,kc,task)
+                my_permuted_w[ki,kj,kk] = get_permuted_w(ki,kj,kk,ka,kb,kc,task)
 
             for ki, kj, kk in product(range(nkpts), repeat=3):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
@@ -811,20 +816,67 @@ def get_t3p2_imds(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
                 kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
 
                 kpt_indices = [ki,kj,kk,ka,kb,kc]
-                eijkabc = (eijk[None,None,None,:,:,:] -
+                eabcijk = (eijk[None,None,None,:,:,:] -
                            mo_e_v[ka][a0:a1][:,None,None,None,None,None] -
                            mo_e_v[kb][b0:b1][None,:,None,None,None,None] -
                            mo_e_v[kc][c0:c1][None,None,:,None,None,None])
 
-                tmp_t3Tv_ijk = my_permuted_v[ki,kj,kk]
-                tmp_t3Tv_jik = my_permuted_v[kj,ki,kk]
-                tmp_t3Tv_kji = my_permuted_v[kk,kj,ki]
+                tmp_t3Tv_ijk = my_permuted_w[ki,kj,kk]
+                tmp_t3Tv_jik = my_permuted_w[kj,ki,kk]
+                tmp_t3Tv_kji = my_permuted_w[kk,kj,ki]
                 Ptmp_t3Tv = add_and_permute(kpt_indices, task,
                                 (tmp_t3Tv_ijk,tmp_t3Tv_jik,tmp_t3Tv_kji))
+                Ptmp_t3Tv /= eabcijk
 
-    log.timer('EOM-CCSD(T) imds', *cpu0)
+                # Contribution to T1 amplitudes
+                if ki == ka and kc == kconserv[kj, kb, kk]:
+                    eris_Soovv = (2.*eris.oovv[kj,kk,kb,:,:,b0:b1,c0:c1] -
+                                     eris.oovv[kj,kk,kc,:,:,c0:c1,b0:b1].transpose(0,1,3,2))
+                    pt1[ka,:,a0:a1] += 0.5*einsum('abcijk,jkbc->ia', Ptmp_t3Tv,
+                                                  eris_Soovv) / eaa[ka][:,a0:a1]
 
-    delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
-    lib.logger.info(cc, 'CCSD energy T3[2] correction : %16.12e', delta_ccsd_energy)
+                # Contribution to T2 amplitudes
+                if ki == ka and kc == kconserv[kj, kb, kk]:
+                    ejkbc = (mo_e_o[kj][:,None,None,None] + mo_e_o[kk][None,:,None,None] -
+                             mo_e_v[kb,b0:b1][None,None,:,None] - mo_e_v[kc,c0:c1][None,None,None,:])
+                    tmp = einsum('abcijk,ia->jkbc', Ptmp_t3Tv, 0.5*fov[ki,:,a0:a1]) / ejkbc
+                    _add_pt2(pt2, nkpts, kconserv, [kj,kk,kb], [None,None,(b0,b1),(c0,c1)], tmp)
+
+                kd = kconserv[ka,ki,kb]
+                eris_vovv = eris.vovv[kd,ki,kb,:,:,b0:b1,a0:a1]
+                ejkdc = (mo_e_o[kj][:,None,None,None] + mo_e_o[kk][None,:,None,None] -
+                         mo_e_v[kd][None,None,:,None] - mo_e_v[kc,c0:c1][None,None,None,:])
+                tmp = einsum('abcijk,diba->jkdc', Ptmp_t3Tv, eris_vovv) / ejkdc
+                _add_pt2(pt2, nkpts, kconserv, [kj,kk,kd], [None,None,None,(c0,c1)], tmp)
+
+                km = kconserv[kc, kk, kb]
+                eris_ooov = eris.ooov[kj,ki,km,:,:,:,a0:a1]
+                emkbc = (mo_e_o[km][:,None,None,None] + mo_e_o[kk][None,:,None,None] -
+                         mo_e_v[kb,b0:b1][None,None,:,None] - mo_e_v[kc,c0:c1][None,None,None,:])
+                tmp = einsum('abcijk,jima->mkbc', Ptmp_t3Tv, eris_ooov) / emkbc
+                _add_pt2(pt2, nkpts, kconserv, [km,kk,kb], [None,None,(b0,b1),(c0,c1)], -1.*tmp)
+
+                # Contribution to Wovoo array
+                km = kconserv[ka,ki,kc]
+                eris_oovv = eris.oovv[km,ki,kc]
+                tmp = einsum('abcijk,mica->mbkj', Ptmp_t3Tv, eris_oovv)
+                Wmcik[km,kb,kk,:,b0:b1,:,:] += tmp
+
+                # Contribution to Wvvoo array
+                ke = kconserv[ki,ka,kk]
+                eris_oovv = eris.oovv[ki,kk,ka]
+                tmp = einsum('abcijk,ikae->cbej', Ptmp_t3Tv, eris_oovv)
+                Wacek[kc,kb,ke,:,c0:c1,b0:b1,:] -= tmp
+
+            logger.timer_debug1(mycc, 'EOM-CCSD T3[2] ka,kb,vir=(%d,%d,%d/%d) [total=%d]'%
+                                (ka,kb,task_id,len(tasks),nkpts**5), *cput2)
+
+    pt1 += t1
+    pt2 += t2
+
+    logger.timer(mycc, 'EOM-CCSD(T) imds', *cpu0)
+
+    delta_ccsd_energy = mycc.energy(pt1, pt2, eris) - ccsd_energy
+    logger.info(mycc, 'CCSD energy T3[2] correction : %16.12e', delta_ccsd_energy)
 
     return delta_ccsd_energy, pt1, pt2, Wmcik, Wacek
