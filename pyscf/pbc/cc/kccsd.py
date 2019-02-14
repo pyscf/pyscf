@@ -231,7 +231,11 @@ def spatial2spin(tx, orbspin, kconserv):
         return spatial2spin((tx,tx), orbspin, kconserv)
     elif isinstance(tx, numpy.ndarray) and tx.ndim == 7:
         # KRCCSD t2 amplitudes
-        t2aa = tx - tx.transpose(0,1,2,4,3,5,6)
+        t2aa = numpy.zeros_like(tx)
+        nkpts = t2aa.shape[2]
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            t2aa[ki,kj,ka] = tx[ki,kj,ka] - tx[ki,kj,kb].transpose(0,1,3,2)
         return spatial2spin((t2aa,tx,t2aa), orbspin, kconserv)
     elif len(tx) == 2:  # KUCCSD t1
         t1a, t1b = tx

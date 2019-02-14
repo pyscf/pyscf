@@ -409,7 +409,7 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
         out = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=ooov.dtype)
 
     for ki, kj, ka in product(range(nkpts), repeat=3):
-        kb = kconserv[ki,ka,kj]
+        kb = kconserv[ki,kj,ka]
         # <bj|ai> -> (ba|ji)    (Physicist->Chemist)
         # (ij|ab) = (ba|ij)*    (Permutational symmetry)
         # out = (ij|ab).transpose(0,1,3,2)
@@ -457,7 +457,7 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
     if (unit*16 < max_memory):  # Store all in memory
         t2T = t2T[:]
         eris_vvop = eris_vvop[:]
-        eris_vooo_C[:]
+        eris_vooo_C = eris_vooo_C[:]
 
     return feri_tmp, t2T, eris_vvop, eris_vooo_C
 
