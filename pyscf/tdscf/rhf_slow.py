@@ -168,7 +168,7 @@ class TDDFTMatrixBlocks(object):
         Returns:
             The matrix.
         """
-        return 2 * self["mnkj"] - self["mnjk"]
+        return self.tdhf_b().conj()
 
     def tdhf_matrix(self, *args, **kwargs):
         """
