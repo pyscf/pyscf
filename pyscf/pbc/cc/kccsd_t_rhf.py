@@ -284,10 +284,10 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                     kpt_indices = [ki,kj,kk,ka,kb,kc]
                     data = get_data(kpt_indices)
                     t3Tw, t3Tv = contract_t3Tv(kpt_indices, task, data)
-                    my_permuted_w[ki,kj,kk] = t3Tw
-                    my_permuted_v[ki,kj,kk] = t3Tv
-                    #my_permuted_w[ki,kj,kk] = get_permuted_w(ki,kj,kk,ka,kb,kc,task)
-                    #my_permuted_v[ki,kj,kk] = get_permuted_v(ki,kj,kk,ka,kb,kc,task)
+                    #my_permuted_w[ki,kj,kk] = t3Tw
+                    #my_permuted_v[ki,kj,kk] = t3Tv
+                    my_permuted_w[ki,kj,kk] = get_permuted_w(ki,kj,kk,ka,kb,kc,task)
+                    my_permuted_v[ki,kj,kk] = get_permuted_v(ki,kj,kk,ka,kb,kc,task)
 
                 for ki, kj, kk in product(range(nkpts), repeat=3):
                     # eigenvalue denominator: e(i) + e(j) + e(k)
@@ -321,7 +321,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                              2. * my_permuted_w[kk,kj,ki].transpose(0,1,2,5,4,3) -
                              2. * my_permuted_w[kj,ki,kk].transpose(0,1,2,4,3,5))
                     rwijk = rwijk / eijkabc
-                    energy_t += symm_kpt * einsum('abcijk,abcijk', pwijk, rwijk.conj())
+                    energy_t += symm_kpt * einsum('abcijk,abcijk', rwijk, pwijk.conj())
 
     energy_t *= (1. / 3)
     energy_t /= nkpts
@@ -550,30 +550,6 @@ def get_data_slices(kpt_indices, orb_indices, kconserv):
 
     return vvop_indices, vooo_indices, t2T_vvop_indices, t2T_vooo_indices
 
-# Gamma point calculation
-#
-# Parameters
-# ----------
-#     mesh : [24, 24, 24]
-#     kpt  : [1, 1, 2]
-# Returns
-# -------
-#     SCF     : -8.65192329453 Hartree per cell
-#     CCSD    : -0.15529836941 Hartree per cell
-#     CCSD(T) : -0.00191451068 Hartree per cell
-
-# Gamma point calculation
-#
-# Parameters
-# ----------
-#     mesh : [24, 24, 24]
-#     kpt  : [1, 1, 3]
-# Returns
-# -------
-#     SCF     : -9.45719492074 Hartree per cell
-#     CCSD    : -0.16615913445 Hartree per cell
-#     CCSD(T) : -0.00403785264 Hartree per cell
-
 if __name__ == '__main__':
     from pyscf.pbc import gto
     from pyscf.pbc import scf
@@ -591,11 +567,12 @@ if __name__ == '__main__':
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
-    cell.verbose = 3
+    cell.verbose = 4
     cell.mesh = [24, 24, 24]
     cell.build()
 
-    kpts = cell.make_kpts([1, 1, 3])
+    nmp = [1,1,4]
+    kpts = cell.make_kpts(nmp)
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
     kmf.conv_tol = 1e-12
@@ -607,3 +584,22 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     ecc, t1, t2 = mycc.kernel(eris=eris)
     energy_t = kernel(mycc, eris=eris, verbose=9)
+
+    # Start of supercell calculations
+    from pyscf.pbc.tools.pbc import super_cell
+    supcell = super_cell(cell, nmp)
+    supcell.build()
+    kmf = scf.RHF(supcell, exxdiv=None)
+    kmf.conv_tol = 1e-12
+    kmf.conv_tol_grad = 1e-12
+    kmf.direct_scf_tol = 1e-16
+    sup_ehf = kmf.kernel()
+
+    myscc = cc.RCCSD(kmf)
+    eris = myscc.ao2mo()
+    sup_ecc, t1, t2 = myscc.kernel(eris=eris)
+    sup_energy_t = myscc.ccsd_t(eris=eris)
+    print "Kpoint    CCSD: %20.16f" % ecc
+    print "Supercell CCSD: %20.16f" % (sup_ecc/np.prod(nmp))
+    print "Kpoint    CCSD(T): %20.16f" % energy_t
+    print "Supercell CCSD(T): %20.16f" % (sup_energy_t/np.prod(nmp))

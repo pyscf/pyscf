@@ -87,29 +87,15 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
 
-    # Create necessary temporary eris for fast read
-    feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(nkpts, nocc, nvir, kconserv)
-    t1T = np.array([x.T for x in t1])
-    fvo = np.array([x.T for x in fov])
     cpu1 = log.timer_debug1('CCSD(T) tmp eri creation', *cpu1)
 
-    def get_w_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1, out=None):
+    def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1, out=None):
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts'''
         km = kconserv[ki, ka, kj]
         kf = kconserv[kk, kc, kj]
         ret = einsum('kjcf,fiba->abcijk', t2[kk,kj,kc,:,:,c0:c1,:], eris.vovv[kf,ki,kb,:,:,b0:b1,a0:a1].conj())
         ret = ret - einsum('mkbc,jima->abcijk', t2[km,kk,kb,:,:,b0:b1,c0:c1], eris.ooov[kj,ki,km,:,:,:,a0:a1].conj())
         return ret
-
-    def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
-        '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts
-
-        Uses tranposed eris for fast data access.'''
-        km = kconserv[ki, ka, kj]
-        kf = kconserv[kk, kc, kj]
-        out = einsum('cfjk,abif->abcijk', t2T[kc,kf,kj,c0:c1,:,:,:], eris_vvop[ka,kb,ki,a0:a1,b0:b1,:,nocc:])
-        out = out - einsum('bckm,aijm->abcijk', t2T[kb,kc,kk,b0:b1,c0:c1,:,:], eris_vooo_C[ka,ki,kj,a0:a1,:,:,:])
-        return out
 
     def get_permuted_w(ki, kj, kk, ka, kb, kc, orb_indices):
         '''Pijkabc operating on Wijkabc intermediate as described in Scuseria paper'''
@@ -133,7 +119,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                2. * get_permuted_w(kj,ki,kk,ka,kb,kc,orb_indices).transpose(0,1,2,4,3,5))
         return ret
 
-    def get_v_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
+    def get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
         '''Vijkabc intermediate as described in Scuseria paper'''
         km = kconserv[ki,ka,kj]
         kf = kconserv[ki,ka,kj]
@@ -141,16 +127,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         if kk == kc:
             out = out + einsum('kc,ijab->abcijk', t1[kk,:,c0:c1], eris.oovv[ki,kj,ka,:,:,a0:a1,b0:b1].conj())
             out = out + einsum('kc,ijab->abcijk', fov[kk,:,c0:c1], t2[ki,kj,ka,:,:,a0:a1,b0:b1])
-        return out
-
-    def get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
-        '''Vijkabc intermediate as described in Scuseria paper'''
-        km = kconserv[ki,ka,kj]
-        kf = kconserv[ki,ka,kj]
-        out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
-        if kk == kc:
-            out = out + einsum('ck,baji->abcijk', t1T[kk,c0:c1,:], eris_vvop[kb,ka,kj,b0:b1,a0:a1,:,:nocc])
-            out = out + einsum('ck,abji->abcijk', fvo[kk,c0:c1,:], t2T[ka,kb,kj,a0:a1,b0:b1,:,:])
         return out
 
     def get_permuted_v(ki, kj, kk, ka, kb, kc, orb_indices):
@@ -227,150 +203,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     log.note('CCSD(T) correction per cell (imag) = %.15g', energy_t.imag)
     return energy_t.real
 
-###################################
-# Helper function for t3 creation
-###################################
-
-def check_read_success(filename, **kwargs):
-    '''Determine criterion for successfully reading a dataset based on its
-    meta values.
-
-    For now, returns False.'''
-    def check_write_complete(filename, **kwargs):
-        '''Check for `completed` attr in file.'''
-        import os
-        mode = kwargs.get('mode', 'r')
-        if not os.path.isfile(filename):
-            return False
-        f = h5py.File(filename, mode=mode, **kwargs)
-        return f.attrs.get('completed', False)
-    write_complete = check_write_complete(filename, **kwargs)
-    return False and write_complete
-
-
-def transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=None):
-    '''Creates t2.transpose(2,3,1,0).'''
-    if out is None:
-        out = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=t2.dtype)
-
-    # Check if it's stored in lower triangular form
-    if len(t2.shape) == 7 and t2.shape[:2] == (nkpts, nkpts):
-        for ki, kj, ka in product(range(nkpts), repeat=3):
-            kb = kconserv[ki,ka,kj]
-            out[ka,kb,kj] = t2[ki,kj,ka].transpose(2,3,1,0)
-    elif len(t2.shape) == 6 and t2.shape[:2] == (nkpts*(nkpts+1)//2, nkpts):
-        for ki, kj, ka in product(range(nkpts), repeat=3):
-            kb = kconserv[ki,ka,kj]
-            # t2[ki,kj,ka] = t2[tril_index(ki,kj),ka]  ki<kj
-            # t2[kj,ki,kb] = t2[ki,kj,ka].transpose(1,0,3,2)  ki<kj
-            #              = t2[tril_index(ki,kj),ka].transpose(1,0,3,2)
-            if ki <= kj:
-                tril_idx = (kj*(kj+1))//2 + ki
-                out[ka,kb,kj] = t2[tril_idx,ka].transpose(2,3,1,0).copy()
-                out[kb,ka,ki] = out[ka,kb,kj].transpose(1,0,3,2)
-    else:
-        raise ValueError('No known conversion for t2 shape %s' % t2.shape)
-    return out
-
-
-def create_eris_vvop(vovv, oovv, nkpts, nocc, nvir, kconserv, out=None):
-    '''Creates vvop from vovv and oovv array (physicist notation).'''
-    nmo = nocc + nvir
-    assert(vovv.shape == (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir))
-    if out is None:
-        out = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=vovv.dtype)
-    else:
-        assert(out.shape == (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo))
-
-    for ki, kj, ka in product(range(nkpts), repeat=3):
-        kb = kconserv[ki,ka,kj]
-        out[ki,kj,ka,:,:,:,nocc:] = vovv[kb,ka,kj].conj().transpose(3,2,1,0)
-        if oovv is not None:
-            out[ki,kj,ka,:,:,:,:nocc] = oovv[kb,ka,kj].conj().transpose(3,2,1,0)
-    return out
-
-
-def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
-    '''Creates vooo from ooov array.
-
-    This is not exactly chemist's notation, but close.  Here a chemist notation vooo
-    is created from physicist ooov, and then the last two indices of vooo are swapped.
-    '''
-    assert(ooov.shape == (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir))
-    if out is None:
-        out = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=ooov.dtype)
-
-    for ki, kj, ka in product(range(nkpts), repeat=3):
-        kb = kconserv[ki,ka,kj]
-        # <bj|ai> -> (ba|ji)    (Physicist->Chemist)
-        # (ij|ab) = (ba|ij)*    (Permutational symmetry)
-        # out = (ij|ab).transpose(0,1,3,2)
-        out[ki,kj,kb] = ooov[kb,kj,ka].conj().transpose(3,1,0,2)
-    return out
-
-
-def create_t3_eris(nkpts, nocc, nvir, kconserv, tmpfile='tmp_t3_eris.h5', dtype=np.complex):
-    '''Create/transpose necessary eri integrals needed for fast read-in by CCSD(T).'''
-    nmo = nocc + nvir
-    feri_tmp = None
-    h5py_kwargs = {}
-    feri_tmp_filename = tmpfile
-    if not check_read_success(feri_tmp_filename):
-        feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'w', **h5py_kwargs)
-        t2T_out = feri_tmp.create_dataset('t2T',
-                      (nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=dtype)
-        eris_vvop_out = feri_tmp.create_dataset('vvop',
-                            (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=dtype)
-        eris_vooo_C_out = feri_tmp.create_dataset('vooo_C',
-                              (nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=dtype)
-
-        transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=t2T_out)
-        create_eris_vvop(eris.vovv, eris.oovv, nkpts, nocc, nvir, kconserv, out=eris_vvop_out)
-        create_eris_vooo(eris.ooov, nkpts, nocc, nvir, kconserv, out=eris_vooo_C_out)
-
-        feri_tmp.attrs['completed'] = True
-        feri_tmp.close()
-
-    feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'r', **h5py_kwargs)
-    t2T = feri_tmp['t2T']
-    eris_vvop = feri_tmp['vvop']
-    eris_vooo_C = feri_tmp['vooo_C']
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(0, mycc.max_memory - mem_now)
-    unit = nkpts**3 * (nvir**2 * nocc**2 + nvir**2 * nmo * nocc + nvir * nocc**3)
-    if (unit*16 < max_memory):  # Store all in memory
-        t2T = t2T[:]
-        eris_vvop = eris_vvop[:]
-        eris_vooo_C[:]
-
-    return feri_tmp, t2T, eris_vvop, eris_vooo_C
-
-
-# Gamma point calculation
-#
-# Parameters
-# ----------
-#     mesh : [24, 24, 24]
-#     kpt  : [1, 1, 2]
-# Returns
-# -------
-#     SCF     : -8.65192329453 Hartree per cell
-#     CCSD    : -0.15529836941 Hartree per cell
-#     CCSD(T) : -0.00191451068 Hartree per cell
-
-# Gamma point calculation
-#
-# Parameters
-# ----------
-#     mesh : [24, 24, 24]
-#     kpt  : [1, 1, 3]
-# Returns
-# -------
-#     SCF     : -9.45719492074 Hartree per cell
-#     CCSD    : -0.16615913445 Hartree per cell
-#     CCSD(T) : -0.00403785264 Hartree per cell
-
 if __name__ == '__main__':
     from pyscf.pbc import gto
     from pyscf.pbc import scf
@@ -395,12 +227,35 @@ if __name__ == '__main__':
     cell.mesh = [24, 24, 24]
     cell.build()
 
-    kpts = cell.make_kpts([1, 1, 3])
+    nmp = [1,1,4]
+    kpts = cell.make_kpts(nmp)
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
+    kmf.conv_tol = 1e-12
+    kmf.conv_tol_grad = 1e-12
+    kmf.direct_scf_tol = 1e-16
     ehf = kmf.kernel()
 
     mycc = cc.KRCCSD(kmf)
     eris = mycc.ao2mo()
     ecc, t1, t2 = mycc.kernel(eris=eris)
     energy_t = kernel(mycc, eris=eris, verbose=9)
+
+    # Start of supercell calculations
+    from pyscf.pbc.tools.pbc import super_cell
+    supcell = super_cell(cell, nmp)
+    supcell.build()
+    kmf = scf.RHF(supcell, exxdiv=None)
+    kmf.conv_tol = 1e-12
+    kmf.conv_tol_grad = 1e-12
+    kmf.direct_scf_tol = 1e-16
+    sup_ehf = kmf.kernel()
+
+    myscc = cc.RCCSD(kmf)
+    eris = myscc.ao2mo()
+    sup_ecc, t1, t2 = myscc.kernel(eris=eris)
+    sup_energy_t = myscc.ccsd_t(eris=eris)
+    print "Kpoint    CCSD: %20.16f" % ecc
+    print "Supercell CCSD: %20.16f" % (sup_ecc/np.prod(nmp))
+    print "Kpoint    CCSD(T): %20.16f" % energy_t
+    print "Supercell CCSD(T): %20.16f" % (sup_energy_t/np.prod(nmp))
