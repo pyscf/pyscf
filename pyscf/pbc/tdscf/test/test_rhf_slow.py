@@ -2,7 +2,7 @@ from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF
 from pyscf.pbc.tdscf import TDHF
 from pyscf.pbc.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, TDRHF
-from pyscf.tdscf.rhf_slow import eig
+from pyscf.tdscf.common_slow import eig
 
 from test_common import retrieve_m, retrieve_m_hf, assert_vectors_close
 
@@ -53,7 +53,7 @@ class DiamondTestGamma(unittest.TestCase):
         for eri in (PhysERI, PhysERI4, PhysERI8):
             try:
                 e = eri(self.model_rhf)
-                m = e.tdhf_matrix()
+                m = e.tdhf_full_form()
 
                 # Test matrix vs ref
                 testing.assert_allclose(m, retrieve_m_hf(e), atol=1e-14)
@@ -95,7 +95,7 @@ class DiamondTestGamma(unittest.TestCase):
         p = numpy.exp(2.j * numpy.pi * numpy.random.rand(model_rhf.mo_coeff.shape[1]))
         model_rhf.mo_coeff = model_rhf.mo_coeff * p[numpy.newaxis, :]
 
-        m_ref = PhysERI(model_rhf).tdhf_matrix()
+        m_ref = PhysERI(model_rhf).tdhf_full_form()
 
         td_model_rhf = TDRHF(model_rhf)
         assert not td_model_rhf.fast
@@ -105,6 +105,6 @@ class DiamondTestGamma(unittest.TestCase):
             td_model_rhf.kernel()
 
         self.assertIsInstance(td_model_rhf.eri, PhysERI4)
-        m = td_model_rhf.eri.tdhf_matrix()
+        m = td_model_rhf.eri.tdhf_full_form()
 
         testing.assert_allclose(m, m_ref, atol=1e-14)
