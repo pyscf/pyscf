@@ -259,7 +259,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     foo = fock[:nocc, :nocc].diagonal()
     fvv = fock[nocc:, nocc:].diagonal()
     dtype = np.result_type(t1, t2)
-    if np.issubdtype(dtype, np.complex):
+    if np.issubdtype(dtype, np.dtype(complex).type):
         logger.warn(cc, 't3p2 imds has not been strictly checked for use with complex integrals')
 
     mo_e_o = eris.mo_energy[:nocc]
