@@ -2,7 +2,7 @@ from pyscf.gto import Mole
 from pyscf.scf import RHF
 from pyscf.tdscf import TDHF
 from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, TDRHF
-from pyscf.tdscf.common_slow import eig
+from pyscf.tdscf.common_slow import eig, full2ab, ab2full, full2mkk, mkk2full, ab2mkk, mkk2ab
 
 import numpy
 from numpy import testing
@@ -40,6 +40,31 @@ class H20Test(unittest.TestCase):
         del cls.td_model_rhf
         del cls.model_rhf
         del cls.mol
+
+    def test_conversion(self):
+        """Tests common conversions."""
+        e = PhysERI(self.model_rhf)
+
+        full = e.tdhf_full_form()
+        a, b = e.tdhf_ab_form()
+        mk, k = e.tdhf_mk_form()
+
+        testing.assert_allclose(full, ab2full(a, b))
+        testing.assert_allclose(full, mkk2full(mk, k))
+
+        _a, _b = full2ab(full)
+        testing.assert_allclose(a, _a)
+        testing.assert_allclose(b, _b)
+        _a, _b = mkk2ab(mk, k)
+        testing.assert_allclose(a, _a)
+        testing.assert_allclose(b, _b)
+
+        _mk, _k = full2mkk(full)
+        testing.assert_allclose(mk, _mk)
+        testing.assert_allclose(k, _k)
+        _mk, _k = ab2mkk(a, b)
+        testing.assert_allclose(mk, _mk)
+        testing.assert_allclose(k, _k)
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
