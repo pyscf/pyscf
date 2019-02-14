@@ -284,10 +284,10 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                     kpt_indices = [ki,kj,kk,ka,kb,kc]
                     data = get_data(kpt_indices)
                     t3Tw, t3Tv = contract_t3Tv(kpt_indices, task, data)
-                    #my_permuted_w[ki,kj,kk] = t3Tw
-                    #my_permuted_v[ki,kj,kk] = t3Tv
-                    my_permuted_w[ki,kj,kk] = get_permuted_w(ki,kj,kk,ka,kb,kc,task)
-                    my_permuted_v[ki,kj,kk] = get_permuted_v(ki,kj,kk,ka,kb,kc,task)
+                    my_permuted_w[ki,kj,kk] = t3Tw
+                    my_permuted_v[ki,kj,kk] = t3Tv
+                    #my_permuted_w[ki,kj,kk] = get_permuted_w(ki,kj,kk,ka,kb,kc,task)
+                    #my_permuted_v[ki,kj,kk] = get_permuted_v(ki,kj,kk,ka,kb,kc,task)
 
                 for ki, kj, kk in product(range(nkpts), repeat=3):
                     # eigenvalue denominator: e(i) + e(j) + e(k)
