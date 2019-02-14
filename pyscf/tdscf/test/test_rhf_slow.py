@@ -1,7 +1,8 @@
 from pyscf.gto import Mole
 from pyscf.scf import RHF
 from pyscf.tdscf import TDHF
-from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, eig, TDRHF, format_frozen
+from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, TDRHF
+from pyscf.tdscf.common_slow import eig
 
 import numpy
 from numpy import testing
@@ -47,7 +48,7 @@ class H20Test(unittest.TestCase):
             # Test plain
             try:
                 e = eri(self.model_rhf)
-                m = e.tdhf_matrix()
+                m = e.tdhf_full_form()
 
                 # Test matrix vs ref
                 testing.assert_allclose(m, retrieve_m_hf(e), atol=1e-14)
@@ -65,7 +66,7 @@ class H20Test(unittest.TestCase):
             for frozen in (1, [0, -1]):
                 try:
                     e = eri(self.model_rhf, frozen=frozen)
-                    m = e.tdhf_matrix()
+                    m = e.tdhf_full_form()
                     ov_mask = tdhf_frozen_mask(e)
                     ref_m = self.ref_m[numpy.ix_(ov_mask, ov_mask)]
                     testing.assert_allclose(ref_m, m, atol=1e-14)

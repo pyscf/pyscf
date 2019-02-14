@@ -20,190 +20,15 @@ procedure. Several variants of TDHF are available:
 
 from pyscf import ao2mo
 from pyscf.lib import logger
+from pyscf.tdscf.common_slow import TDERIMatrixBlocks, TDBase
 
 import numpy
-
 
 # Convention for these modules:
 # * PhysERI, PhysERI4, PhysERI8 are 2-electron integral routines computed directly (for debug purposes), with a 4-fold
 #   symmetry and with an 8-fold symmetry
 # * vector_to_amplitudes reshapes and normalizes the solution
 # * TDRHF provides a container
-
-
-class TDDFTMatrixBlocks(object):
-    symmetries = [
-        ((0, 1, 2, 3), False),
-    ]
-
-    def __init__(self):
-        """
-        This a prototype class for transformed ERIs used in all TDHF calculations. It handles integral blocks and
-        the diagonal part found in Eq. 7.5 of RevModPhys.36.844. Important routines are:
-         * tdhf_diag - builds a diagonal block;
-         * eri_ov - ERI in ov notation (4-tensor);
-         * eri_mknj - ERI in mknj notation (matrix with paired dimensions);
-        """
-        self.__eri__ = {}
-
-    def __get_mo_energies__(self, *args, **kwargs):
-        """This routine collects occupied and virtual MO energies."""
-        raise NotImplementedError
-
-    def tdhf_diag(self, *args):
-        """
-        Retrieves the diagonal block.
-        Args:
-            *args: args passed to `__get_mo_energies__`;
-
-        Returns:
-            The diagonal block.
-        """
-        e_occ, e_virt = self.__get_mo_energies__(*args)
-        diag = (- e_occ[:, numpy.newaxis] + e_virt[numpy.newaxis, :]).reshape(-1)
-        return numpy.diag(diag).reshape((len(e_occ) * len(e_virt), len(e_occ) * len(e_virt)))
-
-    def __calc_block__(self, item, *args):
-        raise NotImplementedError
-
-    def eri_ov(self, item, *args):
-        """
-        Retrieves ERI block using 'ov' notation.
-        Args:
-            item (str): a 4-character string of 'o' and 'v' letters;
-            *args: other args passed to `__calc_block__`;
-
-        Returns:
-            The corresponding block of ERI (4-tensor, phys notation).
-        """
-        if len(item) != 4 or not isinstance(item, str) or not set(item).issubset('ov'):
-            raise ValueError("Unknown item: {}".format(repr(item)))
-
-        args = (tuple(item), ) + args
-        if args in self.__eri__:
-            return self.__eri__[args]
-
-        result = self.__calc_block__(*args)
-
-        for permutation, conjugation in self.symmetries:
-            permuted_args = tuple(
-                tuple(arg[_i] for _i in permutation)
-                for arg in args
-            )
-            if conjugation:
-                self.__eri__[permuted_args] = result.transpose(*permutation).conj()
-            else:
-                self.__eri__[permuted_args] = result.transpose(*permutation)
-        return result
-
-    def __mknj2i__(self, item):
-        notation = "mknj"
-        notation = dict(zip(notation, range(len(notation))))
-        return tuple(notation[i] for i in item)
-
-    def eri_mknj(self, item, *args):
-        """
-        Retrieves ERI block using 'mknj' notation.
-        Args:
-            item (str): a 4-character string of 'mknj' letters;
-            *args: other arguments passed to `get_block_ov_notation`;
-
-        Returns:
-            The corresponding block of ERI (matrix with paired dimensions).
-        """
-        if len(item) != 4 or not isinstance(item, str) or set(item) != set('mknj'):
-            raise ValueError("Unknown item: {}".format(repr(item)))
-
-        item = self.__mknj2i__(item)
-        n_ov = ''.join('o' if i % 2 == 0 else 'v' for i in item)
-        args = tuple(
-            tuple(arg[i] for i in item)
-            for arg in args
-        )
-        result = self.eri_ov(n_ov, *args).transpose(*numpy.argsort(item))
-        i, j, k, l = result.shape
-        result = result.reshape((i * j, k * l))
-        return result
-
-    def __getitem__(self, item):
-        if isinstance(item, str):
-            spec, args = item, tuple()
-        else:
-            spec, args = item[0], item[1:]
-        if set(spec) == set("mknj"):
-            return self.eri_mknj(spec, *args)
-        elif set(spec).issubset("ov"):
-            return self.eri_ov(spec, *args)
-        else:
-            raise ValueError("Unknown item: {}".format(repr(item)))
-
-    def tdhf_a(self, *args, **kwargs):
-        """
-        The TDHF A-matrix.
-        Returns:
-            The matrix.
-        """
-        d = self.tdhf_diag()
-        return d + 2 * self["knmj"] - self["knjm"]
-
-    def tdhf_a_star(self, *args, **kwargs):
-        """
-        The TDHF A-matrix (second block).
-        Returns:
-            The matrix.
-        """
-        return self.tdhf_a().conj()
-
-    def tdhf_b(self, *args, **kwargs):
-        """
-        The TDHF B-matrix.
-        Returns:
-            The matrix.
-        """
-        return 2 * self["kjmn"] - self["kjnm"]
-
-    def tdhf_b_star(self, *args, **kwargs):
-        """
-        The TDHF B-matrix (second block).
-        Returns:
-            The matrix.
-        """
-        return self.tdhf_b().conj()
-
-    def tdhf_matrix(self, *args, **kwargs):
-        """
-        Full matrix of the TDRHF problem.
-        Args:
-            *args, **kwargs: optional arguments for a- and b- matrixes;
-
-        Returns:
-            The matrix.
-        """
-        m = numpy.array([
-            [self.tdhf_a(*args, **kwargs), self.tdhf_b(*args, **kwargs)],
-            [-self.tdhf_b_star(*args, **kwargs), -self.tdhf_a_star(*args, **kwargs)]
-        ])
-
-        return m.transpose((0, 2, 1, 3)).reshape(
-            (m.shape[0] * m.shape[2], m.shape[1] * m.shape[3])
-        )
-
-    def fast_tdhf_matrix_set(self, *args, **kwargs):
-        """
-        A set of real tdhf matrixes to perform an optimized diagonlaization.
-        Args:
-            *args, **kwargs: optional arguments for a- and b- matrixes;
-
-        Returns:
-            The matrix to diagonalize as well as the matrix to determine the second half of the TD HF solution.
-        """
-        tdhf_a = self.tdhf_a(*args, **kwargs)
-        tdhf_b = self.tdhf_b(*args, **kwargs)
-        if numpy.iscomplexobj(tdhf_a) or numpy.iscomplexobj(tdhf_b):
-            raise ValueError("A- and/or B-matrixes are complex-valued: no fast diagonalization int his case")
-        tdhf_k, tdhf_m = tdhf_a - tdhf_b, tdhf_a + tdhf_b
-        tdhf_mk = tdhf_m.dot(tdhf_k)
-        return tdhf_mk, tdhf_k
 
 
 def format_frozen(frozen, nmo):
@@ -228,7 +53,7 @@ def format_frozen(frozen, nmo):
     return space
 
 
-class PhysERI(TDDFTMatrixBlocks):
+class PhysERI(TDERIMatrixBlocks):
 
     def __init__(self, model, frozen=None):
         """
@@ -239,7 +64,7 @@ class PhysERI(TDDFTMatrixBlocks):
             model (RHF): the base model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
-        super(PhysERI, self).__init__()
+        TDERIMatrixBlocks.__init__(self)
         self.model = model
         self.space = format_frozen(frozen, len(model.mo_energy))
         self.__full_eri__ = self.ao2mo((self.mo_coeff,) * 4)
@@ -308,7 +133,7 @@ class PhysERI4(PhysERI):
             model (RHF): the base model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
-        TDDFTMatrixBlocks.__init__(self)
+        TDERIMatrixBlocks.__init__(self)
         self.model = model
         self.space = format_frozen(frozen, len(model.mo_energy))
 
@@ -343,33 +168,6 @@ class PhysERI8(PhysERI4):
         super(PhysERI8, self).__init__(model, frozen=frozen)
 
 
-def eig(m, driver=None, nroots=None, half=True):
-    """
-    Diagonalizes TDHF matrix.
-    Args:
-        m (numpy.ndarray): the matrix to diagonalize;
-        driver (str): one of the drivers;
-        nroots (int): the number of roots ot calculate (ignored for `driver` == 'eig');
-        half (bool): if True, implies spectrum symmetry and takes only a half of eigenvalues;
-
-    Returns:
-
-    """
-    if driver is None:
-        driver = 'eig'
-    if driver == 'eig':
-        vals, vecs = numpy.linalg.eig(m)
-        order = numpy.argsort(vals)
-        vals, vecs = vals[order], vecs[:, order]
-        if half:
-            vals, vecs = vals[len(vals) // 2:], vecs[:, vecs.shape[1] // 2:]
-            vecs = vecs[:, ]
-        vals, vecs = vals[:nroots], vecs[:, :nroots]
-    else:
-        raise ValueError("Unknown driver: {}".format(driver))
-    return vals, vecs
-
-
 def vector_to_amplitudes(vectors, nocc, nmo):
     """
     Transforms (reshapes) and normalizes vectors into amplitudes.
@@ -389,94 +187,11 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     return vectors.transpose(3, 0, 1, 2)
 
 
-def kernel(eri, driver=None, fast=True, nroots=None, **kwargs):
-    """
-    Calculates eigenstates and eigenvalues of the TDHF problem.
-    Args:
-        eri (TDDFTMatrixBlocks): ERI;
-        driver (str): one of the eigenvalue problem drivers;
-        fast (bool): whether to run diagonalization on smaller matrixes;
-        nroots (int): the number of roots to calculate;
-        **kwargs: arguments to `eri.tdhf_matrix`;
-
-    Returns:
-        Positive eigenvalues and eigenvectors.
-    """
-    if not isinstance(eri, TDDFTMatrixBlocks):
-        raise ValueError("The argument must be ERI object")
-
-    if fast:
-        if numpy.iscomplexobj(eri.mo_coeff):
-            raise ValueError("The fast diagonalization works only for real-valued oribtals")
-        logger.debug1(eri.model, "Preparing TDHF matrix (fast) ...")
-        tdhf_mk, tdhf_k = eri.fast_tdhf_matrix_set(**kwargs)
-        logger.debug1(eri.model, "Diagonalizing a {} matrix with {} ...".format(
-            'x'.join(map(str, tdhf_mk.shape)),
-            "'{}'".format(driver) if driver is not None else "a default method",
-        ))
-        vals, vecs_x = eig(tdhf_mk, driver=driver, nroots=nroots, half=False)
-
-        vals = vals ** .5
-        vecs_y = (1. / vals)[numpy.newaxis, :] * tdhf_k.dot(vecs_x)
-        vecs_u, vecs_v = vecs_y + vecs_x, vecs_y - vecs_x
-        return vals, numpy.concatenate((vecs_u, vecs_v), axis=0)
-
-    else:
-        logger.debug1(eri.model, "Preparing TDHF matrix ...")
-        m = eri.tdhf_matrix(**kwargs)
-        logger.debug1(eri.model, "Diagonalizing a {} matrix with {} ...".format(
-            'x'.join(map(str, m.shape)),
-            "'{}'".format(driver) if driver is not None else "a default method",
-        ))
-        return eig(m, driver=driver, nroots=nroots)
-
-
-class TDRHF(object):
-    eri1 = None
+class TDRHF(TDBase):
+    eri1 = PhysERI
     eri4 = PhysERI4
     eri8 = PhysERI8
     v2a = staticmethod(vector_to_amplitudes)
-
-    def __init__(self, mf, frozen=None):
-        """
-        Performs TDHF calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
-        Args:
-            mf (RHF): the base restricted Hartree-Fock model;
-            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-        """
-        self._scf = mf
-        self.driver = None
-        self.nroots = None
-        self.eri = None
-        self.xy = None
-        self.e = None
-        self.frozen = frozen
-        self.fast = not numpy.iscomplexobj(mf.mo_coeff)
-
-    def __kernel__(self, **kwargs):
-        """Silent implementation of kernel."""
-        if self.eri is None:
-            self.eri = self.ao2mo()
-
-        e, xy = kernel(
-            self.eri,
-            driver=self.driver,
-            nroots=self.nroots,
-            fast=self.fast,
-            **kwargs
-        )
-        xy = self.vector_to_amplitudes(xy)
-        return e, xy
-
-    def kernel(self):
-        """
-        Calculates eigenstates and eigenvalues of the TDHF problem.
-
-        Returns:
-            Positive eigenvalues and eigenvectors.
-        """
-        self.e, self.xy = self.__kernel__()
-        return self.e, self.xy
 
     def ao2mo(self):
         """
@@ -503,14 +218,3 @@ class TDRHF(object):
                 return self.eri1(self._scf, frozen=self.frozen)
             else:
                 raise RuntimeError("Failed to pick ERI for real MOs: both eri1 and eri8 are None")
-
-    def vector_to_amplitudes(self, vectors):
-        """
-        Transforms (reshapes) and normalizes vectors into amplitudes.
-        Args:
-            vectors (numpy.ndarray): raw eigenvectors to transform;
-
-        Returns:
-            Amplitudes with the following shape: (# of roots, 2 (x or y), # of occupied orbitals, # of virtual orbitals).
-        """
-        return self.v2a(vectors, self.eri.nocc, self.eri.nmo)
