@@ -84,13 +84,13 @@ mycc2.__dict__.update(mycc.__dict__)
 mycc21.__dict__.update(mycc1.__dict__)
 eris21 = mycc21.ao2mo()
 
-#mycc3 = ccsd.CCSD(mf)
-#mycc31 = ccsd.CCSD(mf1)
-#mycc3.__dict__.update(mycc.__dict__)
-#mycc31.__dict__.update(mycc1.__dict__)
-#mycc3 = mycc3.set(max_memory=0, direct=True)
-#mycc31 = mycc31.set(max_memory=0, direct=True)
-#eris31 = mycc31.ao2mo()
+mycc3 = ccsd.CCSD(mf)
+mycc31 = ccsd.CCSD(mf1)
+mycc3.__dict__.update(mycc.__dict__)
+mycc31.__dict__.update(mycc1.__dict__)
+mycc3 = mycc3.set(max_memory=0, direct=True)
+mycc31 = mycc31.set(max_memory=0, direct=True)
+eris31 = mycc31.ao2mo()
 
 
 def tearDownModule():
@@ -798,12 +798,12 @@ class KnownValues(unittest.TestCase):
         myt1 = mycc1.t1 + 1j * numpy.sin(mycc1.t1) * mycc1.t1
         myt2 = mycc1.t2 + 1j * numpy.sin(mycc1.t2) * mycc1.t2
         myt2 = myt2 + myt2.transpose(1,0,3,2)
-        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
-        self.assertAlmostEqual(lib.finger(e), 23230.479347478944, 6)
-        self.assertAlmostEqual(lib.finger(pt1), (-5.218888542372856+6.26563618296775e-05j), 6)
-        self.assertAlmostEqual(lib.finger(pt2), (46.19512409968981-0.0007574997568293397j), 6)
-        self.assertAlmostEqual(lib.finger(Wmcik), (-18.479280056078426+0.00039725891265209376j), 6)
-        self.assertAlmostEqual(lib.finger(Wacek), (-7.101360230612007-0.00019032711858324745j), 6)
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=erisi)
+        self.assertAlmostEqual(lib.finger(e), 23223.465490572264, 6)
+        self.assertAlmostEqual(lib.finger(pt1), (-5.2202836452466705-0.09570164571057749j), 6)
+        self.assertAlmostEqual(lib.finger(pt2), (46.188012063609506-1.303867687778909j), 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), (-18.438930654297778+1.5734161307568773j), 6)
+        self.assertAlmostEqual(lib.finger(Wacek), (-7.187576764072701+0.7399185332889747j), 6)
 
     def test_t3p2_intermediates_real(self):
         myt1 = mycc1.t1.copy()
