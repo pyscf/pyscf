@@ -60,7 +60,7 @@ class DiamondTest(unittest.TestCase):
             # Note that specific combintation of k-points results in real orbitals and allows testing PhysERI8
             try:
                 e = eri(self.model_krhf)
-                m = e.tdhf_matrix()
+                m = e.tdhf_full_form()
 
                 # Test matrix vs ref
                 testing.assert_allclose(m, retrieve_m_hf(e), atol=1e-11)
