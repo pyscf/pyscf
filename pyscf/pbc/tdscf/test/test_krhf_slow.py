@@ -53,12 +53,12 @@ class DiamondTest(unittest.TestCase):
         # Gamma
         cls.td_model_rhf_gamma = gtd.TDRHF(model_krhf)
         cls.td_model_rhf_gamma.kernel()
-        cls.ref_m_gamma = cls.td_model_rhf_gamma.eri.tdhf_matrix()
+        cls.ref_m_gamma = cls.td_model_rhf_gamma.eri.tdhf_full_form()
 
         # Supercell
         cls.td_model_rhf_supercell = std.TDRHF(model_krhf)
         cls.td_model_rhf_supercell.kernel()
-        cls.ref_m_supercell = cls.td_model_rhf_supercell.eri.tdhf_matrix()
+        cls.ref_m_supercell = cls.td_model_rhf_supercell.eri.tdhf_full_form()
 
     @classmethod
     def tearDownClass(cls):
@@ -74,7 +74,7 @@ class DiamondTest(unittest.TestCase):
             if eri is not ktd.PhysERI8 or self.test8:
                 try:
                     e = eri(self.model_krhf)
-                    m = e.tdhf_matrix(0)
+                    m = e.tdhf_full_form(0)
 
                     # Test matrix vs ref
                     testing.assert_allclose(m, retrieve_m_khf(e, 0), atol=1e-11)
@@ -120,7 +120,7 @@ class DiamondTest(unittest.TestCase):
                         c = k2k(c1, c2)
 
                         # Build matrix
-                        _m = e.tdhf_matrix(k)
+                        _m = e.tdhf_full_form(k)
 
                         # Assign the submatrix
                         m[numpy.ix_(r, c)] = _m.reshape((2*self.k, o*v, 2*self.k, o*v)).transpose(0, 2, 1, 3)
