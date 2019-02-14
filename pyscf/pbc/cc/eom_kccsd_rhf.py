@@ -911,7 +911,7 @@ class _IMDS:
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
-            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+            imd.get_t3p2_imds(cc, t1, t2, eris)
         self.t1 = pt1
         self.t2 = pt2
 
@@ -958,7 +958,7 @@ class _IMDS:
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
-            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+            imd.get_t3p2_imds(cc, t1, t2, eris)
         self.t1 = pt1
         self.t2 = pt2
 
