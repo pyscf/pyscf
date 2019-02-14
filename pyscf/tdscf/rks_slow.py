@@ -29,17 +29,17 @@ import pyscf.tdscf as proxy
 import numpy
 
 
-def rotate_proxy(m, o, v, return_ov=False):
+def canonic(m, o, v, return_ov=False):
     """
-    Rotates the output of pyscf TDDFT matrix to convention.
+    Makes the output of pyscf TDDFT matrix to be canonic.
     Args:
-        m (ndarray): the TDDFT matrix to diagonalize;
+        m (ndarray): the TDDFT matrix;
         o (ndarray): occupied orbital energies;
         v (ndarray): virtual orbital energies;
         return_ov (bool): if True, returns the K-matrix as well;
 
     Returns:
-        The rotated matrix as well as .
+        The rotated matrix as well as an optional K-matrix.
     """
     e_ov = (v[numpy.newaxis, :] - o[:, numpy.newaxis]).reshape(-1)
     e_ov_sqr = e_ov ** .5
@@ -170,10 +170,10 @@ class PhysERI(tdhf.PhysERI):
         probe[numpy.arange(size), numpy.argwhere(ov)[:, 0]] = 1
         result = vind(probe).T[ov, :]
 
-        # The TD matrix is not exactly the output of gen_vind: some rotation is needed
+        # The TD matrix is not exactly the output of gen_vind: some transform is needed
         e_occ = self.mo_energy[:nocc]
         e_virt = self.mo_energy[nocc:]
-        return rotate_proxy(result, e_occ, e_virt, return_ov=True)
+        return canonic(result, e_occ, e_virt, return_ov=True)
 
 
 vector_to_amplitudes = tdhf.vector_to_amplitudes
