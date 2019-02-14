@@ -29,11 +29,12 @@ def msize(m):
     return s
 
 
-def full2ab(full):
+def full2ab(full, tolerance=1e-12):
     """
     Transforms a full TD matrix into A and B parts.
     Args:
         full (numpy.ndarray): the full TD matrix;
+        tolerance (float): a tolerance for checking whether the full matrix is in the ABBA-form;
 
     Returns:
         A and B submatrices.
@@ -43,6 +44,12 @@ def full2ab(full):
         raise ValueError("Not an even matrix size: {:d}".format(s))
 
     s2 = s // 2
+    a, b = full[:s2, :s2], full[:s2, s2:]
+    b_, a_ = full[s2:, :s2].conj(), full[s2:, s2:].conj()
+    delta = max(abs(a + a_).max(), abs(b + b_).max())
+    if delta > tolerance:
+        raise ValueError("The full matrix is not in the ABBA-form, delta: {:.3e}".format(delta))
+
     return full[:s2, :s2], full[:s2, s2:]
 
 
@@ -292,8 +299,10 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
         Returns:
             A and B TD matrices.
         """
-        d = self.tdhf_diag()
-        return d + 2 * self["knmj"] - self["knjm"], 2 * self["kjmn"] - self["kjnm"]
+        d = self.tdhf_diag(*args, **kwargs)
+        a = d + 2 * self["knmj"] - self["knjm"]
+        b = 2 * self["kjmn"] - self["kjnm"]
+        return a, b
 
 
 def eig(m, driver=None, nroots=None, half=True):
