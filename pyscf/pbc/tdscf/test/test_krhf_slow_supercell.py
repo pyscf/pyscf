@@ -3,7 +3,7 @@ from pyscf.pbc.scf import RHF, KRHF
 from pyscf.pbc.tdscf import KTDHF
 from pyscf.pbc.tdscf import krhf_slow_supercell as ktd, rhf_slow as td
 from pyscf.pbc.tools.pbc import super_cell
-from pyscf.tdscf.rhf_slow import eig
+from pyscf.tdscf.common_slow import eig
 
 from test_common import retrieve_m, retrieve_m_hf, adjust_mf_phase, ov_order, assert_vectors_close, tdhf_frozen_mask
 
@@ -54,7 +54,7 @@ class DiamondTestGamma(unittest.TestCase):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
             e = eri(self.model_krhf)
-            m = e.tdhf_matrix()
+            m = e.tdhf_full_form()
             try:
                 testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
                 vals, vecs = eig(m, nroots=self.td_model_krhf.nroots)
@@ -127,7 +127,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         # The Gamma-point TD
         cls.td_model_rhf = td_model_rhf = td.TDRHF(model_rhf)
         td_model_rhf.kernel()
-        cls.ref_m = td_model_rhf.eri.tdhf_matrix()
+        cls.ref_m = td_model_rhf.eri.tdhf_full_form()
 
     @classmethod
     def tearDownClass(cls):
@@ -142,7 +142,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         for eri in (ktd.PhysERI, ktd.PhysERI4):
             try:
                 e = eri(self.model_krhf)
-                m = e.tdhf_matrix()
+                m = e.tdhf_full_form()
 
                 # Test matrix vs ref
                 testing.assert_allclose(m, retrieve_m_hf(e), atol=1e-14)
@@ -219,7 +219,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         # The Gamma-point TD
         cls.td_model_rhf = td_model_rhf = td.TDRHF(model_rhf)
         td_model_rhf.kernel()
-        cls.ref_m = td_model_rhf.eri.tdhf_matrix()
+        cls.ref_m = td_model_rhf.eri.tdhf_full_form()
 
     @classmethod
     def tearDownClass(cls):
@@ -235,7 +235,7 @@ class DiamondTestSupercell2(unittest.TestCase):
             if not eri == ktd.PhysERI8 or self.test8:
                 try:
                     e = eri(self.model_krhf)
-                    m = e.tdhf_matrix()
+                    m = e.tdhf_full_form()
 
                     # Test matrix vs ref
                     testing.assert_allclose(m, retrieve_m_hf(e), atol=1e-11)

@@ -19,7 +19,7 @@ procedure. Several variants of TDHF are available:
 """
 
 from pyscf.pbc.tools import get_kconserv
-from pyscf.tdscf import rhf_slow as td
+from pyscf.tdscf import common_slow, rhf_slow
 
 from pyscf.pbc.lib.kpts_helper import loop_kkk
 from pyscf.lib import logger
@@ -89,7 +89,7 @@ def format_frozen(frozen, nmo, nk):
     return space
 
 
-class PhysERI(td.TDDFTMatrixBlocks):
+class PhysERI(common_slow.TDERIMatrixBlocks):
 
     def __init__(self, model, frozen=None):
         """
@@ -251,7 +251,7 @@ class PhysERI4(PhysERI):
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals for all
             k-points or multiple lists of frozen orbitals for each k-point;
         """
-        td.TDDFTMatrixBlocks.__init__(self)
+        common_slow.TDERIMatrixBlocks.__init__(self)
         self.model = model
         self.space = format_frozen(frozen, len(model.mo_energy[0]), len(model.kpts))
         self.kconserv = get_kconserv(self.model.cell, self.model.kpts).swapaxes(1, 2)
@@ -323,7 +323,7 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     return vectors.transpose(5, 0, 1, 2, 3, 4)
 
 
-class TDRHF(td.TDRHF):
+class TDRHF(rhf_slow.TDRHF):
     eri4 = PhysERI4
     eri8 = PhysERI8
     v2a = staticmethod(vector_to_amplitudes)
