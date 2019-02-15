@@ -370,6 +370,11 @@ def get_full_t3p2(mycc, t1, t2, eris):
     fov = fock[:, :nocc, nocc:]
     foo = numpy.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
     fvv = numpy.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     t3 = numpy.empty((nkpts,nkpts,nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir,nvir),
                       dtype=t2.dtype)
@@ -387,11 +392,11 @@ def get_full_t3p2(mycc, t1, t2, eris):
           t3.transpose(2,0,1,3,4,7,5,6,8,9,10))
 
     for ki, kj, kk in product(range(nkpts), repeat=3):
-        eijk = foo[ki][:, None, None] + foo[kj][None, :, None] + foo[kk][None, None, :]
+        eijk = mo_e_o[ki][:, None, None] + mo_e_o[kj][None, :, None] + mo_e_o[kk][None, None, :]
         for ka, kb in product(range(nkpts), repeat=2):
             kc = kpts_helper.get_kconserv3(mycc._scf.cell, mycc.kpts,
                                            [ki, kj, kk, ka, kb])
-            eabc = fvv[ka][:, None, None] + fvv[kb][None, :, None] + fvv[kc][None, None, :]
+            eabc = mo_e_v[ka][:, None, None] + mo_e_v[kb][None, :, None] + mo_e_v[kc][None, None, :]
             eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
             t3[ki,kj,kk,ka,kb] /= eijkabc
 
