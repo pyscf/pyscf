@@ -91,6 +91,7 @@ def make_rand_kmf(nkpts=3):
     return kmf
 
 rand_kmf = make_rand_kmf()
+rand_kmf1 = make_rand_kmf(nkpts=1)
 rand_kmf2 = make_rand_kmf(nkpts=2)
 
 def tearDownModule():
@@ -300,7 +301,6 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        #print eris.oovv[0,0,0]
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
