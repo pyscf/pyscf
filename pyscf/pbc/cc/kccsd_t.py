@@ -16,6 +16,8 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.misc import flatten
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -78,13 +80,18 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
 
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
+
     energy_t = 0.0
 
     for ki in range(nkpts):
         for kj in range(ki + 1):
             for kk in range(kj + 1):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
-                eijk = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])
+                eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_e_o[0].dtype)
+                n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
+                eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])[n0_ovp_ijk]
 
                 # Factors to include for permutational symmetry among k-points for occupied space
                 if ki == kj and kj == kk:
@@ -102,6 +109,10 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                         kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
                         if kc not in range(kb + 1):
                             continue
+
+                        eabc = LARGE_DENOM * np.ones((nvir,nvir,nvir), dtype=mo_e_o[0].dtype)
+                        n0_ovp_abc = np.ix_(nonzero_vpadding[ka], nonzero_vpadding[kb], nonzero_vpadding[kc])
+                        eabc[n0_ovp_abc] = lib.direct_sum('a,b,c->abc', mo_e_v[ka], mo_e_v[kb], mo_e_v[kc])[n0_ovp_abc]
 
                         # Factors to include for permutational symmetry among k-points for virtual space
                         if ka == kb and kb == kc:
@@ -147,10 +158,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                                     symm_abc = 2.
 
                             # Form energy denominator
-                            eijkabc = (eijk - mo_e_v[ka][a] - mo_e_v[kb][b] - mo_e_v[kc][c])
-                            # When padding for non-equal nocc per k-point, some fock elements will be zero
-                            idx = np.where(abs(eijkabc) < LOOSE_ZERO_TOL)[0]
-                            eijkabc[idx] = LARGE_DENOM
+                            eijkabc = (eijk[:,:,:] - eabc[a,b,c])
 
                             # Form connected triple excitation amplitude
                             t3c = np.zeros((nocc, nocc, nocc), dtype=dtype)

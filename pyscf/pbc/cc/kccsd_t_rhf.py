@@ -308,10 +308,14 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                     else:
                         symm_kpt = 6.
 
-                    eijkabc = (eijk[None,None,None,:,:,:] -
-                               mo_e_v[ka][a0:a1][:,None,None,None,None,None] -
-                               mo_e_v[kb][b0:b1][None,:,None,None,None,None] -
-                               mo_e_v[kc][c0:c1][None,None,:,None,None,None])
+                    eabc = LARGE_DENOM * np.ones((a1-a0,b1-b0,c1-c0), dtype=mo_e_o[0].dtype)
+                    idxa = nonzero_vpadding[ka][np.logical_and(nonzero_vpadding[ka] >= a0, nonzero_vpadding[ka] < a1)] - a0
+                    idxb = nonzero_vpadding[kb][np.logical_and(nonzero_vpadding[kb] >= b0, nonzero_vpadding[kb] < b1)] - b0
+                    idxc = nonzero_vpadding[kc][np.logical_and(nonzero_vpadding[kc] >= c0, nonzero_vpadding[kc] < c1)] - c0
+                    n0_ovp_abc = np.ix_(nonzero_vpadding[ka][idxa], nonzero_vpadding[kb][idxb], nonzero_vpadding[kc][idxc])
+                    # The following could be a little slow
+                    eabc[n0_ovp_abc] = lib.direct_sum('a,b,c->abc', mo_e_v[ka][a0:a1], mo_e_v[kb][b0:b1], mo_e_v[kc][c0:c1])[n0_ovp_abc]
+                    eijkabc = (eijk[None,None,None,:,:,:] - eabc[:,:,:,None,None,None])
 
                     pwijk = my_permuted_w[ki,kj,kk] + my_permuted_v[ki,kj,kk]
                     rwijk = (4. * my_permuted_w[ki,kj,kk] +

@@ -182,12 +182,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                 else:
                     symm_kpt = 6.
 
+                eabc = LARGE_DENOM * np.ones((nvir,)*3, dtype=mo_energy_occ[0].dtype)
+                n0_ovp_abc = np.ix_(nonzero_vpadding[ka], nonzero_vpadding[kb], nonzero_vpadding[kc])
+                eabc[n0_ovp_abc] = lib.direct_sum('i,j,k->ijk', mo_energy_vir[ka], mo_energy_vir[kb], mo_energy_vir[kc])[n0_ovp_abc]
                 for task_id, task in enumerate(tasks):
                     orb_indices = a0,a1,b0,b1,c0,c1
-                    eijkabc = (eijk[None,None,None,:,:,:] -
-                               mo_energy_vir[ka][a0:a1][:,None,None,None,None,None] -
-                               mo_energy_vir[kb][b0:b1][None,:,None,None,None,None] -
-                               mo_energy_vir[kc][c0:c1][None,None,:,None,None,None])
+                    eijkabc = (eijk[None,None,None,:,:,:] - eabc[a0:a1,b0:b1,c0:c1,None,None,None])
                     pwijk = (       get_permuted_w(ki,kj,kk,ka,kb,kc,task) +
                               0.5 * get_permuted_v(ki,kj,kk,ka,kb,kc,task) )
                     rwijk = get_rw(ki,kj,kk,ka,kb,kc,task) / eijkabc
