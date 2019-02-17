@@ -789,7 +789,6 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
 
     pt1 = np.zeros((nkpts,nocc,nvir), dtype=dtype)
     pt2 = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
-    print ""
     for ka, kb in product(range(nkpts), repeat=2):
         for task_id, task in enumerate(tasks):
             cput2 = (time.clock(), time.time())
