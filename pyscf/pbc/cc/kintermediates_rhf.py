@@ -453,6 +453,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     """For a description of arguments, see `get_t3p2_imds_slow` in
     the corresponding `kintermediates.py`.
     """
+    from kccsd_t_rhf import _get_epqr
     if eris is None:
         eris = cc.ao2mo()
     fock = eris.fock
@@ -468,6 +469,9 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
 
     mo_e_o = mo_energy_occ
     mo_e_v = mo_energy_vir
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     ccsd_energy = cc.energy(t1, t2, eris)
 
@@ -500,8 +504,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
         tmp_t3[ki, kj, kk, ka, kb] += get_w(kk, ki, kj, kc, ka, kb).transpose(1, 2, 0, 4, 5, 3)
         tmp_t3[ki, kj, kk, ka, kb] += get_w(kk, kj, ki, kc, kb, ka).transpose(2, 1, 0, 5, 4, 3)
 
-        eijk = mo_e_o[ki][:, None, None] + mo_e_o[kj][None, :, None] + mo_e_o[kk][None, None, :]
-        eabc = mo_e_v[ka][:, None, None] + mo_e_v[kb][None, :, None] + mo_e_v[kc][None, None, :]
+        eijk = _get_epqr(0,nocc,0,nocc,0,nocc,ki,kj,kk,mo_e_o,nonzero_opadding)
+        eabc = _get_epqr(0,nvir,0,nvir,0,nvir,ka,kb,kc,mo_e_v,nonzero_vpadding)
         eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
         tmp_t3[ki, kj, kk, ka, kb] /= eijkabc
 
@@ -585,15 +589,22 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
                                               eris.vovv[ka, km, ke])
 
     for ki in range(nkpts):
-        eii = mo_e_o[ki][:, None] - mo_e_v[ki][None, :]
-        pt1[ki] /= eii
+        ka = ki
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        pt1[ki] /= eia
 
     for ki, ka in product(range(nkpts), repeat=2):
-        eia = mo_e_o[ki][:, None] - mo_e_v[ka][None, :]
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
         for kj in range(nkpts):
             kb = kconserv[ki, ka, kj]
-            ejb = mo_e_o[kj][:, None] - mo_e_v[kb][None, :]
-            eijab = eia[:, None, :, None] + ejb[None, :, None, :]
+            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            eijab = eia[:, None, :, None] + ejb[:, None, :]
             pt2[ki, kj, ka] /= eijab
 
     pt1 += t1
@@ -675,6 +686,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     """For a description of arguments, see `get_t3p2_imds_slow` in
     the corresponding `kintermediates.py`.
     """
+    from kccsd_t_rhf import _get_epqr
     cpu1 = cpu0 = (time.clock(), time.time())
     if eris is None:
         eris = mycc.ao2mo()
@@ -806,19 +818,15 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
 
             for ki, kj, kk in product(range(nkpts), repeat=3):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
-                eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_e_o[0].dtype)
-                n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
-                eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])[n0_ovp_ijk]
+                eijk = _get_epqr(0,nocc,0,nocc,0,nocc,ki,kj,kk,mo_e_o,nonzero_opadding)
 
                 # Find momentum conservation condition for triples
                 # amplitude t3ijkabc
                 kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
+                eabc = _get_epqr(a0,a1,b0,b1,c0,c1,ka,kb,kc,mo_e_v,nonzero_vpadding)
 
                 kpt_indices = [ki,kj,kk,ka,kb,kc]
-                eabcijk = (eijk[None,None,None,:,:,:] -
-                           mo_e_v[ka][a0:a1][:,None,None,None,None,None] -
-                           mo_e_v[kb][b0:b1][None,:,None,None,None,None] -
-                           mo_e_v[kc][c0:c1][None,None,:,None,None,None])
+                eabcijk = (eijk[None,None,None,:,:,:] - eabc[:,:,:,None,None,None])
 
                 tmp_t3Tv_ijk = my_permuted_w[ki,kj,kk]
                 tmp_t3Tv_jik = my_permuted_w[kj,ki,kk]
@@ -832,27 +840,21 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
                     eris_Soovv = (2.*eris.oovv[kj,kk,kb,:,:,b0:b1,c0:c1] -
                                      eris.oovv[kj,kk,kc,:,:,c0:c1,b0:b1].transpose(0,1,3,2))
                     pt1[ka,:,a0:a1] += 0.5*einsum('abcijk,jkbc->ia', Ptmp_t3Tv,
-                                                  eris_Soovv) / eaa[ka][:,a0:a1]
+                                                  eris_Soovv)
 
                 # Contribution to T2 amplitudes
                 if ki == ka and kc == kconserv[kj, kb, kk]:
-                    ejkbc = (mo_e_o[kj][:,None,None,None] + mo_e_o[kk][None,:,None,None] -
-                             mo_e_v[kb,b0:b1][None,None,:,None] - mo_e_v[kc,c0:c1][None,None,None,:])
-                    tmp = einsum('abcijk,ia->jkbc', Ptmp_t3Tv, 0.5*fov[ki,:,a0:a1]) / ejkbc
+                    tmp = einsum('abcijk,ia->jkbc', Ptmp_t3Tv, 0.5*fov[ki,:,a0:a1])
                     _add_pt2(pt2, nkpts, kconserv, [kj,kk,kb], [None,None,(b0,b1),(c0,c1)], tmp)
 
                 kd = kconserv[ka,ki,kb]
                 eris_vovv = eris.vovv[kd,ki,kb,:,:,b0:b1,a0:a1]
-                ejkdc = (mo_e_o[kj][:,None,None,None] + mo_e_o[kk][None,:,None,None] -
-                         mo_e_v[kd][None,None,:,None] - mo_e_v[kc,c0:c1][None,None,None,:])
-                tmp = einsum('abcijk,diba->jkdc', Ptmp_t3Tv, eris_vovv) / ejkdc
+                tmp = einsum('abcijk,diba->jkdc', Ptmp_t3Tv, eris_vovv)
                 _add_pt2(pt2, nkpts, kconserv, [kj,kk,kd], [None,None,None,(c0,c1)], tmp)
 
                 km = kconserv[kc, kk, kb]
                 eris_ooov = eris.ooov[kj,ki,km,:,:,:,a0:a1]
-                emkbc = (mo_e_o[km][:,None,None,None] + mo_e_o[kk][None,:,None,None] -
-                         mo_e_v[kb,b0:b1][None,None,:,None] - mo_e_v[kc,c0:c1][None,None,None,:])
-                tmp = einsum('abcijk,jima->mkbc', Ptmp_t3Tv, eris_ooov) / emkbc
+                tmp = einsum('abcijk,jima->mkbc', Ptmp_t3Tv, eris_ooov)
                 _add_pt2(pt2, nkpts, kconserv, [km,kk,kb], [None,None,(b0,b1),(c0,c1)], -1.*tmp)
 
                 # Contribution to Wovoo array
@@ -869,6 +871,26 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
 
             logger.timer_debug1(mycc, 'EOM-CCSD T3[2] ka,kb,vir=(%d,%d,%d/%d) [total=%d]'%
                                 (ka,kb,task_id,len(tasks),nkpts**5), *cput2)
+
+    for ki in range(nkpts):
+        ka = ki
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        pt1[ki] /= eia
+
+    for ki, ka in product(range(nkpts), repeat=2):
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        for kj in range(nkpts):
+            kb = kconserv[ki, ka, kj]
+            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            eijab = eia[:, None, :, None] + ejb[:, None, :]
+            pt2[ki, kj, ka] /= eijab
+
 
     pt1 += t1
     pt2 += t2

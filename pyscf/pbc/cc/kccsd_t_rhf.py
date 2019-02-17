@@ -291,9 +291,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
                 for ki, kj, kk in product(range(nkpts), repeat=3):
                     # eigenvalue denominator: e(i) + e(j) + e(k)
-                    eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_e_o[0].dtype)
-                    n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
-                    eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])[n0_ovp_ijk]
+                    eijk = _get_epqr(0,nocc,0,nocc,0,nocc,ki,kj,kk,mo_e_o,nonzero_opadding)
 
                     # Find momentum conservation condition for triples
                     # amplitude t3ijkabc
@@ -308,13 +306,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                     else:
                         symm_kpt = 6.
 
-                    eabc = LARGE_DENOM * np.ones((a1-a0,b1-b0,c1-c0), dtype=mo_e_o[0].dtype)
-                    idxa = nonzero_vpadding[ka][np.logical_and(nonzero_vpadding[ka] >= a0, nonzero_vpadding[ka] < a1)] - a0
-                    idxb = nonzero_vpadding[kb][np.logical_and(nonzero_vpadding[kb] >= b0, nonzero_vpadding[kb] < b1)] - b0
-                    idxc = nonzero_vpadding[kc][np.logical_and(nonzero_vpadding[kc] >= c0, nonzero_vpadding[kc] < c1)] - c0
-                    n0_ovp_abc = np.ix_(nonzero_vpadding[ka][idxa], nonzero_vpadding[kb][idxb], nonzero_vpadding[kc][idxc])
-                    # The following could be a little slow
-                    eabc[n0_ovp_abc] = lib.direct_sum('a,b,c->abc', mo_e_v[ka][a0:a1], mo_e_v[kb][b0:b1], mo_e_v[kc][c0:c1])[n0_ovp_abc]
+                    eabc = _get_epqr(a0,a1,b0,b1,c0,c1,ka,kb,kc,mo_e_v,nonzero_vpadding)
                     eijkabc = (eijk[None,None,None,:,:,:] - eabc[:,:,:,None,None,None])
 
                     pwijk = my_permuted_w[ki,kj,kk] + my_permuted_v[ki,kj,kk]
@@ -553,6 +545,17 @@ def get_data_slices(kpt_indices, orb_indices, kconserv):
             count += 1
 
     return vvop_indices, vooo_indices, t2T_vvop_indices, t2T_vooo_indices
+
+def _get_epqr(p0,p1,q0,q1,r0,r1,kp,kq,kr,mo_e,nonzero_padding):
+    def get_idx(x0,x1,kx):
+        return nonzero_padding[kx][np.logical_and(nonzero_padding[kx] >= x0, nonzero_padding[kx] < x1)] - x0
+    epqr = LARGE_DENOM * np.ones((p1-p0,q1-q0,r1-r0), dtype=mo_e[0].dtype)
+    idxp = get_idx(p0,p1,kp)
+    idxq = get_idx(q0,q1,kq)
+    idxr = get_idx(r0,r1,kr)
+    n0_ovp_pqr = np.ix_(nonzero_padding[kp][idxp], nonzero_padding[kq][idxq], nonzero_padding[kr][idxr])
+    epqr[n0_ovp_pqr] = lib.direct_sum('p,q,r->pqr', mo_e[kp][p0:p1], mo_e[kq][q0:q1], mo_e[kr][r0:r1])[n0_ovp_pqr]
+    return epqr
 
 if __name__ == '__main__':
     from pyscf.pbc import gto

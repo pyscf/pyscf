@@ -23,6 +23,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
 import numpy
+from pyscf.lib.parameters import LARGE_DENOM
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 
 #einsum = numpy.einsum
 einsum = lib.einsum
@@ -376,6 +379,9 @@ def get_full_t3p2(mycc, t1, t2, eris):
     mo_e_o = mo_energy_occ
     mo_e_v = mo_energy_vir
 
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
+
     t3 = numpy.empty((nkpts,nkpts,nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir,nvir),
                       dtype=t2.dtype)
     for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
@@ -392,11 +398,15 @@ def get_full_t3p2(mycc, t1, t2, eris):
           t3.transpose(2,0,1,3,4,7,5,6,8,9,10))
 
     for ki, kj, kk in product(range(nkpts), repeat=3):
-        eijk = mo_e_o[ki][:, None, None] + mo_e_o[kj][None, :, None] + mo_e_o[kk][None, None, :]
+        eijk = LARGE_DENOM * numpy.ones((nocc,)*3, dtype=mo_e_o[0].dtype)
+        n0_ovp_ijk = numpy.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
+        eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])[n0_ovp_ijk]
         for ka, kb in product(range(nkpts), repeat=2):
             kc = kpts_helper.get_kconserv3(mycc._scf.cell, mycc.kpts,
                                            [ki, kj, kk, ka, kb])
-            eabc = mo_e_v[ka][:, None, None] + mo_e_v[kb][None, :, None] + mo_e_v[kc][None, None, :]
+            eabc = LARGE_DENOM * numpy.ones((nvir,nvir,nvir), dtype=mo_e_o[0].dtype)
+            n0_ovp_abc = numpy.ix_(nonzero_vpadding[ka], nonzero_vpadding[kb], nonzero_vpadding[kc])
+            eabc[n0_ovp_abc] = lib.direct_sum('a,b,c->abc', mo_e_v[ka], mo_e_v[kb], mo_e_v[kc])[n0_ovp_abc]
             eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
             t3[ki,kj,kk,ka,kb] /= eijkabc
 
@@ -447,6 +457,9 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
+
     mo_e_o = mo_energy_occ
     mo_e_v = mo_energy_vir
 
@@ -468,8 +481,10 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
         ka = ki
         for km, kn, ke in product(range(nkpts), repeat=3):
             pt1[ki] += 0.25 * lib.einsum('mnef,imnaef->ia', eris.oovv[km,kn,ke], t3[ki,km,kn,ka,ke])
-        eii = mo_e_o[ki][:, None] - mo_e_v[ki][None, :]
-        pt1[ki] /= eii
+        eia = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = numpy.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        pt1[ki] /= eia
 
     pt2 = numpy.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=dtype)
     for ki, kj, ka in product(range(nkpts), repeat=3):
@@ -486,9 +501,15 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
                 pt2[ki,kj,ka] -= 0.5 * lib.einsum('inmabe,nmje->ijab', t3[ki,kn,km,ka,kb], eris.ooov[kn,km,kj])
                 pt2[ki,kj,ka] += 0.5 * lib.einsum('jnmabe,nmie->ijab', t3[kj,kn,km,ka,kb], eris.ooov[kn,km,ki])
 
-        eia = mo_e_o[ki][:, None] - mo_e_v[ka][None, :]
-        ejb = mo_e_o[kj][:, None] - mo_e_v[kb][None, :]
-        eijab = eia[:, None, :, None] + ejb[None, :, None, :]
+        eia = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = numpy.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+        ejb = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_jb = numpy.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+        ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+        eijab = eia[:, None, :, None] + ejb[:, None, :]
+
         pt2[ki,kj,ka] /= eijab
 
     pt1 += t1
