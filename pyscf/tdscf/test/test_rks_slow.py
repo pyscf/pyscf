@@ -1,7 +1,8 @@
 from pyscf.gto import Mole
-from pyscf.scf import RKS
+from pyscf.scf import RKS, RHF
 from pyscf.tdscf import TDDFT
-from pyscf.tdscf.rks_slow import PhysERI, TDRKS, canonic
+from pyscf.tdscf.rks_slow import PhysERI, TDRKS
+from pyscf.tdscf.common_slow import proxy_make_canonic
 
 import numpy
 from numpy import testing
@@ -33,7 +34,7 @@ class H20Test(unittest.TestCase):
 
         e = model_rks.mo_energy
         nocc = int(sum(model_rks.mo_occ) // 2)
-        cls.ref_m = canonic(retrieve_m(td_model_rks), e[:nocc], e[nocc:])
+        cls.ref_m = proxy_make_canonic(retrieve_m(td_model_rks), e[:nocc], e[nocc:])
 
     @classmethod
     def tearDownClass(cls):
@@ -45,14 +46,14 @@ class H20Test(unittest.TestCase):
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
         e = PhysERI(self.model_rks)
-        mk, _ = e.fast_tdhf_matrix_set()
+        mk, _ = e.tdhf_mk_form()
         testing.assert_allclose(self.ref_m, mk, atol=1e-13)
 
         # Test frozen
         for frozen in (1, [0, -1]):
             try:
                 e = PhysERI(self.model_rks, frozen=frozen)
-                mk, _ = e.fast_tdhf_matrix_set()
+                mk, _ = e.tdhf_mk_form()
                 ov_mask = tdhf_frozen_mask(e, kind="1ov")
                 ref_m = self.ref_m[numpy.ix_(ov_mask, ov_mask)]
                 testing.assert_allclose(ref_m, mk, atol=1e-13)

@@ -325,6 +325,78 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
         return "ab", a, b
 
 
+def proxy_make_canonic(m, o, v, return_ov=False):
+    """
+    Makes the output of pyscf TDDFT matrix (MK form) to be canonic.
+    Args:
+        m (ndarray): the TDDFT matrix;
+        o (ndarray): occupied orbital energies;
+        v (ndarray): virtual orbital energies;
+        return_ov (bool): if True, returns the K-matrix as well;
+
+    Returns:
+        The rotated matrix as well as an optional K-matrix.
+    """
+    e_ov = (v[numpy.newaxis, :] - o[:, numpy.newaxis]).reshape(-1)
+    e_ov_sqr = e_ov ** .5
+    result = m * (e_ov_sqr[numpy.newaxis, :] / e_ov_sqr[:, numpy.newaxis])
+    if return_ov:
+        return result, numpy.diag(e_ov)
+    else:
+        return result
+
+
+class TDProxyMatrixBlocks(TDMatrixBlocks):
+    def __init__(self, model):
+        """
+        This a prototype class for TD calculations based on proxying pyscf classes such as TDDFT. It is a work-around
+        class. It accepts a `pyscf.tdscf.*` class and uses its matvec to construct a full-sized TD matrix.
+        Args:
+            model: a pyscf base model to extract TD matrix from;
+        """
+        self.proxy_model = model
+        self.proxy_vind, self.proxy_diag = self.proxy_model.gen_vind(self.proxy_model._scf)
+
+    def __get_mo_energies__(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def get_response(self):
+        """
+        Retrieves a raw TD response matrix.
+
+        Returns:
+            The matrix.
+        """
+        raise NotImplementedError
+
+    def tdhf_primary_form(self, *args, **kwargs):
+        """
+        A primary form of TDHF matrixes.
+
+        Returns:
+            Output type: "full", "ab", or "mk" and the corresponding matrix(es).
+        """
+
+        nocc_full = int(self.proxy_model._scf.mo_occ.sum() // 2)
+        nmo_full = len(self.proxy_model._scf.mo_occ)
+        size_full = nocc_full * (nmo_full - nocc_full)
+        size_hdiag = len(self.proxy_diag)
+
+        if size_full == size_hdiag:
+            # The MK case
+            e_occ, e_virt = self.__get_mo_energies__(*args)
+            return ("mk",) + proxy_make_canonic(self.get_response(), e_occ, e_virt, return_ov=True)
+
+        elif 2 * size_full == size_hdiag:
+            # Full case
+            return "full", self.get_response()
+
+        else:
+            raise ValueError("Do not recognize the size of the output diagonal: {:d}, expected {:d} or {:d}".format(
+                size_hdiag, size_full, 2 * size_full,
+            ))
+
+
 def format_frozen_mol(frozen, nmo):
     """
     Formats the argument into a mask array of bools where False values correspond to frozen molecular orbitals.
@@ -383,6 +455,16 @@ class MolecularMFMixin(object):
     def nmo(self):
         """The total number of molecular orbitals."""
         return self.space.sum()
+
+    @property
+    def nocc_full(self):
+        """The true (including frozen degrees of freedom) number of occupied orbitals."""
+        return int(self.model.mo_occ.sum() // 2)
+
+    @property
+    def nmo_full(self):
+        """The true (including frozen degrees of freedom) total number of molecular orbitals."""
+        return len(self.space)
 
 
 def format_frozen_k(frozen, nmo, nk):
