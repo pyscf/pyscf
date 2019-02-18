@@ -323,6 +323,61 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
         return "ab", a, b
 
 
+def format_frozen(frozen, nmo):
+    """
+    Formats the argument into a mask array of bools where False values correspond to frozen orbitals.
+    Args:
+        frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+        nmo (int): the total number of molecular orbitals;
+
+    Returns:
+        The mask array.
+    """
+    space = numpy.ones(nmo, dtype=bool)
+    if frozen is None:
+        pass
+    elif isinstance(frozen, int):
+        space[:frozen] = False
+    elif isinstance(frozen, (tuple, list, numpy.ndarray)):
+        space[frozen] = False
+    else:
+        raise ValueError("Cannot recognize the 'frozen' argument: expected None, int or Iterable")
+    return space
+
+
+class MolecularMFMixin(object):
+    def __init__(self, model, frozen=None):
+        """
+        A mixin to support custom slices of mean-field fields.
+
+        Args:
+            model: the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+        """
+        self.model = model
+        self.space = format_frozen(frozen, len(model.mo_energy))
+
+    @property
+    def mo_coeff(self):
+        """MO coefficients."""
+        return self.model.mo_coeff[:, self.space]
+
+    @property
+    def mo_energy(self):
+        """MO energies."""
+        return self.model.mo_energy[self.space]
+
+    @property
+    def nocc(self):
+        """The number of occupied orbitals."""
+        return int(self.model.mo_occ[self.space].sum() // 2)
+
+    @property
+    def nmo(self):
+        """The total number of olecular orbitals."""
+        return self.space.sum()
+
+
 def eig(m, driver=None, nroots=None, half=True):
     """
     Eigenvalue problem solver.

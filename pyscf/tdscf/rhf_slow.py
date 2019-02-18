@@ -20,7 +20,7 @@ procedure. Several variants of TDHF are available:
 
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.tdscf.common_slow import TDERIMatrixBlocks, TDBase
+from pyscf.tdscf.common_slow import TDERIMatrixBlocks, MolecularMFMixin, TDBase
 
 import numpy
 
@@ -31,30 +31,7 @@ import numpy
 # * TDRHF provides a container
 
 
-def format_frozen(frozen, nmo):
-    """
-    Formats the argument into a mask array of bools where False values correspond to frozen orbitals.
-    Args:
-        frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-        nmo (int): the total number of molecular orbitals;
-
-    Returns:
-        The mask array.
-    """
-    space = numpy.ones(nmo, dtype=bool)
-    if frozen is None:
-        pass
-    elif isinstance(frozen, int):
-        space[:frozen] = False
-    elif isinstance(frozen, (tuple, list, numpy.ndarray)):
-        space[frozen] = False
-    else:
-        raise ValueError("Cannot recognize the 'frozen' argument: expected None, int or Iterable")
-    return space
-
-
-class PhysERI(TDERIMatrixBlocks):
-
+class PhysERI(TDERIMatrixBlocks, MolecularMFMixin):
     def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a full AO-MO transformation of integrals. No symmetries are employed in
@@ -65,25 +42,8 @@ class PhysERI(TDERIMatrixBlocks):
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
         TDERIMatrixBlocks.__init__(self)
-        self.model = model
-        self.space = format_frozen(frozen, len(model.mo_energy))
+        MolecularMFMixin.__init__(self, model, frozen=frozen)
         self.__full_eri__ = self.ao2mo((self.mo_coeff,) * 4)
-
-    @property
-    def mo_coeff(self):
-        return self.model.mo_coeff[:, self.space]
-
-    @property
-    def mo_energy(self):
-        return self.model.mo_energy[self.space]
-
-    @property
-    def nocc(self):
-        return int(self.model.mo_occ[self.space].sum() // 2)
-
-    @property
-    def nmo(self):
-        return self.space.sum()
 
     def ao2mo(self, coeff):
         """
@@ -134,8 +94,7 @@ class PhysERI4(PhysERI):
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
         TDERIMatrixBlocks.__init__(self)
-        self.model = model
-        self.space = format_frozen(frozen, len(model.mo_energy))
+        MolecularMFMixin.__init__(self, model, frozen=frozen)
 
     def __calc_block__(self, item):
         o = self.mo_coeff[:, :self.nocc]
