@@ -19,7 +19,6 @@ procedure. Several variants of TDHF are available:
 """
 
 from pyscf.pbc.tdscf import krhf_slow_supercell as td
-from pyscf.tdscf.common_slow import TDMatrixBlocks
 
 import numpy
 
