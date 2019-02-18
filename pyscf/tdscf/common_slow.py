@@ -131,9 +131,6 @@ def mkk2full(mk, k):
 
 
 class TDMatrixBlocks(object):
-    # When implementing, the primary driver has to be chosen. It can be ither of 'full', 'ab' or 'mk'.
-    primary_driver = "full"
-
     def __get_mo_energies__(self, *args, **kwargs):
         """This routine collects occupied and virtual MO energies."""
         raise NotImplementedError
@@ -151,6 +148,28 @@ class TDMatrixBlocks(object):
         diag = (- e_occ[:, numpy.newaxis] + e_virt[numpy.newaxis, :]).reshape(-1)
         return numpy.diag(diag).reshape((len(e_occ) * len(e_virt), len(e_occ) * len(e_virt)))
 
+    def tdhf_primary_form(self, *args, **kwargs):
+        """
+        A primary form of TDHF matrixes.
+
+        Returns:
+            Output type: "full", "ab", or "mk" and the corresponding matrix(es).
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def __check_primary_form__(m):
+        if not isinstance(m, tuple):
+            raise ValueError("The value returned by `tdhf_primary_form` is not a tuple")
+        forms = dict(ab=3, mk=3, full=2)
+        if m[0] in forms:
+            if len(m) != forms[m[0]]:
+                raise ValueError("The {} form returned by `tdhf_primary_form` must contain {:d} values".format(
+                    m[0].upper(), forms[m[0]],
+                ))
+        else:
+            raise ValueError("Unknown form specification returned by `tdhf_primary_form`: {}".format(m[0]))
+
     def tdhf_ab_form(self, *args, **kwargs):
         """
         The A-B form of the TD problem.
@@ -158,14 +177,14 @@ class TDMatrixBlocks(object):
         Returns:
             A and B TD matrices.
         """
-        if self.primary_driver == "ab":
-            raise NotImplementedError("The primary driver is set to 'ab' but `tdhf_ab_form` is not implemented")
-        elif self.primary_driver == "full":
-            return full2ab(self.tdhf_full_form(*args, **kwargs))
-        elif self.primary_driver == "mk":
-            return mkk2ab(*self.tdhf_mk_form(*args, **kwargs))
-        else:
-            raise RuntimeError("Unknown primary driver set: '{}'".format(self.primary_driver))
+        m = self.tdhf_primary_form(*args, **kwargs)
+        self.__check_primary_form__(m)
+        if m[0] == "ab":
+            return m[1:]
+        elif m[0] == "full":
+            return full2ab(m[1])
+        elif m[0] == "mk":
+            return mkk2ab(*m[1:])
 
     def tdhf_full_form(self, *args, **kwargs):
         """
@@ -174,14 +193,14 @@ class TDMatrixBlocks(object):
         Returns:
             The full TD matrix.
         """
-        if self.primary_driver == "ab":
-            return ab2full(*self.tdhf_ab_form(*args, **kwargs))
-        elif self.primary_driver == "full":
-            raise NotImplementedError("The primary driver is set to 'full' but `tdhf_full_form` is not implemented")
-        elif self.primary_driver == "mk":
-            return mkk2full(*self.tdhf_mk_form(*args, **kwargs))
-        else:
-            raise RuntimeError("Unknown primary driver set: '{}'".format(self.primary_driver))
+        m = self.tdhf_primary_form(*args, **kwargs)
+        self.__check_primary_form__(m)
+        if m[0] == "ab":
+            return ab2full(*m[1:])
+        elif m[0] == "full":
+            return m[1]
+        elif m[0] == "mk":
+            return mkk2full(*m[1:])
 
     def tdhf_mk_form(self, *args, **kwargs):
         """
@@ -190,26 +209,25 @@ class TDMatrixBlocks(object):
         Returns:
             MK and K TD matrixes.
         """
-        if self.primary_driver == "ab":
-            return ab2mkk(*self.tdhf_ab_form(*args, **kwargs))
-        elif self.primary_driver == "full":
-            return full2mkk(self.tdhf_full_form(*args, **kwargs))
-        elif self.primary_driver == "mk":
-            raise NotImplementedError("The primary driver is set to 'mk' but `tdhf_mk_form` is not implemented")
-        else:
-            raise RuntimeError("Unknown primary driver set: '{}'".format(self.primary_driver))
+        m = self.tdhf_primary_form(*args, **kwargs)
+        self.__check_primary_form__(m)
+        if m[0] == "ab":
+            return ab2mkk(*m[1:])
+        elif m[0] == "full":
+            return full2mkk(m[1])
+        elif m[0] == "mk":
+            return m[1:]
 
 
 class TDERIMatrixBlocks(TDMatrixBlocks):
     symmetries = [
         ((0, 1, 2, 3), False),
     ]
-    primary_driver = "ab"
 
     def __init__(self):
         """
-        This a prototype class for transformed ERIs used in all TDHF calculations. It handles integral blocks and
-        the diagonal part found in Eq. 7.5 of RevModPhys.36.844.
+        This a prototype class for TD calculations based on ERI (TD-HF). It handles integral blocks and
+        the diagonal part, see Eq. 7.5 of RevModPhys.36.844.
         """
         # Caching
         self.__eri__ = {}
@@ -292,17 +310,17 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
         else:
             raise ValueError("Unknown item: {}".format(repr(item)))
 
-    def tdhf_ab_form(self, *args, **kwargs):
+    def tdhf_primary_form(self, *args, **kwargs):
         """
-        The A-B form of the TD problem.
+        A primary form of TDHF matrixes (AB).
 
         Returns:
-            A and B TD matrices.
+            Output type: "ab", and the corresponding matrixes.
         """
         d = self.tdhf_diag(*args, **kwargs)
         a = d + 2 * self["knmj"] - self["knjm"]
         b = 2 * self["kjmn"] - self["kjnm"]
-        return a, b
+        return "ab", a, b
 
 
 def eig(m, driver=None, nroots=None, half=True):

@@ -103,12 +103,15 @@ class PhysERI(td.PhysERI):
             pairs_column=enumerate(pair_column),
         )
 
-    def tdhf_full_form(self, k):
+    def tdhf_primary_form(self, k):
         """
-        The full form of the TD problem.
+        A primary form of TDHF matrixes (full).
+        Args:
+            k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
+            vector or a single integer with the second index assuming the first index being zero;
 
         Returns:
-            The full TD matrix.
+            Output type: "full", and the corresponding matrix.
         """
         r1, r2, c1, c2 = get_block_k_ix(self, k)
         d1 = self.tdhf_diag(r1)
@@ -117,9 +120,7 @@ class PhysERI(td.PhysERI):
         b = 2 * self["kjmn", r1, c2] - self["kjnm", r1, c2]
         a_ = d2 + 2 * self["mjkn", r2, c2] - self["mjnk", r2, c2]
         b_ = 2 * self["mnkj", r2, c1] - self["mnjk", r2, c1]
-        return numpy.block([[a, b], [-b_, -a_]])
-
-    tdhf_ab_form = TDMatrixBlocks.tdhf_ab_form
+        return "full", numpy.block([[a, b], [-b_, -a_]])
 
 
 class PhysERI4(PhysERI):
