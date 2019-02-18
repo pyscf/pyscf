@@ -30,10 +30,6 @@ import numpy
 # * TDRHF provides a container
 
 
-k_nocc = td.k_nocc
-k_nmo = td.k_nmo
-
-
 class PhysERI(td.PhysERI):
 
     def __init__(self, model, frozen=None):

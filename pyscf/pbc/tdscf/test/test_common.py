@@ -1,4 +1,4 @@
-from pyscf.pbc.tdscf.krhf_slow_supercell import k_nocc
+from pyscf.tdscf.common_slow import k_nocc
 from pyscf.pbc.tdscf.krhf_slow import get_block_k_ix
 
 import numpy

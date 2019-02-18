@@ -31,9 +31,6 @@ import numpy
 # * TDRHF provides a container
 
 
-k_nocc = td.k_nocc
-
-
 class PhysERI(td.PhysERI):
     primary_driver = "full"
 
