@@ -29,7 +29,7 @@ from pyscf.tdscf import rhf_slow, TDDFT
 import numpy
 
 
-class PhysERI(TDProxyMatrixBlocks, MolecularMFMixin):
+class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
     def __init__(self, model, frozen=None):
         """

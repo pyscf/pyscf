@@ -50,7 +50,7 @@ class DiamondTestGamma(unittest.TestCase):
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
         e = PhysERI(self.model_rks)
-        m = e.tdhf_matrix()
+        m = e.tdhf_full_form()
 
         # Test matrix vs pyscf
         testing.assert_allclose(self.ref_m, m, atol=1e-14)

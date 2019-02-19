@@ -23,64 +23,28 @@ Davidson procedure. Several variants of TDKS are available:
 # * vector_to_amplitudes reshapes and normalizes the solution
 # * TDRKS provides a container
 
-from pyscf.tdscf import rks_slow as tdks, rhf_slow as tdhf
-import pyscf.pbc.tdscf as proxy
-
-import numpy
+from pyscf.tdscf import rks_slow, rhf_slow, common_slow
+from pyscf.pbc.tdscf import KTDDFT
 
 
-class PhysERI(tdks.PhysERI):
+class PhysERI(common_slow.GammaMFMixin, rks_slow.PhysERI):
 
     def __init__(self, model, frozen=None):
         """
-        A proxy class for calculating the TDKS matrix blocks.
+        A proxy class for calculating the TDKS matrix blocks (Gamma-point version).
 
         Args:
-            model (KRKS): the base model with a single k-point (Gamma);
+            model (KRKS): the base model with a single k-point;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
-        k = numpy.array(model.kpts)
-        if len(k.shape) == 2:
-            if k.shape[0] != 1:
-                raise ValueError("A Gamma-point calculation expected: k = {}".format(repr(k)))
-            k = k[0]
-        if numpy.any(k != 0):
-            raise ValueError("A Gamma-point calculation expected: k = {}".format(repr(k)))
-
-        tdhf.TDDFTMatrixBlocks.__init__(self)
-        self.model = model
-        self.proxy_model = proxy.KTDDFT(model)
-        self.space = tdhf.format_frozen(frozen, len(model.mo_energy[0]))
-
-    @property
-    def mo_coeff(self):
-        return self.model.mo_coeff[0][:, self.space]
-
-    @property
-    def mo_energy(self):
-        return self.model.mo_energy[0][self.space]
-
-    @property
-    def nocc(self):
-        return int(self.model.mo_occ[0][self.space].sum() // 2)
-
-    @property
-    def nocc_full(self):
-        return int(self.model.mo_occ[0].sum() // 2)
-
-    @property
-    def nmo(self):
-        return self.space.sum()
-
-    @property
-    def nmo_full(self):
-        return len(self.model.mo_occ[0])
+        common_slow.TDProxyMatrixBlocks.__init__(self, KTDDFT(model))
+        common_slow.GammaMFMixin.__init__(self, model, frozen=frozen)
 
 
-vector_to_amplitudes = tdks.vector_to_amplitudes
+vector_to_amplitudes = rhf_slow.vector_to_amplitudes
 
 
-class TDRKS(tdks.TDRKS):
+class TDRKS(rks_slow.TDRKS):
     eri1 = PhysERI
 
     def __init__(self, mf, frozen=None):
