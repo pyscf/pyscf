@@ -33,7 +33,7 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
     def __init__(self, model, frozen=None):
         """
-        A proxy class for calculating the TDKS matrix blocks.
+        A proxy class for calculating the TDKS matrix blocks (molecular version).
 
         Args:
             model (RKS): the base model;
@@ -52,27 +52,25 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
         Returns:
             The matrix.
         """
-        vind, hdiag = self.proxy_model.gen_vind(self.model)
-
         nmo_full = self.nmo_full
         nocc_full = self.nocc_full
         nvirt_full = nmo_full - nocc_full
         size_full = nocc_full * nvirt_full
 
-        if len(hdiag) == size_full:
+        if len(self.proxy_diag) == size_full:
             double = False
-        elif len(hdiag) == 2 * size_full:
+        elif len(self.proxy_diag) == 2 * size_full:
             double = True
         else:
             raise RuntimeError("The underlying TD* matvec routine returns arrays of unexpected size: {:d} vs "
-                               "{:d} or {:d} (expected)".format(len(hdiag), size_full, 2 * size_full))
+                               "{:d} or {:d} (expected)".format(len(self.proxy_diag), size_full, 2 * size_full))
 
         nmo = self.nmo
         nocc = self.nocc
         nvirt = nmo - nocc
         size = nocc * nvirt
 
-        probe = numpy.zeros((2 * size if double else size, len(hdiag)))
+        probe = numpy.zeros((2 * size if double else size, len(self.proxy_diag)))
 
         o = self.space[:nocc_full]
         v = self.space[nocc_full:]
@@ -81,7 +79,7 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
             ov = numpy.tile(ov, 2)
 
         probe[numpy.arange(probe.shape[0]), numpy.argwhere(ov)[:, 0]] = 1
-        result = vind(probe).T[ov, :]
+        result = self.proxy_vind(probe).T[ov, :]
 
         return result
 

@@ -360,7 +360,7 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
     def __get_mo_energies__(self, *args, **kwargs):
         raise NotImplementedError
 
-    def get_response(self):
+    def get_response(self, *args, **kwargs):
         """
         Retrieves a raw TD response matrix.
 
@@ -392,12 +392,12 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
 
         if size_full == size_hdiag:
             # The MK case
-            e_occ, e_virt = self.__get_mo_energies__(*args)
-            return ("mk",) + proxy_make_canonic(self.get_response(), e_occ, e_virt, return_ov=True)
+            e_occ, e_virt = self.__get_mo_energies__(*args, **kwargs)
+            return ("mk",) + proxy_make_canonic(self.get_response(*args, **kwargs), e_occ, e_virt, return_ov=True)
 
         elif 2 * size_full == size_hdiag:
             # Full case
-            return "full", self.get_response()
+            return "full", self.get_response(*args, **kwargs)
 
         else:
             raise ValueError("Do not recognize the size of the output diagonal: {:d}, expected {:d} or {:d}".format(
@@ -623,6 +623,16 @@ class PeriodicMFMixin(object):
     def nmo(self):
         """The total number of molecular orbitals."""
         return k_nmo(self)
+
+    @property
+    def nocc_full(self):
+        """The true (including frozen degrees of freedom) number of occupied orbitals."""
+        return k_nocc(self.model)
+
+    @property
+    def nmo_full(self):
+        """The true (including frozen degrees of freedom) total number of molecular orbitals."""
+        return k_nmo(self.model)
 
 
 def eig(m, driver=None, nroots=None, half=True):
