@@ -358,11 +358,17 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
                                   2.*lijkab[ki,kk].transpose(0,2,1,3,4) -
                                   2.*lijkab[kk,kj].transpose(2,1,0,3,4) -
                                   2.*lijkab[kj,ki].transpose(1,0,2,3,4))
-                eijk[ki,kj] = eij[ki,kj] + mo_e_o[kk][None,None,None,None,:]
+                eijk[ki,kj] = _get_epqr([0,nocc,ki,mo_e_o,eom.nonzero_opadding],
+                                        [0,nocc,kj,mo_e_o,eom.nonzero_opadding],
+                                        [0,nocc,kk,mo_e_o,eom.nonzero_opadding])
 
             # Creating denominator
-            eab = mo_e_v[ka][:, None] + mo_e_v[kb][None, :]
-            eijkab = (eijk[:, :, :, :, :, None, None] -
+            eab = _get_epq([0,nvir,ka,mo_e_v,eom.nonzero_vpadding],
+                           [0,nvir,kb,mo_e_v,eom.nonzero_vpadding],
+                           fac=[-1.,-1.])
+
+            # Creating denominator
+            eijkab = (eijk[:, :, :, :, :, None, None] +
                       eab[None, None, None, None, None, :, :])
             denom = eijkab + ip_eval
             denom = 1. / denom
@@ -733,7 +739,6 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
         l2 /= ldotr
 
         deltaE = 0.0 + 1j*0.0
-        eab = (mo_e_v[:, None, :, None, None] + mo_e_v[None, :, None, :, None])
         for ki, kj in itertools.product(range(nkpts), repeat=2):
             lijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
             Plijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
@@ -758,11 +763,15 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
                                   2.*lijabc[ka,kc].transpose(0,1,2,4,3) -
                                   2.*lijabc[kc,kb].transpose(0,1,4,3,2) -
                                   2.*lijabc[kb,ka].transpose(0,1,3,2,4))
-                eabc[ka,kb] = eab[ka,kb] + mo_e_v[kc][None,None,None,None,:]
+                eabc[ka,kb] = _get_epqr([0,nvir,ka,mo_e_v,eom.nonzero_vpadding],
+                                        [0,nvir,kb,mo_e_v,eom.nonzero_vpadding],
+                                        [0,nvir,kc,mo_e_v,eom.nonzero_vpadding],
+                                        fac=[-1.,-1.,-1.])
 
             # Creating denominator
-            eij = mo_e_o[ki][:, None] + mo_e_o[kj][None, :]
-            eijabc = (eij[None, None, :, :, None, None, None] -
+            eij = _get_epq([0,nocc,ki,mo_e_o,eom.nonzero_opadding],
+                           [0,nocc,kj,mo_e_o,eom.nonzero_opadding])
+            eijabc = (eij[None, None, :, :, None, None, None] +
                       eabc[:, :, None, None, :, :, :])
             denom = eijabc + ea_eval
             denom = 1. / denom

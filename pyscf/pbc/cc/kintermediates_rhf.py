@@ -504,9 +504,14 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
         tmp_t3[ki, kj, kk, ka, kb] += get_w(kk, ki, kj, kc, ka, kb).transpose(1, 2, 0, 4, 5, 3)
         tmp_t3[ki, kj, kk, ka, kb] += get_w(kk, kj, ki, kc, kb, ka).transpose(2, 1, 0, 5, 4, 3)
 
-        eijk = _get_epqr(0,nocc,0,nocc,0,nocc,ki,kj,kk,mo_e_o,nonzero_opadding)
-        eabc = _get_epqr(0,nvir,0,nvir,0,nvir,ka,kb,kc,mo_e_v,nonzero_vpadding)
-        eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
+        eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                         [0,nocc,kj,mo_e_o,nonzero_opadding],
+                         [0,nocc,kk,mo_e_o,nonzero_opadding])
+        eabc = _get_epqr([0,nvir,ka,mo_e_v,nonzero_vpadding],
+                         [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                         [0,nvir,kc,mo_e_v,nonzero_vpadding],
+                         fac=[-1.,-1.,-1.])
+        eijkabc = eijk[:, :, :, None, None, None] + eabc[None, None, None, :, :, :]
         tmp_t3[ki, kj, kk, ka, kb] /= eijkabc
 
     pt1 = np.zeros((nkpts, nocc, nvir), dtype=t2.dtype)
@@ -818,15 +823,20 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
 
             for ki, kj, kk in product(range(nkpts), repeat=3):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
-                eijk = _get_epqr(0,nocc,0,nocc,0,nocc,ki,kj,kk,mo_e_o,nonzero_opadding)
+                eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                                 [0,nocc,kj,mo_e_o,nonzero_opadding],
+                                 [0,nocc,kk,mo_e_o,nonzero_opadding])
 
                 # Find momentum conservation condition for triples
                 # amplitude t3ijkabc
                 kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
-                eabc = _get_epqr(a0,a1,b0,b1,c0,c1,ka,kb,kc,mo_e_v,nonzero_vpadding)
+                eabc = _get_epqr([a0,a1,ka,mo_e_v,nonzero_vpadding],
+                                 [b0,b1,kb,mo_e_v,nonzero_vpadding],
+                                 [c0,c1,kc,mo_e_v,nonzero_vpadding],
+                                 fac=[-1.,-1.,-1.])
 
                 kpt_indices = [ki,kj,kk,ka,kb,kc]
-                eabcijk = (eijk[None,None,None,:,:,:] - eabc[:,:,:,None,None,None])
+                eabcijk = (eijk[None,None,None,:,:,:] + eabc[:,:,:,None,None,None])
 
                 tmp_t3Tv_ijk = my_permuted_w[ki,kj,kk]
                 tmp_t3Tv_jik = my_permuted_w[kj,ki,kk]
