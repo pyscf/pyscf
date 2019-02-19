@@ -237,11 +237,11 @@ class KnownValues(unittest.TestCase):
         myt1 = mycc1.t1.copy()
         myt2 = mycc1.t2.copy()
         e, pt1, pt2, Wmcik, Wacek = gintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=eris1)
-        self.assertAlmostEqual(lib.finger(e), -13810450.064880637, 5)
-        self.assertAlmostEqual(lib.finger(pt1), (14525.466845738476+1145.7490899866602j), 6)
-        self.assertAlmostEqual(lib.finger(pt2), (-34943.95360794282+29728.34747703709j), 6)
-        self.assertAlmostEqual(lib.finger(Wmcik), (271010.439304044-201703.96483952703j), 6)
-        self.assertAlmostEqual(lib.finger(Wacek), (316710.3913587458+99554.48507036189j), 6)
+        self.assertAlmostEqual(lib.finger(e), -13810450.064880637, 3)
+        self.assertAlmostEqual(lib.finger(pt1), (14525.466845738476+1145.7490899866602j), 4)
+        self.assertAlmostEqual(lib.finger(pt2), (-34943.95360794282+29728.34747703709j), 4)
+        self.assertAlmostEqual(lib.finger(Wmcik), (271010.439304044-201703.96483952703j), 4)
+        self.assertAlmostEqual(lib.finger(Wacek), (316710.3913587458+99554.48507036189j), 4)
 
     def test_t3p2_intermediates_real(self):
         myt1 = mycc1.t1.real.copy()

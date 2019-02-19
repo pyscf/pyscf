@@ -263,11 +263,11 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds_slow(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.finger(e),47165803.39384298, 5)
-        self.assertAlmostEqual(lib.finger(pt1),10444.351837617747+20016.35108560657j, 5)
-        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 4)
-        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 5)
-        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 5)
+        self.assertAlmostEqual(lib.finger(e),47165803.39384298, 3)
+        self.assertAlmostEqual(lib.finger(pt1),10444.351837617747+20016.35108560657j, 4)
+        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
+        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
+        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
 
     def test_t3p2_imds_complex(self):
         '''Test t3p2 implementation.'''
@@ -285,11 +285,11 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.finger(e), 47165803.393840045, 4)
-        self.assertAlmostEqual(lib.finger(pt1),10444.3518376177471509+20016.3510856065695407j, 5)
-        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 4)
-        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 5)
-        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 5)
+        self.assertAlmostEqual(lib.finger(e), 47165803.393840045, 3)
+        self.assertAlmostEqual(lib.finger(pt1),10444.3518376177471509+20016.3510856065695407j, 4)
+        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
+        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
+        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
 
     def test_t3p2_imds_complex_against_so(self):
         '''Test t3[2] implementation against spin-orbital implmentation.'''
