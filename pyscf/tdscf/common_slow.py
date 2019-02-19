@@ -369,6 +369,14 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
         """
         raise NotImplementedError
 
+    @property
+    def nocc_full(self):
+        raise NotImplementedError
+
+    @property
+    def nmo_full(self):
+        raise NotImplementedError
+
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TDHF matrixes.
@@ -377,8 +385,8 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
             Output type: "full", "ab", or "mk" and the corresponding matrix(es).
         """
 
-        nocc_full = int(self.proxy_model._scf.mo_occ.sum() // 2)
-        nmo_full = len(self.proxy_model._scf.mo_occ)
+        nocc_full = self.nocc_full
+        nmo_full = self.nmo_full
         size_full = nocc_full * (nmo_full - nocc_full)
         size_hdiag = len(self.proxy_diag)
 
@@ -422,7 +430,9 @@ def format_frozen_mol(frozen, nmo):
 class MolecularMFMixin(object):
     def __init__(self, model, frozen=None):
         """
-        A mixin to support custom slices of mean-field fields.
+        A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
+
+        Molecular version.
 
         Args:
             model: the base model;
@@ -460,6 +470,60 @@ class MolecularMFMixin(object):
     def nocc_full(self):
         """The true (including frozen degrees of freedom) number of occupied orbitals."""
         return int(self.model.mo_occ.sum() // 2)
+
+    @property
+    def nmo_full(self):
+        """The true (including frozen degrees of freedom) total number of molecular orbitals."""
+        return len(self.space)
+
+
+class GammaMFMixin(object):
+    def __init__(self, model, frozen=None):
+        """
+        A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
+
+        PBC Gamma-point version (supports K-PBC drivers with a single k-point).
+
+        Args:
+            model: the base model;
+            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+        """
+        if "kpts" not in dir(model):
+            raise ValueError("No 'kpts' attribute in the mean-field object")
+        if len(model.kpts) != 1:
+            raise ValueError("Only a single k-point supported, found: model.kpts = {}".format(model.kpts))
+        self.model = model
+        self.space = format_frozen_mol(frozen, len(model.mo_energy[0]))
+
+    @property
+    def mo_coeff(self):
+        """MO coefficients."""
+        return self.model.mo_coeff[0][:, self.space]
+
+    @property
+    def mo_energy(self):
+        """MO energies."""
+        return self.model.mo_energy[0][self.space]
+
+    @property
+    def mo_occ(self):
+        """MO occupation numbers."""
+        return self.model.mo_occ[0][self.space]
+
+    @property
+    def nocc(self):
+        """The number of occupied orbitals."""
+        return int(self.model.mo_occ[0][self.space].sum() // 2)
+
+    @property
+    def nmo(self):
+        """The total number of molecular orbitals."""
+        return self.space.sum()
+
+    @property
+    def nocc_full(self):
+        """The true (including frozen degrees of freedom) number of occupied orbitals."""
+        return int(self.model.mo_occ[0].sum() // 2)
 
     @property
     def nmo_full(self):
@@ -523,7 +587,9 @@ def k_nmo(model):
 class PeriodicMFMixin(object):
     def __init__(self, model, frozen=None):
         """
-        A mixin to support custom slices of mean-field fields.
+        A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
+
+        PBC version.
 
         Args:
             model: the base model;
