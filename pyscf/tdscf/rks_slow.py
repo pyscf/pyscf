@@ -29,6 +29,41 @@ from pyscf.tdscf import rhf_slow, TDDFT
 import numpy
 
 
+def molecular_response(vind, space, nocc, double):
+    """
+    Retrieves a raw response matrix.
+    Args:
+        vind (Callable): a pyscf matvec routine;
+        space (ndarray): the active space;
+        nocc (int): the number of occupied orbitals (frozen and active);
+        double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;
+
+    Returns:
+        The TD matrix.
+    """
+    nmo_full = len(space)
+    nocc_full = nocc
+    nvirt_full = nmo_full - nocc_full
+    size_full = nocc_full * nvirt_full
+
+    nmo = space.sum()
+    nocc = space[:nocc_full].sum()
+    nvirt = nmo - nocc
+    size = nocc * nvirt
+
+    probe = numpy.zeros((2 * size if double else size, 2 * size_full if double else size_full))
+
+    o = space[:nocc_full]
+    v = space[nocc_full:]
+    ov = (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)
+    if double:
+        ov = numpy.tile(ov, 2)
+
+    probe[numpy.arange(probe.shape[0]), numpy.argwhere(ov)[:, 0]] = 1
+
+    return vind(probe).T[ov, :]
+
+
 class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
     def __init__(self, model, frozen=None):
@@ -65,23 +100,7 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
             raise RuntimeError("The underlying TD* matvec routine returns arrays of unexpected size: {:d} vs "
                                "{:d} or {:d} (expected)".format(len(self.proxy_diag), size_full, 2 * size_full))
 
-        nmo = self.nmo
-        nocc = self.nocc
-        nvirt = nmo - nocc
-        size = nocc * nvirt
-
-        probe = numpy.zeros((2 * size if double else size, len(self.proxy_diag)))
-
-        o = self.space[:nocc_full]
-        v = self.space[nocc_full:]
-        ov = (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)
-        if double:
-            ov = numpy.tile(ov, 2)
-
-        probe[numpy.arange(probe.shape[0]), numpy.argwhere(ov)[:, 0]] = 1
-        result = self.proxy_vind(probe).T[ov, :]
-
-        return result
+        return molecular_response(self.proxy_vind, self.space, nocc_full, double)
 
 
 vector_to_amplitudes = rhf_slow.vector_to_amplitudes
