@@ -95,8 +95,8 @@ rand_kmf1 = make_rand_kmf(nkpts=1)
 rand_kmf2 = make_rand_kmf(nkpts=2)
 
 def tearDownModule():
-    global cell_n3d, kmf, rand_kmf
-    del cell_n3d, kmf, rand_kmf
+    global cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2
+    del cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
