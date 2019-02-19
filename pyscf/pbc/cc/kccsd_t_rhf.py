@@ -291,7 +291,9 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
                 for ki, kj, kk in product(range(nkpts), repeat=3):
                     # eigenvalue denominator: e(i) + e(j) + e(k)
-                    eijk = _get_epqr(0,nocc,0,nocc,0,nocc,ki,kj,kk,mo_e_o,nonzero_opadding)
+                    eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                                     [0,nocc,kj,mo_e_o,nonzero_opadding],
+                                     [0,nocc,kk,mo_e_o,nonzero_opadding])
 
                     # Find momentum conservation condition for triples
                     # amplitude t3ijkabc
@@ -306,8 +308,11 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                     else:
                         symm_kpt = 6.
 
-                    eabc = _get_epqr(a0,a1,b0,b1,c0,c1,ka,kb,kc,mo_e_v,nonzero_vpadding)
-                    eijkabc = (eijk[None,None,None,:,:,:] - eabc[:,:,:,None,None,None])
+                    eabc = _get_epqr([a0,a1,ka,mo_e_v,nonzero_vpadding],
+                                     [b0,b1,kb,mo_e_v,nonzero_vpadding],
+                                     [c0,c1,kc,mo_e_v,nonzero_vpadding],
+                                     fac=[-1.,-1.,-1.])
+                    eijkabc = (eijk[None,None,None,:,:,:] + eabc[:,:,:,None,None,None])
 
                     pwijk = my_permuted_w[ki,kj,kk] + my_permuted_v[ki,kj,kk]
                     rwijk = (4. * my_permuted_w[ki,kj,kk] +
@@ -546,15 +551,45 @@ def get_data_slices(kpt_indices, orb_indices, kconserv):
 
     return vvop_indices, vooo_indices, t2T_vvop_indices, t2T_vooo_indices
 
-def _get_epqr(p0,p1,q0,q1,r0,r1,kp,kq,kr,mo_e,nonzero_padding):
-    def get_idx(x0,x1,kx):
-        return nonzero_padding[kx][np.logical_and(nonzero_padding[kx] >= x0, nonzero_padding[kx] < x1)] - x0
-    epqr = LARGE_DENOM * np.ones((p1-p0,q1-q0,r1-r0), dtype=mo_e[0].dtype)
-    idxp = get_idx(p0,p1,kp)
-    idxq = get_idx(q0,q1,kq)
-    idxr = get_idx(r0,r1,kr)
-    n0_ovp_pqr = np.ix_(nonzero_padding[kp][idxp], nonzero_padding[kq][idxq], nonzero_padding[kr][idxr])
-    epqr[n0_ovp_pqr] = lib.direct_sum('p,q,r->pqr', mo_e[kp][p0:p1], mo_e[kq][q0:q1], mo_e[kr][r0:r1])[n0_ovp_pqr]
+def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM):
+    '''Create a denominator
+
+        fac[0]*e[kp,p0:p1] + fac[1]*e[kq,q0:q1] + fac[2]*e[kr,r0:r1]
+
+    where padded elements have been replaced by a large number.
+
+    Args:
+        pindices (5-list of object):
+            A list of p0, p1, kp, orbital values, and non-zero indices for the first
+            denominator element.
+        qindices (5-list of object):
+            A list of q0, q1, kq, orbital values, and non-zero indices for the second
+            denominator element.
+        rindices (5-list of object):
+            A list of r0, r1, kr, orbital values, and non-zero indices for the third
+            denominator element.
+        fac (3-list of float):
+            Factors to multiply the first and second denominator elements.
+        large_num (float):
+            Number to replace the padded elements.
+    '''
+    def get_idx(x0,x1,kx,n0_p):
+        return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
+
+    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    p0,p1,kp,mo_e_p,nonzero_p = pindices
+    q0,q1,kq,mo_e_q,nonzero_q = qindices
+    r0,r1,kr,mo_e_r,nonzero_r = rindices
+    fac_p, fac_q, fac_r = fac
+
+    epqr = large_num * np.ones((p1-p0,q1-q0,r1-r0), dtype=mo_e_p[0].dtype)
+    idxp = get_idx(p0,p1,kp,nonzero_p)
+    idxq = get_idx(q0,q1,kq,nonzero_q)
+    idxr = get_idx(r0,r1,kr,nonzero_r)
+    n0_ovp_pqr = np.ix_(nonzero_p[kp][idxp], nonzero_q[kq][idxq], nonzero_r[kr][idxr])
+    epqr[n0_ovp_pqr] = lib.direct_sum('p,q,r->pqr', fac_p*mo_e_p[kp][p0:p1],
+                                      fac_q*mo_e_q[kq][q0:q1],
+                                      fac_r*mo_e_r[kr][r0:r1])[n0_ovp_pqr]
     return epqr
 
 if __name__ == '__main__':

@@ -25,6 +25,8 @@ from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.cc import eom_kccsd_ghf as eom_kgccsd
 from pyscf.pbc.cc import kintermediates_rhf as imdk
+from pyscf.pbc.cc.kccsd_rhf import _get_epq
+from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
