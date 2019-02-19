@@ -727,10 +727,22 @@ class EOMEA(eom_rccsd.EOM):
 # EOM-EE-CCSD
 ########################################
 
+def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
+           eris=None, imds=None, partition=None, kptlist=None,
+           dtype=None):
+    '''See `ipccsd()` for a description of arguments.'''
+    return ipccsd(eom, nroots, koopmans, guess, left, eris, imds,
+                  partition, kptlist, dtype)
+
+
 class EOMEE(eom_rccsd.EOM):
     def __init__(self, cc):
         self.kpts = cc.kpts
         eom_rccsd.EOM.__init__(self, cc)
+
+    kernel = eeccsd
+    eeccsd = eeccsd
+
 
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
