@@ -66,7 +66,7 @@ def molecular_response(vind, space, nocc, double):
     if double:
         result_a = result[:size]
         result_b = result[size:]
-        return ab2full(result_a, -result_b.conj())
+        return result_a, -result_b.conj()
     else:
         return result
 
@@ -131,7 +131,7 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
         elif 2 * size_full == size_hdiag:
             # Full case
-            return "full", molecular_response(self.proxy_vind, self.space, self.nocc_full, True)
+            return ("ab",) + molecular_response(self.proxy_vind, self.space, self.nocc_full, True)
 
         else:
             raise ValueError("Do not recognize the size of the output diagonal: {:d}, expected {:d} or {:d}".format(
