@@ -31,7 +31,7 @@ import numpy
 # * TDRHF provides a container
 
 
-class PhysERI(TDERIMatrixBlocks, MolecularMFMixin):
+class PhysERI(MolecularMFMixin, TDERIMatrixBlocks):
     def __init__(self, model, frozen=None):
         """
         The TDHF ERI implementation performing a full AO-MO transformation of integrals. No symmetries are employed in

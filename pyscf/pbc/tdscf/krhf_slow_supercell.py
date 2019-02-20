@@ -36,7 +36,7 @@ from itertools import product
 # * TDRHF provides a container
 
 
-class PhysERI(TDERIMatrixBlocks, PeriodicMFMixin):
+class PhysERI(PeriodicMFMixin, TDERIMatrixBlocks):
 
     def __init__(self, model, frozen=None):
         """
