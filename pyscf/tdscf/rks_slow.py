@@ -23,7 +23,7 @@ Davidson procedure. Several variants of TDKS are available:
 # * vector_to_amplitudes reshapes and normalizes the solution
 # * TDRKS provides a container
 
-from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin
+from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, ab2full
 from pyscf.tdscf import rhf_slow, TDDFT
 
 import numpy
@@ -51,17 +51,24 @@ def molecular_response(vind, space, nocc, double):
     nvirt = nmo - nocc
     size = nocc * nvirt
 
-    probe = numpy.zeros((2 * size if double else size, 2 * size_full if double else size_full))
+    probe = numpy.zeros((size, 2 * size_full if double else size_full))
 
     o = space[:nocc_full]
     v = space[nocc_full:]
     ov = (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)
-    if double:
-        ov = numpy.tile(ov, 2)
 
     probe[numpy.arange(probe.shape[0]), numpy.argwhere(ov)[:, 0]] = 1
 
-    return vind(probe).T[ov, :]
+    if double:
+        ov = numpy.tile(ov, 2)
+    result = vind(probe).T[ov, :]
+
+    if double:
+        result_a = result[:size]
+        result_b = result[size:]
+        return ab2full(result_a, -result_b.conj())
+    else:
+        return result
 
 
 class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
