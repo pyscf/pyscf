@@ -1,8 +1,7 @@
 from pyscf.gto import Mole
 from pyscf.scf import RKS, RHF
 from pyscf.tdscf import TDDFT, TDHF
-from pyscf.tdscf.rks_slow import PhysERI, TDRKS
-from pyscf.tdscf.common_slow import proxy_make_canonic
+from pyscf.tdscf.rks_slow import PhysERI, TDRKS, mk_make_canonic
 
 import numpy
 from numpy import testing
@@ -34,7 +33,7 @@ class H20Test(unittest.TestCase):
 
         e = model_rks.mo_energy
         nocc = int(sum(model_rks.mo_occ) // 2)
-        cls.ref_m = proxy_make_canonic(retrieve_m(td_model_rks), e[:nocc], e[nocc:])
+        cls.ref_m = mk_make_canonic(retrieve_m(td_model_rks), e[:nocc], e[nocc:])
 
     @classmethod
     def tearDownClass(cls):

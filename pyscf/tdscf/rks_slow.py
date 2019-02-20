@@ -71,6 +71,27 @@ def molecular_response(vind, space, nocc, double):
         return result
 
 
+def mk_make_canonic(m, o, v, return_ov=False):
+    """
+    Makes the output of pyscf TDDFT matrix (MK form) to be canonic.
+    Args:
+        m (ndarray): the TDDFT matrix;
+        o (ndarray): occupied orbital energies;
+        v (ndarray): virtual orbital energies;
+        return_ov (bool): if True, returns the K-matrix as well;
+
+    Returns:
+        The rotated matrix as well as an optional K-matrix.
+    """
+    e_ov = (v[numpy.newaxis, :] - o[:, numpy.newaxis]).reshape(-1)
+    e_ov_sqr = e_ov ** .5
+    result = m * (e_ov_sqr[numpy.newaxis, :] / e_ov_sqr[:, numpy.newaxis])
+    if return_ov:
+        return result, numpy.diag(e_ov)
+    else:
+        return result
+
+
 class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
     def __init__(self, model, frozen=None):
@@ -87,27 +108,35 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
     def __get_mo_energies__(self, *args, **kwargs):
         return self.mo_energy[:self.nocc], self.mo_energy[self.nocc:]
 
-    def get_response(self):
+    def tdhf_primary_form(self, *args, **kwargs):
         """
-        Retrieves a raw TD response matrix.
+        A primary form of TD matrixes.
 
         Returns:
-            The matrix.
+            Output type: "full", "ab", or "mk" and the corresponding matrix(es).
         """
-        nmo_full = self.nmo_full
+
         nocc_full = self.nocc_full
-        nvirt_full = nmo_full - nocc_full
-        size_full = nocc_full * nvirt_full
+        nmo_full = self.nmo_full
+        size_full = nocc_full * (nmo_full - nocc_full)
+        size_hdiag = len(self.proxy_diag)
 
-        if len(self.proxy_diag) == size_full:
-            double = False
-        elif len(self.proxy_diag) == 2 * size_full:
-            double = True
+        if size_full == size_hdiag:
+            # The MK case
+            e_occ, e_virt = self.__get_mo_energies__(*args, **kwargs)
+            return ("mk",) + mk_make_canonic(
+                molecular_response(self.proxy_vind, self.space, self.nocc_full, False),
+                e_occ, e_virt, return_ov=True
+            )
+
+        elif 2 * size_full == size_hdiag:
+            # Full case
+            return "full", molecular_response(self.proxy_vind, self.space, self.nocc_full, True)
+
         else:
-            raise RuntimeError("The underlying TD* matvec routine returns arrays of unexpected size: {:d} vs "
-                               "{:d} or {:d} (expected)".format(len(self.proxy_diag), size_full, 2 * size_full))
-
-        return molecular_response(self.proxy_vind, self.space, nocc_full, double)
+            raise ValueError("Do not recognize the size of the output diagonal: {:d}, expected {:d} or {:d}".format(
+                size_hdiag, size_full, 2 * size_full,
+            ))
 
 
 vector_to_amplitudes = rhf_slow.vector_to_amplitudes

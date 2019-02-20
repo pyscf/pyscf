@@ -325,27 +325,6 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
         return "ab", a, b
 
 
-def proxy_make_canonic(m, o, v, return_ov=False):
-    """
-    Makes the output of pyscf TDDFT matrix (MK form) to be canonic.
-    Args:
-        m (ndarray): the TDDFT matrix;
-        o (ndarray): occupied orbital energies;
-        v (ndarray): virtual orbital energies;
-        return_ov (bool): if True, returns the K-matrix as well;
-
-    Returns:
-        The rotated matrix as well as an optional K-matrix.
-    """
-    e_ov = (v[numpy.newaxis, :] - o[:, numpy.newaxis]).reshape(-1)
-    e_ov_sqr = e_ov ** .5
-    result = m * (e_ov_sqr[numpy.newaxis, :] / e_ov_sqr[:, numpy.newaxis])
-    if return_ov:
-        return result, numpy.diag(e_ov)
-    else:
-        return result
-
-
 class TDProxyMatrixBlocks(TDMatrixBlocks):
     def __init__(self, model):
         """
@@ -360,49 +339,8 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
     def __get_mo_energies__(self, *args, **kwargs):
         raise NotImplementedError
 
-    def get_response(self, *args, **kwargs):
-        """
-        Retrieves a raw TD response matrix.
-
-        Returns:
-            The matrix.
-        """
-        raise NotImplementedError
-
-    @property
-    def nocc_full(self):
-        raise NotImplementedError
-
-    @property
-    def nmo_full(self):
-        raise NotImplementedError
-
     def tdhf_primary_form(self, *args, **kwargs):
-        """
-        A primary form of TDHF matrixes.
-
-        Returns:
-            Output type: "full", "ab", or "mk" and the corresponding matrix(es).
-        """
-
-        nocc_full = self.nocc_full
-        nmo_full = self.nmo_full
-        size_full = nocc_full * (nmo_full - nocc_full)
-        size_hdiag = len(self.proxy_diag)
-
-        if size_full == size_hdiag:
-            # The MK case
-            e_occ, e_virt = self.__get_mo_energies__(*args, **kwargs)
-            return ("mk",) + proxy_make_canonic(self.get_response(*args, **kwargs), e_occ, e_virt, return_ov=True)
-
-        elif 2 * size_full == size_hdiag:
-            # Full case
-            return "full", self.get_response(*args, **kwargs)
-
-        else:
-            raise ValueError("Do not recognize the size of the output diagonal: {:d}, expected {:d} or {:d}".format(
-                size_hdiag, size_full, 2 * size_full,
-            ))
+        raise NotImplementedError
 
 
 def format_frozen_mol(frozen, nmo):
