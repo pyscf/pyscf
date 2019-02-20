@@ -50,5 +50,8 @@ mycc = cc.KUCCSD(kmf)
 euccsd = mycc.kernel()
 
 # EOM-KUCCSD
-myeom = eom_kuccsd.EOMIP(mycc)
-e, v = myeom.kernel(nroots=1)
+myeomip = eom_kuccsd.EOMIP(mycc)
+eip, vip = myeomip.kernel(nroots=1)
+
+myeomea = eom_kuccsd.EOMEA(mycc)
+eea, vea = myeomea.kernel(nroots=1)

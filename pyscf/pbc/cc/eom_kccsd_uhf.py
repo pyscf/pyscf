@@ -1042,6 +1042,30 @@ class EOMEA(eom_kgccsd.EOMEA):
         imds.make_ea()
         return imds
 
+
+########################################
+# EOM-EE-CCSD
+########################################
+
+
+class EOMEE(eom_kgccsd.EOMEE):
+    def __init__(self, cc):
+        self.kpts = cc.kpts
+        eom_kgccsd.EOMIP.__init__(self, cc)
+
+    get_padding_k_idx = get_padding_k_idx
+
+    def vector_size(self):
+        '''Size of the linear excitation operator R vector based on spin-orbital basis'''
+        nocca, noccb = self.nocc
+        nmoa, nmob = self.nmo
+        nvira, nvirb = nmoa - nocca, nmob - noccb
+        nkpts = self.nkpts
+
+        size_r1 = nkpts*nocca*nvira + nkpts*noccb*nvirb
+        size_r2 = 0
+        return size_r1 + size_r2
+
 class _IMDS:
     def __init__(self, cc, eris=None, t1=None, t2=None):
         self._cc = cc
