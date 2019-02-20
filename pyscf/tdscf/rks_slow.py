@@ -23,7 +23,7 @@ Davidson procedure. Several variants of TDKS are available:
 # * vector_to_amplitudes reshapes and normalizes the solution
 # * TDRKS provides a container
 
-from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, ab2full
+from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, TDBase
 from pyscf.tdscf import rhf_slow, TDDFT
 
 import numpy
@@ -142,9 +142,9 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 vector_to_amplitudes = rhf_slow.vector_to_amplitudes
 
 
-class TDRKS(rhf_slow.TDRHF):
-    eri1 = PhysERI
-    eri4 = eri8 = None
+class TDRKS(TDBase):
+    proxy_eri = PhysERI
+    v2a = staticmethod(vector_to_amplitudes)
 
     def __init__(self, mf, frozen=None):
         """
@@ -155,3 +155,12 @@ class TDRKS(rhf_slow.TDRHF):
         """
         super(TDRKS, self).__init__(mf, frozen=frozen)
         self.fast = True
+
+    def ao2mo(self):
+        """
+        Prepares ERI.
+
+        Returns:
+            A suitable ERI.
+        """
+        return self.proxy_eri(self._scf, frozen=self.frozen)

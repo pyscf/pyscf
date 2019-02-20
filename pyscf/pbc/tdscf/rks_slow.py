@@ -45,7 +45,8 @@ vector_to_amplitudes = rhf_slow.vector_to_amplitudes
 
 
 class TDRKS(rks_slow.TDRKS):
-    eri1 = PhysERI
+    proxy_eri = PhysERI
+    v2a = staticmethod(vector_to_amplitudes)
 
     def __init__(self, mf, frozen=None):
         """
