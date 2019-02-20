@@ -140,6 +140,11 @@ class X2C(lib.StreamObject):
             x = _x2c1e_xmatrix(t, v, w, s, c)
         return x
 
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        return self
+
 
 def get_hcore(mol):
     '''2-component X2c hcore Hamiltonian (including spin-free and
@@ -148,7 +153,7 @@ def get_hcore(mol):
     x2c = X2C(mol)
     return x2c.get_hcore(mol)
 
-def get_jk(mol, dm, hermi=1, mf_opt=None):
+def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
@@ -273,13 +278,13 @@ class X2C_UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt)
+        vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
@@ -301,8 +306,13 @@ class X2C_UHF(hf.SCF):
 UHF = X2C_UHF
 
 try:
-    from pyscf.dft import rks, dks
+    from pyscf.dft import rks, dks, r_numint
     class X2C_UKS(X2C_UHF):
+        def __init__(self, mol):
+            X2C_UHF.__init__(self, mol)
+            rks._dft_common_init_(self)
+            self._numint = r_numint.RNumInt()
+
         def dump_flags(self):
             hf.SCF.dump_flags(self)
             logger.info(self, 'XC functionals = %s', self.xc)
@@ -556,3 +566,6 @@ if __name__ == '__main__':
     method.with_x2c.approx = 'atom1e'
     print('E(X2C1E) = %.12g' % method.kernel())
 
+    method = UKS(mol)
+    ex2c = method.kernel()
+    print('E(X2C1E) = %.12g' % ex2c)

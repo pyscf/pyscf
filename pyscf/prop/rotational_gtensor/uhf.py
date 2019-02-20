@@ -114,6 +114,9 @@ class RotationalGTensor(rhf_g.RotationalGTensor):
     para = para
     get_fock = uhf_nmr.get_fock
 
+from pyscf import scf
+scf.uhf.UHF.RotationalGTensor = lib.class_as_method(RotationalGTensor)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -128,7 +131,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.UHF(mol).run()
-    rotg = RotationalGTensor(mf)
+    rotg = mf.RotationalGTensor()
     m = rotg.kernel()
     print(m[0,0] - 0.740149929639848)
 

@@ -321,6 +321,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(s[0]-s[2].conj()).max(), 0, 12)
         self.assertAlmostEqual(abs(s[0]-s[3]       ).max(), 0, 12)
 
+    def test_basis_truncation(self):
+        b = pgto.basis.load('gthtzvp@3s1p', 'C')
+        self.assertEqual(len(b), 2)
+        self.assertEqual(len(b[0][1]), 4)
+        self.assertEqual(len(b[1][1]), 2)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

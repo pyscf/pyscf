@@ -101,6 +101,11 @@ class DFMP2(mp2.MP2):
 
 MP2 = DFMP2
 
+from pyscf import scf
+scf.hf.RHF.DFMP2 = lib.class_as_method(DFMP2)
+scf.rohf.ROHF.DFMP2 = None
+scf.uhf.UHF.DFMP2 = None
+
 del(WITH_T2)
 
 

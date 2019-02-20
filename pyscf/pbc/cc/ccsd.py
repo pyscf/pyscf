@@ -49,10 +49,11 @@ class RCCSD(rccsd.RCCSD):
         #if mo_coeff is self._scf.mo_coeff:
         #    eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
         #else:
-        #    # Add the HFX correction of Ewald probe charge method.
-        #    # FIXME: Whether to add this correction for other exxdiv treatments?
-        #    # Without the correction, MP2 energy may be largely off the
-        #    # correct value.
+
+        # Add the HFX correction of Ewald probe charge method.
+        # FIXME: Whether to add this correction for other exxdiv treatments?
+        # Without the correction, MP2 energy may be largely off the
+        # correct value.
         madelung = tools.madelung(self._scf.cell, self._scf.kpt)
         eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris

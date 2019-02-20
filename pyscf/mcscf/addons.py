@@ -356,7 +356,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
 
     def project(mfmo, init_mo, ncore, s):
         s_init_mo = numpy.einsum('pi,pi->i', init_mo.conj(), s.dot(init_mo))
-        if abs(s_init_mo - 1).max() < 1e-7:
+        if abs(s_init_mo - 1).max() < 1e-7 and mfmo.shape[1] == init_mo.shape[1]:
             # Initial guess orbitals are orthonormal
             return init_mo
 # TODO: test whether the canonicalized orbitals are better than the projected orbitals

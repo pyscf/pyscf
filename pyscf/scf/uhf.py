@@ -84,12 +84,8 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         project = not gto.same_basis_set(chk_mol, mol)
 
     # Check whether the two molecules are similar
-    def inertia_momentum(mol):
-        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
-                                  mol.atom_coords())
-        return scipy.linalg.eigh(im)[0]
-    im1 = inertia_momentum(mol)
-    im2 = inertia_momentum(chk_mol)
+    im1 = scipy.linalg.eigvalsh(mol.inertia_moment())
+    im2 = scipy.linalg.eigvalsh(chk_mol.inertia_moment())
     # im1+1e-7 to avoid 'divide by zero' error
     if abs((im1-im2)/(im1+1e-7)).max() > 0.01:
         logger.warn(mol, "Large deviations found between the input "
@@ -742,7 +738,7 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
         '''Coulomb (J) and exchange (K)
 
         Args:
@@ -754,10 +750,10 @@ class UHF(hf.SCF):
         if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
-            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
         else:
-            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi)
-        return numpy.asarray(vj), numpy.asarray(vk)
+            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
+        return vj, vk
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):

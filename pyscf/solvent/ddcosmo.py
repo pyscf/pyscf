@@ -48,7 +48,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import df
-from pyscf import mcscf
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.symm import sph
@@ -480,6 +479,18 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
     return PostSCFWithSolvent(method)
 
 
+# Inject DDCOSMO to other methods
+from pyscf import scf
+from pyscf import mcscf
+from pyscf import mp, ci, cc
+scf.hf.SCF.DDCOSMO = ddcosmo_for_scf
+mcscf.casci.DDCOSMO = ddcosmo_for_casci
+mcscf.mc1step.DDCOSMO = ddcosmo_for_casscf
+mp.mp2.MP2.DDCOSMO = ddcosmo_for_post_scf
+ci.cisd.CISD.DDCOSMO = ddcosmo_for_post_scf
+cc.ccsd.CCSD.DDCOSMO = ddcosmo_for_post_scf
+
+
 # TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
 # psi are tested against ddPCM implementation on github. Psi needs to be
 # computed by the host program. It requires the numerical integration code. 
@@ -900,6 +911,13 @@ class DDCOSMO(lib.StreamObject):
 
         epcm, vpcm = self._solver_(dm)
         return epcm, vpcm
+
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        self._solver_ = None
+        self.grids.reset(mol)
+        return self
 
     energy = energy
     gen_solver = as_solver = gen_ddcosmo_solver

@@ -175,11 +175,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         project = not gto.same_basis_set(chk_mol, mol)
 
     # Check whether the two molecules are similar
-    def inertia_momentum(mol):
-        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
-                                  mol.atom_coords())
-        return scipy.linalg.eigh(im)[0]
-    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
+    if abs(mol.inertia_moment() - chk_mol.inertia_moment()).sum() > 0.5:
         logger.warn(mol, "Large deviations found between the input "
                     "molecule and the molecule from chkfile\n"
                     "Initial guess density matrix may have large error.")
@@ -476,7 +472,7 @@ class UHF(hf.SCF):
         opt_gaunt = None
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
@@ -562,6 +558,14 @@ class UHF(hf.SCF):
     def nuc_grad_method(self):
         from pyscf.grad import dhf
         return dhf.Gradients(self)
+
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
+        return self
+
 DHF = UHF
 
 

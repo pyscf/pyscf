@@ -30,6 +30,8 @@ class KnownValues(unittest.TestCase):
                          ('pople-basis/6-31Gss.dat',))
         self.assertEqual(gto.basis._parse_pople_basis('631++g**', 'C'),
                          ('pople-basis/6-31++Gss.dat',))
+        self.assertEqual(gto.basis._parse_pople_basis('6311+g(d,p)', 'C'),
+                         ('pople-basis/6-311+G.dat', 'pople-basis/6-311G-polarization-d.dat'))
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):
@@ -347,6 +349,36 @@ F   1   1.00
         ref = gto.basis.load('631g(3df,3pd)', 'C')
         self.assertEqual(ref, basis1)
 
+    def test_basis_truncation(self):
+        b = gto.basis.load('ano@3s1p1f', 'C')
+        self.assertEqual(len(b), 3)
+        self.assertEqual(len(b[0][1]), 4)
+        self.assertEqual(len(b[1][1]), 2)
+        self.assertEqual(b[2][0], 3)
+        self.assertEqual(len(b[2][1]), 2)
+
+        b = gto.basis.load('631g(3df,3pd)@3s2p1f', 'C')
+        self.assertEqual(len(b), 6)
+        self.assertEqual(len(b[0][1]), 2)
+        self.assertEqual(len(b[1][1]), 2)
+        self.assertEqual(len(b[2][1]), 2)
+        self.assertEqual(len(b[3][1]), 2)
+        self.assertEqual(len(b[4][1]), 2)
+        self.assertEqual(b[5][0], 3)
+        self.assertEqual(len(b[5][1]), 2)
+
+        b = gto.basis.load('aug-ccpvtz@4s3p', 'C')
+        self.assertEqual(len(b), 6)
+        self.assertEqual(b[3][0], 1)
+
+        self.assertRaises(AssertionError, gto.basis.load, 'aug-ccpvtz@4s3f', 'C')
+
+    def test_to_general_contraction(self):
+        b = gto.basis.to_general_contraction(gto.load('cc-pvtz', 'H'))
+        self.assertEqual(len(b), 3)
+        self.assertEqual(len(b[0]), 6)
+        self.assertEqual(len(b[1]), 3)
+        self.assertEqual(len(b[2]), 2)
 
 if __name__ == "__main__":
     print("test basis module")

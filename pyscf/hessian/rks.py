@@ -29,6 +29,10 @@ from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint
 
 
+# import pyscf.grad.rks to activate nuc_grad_method method
+from pyscf.grad import rks
+
+
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
     log = logger.new_logger(hessobj, verbose)
@@ -490,6 +494,8 @@ class Hessian(rhf_hess.Hessian):
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 
+from pyscf import dft
+dft.rks.RKS.Hessian = dft.rks_symm.RKS.Hessian = lib.class_as_method(Hessian)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -518,7 +524,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     mf.kernel()
     n3 = mol.natm * 3
-    hobj = Hessian(mf)
+    hobj = mf.Hessian()
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.42286447944621297)
     print(lib.finger(e2) - -0.45453541215680582)

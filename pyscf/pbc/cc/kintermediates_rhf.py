@@ -21,6 +21,8 @@ import tempfile
 import numpy as np
 import h5py
 from pyscf import lib
+from pyscf.lib import logger
+from pyscf.pbc.lib import kpts_helper
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -441,3 +443,178 @@ def _new(shape, dtype, out):
         assert(out.shape == shape)
         assert(out.dtype == dtype)
     return out
+
+def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
+    """For a description of arguments, see `get_t3p2_imds_slow` in
+    the corresponding `kintermediates.py`.
+    """
+    if eris is None:
+        eris = cc.ao2mo()
+    fock = eris.fock
+    nkpts, nocc, nvir = t1.shape
+    kconserv = cc.khelper.kconserv
+    dtype = np.result_type(t1, t2)
+
+    fov = fock[:, :nocc, nocc:]
+    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
+
+    ccsd_energy = cc.energy(t1, t2, eris)
+
+    if t3p2_ip_out is None:
+        t3p2_ip_out = np.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc),dtype=dtype)
+    Wmcik = t3p2_ip_out
+
+    if t3p2_ea_out is None:
+        t3p2_ea_out = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc),dtype=dtype)
+    Wacek = t3p2_ea_out
+
+    from itertools import product
+    tmp_t3 = np.empty((nkpts, nkpts, nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir, nvir, nvir),
+                      dtype = t2.dtype)
+
+    def get_v(ki, kj, kk, ka, kb, kc):
+        kd = kconserv[kb, kk, kc]
+        ret = lib.einsum('dkbc,ijad->ijkabc', eris.vovv[kd, kk, kb].conj(), t2[ki, kj, ka])
+        km = kconserv[ka, ki, kb]
+        ret -= lib.einsum('jkmc,imab->ijkabc', eris.ooov[kj, kk, km].conj(), t2[ki, km, ka])
+        return ret
+
+    for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
+        kc = kpts_helper.get_kconserv3(cc._scf.cell, cc.kpts,
+                                       [ki, kj, kk, ka, kb])
+        tmp_t3[ki, kj, kk, ka, kb] = get_v(ki, kj, kk, ka, kb, kc)
+        tmp_t3[ki, kj, kk, ka, kb] += get_v(ki, kk, kj, ka, kc, kb).transpose(0, 2, 1, 3, 5, 4)
+        tmp_t3[ki, kj, kk, ka, kb] += get_v(kj, ki, kk, kb, ka, kc).transpose(1, 0, 2, 4, 3, 5)
+        tmp_t3[ki, kj, kk, ka, kb] += get_v(kj, kk, ki, kb, kc, ka).transpose(2, 0, 1, 5, 3, 4)
+        tmp_t3[ki, kj, kk, ka, kb] += get_v(kk, ki, kj, kc, ka, kb).transpose(1, 2, 0, 4, 5, 3)
+        tmp_t3[ki, kj, kk, ka, kb] += get_v(kk, kj, ki, kc, kb, ka).transpose(2, 1, 0, 5, 4, 3)
+
+        eijk = mo_e_o[ki][:, None, None] + mo_e_o[kj][None, :, None] + mo_e_o[kk][None, None, :]
+        eabc = mo_e_v[ka][:, None, None] + mo_e_v[kb][None, :, None] + mo_e_v[kc][None, None, :]
+        eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
+        tmp_t3[ki, kj, kk, ka, kb] /= eijkabc
+
+    pt1 = np.zeros((nkpts, nocc, nvir), dtype=t2.dtype)
+    for ki in range(nkpts):
+        for km, kn, ke in product(range(nkpts), repeat=3):
+            kf = kconserv[km, ke, kn]
+            Soovv = 2. * eris.oovv[km, kn, ke] - eris.oovv[km, kn, kf].transpose(0, 1, 3, 2)
+            St3 = (tmp_t3[ki, km, kn, ki, ke] -
+                   tmp_t3[ki, km, kn, ke, ki].transpose(0, 1, 2, 4, 3, 5))
+            pt1[ki] += lib.einsum('mnef,imnaef->ia', Soovv, St3)
+
+    pt2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=t2.dtype)
+    for ki, kj, ka in product(range(nkpts), repeat=3):
+        kb = kconserv[ki, ka, kj]
+        for km in range(nkpts):
+            for kn in range(nkpts):
+                # (ia,jb) -> (ia,jb)
+                ke = kconserv[km, kj, kn]
+                pt2[ki, kj, ka] += - 2. * lib.einsum('imnabe,mnje->ijab',
+                                                     tmp_t3[ki, km, kn, ka, kb],
+                                                     eris.ooov[km, kn, kj])
+                pt2[ki, kj, ka] += lib.einsum('imnabe,nmje->ijab',
+                                              tmp_t3[ki, km, kn, ka, kb],
+                                              eris.ooov[kn, km, kj])
+                pt2[ki, kj, ka] += lib.einsum('inmeab,mnje->ijab',
+                                              tmp_t3[ki, kn, km, ke, ka],
+                                              eris.ooov[km, kn, kj])
+
+                # (ia,jb) -> (jb,ia)
+                ke = kconserv[km, ki, kn]
+                pt2[ki, kj, ka] += - 2. * lib.einsum('jmnbae,mnie->ijab',
+                                                     tmp_t3[kj, km, kn, kb, ka],
+                                                     eris.ooov[km, kn, ki])
+                pt2[ki, kj, ka] += lib.einsum('jmnbae,nmie->ijab',
+                                              tmp_t3[kj, km, kn, kb, ka],
+                                              eris.ooov[kn, km, ki])
+                pt2[ki, kj, ka] += lib.einsum('jnmeba,mnie->ijab',
+                                              tmp_t3[kj, kn, km, ke, kb],
+                                              eris.ooov[km, kn, ki])
+
+            # (ia,jb) -> (ia,jb)
+            pt2[ki, kj, ka] += lib.einsum('ijmabe,me->ijab',
+                                          tmp_t3[ki, kj, km, ka, kb],
+                                          fov[km])
+            pt2[ki, kj, ka] -= lib.einsum('ijmaeb,me->ijab',
+                                          tmp_t3[ki, kj, km, ka, km],
+                                          fov[km])
+
+            # (ia,jb) -> (jb,ia)
+            pt2[ki, kj, ka] += lib.einsum('jimbae,me->ijab',
+                                          tmp_t3[kj, ki, km, kb, ka],
+                                          fov[km])
+            pt2[ki, kj, ka] -= lib.einsum('jimbea,me->ijab',
+                                          tmp_t3[kj, ki, km, kb, km],
+                                          fov[km])
+
+            for ke in range(nkpts):
+                # (ia,jb) -> (ia,jb)
+                kf = kconserv[km, ke, kb]
+                pt2[ki, kj, ka] += 2. * lib.einsum('ijmaef,bmef->ijab',
+                                                   tmp_t3[ki, kj, km, ka, ke],
+                                                   eris.vovv[kb, km, ke])
+                pt2[ki, kj, ka] -= lib.einsum('ijmaef,bmfe->ijab',
+                                              tmp_t3[ki, kj, km, ka, ke],
+                                              eris.vovv[kb, km, kf])
+                pt2[ki, kj, ka] -= lib.einsum('imjfae,bmef->ijab',
+                                              tmp_t3[ki, km, kj, kf, ka],
+                                              eris.vovv[kb, km, ke])
+
+                # (ia,jb) -> (jb,ia)
+                kf = kconserv[km, ke, ka]
+                pt2[ki, kj, ka] += 2. * lib.einsum('jimbef,amef->ijab',
+                                                   tmp_t3[kj, ki, km, kb, ke],
+                                                   eris.vovv[ka, km, ke])
+                pt2[ki, kj, ka] -= lib.einsum('jimbef,amfe->ijab',
+                                              tmp_t3[kj, ki, km, kb, ke],
+                                              eris.vovv[ka, km, kf])
+                pt2[ki, kj, ka] -= lib.einsum('jmifbe,amef->ijab',
+                                              tmp_t3[kj, km, ki, kf, kb],
+                                              eris.vovv[ka, km, ke])
+
+    for ki in range(nkpts):
+        eii = mo_e_o[ki][:, None] - mo_e_v[ki][None, :]
+        pt1[ki] /= eii
+
+    for ki, ka in product(range(nkpts), repeat=2):
+        eia = mo_e_o[ki][:, None] - mo_e_v[ka][None, :]
+        for kj in range(nkpts):
+            kb = kconserv[ki, ka, kj]
+            ejb = mo_e_o[kj][:, None] - mo_e_v[kb][None, :]
+            eijab = eia[:, None, :, None] + ejb[None, :, None, :]
+            pt2[ki, kj, ka] /= eijab
+
+    pt1 += t1
+    pt2 += t2
+
+    for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
+        kc = kpts_helper.get_kconserv3(cc._scf.cell, cc.kpts,
+                                       [ki, kj, kk, ka, kb])
+        km = kconserv[kc, ki, ka]
+
+        _oovv = eris.oovv[km, ki, kc]
+        Wmcik[km, kb, kk] += 2. * lib.einsum('ijkabc,mica->mbkj', tmp_t3[ki, kj, kk, ka, kb], _oovv)
+        Wmcik[km, kb, kk] -=      lib.einsum('jikabc,mica->mbkj', tmp_t3[kj, ki, kk, ka, kb], _oovv)
+        Wmcik[km, kb, kk] -=      lib.einsum('kjiabc,mica->mbkj', tmp_t3[kk, kj, ki, ka, kb], _oovv)
+
+    for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
+        kc = kpts_helper.get_kconserv3(cc._scf.cell, cc.kpts,
+                                       [ki, kj, kk, ka, kb])
+        ke = kconserv[ki, ka, kk]
+
+        _oovv = eris.oovv[ki, kk, ka]
+        Wacek[kc, kb, ke] -= 2. * lib.einsum('ijkabc,ikae->cbej', tmp_t3[ki, kj, kk, ka, kb], _oovv)
+        Wacek[kc, kb, ke] +=      lib.einsum('jikabc,ikae->cbej', tmp_t3[kj, ki, kk, ka, kb], _oovv)
+        Wacek[kc, kb, ke] +=      lib.einsum('kjiabc,ikae->cbej', tmp_t3[kk, kj, ki, ka, kb], _oovv)
+
+    delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
+    lib.logger.info(cc, 'CCSD energy T3[2] correction : %16.12e', delta_ccsd_energy)
+
+    return delta_ccsd_energy, pt1, pt2, Wmcik, Wacek

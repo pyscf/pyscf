@@ -509,6 +509,16 @@ def as_scanner(mc):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            # These properties can be updated when calling mf_scanner(mol) if
+            # they are shared with mc._scf. In certain scenario the properties
+            # may be created for mc separately, e.g. when mcscf.approx_hessian is
+            # called. For safety, the code below explicitly resets these
+            # properties.
+            for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
@@ -733,6 +743,7 @@ class CASSCF(casci.CASCI):
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
         log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
+        log.info('ao2mo_level = %d', self.ao2mo_level)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
@@ -1232,6 +1243,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
         return mc1
+
+from pyscf import scf
+scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
+scf.uhf.UHF.CASSCF = None
 
 
 # to avoid calculating AO integrals

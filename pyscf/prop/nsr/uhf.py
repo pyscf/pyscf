@@ -59,6 +59,10 @@ class NSR(rhf_nsr.NSR):
     get_fock = uhf_nmr.get_fock
     solve_mo1 = uhf_nmr.solve_mo1
 
+from pyscf import lib
+from pyscf import scf
+scf.uhf.UHF.NSR = lib.class_as_method(NSR)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -74,7 +78,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.UHF(mol).run()
-    rotg = NSR(mf)
+    rotg = mf.NSR()
     m = rotg.kernel()
     print(m[1,0,0] - -274.44236312671563)
     print(lib.finger(m) - 26.68194604747653)

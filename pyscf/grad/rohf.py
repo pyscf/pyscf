@@ -20,7 +20,7 @@
 Non-relativistic ROHF analytical nuclear gradients
 '''
 
-from pyscf.scf import addons
+from pyscf import lib
 from pyscf.grad import uhf as uhf_grad
 
 
@@ -28,9 +28,12 @@ class Gradients(uhf_grad.Gradients):
     '''Non-relativistic ROHF gradients
     '''
     def __init__(self, mf):
-        uhf_grad.Gradients.__init__(self, addons.convert_to_uhf(mf))
+        uhf_grad.Gradients.__init__(self, scf.addons.convert_to_uhf(mf))
 
 Grad = Gradients
+
+from pyscf import scf
+scf.rohf.ROHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -42,7 +45,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.ROHF(mol)
     mf.scf()
-    g = Gradients(mf)
+    g = mf.Gradients()
     print(g.grad())
 
     mol = gto.Mole()

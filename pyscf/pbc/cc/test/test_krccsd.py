@@ -410,7 +410,8 @@ class KnownValues(unittest.TestCase):
         self._test_cu_metallic_nonequal_occ(kmf, cell, -0.96676526820520137)
 
     def test_ccsd_t_non_hf(self):
-        '''Tests ccsd and ccsd_t for non-Hartree-Fock references.'''
+        '''Tests ccsd and ccsd_t for non-Hartree-Fock references
+        using supercell vs k-point calculation.'''
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
 
@@ -449,7 +450,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
 
     def test_ccsd_t_non_hf_frozen(self):
-        '''Tests ccsd and ccsd_t for non-Hartree-Fock references with frozen orbitals.'''
+        '''Tests ccsd and ccsd_t for non-Hartree-Fock references with frozen orbitals
+        using supercell vs k-point calculation.'''
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
         #import sys
@@ -491,7 +493,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
 
     def test_ccsd_t_hf(self):
-        '''Tests ccsd and ccsd_t for Hartree-Fock references.'''
+        '''Tests ccsd and ccsd_t for Hartree-Fock references using supercell
+        vs k-point calculation.'''
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
 
@@ -529,7 +532,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ercc_t/np.prod(nk), ekcc_t, 6)
 
     def test_ccsd_t_hf_frozen(self):
-        '''Tests ccsd and ccsd_t for Hartree-Fock references with frozen orbitals.'''
+        '''Tests ccsd and ccsd_t for Hartree-Fock references with frozen orbitals
+        using supercell vs k-point calculation.'''
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
 
@@ -594,7 +598,7 @@ class KnownValues(unittest.TestCase):
         ekrcc, t1, t2 = mycc.kernel(eris=eris)
         ekrcc_t = mycc.ccsd_t(eris=eris)
 
-        self.assertAlmostEqual(ekrcc_t, -0.00216678709982, 6)
+        self.assertAlmostEqual(ekrcc_t, -0.0021667871077339, 6)
         self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
 
     def test_rccsd_t_non_hf_against_so(self):
@@ -872,14 +876,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ekccsd, -0.06146759560406628, 6)
 
         # Getting more roots than 1 is difficult
-        e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
+        e = mycc.eaccsd(nroots=1, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], 5.079427283440857, 6)
-        e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
+        e = mycc.eaccsd(nroots=1, koopmans=False, kptlist=(1,))[0]
         self.assertAlmostEqual(e[0][0], 4.183328878177331, 6)
 
-        e = mycc.ipccsd(nroots=1, kptlist=(0,))[0]
+        e = mycc.ipccsd(nroots=1, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], -3.471710821544506, 6)
-        e = mycc.ipccsd(nroots=1, kptlist=(1,))[0]
+        e = mycc.ipccsd(nroots=1, koopmans=False, kptlist=(1,))[0]
         self.assertAlmostEqual(e[0][0], -4.272015727359054, 6)
 
         # Start of supercell calculations
@@ -894,13 +898,13 @@ class KnownValues(unittest.TestCase):
         eccsd /= np.prod(nmp)
         self.assertAlmostEqual(eccsd, -0.06146759560406628, 6)
 
-        e = myscc.eaccsd(nroots=4, kptlist=(0,))[0]
+        e = myscc.eaccsd(nroots=4, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], 4.183328873793568, 6)
         self.assertAlmostEqual(e[0][1], 4.225034294249784, 6)
         self.assertAlmostEqual(e[0][2], 5.068962665511664, 6)
         self.assertAlmostEqual(e[0][3], 5.07942727935064 , 6)
 
-        e = myscc.ipccsd(nroots=4, kptlist=(0,))[0]
+        e = myscc.ipccsd(nroots=4, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], -4.272015724869052, 6)
         self.assertAlmostEqual(e[0][1], -4.254298274388934, 6)
         self.assertAlmostEqual(e[0][2], -3.471710821688812, 6)
@@ -945,14 +949,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ekccsd, -0.04683399814247455, 6)
 
         # Getting more roots than 1 is difficult
-        e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
+        e = mycc.eaccsd(nroots=1, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], 5.060562738181741, 6)
-        e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
+        e = mycc.eaccsd(nroots=1, koopmans=False, kptlist=(1,))[0]
         self.assertAlmostEqual(e[0][0], 4.188511644938458, 6)
 
-        e = mycc.ipccsd(nroots=1, kptlist=(0,))[0]
+        e = mycc.ipccsd(nroots=1, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], -3.477663551987023, 6)
-        e = mycc.ipccsd(nroots=1, kptlist=(1,))[0]
+        e = mycc.ipccsd(nroots=1, koopmans=False, kptlist=(1,))[0]
         self.assertAlmostEqual(e[0][0], -4.23523412155825, 6)
 
         # Start of supercell calculations
@@ -967,13 +971,13 @@ class KnownValues(unittest.TestCase):
         eccsd /= np.prod(nmp)
         self.assertAlmostEqual(eccsd, -0.04683401678904569, 6)
 
-        e = myscc.eaccsd(nroots=4, kptlist=(0,))[0]
+        e = myscc.eaccsd(nroots=4, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], 4.188511680212755, 6)
         self.assertAlmostEqual(e[0][1], 4.205924087610756, 6)
         self.assertAlmostEqual(e[0][2], 5.060562771978923, 6)
         self.assertAlmostEqual(e[0][3], 5.077249823137741, 6)
 
-        e = myscc.ipccsd(nroots=4, kptlist=(0,))[0]
+        e = myscc.ipccsd(nroots=4, koopmans=False, kptlist=(0,))[0]
         self.assertAlmostEqual(e[0][0], -4.261818242746091, 6)
         self.assertAlmostEqual(e[0][1], -4.235233956876479, 6)
         self.assertAlmostEqual(e[0][2], -3.477663568390151, 6)

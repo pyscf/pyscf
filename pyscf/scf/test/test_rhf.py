@@ -636,6 +636,25 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(ss, 2, 12)
         self.assertAlmostEqual(s, 3, 12)
 
+    def test_get_vj(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        ref = mf.get_j(mol, dm)
+
+        mf1 = scf.RHF(mol)
+        mf1.max_memory = 0
+        vj1 = mf1.get_j(mol, dm)
+
+        self.assertAlmostEqual(abs(ref-vj1).max(), 0, 12)
+        self.assertAlmostEqual(numpy.linalg.norm(vj1), 77.035779188661465, 9)
+
+        orig = mf1.opt.prescreen
+        self.assertEqual(orig, scf._vhf._fpointer('CVHFnrs8_prescreen').value)
+        mf1.opt.prescreen = orig
+        mf1.opt.prescreen = 'CVHFnoscreen'
+        self.assertEqual(mf1.opt.prescreen, scf._vhf._fpointer('CVHFnoscreen').value)
+
 
 if __name__ == "__main__":
     print("Full Tests for rhf")

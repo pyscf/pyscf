@@ -44,12 +44,24 @@ for i in range(mol.natm):
 #
 # 3. Potential of electron density
 #
+
+# There are two ways to compute this potential.
+# Method 1 (slow): looping over r_orig and evaluating 1/|r-r_orig| for each
+# point.
 dm = mf.make_rdm1()
 Vele = []
 for p in points:
     mol.set_rinv_orig_(p)
-    Vele.append(numpy.einsum('ij,ij', mol.intor('cint1e_rinv_sph'), dm))
+    Vele.append(numpy.einsum('ij,ij', mol.intor('int1e_rinv'), dm))
 Vele = numpy.array(Vele)
+
+# Method 2 (fast): Mimicing the points with delta function (steep S-type
+# Gaussians) then calling the 3-center integral code to calculate the
+# interaction between points and other AOs. Below, fakemol holds the delta
+# functions.
+from pyscf import df
+fakemol = gto.fakemol_for_charges(points)
+Vele = np.einsum('ijp,ij->p', df.incore.aux_e2(mol, fakemol), dm)
 
 #
 # 4. MEP at each point
@@ -67,15 +79,23 @@ for i in range(mol.natm):
     pr = points - r
     Fnuc += Z / (numpy.einsum('xi,xi->x', pr, pr)**1.5).reshape(-1,1) * pr
 
+# Method 1 (slow)
 Fele = []
 for p in points:
     mol.set_rinv_orig_(p)
     # <i(x)| d/dr 1/|r-x| |j(x)> = <i(x)|-d/dx 1/|r-x| |j(x)>
     #                            = <d/dx i(x)| 1/|r-x| |j(x)> + <i(x)| 1/|r-x| |d/dx j(x)>
-    d_rinv = mol.intor('cint1e_iprinv_sph', comp=3)
+    d_rinv = mol.intor('int1e_iprinv', comp=3)
     d_rinv = d_rinv + d_rinv.transpose(0,2,1)
-    Fele.append(numpy.einsum('xij,ij', d_rinv, dm))
+    Fele.append(numpy.einsum('xij,ij->x', d_rinv, dm))
 Fele = numpy.array(Fele)
+
+# Method 2 (fast)
+from pyscf import df
+fakemol = gto.fakemol_for_charges(points)
+ints = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1')
+ints = ints + ints.transpose(0,2,1,3)
+Fele = np.einsum('xijp,ij->px', ints, dm)
 
 F_MEP = Fnuc + Fele
 print(F_MEP.shape)

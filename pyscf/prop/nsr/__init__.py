@@ -18,10 +18,13 @@
 
 from pyscf.prop.nsr import rhf
 from pyscf.prop.nsr import uhf
-from pyscf.prop.nsr import rks
-from pyscf.prop.nsr import uks
-
 RHF = rhf.NSR
 UHF = uhf.NSR
-RKS = rks.NSR
-UKS = uks.NSR
+
+try:
+    from pyscf.prop.nsr import rks
+    from pyscf.prop.nsr import uks
+    RKS = rks.NSR
+    UKS = uks.NSR
+except ImportError:
+    pass

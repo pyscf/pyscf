@@ -712,6 +712,35 @@ def restore_from_diis_(mycc, diis_file, inplace=True):
         mycc.diis = adiis
     return mycc
 
+def get_t1_diagnostic(t1):
+    '''Returns the t1 amplitude norm, normalized by number of correlated electrons.'''
+    nelectron = 2 * t1.shape[0]
+    return numpy.sqrt(numpy.linalg.norm(t1)**2 / nelectron)
+
+def get_d1_diagnostic(t1):
+    '''D1 diagnostic given in
+
+        Janssen, et. al Chem. Phys. Lett. 290 (1998) 423
+    '''
+    f = lambda x: numpy.sqrt(numpy.sort(numpy.abs(x[0])))[-1]
+    d1norm_ij = f(numpy.linalg.eigh(numpy.einsum('ia,ja->ij',t1,t1)))
+    d1norm_ab = f(numpy.linalg.eigh(numpy.einsum('ia,ib->ab',t1,t1)))
+    d1norm = max(d1norm_ij, d1norm_ab)
+    return d1norm
+
+def get_d2_diagnostic(t2):
+    '''D2 diagnostic given in
+
+        Nielsen, et. al Chem. Phys. Lett. 310 (1999) 568
+
+    Note: This is currently only defined in the literature for restricted
+    closed-shell systems.
+    '''
+    f = lambda x: numpy.sqrt(numpy.sort(numpy.abs(x[0])))[-1]
+    d2norm_ij = f(numpy.linalg.eigh(numpy.einsum('ikab,jkab->ij',t2,t2)))
+    d2norm_ab = f(numpy.linalg.eigh(numpy.einsum('ijac,ijbc->ab',t2,t2)))
+    d2norm = max(d2norm_ij, d2norm_ab)
+    return d2norm
 
 def as_scanner(cc):
     '''Generating a scanner/solver for CCSD PES.
@@ -749,6 +778,11 @@ def as_scanner(cc):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
+            for key in ('with_df', 'with_solvent'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
 
             mf_scanner = self._scf
             mf_scanner(mol)
@@ -1170,7 +1204,24 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.grad import ccsd
         return ccsd.Gradients(self)
 
+    def get_t1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        return get_t1_diagnostic(t1)
+
+    def get_d1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        return get_d1_diagnostic(t1)
+
+    def get_d2_diagnostic(self, t2=None):
+        if t2 is None: t2 = self.t2
+        return get_d2_diagnostic(t2)
+
+
 CC = RCCSD = CCSD
+
+from pyscf import scf
+scf.hf.RHF.CCSD = lib.class_as_method(CCSD)
+scf.rohf.ROHF.CCSD = None
 
 
 class _ChemistsERIs:
@@ -1397,12 +1448,6 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     nvir_pair = nvir*(nvir+1)//2
     orbo = mo_coeff[:,:nocc]
     orbv = mo_coeff[:,nocc:]
-    oooo = numpy.zeros((nocc*nocc,nocc*nocc))
-    ovoo = numpy.zeros((nocc*nvir,nocc*nocc))
-    oovv = numpy.zeros((nocc*nocc,nvir*nvir))
-    ovvo = numpy.zeros((nocc*nvir,nvir*nocc))
-    ovvv = numpy.zeros((nocc*nvir,nvir_pair))
-    vvvv = numpy.zeros((nvir_pair,nvir_pair))
 
     naux = mycc._scf.with_df.get_naoaux()
     Loo = numpy.empty((naux,nocc,nocc))

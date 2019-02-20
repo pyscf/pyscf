@@ -151,6 +151,9 @@ class NSR(rhf_nmr.NMR):
     dia = dia
     para = para
 
+from pyscf import scf
+scf.hf.RHF.NSR = lib.class_as_method(NSR)
+
 def _write(stdout, nsr3x3, title):
     stdout.write('%s\n' % title)
     stdout.write('mu_x %s\n' % str(nsr3x3[0]))
@@ -172,7 +175,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.RHF(mol).run()
-    rotg = NSR(mf)
+    rotg = mf.NSR()
     m = rotg.kernel()
     print(m[1,0,0] - -274.44236312671563)
     print(lib.finger(m) - 26.68194604747653)

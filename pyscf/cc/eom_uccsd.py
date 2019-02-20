@@ -308,6 +308,7 @@ class EOMIP(eom_rccsd.EOMIP):
     l_matvec = None
     get_diag = ipccsd_diag
     ipccsd_star = None
+    ccsd_star_contract = None
 
     def __init__(self, cc):
         eom_rccsd.EOMIP.__init__(self, cc)
@@ -826,6 +827,7 @@ class EOMEA(eom_rccsd.EOMEA):
     l_matvec = None
     get_diag = eaccsd_diag
     eaccsd_star = None
+    ccsd_star_contract = None
 
     def __init__(self, cc):
         eom_rccsd.EOMEA.__init__(self, cc)

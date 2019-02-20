@@ -124,6 +124,93 @@ class EOM(lib.StreamObject):
         return self
 
 
+def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
+                                 left_converged, left_evals, left_evecs, tol=1e-6):
+    '''Ensures the left and right eigenvectors correspond to the same eigenvalue.
+
+    Note:
+        Useful for perturbative methods that need both eigenstates.  Right now, just
+        simply checks for equality between left and right eigenvalues, but can be
+        extended to make sure the overlap between states is sufficiently large.
+
+    Kwargs:
+        eom : :class:`EOM`
+            Class holding EOM results.
+        right_converged : array-like of bool
+            Whether the right eigenstates converged.
+        right_evals : array-like
+            Eigenvalues of right eigenstates.
+        right_evecs : array-like of ndarray
+            Eigenvectors of right eigenstates.
+        left_converged : array-like of bool
+            Whether the left eigenstates converged.
+        left_evals : array-like
+            Eigenvalues of left eigenstates.
+        left_evecs : array-like of ndarray
+            Eigenvectors of left eigenstates.
+        tol : float
+            Tolerance for determining whether a left and right eigenvalue
+            should be considered equal.
+    '''
+    log = logger.Logger(eom.stdout, eom.verbose)
+
+    right_evecs, left_evecs = [np.atleast_2d(x) for x in [right_evecs, left_evecs]]
+    right_evals, left_evals = [np.atleast_1d(x) for x in [right_evals, left_evals]]
+    right_converged, left_converged = [np.atleast_1d(x) for x in [right_converged, left_converged]]
+
+    srt_right_idx = []
+    srt_left_idx = []
+    left_idx = [idx for idx in range(len(left_evals)) if left_converged[idx]]
+    right_idx = [idx for idx in range(len(right_evals)) if right_converged[idx]]
+    if len(right_idx) != len(left_idx):
+        log.warn('Number of converged left and right eigenvalues are not equal.\n'
+                 '    No. Left = %3d, No. Right = %3d.' %
+                 (len(left_idx), len(right_idx)))
+
+    for ir_idx, ir in enumerate(right_idx):
+        found = False
+        for il_idx, il in enumerate(left_idx):
+            if abs(right_evals[ir] - left_evals[il]) < tol:
+                found = True
+                srt_right_idx.append(ir)
+                srt_left_idx.append(il)
+                break
+        if found:
+            left_idx.pop(il_idx)
+        else:
+            log.warn('No converged left eigenvalue corresponding to right eigenvalue '
+                     '%.6g (right idx=%3d).\nWill not perform perturbation on this state.'
+                     % (right_evals[ir], ir))
+
+    log.info('Resulting left/right eigenstates:')
+    log.info('Left Eigen (idx) <-> Right Eigen (idx)')
+    for il, ir in zip(srt_left_idx, srt_right_idx):
+        log.info('%10.6g (%3d)      %10.6g (%3d)',
+                 left_evals[il], il, right_evals[ir], ir)
+    return (right_evals[srt_right_idx], right_evecs[srt_right_idx], left_evecs[srt_left_idx])
+
+
+def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
+            left_guess=None, eris=None, imds=None):
+    '''Wrapper for running perturbative excited-states that require both left
+    and right amplitudes.'''
+    if imds is None:
+        imds = eom.make_imds(eris=eris)
+
+    # Right eigenvectors
+    r_converged, r_e, r_v = \
+               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
+                      eris=eris, imds=imds)
+    # Left eigenvectors
+    l_converged, l_e, l_v = \
+               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
+                      eris=eris, imds=imds)
+
+    e, r_v, l_v = _sort_left_right_eigensystem(eom, r_converged, r_e, r_v, l_converged, l_e, l_v)
+    e_star = eom.ccsd_star_contract(e, r_v, l_v, imds=imds)
+    return e_star
+
+
 ########################################
 # EOM-IP-CCSD
 ########################################
@@ -151,6 +238,21 @@ def ipccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
     eom.converged, eom.e, eom.v \
             = kernel(eom, nroots, koopmans, guess, left, eris=eris, imds=imds)
     return eom.e, eom.v
+
+def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
+                left_guess=None, eris=None, imds=None):
+    """Calculates CCSD* perturbative correction.
+
+    Simply calls the relevant `kernel()` function and `perturb_star` of the
+    `eom` class.
+
+    Returns:
+        e_t_a_star (list of float):
+            The IP-CCSD* energy.
+    """
+    return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
+               right_guess=right_guess, left_guess=left_guess, eris=eris,
+               imds=imds)
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -284,75 +386,129 @@ def ipccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
-def ipccsd_star(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
-    assert(eom.partition == None)
-    if eris is None:
-        eris = eom._cc.ao2mo()
-    t1, t2 = eom._cc.t1, eom._cc.t2
+def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
+    from pyscf.cc.ccsd_t import _sort_eri, _sort_t2_vooo_
+    cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
+
     fock = eris.fock
     nocc, nvir = t1.shape
+    nmo = nocc + nvir
+
+    dtype = np.result_type(t1, t2, eris.ovoo.dtype)
+    if eom._cc.incore_complete:
+        ftmp = None
+        eris_vvop = numpy.zeros((nvir,nvir,nocc,nmo), dtype)
+    else:
+        ftmp = lib.H5TmpFile()
+        eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), dtype)
+
+    orbsym = _sort_eri(eom._cc, eris, nocc, nvir, eris_vvop, log)
+    mo_energy, t1T, t2T, vooo, fvo, restore_t2_inplace = \
+            _sort_t2_vooo_(eom._cc, orbsym, t1, t2, eris)
+
+    cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)
 
     fov = fock[:nocc,nocc:]
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
 
-    oovv = _cp(eris.ovov).transpose(0,2,1,3)
-    ovvv = _cp(eris.get_ovvv()).transpose(0,2,1,3)
-    ovov = _cp(eris.oovv).transpose(0,2,1,3)
-    ovvo = _cp(eris.ovvo).transpose(0,2,1,3)
-    ooov = _cp(eris.ovoo).transpose(2,0,3,1)
-    vooo = ooov.conj().transpose(3,2,1,0)
-    vvvo = ovvv.transpose(3,2,1,0).conj()
-    oooo = _cp(eris.oooo).transpose(0,2,1,3)
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nocc**3*6))))
 
-    eijkab = np.zeros((nocc,nocc,nocc,nvir,nvir))
-    for i,j,k in lib.cartesian_prod([range(nocc),range(nocc),range(nocc)]):
-        for a,b in lib.cartesian_prod([range(nvir),range(nvir)]):
-            eijkab[i,j,k,a,b] = foo[i,i] + foo[j,j] + foo[k,k] - fvv[a,a] - fvv[b,b]
+    fock_mo_energy = np.asarray(eris.fock.diagonal())
+    mo_e_occ = np.asarray(mo_energy[:nocc])
+    mo_e_vir = np.asarray(mo_energy[nocc:])
+
+    def contract_l2p(l1, l2, a0, a1, b0, b1, cache_vvop, out=None):
+        '''Create perturbed l2.'''
+        if out is None:
+            out = np.zeros((nocc,)*3 + (a1-a0,b1-b0), dtype=dtype)
+        out += 0.5*np.einsum('abij,k->ijkab', cache_vvop[:,:,:,:nocc].conj(), l1)
+        out += lib.einsum('abie,jke->ijkab', cache_vvop[:,:,:,nocc:].conj(), l2)
+        out += -lib.einsum('bjkm,ima->ijkab', vooo[b0:b1], l2[:,:,a0:a1])
+        out += -lib.einsum('bjim,mka->ijkab', vooo[b0:b1], l2[:,:,a0:a1])
+        return out
+
+    def contract_pl2p(l1, l2, a0, a1, b0, b1, cache_vvop_a, cache_vvop_b):
+        '''Create P(ia|jb) of perturbed l2.'''
+        out = contract_l2p(l1, l2, a0, a1, b0, b1, cache_vvop_a)
+        out += contract_l2p(l1, l2, b0, b1, a0, a1, cache_vvop_b).transpose(1,0,2,4,3)  # P(ia|jb)
+        return out
+
+    def contract_r2p(r1, r2, a0, a1, b0, b1, cache_vvop, out=None):
+        '''Create perturbed r2.'''
+        if out is None:
+            out = np.zeros((nocc,)*3 + (a1-a0,b1-b0), dtype=dtype)
+        tmp = np.einsum('mkbe,m->bke', eris.oovv[:,:,b0:b1,:], r1)
+        out += -lib.einsum('bke,aeji->ijkab', tmp, t2T[a0:a1])
+        tmp = np.einsum('mebj,m->bej', eris.ovvo[:,:,b0:b1,:], r1)
+        out += -lib.einsum('bej,aeki->ijkab', tmp, t2T[a0:a1])
+        tmp = np.einsum('mjnk,n->mjk', eris.oooo, r1)
+        out += lib.einsum('mjk,abmi->ijkab', tmp, t2T[a0:a1,b0:b1])
+        out += lib.einsum('abie,kje->ijkab', cache_vvop[:,:,:,nocc:], r2)
+        out += -lib.einsum('bjkm,mia->ijkab', vooo[b0:b1].conj(), r2[:,:,a0:a1])
+        out += -lib.einsum('bjim,kma->ijkab', vooo[b0:b1].conj(), r2[:,:,a0:a1])
+        return out
+
+    def contract_pr2p(r1, r2, a0, a1, b0, b1, cache_vvop_a, cache_vvop_b):
+        '''Create P(ia|jb) of perturbed r2.'''
+        out = contract_r2p(r1, r2, a0, a1, b0, b1, cache_vvop_a)
+        out += contract_r2p(r1, r2, b0, b1, a0, a1, cache_vvop_b).transpose(1,0,2,4,3)  # P(ia|jb)
+        return out
 
     ipccsd_evecs  = np.array(ipccsd_evecs)
     lipccsd_evecs = np.array(lipccsd_evecs)
     e = []
-    for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
-        l1, l2 = eom.vector_to_amplitudes(_levec)
-        r1, r2 = eom.vector_to_amplitudes(_evec)
+    ipccsd_evecs, lipccsd_evecs = [np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs]]
+    ipccsd_evals = np.atleast_1d(ipccsd_evals)
+    for eval_, evec_, levec_ in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
+        l1, l2 = eom.vector_to_amplitudes(levec_)
+        r1, r2 = eom.vector_to_amplitudes(evec_)
         ldotr = np.dot(l1, r1) + np.dot(l2.ravel(), r2.ravel())
         l1 /= ldotr
         l2 /= ldotr
         l2 = 1./3*(l2 + 2.*l2.transpose(1,0,2))
 
-        _eijkab = eijkab + _eval
-        _eijkab = 1./_eijkab
+        deltaE = 0.0
+        eijk = (mo_e_occ[:,None,None,None,None] +
+                mo_e_occ[None,:,None,None,None] +
+                mo_e_occ[None,None,:,None,None] + eval_)
+        for a0, a1 in lib.prange_tril(0, nvir, blksize):
+            b0, b1 = 0, a1
+            eijkab = (eijk - mo_e_vir[a0:a1][None,None,None,:,None] -
+                      mo_e_vir[b0:b1][None,None,None,None,:])
+            eijkab = 1./eijkab
+            vvov_a = eris_vvop[a0:a1,b0:b1,:,:]
+            vvov_b = eris_vvop[b0:b1,a0:a1,:,:]
+            lijkab = contract_pl2p(l1, l2, a0, a1, b0, b1, vvov_a, vvov_b)
+            rijkab = contract_pr2p(r1, r2, a0, a1, b0, b1, vvov_a, vvov_b)
 
-        lijkab = 0.5*np.einsum('ijab,k->ijkab', oovv, l1)
-        lijkab += lib.einsum('ieab,jke->ijkab', ovvv, l2)
-        lijkab += -lib.einsum('kjmb,ima->ijkab', ooov, l2)
-        lijkab += -lib.einsum('ijmb,mka->ijkab', ooov, l2)
-        lijkab = lijkab + lijkab.transpose(1,0,2,4,3)
+            lijkab = 4.*lijkab \
+                   - 2.*lijkab.transpose(1,0,2,3,4) \
+                   - 2.*lijkab.transpose(2,1,0,3,4) \
+                   - 2.*lijkab.transpose(0,2,1,3,4) \
+                   + 1.*lijkab.transpose(1,2,0,3,4) \
+                   + 1.*lijkab.transpose(2,0,1,3,4)
 
-        tmp = np.einsum('mbke,m->bke', ovov, r1)
-        rijkab = -lib.einsum('bke,ijae->ijkab', tmp, t2)
-        tmp = np.einsum('mbej,m->bej', ovvo, r1)
-        rijkab += -lib.einsum('bej,ikae->ijkab', tmp, t2)
-        tmp = np.einsum('mnjk,n->mjk', oooo, r1)
-        rijkab += lib.einsum('mjk,imab->ijkab', tmp, t2)
-        rijkab += lib.einsum('baei,kje->ijkab', vvvo, r2)
-        rijkab += -lib.einsum('bmjk,mia->ijkab', vooo, r2)
-        rijkab += -lib.einsum('bmji,kma->ijkab', vooo, r2)
-        rijkab = rijkab + rijkab.transpose(1,0,2,4,3)
+            # Symmetry factors (1 for a == b, 2 for a < b)
+            fac = 2*np.ones_like(rijkab, dtype=int)
+            triu_idx = np.triu_indices(a1-a0,a0+1,m=b1-b0)
+            fac[:,:,:,triu_idx[0],triu_idx[1]] = 0
+            fac[:,:,:,np.arange(a1-a0),np.arange(a0,b1)] = 1
+            eijkab *= fac
 
-        lijkab = 4.*lijkab \
-               - 2.*lijkab.transpose(1,0,2,3,4) \
-               - 2.*lijkab.transpose(2,1,0,3,4) \
-               - 2.*lijkab.transpose(0,2,1,3,4) \
-               + 1.*lijkab.transpose(1,2,0,3,4) \
-               + 1.*lijkab.transpose(2,0,1,3,4)
-
-        deltaE = 0.5*np.einsum('ijkab,ijkab,ijkab', lijkab, rijkab, _eijkab)
-        deltaE = deltaE.real
-        logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
-                    _eval+deltaE, deltaE)
-        e.append(_eval+deltaE)
+            deltaE += np.einsum('ijkab,ijkab,ijkab', lijkab, rijkab, eijkab)
+        deltaE = 0.5*deltaE.real
+        logger.info(eom, "ipccsd energy, star energy, delta energy = %16.12f, %16.12f, %16.12f",
+                    eval_, eval_+deltaE, deltaE)
+        e.append(eval_+deltaE)
+    t2 = restore_t2_inplace(t2T)
     return e
 
 class EOMIP(EOM):
@@ -376,10 +532,15 @@ class EOMIP(EOM):
 
     kernel = ipccsd
     ipccsd = ipccsd
+    ipccsd_star = ipccsd_star
+
     matvec = ipccsd_matvec
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
-    ipccsd_star = ipccsd_star
+    ccsd_star_contract = ipccsd_star_contract
+
+    def ipccsd_star_contract(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
+        return self.ccsd_star_contract(ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=imds)
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()
@@ -413,6 +574,13 @@ class EOMIP(EOM):
         return self.e
 
 
+class EOMIP_Ta(EOMIP):
+    '''Class for EOM IPCCSD(T)*(a) method by Matthews and Stanton.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_t3p2_ip(self._cc, self.partition)
+        return imds
+
 ########################################
 # EOM-EA-CCSD
 ########################################
@@ -421,10 +589,21 @@ def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
            partition=None, eris=None, imds=None):
     '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
 
-    Kwargs:
+    Args:
         See also ipccd()
     '''
     return ipccsd(eom, nroots, left, koopmans, guess, partition, eris, imds)
+
+def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
+        left_guess=None, eris=None, imds=None, **kwargs):
+    """Calculates CCSD* perturbative correction.
+
+    Args:
+        See also ipccd_star()
+    """
+    return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
+               right_guess=right_guess, left_guess=left_guess, eris=eris,
+               imds=imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -563,75 +742,139 @@ def eaccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ea(Hr1,Hr2)
     return vector
 
-def eaccsd_star(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
-    assert(eom.partition == None)
-    if eris is None:
-        eris = eom._cc.ao2mo()
-    t1, t2 = eom._cc.t1, eom._cc.t2
+def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
+    cpu1 = cpu0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
+
     fock = eris.fock
     nocc, nvir = t1.shape
+    nmo = nocc + nvir
+    dtype = np.result_type(t1, t2, eris.ovoo.dtype)
+    # Notice we do not use `sort_eri` as compared to the eaccsd_star.
+    # The sort_eri does not produce eri's that are read-in quickly for the current contraction
+    # scheme.  Here, we have that the block loop is over occupied indices whereas in the
+    # sort_eri it is done over virtual indices (due to the permutation over occupied indices
+    # in ipccsd_star versus virtual indices in eaccsd_star).
+    cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)  # Left if new sort_eri implemented
 
     fov = fock[:nocc,nocc:]
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
 
-    oovv = _cp(eris.ovov).transpose(0,2,1,3)
-    ovvv = _cp(eris.get_ovvv()).transpose(0,2,1,3)
-    vvov = ovvv.transpose(2,3,0,1).conj()
-    ooov = _cp(eris.ovoo).transpose(2,0,3,1)
-    vooo = ooov.conj().transpose(3,2,1,0)
-    ovov = _cp(eris.oovv).transpose(0,2,1,3)
-    vvvv = imd._get_vvvv(eris).transpose(0,2,1,3)
-    ovvo = _cp(eris.ovvo).transpose(0,2,1,3)
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*6))))
 
-    eijabc = np.zeros((nocc,nocc,nvir,nvir,nvir))
-    for i,j in lib.cartesian_prod([range(nocc),range(nocc)]):
-        for a,b,c in lib.cartesian_prod([range(nvir),range(nvir),range(nvir)]):
-            eijabc[i,j,a,b,c] = foo[i,i] + foo[j,j] - fvv[a,a] - fvv[b,b] - fvv[c,c]
+    mo_energy = np.asarray(eris.mo_energy)
+    fock_mo_energy = np.asarray(eris.fock.diagonal())
+    mo_e_occ = np.asarray(mo_energy[:nocc])
+    mo_e_vir = np.asarray(mo_energy[nocc:])
+
+    def contract_l2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j, out=None):
+        '''Create perturbed l2.'''
+        if out is None:
+            out = np.zeros((i1-i0,j1-j0) + (nvir,)*3, dtype=dtype)
+        out += -0.5*np.einsum('iajb,c->ijabc', eris.ovov[i0:i1,:,j0:j1], l1)
+        out += lib.einsum('iajm,mbc->ijabc', eris.ovoo[i0:i1,:,j0:j1], l2)
+        out -= lib.einsum('iaeb,jec->ijabc', cache_ovvv_i, l2[j0:j1])
+        out -= lib.einsum('jbec,iae->ijabc', cache_ovvv_j, l2[i0:i1])
+        return out
+
+    def contract_pl2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j):
+        '''Create P(ia|jb) of perturbed l2.'''
+        out = contract_l2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
+        tmp = contract_l2p(l1, l2, j0, j1, i0, i1, cache_ovvv_j, cache_ovvv_i)
+        tmp = tmp.transpose(1,0,3,2,4)  # P(ia|jb)
+        out = out + tmp
+        return out
+
+    def _get_vvvv(eris):
+        if eris.vvvv is None and getattr(eris, 'vvL', None) is not None:  # DF eris
+            vvL = np.asarray(eris.vvL)
+            nvir = int(np.sqrt(eris.vvL.shape[0]*2))
+            return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)
+        elif len(eris.vvvv.shape) == 2:  # DO not use .ndim here for h5py library
+                                         # backward compatbility
+            nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
+            return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
+        else:
+            return eris.vvvv
+
+    def contract_r2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j, out=None):
+        '''Create perturbed r2.'''
+        if out is None:
+            out = np.zeros((i1-i0,j1-j0) + (nvir,)*3, dtype=dtype)
+        tmp = np.einsum('becf,f->bce', _get_vvvv(eris), r1)
+        out += -lib.einsum('bce,ijae->ijabc', tmp, t2[i0:i1,j0:j1])
+        tmp = np.einsum('mjce,e->mcj', eris.oovv[:,j0:j1], r1)
+        out += lib.einsum('mcj,imab->ijabc', tmp, t2[i0:i1])
+        tmp = np.einsum('jbem,e->mbj', eris.ovvo[j0:j1], r1)
+        out += lib.einsum('mbj,imac->ijabc', tmp, t2[i0:i1])
+        out += lib.einsum('iajm,mbc->ijabc', eris.ovoo[i0:i1,:,j0:j1].conj(), r2)
+        out += -lib.einsum('iaeb,jec->ijabc', cache_ovvv_i.conj(), r2[j0:j1])
+        out += -lib.einsum('jbec,iae->ijabc', cache_ovvv_j.conj(), r2[i0:i1])
+        return out
+
+    def contract_pr2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j):
+        '''Create P(ia|jb) of perturbed r2.'''
+        out = contract_r2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
+        tmp = contract_r2p(r1, r2, j0, j1, i0, i1, cache_ovvv_j, cache_ovvv_i)
+        tmp = tmp.transpose(1,0,3,2,4)  # P(ia|jb)
+        out = out + tmp
+        return out
 
     eaccsd_evecs  = np.array(eaccsd_evecs)
     leaccsd_evecs = np.array(leaccsd_evecs)
     e = []
-    for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
-        l1, l2 = eom.vector_to_amplitudes(_levec)
-        r1, r2 = eom.vector_to_amplitudes(_evec)
+    eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
+    eaccsd_evals = np.atleast_1d(eaccsd_evals)
+    for eval_, evec_, levec_ in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+        l1, l2 = eom.vector_to_amplitudes(levec_)
+        r1, r2 = eom.vector_to_amplitudes(evec_)
         ldotr = np.dot(l1, r1) + np.dot(l2.ravel(),r2.ravel())
         l1 /= ldotr
         l2 /= ldotr
         l2 = 1./3*(1.*l2 + 2.*l2.transpose(0,2,1))
         r2 = r2.transpose(0,2,1)
 
-        _eijabc = eijabc + _eval
-        _eijabc = 1./_eijabc
+        deltaE = 0.0
+        eabc = (mo_e_vir[None,None,:,None,None] +
+                mo_e_vir[None,None,None,:,None] +
+                mo_e_vir[None,None,None,None,:] - eval_)
 
-        lijabc = -0.5*np.einsum('ijab,c->ijabc', oovv, l1)
-        lijabc += lib.einsum('jima,mbc->ijabc', ooov, l2)
-        lijabc -= lib.einsum('ieab,jec->ijabc', ovvv, l2)
-        lijabc -= lib.einsum('jebc,iae->ijabc', ovvv, l2)
-        lijabc = lijabc + lijabc.transpose(1,0,3,2,4)
+        for i0, i1 in lib.prange_tril(0, nocc, blksize):
+            j0, j1 = 0, i1
+            eijabc = (mo_e_occ[i0:i1][:,None,None,None,None] +
+                      mo_e_occ[j0:j1][None,:,None,None,None] - eabc)
+            eijabc = 1./eijabc
+            cache_ovvv_i = eris.get_ovvv(slice(i0,i1))
+            cache_ovvv_j = eris.get_ovvv(slice(j0,j1))
+            lijabc = contract_pl2p(l1, l2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
+            rijabc = contract_pr2p(r1, r2, i0, i1, j0, j1, cache_ovvv_i, cache_ovvv_j)
 
-        tmp = np.einsum('bcef,f->bce', vvvv, r1)
-        rijabc = -lib.einsum('bce,ijae->ijabc', tmp, t2)
-        tmp = np.einsum('mcje,e->mcj', ovov, r1)
-        rijabc += lib.einsum('mcj,imab->ijabc', tmp, t2)
-        tmp = np.einsum('mbej,e->mbj', ovvo, r1)
-        rijabc += lib.einsum('mbj,imac->ijabc', tmp, t2)
-        rijabc += lib.einsum('amij,mbc->ijabc', vooo, r2)
-        rijabc += -lib.einsum('bcje,iae->ijabc', vvov, r2)
-        rijabc += -lib.einsum('abie,jec->ijabc', vvov, r2)
-        rijabc = rijabc + rijabc.transpose(1,0,3,2,4)
+            lijabc =  4.*lijabc \
+                    - 2.*lijabc.transpose(0,1,3,2,4) \
+                    - 2.*lijabc.transpose(0,1,4,3,2) \
+                    - 2.*lijabc.transpose(0,1,2,4,3) \
+                    + 1.*lijabc.transpose(0,1,3,4,2) \
+                    + 1.*lijabc.transpose(0,1,4,2,3)
 
-        lijabc =  4.*lijabc \
-                - 2.*lijabc.transpose(0,1,3,2,4) \
-                - 2.*lijabc.transpose(0,1,4,3,2) \
-                - 2.*lijabc.transpose(0,1,2,4,3) \
-                + 1.*lijabc.transpose(0,1,3,4,2) \
-                + 1.*lijabc.transpose(0,1,4,2,3)
-        deltaE = 0.5*np.einsum('ijabc,ijabc,ijabc', lijabc,rijabc,_eijabc)
-        deltaE = deltaE.real
-        logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
-                    _eval+deltaE, deltaE)
-        e.append(_eval+deltaE)
+            # Symmetry factors (1 for a == b, 2 for a < b)
+            fac = 2*np.ones_like(rijabc, dtype=int)
+            triu_idx = np.triu_indices(i1-i0,i0+1,m=j1-j0)
+            fac[triu_idx[0],triu_idx[1],:,:,:] = 0
+            fac[np.arange(i1-i0),np.arange(i0,j1)] = 1
+            eijabc *= fac
+
+            deltaE += np.einsum('ijabc,ijabc,ijabc',lijabc,rijabc,eijabc)
+        deltaE = 0.5*deltaE.real
+        logger.info(eom, "eaccsd energy, star energy, delta energy = %16.12f, %16.12f, %16.12f",
+                    eval_, eval_+deltaE, deltaE)
+        e.append(eval_+deltaE)
     return e
 
 
@@ -656,10 +899,15 @@ class EOMEA(EOM):
 
     kernel = eaccsd
     eaccsd = eaccsd
+    eaccsd_star = eaccsd_star
+
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
-    eaccsd_star = eaccsd_star
+    ccsd_star_contract = eaccsd_star_contract
+
+    def eaccsd_star_contract(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
+        return self.ccsd_star_contract(eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=imds)
 
     def gen_matvec(self, imds=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()
@@ -692,6 +940,13 @@ class EOMEA(EOM):
     def eea(self):
         return self.e
 
+
+class EOMEA_Ta(EOMEA):
+    '''Class for EOM EACCSD(T)*(a) method by Matthews and Stanton.'''
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_t3p2_ea(self._cc, self.partition)
+        return imds
 
 ########################################
 # EOM-EE-CCSD
@@ -1457,6 +1712,24 @@ class _IMDS:
         log.timer_debug1('EOM-CCSD IP intermediates', *cput0)
         return self
 
+    def make_t3p2_ip(self, cc, ip_partition=None):
+        assert(ip_partition is None)
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
+
+        self._made_shared_2e = False  # Force update
+        self.make_ip()  # Make after t1/t2 updated
+        self.Wovoo = self.Wovoo + Wovoo
+
+        logger.timer_debug1(self, 'EOM-CCSD(T)a IP intermediates', *cput0)
+        return self
+
+
     def make_ea(self, ea_partition=None):
         self._make_shared_1e()
         if not self._made_shared_2e and ea_partition != 'mp':
@@ -1475,6 +1748,23 @@ class _IMDS:
             self.Wvvvv = imd.Wvvvv(t1, t2, eris)
             self.Wvvvo = imd.Wvvvo(t1, t2, eris, self.Wvvvv)
         log.timer_debug1('EOM-CCSD EA intermediates', *cput0)
+        return self
+
+    def make_t3p2_ea(self, cc, ea_partition=None):
+        assert(ea_partition is None)
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
+
+        self._made_shared_2e = False  # Force update
+        self.make_ea()  # Make after t1/t2 updated
+        self.Wvvvo = self.Wvvvo + Wvvvo
+
+        logger.timer_debug1(self, 'EOM-CCSD(T)a EA intermediates', *cput0)
         return self
 
 
@@ -1676,7 +1966,7 @@ if __name__ == '__main__':
     print(le[1] - 0.51876597800180335)
     print(le[2] - 0.67828755013874864)
 
-    e = myeom.ipccsd_star(e, v, lv)
+    e = myeom.ipccsd_star_contract(e, v, lv)
     print(e[0] - 0.43793202073189047)
     print(e[1] - 0.52287073446559729)
     print(e[2] - 0.67994597948852287)
@@ -1694,7 +1984,7 @@ if __name__ == '__main__':
     print(le[1] - 0.24027634198123343)
     print(le[2] - 0.51006809015066612)
 
-    e = myeom.eaccsd_star(e,v,lv)
+    e = myeom.eaccsd_star_contract(e,v,lv)
     print(e[0] - 0.16656250953550664)
     print(e[1] - 0.23944144521387614)
     print(e[2] - 0.41399436888830721)
@@ -1748,7 +2038,7 @@ if __name__ == '__main__':
     print(le[1] - 0.51876597800180335)
     print(le[2] - 0.67828755013874864)
 
-    e = myeom.ipccsd_star(e, v, lv)
+    e = myeom.ipccsd_star_contract(e, v, lv)
     print(e[0] - 0.43793202073189047)
     print(e[1] - 0.52287073446559729)
     print(e[2] - 0.67994597948852287)
@@ -1766,7 +2056,7 @@ if __name__ == '__main__':
     print(le[1] - 0.24027634198123343)
     print(le[2] - 0.51006809015066612)
 
-    e = myeom.eaccsd_star(e,v,lv)
+    e = myeom.eaccsd_star_contract(e,v,lv)
     print(e[0] - 0.16656250953550664)
     print(e[1] - 0.23944144521387614)
     print(e[2] - 0.41399436888830721)

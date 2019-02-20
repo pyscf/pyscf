@@ -225,6 +225,9 @@ class NMR(rhf_nmr.NMR):
     get_fock = get_fock
     solve_mo1 = solve_mo1
 
+from pyscf import scf
+scf.uhf.UHF.NMR = lib.class_as_method(NMR)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -242,7 +245,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.UHF(mol).run()
-    nmr = NMR(mf)
+    nmr = mf.NMR()
     nmr.cphf = True
     #nmr.gauge_orig = (0,0,0)
     msc = nmr.kernel() # _xx,_yy = 375.232839, _zz = 483.002139
