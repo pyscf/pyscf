@@ -122,17 +122,21 @@ class H20HFTest(unittest.TestCase):
         testing.assert_allclose(self.ref_m, m, atol=1e-13)
 
         # Test frozen
-        for frozen in (1, [0, -1]):
-            try:
-                e = PhysERI(self.model_rhf, frozen=frozen)
-                m = e.tdhf_full_form()
-                ov_mask = tdhf_frozen_mask(e, kind="ov")
-                ref_m = self.ref_m[numpy.ix_(ov_mask, ov_mask)]
-                testing.assert_allclose(ref_m, m, atol=1e-13)
+        for proxy in (None, self.td_model_rhf):
+            for frozen in (1, [0, -1]):
+                try:
+                    e = PhysERI(self.model_rhf, frozen=frozen)
+                    m = e.tdhf_full_form()
+                    ov_mask = tdhf_frozen_mask(e, kind="ov")
+                    ref_m = self.ref_m[numpy.ix_(ov_mask, ov_mask)]
+                    testing.assert_allclose(ref_m, m, atol=1e-13)
 
-            except Exception:
-                print("When testing with frozen={} the following exception occurred:".format(repr(frozen)))
-                raise
+                except Exception:
+                    print("When testing with proxy={} and frozen={} the following exception occurred:".format(
+                        repr(proxy),
+                        repr(frozen)
+                    ))
+                    raise
 
     def test_class(self):
         """Tests container behavior."""

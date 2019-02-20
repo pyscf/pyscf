@@ -29,15 +29,16 @@ from pyscf.pbc.tdscf import KTDDFT
 
 class PhysERI(common_slow.GammaMFMixin, rks_slow.PhysERI):
 
-    def __init__(self, model, frozen=None):
+    def __init__(self, model, frozen=None, proxy=None):
         """
         A proxy class for calculating the TDKS matrix blocks (Gamma-point version).
 
         Args:
             model (KRKS): the base model with a single k-point;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            proxy: a pyscf proxy with TD response function;
         """
-        common_slow.TDProxyMatrixBlocks.__init__(self, KTDDFT(model))
+        common_slow.TDProxyMatrixBlocks.__init__(self, proxy if proxy is not None else KTDDFT(model))
         common_slow.GammaMFMixin.__init__(self, model, frozen=frozen)
 
 
@@ -48,12 +49,13 @@ class TDRKS(rks_slow.TDRKS):
     proxy_eri = PhysERI
     v2a = staticmethod(vector_to_amplitudes)
 
-    def __init__(self, mf, frozen=None):
+    def __init__(self, mf, frozen=None, proxy=None):
         """
         Performs TDKS calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf (RKS): the base restricted DFT model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            proxy: a pyscf proxy with TD response function;
         """
-        super(TDRKS, self).__init__(mf, frozen=frozen)
+        super(TDRKS, self).__init__(mf, frozen=frozen, proxy=proxy)
         self.fast = False

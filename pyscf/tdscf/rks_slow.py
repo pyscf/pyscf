@@ -94,15 +94,16 @@ def mk_make_canonic(m, o, v, return_ov=False):
 
 class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
-    def __init__(self, model, frozen=None):
+    def __init__(self, model, frozen=None, proxy=None):
         """
         A proxy class for calculating the TDKS matrix blocks (molecular version).
 
         Args:
             model (RKS): the base model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            proxy: a pyscf proxy with TD response function;
         """
-        TDProxyMatrixBlocks.__init__(self, TDDFT(model))
+        TDProxyMatrixBlocks.__init__(self, proxy if proxy is not None else TDDFT(model))
         MolecularMFMixin.__init__(self, model, frozen=frozen)
 
     def __get_mo_energies__(self, *args, **kwargs):
@@ -146,15 +147,17 @@ class TDRKS(TDBase):
     proxy_eri = PhysERI
     v2a = staticmethod(vector_to_amplitudes)
 
-    def __init__(self, mf, frozen=None):
+    def __init__(self, mf, frozen=None, proxy=None):
         """
         Performs TDKS calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf (RKS): the base restricted DFT model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            proxy: a pyscf proxy with TD response function;
         """
         super(TDRKS, self).__init__(mf, frozen=frozen)
         self.fast = True
+        self.__proxy__ = proxy
 
     def ao2mo(self):
         """
@@ -163,4 +166,4 @@ class TDRKS(TDBase):
         Returns:
             A suitable ERI.
         """
-        return self.proxy_eri(self._scf, frozen=self.frozen)
+        return self.proxy_eri(self._scf, frozen=self.frozen, proxy=self.__proxy__)
