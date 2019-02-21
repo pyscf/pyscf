@@ -14,13 +14,10 @@ non-periodic direction.
 
 '''
 
-import numpy
 import time
-from pyscf import scf
 from pyscf.pbc import df as pdf
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbchf
-from pyscf.pbc import tools
 
 nk = 1
 kpts = [nk,nk,1]
