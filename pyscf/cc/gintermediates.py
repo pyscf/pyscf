@@ -223,6 +223,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
 
     ccsd_energy = cc.energy(t1, t2, eris)
     dtype = np.result_type(t1, t2)
+    if np.issubdtype(dtype, np.dtype(complex).type):
+        logger.error(cc, 't3p2 imds has not been strictly checked for use with complex integrals')
 
     if t3p2_ip_out is None:
         t3p2_ip_out = np.zeros((nocc,nvir,nocc,nocc), dtype=dtype)
