@@ -453,7 +453,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     """For a description of arguments, see `get_t3p2_imds_slow` in
     the corresponding `kintermediates.py`.
     """
-    from kccsd_t_rhf import _get_epqr
+    from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
     if eris is None:
         eris = cc.ao2mo()
     fock = eris.fock
@@ -691,7 +691,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     """For a description of arguments, see `get_t3p2_imds_slow` in
     the corresponding `kintermediates.py`.
     """
-    from kccsd_t_rhf import _get_epqr
+    from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
     cpu1 = cpu0 = (time.clock(), time.time())
     if eris is None:
         eris = mycc.ao2mo()
@@ -722,7 +722,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     Wacek = t3p2_ea_out
 
     # Create necessary temporary eris for fast read
-    from kccsd_t_rhf import create_t3_eris, get_data_slices
+    from pyscf.pbc.cc.kccsd_t_rhf import create_t3_eris, get_data_slices
     feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
     t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
     fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
