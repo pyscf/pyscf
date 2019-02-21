@@ -131,11 +131,9 @@ def sparse_transform(m, *args):
         for b2 in range(basis.shape[1]):
             slice_b2 = (slice(None),) * index + (b2,)
             col = basis.getcol(b2)
-            assert len(col.indptr) == 2
-            assert col.shape[1] == 1
-            for b1, v in zip(col.indices, col.data):
+            for b1 in col.nonzero()[0]:
                 slice_b1 = (slice(None),) * index + (b1,)
-                new_result[slice_b2] += v * result[slice_b1]
+                new_result[slice_b2] += col[b1, 0] * result[slice_b1]
         result = new_result
 
     return result
@@ -180,8 +178,8 @@ def k2s(model, grid_spec, mf_constructor, threshold=None, degeneracy_threshold=N
         moc.append(psi)
     moc = numpy.concatenate(moc, axis=1)
 
-    rotation_matrix = sparse.csc_matrix(moc.shape, dtype=moc.dtype)
-    inv_rotation_matrix = sparse.csc_matrix(moc.shape, dtype=moc.dtype)
+    rotation_matrix = sparse.dok_matrix(moc.shape, dtype=moc.dtype)
+    inv_rotation_matrix = sparse.dok_matrix(moc.shape, dtype=moc.dtype)
     nvecs = (0,) + tuple(i.shape[1] for i in model.mo_coeff)
     nvecs = numpy.cumsum(nvecs)
     k_spaces = tuple(numpy.arange(i, j) for i, j in zip(nvecs[:-1], nvecs[1:]))
