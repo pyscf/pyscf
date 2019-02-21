@@ -23,6 +23,11 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
 import numpy
+from pyscf.lib.parameters import LARGE_DENOM
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
+from pyscf.pbc.cc.kccsd_rhf import _get_epq
+from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 
 #einsum = numpy.einsum
 einsum = lib.einsum
@@ -370,6 +375,14 @@ def get_full_t3p2(mycc, t1, t2, eris):
     fov = fock[:, :nocc, nocc:]
     foo = numpy.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
     fvv = numpy.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
 
     t3 = numpy.empty((nkpts,nkpts,nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir,nvir),
                       dtype=t2.dtype)
@@ -387,12 +400,17 @@ def get_full_t3p2(mycc, t1, t2, eris):
           t3.transpose(2,0,1,3,4,7,5,6,8,9,10))
 
     for ki, kj, kk in product(range(nkpts), repeat=3):
-        eijk = foo[ki][:, None, None] + foo[kj][None, :, None] + foo[kk][None, None, :]
+        eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                         [0,nocc,kj,mo_e_o,nonzero_opadding],
+                         [0,nocc,kk,mo_e_o,nonzero_opadding])
         for ka, kb in product(range(nkpts), repeat=2):
             kc = kpts_helper.get_kconserv3(mycc._scf.cell, mycc.kpts,
                                            [ki, kj, kk, ka, kb])
-            eabc = fvv[ka][:, None, None] + fvv[kb][None, :, None] + fvv[kc][None, None, :]
-            eijkabc = eijk[:, :, :, None, None, None] - eabc[None, None, None, :, :, :]
+            eabc = _get_epqr([0,nvir,ka,mo_e_v,nonzero_vpadding],
+                             [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                             [0,nvir,kc,mo_e_v,nonzero_vpadding],
+                             fac=[-1.,-1.,-1.])
+            eijkabc = eijk[:, :, :, None, None, None] + eabc[None, None, None, :, :, :]
             t3[ki,kj,kk,ka,kb] /= eijkabc
 
     return t3
@@ -442,6 +460,9 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
+
     mo_e_o = mo_energy_occ
     mo_e_v = mo_energy_vir
 
@@ -463,8 +484,10 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
         ka = ki
         for km, kn, ke in product(range(nkpts), repeat=3):
             pt1[ki] += 0.25 * lib.einsum('mnef,imnaef->ia', eris.oovv[km,kn,ke], t3[ki,km,kn,ka,ke])
-        eii = mo_e_o[ki][:, None] - mo_e_v[ki][None, :]
-        pt1[ki] /= eii
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
+        pt1[ki] /= eia
 
     pt2 = numpy.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=dtype)
     for ki, kj, ka in product(range(nkpts), repeat=3):
@@ -481,9 +504,13 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
                 pt2[ki,kj,ka] -= 0.5 * lib.einsum('inmabe,nmje->ijab', t3[ki,kn,km,ka,kb], eris.ooov[kn,km,kj])
                 pt2[ki,kj,ka] += 0.5 * lib.einsum('jnmabe,nmie->ijab', t3[kj,kn,km,ka,kb], eris.ooov[kn,km,ki])
 
-        eia = mo_e_o[ki][:, None] - mo_e_v[ka][None, :]
-        ejb = mo_e_o[kj][:, None] - mo_e_v[kb][None, :]
-        eijab = eia[:, None, :, None] + ejb[None, :, None, :]
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
+        ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
+                       [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
+        eijab = eia[:, None, :, None] + ejb[:, None, :]
         pt2[ki,kj,ka] /= eijab
 
     pt1 += t1
