@@ -419,20 +419,19 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
             dm_kpts[1,:] *= 0.99  # To slightly break spin symmetry
             assert dm_kpts.shape[0]==2
 
-        if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
-            # FIXME: consider the fractional num_electron or not? This maybe
-            # relates to the charged system.
-            nkpts = len(self.kpts)
-            nelec = np.asarray(self.nelec)
-            if np.any(abs(ne - nelec) > 1e-7*nkpts):
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to the number '
-                            'of electrons', ne.sum()/nkpts)
-                dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
+        ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
+        # FIXME: consider the fractional num_electron or not? This maybe
+        # relates to the charged system.
+        nkpts = len(self.kpts)
+        nelec = np.asarray(self.nelec)
+        if np.any(abs(ne - nelec) > 1e-7*nkpts):
+            logger.warn(self, 'Big error detected in the electron number '
+                        'of initial guess density matrix (Ne/cell = %g)!\n'
+                        '  This can cause huge error in Fock matrix and '
+                        'lead to instability in SCF for low-dimensional '
+                        'systems.\n  DM is normalized wrt the number '
+                        'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
+            dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
     get_hcore = khf.KSCF.get_hcore

@@ -682,16 +682,7 @@ class SCF(mol_hf.SCF):
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        if cell.dimension < 3:
-            ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
-            if abs(ne - cell.nelectron).sum() > 1e-7:
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to the number '
-                            'of electrons', ne)
-                dm *= cell.nelectron / ne
+        dm = normalize_dm_(self, dm)
         return dm
 
     def init_guess_by_1e(self, cell=None):
@@ -759,3 +750,22 @@ def _format_jks(vj, dm, kpts_band):
     elif getattr(dm, "ndim", 0) == 2:
         vj = vj[0]
     return vj
+
+def normalize_dm_(mf, dm):
+    '''
+    Scale density matrix to make it produce the correct number of electrons.
+    '''
+    cell = mf.cell
+    if isinstance(dm, np.ndarray) and dm.ndim == 2:
+        ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell))
+    else:
+        ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell))
+    if abs(ne - cell.nelectron).sum() > 1e-7:
+        logger.warn(mf, 'Big error detected in the electron number '
+                    'of initial guess density matrix (Ne/cell = %g)!\n'
+                    '  This can cause huge error in Fock matrix and '
+                    'lead to instability in SCF for low-dimensional '
+                    'systems.\n  DM is normalized wrt the number '
+                    'of electrons %s', ne, cell.nelectron)
+        dm *= cell.nelectron / ne
+    return dm
