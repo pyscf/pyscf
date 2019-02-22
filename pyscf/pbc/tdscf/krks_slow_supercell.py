@@ -360,39 +360,6 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
         PeriodicMFMixin.__init__(self, model, frozen=frozen)
         self.model_super = model_super
 
-    def __get_mo_energies__(self, k1, k2):
-        """This routine collects occupied and virtual MO energies."""
-        return self.mo_energy[k1][:self.nocc[k1]], self.mo_energy[k2][self.nocc[k2]:]
-
-    def tdhf_diag_k(self, k1, k2):
-        """
-        Retrieves the diagonal block.
-        Args:
-            k1 (int): first k-index (row);
-            k2 (int): second k-index (column);
-
-        Returns:
-            The diagonal block.
-        """
-        # Everything is already implemented in molecular code
-        return super(PhysERI, self).tdhf_diag(k1, k2)
-
-    def tdhf_diag(self, pairs=None):
-        """
-        Retrieves the merged diagonal block with specified or all possible k-index pairs.
-        Args:
-            pairs (Iterable): pairs of k-points to assmble;
-
-        Returns:
-            The diagonal block.
-        """
-        if pairs is None:
-            pairs = product(range(len(self.model.kpts)), range(len(self.model.kpts)))
-        result = []
-        for k1, k2 in pairs:
-            result.append(self.tdhf_diag_k(k1, k2))
-        return scipy.linalg.block_diag(*result)
-
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TD matrixes.
@@ -447,35 +414,3 @@ class TDRKS(rks_slow.TDRKS):
             frozen=self.frozen,
             proxy=self.__proxy__,
         )
-
-
-if __name__ == "__main__":
-    __k__ = [3, 1, 1]
-
-    from pyscf.pbc.gto import Cell
-    from pyscf.pbc.scf import KRKS
-    from pyscf.pbc.tools.pbc import super_cell
-
-    cell = Cell()
-    # Lift some degeneracies
-    cell.atom = '''
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.67   1.68   1.69
-    '''
-    cell.basis = {'C': [[0, (0.8, 1.0)],
-                        [1, (1.0, 1.0)]]}
-    # cell.basis = 'gth-dzvp'
-    cell.pseudo = 'gth-pade'
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.verbose = 8
-    cell.build()
-
-    model_rks = KRKS(cell, cell.make_kpts(__k__))
-    model_rks.kernel()
-
-    eri = PhysERI(model_rks, __k__, KRKS, frozen=1)
-    eri.tdhf_full_form()

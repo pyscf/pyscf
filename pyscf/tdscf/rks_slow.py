@@ -106,9 +106,6 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
         TDProxyMatrixBlocks.__init__(self, proxy if proxy is not None else TDDFT(model))
         MolecularMFMixin.__init__(self, model, frozen=frozen)
 
-    def __get_mo_energies__(self, *args, **kwargs):
-        return self.mo_energy[:self.nocc], self.mo_energy[self.nocc:]
-
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TD matrixes.
@@ -124,7 +121,7 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
         if size_full == size_hdiag:
             # The MK case
-            e_occ, e_virt = self.__get_mo_energies__(*args, **kwargs)
+            e_occ, e_virt = self.mo_energy[:self.nocc], self.mo_energy[self.nocc:]
             return ("mk",) + mk_make_canonic(
                 molecular_response(self.proxy_vind, self.space, self.nocc_full, False),
                 e_occ, e_virt, return_ov=True

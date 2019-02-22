@@ -133,23 +133,6 @@ def mkk2full(mk, k):
 
 
 class TDMatrixBlocks(object):
-    def __get_mo_energies__(self, *args, **kwargs):
-        """This routine collects occupied and virtual MO energies."""
-        raise NotImplementedError
-
-    def tdhf_diag(self, *args):
-        """
-        Retrieves the diagonal block.
-        Args:
-            *args: args passed to `__get_mo_energies__`;
-
-        Returns:
-            The diagonal block.
-        """
-        e_occ, e_virt = self.__get_mo_energies__(*args)
-        diag = (- e_occ[:, numpy.newaxis] + e_virt[numpy.newaxis, :]).reshape(-1)
-        return numpy.diag(diag).reshape((len(e_occ) * len(e_virt), len(e_occ) * len(e_virt)))
-
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TDHF matrixes.
@@ -240,6 +223,19 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
 
     def __calc_block__(self, item, *args):
         raise NotImplementedError
+
+    def tdhf_diag(self, *args):
+        """
+        Retrieves the diagonal block.
+        Args:
+            *args: args passed to `__get_mo_energies__`;
+
+        Returns:
+            The diagonal block.
+        """
+        e_occ, e_virt = self.__get_mo_energies__(*args)
+        diag = (- e_occ[:, numpy.newaxis] + e_virt[numpy.newaxis, :]).reshape(-1)
+        return numpy.diag(diag).reshape((len(e_occ) * len(e_virt), len(e_occ) * len(e_virt)))
 
     def eri_ov(self, item, *args):
         """
@@ -335,9 +331,6 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
         """
         self.proxy_model = model
         self.proxy_vind, self.proxy_diag = self.proxy_model.gen_vind(self.proxy_model._scf)
-
-    def __get_mo_energies__(self, *args, **kwargs):
-        raise NotImplementedError
 
     def tdhf_primary_form(self, *args, **kwargs):
         raise NotImplementedError
