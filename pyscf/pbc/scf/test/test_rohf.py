@@ -65,7 +65,7 @@ class KnownValues(unittest.TestCase):
         kmf.diis = None
         e2 = kmf.kernel()
         self.assertAlmostEqual(e1, e2, 9)
-        self.assertAlmostEqual(e1, -3.3035461870274085, 9)
+        self.assertAlmostEqual(e1, -3.3046228601655607, 9)
 
     def test_init_guess_by_chkfile(self):
         np.random.seed(1)

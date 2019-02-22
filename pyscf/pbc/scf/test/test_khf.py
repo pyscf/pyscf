@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         upop, uchg = kumf.analyze()
         self.assertTrue(isinstance(rpop, np.ndarray) and rpop.ndim == 1)
         self.assertAlmostEqual(abs(upop[0]+upop[1]-rpop).max(), 0, 7)
-        self.assertAlmostEqual(lib.finger(rpop), 1.6974490052755433, 6)
+        self.assertAlmostEqual(lib.finger(rpop), 1.697446, 5)
 
     def test_kpt_vs_supercell_high_cost(self):
         # For large n, agreement is always achieved
@@ -270,7 +270,7 @@ class KnownValues(unittest.TestCase):
         kmf.diis = None
         e2 = kmf.kernel()
         self.assertAlmostEqual(e1, e2, 9)
-        self.assertAlmostEqual(e1, -11.451354250609718, 9)
+        self.assertAlmostEqual(e1, -11.451118801956275, 9)
 
 
 if __name__ == '__main__':
