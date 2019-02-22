@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.3058403617753886, 9)
+        self.assertAlmostEqual(e1, -3.4070772194665477, 9)
 
         mf1 = pscf.UHF(cell, exxdiv='vcut_sph')
         mf1.chkfile = mf.chkfile
@@ -83,19 +83,19 @@ class KnownValues(unittest.TestCase):
         mf1.diis = None
         mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -3.4204798298887615, 9)
+        self.assertAlmostEqual(e1, -3.4272925247351256, 9)
         self.assertTrue(mf1.mo_coeff[0].dtype == np.double)
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 1.644379056097664, 9)
+        self.assertAlmostEqual(lib.finger(dip), 1.644379056097664, 7)
 
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.6934374246768265, 9)
+        self.assertAlmostEqual(lib.finger(dip), 0.6934317735537686, 6)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
-        self.assertAlmostEqual(ss, 2.077383024287556, 9)
+        self.assertAlmostEqual(ss, 2.077383024287556, 4)
 
     def test_bands(self):
         np.random.seed(1)
@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(e), 0.9038555558945438, 6)
 
         e = kmf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(lib.finger(e), -0.30205862019368834, 6)
+        self.assertAlmostEqual(lib.finger(e), -0.3020614, 6)
 
 
 if __name__ == '__main__':

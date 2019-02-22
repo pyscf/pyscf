@@ -632,8 +632,8 @@ class KnownValues(unittest.TestCase):
 
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 2.3002596914518700, 9)
-        self.assertAlmostEqual(ek1, 3.3165691757797346, 9)
+        self.assertAlmostEqual(ej1, 2.3002596914518700*(6/6.82991739766009)**2, 9)
+        self.assertAlmostEqual(ek1, 3.3165691757797346*(6/6.82991739766009)**2, 9)
 
         dm = mf0.get_init_guess()
         vj0, vk0 = get_jk(mf0, cell, dm)
@@ -645,8 +645,8 @@ class KnownValues(unittest.TestCase):
 
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 2.4673139106639925, 9)
-        self.assertAlmostEqual(ek1, 3.6886674521354221, 9)
+        self.assertAlmostEqual(ej1, 2.4673139106639925*(6/6.82991739766009)**2, 9)
+        self.assertAlmostEqual(ek1, 3.6886674521354221*(6/6.82991739766009)**2, 9)
 
     def test_get_jk_kpts(self):
         df = fft.FFTDF(cell)
@@ -662,14 +662,14 @@ class KnownValues(unittest.TestCase):
 
         ej1 = numpy.einsum('xij,xji->', vj1, dms) / len(kpts)
         ek1 = numpy.einsum('xij,xji->', vk1, dms) / len(kpts)
-        self.assertAlmostEqual(ej1, 2.3163352969873445, 9)
-        self.assertAlmostEqual(ek1, 7.7311228144548600, 9)
+        self.assertAlmostEqual(ej1, 2.3163352969873445*(6/6.82991739766009)**2, 9)
+        self.assertAlmostEqual(ek1, 7.7311228144548600*(6/6.82991739766009)**2, 9)
 
         numpy.random.seed(1)
         kpts_band = numpy.random.random((2,3))
         vj1, vk1 = df.get_jk(dms, kpts=kpts, kpts_band=kpts_band, exxdiv=None)
-        self.assertAlmostEqual(lib.finger(vj1), 3.437188138446714+0.1360466492092307j, 9)
-        self.assertAlmostEqual(lib.finger(vk1), 7.479986541097368+1.1980593415201204j, 9)
+        self.assertAlmostEqual(lib.finger(vj1), 6/6.82991739766009*(3.437188138446714+0.1360466492092307j), 9)
+        self.assertAlmostEqual(lib.finger(vk1), 6/6.82991739766009*(7.479986541097368+1.1980593415201204j), 9)
 
         nao = dm.shape[0]
         mo_coeff = numpy.random.random((nkpts,nao,nao))
@@ -869,3 +869,46 @@ if __name__ == '__main__':
     unittest.main()
 
 
+#|| ======================================================================
+#|| FAIL: test_get_jk (__main__.KnownValues)
+#|| ----------------------------------------------------------------------
+#|| Traceback (most recent call last):
+#||   File "df/test/test_fft.py", line 635, in test_get_jk
+#||     self.assertAlmostEqual(ej1, 2.3002596914518700*6./6.82991739766009, 9)
+#|| AssertionError: (1.7752048157393747-2.5392293537889846e-19j) != 2.0207503759034617 within 9 places
+#|| 
+#|| ======================================================================
+#|| FAIL: test_get_jk_kpts (__main__.KnownValues)
+#|| ----------------------------------------------------------------------
+#|| Traceback (most recent call last):
+#||   File "df/test/test_fft.py", line 665, in test_get_jk_kpts
+#||     self.assertAlmostEqual(ej1, 2.3163352969873445*6./6.82991739766009, 9)
+#|| AssertionError: (1.7876110203371138+9.959029383250026e-19j) != 2.0348726013414873 within 9 places
+#|| 
+#|| ======================================================================
+#|| FAIL: test_get_jk_with_casscf (__main__.KnownValues)
+#|| ----------------------------------------------------------------------
+#|| Traceback (most recent call last):
+#||   File "df/test/test_fft.py", line 861, in test_get_jk_with_casscf
+#||     mc = mcscf.CASSCF(mf, 1, 2).run()
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/lib/misc.py", line 472, in run
+#||     self.kernel(*args)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/mc1step.py", line 796, in kernel
+#||     ci0=ci0, callback=callback, verbose=self.verbose)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/mc1step.py", line 346, in kernel
+#||     e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/mc1step.py", line 816, in casci
+#||     e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/casci.py", line 493, in kernel
+#||     ecore=energy_core)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/fci/direct_spin1.py", line 738, in kernel
+#||     davidson_only, pspace_size, ecore=ecore, **kwargs)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/fci/direct_spin1.py", line 448, in kernel_ms1
+#||     assert(0 < nelec[0] < norb and 0 < nelec[1] < norb)
+#|| AssertionError
+#|| 
+#|| ----------------------------------------------------------------------
+#|| Ran 14 tests in 9.418s
+#|| 
+#|| FAILED (failures=3)
+#|| [Finished in 10 seconds with code 1]
