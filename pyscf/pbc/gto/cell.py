@@ -183,14 +183,14 @@ def pack(cell):
     '''
     cldic = mole.pack(cell)
     cldic['a'] = cell.a
-    cldic['mesh'] = cell.mesh
     cldic['precision'] = cell.precision
     cldic['pseudo'] = cell.pseudo
     cldic['ke_cutoff'] = cell.ke_cutoff
-    cldic['rcut'] = cell.rcut
     cldic['exp_to_discard'] = cell.exp_to_discard
-    cldic['ew_eta'] = cell.ew_eta
-    cldic['ew_cut'] = cell.ew_cut
+    cldic['_mesh'] = cell._mesh
+    cldic['_rcut'] = cell._rcut
+    cldic['_ew_eta'] = cell._ew_eta
+    cldic['_ew_cut'] = cell._ew_cut
     cldic['dimension'] = cell.dimension
     cldic['low_dim_ft_type'] = cell.low_dim_ft_type
     return cldic
@@ -1042,7 +1042,6 @@ class Cell(mole.Mole):
     def __init__(self, **kwargs):
         mole.Mole.__init__(self, **kwargs)
         self.a = None # lattice vectors, (a1,a2,a3)
-        self.mesh = None
         self.ke_cutoff = None # if set, defines a spherical cutoff
                               # of fourier components, with .5 * G**2 < ke_cutoff
         self.pseudo = None
@@ -1054,14 +1053,47 @@ class Cell(mole.Mole):
 
 ##################################################
 # These attributes are initialized by build function if not given
+        self.mesh = None
         self.ew_eta = None
         self.ew_cut = None
         self.rcut = None
 
 ##################################################
 # don't modify the following variables, they are not input arguments
-        keys = set(('precision', 'exp_to_discard'))
+        keys = ('precision', 'exp_to_discard')
         self._keys = self._keys.union(self.__dict__).union(keys)
+
+    @property
+    def mesh(self):
+        return self._mesh
+    @mesh.setter
+    def mesh(self, x):
+        self._mesh = x
+        self._mesh_from_build = False
+
+    @property
+    def rcut(self):
+        return self._rcut
+    @rcut.setter
+    def rcut(self, x):
+        self._rcut = x
+        self._rcut_from_build = False
+
+    @property
+    def ew_eta(self):
+        return self._ew_eta
+    @ew_eta.setter
+    def ew_eta(self, val):
+        self._ew_eta = val
+        self._ew_from_build = False
+
+    @property
+    def ew_cut(self):
+        return self._ew_cut
+    @ew_cut.setter
+    def ew_cut(self, val):
+        self._ew_cut = val
+        self._ew_from_build = False
 
     if not getattr(__config__, 'pbc_gto_cell_Cell_verify_nelec', False):
 # nelec method defined in Mole class raises error when the attributes .spin
@@ -1227,9 +1259,10 @@ class Cell(mole.Mole):
                 self.dump_input()
             return self
 
-        if self.rcut is None:
-            self.rcut = max([self.bas_rcut(ib, self.precision)
-                             for ib in range(self.nbas)] + [0])
+        if self.rcut is None or self._rcut_from_build:
+            self._rcut = max([self.bas_rcut(ib, self.precision)
+                              for ib in range(self.nbas)] + [0])
+            self._rcut_from_build = True
 
         _a = self.lattice_vectors()
         if np.linalg.det(_a) < 0:
@@ -1246,21 +1279,23 @@ class Cell(mole.Mole):
   Size of vacuum may not be enough. The recommended vacuum size is %s AA (%s Bohr)\n\n'''
                                  % (Lz_guess*param.BOHR, Lz_guess))
 
-        if self.mesh is None:
+        if self.mesh is None or self._mesh_from_build:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)
             else:
                 ke_cutoff = self.ke_cutoff
-            self.mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
+            self._mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
 
             if (self.dimension < 2 or
                 (self.dimension == 2 and self.low_dim_ft_type == 'inf_vacuum')):
                 #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
                 meshz = (np.log(self.nelectron/self.precision)-2.99944305)/0.436392335
-                self.mesh[self.dimension:] = int(meshz)
+                self._mesh[self.dimension:] = int(meshz)
+            self._mesh_from_build = True
 
-        if self.ew_eta is None or self.ew_cut is None:
-            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.mesh)
+        if self.ew_eta is None or self.ew_cut is None or self._ew_from_build:
+            self._ew_eta, self._ew_cut = self.get_ewald_params(self.precision, self.mesh)
+            self._ew_from_build = True
 
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()
@@ -1538,7 +1573,7 @@ class Cell(mole.Mole):
         # gth-PP) will not be recognized by mole.build function.
         mol = self.view(mole.Mole)
         delattr(mol, 'a')
-        delattr(mol, 'mesh')
+        delattr(mol, '_mesh')
         return mol
 
     def has_ecp(self):

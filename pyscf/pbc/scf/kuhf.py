@@ -425,7 +425,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         nkpts = len(self.kpts)
         nelec = np.asarray(self.nelec)
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
-            logger.warn(self, 'Big error detected in the electron number '
+            logger.debug(self, 'Big error detected in the electron number '
                         'of initial guess density matrix (Ne/cell = %g)!\n'
                         '  This can cause huge error in Fock matrix and '
                         'lead to instability in SCF for low-dimensional '

@@ -757,11 +757,11 @@ def normalize_dm_(mf, dm):
     '''
     cell = mf.cell
     if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell))
+        ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
     else:
-        ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell))
+        ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
     if abs(ne - cell.nelectron).sum() > 1e-7:
-        logger.warn(mf, 'Big error detected in the electron number '
+        logger.debug(mf, 'Big error detected in the electron number '
                     'of initial guess density matrix (Ne/cell = %g)!\n'
                     '  This can cause huge error in Fock matrix and '
                     'lead to instability in SCF for low-dimensional '
