@@ -204,6 +204,20 @@ class TDMatrixBlocks(object):
             return m[1:]
 
 
+def mknj2i(item):
+    """
+    Transforms "mknj" notation into tensor index order for the ERI.
+    Args:
+        item (str): an arbitrary transpose of "mknj" letters;
+
+    Returns:
+        4 indexes.
+    """
+    notation = "mknj"
+    notation = dict(zip(notation, range(len(notation))))
+    return tuple(notation[i] for i in item)
+
+
 class TDERIMatrixBlocks(TDMatrixBlocks):
     symmetries = [
         ((0, 1, 2, 3), False),
@@ -267,11 +281,6 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
                 self.__eri__[permuted_args] = result.transpose(*permutation)
         return result
 
-    def __mknj2i__(self, item):
-        notation = "mknj"
-        notation = dict(zip(notation, range(len(notation))))
-        return tuple(notation[i] for i in item)
-
     def eri_mknj(self, item, *args):
         """
         Retrieves ERI block using 'mknj' notation.
@@ -285,7 +294,7 @@ class TDERIMatrixBlocks(TDMatrixBlocks):
         if len(item) != 4 or not isinstance(item, str) or set(item) != set('mknj'):
             raise ValueError("Unknown item: {}".format(repr(item)))
 
-        item = self.__mknj2i__(item)
+        item = mknj2i(item)
         n_ov = ''.join('o' if i % 2 == 0 else 'v' for i in item)
         args = tuple(
             tuple(arg[i] for i in item)

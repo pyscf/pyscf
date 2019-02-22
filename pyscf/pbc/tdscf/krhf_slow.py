@@ -20,6 +20,7 @@ procedure. Several variants of TDHF are available:
 
 from pyscf.pbc.tdscf import krhf_slow_supercell as td
 from pyscf.tdscf import rhf_slow
+from pyscf.tdscf.common_slow import mknj2i
 
 import numpy
 
@@ -56,7 +57,7 @@ class PhysERI(td.PhysERI):
         Returns:
             Row and column indexes of a sub-block with conserving momentum.
         """
-        item_i = numpy.argsort(self.__mknj2i__(item))
+        item_i = numpy.argsort(mknj2i(item))
         item_code = ''.join("++--"[i] for i in item_i)
         if item_code[0] == item_code[1]:
             kc = self.kconserv  # ++-- --++
