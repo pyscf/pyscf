@@ -1299,6 +1299,10 @@ class EOMEE(eom_rccsd.EOM):
     kernel = eeccsd
     eeccsd = eeccsd
 
+    @property
+    def nkpts(self):
+        return len(self.kpts)
+
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
     # -- rintermediates --> gintermediates

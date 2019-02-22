@@ -1057,13 +1057,32 @@ class EOMEE(eom_kgccsd.EOMEE):
 
     def vector_size(self):
         '''Size of the linear excitation operator R vector based on spin-orbital basis'''
-        nocca, noccb = self.nocc
-        nmoa, nmob = self.nmo
-        nvira, nvirb = nmoa - nocca, nmob - noccb
+        nocc = np.sum(self.nocc)
+        nvir = np.sum(self.nmo) - nocc
         nkpts = self.nkpts
 
-        size_r1 = nkpts*nocca*nvira + nkpts*noccb*nvirb
-        size_r2 = 0
+        size_r1 = nkpts*nocc*nvir
+        if nkpts % 2 == 1:
+            size_r2 = nkpts*nocc*(nkpts*nocc-1)//2*nvir*(nkpts*nvir-1)//2
+        else:
+            size_oo = nocc*(nocc-1)//2  # When ki==kj, there are size_oo ways to create 2 holes
+            size_vv = nvir*(nvir-1)//2  # When ka==kb, there are size_vv ways to create 2 particles
+            size_r2 = 0
+            kconserv = self._cc.khelper.kconserv
+            # TODO Optimize this 3-layer for loop, or find an elegant solution
+            for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+                kb = kconserv[ki, ka, kj]
+                if ki == kj:
+                    if ka == kb:
+                        size_r2 += size_oo*size_vv
+                    elif ka > kb:
+                        size_r2 += size_oo*nvir**2
+                elif ki > kj:
+                    if ka == kb:
+                        size_r2 += nocc**2*size_vv
+                    elif ka > kb:
+                        size_r2 += nocc**2*nvir**2
+
         return size_r1 + size_r2
 
 class _IMDS:
