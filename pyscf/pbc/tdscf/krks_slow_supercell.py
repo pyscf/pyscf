@@ -299,7 +299,6 @@ def supercell_response(vind, space, nocc, double, rot_bloch, mo_occ_bloch, log_d
     nmo = sum(space_real)
     nocc = sum(space_real[:nocc])
     nvirt = nmo - nocc
-    size = nocc * nvirt
     response_real_a = response_real_a.reshape(nocc, nvirt, nocc, nvirt)
     response_real_b = response_real_b.reshape(nocc, nvirt, nocc, nvirt)
     logger.debug1(log_dest, "  reshape into ov: shapes: {} and {}".format(
@@ -331,16 +330,9 @@ def supercell_response(vind, space, nocc, double, rot_bloch, mo_occ_bloch, log_d
     response_bloch_a = sparse_transform(response_real_a, 0, r_oo, 1, r_vv.conj(), 2, r_oo.conj(), 3, r_vv)
     logger.debug1(log_dest, "  rotating B ...")
     response_bloch_b = sparse_transform(response_real_b, 0, r_oo, 1, r_vv.conj(), 2, r_oo, 3, r_vv.conj())
+    logger.debug1(log_dest, "  resulting shapes: {} and {}".format(response_bloch_a.shape, response_bloch_b.shape))
 
-    logger.debug1(log_dest, "Transforming into supercell convention: [k_o, o, k_v, v] -> [k_o, k_v, o, v] ...")
-    nocc_k = (mo_occ_bloch[0] > 0).sum()
-    nk = len(mo_occ_bloch)
-    nvirt_k = len(mo_occ_bloch[0]) - nocc_k
-
-    response_bloch_a = response_bloch_a.reshape((nk, nocc_k, nk, nvirt_k) * 2).transpose(0, 2, 1, 3, 4, 6, 5, 7)
-    response_bloch_b = response_bloch_b.reshape((nk, nocc_k, nk, nvirt_k) * 2).transpose(0, 2, 1, 3, 4, 6, 5, 7)
-    logger.debug1(log_dest, "  resulting shapes: {}, {}".format(response_bloch_a.shape, response_bloch_b.shape))
-    return response_bloch_a.reshape(size, size), response_bloch_b.reshape(size, size)
+    return response_bloch_a, response_bloch_b
 
 
 class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
@@ -367,7 +359,7 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
         Returns:
             Output type: "full", "ab", or "mk" and the corresponding matrix(es).
         """
-        return ("ab",) + supercell_response(
+        a, b = supercell_response(
             self.proxy_vind,
             self.space,
             sum(self.nocc_full),
@@ -376,6 +368,16 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
             self.mo_occ,
             self.model,
         )
+
+        # Transform into supercell convention: [k_o, o, k_v, v] -> [k_o, k_v, o, v]
+        nocc_k = self.nocc[0]
+        nk = len(self.nocc)
+        nvirt_k = self.nmo[0] - self.nocc[0]
+        size = nk * nk * nocc_k * nvirt_k
+
+        a = a.reshape((nk, nocc_k, nk, nvirt_k) * 2).transpose(0, 2, 1, 3, 4, 6, 5, 7)
+        b = b.reshape((nk, nocc_k, nk, nvirt_k) * 2).transpose(0, 2, 1, 3, 4, 6, 5, 7)
+        return "ab", a.reshape(size, size), b.reshape(size, size)
 
 
 vector_to_amplitudes = krhf_slow_supercell.vector_to_amplitudes
