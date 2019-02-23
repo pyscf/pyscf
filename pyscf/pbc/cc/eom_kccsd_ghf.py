@@ -1290,6 +1290,25 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
     return ipccsd(eom, nroots, koopmans, guess, left, eris, imds,
                   partition, kptlist, dtype)
 
+# TODO complete this method
+def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
+    return None
+
+# TODO complete this method
+def eeccsd_diag(eom, kshift, imds=None):
+    return None
+
+# TODO complete this method
+def mask_frozen_ee(eom, vector, kshift, const=LARGE_DENOM):
+    return None
+
+# TODO complete this method
+def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
+    return None
+
+# TODO complete this method
+def amplitudes_to_vector_ee(r1, r2, kshift, kconserv):
+    return None
 
 class EOMEE(eom_rccsd.EOM):
     def __init__(self, cc):
@@ -1298,10 +1317,79 @@ class EOMEE(eom_rccsd.EOM):
 
     kernel = eeccsd
     eeccsd = eeccsd
+    matvec = eeccsd_matvec
+    get_diag = eeccsd_diag
+    mask_frozen = mask_frozen_ee
 
     @property
     def nkpts(self):
         return len(self.kpts)
+
+    def vector_size(self):
+        '''Size of the linear excitation operator R vector based on spin-orbital basis'''
+        nocc = self.nocc  # alpha+beta
+        nvir = self.nvir  # alpha+beta
+        nkpts = self.nkpts
+
+        size_r1 = nkpts*nocc*nvir
+        if nkpts % 2 == 1:
+            size_r2 = nkpts*nocc*(nkpts*nocc-1)//2*nvir*(nkpts*nvir-1)//2
+        else:
+            size_oo = nocc*(nocc-1)//2  # When ki==kj, there are size_oo ways to create 2 holes
+            size_vv = nvir*(nvir-1)//2  # When ka==kb, there are size_vv ways to create 2 particles
+            size_r2 = 0
+            kconserv = self._cc.khelper.kconserv
+            # TODO Optimize this 3-layer for loop, or find an elegant solution
+            for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+                kb = kconserv[ki, ka, kj]
+                if ki == kj:
+                    if ka == kb:
+                        size_r2 += size_oo*size_vv
+                    elif ka > kb:
+                        size_r2 += size_oo*nvir**2
+                elif ki > kj:
+                    if ka == kb:
+                        size_r2 += nocc**2*size_vv
+                    elif ka > kb:
+                        size_r2 += nocc**2*nvir**2
+
+        return size_r1 + size_r2
+
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
+        """Initial guess vectors of R coefficients"""
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.complex)
+        nroots = min(nroots, size)
+        guess = []
+        # TODO do Koopmans later
+        if koopmans:
+            raise NotImplementedError
+        else:
+            idx = diag.argsort()[:nroots]
+            for i in idx:
+                g = np.zeros(int(size), dtype=dtype)
+                g[i] = 1.0
+                # TODO do mask_frozen later
+                guess.append(g)
+        return guess
+
+    # TODO complete this method
+    def get_matvec(self, kshift, imds=None, left=False, **kwargs):
+        return None
+
+    # TODO complete this method
+    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None, kconverv=None):
+        return vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconverv)
+
+    # TODO complete this method
+    def amplitudes_to_vector(self, r1, r2, kshift, kconserv=None):
+        return amplitudes_to_vector_ee(r1, r2, kshift, kconserv)
+
+    # TODO complete this method
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_ee()
+        return imds
 
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
