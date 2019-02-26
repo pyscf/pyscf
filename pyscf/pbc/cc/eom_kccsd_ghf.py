@@ -1519,7 +1519,7 @@ class _IMDS:
             # 3 or 4 virtuals
             self.Wvovv = imd.Wvovv(self._cc, t1, t2, eris, kconserv)
             self.Wvvvv = imd.Wvvvv(self._cc, t1, t2, eris, kconserv)
-            self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, self.Wvvvv, kconserv)
+            self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, kconserv, self.Wvvvv)
 
         self.made_ee_imds = True
         logger.timer(self, 'EOM-CCSD EE intermediates', *cput0)
