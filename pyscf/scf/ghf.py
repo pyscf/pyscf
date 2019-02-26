@@ -110,7 +110,7 @@ def get_jk(mol, dm, hermi=0,
     n_dm = dms.shape[0]
 
     dmaa = dms[:,:nao,:nao]
-    dmab = dms[:,nao:,:nao]
+    dmab = dms[:,:nao,nao:]
     dmbb = dms[:,nao:,nao:]
     dms = numpy.vstack((dmaa, dmbb, dmab))
     if dm.dtype == numpy.complex128:

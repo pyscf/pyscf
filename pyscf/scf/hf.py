@@ -602,7 +602,7 @@ def dot_eri_dm(eri, dm, hermi=0):
     >>> print(j.shape)
     (3, 2, 2)
     '''
-    dm = numpy.asarray(dm)
+    dm = numpy.asarray(dm,order='C')
     nao = dm.shape[-1]
     dms = dm.reshape(-1,nao,nao)
     if eri.dtype == numpy.complex128 or eri.size == nao**4:
