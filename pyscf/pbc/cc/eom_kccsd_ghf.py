@@ -1391,11 +1391,9 @@ def eeccsd_diag(eom, kshift, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = t1.shape
-    kconserv = eom.kconserv
-    kconserv_r1 = eom.get_kconserv_r1(kshift)
-    kconserv_r2 = eom.get_kconserv_r2(kshift)
-
-
+    kconserv = eom.kconserv  # Er... Why do I need this?
+    kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
+    kconserv_r2 = eom.get_kconserv_ee_r2(kshift)
 
     Hr1 = np.zeros((nkpts, nocc, nvir), dtype=t1.dtype)
 
@@ -1510,7 +1508,7 @@ class EOMEE(eom_rccsd.EOM):
     def amplitudes_to_vector(self, r1, r2, kshift, kconserv=None):
         return amplitudes_to_vector_ee(r1, r2, kshift, kconserv)
 
-    def get_kconserv_r1(self, kshift=0):
+    def get_kconserv_ee_r1(self, kshift=0):
         '''Get the momentum conservation array for a set of k-points.
 
         Given k-point index m the array kconserv_r1[m] returns the index n that
@@ -1527,7 +1525,7 @@ class EOMEE(eom_rccsd.EOM):
         return kconserv_r1
 
     # TODO Complete this method and merge it with `kpts_helper.get_kconserv()`
-    def get_kconserv_r2(self, kshift=0):
+    def get_kconserv_ee_r2(self, kshift=0):
         r'''Get the momentum conservation array for a set of k-points.
 
         Given k-point indices (k, l, m) the array kconserv_r2[k,l,m] returns
