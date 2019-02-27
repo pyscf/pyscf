@@ -106,6 +106,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     convs = np.zeros((len(kptlist),nroots), dtype)
 
     for k, kshift in enumerate(kptlist):
+        print("kshift =", kshift)
         matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
         diag = eom.mask_frozen(diag, kshift, const=LARGE_DENOM)
 
@@ -449,7 +450,7 @@ def ipccsd_diag(eom, kshift, imds=None):
     kconserv = imds.kconserv
 
     Hr1 = -np.diag(imds.Foo[kshift])
-
+    print("ipccsd: Hr1 shape =", Hr1.shape)
     Hr2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir), dtype=t1.dtype)
     if eom.partition == 'mp':
         foo = eom.eris.fock[:,:nocc,:nocc]
@@ -1008,7 +1009,7 @@ def eaccsd_diag(eom, kshift, imds=None):
     kconserv = imds.kconserv
 
     Hr1 = np.diag(imds.Fvv[kshift])
-
+    print("eaccsd: Hr1 shape =", Hr1.shape)
     Hr2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), dtype=t1.dtype)
     if eom.partition == 'mp': # This case is untested
         foo = eom.eris.fock[:,:nocc,:nocc]
@@ -1283,27 +1284,133 @@ class EOMEA_Ta(EOMEA):
 # EOM-EE-CCSD
 ########################################
 
+def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
+           eris=None, imds=None, partition=None, kptlist=None,
+           dtype=None, **kwargs):
+    '''See `kernel()` for a description of arguments.
+
+    This method is merely a simplified version of kernel() with a few parts
+    removed, such as those involving `eom.mask_frozen()`. Slowly they will be
+    added back for the completion of program.
+    '''
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+    if eom.verbose >= logger.WARN:
+        eom.check_sanity()
+    eom.dump_flags()
+
+    if imds is None:
+        imds = eom.make_imds(eris=eris)
+
+    size = eom.vector_size()
+    nroots = min(nroots, size)
+    nkpts = eom.nkpts
+
+    if kptlist is None:
+        kptlist = range(nkpts)
+
+    # TODO mask frozen-orbital indices
+
+    if dtype is None:
+        dtype = np.result_type(*imds.t1)
+
+    evals = np.zeros((len(kptlist),nroots), np.float)
+    evecs = np.zeros((len(kptlist),nroots,size), dtype)
+    convs = np.zeros((len(kptlist),nroots), dtype)
+
+    for k, kshift in enumerate(kptlist):
+        matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
+        raise NotImplementedError # Remove after finishing gen_matvec()
+        # TODO update `diag` in case of frozen orbitals
+
+        # TODO allow user provided guess vector
+        if guess:
+            raise NotImplementedError
+        else:
+            user_guess = False
+            guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
+        for ig, g in enumerate(guess):
+            guess_norm = np.linalg.norm(g)
+            guess_norm_tol = LOOSE_ZERO_TOL
+            if guess_norm < guess_norm_tol:
+                raise ValueError('Guess vector (id=%d) with norm %.4g is below threshold %.4g.\n'
+                                 'This could possibly be due to masking/freezing orbitals.\n'
+                                 'Check your guess vector to make sure it has sufficiently large norm.'
+                                 % (ig, guess_norm, guess_norm_tol))
+
+        def precond(r, e0, x0):
+            return r/(e0-diag+1e-12)
+
+        eig = lib.davidson_nosym1
+        # TODO allow user provided guess vector or Koopmans
+        if user_guess or koopmans:
+            raise NotImplementedError
+        else:
+            conv_k, evals_k, evecs_k = eig(matvec, guess, precond,
+                                       tol=eom.conv_tol, max_cycle=eom.max_cycle,
+                                       max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+
+        evals_k = evals_k.real
+        evals[k] = evals_k
+        evecs[k] = evecs_k
+        convs[k] = conv_k
+
+        for n, en, vn in zip(range(nroots), evals_k, evecs_k):
+            r1, r2 = eom.vector_to_amplitudes(vn, kshift=kshift)
+            if isinstance(r1, np.ndarray):
+                qp_weight = np.linalg.norm(r1) ** 2
+            else:  # for EOM-UCCSD
+                r1 = np.hstack([x.ravel() for x in r1])
+                qp_weight = np.linalg.norm(r1) ** 2
+            logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %0.6g',
+                        n, en, qp_weight)
+    log.timer('EOM-CCSD', *cput0)
+    return convs, evals, evecs
+
+
 def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None):
     '''See `ipccsd()` for a description of arguments.'''
-    return ipccsd(eom, nroots, koopmans, guess, left, eris, imds,
-                  partition, kptlist, dtype)
+    eom.converged, eom.e, eom.v \
+            = kernel_ee(eom, nroots, koopmans, guess, left, eris=eris, imds=imds,
+                  partition=partition, kptlist=kptlist, dtype=dtype)
+    return eom.e, eom.v
+
 
 # TODO complete this method
 def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     return None
 
+
 # TODO complete this method
 def eeccsd_diag(eom, kshift, imds=None):
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    nkpts, nocc, nvir = t1.shape
+    kconserv = eom.kconserv
+
+    Hr1 = np.zeros((nkpts, nocc, nvir), dtype=t1.dtype)
+
+
     return None
+
 
 # TODO complete this method
 def mask_frozen_ee(eom, vector, kshift, const=LARGE_DENOM):
+    '''Replace all frozen orbital indices of `vector` with the value `const`.'''
     return None
+
 
 # TODO complete this method
 def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
+    nvir = nmo - nocc
+
+    r1 = vector[:nkpts*nocc*nvir].copy()
+    r2_tril = vector[nkpts*nocc*nvir:].copy()
+
+
+
     return None
 
 # TODO complete this method
@@ -1313,6 +1420,7 @@ def amplitudes_to_vector_ee(r1, r2, kshift, kconserv):
 class EOMEE(eom_rccsd.EOM):
     def __init__(self, cc):
         self.kpts = cc.kpts
+        self.kconserv = cc.khelper.kconserv
         eom_rccsd.EOM.__init__(self, cc)
 
     kernel = eeccsd
@@ -1328,7 +1436,7 @@ class EOMEE(eom_rccsd.EOM):
     def vector_size(self):
         '''Size of the linear excitation operator R vector based on spin-orbital basis'''
         nocc = self.nocc  # alpha+beta
-        nvir = self.nvir  # alpha+beta
+        nvir = self.nmo-nocc  # alpha+beta
         nkpts = self.nkpts
 
         size_r1 = nkpts*nocc*nvir
@@ -1338,7 +1446,7 @@ class EOMEE(eom_rccsd.EOM):
             size_oo = nocc*(nocc-1)//2  # When ki==kj, there are size_oo ways to create 2 holes
             size_vv = nvir*(nvir-1)//2  # When ka==kb, there are size_vv ways to create 2 particles
             size_r2 = 0
-            kconserv = self._cc.khelper.kconserv
+            kconserv = self.kconserv
             # TODO Optimize this 3-layer for loop, or find an elegant solution
             for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
                 kb = kconserv[ki, ka, kj]
@@ -1373,13 +1481,23 @@ class EOMEE(eom_rccsd.EOM):
                 guess.append(g)
         return guess
 
-    # TODO complete this method
-    def get_matvec(self, kshift, imds=None, left=False, **kwargs):
-        return None
+    def gen_matvec(self, kshift, imds=None, left=False, **kwargs):
+        if imds is None: imds = self.make_imds()
+        diag = self.get_diag(kshift, imds)
+        if left:
+            # TODO allow left vectors to be computed
+            raise NotImplementedError
+        else:
+            matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
+        return matvec, diag
 
     # TODO complete this method
-    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None, kconverv=None):
-        return vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconverv)
+    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None, kconserv=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        if nkpts is None: nkpts = self.nkpts
+        if kconserv is None: kconserv = self.kconserv
+        return vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv)
 
     # TODO complete this method
     def amplitudes_to_vector(self, r1, r2, kshift, kconserv=None):
