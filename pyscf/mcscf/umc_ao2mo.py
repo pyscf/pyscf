@@ -20,9 +20,7 @@ MO integrals for UCASSCF methods
 import sys
 import ctypes
 import time
-import tempfile
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
@@ -72,19 +70,15 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 def trans_e1_outcore(mol, mo, ncore, ncas,
                      max_memory=None, ioblk_size=512, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
     nao, nmo = mo[0].shape
     nao_pair = nao*(nao+1)//2
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
 
-    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), swapfile.name,
+    fswap = lib.H5TmpFile()
+    ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), fswap,
                           verbose=log, compact=False)
 
-    fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_bufa(bfn_id):
         if log.verbose >= logger.DEBUG1:
@@ -111,15 +105,13 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
                          ao_loc)[:4]
     time0 = log.timer('trans_CVCV', *time0)
     tmp = None
-    fswap.close()
 
     ###########################
 
-    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), swapfile.name,
+    fswap = lib.H5TmpFile()
+    ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), fswap,
                           verbose=log, compact=False)
 
-    fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_bufb(bfn_id):
         if log.verbose >= logger.DEBUG1:
@@ -142,7 +134,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
     jc_pp, jc_PP, kc_pp, Icvcv, cvCV = \
             _trans_cvcv_(mo, ncore, ncas, load_bufb, ao_loc)
     time0 = log.timer('trans_cvcv', *time0)
-    fswap.close()
 
     jkcpp = jc_pp - kc_pp
     jkcPP = jC_PP - kC_PP

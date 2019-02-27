@@ -18,11 +18,9 @@
 
 import sys
 import time
-import tempfile
 import ctypes
 from functools import reduce
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
@@ -267,8 +265,7 @@ class _ERIS(object):
         k_cp = numpy.zeros((ncore,nmo))
 
         mo = numpy.asarray(mo, order='F')
-        _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        fxpp = h5py.File(_tmpfile1.name)
+        fxpp = lib.H5TmpFile()
         bufpa = numpy.empty((naoaux,nmo,ncas))
         bufs1 = numpy.empty((with_df.blockdim,nmo,nmo))
         fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
@@ -329,7 +326,6 @@ class _ERIS(object):
         bufs1 = bufs2 = buf = None
         t1 = log.timer('density fitting ppaa pass2', *t1)
 
-        fxpp.close()
         self.feri.flush()
 
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
