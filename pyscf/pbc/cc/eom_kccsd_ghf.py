@@ -1319,6 +1319,9 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
     convs = np.zeros((len(kptlist),nroots), dtype)
 
     for k, kshift in enumerate(kptlist):
+        eom.get_diag(kshift, imds)
+
+    for k, kshift in enumerate(kptlist):
         matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
         raise NotImplementedError # Remove after finishing gen_matvec()
         # TODO update `diag` in case of frozen orbitals
@@ -1389,6 +1392,8 @@ def eeccsd_diag(eom, kshift, imds=None):
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = t1.shape
     kconserv = eom.kconserv
+    kconserv_r1 = eom.get_kconserv_r1(kshift)
+
 
     Hr1 = np.zeros((nkpts, nocc, nvir), dtype=t1.dtype)
 
@@ -1409,13 +1414,13 @@ def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
     r1 = vector[:nkpts*nocc*nvir].copy()
     r2_tril = vector[nkpts*nocc*nvir:].copy()
 
-
-
     return None
+
 
 # TODO complete this method
 def amplitudes_to_vector_ee(r1, r2, kshift, kconserv):
     return None
+
 
 class EOMEE(eom_rccsd.EOM):
     def __init__(self, cc):
@@ -1502,6 +1507,52 @@ class EOMEE(eom_rccsd.EOM):
     # TODO complete this method
     def amplitudes_to_vector(self, r1, r2, kshift, kconserv=None):
         return amplitudes_to_vector_ee(r1, r2, kshift, kconserv)
+
+    def get_kconserv_r1(self, kshift=0):
+        '''Get the momentum conservation array for a set of k-points.
+
+        Given k-point index m the array kconserv_r1[m] returns the index n that
+        satisfies momentum conservation,
+
+            (k(m) - k(n) - kshift) \dot a = 2n\pi
+
+        This is used for symmetry of 1p-1h excitation operator vector
+        R_{m k_m}^{n k_n} is zero unless n satisfies the above.
+
+        Note that this method is adapted from `kpts_helper.get_kconserv()`.
+        '''
+        kconserv_r1 = self.kconserv[:,kshift,0].copy()
+        return kconserv_r1
+
+    # TODO Complete this method and merge it with `kpts_helper.get_kconserv()`
+    def get_kconserv_r2(self, kshift=0):
+        r'''Get the momentum conservation array for a set of k-points.
+
+        Given k-point indices (k, l, m) the array kconserv_r2[k,l,m] returns
+        the index n that satisfies momentum conservation,
+
+            (k(k) - k(l) + k(m) - k(n) - kshift) \dot a = 2n\pi
+
+        This is used for symmetry of 2p-2h excitation operator vector
+        R_{k k_k, m k_m}^{l k_l n k_n} is zero unless n satisfies the above.
+
+        Note that this method is adapted from `kpts_helper.get_kconserv()`.
+        '''
+        nkpts = kpts.shape[0]
+        a = cell.lattice_vectors() / (2 * np.pi)
+
+        kconserv_r2 = np.zeros((nkpts, nkpts, nkpts), dtype=int)
+        # TODO add kshift in this line!!!
+        kvKLM = kpts[:, None, None, :] - kpts[:, None, :] + kpts
+        for N, kvN in enumerate(kpts):
+            kvKLMN = np.einsum('wx,klmx->wklm', a, kvKLM - kvN)
+            # check whether (1/(2pi) k_{KLMN} dot a) is an integer
+            kvKLMN_int = np.rint(kvKLMN)
+            mask = np.einsum('wklm->klm', abs(kvKLMN - kvKLMN_int)) < 1e-9
+            print("mask:\n", mask)
+            kconserv_r2[mask] = N
+            print("kconserv_r2:\n", kconserv_r2)
+        return kconserv_r2
 
     # TODO complete this method
     def make_imds(self, eris=None):
