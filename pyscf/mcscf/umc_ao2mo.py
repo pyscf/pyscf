@@ -223,11 +223,9 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore'):
         mol = casscf.mol
-        self.ncore = casscf.ncore
-        self.ncas = casscf.ncas
+        ncore = self.ncore = casscf.ncore
+        ncas  = self.ncas  = casscf.ncas
         nmo = mo[0].shape[1]
-        ncore = self.ncore
-        ncas = self.ncas
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
         mem_now = lib.current_memory()[0]
 
@@ -242,7 +240,7 @@ class _ERIS(object):
             self.appa, self.apPA, self.APPA, \
             self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
             self.Icvcv, self.ICVCV, self.cvCV = \
-                    trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
+                    trans_e1_incore(eri, mo, ncore, ncas)
             self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
                           numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)
         else:
@@ -259,7 +257,7 @@ class _ERIS(object):
                 self.appa, self.apPA, self.APPA, \
                 self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
                 self.Icvcv, self.ICVCV, self.cvCV = \
-                        trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
+                        trans_e1_outcore(mol, mo, ncore, ncas,
                                          max_memory=max_memory, verbose=log)
                 self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
                               numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)

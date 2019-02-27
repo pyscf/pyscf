@@ -89,10 +89,12 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 
         def get_h2eff(self, mo_coeff=None):  # For CASCI
             if self.with_df:
+                ncore = self.ncore
+                nocc = ncore + self.ncas
                 if mo_coeff is None:
-                    mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                    mo_coeff = self.mo_coeff[:,ncore:nocc]
                 elif mo_coeff.shape[1] != self.ncas:
-                    mo_coeff = mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                    mo_coeff = mo_coeff[:,ncore:nocc]
                 return self.with_df.ao2mo(mo_coeff)
             else:
                 return casscf_class.get_h2eff(self, mo_coeff)

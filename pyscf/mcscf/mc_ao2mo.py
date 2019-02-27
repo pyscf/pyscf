@@ -279,7 +279,7 @@ class _ERIS(object):
             if eri is None:
                 eri = mol.intor('int2e', aosym='s8')
             self.j_pc, self.k_pc, self.ppaa, self.papa = \
-                    trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
+                    trans_e1_incore(eri, mo, ncore, ncas)
         else:
             import gc
             gc.collect()
@@ -290,8 +290,7 @@ class _ERIS(object):
                 log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                          (mem_basic+mem_now)/.9, casscf.max_memory)
             self.j_pc, self.k_pc = \
-                    trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
-                                     self.feri,
+                    trans_e1_outcore(mol, mo, ncore, ncas, self.feri,
                                      max_memory=max_memory,
                                      level=level, verbose=log)
             self.ppaa = self.feri['ppaa']
