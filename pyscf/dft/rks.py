@@ -170,16 +170,18 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
             Core hamiltonian
 
     Returns:
-        RKS electronic energy and the 2-electron part contribution
+        RKS electronic energy and the 2-electron contribution
     '''
     if dm is None: dm = ks.make_rdm1()
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm)
-    tot_e = e1 + vhf.ecoul + vhf.exc
+    e1 = numpy.einsum('ij,ji->', h1e, dm)
+    e2 = vhf.ecoul + vhf.exc
+    tot_e = e1 + e2
+    tot_e = hf._TaggedEnergy(tot_e.real, e1=e1, coul=vhf.ecoul, exc=vhf.exc)
     logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return tot_e.real, vhf.ecoul+vhf.exc
+    return tot_e, e2
 
 
 NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)

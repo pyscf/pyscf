@@ -264,18 +264,21 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm)
-    e_coul = numpy.einsum('ij,ji', vhf, dm) * .5
+    e1 = numpy.einsum('ij,ji->', h1e, dm)
+    e_coul = numpy.einsum('ij,ji->', vhf, dm) * .5
+    e_elec = e1 + e_coul
+    e_elec = _TaggedEnergy(e_elec.real, e1=e1, e2=e_coul)
     logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
-    return (e1+e_coul).real, e_coul
+    return e_elec, e_coul
 
 
 def energy_tot(mf, dm=None, h1e=None, vhf=None):
     r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
     See :func:`scf.hf.energy_elec` for the electron part
     '''
-    e_tot = mf.energy_elec(dm, h1e, vhf)[0] + mf.energy_nuc()
-    return e_tot.real
+    e_elec = mf.energy_elec(dm, h1e, vhf)[0]
+    e_tot = e_elec.add(nuc=mf.energy_nuc())
+    return e_tot
 
 
 def get_hcore(mol):
@@ -854,7 +857,9 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     log = logger.new_logger(mf, verbose)
+
     if log.verbose >= logger.NOTE:
+        mf.scf_summary(log)
         log.note('**** MO energy ****')
         for i,c in enumerate(mo_occ):
             log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE,
@@ -878,6 +883,57 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     else:
         return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
                 mf.dip_moment(mf.mol, dm, verbose=log))
+
+class _TaggedEnergy(float):
+    '''To record the details how the energy is composed'''
+    def __new__(self, x, **kwargs):
+        return float.__new__(self, x)
+    def __init__(self, x, **kwargs):
+        self.__dict__.update(**kwargs)
+
+    def add(self, **kwargs):
+        e = self
+        e_dic = self.__dict__
+        for k, v in kwargs.items():
+            e += v
+            if k in e_dic:
+                e_dic[k] += v
+            else:
+                e_dic[k] = v
+        e = _TaggedEnergy(e)
+        e.__dict__.update(e_dic)
+        return e
+
+    def real(self):
+        e = _TaggedEnergy(self.real)
+        e.__dict__.update(self.__dict__)
+        return e
+
+def scf_summary(mf, verbose=logger.DEBUG):
+    e_tot = mf.e_tot
+    if not hasattr(e_tot, 'e1'):
+        # Skip SCF summary unless the energy is obtained from energy_elec
+        # function
+        return
+
+    log = logger.new_logger(mf, verbose)
+    log.info('**** SCF Summaries ****')
+    log.info('Total Energy =                    %24.15f', e_tot)
+    log.info('Nuclear Repulsion Energy =        %24.15f', e_tot.nuc)
+    log.info('One-electron Energy =             %24.15f', e_tot.e1)
+    if getattr(e_tot, 'e2', None):
+        log.info('Two-electron Energy =             %24.15f', e_tot.e2)
+    if getattr(e_tot, 'coul', None):
+        log.info('Two-electron Coulomb Energy =     %24.15f', e_tot.coul)
+    if getattr(e_tot, 'exc', None):
+        log.info('DFT Exchange-Correlation Energy = %24.15f', e_tot.exc)
+    if getattr(e_tot, 'dispersion', None):
+        log.info('Empirical Dispersion Energy =     %24.15f', e_tot.dispersion)
+    if getattr(e_tot, 'epcm', None):
+        log.info('PCM Polarization Energy =         %24.15f', e_tot.epcm)
+    if getattr(e_tot, 'efp', None):
+        log.info('EFP Energy =                      %24.15f', e_tot.efp)
+
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis
@@ -1550,6 +1606,8 @@ class SCF(lib.StreamObject):
                 **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
+
+    scf_summary = scf_summary
 
     @lib.with_doc(mulliken_pop.__doc__)
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):

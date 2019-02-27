@@ -121,13 +121,9 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        dm = numpy.array((dm*.5, dm*.5))
-    e1 = numpy.einsum('ij,ji', h1e, dm[0])
-    e1+= numpy.einsum('ij,ji', h1e, dm[1])
-    tot_e = e1 + vhf.ecoul + vhf.exc
-    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return tot_e.real, vhf.ecoul+vhf.exc
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        dm = dm[0] + dm[1]
+    return rks.energy_elec(ks, dm, h1e, vhf)
 
 
 class UKS(uhf.UHF):

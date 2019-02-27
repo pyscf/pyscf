@@ -247,6 +247,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
 
+    mf.scf_summary(log)
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:

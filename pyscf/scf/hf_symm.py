@@ -61,6 +61,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     ovlp_ao = mf.get_ovlp()
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
+        mf.scf_summary(log)
+
         nirrep = len(mol.irrep_id)
         orbsym = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
         wfnsym = 0
@@ -714,6 +716,8 @@ class SymAdaptedROHF(rohf.ROHF):
         ovlp_ao = self.get_ovlp()
         log = logger.new_logger(self, verbose)
         if log.verbose >= logger.NOTE:
+            self.scf_summary(log)
+
             nirrep = len(mol.irrep_id)
             orbsym = get_orbsym(self.mol, mo_coeff)
             wfnsym = 0
