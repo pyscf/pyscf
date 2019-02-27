@@ -1393,6 +1393,8 @@ def eeccsd_diag(eom, kshift, imds=None):
     nkpts, nocc, nvir = t1.shape
     kconserv = eom.kconserv
     kconserv_r1 = eom.get_kconserv_r1(kshift)
+    kconserv_r2 = eom.get_kconserv_r2(kshift)
+
 
 
     Hr1 = np.zeros((nkpts, nocc, nvir), dtype=t1.dtype)
@@ -1538,27 +1540,28 @@ class EOMEE(eom_rccsd.EOM):
 
         Note that this method is adapted from `kpts_helper.get_kconserv()`.
         '''
+        cell = self._cc._scf.cell
+        kpts = self.kpts
         nkpts = kpts.shape[0]
         a = cell.lattice_vectors() / (2 * np.pi)
 
         kconserv_r2 = np.zeros((nkpts, nkpts, nkpts), dtype=int)
-        # TODO add kshift in this line!!!
         kvKLM = kpts[:, None, None, :] - kpts[:, None, :] + kpts
+        # Apply k shift
+        kvKLM = kvKLM - kpts[kshift]
         for N, kvN in enumerate(kpts):
             kvKLMN = np.einsum('wx,klmx->wklm', a, kvKLM - kvN)
             # check whether (1/(2pi) k_{KLMN} dot a) is an integer
             kvKLMN_int = np.rint(kvKLMN)
             mask = np.einsum('wklm->klm', abs(kvKLMN - kvKLMN_int)) < 1e-9
-            print("mask:\n", mask)
             kconserv_r2[mask] = N
-            print("kconserv_r2:\n", kconserv_r2)
         return kconserv_r2
 
-    # TODO complete this method
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
         imds.make_ee()
         return imds
+
 
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
