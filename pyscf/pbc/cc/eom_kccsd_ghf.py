@@ -1396,6 +1396,24 @@ def eeccsd_diag(eom, kshift, imds=None):
     kconserv_r2 = eom.get_kconserv_ee_r2(kshift)
 
     Hr1 = np.zeros((nkpts, nocc, nvir), dtype=t1.dtype)
+    for ki in range(nkpts):
+        ka = kconserv_r1[ki]
+        Hr1[ki] -= imds.Foo[ki].diagonal()[:, None]
+        Hr1[ki] += imds.Fvv[ka].diagonal()[None, :]
+        Hr1[ki] += np.einsum('iaai->ia', imds.Wovvo[ki, ka, ka])
+
+    Hr2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir),
+                   dtype=t1.dtype)
+    # TODO allow partition='mp'
+    if eom.partition == "mp":
+        raise NotImplementedError
+    else:
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv_r2(ki, ka, kj)
+            Hr2[ki, kj, ka] -= imds.Foo[ki].diagonal()[:, None, None, None]
+            Hr2[ki, kj, ka] -= imds.Foo[kj].diagonal()[None, :, None, None]
+            Hr2[ki, kj, ka] += imds.Fvv[ka].diagonal()[None, None, :, None]
+            Hr2[ki, kj, ka] += imds.Fvv[kb].diagonal()[None, None, None, :]
 
 
     return None
