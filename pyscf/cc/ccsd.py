@@ -68,16 +68,26 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
 
-        # normt = |amplitudes_to_vector(t_old) - amplitudes_to_vector(t_new)|
-        t1 -= t1new
-        t2 -= t2new
-        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1, t2))
+        if isinstance(t2, numpy.ndarray):
+            # Less memory footprint
+            # normt = |amplitudes_to_vector(t_old) - amplitudes_to_vector(t_new)|
+            t1 -= t1new
+            t2 -= t2new
+            normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1, t2))
+            if mycc.iterative_damping < 1.0:
+                alpha = mycc.iterative_damping
+                # t_new = (1-alpha) * t_old + alpha * t_new
+                t1new += (1-alpha) * t1  # here t1 ~ t1-t1new
+                t2new += (1-alpha) * t2  # here t2 ~ t2-t2new
+        else:
+            normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
+                                      mycc.amplitudes_to_vector(t1, t2))
+            if mycc.iterative_damping < 1.0:
+                alpha = mycc.iterative_damping
+                t1new = (1-alpha) * t1 + alpha * t1new
+                t2new *= alpha
+                t2new += (1-alpha) * t2
 
-        if mycc.iterative_damping < 1.0:
-            alpha = mycc.iterative_damping
-            # t_new = (1-alpha) * t_old + alpha * t_new
-            t1new += (1-alpha) * t1  # here t1 ~ t1-t1new
-            t2new += (1-alpha) * t2  # here t2 ~ t2-t2new
         t1, t2 = t1new, t2new
         t1new = t2new = None
 
