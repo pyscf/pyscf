@@ -404,14 +404,16 @@ class UCASSCF(ucasci.UCASCI):
         log.info('')
         log.info('******** UHF-CASSCF flags ********')
         nmo = self.mo_coeff[0].shape[1]
-        nvir_alpha = nmo - self.ncore[0] - self.ncas
-        nvir_beta  = nmo - self.ncore[1]  - self.ncas
+        ncore = self.ncore
+        ncas = self.ncas
+        nvir_alpha = nmo - ncore[0] - ncas
+        nvir_beta  = nmo - ncore[1]  - ncas
         log.info('CAS (%de+%de, %do), ncore = [%d+%d], nvir = [%d+%d]',
-                 self.nelecas[0], self.nelecas[1], self.ncas,
-                 self.ncore[0], self.ncore[1], nvir_alpha, nvir_beta)
-        if self.ncore[0] != self.ncore[1]:
+                 self.nelecas[0], self.nelecas[1], ncas,
+                 ncore[0], ncore[1], nvir_alpha, nvir_beta)
+        if ncore[0] != ncore[1]:
             log.warn('converge might be slow since num alpha core %d != num beta core %d',
-                     self.ncore[0], self.ncore[1])
+                     ncore[0], ncore[1])
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max. macro cycles = %d', self.max_cycle_macro)
@@ -521,16 +523,20 @@ class UCASSCF(ucasci.UCASCI):
 
     def pack_uniq_var(self, mat):
         nmo = self.mo_coeff[0].shape[1]
-        idxa = self.uniq_var_indices(nmo, self.ncore[0], self.ncas, self.frozen)
-        idxb = self.uniq_var_indices(nmo, self.ncore[1], self.ncas, self.frozen)
+        ncore = self.ncore
+        ncas = self.ncas
+        idxa = self.uniq_var_indices(nmo, ncore[0], ncas, self.frozen)
+        idxb = self.uniq_var_indices(nmo, ncore[1], ncas, self.frozen)
         return numpy.hstack((mat[0][idxa], mat[1][idxb]))
 
     # to anti symmetric matrix
     def unpack_uniq_var(self, v):
         nmo = self.mo_coeff[0].shape[1]
+        ncore = self.ncore
+        ncas = self.ncas
         idx = numpy.empty((2,nmo,nmo), dtype=bool)
-        idx[0] = self.uniq_var_indices(nmo, self.ncore[0], self.ncas, self.frozen)
-        idx[1] = self.uniq_var_indices(nmo, self.ncore[1], self.ncas, self.frozen)
+        idx[0] = self.uniq_var_indices(nmo, ncore[0], ncas, self.frozen)
+        idx[1] = self.uniq_var_indices(nmo, ncore[1], ncas, self.frozen)
         mat = numpy.zeros((2,nmo,nmo))
         mat[idx] = v
         mat[0] = mat[0] - mat[0].T
@@ -745,8 +751,9 @@ class UCASSCF(ucasci.UCASCI):
         else:
             civec = None
         ncore = self.ncore
-        nocca = self.ncore[0] + self.ncas
-        noccb = self.ncore[1] + self.ncas
+        ncas = self.ncas
+        nocca = ncore[0] + ncas
+        noccb = ncore[1] + ncas
         if 'mo' in envs:
             mo_coeff = envs['mo']
         else:
@@ -765,7 +772,7 @@ class UCASSCF(ucasci.UCASCI):
         mo_energy = 'None'
 
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
-                           mo_coeff, self.ncore, self.ncas, mo_occ,
+                           mo_coeff, ncore, ncas, mo_occ,
                            mo_energy, envs['e_cas'], civec, envs['casdm1'],
                            overwrite_mol=False)
         return self

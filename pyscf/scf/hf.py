@@ -277,7 +277,7 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
     See :func:`scf.hf.energy_elec` for the electron part
     '''
     e_elec = mf.energy_elec(dm, h1e, vhf)[0]
-    e_tot = e_elec.add(nuc=mf.energy_nuc())
+    e_tot = e_elec.add(nuc=mf.energy_nuc())  # e_tot = e_elec + nuc
     return e_tot
 
 

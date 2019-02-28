@@ -17,9 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import tempfile
 import numpy as np
-import h5py
 import time
 from itertools import product
 from pyscf import lib
