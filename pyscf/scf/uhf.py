@@ -301,6 +301,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''Electronic energy of Unrestricted Hartree-Fock
 
+    Note this function has side effects which cause mf.scf_summary updated.
+
     Returns:
         Hartree-Fock electronic energy and the 2-electron part contribution
     '''
@@ -315,8 +317,9 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     e1+= numpy.einsum('ij,ji->', h1e, dm[1])
     e_coul =(numpy.einsum('ij,ji->', vhf[0], dm[0]) +
              numpy.einsum('ij,ji->', vhf[1], dm[1])) * .5
-    e_elec = e1 + e_coul
-    e_elec = hf._TaggedEnergy(e_elec.real, e1=e1, e2=e_coul)
+    e_elec = (e1 + e_coul).real
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
     return e_elec, e_coul
 

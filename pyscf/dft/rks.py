@@ -161,6 +161,8 @@ def _get_k_lr(mol, dm, omega=0, hermi=0):
 def energy_elec(ks, dm=None, h1e=None, vhf=None):
     r'''Electronic part of RKS energy.
 
+    Note this function has side effects which cause mf.scf_summary updated.
+
     Args:
         ks : an instance of DFT class
 
@@ -178,10 +180,11 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
         vhf = ks.get_veff(ks.mol, dm)
     e1 = numpy.einsum('ij,ji->', h1e, dm)
     e2 = vhf.ecoul + vhf.exc
-    tot_e = e1 + e2
-    tot_e = hf._TaggedEnergy(tot_e.real, e1=e1, coul=vhf.ecoul, exc=vhf.exc)
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['coul'] = vhf.ecoul.real
+    mf.scf_summary['exc'] = vhf.exc.real
     logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return tot_e, e2
+    return (e1+e2).real, e2
 
 
 NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)
