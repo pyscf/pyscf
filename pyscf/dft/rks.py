@@ -180,9 +180,9 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
         vhf = ks.get_veff(ks.mol, dm)
     e1 = numpy.einsum('ij,ji->', h1e, dm)
     e2 = vhf.ecoul + vhf.exc
-    mf.scf_summary['e1'] = e1.real
-    mf.scf_summary['coul'] = vhf.ecoul.real
-    mf.scf_summary['exc'] = vhf.exc.real
+    ks.scf_summary['e1'] = e1.real
+    ks.scf_summary['coul'] = vhf.ecoul.real
+    ks.scf_summary['exc'] = vhf.exc.real
     logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
     return (e1+e2).real, e2
 

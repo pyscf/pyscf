@@ -268,11 +268,10 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ji->', h1e, dm)
     e_coul = numpy.einsum('ij,ji->', vhf, dm) * .5
-    e_elec = e1 + e_coul
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
-    return e_elec, e_coul
+    return (e1+e_coul).real, e_coul
 
 
 def energy_tot(mf, dm=None, h1e=None, vhf=None):
@@ -899,7 +898,7 @@ def dump_scf_summary(mf, verbose=logger.DEBUG):
     summary = mf.scf_summary
     def write(fmt, key):
         if key in summary:
-            log.info(fmt, scf_summary[key])
+            log.info(fmt, summary[key])
     log.info('**** SCF Summaries ****')
     log.info('Total Energy =                    %24.15f', mf.e_tot)
     write('Nuclear Repulsion Energy =        %24.15f', 'nuc')

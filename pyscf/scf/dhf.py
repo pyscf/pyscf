@@ -579,7 +579,8 @@ class HF1e(UHF):
         s1e = self.get_ovlp(self.mol)
         self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
         self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
+        self.e_tot = (self.mo_energy[self.mo_occ>0][0] +
+                      self.mol.energy_nuc()).real
         self._finalize()
         return self.e_tot
 
