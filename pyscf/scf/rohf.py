@@ -248,7 +248,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     mo_coeff = mf.mo_coeff
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
-        mf.scf_summary(log)
+        mf.dump_scf_summary(log)
 
         log.note('**** MO energy ****')
         if getattr(mo_energy, 'mo_ea', None) is not None:

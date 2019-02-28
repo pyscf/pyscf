@@ -273,7 +273,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
 
-    mf.scf_summary(verbose)
+    mf.dump_scf_summary(verbose)
 
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff

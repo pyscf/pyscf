@@ -444,7 +444,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     nmo = len(mo_occ[0])
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
-        mf.scf_summary(log)
+        mf.dump_scf_summary(log)
 
         log.note('**** MO energy ****')
         log.note('                             alpha | beta                alpha | beta')

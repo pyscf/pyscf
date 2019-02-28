@@ -49,7 +49,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     ovlp_ao = mf.get_ovlp()
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
-        mf.scf_summary(log)
+        mf.dump_scf_summary(log)
 
         nirrep = len(mol.irrep_id)
         ovlp_ao = mf.get_ovlp()
