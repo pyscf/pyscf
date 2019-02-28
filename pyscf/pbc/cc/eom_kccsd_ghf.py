@@ -1409,14 +1409,32 @@ def eeccsd_diag(eom, kshift, imds=None):
         raise NotImplementedError
     else:
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-            kb = kconserv_r2(ki, ka, kj)
+            kb = kconserv_r2[ki, ka, kj]
             Hr2[ki, kj, ka] -= imds.Foo[ki].diagonal()[:, None, None, None]
             Hr2[ki, kj, ka] -= imds.Foo[kj].diagonal()[None, :, None, None]
             Hr2[ki, kj, ka] += imds.Fvv[ka].diagonal()[None, None, :, None]
             Hr2[ki, kj, ka] += imds.Fvv[kb].diagonal()[None, None, None, :]
 
+            Hr2[ki, kj, ka] += np.einsum('jbbj->jb', imds.Wovvo[kj, kb, kb])[None, :, None, :]
+            Hr2[ki, kj, ka] += np.einsum('ibbi->ib', imds.Wovvo[ki, kb, kb])[:, None, None, :]
+            Hr2[ki, kj, ka] += np.einsum('jaaj->ja', imds.Wovvo[kj, ka, ka])[None, :, :, None]
+            Hr2[ki, kj, ka] += np.einsum('iaai->ia', imds.Wovvo[ki, ka, ka])[:, None, :, None]
 
-    return None
+            Hr2[ki, kj, ka] += np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:, :, None, None]
+            Hr2[ki, kj, ka] += np.einsum('abab->ab', imds.Wvvvv[ka, kb, ka])[None, None, :, :]
+
+            kk = kconserv[ka, kj, kb]
+            Hr2[ki, kj, ka] -= np.einsum('kjab,kjab->jab', imds.Woovv[kk, kj, ka], imds.t2[kk, kj, ka])[None, :, :, :]
+            kk = kconserv[ka, ki, kb]
+            Hr2[ki, kj, ka] -= np.einsum('kiab,kiab->iab', imds.Woovv[kk, ki, ka], imds.t2[kk, ka, ka])[:, None, :, :]
+
+            kc = kconserv[ki, kb, kj]
+            Hr2[ki, kj, ka] -= np.einsum('ijcb,ijcb->ijb', imds.Woovv[ki, kj, kc], imds.t2[ki, kj, kc])[:, :, None, :]
+            kc = kconserv[ki, ka, kj]
+            Hr2[ki, kj, ka] -= np.einsum('ijca,ijca->ija', imds.Woovv[ki, kj, kc], imds.t2[ki, kj, kc])[:, :, :, None]
+
+    vector = amplitudes_to_vector_ee(Hr1, Hr2, kshift, kconserv)
+    return vector
 
 
 # TODO complete this method
