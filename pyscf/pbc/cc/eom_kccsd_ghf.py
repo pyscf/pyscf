@@ -1446,14 +1446,43 @@ def mask_frozen_ee(eom, vector, kshift, const=LARGE_DENOM):
     return None
 
 
-# TODO complete this method
 def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
     nvir = nmo - nocc
 
-    r1 = vector[:nkpts*nocc*nvir].copy()
+    r1 = vector[:nkpts*nocc*nvir].copy().reshape(nkpts, nocc, nvir)
+
+    ki_i, kj_j = np.tril_indices(nkpts*nocc, -1)
+    ida, idb = np.tril_indices(nvir, -1)
+    r2 = np.zeros((nkpts*nocc, nkpts*nocc, nkpts, nvir, nvir))
+
     r2_tril = vector[nkpts*nocc*nvir:].copy()
 
-    return None
+    offset = 0
+    nvir2_tril = nvir*(nvir-1)//2
+    nvir2 = nvir*nvir
+    for ij in range(len(ki_i)):
+        idx_ki_i = ki_i[ij]
+        idx_kj_j = kj_j[ij]
+        ki = idx_ki_i // nocc
+        kj = idx_kj_j // nocc
+        r2_ka_ab = np.zeros(nkpts, nvir, nvir)
+        for ka in range(nkpts):
+            kb = kconserv[ki, ka, kj]
+            if ka == kb:
+                tmp = r2_tril[offset:offset+nvir2_tril]
+                r2_ka_ab[ka, ida, idb] = tmp
+                r2_ka_ab[ka, idb, ida] = -tmp
+                offset += nvir2_tril
+            elif ka > kb:
+                tmp = r2_tril[offset:offset+nvir2].reshape(nvir, nvir)
+                r2_ka_ab[ka] = tmp
+                r2_ka_ab[kb] = -tmp.transpose()
+                offset += nvir2
+        r2[idx_ki_i, idx_kj_j] = r2_ka_ab
+        r2[idx_kj_j, idx_ki_i] = -r2_ka_ab
+
+    r2 = r2.reshape(nkpts, nocc, nkpts, nocc, nkpts, nvir, nvir).transpose(0, 2, 4, 1, 3, 5, 6)
+    return [r1, r2]
 
 
 def amplitudes_to_vector_ee(r1, r2, kshift, kconserv):
