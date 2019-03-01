@@ -1391,7 +1391,7 @@ def eeccsd_diag(eom, kshift, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = t1.shape
-    kconserv = eom.kconserv  # Er... Why do I need this?
+    kconserv = eom.kconserv
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
     kconserv_r2 = eom.get_kconserv_ee_r2(kshift)
 
@@ -1423,6 +1423,8 @@ def eeccsd_diag(eom, kshift, imds=None):
             Hr2[ki, kj, ka] += np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:, :, None, None]
             Hr2[ki, kj, ka] += np.einsum('abab->ab', imds.Wvvvv[ka, kb, ka])[None, None, :, :]
 
+            # This is to make t2 are non-zero
+            # Note that `kconserv` is used instead of `kconserv_r2`
             kk = kconserv[ka, kj, kb]
             Hr2[ki, kj, ka] -= np.einsum('kjab,kjab->jab', imds.Woovv[kk, kj, ka], imds.t2[kk, kj, ka])[None, :, :, :]
             kk = kconserv[ka, ki, kb]
@@ -1433,7 +1435,8 @@ def eeccsd_diag(eom, kshift, imds=None):
             kc = kconserv[ki, ka, kj]
             Hr2[ki, kj, ka] -= np.einsum('ijca,ijca->ija', imds.Woovv[ki, kj, kc], imds.t2[ki, kj, kc])[:, :, :, None]
 
-    vector = amplitudes_to_vector_ee(Hr1, Hr2, kshift, kconserv)
+    # Make sure 4th argument you pass is `kconserv_r2`
+    vector = amplitudes_to_vector_ee(Hr1, Hr2, kshift, kconserv_r2)
     return vector
 
 
@@ -1453,9 +1456,40 @@ def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
     return None
 
 
-# TODO complete this method
 def amplitudes_to_vector_ee(r1, r2, kshift, kconserv):
-    return None
+    '''Transform 3- and 7-dimensional arrays, r1 and r2, to a 1-dimensional
+    array with unique indices.
+
+    For example:
+        r1: t_{i k_i}^{a k_a}
+        r2: t_{i k_i, j k_j}^{a k_a, b k_b}
+        return: a vector with all r1 elements, and r2 elements whose indices
+    satisfy (i k_i) > (j k_j) and (a k_a) > (b k_b)
+    '''
+    # r1 indices: k_i, i, a
+    nkpts, nocc, nvir = np.asarray(r1.shape)[0, 1, 2]
+
+    # r2 indices (old): k_i, k_j, k_a, i, j, a, b
+    # r2 indices (new): (k_i, i), (k_j, j), (k_a, a, b)
+    r2 = r2.transpose(0, 3, 1, 4, 2, 5, 6).reshape(nkpts*nocc, nkpts*nocc, nkpts, nvir, nvir)
+
+    # Get (k_i, i) and (k_j, j) indices for the lower-triangle of r2
+    ki_i, kj_j = np.tril_indices(nkpts*nocc, -1)
+    ida, idb = np.tril_indices(nvir, -1)
+
+    vector = r1.ravel()
+    for ij in range(len(ki_i)):
+        ki = ki_i[ij] // nocc
+        kj = kj_j[ij] // nocc
+        r2ab = r2[ki_i[ij], kj_j[ij]]
+        for ka in range(nkpts):
+            kb = kconserv[ki, ka, kj]
+            if ka == kb:
+                vector = np.hstack((vector, r2ab[ka, ida, idb]))
+            elif ka > kb:
+                vector = np.hstack((vector, r2ab[ka].ravel()))
+
+    return vector
 
 
 class EOMEE(eom_rccsd.EOM):
