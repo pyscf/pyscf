@@ -41,8 +41,8 @@ class KnowValues(unittest.TestCase):
         vj, vk = mydf.get_jk(dm, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 3.0455881073561235, 9)
-        self.assertAlmostEqual(ek1, 7.7905480251964629, 9)
+        self.assertAlmostEqual(ej1, 3.0455881073561235*(4./3.66768353356587)**2, 9)
+        self.assertAlmostEqual(ek1, 7.7905480251964629*(4./3.66768353356587)**2, 9)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()

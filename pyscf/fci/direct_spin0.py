@@ -225,6 +225,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if pspace_size is None: pspace_size = fci.pspace_size
 
     assert(fci.spin is None or fci.spin == 0)
+    assert(0 <= numpy.sum(nelec) <= norb*2)
 
     link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)

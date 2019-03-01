@@ -152,7 +152,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.132914531737784, 9)
+        self.assertAlmostEqual(e1, -4.132445328608581, 9)
 
         mf1 = pbchf.RHF(cell, exxdiv='vcut_sph')
         mf1.chkfile = mf.chkfile
@@ -160,7 +160,7 @@ class KnownValues(unittest.TestCase):
         mf1.diis = None
         mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -4.291691793916943, 9)
+        self.assertAlmostEqual(e1, -4.291854736401251, 9)
         self.assertTrue(mf1.mo_coeff.dtype == numpy.double)
 
     def test_uhf_exx_ewald(self):
@@ -468,7 +468,7 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.03847620192010277, 9)
+        self.assertAlmostEqual(lib.finger(dip), 0.03847620192010277, 8)
 
         # For test cover only. Results for low-dimesion system are not
         # implemented.

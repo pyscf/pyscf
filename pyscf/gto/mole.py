@@ -2025,10 +2025,17 @@ class Mole(lib.StreamObject):
         if parse_arg:
             _update_from_cmdargs_(self)
 
-        # avoid to open output file twice
-        if (parse_arg and self.output is not None and
-            not (getattr(self.stdout, 'name', None) and  # to handle StringIO().name bug
-                 self.stdout.name == self.output)):
+        # avoid opening output file twice
+        if (self.output is not None
+            # StringIO() does not have attribute 'name'
+            and getattr(self.stdout, 'name', None) != self.output):
+
+            if self.verbose > logger.QUIET:
+                if os.path.isfile(self.output):
+                    print('overwrite output file: %s' % self.output)
+                else:
+                    print('output file: %s' % self.output)
+
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
             else:
@@ -3095,15 +3102,6 @@ def _update_from_cmdargs_(mol):
 
         if opts.output:
             mol.output = opts.output
-
-    if mol.output is not None:
-        if os.path.isfile(mol.output):
-            #os.remove(mol.output)
-            if mol.verbose > logger.QUIET:
-                print('overwrite output file: %s' % mol.output)
-        else:
-            if mol.verbose > logger.QUIET:
-                print('output file: %s' % mol.output)
 
 
 def from_zmatrix(atomstr):
