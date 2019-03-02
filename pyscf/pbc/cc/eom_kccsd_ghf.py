@@ -1323,7 +1323,6 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
 
     for k, kshift in enumerate(kptlist):
         matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
-        raise NotImplementedError # Remove after finishing gen_matvec()
         # TODO update `diag` in case of frozen orbitals
 
         # TODO allow user provided guess vector
@@ -1381,12 +1380,110 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
     return eom.e, eom.v
 
 
-# TODO complete this method
 def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
-    return None
+    '''Add a description'''
+    if imds is None: imds = eom.make_imds()
+    nocc = eom.nocc
+    nmo = eom.nmo
+    nvir = nmo - nocc
+    nkpts = eom.nkpts
+    kconserv = imds.kconserv
+    kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
+    kconserv_r2 = eom.get_kconserv_ee_r2(kshift)
+    r1, r2 = vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv_r2)
+
+    Hr1 = np.zeros_like(r1)
+    for ki in range(nkpts):
+        ka = kconserv_r1[ki]
+        Hr1[ki] += np.einsum('ae,ie->ia', imds.Fvv[ka], r1[ki])
+        Hr1[ki] -= np.einsum('mi,ma->ia', imds.Foo[ki], r1[ki])
+        for km in range(nkpts):
+            Hr1[ki] += np.einsum('me,imae->ia', imds.Fov[km], r2[ki, km, ka])
+            ke = kconserv_r2[km]
+            Hr1[ki] += np.einsum('maei,me->ia', imds.Wovvo[km, ka, ke], r1[km])
+            for kn in range(nkpts):
+                Hr1[ki] -= 0.5*np.einsum('mnie,mnae->ia', imds.Wooov[km, kn, ki], r2[km, kn, ka])
+                # Rename dummy index kn->ke
+                Hr1[ki] += 0.5*np.einsum('amef,imef->ia', imds.Wvovv[ka, km, kn], r2[ki, km, kn])
+
+    Hr2 = np.zeros_like(r2)
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        kb = kconserv_r2[ki, ka, kj]
+
+        # r_ijab <- F_mj r_imab
+        # km = kj because of k conservation
+        tmpij = np.einsum('mj,imab->ijab', -imds.Foo[kj], r2[ki, kj, ka])
+        # r_ijab <- W_abej r_ie
+        ke = kconserv_r1[ki]
+        tmpij += np.einsum('abej,ie->ijab', imds.Wvvvo[ka, kb, ke], r1[ki])
+
+        # r_ijab <- W_mnef t_imab r_jnef
+        # ki + kj - ka - kb = G + kshift
+        # ki + km - ka - kb = G
+        # => kj - km = G + kshift
+        km = kconserv_r1[kj]
+        # x: kn, y: ke
+        tmp_mj = np.einsum('xymnef,xyjnef->mj', imds.Woovv[km], r2[kj])
+        tmpij -= 0.5*np.einsum('mj,imab->ijab', tmp_mj, imds.t2[ki, km, ka])
+
+        # r_ijab <- W_mnie t_njab r_me
+        # ki + kj - ka - kb = G + kshift
+        # kn + kj - ka - kb = G
+        # => ki - kn = G + kshift
+        kn = kconserv_r1[ki]
+        # x: km
+        tmp_ni = np.einsum('xmnie,xme->ni', imds.Wooov[:,kn,ki], r1)
+        tmpij += np.einsum('ni,njab->ijab', tmp_ni, imds.t2[kn, kj, ka])
+
+        # r_ijab <- -P_ij(tmpij terms above)
+        Hr2[ki, kj, ka] += tmpij - tmpij.transpose(1,0,2,3)
+
+        # r_ijab <- F_be r_ijae
+        tmpab = np.einsum('be,ijae->ijab', imds.Fvv[kb], r2[ki, kj, ka])
+        # r_ijab <- W_mbij r_ma
+        # km + kb - ki - kj = G
+        km = kconserv[ki, kb, kj]
+        tmpab -= np.einsum('mbij,ma->ijab', imds.Wovoo[km, kb, ki], r1[km])
+
+        # r_ijab <- W_mnef t_ijae r_mnbf
+        # ki + kj - ka - ke = G
+        ke = kconserv[ki, ka, kj]
+        # x: km, y: kn
+        tmp_eb = np.einsum('xymnef,xymnbf->eb', imds.Woovv[:,:,ke], r2[:,:,kb])
+        tmpab -= 0.5*np.einsum('eb,ijae->ijab', tmp_eb, imds.t2[ki, kj, ka])
+
+        # r_ijab <- W_amfe t_ijfb r_me
+        # ki + kj - kf - kb = G
+        kf = kconserv[ki, kb, kj]
+        # x: km
+        tmp_af = np.einsum('xamfe,xme->af', imds.Wvovv[ka,:,kf], r1)
+        tmpab += np.einsum('af,ijfb->ijab', tmp_af, imds.t2[ki, kj, kf])
+
+        # r_ijab <- -P_ab(tmpab terms above)
+        Hr2[ki, kj, ka] += tmpab - tmpab.transpose(0,1,3,2)
+
+        tmpijab = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
+        tmpoooo = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
+        tmpvvvv = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
+        for km in range(nkpts):
+            # km + kb - ke - kj = G
+            ke = kconserv[km, kj, kb]
+            tmpijab += np.einsum('mbej,imae->ijab', imds.Wovvo[km, kb, ke], r2[ki, km, ka])
+            # km + kn - ki - kj = G
+            kn = kconserv[ki, km, kj]
+            tmpoooo += 0.5*np.einsum('mnij,mnab->ijab', imds.Woooo[km, kn, ki], r2[km, kn, ka])
+            # Rename dummy index km->ke
+            tmpvvvv += 0.5*np.einsum('abef,ijef->ijab', imds.Wvvvv[ka, kb, km], r2[ki, kj, km])
+        tmpijab = tmpijab - tmpijab.transpose(1, 0, 2, 3)
+        tmpijab = tmpijab - tmpijab.transpose(0, 1, 3, 2)
+        Hr2[ki, kj, ka] += tmpijab
+        Hr2[ki, kj, ka] += tmpoooo
+        Hr2[ki, kj, ka] += tmpvvvv
+
+    vector = amplitudes_to_vector_ee(Hr1, Hr2, kshift, kconserv_r2)
+    return vector
 
 
-# TODO complete this method
 def eeccsd_diag(eom, kshift, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -1595,16 +1692,15 @@ class EOMEE(eom_rccsd.EOM):
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
-    # TODO complete this method
     def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None, kconserv=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         if nkpts is None: nkpts = self.nkpts
-        if kconserv is None: kconserv = self.kconserv
+        if kconserv is None: kconserv = self.get_kconserv_ee_r2(kshift)
         return vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv)
 
-    # TODO complete this method
     def amplitudes_to_vector(self, r1, r2, kshift, kconserv=None):
+        if kconserv is None: kconserv = self.get_kconserv_ee_r2(kshift)
         return amplitudes_to_vector_ee(r1, r2, kshift, kconserv)
 
     def get_kconserv_ee_r1(self, kshift=0):
@@ -1623,7 +1719,7 @@ class EOMEE(eom_rccsd.EOM):
         kconserv_r1 = self.kconserv[:,kshift,0].copy()
         return kconserv_r1
 
-    # TODO Complete this method and merge it with `kpts_helper.get_kconserv()`
+    # TODO merge it with `kpts_helper.get_kconserv()`
     def get_kconserv_ee_r2(self, kshift=0):
         r'''Get the momentum conservation array for a set of k-points.
 
