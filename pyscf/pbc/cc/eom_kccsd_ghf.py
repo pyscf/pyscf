@@ -1593,7 +1593,7 @@ def amplitudes_to_vector_ee(r1, r2, kshift, kconserv):
     satisfy (i k_i) > (j k_j) and (a k_a) > (b k_b)
     '''
     # r1 indices: k_i, i, a
-    nkpts, nocc, nvir = np.asarray(r1.shape)[0, 1, 2]
+    nkpts, nocc, nvir = np.asarray(r1.shape)[[0, 1, 2]]
 
     # r2 indices (old): k_i, k_j, k_a, i, j, a, b
     # r2 indices (new): (k_i, i), (k_j, j), (k_a, a, b)
