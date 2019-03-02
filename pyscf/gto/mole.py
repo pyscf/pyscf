@@ -2534,7 +2534,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol.build(False, False)
 
         if mol.verbose >= logger.INFO:
-            logger.info(mol, 'New geometry (unit Bohr)')
+            logger.info(mol, 'New geometry (unit %s)', unit)
             coords = mol.atom_coords()
             for ia in range(mol.natm):
                 logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f',
