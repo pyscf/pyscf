@@ -26,6 +26,14 @@ from pyscf import lib
 from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
 from pyscf import __config__
 
+# Overwrite units defined in geomeTRIC
+from geometric import internal, optimize, nifty, engine, molecule
+internal.ang2bohr = optimize.ang2bohr = nifty.ang2bohr = 1./lib.param.BOHR
+engine.bohr2ang = internal.bohr2ang = molecule.bohr2ang = nifty.bohr2ang = \
+        optimize.bohr2ang = lib.param.BOHR
+del(internal, optimize, nifty, engine, molecule)
+
+
 INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
 ASSERT_CONV = getattr(__config__, 'geomopt_berny_solver_optimize_assert_convergence', True)
 
@@ -41,24 +49,30 @@ class PySCFEngine(geometric.engine.Engine):
         super(PySCFEngine, self).__init__(molecule)
         self.scanner = scanner
         self.cycle = 0
+        self.callback = None
 
     def calc_new(self, coords, dirname):
         scanner = self.scanner
         mol = scanner.mol
         lib.logger.note(scanner, '\nGeometry optimization step %d', self.cycle)
         self.cycle += 1
-        # geomeTRIC handles coords and gradients in atomic unit
+
+        # geomeTRIC requires coords and gradients in atomic unit
         coords = coords.reshape(-1,3)
         if scanner.verbose >= lib.logger.NOTE:
             dump_mol_geometry(self.scanner.mol, coords*lib.param.BOHR)
         mol.set_geom_(coords, unit='Bohr')
-        energy, gradient = scanner(mol)
+        energy, gradients = scanner(mol)
+
+        if callable(self.callback):
+            self.callback(locals())
+
         if scanner.assert_convergence and not scanner.converged:
             raise RuntimeError('Nuclear gradients of %s not converged' % scanner.base)
-        return energy, gradient.ravel()
+        return energy, gradients.ravel()
 
 def kernel(method, assert_convergence=ASSERT_CONV,
-           include_ghost=INCLUDE_GHOST, constraints=None, **kwargs):
+           include_ghost=INCLUDE_GHOST, constraints=None, callback=None, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
     
     To adjust the convergence threshold, parameters can be set in kwargs as
@@ -86,7 +100,9 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     g_scanner.assert_convergence = assert_convergence
 
     tmpf = tempfile.mktemp(dir=lib.param.TMPDIR)
-    m = geometric.optimize.run_optimizer(customengine=PySCFEngine(g_scanner),
+    engine = PySCFEngine(g_scanner)
+    engine.callback = callback
+    m = geometric.optimize.run_optimizer(customengine=engine,
                                          input=tmpf, constraints=constraints,
                                          **kwargs)
 
