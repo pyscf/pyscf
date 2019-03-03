@@ -51,28 +51,29 @@ class PySCFEngine(geometric.engine.Engine):
         self.cycle = 0
         self.callback = None
         self.maxsteps = 100
+        self.assert_convergence = False
 
     def calc_new(self, coords, dirname):
         if self.cycle >= self.maxsteps:
             raise NotConvergedError('Geometry optimization is not converged in '
                                     '%d iterations' % self.maxsteps)
 
-        scanner = self.scanner
+        g_scanner = self.scanner
         mol = self.mol
-        lib.logger.note(scanner, '\nGeometry optimization step %d', self.cycle)
+        lib.logger.note(g_scanner, '\nGeometry optimization step %d', self.cycle)
         self.cycle += 1
 
         # geomeTRIC requires coords and gradients in atomic unit
         coords = coords.reshape(-1,3)
-        if scanner.verbose >= lib.logger.NOTE:
-            dump_mol_geometry(self.scanner.mol, coords*lib.param.BOHR)
+        if g_scanner.verbose >= lib.logger.NOTE:
+            dump_mol_geometry(mol, coords*lib.param.BOHR)
         mol.set_geom_(coords, unit='Bohr')
-        energy, gradients = scanner(mol)
+        energy, gradients = g_scanner(mol)
 
         if callable(self.callback):
             self.callback(locals())
 
-        if scanner.assert_convergence and not scanner.converged:
+        if self.assert_convergence and not g_scanner.converged:
             raise RuntimeError('Nuclear gradients of %s not converged' % scanner.base)
         return energy, gradients.ravel()
 
@@ -105,7 +106,6 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         raise NotImplementedError('Nuclear gradients of %s not available' % method)
     if not include_ghost:
         g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
-    g_scanner.assert_convergence = assert_convergence
 
     tmpf = tempfile.mktemp(dir=lib.param.TMPDIR)
     engine = PySCFEngine(g_scanner)
@@ -113,6 +113,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     engine.maxsteps = maxsteps
     # To avoid overwritting method.mol
     engine.mol = g_scanner.mol.copy()
+    engine.assert_convergence = assert_convergence
     try:
         m = geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
                                              constraints=constraints, **kwargs)

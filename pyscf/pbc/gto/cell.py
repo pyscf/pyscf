@@ -996,6 +996,12 @@ def tot_electrons(cell, nkpts=1):
     nelectron = int(nelectron+0.5)
     return nelectron
 
+def _mesh_inf_vaccum(cell):
+    #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
+    meshz = (np.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
+    # meshz has to be even number due to the symmetry on z+ and z-
+    return int(meshz*.5 + .999) * 2
+
 
 class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
@@ -1288,9 +1294,7 @@ class Cell(mole.Mole):
 
             if (self.dimension < 2 or
                 (self.dimension == 2 and self.low_dim_ft_type == 'inf_vacuum')):
-                #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
-                meshz = (np.log(self.nelectron/self.precision)-2.99944305)/0.436392335
-                self._mesh[self.dimension:] = int(meshz)
+                self._mesh[self.dimension:] = _mesh_inf_vaccum(self)
             self._mesh_from_build = True
 
         if self.ew_eta is None or self.ew_cut is None or self._ew_from_build:
