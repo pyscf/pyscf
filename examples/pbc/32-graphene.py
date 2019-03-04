@@ -72,7 +72,6 @@ cell.build(unit = 'B',
            basis='gth-szv')
 t0 = time.time()
 mf = pbchf.KRHF(cell, exxdiv='ewald')
-#mf = pbchf.KRHF(cell, exxdiv=None)
 mf.with_df = pdf.FFTDF(cell)
 mf.kpts = cell.make_kpts(kpts)
 mf.conv_tol = 1e-6

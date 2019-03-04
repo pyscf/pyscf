@@ -1297,6 +1297,11 @@ class Cell(mole.Mole):
                 self._mesh[self.dimension:] = _mesh_inf_vaccum(self)
             self._mesh_from_build = True
 
+            # Set minimal mesh grids to handle the case mesh==0. since Madelung
+            # constant may be computed even if the unit cell has 0 atoms. In this
+            # system, cell.mesh was initialized to 0.
+            self._mesh[self._mesh == 0] = 30
+
         if self.ew_eta is None or self.ew_cut is None or self._ew_from_build:
             self._ew_eta, self._ew_cut = self.get_ewald_params(self.precision, self.mesh)
             self._ew_from_build = True
