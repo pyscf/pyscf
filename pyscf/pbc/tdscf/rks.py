@@ -17,7 +17,6 @@
 #
 
 from pyscf.tdscf import rks
-from pyscf.pbc.tdscf.rhf import TDA
 from pyscf.pbc.tdscf.rhf import TDHF as TDDFT
 from pyscf import lib
 

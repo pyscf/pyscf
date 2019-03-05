@@ -12,7 +12,7 @@ from test_common import retrieve_m, retrieve_m_hf, assert_vectors_close, tdhf_fr
 
 
 class H20Test(unittest.TestCase):
-    """Compare this (rhf_slow) vs reference."""
+    """Compare this (rhf_slow) vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.mol = mol = Mole()

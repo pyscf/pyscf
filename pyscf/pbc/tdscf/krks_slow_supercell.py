@@ -257,17 +257,35 @@ def active_space_required(transform, final_space):
     return numpy.any((transform.toarray() != 0)[:, final_space], axis=1)
 
 
-def supercell_response(vind, space, nocc, double, rot_bloch, mo_occ_bloch, log_dest):
+def ko_mask(nocc, nmo):
+    """
+    Prepares a mask of an occupied space.
+    Args:
+        nocc (Iterable): occupation numbers per k-point;
+        nmo (Iterable): numbers of orbitals per k-point;
+
+    Returns:
+        The mask where `True` denotes occupied orbitals.
+    """
+    result = numpy.zeros(sum(nmo), dtype=bool)
+    offset = 0
+    for no, nm in zip(nocc, nmo):
+        result[offset:offset+no] = True
+        offset += nm
+    return result
+
+
+def supercell_response(vind, space, nocc, nmo, double, rot_bloch, log_dest):
     """
     Retrieves a raw response matrix.
     Args:
         vind (Callable): a pyscf matvec routine;
-        space (ndarray): the active space;
-        nocc (int): the total number of occupied orbitals (frozen and active);
+        space (ndarray): the active space: either for both rows and columns (1D array) or for rows and columns separately (2D array);
+        nocc (ndarray): the numbers of occupied orbitals (frozen and active) per k-point;
+        nmo (ndarray): the total number of orbitals per k-point;
         double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;
         rot_bloch (ndarray): a matrix specifying the rotation from real orbitals returned from pyscf to Bloch
         functions;
-        mo_occ_bloch (Iterable): occupation numbers of Bloch orbitals;
         log_dest (object): pyscf logging;
 
     Returns:
@@ -276,19 +294,38 @@ def supercell_response(vind, space, nocc, double, rot_bloch, mo_occ_bloch, log_d
     if not double:
         raise NotImplementedError("Not implemented for MK-type matrixes")
 
+    # Full space dims
+    nocc_full = sum(nocc)
+    nmo_full = sum(nmo)
+
+    space = numpy.array(space)
+
+    if space.shape == (nmo_full,):
+        space = numpy.repeat(space[numpy.newaxis, :], 2, axis=0)
+    elif space.shape != (2, nmo_full):
+        raise ValueError("The 'space' argument should a 1D array with dimension {:d} or a 2D array with dimensions {},"
+                         " found: {}".format(nmo_full, (2, nmo_full), space.shape))
+
+    space_real = numpy.array(tuple(active_space_required(rot_bloch, i) for i in space))
+
     logger.debug1(log_dest, "Performing a supercell proxy response calculation ...")
     # Calculate effective space of the supercell matrix required
-    space_bloch = numpy.concatenate(space)
-    space_real = active_space_required(rot_bloch, space_bloch)
-    logger.debug1(log_dest, "  Bloch total space size: {:d}, supercell space size: {:d}, total space size: {:d}".format(
-        sum(space_bloch),
-        sum(space_real),
-        len(space_bloch),
+    logger.debug1(log_dest, "  Bloch total space size: {}, supercell space size: {}, total space size: {:d}".format(
+        "x".join(str(sum(i)) for i in space),
+        "x".join(str(sum(i)) for i in space_real),
+        space.shape[1],
     ))
 
     # Retrieve real-valued matrices
     logger.debug1(log_dest, "  collecting the A, B matrices ...")
-    response_real_a, response_real_b = rks_slow.molecular_response(vind, space_real, nocc, double)
+    response_real_a, response_real_b = rks_slow.molecular_response(
+        vind,
+        space_real,
+        nocc_full,
+        nmo_full,
+        double,
+        log_dest,
+    )
     logger.debug1(log_dest, "  done, shapes: {} and {}".format(
         response_real_a.shape,
         response_real_b.shape,
@@ -296,11 +333,11 @@ def supercell_response(vind, space, nocc, double, rot_bloch, mo_occ_bloch, log_d
 
     logger.debug1(log_dest, "Transforming into Bloch basis ...")
     # Reshape into ov
-    nmo = sum(space_real)
-    nocc = sum(space_real[:nocc])
-    nvirt = nmo - nocc
-    response_real_a = response_real_a.reshape(nocc, nvirt, nocc, nvirt)
-    response_real_b = response_real_b.reshape(nocc, nvirt, nocc, nvirt)
+    nmo_real = space_real.sum(axis=-1)
+    nocc_real = space_real[:, :nocc_full].sum(axis=-1)
+    nvirt_real = nmo_real - nocc_real
+    response_real_a = response_real_a.reshape(nocc_real[0], nvirt_real[0], nocc_real[1], nvirt_real[1])
+    response_real_b = response_real_b.reshape(nocc_real[0], nvirt_real[0], nocc_real[1], nvirt_real[1])
     logger.debug1(log_dest, "  reshape into ov: shapes: {} and {}".format(
         response_real_a.shape,
         response_real_b.shape,
@@ -308,29 +345,36 @@ def supercell_response(vind, space, nocc, double, rot_bloch, mo_occ_bloch, log_d
 
     # Set rotation
     logger.debug1(log_dest, "  preparing rotation real->Bloch ...")
-    o = numpy.concatenate(mo_occ_bloch) != 0
-    v = numpy.logical_not(o)
 
-    rot_bloch = rot_bloch[space_real, :][:, space_bloch]
-    r_oo = rot_bloch[:nocc, o]
-    r_vv = rot_bloch[nocc:, v]
-    r_ov = rot_bloch[:nocc, v]
-    r_vo = rot_bloch[nocc:, o]
-    logger.debug1(log_dest, "  block shapes: oo {} vv {} ov {}".format(
-        r_oo.shape,
-        r_vv.shape,
-        r_ov.shape,
-    ))
+    mask = ko_mask(nocc, nmo)
+    r_oo = []
+    r_vv = []
+    for title, _space_real, _space, _nocc_real in zip(("row", "column"), space_real, space, nocc_real):
+        _rot_bloch = rot_bloch[_space_real, :][:, _space]
+        o = mask[_space]
+        v = ~o
+        r_oo.append(_rot_bloch[:_nocc_real, o])
+        r_vv.append(_rot_bloch[_nocc_real:, v])
+        r_ov = _rot_bloch[:_nocc_real, v]
+        r_vo = _rot_bloch[_nocc_real:, o]
+        logger.debug1(log_dest, "  {} block shapes: oo {} vv {} ov {}".format(
+            title,
+            r_oo[-1].shape,
+            r_vv[-1].shape,
+            r_ov.shape,
+        ))
 
-    if abs(r_ov).max() > 1e-14 or abs(r_vo).max() > 1e-14:
-        raise RuntimeError("Occupied and virtual spaces are coupled by the rotation matrix")
+        if abs(r_ov).max() > 1e-14 or abs(r_vo).max() > 1e-14:
+            raise RuntimeError("Occupied and virtual spaces are coupled by the rotation matrix ({} transform)".format(
+                title,
+            ))
 
     # Rotate
     logger.debug1(log_dest, "  rotating A ...")
-    response_bloch_a = sparse_transform(response_real_a, 0, r_oo, 1, r_vv.conj(), 2, r_oo.conj(), 3, r_vv)
+    response_bloch_a = sparse_transform(response_real_a, 0, r_oo[0], 1, r_vv[0].conj(), 2, r_oo[1].conj(), 3, r_vv[1])
     logger.debug1(log_dest, "  rotating B ...")
-    response_bloch_b = sparse_transform(response_real_b, 0, r_oo, 1, r_vv.conj(), 2, r_oo, 3, r_vv.conj())
-    logger.debug1(log_dest, "  resulting shapes: {} and {}".format(response_bloch_a.shape, response_bloch_b.shape))
+    response_bloch_b = sparse_transform(response_real_b, 0, r_oo[0], 1, r_vv[0].conj(), 2, r_oo[1], 3, r_vv[1].conj())
+    logger.debug1(log_dest, "  shapes: {} and {}".format(response_bloch_a.shape, response_bloch_b.shape))
 
     return response_bloch_a, response_bloch_b
 
@@ -352,6 +396,44 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
         PeriodicMFMixin.__init__(self, model, frozen=frozen)
         self.model_super = model_super
 
+    def proxy_is_double(self):
+        """
+        Determines if double-sized matrices are proxied.
+        Returns:
+            True if double-sized matrices are proxied.
+        """
+        nocc_full = sum(self.nocc_full)
+        nmo_full = sum(self.nmo_full)
+        size_full = nocc_full * (nmo_full - nocc_full)
+        size_hdiag = len(self.proxy_diag)
+
+        if size_full == size_hdiag:
+            return False
+
+        elif 2 * size_full == size_hdiag:
+            return True
+
+        else:
+            raise RuntimeError("Do not recognize the size of TD diagonal: {:d}. The size of ov-space is {:d}".format(
+                size_hdiag, size_full
+            ))
+
+    def proxy_response(self):
+        """
+        A raw response matrix.
+        Returns:
+            A raw response matrix.
+        """
+        return supercell_response(
+            self.proxy_vind,
+            numpy.concatenate(self.space),
+            self.nocc_full,
+            self.nmo_full,
+            self.proxy_is_double(),
+            self.model_super.supercell_inv_rotation,
+            self.model,
+        )
+
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TD matrixes.
@@ -359,15 +441,7 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
         Returns:
             Output type: "full", "ab", or "mk" and the corresponding matrix(es).
         """
-        a, b = supercell_response(
-            self.proxy_vind,
-            self.space,
-            sum(self.nocc_full),
-            True,
-            self.model_super.supercell_inv_rotation,
-            self.mo_occ,
-            self.model,
-        )
+        a, b = self.proxy_response()
 
         # Transform into supercell convention: [k_o, o, k_v, v] -> [k_o, k_v, o, v]
         nocc_k = self.nocc[0]
@@ -400,7 +474,7 @@ class TDRKS(rks_slow.TDRKS):
         super(TDRKS, self).__init__(mf, frozen=frozen, proxy=proxy)
         self.fast = False
         self.x = x
-        self.mf_cosntructor = mf_constructor
+        self.mf_constructor = mf_constructor
 
     def ao2mo(self):
         """
@@ -412,7 +486,7 @@ class TDRKS(rks_slow.TDRKS):
         return self.proxy_eri(
             self._scf,
             x=self.x,
-            mf_constructor=self.mf_cosntructor,
+            mf_constructor=self.mf_constructor,
             frozen=self.frozen,
             proxy=self.__proxy__,
         )

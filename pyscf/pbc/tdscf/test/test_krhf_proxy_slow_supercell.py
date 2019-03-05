@@ -24,7 +24,7 @@ def density_fitting_hf(x):
 
 
 class DiamondTestGamma(unittest.TestCase):
-    """Compare this (supercell_slow) @Gamma vs reference."""
+    """Compare this (krks_supercell_slow) @Gamma vs reference (pyscf), Hartree-Fock setup."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -71,7 +71,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow_supercell.TDRKS(self.model_krhf, [1, 1, 1], lambda x: KRHF(x).density_fit())
+        model = krks_slow_supercell.TDRKS(self.model_krhf, [1, 1, 1], density_fitting_hf)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel()
@@ -79,49 +79,8 @@ class DiamondTestGamma(unittest.TestCase):
         assert_vectors_close(model.xy, numpy.array(self.td_model_krhf.xy), atol=1e-12)
 
 
-class DiamondTestShiftedGamma(unittest.TestCase):
-    """Compare this (supercell_slow) @non-Gamma 1kp vs rhf_slow."""
-    @classmethod
-    def setUpClass(cls):
-        cls.cell = cell = Cell()
-        # Lift some degeneracies
-        cell.atom = '''
-        C 0.000000000000   0.000000000000   0.000000000000
-        C 1.67   1.68   1.69
-        '''
-        cell.basis = {'C': [[0, (0.8, 1.0)],
-                            [1, (1.0, 1.0)]]}
-        # cell.basis = 'gth-dzvp'
-        cell.pseudo = 'gth-pade'
-        cell.a = '''
-        0.000000000, 3.370137329, 3.370137329
-        3.370137329, 0.000000000, 3.370137329
-        3.370137329, 3.370137329, 0.000000000'''
-        cell.unit = 'B'
-        cell.verbose = 5
-        cell.build()
-
-        k = cell.get_abs_kpts((.1, .2, .3))
-
-        cls.model_krhf = model_krhf = KRHF(cell, kpts=k).density_fit()
-        model_krhf.kernel()
-
-    @classmethod
-    def tearDownClass(cls):
-        # These are here to remove temporary files
-        del cls.model_krhf
-        del cls.cell
-
-    def test_class(self):
-        """Tests container behavior."""
-        model = krks_slow_supercell.TDRKS(self.model_krhf, [1, 1, 1], density_fitting_hf, proxy=KTDHF)
-        # Shifted k-point grid is not TRS: an exception should be raised
-        with self.assertRaises(RuntimeError):
-            model.kernel()
-
-
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (supercell_slow) @2kp vs original supercell_slow."""
+    """Compare this (krks_supercell_slow) @2kp vs reference (krhf_supercell_slow), Hartree-Fock setup."""
     k = 2
 
     @classmethod
@@ -192,7 +151,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (supercell_slow) @3kp vs rhf_slow (3x1x1 supercell)."""
+    """Compare this (krks_supercell_slow) @3kp vs reference (krhf_supercell_slow), Hartree-Fock setup."""
     k = 3
 
 

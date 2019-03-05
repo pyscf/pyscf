@@ -19,7 +19,7 @@ def k2k(*indexes):
 
 
 class DiamondTest(unittest.TestCase):
-    """Compare this (krhf_slow) @2kp@Gamma vs `krhf_slow_gamma` and `krhf_slow_supercell`."""
+    """Compare this (krhf_slow) @2kp@Gamma vs reference (krhf_slow_gamma, krhf_slow_supercell)."""
     k = 2
     k_c = (0, 0, 0)
     test8 = True
@@ -136,14 +136,7 @@ class DiamondTest(unittest.TestCase):
         model = ktd.TDRHF(self.model_krhf)
         assert not model.fast
         model.kernel()
-        # vals = []
-        # vecs = []
         o = v = 4
-        # eri = ktd.PhysERI4(self.model_krhf)
-        # for k in range(self.k):
-        #     va, ve = ktd.kernel(self.model_krhf, k, driver='eig')
-        #     vals.append(va)
-        #     vecs.append(ve)
 
         # Concatenate everything
         ks = numpy.array(sum(([i] * len(model.e[i]) for i in range(self.k)), []))
@@ -181,7 +174,7 @@ class DiamondTest(unittest.TestCase):
 
 
 class DiamondTest3(DiamondTest):
-    """Compare this (krhf_slow) @3kp@Gamma vs vs `krhf_slow_supercell`."""
+    """Compare this (krhf_slow) @3kp@Gamma vs reference (krhf_slow_supercell)."""
     k = 3
     k_c = (0.1, 0, 0)
     test8 = False

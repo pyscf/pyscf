@@ -11,7 +11,7 @@ from test_common import retrieve_m, retrieve_m_hf, assert_vectors_close, tdhf_fr
 
 
 class DiamondTest(unittest.TestCase):
-    """Compare this (krhf_slow_gamma) @2kp@Gamma vs reference."""
+    """Compare this (krhf_slow_gamma) @2kp@Gamma vs reference (pyscf)."""
     k = 2
     k_c = (0, 0, 0)
 

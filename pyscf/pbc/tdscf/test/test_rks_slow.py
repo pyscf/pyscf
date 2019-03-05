@@ -10,7 +10,7 @@ from numpy import testing
 
 
 class DiamondTestGamma(unittest.TestCase):
-    """Compare this (rhf_slow) vs reference."""
+    """Compare this (rhf_slow) vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -68,7 +68,7 @@ class DiamondTestGamma(unittest.TestCase):
 
 
 class DiamondHFTestGamma(unittest.TestCase):
-    """Compare this (rhf_slow) vs reference in a Hartree-Fock setup."""
+    """Compare this (rhf_slow) vs reference (pyscf), Hartree-Fock setup."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()

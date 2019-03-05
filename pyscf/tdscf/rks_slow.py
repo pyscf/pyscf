@@ -25,53 +25,73 @@ Davidson procedure. Several variants of TDKS are available:
 
 from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, TDBase
 from pyscf.tdscf import rhf_slow, TDDFT
+from pyscf.lib import logger
 
 import numpy
 
 
-def molecular_response(vind, space, nocc, double):
+def orb2ov(space, nocc):
+    """
+    Converts orbital active space specification into ov-pairs space spec.
+    Args:
+        space (ndarray): the obital space;
+        nocc (int): the number of occupied orbitals;
+
+    Returns:
+        The ov space specification.
+    """
+    o = space[:nocc]
+    v = space[nocc:]
+    return (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)
+
+
+def molecular_response(vind, space, nocc, nmo, double, log_dest):
     """
     Retrieves a raw response matrix.
     Args:
         vind (Callable): a pyscf matvec routine;
-        space (ndarray): the active space;
+        space (ndarray): the active space: either for both rows and columns (1D array) or for rows and columns separately (2D array);
         nocc (int): the number of occupied orbitals (frozen and active);
+        nmo (int): the total number of orbitals;
         double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;
+        log_dest (object): pyscf logging;
 
     Returns:
         The TD matrix.
     """
-    nmo_full = len(space)
-    nocc_full = nocc
-    nvirt_full = nmo_full - nocc_full
+    space = numpy.array(space)
+
+    nocc_full, nvirt_full = nocc, nmo - nocc
     size_full = nocc_full * nvirt_full
 
-    nmo = space.sum()
-    nocc = space[:nocc_full].sum()
-    nvirt = nmo - nocc
-    size = nocc * nvirt
+    if space.shape == (nmo,):
+        ov1 = ov2 = orb2ov(space, nocc)
+    elif space.shape == (2, nmo):
+        ov1 = orb2ov(space[0], nocc)
+        ov2 = orb2ov(space[1], nocc)
+    else:
+        raise ValueError("The 'space' argument should be either a plain array or a 2D array with first dimension = "
+                         "2, found shape: {}".format(space.shape))
+
+    size = sum(ov2)
 
     probe = numpy.zeros((size, 2 * size_full if double else size_full))
-
-    o = space[:nocc_full]
-    v = space[nocc_full:]
-    ov = (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)
-
-    probe[numpy.arange(probe.shape[0]), numpy.argwhere(ov)[:, 0]] = 1
+    probe[numpy.arange(probe.shape[0]), numpy.argwhere(ov2)[:, 0]] = 1
+    logger.debug1(log_dest, "Requesting response against matrix {}".format(probe.shape))
+    result = vind(probe).T
+    logger.debug1(log_dest, "  output: {}".format(result.shape))
 
     if double:
-        ov = numpy.tile(ov, 2)
-    result = vind(probe).T[ov, :]
-
-    if double:
-        result_a = result[:size]
-        result_b = result[size:]
+        result = result[numpy.tile(ov1, 2)]
+        half = sum(ov1)
+        result_a = result[:half]
+        result_b = result[half:]
         return result_a, -result_b.conj()
     else:
-        return result
+        return result[ov1]
 
 
-def mk_make_canonic(m, o, v, return_ov=False):
+def mk_make_canonic(m, o, v, return_ov=False, space_ov=None):
     """
     Makes the output of pyscf TDDFT matrix (MK form) to be canonic.
     Args:
@@ -79,11 +99,14 @@ def mk_make_canonic(m, o, v, return_ov=False):
         o (ndarray): occupied orbital energies;
         v (ndarray): virtual orbital energies;
         return_ov (bool): if True, returns the K-matrix as well;
+        space_ov (ndarray): an optional ov space;
 
     Returns:
         The rotated matrix as well as an optional K-matrix.
     """
     e_ov = (v[numpy.newaxis, :] - o[:, numpy.newaxis]).reshape(-1)
+    if space_ov:
+        e_ov = e_ov[space_ov]
     e_ov_sqr = e_ov ** .5
     result = m * (e_ov_sqr[numpy.newaxis, :] / e_ov_sqr[:, numpy.newaxis])
     if return_ov:
@@ -106,6 +129,43 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
         TDProxyMatrixBlocks.__init__(self, proxy if proxy is not None else TDDFT(model))
         MolecularMFMixin.__init__(self, model, frozen=frozen)
 
+    def proxy_is_double(self):
+        """
+        Determines if double-sized matrices are proxied.
+        Returns:
+            True if double-sized matrices are proxied.
+        """
+        nocc_full = self.nocc_full
+        nmo_full = self.nmo_full
+        size_full = nocc_full * (nmo_full - nocc_full)
+        size_hdiag = len(self.proxy_diag)
+
+        if size_full == size_hdiag:
+            return False
+
+        elif 2 * size_full == size_hdiag:
+            return True
+
+        else:
+            raise RuntimeError("Do not recognize the size of TD diagonal: {:d}. The size of ov-space is {:d}".format(
+                size_hdiag, size_full
+            ))
+
+    def proxy_response(self):
+        """
+        A raw response matrix.
+        Returns:
+            A raw response matrix.
+        """
+        return molecular_response(
+            self.proxy_vind,
+            self.space,
+            self.nocc_full,
+            self.nmo_full,
+            self.proxy_is_double(),
+            self.model,
+        )
+
     def tdhf_primary_form(self, *args, **kwargs):
         """
         A primary form of TD matrixes.
@@ -113,28 +173,14 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
         Returns:
             Output type: "full", "ab", or "mk" and the corresponding matrix(es).
         """
-
-        nocc_full = self.nocc_full
-        nmo_full = self.nmo_full
-        size_full = nocc_full * (nmo_full - nocc_full)
-        size_hdiag = len(self.proxy_diag)
-
-        if size_full == size_hdiag:
+        if not self.proxy_is_double():
             # The MK case
             e_occ, e_virt = self.mo_energy[:self.nocc], self.mo_energy[self.nocc:]
-            return ("mk",) + mk_make_canonic(
-                molecular_response(self.proxy_vind, self.space, self.nocc_full, False),
-                e_occ, e_virt, return_ov=True
-            )
-
-        elif 2 * size_full == size_hdiag:
-            # Full case
-            return ("ab",) + molecular_response(self.proxy_vind, self.space, self.nocc_full, True)
+            return ("mk",) + mk_make_canonic(self.proxy_response(), e_occ, e_virt, return_ov=True)
 
         else:
-            raise ValueError("Do not recognize the size of the output diagonal: {:d}, expected {:d} or {:d}".format(
-                size_hdiag, size_full, 2 * size_full,
-            ))
+            # Full case
+            return ("ab",) + self.proxy_response()
 
 
 vector_to_amplitudes = rhf_slow.vector_to_amplitudes

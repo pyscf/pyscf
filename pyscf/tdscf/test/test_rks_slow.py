@@ -1,7 +1,8 @@
 from pyscf.gto import Mole
 from pyscf.scf import RKS, RHF
 from pyscf.tdscf import TDDFT, TDHF
-from pyscf.tdscf.rks_slow import PhysERI, TDRKS, mk_make_canonic
+from pyscf.tdscf.rks_slow import PhysERI, TDRKS, mk_make_canonic, molecular_response, orb2ov
+from pyscf.tdscf.common_slow import format_frozen_mol
 
 import numpy
 from numpy import testing
@@ -11,7 +12,7 @@ from test_common import retrieve_m, assert_vectors_close, tdhf_frozen_mask
 
 
 class H20Test(unittest.TestCase):
-    """Compare this (rks_slow) vs reference."""
+    """Compare this (rks_slow) vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.mol = mol = Mole()
@@ -84,9 +85,46 @@ class H20Test(unittest.TestCase):
                 print("When testing class with frozen={} the following exception occurred:".format(repr(frozen)))
                 raise
 
+    def test_raw_response(self):
+        """Tests the `molecular_reponse` and whether it slices output properly."""
+        eri = PhysERI(self.model_rks)
+        ref_m_full = eri.proxy_response()
+
+        # Test single
+        for frozen in (1, [0, -1]):
+            space = format_frozen_mol(frozen, eri.nmo_full)
+            space_ov = orb2ov(space, eri.nocc_full)
+
+            m = molecular_response(
+                eri.proxy_vind,
+                space,
+                eri.nocc_full,
+                eri.nmo_full,
+                False,
+                eri.proxy_model,
+            )
+            ref_m = ref_m_full[space_ov, :][:, space_ov]
+            testing.assert_allclose(ref_m, m, atol=1e-12)
+
+        # Test pair
+        for frozen in ((1, 3), ([1, -2], [0, -1])):
+            space = tuple(format_frozen_mol(i, eri.nmo_full) for i in frozen)
+            space_ov = tuple(orb2ov(i, eri.nocc_full) for i in space)
+
+            m = molecular_response(
+                eri.proxy_vind,
+                space,
+                eri.nocc_full,
+                eri.nmo_full,
+                False,
+                eri.proxy_model,
+            )
+            ref_m = ref_m_full[space_ov[0], :][:, space_ov[1]]
+            testing.assert_allclose(ref_m, m, atol=1e-12)
+
 
 class H20HFTest(unittest.TestCase):
-    """Compare this (rks_slow) vs reference in a Hartree-Fock setup."""
+    """Compare this (rks_slow) vs reference (pyscf), Hartree-Fock setup."""
     @classmethod
     def setUpClass(cls):
         cls.mol = mol = Mole()
@@ -160,3 +198,40 @@ class H20HFTest(unittest.TestCase):
             except Exception:
                 print("When testing class with frozen={} the following exception occurred:".format(repr(frozen)))
                 raise
+
+    def test_raw_response(self):
+        """Tests the `molecular_reponse` and whether it slices output properly."""
+        eri = PhysERI(self.model_rhf)
+        ref_m_full = eri.proxy_response()
+
+        # Test single
+        for frozen in (1, [0, -1]):
+            space = format_frozen_mol(frozen, eri.nmo_full)
+            space_ov = orb2ov(space, eri.nocc_full)
+
+            m = molecular_response(
+                eri.proxy_vind,
+                space,
+                eri.nocc_full,
+                eri.nmo_full,
+                True,
+                eri.proxy_model,
+            )
+            ref_m = tuple(i[space_ov, :][:, space_ov] for i in ref_m_full)
+            testing.assert_allclose(ref_m, m, atol=1e-12)
+
+        # Test pair
+        for frozen in ((1, 3), ([1, -2], [0, -1])):
+            space = tuple(format_frozen_mol(i, eri.nmo_full) for i in frozen)
+            space_ov = tuple(orb2ov(i, eri.nocc_full) for i in space)
+
+            m = molecular_response(
+                eri.proxy_vind,
+                space,
+                eri.nocc_full,
+                eri.nmo_full,
+                True,
+                eri.proxy_model,
+            )
+            ref_m = tuple(i[space_ov[0], :][:, space_ov[1]] for i in ref_m_full)
+            testing.assert_allclose(ref_m, m, atol=1e-12)

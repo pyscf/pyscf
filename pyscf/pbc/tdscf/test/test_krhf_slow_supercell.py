@@ -13,7 +13,7 @@ import numpy
 
 
 class DiamondTestGamma(unittest.TestCase):
-    """Compare this (supercell_slow) @Gamma vs reference."""
+    """Compare this (krhf_supercell_slow) @Gamma vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -86,7 +86,7 @@ class DiamondTestGamma(unittest.TestCase):
 
 
 class DiamondTestShiftedGamma(unittest.TestCase):
-    """Compare this (supercell_slow) @non-Gamma 1kp vs rhf_slow."""
+    """Compare this (krhf_supercell_slow) @non-Gamma vs reference (rhf_slow)."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -166,7 +166,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
 
 
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (supercell_slow) @2kp vs rhf_slow (2x1x1 supercell)."""
+    """Compare this (krhf_supercell_slow) @2kp vs supercell reference (rhf_slow)."""
     k = 2
     k_c = (0, 0, 0)
     test8 = True
@@ -262,7 +262,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (supercell_slow) @3kp vs rhf_slow (3x1x1 supercell)."""
+    """Compare this (supercell_slow) @3kp vs supercell reference (rhf_slow)."""
     k = 3
     k_c = (.1, 0, 0)
     test8 = False
