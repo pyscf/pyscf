@@ -340,6 +340,7 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
         """
         self.proxy_model = model
         self.proxy_vind, self.proxy_diag = self.proxy_model.gen_vind(self.proxy_model._scf)
+        self.proxy_vind = VindTracker(self.proxy_vind)
 
     def tdhf_primary_form(self, *args, **kwargs):
         raise NotImplementedError
@@ -573,6 +574,64 @@ class PeriodicMFMixin(object):
     def nmo_full(self):
         """The true (including frozen degrees of freedom) total number of molecular orbitals."""
         return k_nmo(self.model)
+
+
+class VindTracker(object):
+    def __init__(self, vind):
+        """
+        Tracks calls to `vind` (a matrix-vector multiplication density response routine).
+        Args:
+            vind (Callable): a matvec product routine;
+        """
+        self.vind = vind
+        self.args = self.results = self.errors = None
+        self.reset()
+
+    def reset(self):
+        """
+        Resets statistics.
+        """
+        self.args = []
+        self.results = []
+        self.errors = []
+
+    def __call__(self, v):
+        if not isinstance(v, numpy.ndarray):
+            raise ValueError("The input is not an array")
+        self.args.append(v.shape)
+        try:
+            r = self.vind(v)
+        except Exception as e:
+            self.results.append(None)
+            self.errors.append(e)
+            raise
+        r = numpy.array(r)
+        self.results.append(r.shape)
+        self.errors.append(None)
+        return r
+
+    def __iter__(self):
+        for i, o, e in zip(self.args, self.results, self.errors):
+            yield i, o, e
+
+    def text_stats(self):
+        size = 0
+        total_calc = 0
+        for _, o, _ in self:
+            if o is not None:
+                size = o[1]
+                total_calc += o[0] * o[1]
+        return "--------------------\nVind call statistics\n--------------------\n" \
+            "  calls: {total_calls:d}\n" \
+            "  elements total: {total_elems:d} ({size})\n" \
+            "  elements calculated: {total_calc:d}\n" \
+            "  ratio: {ratio:.3f}".format(
+                total_calls=len(self.args),
+                total_elems=size ** 2,
+                size="x".join((str(size),) * 2),
+                total_calc=total_calc,
+                ratio=1.0 * total_calc / (size ** 2),
+            )
 
 
 def eig(m, driver=None, nroots=None, half=True):
