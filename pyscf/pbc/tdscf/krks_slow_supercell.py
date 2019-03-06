@@ -265,7 +265,7 @@ def ko_mask(nocc, nmo):
         nmo (Iterable): numbers of orbitals per k-point;
 
     Returns:
-        The mask where `True` denotes occupied orbitals.
+        The mask where `True` denotes occupied orbitals. Basis order: [k, orb=o+v]
     """
     result = numpy.zeros(sum(nmo), dtype=bool)
     offset = 0
@@ -280,7 +280,8 @@ def supercell_response(vind, space, nocc, nmo, double, rot_bloch, log_dest):
     Retrieves a raw response matrix.
     Args:
         vind (Callable): a pyscf matvec routine;
-        space (ndarray): the active space: either for both rows and columns (1D array) or for rows and columns separately (2D array);
+        space (ndarray): the active space: either for both rows and columns (1D array) or for rows and columns
+        separately (2D array). Basis order: [k, orb=o+v];
         nocc (ndarray): the numbers of occupied orbitals (frozen and active) per k-point;
         nmo (ndarray): the total number of orbitals per k-point;
         double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;

@@ -33,34 +33,43 @@ def orb2ov(space, nocc, nmo):
     """
     Converts orbital active space specification into ov-pairs space spec.
     Args:
-        space (ndarray): the obital space;
+        space (ndarray): the obital space. Basis order: [k, orb=o+v];
         nocc (Iterable): the numbers of occupied orbitals per k-point;
         nmo (Iterable): the total numbers of orbitals per k-point;
 
     Returns:
-        The ov space specification.
+        The ov space specification. Basis order: [k_o, o, k_v, v].
     """
-    m = krks_slow_supercell.ko_mask(nocc, nmo)
-    o = space[m]
-    v = space[~m]
-    return (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)
+    m = krks_slow_supercell.ko_mask(nocc, nmo)  # [k, orb=o+v]
+    o = space[m]  # [k, o]
+    v = space[~m]  # [k, v]
+    return (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)  # [k_o, o, k_v, v]
 
 
 def ov2orb(space, nocc, nmo):
     """
     Converts ov-pairs active space specification into orbital space spec.
     Args:
-        space (ndarray): the ov space;
-        nocc (int): the total number of occupied orbitals;
-        nmo (int): the total number of orbitals;
+        space (ndarray): the ov space. Basis order: [k_o, o, k_v, v];
+        nocc (Iterable): the numbers of occupied orbitals per k-point;
+        nmo (Iterable): the total numbers of orbitals per k-point;
 
     Returns:
-        The orbital space specification.
+        The orbital space specification. Basis order: [k, orb=o+v].
     """
-    s = space.reshape(nocc, nmo - nocc)
-    s_o = numpy.any(s, axis=1)
-    s_v = numpy.any(s, axis=0)
-    return numpy.concatenate((s_o, s_v))
+    nocc = numpy.array(nocc)
+    nmo = numpy.array(nmo)
+    nvirt = nmo-nocc
+    s = space.reshape(sum(nocc), sum(nmo) - sum(nocc))  # [k_o, o; k_v, v]
+    s_o = numpy.any(s, axis=1)  # [k_o, o]
+    s_v = numpy.any(s, axis=0)  # [k_v, v]
+    o_offset = numpy.cumsum(numpy.concatenate(([0], nocc)))
+    v_offset = numpy.cumsum(numpy.concatenate(([0], nvirt)))
+    result = []
+    for o_fr, o_to, v_fr, v_to in zip(o_offset[:-1], o_offset[1:], v_offset[:-1], v_offset[1:]):
+        result.append(s_o[o_fr:o_to])
+        result.append(s_v[v_fr:v_to])
+    return numpy.concatenate(result)  # [k, orb=o+v]
 
 
 def supercell_response_ov(vind, space_ov, nocc, nmo, double, rot_bloch, log_dest):
@@ -95,7 +104,7 @@ def supercell_response_ov(vind, space_ov, nocc, nmo, double, rot_bloch, log_dest
         raise ValueError("The 'space' argument should a 1D array with dimension {:d} or a 2D array with dimensions {},"
                          " found: {}".format(size_ov_full, (2, size_ov_full), space_ov.shape))
 
-    space_orb = tuple(ov2orb(i, nocc_full, nmo_full) for i in space_ov)
+    space_orb = tuple(ov2orb(i, nocc, nmo) for i in space_ov)
     space_full = tuple(j[orb2ov(i, nocc, nmo)] for i, j in zip(space_orb, space_ov))
 
     result_orb = krks_slow_supercell.supercell_response(
@@ -121,7 +130,7 @@ def k2ov(nocc, nmo, k):
     Args:
         nocc (Iterable): occupation numbers per k-point;
         nmo (Iterable): numbers of orbitals per k-point;
-        k (Iterable): a list of second k-indexes;
+        k (Iterable): k-index pairs;
 
     Returns:
         An ov-mask.
@@ -138,7 +147,7 @@ def k2ov(nocc, nmo, k):
     ov_o, ov_v = ov_o.reshape(-1), ov_v.reshape(-1)
 
     result = numpy.zeros(ov_o.shape, dtype=bool)
-    for k1, k2 in enumerate(k):
+    for k1, k2 in k:
         result[numpy.logical_and(ov_o == k1, ov_v == k2)] = True
     return result
 
@@ -161,12 +170,19 @@ class PhysERI(krks_slow_supercell.PhysERI):
         """
         A raw response submatrix corresponding to specific k-points.
         Args:
-            k1 (Iterable): a list of second k-indexes (row dimension);
-            k2 (Iterable): a list of second k-indexes (column dimension);
+            k1 (Iterable): k-index pairs (row dimension);
+            k2 (Iterable): k-index pairs (column dimension);
 
         Returns:
             A raw response matrix.
         """
+        # This is a more efficient implementation which does not calculate unnecessary blocks
+        result = []
+        for k34 in k2:
+            result.append(self.__proxy_response_ov__(k1, [k34]))
+        return tuple(numpy.concatenate(i, axis=1) for i in zip(*tuple(result)))
+
+    def __proxy_response_ov__(self, k1, k2):
         space_ov = orb2ov(numpy.concatenate(self.space), self.nocc_full, self.nmo_full)
         return supercell_response_ov(
             self.proxy_vind,
@@ -195,12 +211,13 @@ class PhysERI(krks_slow_supercell.PhysERI):
             Output type: "full", and the corresponding matrix.
         """
         # 1. Convert k into pairs of rows and column k
-        k1, k2, _, _ = krhf_slow.get_block_k_ix(self, k)
+        r1, r2, _, _ = krhf_slow.get_block_k_ix(self, k)
+        r1, r2 = tuple(enumerate(r1)), tuple(enumerate(r2))
         # 2. Retrieve the 4 matrix blocks
-        a, _ = self.proxy_response_ov(k1, k1)
-        _, b = self.proxy_response_ov(k1, k2)
-        _, b_star = self.proxy_response_ov(k2, k1)
-        a_star, _ = self.proxy_response_ov(k2, k2)
+        a, _ = self.proxy_response_ov(r1, r1)
+        _, b = self.proxy_response_ov(r1, r2)
+        _, b_star = self.proxy_response_ov(r2, r1)
+        a_star, _ = self.proxy_response_ov(r2, r2)
         # 3. Merge them into the full matrix
         return "full", numpy.block([[a, b], [-b_star.conj(), -a_star.conj()]])
 
