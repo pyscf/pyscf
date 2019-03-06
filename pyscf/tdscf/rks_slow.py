@@ -23,7 +23,7 @@ Davidson procedure. Several variants of TDKS are available:
 # * vector_to_amplitudes reshapes and normalizes the solution
 # * TDRKS provides a container
 
-from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, TDBase
+from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, TDBase, format_mask
 from pyscf.tdscf import rhf_slow, TDDFT
 from pyscf.lib import logger
 
@@ -77,7 +77,9 @@ def molecular_response(vind, space, nocc, nmo, double, log_dest):
 
     probe = numpy.zeros((size, 2 * size_full if double else size_full))
     probe[numpy.arange(probe.shape[0]), numpy.argwhere(ov2)[:, 0]] = 1
-    logger.debug1(log_dest, "Requesting response against matrix {}".format(probe.shape))
+    logger.debug1(log_dest, "Requesting response against {} matrix (column space: {})".format(
+        "x".join(str(i) for i in probe.shape), format_mask(ov2),
+    ))
     result = vind(probe).T
     logger.debug1(log_dest, "  output: {}".format(result.shape))
 

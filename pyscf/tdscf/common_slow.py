@@ -15,6 +15,8 @@ from pyscf.pbc.tools import get_kconserv
 import numpy
 from scipy.linalg import solve
 
+from itertools import count, groupby
+
 
 def msize(m):
     """
@@ -766,3 +768,21 @@ class TDBase(object):
             Amplitudes with the following shape: (# of roots, 2 (x or y), # of occupied orbitals, # of virtual orbitals).
         """
         return self.v2a(vectors, self.eri.nocc, self.eri.nmo)
+
+
+def format_mask(x):
+    """
+    Formats a mask into a readable string.
+    Args:
+        x (ndarray): an array with the mask;
+
+    Returns:
+        A readable string with the mask.
+    """
+    x = numpy.asanyarray(x)
+    if len(x) == 0:
+        return "(empty)"
+    if x.dtype == bool:
+        x = numpy.argwhere(x)[:, 0]
+    grps = tuple(list(g) for _, g in groupby(x, lambda n, c=count(): n-next(c)))
+    return ",".join("{:d}-{:d}".format(i[0], i[-1]) if len(i) > 1 else "{:d}".format(i[0]) for i in grps)
