@@ -120,7 +120,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         conv = True
         # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
     except NotConvergedError as e:
-        lib.logger.note(method, e.message)
+        lib.logger.note(method, str(e))
         conv = False
     return conv, engine.mol
 
@@ -201,7 +201,10 @@ H       -0.0227 1.1812  -0.8852
         'convergence_drms': 1.2e-2,  # Angstrom
         'convergence_dmax': 1.8e-2,  # Angstrom
     }
-    opt = GeometryOptimizer(mf).set(params=conv_params).run()
+    opt = GeometryOptimizer(mf).set(params=conv_params)#.run()
+    opt.max_cycle=1
+    opt.run()
+    exit()
     mol1 = opt.mol
     print(mf.kernel() - -153.219208484874)
     print(scf.RHF(mol1).kernel() - -153.222680852335)
