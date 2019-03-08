@@ -1327,7 +1327,10 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
 
         # TODO allow user provided guess vector
         if guess:
-            raise NotImplementedError
+            user_guess = True
+            assert len(guess) == nroots
+            for g in guess:
+                assert g.size == size
         else:
             user_guess = False
             guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
