@@ -442,6 +442,9 @@ class SpinSpinCoupling(lib.StreamObject):
 
 SSC = SpinSpinCoupling
 
+from pyscf import scf
+scf.hf.RHF.SSC = scf.hf.RHF.SpinSpinCoupling = lib.class_as_method(SSC)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -459,7 +462,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.RHF(mol).run()
-    ssc = SSC(mf)
+    ssc = mf.SSC()
     ssc.verbose = 4
     ssc.cphf = True
     ssc.with_fc = True

@@ -8,7 +8,7 @@ berny_solver.
 
 import numpy as np
 from pyscf import gto, scf
-from pyscf.geomopt import berny_solver
+from pyscf.geomopt import berny_solver, as_pyscf_method
 
 mol = gto.M(atom='N 0 0 0; N 0 0 1.8', unit='Bohr', basis='ccpvdz')
 mf = scf.RHF(mol)
@@ -30,7 +30,7 @@ def f(mol):
 # object as geometry input, and returns the energy and gradients of that
 # geometry.
 #
-fake_method = berny_solver.as_pyscf_method(mol, f)
+fake_method = as_pyscf_method(mol, f)
 new_mol = berny_solver.optimize(fake_method)
 
 print('Old geometry (Bohr)')

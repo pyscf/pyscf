@@ -746,6 +746,11 @@ class UCCSD(ccsd.CCSD):
         raise NotImplementedError
         #return get_d2_diagnostic(t2)
 
+CCSD = UCCSD
+from pyscf import scf
+scf.uhf.UHF.CCSD = lib.class_as_method(CCSD)
+
+
 class _ChemistsERIs(ccsd._ChemistsERIs):
     def __init__(self, mol=None):
         ccsd._ChemistsERIs.__init__(self, mol)

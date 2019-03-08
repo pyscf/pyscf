@@ -255,6 +255,8 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
     if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
@@ -270,6 +272,9 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     '''
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
+
+    mf.dump_scf_summary(verbose)
+
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     ovlp_ao = mf.get_ovlp()
@@ -507,20 +512,19 @@ class KSCF(pbchf.SCF):
         if dm_kpts is None:
             dm_kpts = lib.asarray([dm]*len(self.kpts))
 
-        if cell.dimension < 3:
-            ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
-            # FIXME: consider the fractional num_electron or not? This maybe
-            # relates to the charged system.
-            nkpts = len(self.kpts)
-            nelectron = self.cell.tot_electrons(nkpts)
-            if abs(ne - nelectron) > 1e-7*nkpts:
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to the number '
-                            'of electrons', ne.mean()/nkpts)
-                dm_kpts *= (nelectron / ne).reshape(-1,1,1)
+        ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        # FIXME: consider the fractional num_electron or not? This maybe
+        # relate to the charged system.
+        nkpts = len(self.kpts)
+        nelectron = float(self.cell.tot_electrons(nkpts))
+        if abs(ne - nelectron) > 1e-7*nkpts:
+            logger.debug(self, 'Big error detected in the electron number '
+                        'of initial guess density matrix (Ne/cell = %g)!\n'
+                        '  This can cause huge error in Fock matrix and '
+                        'lead to instability in SCF for low-dimensional '
+                        'systems.\n  DM is normalized wrt the number '
+                        'of electrons %s', ne/nkpts, nelectron/nkpts)
+            dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 
     def init_guess_by_1e(self, cell=None):

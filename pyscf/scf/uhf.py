@@ -84,12 +84,8 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         project = not gto.same_basis_set(chk_mol, mol)
 
     # Check whether the two molecules are similar
-    def inertia_momentum(mol):
-        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
-                                  mol.atom_coords())
-        return scipy.linalg.eigh(im)[0]
-    im1 = inertia_momentum(mol)
-    im2 = inertia_momentum(chk_mol)
+    im1 = scipy.linalg.eigvalsh(mol.inertia_moment())
+    im2 = scipy.linalg.eigvalsh(chk_mol.inertia_moment())
     # im1+1e-7 to avoid 'divide by zero' error
     if abs((im1-im2)/(im1+1e-7)).max() > 0.01:
         logger.warn(mol, "Large deviations found between the input "
@@ -305,6 +301,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''Electronic energy of Unrestricted Hartree-Fock
 
+    Note this function has side effects which cause mf.scf_summary updated.
+
     Returns:
         Hartree-Fock electronic energy and the 2-electron part contribution
     '''
@@ -315,12 +313,15 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm[0])
-    e1+= numpy.einsum('ij,ji', h1e, dm[1])
-    e_coul =(numpy.einsum('ij,ji', vhf[0], dm[0]) +
-             numpy.einsum('ij,ji', vhf[1], dm[1])) * .5
+    e1 = numpy.einsum('ij,ji->', h1e, dm[0])
+    e1+= numpy.einsum('ij,ji->', h1e, dm[1])
+    e_coul =(numpy.einsum('ij,ji->', vhf[0], dm[0]) +
+             numpy.einsum('ij,ji->', vhf[1], dm[1])) * .5
+    e_elec = (e1 + e_coul).real
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
-    return (e1+e_coul).real, e_coul
+    return e_elec, e_coul
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mo, s=1):
@@ -443,6 +444,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     nmo = len(mo_occ[0])
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
+        mf.dump_scf_summary(log)
+
         log.note('**** MO energy ****')
         log.note('                             alpha | beta                alpha | beta')
         for i in range(nmo):

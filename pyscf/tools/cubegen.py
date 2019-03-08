@@ -37,10 +37,12 @@ AtomN ZN x y z          # ...
 Data on grids           # (N1*N2) lines of records, each line has N3 elements
 '''
 
-import numpy
 import time
+import numpy
 import pyscf
 from pyscf import lib
+from pyscf import gto
+from pyscf import df
 from pyscf.dft import numint
 from pyscf import __config__
 
@@ -160,14 +162,13 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
         Vnuc += Z / numpy.einsum('xi,xi->x', rp, rp)**.5
 
     # Potential of electron density
-    Vele = []
-    for p in coords:
-        mol.set_rinv_orig_(p)
-        Vele.append(numpy.einsum('ij,ij', mol.intor('int1e_rinv'), dm))
+    Vele = numpy.empty_like(Vnuc)
+    for p0, p1 in lib.prange(0, Vele.size, 600):
+        fakemol = gto.fakemol_for_charges(coords[p0:p1])
+        ints = df.incore.aux_e2(mol, fakemol)
+        Vele[p0:p1] = numpy.einsum('ijp,ij->p', ints, dm)
 
     MEP = Vnuc - Vele     # MEP at each point
-
-    MEP = numpy.asarray(MEP)
     MEP = MEP.reshape(nx,ny,nz)
 
     # Write the potential
@@ -180,19 +181,20 @@ class Cube(object):
                  margin=BOX_MARGIN):
         self.mol = mol
         coord = mol.atom_coords()
-        self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+        box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+        self.box = numpy.diag(box)
         self.boxorig = numpy.min(coord,axis=0) - margin
         if resolution is not None:
-            nx, ny, nz = numpy.ceil(self.box / resolution).astype(int)
+            nx, ny, nz = numpy.ceil(box / resolution).astype(int)
 
         self.nx = nx
         self.ny = ny
         self.nz = nz
         # .../(nx-1) to get symmetric mesh
         # see also the discussion on https://github.com/sunqm/pyscf/issues/154
-        self.xs = numpy.arange(nx) * (self.box[0] / (nx - 1))
-        self.ys = numpy.arange(ny) * (self.box[1] / (ny - 1))
-        self.zs = numpy.arange(nz) * (self.box[2] / (nz - 1))
+        self.xs = numpy.arange(nx) * (box[0] / (nx - 1))
+        self.ys = numpy.arange(ny) * (box[1] / (ny - 1))
+        self.zs = numpy.arange(nz) * (box[2] / (nz - 1))
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored
@@ -204,9 +206,6 @@ class Cube(object):
 
     def get_ngrids(self):
         return self.nx * self.ny * self.nz
-
-    def get_volume_element(self):
-        return (self.xs[1]-self.xs[0])*(self.ys[1]-self.ys[0])*(self.zs[1]-self.zs[0])
 
     def write(self, field, fname, comment=None):
         """  Result: .cube file with the field in the file fname.  """
@@ -236,7 +235,8 @@ class Cube(object):
                         fmt = '%13.5E' * (iz1-iz0) + '\n'
                         f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
 
-del(RESOLUTION, BOX_MARGIN)
+    def read(self, cube_file):
+        raise NotImplementedError
 
 
 if __name__ == '__main__':

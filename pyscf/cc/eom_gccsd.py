@@ -114,7 +114,7 @@ def ipccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
 
-def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=None):
+def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
     """
     Returns:
         e_star (list of float):
@@ -134,10 +134,11 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, eris=No
     assert (eom.partition == None)
     cpu1 = cpu0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
-    if eris is None:
-        eris = eom._cc.ao2mo()
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
     assert (isinstance(eris, gccsd._PhysicistsERIs))
-    t1, t2 = eom._cc.t1, eom._cc.t2
     fock = eris.fock
     nocc, nvir = t1.shape
     nmo = nocc + nvir
@@ -229,7 +230,6 @@ class EOMIP(eom_rccsd.EOMIP):
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
     ccsd_star_contract = ipccsd_star_contract
-    ipccsd_star_contract = ipccsd_star_contract
 
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
@@ -250,11 +250,10 @@ class EOMIP(eom_rccsd.EOMIP):
         return imds
 
 class EOMIP_Ta(EOMIP):
-    '''Class for EOM IPCCSD(T)(a) method by Devin Matthews.'''
+    '''Class for EOM IPCCSD(T)*(a) method by Matthews and Stanton.'''
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
-        imds.make_ip()
-        imds.add_t3p2_ip()
+        imds.make_t3p2_ip(self._cc)
         return imds
 
 ########################################
@@ -352,7 +351,7 @@ def eaccsd_diag(eom, imds=None):
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
 
-def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=None):
+def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
     """
     Returns:
         e_star (list of float):
@@ -367,10 +366,11 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, eris=No
     assert (eom.partition == None)
     cpu1 = cpu0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
-    if eris is None:
-        eris = eom._cc.ao2mo()
+    if imds is None:
+        imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    eris = imds.eris
     assert (isinstance(eris, gccsd._PhysicistsERIs))
-    t1, t2 = eom._cc.t1, eom._cc.t2
     fock = eris.fock
     nocc, nvir = t1.shape
     nmo = nocc + nvir
@@ -463,7 +463,6 @@ class EOMEA(eom_rccsd.EOMEA):
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
-    eaccsd_star_contract = eaccsd_star_contract
     ccsd_star_contract = eaccsd_star_contract
 
     def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
@@ -486,11 +485,10 @@ class EOMEA(eom_rccsd.EOMEA):
 
 
 class EOMEA_Ta(EOMEA):
-    '''Class for EOM EACCSD(T)(a) method by Devin Matthews.'''
+    '''Class for EOM EACCSD(T)*(a) method by Matthews and Stanton.'''
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris=eris)
-        imds.make_ea()
-        imds.add_t3p2_ea()
+        imds.make_t3p2_ea(self._cc)
         return imds
 
 ########################################
@@ -673,15 +671,20 @@ class _IMDS:
         logger.timer_debug1(self, 'EOM-CCSD IP intermediates', *cput0)
         return self
 
-    def add_t3p2_ip(self):
-        raise NotImplementedError
-        if not self.made_ip_imds:
-            self.make_ip()
-
+    def make_t3p2_ip(self, cc):
         cput0 = (time.clock(), time.time())
 
-        t1, t2, eris = self.t1, self.t2, self.eris
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
 
+        self._made_shared = False  # Force update
+        self.make_ip()  # Make after t1/t2 updated
+        self.Wovoo = self.Wovoo + Wovoo
+
+        self.made_ip_imds = True
         logger.timer_debug1(self, 'EOM-CCSD(T)a IP intermediates', *cput0)
         return self
 
@@ -703,15 +706,20 @@ class _IMDS:
         logger.timer_debug1(self, 'EOM-CCSD EA intermediates', *cput0)
         return self
 
-    def add_t3p2_ea(self):
-        raise NotImplementedError
-        if not self.made_ea_imds:
-            self.make_ea()
-
+    def make_t3p2_ea(self, cc):
         cput0 = (time.clock(), time.time())
 
-        t1, t2, eris = self.t1, self.t2, self.eris
+        t1, t2, eris = cc.t1, cc.t2, self.eris
+        delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
+            imd.get_t3p2_imds_slow(cc, t1, t2, eris)
+        self.t1 = pt1
+        self.t2 = pt2
 
+        self._made_shared = False  # Force update
+        self.make_ea()  # Make after t1/t2 updated
+        self.Wvvvo = self.Wvvvo + Wvvvo
+
+        self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-CCSD(T)a EA intermediates', *cput0)
         return self
 

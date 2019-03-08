@@ -82,6 +82,11 @@ def num_threads(n=None):
     '''Set the number of OMP threads.  If argument is not specified, the
     function will return the total number of available OMP threads.
 
+    It's recommended to call this function to set OMP threads than
+    "os.environ['OMP_NUM_THREADS'] = int(n)". This is because environment
+    variables like OMP_NUM_THREADS were read when a module was imported. They
+    cannot be reset through os.environ after the module was loaded.
+
     Examples:
 
     >>> from pyscf import lib
@@ -574,13 +579,14 @@ def alias(fn, alias_name=None):
     overloaded in the child class. Using "alias" can make sure that the
     overloaded mehods were called when calling the aliased method.
     '''
-    def aliased_fn(*args, **kwargs):
-        return fn(*args, **kwargs)
+    fname = fn.__name__
+    def aliased_fn(self, *args, **kwargs):
+        return getattr(self, fname)(*args, **kwargs)
 
     if alias_name is not None:
         aliased_fn.__name__ = alias_name
 
-    doc_str = 'An alias to method %s\n' % fn.__name__
+    doc_str = 'An alias to method %s\n' % fname
     if sys.version_info >= (3,):
         from inspect import signature
         sig = str(signature(fn))
@@ -595,6 +601,20 @@ def alias(fn, alias_name=None):
 
     aliased_fn.__doc__ = doc_str
     return aliased_fn
+
+def class_as_method(cls):
+    '''
+    The statement "fn1 = alias(Class)" is equivalent to:
+
+    .. code-block:: python
+        def fn1(self, *args, **kwargs):
+            return Class(self, *args, **kwargs)
+    '''
+    def fn(obj, *args, **kwargs):
+        return cls(obj, *args, **kwargs)
+    fn.__doc__ = cls.__doc__
+    fn.__name__ = cls.__name__
+    return fn
 
 def import_as_method(fn, default_keys=None):
     '''

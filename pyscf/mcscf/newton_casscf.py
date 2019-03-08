@@ -645,10 +645,12 @@ class CASSCF(mc1step.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
-        nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
+        ncore = self.ncore
+        ncas = self.ncas
+        nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        assert(nvir > 0 and self.ncore > 0 and self.ncas > 0)
+                 self.nelecas[0], self.nelecas[1], self.ncas, ncore, nvir)
+        assert(nvir > 0 and ncore > 0 and self.ncas > 0)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)

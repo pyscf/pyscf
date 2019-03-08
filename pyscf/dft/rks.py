@@ -161,6 +161,8 @@ def _get_k_lr(mol, dm, omega=0, hermi=0):
 def energy_elec(ks, dm=None, h1e=None, vhf=None):
     r'''Electronic part of RKS energy.
 
+    Note this function has side effects which cause mf.scf_summary updated.
+
     Args:
         ks : an instance of DFT class
 
@@ -170,16 +172,19 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
             Core hamiltonian
 
     Returns:
-        RKS electronic energy and the 2-electron part contribution
+        RKS electronic energy and the 2-electron contribution
     '''
     if dm is None: dm = ks.make_rdm1()
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm)
-    tot_e = e1 + vhf.ecoul + vhf.exc
+    e1 = numpy.einsum('ij,ji->', h1e, dm)
+    e2 = vhf.ecoul + vhf.exc
+    ks.scf_summary['e1'] = e1.real
+    ks.scf_summary['coul'] = vhf.ecoul.real
+    ks.scf_summary['exc'] = vhf.exc.real
     logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return tot_e.real, vhf.ecoul+vhf.exc
+    return (e1+e2).real, e2
 
 
 NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)

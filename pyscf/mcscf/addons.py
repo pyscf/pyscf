@@ -179,7 +179,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             else:
                 irrep_ncore[k] = v
 
-        ncore_rest = casscf.ncore - sum(irrep_ncore.values())
+        ncore_rest = ncore - sum(irrep_ncore.values())
         if ncore_rest > 0:  # guess core configuration
             mask = numpy.ones(len(orbsym), dtype=bool)
             for ir in irrep_ncore:
@@ -188,12 +188,12 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             core_rest = dict([(ir, numpy.count_nonzero(core_rest==ir))
                               for ir in set(core_rest)])
             log.info('Given core space %s < casscf core size %d',
-                     cas_irrep_ncore, casscf.ncore)
+                     cas_irrep_ncore, ncore)
             log.info('Add %s to core configuration', core_rest)
             irrep_ncore.update(core_rest)
         elif ncore_rest < 0:
             raise ValueError('Given core space %s > casscf core size %d'
-                             % (cas_irrep_ncore, casscf.ncore))
+                             % (cas_irrep_ncore, ncore))
     else:
         irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
 
@@ -356,7 +356,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
 
     def project(mfmo, init_mo, ncore, s):
         s_init_mo = numpy.einsum('pi,pi->i', init_mo.conj(), s.dot(init_mo))
-        if abs(s_init_mo - 1).max() < 1e-7:
+        if abs(s_init_mo - 1).max() < 1e-7 and mfmo.shape[1] == init_mo.shape[1]:
             # Initial guess orbitals are orthonormal
             return init_mo
 # TODO: test whether the canonicalized orbitals are better than the projected orbitals

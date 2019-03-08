@@ -170,6 +170,11 @@ class GMP2(mp2.MP2):
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+MP2 = GMP2
+
+from pyscf import scf
+scf.ghf.GHF.MP2 = lib.class_as_method(MP2)
+
 
 class _PhysicistsERIs:
     def __init__(self, mp, mo_coeff=None):
@@ -241,7 +246,8 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     orbspin = eris.orbspin
 
     feri = eris.feri = lib.H5TmpFile()
-    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
+    dtype = numpy.result_type(eris.mo_coeff).char
+    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), dtype)
 
     if orbspin is None:
         max_memory = mp.max_memory-lib.current_memory()[0]

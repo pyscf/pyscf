@@ -424,6 +424,11 @@ class GCISD(cisd.CISD):
                 orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
 
+CISD = GCISD
+
+from pyscf import scf
+scf.ghf.GHF.CISD = lib.class_as_method(CISD)
+
 
 if __name__ == '__main__':
     from pyscf import gto

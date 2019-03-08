@@ -17,7 +17,7 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com> 
 
 import os
-import pyscf.gto.basis
+from pyscf.gto import basis as _mol_basis
 from pyscf.pbc.gto.basis import parse_cp2k
 from pyscf import __config__
 
@@ -47,8 +47,8 @@ ALIAS = {
 
 OPTIMIZE_CONTRACTION = getattr(__config__, 'pbc_gto_basis_parse_optimize', False)
 def parse(string, optimize=OPTIMIZE_CONTRACTION):
-    '''Parse the basis text which is in CP2K format, return an internal
-    basis format which can be assigned to :attr:`Mole.basis`
+    '''Parse the basis text in CP2K format, return an internal basis format
+    which can be assigned to :attr:`Cell.basis`
 
     Args:
         string : Blank linke and the lines of "BASIS SET" and "END" will be ignored
@@ -93,12 +93,24 @@ def load(file_or_basis_name, symb, optimize=OPTIMIZE_CONTRACTION):
             with open(file_or_basis_name, 'r') as fin:
                 return parse_cp2k.parse(fin.read())
 
-    name = file_or_basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    name = _mol_basis._format_basis_name(file_or_basis_name)
+    if '@' in name:
+        split_name = name.split('@')
+        assert len(split_name) == 2
+        name = split_name[0]
+        contr_scheme = _mol_basis._convert_contraction(split_name[1])
+    else:
+        contr_scheme = 'Full'
+
     if name not in ALIAS:
-        return pyscf.gto.basis.load(file_or_basis_name, symb)
+        return _mol_basis.load(file_or_basis_name, symb)
+
     basmod = ALIAS[name]
     symb = ''.join(i for i in symb if i.isalpha())
     b = parse_cp2k.load(os.path.join(os.path.dirname(__file__), basmod), symb)
+
+    if contr_scheme != 'Full':
+        b = _mol_basis._truncate(b, contr_scheme, symb, split_name)
     return b
 
 del(OPTIMIZE_CONTRACTION)

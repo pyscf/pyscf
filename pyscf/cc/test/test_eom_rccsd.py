@@ -23,7 +23,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
-from pyscf.cc import ccsd, rccsd, eom_rccsd
+from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates, gintermediates
 
 mol = gto.Mole()
 mol.atom = [
@@ -790,6 +790,86 @@ class KnownValues(unittest.TestCase):
 #        vec1 = myeom.matvec(vec, imds, diag=diag)
 #        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
 #        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
+
+    def test_t3p2_intermediates_complex(self):
+        '''Although this has not been tested strictly for complex values, it
+        was written to be correct for complex values and differences in the complex
+        values between versions should be taken into account and corrected.'''
+        myt1 = mycc1.t1 + 1j * numpy.sin(mycc1.t1) * mycc1.t1
+        myt2 = mycc1.t2 + 1j * numpy.sin(mycc1.t2) * mycc1.t2
+        myt2 = myt2 + myt2.transpose(1,0,3,2)
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=erisi)
+        self.assertAlmostEqual(lib.finger(e), 23223.465490572264, 6)
+        self.assertAlmostEqual(lib.finger(pt1), (-5.2202836452466705-0.09570164571057749j), 6)
+        self.assertAlmostEqual(lib.finger(pt2), (46.188012063609506-1.303867687778909j), 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), (-18.438930654297778+1.5734161307568773j), 6)
+        self.assertAlmostEqual(lib.finger(Wacek), (-7.187576764072701+0.7399185332889747j), 6)
+
+    def test_t3p2_intermediates_real(self):
+        myt1 = mycc1.t1.copy()
+        myt2 = mycc1.t2.copy()
+        myt2 = myt2 + myt2.transpose(1,0,3,2)
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
+        self.assertAlmostEqual(lib.finger(e), 23230.479350851536, 6)
+        self.assertAlmostEqual(lib.finger(pt1), -5.218888542335442, 6)
+        self.assertAlmostEqual(lib.finger(pt2), 46.19512409958347, 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), -18.47928005593598, 6)
+        self.assertAlmostEqual(lib.finger(Wacek), -7.101360230151883, 6)
+
+    def test_t3p2_intermediates_against_so(self):
+        from pyscf.cc.addons import convert_to_gccsd
+        myt1 = mycc1.t1.copy()
+        myt2 = mycc1.t2.copy()
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
+
+        mygcc = convert_to_gccsd(mycc1)
+        mygt1 = mygcc.t1.copy()
+        mygt2 = mygcc.t2.copy()
+        ge, gpt1, gpt2, gWmcik, gWacek = gintermediates.get_t3p2_imds_slow(mygcc, mygt1, mygt2)
+        self.assertAlmostEqual(lib.finger(pt1), -2.6094405706617727, 6)
+        self.assertAlmostEqual(lib.finger(pt2), 23.097562049844235, 6)
+        self.assertAlmostEqual(lib.finger(pt1), lib.finger(gpt1[::2,::2]), 6)
+        self.assertAlmostEqual(lib.finger(pt2), lib.finger(gpt2[::2,1::2,::2,1::2]), 6)
+
+    def test_h2o_star(self):
+        mol_h2o = gto.Mole()
+        mol_h2o.atom = [
+                [8, [0.000000000000000, -0.000000000000000, -0.124143731294022]],
+                [1, [0.000000000000000, -1.430522735894536,  0.985125550040314]],
+                [1, [0.000000000000000,  1.430522735894536,  0.985125550040314]]]
+        mol_h2o.unit = 'B'
+        mol_h2o.basis = {'H' : [[0,
+                               [5.4471780, 0.156285],
+                               [0.8245472, 0.904691]],
+                               [0, [0.1831916, 1.0]]],
+                        'O' : '3-21G'}
+        mol_h2o.verbose = 7
+        mol_h2o.output = '/dev/null'
+        mol_h2o.build()
+        mol.conv_tol = 1e-12
+        mf_h2o = scf.RHF(mol_h2o)
+        mf_h2o.conv_tol_grad = 1e-12
+        mf_h2o.kernel()
+        mycc_h2o = cc.RCCSD(mf_h2o).run()
+        mycc_h2o.conv_tol_normt = 1e-12
+        mycc_h2o.conv_tol = 1e-12
+        mycc_h2o.kernel()
+
+        myeom = eom_rccsd.EOMIP(mycc_h2o)
+        e = myeom.ipccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.410661965883, 6)
+
+        myeom = eom_rccsd.EOMIP_Ta(mycc_h2o)
+        e = myeom.ipccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.411695647736, 6)
+
+        myeom = eom_rccsd.EOMEA(mycc_h2o)
+        e = myeom.eaccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.250589854185, 6)
+
+        myeom = eom_rccsd.EOMEA_Ta(mycc_h2o)
+        e = myeom.eaccsd_star(nroots=3)
+        self.assertAlmostEqual(e[0], 0.250720295150, 6)
 
 if __name__ == "__main__":
     print("Tests for EOM RCCSD")

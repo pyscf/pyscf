@@ -130,6 +130,9 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             self._in_scf = False
             self._last_dm = 0
 
+        def nuc_grad_method(self):
+            raise NotImplementedError
+
     return SGXHF(mf)
 
 # A tag to label the derived SCF class

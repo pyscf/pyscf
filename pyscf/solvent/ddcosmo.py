@@ -48,7 +48,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import df
-from pyscf import mcscf
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.symm import sph
@@ -119,6 +118,7 @@ def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
                 vhf = self.get_veff(self.mol, dm)
             e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf)
             e_tot += vhf.epcm
+            self.scf_summary['epcm'] = vhf.epcm.real
             logger.debug(self, '  E_diel = %.15g', vhf.epcm)
             return e_tot, e_coul
 
@@ -478,6 +478,18 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
 
     return PostSCFWithSolvent(method)
+
+
+# Inject DDCOSMO to other methods
+from pyscf import scf
+from pyscf import mcscf
+from pyscf import mp, ci, cc
+scf.hf.SCF.DDCOSMO = ddcosmo_for_scf
+mcscf.casci.DDCOSMO = ddcosmo_for_casci
+mcscf.mc1step.DDCOSMO = ddcosmo_for_casscf
+mp.mp2.MP2.DDCOSMO = ddcosmo_for_post_scf
+ci.cisd.CISD.DDCOSMO = ddcosmo_for_post_scf
+cc.ccsd.CCSD.DDCOSMO = ddcosmo_for_post_scf
 
 
 # TODO: Testing the value of psi (make_psi_vmat).  All intermediates except

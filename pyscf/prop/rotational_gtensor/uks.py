@@ -56,6 +56,10 @@ class RotationalGTensor(uhf_g.RotationalGTensor):
     get_fock = uks_nmr.get_fock
     solve_mo1 = uks_nmr.solve_mo1
 
+from pyscf import lib
+from pyscf import dft
+dft.uks.UKS.RotationalGTensor = dft.uks_symm.UKS.RotationalGTensor = lib.class_as_method(RotationalGTensor)
+
 
 if __name__ == '__main__':
     from pyscf import lib
@@ -71,7 +75,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dft.UKS(mol).run(xc='b3lyp')
-    rotg = RotationalGTensor(mf)
+    rotg = mf.RotationalGTensor()
     m = rotg.kernel()
     print(m[0,0] - 0.6944660741142765)
 

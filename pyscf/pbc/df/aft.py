@@ -308,7 +308,7 @@ class AFTDF(lib.StreamObject):
         if cell.dimension < 3:
             err = numpy.exp(-0.436392335*min(self.mesh[cell.dimension:]) - 2.99944305)
             err *= cell.nelectron
-            meshz = (numpy.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
+            meshz = pbcgto.cell._mesh_inf_vaccum(cell)
             mesh_guess[cell.dimension:] = int(meshz)
             if err > cell.precision*10:
                 logger.warn(self, 'mesh %s of AFTDF may not be enough to get '
@@ -317,7 +317,7 @@ class AFTDF(lib.StreamObject):
                             'Recommended mesh is %s.',
                             self.mesh, cell.precision, cell.dimension, err, mesh_guess)
             if (cell.mesh[cell.dimension:]/(1.*meshz) > 1.1).any():
-                meshz = (numpy.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
+                meshz = pbcgto.cell._mesh_inf_vaccum(cell)
                 logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
                             '(=%s) can result in an unnecessarily slow calculation.\n'
                             'For coulomb integral error of ~ %.2g Eh in %dD PBC, \n'

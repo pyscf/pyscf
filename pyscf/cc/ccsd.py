@@ -67,8 +67,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
-                                  mycc.amplitudes_to_vector(t1, t2))
+        tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
+        tmpvec -= mycc.amplitudes_to_vector(t1, t2)
+        normt = numpy.linalg.norm(tmpvec)
+        tmpvec = None
         if mycc.iterative_damping < 1.0:
             alpha = mycc.iterative_damping
             t1new = (1-alpha) * t1 + alpha * t1new
@@ -1219,6 +1221,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
 CC = RCCSD = CCSD
 
+from pyscf import scf
+scf.hf.RHF.CCSD = lib.class_as_method(CCSD)
+scf.rohf.ROHF.CCSD = None
+
 
 class _ChemistsERIs:
     '''(pq|rs)'''
@@ -1444,12 +1450,6 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     nvir_pair = nvir*(nvir+1)//2
     orbo = mo_coeff[:,:nocc]
     orbv = mo_coeff[:,nocc:]
-    oooo = numpy.zeros((nocc*nocc,nocc*nocc))
-    ovoo = numpy.zeros((nocc*nvir,nocc*nocc))
-    oovv = numpy.zeros((nocc*nocc,nvir*nvir))
-    ovvo = numpy.zeros((nocc*nvir,nvir*nocc))
-    ovvv = numpy.zeros((nocc*nvir,nvir_pair))
-    vvvv = numpy.zeros((nvir_pair,nvir_pair))
 
     naux = mycc._scf.with_df.get_naoaux()
     Loo = numpy.empty((naux,nocc,nocc))

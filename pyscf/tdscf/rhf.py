@@ -791,6 +791,8 @@ class TDA(lib.StreamObject):
     transition_quadrupole          = transition_quadrupole
     transition_octupole            = transition_octupole
     transition_velocity_dipole     = transition_velocity_dipole
+    transition_velocity_quadrupole = transition_velocity_quadrupole
+    transition_velocity_octupole   = transition_velocity_octupole
     transition_magnetic_dipole     = transition_magnetic_dipole
     transition_magnetic_quadrupole = transition_magnetic_quadrupole
 
@@ -966,6 +968,14 @@ class TDHF(TDA):
 
 RPA = TDRHF = TDHF
 
+from pyscf import scf
+scf.hf.RHF.TDA = lib.class_as_method(TDA)
+scf.hf.RHF.TDHF = lib.class_as_method(TDHF)
+scf.rohf.ROHF.TDA = None
+scf.rohf.ROHF.TDHF = None
+scf.hf_symm.ROHF.TDA = None
+scf.hf_symm.ROHF.TDHF = None
+
 del(OUTPUT_THRESHOLD)
 
 
@@ -983,7 +993,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.RHF(mol).run()
-    td = TDA(mf)
+    td = mf.TDA()
     td.verbose = 3
     print(td.kernel()[0] * 27.2114)
 # [ 11.90276464  11.90276464  16.86036434]
@@ -992,7 +1002,7 @@ if __name__ == '__main__':
     print(td.kernel()[0] * 27.2114)
 # [ 11.01747918  11.01747918  13.16955056]
 
-    td = TDHF(mf)
+    td = mf.TDHF()
     td.verbose = 3
     print(td.kernel()[0] * 27.2114)
 # [ 11.83487199  11.83487199  16.66309285]
