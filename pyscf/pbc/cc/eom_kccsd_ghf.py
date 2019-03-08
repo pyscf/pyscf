@@ -1399,7 +1399,7 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr1[ki] -= np.einsum('mi,ma->ia', imds.Foo[ki], r1[ki])
         for km in range(nkpts):
             Hr1[ki] += np.einsum('me,imae->ia', imds.Fov[km], r2[ki, km, ka])
-            ke = kconserv_r2[km]
+            ke = kconserv_r1[km]
             Hr1[ki] += np.einsum('maei,me->ia', imds.Wovvo[km, ka, ke], r1[km])
             for kn in range(nkpts):
                 Hr1[ki] -= 0.5*np.einsum('mnie,mnae->ia', imds.Wooov[km, kn, ki], r2[km, kn, ka])
@@ -1550,7 +1550,7 @@ def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
 
     ki_i, kj_j = np.tril_indices(nkpts*nocc, -1)
     ida, idb = np.tril_indices(nvir, -1)
-    r2 = np.zeros((nkpts*nocc, nkpts*nocc, nkpts, nvir, nvir))
+    r2 = np.zeros((nkpts*nocc, nkpts*nocc, nkpts, nvir, nvir), dtype=vector.dtype)
 
     r2_tril = vector[nkpts*nocc*nvir:].copy()
 
@@ -1562,7 +1562,7 @@ def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
         idx_kj_j = kj_j[ij]
         ki = idx_ki_i // nocc
         kj = idx_kj_j // nocc
-        r2_ka_ab = np.zeros(nkpts, nvir, nvir)
+        r2_ka_ab = np.zeros((nkpts, nvir, nvir))
         for ka in range(nkpts):
             kb = kconserv[ki, ka, kj]
             if ka == kb:
