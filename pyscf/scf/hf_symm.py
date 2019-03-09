@@ -536,6 +536,16 @@ class SymAdaptedROHF(rohf.ROHF):
                     logger.warn(self, 'No irrep %s', irname)
 
             check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+
+            alpha_open = beta_open = False
+            for ne in self.irrep_nelec.values():
+                if not isinstance(ne, (int, numpy.integer)):
+                    alpha_open = ne[0] > ne[1]
+                    beta_open = ne[0] < ne[1]
+                if alpha_open and beta_open:
+                    raise ValueError('A low-spin configuration was found in '
+                                     'the irrep_nelec input. ROHF does not '
+                                     'support low-spin systems.')
         return hf.RHF.build(self, mol)
 
     @lib.with_doc(eig.__doc__)

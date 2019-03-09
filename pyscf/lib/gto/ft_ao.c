@@ -1312,7 +1312,7 @@ static void _ft_zset0(double complex *out, int *dims, int *counts,
         int i, j, k, ic;
         for (ic = 0; ic < comp; ic++) {
                 for (j = 0; j < counts[1]; j++) {
-                        pout = out + j * counts[0] * NGv;
+                        pout = out + j * dims[0] * NGv;
                         for (i = 0; i < counts[0]; i++) {
                                 for (k = 0; k < NGv; k++) {
                                         pout[i*NGv+k] = 0;

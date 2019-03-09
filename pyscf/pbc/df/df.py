@@ -217,7 +217,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             #      'It is likely that mesh is not enough.\n'
             #      '===================================')
             #log.error(msg)
-            #raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
+            #raise scipy.linalg.LinAlgError('\n'.join([str(e), msg]))
             w, v = scipy.linalg.eigh(j2c)
             log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
             log.debug('cond = %.4g, drop %d bfns',
