@@ -1571,7 +1571,7 @@ def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
         idx_kj_j = kj_j[ij]
         ki = idx_ki_i // nocc
         kj = idx_kj_j // nocc
-        r2_ka_ab = np.zeros((nkpts, nvir, nvir))
+        r2_ka_ab = np.zeros((nkpts, nvir, nvir), dtype=r2_tril.dtype)
         for ka in range(nkpts):
             kb = kconserv[ki, ka, kj]
             if ka == kb:
