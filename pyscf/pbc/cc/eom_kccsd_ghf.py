@@ -1302,8 +1302,6 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
     if imds is None:
         imds = eom.make_imds(eris=eris)
 
-    size = eom.vector_size()
-    nroots = min(nroots, size)
     nkpts = eom.nkpts
 
     if kptlist is None:
@@ -1314,26 +1312,33 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
     if dtype is None:
         dtype = np.result_type(*imds.t1)
 
-    evals = np.zeros((len(kptlist),nroots), np.float)
-    evecs = np.zeros((len(kptlist),nroots,size), dtype)
-    convs = np.zeros((len(kptlist),nroots), dtype)
+    # evals = np.zeros((len(kptlist),nroots), np.float)
+    # evecs = np.zeros((len(kptlist),nroots,size), dtype)
+    # convs = np.zeros((len(kptlist),nroots), dtype)
+    evals = [None]*len(kptlist)
+    evecs = [None]*len(kptlist)
+    convs = [None]*len(kptlist)
 
     for k, kshift in enumerate(kptlist):
-        eom.get_diag(kshift, imds)
+        print("kshift =", kshift)
+        # vector size and thus, nroots depend on kshift in the case of even nkpts,
+        size = eom.vector_size(kshift)
+        nroots = min(nroots, size)
 
-    for k, kshift in enumerate(kptlist):
         matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
         # TODO update `diag` in case of frozen orbitals
 
         # TODO allow user provided guess vector
-        if guess:
-            user_guess = True
-            assert len(guess) == nroots
-            for g in guess:
-                assert g.size == size
-        else:
-            user_guess = False
-            guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
+        # if guess:
+        #     user_guess = True
+        #     assert len(guess) == nroots
+        #     for g in guess:
+        #         assert g.size == size
+        # else:
+        #     user_guess = False
+        #     guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
+        user_guess = False
+        guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
         for ig, g in enumerate(guess):
             guess_norm = np.linalg.norm(g)
             guess_norm_tol = LOOSE_ZERO_TOL
@@ -1643,8 +1648,19 @@ class EOMEE(eom_rccsd.EOM):
     def nkpts(self):
         return len(self.kpts)
 
-    def vector_size(self):
-        '''Size of the linear excitation operator R vector based on spin-orbital basis'''
+    def vector_size(self, kshift=0):
+        '''Size of the linear excitation operator R vector based on spin-orbital basis.
+
+        Kwargs:
+            kshift : int
+                index of kpt in R(k)
+
+        Returns:
+            size (int): number of unique elements in linear excitation operator R
+
+        Notes:
+            The vector size is kshift-dependent if nkpts is an even number
+            '''
         nocc = self.nocc  # alpha+beta
         nvir = self.nmo-nocc  # alpha+beta
         nkpts = self.nkpts
@@ -1656,7 +1672,7 @@ class EOMEE(eom_rccsd.EOM):
             size_oo = nocc*(nocc-1)//2  # When ki==kj, there are size_oo ways to create 2 holes
             size_vv = nvir*(nvir-1)//2  # When ka==kb, there are size_vv ways to create 2 particles
             size_r2 = 0
-            kconserv = self.kconserv
+            kconserv = self.get_kconserv_ee_r2(kshift)
             # TODO Optimize this 3-layer for loop, or find an elegant solution
             for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
                 kb = kconserv[ki, ka, kj]
@@ -1675,7 +1691,7 @@ class EOMEE(eom_rccsd.EOM):
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         """Initial guess vectors of R coefficients"""
-        size = self.vector_size()
+        size = self.vector_size(kshift)
         dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
         guess = []
