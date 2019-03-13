@@ -145,7 +145,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         nelec = mf.nelec
     ncore = nelec[1]
     nocc  = nelec[0]
-    nopen = nocc - ncore
+    nopen = abs(nocc - ncore)
     mo_occ = _fill_rohf_occ(mo_energy, mo_ea, mo_eb, ncore, nopen)
 
     if mf.verbose >= logger.INFO and nocc < nmo and ncore > 0:
