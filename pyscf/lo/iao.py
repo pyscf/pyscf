@@ -15,6 +15,7 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Paul J. Robinson <pjrobinson@ucla.edu>
+#         Zhi-Hao Cui <zhcui0408@gmail.com>
 
 '''
 Intrinsic Atomic Orbitals
@@ -28,12 +29,13 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import scf
 from pyscf import __config__
+from orth import vec_lowdin
 
 # Alternately, use ANO for minao
 # orthogonalize iao by orth.lowdin(c.T*mol.intor(ovlp)*c)
 MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
-def iao(mol, orbocc, minao=MINAO):
+def iao(mol, orbocc, minao=MINAO, kpts=None):
     '''Intrinsic Atomic Orbitals. [Ref. JCTC, 9, 4834]
 
     Args:
@@ -61,9 +63,9 @@ def iao(mol, orbocc, minao=MINAO):
     # The code should work even pbc module is not availabe.
     if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
         from pyscf.pbc import gto as pbcgto
-        s1 = mol.pbc_intor('int1e_ovlp', hermi=1)
-        s2 = pmol.pbc_intor('int1e_ovlp', hermi=1)
-        s12 = pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol)
+        s1 = numpy.asarray(mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
+        s2 = numpy.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
+        s12 = numpy.asarray(pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol, kpts=kpts))
     else:
 #s1 is the one electron overlap integrals (coulomb integrals)
         s1 = mol.intor_symmetric('int1e_ovlp')
@@ -72,21 +74,37 @@ def iao(mol, orbocc, minao=MINAO):
 #overlap integrals of the two molecules 
         s12 = gto.mole.intor_cross('int1e_ovlp', mol, pmol)
 #transpose of overlap
-    s21 = s12.T
-    s1cd = scipy.linalg.cho_factor(s1)
-    s2cd = scipy.linalg.cho_factor(s2)
-
-    p12 = scipy.linalg.cho_solve(s1cd, s12)
-
-    ctild = scipy.linalg.cho_solve(s2cd, numpy.dot(s21, orbocc))
-    ctild = scipy.linalg.cho_solve(s1cd, numpy.dot(s12, ctild))
-    ccs1 = reduce(numpy.dot, (orbocc, orbocc.conj().T, s1))
-    ccs2 = reduce(numpy.dot, (ctild, ctild.conj().T, s1))
-#a is the set of IAOs in the original basis
-    a = (p12 + reduce(numpy.dot, (ccs1, ccs2, p12)) * 2
-        - numpy.dot(ccs1, p12) - numpy.dot(ccs2, p12))
+    if len(s1.shape) == 2:
+        s21 = s12.conj().T
+        s1cd = scipy.linalg.cho_factor(s1)
+        s2cd = scipy.linalg.cho_factor(s2)
+        p12 = scipy.linalg.cho_solve(s1cd, s12)
+        ctild = scipy.linalg.cho_solve(s2cd, numpy.dot(s21, orbocc))
+        ctild = scipy.linalg.cho_solve(s1cd, numpy.dot(s12, ctild))
+        ctild = vec_lowdin(ctild, s1)
+        ccs1 = reduce(numpy.dot, (orbocc, orbocc.conj().T, s1))
+        ccs2 = reduce(numpy.dot, (ctild, ctild.conj().T, s1))
+        #a is the set of IAOs in the original basis
+        a = (p12 + reduce(numpy.dot, (ccs1, ccs2, p12)) * 2
+            - numpy.dot(ccs1, p12) - numpy.dot(ccs2, p12))
+    else: # k point sampling
+        s21 = numpy.swapaxes(s12, -1, -2).conj()
+        nkpts = len(kpts)
+        a = numpy.zeros((nkpts, s1.shape[-1], s2.shape[-1]), dtype=numpy.complex128)
+        for k in range(nkpts):
+            # ZHC NOTE check the case, at some kpts, there is no occupied MO.
+            s1cd_k = scipy.linalg.cho_factor(s1[k])
+            s2cd_k = scipy.linalg.cho_factor(s2[k])
+            p12_k = scipy.linalg.cho_solve(s1cd_k, s12[k])
+            ctild_k = scipy.linalg.cho_solve(s2cd_k, numpy.dot(s21[k], orbocc[k]))
+            ctild_k = scipy.linalg.cho_solve(s1cd_k, numpy.dot(s12[k], ctild_k))
+            ctild_k = vec_lowdin(ctild_k, s1[k])
+            ccs1_k = reduce(numpy.dot, (orbocc[k], orbocc[k].conj().T, s1[k]))
+            ccs2_k = reduce(numpy.dot, (ctild_k, ctild_k.conj().T, s1[k]))
+            #a is the set of IAOs in the original basis
+            a[k] = (p12_k + reduce(numpy.dot, (ccs1_k, ccs2_k, p12_k)) * 2
+                - numpy.dot(ccs1_k, p12_k) - numpy.dot(ccs2_k, p12_k))
     return a
-
 
 def reference_mol(mol, minao=MINAO):
     '''Create a molecule which uses reference minimal basis'''
