@@ -141,7 +141,7 @@ def search_seg(basisfile, symb):
         return [x.upper() for x in dat.splitlines() if x and 'END' not in x]
 
 def _search_seg(raw_data, symb):
-    for dat in raw_data[1:]:
+    for dat in raw_data:
         dat0 = dat.split(None, 1)
         if dat0 and dat0[0] == symb:
             return dat
