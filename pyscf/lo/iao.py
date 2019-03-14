@@ -29,7 +29,7 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import scf
 from pyscf import __config__
-from orth import vec_lowdin
+from pyscf.lo.orth import vec_lowdin
 
 # Alternately, use ANO for minao
 # orthogonalize iao by orth.lowdin(c.T*mol.intor(ovlp)*c)
