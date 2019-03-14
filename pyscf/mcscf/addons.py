@@ -639,33 +639,33 @@ def state_average_(casscf, weights=(0.5,0.5)):
                                         max_cycle=casscf.ci_response_space,
                                         nroots=self.nroots, **kwargs)
             return numpy.einsum('i,i->', e, weights), c
-        def make_rdm1(self, ci0, norb, nelec):
+        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
             dm1 = 0
             for i, wi in enumerate(weights):
-                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
+                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec, *args, **kwargs)
             return dm1
-        def make_rdm1s(self, ci0, norb, nelec):
+        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
             dm1a, dm1b = 0, 0
             for i, wi in enumerate(weights):
-                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec)
+                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec, *args, **kwargs)
                 dm1a += wi * dm1s[0]
                 dm1b += wi * dm1s[1]
             return dm1a, dm1b
-        def make_rdm12(self, ci0, norb, nelec):
+        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
             rdm1 = 0
             rdm2 = 0
             for i, wi in enumerate(weights):
-                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
+                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec, *args, **kwargs)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
 
         if has_spin_square:
-            def spin_square(self, ci0, norb, nelec):
+            def spin_square(self, ci0, norb, nelec, *args, **kwargs):
                 ss = 0
                 multip = 0
                 for i, wi in enumerate(weights):
-                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec)
+                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec, *args, **kwargs)
                     ss += wi * res[0]
                     multip += wi * res[1]
                 return ss, multip
