@@ -65,7 +65,7 @@ Li    S
       0.6362897             -0.09996723
       0.1478601              0.39951283
       0.0480887              0.70011547
-                   ''')
+                   '''.encode())
         ftmp.flush()
         b = gto.basis.load(ftmp.name, 'Li')
         self.assertEqual(len(b), 2)
