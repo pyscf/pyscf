@@ -1216,6 +1216,9 @@ def time_reversal_map(mol):
                     i += dj
     return numpy.asarray(tao, dtype=numpy.int32)
 
+
+CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
+
 def energy_nuc(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
@@ -1236,6 +1239,10 @@ def energy_nuc(mol, charges=None, coords=None):
     #        e += q1 * q2 / r
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
+    if CHECK_GEOM and numpy.any(rr < 1e-5):
+        for atm_idx in numpy.argwhere(rr<1e-5):
+            logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
+        raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
 
