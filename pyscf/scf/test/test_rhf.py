@@ -624,6 +624,9 @@ H     0    0.757    0.587'''
         self.assertRaises(ValueError, n2_rohf.build)
         n2_rohf.irrep_nelec['A1g'] = (0,2)
         self.assertRaises(ValueError, n2_rohf.build)
+        n2_rohf.irrep_nelec['A1g'] = (3,2)
+        n2_rohf.irrep_nelec['A1u'] = (2,3)
+        self.assertRaises(ValueError, n2_rohf.build)
 
     def test_rohf_spin_square(self):
         mf1 = mf.view(scf.rohf.ROHF)

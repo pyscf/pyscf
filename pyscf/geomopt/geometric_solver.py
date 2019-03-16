@@ -74,7 +74,7 @@ class PySCFEngine(geometric.engine.Engine):
             self.callback(locals())
 
         if self.assert_convergence and not g_scanner.converged:
-            raise RuntimeError('Nuclear gradients of %s not converged' % scanner.base)
+            raise RuntimeError('Nuclear gradients of %s not converged' % g_scanner.base)
         return energy, gradients.ravel()
 
 def kernel(method, assert_convergence=ASSERT_CONV,
@@ -204,7 +204,6 @@ H       -0.0227 1.1812  -0.8852
     opt = GeometryOptimizer(mf).set(params=conv_params)#.run()
     opt.max_cycle=1
     opt.run()
-    exit()
     mol1 = opt.mol
     print(mf.kernel() - -153.219208484874)
     print(scf.RHF(mol1).kernel() - -153.222680852335)
