@@ -204,7 +204,6 @@ H       -0.0227 1.1812  -0.8852
     opt = GeometryOptimizer(mf).set(params=conv_params)#.run()
     opt.max_cycle=1
     opt.run()
-    exit()
     mol1 = opt.mol
     print(mf.kernel() - -153.219208484874)
     print(scf.RHF(mol1).kernel() - -153.222680852335)
