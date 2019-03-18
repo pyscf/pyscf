@@ -620,23 +620,40 @@ class VindTracker(object):
         for i, o, e in zip(self.args, self.results, self.errors):
             yield i, o, e
 
+    @property
+    def ncalls(self):
+        return len(self.args)
+
+    @property
+    def msize(self):
+        for i in self.results:
+            if i is not None:
+                return i[1]
+        return None
+
+    @property
+    def elements_total(self):
+        return self.msize ** 2
+
+    @property
+    def elements_calc(self):
+        return sum(map(lambda i: i[0] * i[1] if i is not None else 0, self.results))
+
+    @property
+    def ratio(self):
+        return 1.0 * self.elements_calc / self.elements_total
+
     def text_stats(self):
-        size = 0
-        total_calc = 0
-        for _, o, _ in self:
-            if o is not None:
-                size = o[1]
-                total_calc += o[0] * o[1]
         return "--------------------\nVind call statistics\n--------------------\n" \
             "  calls: {total_calls:d}\n" \
             "  elements total: {total_elems:d} ({size})\n" \
             "  elements calculated: {total_calc:d}\n" \
             "  ratio: {ratio:.3f}".format(
-                total_calls=len(self.args),
-                total_elems=size ** 2,
-                size="x".join((str(size),) * 2),
-                total_calc=total_calc,
-                ratio=1.0 * total_calc / (size ** 2),
+                total_calls=self.ncalls,
+                total_elems=self.elements_total,
+                size="x".join((str(self.msize),) * 2),
+                total_calc=self.elements_calc,
+                ratio=self.ratio,
             )
 
 

@@ -29,6 +29,7 @@ def density_fitting_ks(x):
 class DiamondTestSupercell2(unittest.TestCase):
     """Compare this (krks_slow) @2kp vs reference (krks_supercell_slow)."""
     k = 2
+    call_ratios = (1./4, 1./4)
 
     @classmethod
     def setUpClass(cls):
@@ -71,7 +72,14 @@ class DiamondTestSupercell2(unittest.TestCase):
         model = krks_slow.TDRKS(self.model_krks, [self.k, 1, 1], KRKS)
         model.nroots = self.td_model_rks_supercell.nroots
         assert not model.fast
-        model.kernel()
+        for k in range(self.k):
+            model.kernel(k)
+            try:
+                testing.assert_allclose(model.eri.proxy_vind.ratio, self.call_ratios[k])
+            except Exception:
+                print("During efficiency check @k={:d} the following exception occurred:".format(k))
+                raise
+            model.eri.proxy_vind.reset()
         o = v = 4
 
         # Concatenate everything
@@ -114,3 +122,4 @@ class DiamondTestSupercell2(unittest.TestCase):
 class DiamondTestSupercell3(DiamondTestSupercell2):
     """Compare this (krks_supercell_slow) @3kp vs supercell reference (pyscf)."""
     k = 3
+    call_ratios = (5./18, 4./9, 4./9)
