@@ -2,7 +2,7 @@ from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RKS, KRKS
 from pyscf.pbc.tdscf import TDDFT, KTDDFT
 from pyscf.pbc.tdscf import krks_slow, rks_slow, krhf_slow, krks_slow_supercell
-from pyscf.pbc.tdscf.krks_slow import orb2ov, PhysERI, supercell_response_ov
+from pyscf.pbc.tdscf.krks_slow import PhysERI
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.tdscf.common_slow import eig, ab2full, format_frozen_mol
 
@@ -65,45 +65,6 @@ class DiamondTestSupercell2(unittest.TestCase):
         del cls.td_model_rks_supercell
         del cls.model_krks
         del cls.cell
-
-    def test_raw_response(self):
-        """Tests the `molecular_reponse` and whether it slices output properly."""
-        eri = PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
-        ref_m_full = eri.proxy_response()
-        s = sum(eri.nocc_full) * (sum(eri.nmo_full) - sum(eri.nocc_full))
-        ref_m_full = tuple(i.reshape((s, s)) for i in ref_m_full)
-
-        # Test single
-        for frozen in (1, [0, -1]):
-            space_ov = format_frozen_mol(frozen, s)
-
-            m = supercell_response_ov(
-                eri.proxy_vind,
-                space_ov,
-                eri.nocc_full,
-                eri.nmo_full,
-                True,
-                eri.model_super.supercell_inv_rotation,
-                eri.proxy_model,
-            )
-            ref_m = tuple(i[space_ov, :][:, space_ov] for i in ref_m_full)
-            testing.assert_allclose(ref_m, m, atol=1e-12)
-
-        # Test pair
-        for frozen in ((1, 3), ([1, -2], [0, -1])):
-            space_ov = tuple(format_frozen_mol(i, s) for i in frozen)
-
-            m = supercell_response_ov(
-                eri.proxy_vind,
-                space_ov,
-                eri.nocc_full,
-                eri.nmo_full,
-                True,
-                eri.model_super.supercell_inv_rotation,
-                eri.proxy_model,
-            )
-            ref_m = tuple(i[space_ov[0], :][:, space_ov[1]] for i in ref_m_full)
-            testing.assert_allclose(ref_m, m, atol=1e-12)
 
     def test_class(self):
         """Tests container behavior."""

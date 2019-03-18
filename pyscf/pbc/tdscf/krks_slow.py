@@ -24,132 +24,38 @@ Davidson procedure. Several variants of TDKS are available:
 # * TDRKS provides a container
 
 from pyscf.pbc.tdscf import krks_slow_supercell, krhf_slow
-from pyscf.lib import logger
 
 import numpy
 
 
-def orb2ov(space, nocc, nmo):
+def kov2ov(nocc, nmo, k):
     """
-    Converts orbital active space specification into ov-pairs space spec.
-    Args:
-        space (ndarray): the obital space. Basis order: [k, orb=o+v];
-        nocc (Iterable): the numbers of occupied orbitals per k-point;
-        nmo (Iterable): the total numbers of orbitals per k-point;
-
-    Returns:
-        The ov space specification. Basis order: [k_o, o, k_v, v].
-    """
-    m = krks_slow_supercell.ko_mask(nocc, nmo)  # [k, orb=o+v]
-    o = space[m]  # [k, o]
-    v = space[~m]  # [k, v]
-    return (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)  # [k_o, o, k_v, v]
-
-
-def ov2orb(space, nocc, nmo):
-    """
-    Converts ov-pairs active space specification into orbital space spec.
-    Args:
-        space (ndarray): the ov space. Basis order: [k_o, o, k_v, v];
-        nocc (Iterable): the numbers of occupied orbitals per k-point;
-        nmo (Iterable): the total numbers of orbitals per k-point;
-
-    Returns:
-        The orbital space specification. Basis order: [k, orb=o+v].
-    """
-    nocc = numpy.array(nocc)
-    nmo = numpy.array(nmo)
-    nvirt = nmo-nocc
-    s = space.reshape(sum(nocc), sum(nmo) - sum(nocc))  # [k_o, o; k_v, v]
-    s_o = numpy.any(s, axis=1)  # [k_o, o]
-    s_v = numpy.any(s, axis=0)  # [k_v, v]
-    o_offset = numpy.cumsum(numpy.concatenate(([0], nocc)))
-    v_offset = numpy.cumsum(numpy.concatenate(([0], nvirt)))
-    result = []
-    for o_fr, o_to, v_fr, v_to in zip(o_offset[:-1], o_offset[1:], v_offset[:-1], v_offset[1:]):
-        result.append(s_o[o_fr:o_to])
-        result.append(s_v[v_fr:v_to])
-    return numpy.concatenate(result)  # [k, orb=o+v]
-
-
-def supercell_response_ov(vind, space_ov, nocc, nmo, double, rot_bloch, log_dest):
-    """
-    Retrieves a raw response matrix.
-    Args:
-        vind (Callable): a pyscf matvec routine;
-        space_ov (ndarray): the active `ov` space in the Bloch space;
-        nocc (ndarray): the numbers of occupied orbitals (frozen and active) per k-point;
-        nmo (ndarray): the total number of orbitals per k-point;
-        double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;
-        rot_bloch (ndarray): a matrix specifying the rotation from real orbitals returned from pyscf to Bloch
-        functions;
-        log_dest (object): pyscf logging;
-
-    Returns:
-        The TD matrix.
-    """
-    if not double:
-        raise NotImplementedError("Not implemented for MK-type matrixes")
-
-    # Full space dims
-    nocc_full = sum(nocc)
-    nmo_full = sum(nmo)
-    size_ov_full = nocc_full * (nmo_full - nocc_full)
-
-    space_ov = numpy.array(space_ov)
-
-    if space_ov.shape == (size_ov_full,):
-        space_ov = numpy.repeat(space_ov[numpy.newaxis, :], 2, axis=0)
-    elif space_ov.shape != (2, size_ov_full):
-        raise ValueError("The 'space' argument should a 1D array with dimension {:d} or a 2D array with dimensions {},"
-                         " found: {}".format(size_ov_full, (2, size_ov_full), space_ov.shape))
-
-    space_orb = tuple(ov2orb(i, nocc, nmo) for i in space_ov)
-    space_full = tuple(j[orb2ov(i, nocc, nmo)] for i, j in zip(space_orb, space_ov))
-
-    result_orb = krks_slow_supercell.supercell_response(
-        vind,
-        space_orb,
-        nocc, nmo, double,
-        rot_bloch,
-        log_dest
-    )
-    logger.debug1(log_dest, "Reshaping into a matrix and slicing ov ...")
-
-    result = []
-    for m in result_orb:
-        d1, d2, d3, d4 = m.shape
-        result.append(m.reshape(d1 * d2, d3 * d4)[space_full[0], :][:, space_full[1]])
-
-    return tuple(result)
-
-
-def k2ov(nocc, nmo, k):
-    """
-    Converts k-index pairs into ov mask.
+    Converts k point pairs into ov mask.
     Args:
         nocc (Iterable): occupation numbers per k-point;
         nmo (Iterable): numbers of orbitals per k-point;
-        k (Iterable): k-index pairs;
+        k (ndarray): k-point pairs;
 
     Returns:
-        An ov-mask.
+        An ov-mask. Basis order: [k_o, o, k_v, v].
     """
-    o = numpy.concatenate(tuple(
-        (i, ) * n
-        for i, n in enumerate(nocc)
-    ))
-    v = numpy.concatenate(tuple(
-        (i, ) * (m - n)
-        for i, (n, m) in enumerate(zip(nocc, nmo))
-    ))
-    ov_o, ov_v = numpy.meshgrid(o, v, indexing="ij")
-    ov_o, ov_v = ov_o.reshape(-1), ov_v.reshape(-1)
+    nocc = numpy.asanyarray(nocc)
+    nmo = numpy.asanyarray(nmo)
 
-    result = numpy.zeros(ov_o.shape, dtype=bool)
-    for k1, k2 in k:
-        result[numpy.logical_and(ov_o == k1, ov_v == k2)] = True
-    return result
+    nvirt = nmo - nocc
+
+    mask = numpy.zeros((sum(nocc), sum(nvirt)), dtype=bool)
+
+    o_e = numpy.cumsum(nocc)
+    o_s = o_e - o_e[0]
+
+    v_e = numpy.cumsum(nvirt)
+    v_s = v_e - v_e[0]
+
+    for k1, k2 in enumerate(k):
+        mask[o_s[k1]:o_e[k1], v_s[k2]:v_e[k2]] = True
+
+    return mask.reshape(-1)
 
 
 class PhysERI(krks_slow_supercell.PhysERI):
@@ -166,36 +72,60 @@ class PhysERI(krks_slow_supercell.PhysERI):
         """
         super(PhysERI, self).__init__(model, x, mf_constructor, frozen=frozen, proxy=proxy)
 
-    def proxy_response_ov(self, k1, k2):
+    def get_ov_space_mask(self):
+        """
+        Prepares the space mask in the ov form.
+        Returns:
+            The mask in the ov form.
+        """
+        return krks_slow_supercell.orb2ov(numpy.concatenate(self.space), self.nocc_full, self.nmo_full)
+
+    def kov2ov(self, k):
+        """
+        Converts k-ov mask into ov mask.
+        Args:
+            k (ndarray): k-point pairs;
+
+        Returns:
+            An ov-mask. Basis order: [k_o, o, k_v, v].
+        """
+        mask = self.get_ov_space_mask()
+        return numpy.logical_and(mask, kov2ov(self.nocc_full, self.nmo_full, k))
+
+    def proxy_response_ov_batch(self, k_row, k_col):
         """
         A raw response submatrix corresponding to specific k-points.
         Args:
-            k1 (Iterable): k-index pairs (row dimension);
-            k2 (Iterable): k-index pairs (column dimension);
+            k_row (ndarray): sets of k-point pairs (row index);
+            k_col (ndarray): sets of k-point pairs (column index);
 
         Returns:
             A raw response matrix.
         """
-        # This is a more efficient implementation which does not calculate unnecessary blocks
-        result = []
-        for k34 in k2:
-            result.append(self.__proxy_response_ov__(k1, [k34]))
-        return tuple(numpy.concatenate(i, axis=1) for i in zip(*tuple(result)))
+        masks_row = tuple(self.kov2ov(i) for i in k_row)
+        masks_col = tuple(self.kov2ov(i) for i in k_col)
 
-    def __proxy_response_ov__(self, k1, k2):
-        space_ov = orb2ov(numpy.concatenate(self.space), self.nocc_full, self.nmo_full)
-        return supercell_response_ov(
+        full_mask_row = reduce(numpy.logical_or, masks_row)
+        full_mask_col = reduce(numpy.logical_or, masks_col)
+
+        big = krks_slow_supercell.supercell_response_ov(
             self.proxy_vind,
-            (
-                numpy.logical_and(space_ov, k2ov(self.nocc, self.nmo, k1)),
-                numpy.logical_and(space_ov, k2ov(self.nocc, self.nmo, k2)),
-            ),
+            (full_mask_row, full_mask_col),
             self.nocc_full,
             self.nmo_full,
             self.proxy_is_double(),
             self.model_super.supercell_inv_rotation,
             self.model,
         )
+
+        result = []
+
+        for m_row, m_col in zip(masks_row, masks_col):
+            m_row_red = m_row[full_mask_row]
+            m_col_red = m_col[full_mask_col]
+            result.append(tuple(i[m_row_red][:, m_col_red] for i in big))
+
+        return tuple(result)
 
     # This is needed for krhf_slow.get_block_k_ix
     get_k_ix = krhf_slow.PhysERI.get_k_ix.im_func
@@ -211,14 +141,10 @@ class PhysERI(krks_slow_supercell.PhysERI):
             Output type: "full", and the corresponding matrix.
         """
         # 1. Convert k into pairs of rows and column k
-        r1, r2, _, _ = krhf_slow.get_block_k_ix(self, k)
-        r1, r2 = tuple(enumerate(r1)), tuple(enumerate(r2))
-        # 2. Retrieve the 4 matrix blocks
-        a, _ = self.proxy_response_ov(r1, r1)
-        _, b = self.proxy_response_ov(r1, r2)
-        _, b_star = self.proxy_response_ov(r2, r1)
-        a_star, _ = self.proxy_response_ov(r2, r2)
-        # 3. Merge them into the full matrix
+        r1, r2, c1, c2 = krhf_slow.get_block_k_ix(self, k)
+
+        (a, _), (_, b), (_, b_star), (a_star, _) = self.proxy_response_ov_batch((r1, r1, r2, r2), (c1, c2, c1, c2))
+
         return "full", numpy.block([[a, b], [-b_star.conj(), -a_star.conj()]])
 
 
@@ -262,3 +188,36 @@ class TDRKS(krks_slow_supercell.TDRKS):
         for kk in k:
             self.e[kk], self.xy[kk] = self.__kernel__(k=kk)
         return self.e, self.xy
+
+
+if __name__ == "__main__":
+    from pyscf.pbc.gto import Cell
+    from pyscf.pbc.scf import KRKS
+
+    cell = Cell()
+    # Lift some degeneracies
+    cell.atom = '''
+    C 0.000000000000   0.000000000000   0.000000000000
+    C 1.67   1.68   1.69
+    '''
+    cell.basis = {'C': [[0, (0.8, 1.0)],
+                        [1, (1.0, 1.0)]]}
+    # cell.basis = 'gth-dzvp'
+    cell.pseudo = 'gth-pade'
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.verbose = 7
+    cell.build()
+
+    gs = [2, 1, 1]
+    k = cell.make_kpts(gs)
+
+    model_krks = KRKS(cell, k)
+    model_krks.kernel()
+
+    model = TDRKS(model_krks, gs, KRKS)
+    model.kernel(0)
+    print model.eri.proxy_vind.text_stats()

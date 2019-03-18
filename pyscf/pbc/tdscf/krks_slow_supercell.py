@@ -141,7 +141,7 @@ def sparse_transform(m, *args):
 
 def k2s(model, grid_spec, mf_constructor, threshold=None, degeneracy_threshold=None, imaginary_threshold=None):
     """
-    Converts K to supercell with real orbitals.
+    Converts k-point model into a supercell with real orbitals.
     Args:
         model (KSCF): an arbitrary mean-field pbc model;
         grid_spec (Iterable): integer dimensions of the k-grid in KSCF;
@@ -207,6 +207,9 @@ def k2s(model, grid_spec, mf_constructor, threshold=None, degeneracy_threshold=N
         else:
             pass
 
+    rotation_matrix = rotation_matrix.tocsc()
+    inv_rotation_matrix = inv_rotation_matrix.tocsc()
+
     moc = sparse_transform(moc, 1, rotation_matrix)
     max_imag = abs(moc.imag).max()
     if max_imag > imaginary_threshold:
@@ -244,19 +247,6 @@ def k2s(model, grid_spec, mf_constructor, threshold=None, degeneracy_threshold=N
     return result
 
 
-def active_space_required(transform, final_space):
-    """
-    Calulcates the space before transform required for achieving the final active space.
-    Args:
-        transform (ndarray): the transformation;
-        final_space (ndarray): the final active space;
-
-    Returns:
-        The initial active space.
-    """
-    return numpy.any((transform.toarray() != 0)[:, final_space], axis=1)
-
-
 def ko_mask(nocc, nmo):
     """
     Prepares a mask of an occupied space.
@@ -273,6 +263,220 @@ def ko_mask(nocc, nmo):
         result[offset:offset+no] = True
         offset += nm
     return result
+
+
+def split_transform(transform, nocc, nmo, tolerance=1e-14):
+    """
+    Splits the transform into `oo` and `vv` blocks.
+    Args:
+        transform (numpy.ndarray): the original transform. The basis order for the transform is [real orb=o+v; k, orb=o+v];
+        nocc (Iterable): occupation numbers per k-point;
+        nmo (Iterable): the number of orbitals per k-point;
+        tolerance (float): tolerance to check zeros at the `ov` block;
+
+    Returns:
+        `oo` and `vv` blocks of the transform.
+    """
+    o_mask = ko_mask(nocc, nmo)
+    v_mask = ~o_mask
+    ov = transform[:sum(nocc), v_mask]
+    vo = transform[sum(nocc):, o_mask]
+    if abs(ov).max() > tolerance or abs(vo).max() > tolerance:
+        raise ValueError("Occupied and virtual spaces are coupled by the transformation")
+    return transform[:sum(nocc), o_mask], transform[sum(nocc):, v_mask]
+
+
+def supercell_space_required(transform_oo, transform_vv, final_space):
+    """
+    For a given orbital transformation and a given `ov` mask in the transformed space, calculates a minimal `ov` mask
+    in the original space required to achieve this transform.
+    Args:
+        transform_oo (ndarray): the transformation in the occupied space;
+        transform_vv (ndarray): the transformation in the virtual space;
+        final_space (ndarray): the final `ov` space. Basis order: [k_o, o, k_v, v];
+
+    Returns:
+        The initial active space. Basis order: [k_o, o, k_v, v].
+    """
+    final_space = numpy.asanyarray(final_space)
+    final_space = final_space.reshape(final_space.shape[:-1] + (transform_oo.shape[1], transform_vv.shape[1]))
+    result = einsum(
+        "ao,bv,...ov->...ab",
+        (transform_oo.toarray() != 0).astype(int),
+        (transform_vv.toarray() != 0).astype(int),
+        final_space.astype(int),
+    ) != 0
+    return result.reshape(result.shape[:-2] + (-1,))
+
+
+def get_sparse_ov_transform(oo, vv):
+    """
+    Retrieves a sparse `ovov` transform out of sparse `oo` and `vv` transforms.
+    Args:
+        oo (ndarray): the transformation in the occupied space;
+        vv (ndarray): the transformation in the virtual space;
+
+    Returns:
+        The resulting matrix representing the sparse transform in the `ov` space.
+    """
+    i, a = oo.shape
+    j, b = vv.shape
+
+    # If the input is dense the result is simply
+    # return (oo[:, numpy.newaxis, :, numpy.newaxis] * vv[numpy.newaxis, :, numpy.newaxis, :]).reshape(i*j, a*b)
+
+    result_data = numpy.zeros(oo.nnz * vv.nnz, dtype=numpy.common_type(oo, vv))
+    result_indices = numpy.zeros(len(result_data), dtype=int)
+    result_indptr = numpy.zeros(a * b + 1, dtype=int)
+
+    ptr_counter = 0
+    for i_a in range(a):
+        oo_col = oo.getcol(i_a)
+        assert tuple(oo_col.indptr.tolist()) == (0, len(oo_col.data))
+        i_i, oo_col_v = oo_col.indices, oo_col.data
+        for i_b in range(b):
+            vv_col = vv.getcol(i_b)
+            assert tuple(vv_col.indptr.tolist()) == (0, len(vv_col.data))
+            i_j, vv_col_v = vv_col.indices, vv_col.data
+
+            data_length = len(i_i) * len(i_j)
+            result_indices[ptr_counter:ptr_counter + data_length] = ((i_i * j)[:, numpy.newaxis] + i_j[numpy.newaxis, :]).reshape(-1)
+            result_data[ptr_counter:ptr_counter + data_length] = (oo_col_v[:, numpy.newaxis] * vv_col_v[numpy.newaxis, :]).reshape(-1)
+            result_indptr[i_a * b + i_b] = ptr_counter
+
+            ptr_counter += data_length
+
+    result_indptr[-1] = ptr_counter
+    return sparse.csc_matrix((result_data, result_indices, result_indptr))
+
+
+def ov2orb(space, nocc, nmo):
+    """
+    Converts ov-pairs active space specification into orbital space spec.
+    Args:
+        space (ndarray): the ov space. Basis order: [k_o, o, k_v, v];
+        nocc (Iterable): the numbers of occupied orbitals per k-point;
+        nmo (Iterable): the total numbers of orbitals per k-point;
+
+    Returns:
+        The orbital space specification. Basis order: [k, orb=o+v].
+    """
+    nocc = numpy.asanyarray(nocc)
+    nmo = numpy.asanyarray(nmo)
+    nvirt = nmo - nocc
+
+    space = numpy.asanyarray(space)
+    space = space.reshape(space.shape[:-1] + (sum(nocc), sum(nvirt)))  # [k_o, o; k_v, v]
+
+    s_o = numpy.any(space, axis=-1)  # [k_o, o]
+    s_v = numpy.any(space, axis=-2)  # [k_v, v]
+
+    o_offset = numpy.cumsum(numpy.concatenate(([0], nocc)))
+    v_offset = numpy.cumsum(numpy.concatenate(([0], nvirt)))
+    result = []
+    for o_fr, o_to, v_fr, v_to in zip(o_offset[:-1], o_offset[1:], v_offset[:-1], v_offset[1:]):
+        result.append(s_o[..., o_fr:o_to])
+        result.append(s_v[..., v_fr:v_to])
+    return numpy.concatenate(result, axis=-1)  # [k, orb=o+v]
+
+
+def supercell_response_ov(vind, space_ov, nocc, nmo, double, rot_bloch, log_dest):
+    """
+    Retrieves a raw response matrix.
+    Args:
+        vind (Callable): a pyscf matvec routine;
+        space_ov (ndarray): the active `ov` space mask: either the same mask for both rows and columns (1D array) or
+        separate `ov` masks for rows and columns (2D array). Basis order: [k_o, o, k_v, v];
+        nocc (ndarray): the numbers of occupied orbitals (frozen and active) per k-point;
+        nmo (ndarray): the total number of orbitals per k-point;
+        double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;
+        rot_bloch (ndarray): a matrix specifying the rotation from real orbitals returned from pyscf to Bloch
+        functions;
+        log_dest (object): pyscf logging;
+
+    Returns:
+        The TD matrix.
+    """
+    if not double:
+        raise NotImplementedError("Not implemented for MK-type matrixes")
+
+    nocc_full = sum(nocc)
+    nmo_full = sum(nmo)
+    nvirt_full = nmo_full - nocc_full
+    size_full = nocc_full * nvirt_full
+
+    space_ov = numpy.array(space_ov)
+
+    if space_ov.shape == (size_full,):
+        space_ov = numpy.repeat(space_ov[numpy.newaxis, :], 2, axis=0)
+
+    elif space_ov.shape != (2, size_full):
+        raise ValueError(
+            "The 'space_ov' argument should be a 1D array with dimension {size_full:d} or a 2D array with"
+            " dimensions 2x{size_full:d}, found: {actual}".format(
+                size_full=size_full,
+                actual=space_ov.shape,
+            ))
+
+    oo, vv = split_transform(rot_bloch, nocc, nmo)
+    space_real_ov = supercell_space_required(oo, vv, space_ov)
+
+    logger.debug1(log_dest, "Performing a supercell proxy response calculation ...")
+    logger.debug1(log_dest, "  Total ov space size: {:d} requested elements: {} real elements to calculate: {}".format(
+        size_full,
+        "x".join(map(str, space_ov.sum(axis=-1))),
+        "x".join(map(str, space_real_ov.sum(axis=-1))),
+    ))
+
+    logger.debug1(log_dest, "  collecting the A, B matrices ...")
+    response_real_a, response_real_b = rks_slow.molecular_response_ov(
+        vind,
+        space_real_ov,
+        nocc_full,
+        nmo_full,
+        double,
+        log_dest,
+    )
+    logger.debug1(log_dest, "  done, shapes: {} and {}".format(
+        response_real_a.shape,
+        response_real_b.shape,
+    ))
+
+    logger.debug1(log_dest, "Transforming into Bloch basis ...")
+
+    ovov_nc = get_sparse_ov_transform(oo, vv.conj())
+    ovov_cn = get_sparse_ov_transform(oo.conj(), vv)
+
+    ovov_row = ovov_nc[:, space_ov[0]][space_real_ov[0]]
+    ovov_col_a = ovov_cn[:, space_ov[1]][space_real_ov[1]]
+    ovov_col_b = ovov_nc[:, space_ov[1]][space_real_ov[1]]
+
+    # Rotate
+    logger.debug1(log_dest, "  rotating A ...")
+    response_bloch_a = sparse_transform(response_real_a, 0, ovov_row, 1, ovov_col_a)
+    logger.debug1(log_dest, "  rotating B ...")
+    response_bloch_b = sparse_transform(response_real_b, 0, ovov_row, 1, ovov_col_b)
+    logger.debug1(log_dest, "  shapes: {} and {}".format(response_bloch_a.shape, response_bloch_b.shape))
+
+    return response_bloch_a, response_bloch_b
+
+
+def orb2ov(space, nocc, nmo):
+    """
+    Converts orbital active space specification into ov-pairs space spec.
+    Args:
+        space (ndarray): the obital space. Basis order: [k, orb=o+v];
+        nocc (Iterable): the numbers of occupied orbitals per k-point;
+        nmo (Iterable): the total numbers of orbitals per k-point;
+
+    Returns:
+        The ov space specification. Basis order: [k_o, o, k_v, v].
+    """
+    space = numpy.asanyarray(space)
+    m = ko_mask(nocc, nmo)  # [k, orb=o+v]
+    o = space[...,  m]  # [k, o]
+    v = space[..., ~m]  # [k, v]
+    return (o[..., numpy.newaxis] * v[..., numpy.newaxis, :]).reshape(space.shape[:-1] + (-1,))  # [k_o, o, k_v, v]
 
 
 def supercell_response(vind, space, nocc, nmo, double, rot_bloch, log_dest):
@@ -296,9 +500,7 @@ def supercell_response(vind, space, nocc, nmo, double, rot_bloch, log_dest):
         raise NotImplementedError("Not implemented for MK-type matrixes")
 
     # Full space dims
-    nocc_full = sum(nocc)
     nmo_full = sum(nmo)
-
     space = numpy.array(space)
 
     if space.shape == (nmo_full,):
@@ -307,77 +509,7 @@ def supercell_response(vind, space, nocc, nmo, double, rot_bloch, log_dest):
         raise ValueError("The 'space' argument should a 1D array with dimension {:d} or a 2D array with dimensions {},"
                          " found: {}".format(nmo_full, (2, nmo_full), space.shape))
 
-    space_real = numpy.array(tuple(active_space_required(rot_bloch, i) for i in space))
-
-    logger.debug1(log_dest, "Performing a supercell proxy response calculation ...")
-    # Calculate effective space of the supercell matrix required
-    logger.debug1(log_dest, "  Bloch total space size: {}, supercell space size: {}, total space size: {:d}".format(
-        "x".join(str(sum(i)) for i in space),
-        "x".join(str(sum(i)) for i in space_real),
-        space.shape[1],
-    ))
-
-    # Retrieve real-valued matrices
-    logger.debug1(log_dest, "  collecting the A, B matrices ...")
-    response_real_a, response_real_b = rks_slow.molecular_response(
-        vind,
-        space_real,
-        nocc_full,
-        nmo_full,
-        double,
-        log_dest,
-    )
-    logger.debug1(log_dest, "  done, shapes: {} and {}".format(
-        response_real_a.shape,
-        response_real_b.shape,
-    ))
-
-    logger.debug1(log_dest, "Transforming into Bloch basis ...")
-    # Reshape into ov
-    nmo_real = space_real.sum(axis=-1)
-    nocc_real = space_real[:, :nocc_full].sum(axis=-1)
-    nvirt_real = nmo_real - nocc_real
-    response_real_a = response_real_a.reshape(nocc_real[0], nvirt_real[0], nocc_real[1], nvirt_real[1])
-    response_real_b = response_real_b.reshape(nocc_real[0], nvirt_real[0], nocc_real[1], nvirt_real[1])
-    logger.debug1(log_dest, "  reshape into ov: shapes: {} and {}".format(
-        response_real_a.shape,
-        response_real_b.shape,
-    ))
-
-    # Set rotation
-    logger.debug1(log_dest, "  preparing rotation real->Bloch ...")
-
-    mask = ko_mask(nocc, nmo)
-    r_oo = []
-    r_vv = []
-    for title, _space_real, _space, _nocc_real in zip(("row", "column"), space_real, space, nocc_real):
-        _rot_bloch = rot_bloch[_space_real, :][:, _space]
-        o = mask[_space]
-        v = ~o
-        r_oo.append(_rot_bloch[:_nocc_real, o])
-        r_vv.append(_rot_bloch[_nocc_real:, v])
-        r_ov = _rot_bloch[:_nocc_real, v]
-        r_vo = _rot_bloch[_nocc_real:, o]
-        logger.debug1(log_dest, "  {} block shapes: oo {} vv {} ov {}".format(
-            title,
-            r_oo[-1].shape,
-            r_vv[-1].shape,
-            r_ov.shape,
-        ))
-
-        if abs(r_ov).max() > 1e-14 or abs(r_vo).max() > 1e-14:
-            raise RuntimeError("Occupied and virtual spaces are coupled by the rotation matrix ({} transform)".format(
-                title,
-            ))
-
-    # Rotate
-    logger.debug1(log_dest, "  rotating A ...")
-    response_bloch_a = sparse_transform(response_real_a, 0, r_oo[0], 1, r_vv[0].conj(), 2, r_oo[1].conj(), 3, r_vv[1])
-    logger.debug1(log_dest, "  rotating B ...")
-    response_bloch_b = sparse_transform(response_real_b, 0, r_oo[0], 1, r_vv[0].conj(), 2, r_oo[1], 3, r_vv[1].conj())
-    logger.debug1(log_dest, "  shapes: {} and {}".format(response_bloch_a.shape, response_bloch_b.shape))
-
-    return response_bloch_a, response_bloch_b
+    return supercell_response_ov(vind, orb2ov(space, nocc, nmo), nocc, nmo, double, rot_bloch, log_dest)
 
 
 class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
@@ -491,3 +623,37 @@ class TDRKS(rks_slow.TDRKS):
             frozen=self.frozen,
             proxy=self.__proxy__,
         )
+
+
+if __name__ == "__main__":
+    from pyscf.pbc.gto import Cell
+    from pyscf.pbc.scf import KRHF
+
+    cell = Cell()
+    # Lift some degeneracies
+    cell.atom = '''
+    C 0.000000000000   0.000000000000   0.000000000000
+    C 1.67   1.68   1.69
+    '''
+    cell.basis = {'C': [[0, (0.8, 1.0)],
+                        [1, (1.0, 1.0)]]}
+    # cell.basis = 'sto-3g'
+    cell.pseudo = 'gth-pade'
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.verbose = 7
+    cell.build()
+
+    x = [1, 1, 1]
+    k = cell.make_kpts(x)
+
+    # K-points
+    model_krhf = KRHF(cell, k).density_fit()
+    model_krhf.conv_tol = 1e-14
+    model_krhf.kernel()
+
+    model_td = TDRKS(model_krhf, x, lambda x: KRHF(x).density_fit(), frozen=1)
+    model_td.kernel()

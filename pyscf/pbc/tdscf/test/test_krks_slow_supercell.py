@@ -3,7 +3,7 @@ from pyscf.pbc.scf import RKS, KRKS
 from pyscf.pbc.tdscf import TDDFT, KTDDFT
 from pyscf.pbc.tdscf import krks_slow_supercell, rks_slow
 from pyscf.pbc.tools.pbc import super_cell
-from pyscf.tdscf.common_slow import eig, format_frozen_k
+from pyscf.tdscf.common_slow import eig, format_frozen_k, format_frozen_mol
 from pyscf.tdscf.rks_slow import orb2ov
 
 from test_common import retrieve_m, retrieve_m_hf, adjust_mf_phase, ov_order, assert_vectors_close, tdhf_frozen_mask
@@ -197,6 +197,7 @@ class DiamondTestSupercell2(unittest.TestCase):
             space = format_frozen_k(frozen, eri.nmo_full[0], len(eri.nmo_full))
             space_o = numpy.concatenate(tuple(i[:j] for i, j in zip(space, eri.nocc_full)))
             space_v = numpy.concatenate(tuple(i[j:] for i, j in zip(space, eri.nocc_full)))
+            space_ov = numpy.logical_and(space_o[:, numpy.newaxis], space_v[numpy.newaxis, :]).reshape(-1)
 
             m = krks_slow_supercell.supercell_response(
                 eri.proxy_vind,
@@ -207,7 +208,7 @@ class DiamondTestSupercell2(unittest.TestCase):
                 eri.model_super.supercell_inv_rotation,
                 eri.proxy_model,
             )
-            ref_m = tuple(i[space_o][:, space_v][:, :, space_o][..., space_v] for i in ref_m_full)
+            ref_m = tuple(i[space_ov][:, space_ov] for i in ref_m_full)
             testing.assert_allclose(ref_m, m, atol=1e-12)
 
         # Test pair
@@ -215,6 +216,10 @@ class DiamondTestSupercell2(unittest.TestCase):
             space = tuple(format_frozen_k(i, eri.nmo_full[0], len(eri.nmo_full)) for i in frozen)
             space_o = tuple(numpy.concatenate(tuple(i[:j] for i, j in zip(s, eri.nocc_full))) for s in space)
             space_v = tuple(numpy.concatenate(tuple(i[j:] for i, j in zip(s, eri.nocc_full))) for s in space)
+            space_ov = tuple(
+                numpy.logical_and(i[:, numpy.newaxis], j[numpy.newaxis, :]).reshape(-1)
+                for i, j in zip(space_o, space_v)
+            )
 
             m = krks_slow_supercell.supercell_response(
                 eri.proxy_vind,
@@ -225,7 +230,46 @@ class DiamondTestSupercell2(unittest.TestCase):
                 eri.model_super.supercell_inv_rotation,
                 eri.proxy_model,
             )
-            ref_m = tuple(i[space_o[0]][:, space_v[0]][:, :, space_o[1]][..., space_v[1]] for i in ref_m_full)
+            ref_m = tuple(i[space_ov[0]][:, space_ov[1]] for i in ref_m_full)
+            testing.assert_allclose(ref_m, m, atol=1e-12)
+
+    def test_raw_response_ov(self):
+        """Tests the `molecular_reponse` and whether it slices output properly."""
+        eri = krks_slow_supercell.PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
+        ref_m_full = eri.proxy_response()
+        s = sum(eri.nocc_full) * (sum(eri.nmo_full) - sum(eri.nocc_full))
+        ref_m_full = tuple(i.reshape((s, s)) for i in ref_m_full)
+
+        # Test single
+        for frozen in (1, [0, -1]):
+            space_ov = format_frozen_mol(frozen, s)
+
+            m = krks_slow_supercell.supercell_response_ov(
+                eri.proxy_vind,
+                space_ov,
+                eri.nocc_full,
+                eri.nmo_full,
+                True,
+                eri.model_super.supercell_inv_rotation,
+                eri.proxy_model,
+            )
+            ref_m = tuple(i[space_ov, :][:, space_ov] for i in ref_m_full)
+            testing.assert_allclose(ref_m, m, atol=1e-12)
+
+        # Test pair
+        for frozen in ((1, 3), ([1, -2], [0, -1])):
+            space_ov = tuple(format_frozen_mol(i, s) for i in frozen)
+
+            m = krks_slow_supercell.supercell_response_ov(
+                eri.proxy_vind,
+                space_ov,
+                eri.nocc_full,
+                eri.nmo_full,
+                True,
+                eri.model_super.supercell_inv_rotation,
+                eri.proxy_model,
+            )
+            ref_m = tuple(i[space_ov[0], :][:, space_ov[1]] for i in ref_m_full)
             testing.assert_allclose(ref_m, m, atol=1e-12)
 
 

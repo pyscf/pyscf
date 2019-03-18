@@ -30,27 +30,13 @@ from pyscf.lib import logger
 import numpy
 
 
-def orb2ov(space, nocc):
-    """
-    Converts orbital active space specification into ov-pairs space spec.
-    Args:
-        space (ndarray): the obital space;
-        nocc (int): the number of occupied orbitals;
-
-    Returns:
-        The ov space specification.
-    """
-    o = space[:nocc]
-    v = space[nocc:]
-    return (o[:, numpy.newaxis] * v[numpy.newaxis, :]).reshape(-1)
-
-
-def molecular_response(vind, space, nocc, nmo, double, log_dest):
+def molecular_response_ov(vind, space_ov, nocc, nmo, double, log_dest):
     """
     Retrieves a raw response matrix.
     Args:
         vind (Callable): a pyscf matvec routine;
-        space (ndarray): the active space: either for both rows and columns (1D array) or for rows and columns separately (2D array);
+        space_ov (ndarray): the active `ov` space maks: either the same mask for both rows and columns (1D array) or
+        separate `ov` masks for rows and columns (2D array);
         nocc (int): the number of occupied orbitals (frozen and active);
         nmo (int): the total number of orbitals;
         double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;
@@ -58,20 +44,22 @@ def molecular_response(vind, space, nocc, nmo, double, log_dest):
 
     Returns:
         The TD matrix.
+
+    Note:
+        The runtime scales with the size of the column mask `space_ov[1]` but not the row mask `space_ov[0]`.
     """
-    space = numpy.array(space)
+    space_ov = numpy.array(space_ov)
 
     nocc_full, nvirt_full = nocc, nmo - nocc
     size_full = nocc_full * nvirt_full
 
-    if space.shape == (nmo,):
-        ov1 = ov2 = orb2ov(space, nocc)
-    elif space.shape == (2, nmo):
-        ov1 = orb2ov(space[0], nocc)
-        ov2 = orb2ov(space[1], nocc)
-    else:
-        raise ValueError("The 'space' argument should be either a plain array or a 2D array with first dimension = "
-                         "2, found shape: {}".format(space.shape))
+    if space_ov.shape not in ((size_full,), (2, size_full)):
+        raise ValueError("The 'space_ov' argument should be a 1D array with dimension {size_full:d} or a 2D array with"
+                         " dimensions 2x{size_full:d}, found: {actual}".format(
+                            size_full=size_full,
+                            actual=space_ov.shape,
+                            ))
+    ov1, ov2 = space_ov
 
     size = sum(ov2)
 
@@ -91,6 +79,51 @@ def molecular_response(vind, space, nocc, nmo, double, log_dest):
         return result_a, -result_b.conj()
     else:
         return result[ov1]
+
+
+def orb2ov(space, nocc):
+    """
+    Converts orbital active space specification into ov-pairs space spec.
+    Args:
+        space (ndarray): the obital space;
+        nocc (int): the number of occupied orbitals;
+
+    Returns:
+        The ov space specification.
+    """
+    space = numpy.array(space)
+    o = space[..., :nocc]
+    v = space[..., nocc:]
+    return (o[..., numpy.newaxis] * v[..., numpy.newaxis, :]).reshape(space.shape[:-1] + (-1,))
+
+
+def molecular_response(vind, space, nocc, nmo, double, log_dest):
+    """
+    Retrieves a raw response matrix.
+    Args:
+        vind (Callable): a pyscf matvec routine;
+        space (ndarray): the active orbital space maks: either the same mask for both rows and columns (1D array) or
+        separate orbital masks for rows and columns (2D array);
+        nocc (int): the number of occupied orbitals (frozen and active);
+        nmo (int): the total number of orbitals;
+        double (bool): set to True if `vind` returns the double-sized (i.e. full) matrix;
+        log_dest (object): pyscf logging;
+
+    Returns:
+        The TD matrix.
+    """
+    space = numpy.array(space)
+
+    if space.shape == (nmo,):
+        space = numpy.repeat(space[numpy.newaxis, :], 2, axis=0)
+    elif space.shape != (2, nmo):
+        raise ValueError(
+            "The 'space' argument should be a 1D array with dimension {size_full:d} or a 2D array with"
+            " dimensions 2x{size_full:d}, found: {actual}".format(
+                size_full=nocc,
+                actual=space.shape,
+            ))
+    return molecular_response_ov(vind, orb2ov(space, nocc), nocc, nmo, double, log_dest)
 
 
 def mk_make_canonic(m, o, v, return_ov=False, space_ov=None):

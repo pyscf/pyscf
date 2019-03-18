@@ -148,6 +148,10 @@ class TDMatrixBlocks(object):
     def __check_primary_form__(m):
         if not isinstance(m, tuple):
             raise ValueError("The value returned by `tdhf_primary_form` is not a tuple")
+        if len(m) < 1:
+            raise ValueError("Empty tuple returned by `tdhf_primary_form`")
+        if not isinstance(m[0], (str, unicode)):
+            raise ValueError("The first item returned by `tdhf_primary_form` must be a string")
         forms = dict(ab=3, mk=3, full=2)
         if m[0] in forms:
             if len(m) != forms[m[0]]:
