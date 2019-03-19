@@ -1,3 +1,27 @@
+PySCF 1.7.0 (2019-?-?)
+----------------------
+* Added
+  - k-CCSD density matrix
+  - k-CCSD(T) with core frozen
+  - sgX method (a pseudo-spectral method like COSX)
+  - Hooks pre_kernel and post_kernel in SCF driver
+  - Left IP/EA-CCSD for molecular code
+  - EOM-IP/EA-KCCSD, EOM-IP/EA-KRCCSD
+  - Methods EOM-IP/EA-KCCSD(T) T*(a), EOM-IP/EA-KRCCSD(T) T*(a)
+  - kEOM-IP/EA-CCSD*
+  - KUMP2
+  - KCCSD function spatial2spin that transforms amplitudes in spatial orbital to
+    that in spin-orbital
+* Improved
+  - Optimized regular get_j and density-fitting get_j
+  - Faster k-CCSD(T)
+  - Davidson diagonalization for multi-roots
+  - memory usage in CCSD
+* Bugfix
+  - Carbon ANO data
+  - Initial guess for EOM-KCCSD
+
+
 PySCF 1.6.1 (2019-03-15)
 ------------------------
 * Added
@@ -20,9 +44,10 @@ PySCF 1.6.1 (2019-03-15)
   - Normalizing SCF initial guess in PBC (to the right number of electrons/cell)
   - mesh estimation for inf-vacuum
   - Tuned threshold in point group symmetry detection functions
+  - SCF summary in the output message
 * Bugfix
   - Solvent object initialization in SCF scanner function
-  - GHF get_jk function
+  - GHF bug fix
   - QM/MM object initialization in SCF scanner function
   - Missing virtual orbitals in MCSCF project_init_guess function
   - MINAO basis data

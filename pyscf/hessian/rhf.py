@@ -21,6 +21,7 @@ Non-relativistic RHF analytical Hessian
 '''
 
 from functools import reduce
+import ctypes
 import time
 import numpy
 from pyscf import lib
@@ -120,12 +121,15 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     vj1, vk1 = _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
                        ['lk->s1ij', dm0,   # vj1
-                        'jk->s1il', dm0])  # vk1
+                        'jk->s1il', dm0],  # vk1
+                       vhfopt=_make_vhfopt(mol, dm0, 'ipip1', 'int2e_ipip1ipip2'))
     vhf_diag = vj1 - vk1*.5
     vhf_diag = vhf_diag.reshape(3,3,nao,nao)
     vj1 = vk1 = None
     t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
 
+    ip1ip2_opt = _make_vhfopt(mol, dm0, 'ip1ip2', 'int2e_ip1ip2')
+    ipvip1_opt = _make_vhfopt(mol, dm0, 'ipvip1', 'int2e_ipvip1ipvip2')
     aoslices = mol.aoslice_by_atom()
     de2 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
     for i0, ia in enumerate(atmlst):
@@ -135,14 +139,14 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                                 ['ji->s1kl', dm0[:,p0:p1],  # vj1
                                  'li->s1kj', dm0[:,p0:p1],  # vk1
                                  'lj->s1ki', dm0         ], # vk2
-                                shls_slice=shls_slice)
+                                shls_slice=shls_slice, vhfopt=ip1ip2_opt)
         vhf = vj1 * 2 - vk1 * .5
         vhf[:,:,p0:p1] -= vk2 * .5
         t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
         vj1, vk1 = _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
                            ['lk->s1ij', dm0         ,  # vj1
                             'li->s1kj', dm0[:,p0:p1]], # vk1
-                           shls_slice=shls_slice)
+                           shls_slice=shls_slice, vhfopt=ipvip1_opt)
         vhf[:,:,p0:p1] += vj1.transpose(0,2,1)
         vhf -= vk1.transpose(0,2,1) * .5
         vhf = vhf.reshape(3,3,nao,nao)
@@ -170,6 +174,33 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     log.timer('RHF partial hessian', *time0)
     return de2
+
+def _make_vhfopt(mol, dms, key, vhf_intor):
+    if not hasattr(_vhf.libcvhf, vhf_intor):
+        return None
+    vhfopt = _vhf.VHFOpt(mol, vhf_intor, 'CVHF'+key+'_prescreen',
+                         'CVHF'+key+'_direct_scf')
+    dms = numpy.asarray(dms, order='C')
+    if dms.ndim == 3:
+        n_dm = dms.shape[0]
+    else:
+        n_dm = 1
+    ao_loc = mol.ao_loc_nr()
+    fsetdm = getattr(_vhf.libcvhf, 'CVHF'+key+'_direct_scf_dm')
+    fsetdm(vhfopt._this,
+           dms.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
+           ao_loc.ctypes.data_as(ctypes.c_void_p),
+           mol._atm.ctypes.data_as(ctypes.c_void_p), mol.natm,
+           mol._bas.ctypes.data_as(ctypes.c_void_p), mol.nbas,
+           mol._env.ctypes.data_as(ctypes.c_void_p))
+
+    # Update the vhfopt's attributes intor.  Function direct_mapdm needs
+    # vhfopt._intor and vhfopt._cintopt to compute J/K.
+    if vhf_intor != 'int2e_'+key:
+        vhfopt._intor = mol._add_suffix('int2e_'+key)
+        vhfopt._cintopt = None
+    return vhfopt
+
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     time0 = t1 = (time.clock(), time.time())
@@ -231,12 +262,12 @@ def get_ovlp(mol):
     return s1aa, s1ab, s1a
 
 def _get_jk(mol, intor, comp, aosym, script_dms,
-            shls_slice=None, cintopt=None):
+            shls_slice=None, cintopt=None, vhfopt=None):
     intor = mol._add_suffix(intor)
     scripts = script_dms[::2]
     dms = script_dms[1::2]
     vs = _vhf.direct_bindm(intor, aosym, scripts, dms, comp,
-                           mol._atm, mol._bas, mol._env,
+                           mol._atm, mol._bas, mol._env, vhfopt=vhfopt,
                            cintopt=cintopt, shls_slice=shls_slice)
     for k, script in enumerate(scripts):
         if 's2' in script:

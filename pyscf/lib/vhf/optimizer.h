@@ -57,3 +57,7 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 void CVHFnr_optimizer(CVHFOpt **vhfopt, int (*intor)(), CINTOpt *cintopt,
                       int *ao_loc, int *atm, int natm,
                       int *bas, int nbas, double *env);
+
+void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
+                          int *ao_loc, int *atm, int natm,
+                          int *bas, int nbas, double *env);
