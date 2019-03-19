@@ -344,6 +344,7 @@ class TDProxyMatrixBlocks(TDMatrixBlocks):
         Args:
             model: a pyscf base model to extract TD matrix from;
         """
+        super(TDProxyMatrixBlocks, self).__init__()
         self.proxy_model = model
         self.proxy_vind, self.proxy_diag = self.proxy_model.gen_vind(self.proxy_model._scf)
         self.proxy_vind = VindTracker(self.proxy_vind)
@@ -412,6 +413,11 @@ class MolecularMFMixin(object):
     def nmo(self):
         """The total number of molecular orbitals."""
         return self.space.sum()
+
+    @property
+    def mo_coeff_full(self):
+        """MO coefficients."""
+        return self.model.mo_coeff
 
     @property
     def nocc_full(self):

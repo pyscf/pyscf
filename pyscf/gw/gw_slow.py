@@ -1,7 +1,7 @@
 #  Authors: Artem Pulkin, pyscf authors
 """
-This module implements the G0W0 approximation on top of `pyscf.tdscf.rhf_slow` TDHF implementation. Unlike `gw.py`, all
-integrals are stored in memory. Several variants of GW are available:
+This module implements the G0W0 approximation on top of `pyscf.tdscf.rhf_slow` and `pyscf.tdscf.proxy` TD
+implementations. Unlike `gw.py`, all integrals are stored in memory. Several variants of GW are available:
 
  * (this module) `pyscf.gw_slow`: the molecular implementation;
  * `pyscf.pbc.gw.gw_slow`: single-kpoint PBC (periodic boundary condition) implementation;
@@ -12,7 +12,7 @@ integrals are stored in memory. Several variants of GW are available:
 """
 
 from pyscf.lib import einsum, direct_sum
-from pyscf.lib import logger, temporary_env
+from pyscf.lib import logger
 
 import numpy
 from scipy.optimize import newton, bisect
@@ -28,14 +28,18 @@ from itertools import product
 class AbstractIMDS(object):
     orb_dims = 1
 
-    def __init__(self, tdhf):
+    def __init__(self, td, eri=None):
         """
-        GW intermediates.
+        GW intermediates interface.
         Args:
-            tdhf (TDRHF): the TDRHF contatainer;
+            td: a container with TD solution;
+            eri (PhysERI): a container with electron repulsion integrals;
         """
-        self.eri = tdhf.eri
-        self.tdhf = tdhf
+        self.td = td
+        if eri is None:
+            self.eri = td.eri
+        else:
+            self.eri = eri
 
     def get_rhs(self, p):
         """
@@ -97,22 +101,47 @@ class AbstractIMDS(object):
         raise NotImplementedError
 
 
+def corrected_moe(eri, p):
+    """
+    Calculates the corrected orbital energy.
+    Args:
+        eri (PhysERI): a container with electron repulsion integrals;
+        p (int): orbital;
+
+    Returns:
+        The corrected orbital energy.
+    """
+    moe = eri.mo_energy[p]
+    moc = eri.mo_coeff[:, p]
+    vk = - eri.ao2mo((
+        moc[:, numpy.newaxis],
+        eri.mo_coeff_full[:, :eri.nocc_full],
+        eri.mo_coeff_full[:, :eri.nocc_full],
+        moc[:, numpy.newaxis],
+    )).squeeze().trace()
+    mf = eri.model
+    v_mf = mf.get_veff() - mf.get_j()
+    v_mf = einsum("i,ij,j", moc.conj(), v_mf, moc)
+    return moe + vk - v_mf
+
+
 class IMDS(AbstractIMDS):
-    def __init__(self, tdhf):
+    def __init__(self, td, eri=None):
         """
         GW intermediates.
         Args:
-            tdhf (TDRHF): the TDRHF contatainer;
+            td: a container with TD solution;
+            eri: a container with electron repulsion integrals;
         """
-        super(IMDS, self).__init__(tdhf)
+        super(IMDS, self).__init__(td, eri=eri)
 
         # MF
         self.nocc = self.eri.nocc
         self.o, self.v = self.eri.mo_energy[:self.nocc], self.eri.mo_energy[self.nocc:]
 
         # TD
-        self.td_xy = self.tdhf.xy
-        self.td_e = self.tdhf.e
+        self.td_xy = self.td.xy
+        self.td_e = self.td.e
 
         self.tdm = self.construct_tdm()
 
@@ -120,7 +149,8 @@ class IMDS(AbstractIMDS):
         return self.eri[item]
 
     def get_rhs(self, p):
-        return self.eri.mo_energy[p]
+        # return self.eri.mo_energy[p]
+        return corrected_moe(self.eri, p)
 
     def construct_tdm(self):
         td_xy = 2 * numpy.asarray(self.td_xy)
@@ -280,7 +310,7 @@ def kernel(imds, orbs=None, linearized=False, eta=1e-3, tol=1e-9, method="fallba
                 try:
                     gw_energies[i_p] = newton(debug, imds.initial_guess(p), tol=tol, maxiter=100)
                 except RuntimeError:
-                    logger.warn(imds.tdhf._scf, "Failed to converge with newton, using bisect on the interval [{:.3e}, {:.3e}]".format(
+                    logger.warn(imds.td._scf, "Failed to converge with newton, using bisect on the interval [{:.3e}, {:.3e}]".format(
                         min(debug.x), max(debug.x),
                     ))
                     gw_energies[i_p] = bisect(debug, min(debug.x), max(debug.x), xtol=tol, maxiter=100)
@@ -291,14 +321,15 @@ def kernel(imds, orbs=None, linearized=False, eta=1e-3, tol=1e-9, method="fallba
 class GW(object):
     base_imds = IMDS
 
-    def __init__(self, tdhf):
+    def __init__(self, td, eri=None):
         """
         Performs GW calculation. Roots are stored in `self.mo_energy`.
         Args:
-            tdhf (TDRHF): the base time-dependent restricted Hartree-Fock model;
+            td: a container with TD solution;
+            eri: a container with electron repulsion integrals;
         """
-        self.tdhf = tdhf
-        self.imds = self.base_imds(tdhf)
+        self.td = td
+        self.imds = self.base_imds(td, eri=eri)
         self.mo_energy = None
         self.orbs = None
         self.method = "fallback"
