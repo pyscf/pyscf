@@ -1320,7 +1320,7 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
     convs = [None]*len(kptlist)
 
     for k, kshift in enumerate(kptlist):
-        print("kshift =", kshift)
+        print("\nkshift =", kshift)
         # vector size and thus, nroots depend on kshift in the case of even nkpts,
         size = eom.vector_size(kshift)
         nroots = min(nroots, size)
@@ -1424,75 +1424,114 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv_r2[ki, ka, kj]
 
-        # r_ijab <- F_mj r_imab
+        # r_ijab <- P(ij) (-F_mj r_imab)
         # km = kj because of k conservation
-        tmpij = np.einsum('mj,imab->ijab', -imds.Foo[kj], r2[ki, kj, ka])
-        # r_ijab <- W_abej r_ie
-        ke = kconserv_r1[ki]
-        tmpij += np.einsum('abej,ie->ijab', imds.Wvvvo[ka, kb, ke], r1[ki])
+        Hr2[ki, kj, ka] += np.einsum('mj,imab->ijab', -imds.Foo[kj], r2[ki, kj, ka])
+        # km = ki because of k conservation
+        Hr2[ki, kj, ka] -= np.einsum('mi,jmab->ijab', -imds.Foo[ki], r2[kj, ki, ka])
 
-        # r_ijab <- W_mnef t_imab r_jnef
+        # r_ijab <- P(ij) W_abej r_ie
+        ke = kconserv_r1[ki]
+        Hr2[ki, kj, ka] += np.einsum('abej,ie->ijab', imds.Wvvvo[ka, kb, ke], r1[ki])
+        ke = kconserv_r1[kj]
+        Hr2[ki, kj, ka] -= np.einsum('abei,je->ijab', imds.Wvvvo[ka, kb, ke], r1[kj])
+
+        # r_ijab <- P(ij) (-0.5 W_mnef t_imab r_jnef)
         # ki + kj - ka - kb = G + kshift
         # ki + km - ka - kb = G
         # => kj - km = G + kshift
         km = kconserv_r1[kj]
         # x: kn, y: ke
-        tmp_mj = np.einsum('xymnef,xyjnef->mj', imds.Woovv[km], r2[kj])
-        tmpij -= 0.5*np.einsum('mj,imab->ijab', tmp_mj, imds.t2[ki, km, ka])
+        tmp_mj = np.einsum('xymnef,xyjnef->mj', -imds.Woovv[km], r2[kj])
+        Hr2[ki, kj, ka] += 0.5*np.einsum('mj,imab->ijab', tmp_mj, imds.t2[ki, km, ka])
+        # kj + km - ka - kb = G
+        # => ki - km = G + kshift
+        km = kconserv_r1[ki]
+        # x: kn, y: ke
+        tmp_mi = np.einsum('xymnef,xyinef->mi', -imds.Woovv[km], r2[ki])
+        Hr2[ki, kj, ka] -= 0.5*np.einsum('mi,jmab->ijab', tmp_mi, imds.t2[kj, km, ka])
 
-        # r_ijab <- W_mnie t_njab r_me
+        # r_ijab <- P(ij) W_mnie t_njab r_me
         # ki + kj - ka - kb = G + kshift
         # kn + kj - ka - kb = G
         # => ki - kn = G + kshift
         kn = kconserv_r1[ki]
         # x: km
-        tmp_ni = np.einsum('xmnie,xme->ni', imds.Wooov[:,kn,ki], r1)
-        tmpij += np.einsum('ni,njab->ijab', tmp_ni, imds.t2[kn, kj, ka])
+        tmp_ni = np.einsum('xmnie,xme->ni', imds.Wooov[:, kn, ki], r1)
+        Hr2[ki, kj, ka] += np.einsum('ni,njab->ijab', tmp_ni, imds.t2[kn, kj, ka])
+        # kn + ki - ka - kb = G
+        # => kj - kn = G + kshift
+        kn = kconserv_r1[kj]
+        # x: km
+        tmp_nj = np.einsum('xmnje,xme->nj', imds.Wooov[:, kn, kj], r1)
+        Hr2[ki, kj, ka] -= np.einsum('nj,niab->ijab', tmp_nj, imds.t2[kn, ki, ka])
 
-        # r_ijab <- -P_ij(tmpij terms above)
-        Hr2[ki, kj, ka] += tmpij - tmpij.transpose(1,0,2,3)
 
-        # r_ijab <- F_be r_ijae
-        tmpab = np.einsum('be,ijae->ijab', imds.Fvv[kb], r2[ki, kj, ka])
-        # r_ijab <- W_mbij r_ma
+        # r_ijab <- P(ab) F_be r_ijae
+        Hr2[ki, kj, ka] += np.einsum('be,ijae->ijab', imds.Fvv[kb], r2[ki, kj, ka])
+        Hr2[ki, kj, ka] -= np.einsum('ae,ijbe->ijab', imds.Fvv[ka], r2[ki, kj, kb])
+        # r_ijab <- P(ab) (- W_mbij r_ma)
         # km + kb - ki - kj = G
         km = kconserv[ki, kb, kj]
-        tmpab -= np.einsum('mbij,ma->ijab', imds.Wovoo[km, kb, ki], r1[km])
+        Hr2[ki, kj, ka] += np.einsum('mbij,ma->ijab', -imds.Wovoo[km, kb, ki], r1[km])
+        # km + ka - ki - kj = G
+        km = kconserv[ki, ka, kj]
+        Hr2[ki, kj, ka] -= np.einsum('maij,mb->ijab', -imds.Wovoo[km, ka, ki], r1[km])
 
-        # r_ijab <- W_mnef t_ijae r_mnbf
+        # r_ijab <- P(ab) (-0.5 W_mnef t_ijae r_mnbf)
         # ki + kj - ka - ke = G
         ke = kconserv[ki, ka, kj]
         # x: km, y: kn
-        tmp_eb = np.einsum('xymnef,xymnbf->eb', imds.Woovv[:,:,ke], r2[:,:,kb])
-        tmpab -= 0.5*np.einsum('eb,ijae->ijab', tmp_eb, imds.t2[ki, kj, ka])
+        tmp_eb = np.einsum('xymnef,xymnbf->eb', -imds.Woovv[:, :, ke], r2[:, :, kb])
+        Hr2[ki, kj, ka] += 0.5*np.einsum('eb,ijae->ijab', tmp_eb, imds.t2[ki, kj, ka])
+        # ki + kj - kb - ke = G
+        ke = kconserv[ki, kb, kj]
+        # x: km, y: kn
+        tmp_ea = np.einsum('xymnef,xymnaf->ea', -imds.Woovv[:, :, ke], r2[:, :, ka])
+        Hr2[ki, kj, ka] -= 0.5*np.einsum('ea,ijbe->ijab', tmp_ea, imds.t2[ki, kj, kb])
 
-        # r_ijab <- W_amfe t_ijfb r_me
+        # r_ijab <- P(ab) W_amfe t_ijfb r_me
         # ki + kj - kf - kb = G
         kf = kconserv[ki, kb, kj]
         # x: km
-        tmp_af = np.einsum('xamfe,xme->af', imds.Wvovv[ka,:,kf], r1)
-        tmpab += np.einsum('af,ijfb->ijab', tmp_af, imds.t2[ki, kj, kf])
+        tmp_af = np.einsum('xamfe,xme->af', imds.Wvovv[ka, :, kf], r1)
+        Hr2[ki, kj, ka] += np.einsum('af,ijfb->ijab', tmp_af, imds.t2[ki, kj, kf])
+        # ki + kj - kf - ka = G
+        kf = kconserv[ki, ka, kj]
+        # x: km
+        tmp_bf = np.einsum('xbmfe,xme->bf', imds.Wvovv[kb, :, kf], r1)
+        Hr2[ki, kj, ka] -= np.einsum('bf,ijfa->ijab', tmp_bf, imds.t2[ki, kj, kf])
 
-        # r_ijab <- -P_ab(tmpab terms above)
-        Hr2[ki, kj, ka] += tmpab - tmpab.transpose(0,1,3,2)
 
-        tmpijab = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
+        # r_ijab <- 0.5 W_mnij r_mnab
         tmpoooo = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
+        # r_ijab <- 0.5 W_abef r_ijef
         tmpvvvv = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
         for km in range(nkpts):
-            # km + kb - ke - kj = G
-            ke = kconserv[km, kj, kb]
-            tmpijab += np.einsum('mbej,imae->ijab', imds.Wovvo[km, kb, ke], r2[ki, km, ka])
             # km + kn - ki - kj = G
             kn = kconserv[ki, km, kj]
             tmpoooo += 0.5*np.einsum('mnij,mnab->ijab', imds.Woooo[km, kn, ki], r2[km, kn, ka])
             # Rename dummy index km->ke
             tmpvvvv += 0.5*np.einsum('abef,ijef->ijab', imds.Wvvvv[ka, kb, km], r2[ki, kj, km])
-        tmpijab = tmpijab - tmpijab.transpose(1, 0, 2, 3)
-        tmpijab = tmpijab - tmpijab.transpose(0, 1, 3, 2)
-        Hr2[ki, kj, ka] += tmpijab
         Hr2[ki, kj, ka] += tmpoooo
         Hr2[ki, kj, ka] += tmpvvvv
+
+        # r_ijab <- P(ij) P(ab) W_mbej r_imae
+        tmpijab = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
+        for km in range(nkpts):
+            # km + kb - ke - kj = G
+            ke = kconserv[km, kj, kb]
+            tmpijab += np.einsum('mbej,imae->ijab', imds.Wovvo[km, kb, ke], r2[ki, km, ka])
+            # km + kb - ke - ki = G
+            ke = kconserv[km, ki, kb]
+            tmpijab -= np.einsum('mbei,jmae->ijab', imds.Wovvo[km, kb, ke], r2[kj, km, ka])
+            # km + ka - ke - kj = G
+            ke = kconserv[km, kj, ka]
+            tmpijab -= np.einsum('maej,imbe->ijab', imds.Wovvo[km, ka, ke], r2[ki, km, kb])
+            # km + ka - ke - ki = G
+            ke = kconserv[km, ki, ka]
+            tmpijab += np.einsum('maei,jmbe->ijab', imds.Wovvo[km, ka, ke], r2[kj, km, kb])
+        Hr2[ki, kj, ka] += tmpijab
 
     vector = amplitudes_to_vector_ee(Hr1, Hr2, kshift, kconserv_r2)
     return vector
