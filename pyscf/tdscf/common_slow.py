@@ -474,6 +474,11 @@ class GammaMFMixin(object):
         return self.space.sum()
 
     @property
+    def mo_coeff_full(self):
+        """MO coefficients."""
+        return self.model.mo_coeff[0]
+
+    @property
     def nocc_full(self):
         """The true (including frozen degrees of freedom) number of occupied orbitals."""
         return int(self.model.mo_occ[0].sum() // 2)
@@ -576,6 +581,11 @@ class PeriodicMFMixin(object):
     def nmo(self):
         """The total number of molecular orbitals."""
         return k_nmo(self)
+
+    @property
+    def mo_coeff_full(self):
+        """MO coefficients."""
+        return self.model.mo_coeff
 
     @property
     def nocc_full(self):

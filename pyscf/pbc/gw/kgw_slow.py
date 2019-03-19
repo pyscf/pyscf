@@ -12,7 +12,7 @@ integrals are stored in memory. Several variants of GW are available:
 
 from pyscf.gw import gw_slow
 from pyscf.pbc.gw import kgw_slow_supercell
-from pyscf.lib import einsum, direct_sum, temporary_env
+from pyscf.lib import einsum, direct_sum
 from pyscf.pbc.tdscf.krhf_slow import get_block_k_ix
 
 import numpy
@@ -25,15 +25,18 @@ import numpy
 
 
 class IMDS(kgw_slow_supercell.IMDS):
-    def __init__(self, tdhf):
+    def __init__(self, td, eri=None):
         """
         GW intermediates (k-version).
         Args:
-            tdhf (TDRHF): the TDRHF contatainer;
-        """
-        gw_slow.AbstractIMDS.__init__(self, tdhf)
+        Args:
+            td: a container with TD solution;
+            eri: a container with electron repulsion integrals;
 
-        self.nk = len(self.tdhf._scf.mo_energy)
+        """
+        gw_slow.AbstractIMDS.__init__(self, td, eri=eri)
+
+        self.nk = len(self.td._scf.mo_energy)
 
         # MF
         self.nocc = self.eri.nocc
@@ -41,8 +44,8 @@ class IMDS(kgw_slow_supercell.IMDS):
         self.v = tuple(e[nocc:] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc))
 
         # TD
-        self.td_xy = self.tdhf.xy
-        self.td_e = self.tdhf.e
+        self.td_xy = self.td.xy
+        self.td_e = self.td.e
 
         self.tdm = self.construct_tdm()
 
@@ -51,10 +54,6 @@ class IMDS(kgw_slow_supercell.IMDS):
         return self.eri.eri_ov(item, (k1, k2, k3, k4)) / self.nk
 
     __getitem__ = eri_ov
-
-    def get_rhs(self, p, components=False):
-        k, kp = p
-        return self.eri.mo_energy[k][kp]
 
     def construct_tdm(self):
 
@@ -167,20 +166,3 @@ kernel = gw_slow.kernel
 
 class GW(gw_slow.GW):
     base_imds = IMDS
-
-    def __init__(self, tdhf):
-        """
-        Performs GW calculation. Roots are stored in `self.mo_energy`.
-        Args:
-            tdhf (TDRHF): the base time-dependent restricted Hartree-Fock model;
-        """
-        super(GW, self).__init__(tdhf)
-
-    def kernel(self):
-        """
-        Calculates GW roots.
-
-        Returns:
-            GW roots.
-        """
-        return super(GW, self).kernel()

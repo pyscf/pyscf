@@ -11,7 +11,7 @@ integrals are stored in memory. Several variants of GW are available:
 """
 
 from pyscf.gw import gw_slow
-from pyscf.lib import einsum, temporary_env
+from pyscf.lib import einsum
 
 import numpy
 
@@ -22,18 +22,48 @@ import numpy
 # * GW provides a container
 
 
+def corrected_moe(eri, k, p):
+    """
+    Calculates the corrected orbital energy.
+    Args:
+        eri (PhysERI): a container with electron repulsion integrals;
+        k (int): the k-point index;
+        p (int): orbital;
+
+    Returns:
+        The corrected orbital energy.
+    """
+    moe = eri.mo_energy[k][p]
+    moc = eri.mo_coeff[k][:, p]
+    nk = len(eri.mo_energy)
+    vk = 0
+    for k2 in range(nk):
+        vk -= eri.ao2mo_k((
+            moc[:, numpy.newaxis],
+            eri.mo_coeff_full[k2][:, :eri.nocc_full[k2]],
+            eri.mo_coeff_full[k2][:, :eri.nocc_full[k2]],
+            moc[:, numpy.newaxis],
+        ), (k, k2, k2, k)).squeeze().trace()
+    vk /= nk
+    mf = eri.model
+    v_mf = mf.get_veff()[k] - mf.get_j()[k]
+    v_mf = einsum("i,ij,j", moc.conj(), v_mf, moc)
+    return moe + vk - v_mf
+
+
 class IMDS(gw_slow.IMDS):
     orb_dims = 2
 
-    def __init__(self, tdhf):
+    def __init__(self, td, eri=None):
         """
         GW intermediates (k-version/supercell).
         Args:
-            tdhf (TDRHF): the TDRHF contatainer;
+            td: a container with TD solution;
+            eri: a container with electron repulsion integrals;
         """
-        gw_slow.AbstractIMDS.__init__(self, tdhf)
+        gw_slow.AbstractIMDS.__init__(self, td, eri=eri)
 
-        self.nk = len(self.tdhf._scf.mo_energy)
+        self.nk = len(self.td._scf.mo_energy)
 
         # MF
         self.nocc = sum(self.eri.nocc)
@@ -41,9 +71,9 @@ class IMDS(gw_slow.IMDS):
         self.v = numpy.concatenate(tuple(e[nocc:] for e, nocc in zip(self.eri.mo_energy, self.eri.nocc)))
 
         # TD
-        nroots, _, k1, k2, o, v = self.tdhf.xy.shape
-        self.td_xy = self.tdhf.xy.transpose(0, 1, 2, 4, 3, 5).reshape(nroots, 2, k1*o, k2*v)
-        self.td_e = self.tdhf.e
+        nroots, _, k1, k2, o, v = self.td.xy.shape
+        self.td_xy = self.td.xy.transpose(0, 1, 2, 4, 3, 5).reshape(nroots, 2, k1*o, k2*v)
+        self.td_e = self.td.e
 
         self.tdm = self.construct_tdm()
 
@@ -82,7 +112,8 @@ class IMDS(gw_slow.IMDS):
 
     def get_rhs(self, p, components=False):
         k, kp = p
-        return self.eri.mo_energy[k][kp]
+        # return self.eri.mo_energy[k][kp]
+        return corrected_moe(self.eri, k, kp)
 
     def get_sigma_element(self, omega, p, eta, vir_sgn=1):
         return super(IMDS, self).get_sigma_element(omega, self.__plain_index__(p, spec=False), eta, vir_sgn=vir_sgn)
@@ -102,20 +133,3 @@ kernel = gw_slow.kernel
 
 class GW(gw_slow.GW):
     base_imds = IMDS
-
-    def __init__(self, tdhf):
-        """
-        Performs GW calculation. Roots are stored in `self.mo_energy`.
-        Args:
-            tdhf (TDRHF): the base time-dependent restricted Hartree-Fock model;
-        """
-        super(GW, self).__init__(tdhf)
-
-    def kernel(self):
-        """
-        Calculates GW roots.
-
-        Returns:
-            GW roots.
-        """
-        return super(GW, self).kernel()
