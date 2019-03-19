@@ -1,7 +1,7 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import KRKS
 from pyscf.pbc.tdscf import KTDDFT
-from pyscf.pbc.tdscf import krks_slow_supercell
+from pyscf.pbc.tdscf import kproxy_supercell
 from pyscf.tdscf.common_slow import eig, format_frozen_k, format_frozen_mol
 
 from test_common import retrieve_m, ov_order, assert_vectors_close
@@ -24,7 +24,7 @@ def density_fitting_ks(x):
 
 
 class DiamondTestGamma(unittest.TestCase):
-    """Compare this (krks_supercell_slow) @Gamma vs reference (pyscf)."""
+    """Compare this (supercell proxy) @Gamma vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -63,7 +63,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = krks_slow_supercell.PhysERI(self.model_krks, [1, 1, 1], KRKS)
+        e = kproxy_supercell.PhysERI(self.model_krks, [1, 1, 1], KRKS)
         m = e.tdhf_full_form()
         testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
         vals, vecs = eig(m, nroots=self.td_model_krks.nroots)
@@ -71,7 +71,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow_supercell.TDRKS(self.model_krks, [1, 1, 1], KRKS)
+        model = kproxy_supercell.TDProxy(self.model_krks, [1, 1, 1], KRKS)
         model.nroots = self.td_model_krks.nroots
         assert not model.fast
         model.kernel()
@@ -80,7 +80,7 @@ class DiamondTestGamma(unittest.TestCase):
 
 
 class DiamondTestShiftedGamma(unittest.TestCase):
-    """Test this (krks_supercell_slow) @non-Gamma: exception."""
+    """Test this (supercell proxy) @non-Gamma: exception."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -114,14 +114,14 @@ class DiamondTestShiftedGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow_supercell.TDRKS(self.model_krks, [1, 1, 1], density_fitting_ks)
+        model = kproxy_supercell.TDProxy(self.model_krks, [1, 1, 1], density_fitting_ks)
         # Shifted k-point grid is not TRS: an exception should be raised
         with self.assertRaises(RuntimeError):
             model.kernel()
 
 
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (supercell_slow) @2kp vs supercell reference (pyscf)."""
+    """Compare this (supercell proxy) @2kp vs supercell reference (pyscf)."""
     k = 2
 
     @classmethod
@@ -152,7 +152,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         model_krks.kernel()
 
         # Supercell reference
-        cls.model_rks = model_rks = krks_slow_supercell.k2s(model_krks, [cls.k, 1, 1], KRKS)
+        cls.model_rks = model_rks = kproxy_supercell.k2s(model_krks, [cls.k, 1, 1], KRKS)
 
         # Ensure orbitals are real
         testing.assert_allclose(model_rks.mo_coeff[0].imag, 0, atol=1e-8)
@@ -173,7 +173,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow_supercell.TDRKS(self.model_krks, [self.k, 1, 1], KRKS)
+        model = kproxy_supercell.TDProxy(self.model_krks, [self.k, 1, 1], KRKS)
         model.nroots = self.td_model_rks.nroots
         assert not model.fast
         model.kernel()
@@ -187,7 +187,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_raw_response(self):
         """Tests the `supercell_reponse` and whether it slices output properly."""
-        eri = krks_slow_supercell.PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
+        eri = kproxy_supercell.PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
         ref_m_full = eri.proxy_response()
 
         # Test single
@@ -197,7 +197,7 @@ class DiamondTestSupercell2(unittest.TestCase):
             space_v = numpy.concatenate(tuple(i[j:] for i, j in zip(space, eri.nocc_full)))
             space_ov = numpy.logical_and(space_o[:, numpy.newaxis], space_v[numpy.newaxis, :]).reshape(-1)
 
-            m = krks_slow_supercell.supercell_response(
+            m = kproxy_supercell.supercell_response(
                 eri.proxy_vind,
                 numpy.concatenate(space),
                 eri.nocc_full,
@@ -219,7 +219,7 @@ class DiamondTestSupercell2(unittest.TestCase):
                 for i, j in zip(space_o, space_v)
             )
 
-            m = krks_slow_supercell.supercell_response(
+            m = kproxy_supercell.supercell_response(
                 eri.proxy_vind,
                 (numpy.concatenate(space[0]), numpy.concatenate(space[1])),
                 eri.nocc_full,
@@ -233,7 +233,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_raw_response_ov(self):
         """Tests the `molecular_reponse` and whether it slices output properly."""
-        eri = krks_slow_supercell.PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
+        eri = kproxy_supercell.PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
         ref_m_full = eri.proxy_response()
         s = sum(eri.nocc_full) * (sum(eri.nmo_full) - sum(eri.nocc_full))
         ref_m_full = tuple(i.reshape((s, s)) for i in ref_m_full)
@@ -242,7 +242,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         for frozen in (1, [0, -1]):
             space_ov = format_frozen_mol(frozen, s)
 
-            m = krks_slow_supercell.supercell_response_ov(
+            m = kproxy_supercell.supercell_response_ov(
                 eri.proxy_vind,
                 space_ov,
                 eri.nocc_full,
@@ -258,7 +258,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         for frozen in ((1, 3), ([1, -2], [0, -1])):
             space_ov = tuple(format_frozen_mol(i, s) for i in frozen)
 
-            m = krks_slow_supercell.supercell_response_ov(
+            m = kproxy_supercell.supercell_response_ov(
                 eri.proxy_vind,
                 space_ov,
                 eri.nocc_full,
@@ -272,5 +272,5 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (supercell_slow) @3kp vs supercell reference (pyscf)."""
+    """Compare this (supercell proxy) @3kp vs supercell reference (pyscf)."""
     k = 3

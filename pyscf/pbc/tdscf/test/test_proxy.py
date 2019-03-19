@@ -1,7 +1,7 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import KRKS, KRHF
 from pyscf.pbc.tdscf import KTDDFT, KTDHF
-from pyscf.pbc.tdscf.rks_slow import PhysERI, TDRKS
+from pyscf.pbc.tdscf.proxy import PhysERI, TDProxy
 
 from test_common import retrieve_m, assert_vectors_close
 
@@ -10,7 +10,7 @@ from numpy import testing
 
 
 class DiamondTestGamma(unittest.TestCase):
-    """Compare this (rhf_slow) vs reference (pyscf)."""
+    """Compare this (Gamma proxy) vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -57,7 +57,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDRKS(self.model_rks)
+        model = TDProxy(self.model_rks)
         model.nroots = self.td_model_rks.nroots
         assert not model.fast
         model.kernel()
@@ -68,7 +68,7 @@ class DiamondTestGamma(unittest.TestCase):
 
 
 class DiamondHFTestGamma(unittest.TestCase):
-    """Compare this (rhf_slow) vs reference (pyscf), Hartree-Fock setup."""
+    """Compare this (Gamma proxy) vs reference (pyscf), Hartree-Fock setup."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -115,7 +115,7 @@ class DiamondHFTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDRKS(self.model_rhf)
+        model = TDProxy(self.model_rhf)
         model.nroots = self.td_model_rhf.nroots
         assert not model.fast
         model.kernel()

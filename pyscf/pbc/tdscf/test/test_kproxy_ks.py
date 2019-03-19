@@ -1,6 +1,6 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import KRKS
-from pyscf.pbc.tdscf import krks_slow, krhf_slow, krks_slow_supercell
+from pyscf.pbc.tdscf import kproxy, krhf_slow, kproxy_supercell
 
 from test_common import assert_vectors_close
 from test_krhf_slow import k2k
@@ -23,7 +23,7 @@ def density_fitting_ks(x):
 
 
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (krks_slow) @2kp vs reference (krks_supercell_slow)."""
+    """Compare this (k-proxy) @2kp vs reference (krks_supercell_slow)."""
     k = 2
     call_ratios = (1./4, 1./4)
 
@@ -52,7 +52,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         cls.model_krks = model_krks = KRKS(cell, k)
         model_krks.kernel()
 
-        cls.td_model_rks_supercell = krks_slow_supercell.TDRKS(model_krks, [cls.k, 1, 1], KRKS)
+        cls.td_model_rks_supercell = kproxy_supercell.TDProxy(model_krks, [cls.k, 1, 1], KRKS)
         cls.td_model_rks_supercell.kernel()
         cls.ref_m_supercell = cls.td_model_rks_supercell.eri.tdhf_full_form()
 
@@ -65,7 +65,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow.TDRKS(self.model_krks, [self.k, 1, 1], KRKS)
+        model = kproxy.TDProxy(self.model_krks, [self.k, 1, 1], KRKS)
         model.nroots = self.td_model_rks_supercell.nroots
         assert not model.fast
         for k in range(self.k):
@@ -116,6 +116,6 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (krks_supercell_slow) @3kp vs supercell reference (pyscf)."""
+    """Compare this (k-proxy) @3kp vs supercell reference (pyscf)."""
     k = 3
     call_ratios = (5./18, 4./9, 4./9)

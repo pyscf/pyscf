@@ -1,7 +1,7 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import KRHF
 from pyscf.pbc.tdscf import KTDHF
-from pyscf.pbc.tdscf import krhf_slow_supercell, krks_slow_supercell
+from pyscf.pbc.tdscf import krhf_slow_supercell, kproxy_supercell
 from pyscf.tdscf.common_slow import eig
 
 from test_common import retrieve_m, assert_vectors_close
@@ -24,7 +24,7 @@ def density_fitting_hf(x):
 
 
 class DiamondTestGamma(unittest.TestCase):
-    """Compare this (krks_supercell_slow) @Gamma vs reference (pyscf), Hartree-Fock setup."""
+    """Compare this (supercell proxy) @Gamma vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -63,7 +63,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = krks_slow_supercell.PhysERI(self.model_krhf, [1, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy_supercell.PhysERI(self.model_krhf, [1, 1, 1], density_fitting_hf, proxy=KTDHF)
         m = e.tdhf_full_form()
         testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
         vals, vecs = eig(m, nroots=self.td_model_krhf.nroots)
@@ -71,7 +71,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow_supercell.TDRKS(self.model_krhf, [1, 1, 1], density_fitting_hf)
+        model = kproxy_supercell.TDProxy(self.model_krhf, [1, 1, 1], density_fitting_hf)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel()
@@ -80,7 +80,7 @@ class DiamondTestGamma(unittest.TestCase):
 
 
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (krks_supercell_slow) @2kp vs reference (krhf_supercell_slow), Hartree-Fock setup."""
+    """Compare this (supercell proxy) @2kp vs reference (krhf_supercell_slow)."""
     k = 2
 
     @classmethod
@@ -124,7 +124,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_eri(self):
         """Tests ERI."""
-        e = krks_slow_supercell.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy_supercell.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
         m = e.tdhf_full_form()
 
         # Test matrix vs ref
@@ -132,7 +132,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow_supercell.TDRKS(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        model = kproxy_supercell.TDProxy(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel()
@@ -151,7 +151,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (krks_supercell_slow) @3kp vs reference (krhf_supercell_slow), Hartree-Fock setup."""
+    """Compare this (supercell proxy) @3kp vs reference (krhf_supercell_slow)."""
     k = 3
 
 
@@ -196,7 +196,7 @@ class FrozenTest(unittest.TestCase):
         """Tests ERI."""
         for frozen in (1, [0, 1], [0, -1]):
             try:
-                e = krks_slow_supercell.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, frozen=frozen)
+                e = kproxy_supercell.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, frozen=frozen)
                 m = e.tdhf_full_form()
 
                 ref_e = krhf_slow_supercell.PhysERI4(self.model_krhf, frozen=frozen)

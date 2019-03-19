@@ -1,7 +1,7 @@
 from pyscf.gto import Mole
 from pyscf.scf import RKS, RHF
 from pyscf.tdscf import TDDFT, TDHF
-from pyscf.tdscf.rks_slow import PhysERI, TDRKS, mk_make_canonic, molecular_response, orb2ov
+from pyscf.tdscf.proxy import PhysERI, TDProxy, mk_make_canonic, molecular_response, orb2ov
 from pyscf.tdscf.common_slow import format_frozen_mol
 
 import numpy
@@ -12,7 +12,7 @@ from test_common import retrieve_m, assert_vectors_close, tdhf_frozen_mask
 
 
 class H20Test(unittest.TestCase):
-    """Compare this (rks_slow) vs reference (pyscf)."""
+    """Compare this (molecular proxy) vs reference (pyscf)."""
     @classmethod
     def setUpClass(cls):
         cls.mol = mol = Mole()
@@ -64,7 +64,7 @@ class H20Test(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDRKS(self.model_rks)
+        model = TDProxy(self.model_rks)
         model.nroots = self.td_model_rks.nroots
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rks.e, atol=1e-5)
@@ -74,7 +74,7 @@ class H20Test(unittest.TestCase):
         """Tests container behavior."""
         for frozen in (1, [0, -1]):
             try:
-                model = TDRKS(self.model_rks, frozen=frozen)
+                model = TDProxy(self.model_rks, frozen=frozen)
                 model.nroots = self.td_model_rks.nroots
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
@@ -124,7 +124,7 @@ class H20Test(unittest.TestCase):
 
 
 class H20HFTest(unittest.TestCase):
-    """Compare this (rks_slow) vs reference (pyscf), Hartree-Fock setup."""
+    """Compare this (molecular proxy) vs reference (pyscf), Hartree-Fock setup."""
     @classmethod
     def setUpClass(cls):
         cls.mol = mol = Mole()
@@ -178,7 +178,7 @@ class H20HFTest(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDRKS(self.model_rhf)
+        model = TDProxy(self.model_rhf)
         model.nroots = self.td_model_rhf.nroots
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
@@ -188,7 +188,7 @@ class H20HFTest(unittest.TestCase):
         """Tests container behavior."""
         for frozen in (1, [0, -1]):
             try:
-                model = TDRKS(self.model_rhf, frozen=frozen)
+                model = TDProxy(self.model_rhf, frozen=frozen)
                 model.nroots = self.td_model_rhf.nroots
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")

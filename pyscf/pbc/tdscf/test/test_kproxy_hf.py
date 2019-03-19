@@ -1,7 +1,7 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import KRHF
 from pyscf.pbc.tdscf import KTDHF
-from pyscf.pbc.tdscf import krhf_slow, krks_slow
+from pyscf.pbc.tdscf import krhf_slow, kproxy
 from pyscf.tdscf.common_slow import eig
 
 from test_common import retrieve_m, assert_vectors_close
@@ -24,7 +24,7 @@ def density_fitting_hf(x):
 
 
 class DiamondTestGamma(unittest.TestCase):
-    """Compare this (krks_slow) @Gamma vs reference (pyscf), Hartree-Fock setup."""
+    """Compare this (k-proxy) @Gamma vs reference (pyscf), Hartree-Fock setup."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -63,7 +63,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = krks_slow.PhysERI(self.model_krhf, [1, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy.PhysERI(self.model_krhf, [1, 1, 1], density_fitting_hf, proxy=KTDHF)
         m = e.tdhf_full_form(0)
         testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
         vals, vecs = eig(m, nroots=self.td_model_krhf.nroots)
@@ -71,7 +71,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow.TDRKS(self.model_krhf, [1, 1, 1], density_fitting_hf)
+        model = kproxy.TDProxy(self.model_krhf, [1, 1, 1], density_fitting_hf)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel(0)
@@ -80,7 +80,7 @@ class DiamondTestGamma(unittest.TestCase):
 
 
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (krks_slow) @2kp vs reference (krhf_slow), Hartree-Fock setup."""
+    """Compare this (k-proxy) @2kp vs reference (krhf_slow), Hartree-Fock setup."""
     k = 2
 
     @classmethod
@@ -124,7 +124,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_eri(self):
         """Tests ERI."""
-        e = krks_slow.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
         for i in range(self.k):
             try:
                 m = e.tdhf_full_form(i)
@@ -137,7 +137,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = krks_slow.TDRKS(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        model = kproxy.TDProxy(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel()
@@ -158,5 +158,5 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (krks_slow) @3kp vs reference (krhf_slow), Hartree-Fock setup."""
+    """Compare this (k-proxy) @3kp vs reference (krhf_slow), Hartree-Fock setup."""
     k = 3

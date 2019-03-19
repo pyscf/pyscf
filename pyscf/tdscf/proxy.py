@@ -1,27 +1,25 @@
 #  Author: Artem Pulkin
 """
-This and other `_slow` modules implement the time-dependent Kohn-Sham procedure. The primary performance drawback is
-that, unlike other 'fast' routines with an implicit construction of the eigenvalue problem, these modules construct
-TDHF matrices explicitly by proxying to pyscf density response routines with a O(N^4) complexity scaling. As a result,
-regular `numpy.linalg.eig` can be used to retrieve TDKS roots in a reliable fashion without any issues related to the
-Davidson procedure. Several variants of TDKS are available:
+This and other `proxy` modules implement the time-dependent mean-field procedure using the existing pyscf
+implementations as a black box. The main purpose of these modules is to overcome the existing limitations in pyscf
+(i.e. real-only orbitals, davidson diagonalizer, incomplete Bloch space, etc). The primary performance drawback is that,
+unlike the original pyscf routines with an implicit construction of the eigenvalue problem, these modules construct TD
+matrices explicitly by proxying to pyscf density response routines with a O(N^4) complexity scaling. As a result,
+regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of proxy-TD are available:
 
- * (this module) `pyscf.tdscf.rks_slow`: the molecular implementation;
- * `pyscf.pbc.tdscf.rks_slow`: PBC (periodic boundary condition) implementation for RKS objects of `pyscf.pbc.scf`
- modules;
- * `pyscf.pbc.tdscf.krks_slow_supercell`: PBC implementation for KRKS objects of `pyscf.pbc.scf` modules. Works with
-   an arbitrary number of k-points but has a overhead due to an effective construction of a supercell.
- * `pyscf.pbc.tdscf.krks_slow_gamma`: A Gamma-point calculation resembling the original `pyscf.pbc.tdscf.krks`
-   module. Despite its name, it accepts KRKS objects with an arbitrary number of k-points but finds only few TDKS roots
-   corresponding to collective oscillations without momentum transfer;
- * `pyscf.pbc.tdscf.krks_slow`: PBC implementation for KRKS objects of `pyscf.pbc.scf` modules. Works with
-   an arbitrary number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
+ * (this module) `pyscf.tdscf.proxy`: the molecular implementation;
+ * `pyscf.pbc.tdscf.proxy`: PBC (periodic boundary condition) Gamma-point-only implementation;
+ * `pyscf.pbc.tdscf.kproxy_supercell`: PBC implementation constructing supercells. Works with an arbitrary number of
+   k-points but has an overhead due to ignoring the momentum conservation law. In addition, works only with
+   time reversal invariant (TRI) models: i.e. the k-point grid has to be aligned and contain at least one TRI momentum.
+ * `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonlizes smaller
+   matrices (the performance gain is the total number of k-points in the model).
 """
 
 # Convention for these modules:
-# * PhysERI, PhysERI4, PhysERI8 are proxy classes for computing the full TDDFT matrix
+# * PhysERI is the proxying class constructing time-dependent matrices
 # * vector_to_amplitudes reshapes and normalizes the solution
-# * TDRKS provides a container
+# * TDProxy provides a container
 
 from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, TDBase, format_mask
 from pyscf.tdscf import rhf_slow, TDDFT
@@ -154,10 +152,10 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 
     def __init__(self, model, frozen=None, proxy=None):
         """
-        A proxy class for calculating the TDKS matrix blocks (molecular version).
+        A proxy class for calculating TD matrix blocks (molecular version).
 
         Args:
-            model (RKS): the base model;
+            model: the base model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
             proxy: a pyscf proxy with TD response function;
         """
@@ -221,19 +219,19 @@ class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
 vector_to_amplitudes = rhf_slow.vector_to_amplitudes
 
 
-class TDRKS(TDBase):
+class TDProxy(TDBase):
     proxy_eri = PhysERI
     v2a = staticmethod(vector_to_amplitudes)
 
     def __init__(self, mf, frozen=None, proxy=None):
         """
-        Performs TDKS calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
+        Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
-            mf (RKS): the base restricted DFT model;
+            mf: the base restricted mean-field model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
             proxy: a pyscf proxy with TD response function;
         """
-        super(TDRKS, self).__init__(mf, frozen=frozen)
+        super(TDProxy, self).__init__(mf, frozen=frozen)
         self.fast = True
         self.__proxy__ = proxy
 

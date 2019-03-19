@@ -1,29 +1,27 @@
 #  Author: Artem Pulkin
 """
-This and other `_slow` modules implement the time-dependent Kohn-Sham procedure. The primary performance drawback is
-that, unlike other 'fast' routines with an implicit construction of the eigenvalue problem, these modules construct
-TDHF matrices explicitly by proxying to pyscf density response routines with a O(N^4) complexity scaling. As a result,
-regular `numpy.linalg.eig` can be used to retrieve TDKS roots in a reliable fashion without any issues related to the
-Davidson procedure. Several variants of TDKS are available:
+This and other `proxy` modules implement the time-dependent mean-field procedure using the existing pyscf
+implementations as a black box. The main purpose of these modules is to overcome the existing limitations in pyscf
+(i.e. real-only orbitals, davidson diagonalizer, incomplete Bloch space, etc). The primary performance drawback is that,
+unlike the original pyscf routines with an implicit construction of the eigenvalue problem, these modules construct TD
+matrices explicitly by proxying to pyscf density response routines with a O(N^4) complexity scaling. As a result,
+regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of proxy-TD are available:
 
- * `pyscf.tdscf.rks_slow`: the molecular implementation;
- * `pyscf.pbc.tdscf.rks_slow`: PBC (periodic boundary condition) implementation for RKS objects of `pyscf.pbc.scf`
-   modules;
- * `pyscf.pbc.tdscf.krks_slow_supercell`: PBC implementation for KRKS objects of `pyscf.pbc.scf` modules.
-   Works with an arbitrary number of k-points but has a overhead due to an effective construction of a supercell.
- * `pyscf.pbc.tdscf.krks_slow_gamma`: A Gamma-point calculation resembling the original `pyscf.pbc.tdscf.krks`
-   module. Despite its name, it accepts KRKS objects with an arbitrary number of k-points but finds only few TDKS roots
-   corresponding to collective oscillations without momentum transfer;
- * (this moodule)`pyscf.pbc.tdscf.krks_slow`: PBC implementation for KRKS objects of `pyscf.pbc.scf` modules. Works with
-   an arbitrary number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
+ * `pyscf.tdscf.proxy`: the molecular implementation;
+ * `pyscf.pbc.tdscf.proxy`: PBC (periodic boundary condition) Gamma-point-only implementation;
+ * `pyscf.pbc.tdscf.kproxy_supercell`: PBC implementation constructing supercells. Works with an arbitrary number of
+   k-points but has an overhead due to ignoring the momentum conservation law. In addition, works only with
+   time reversal invariant (TRI) models: i.e. the k-point grid has to be aligned and contain at least one TRI momentum.
+ * (this module) `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonlizes smaller
+   matrices (the performance gain is the total number of k-points in the model).
 """
 
 # Convention for these modules:
-# * PhysERI, PhysERI4, PhysERI8 are proxy classes for computing the full TDDFT matrix
+# * PhysERI is the proxying class constructing time-dependent matrices
 # * vector_to_amplitudes reshapes and normalizes the solution
-# * TDRKS provides a container
+# * TDProxy provides a container
 
-from pyscf.pbc.tdscf import krks_slow_supercell, krhf_slow
+from pyscf.pbc.tdscf import kproxy_supercell, krhf_slow
 
 import numpy
 
@@ -58,13 +56,13 @@ def kov2ov(nocc, nmo, k):
     return mask.reshape(-1)
 
 
-class PhysERI(krks_slow_supercell.PhysERI):
+class PhysERI(kproxy_supercell.PhysERI):
     def __init__(self, model, x, mf_constructor, frozen=None, proxy=None):
         """
-        A proxy class for calculating the TDKS matrix blocks (k-point version).
+        A proxy class for calculating the TD matrix blocks (k-point version).
 
         Args:
-            model (KRKS): the base model with a regular k-point grid which includes the Gamma-point;
+            model: the base model with a time reversal-invariant k-point grid;
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
@@ -78,7 +76,7 @@ class PhysERI(krks_slow_supercell.PhysERI):
         Returns:
             The mask in the ov form.
         """
-        return krks_slow_supercell.orb2ov(numpy.concatenate(self.space), self.nocc_full, self.nmo_full)
+        return kproxy_supercell.orb2ov(numpy.concatenate(self.space), self.nocc_full, self.nmo_full)
 
     def kov2ov(self, k):
         """
@@ -108,7 +106,7 @@ class PhysERI(krks_slow_supercell.PhysERI):
         full_mask_row = reduce(numpy.logical_or, masks_row)
         full_mask_col = reduce(numpy.logical_or, masks_col)
 
-        big = krks_slow_supercell.supercell_response_ov(
+        big = kproxy_supercell.supercell_response_ov(
             self.proxy_vind,
             (full_mask_row, full_mask_col),
             self.nocc_full,
@@ -132,7 +130,7 @@ class PhysERI(krks_slow_supercell.PhysERI):
 
     def tdhf_primary_form(self, k):
         """
-        A primary form of TDKS matrixes (full).
+        A primary form of TD matrices (full).
         Args:
             k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
             vector or a single integer with the second index assuming the first index being zero;
@@ -140,32 +138,29 @@ class PhysERI(krks_slow_supercell.PhysERI):
         Returns:
             Output type: "full", and the corresponding matrix.
         """
-        # 1. Convert k into pairs of rows and column k
         r1, r2, c1, c2 = krhf_slow.get_block_k_ix(self, k)
-
         (a, _), (_, b), (_, b_star), (a_star, _) = self.proxy_response_ov_batch((r1, r1, r2, r2), (c1, c2, c1, c2))
-
         return "full", numpy.block([[a, b], [-b_star.conj(), -a_star.conj()]])
 
 
 vector_to_amplitudes = krhf_slow.vector_to_amplitudes
 
 
-class TDRKS(krks_slow_supercell.TDRKS):
+class TDProxy(kproxy_supercell.TDProxy):
     v2a = staticmethod(vector_to_amplitudes)
     proxy_eri = PhysERI
 
     def __init__(self, mf, x, mf_constructor, frozen=None, proxy=None):
         """
-        Performs TDKS calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
+        Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
-            mf (RKS): the base restricted DFT model;
+            mf: the base model with a time-reversal invariant k-point grid;
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
             proxy: a pyscf proxy with TD response function;
         """
-        super(TDRKS, self).__init__(mf, x, mf_constructor, frozen=frozen, proxy=proxy)
+        super(TDProxy, self).__init__(mf, x, mf_constructor, frozen=frozen, proxy=proxy)
         self.e = {}
         self.xy = {}
 
@@ -188,36 +183,3 @@ class TDRKS(krks_slow_supercell.TDRKS):
         for kk in k:
             self.e[kk], self.xy[kk] = self.__kernel__(k=kk)
         return self.e, self.xy
-
-
-if __name__ == "__main__":
-    from pyscf.pbc.gto import Cell
-    from pyscf.pbc.scf import KRKS
-
-    cell = Cell()
-    # Lift some degeneracies
-    cell.atom = '''
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.67   1.68   1.69
-    '''
-    cell.basis = {'C': [[0, (0.8, 1.0)],
-                        [1, (1.0, 1.0)]]}
-    # cell.basis = 'gth-dzvp'
-    cell.pseudo = 'gth-pade'
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.verbose = 7
-    cell.build()
-
-    gs = [2, 1, 1]
-    k = cell.make_kpts(gs)
-
-    model_krks = KRKS(cell, k)
-    model_krks.kernel()
-
-    model = TDRKS(model_krks, gs, KRKS)
-    model.kernel(0)
-    print model.eri.proxy_vind.text_stats()

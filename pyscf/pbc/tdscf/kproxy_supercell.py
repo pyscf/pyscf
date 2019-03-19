@@ -1,46 +1,41 @@
 #  Author: Artem Pulkin
 """
-This and other `_slow` modules implement the time-dependent Kohn-Sham procedure. The primary performance drawback is
-that, unlike other 'fast' routines with an implicit construction of the eigenvalue problem, these modules construct
-TDHF matrices explicitly by proxying to pyscf density response routines with a O(N^4) complexity scaling. As a result,
-regular `numpy.linalg.eig` can be used to retrieve TDKS roots in a reliable fashion without any issues related to the
-Davidson procedure. Several variants of TDKS are available:
+This and other `proxy` modules implement the time-dependent mean-field procedure using the existing pyscf
+implementations as a black box. The main purpose of these modules is to overcome the existing limitations in pyscf
+(i.e. real-only orbitals, davidson diagonalizer, incomplete Bloch space, etc). The primary performance drawback is that,
+unlike the original pyscf routines with an implicit construction of the eigenvalue problem, these modules construct TD
+matrices explicitly by proxying to pyscf density response routines with a O(N^4) complexity scaling. As a result,
+regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of proxy-TD are available:
 
- * `pyscf.tdscf.rks_slow`: the molecular implementation;
- * `pyscf.pbc.tdscf.rks_slow`: PBC (periodic boundary condition) implementation for RKS objects of `pyscf.pbc.scf`
-   modules;
- * (this module)`pyscf.pbc.tdscf.krks_slow_supercell`: PBC implementation for KRKS objects of `pyscf.pbc.scf` modules.
-   Works with an arbitrary number of k-points but has a overhead due to an effective construction of a supercell.
- * `pyscf.pbc.tdscf.krks_slow_gamma`: A Gamma-point calculation resembling the original `pyscf.pbc.tdscf.krks`
-   module. Despite its name, it accepts KRKS objects with an arbitrary number of k-points but finds only few TDKS roots
-   corresponding to collective oscillations without momentum transfer;
- * `pyscf.pbc.tdscf.krks_slow`: PBC implementation for KRKS objects of `pyscf.pbc.scf` modules. Works with
-   an arbitrary number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
+ * `pyscf.tdscf.proxy`: the molecular implementation;
+ * `pyscf.pbc.tdscf.proxy`: PBC (periodic boundary condition) Gamma-point-only implementation;
+ * (this module) `pyscf.pbc.tdscf.kproxy_supercell`: PBC implementation constructing supercells. Works with an arbitrary number of
+   k-points but has an overhead due to ignoring the momentum conservation law. In addition, works only with
+   time reversal invariant (TRI) models: i.e. the k-point grid has to be aligned and contain at least one TRI momentum.
+ * `pyscf.pbc.tdscf.kproxy`: same as the above but respect the momentum conservation and, thus, diagonlizes smaller
+   matrices (the performance gain is the total number of k-points in the model).
 """
 
 # Convention for these modules:
-# * PhysERI, PhysERI4, PhysERI8 are proxy classes for computing the full TDDFT matrix
+# * PhysERI is the proxying class constructing time-dependent matrices
 # * vector_to_amplitudes reshapes and normalizes the solution
-# * TDRKS provides a container
+# * TDProxy provides a container
 
 from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, PeriodicMFMixin
-from pyscf.tdscf import rks_slow
+from pyscf.tdscf import proxy as mol_proxy
 from pyscf.pbc.tdscf import krhf_slow_supercell, KTDDFT
 from pyscf.lib import einsum, cartesian_prod, norm, logger
 from pyscf.pbc.tools.pbc import super_cell
 
 import numpy
-import scipy
 from scipy import sparse
-
-from itertools import product
 
 
 def minus_k(model, threshold=None, degeneracy_threshold=None):
     """
     Retrieves an array of indexes of negative k.
     Args:
-        model (KSCF): an arbitrary mean-field pbc model;
+        model: a mean-field pbc model;
         threshold (float): a threshold for determining the negative;
         degeneracy_threshold (float): a threshold for assuming degeneracy;
 
@@ -73,7 +68,7 @@ def assert_scf_converged(model, threshold=1e-7):
     """
     Tests if scf is converged.
     Args:
-        model (KSCF): a model to test;
+        model: a mean-field model to test;
         threshold (float): threshold for eigenvalue comparison;
 
     Returns:
@@ -81,13 +76,6 @@ def assert_scf_converged(model, threshold=1e-7):
     """
     ovlp = model.get_ovlp()
     fock = model.get_fock(dm=model.make_rdm1())
-    # dm = model.make_rdm1()
-    # fock = model.get_fock(
-    #     model.get_hcore(model.cell),
-    #     ovlp,
-    #     model.get_veff(model.cell, dm),
-    #     dm,
-    # )
     for k, (m, e, v, o) in enumerate(zip(fock, model.mo_energy, model.mo_coeff, ovlp)):
         delta = norm(numpy.dot(m, v) - e[numpy.newaxis, :] * numpy.dot(o, v), axis=0)
         nabove = (delta > threshold).sum()
@@ -143,8 +131,8 @@ def k2s(model, grid_spec, mf_constructor, threshold=None, degeneracy_threshold=N
     """
     Converts k-point model into a supercell with real orbitals.
     Args:
-        model (KSCF): an arbitrary mean-field pbc model;
-        grid_spec (Iterable): integer dimensions of the k-grid in KSCF;
+        model: a mean-field pbc model;
+        grid_spec (Iterable): integer dimensions of the k-grid in the mean-field model;
         mf_constructor (Callable): a function constructing the mean-field object;
         threshold (float): a threshold for determining the negative k-point index;
         degeneracy_threshold (float): a threshold for assuming degeneracy when composing real-valued orbitals;
@@ -429,7 +417,7 @@ def supercell_response_ov(vind, space_ov, nocc, nmo, double, rot_bloch, log_dest
     ))
 
     logger.debug1(log_dest, "  collecting the A, B matrices ...")
-    response_real_a, response_real_b = rks_slow.molecular_response_ov(
+    response_real_a, response_real_b = mol_proxy.molecular_response_ov(
         vind,
         space_real_ov,
         nocc_full,
@@ -515,10 +503,10 @@ def supercell_response(vind, space, nocc, nmo, double, rot_bloch, log_dest):
 class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
     def __init__(self, model, x, mf_constructor, frozen=None, proxy=None):
         """
-        A proxy class for calculating the TDKS matrix blocks (supercell version).
+        A proxy class for calculating TD matrix blocks (supercell version).
 
         Args:
-            model (KRKS): the base model with a regular k-point grid which includes the Gamma-point;
+            model: the base model with a time reversal-invariant k-point grid;
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
@@ -590,21 +578,21 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
 vector_to_amplitudes = krhf_slow_supercell.vector_to_amplitudes
 
 
-class TDRKS(rks_slow.TDRKS):
+class TDProxy(mol_proxy.TDProxy):
     v2a = staticmethod(vector_to_amplitudes)
     proxy_eri = PhysERI
 
     def __init__(self, mf, x, mf_constructor, frozen=None, proxy=None):
         """
-        Performs TDKS calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
+        Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
-            mf (RKS): the base restricted DFT model;
+            mf: the base model with a time reversal-invariant k-point grid;
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
             proxy: a pyscf proxy with TD response function;
         """
-        super(TDRKS, self).__init__(mf, frozen=frozen, proxy=proxy)
+        super(TDProxy, self).__init__(mf, frozen=frozen, proxy=proxy)
         self.fast = False
         self.x = x
         self.mf_constructor = mf_constructor
@@ -624,36 +612,3 @@ class TDRKS(rks_slow.TDRKS):
             proxy=self.__proxy__,
         )
 
-
-if __name__ == "__main__":
-    from pyscf.pbc.gto import Cell
-    from pyscf.pbc.scf import KRHF
-
-    cell = Cell()
-    # Lift some degeneracies
-    cell.atom = '''
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.67   1.68   1.69
-    '''
-    cell.basis = {'C': [[0, (0.8, 1.0)],
-                        [1, (1.0, 1.0)]]}
-    # cell.basis = 'sto-3g'
-    cell.pseudo = 'gth-pade'
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.verbose = 7
-    cell.build()
-
-    x = [1, 1, 1]
-    k = cell.make_kpts(x)
-
-    # K-points
-    model_krhf = KRHF(cell, k).density_fit()
-    model_krhf.conv_tol = 1e-14
-    model_krhf.kernel()
-
-    model_td = TDRKS(model_krhf, x, lambda x: KRHF(x).density_fit(), frozen=1)
-    model_td.kernel()
