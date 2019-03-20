@@ -149,7 +149,7 @@ class H20KSTest(unittest.TestCase):
         td_proxy_model.nroots = td_model_rks.nroots
         td_proxy_model.kernel()
 
-        testing.assert_allclose(td_model_rks.e, td_proxy_model.e)
+        testing.assert_allclose(td_model_rks.e, td_proxy_model.e, atol=1e-6)
 
         cls.gw = gw = GW(model_rks, td_model_rks)
         gw.kernel()
