@@ -25,23 +25,11 @@ from pyscf.tdscf import proxy as mol_proxy, rhf_slow, common_slow
 from pyscf.pbc.tdscf import KTDDFT, KTDHF
 
 
-class PhysERI(common_slow.GammaMFMixin, mol_proxy.PhysERI):
+class PhysERI(mol_proxy.PhysERI):
     proxy_choices = {
         "hf": KTDHF,
         "dft": KTDDFT,
     }
-
-    def __init__(self, model, proxy, frozen=None):
-        """
-        A proxy class for calculating TD matrix blocks (Gamma version).
-
-        Args:
-            model: the base model;
-            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
-            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-        """
-        common_slow.TDProxyMatrixBlocks.__init__(self, self.proxy_choices[proxy](model))
-        common_slow.GammaMFMixin.__init__(self, model, frozen=frozen)
 
 
 vector_to_amplitudes = rhf_slow.vector_to_amplitudes
@@ -49,15 +37,3 @@ vector_to_amplitudes = rhf_slow.vector_to_amplitudes
 
 class TDProxy(mol_proxy.TDProxy):
     proxy_eri = PhysERI
-    v2a = staticmethod(vector_to_amplitudes)
-
-    def __init__(self, mf, proxy, frozen=None):
-        """
-        Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
-        Args:
-            mf: the base restricted mean-field model;
-            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
-            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-        """
-        super(TDProxy, self).__init__(mf, proxy, frozen=frozen)
-        self.fast = False

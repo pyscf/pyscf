@@ -441,65 +441,6 @@ class MolecularMFMixin(object):
         return len(self.space)
 
 
-class GammaMFMixin(object):
-    def __init__(self, model, frozen=None):
-        """
-        A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
-
-        PBC Gamma-point version (supports K-PBC drivers with a single k-point).
-
-        Args:
-            model: the base model;
-            frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-        """
-        if "kpts" not in dir(model):
-            raise ValueError("No 'kpts' attribute in the mean-field object")
-        if len(model.kpts) != 1:
-            raise ValueError("Only a single k-point supported, found: model.kpts = {}".format(model.kpts))
-        self.model = model
-        self.space = format_frozen_mol(frozen, len(model.mo_energy[0]))
-
-    @property
-    def mo_coeff(self):
-        """MO coefficients."""
-        return self.model.mo_coeff[0][:, self.space]
-
-    @property
-    def mo_energy(self):
-        """MO energies."""
-        return self.model.mo_energy[0][self.space]
-
-    @property
-    def mo_occ(self):
-        """MO occupation numbers."""
-        return self.model.mo_occ[0][self.space]
-
-    @property
-    def nocc(self):
-        """The number of occupied orbitals."""
-        return int(self.model.mo_occ[0][self.space].sum() // 2)
-
-    @property
-    def nmo(self):
-        """The total number of molecular orbitals."""
-        return self.space.sum()
-
-    @property
-    def mo_coeff_full(self):
-        """MO coefficients."""
-        return self.model.mo_coeff[0]
-
-    @property
-    def nocc_full(self):
-        """The true (including frozen degrees of freedom) number of occupied orbitals."""
-        return int(self.model.mo_occ[0].sum() // 2)
-
-    @property
-    def nmo_full(self):
-        """The true (including frozen degrees of freedom) total number of molecular orbitals."""
-        return len(self.space)
-
-
 def format_frozen_k(frozen, nmo, nk):
     """
     Formats the argument into a mask array of bools where False values correspond to frozen orbitals for each k-point.
@@ -770,7 +711,7 @@ class TDBase(object):
         self.xy = None
         self.e = None
         self.frozen = frozen
-        self.fast = not numpy.iscomplexobj(mf.mo_coeff)
+        self.fast = not numpy.iscomplexobj(numpy.asanyarray(mf.mo_coeff))
 
     def __kernel__(self, **kwargs):
         """Silent implementation of kernel which does not change attributes."""

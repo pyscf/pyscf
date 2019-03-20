@@ -240,7 +240,6 @@ class TDProxy(TDBase):
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
         super(TDProxy, self).__init__(mf, frozen=frozen)
-        self.fast = True
         self.__proxy__ = proxy
 
     def ao2mo(self):

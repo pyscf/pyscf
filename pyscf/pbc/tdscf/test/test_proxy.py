@@ -59,7 +59,6 @@ class DiamondTestGamma(unittest.TestCase):
         """Tests container behavior."""
         model = TDProxy(self.model_rks, "dft")
         model.nroots = self.td_model_rks.nroots
-        assert not model.fast
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rks.e, atol=1e-12)
         assert_vectors_close(model.xy, self.td_model_rks.xy, atol=1e-12)
@@ -117,7 +116,6 @@ class DiamondHFTestGamma(unittest.TestCase):
         """Tests container behavior."""
         model = TDProxy(self.model_rhf, "hf")
         model.nroots = self.td_model_rhf.nroots
-        assert not model.fast
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-12)
         assert_vectors_close(model.xy, self.td_model_rhf.xy, atol=1e-12)
