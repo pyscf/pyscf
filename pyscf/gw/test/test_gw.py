@@ -47,7 +47,7 @@ class H20Test(unittest.TestCase):
         td_model_rhf_slow.nroots = td_model_rks.nroots
         td_model_rhf_slow.kernel()
 
-        cls.td_proxy_model = td_proxy_model = TDProxy(model_rks, proxy=td_model_rks)
+        cls.td_proxy_model = td_proxy_model = TDProxy(model_rks, "dft")
         td_proxy_model.nroots = td_model_rks.nroots
         td_proxy_model.kernel()
 
@@ -145,7 +145,7 @@ class H20KSTest(unittest.TestCase):
         td_model_rks.nroots = 4
         td_model_rks.kernel()
 
-        cls.td_proxy_model = td_proxy_model = TDProxy(model_rks, proxy=td_model_rks)
+        cls.td_proxy_model = td_proxy_model = TDProxy(model_rks, "dft")
         td_proxy_model.nroots = td_model_rks.nroots
         td_proxy_model.kernel()
 
