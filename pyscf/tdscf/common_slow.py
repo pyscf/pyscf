@@ -74,18 +74,20 @@ def ab2full(a, b):
     return numpy.block([[a, b], [-b.conj(), -a.conj()]])
 
 
-def ab2mkk(a, b):
+def ab2mkk(a, b, tolerance=1e-12):
     """
     Transforms A and B TD matrices into MK and K matrices.
     Args:
         a (numpy.ndarray): TD A-matrix;
         b (numpy.ndarray): TD B-matrix;
+        tolerance (float): a tolerance for checking whether the input matrices are real;
 
     Returns:
         MK and K submatrices.
     """
-    if numpy.iscomplexobj(a) or numpy.iscomplexobj(b):
+    if max(abs(a.imag).max(), abs(b.imag).max()) > tolerance:
         raise ValueError("A- and/or B-matrixes are complex-valued: no transform is possible")
+    a, b = a.real, b.real
     tdhf_k, tdhf_m = a - b, a + b
     tdhf_mk = tdhf_m.dot(tdhf_k)
     return tdhf_mk, tdhf_k
