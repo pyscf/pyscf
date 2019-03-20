@@ -49,7 +49,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = PhysERI(self.model_rks)
+        e = PhysERI(self.model_rks, "dft")
         m = e.tdhf_full_form()
 
         # Test matrix vs pyscf
@@ -57,7 +57,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDProxy(self.model_rks)
+        model = TDProxy(self.model_rks, "dft")
         model.nroots = self.td_model_rks.nroots
         assert not model.fast
         model.kernel()
@@ -107,7 +107,7 @@ class DiamondHFTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = PhysERI(self.model_rhf)
+        e = PhysERI(self.model_rhf, "hf")
         m = e.tdhf_full_form()
 
         # Test matrix vs pyscf
@@ -115,7 +115,7 @@ class DiamondHFTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDProxy(self.model_rhf)
+        model = TDProxy(self.model_rhf, "hf")
         model.nroots = self.td_model_rhf.nroots
         assert not model.fast
         model.kernel()

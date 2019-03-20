@@ -23,7 +23,7 @@ regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of
 
 from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, PeriodicMFMixin
 from pyscf.tdscf import proxy as mol_proxy
-from pyscf.pbc.tdscf import krhf_slow_supercell, KTDDFT
+from pyscf.pbc.tdscf import krhf_slow_supercell, KTDDFT, KTDHF
 from pyscf.lib import einsum, cartesian_prod, norm, logger
 from pyscf.pbc.tools.pbc import super_cell
 
@@ -501,19 +501,24 @@ def supercell_response(vind, space, nocc, nmo, double, rot_bloch, log_dest):
 
 
 class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
-    def __init__(self, model, x, mf_constructor, frozen=None, proxy=None):
+    proxy_choices = {
+        "hf": KTDHF,
+        "dft": KTDDFT,
+    }
+
+    def __init__(self, model, proxy, x, mf_constructor, frozen=None):
         """
         A proxy class for calculating TD matrix blocks (supercell version).
 
         Args:
             model: the base model with a time reversal-invariant k-point grid;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
         model_super = k2s(model, x, mf_constructor)
-        TDProxyMatrixBlocks.__init__(self, proxy(model_super) if proxy is not None else KTDDFT(model_super))
+        TDProxyMatrixBlocks.__init__(self, self.proxy_choices[proxy](model_super))
         PeriodicMFMixin.__init__(self, model, frozen=frozen)
         self.model_super = model_super
 
@@ -582,17 +587,17 @@ class TDProxy(mol_proxy.TDProxy):
     v2a = staticmethod(vector_to_amplitudes)
     proxy_eri = PhysERI
 
-    def __init__(self, mf, x, mf_constructor, frozen=None, proxy=None):
+    def __init__(self, mf, proxy, x, mf_constructor, frozen=None):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf: the base model with a time reversal-invariant k-point grid;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
-        super(TDProxy, self).__init__(mf, frozen=frozen, proxy=proxy)
+        super(TDProxy, self).__init__(mf, proxy, frozen=frozen)
         self.fast = False
         self.x = x
         self.mf_constructor = mf_constructor
@@ -606,9 +611,9 @@ class TDProxy(mol_proxy.TDProxy):
         """
         return self.proxy_eri(
             self._scf,
+            self.__proxy__,
             x=self.x,
             mf_constructor=self.mf_constructor,
             frozen=self.frozen,
-            proxy=self.__proxy__,
         )
 

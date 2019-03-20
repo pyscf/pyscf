@@ -22,21 +22,25 @@ regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of
 # * TDProxy provides a container
 
 from pyscf.tdscf import proxy as mol_proxy, rhf_slow, common_slow
-from pyscf.pbc.tdscf import KTDDFT
+from pyscf.pbc.tdscf import KTDDFT, KTDHF
 
 
 class PhysERI(common_slow.GammaMFMixin, mol_proxy.PhysERI):
+    proxy_choices = {
+        "hf": KTDHF,
+        "dft": KTDDFT,
+    }
 
-    def __init__(self, model, frozen=None, proxy=None):
+    def __init__(self, model, proxy, frozen=None):
         """
-        A proxy class for calculating the TD matrix blocks (Gamma-point version).
+        A proxy class for calculating TD matrix blocks (Gamma version).
 
         Args:
-            model: the base model with a single k-point;
+            model: the base model;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
-        common_slow.TDProxyMatrixBlocks.__init__(self, proxy if proxy is not None else KTDDFT(model))
+        common_slow.TDProxyMatrixBlocks.__init__(self, self.proxy_choices[proxy](model))
         common_slow.GammaMFMixin.__init__(self, model, frozen=frozen)
 
 
@@ -47,13 +51,13 @@ class TDProxy(mol_proxy.TDProxy):
     proxy_eri = PhysERI
     v2a = staticmethod(vector_to_amplitudes)
 
-    def __init__(self, mf, frozen=None, proxy=None):
+    def __init__(self, mf, proxy, frozen=None):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf: the base restricted mean-field model;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
-        super(TDProxy, self).__init__(mf, frozen=frozen, proxy=proxy)
+        super(TDProxy, self).__init__(mf, proxy, frozen=frozen)
         self.fast = False

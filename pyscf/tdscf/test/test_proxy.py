@@ -45,14 +45,14 @@ class H20Test(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = PhysERI(self.model_rks)
+        e = PhysERI(self.model_rks, "dft")
         mk, _ = e.tdhf_mk_form()
         testing.assert_allclose(self.ref_m, mk, atol=1e-13)
 
         # Test frozen
         for frozen in (1, [0, -1]):
             try:
-                e = PhysERI(self.model_rks, frozen=frozen)
+                e = PhysERI(self.model_rks, "dft", frozen=frozen)
                 mk, _ = e.tdhf_mk_form()
                 ov_mask = tdhf_frozen_mask(e, kind="1ov")
                 ref_m = self.ref_m[numpy.ix_(ov_mask, ov_mask)]
@@ -64,7 +64,7 @@ class H20Test(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDProxy(self.model_rks)
+        model = TDProxy(self.model_rks, "dft")
         model.nroots = self.td_model_rks.nroots
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rks.e, atol=1e-5)
@@ -74,7 +74,7 @@ class H20Test(unittest.TestCase):
         """Tests container behavior."""
         for frozen in (1, [0, -1]):
             try:
-                model = TDProxy(self.model_rks, frozen=frozen)
+                model = TDProxy(self.model_rks, "dft", frozen=frozen)
                 model.nroots = self.td_model_rks.nroots
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
@@ -87,7 +87,7 @@ class H20Test(unittest.TestCase):
 
     def test_raw_response(self):
         """Tests the `molecular_reponse` and whether it slices output properly."""
-        eri = PhysERI(self.model_rks)
+        eri = PhysERI(self.model_rks, "dft")
         ref_m_full = eri.proxy_response()
 
         # Test single
@@ -155,7 +155,7 @@ class H20HFTest(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = PhysERI(self.model_rhf)
+        e = PhysERI(self.model_rhf, "hf")
         m = e.tdhf_full_form()
         testing.assert_allclose(self.ref_m, m, atol=1e-13)
 
@@ -163,7 +163,7 @@ class H20HFTest(unittest.TestCase):
         for proxy in (None, self.td_model_rhf):
             for frozen in (1, [0, -1]):
                 try:
-                    e = PhysERI(self.model_rhf, frozen=frozen)
+                    e = PhysERI(self.model_rhf, "dft", frozen=frozen)
                     m = e.tdhf_full_form()
                     ov_mask = tdhf_frozen_mask(e, kind="ov")
                     ref_m = self.ref_m[numpy.ix_(ov_mask, ov_mask)]
@@ -178,7 +178,7 @@ class H20HFTest(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = TDProxy(self.model_rhf)
+        model = TDProxy(self.model_rhf, "hf")
         model.nroots = self.td_model_rhf.nroots
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
@@ -188,7 +188,7 @@ class H20HFTest(unittest.TestCase):
         """Tests container behavior."""
         for frozen in (1, [0, -1]):
             try:
-                model = TDProxy(self.model_rhf, frozen=frozen)
+                model = TDProxy(self.model_rhf, "hf", frozen=frozen)
                 model.nroots = self.td_model_rhf.nroots
                 model.kernel()
                 mask_o, mask_v = tdhf_frozen_mask(model.eri, kind="o,v")
@@ -201,7 +201,7 @@ class H20HFTest(unittest.TestCase):
 
     def test_raw_response(self):
         """Tests the `molecular_reponse` and whether it slices output properly."""
-        eri = PhysERI(self.model_rhf)
+        eri = PhysERI(self.model_rhf, "hf")
         ref_m_full = eri.proxy_response()
 
         # Test single

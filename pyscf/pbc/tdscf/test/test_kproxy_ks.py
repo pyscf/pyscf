@@ -52,7 +52,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         cls.model_krks = model_krks = KRKS(cell, k)
         model_krks.kernel()
 
-        cls.td_model_rks_supercell = kproxy_supercell.TDProxy(model_krks, [cls.k, 1, 1], KRKS)
+        cls.td_model_rks_supercell = kproxy_supercell.TDProxy(model_krks, "dft", [cls.k, 1, 1], KRKS)
         cls.td_model_rks_supercell.kernel()
         cls.ref_m_supercell = cls.td_model_rks_supercell.eri.tdhf_full_form()
 
@@ -65,7 +65,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy.TDProxy(self.model_krks, [self.k, 1, 1], KRKS)
+        model = kproxy.TDProxy(self.model_krks, "dft", [self.k, 1, 1], KRKS)
         model.nroots = self.td_model_rks_supercell.nroots
         assert not model.fast
         for k in range(self.k):

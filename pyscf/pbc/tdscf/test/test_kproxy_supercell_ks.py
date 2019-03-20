@@ -63,7 +63,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = kproxy_supercell.PhysERI(self.model_krks, [1, 1, 1], KRKS)
+        e = kproxy_supercell.PhysERI(self.model_krks, "dft", [1, 1, 1], KRKS)
         m = e.tdhf_full_form()
         testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
         vals, vecs = eig(m, nroots=self.td_model_krks.nroots)
@@ -71,7 +71,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy_supercell.TDProxy(self.model_krks, [1, 1, 1], KRKS)
+        model = kproxy_supercell.TDProxy(self.model_krks, "dft", [1, 1, 1], KRKS)
         model.nroots = self.td_model_krks.nroots
         assert not model.fast
         model.kernel()
@@ -114,7 +114,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy_supercell.TDProxy(self.model_krks, [1, 1, 1], density_fitting_ks)
+        model = kproxy_supercell.TDProxy(self.model_krks, "dft", [1, 1, 1], density_fitting_ks)
         # Shifted k-point grid is not TRS: an exception should be raised
         with self.assertRaises(RuntimeError):
             model.kernel()
@@ -173,7 +173,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy_supercell.TDProxy(self.model_krks, [self.k, 1, 1], KRKS)
+        model = kproxy_supercell.TDProxy(self.model_krks, "dft", [self.k, 1, 1], KRKS)
         model.nroots = self.td_model_rks.nroots
         assert not model.fast
         model.kernel()
@@ -187,7 +187,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_raw_response(self):
         """Tests the `supercell_reponse` and whether it slices output properly."""
-        eri = kproxy_supercell.PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
+        eri = kproxy_supercell.PhysERI(self.model_krks, "dft", [self.k, 1, 1], KRKS)
         ref_m_full = eri.proxy_response()
 
         # Test single
@@ -233,7 +233,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_raw_response_ov(self):
         """Tests the `molecular_reponse` and whether it slices output properly."""
-        eri = kproxy_supercell.PhysERI(self.model_krks, [self.k, 1, 1], KRKS)
+        eri = kproxy_supercell.PhysERI(self.model_krks, "dft", [self.k, 1, 1], KRKS)
         ref_m_full = eri.proxy_response()
         s = sum(eri.nocc_full) * (sum(eri.nmo_full) - sum(eri.nocc_full))
         ref_m_full = tuple(i.reshape((s, s)) for i in ref_m_full)

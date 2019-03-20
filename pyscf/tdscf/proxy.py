@@ -22,7 +22,7 @@ regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of
 # * TDProxy provides a container
 
 from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, MolecularMFMixin, TDBase, format_mask
-from pyscf.tdscf import rhf_slow, TDDFT
+from pyscf.tdscf import rhf_slow, TDDFT, TDHF
 from pyscf.lib import logger
 
 import numpy
@@ -149,17 +149,25 @@ def mk_make_canonic(m, o, v, return_ov=False, space_ov=None):
 
 
 class PhysERI(MolecularMFMixin, TDProxyMatrixBlocks):
+    proxy_choices = {
+        "hf": TDHF,
+        "dft": TDDFT,
+    }
 
-    def __init__(self, model, frozen=None, proxy=None):
+    def __init__(self, model, proxy, frozen=None):
         """
         A proxy class for calculating TD matrix blocks (molecular version).
 
         Args:
             model: the base model;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
-        TDProxyMatrixBlocks.__init__(self, proxy if proxy is not None else TDDFT(model))
+        # Note: the "proxy" argument does not matter at all since pyscf returns same objects for both HF and DFT
+        # mean-field solutions. The argument is left for consistency and explicitness
+        if proxy not in self.proxy_choices:
+            raise ValueError("Unknown proxy: {}".format(repr(proxy)))
+        TDProxyMatrixBlocks.__init__(self, self.proxy_choices[proxy](model))
         MolecularMFMixin.__init__(self, model, frozen=frozen)
 
     def proxy_is_double(self):
@@ -223,13 +231,13 @@ class TDProxy(TDBase):
     proxy_eri = PhysERI
     v2a = staticmethod(vector_to_amplitudes)
 
-    def __init__(self, mf, frozen=None, proxy=None):
+    def __init__(self, mf, proxy, frozen=None):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf: the base restricted mean-field model;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
         super(TDProxy, self).__init__(mf, frozen=frozen)
         self.fast = True
@@ -242,4 +250,4 @@ class TDProxy(TDBase):
         Returns:
             A suitable ERI.
         """
-        return self.proxy_eri(self._scf, frozen=self.frozen, proxy=self.__proxy__)
+        return self.proxy_eri(self._scf, self.__proxy__, frozen=self.frozen)

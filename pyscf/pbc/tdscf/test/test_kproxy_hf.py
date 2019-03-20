@@ -63,7 +63,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = kproxy.PhysERI(self.model_krhf, [1, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy.PhysERI(self.model_krhf, "hf", [1, 1, 1], density_fitting_hf)
         m = e.tdhf_full_form(0)
         testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
         vals, vecs = eig(m, nroots=self.td_model_krhf.nroots)
@@ -71,7 +71,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy.TDProxy(self.model_krhf, [1, 1, 1], density_fitting_hf)
+        model = kproxy.TDProxy(self.model_krhf, "hf", [1, 1, 1], density_fitting_hf)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel(0)
@@ -124,7 +124,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_eri(self):
         """Tests ERI."""
-        e = kproxy.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy.PhysERI(self.model_krhf, "hf", [self.k, 1, 1], density_fitting_hf)
         for i in range(self.k):
             try:
                 m = e.tdhf_full_form(i)
@@ -137,7 +137,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy.TDProxy(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        model = kproxy.TDProxy(self.model_krhf, "hf", [self.k, 1, 1], density_fitting_hf)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel()

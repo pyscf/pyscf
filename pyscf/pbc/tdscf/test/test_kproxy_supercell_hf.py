@@ -63,7 +63,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        e = kproxy_supercell.PhysERI(self.model_krhf, [1, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy_supercell.PhysERI(self.model_krhf, "hf", [1, 1, 1], density_fitting_hf)
         m = e.tdhf_full_form()
         testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
         vals, vecs = eig(m, nroots=self.td_model_krhf.nroots)
@@ -71,7 +71,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy_supercell.TDProxy(self.model_krhf, [1, 1, 1], density_fitting_hf)
+        model = kproxy_supercell.TDProxy(self.model_krhf, "hf", [1, 1, 1], density_fitting_hf)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel()
@@ -124,7 +124,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_eri(self):
         """Tests ERI."""
-        e = kproxy_supercell.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        e = kproxy_supercell.PhysERI(self.model_krhf, "hf", [self.k, 1, 1], density_fitting_hf)
         m = e.tdhf_full_form()
 
         # Test matrix vs ref
@@ -132,7 +132,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_class(self):
         """Tests container behavior."""
-        model = kproxy_supercell.TDProxy(self.model_krhf, [self.k, 1, 1], density_fitting_hf, proxy=KTDHF)
+        model = kproxy_supercell.TDProxy(self.model_krhf, "hf", [self.k, 1, 1], density_fitting_hf)
         model.nroots = self.td_model_krhf.nroots
         assert not model.fast
         model.kernel()
@@ -196,7 +196,7 @@ class FrozenTest(unittest.TestCase):
         """Tests ERI."""
         for frozen in (1, [0, 1], [0, -1]):
             try:
-                e = kproxy_supercell.PhysERI(self.model_krhf, [self.k, 1, 1], density_fitting_hf, frozen=frozen)
+                e = kproxy_supercell.PhysERI(self.model_krhf, "hf", [self.k, 1, 1], density_fitting_hf, frozen=frozen)
                 m = e.tdhf_full_form()
 
                 ref_e = krhf_slow_supercell.PhysERI4(self.model_krhf, frozen=frozen)

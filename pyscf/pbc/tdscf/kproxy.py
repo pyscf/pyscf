@@ -57,18 +57,18 @@ def kov2ov(nocc, nmo, k):
 
 
 class PhysERI(kproxy_supercell.PhysERI):
-    def __init__(self, model, x, mf_constructor, frozen=None, proxy=None):
+    def __init__(self, model, proxy, x, mf_constructor, frozen=None):
         """
         A proxy class for calculating the TD matrix blocks (k-point version).
 
         Args:
             model: the base model with a time reversal-invariant k-point grid;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
-        super(PhysERI, self).__init__(model, x, mf_constructor, frozen=frozen, proxy=proxy)
+        super(PhysERI, self).__init__(model, proxy, x, mf_constructor, frozen=frozen)
 
     def get_ov_space_mask(self):
         """
@@ -150,17 +150,17 @@ class TDProxy(kproxy_supercell.TDProxy):
     v2a = staticmethod(vector_to_amplitudes)
     proxy_eri = PhysERI
 
-    def __init__(self, mf, x, mf_constructor, frozen=None, proxy=None):
+    def __init__(self, mf, proxy, x, mf_constructor, frozen=None):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
             mf: the base model with a time-reversal invariant k-point grid;
+            proxy: a pyscf proxy with TD response function, one of 'hf', 'dft';
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
-            proxy: a pyscf proxy with TD response function;
         """
-        super(TDProxy, self).__init__(mf, x, mf_constructor, frozen=frozen, proxy=proxy)
+        super(TDProxy, self).__init__(mf, proxy, x, mf_constructor, frozen=frozen)
         self.e = {}
         self.xy = {}
 
