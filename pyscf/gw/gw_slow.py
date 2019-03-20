@@ -120,7 +120,7 @@ def corrected_moe(eri, p):
         moc[:, numpy.newaxis],
     )).squeeze().trace()
     mf = eri.model
-    v_mf = mf.get_veff() - mf.get_j()
+    v_mf = eri.squeeze(mf.get_veff() - mf.get_j())
     v_mf = einsum("i,ij,j", moc.conj(), v_mf, moc)
     return moe + vk - v_mf
 
