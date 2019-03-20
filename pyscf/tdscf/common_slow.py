@@ -380,34 +380,43 @@ class MolecularMFMixin(object):
         """
         A mixin to support custom slices of mean-field attributes: `mo_coeff`, `mo_energy`, ...
 
-        Molecular version.
+        Molecular version. Also supports single k-point inputs.
 
         Args:
             model: the base model;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
         """
+        self.__is_k__ = False
+        if "kpts" in dir(model):
+            self.__is_k__ = True
+            if len(model.kpts) != 1:
+                raise ValueError("Only a single k-point supported, found: model.kpts = {}".format(model.kpts))
         self.model = model
-        self.space = format_frozen_mol(frozen, len(model.mo_energy))
+        self.space = format_frozen_mol(frozen, len(self.squeeze(model.mo_energy)))
+
+    def squeeze(self, x):
+        """Squeezes quantities in the case of a PBC model."""
+        return x[0] if self.__is_k__ else x
 
     @property
     def mo_coeff(self):
         """MO coefficients."""
-        return self.model.mo_coeff[:, self.space]
+        return self.squeeze(self.model.mo_coeff)[:, self.space]
 
     @property
     def mo_energy(self):
         """MO energies."""
-        return self.model.mo_energy[self.space]
+        return self.squeeze(self.model.mo_energy)[self.space]
 
     @property
     def mo_occ(self):
         """MO occupation numbers."""
-        return self.model.mo_occ[self.space]
+        return self.squeeze(self.model.mo_occ)[self.space]
 
     @property
     def nocc(self):
         """The number of occupied orbitals."""
-        return int(self.model.mo_occ[self.space].sum() // 2)
+        return int(self.squeeze(self.model.mo_occ)[self.space].sum() // 2)
 
     @property
     def nmo(self):
@@ -417,12 +426,12 @@ class MolecularMFMixin(object):
     @property
     def mo_coeff_full(self):
         """MO coefficients."""
-        return self.model.mo_coeff
+        return self.squeeze(self.model.mo_coeff)
 
     @property
     def nocc_full(self):
         """The true (including frozen degrees of freedom) number of occupied orbitals."""
-        return int(self.model.mo_occ.sum() // 2)
+        return int(self.squeeze(self.model.mo_occ).sum() // 2)
 
     @property
     def nmo_full(self):
