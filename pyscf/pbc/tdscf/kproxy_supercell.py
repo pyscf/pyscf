@@ -146,10 +146,42 @@ def k2s(model, grid_spec, mf_constructor, threshold=None, degeneracy_threshold=N
     Returns:
         The same class where the Cell object was replaced by the supercell and all fields were adjusted accordingly.
     """
+    # This hack works as follows. Provided TRS Hamiltonian
+    #    H(k) = H(-k)*,
+    # with same real eigenvalues and eigenfunctions related as
+    #    psi(k) = c psi(-k)*,
+    # c - arbitrary phase, it is easy to construct real (non-Bloch) eigenvectors of the whole Hamiltonian
+    #    real1(|k|) = c* psi(k) + psi(-k) = psi(-k)* + psi(-k)
+    # and
+    #    real2(|k|) = 1.j * (c* psi(k) - psi(-k)) = 1.j* (psi(-k)* - psi(-k)).
+    # The coefficient c is determined as
+    #    psi(k) * psi(-k) = c psi(-k)* * psi(-k) = c
     if imaginary_threshold is None:
         imaginary_threshold = 1e-7
 
     mk = minus_k(model, threshold=threshold, degeneracy_threshold=degeneracy_threshold)
+
+    # Fix phases
+    ovlp = model.get_ovlp()
+    phases = {}
+    for k1, k2 in enumerate(mk):
+        if k1 <= k2:
+            c1 = model.mo_coeff[k1]
+            c2 = model.mo_coeff[k2]
+            o = ovlp[k1]
+            r = reduce(numpy.dot, (c2.T, o, c1))
+            delta = abs(abs(r) - numpy.eye(r.shape[0])).max()
+            if delta > imaginary_threshold:
+                raise RuntimeError("K-points connected by time reversal {:d} and {:d} are not complex conjugate: "
+                                   "the difference {:.3e} is larger than the threshold {:.3e}".format(
+                                        k1, k2, delta, imaginary_threshold,
+                                    ))
+            p = numpy.angle(numpy.diag(r))
+            if k1 == k2:
+                phases[k1] = numpy.exp(- .5j * p)[numpy.newaxis, :]
+            else:
+                phases[k1] = numpy.exp(- 1.j * p)[numpy.newaxis, :]
+
     nk = len(model.kpts)
     t_vecs = cartesian_prod(tuple(numpy.arange(i) for i in grid_spec))
     kpts_frac = model.cell.get_scaled_kpts(model.kpts)
@@ -183,17 +215,17 @@ def k2s(model, grid_spec, mf_constructor, threshold=None, degeneracy_threshold=N
         j = k_spaces[mk[k]]
 
         if k == mk[k]:
-            rotation_matrix[i, i] = 1
-            inv_rotation_matrix[i, i] = 1
+            rotation_matrix[i, i] = phases[k]
+            inv_rotation_matrix[i, i] = phases[k].conj()
 
         elif k < mk[k]:
-            rotation_matrix[i, i] = .5**.5
+            rotation_matrix[i, i] = .5**.5 * phases[k]
             rotation_matrix[j, i] = .5**.5
-            rotation_matrix[i, j] = -1.j * .5**.5
+            rotation_matrix[i, j] = -1.j * .5**.5 * phases[k]
             rotation_matrix[j, j] = 1.j * .5**.5
 
-            inv_rotation_matrix[i, i] = .5**.5
-            inv_rotation_matrix[j, i] = 1.j * .5**.5
+            inv_rotation_matrix[i, i] = .5**.5 * phases[k].conj()
+            inv_rotation_matrix[j, i] = 1.j * .5**.5 * phases[k].conj()
             inv_rotation_matrix[i, j] = .5**.5
             inv_rotation_matrix[j, j] = -1.j * .5**.5
 

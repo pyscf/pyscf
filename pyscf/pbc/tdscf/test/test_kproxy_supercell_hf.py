@@ -110,6 +110,11 @@ class DiamondTestSupercell2(unittest.TestCase):
         model_krhf.conv_tol = 1e-14
         model_krhf.kernel()
 
+        # Add random phases
+        numpy.random.seed(0)
+        for i in model_krhf.mo_coeff:
+            i *= numpy.exp(2.j * numpy.pi * numpy.random.rand(i.shape[1]))[numpy.newaxis, :]
+
         # The slow supercell KTDHF
         cls.td_model_krhf = td_model_krhf = krhf_slow_supercell.TDRHF(model_krhf)
         td_model_krhf.kernel()
@@ -129,6 +134,12 @@ class DiamondTestSupercell2(unittest.TestCase):
 
         # Test matrix vs ref
         testing.assert_allclose(m, self.ref_m, atol=1e-11)
+
+        # Test transformations
+        testing.assert_allclose(
+            e.model_super.supercell_rotation.dot(e.model_super.supercell_inv_rotation).toarray(),
+            numpy.eye(e.model_super.supercell_rotation.shape[0]),
+        )
 
     def test_class(self):
         """Tests container behavior."""
