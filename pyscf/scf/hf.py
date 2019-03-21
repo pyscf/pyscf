@@ -1439,7 +1439,18 @@ class SCF(lib.StreamObject):
     energy_tot = energy_tot
 
     def energy_nuc(self):
-        return self.mol.energy_nuc()
+        from pyscf.pbc import gto as pbcgto
+        from pyscf.gto import mole
+
+        # If Cell object is fed into molecular mean field `mf`,
+        # self.mol.energy_nuc() will compute nuclear-repulsion energy in
+        # a periodic setting, while mf.energy_elec() computes electronic energy
+        # in a molecular setting.
+        if isinstance(self.mol, pbcgto.Cell):
+            e = mole.energy_nuc(self.mol)
+        else:
+            e = self.mol.energy_nuc()
+        return e
 
     # A hook for overloading convergence criteria in SCF iterations. Assigning
     # a function
