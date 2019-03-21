@@ -45,7 +45,7 @@ def minus_k(model, threshold=None, degeneracy_threshold=None):
     if threshold is None:
         threshold = 1e-8
     if degeneracy_threshold is None:
-        degeneracy_threshold = 1e-8
+        degeneracy_threshold = 1e-6
     kpts = model.cell.get_scaled_kpts(model.kpts)
     result = []
     for id_k, k in enumerate(kpts):
@@ -53,14 +53,16 @@ def minus_k(model, threshold=None, degeneracy_threshold=None):
         i = numpy.argmin(delta)
         if delta[i] > threshold:
             raise RuntimeError("Could not find a negative k-point for k={} (ID: {:d}, best difference: {:.3e}, "
-                               "threshold: {:.3e})".format(
+                               "threshold: {:.3e}). Use the 'threshold' keyword to loosen the threshold or revise"
+                               "your model".format(
                 repr(k), id_k, delta[i], threshold,
             ))
         delta = abs(model.mo_energy[id_k] - model.mo_energy[i]).max()
         if delta > degeneracy_threshold:
             raise RuntimeError("Non-symmetric band structure (time-reversal) at k={} (ID: {:d}) and k={} (ID: {:d}), "
                                "max difference: {:.3e}, threshold: {:.3e}. This prevents composing real-valued "
-                               "orbitals".format(
+                               "orbitals. Use the 'degeneracy_threshold' keyword to loosen the threshold or revise"
+                               "your model".format(
                                     repr(k), id_k, repr(kpts[i]), i, delta, degeneracy_threshold,
                                 ))
         result.append(i)
