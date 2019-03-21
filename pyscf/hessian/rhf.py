@@ -178,6 +178,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 def _make_vhfopt(mol, dms, key, vhf_intor):
     if not hasattr(_vhf.libcvhf, vhf_intor):
         return None
+
     vhfopt = _vhf.VHFOpt(mol, vhf_intor, 'CVHF'+key+'_prescreen',
                          'CVHF'+key+'_direct_scf')
     dms = numpy.asarray(dms, order='C')
