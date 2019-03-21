@@ -50,7 +50,7 @@ class H20Test(unittest.TestCase):
         mk, k = e.tdhf_mk_form()
 
         testing.assert_allclose(full, ab2full(a, b))
-        testing.assert_allclose(full, mkk2full(mk, k))
+        testing.assert_allclose(full, mkk2full(mk, k), atol=1e-13)
 
         _a, _b = full2ab(full)
         testing.assert_allclose(a, _a)
