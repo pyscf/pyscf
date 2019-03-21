@@ -1441,6 +1441,11 @@ class SCF(lib.StreamObject):
     def energy_nuc(self):
         from pyscf.pbc import gto as pbcgto
         from pyscf.gto import mole
+
+        # If Cell object is fed into molecular mean field `mf`,
+        # self.mol.energy_nuc() will compute nuclear-repulsion energy in
+        # a periodic setting, while mf.energy_elec() computes electronic energy
+        # in a molecular setting.
         if isinstance(self.mol, pbcgto.Cell):
             e = mole.energy_nuc(self.mol)
         else:

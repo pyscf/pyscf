@@ -106,7 +106,6 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     convs = np.zeros((len(kptlist),nroots), dtype)
 
     for k, kshift in enumerate(kptlist):
-        print("kshift =", kshift)
         matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
         diag = eom.mask_frozen(diag, kshift, const=LARGE_DENOM)
 
@@ -450,7 +449,6 @@ def ipccsd_diag(eom, kshift, imds=None):
     kconserv = imds.kconserv
 
     Hr1 = -np.diag(imds.Foo[kshift])
-    print("ipccsd: Hr1 shape =", Hr1.shape)
     Hr2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir), dtype=t1.dtype)
     if eom.partition == 'mp':
         foo = eom.eris.fock[:,:nocc,:nocc]
@@ -1009,7 +1007,6 @@ def eaccsd_diag(eom, kshift, imds=None):
     kconserv = imds.kconserv
 
     Hr1 = np.diag(imds.Fvv[kshift])
-    print("eaccsd: Hr1 shape =", Hr1.shape)
     Hr2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), dtype=t1.dtype)
     if eom.partition == 'mp': # This case is untested
         foo = eom.eris.fock[:,:nocc,:nocc]
@@ -1312,9 +1309,8 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
     if dtype is None:
         dtype = np.result_type(*imds.t1)
 
-    # evals = np.zeros((len(kptlist),nroots), np.float)
-    # evecs = np.zeros((len(kptlist),nroots,size), dtype)
-    # convs = np.zeros((len(kptlist),nroots), dtype)
+    # Note that vector_size may change with kshift. Thus we do not fix
+    # the length of each eval and evec
     evals = [None]*len(kptlist)
     evecs = [None]*len(kptlist)
     convs = [None]*len(kptlist)
@@ -1329,14 +1325,10 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
         # TODO update `diag` in case of frozen orbitals
 
         # TODO allow user provided guess vector
-        # if guess:
-        #     user_guess = True
-        #     assert len(guess) == nroots
-        #     for g in guess:
-        #         assert g.size == size
-        # else:
-        #     user_guess = False
-        #     guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
+        # Since vector_size may change with kshift, it is difficult for users to
+        # provide guesses. Similarly, `guess` from the previous `kshift` may not
+        # work for the current `kshift` due to different vector_size. Thus for
+        # now we keep `user_guess` false, and always compute `guess` on our own.
         user_guess = False
         guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
         for ig, g in enumerate(guess):
@@ -1387,7 +1379,7 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
 def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None):
-    '''See `ipccsd()` for a description of arguments.'''
+    '''See `kernel_ee()` for a description of arguments.'''
     eom.converged, eom.e, eom.v \
             = kernel_ee(eom, nroots, koopmans, guess, left, eris=eris, imds=imds,
                   partition=partition, kptlist=kptlist, dtype=dtype)
@@ -1395,7 +1387,10 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
 
 
 def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
-    '''Add a description'''
+    '''Spin-orbital EOM-EE-CCSD equations with k points.'''
+    # Ref: Wang, Tu, and Wang, J. Chem. Theory Comput. 10, 5567 (2014) Eqs.(9)-(10)
+    # Note: Last line in Eq. (10) is superfluous.
+    # See, e.g. Gwaltney, Nooijen, and Barlett, Chem. Phys. Lett. 248, 189 (1996)
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
@@ -1425,7 +1420,8 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         kb = kconserv_r2[ki, ka, kj]
 
         # r_ijab <- P(ij) (-F_mj r_imab)
-        # km = kj because of k conservation
+        #   km - kj = G
+        # => km = kj
         tmp_ij = np.einsum('mj,imab->ijab', -imds.Foo[kj], r2[ki, kj, ka])
         # r_ijab <- P(ij) W_abej r_ie
         ke = kconserv_r1[ki]
@@ -1436,7 +1432,8 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         # r_ijab <- P(ab) F_be r_ijae
         tmp_ab = np.einsum('be,ijae->ijab', imds.Fvv[kb], r2[ki, kj, ka])
         # r_ijab <- P(ab) (- W_mbij r_ma)
-        # km + kb - ki - kj = G
+        #   km + kb - ki - kj = G
+        # => ki + kj - km - kb = G
         km = kconserv[ki, kb, kj]
         tmp_ab += np.einsum('mbij,ma->ijab', -imds.Wovoo[km, kb, ki], r1[km])
         Hr2[ki, kj, ka] += tmp_ab
@@ -1447,7 +1444,7 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         # r_ijab <- 0.5 W_abef r_ijef
         tmpvvvv = np.zeros((nocc, nocc, nvir, nvir), dtype=r2.dtype)
         for km in range(nkpts):
-            # km + kn - ki - kj = G
+            # km + kn - ki - kj = G (as in W_mnij)
             kn = kconserv[ki, km, kj]
             tmpoooo += 0.5*np.einsum('mnij,mnab->ijab', imds.Woooo[km, kn, ki], r2[km, kn, ka])
             # Rename dummy index km->ke
@@ -1478,8 +1475,8 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     tmp_in = np.zeros_like(tmp_jm)
     for ke in range(nkpts):
         # M_eb = W_mnef r_mnbf (or equivalently, M_ea = W_mnef r_mnaf)
-        # km + kn - ke - kf = G
-        # km + kn - kb - kf = G + kshift
+        #   km + kn - ke - kf = G
+        #   km + kn - kb - kf = G + kshift
         # => ke - kb = G + kshift
         kb = kconserv_r1[ke]
         # x: km, y: kn
@@ -1487,8 +1484,8 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
         # M_fa = W_amfe r_me (or equivalently, M_fb = W_bmfe r_me)
         kf = ke
-        # ki + kj - ka - kb = G + kshift
-        # ki + kj - kf - kb = G
+        #   ki + kj - ka - kb = G + kshift
+        #   ki + kj - kf - kb = G
         # => kf - ka = G + kshift
         ka = kconserv_r1[kf]
         # x: km
@@ -1496,8 +1493,8 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
         # M_jm = W_mnef r_jnef (or equivalently, M_im = W_mnef r_inef)
         kj = ke
-        # km + kn - ke - kf = G
-        # kj + kn - ke - kf = G + kshift
+        #   km + kn - ke - kf = G
+        #   kj + kn - ke - kf = G + kshift
         # => kj - km = G + kshift
         km = kconserv_r1[kj]
         # x: kn, y: ke
@@ -1505,8 +1502,8 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
         # M_in = W_mnie r_me (or equivalently, M_jn = W_mnje r_me)
         ki = ke
-        # ki + kj - ka - kb = G + kshift
-        # kn + kj - ka - kb = G
+        #   ki + kj - ka - kb = G + kshift
+        #   kn + kj - ka - kb = G
         # => ki - kn = G + kshift
         kn = kconserv_r1[ki]
         # x: km
@@ -1515,22 +1512,22 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv_r2[ki, ka, kj]
         # r_ijab <- P(ab) (-0.5 M_eb t_ijae)
-        # ki + kj - ka - ke = G
+        #   ki + kj - ka - ke = G
         ke = kconserv[ki, ka, kj]
         tmp_ab = 0.5*np.einsum('eb,ijae->ijab', -tmp_eb[ke], imds.t2[ki, kj, ka])
         # r_ijab <- P(ab) M_fa t_ijfb
-        # ki + kj - kf - kb = G
+        #   ki + kj - kf - kb = G
         kf = kconserv[ki, kb, kj]
         tmp_ab += np.einsum('fa,ijfb->ijab', tmp_fa[kf], imds.t2[ki, kj, kf])
         Hr2[ki, kj, ka] += tmp_ab
         Hr2[ki, kj, kb] -= tmp_ab.transpose(0, 1, 3, 2)
 
         # r_ijab <- P(ij) (-0.5 M_jm t_imab)
-        # kj - km = G + kshift
+        #   kj - km = G + kshift
         km = kconserv_r1[kj]
         tmp_ij = 0.5*np.einsum('jm,imab->ijab', -tmp_jm[kj], imds.t2[ki, km, ka])
         # r_ijab <- P(ij) M_in t_njab
-        # ki - kn = G + kshift
+        #   ki - kn = G + kshift
         kn = kconserv_r1[ki]
         tmp_ij += np.einsum('in,njab->ijab', tmp_in[ki], imds.t2[kn, kj, ka])
         Hr2[ki, kj, ka] += tmp_ij
@@ -1541,6 +1538,7 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
 
 def eeccsd_diag(eom, kshift, imds=None):
+    '''Diagonal elements of similarity-transformed Hamiltonian'''
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = t1.shape
@@ -1593,13 +1591,22 @@ def eeccsd_diag(eom, kshift, imds=None):
     return vector
 
 
-# TODO complete this method
-def mask_frozen_ee(eom, vector, kshift, const=LARGE_DENOM):
-    '''Replace all frozen orbital indices of `vector` with the value `const`.'''
-    return None
-
-
 def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
+    '''Transform 1-dimensional array to 3- and 7-dimensional arrays, r1 and r2.
+
+    For example:
+        vector: a 1-d array with all r1 elements, and r2 elements whose indices
+    satisfy (i k_i) > (j k_j) and (a k_a) > (b k_b)
+        return: [r1, r2], where
+        r1 = r_{i k_i}^{a k_a} is a 3-d array whose elements can be accessed via
+
+            r1[k_i, i, a].
+
+        r2 = r_{i k_i, j k_j}^{a k_a, b k_b} is a 7-d array whose elements can
+    be accessed via
+
+            r2[k_i, k_j, k_a, i, j, a, b]
+    '''
     nvir = nmo - nocc
 
     r1 = vector[:nkpts*nocc*nvir].copy().reshape(nkpts, nocc, nvir)
@@ -1686,7 +1693,6 @@ class EOMEE(eom_rccsd.EOM):
     eeccsd = eeccsd
     matvec = eeccsd_matvec
     get_diag = eeccsd_diag
-    mask_frozen = mask_frozen_ee
 
     @property
     def nkpts(self):

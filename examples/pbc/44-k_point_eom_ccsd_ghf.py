@@ -3,7 +3,13 @@
 # Author: Xiao Wang <xiaowang314159@gmail.com>
 #
 """
-Showing use of general EOM-CCSD with K-point sampling.
+This example first runs a general periodic EOM-EE-CCSD with K-point sampling,
+a.k.a. EOM-EE-KGCCSD, on one of the three provided systems.
+
+Then a molecular EOM-EE-CCSD based on Gamma-point Hartree-Fock is done, where
+a supercell (unit cell with its nmp replicas) is used.
+
+Excitation energies from the two sets of calculations should match.
 """
 
 import numpy as np
@@ -16,7 +22,7 @@ from pyscf.pbc.tools.pbc import super_cell
 
 
 cell = gto.Cell()
-cell.verbose = 4
+cell.verbose = 5
 cell.unit = 'B'
 
 #
@@ -60,7 +66,8 @@ cell.a = '''
 
 cell.build()
 
-nmp = [2,2,2]
+nmp = [1,1,2]
+nroots_test = 2
 
 # KRHF
 kpts = cell.make_kpts(nmp)
@@ -71,7 +78,7 @@ ekrhf = kmf.kernel()
 mycc = cc.KGCCSD(kmf)
 ekgcc, t1, t2 = mycc.kernel()
 
-nroots_test = 4
+# EOM-EE-KGCCSD
 myeomee = eom_kgccsd.EOMEE(mycc)
 eee, vee = myeomee.kernel(nroots=nroots_test)
 
@@ -89,7 +96,7 @@ egcc, t1, t2 = mycc.kernel()
 
 # Molecular EOM-GCCSD
 myeomee = mol_eom_gccsd.EOMEE(mycc)
-eee_mol, vee_mol = myeomee.kernel(nroots=nroots_test*2)
+eee_mol, vee_mol = myeomee.kernel(nroots=nroots_test*np.product(nmp))
 
 print("PBC KRHF Energy:", ekrhf)
 print("PBC RHF Energy :", erhf)
@@ -97,5 +104,3 @@ print("PBC KGCCSD Energy        :", ekgcc)
 print("Mol GCCSD Energy per cell:", egcc / np.product(nmp))
 print("PBC EOMEE roots:", eee)
 print("Mol EOMEE roots:", eee_mol)
-
-
