@@ -1,10 +1,10 @@
 from pyscf.pbc.gto import Cell
-from pyscf.pbc.scf import KRHF
-from pyscf.pbc.tdscf import krhf_slow_supercell as std, krhf_slow as ktd
+from pyscf.pbc.scf import KRHF, KRKS
+from pyscf.pbc.tdscf import krhf_slow_supercell as std, krhf_slow as ktd, kproxy_supercell as stdp, kproxy as ktdp
 from pyscf.pbc.gw import kgw_slow_supercell as sgw, kgw_slow as kgw
 from pyscf.pbc.tdscf.krhf_slow import get_block_k_ix
 
-from test_common import adjust_mf_phase, adjust_td_phase, ov_order
+from test_common import adjust_mf_phase, adjust_td_phase
 
 import unittest
 from numpy import testing
@@ -70,7 +70,7 @@ def tdm_k2s(imds):
 
 
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (k-version) @2kp vs rhf_slow_supercell."""
+    """Compare this (kgw_slow) @2kp vs kgw_slow_supercell, HF."""
     k = 2
     k_c = (0, 0, 0)
 
@@ -174,7 +174,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (k-version) @3kp vs rhf_slow_supercell."""
+    """Compare this (kgw_slow) @3kp vs kgw_slow_supercell, HF."""
     k = 3
     k_c = (.1, 0, 0)
 
@@ -276,3 +276,77 @@ class FrozenTest(unittest.TestCase):
         gw_model.kernel()
 
         testing.assert_allclose(gw_model.mo_energy, self.gw_model_krhf.mo_energy[:, 2:], atol=1e-4)
+
+
+class DiamondKSTestSupercell2(unittest.TestCase):
+    """Compare this (kgw_slow) @2kp vs kgw_slow_supercell, DFT."""
+    k = 2
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cell = cell = Cell()
+        # Lift some degeneracies
+        cell.atom = '''
+        C 0.000000000000   0.000000000000   0.000000000000
+        C 1.67   1.68   1.69
+        '''
+        cell.basis = {'C': [[0, (0.8, 1.0)],
+                            [1, (1.0, 1.0)]]}
+        # cell.basis = 'gth-dzvp'
+        cell.pseudo = 'gth-pade'
+        cell.a = '''
+        0.000000000, 3.370137329, 3.370137329
+        3.370137329, 0.000000000, 3.370137329
+        3.370137329, 3.370137329, 0.000000000'''
+        cell.unit = 'B'
+        cell.verbose = 5
+        cell.build()
+
+        k = cell.make_kpts([cls.k, 1, 1])
+
+        # K-points
+        cls.model_krks = model_krks = KRKS(cell, k)
+        model_krks.conv_tol = 1e-14
+        model_krks.kernel()
+
+        # TD
+        cls.td_model_srks = td_model_srks = stdp.TDProxy(model_krks, "dft", [cls.k, 1, 1], KRKS)
+        td_model_srks.kernel()
+
+        cls.td_model_krks = td_model_krks = ktdp.TDProxy(model_krks, "dft", [cls.k, 1, 1], KRKS)
+        td_model_krks.kernel()
+
+        # GW
+        cls.gw = sgw.GW(td_model_srks, std.TDRHF(model_krks).ao2mo())
+        cls.kgw = kgw.GW(td_model_krks, ktd.TDRHF(model_krks).ao2mo())
+
+        # cls.order_k, cls.order_p, cls.order = ov_order_supercell(cls.kgw.imds)
+        #
+        # orbs = []
+        # for k in range(cls.k):
+        #     for o in numpy.arange(2, 6):
+        #         orbs.append(numpy.where(numpy.logical_and(cls.order_k == k, cls.order_p == o))[0][0])
+        # cls.gw.orbs = numpy.array(orbs)
+        # cls.kgw.orbs = numpy.arange(2, 6)
+
+    @classmethod
+    def tearDownClass(cls):
+        # These are here to remove temporary files
+        del cls.kgw
+        del cls.gw
+        del cls.td_model_krks
+        del cls.td_model_srks
+        del cls.model_krks
+        del cls.cell
+
+    def test_class(self):
+        """Tests default eig kernel behavior."""
+        self.gw.eta = self.kgw.eta = 1e-6
+        self.gw.kernel()
+        self.kgw.kernel()
+        testing.assert_allclose(self.gw.mo_energy, self.kgw.mo_energy)
+
+
+class DiamondKSTestSupercell3(unittest.TestCase):
+    """Compare this (kgw_slow) @3kp vs kgw_slow_supercell, DFT."""
+    k = 3

@@ -1,5 +1,5 @@
 from pyscf.pbc.gto import Cell
-from pyscf.pbc.scf import RHF, KRHF, RKS, KRKS
+from pyscf.pbc.scf import RHF, KRHF, KRKS
 from pyscf.pbc.tdscf import rhf_slow as td, krhf_slow_supercell as ktd, proxy as tdp, kproxy_supercell as ktdp
 from pyscf.pbc.gw import gw_slow as gw, kgw_slow_supercell as kgw
 from pyscf.pbc.tools.pbc import super_cell
@@ -24,7 +24,7 @@ def ov_order_supercell(imds):
 
 
 class DiamondTestSupercell2(unittest.TestCase):
-    """Compare this (supercell_slow) @2kp vs rhf_slow (2x1x1 supercell)."""
+    """Compare this (kgw_slow_supercell) @2kp vs gw_slow (2x1x1 supercell), HF."""
     k = 2
     k_c = (0, 0, 0)
 
@@ -126,7 +126,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
-    """Compare this (supercell_slow) @3kp vs rhf_slow (3x1x1 supercell)."""
+    """Compare this (kgw_slow_supercell) @3kp vs gw_slow (3x1x1 supercell), HF."""
     k = 3
     k_c = (.1, 0, 0)
 
@@ -233,7 +233,7 @@ class FrozenTest(unittest.TestCase):
 
 
 class DiamondKSTestSupercell2(unittest.TestCase):
-    """Compare this (supercell_slow) @2kp vs rhf_slow (2x1x1 supercell)."""
+    """Compare this (kgw_slow_supercell) @2kp vs gw_slow (2x1x1 supercell), DFT."""
     k = 2
 
     @classmethod
@@ -313,3 +313,8 @@ class DiamondKSTestSupercell2(unittest.TestCase):
         self.gw.kernel()
         self.kgw.kernel()
         testing.assert_allclose(self.gw.mo_energy, self.kgw.mo_energy.reshape(-1))
+
+
+class DiamondKSTestSupercell3(unittest.TestCase):
+    """Compare this (kgw_slow_supercell) @2kp vs gw_slow (2x1x1 supercell), DFT."""
+    k = 3
