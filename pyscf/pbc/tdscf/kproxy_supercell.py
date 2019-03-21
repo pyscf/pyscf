@@ -52,13 +52,16 @@ def minus_k(model, threshold=None, degeneracy_threshold=None):
         delta = norm(((kpts + k[numpy.newaxis, :]) - .5) % 1 - .5, axis=-1)
         i = numpy.argmin(delta)
         if delta[i] > threshold:
-            raise RuntimeError("Could not find a negative k-point for k={} (ID: {:d}, best difference: {:.3e})".format(
-                repr(k), id_k, delta[i]
+            raise RuntimeError("Could not find a negative k-point for k={} (ID: {:d}, best difference: {:.3e}, "
+                               "threshold: {:.3e})".format(
+                repr(k), id_k, delta[i], threshold,
             ))
-        if abs(model.mo_energy[id_k] - model.mo_energy[i]).max() > degeneracy_threshold:
-            raise RuntimeError("Non-symmetric band structure (time-reversal) at k={} (ID: {:d}) and k={} (ID: {:d}). "
-                               "This prevents composing real-valued orbitals".format(
-                                    repr(k), id_k, repr(kpts[i]), i,
+        delta = abs(model.mo_energy[id_k] - model.mo_energy[i]).max()
+        if delta > degeneracy_threshold:
+            raise RuntimeError("Non-symmetric band structure (time-reversal) at k={} (ID: {:d}) and k={} (ID: {:d}), "
+                               "max difference: {:.3e}, threshold: {:.3e}. This prevents composing real-valued "
+                               "orbitals".format(
+                                    repr(k), id_k, repr(kpts[i]), i, delta, degeneracy_threshold,
                                 ))
         result.append(i)
     return result
@@ -506,7 +509,7 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
         "dft": KTDDFT,
     }
 
-    def __init__(self, model, proxy, x, mf_constructor, frozen=None):
+    def __init__(self, model, proxy, x, mf_constructor, frozen=None, **kwargs):
         """
         A proxy class for calculating TD matrix blocks (supercell version).
 
@@ -516,8 +519,9 @@ class PhysERI(PeriodicMFMixin, TDProxyMatrixBlocks):
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            **kwargs: arguments to `k2s` function constructing supercells;
         """
-        model_super = k2s(model, x, mf_constructor)
+        model_super = k2s(model, x, mf_constructor, **kwargs)
         TDProxyMatrixBlocks.__init__(self, self.proxy_choices[proxy](model_super))
         PeriodicMFMixin.__init__(self, model, frozen=frozen)
         self.model_super = model_super
@@ -587,7 +591,7 @@ class TDProxy(mol_proxy.TDProxy):
     v2a = staticmethod(vector_to_amplitudes)
     proxy_eri = PhysERI
 
-    def __init__(self, mf, proxy, x, mf_constructor, frozen=None):
+    def __init__(self, mf, proxy, x, mf_constructor, frozen=None, **kwargs):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
@@ -596,11 +600,13 @@ class TDProxy(mol_proxy.TDProxy):
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            **kwargs: arguments to `k2s` function constructing supercells;
         """
         super(TDProxy, self).__init__(mf, proxy, frozen=frozen)
         self.fast = False
         self.x = x
         self.mf_constructor = mf_constructor
+        self.__k2s_kwargs__ = kwargs
 
     def ao2mo(self):
         """
@@ -615,5 +621,6 @@ class TDProxy(mol_proxy.TDProxy):
             x=self.x,
             mf_constructor=self.mf_constructor,
             frozen=self.frozen,
+            **self.__k2s_kwargs__
         )
 

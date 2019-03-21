@@ -57,7 +57,7 @@ def kov2ov(nocc, nmo, k):
 
 
 class PhysERI(kproxy_supercell.PhysERI):
-    def __init__(self, model, proxy, x, mf_constructor, frozen=None):
+    def __init__(self, model, proxy, x, mf_constructor, frozen=None, **kwargs):
         """
         A proxy class for calculating the TD matrix blocks (k-point version).
 
@@ -67,8 +67,9 @@ class PhysERI(kproxy_supercell.PhysERI):
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            **kwargs: arguments to `k2s` function constructing supercells;
         """
-        super(PhysERI, self).__init__(model, proxy, x, mf_constructor, frozen=frozen)
+        super(PhysERI, self).__init__(model, proxy, x, mf_constructor, frozen=frozen, **kwargs)
 
     def get_ov_space_mask(self):
         """
@@ -150,7 +151,7 @@ class TDProxy(kproxy_supercell.TDProxy):
     v2a = staticmethod(vector_to_amplitudes)
     proxy_eri = PhysERI
 
-    def __init__(self, mf, proxy, x, mf_constructor, frozen=None):
+    def __init__(self, mf, proxy, x, mf_constructor, frozen=None, **kwargs):
         """
         Performs TD calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
         Args:
@@ -159,8 +160,9 @@ class TDProxy(kproxy_supercell.TDProxy):
             x (Iterable): the original k-grid dimensions (numbers of k-points per each axis);
             mf_constructor (Callable): a function constructing the mean-field object;
             frozen (int, Iterable): the number of frozen valence orbitals or the list of frozen orbitals;
+            **kwargs: arguments to `k2s` function constructing supercells;
         """
-        super(TDProxy, self).__init__(mf, proxy, x, mf_constructor, frozen=frozen)
+        super(TDProxy, self).__init__(mf, proxy, x, mf_constructor, frozen=frozen, **kwargs)
         self.e = {}
         self.xy = {}
 
