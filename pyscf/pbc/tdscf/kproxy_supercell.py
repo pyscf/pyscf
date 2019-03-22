@@ -30,6 +30,8 @@ from pyscf.pbc.tools.pbc import super_cell
 import numpy
 from scipy import sparse
 
+from warnings import warn
+
 
 def minus_k(model, threshold=None, degeneracy_threshold=None):
     """
@@ -88,9 +90,10 @@ def assert_scf_converged(model, threshold=1e-7):
         eye = reduce(numpy.dot, (v.conj().T, o, v))
         delta_o = abs(eye - numpy.eye(eye.shape[0])).max()
         if nabove > 0:
-            raise AssertionError("{:d} vectors at k={:d} are not converged, max difference: {:.3e}; orthogonality error: {:.3e}".format(
-                nabove, k, max(delta), delta_o,
-            ))
+            warn("{:d} vectors at k={:d} are not converged, max difference: {:.3e}; orthogonality error: {:.3e} "
+                 "warning threshold: {:.3e}".format(
+                    nabove, k, max(delta), delta_o, threshold,
+                 ))
 
 
 def sparse_transform(m, *args):
