@@ -489,6 +489,7 @@ class Hessian(rhf_hess.Hessian):
     def __init__(self, mf):
         rhf_hess.Hessian.__init__(self, mf)
         self.grids = None
+        self.grid_response = False
         self._keys = self._keys.union(['grids'])
 
     partial_hess_elec = partial_hess_elec
