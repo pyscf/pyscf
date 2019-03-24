@@ -924,6 +924,13 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
     .. math:: \delta_i = \sum_j M_{ij}
 
+    Returns:
+        A list : pop, charges
+
+        pop : nparray
+            Mulliken population on each atomic orbitals
+        charges : nparray
+            Mulliken charges
     '''
     if s is None: s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
@@ -971,6 +978,13 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
             | 'minao' : Project GTOs to MINAO basis
             | 'scf'   : Fraction-averaged RHF
 
+    Returns:
+        A list : pop, charges
+
+        pop : nparray
+            Mulliken population on each atomic orbitals
+        charges : nparray
+            Mulliken charges
     '''
     from pyscf.lo import orth
     if s is None: s = get_ovlp(mol)

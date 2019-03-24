@@ -87,7 +87,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
-    class DFHF(mf_class, _DFHF):
+    class DFHF(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
 
@@ -128,17 +128,12 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def nuc_grad_method(self):
             raise NotImplementedError
 
-    for k, v in _METHODS_TO_ASSIGN.items():
-        setattr(DFHF, k, v)
     return DFHF(mf)
 
-# A tag to label the derived SCF class
+# 1. A tag to label the derived SCF class
+# 2. A hook to register DF specific methods, such as nuc_grad_method.
 class _DFHF:
     pass
-
-# Some methods should be attached to the DF-SCF class in density_fit function
-# above. They can be registered in _METHODS_TO_ASSIGN.
-_METHODS_TO_ASSIGN = {}
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
