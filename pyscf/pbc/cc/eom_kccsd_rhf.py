@@ -823,6 +823,39 @@ class EOMEA_Ta(EOMEA):
         imds.make_t3p2_ea(self._cc)
         return imds
 
+########################################
+# EOM-EE-CCSD
+########################################
+
+class EOMEE(eom_kgccsd.EOMEE):
+
+    @property
+    def nkpts(self):
+        return len(self.kpts)
+
+    def vector_size(self, kshift=0):
+        return None
+
+    def make_imds(self, eris=None):
+        return None
+
+
+class EOMEESinglet(EOMEE):
+
+    def vector_size(self, kshift=0):
+        return None
+
+class EOMEETriplet(EOMEE):
+
+    def vector_size(self, kshift=0):
+        return None
+
+class EOMEESpinFlip(EOMEE):
+
+    def vector_size(self, kshift=0):
+        return None
+
+
 imd = imdk
 
 class _IMDS:
