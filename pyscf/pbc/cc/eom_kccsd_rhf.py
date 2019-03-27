@@ -827,13 +827,33 @@ class EOMEA_Ta(EOMEA):
 # EOM-EE-CCSD
 ########################################
 
+
+def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
+           eris=None, imds=None, partition=None, kptlist=None,
+           dtype=None):
+    return None
+
+
+def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
+    return None
+
+
+def eeccsd_diag(eom, kshift, imds=None):
+    return None
+
+
 class EOMEE(eom_kgccsd.EOMEE):
+    kernel = eeccsd
+    eeccsd = eeccsd
+    matvec = eeccsd_matvec
+    get_diag = eeccsd_diag
 
     @property
     def nkpts(self):
         return len(self.kpts)
 
     def vector_size(self, kshift=0):
+
         return None
 
     def make_imds(self, eris=None):
@@ -845,10 +865,12 @@ class EOMEESinglet(EOMEE):
     def vector_size(self, kshift=0):
         return None
 
+
 class EOMEETriplet(EOMEE):
 
     def vector_size(self, kshift=0):
         return None
+
 
 class EOMEESpinFlip(EOMEE):
 
