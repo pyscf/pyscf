@@ -2463,8 +2463,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Retuen a temporary mol context which has the rquired charge
-        distribution on the "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
+        '''Retuen a temporary mol context which has the rquired Gaussian charge
+        distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
         Examples:
@@ -2476,8 +2476,9 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def with_rinv_as_nucleus(self, atm_id):
-        '''Retuen a temporary mol context which has the rquired origin of 1/r
-        operator and the required nuclear charge distribution on 1/r.
+        '''Retuen a temporary mol context in which the rinv operator (1/r) is
+        treated like the Coulomb potential of a Gaussian charge distribution
+        rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
         Examples:
 
