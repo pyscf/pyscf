@@ -87,7 +87,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
-    class DFHF(_DFHF, mf_class):
+    class DFHF(mf_class, _DFHF):
         __doc__ = '''
         Density fitting SCF class
 
