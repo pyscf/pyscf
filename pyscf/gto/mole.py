@@ -2463,8 +2463,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Retuen a temporary mol context which has the rquired charge
-        distribution on the "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
+        '''Retuen a temporary mol context which has the rquired Gaussian charge
+        distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
         Examples:
@@ -2476,8 +2476,9 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def with_rinv_as_nucleus(self, atm_id):
-        '''Retuen a temporary mol context which has the rquired origin of 1/r
-        operator and the required nuclear charge distribution on 1/r.
+        '''Retuen a temporary mol context in which the rinv operator (1/r) is
+        treated like the Coulomb potential of a Gaussian charge distribution
+        rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
         Examples:
 
@@ -2592,6 +2593,11 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         '''
         return _std_symbol(self._atom[atm_id][0])
 
+    @property
+    def elements(self):
+        '''A list of elements in the molecule'''
+        return [self.atom_pure_symbol(i) for i in range(self.natm)]
+
     def atom_charge(self, atm_id):
         r'''Nuclear effective charge of the given atom id
         Note "atom_charge /= charge(atom_symbol)" when ECP is enabled.
@@ -2618,7 +2624,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         '''
         return charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
 
-    def atom_coord(self, atm_id):
+    def atom_coord(self, atm_id, unit='Bohr'):
         r'''Coordinates (ndarray) of the given atom id
 
         Args:
@@ -2632,12 +2638,18 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        return self._env[ptr:ptr+3]
+        if unit[:3].upper() == 'ANG':
+            return self._env[ptr:ptr+3] * param.BOHR
+        else:
+            return self._env[ptr:ptr+3]
 
-    def atom_coords(self):
+    def atom_coords(self, unit='Bohr'):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        return self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+        c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+        if unit[:3].upper() == 'ANG':
+            c *= param.BOHR
+        return c
 
     atom_mass_list = atom_mass_list
 

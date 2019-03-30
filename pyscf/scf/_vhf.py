@@ -280,7 +280,10 @@ def direct_mapdm(intor, aosym, jkdescript,
         vshape = (n_dm,ncomp) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
         for j in range(n_dm):
-            assert(dms[j].shape == get_dims(dmsym, shls_slice, ao_loc))
+            if dms[j].shape != get_dims(dmsym, shls_slice, ao_loc):
+                raise RuntimeError('dm[%d] shape %s is inconsistent with the '
+                                   'shls_slice shape %s' %
+                                   (j, dms[j].shape, get_dims(dmsym, shls_slice, ao_loc)))
             dmsptr[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             vjkptr[i*n_dm+j] = vjk[i][j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
@@ -356,7 +359,10 @@ def direct_bindm(intor, aosym, jkdescript,
     for i, (dmsym, vsym) in enumerate(descr_sym):
         f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
 
-        assert(dms[i].shape == get_dims(dmsym, shls_slice, ao_loc))
+        if dms[i].shape != get_dims(dmsym, shls_slice, ao_loc):
+            raise RuntimeError('dm[%d] shape %s is inconsistent with the '
+                               'shls_slice shape %s' %
+                               (i, dms[i].shape, get_dims(dmsym, shls_slice, ao_loc)))
         vshape = (ncomp,) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
         dmsptr[i] = dms[i].ctypes.data_as(ctypes.c_void_p)

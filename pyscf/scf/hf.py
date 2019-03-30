@@ -883,6 +883,13 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
     .. math:: \delta_i = \sum_j M_{ij}
 
+    Returns:
+        A list : pop, charges
+
+        pop : nparray
+            Mulliken population on each atomic orbitals
+        charges : nparray
+            Mulliken charges
     '''
     if s is None: s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
@@ -930,6 +937,13 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
             | 'minao' : Project GTOs to MINAO basis
             | 'scf'   : Fraction-averaged RHF
 
+    Returns:
+        A list : pop, charges
+
+        pop : nparray
+            Mulliken population on each atomic orbitals
+        charges : nparray
+            Mulliken charges
     '''
     from pyscf.lo import orth
     if s is None: s = get_ovlp(mol)
@@ -1516,11 +1530,7 @@ class SCF(lib.StreamObject):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        if mol.cart:
-            intor = 'int2e_cart'
-        else:
-            intor = 'int2e_sph'
-        opt = _vhf.VHFOpt(mol, intor, 'CVHFnrs8_prescreen',
+        opt = _vhf.VHFOpt(mol, 'int2e', 'CVHFnrs8_prescreen',
                           'CVHFsetnr_direct_scf',
                           'CVHFsetnr_direct_scf_dm')
         opt.direct_scf_tol = self.direct_scf_tol
