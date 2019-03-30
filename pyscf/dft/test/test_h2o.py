@@ -389,6 +389,16 @@ class KnownValues(unittest.TestCase):
         vxc = method.get_veff(h2o, dm, dm, vxc)
         self.assertAlmostEqual(lib.finger(vxc), 23.058813088809824, 8)
 
+    def test_nr_rks_rsh_cart(self):
+        mol1 = h2o.copy()
+        mol1.basis = 'ccpvdz'
+        mol1.cart = True
+        mol1.build(0, 0)
+        method = dft.RKS(mol1)
+        method.xc = 'B97M_V'
+        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        self.assertAlmostEqual(method.kernel(), -76.44022393692919, 9)
+
     def test_nr_uks_rsh(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()

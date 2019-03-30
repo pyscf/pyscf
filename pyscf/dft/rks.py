@@ -154,7 +154,8 @@ def _get_k_lr(mol, dm, omega=0, hermi=0):
     with mol.with_range_coulomb(omega):
         # Compute the long range part of ERIs temporarily with omega. Restore
         # the original omega when the block ends
-        vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms))
+        intor = mol._add_suffix('int2e')
+        vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms), intor=intor)
     return numpy.asarray(vklr).reshape(dm.shape)
 
 

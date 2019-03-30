@@ -1542,11 +1542,7 @@ class SCF(lib.StreamObject):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        if mol.cart:
-            intor = 'int2e_cart'
-        else:
-            intor = 'int2e_sph'
-        opt = _vhf.VHFOpt(mol, intor, 'CVHFnrs8_prescreen',
+        opt = _vhf.VHFOpt(mol, 'int2e', 'CVHFnrs8_prescreen',
                           'CVHFsetnr_direct_scf',
                           'CVHFsetnr_direct_scf_dm')
         opt.direct_scf_tol = self.direct_scf_tol
