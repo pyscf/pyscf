@@ -1337,11 +1337,8 @@ class SCF(lib.StreamObject):
 
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
-        method = []
-        cls = self.__class__
-        while cls != SCF:
-            method.append(cls.__name__)
-            cls = cls.__base__
+        method = [cls.__name__ for cls in self.__class__.__mro__
+                  if issubclass(cls, SCF) and cls != SCF]
         logger.info(self, 'method = %s', '-'.join(method))
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)

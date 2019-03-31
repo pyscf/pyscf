@@ -88,7 +88,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
-    class DFHF(mf_class, _DFHF):
+    class DFHF(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
 
@@ -152,7 +152,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
-class _DFHF:
+class _DFHF(object):
     pass
 
 
