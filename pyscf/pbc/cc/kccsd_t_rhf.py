@@ -586,10 +586,11 @@ def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM
     idxp = get_idx(p0,p1,kp,nonzero_p)
     idxq = get_idx(q0,q1,kq,nonzero_q)
     idxr = get_idx(r0,r1,kr,nonzero_r)
-    n0_ovp_pqr = np.ix_(nonzero_p[kp][idxp], nonzero_q[kq][idxq], nonzero_r[kr][idxr])
+    n0_ovp_pqr = np.ix_(nonzero_p[kp][idxp]-p0, nonzero_q[kq][idxq]-q0, nonzero_r[kr][idxr]-r0)
     epqr[n0_ovp_pqr] = lib.direct_sum('p,q,r->pqr', fac_p*mo_e_p[kp][p0:p1],
                                       fac_q*mo_e_q[kq][q0:q1],
                                       fac_r*mo_e_r[kr][r0:r1])[n0_ovp_pqr]
+    #epqr[n0_ovp_pqr] = temp[n0_ovp_pqr]
     return epqr
 
 if __name__ == '__main__':

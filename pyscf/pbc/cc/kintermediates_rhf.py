@@ -792,7 +792,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     vir_blksize = min(nvir, max(blkmin, int((max_memory*.9e6/16/nocc**3/nkpts**3)**(1./3))))
     tasks = []
     logger.debug(mycc, 'max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    logger.debug(mycc, 'virtual blksize = %d (nvir = %d)', nvir, vir_blksize)
+    logger.debug(mycc, 'virtual blksize = %d (nvir = %d)', vir_blksize, nvir)
     for a0, a1 in lib.prange(0, nvir, vir_blksize):
         for b0, b1 in lib.prange(0, nvir, vir_blksize):
             for c0, c1 in lib.prange(0, nvir, vir_blksize):
@@ -867,15 +867,15 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
 
                 # Contribution to Wovoo array
                 km = kconserv[ka,ki,kc]
-                eris_oovv = eris.oovv[km,ki,kc]
+                eris_oovv = eris.oovv[km,ki,kc,:,:,c0:c1,a0:a1]
                 tmp = einsum('abcijk,mica->mbkj', Ptmp_t3Tv, eris_oovv)
                 Wmcik[km,kb,kk,:,b0:b1,:,:] += tmp
 
                 # Contribution to Wvvoo array
                 ke = kconserv[ki,ka,kk]
-                eris_oovv = eris.oovv[ki,kk,ka]
+                eris_oovv = eris.oovv[ki,kk,ka,:,:,a0:a1,:]
                 tmp = einsum('abcijk,ikae->cbej', Ptmp_t3Tv, eris_oovv)
-                Wacek[kc,kb,ke,:,c0:c1,b0:b1,:] -= tmp
+                Wacek[kc,kb,ke,c0:c1,b0:b1,:,:] -= tmp
 
             logger.timer_debug1(mycc, 'EOM-CCSD T3[2] ka,kb,vir=(%d,%d,%d/%d) [total=%d]'%
                                 (ka,kb,task_id,len(tasks),nkpts**5), *cput2)
