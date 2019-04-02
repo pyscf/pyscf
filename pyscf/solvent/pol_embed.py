@@ -15,7 +15,7 @@ def pe_scf(mf, pe_state):
                 raise TypeError("Invalid type for pe_state.")
             self._pol_embed = pe_state
             self._pe_energy = 0.0
-            self._lock = False # dirty hack to avoid solving for the induced moments twice in DFT calculations
+            self._lock = False  # hack to avoid solving for the induced moments twice in DFT calculations
 
         def dump_flags(self):
             oldMF.dump_flags(self)
@@ -140,7 +140,7 @@ class PolEmbed(lib.StreamObject):
             vmat = self.V_es + V_ind
         else:
             vmat = V_ind
-            e = self.cppe_state.get_current_energies().get("Polarization/Electronic")
+            e = self.cppe_state.get_energies().get("Polarization/Electronic")
         return e, vmat
 
     def _compute_multipole_potential_integrals(self, site, order, moments):
