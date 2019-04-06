@@ -42,6 +42,7 @@ Set mf.direct_scf = False because no traditional 2e integrals
 '''
 
 import time
+import ctypes
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -49,6 +50,8 @@ from pyscf import gto
 from pyscf import dft
 from pyscf.lib import logger
 from pyscf.df.incore import aux_e2
+from pyscf.gto import moleintor
+from pyscf.scf import _vhf
 
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
@@ -63,11 +66,10 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
 
-    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
-    def batch_nuc(mol, grid_coords, out=None):
-        fakemol = gto.fakemol_for_charges(grid_coords)
-        j3c = aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij', cintopt=cintopt)
-        return lib.unpack_tril(j3c.T, out=out)
+    if sgx.debug:
+        batch_nuc = _gen_batch_nuc(mol)
+    else:
+        batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol)
     t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
 
     sn = numpy.zeros((nao,nao))
@@ -96,20 +98,29 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
             fg = fg[:,mask]
             coords = coords[mask]
 
-        tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
-        gbn = batch_nuc(mol, coords)
-        tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+        if sgx.debug:
+            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            gbn = batch_nuc(mol, coords)
+            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            if with_j:
+                jg = numpy.einsum('gij,xij->xg', gbn, dms)
+            if with_k:
+                gv = lib.einsum('gvt,xgt->xgv', gbn, fg)
+            gbn = None
+        else:
+            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            jg, gv = batch_jk(mol, coords, dms, fg)
+            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
 
         if with_j:
-            jg = numpy.einsum('gij,xij->xg', gbn, dms)
             xj = lib.einsum('gv,xg->xgv', ao, jg)
             for i in range(nset):
                 vj[i] += lib.einsum('gu,gv->uv', wao, xj[i])
-
         if with_k:
-            gv = lib.einsum('gvt,xgt->xgv', gbn, fg)
             for i in range(nset):
                 vk[i] += lib.einsum('gu,gv->uv', ao, gv[i])
+        jg = gv = None
+
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
     tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
     logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
@@ -142,11 +153,10 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
 
-    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
-    def batch_nuc(mol, grid_coords, out=None):
-        fakemol = gto.fakemol_for_charges(grid_coords)
-        j3c = aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij', cintopt=cintopt)
-        return lib.unpack_tril(j3c.T, out=out)
+    if sgx.debug:
+        batch_nuc = _gen_batch_nuc(mol)
+    else:
+        batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol)
 
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
@@ -182,28 +192,116 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
             fg = fg[:,mask]
             coords = coords[mask]
 
-        tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
-        gbn = batch_nuc(mol, coords)
-        tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
-
         if with_j:
             rhog = numpy.einsum('xgu,gu->xg', fg, ao)
-            vj += numpy.einsum('guv,xg->xuv', gbn, rhog)
 
+        if sgx.debug:
+            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            gbn = batch_nuc(mol, coords)
+            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            if with_j:
+                jpart = numpy.einsum('guv,xg->xuv', gbn, rhog)
+            if with_k:
+                gv = lib.einsum('gtv,xgt->xgv', gbn, fg)
+            gbn = None
+        else:
+            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            jpart, gv = batch_jk(mol, coords, rhog, fg)
+            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+
+        if with_j:
+            vj += jpart
         if with_k:
             for i in range(nset):
-                gv = lib.einsum('gtv,gt->gv', gbn, fg[i])
-                vk[i] += lib.einsum('gu,gv->uv', ao, gv)
+                vk[i] += lib.einsum('gu,gv->uv', ao, gv[i])
+        jpart = gv = None
+
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
     tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
     logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
                   'for tensor contraction (%.2f, %.2f)',
                   tnuc[0], tnuc[1], tdot[0], tdot[1])
 
+    for i in range(nset):
+        lib.hermi_triu(vj[i], inplace=True)
     if with_k and hermi == 1:
         vk = (vk + vk.transpose(0,2,1))*.5
     logger.timer(mol, "vj and vk", *t0)
     return vj.reshape(dm_shape), vk.reshape(dm_shape)
+
+def _gen_batch_nuc(mol):
+    '''Coulomb integrals of the given points and orbital pairs'''
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
+    def batch_nuc(mol, grid_coords, out=None):
+        fakemol = gto.fakemol_for_charges(grid_coords)
+        j3c = aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij', cintopt=cintopt)
+        return lib.unpack_tril(j3c.T, out=out)
+    return batch_nuc
+
+def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol):
+    '''Contraction between sgX Coulomb integrals and density matrices
+    J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid
+       einsum('gij,xij->xg', gbn, dms) if dms are density matrices
+    K: einsum('gtv,xgt->xgv', gbn, fg)
+    '''
+    intor = mol._add_suffix('int3c2e')
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
+    ncomp = 1
+    nao = mol.nao
+    vhfopt = _vhf.VHFOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
+                         'SGXsetnr_direct_scf')
+    vhfopt.direct_scf_tol = direct_scf_tol
+    cintor = _vhf._fpointer(intor)
+    fdot = _vhf._fpointer('SGXdot_nr'+aosym)
+    drv = _vhf.libcvhf.SGXnr_direct_drv
+
+    def jk_part(mol, grid_coords, dms, fg):
+        fakemol = gto.fakemol_for_charges(grid_coords)
+        atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                                          fakemol._atm, fakemol._bas, fakemol._env)
+
+        ao_loc = moleintor.make_loc(bas, intor)
+        shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, len(bas))
+        ngrids = grid_coords.shape[0]
+
+        vj = vk = None
+        fjk = []
+        dmsptr = []
+        vjkptr = []
+        if with_j:
+            if dms[0].ndim == 1:  # the value of density at each grid
+                vj = numpy.zeros((len(dms),ncomp,nao,nao))[:,0]
+                for i, dm in enumerate(dms):
+                    dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+                    vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
+                    fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_g_ij'))
+            else:
+                vj = numpy.zeros((len(dms),ncomp,ngrids))[:,0]
+                for i, dm in enumerate(dms):
+                    dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+                    vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
+                    fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_ji_g'))
+        if with_k:
+            vk = numpy.zeros((len(fg),ncomp,ngrids,nao))[:,0]
+            for i, dm in enumerate(fg):
+                dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+                vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
+                fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_gj_gi'))
+
+        n_dm = len(fjk)
+        fjk = (ctypes.c_void_p*(n_dm))(*fjk)
+        dmsptr = (ctypes.c_void_p*(n_dm))(*dmsptr)
+        vjkptr = (ctypes.c_void_p*(n_dm))(*vjkptr)
+
+        drv(cintor, fdot, fjk, dmsptr, vjkptr, n_dm, ncomp,
+            (ctypes.c_int*6)(*shls_slice),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+            cintopt, vhfopt._this,
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+            env.ctypes.data_as(ctypes.c_void_p))
+        return vj, vk
+    return jk_part
 
 
 # pre for get_k
@@ -247,15 +345,25 @@ if __name__ == '__main__':
 
     sgxobj = sgx.SGX(mol)
     sgxobj.grids = get_gridss(mol, 0, 1e-10)
-    vj, vk = get_jk_favork(sgxobj, dm)
+    with lib.temporary_env(sgxobj, debug=True):
+        vj, vk = get_jk_favork(sgxobj, dm)
+    print(numpy.einsum('ij,ji->', vj, dm))
+    print(numpy.einsum('ij,ji->', vk, dm))
+    print(abs(vjref-vj).max().max())
+    print(abs(vkref-vk).max().max())
+    with lib.temporary_env(sgxobj, debug=False):
+        vj1, vk1 = get_jk_favork(sgxobj, dm)
+    print(abs(vj - vj1).max())
+    print(abs(vk - vk1).max())
+
+    with lib.temporary_env(sgxobj, debug=True):
+        vj, vk = get_jk_favorj(sgxobj, dm)
     print(numpy.einsum('ij,ji->', vj, dm))
     print(numpy.einsum('ij,ji->', vk, dm))
     print(abs(vjref-vj).max().max())
     print(abs(vkref-vk).max().max())
 
-    vj, vk = get_jk_favorj(sgxobj, dm)
-    print(numpy.einsum('ij,ji->', vj, dm))
-    print(numpy.einsum('ij,ji->', vk, dm))
-    print(abs(vjref-vj).max().max())
-    print(abs(vkref-vk).max().max())
-
+    with lib.temporary_env(sgxobj, debug=False):
+        vj1, vk1 = get_jk_favorj(sgxobj, dm)
+    print(abs(vj - vj1).max())
+    print(abs(vk - vk1).max())
