@@ -237,7 +237,6 @@ void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                                 tmp = fabs(buf[i+di*j]);
                                 qtmp = MAX(qtmp, tmp);
                         } }
-                        qtmp = sqrt(qtmp);
                 }
                 q_cond[ish*nbas+jsh] = qtmp;
                 q_cond[jsh*nbas+ish] = qtmp;
