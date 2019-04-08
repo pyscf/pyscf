@@ -118,7 +118,7 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
         from pyscf.mcscf.addons import StateAverageMCSCFSolver
         if isinstance (self, StateAverageMCSCFSolver):
-            mc1 = mc1.state_average_()
+            mc1 = mc1.state_average_(self.weights)
         return mc1
 
 CASSCF = SymAdaptedCASSCF
