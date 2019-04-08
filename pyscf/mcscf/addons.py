@@ -710,7 +710,7 @@ def state_average(casscf, weights=(0.5,0.5)):
             self._keys = self._keys.union (keys)
         @property
         def _base_class (self):
-            ''' for convenience; this is equal to fcibase_class '''
+            ''' for convenience; this is equal to mcscfbase_class '''
             return self.__class__.__bases__[0]
         @property
         def weights (self):
