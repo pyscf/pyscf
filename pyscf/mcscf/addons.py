@@ -645,9 +645,10 @@ def state_average(casscf, weights=(0.5,0.5)):
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
 # pass self to fcibase_class.kernel function because orbsym argument is stored in self
 # but undefined in fcibase object
-            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
-                                        nroots=self.nroots, **kwargs)
-            self.e_states[0] = e
+            if 'nroots' not in kwargs:
+                kwargs['nroots'] = self.nroots
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0, **kwargs)
+            self.e_states = e
             if casscf.verbose >= logger.DEBUG:
                 if has_spin_square:
                     for i, ei in enumerate(e):
@@ -699,9 +700,18 @@ def state_average(casscf, weights=(0.5,0.5)):
 
         def __init__(self, my_mc):
             self.__dict__.update (my_mc.__dict__)
-            self.fcisolver = FakeCISolver (my_mc.fcisolver)
-            keys = set (('weights',))
+            # No recursion of FakeCISolver is allowed!
+            if isinstance (self.fcisolver, StateAverageFCISolver):
+                self.fcisolver.nroots = len (weights)
+                self.fcisolver.weights = weights
+            else:
+                self.fcisolver = FakeCISolver (my_mc.fcisolver)
+            keys = set (('weights','_base_class'))
             self._keys = self._keys.union (keys)
+        @property
+        def _base_class (self):
+            ''' for convenience; this is equal to fcibase_class '''
+            return self.__class__.__bases__[0]
         @property
         def weights (self):
             ''' I want these to be accessible but not separable from fcisolver.weights '''
@@ -712,7 +722,7 @@ def state_average(casscf, weights=(0.5,0.5)):
             return self.fcisolver.weights
         def _finalize(self):
             mcscfbase_class._finalize(self)
-            self.e_tot = self.fcisolver.e_states[0]
+            self.e_tot = self.fcisolver.e_states
             logger.note(self, 'CASCI energy for each state')
             if has_spin_square:
                 ncas = self.ncas
