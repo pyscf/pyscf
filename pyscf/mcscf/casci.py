@@ -884,7 +884,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 
     @lib.with_doc(addons.state_average_.__doc__)
     def state_average_(self, weights=(0.5,0.5)):
-        addons.state_average(self, weights)
+        addons.state_average_(self, weights)
         return self
 
     @lib.with_doc(addons.state_specific_.__doc__)

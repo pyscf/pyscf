@@ -590,8 +590,11 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
 # A tag to label the derived FCI class
 class StateAverageFCISolver:
     pass
+# A tag to label the derived MCSCF class
+class StateAverageMCSCFSolver:
+    pass
 
-def state_average_(casscf, weights=(0.5,0.5)):
+def state_average(casscf, weights=(0.5,0.5)):
     ''' State average over the energy.  The energy funcitonal is
     E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
 
@@ -600,30 +603,51 @@ def state_average_(casscf, weights=(0.5,0.5)):
     mc.fcisolver = fci.solver(mol, False)
 
     before calling state_average_(mc), to mix the singlet and triplet states
+
+    MRH, 04/08/2019: Instead of turning casscf._finalize into an instance attribute
+    that points to the previous casscf object, I'm going to make a whole new child class.
+    This will have the added benefit of making state_average and state_average_
+    actually behave differently for the first time (until now they *both* modified the
+    casscf object inplace). I'm also going to assign the weights argument as a member
+    of the mc child class because an accurate second-order CASSCF algorithm for state-averaged
+    calculations requires that the gradient and Hessian be computed for CI vectors of each root
+    individually and then multiplied by that root's weight. The second derivatives computed
+    by newton_casscf.py need to be extended to state-averaged calculations in order to be
+    used as intermediates for calculations of the gradient of a single root in the context
+    of the SA-CASSCF method; see: Mol. Phys. 99, 103 (2001).
     '''
     assert(abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
-    if fcibase_class.__name__ == 'FakeCISolver':
-        raise TypeError('mc.fcisolver is not base FCI solver\n'
+    mcscfbase_class = casscf.__class__
+    if isinstance (casscf, StateAverageMCSCFSolver):
+        raise TypeError('mc is not base MCSCF solver\n'
                         'state_average function cannot work with decorated '
-                        'fcisolver %s.\nYou can restore the base fcisolver '
+                        'MCSCF solver %s.\nYou can restore the base MCSCF '
                         'then call state_average function, eg\n'
-                        '    mc.fcisolver = %s.%s(mc.mol)\n'
+                        '    mc = %s.%s(mc._scf, %s, %s)\n'
                         '    mc.state_average_()\n' %
-                        (casscf.fcisolver, fcibase_class.__base__.__module__,
-                         fcibase_class.__base__.__name__))
+                        (mcscf_base, mcscfbase_class.__base__.__module__,
+                         mcscfbase_class.__base__.__name__, casscf.ncas, casscf.nelecas))
     has_spin_square = getattr(casscf.fcisolver, 'spin_square', None)
-    e_states = [None]
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
-        def __init__(self, mol=None):
+        def __init__(self, fcibase):
+            self.__dict__.update (fcibase.__dict__)
             self.nroots = len(weights)
+            self.weights = weights
+            self.e_states = [None]
+            keys = set (('weights','e_states','_base_class'))
+            self._keys = self._keys.union (keys)
+        @property
+        def _base_class (self):
+            ''' for convenience; this is equal to fcibase_class '''
+            return self.__class__.__bases__[0]
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
 # pass self to fcibase_class.kernel function because orbsym argument is stored in self
 # but undefined in fcibase object
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
-            e_states[0] = e
+            self.e_states[0] = e
             if casscf.verbose >= logger.DEBUG:
                 if has_spin_square:
                     for i, ei in enumerate(e):
@@ -633,20 +657,20 @@ def state_average_(casscf, weights=(0.5,0.5)):
                 else:
                     for i, ei in enumerate(e):
                         logger.debug(casscf, 'state %d  E = %.15g', i, ei)
-            return numpy.einsum('i,i->', e, weights), c
+            return numpy.einsum('i,i->', e, self.weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         max_cycle=casscf.ci_response_space,
                                         nroots=self.nroots, **kwargs)
-            return numpy.einsum('i,i->', e, weights), c
+            return numpy.einsum('i,i->', e, self.weights), c
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
-            for i, wi in enumerate(weights):
+            for i, wi in enumerate(self.weights):
                 dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
             return dm1
         def make_rdm1s(self, ci0, norb, nelec):
             dm1a, dm1b = 0, 0
-            for i, wi in enumerate(weights):
+            for i, wi in enumerate(self.weights):
                 dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec)
                 dm1a += wi * dm1s[0]
                 dm1b += wi * dm1s[1]
@@ -654,7 +678,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
         def make_rdm12(self, ci0, norb, nelec):
             rdm1 = 0
             rdm2 = 0
-            for i, wi in enumerate(weights):
+            for i, wi in enumerate(self.weights):
                 dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
@@ -664,38 +688,54 @@ def state_average_(casscf, weights=(0.5,0.5)):
             def spin_square(self, ci0, norb, nelec):
                 ss = 0
                 multip = 0
-                for i, wi in enumerate(weights):
+                for i, wi in enumerate(self.weights):
                     res = fcibase_class.spin_square(self, ci0[i], norb, nelec)
                     ss += wi * res[0]
                     multip += wi * res[1]
                 return ss, multip
 
-    fcisolver = FakeCISolver(casscf.mol)
-    fcisolver.__dict__.update(casscf.fcisolver.__dict__)
-    fcisolver.nroots = len(weights)
-    casscf.fcisolver = fcisolver
 
-    old_finalize = casscf._finalize
-    def _finalize():
-        old_finalize()
-        casscf.e_tot = e_states[0]
-        logger.note(casscf, 'CASCI energy for each state')
-        if has_spin_square:
-            ncas = casscf.ncas
-            nelecas = casscf.nelecas
-            for i, ei in enumerate(casscf.e_tot):
-                ss = fcibase_class.spin_square(casscf.fcisolver, casscf.ci[i],
-                                               ncas, nelecas)[0]
-                logger.note(casscf, '  State %d weight %g  E = %.15g S^2 = %.7f',
-                            i, weights[i], ei, ss)
-        else:
-            for i, ei in enumerate(casscf.e_tot):
-                logger.note(casscf, '  State %d weight %g  E = %.15g',
-                            i, weights[i], ei)
-        return casscf
-    casscf._finalize = _finalize
+    class FakeMCSCFSolver (mcscfbase_class, StateAverageMCSCFSolver):
+
+        def __init__(self, my_mc):
+            self.__dict__.update (my_mc.__dict__)
+            self.fcisolver = FakeCISolver (my_mc.fcisolver)
+            keys = set (('weights',))
+            self._keys = self._keys.union (keys)
+        @property
+        def weights (self):
+            ''' I want these to be accessible but not separable from fcisolver.weights '''
+            return self.fcisolver.weights
+        @weights.setter
+        def weights (self, x):
+            self.fcisolver.weights = x
+            return self.fcisolver.weights
+        def _finalize(self):
+            mcscfbase_class._finalize(self)
+            self.e_tot = self.fcisolver.e_states[0]
+            logger.note(self, 'CASCI energy for each state')
+            if has_spin_square:
+                ncas = self.ncas
+                nelecas = self.nelecas
+                for i, ei in enumerate(self.e_tot):
+                    ss = self.fcisolver._base_class.spin_square(self.fcisolver, self.ci[i],
+                                                   ncas, nelecas)[0]
+                    logger.note(self, '  State %d weight %g  E = %.15g S^2 = %.7f',
+                                i, self.weights[i], ei, ss)
+            else:
+                for i, ei in enumerate(self.e_tot):
+                    logger.note(self, '  State %d weight %g  E = %.15g',
+                                i, self.weights[i], ei)
+            return self
+
+    return FakeMCSCFSolver (casscf)
+
+def state_average_(casscf, weights=(0.5,0.5)):
+    ''' Inplace version of state_average '''
+    sacasscf = state_average (casscf, weights)
+    casscf.__class__ = sacasscf.__class__
+    casscf.__dict__.update (sacasscf.__dict__)
     return casscf
-state_average = state_average_
 
 
 def state_specific_(casscf, state=1):
