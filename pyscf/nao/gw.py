@@ -101,6 +101,7 @@ class gw(scf):
     self.x = require(self.mo_coeff[0,:,:,:,0], dtype=self.dtype, requirements='CW')
 
     if self.perform_gw: self.kernel_gw()
+    self.snmw2sf_ncalls = 0
     
   def get_h0_vh_x_expval(self):
     """
@@ -230,7 +231,7 @@ class gw(scf):
     """
     wpq2si0 = self.si_c(ww = 1j*self.ww_ia).real
     v_pab = self.pb.get_ac_vertex_array()
-
+    self.snmw2sf_ncalls += 1
     snmw2sf = []
     for s in range(self.nspin):
       nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
@@ -238,7 +239,7 @@ class gw(scf):
       xna = self.mo_coeff[0,s,self.nn[s],:,0]                                           #n runs from s...f or states will be corrected: self.nn = [range(self.start_st[s], self.finish_st[s])
       #xna = self.mo_coeff[0,s,self.nn,:,0]
       xmb = self.mo_coeff[0,s,:,:,0]                                                    #m runs from 0...norbs
-      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m foe each side
+      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m for each side
       for iw,si0 in enumerate(wpq2si0):
         nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)                #This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx 
       snmw2sf.append(nmw2sf)
@@ -367,7 +368,7 @@ class gw(scf):
         if self.verbosity>0: print('-'*43,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*43,'\n')
         break
       if err>=self.tol_ev and i+1==self.niter_max_ev:
-        if self.verbosity>0: print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
+        print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
     return sn2eval_gw
     
   def report(self):
@@ -382,9 +383,9 @@ class gw(scf):
         out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')
         if self.nspin==1:
             out_file.write('Energy-sorted MO indices \t {}'.format(self.argsort[0]))
-            if (np.allclose(self.argsort,np.sort(self.argsort))==False):
-                    print ("Warning: Swapping in orbital energies are obtained!")
-                    out_file.write("\nWarning: Swapping in orbital energies are obtained!")
+            if (np.allclose(self.argsort[0][:self.nfermi[0]],np.sort(self.argsort[0][:self.nfermi[0]]))==False):
+                    print ("Warning: Swapping in orbital energies below Fermi are obtained!")
+                    out_file.write("\nWarning: Swapping in orbital energies below Fermi are obtained!")
             print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
             out_file.write("\n   n  %14s %14s %7s \n" % ("E_mf", "E_gw", "occ") )
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -401,9 +402,9 @@ class gw(scf):
         elif self.nspin==2:
             for s in range(2):
                 out_file.write('\nEnergy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
-                if (np.allclose(self.argsort[s],np.sort(self.argsort[s]))==False):
-                    print ("Warning: Swapping in orbital energies are obtained at spin {} channel!".format(s+1))
-                    out_file.write("\nWarning: Swapping in orbital energies are obtained at spin {} channel!\n".format(s+1))         
+                if (np.allclose(self.argsort[s][:self.nfermi[s]],np.sort(self.argsort[s][:self.nfermi[s]]))==False):
+                    print ("Warning: Swapping in orbital energies below Fermi are obtained at spin {} channel!".format(s+1))
+                    out_file.write("\nWarning: Swapping in orbital energies below Fermi are obtained at spin {} channel!\n".format(s+1))         
             print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -476,7 +477,7 @@ class gw(scf):
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
-    if self.verbosity>1:
+    if self.verbosity>4:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
     
