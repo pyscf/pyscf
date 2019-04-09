@@ -326,7 +326,8 @@ def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 # MRH, 04/08/2019: enable multiple roots
 def extract_rotation(casscf, dr, u, ci0):
     nroots = casscf.fcisolver.nroots
-    ngorb = numpy.count_nonzero (casscf.uniq_var_indices (u.shape[1], casscf.ncore, casscf.ncas, casscf.frozen))
+    nmo = casscf.mo_coeff.shape[1]
+    ngorb = numpy.count_nonzero (casscf.uniq_var_indices (nmo, casscf.ncore, casscf.ncas, casscf.frozen))
     u = numpy.dot(u, casscf.update_rotate_matrix(dr[:ngorb]))
     ci1 = (numpy.asarray (ci0).ravel() + dr[ngorb:]).reshape (nroots, -1)
     ci1 *= 1./numpy.linalg.norm(ci1, axis=1)[:,None]
