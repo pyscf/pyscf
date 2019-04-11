@@ -248,22 +248,15 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     mol = dfobj.mol
     if dfobj._vjopt is None:
         dfobj.auxmol = auxmol = addons.make_auxmol(mol, dfobj.auxbasis)
-        # == opt = _vhf.VHFOpt(mol, 'int3c2e','CVHFnr3c2e_schwarz_cond')
-        opt = _vhf.VHFOpt(mol, 'int3c2e')
+        opt = _vhf.VHFOpt(mol, 'int3c2e', 'CVHFnr3c2e_schwarz_cond')
         opt.direct_scf_tol = direct_scf_tol
 
-        j2c = auxmol.intor('int2c2e', hermi=1)
-
-        # Use regular int2e (ij|ij) to initialize vhfopt.q_cond for mol's basis
-        fsetqcond = _vhf.libcvhf.CVHFsetnr_direct_scf
-        fsetqcond(opt._this, _vhf.libcvhf.int2e_sph, lib.c_null_ptr(),
-                  mol.ao_loc.ctypes.data_as(ctypes.c_void_p),
-                  mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-                  mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                  mol._env.ctypes.data_as(ctypes.c_void_p))
+        # q_cond part 1: the regular int2e (ij|ij) for mol's basis
+        opt.init_cvhf_direct(mol, 'int2e', 'CVHFsetnr_direct_scf')
         mol_q_cond = lib.frompointer(opt._this.contents.q_cond, mol.nbas**2)
 
         # Update q_cond to include the 2e-integrals (auxmol|auxmol)
+        j2c = auxmol.intor('int2c2e', hermi=1)
         j2c_diag = numpy.sqrt(abs(j2c.diagonal()))
         aux_loc = auxmol.ao_loc
         aux_q_cond = [j2c_diag[i0:i1].max()

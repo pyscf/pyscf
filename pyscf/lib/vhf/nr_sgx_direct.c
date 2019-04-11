@@ -225,13 +225,13 @@ void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                         continue;
                 }
 
-                di = ao_loc[ish+1] - ao_loc[ish];
-                dj = ao_loc[jsh+1] - ao_loc[jsh];
                 shls[0] = ish;
                 shls[1] = jsh;
                 qtmp = 1e-100;
                 if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env,
                                   NULL, cache)) {
+                        di = ao_loc[ish+1] - ao_loc[ish];
+                        dj = ao_loc[jsh+1] - ao_loc[jsh];
                         for (i = 0; i < di; i++) {
                         for (j = 0; j < dj; j++) {
                                 tmp = fabs(buf[i+di*j]);

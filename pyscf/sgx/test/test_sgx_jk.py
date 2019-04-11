@@ -59,6 +59,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vj1-vj).max(), 0, 9)
         self.assertAlmostEqual(abs(vk1-vk).max(), 0, 9)
 
+    def test_dfj(self):
+        mol = gto.Mole()
+        mol.build(
+            verbose = 0,
+            atom = [["O" , (0. , 0.     , 0.)],
+                    [1   , (0. , -0.757 , 0.587)],
+                    [1   , (0. , 0.757  , 0.587)] ],
+            basis = 'ccpvdz',
+        )
+        nao = mol.nao
+        numpy.random.seed(1)
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+
+        mf = sgx.sgx_fit(scf.RHF(mol), 'weigend')
+        mf.with_df.dfj = True
+        mf.build()
+        vj, vk = mf.get_jk(mol, dm)
+        self.assertAlmostEqual(lib.finger(vj), -19.100356543264645, 9)
+        self.assertAlmostEqual(lib.finger(vk), -16.750915356787406, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for sgx_jk")

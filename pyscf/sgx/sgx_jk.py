@@ -194,6 +194,8 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
 
         if with_j:
             rhog = numpy.einsum('xgu,gu->xg', fg, ao)
+        else:
+            rhog = None
 
         if sgx.debug:
             tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
@@ -248,8 +250,12 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol):
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
     ncomp = 1
     nao = mol.nao
+    # intor 'int1e_ovlp' is used by the prescreen method
+    # 'SGXnr_ovlp_prescreen' only. It is never be used again in other places.
+    # It can be released early
     vhfopt = _vhf.VHFOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
                          'SGXsetnr_direct_scf')
+    vhfopt._intor = None
     vhfopt.direct_scf_tol = direct_scf_tol
     cintor = _vhf._fpointer(intor)
     fdot = _vhf._fpointer('SGXdot_nr'+aosym)
@@ -312,11 +318,16 @@ def get_gridss(mol, level=1, gthrd=1e-10):
     grids.level = level
     grids.build()
 
-    ao_v = mol.eval_gto('GTOval', grids.coords)
-    ao_v *= grids.weights[:,None]
-    wao_v0 = ao_v
+    ngrids = grids.weights.size
+    mask = []
+    for p0, p1 in lib.prange(0, ngrids, 10000):
+        ao_v = mol.eval_gto('GTOval', grids.coords[p0:p1])
+        ao_v *= grids.weights[p0:p1,None]
+        wao_v0 = ao_v
+        mask.append(numpy.any(wao_v0>gthrd, axis=1) |
+                    numpy.any(wao_v0<-gthrd, axis=1))
 
-    mask = numpy.any(wao_v0>gthrd, axis=1) | numpy.any(wao_v0<-gthrd, axis=1)
+    mask = numpy.hstack(mask)
     grids.coords = grids.coords[mask]
     grids.weights = grids.weights[mask]
     logger.debug(mol, 'threshold for grids screening %g', gthrd)
