@@ -38,8 +38,8 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
-from pyscf.pbc import df
 from pyscf.pbc.scf import addons
+from pyscf.pbc import df
 from pyscf import __config__
 
 
@@ -740,6 +740,18 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
+
+    def to_rhf(self, mf):
+        '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
+        return addons.convert_to_rhf(mf)
+
+    def to_uhf(self, mf):
+        '''Convert the input mean-field object to a UHF/UKS object'''
+        return addons.convert_to_uhf(mf)
+
+    def to_ghf(self, mf):
+        '''Convert the input mean-field object to a GHF/GKS object'''
+        return addons.convert_to_ghf(mf)
 
 
 class RHF(SCF, mol_hf.RHF):
