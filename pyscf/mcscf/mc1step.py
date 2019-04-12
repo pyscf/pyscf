@@ -1242,6 +1242,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         mc1 = newton_casscf.CASSCF(self._scf, self.ncas, self.nelecas)
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
+        # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
+        if isinstance (self, StateAverageMCSCFSolver):
+            mc1 = mc1.state_average_(self.weights)
         return mc1
 
 from pyscf import scf

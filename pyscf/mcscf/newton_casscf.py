@@ -28,7 +28,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.mcscf import casci, mc1step
+from pyscf.mcscf import casci, mc1step, addons
 from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
@@ -39,6 +39,9 @@ from pyscf import fci
 
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
+    # MRH 04/08/2019: punt to state-average wrapper if necessary
+    if isinstance (casscf, addons.StateAverageMCSCFSolver):
+        return _sa_gen_g_hop (casscf, mo, ci0, eris, verbose)
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncas + ncore
@@ -290,11 +293,46 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 
     return g_all, g_update, h_op, hdiag_all
 
+def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
+    ''' MRH, 04/08/2019: This is a thin wrapper around the original gen_g_hop to weight and average the derivatives
+        in the second-order algorithm for a SA-CASSCF calculation. '''
+    ngorb = numpy.count_nonzero (casscf.uniq_var_indices (mo.shape[1], casscf.ncore, casscf.ncas, casscf.frozen))
+    nroots = casscf.fcisolver.nroots
+    fcasscf = casscf._base_class (casscf._scf, casscf.ncas, casscf.nelecas)
+    fcasscf.fcisolver = casscf.fcisolver._base_class (casscf.mol)
+
+    # Warning: do not call gen_g_hop from here with casscf: infinite recursion danger
+    gh_roots = [gen_g_hop (fcasscf, mo, ci0_i, eris, verbose=verbose) for ci0_i in ci0]
+    def avg_orb_wgt_ci (x_roots):
+        x_orb = sum ([x_iroot[:ngorb] * w for x_iroot, w in zip (x_roots, casscf.weights)])
+        x_ci = numpy.stack ([x_iroot[ngorb:] * w for x_iroot, w in zip (x_roots, casscf.weights)], axis=0)
+        x_all = numpy.append (x_orb, x_ci.ravel ()).ravel ()
+        return x_all
+
+    g_all = avg_orb_wgt_ci ([gh_iroot[0] for gh_iroot in gh_roots])
+    hdiag_all = avg_orb_wgt_ci ([gh_iroot[3] for gh_iroot in gh_roots])
+
+    def g_update (u, fcivec):
+        return avg_orb_wgt_ci ([gh_iroot[1] (u, ci) for gh_iroot, ci in zip (gh_roots, fcivec)])
+
+    def h_op (x):
+        x_orb = x[:ngorb]
+        x_ci = x[ngorb:].reshape (nroots, -1)
+        return avg_orb_wgt_ci ([gh_iroot[2] (numpy.append (x_orb, x_ci_iroot))
+            for gh_iroot, x_ci_iroot in zip (gh_roots, x_ci)])
+
+    return g_all, g_update, h_op, hdiag_all
+
+# MRH, 04/08/2019: enable multiple roots
 def extract_rotation(casscf, dr, u, ci0):
-    ngorb = dr.size - ci0.size
+    nroots = casscf.fcisolver.nroots
+    nmo = casscf.mo_coeff.shape[1]
+    ngorb = numpy.count_nonzero (casscf.uniq_var_indices (nmo, casscf.ncore, casscf.ncas, casscf.frozen))
     u = numpy.dot(u, casscf.update_rotate_matrix(dr[:ngorb]))
-    ci1 = ci0.ravel() + dr[ngorb:]
-    ci1 *= 1./numpy.linalg.norm(ci1)
+    ci1 = (numpy.asarray (ci0).ravel() + dr[ngorb:]).reshape (nroots, -1)
+    ci1 *= 1./numpy.linalg.norm(ci1, axis=1)[:,None]
+    ci1 = [ci1[iroot].ravel () for iroot in range (nroots)]
+    if nroots == 1: ci1 = ci1[0]
     return u, ci1
 
 def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
@@ -304,9 +342,13 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
         max_stepsize = casscf.max_stepsize
 
     nmo = mo.shape[1]
-    ci0 = ci0.ravel()
+    # MRH, 04/08/2019: enable multiple roots
+    if casscf.fcisolver.nroots == 1:
+        ci0 = ci0.ravel ()
+    else:
+        ci0 = [c.ravel () for c in ci0]
     g_all, g_update, h_op, h_diag = gen_g_hop(casscf, mo, ci0, eris)
-    ngorb = g_all.size - ci0.size
+    ngorb = numpy.count_nonzero (casscf.uniq_var_indices (nmo, casscf.ncore, casscf.ncas, casscf.frozen))
     g_kf = g_all
     norm_gkf = norm_gall = numpy.linalg.norm(g_all)
     log.debug('    |g|=%5.3g (%4.3g %4.3g) (keyframe)', norm_gall,
@@ -423,7 +465,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
     log.debug('    tot inner=%d  |g|= %4.3g (%4.3g %4.3g) |u-1|= %4.3g  |dci|= %4.3g',
               stat.imic, norm_gall, norm_gorb, norm_gci,
               numpy.linalg.norm(u-numpy.eye(nmo)),
-              numpy.linalg.norm(ci_kf-ci0))
+              numpy.linalg.norm(numpy.asarray(ci_kf)-numpy.asarray(ci0)))
     return u, ci_kf, norm_gkf, stat, dxi
 
 
