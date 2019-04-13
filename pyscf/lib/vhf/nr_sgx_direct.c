@@ -147,7 +147,7 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
         const int ksh1 = shls_slice[5];
         const int nksh = ksh1 - ksh0;
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
                                                  atm, natm, bas, nbas, env);
 
 #pragma omp parallel default(none) \
