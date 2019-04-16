@@ -30,6 +30,14 @@ from pyscf import __config__
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
+# MP 2019
+def fermi_smearing_mo_occ(e_f, mo_energy, tau):
+    sigma = 0.3166808991e-5*tau
+    occ = numpy.zeros_like(mo_energy)
+    de = (mo_energy - e_f) / sigma
+    occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
+    return occ
+
 def frac_occ_(mf, tol=1e-3):
     from pyscf.scf import uhf, rohf
     old_get_occ = mf.get_occ

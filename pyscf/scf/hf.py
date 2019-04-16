@@ -801,8 +801,28 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     e_sort = mo_energy[e_idx]
     nmo = mo_energy.size
     mo_occ = numpy.zeros(nmo)
-    nocc = mf.mol.nelectron // 2
-    mo_occ[e_idx[:nocc]] = 2
+    nocc = mf.mol.nelectron // 2    
+    elec = mf.mol.nelectron
+
+    # MP 2019
+    if not mf.mol.smearing:
+        mo_occ[e_idx[:nocc]] = 2
+    else:
+        if mf.verbose >= logger.INFO:
+            logger.warn(mf, "WARNING: experimental, use at your own risk")
+        if mf.mol.FermiEnergy is None:
+            mf.mol.FermiEnergy = mo_energy[e_idx[nocc]] 
+        from pyscf.scf.addons import fermi_smearing_mo_occ
+        def nelec_cost_fn(e_f):
+            mo_occ = fermi_smearing_mo_occ(e_f, mo_energy, mf.mol.tau)*2
+            nelec = numpy.sum(mo_occ)
+            return (nelec - elec)**2
+        res = scipy.optimize.minimize(nelec_cost_fn, mf.mol.FermiEnergy, method='Powell')
+        mf.mol.FermiEnergy = res.x
+        mo_occ = fermi_smearing_mo_occ(mf.mol.FermiEnergy, mo_energy, mf.mol.tau)*2
+        if not numpy.isclose(numpy.sum(mo_occ),elec):
+            raise RuntimeError('Fermi-Dirac did not converge. Try raising mol.tau.') 
+
     if mf.verbose >= logger.INFO and nocc < nmo:
         if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
             logger.warn(mf, 'HOMO %.15g == LUMO %.15g',
