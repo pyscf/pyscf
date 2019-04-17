@@ -75,7 +75,7 @@ class PySCFEngine(geometric.engine.Engine):
 
         if self.assert_convergence and not g_scanner.converged:
             raise RuntimeError('Nuclear gradients of %s not converged' % g_scanner.base)
-        return energy, gradients.ravel()
+        return {"energy": energy, "gradient": gradients.ravel()}
 
 def kernel(method, assert_convergence=ASSERT_CONV,
            include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
