@@ -320,6 +320,7 @@ class tddft_iter(chi0_matvec):
             if Exyz == 0.0: continue
 
             for iw,comega in enumerate(comegas):
+                print(xyz, iw)
                 if self.verbosity>0: 
                     print("dir: {0}/3, w: {1}/{2}: ".format(xyz, iw, nww), comega*eV)
                 veff = self.comp_veff(vext[xyz], comega)

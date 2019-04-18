@@ -16,8 +16,10 @@ def scf_dos(scf, zomegas, nkpoints=1):
 
 
 def system_vars_ados(sv, zomegas, ls_atom_groups, nkpoints=1): 
-  """ Compute a Partial Density of States (resolved in atomic indices) using the eigenvalues and eigenvectors in wfsx """
-  from timeit import default_timer as timer
+  """
+  Compute a Partial Density of States (resolved in atomic indices) using the 
+  eigenvalues and eigenvectors in wfsx
+  """
   
   iksn2w = zeros([2]+list(sv.wfsx.ksn2e.shape))
   over = sv.hsx.s4_csr.toarray()
