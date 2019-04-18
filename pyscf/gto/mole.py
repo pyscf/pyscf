@@ -1862,6 +1862,11 @@ class Mole(lib.StreamObject):
         self.nucmod = {}
 # self.ecp = {atom_symbol: [[l, (r_order, expnt, c),...]]}
         self.ecp = {}
+
+# self.smearing -- MP 2019 
+        self.smearing = False
+        self.tau      = None
+        self.FermiEnergy = None
 # Nuclear property. self.nucprop = {atom_symbol: {key: value}}
         self.nucprop = {}
 ##################################################
