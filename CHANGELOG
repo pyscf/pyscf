@@ -22,6 +22,16 @@ PySCF 1.7.0 (2019-?-?)
   - Initial guess for EOM-KCCSD
 
 
+PySCF 1.6.2 (2019-?-?)
+----------------------
+* Improved
+  - DFHF class structure and method hooks
+* Bugfix
+  - Cartesian GTOs was not handled in RSH integrals
+  - geometric_solver for latest geomeTRIC release
+  - Initial guess of orbital localization solver
+
+
 PySCF 1.6.1 (2019-03-15)
 ------------------------
 * Added
