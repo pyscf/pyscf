@@ -1,3 +1,13 @@
+PySCF 1.6.2 (2019-?-?)
+----------------------
+* Improved
+  - DFHF class structure and method hooks
+* Fixed
+  - Cartesian GTOs was not handled in RSH integrals
+  - geometric_solver for latest geomeTRIC release
+  - Initial guess of orbital localization solver
+
+
 PySCF 1.6.1 (2019-03-15)
 ------------------------
 * Added
