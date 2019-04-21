@@ -682,7 +682,7 @@ class UHF(hf.SCF):
     def eig(self, fock, s):
         e_a, c_a = self._eigh(fock[0], s)
         e_b, c_b = self._eigh(fock[1], s)
-        return (e_a,e_b), (c_a,c_b)
+        return numpy.array((e_a,e_b)), numpy.array((c_a,c_b))
 
     get_fock = get_fock
 
