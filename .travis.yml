@@ -25,6 +25,7 @@ python:
   - 3.4
   - 3.5
   - 3.6
+  - 3.7
 
 #virtualenv:  affect python 3.5 3.6?
 #    system_site_packages: true

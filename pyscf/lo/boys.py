@@ -116,13 +116,14 @@ def atomic_init_guess(mol, mo_coeff):
     s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
     mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
-    nmo = mo_coeff.shape[1]
 # Find the AOs which have largest overlap to MOs
     idx = numpy.argsort(numpy.einsum('pi,pi->p', mo.conj(), mo))
     nmo = mo.shape[1]
-    idx = idx[-nmo:]
+    idx = sorted(idx[-nmo:])
+
+    # Rotate mo_coeff, make it as close as possible to AOs
     u, w, vh = numpy.linalg.svd(mo[idx])
-    return lib.dot(vh, u.conj().T)
+    return lib.dot(u, vh).conj().T
 
 class Boys(ciah.CIAHOptimizer):
 
