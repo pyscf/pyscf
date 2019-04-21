@@ -895,10 +895,13 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
-    @lib.with_doc(addons.state_average_.__doc__)
+    @lib.with_doc(addons.state_average.__doc__)
     def state_average_(self, weights=(0.5,0.5)):
-        addons.state_average(self, weights)
+        addons.state_average_(self, weights)
         return self
+    @lib.with_doc(addons.state_average.__doc__)
+    def state_average(self, weights=(0.5,0.5)):
+        return addons.state_average(self, weights)
 
     @lib.with_doc(addons.state_specific_.__doc__)
     def state_specific_(self, state=1):
