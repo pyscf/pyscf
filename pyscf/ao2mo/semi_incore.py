@@ -37,7 +37,6 @@ from pyscf import lib
 from pyscf.lib import logger
 
 IOBLK_SIZE = 128
-f8_size = numpy.dtype('f8').itemsize/1e6 # in MB
 
 def general(eri, mo_coeffs, erifile, dataname='eri_mo',
             ioblk_size=IOBLK_SIZE, compact=True, verbose=logger.NOTE):
@@ -137,14 +136,16 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
         kl_red = True
         nkl_pair = nmok*nmol
 
-    chunks_half = (max(1, numpy.minimum(int(ioblk_size//(nao_pair*f8_size)),nmoj)),
-                   max(1, numpy.minimum(int(ioblk_size//(nij_pair*f8_size)),nmol)))
+    dtype = numpy.result_type(eri, *mo_coeffs)
+    typesize = dtype.itemsize/1e6 # in MB
+    chunks_half = (max(1, numpy.minimum(int(ioblk_size//(nao_pair*typesize)),nmoj)),
+                   max(1, numpy.minimum(int(ioblk_size//(nij_pair*typesize)),nmol)))
     '''
     ideally, the final transformed eris should have a chunk of nmoj x nmol to
     optimize read operations. However, I'm chunking the row size so that the
     write operations during the transform can be done as fast as possible.
     '''
-    chunks_full = (numpy.minimum(int(ioblk_size//(nkl_pair*f8_size)),nmoj),nmol)
+    chunks_full = (numpy.minimum(int(ioblk_size//(nkl_pair*typesize)),nmoj),nmol)
 
     if isinstance(erifile, str):
         if h5py.is_hdf5(erifile):
@@ -156,23 +157,26 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
     else:
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
-    h5d_eri = feri.create_dataset(dataname,(nij_pair,nkl_pair),'f8',chunks=chunks_full)
+
+    h5d_eri = feri.create_dataset(dataname,(nij_pair,nkl_pair),
+                                  dtype.char, chunks=chunks_full)
 
     feri_swap = lib.H5TmpFile(libver='latest')
-    half_eri = feri_swap.create_dataset(dataname,(nij_pair,nao_pair),'f8',chunks=chunks_half)
+    half_eri = feri_swap.create_dataset(dataname,(nij_pair,nao_pair),
+                                        dtype.char, chunks=chunks_half)
 
     log.debug('Memory information:')
     log.debug('  IOBLK_SIZE (MB): {}'.format(ioblk_size))
     log.debug('  jxl {}x{}, half eri chunk dim  {}x{}'.format(nmoj,nmol,chunks_half[0],chunks_half[1]))
     log.debug('  jxl {}x{}, full eri chunk dim {}x{}'.format(nmoj,nmol,chunks_full[0],chunks_full[1]))
     log.debug('  Final disk eri size (MB): {:.3g}, chunked {:.3g}'
-              .format(nij_pair*nkl_pair*f8_size,numpy.prod(chunks_full)*f8_size))
+              .format(nij_pair*nkl_pair*typesize,numpy.prod(chunks_full)*typesize))
     log.debug('  Half transformed eri size (MB): {:.3g}, chunked {:.3g}'
-              .format(nij_pair*nao_pair*f8_size,numpy.prod(chunks_half)*f8_size))
+              .format(nij_pair*nao_pair*typesize,numpy.prod(chunks_half)*typesize))
     log.debug('  RAM buffer for half transform (MB): {:.3g}'
-             .format(nij_pair*chunks_half[1]*f8_size*2))
+             .format(nij_pair*chunks_half[1]*typesize*2))
     log.debug('  RAM buffer for full transform (MB): {:.3g}'
-             .format(f8_size*chunks_full[0]*nkl_pair*2 + chunks_half[0]*nao_pair*f8_size*2))
+             .format(typesize*chunks_full[0]*nkl_pair*2 + chunks_half[0]*nao_pair*typesize*2))
 
     def save1(piece,buf):
         start = piece*chunks_half[1]
