@@ -1337,11 +1337,8 @@ class SCF(lib.StreamObject):
 
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
-        method = []
-        cls = self.__class__
-        while cls != SCF:
-            method.append(cls.__name__)
-            cls = cls.__base__
+        method = [cls.__name__ for cls in self.__class__.__mro__
+                  if issubclass(cls, SCF) and cls != SCF]
         logger.info(self, 'method = %s', '-'.join(method))
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
@@ -1693,6 +1690,21 @@ class SCF(lib.StreamObject):
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
 
+    def to_rhf(self, mf):
+        '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
+        from pyscf.scf import addons
+        return addons.convert_to_rhf(mf)
+
+    def to_uhf(self, mf):
+        '''Convert the input mean-field object to a UHF/UKS object'''
+        from pyscf.scf import addons
+        return addons.convert_to_uhf(mf)
+
+    def to_ghf(self, mf):
+        '''Convert the input mean-field object to a GHF/GKS object'''
+        from pyscf.scf import addons
+        return addons.convert_to_ghf(mf)
+
 
 ############
 
@@ -1735,7 +1747,7 @@ class RHF(SCF):
         return vhf
 
     def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF/ROHF'''
+        '''Convert the input mean-field object to RHF/ROHF'''
         from pyscf.scf import addons
         return addons.convert_to_rhf(mf, out=self)
 

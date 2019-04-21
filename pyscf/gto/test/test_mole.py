@@ -558,7 +558,7 @@ O    SP
             self.assertEqual(len(shls), nshls)
             self.assertEqual(mol0.atom_nshells(i), nshls)
         aoslice = mol0.aoslice_2c_by_atom()
-        mol0.elements
+        mol0.elements  # test property(elements) in Mole
         self.assertEqual([x[2] for x in aoslice], [0, 8, 56])
         self.assertEqual([x[3] for x in aoslice], [8, 56, 64])
 

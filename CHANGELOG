@@ -1,3 +1,13 @@
+PySCF 1.6.2 (2019-?-?)
+----------------------
+* Improved
+  - DFHF class structure and method hooks
+* Fixed
+  - Cartesian GTOs was not handled in RSH integrals
+  - geometric_solver for latest geomeTRIC release
+  - Initial guess of orbital localization solver
+
+
 PySCF 1.6.1 (2019-03-15)
 ------------------------
 * Added
@@ -10,6 +20,7 @@ PySCF 1.6.1 (2019-03-15)
     optimized format
   - inertia_moment function in Mole object
   - keyword resolution in CHGCAR writer
+  - IAO for each k-point in PBC systems
 * Improved
   - Geometry optimization module (GeometryOptimizer class, output format etc.)
   - SCF Gradients class. A hook "extra_force" was added.
@@ -28,7 +39,6 @@ PySCF 1.6.1 (2019-03-15)
   - MINAO basis data
   - Analytical Fourier transform zero elements when basis functions do not overlap
   - make_rdm1 function in state_average mcscf wrapper
-  - IAO orthogonalization
 
 
 PySCF 1.6 (2018-12-31)
