@@ -22,6 +22,7 @@ Non-relativistic Hartree-Fock analytical nuclear gradients
 
 import time
 import numpy
+import ctypes
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -133,12 +134,33 @@ def get_jk(mol, dm):
     '''J = ((-nabla i) j| kl) D_lk
     K = ((-nabla i) j| kl) D_jk
     '''
-    intor = mol._add_suffix('int2e_ip1')
+    vhfopt = _vhf.VHFOpt(mol, 'int2e_ip1ip2', 'CVHFgrad_jk_prescreen',
+                         'CVHFgrad_jk_direct_scf')
+    dm = numpy.asarray(dm, order='C')
+    if dm.ndim == 3:
+        n_dm = dm.shape[0]
+    else:
+        n_dm = 1
+    ao_loc = mol.ao_loc_nr()
+    fsetdm = getattr(_vhf.libcvhf, 'CVHFgrad_jk_direct_scf_dm')
+    fsetdm(vhfopt._this,
+           dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
+           ao_loc.ctypes.data_as(ctypes.c_void_p),
+           mol._atm.ctypes.data_as(ctypes.c_void_p), mol.natm,
+           mol._bas.ctypes.data_as(ctypes.c_void_p), mol.nbas,
+           mol._env.ctypes.data_as(ctypes.c_void_p))
+
+    # Update the vhfopt's attributes intor.  Function direct_mapdm needs
+    # vhfopt._intor and vhfopt._cintopt to compute J/K.  intor was initialized
+    # as int2e_ip1ip2. It should be int2e_ip1
+    vhfopt._intor = intor = mol._add_suffix('int2e_ip1')
+    vhfopt._cintopt = None
+
     vj, vk = _vhf.direct_mapdm(intor,  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
                                ('lk->s1ij', 'jk->s1il'),
                                dm, 3, # xyz, 3 components
-                               mol._atm, mol._bas, mol._env)
+                               mol._atm, mol._bas, mol._env, vhfopt=vhfopt)
     return -vj, -vk
 
 def get_veff(mf_grad, mol, dm):

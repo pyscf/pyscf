@@ -14,13 +14,10 @@ non-periodic direction.
 
 '''
 
-import numpy
 import time
-from pyscf import scf
 from pyscf.pbc import df as pdf
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbchf
-from pyscf.pbc import tools
 
 nk = 1
 kpts = [nk,nk,1]
@@ -75,7 +72,6 @@ cell.build(unit = 'B',
            basis='gth-szv')
 t0 = time.time()
 mf = pbchf.KRHF(cell, exxdiv='ewald')
-#mf = pbchf.KRHF(cell, exxdiv=None)
 mf.with_df = pdf.FFTDF(cell)
 mf.kpts = cell.make_kpts(kpts)
 mf.conv_tol = 1e-6

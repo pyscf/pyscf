@@ -145,7 +145,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         nelec = mf.nelec
     ncore = nelec[1]
     nocc  = nelec[0]
-    nopen = nocc - ncore
+    nopen = abs(nocc - ncore)
     mo_occ = _fill_rohf_occ(mo_energy, mo_ea, mo_eb, ncore, nopen)
 
     if mf.verbose >= logger.INFO and nocc < nmo and ncore > 0:
@@ -248,6 +248,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     mo_coeff = mf.mo_coeff
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
+        mf.dump_scf_summary(log)
+
         log.note('**** MO energy ****')
         if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea

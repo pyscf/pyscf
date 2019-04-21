@@ -445,6 +445,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if pspace_size is None: pspace_size = fci.pspace_size
 
     nelec = _unpack_nelec(nelec, fci.spin)
+    assert(0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]

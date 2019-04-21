@@ -29,17 +29,22 @@ import time
 import numpy
 import pyscf
 from pyscf import lib
+from pyscf import gto
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.dft import numint, gen_grid
 from pyscf.tools import cubegen
 
+RESOLUTION = cubegen.RESOLUTION
+BOX_MARGIN = cubegen.BOX_MARGIN
 
-def density(cell, outfile, dm, nx=60, ny=60, nz=60, moN = -1, fileFormat = "cube"):
+
+def density(cell, outfile, dm, nx=60, ny=60, nz=60, resolution=RESOLUTION):
     '''Calculates electron density and write out in CHGCAR format.
 
     Args:
-        cell : Cell
-            pbc Cell
+        cell : Mole or Cell object
+            Mole or pbc Cell. If Mole object is given, the program will guess
+            a cubic lattice for the molecule.
         outfile : str
             Name of Cube file to be written.
         dm : ndarray
@@ -71,29 +76,31 @@ def density(cell, outfile, dm, nx=60, ny=60, nz=60, moN = -1, fileFormat = "cube
         >>> chgcar.density(cell, 'h2.CHGCAR', mf.make_rdm1())
 
     '''
-    assert(isinstance(cell, pbcgto.Cell))
-
-    cc = CHGCAR(cell, nx=nx, ny=ny, nz=nz)
+    cc = CHGCAR(cell, nx=nx, ny=ny, nz=nz, resolution=resolution)
 
     coords = cc.get_coords()
     ngrids = cc.get_ngrids()
     blksize = min(8000, ngrids)
     rho = numpy.empty(ngrids)
     for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        ao = numint.eval_ao(cell, coords[ip0:ip1])
-        rho[ip0:ip1] = numint.eval_rho(cell, ao, dm)
+        if isinstance(cell, pbcgto.cell.Cell):
+            ao = cell.pbc_eval_gto('GTOval', coords[ip0:ip1])
+        else:
+            ao = cell.eval_gto('GTOval', coords[ip0:ip1])
+        rho[ip0:ip1] = lib.einsum('pi,ij,pj->p', ao, dm, ao)
     rho = rho.reshape(nx,ny,nz)
 
     cc.write(rho, outfile)
 
 
-def orbital(cell, outfile, coeff, nx=60, ny=60, nz=60):
+def orbital(cell, outfile, coeff, nx=60, ny=60, nz=60, resolution=RESOLUTION):
     '''Calculate orbital value on real space grid and write out in
     CHGCAR format.
 
     Args:
-        cell : Cell
-            pbc Cell
+        cell : Mole or Cell object
+            Mole or pbc Cell. If Mole object is given, the program will guess
+            a cubic lattice for the molecule.
         outfile : str
             Name of Cube file to be written.
         dm : ndarray
@@ -125,16 +132,17 @@ def orbital(cell, outfile, coeff, nx=60, ny=60, nz=60):
         >>> chgcar.orbital(cell, 'h2_mo1.CHGCAR', mf.mo_coeff[:,0])
 
     '''
-    assert(isinstance(cell, pbcgto.Cell))
-
-    cc = CHGCAR(cell, nx=nx, ny=ny, nz=nz)
+    cc = CHGCAR(cell, nx=nx, ny=ny, nz=nz, resolution=resolution)
 
     coords = cc.get_coords()
     ngrids = cc.get_ngrids()
     blksize = min(8000, ngrids)
     orb_on_grid = numpy.empty(ngrids)
     for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        ao = numint.eval_ao(cell, coords[ip0:ip1])
+        if isinstance(cell, pbcgto.cell.Cell):
+            ao = cell.pbc_eval_gto('GTOval', coords[ip0:ip1])
+        else:
+            ao = cell.eval_gto('GTOval', coords[ip0:ip1])
         orb_on_grid[ip0:ip1] = numpy.dot(ao, coeff)
     orb_on_grid = orb_on_grid.reshape(nx,ny,nz)
 
@@ -143,22 +151,47 @@ def orbital(cell, outfile, coeff, nx=60, ny=60, nz=60):
 
 class CHGCAR(cubegen.Cube):
     '''  Read-write of the Vasp CHGCAR files  '''
-    def __init__(self, cell, nx=60, ny=60, nz=60):
+    def __init__(self, cell, nx=60, ny=60, nz=60, resolution=RESOLUTION,
+                 margin=BOX_MARGIN):
+        if not isinstance(cell, pbcgto.cell.Cell):
+            coord = cell.atom_coords()
+            box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+            boxorig = numpy.min(coord,axis=0) - margin
+            if resolution is not None:
+                nx, ny, nz = numpy.ceil(box / resolution).astype(int)
+            self.box = numpy.diag(box)
+            lib.logger.warn(cell, 'Molecular system is found. FFT-grid is not '
+                            'available for Molecule. Lattice (in Bohr)\n'
+                            '%s\nand FFT grids %s are applied.',
+                            self.box, (nx,ny,nz))
+            self.mol = cell
+            cell = cell.view(pbcgto.Cell)
+            if (isinstance(cell.unit, (str, unicode)) and
+                cell.unit.startswith(('B','b','au','AU'))):
+                cell.a = self.box
+            else:
+                cell.a = self.box * lib.param.BOHR
+            ptr = cell._atm[:,gto.PTR_COORD]
+            cell._env[ptr+0] = coord[:,0] - boxorig[0]
+            cell._env[ptr+1] = coord[:,1] - boxorig[1]
+            cell._env[ptr+2] = coord[:,2] - boxorig[2]
+
         self.nx = nx
         self.ny = ny
         self.nz = nz
         self.cell = cell
         self.box = cell.lattice_vectors()
         self.boxorig = numpy.zeros(3)
-        self.xs = numpy.arange(nx) * (1./nx)
-        self.ys = numpy.arange(ny) * (1./ny)
-        self.zs = numpy.arange(nz) * (1./nz)
+        self.vol = cell.vol
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored
         in the file.
         """
-        xyz = lib.cartesian_prod((self.xs, self.ys, self.zs))
+        xs = numpy.arange(self.nx) * (1./self.nx)
+        ys = numpy.arange(self.ny) * (1./self.ny)
+        zs = numpy.arange(self.nz) * (1./self.nz)
+        xyz = lib.cartesian_prod((xs, ys, zs))
         coords = numpy.dot(xyz, self.box)
         return numpy.asarray(coords, order='C')
 
@@ -172,7 +205,8 @@ class CHGCAR(cubegen.Cube):
         cell = self.cell
 
         # See CHGCAR format https://cms.mpi.univie.ac.at/vasp/vasp/CHGCAR_file.html
-        field = field * cell.vol
+        # the value of (total density * volume) was dumped
+        field = field * self.vol
 
         boxA = self.box * lib.param.BOHR
         atomList= [cell.atom_pure_symbol(i) for i in range(cell.natm)]
@@ -201,6 +235,9 @@ class CHGCAR(cubegen.Cube):
                     f.write('\n')
                     for ix in range(self.nz):
                         f.write(fmt % field[ix,iy,iz])
+
+    def read(self, chgcar_file):
+        raise NotImplementedError
 
 
 if __name__ == '__main__':

@@ -41,12 +41,43 @@ class KnownValues(unittest.TestCase):
         sgxobj = sgx.SGX(mol)
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-10)
 
-        vj, vk = sgx_jk.get_jk_favork(sgxobj, dm)
+        with lib.temporary_env(sgxobj, debug=False):
+            vj, vk = sgx_jk.get_jk_favork(sgxobj, dm)
         self.assertAlmostEqual(lib.finger(vj), -19.25235595827077,  9)
         self.assertAlmostEqual(lib.finger(vk), -16.711443399467267, 9)
+        with lib.temporary_env(sgxobj, debug=True):
+            vj1, vk1 = sgx_jk.get_jk_favork(sgxobj, dm)
+        self.assertAlmostEqual(abs(vj1-vj).max(), 0, 9)
+        self.assertAlmostEqual(abs(vk1-vk).max(), 0, 9)
 
-        vj, vk = sgx_jk.get_jk_favorj(sgxobj, dm)
+        with lib.temporary_env(sgxobj, debug=False):
+            vj, vk = sgx_jk.get_jk_favorj(sgxobj, dm)
         self.assertAlmostEqual(lib.finger(vj), -19.176378579757973, 9)
+        self.assertAlmostEqual(lib.finger(vk), -16.750915356787406, 9)
+        with lib.temporary_env(sgxobj, debug=True):
+            vj1, vk1 = sgx_jk.get_jk_favorj(sgxobj, dm)
+        self.assertAlmostEqual(abs(vj1-vj).max(), 0, 9)
+        self.assertAlmostEqual(abs(vk1-vk).max(), 0, 9)
+
+    def test_dfj(self):
+        mol = gto.Mole()
+        mol.build(
+            verbose = 0,
+            atom = [["O" , (0. , 0.     , 0.)],
+                    [1   , (0. , -0.757 , 0.587)],
+                    [1   , (0. , 0.757  , 0.587)] ],
+            basis = 'ccpvdz',
+        )
+        nao = mol.nao
+        numpy.random.seed(1)
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+
+        mf = sgx.sgx_fit(scf.RHF(mol), 'weigend')
+        mf.with_df.dfj = True
+        mf.build()
+        vj, vk = mf.get_jk(mol, dm)
+        self.assertAlmostEqual(lib.finger(vj), -19.100356543264645, 9)
         self.assertAlmostEqual(lib.finger(vk), -16.750915356787406, 9)
 
 

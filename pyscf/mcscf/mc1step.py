@@ -341,10 +341,13 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
     mo = mo_coeff
     nmo = mo_coeff.shape[1]
+    ncore = casscf.ncore
+    ncas = casscf.ncas
+    nocc = ncore + ncas
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
     e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if casscf.ncas == nmo and not casscf.internal_rotation:
+    if ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
             mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
@@ -365,7 +368,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
-    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
+    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
     norm_ddm = 1e2
     casdm1_prev = casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
@@ -429,7 +432,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         t2m = log.timer('update eri', *t3m)
 
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.timer('CASCI solver', *t2m)
@@ -459,8 +462,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
                                     casscf.natorb, casdm1, log)
         if casscf.natorb and dump_chk: # dump_chk may save casdm1
-            nocc = casscf.ncore + casscf.ncas
-            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
+            occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = numpy.diag(-occ)
     else:
         mo_energy = None
@@ -717,10 +719,12 @@ class CASSCF(casci.CASCI):
         log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
-        nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
+        ncore = self.ncore
+        ncas = self.ncas
+        nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        assert(self.ncas > 0)
+                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
+        assert(nvir >= 0 and ncore >= 0 and ncas >= 0)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)
@@ -1139,7 +1143,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         else:
             civec = None
         ncore = self.ncore
-        nocc = self.ncore + self.ncas
+        nocc = ncore + self.ncas
         if 'mo' in envs:
             mo_coeff = envs['mo']
         else:
@@ -1157,7 +1161,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         else:
             mo_energy = 'None'
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
-                           mo_coeff, self.ncore, self.ncas, mo_occ,
+                           mo_coeff, ncore, self.ncas, mo_occ,
                            mo_energy, envs['e_cas'], civec, envs['casdm1'],
                            overwrite_mol=False)
         return self
@@ -1271,8 +1275,6 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     h1eff += eris.vhf_c[ncore:nocc,ncore:nocc]
     mc.get_h1eff = lambda *args: (h1eff, energy_core)
 
-    ncore = casscf.ncore
-    nocc = ncore + casscf.ncas
     eri_cas = eris.ppaa[ncore:nocc,ncore:nocc,:,:].copy()
     mc.get_h2eff = lambda *args: eri_cas
     return mc

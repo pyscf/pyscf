@@ -273,11 +273,22 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         // Use opt->nbas because it is used in the prescreen function
         nbas = opt->nbas;
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        CVHFset_int2e_q_cond(intor, cintopt, opt->q_cond, ao_loc,
+                             atm, natm, bas, nbas, env);
+}
+
+/*
+ * Non-relativistic 2-electron integrals
+ */
+void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
+                          int *ao_loc, int *atm, int natm,
+                          int *bas, int nbas, double *env)
+{
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
 #pragma omp parallel default(none) \
-        shared(opt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env)
+        shared(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp, tmp;
         int ij, i, j, di, dj, ish, jsh;
@@ -309,8 +320,8 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                         } }
                         qtmp = sqrt(qtmp);
                 }
-                opt->q_cond[ish*nbas+jsh] = qtmp;
-                opt->q_cond[jsh*nbas+ish] = qtmp;
+                q_cond[ish*nbas+jsh] = qtmp;
+                q_cond[jsh*nbas+ish] = qtmp;
         }
         free(buf);
         free(cache);

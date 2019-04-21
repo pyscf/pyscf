@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -67,8 +67,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
-                                  mycc.amplitudes_to_vector(t1, t2))
+        tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
+        tmpvec -= mycc.amplitudes_to_vector(t1, t2)
+        normt = numpy.linalg.norm(tmpvec)
+        tmpvec = None
         if mycc.iterative_damping < 1.0:
             alpha = mycc.iterative_damping
             t1new = (1-alpha) * t1 + alpha * t1new

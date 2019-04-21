@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -179,7 +179,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             else:
                 irrep_ncore[k] = v
 
-        ncore_rest = casscf.ncore - sum(irrep_ncore.values())
+        ncore_rest = ncore - sum(irrep_ncore.values())
         if ncore_rest > 0:  # guess core configuration
             mask = numpy.ones(len(orbsym), dtype=bool)
             for ir in irrep_ncore:
@@ -188,12 +188,12 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             core_rest = dict([(ir, numpy.count_nonzero(core_rest==ir))
                               for ir in set(core_rest)])
             log.info('Given core space %s < casscf core size %d',
-                     cas_irrep_ncore, casscf.ncore)
+                     cas_irrep_ncore, ncore)
             log.info('Add %s to core configuration', core_rest)
             irrep_ncore.update(core_rest)
         elif ncore_rest < 0:
             raise ValueError('Given core space %s > casscf core size %d'
-                             % (cas_irrep_ncore, casscf.ncore))
+                             % (cas_irrep_ncore, ncore))
     else:
         irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
 
@@ -664,33 +664,33 @@ def state_average(casscf, weights=(0.5,0.5)):
                                         max_cycle=casscf.ci_response_space,
                                         nroots=self.nroots, **kwargs)
             return numpy.einsum('i,i->', e, self.weights), c
-        def make_rdm1(self, ci0, norb, nelec):
+        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
             dm1 = 0
             for i, wi in enumerate(self.weights):
-                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
+                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec, *args, **kwargs)
             return dm1
-        def make_rdm1s(self, ci0, norb, nelec):
+        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
             dm1a, dm1b = 0, 0
             for i, wi in enumerate(self.weights):
-                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec)
+                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec, *args, **kwargs)
                 dm1a += wi * dm1s[0]
                 dm1b += wi * dm1s[1]
             return dm1a, dm1b
-        def make_rdm12(self, ci0, norb, nelec):
+        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
             rdm1 = 0
             rdm2 = 0
             for i, wi in enumerate(self.weights):
-                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
+                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec, *args, **kwargs)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
 
         if has_spin_square:
-            def spin_square(self, ci0, norb, nelec):
+            def spin_square(self, ci0, norb, nelec, *args, **kwargs):
                 ss = 0
                 multip = 0
                 for i, wi in enumerate(self.weights):
-                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec)
+                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec, *args, **kwargs)
                     ss += wi * res[0]
                     multip += wi * res[1]
                 return ss, multip

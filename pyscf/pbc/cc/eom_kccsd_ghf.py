@@ -140,11 +140,11 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
                 return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond, pick=pickeig,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                           max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           max_space=eom.max_space, nroots=nroots, verbose=log)
         else:
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                           max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           max_space=eom.max_space, nroots=nroots, verbose=log)
 
         evals_k = evals_k.real
         evals[k] = evals_k

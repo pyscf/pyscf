@@ -235,7 +235,7 @@ class KnownValues(unittest.TestCase):
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
-        self.assertAlmostEqual(ecc, ecc_bench, 8)
+        self.assertAlmostEqual(ecc, ecc_bench, 7)
 
     def test_ao2mo(self):
         kmf = make_rand_kmf()
@@ -289,7 +289,7 @@ class KnownValues(unittest.TestCase):
         eris.mo_energy = [f.diagonal() for f in eris.fock]
         ecc1, t1, t2 = mycc.kernel(eris=eris)
 
-        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
+        self.assertAlmostEqual(ecc1, ecc1_bench, 5)
 
     def _test_cu_metallic_frozen_occ(self, kmf, cell):
         assert cell.mesh == [7, 7, 7]

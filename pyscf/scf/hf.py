@@ -235,6 +235,8 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         E = \sum_{ij}h_{ij} \gamma_{ji}
           + \frac{1}{2}\sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl\rangle
 
+    Note this function has side effects which cause mf.scf_summary updated.
+
     Args:
         mf : an instance of SCF class
 
@@ -264,8 +266,10 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm)
-    e_coul = numpy.einsum('ij,ji', vhf, dm) * .5
+    e1 = numpy.einsum('ij,ji->', h1e, dm)
+    e_coul = numpy.einsum('ij,ji->', vhf, dm) * .5
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
     return (e1+e_coul).real, e_coul
 
@@ -273,9 +277,14 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 def energy_tot(mf, dm=None, h1e=None, vhf=None):
     r'''Total Hartree-Fock energy, electronic part plus nuclear repulstion
     See :func:`scf.hf.energy_elec` for the electron part
+
+    Note this function has side effects which cause mf.scf_summary updated.
+
     '''
-    e_tot = mf.energy_elec(dm, h1e, vhf)[0] + mf.energy_nuc()
-    return e_tot.real
+    nuc = mf.energy_nuc()
+    e_tot = mf.energy_elec(dm, h1e, vhf)[0] + nuc
+    mf.scf_summary['nuc'] = nuc.real
+    return e_tot
 
 
 def get_hcore(mol):
@@ -854,7 +863,9 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     log = logger.new_logger(mf, verbose)
+
     if log.verbose >= logger.NOTE:
+        mf.dump_scf_summary(log)
         log.note('**** MO energy ****')
         for i,c in enumerate(mo_occ):
             log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE,
@@ -879,6 +890,31 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
                 mf.dip_moment(mf.mol, dm, verbose=log))
 
+def dump_scf_summary(mf, verbose=logger.DEBUG):
+    if not mf.scf_summary:
+        return
+
+    log = logger.new_logger(mf, verbose)
+    summary = mf.scf_summary
+    def write(fmt, key):
+        if key in summary:
+            log.info(fmt, summary[key])
+    log.info('**** SCF Summaries ****')
+    log.info('Total Energy =                    %24.15f', mf.e_tot)
+    write('Nuclear Repulsion Energy =        %24.15f', 'nuc')
+    write('One-electron Energy =             %24.15f', 'e1')
+    write('Two-electron Energy =             %24.15f', 'e2')
+    write('Two-electron Coulomb Energy =     %24.15f', 'coul')
+    write('DFT Exchange-Correlation Energy = %24.15f', 'exc')
+    write('Empirical Dispersion Energy =     %24.15f', 'dispersion')
+    write('PCM Polarization Energy =         %24.15f', 'epcm')
+    write('EFP Energy =                      %24.15f', 'efp')
+    if getattr(mf, 'entropy', None):
+        log.info('(Electronic) Entropy              %24.15f', mf.entropy)
+        log.info('(Electronic) Zero Point Energy    %24.15f', mf.e_zero)
+        log.info('Free Energy =                     %24.15f', mf.e_free)
+
+
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis
 
@@ -888,6 +924,13 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
 
     .. math:: \delta_i = \sum_j M_{ij}
 
+    Returns:
+        A list : pop, charges
+
+        pop : nparray
+            Mulliken population on each atomic orbitals
+        charges : nparray
+            Mulliken charges
     '''
     if s is None: s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
@@ -935,6 +978,13 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
             | 'minao' : Project GTOs to MINAO basis
             | 'scf'   : Fraction-averaged RHF
 
+    Returns:
+        A list : pop, charges
+
+        pop : nparray
+            Mulliken population on each atomic orbitals
+        charges : nparray
+            Mulliken charges
     '''
     from pyscf.lo import orth
     if s is None: s = get_ovlp(mol)
@@ -1273,6 +1323,7 @@ class SCF(lib.StreamObject):
         self.e_tot = 0
         self.converged = False
         self.callback = None
+        self.scf_summary = {}
 
         self.opt = None
         self._eri = None # Note: self._eri requires large amount of memory
@@ -1298,11 +1349,8 @@ class SCF(lib.StreamObject):
 
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
-        method = []
-        cls = self.__class__
-        while cls != SCF:
-            method.append(cls.__name__)
-            cls = cls.__base__
+        method = [cls.__name__ for cls in self.__class__.__mro__
+                  if issubclass(cls, SCF) and cls != SCF]
         logger.info(self, 'method = %s', '-'.join(method))
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
@@ -1491,11 +1539,7 @@ class SCF(lib.StreamObject):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        if mol.cart:
-            intor = 'int2e_cart'
-        else:
-            intor = 'int2e_sph'
-        opt = _vhf.VHFOpt(mol, intor, 'CVHFnrs8_prescreen',
+        opt = _vhf.VHFOpt(mol, 'int2e', 'CVHFnrs8_prescreen',
                           'CVHFsetnr_direct_scf',
                           'CVHFsetnr_direct_scf_dm')
         opt.direct_scf_tol = self.direct_scf_tol
@@ -1550,6 +1594,8 @@ class SCF(lib.StreamObject):
                 **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
+
+    dump_scf_summary = dump_scf_summary
 
     @lib.with_doc(mulliken_pop.__doc__)
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
@@ -1673,6 +1719,21 @@ class SCF(lib.StreamObject):
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
 
+    def to_rhf(self, mf):
+        '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
+        from pyscf.scf import addons
+        return addons.convert_to_rhf(mf)
+
+    def to_uhf(self, mf):
+        '''Convert the input mean-field object to a UHF/UKS object'''
+        from pyscf.scf import addons
+        return addons.convert_to_uhf(mf)
+
+    def to_ghf(self, mf):
+        '''Convert the input mean-field object to a GHF/GKS object'''
+        from pyscf.scf import addons
+        return addons.convert_to_ghf(mf)
+
 
 ############
 
@@ -1715,7 +1776,7 @@ class RHF(SCF):
         return vhf
 
     def convert_from_(self, mf):
-        '''Convert given mean-field object to RHF/ROHF'''
+        '''Convert the input mean-field object to RHF/ROHF'''
         from pyscf.scf import addons
         return addons.convert_to_rhf(mf, out=self)
 

@@ -107,6 +107,9 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
                   np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
     tot_e = e1 + vhf.ecoul + vhf.exc
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['coul'] = vhf.ecoul.real
+    mf.scf_summary['exc'] = vhf.exc.real
     logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
     return tot_e.real, vhf.ecoul + vhf.exc
 

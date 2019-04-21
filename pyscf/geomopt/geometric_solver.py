@@ -26,39 +26,60 @@ from pyscf import lib
 from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
 from pyscf import __config__
 
+# Overwrite units defined in geomeTRIC
+from geometric import internal, optimize, nifty, engine, molecule
+internal.ang2bohr = optimize.ang2bohr = nifty.ang2bohr = 1./lib.param.BOHR
+engine.bohr2ang = internal.bohr2ang = molecule.bohr2ang = nifty.bohr2ang = \
+        optimize.bohr2ang = lib.param.BOHR
+del(internal, optimize, nifty, engine, molecule)
+
+
 INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
 ASSERT_CONV = getattr(__config__, 'geomopt_berny_solver_optimize_assert_convergence', True)
 
 class PySCFEngine(geometric.engine.Engine):
     def __init__(self, scanner):
         molecule = geometric.molecule.Molecule()
-        mol = scanner.mol
+        self.mol = mol = scanner.mol
         molecule.elem = [mol.atom_symbol(i) for i in range(mol.natm)]
         # Molecule is the geometry parser for a bunch of formats which use
         # Angstrom for Cartesian coordinates by default.
         molecule.xyzs = [mol.atom_coords()*lib.param.BOHR]  # In Angstrom
-
         super(PySCFEngine, self).__init__(molecule)
+
         self.scanner = scanner
         self.cycle = 0
+        self.callback = None
+        self.maxsteps = 100
+        self.assert_convergence = False
 
     def calc_new(self, coords, dirname):
-        scanner = self.scanner
-        mol = scanner.mol
-        lib.logger.note(scanner, '\nGeometry optimization step %d', self.cycle)
+        if self.cycle >= self.maxsteps:
+            raise NotConvergedError('Geometry optimization is not converged in '
+                                    '%d iterations' % self.maxsteps)
+
+        g_scanner = self.scanner
+        mol = self.mol
+        lib.logger.note(g_scanner, '\nGeometry optimization step %d', self.cycle)
         self.cycle += 1
-        # geomeTRIC handles coords and gradients in atomic unit
+
+        # geomeTRIC requires coords and gradients in atomic unit
         coords = coords.reshape(-1,3)
-        if scanner.verbose >= lib.logger.NOTE:
-            dump_mol_geometry(self.scanner.mol, coords*lib.param.BOHR)
+        if g_scanner.verbose >= lib.logger.NOTE:
+            dump_mol_geometry(mol, coords*lib.param.BOHR)
         mol.set_geom_(coords, unit='Bohr')
-        energy, gradient = scanner(mol)
-        if scanner.assert_convergence and not scanner.converged:
-            raise RuntimeError('Nuclear gradients of %s not converged' % scanner.base)
-        return energy, gradient.ravel()
+        energy, gradients = g_scanner(mol)
+
+        if callable(self.callback):
+            self.callback(locals())
+
+        if self.assert_convergence and not g_scanner.converged:
+            raise RuntimeError('Nuclear gradients of %s not converged' % g_scanner.base)
+        return {"energy": energy, "gradient": gradients.ravel()}
 
 def kernel(method, assert_convergence=ASSERT_CONV,
-           include_ghost=INCLUDE_GHOST, constraints=None, **kwargs):
+           include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
+           maxsteps=100, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
     
     To adjust the convergence threshold, parameters can be set in kwargs as
@@ -73,7 +94,9 @@ def kernel(method, assert_convergence=ASSERT_CONV,
             'convergence_dmax': 1.8e-3,  # Angstrom
         }
         from pyscf import geometric_solver
-        geometric_solver.optimize(method, **conv_params)
+        opt = geometric_solver.GeometryOptimizer(method)
+        opt.params = conv_params
+        opt.kernel()
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
@@ -83,21 +106,73 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         raise NotImplementedError('Nuclear gradients of %s not available' % method)
     if not include_ghost:
         g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
-    g_scanner.assert_convergence = assert_convergence
 
     tmpf = tempfile.mktemp(dir=lib.param.TMPDIR)
-    m = geometric.optimize.run_optimizer(customengine=PySCFEngine(g_scanner),
-                                         input=tmpf, constraints=constraints,
-                                         **kwargs)
+    engine = PySCFEngine(g_scanner)
+    engine.callback = callback
+    engine.maxsteps = maxsteps
+    # To avoid overwritting method.mol
+    engine.mol = g_scanner.mol.copy()
+    engine.assert_convergence = assert_convergence
+    try:
+        m = geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
+                                             constraints=constraints, **kwargs)
+        conv = True
+        # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
+    except NotConvergedError as e:
+        lib.logger.note(method, str(e))
+        conv = False
+    return conv, engine.mol
 
-    #FIXME: geomeTRIC library keeps running until converged. We need a function
-    # to terminate the program even not converged.
-    conv = True
+def optimize(method, assert_convergence=ASSERT_CONV,
+             include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
+             maxsteps=100, **kwargs):
+    '''Optimize geometry with geomeTRIC library for the given method.
+    
+    To adjust the convergence threshold, parameters can be set in kwargs as
+    below:
 
-    #return conv, method.mol.copy().set_geom_(m.xyzs[-1], unit='Bohr')
-    return method.mol.copy().set_geom_(m.xyzs[-1], unit='Angstrom')
+    .. code-block:: python
+        conv_params = {  # They are default settings
+            'convergence_energy': 1e-6,  # Eh
+            'convergence_grms': 3e-4,    # Eh/Bohr
+            'convergence_gmax': 4.5e-4,  # Eh/Bohr
+            'convergence_drms': 1.2e-3,  # Angstrom
+            'convergence_dmax': 1.8e-3,  # Angstrom
+        }
+        from pyscf import geometric_solver
+        newmol = geometric_solver.optimize(method, **conv_params)
+    '''
+    return kernel(method, assert_convergence, include_ghost, callback,
+                  maxsteps, **kwargs)[1]
 
-optimize = kernel
+class GeometryOptimizer(lib.StreamObject):
+    '''Optimize the molecular geometry for the input method.
+
+    Note the method.mol will be changed after calling .kernel() method.
+    '''
+    def __init__(self, method):
+        self.method = method
+        self.callback = None
+        self.params = {}
+        self.converged = False
+        self.max_cycle = 100
+
+    @property
+    def mol(self):
+        return self.method.mol
+    @mol.setter
+    def mol(self, x):
+        self.method.mol = x
+
+    def kernel(self):
+        self.converged, self.mol = \
+                kernel(self.method, callback=self.callback,
+                       maxsteps=self.max_cycle, **self.params)
+        return self.mol
+
+class NotConvergedError(RuntimeError):
+    pass
 
 del(INCLUDE_GHOST, ASSERT_CONV)
 
@@ -126,7 +201,10 @@ H       -0.0227 1.1812  -0.8852
         'convergence_drms': 1.2e-2,  # Angstrom
         'convergence_dmax': 1.8e-2,  # Angstrom
     }
-    mol1 = optimize(mf, **conv_params)
+    opt = GeometryOptimizer(mf).set(params=conv_params)#.run()
+    opt.max_cycle=1
+    opt.run()
+    mol1 = opt.mol
     print(mf.kernel() - -153.219208484874)
     print(scf.RHF(mol1).kernel() - -153.222680852335)
 
