@@ -55,7 +55,7 @@ except ImportError:
     settings.BLOCKVERSION = getattr(__config__, 'dmrgscf_BLOCKVERSION', None)
     if (settings.BLOCKEXE is None or settings.BLOCKSCRATCHDIR is None):
         import sys
-        sys.stderr.write('settings.py not found.  Please create %s\n'
+        sys.stderr.write('settings.py not found for module dmrgci.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 

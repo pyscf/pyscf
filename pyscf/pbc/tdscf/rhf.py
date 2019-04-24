@@ -51,3 +51,10 @@ class TDHF(rhf.TDHF):
 
 RPA = TDRHF = TDHF
 
+
+from pyscf.pbc import scf
+scf.hf.RHF.TDA = lib.class_as_method(TDA)
+scf.hf.RHF.TDHF = lib.class_as_method(TDHF)
+scf.rohf.ROHF.TDA = None
+scf.rohf.ROHF.TDHF = None
+

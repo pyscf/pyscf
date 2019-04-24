@@ -1947,6 +1947,44 @@ class Mole(lib.StreamObject):
     def ms(self, x):
         self.spin = int(round(2*x, 4))
 
+    def __getattr__(self, key):
+        '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
+        from Mole object.
+        '''
+        # https://github.com/mewwts/addict/issues/26
+        # https://github.com/jupyter/notebook/issues/2014
+        if key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf import __all__
+        from pyscf import scf, dft
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if 'TD' in key[:3]:
+            if key in ('TDHF', 'TDA'):
+                mf = scf.HF(self)
+            else:
+                mf = dft.KS(self)
+                xc = key.split('TD', 1)[1]
+                if xc in dft.XC:
+                    mf.xc = xc
+                    key = 'TDDFT'
+        else:
+            mf = scf.HF(self)
+
+        method = getattr(mf, key)
+        if method is None:
+            raise AttributeError
+
+        mf.run()
+        return method
+
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
 # def __copy__(self):
@@ -3065,28 +3103,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
-            from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
-            # Import all available modules. Some methods are registered when
-            # loading these modules.
-            from pyscf import grad, hessian, solvent, qmmm, prop
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, mcscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            if fn.upper() == 'TDHF':
-                return tdscf.TDHF(scf.HF(self).run(), *args, **kwargs)
-            else:
-                method = getattr(tdscf, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
+            method = getattr(self, fn.upper())
+            return method(*args, **kwargs)
         else:
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')

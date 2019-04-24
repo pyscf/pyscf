@@ -824,6 +824,20 @@ O    SP
         self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
         mol0.cart = False
 
+    def test_getattr(self):
+        from pyscf import scf, dft, ci, tdscf
+        mol = gto.M(atom='He')
+        self.assertEqual(mol.HF().__class__, scf.HF(mol).__class__)
+        self.assertEqual(mol.KS().__class__, dft.KS(mol).__class__)
+        self.assertEqual(mol.UKS().__class__, dft.UKS(mol).__class__)
+        self.assertEqual(mol.CISD().__class__, ci.cisd.RCISD)
+        self.assertEqual(mol.TDA().__class__, tdscf.rks.TDA)
+        self.assertEqual(mol.dTDA().__class__, tdscf.rks.dTDA)
+        self.assertEqual(mol.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
+        self.assertEqual(mol.TDB3LYP().__class__, tdscf.rks.TDDFT)
+        self.assertRaises(AttributeError, lambda: mol.xyz)
+        self.assertRaises(AttributeError, lambda: mol.TDxyz)
+
 
 if __name__ == "__main__":
     print("test mole.py")

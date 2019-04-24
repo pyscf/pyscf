@@ -1116,6 +1116,60 @@ class Cell(mole.Mole):
                               'in unit cell\n' % (ne, self.spin))
             return nalpha, nbeta
 
+    def __getattr__(self, key):
+        '''To support accessing methods (cell.HF, cell.KKS, cell.KUCCSD, ...)
+        from Cell object.
+        '''
+        # https://github.com/mewwts/addict/issues/26
+        # https://github.com/jupyter/notebook/issues/2014
+        if key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf.pbc import __all__
+        from pyscf.pbc import scf, dft
+        from pyscf.dft import XC
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if key[0] == 'K':  # with k-point sampling
+            if 'TD' in key[:4]:
+                if key in ('KTDHF', 'KTDA'):
+                    mf = scf.KHF(self)
+                else:
+                    mf = dft.KKS(self)
+                    xc = key.split('TD', 1)[1]
+                    if xc in XC:
+                        mf.xc = xc
+                        key = 'KTDDFT'
+            else:
+                mf = scf.KHF(self)
+            # Remove prefix 'K' because methods are registered without the leading 'K'
+            key = key[1:]
+        else:
+            if 'TD' in key[:3]:
+                if key in ('TDHF', 'TDA'):
+                    mf = scf.HF(self)
+                else:
+                    mf = dft.KS(self)
+                    xc = key.split('TD', 1)[1]
+                    if xc in XC:
+                        mf.xc = xc
+                        key = 'TDDFT'
+            else:
+                mf = scf.HF(self)
+
+        method = getattr(mf, key)
+        if method is None:
+            raise AttributeError
+
+        mf.run()
+        return method
+
     tot_electrons = tot_electrons
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
@@ -1588,25 +1642,5 @@ class Cell(mole.Mole):
     def has_ecp(self):
         '''Whether pseudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
-
-    def apply(self, fn, *args, **kwargs):
-        if callable(fn):
-            return lib.StreamObject.apply(self, fn, *args, **kwargs)
-        elif isinstance(fn, (str, unicode)):
-            from pyscf.pbc import scf, dft, mp, cc, ci, tdscf
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, tdscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
-        else:
-            raise TypeError('First argument of .apply method must be a '
-                            'function or a string.')
 
 del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

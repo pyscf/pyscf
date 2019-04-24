@@ -31,7 +31,7 @@ from subprocess import call
 try:
     from pyscf.fciqmcscf import settings
 except ImportError:
-    msg = '''settings.py not found.  Please create %s
+    msg = '''settings.py not found for module fciqmcscf.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
 

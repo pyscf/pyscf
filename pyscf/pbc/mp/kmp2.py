@@ -461,6 +461,12 @@ class KMP2(mp2.MP2):
 KRMP2 = KMP2
 
 
+from pyscf.pbc import scf
+scf.khf.KRHF.MP2 = lib.class_as_method(KRMP2)
+scf.kghf.KGHF.MP2 = None
+scf.krohf.KROHF.MP2 = None
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, mp
 
