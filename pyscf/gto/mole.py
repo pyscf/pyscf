@@ -1951,10 +1951,12 @@ class Mole(lib.StreamObject):
         '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
         from Mole object.
         '''
-        # https://github.com/mewwts/addict/issues/26
-        # https://github.com/jupyter/notebook/issues/2014
-        if key in ('_ipython_canary_method_should_not_exist_',
+        if key[:2] == '__':  # Skip Python builtins
+            raise AttributeError
+        elif key in ('_ipython_canary_method_should_not_exist_',
                    '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
             raise AttributeError
 
         # Import all available modules. Some methods are registered to other
@@ -1967,6 +1969,7 @@ class Mole(lib.StreamObject):
                 return method(self)
 
         if 'TD' in key[:3]:
+            print(key)
             if key in ('TDHF', 'TDA'):
                 mf = scf.HF(self)
             else:
