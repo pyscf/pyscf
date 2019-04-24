@@ -49,6 +49,7 @@ class PySCFEngine(geometric.engine.Engine):
 
         self.scanner = scanner
         self.cycle = 0
+        self.e_last = 0
         self.callback = None
         self.maxsteps = 100
         self.assert_convergence = False
@@ -60,8 +61,8 @@ class PySCFEngine(geometric.engine.Engine):
 
         g_scanner = self.scanner
         mol = self.mol
-        lib.logger.note(g_scanner, '\nGeometry optimization step %d', self.cycle)
         self.cycle += 1
+        lib.logger.note(g_scanner, '\nGeometry optimization cycle %d', self.cycle)
 
         # geomeTRIC requires coords and gradients in atomic unit
         coords = coords.reshape(-1,3)
@@ -69,6 +70,10 @@ class PySCFEngine(geometric.engine.Engine):
             dump_mol_geometry(mol, coords*lib.param.BOHR)
         mol.set_geom_(coords, unit='Bohr')
         energy, gradients = g_scanner(mol)
+        lib.logger.note(g_scanner,
+                        'cycle %d: E = %.12g  dE = %g  norm(grad) = %g', self.cycle,
+                        energy, energy - self.e_last, numpy.linalg.norm(gradients))
+        self.e_last = energy
 
         if callable(self.callback):
             self.callback(locals())
