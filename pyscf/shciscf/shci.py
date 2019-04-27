@@ -775,6 +775,14 @@ class SHCI(pyscf.lib.StreamObject):
         else:
             return [ss] * len(civec), [s * 2 + 1] * len(civec)
 
+    def cleanup_dice_files(self):
+        """
+        Remove the files used for Dice communication.
+        """
+        os.remove("input.dat")
+        os.remove("output.dat")
+        os.remove("FCIDUMP")
+
 
 def print1Int(h1, name):
     with open('%s.X' % (name), 'w') as fout:
