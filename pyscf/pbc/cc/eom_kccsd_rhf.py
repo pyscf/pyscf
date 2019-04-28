@@ -853,17 +853,54 @@ class EOMEE(eom_kgccsd.EOMEE):
         return len(self.kpts)
 
     def vector_size(self, kshift=0):
-
         return None
 
     def make_imds(self, eris=None):
         return None
 
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
+        return None
+
 
 class EOMEESinglet(EOMEE):
+    kernel = eomee_ccsd_singlet
+    eomee_ccsd_singlet = eomee_ccsd_singlet
+    matvec = eeccsd_matvec_singlet
 
     def vector_size(self, kshift=0):
-        return None
+        '''Size of the linear excitation operator R vector based on spatial
+        orbital basis.
+
+        r1 : r_{i k_i}${a k_a}
+        r2 : r_{i k_i, J k_J}^{a k_a, B k_B}
+        '''
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        nkpts = self.nkpts
+
+        size_r1 = nkpts*nocc*nvir
+        nokvk = nkpts*nocc*nkpts*nvir
+        size_r2 = nokvk*(nokvk+1)//2//nkpts
+
+        return size_r1 + size_r2
+
+    def gen_matvec(self, kshift, imds=None, left=False, **kwargs):
+        if imds is None: imds = self.make_imds()
+        diag = self.get_diag(imds)[0]
+        if left:
+            # TODO allow left vectors to be computed
+            raise NotImplementedError
+        else:
+            matvec = lambda xs: [self.matvec(x, imds) for x in xs]
+        return matvec, diag
+
+    def vector_to_amplitudes(self, vector, kshift=None):
+        return vector_to_amplitudes_ee_singlet(vector, kshift)
+
+    def amplitudes_to_vector(self, r1, r2, kshift=None):
+        return amplitudes_to_vector_ee_singlet(r1, r2, kshift)
+
+
 
 
 class EOMEETriplet(EOMEE):
@@ -1046,4 +1083,33 @@ class _IMDS:
         return self
 
     def make_ee(self):
-        raise NotImplementedError
+        self._make_shared_1e()
+        if self._made_shared_2e is False:
+            self._make_shared_2e()
+            self._made_shared_2e = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+
+        # Rename imds to match the notations in pyscf.cc.eom_rccsd
+        self.Foo = self.Loo
+        self.Fvv = self.Lvv
+        self.woVvO = self.Wovvo
+        self.woVVo = -self.Wovov.transpose(0,1,3,2)
+
+        if not self.made_ip_imds:
+            # 0 or 1 virtuals
+            self.woOoO = imd.Woooo(t1, t2, eris)
+            self.woOoV = imd.Wooov(t1, t2, eris)
+            self.woVoO = imd.Wovoo(t1, t2, eris)
+        else:
+            self.woOoO = self.Woooo
+            self.woOoV = self.Wooov
+            self.woVoO = self.Wovoo
+        
+        self.made_ee_imds = True
+        log.timer_debug1(self, 'EOM-CCSD EE intermediates', *cput0)
+        raise self
