@@ -19,6 +19,7 @@ import pyscf
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import mcscf
 from pyscf import grad
 from pyscf.qmmm import itrf
 
@@ -84,6 +85,47 @@ class KnowValues(unittest.TestCase):
         h = mf.nuc_grad_method().get_hcore()
         self.assertEqual(h.shape, (3,30,30))
         self.assertAlmostEqual(lib.finger(h), -178.29768724184771, 9)
+
+    def test_casci(self):
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.verbose = 0
+        mol.basis = '6-31g'
+        mol.build()
+
+        coords = [(0.5,0.6,0.1)]
+        charges = [-0.1]
+        mf = itrf.add_mm_charges(scf.RHF(mol), coords, charges).run()
+        mc = mcscf.CASCI(mf, 4, 4).run()
+        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 6)
+
+        # Note, it's different to the CASCI above. The SCF orbitals are
+        # obtained without QM/MM charges
+        mf = scf.RHF(mol).run()
+        mc = itrf.add_mm_charges(mcscf.CASCI(mf, 4, 4), coords, charges).run()
+        self.assertAlmostEqual(mc.e_tot, -75.98116769441611, 6)
+
+    def test_casscf(self):
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.verbose = 0
+        mol.basis = '6-31g'
+        mol.build()
+
+        coords = [(0.5,0.6,0.1)]
+        charges = [-0.1]
+        mf = itrf.add_mm_charges(scf.RHF(mol), coords, charges).run()
+        mc = mcscf.CASSCF(mf, 4, 4).run()
+        self.assertAlmostEqual(mc.e_tot, -76.0461574155984, 7)
+
+        # The two CASSCF should be the same
+        mf = scf.RHF(mol).run()
+        mc = itrf.add_mm_charges(mcscf.CASSCF(mf, 4, 4), coords, charges).run()
+        self.assertAlmostEqual(mc.e_tot, -76.0461574155984, 7)
 
 
 

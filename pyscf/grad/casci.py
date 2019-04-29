@@ -34,13 +34,15 @@ from pyscf.grad.mp2 import _shell_prange
 from pyscf.scf import cphf
 
 
-def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
+def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
+    mc = mc_grad.base
     if mo_coeff is None: mo_coeff = mc._scf.mo_coeff
     if ci is None: ci = mc.ci
-    if mf_grad is None: mf_grad = mc._scf.nuc_grad_method()
     assert(isinstance(ci, numpy.ndarray))
 
-    mol = mc.mol
+    time0 = time.clock(), time.time()
+    log = logger.new_logger(mc_grad, verbose)
+    mol = mc_grad.mol
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = ncore + ncas
@@ -109,8 +111,8 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
 
     casci_dm1 = dm_core + dm_cas
     hf_dm1 = mc._scf.make_rdm1(mo_coeff, mc._scf.mo_occ)
-    hcore_deriv = mf_grad.hcore_generator(mol)
-    s1 = mf_grad.get_ovlp(mol)
+    hcore_deriv = mc_grad.hcore_generator(mol)
+    s1 = mc_grad.get_ovlp(mol)
 
     diag_idx = numpy.arange(nao)
     diag_idx = diag_idx * (diag_idx+1) // 2 + diag_idx
@@ -127,7 +129,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
     aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
 
-    max_memory = mc.max_memory - lib.current_memory()[0]
+    max_memory = mc_grad.max_memory - lib.current_memory()[0]
     blksize = int(max_memory*.9e6/8 / ((aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
     blksize = min(nao, max(2, blksize))
 
@@ -155,7 +157,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
                 de[k,i] += numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[q0:q1])
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, hf_dm1[q0:q1], zvec_ao[p0:p1])
 
-                #:vhf1c, vhf1a = mf_grad.get_veff(mol, (dm_core, dm_cas))
+                #:vhf1c, vhf1a = mc_grad.get_veff(mol, (dm_core, dm_cas))
                 #:de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], casci_dm1[p0:p1]) * 2
                 #:de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
                 de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_core[q0:q1], casci_dm1[p0:p1]) * 2
@@ -173,7 +175,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf_s1occ[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ji->x', s1[:,p0:p1], vhf_s1occ[:,p0:p1]) * 2
 
-    de += mf_grad.grad_nuc(mol, atmlst)
+    log.timer('CASCI nuclear gradients', *time0)
     return de
 
 
@@ -233,18 +235,11 @@ def as_scanner(mcscf_grad, state=0):
     return CASCI_GradScanner(mcscf_grad)
 
 
-class Gradients(lib.StreamObject):
+class Gradients(rhf_grad.GradientsBasics):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, mc):
-        self.base = mc
-        self.mol = mc.mol
-        self.stdout = mc.stdout
-        self.verbose = mc.verbose
-        self.max_memory = mc.max_memory
         self.state = 0  # of which the gradients to be computed.
-        self.atmlst = None
-        self.de = None
-        self._keys = set(self.__dict__.keys())
+        rhf_grad.GradientsBasics.__init__(self, mc)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -259,9 +254,10 @@ class Gradients(lib.StreamObject):
                  self.max_memory, lib.current_memory()[0])
         return self
 
-    def kernel(self, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
+    grad_elec = grad_elec
+
+    def kernel(self, mo_coeff=None, ci=None, atmlst=None,
                state=None, verbose=None):
-        cput0 = (time.clock(), time.time())
         log = logger.new_logger(self, verbose)
         if ci is None: ci = self.base.ci
         if isinstance(ci, (list, tuple)):
@@ -271,8 +267,8 @@ class Gradients(lib.StreamObject):
                 self.state = state
 
             ci = ci[state]
-            logger.info(self, 'Multiple roots are found in CASCI solver. '
-                        'Nuclear gradients of root %d are computed.', state)
+            log.info('Multiple roots are found in CASCI solver. '
+                     'Nuclear gradients of root %d are computed.', state)
 
         if atmlst is None:
             atmlst = self.atmlst
@@ -284,16 +280,28 @@ class Gradients(lib.StreamObject):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        self.de = kernel(self.base, mo_coeff, ci, atmlst, mf_grad, log)
-        log.timer('CASCI gradients', *cput0)
+        de = self.grad_elec(mo_coeff, ci, atmlst, log)
+        self.de = de = de + self.grad_nuc(atmlst=atmlst)
         self._finalize()
         return self.de
 
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. x2c, QM/MM, solvent) modifies the SCF object only.
+    def hcore_generator(self, mol=None):
+        mf_grad = self.base._scf.nuc_grad_method()
+        return mf_grad.hcore_generator(mol)
+
+    # Calling the underlying SCF nuclear gradients because it may be modified
+    # by external modules (e.g. QM/MM, solvent)
+    def grad_nuc(self, mol=None, atmlst=None):
+        mf_grad = self.base._scf.nuc_grad_method()
+        return mf_grad.grad_nuc(mol, atmlst)
+
     def _finalize(self):
         if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '--------- %s gradients for state %d ----------',
+                        self.base.__class__.__name__, self.state)
+            self._write(self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner

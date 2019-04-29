@@ -64,8 +64,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
     >>> mf.kernel()
     -101.940495711284
     '''
-    assert(isinstance(scf_method, scf.hf.SCF) or
-           isinstance(scf_method, mcscf.casci.CASCI))
+    assert(isinstance(scf_method, (scf.hf.SCF, mcscf.casci.CASCI)))
 
     if unit is None:
         unit = scf_method.mol.unit
@@ -82,8 +81,8 @@ def mm_charge(scf_method, coords, charges, unit=None):
         def __init__(self):
             self.__dict__.update(scf_method.__dict__)
 
-        def dump_flags(self):
-            method_class.dump_flags(self)
+        def dump_flags(self, *args, **kwargs):
+            method_class.dump_flags(self, *args, **kwargs)
             logger.info(self, '** Add background charges for %s **',
                         method_class)
             if self.verbose >= logger.DEBUG:
@@ -132,6 +131,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
         def nuc_grad_method(self):
             scf_grad = method_class.nuc_grad_method(self)
             return mm_charge_grad(scf_grad, coords, charges, 'Bohr')
+        Gradients = nuc_grad_method
 
     return QMMM()
 add_mm_charges = mm_charge

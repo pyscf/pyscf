@@ -103,6 +103,7 @@ def get_hcore(mol):
         h += mol.intor('ECPscalar_ipnuc', comp=3)
     return -h
 
+
 def hcore_generator(mf, mol=None):
     if mol is None: mol = mf.mol
     with_x2c = getattr(mf.base, 'with_x2c', None)
@@ -129,6 +130,7 @@ def hcore_generator(mf, mol=None):
 
 def get_ovlp(mol):
     return -mol.intor('int1e_ipovlp', comp=3)
+
 
 def get_jk(mol, dm):
     '''J = ((-nabla i) j| kl) D_lk
@@ -219,13 +221,15 @@ def as_scanner(mf_grad):
     return SCF_GradScanner(mf_grad)
 
 
-class Gradients(lib.StreamObject):
-    '''Non-relativistic restricted Hartree-Fock gradients'''
-    def __init__(self, scf_method):
-        self.verbose = scf_method.verbose
-        self.stdout = scf_method.stdout
-        self.mol = scf_method.mol
-        self.base = scf_method
+class GradientsBasics(lib.StreamObject):
+    '''
+    Basic nuclear gradient functions for non-relativistic methods
+    '''
+    def __init__(self, method):
+        self.verbose = method.verbose
+        self.stdout = method.stdout
+        self.mol = method.mol
+        self.base = method
         self.max_memory = self.mol.max_memory
 
         self.atmlst = None
@@ -235,8 +239,9 @@ class Gradients(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        if not self.base.converged:
-            log.warn('Ground state SCF not converged')
+        if hasattr(self.base, 'converged') and not self.base.converged:
+            log.warn('Ground state %s not converged',
+                     self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
         log.info('max_memory %d MB (current use %d MB)',
@@ -258,7 +263,6 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        #TODO: direct_scf opt
         vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -276,6 +280,51 @@ class Gradients(lib.StreamObject):
         intor = mol._add_suffix('int2e_ip1')
         return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
                                   mol._atm, mol._bas, mol._env)
+
+    def grad_nuc(self, mol=None, atmlst=None):
+        if mol is None: mol = self.mol
+        return grad_nuc(mol, atmlst)
+
+    def optimizer(self, solver='geometric'):
+        '''Geometry optimization solver
+
+        Kwargs:
+            solver (string) : geometry optimization solver, can be "geomeTRIC"
+            (default) or "berny".
+        '''
+        if solver.lower() == 'geometric':
+            from pyscf.geomopt import geometric_solver
+            return geometric_solver.GeometryOptimizer(self.as_scanner())
+        elif solver.lower() == 'berny':
+            from pyscf.geomopt import berny_solver
+            return berny_solver.GeometryOptimizer(self.as_scanner())
+        else:
+            raise RuntimeError('Unknown geometry optimization solver %s' % solver)
+
+    def grad_elec(self):
+        raise NotImplementedError
+
+    def kernel(self):
+        raise NotImplementedError
+
+    grad = lib.alias(kernel, alias_name='grad')
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self.base.__class__.__name__)
+            self._write(self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
+
+    _write = _write
+
+    def as_scanner(self):
+        '''Generate Gradients Scanner'''
+        raise NotImplementedError
+
+
+class Gradients(GradientsBasics):
+    '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol
@@ -299,12 +348,6 @@ class Gradients(lib.StreamObject):
 
     grad_elec = grad_elec
 
-    def grad_nuc(self, mol=None, atmlst=None):
-        if mol is None: mol = self.mol
-        return grad_nuc(mol, atmlst)
-
-    def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        return self.kernel(mo_energy, mo_coeff, mo_occ, atmlst)
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
         if mo_energy is None: mo_energy = self.base.mo_energy
@@ -325,13 +368,6 @@ class Gradients(lib.StreamObject):
         logger.timer(self, 'SCF gradients', *cput0)
         self._finalize()
         return self.de
-
-    def _finalize(self):
-        if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
-            _write(self, self.mol, self.de, self.atmlst)
-            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Peng Bao <baopeng@iccas.ac.cn>
+#         Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''

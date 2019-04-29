@@ -31,9 +31,8 @@ from pyscf.mp import mp2
 from pyscf.ao2mo import _ao2mo
 
 
-def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
-    if mf_grad is None: mf_grad = mp._scf.nuc_grad_method()
-
+def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
+    mp = mp_grad.base
     log = logger.new_logger(mp, verbose)
     time0 = time.clock(), time.time()
 
@@ -45,7 +44,7 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
 # Set nocc, nvir for half-transformation of 2pdm.  Frozen orbitals are exculded.
 # nocc, nvir should be updated to include the frozen orbitals when proceeding
 # the 1-particle quantities later.
-    mol = mp.mol
+    mol = mp_grad.mol
     with_frozen = not (mp.frozen is None or mp.frozen is 0)
     OA, VA, OF, VF = _index_frozen_active(mp.get_frozen_mask(), mp.mo_occ)
     orbo = mp.mo_coeff[:,OA]
@@ -149,8 +148,12 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
     time1 = log.timer_debug1('response_rdm1', *time1)
 
     log.debug('h1 and JK1')
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = mp_grad.base._scf.nuc_grad_method()
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
+
     zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[:nocc].reshape(-1,1)
@@ -164,7 +167,7 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
     # Hartree-Fock part contribution
     dm1p = hf_dm1 + dm1*2
     dm1 += hf_dm1
-    zeta += mf_grad.make_rdm1e(mo_energy, mo_coeff, mp.mo_occ)
+    zeta += rhf_grad.make_rdm1e(mo_energy, mo_coeff, mp.mo_occ)
 
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -181,7 +184,6 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf_s1occ[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k], dm1p)
 
-    de += mf_grad.grad_nuc(mol)
     log.timer('%s gradients' % mp.__class__.__name__, *time0)
     return de
 
@@ -225,8 +227,7 @@ def as_scanner(grad_mp):
 
             mp_scanner = self.base
             mp_scanner(mol, with_t2=True)
-            mf_grad = mp_scanner._scf.nuc_grad_method()
-            de = self.kernel(mp_scanner.t2, mf_grad=mf_grad)
+            de = self.kernel(mp_scanner.t2)
             return mp_scanner.e_tot, de
         @property
         def converged(self):
@@ -272,18 +273,11 @@ def _index_frozen_active(frozen_mask, mo_occ):
     VF = numpy.where((~frozen_mask) & (mo_occ==0))[0] # virtual frozen orbitals
     return OA, VA, OF, VF
 
-class Gradients(lib.StreamObject):
-    def __init__(self, mp):
-        self.base = mp
-        self.mol = mp.mol
-        self.stdout = mp.stdout
-        self.verbose = mp.verbose
-        self.atmlst = None
-        self.de = None
-        self._keys = set(self.__dict__.keys())
+class Gradients(rhf_grad.GradientsBasics):
 
-    def kernel(self, t2=None, atmlst=None, mf_grad=None, verbose=None,
-               _kern=kernel):
+    grad_elec = grad_elec
+
+    def kernel(self, t2=None, atmlst=None, verbose=None):
         log = logger.new_logger(self, verbose)
         if t2 is None: t2 = self.base.t2
         if t2 is None: t2 = self.base.kernel()
@@ -292,16 +286,16 @@ class Gradients(lib.StreamObject):
         else:
             self.atmlst = atmlst
 
-        self.de = _kern(self.base, t2, atmlst, mf_grad, verbose=log)
+        de = self.grad_elec(t2, atmlst, verbose=log)
+        self.de = de + self.grad_nuc(atmlst=atmlst)
         self._finalize()
         return self.de
 
-    def _finalize(self):
-        if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, self.atmlst)
-            logger.note(self, '----------------------------------------------')
+    # Calling the underlying SCF nuclear gradients because it may be modified
+    # by external modules (e.g. QM/MM, solvent)
+    def grad_nuc(self, mol=None, atmlst=None):
+        mf_grad = self.base._scf.nuc_grad_method()
+        return mf_grad.grad_nuc(mol, atmlst)
 
     as_scanner = as_scanner
 

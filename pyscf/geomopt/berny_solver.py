@@ -31,6 +31,8 @@ import numpy
 from pyscf import lib
 from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
 from pyscf import __config__
+from pyscf.grad.rhf import GradientsBasics
+
 # Overwrite pyberny's atomic unit
 coords.angstrom = 1./lib.param.BOHR
 
@@ -109,6 +111,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     if isinstance(method, lib.GradScanner):
         g_scanner = method
+    elif isinstance(method, GradientsBasics):
+        g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
     else:
@@ -182,7 +186,9 @@ class GeometryOptimizer(lib.StreamObject):
     def mol(self, x):
         self.method.mol = x
 
-    def kernel(self):
+    def kernel(self, params=None):
+        if params is not None:
+            self.params.update(params)
         params = dict(self.params)
         params['maxsteps'] = self.max_cycle
         self.converged, self.mol = \
