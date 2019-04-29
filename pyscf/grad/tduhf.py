@@ -247,7 +247,7 @@ if __name__ == '__main__':
     #tdg.verbose = 5
     g1 = tdg.kernel(z[1])
     print(g1)
-    print(lib.finger(g1) - 0.30223398112148536)
+    print(lib.finger(g1) - 0.3970638627132136)
     td_solver = td.as_scanner()
     e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
     e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
