@@ -966,7 +966,9 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 
     def sfx2c1e(self):
         from pyscf.x2c import sfx2c1e
-        self._scf = sfx2c1e.sfx2c1e(self._scf)
+        self._scf = sfx2c1e.sfx2c1e(self._scf).run()
+        self.mo_coeff = self._scf.mo_coeff
+        self.mo_energy = self._scf.mo_energy
         return self
     x2c = x2c1e = sfx2c1e
 

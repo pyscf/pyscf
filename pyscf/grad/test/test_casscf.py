@@ -163,22 +163,11 @@ class KnownValues(unittest.TestCase):
         ref = (e1 - e2)/0.002 * lib.param.BOHR
         self.assertAlmostEqual(g[0,0], ref, 4)
 
-#        # hcore_generator in casci calls the underlying mf_grad.get_hcore,
-#        # which does not have the QM/MM information
-#        mf = scf.RHF(mol)
-#        mc = qmmm.add_mm_charges(mcscf.CASSCF(mf, 4, 4).as_scanner(), coords, charges)
-#        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
-#        # The two CASSCF should be the same
-#        self.assertAlmostEqual(e_tot, -76.0461574155984, 7)
-#        self.assertAlmostEqual(lib.finger(g), 0.042835374915102364, 5)
-#        e1 = mc(''' O                  0.00100000    0.00000000   -0.11081188
-#                 H                 -0.00000000   -0.84695236    0.59109389
-#                 H                 -0.00000000    0.89830571    0.52404783 ''')
-#        e2 = mc(''' O                 -0.00100000    0.00000000   -0.11081188
-#                 H                 -0.00000000   -0.84695236    0.59109389
-#                 H                 -0.00000000    0.89830571    0.52404783 ''')
-#        ref = (e1 - e2)/0.002 * lib.param.BOHR
-#        self.assertAlmostEqual(g[0,0], ref, 4)
+        mf = scf.RHF(mol)
+        mc = qmmm.add_mm_charges(mcscf.CASSCF(mf, 4, 4).as_scanner(), coords, charges)
+        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
+        self.assertAlmostEqual(e_tot, -76.0461574155984, 7)
+        self.assertAlmostEqual(lib.finger(g), 0.042835374915102364, 6)
 
 
 

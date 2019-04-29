@@ -398,23 +398,11 @@ class KnownValues(unittest.TestCase):
         ref = (e1 - e2)/0.002 * lib.param.BOHR
         self.assertAlmostEqual(g[0,0], ref, 4)
 
-#        # hcore_generator in casci calls the underlying mf_grad.get_hcore,
-#        # which does not have the QM/MM information
-#        mf = scf.RHF(mol)
-#        mc = qmmm.add_mm_charges(mcscf.CASCI(mf, 4, 4).as_scanner(), coords, charges)
-#        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
-#        # Note, it's different to the CASCI above. The SCF orbitals are
-#        # obtained without QM/MM charges
-#        self.assertAlmostEqual(e_tot, -75.98116769441611, 9)
-#        self.assertAlmostEqual(lib.finger(g), 0.08285315761445006, 6)
-#        e1 = mc(''' O                  0.00100000    0.00000000   -0.11081188
-#                 H                 -0.00000000   -0.84695236    0.59109389
-#                 H                 -0.00000000    0.89830571    0.52404783 ''')
-#        e2 = mc(''' O                 -0.00100000    0.00000000   -0.11081188
-#                 H                 -0.00000000   -0.84695236    0.59109389
-#                 H                 -0.00000000    0.89830571    0.52404783 ''')
-#        ref = (e1 - e2)/0.002 * lib.param.BOHR
-#        self.assertAlmostEqual(g[0,0], ref, 4)
+        mf = scf.RHF(mol)
+        mc = qmmm.add_mm_charges(mcscf.CASCI(mf, 4, 4).as_scanner(), coords, charges)
+        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
+        self.assertAlmostEqual(e_tot, -75.98156095286714, 7)
+        self.assertAlmostEqual(lib.finger(g), 0.08335504754051845, 6)
 
 
 if __name__ == "__main__":

@@ -222,6 +222,14 @@ def as_scanner(grad_cc):
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
+
+            # cache eris. It is used multiple times when calculating gradients
+            g_ao2mo = g.base.__class__.ao2mo
+            def _save_eris(self, *args, **kwargs):
+                self._eris = g_ao2mo(self, *args, **kwargs)
+                return self._eris
+            self.base.__class__.ao2mo = _save_eris
+
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
@@ -229,24 +237,11 @@ def as_scanner(grad_cc):
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
             self.mol = mol
 
-            # The following simple version also works.  But eris object is
-            # recomputed in cc_scanner and solve_lambda.
-            # cc = self.base
-            # cc(mol)
-            # eris = cc.ao2mo()
-            # cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
-            # de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
-
             cc = self.base
-            mf_scanner = cc._scf
-            mf_scanner(mol)
-            cc.mol = mol
-            cc.mo_coeff = mf_scanner.mo_coeff
-            cc.mo_occ = mf_scanner.mo_occ
-            eris = cc.ao2mo(cc.mo_coeff)
-            cc.kernel(cc.t1, cc.t2, eris=eris)
-            cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
-            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, **kwargs)
+            cc(mol)
+            cc.solve_lambda(cc.t1, cc.t2, eris=cc._eris)
+            de = self.kernel(cc.t1, cc.t2, eris=cc._eris, **kwargs)
+            cc._eris = None  # release the resources occupied by .eris
             return cc.e_tot, de
         @property
         def converged(self):

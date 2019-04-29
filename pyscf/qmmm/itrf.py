@@ -75,10 +75,21 @@ def mm_charge(scf_method, coords, charges, unit=None):
     else:
         coords = numpy.asarray(coords, order='C') / unit
     charges = numpy.asarray(charges)
-    method_class = scf_method.__class__
+
+    if isinstance(scf_method, scf.hf.SCF):
+        if isinstance(scf_method, _QMMM):
+            return scf_method
+
+        method_class = scf_method.__class__
+
+    else:
+        if isinstance(scf_method._scf, _QMMM):
+            return scf_method
+
+        method_class = scf_method._scf.__class__
 
     class QMMM(method_class, _QMMM):
-        def __init__(self):
+        def __init__(self, scf_method):
             self.__dict__.update(scf_method.__dict__)
 
         def dump_flags(self, *args, **kwargs):
@@ -133,7 +144,13 @@ def mm_charge(scf_method, coords, charges, unit=None):
             return mm_charge_grad(scf_grad, coords, charges, 'Bohr')
         Gradients = nuc_grad_method
 
-    return QMMM()
+    if isinstance(scf_method, scf.hf.SCF):
+        return QMMM(scf_method)
+    else:
+        scf_method._scf = QMMM(scf_method._scf).run()
+        scf_method.mo_coeff = scf_method._scf.mo_coeff
+        scf_method.mo_energy = scf_method._scf.mo_energy
+        return scf_method
 add_mm_charges = mm_charge
 
 def mm_charge_grad(scf_grad, coords, charges, unit=None):

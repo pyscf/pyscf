@@ -99,13 +99,11 @@ class KnowValues(unittest.TestCase):
         charges = [-0.1]
         mf = itrf.add_mm_charges(scf.RHF(mol), coords, charges).run()
         mc = mcscf.CASCI(mf, 4, 4).run()
-        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 6)
+        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 9)
 
-        # Note, it's different to the CASCI above. The SCF orbitals are
-        # obtained without QM/MM charges
         mf = scf.RHF(mol).run()
         mc = itrf.add_mm_charges(mcscf.CASCI(mf, 4, 4), coords, charges).run()
-        self.assertAlmostEqual(mc.e_tot, -75.98116769441611, 6)
+        self.assertAlmostEqual(mc.e_tot, -75.98156095286714, 9)
 
     def test_casscf(self):
         mol = gto.Mole()
@@ -122,7 +120,6 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 4, 4).run()
         self.assertAlmostEqual(mc.e_tot, -76.0461574155984, 7)
 
-        # The two CASSCF should be the same
         mf = scf.RHF(mol).run()
         mc = itrf.add_mm_charges(mcscf.CASSCF(mf, 4, 4), coords, charges).run()
         self.assertAlmostEqual(mc.e_tot, -76.0461574155984, 7)

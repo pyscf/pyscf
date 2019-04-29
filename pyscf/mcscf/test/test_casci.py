@@ -59,11 +59,11 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_with_x2c_scanner(self):
         mc1 = mcscf.CASCI(m, 4, 4).x2c().run()
-        self.assertAlmostEqual(mc1.e_tot, -108.89255507863562, 9)
+        self.assertAlmostEqual(mc1.e_tot, -108.89264146901512, 7)
 
         mc1 = mcscf.CASCI(m, 4, 4).x2c().as_scanner().as_scanner()
         mc1(mol)
-        self.assertAlmostEqual(mc1.e_tot, -108.89264146901512, 8)
+        self.assertAlmostEqual(mc1.e_tot, -108.89264146901512, 7)
 
     def test_fix_spin_(self):
         mc1 = mcscf.CASCI(m, 4, 4)

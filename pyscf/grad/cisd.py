@@ -72,6 +72,14 @@ def as_scanner(grad_ci, state=0):
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
+
+            # cache eris. It is used multiple times when calculating gradients
+            g_ao2mo = g.base.__class__.ao2mo
+            def _save_eris(self, *args, **kwargs):
+                self._eris = g_ao2mo(self, *args, **kwargs)
+                return self._eris
+            self.base.__class__.ao2mo = _save_eris
+
         def __call__(self, mol_or_geom, state=state, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
@@ -92,7 +100,8 @@ def as_scanner(grad_ci, state=0):
                 civec = ci_scanner.ci
 
             self.mol = mol
-            de = self.kernel(civec, **kwargs)
+            de = self.kernel(civec, eris=ci_scanner._eris, **kwargs)
+            ci_scanner._eris = None  # release the resources occupied by .eris
             return e_tot, de
         @property
         def converged(self):
