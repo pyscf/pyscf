@@ -205,6 +205,9 @@ class KnownValues(unittest.TestCase):
         vec1 = mycc.amplitudes_to_vector(r1, r2)
         self.assertAlmostEqual(abs(vec-vec1).max(), 0, 14)
 
+    def test_vector_size(self):
+        self.assertEqual(mycc.vector_size(), 860)
+
     def test_rccsd_frozen(self):
         cc1 = copy.copy(mycc)
         cc1.frozen = 1
