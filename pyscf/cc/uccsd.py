@@ -728,6 +728,17 @@ class UCCSD(ccsd.CCSD):
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vector, nmo, nocc)
 
+    def vector_size(self, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nocca, noccb = nocc
+        nmoa, nmob = nmo
+        nvira, nvirb = nmoa-nocca, nmob-noccb
+        sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
+        sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
+        sizeab = nocca * noccb * nvira * nvirb
+        return sizea + sizeb + sizeab
+
     def amplitudes_from_rccsd(self, t1, t2):
         return amplitudes_from_rccsd(t1, t2)
 
