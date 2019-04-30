@@ -1129,7 +1129,11 @@ def as_scanner(mf):
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
             mf_obj = self
-            while mf_obj is not None:
+            mf_objs = []
+            while (mf_obj is not None and
+                   # avoid endless loop caused by circular reference
+                   mf_obj not in mf_objs):
+                mf_objs.append(mf_obj)
                 mf_obj.mol = mol
                 mf_obj.opt = None
                 mf_obj._eri = None
