@@ -697,8 +697,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 
 # Copy the integral file to soscf object to avoid the integrals being cached
 # twice.
-    if mol == mf.mol and not getattr(mf, 'with_df', None):
+    if mol is mf.mol and not getattr(mf, 'with_df', None):
         mf._eri = mf._scf._eri
+        mf.opt = mf._scf.opt
 
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
     u, g_orb, kfcount, jkcount = next(rotaiter)
@@ -810,7 +811,6 @@ class _CIAH_SOSCF(hf.SCF):
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
         self._scf = mf
-        self._opt = None
         self._keys.update(('max_cycle_inner', 'max_stepsize',
                            'canonicalization', 'ah_start_tol', 'ah_start_cycle',
                            'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
@@ -846,20 +846,6 @@ class _CIAH_SOSCF(hf.SCF):
                  self.max_memory, lib.current_memory()[0])
         return self
 
-    @property
-    def opt(self):
-        '''An alias of self._scf.opt'''
-        if self.mol is self._scf.mol:
-            return self._scf.opt
-        else:
-            return self._opt
-    @opt.setter
-    def opt(self, x):
-        if self.mol is self._scf.mol:
-            self._scf.opt = x
-        else:
-            self._opt = x
-
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
@@ -887,7 +873,7 @@ class _CIAH_SOSCF(hf.SCF):
                 logger.debug(self, 'Initial guess orbitals not given. '
                              'Generating initial guess from %s density matrix',
                              self.init_guess)
-                if self.mol == self._scf.mol:
+                if self.mol is self._scf.mol:
                     dm = self.get_init_guess(self.mol, self.init_guess)
                 else:
                     dm = self.get_init_guess(self._scf.mol, self.init_guess)
@@ -921,7 +907,7 @@ class _CIAH_SOSCF(hf.SCF):
 # * If self.mol and self._scf.mol are different, SOSCF was approximated by a
 #   different mol object. The underlying self._scf has to be used to get right
 #   dimension for the initial guess.
-        if self.mol == self._scf.mol:
+        if self.mol is self._scf.mol:
             mf = self
         else:
             mf = self._scf
