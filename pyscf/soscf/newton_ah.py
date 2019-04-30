@@ -810,6 +810,7 @@ class _CIAH_SOSCF(hf.SCF):
     def __init__(self, mf):
         self.__dict__.update(mf.__dict__)
         self._scf = mf
+        self._opt = None
         self._keys.update(('max_cycle_inner', 'max_stepsize',
                            'canonicalization', 'ah_start_tol', 'ah_start_cycle',
                            'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
@@ -845,15 +846,26 @@ class _CIAH_SOSCF(hf.SCF):
                  self.max_memory, lib.current_memory()[0])
         return self
 
+    @property
+    def opt(self):
+        '''An alias of self._scf.opt'''
+        if self.mol is self._scf.mol:
+            return self._scf.opt
+        else:
+            return self._opt
+    @opt.setter
+    def opt(self, x):
+        if self.mol is self._scf.mol:
+            self._scf.opt = x
+        else:
+            self._opt = x
+
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self._scf.build(mol)
-        if self._scf.mol == mol:
-            self.opt = self._scf.opt
-        else:
-            self.opt = self.init_direct_scf(mol)
+        self.opt = None
         self._eri = None
         return self
 

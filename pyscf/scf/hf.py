@@ -1338,9 +1338,8 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if not mol.incore_anyway and not self._is_mem_enough():
-# Should I lazy initialize direct SCF?
-            self.opt = self.init_direct_scf(mol)
+        # lazily initialize direct SCF
+        self.opt = None
         return self
 
     def dump_flags(self):
