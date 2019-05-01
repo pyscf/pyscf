@@ -1,4 +1,5 @@
-from . import post_scf
+from . import lib, gto, scf, ao2mo
+from .post_scf import *
 from . import grad
 from . import gw
 from . import hci
@@ -35,6 +36,7 @@ from . import tools
 #except ImportError:
 #    pass
 
+from . import pbc
 from .pbc import __all__
 del __all__
 

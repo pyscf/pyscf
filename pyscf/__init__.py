@@ -66,9 +66,9 @@ DEBUG = __config__.DEBUG
 
 def M(**kwargs):
     '''Main driver to create Molecule object (mol) or Material crystal object (cell)'''
+    from pyscf import __all__
     if kwargs.get('a') is not None:  # a is crystal lattice parameter
-        from pyscf.pbc import gto as pgto
-        return pgto.M(**kwargs)
+        return __all__.pbc.gto.M(**kwargs)
     else:  # Molecule
         return gto.M(**kwargs)
 

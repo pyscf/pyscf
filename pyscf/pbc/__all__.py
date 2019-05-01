@@ -1,3 +1,6 @@
+from . import gto
+from . import scf
+from . import lib
 from . import mp, ci, cc, tdscf
 from . import ao2mo
 from . import df
