@@ -52,21 +52,21 @@ e_CASSCF = mc.mc1step()[0]
 
 # Create SHCI molecule for just variational opt.
 # Active spaces chosen to reflect valence active space.
-mch = shci.SHCISCF(mf, ncas, nelecas)
-mch.fcisolver.mpiprefix = 'mpirun -np 2'
-mch.fcisolver.stochastic = True
-mch.fcisolver.nPTiter = 0  # Turn off perturbative calc.
-mch.fcisolver.sweep_iter = [0]
+mc = shci.SHCISCF(mf, ncas, nelecas)
+mc.fcisolver.mpiprefix = 'mpirun -np 2'
+mc.fcisolver.stochastic = True
+mc.fcisolver.nPTiter = 0  # Turn off perturbative calc.
+mc.fcisolver.sweep_iter = [0]
 # Setting large epsilon1 thresholds highlights improvement from perturbation.
-mch.fcisolver.sweep_epsilon = [5e-3]
-e_noPT = mch.mc1step()[0]
+mc.fcisolver.sweep_epsilon = [5e-3]
+e_noPT = mc.mc1step()[0]
 
 # Run a single SHCI iteration with perturbative correction.
-mch.fcisolver.stochastic = False  # Turns on deterministic PT calc.
-mch.fcisolver.epsilon2 = 1e-8
-shci.writeSHCIConfFile(mch.fcisolver, [nelecas / 2, nelecas / 2], False)
-shci.executeSHCI(mch.fcisolver)
-e_PT = shci.readEnergy(mch.fcisolver)  #struct.unpack(format, file1.read())
+mc.fcisolver.stochastic = False  # Turns on deterministic PT calc.
+mc.fcisolver.epsilon2 = 1e-8
+shci.writeSHCIConfFile(mc.fcisolver, [nelecas / 2, nelecas / 2], False)
+shci.executeSHCI(mc.fcisolver)
+e_PT = shci.readEnergy(mc.fcisolver)  #struct.unpack(format, file1.read())
 
 # Comparison Calculations
 del_PT = e_PT - e_noPT
@@ -83,5 +83,4 @@ print('E(CASSCF) - E(SHCI): %6.12f' % del_shci)
 print("Total Time:    ", time.time() - t0)
 
 # File cleanup
-os.system("rm *.dat")
-os.system("rm FCIDUMP")
+mc.fcisolver.cleanup_dice_files()

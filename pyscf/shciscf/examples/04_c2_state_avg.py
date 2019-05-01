@@ -51,14 +51,13 @@ mf.scf()
 
 # Calculate energy of the molecules with frozen core.
 # Active spaces chosen to reflect valence active space.
-#mch = shci.SHCISCF( mf, norb, nelec ).state_average_([0.333333, 0.33333, 0.33333])
-mch = shci.SHCISCF(mf, norb, nelec).state_average_([0.5, 0.5])
-mch.fcisolver.sweep_iter = [0, 3]
-mch.fcisolver.sweep_epsilon = [1.e-3, 1.e-4]
-mch.kernel()
+#mc = shci.SHCISCF( mf, norb, nelec ).state_average_([0.333333, 0.33333, 0.33333])
+mc = shci.SHCISCF(mf, norb, nelec).state_average_([0.5, 0.5])
+mc.fcisolver.sweep_iter = [0, 3]
+mc.fcisolver.sweep_epsilon = [1.e-3, 1.e-4]
+mc.kernel()
 
 print("Total Time:    ", time.time() - t0)
 
 # File cleanup
-os.system("rm *.dat")
-os.system("rm FCIDUMP")
+mc.fcisolver.cleanup_dice_files()

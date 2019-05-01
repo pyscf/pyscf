@@ -364,6 +364,28 @@ class SHCI(pyscf.lib.StreamObject):
         onepdm /= (nelectrons - 1)
         return onepdm, twopdm
 
+    def make_rdm12_forSQA(self, state, norb, nelec, link_index=None, **kwargs):
+        nelectrons = 0
+        if isinstance(nelec, (int, numpy.integer)):
+            nelectrons = nelec
+        else:
+            nelectrons = nelec[0]+nelec[1]
+
+        # The 2RDMs written by "SHCIrdm::saveRDM" in DICE
+        # are written as E2[i1,j2,k1,l2]
+        # and stored here as E2[i1,k1,j2,l2] (for PySCF purposes)
+        # This is NOT done with SQA in mind.
+        twopdm = numpy.zeros((norb, norb, norb, norb))
+        file2pdm = "spatialRDM.%d.%d.txt" % (state,state)
+        r2RDM(twopdm, norb,
+              os.path.join(self.scratchDirectory, file2pdm).endcode())
+        twopdm=twopdm.transpose(0,2,1,3)
+
+        # (This is coherent with previous statement about indexes)
+        onepdm = numpy.einsum('ijkj->ki', twopdm)
+        onepdm /= (nelectrons-1)
+        return onepdm, twopdm
+
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
             writeSHCIConfFile(self, nelec, True)
@@ -379,6 +401,7 @@ class SHCI(pyscf.lib.StreamObject):
             self.mpiprefix = mpisave
             end = time.time()
             print('......production of RDMs took %10.2f sec' % (end - start))
+            sys.stdout.flush()
 
             if self.verbose >= logger.DEBUG1:
                 outFile = os.path.join(self.runtimeDir, self.outputFile)
@@ -403,8 +426,8 @@ class SHCI(pyscf.lib.StreamObject):
             assert (norb_read == norb)
             for line in f:
                 linesp = line.split()
-                i, j, k, l, m, n = [int(x) for x in linesp[:6]]
-                threepdm[i, j, k, l, m, n] = float(linesp[6])
+                i,j,k, l,m,n = [int(x) for x in linesp[:6]]
+                threepdm[i,j,k,l,m,n] = float(linesp[6])
 
         # (This is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm', threepdm)
@@ -413,6 +436,7 @@ class SHCI(pyscf.lib.StreamObject):
         onepdm /= (nelectrons - 1)
         end = time.time()
         print('......reading the RDM took    %10.2f sec' % (end - start))
+        sys.stdout.flush()
         return onepdm, twopdm, threepdm
 
     def _make_dm123(self, state, norb, nelec, link_index=None, **kwargs):
@@ -434,8 +458,8 @@ class SHCI(pyscf.lib.StreamObject):
         threepdm += numpy.einsum('jm,kinl->ijklmn', numpy.identity(norb),
                                  twopdm)
 
-        twopdm = (numpy.einsum('iklj->ijkl', twopdm) + numpy.einsum(
-            'li,jk->ijkl', onepdm, numpy.identity(norb)))
+        twopdm =(numpy.einsum('iklj->ijkl',twopdm)
+               + numpy.einsum('li,jk->ijkl',onepdm,numpy.identity(norb)))
 
         return onepdm, twopdm, threepdm
 
@@ -446,12 +470,15 @@ class SHCI(pyscf.lib.StreamObject):
                   dt=numpy.dtype('Float64'),
                   filetype="binary",
                   link_index=None,
-                  **kwargs):
+                  bypass=False,
+                  cumulantE4=False, **kwargs):
         import os
 
         if self.has_threepdm == False:
             self.twopdm = False
             self.extraline.append('DoThreeRDM')
+            if cumulantE4:
+              self.extraline.append('dospinrdm')
 
             writeSHCIConfFile(self, nelec, False)
             if self.verbose >= logger.DEBUG1:
@@ -467,6 +494,7 @@ class SHCI(pyscf.lib.StreamObject):
             self.mpiprefix = mpisave
             end = time.time()
             print('......production of RDMs took %10.2f sec' % (end - start))
+            sys.stdout.flush()
 
             if self.verbose >= logger.DEBUG1:
                 outFile = self.outputFile
@@ -474,6 +502,8 @@ class SHCI(pyscf.lib.StreamObject):
                 logger.debug1(self, open(outFile).read())
             self.has_threepdm = True
             self.extraline.pop()
+
+        if (bypass): return None
 
         # The 3RDMS binary files written by "SHCIrdm::save3RDM" in DICE
         # are written as E3[i1,j2,k3,l3,m2,n1]
@@ -507,11 +537,19 @@ class SHCI(pyscf.lib.StreamObject):
                     continue
                 a,b,c, d,e,f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]),\
                                          int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
-                self.populate(E3, [a, b, c, f, e, d], integral)
+                self.populate(E3, [a,b,c,  f,e,d], integral)
         end = time.time()
         print('......reading the RDM took    %10.2f sec' % (end - start))
         print('')
+        sys.stdout.flush()
         return E3
+
+        #if (filetype == "binary") :
+        #    fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin" %(state, state))
+        #    fnameout = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
+        #    libE3unpack.unpackE3(ctypes.c_char_p(fname.encode()),
+        #                         ctypes.c_char_p(fnameout.encode()),
+        #                         ctypes.c_int(norb))
 
     def make_rdm4(self,
                   state,
@@ -520,6 +558,7 @@ class SHCI(pyscf.lib.StreamObject):
                   dt=numpy.dtype('Float64'),
                   filetype="binary",
                   link_index=None,
+                  bypass=False,
                   **kwargs):
         import os
 
@@ -543,6 +582,7 @@ class SHCI(pyscf.lib.StreamObject):
             self.mpiprefix = mpisave
             end = time.time()
             print('......production of RDMs took %10.2f sec' % (end - start))
+            sys.stdout.flush()
 
             if self.verbose >= logger.DEBUG1:
                 outFile = self.outputFile
@@ -551,6 +591,8 @@ class SHCI(pyscf.lib.StreamObject):
             self.has_fourpdm = True
             self.has_threepdm = True
             self.extraline.pop()
+
+        if (bypass): return None
 
         # The 4RDMS binary files written by "SHCIrdm::save3RDM" in DICE
         # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
@@ -584,10 +626,11 @@ class SHCI(pyscf.lib.StreamObject):
                     continue
                 a,b,c,d, e,f,g,h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]),\
                                              int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
-                self.populate(E4, [a, b, c, d, h, g, f, e], integral)
+                self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
         end = time.time()
         print('......reading the RDM took    %10.2f sec' % (end - start))
         print('')
+        sys.stdout.flush()
         return E4
 
     def populate(self, array, list, value):
@@ -599,6 +642,64 @@ class SHCI(pyscf.lib.StreamObject):
             updn = [up[i] for i in t] + [dn[i] for i in t]
             array[tuple(updn)] = value
 
+    def unpackE2_DICE(self,fname,norb):
+        # The 2RDMs written by "SHCIrdm::saveRDM" in DICE
+        # are written as E2[i1,j2,k2,l2]
+        # and are stored here as E2[i1,j2,l2,k2]
+        # This is done with SQA in mind.
+        fil=open(fname,"rb")
+        print("     [fil.seek: How dangerous is that??]")
+        fil.seek(53)  # HOW DANGEROUS IS THAT ???!?!?!?
+        spina=-1
+        spinb=-1
+        spinc=-1
+        spind=-1
+        ab='ab'
+        E2hom=numpy.zeros((norb,norb,norb,norb), order='F')
+        E2het=numpy.zeros((norb,norb,norb,norb), order='F')
+        for a in range(2*norb):
+            spina=(spina+1)%2
+            for b in range(a+1):
+                spinb=(spinb+1)%2
+                for c in range(2*norb):
+                    spinc=(spinc+1)%2
+                    for d in range(c+1):
+                        spind=(spind+1)%2
+                        A,B,C,D=int(a/2.),int(b/2.),int(c/2.),int(d/2.)
+                        (value,)=struct.unpack('d',fil.read(8))
+                        if spina==spinb and spina==spinc and spina==spind:
+                           #print '%3i%3i%3i%3i %3i%3i%3i%3i %1s%1s%1s%1s E2hom %13.5e'%(a,b,c,d,A,B,C,D,ab[spina],ab[spinb],ab[spinc],ab[spind],value)
+                            if (a%2==d%2 and b%2==c%2):
+                                E2hom[A,B, D,C]-=value
+                                E2hom[B,A, C,D]-=value
+                            if (a%2==c%2 and b%2==d%2) and (a!=b):
+                                E2hom[A,B, C,D]+=value
+                                E2hom[B,A, D,C]+=value
+                        elif (spina==spinb and spinc==spind)\
+                           or(spina==spinc and spinb==spind)\
+                           or(spina==spind and spinb==spinc):
+                           #print '%3i%3i%3i%3i %3i%3i%3i%3i %1s%1s%1s%1s E2het %13.5e'%(a,b,c,d,A,B,C,D,ab[spina],ab[spinb],ab[spinc],ab[spind],value)
+                            if (a%2==d%2 and b%2==c%2):
+                                E2het[A,B, D,C]-=value
+                                E2het[B,A, C,D]-=value
+                            if (a%2==c%2 and b%2==d%2) and (a!=b):
+                                E2het[A,B, C,D]+=value
+                                E2het[B,A, D,C]+=value
+                       #else:
+                       #    print '%3i%3i%3i%3i %3i%3i%3i%3i %1s%1s%1s%1s NONE  %13.5e'%(a,b,c,d,A,B,C,D,ab[spina],ab[spinb],ab[spinc],ab[spind],value)
+                    spind=-1
+                spinc=-1
+            spinb=-1
+        spina=-1
+        try:
+            (value,)=struct.unpack('c',fil.read(1))
+            print("     [MORE bytes TO READ!]")
+        except:
+            print("     [at least, no more bytes to read!]")
+          #exit(0)
+        fil.close()
+        return E2hom,E2het
+
     def unpackE3_DICE(self, fname, norb):
         # The 3RDMs written by "SHCIrdm::save3RDM" in DICE
         # are written as E3[i1,j2,k3,l3,m2,n1]
@@ -606,9 +707,7 @@ class SHCI(pyscf.lib.StreamObject):
         # This is done with SQA in mind.
         E3 = numpy.zeros((norb, norb, norb, norb, norb, norb), order='F')
         fil = open(fname, "rb")
-        print(
-            "[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?"
-        )
+        print("     [fil.seek: How dangerous is that??]")
         #fil.seek(93) # HOW DANGEROUS IS THAT ???!?!?!?
         fil.seek(53)  # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
@@ -618,12 +717,12 @@ class SHCI(pyscf.lib.StreamObject):
                         for e in range(norb):
                             for f in range(norb):
                                 (value, ) = struct.unpack('d', fil.read(8))
-                                E3[a, b, c, f, e, d] = value
+                                E3[a,b,c,  f,e,d]=value
         try:
             (value, ) = struct.unpack('c', fil.read(1))
-            print("MORE bytes TO READ!")
+            print("     [MORE bytes TO READ!]")
         except:
-            print("AT LEAST, NO MORE bytes TO READ!")
+            print("     [at least, no more bytes to read!]")
         #exit(0)
         fil.close()
         return E3
@@ -636,9 +735,7 @@ class SHCI(pyscf.lib.StreamObject):
         E4 = numpy.zeros((norb, norb, norb, norb, norb, norb, norb, norb),
                          order='F')
         fil = open(fname, "rb")
-        print(
-            "[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?"
-        )
+        print("     [fil.seek: How dangerous is that??]")
         fil.seek(53)  # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
             for b in range(norb):
@@ -648,14 +745,13 @@ class SHCI(pyscf.lib.StreamObject):
                             for f in range(norb):
                                 for g in range(norb):
                                     for h in range(norb):
-                                        (value, ) = struct.unpack(
-                                            'd', fil.read(8))
-                                        E4[a, b, c, d, h, g, f, e] = value
+                                        (value, ) = struct.unpack('d', fil.read(8))
+                                        E4[a,b,c,d,  h,g,f,e]=value
         try:
             (value, ) = struct.unpack('c', fil.read(1))
-            print("MORE bytes TO READ!")
+            print("     [MORE bytes TO READ!]")
         except:
-            print("AT LEAST, NO MORE bytes TO READ!")
+            print("     [at least, no more bytes to read!]")
         #exit(0)
         fil.close()
         return E4
@@ -719,6 +815,7 @@ class SHCI(pyscf.lib.StreamObject):
             outFile = os.path.join(self.runtimeDir, self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
+
         return calc_e, roots
 
     def approx_kernel(self,
@@ -1107,8 +1204,7 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
 
         eri_cas = pyscf.ao2mo.restore(8, eri_cas, norb)
         # Writes the FCIDUMP file using functions in SHCI_tools.cpp.
-        integralFile = integralFile.encode(
-        )  # .encode for python3 compatibility
+        integralFile = integralFile.encode()  # .encode for python3 compatibility
         fcidumpFromIntegral(integralFile, h1eff, eri_cas, norb,
                             neleca + nelecb, ecore,
                             numpy.asarray(orbsym, dtype=numpy.int32),
@@ -1116,10 +1212,9 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
 
 
 def executeSHCI(SHCI):
-    file1 = os.path.join(SHCI.runtimeDir,
-                         "%s/shci.e" % (SHCI.scratchDirectory))
-    if os.path.exists(file1):
-        os.remove(file1)
+    file1 = os.path.join(SHCI.runtimeDir, "%s/shci.e" % (SHCI.scratchDirectory))#what?
+    if os.path.exists(file1):                                                   #what?
+        os.remove(file1)                                                        #what?
     inFile = os.path.join(SHCI.runtimeDir, SHCI.configFile)
     outFile = os.path.join(SHCI.runtimeDir, SHCI.outputFile)
     try:

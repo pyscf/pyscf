@@ -53,22 +53,22 @@ mf.conv_tol = 1e-9
 mf.scf()
 
 # Calculate energy of the molecules with frozen core.
-mch = shci.SHCISCF(mf, ncas, nelecas)
-mch.frozen = nfrozen  # Freezes the innermost 2 orbitals.
-mch.fcisolver.sweep_iter = [0]
-mch.fcisolver.sweep_epsilon = [1e-3]  # Loose variational tolerances.
-mch.fcisolver.nPTiter = 0
-e_noaa = mch.mc1step()[0]
+mc = shci.SHCISCF(mf, ncas, nelecas)
+mc.frozen = nfrozen  # Freezes the innermost 2 orbitals.
+mc.fcisolver.sweep_iter = [0]
+mc.fcisolver.sweep_epsilon = [1e-3]  # Loose variational tolerances.
+mc.fcisolver.nPTiter = 0
+e_noaa = mc.mc1step()[0]
 
 # Calculate energy of the molecule with frozen core and active-active rotations
-mch = shci.SHCISCF(mf, ncas, nelecas)
-mch.frozen = nfrozen  # Freezes the innermost 2 orbitals.
-mch.internal_rotation = True  # Do active-active orbital rotations.
-mch.fcisolver.sweep_iter = [0]
-mch.fcisolver.sweep_epsilon = [1e-3]
-mch.fcisolver.nPTiter = 0
-mch.max_cycle_macro = 20
-e_aa = mch.mc1step()[0]
+mc = shci.SHCISCF(mf, ncas, nelecas)
+mc.frozen = nfrozen  # Freezes the innermost 2 orbitals.
+mc.internal_rotation = True  # Do active-active orbital rotations.
+mc.fcisolver.sweep_iter = [0]
+mc.fcisolver.sweep_epsilon = [1e-3]
+mc.fcisolver.nPTiter = 0
+mc.max_cycle_macro = 20
+e_aa = mc.mc1step()[0]
 
 # Comparison Calculations
 del_aa = e_aa - e_noaa
@@ -80,8 +80,4 @@ print('SHCI w/ Act.-Act. Rotations: %6.12f' % e_aa)
 print('Change w/ Act.-Act. Rotations: %6.12f' % del_aa)
 
 # File cleanup. Comment out to help debugging.
-os.system("rm *.bkp")
-os.system("rm *.txt")
-os.system("rm shci.e")
-os.system("rm *.dat")
-os.system("rm FCIDUMP")
+mc.fcisolver.cleanup_dice_files()

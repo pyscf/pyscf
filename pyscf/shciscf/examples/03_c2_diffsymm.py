@@ -69,5 +69,4 @@ mycas.kernel()
 print("Total Time:    ", time.time() - t0)
 
 # File cleanup
-os.system("rm *.dat")
-os.system("rm FCIDUMP")
+solver1.cleanup_dice_files()
