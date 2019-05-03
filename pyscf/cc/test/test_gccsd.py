@@ -128,6 +128,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2[1] - gcc1.t2[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(t2[2] - gcc1.t2[2]).max(), 0, 12)
 
+    def test_vector_size(self):
+        self.assertEqual(gcc1.vector_size(), 5560)
+
     def test_update_amps(self):
         mol = gto.M()
         nocc, nvir = 8, 14

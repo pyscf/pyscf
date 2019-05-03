@@ -750,11 +750,18 @@ def as_scanner(cc):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            if self.t2 is not None:
+                last_size = self.vector_size()
+            else:
+                last_size = 0
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
+            if last_size != self.vector_size():
+                self.t1 = self.t2 = None
             self.kernel(self.t1, self.t2, **kwargs)
             return self.e_tot
     return CCSD_Scanner(cc)
@@ -1135,6 +1142,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if nocc is None: nocc = self.nocc
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vec, nmo, nocc)
+
+    def vector_size(self, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        nov = nocc * nvir
+        return nov + nov*(nov+1)//2
 
     def dump_chk(self, t1_t2=None, frozen=None, mo_coeff=None, mo_occ=None):
         if not self.chkfile:

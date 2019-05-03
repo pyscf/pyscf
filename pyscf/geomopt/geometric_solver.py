@@ -26,8 +26,15 @@ from pyscf import lib
 from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
 from pyscf import __config__
 
+try:
+    from geometric import internal, optimize, nifty, engine, molecule
+except ImportError:
+    msg = ('Geometry optimizer geomeTRIC not found.\ngeomeTRIC library '
+           'can be found on github https://github.com/leeping/geomeTRIC.\n'
+           'You can install geomeTRIC with "pip install geometric"')
+    raise ImportError(msg)
+
 # Overwrite units defined in geomeTRIC
-from geometric import internal, optimize, nifty, engine, molecule
 internal.ang2bohr = optimize.ang2bohr = nifty.ang2bohr = 1./lib.param.BOHR
 engine.bohr2ang = internal.bohr2ang = molecule.bohr2ang = nifty.bohr2ang = \
         optimize.bohr2ang = lib.param.BOHR

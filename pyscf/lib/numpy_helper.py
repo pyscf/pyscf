@@ -278,8 +278,12 @@ def pack_tril(mat, axis=-1, out=None):
         out = numpy.ndarray(shape, mat.dtype, buffer=out)
         if mat.dtype == numpy.double:
             fn = _np_helper.NPdpack_tril_2d
-        else:
+        elif mat.dtype == numpy.complex:
             fn = _np_helper.NPzpack_tril_2d
+        else:
+            out[:] = mat[numpy.tril_indices(nd)]
+            return out
+
         fn(ctypes.c_int(count), ctypes.c_int(nd),
            out.ctypes.data_as(ctypes.c_void_p),
            mat.ctypes.data_as(ctypes.c_void_p))
@@ -329,16 +333,15 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
 
-    if (numpy.issubdtype(tril.dtype, numpy.integer) and
-        (filltriu == HERMITIAN or filltriu == SYMMETRIC)):
-        idx = numpy.tril_indices(nd)
-        idxy = numpy.empty((nd,nd), dtype=numpy.int)
-        idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
-        out = numpy.take(tril, idxy.ravel(), axis=axis, out=out)
-        if axis == 0 and tril.ndim == 1:
-            return out.reshape(nd,nd,-1)
+    if (tril.dtype != numpy.double and tril.dtype != numpy.complex):
+        out = numpy.ndarray(shape, tril.dtype, buffer=out)
+        idx, idy = numpy.tril_indices(nd)
+        if filltriu == ANTIHERMI:
+            out[...,idy,idx] = -tril
         else:
-            return out.reshape(shape)
+            out[...,idy,idx] = tril
+        out[...,idx,idy] = tril
+        return out
 
     elif tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
@@ -391,8 +394,14 @@ def unpack_row(tril, row_id):
     mat = numpy.empty(nd, tril.dtype)
     if tril.dtype == numpy.double:
         fn = _np_helper.NPdunpack_row
-    else:
+    elif tril.dtype == numpy.complex:
         fn = _np_helper.NPzunpack_row
+    else:
+        p0 = row_id*(row_id+1)//2
+        p1 = row_id*(row_id+1)//2 + row_id
+        idx = numpy.arange(row_id, nd)
+        return numpy.append(tril[p0:p1], tril[idx*(idx+1)//2+row_id])
+
     fn.restype = ctypes.c_void_p
     fn(ctypes.c_int(nd), ctypes.c_int(row_id),
        tril.ctypes.data_as(ctypes.c_void_p),
@@ -435,8 +444,10 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
 
     if mat.dtype == numpy.double:
         fn = _np_helper.NPdsymm_triu
-    else:
+    elif mat.dtype == numpy.complex:
         fn = _np_helper.NPzhermi_triu
+    else:
+        raise NotImplementedError
     fn.restype = ctypes.c_void_p
     fn(ctypes.c_int(nd), buf.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(hermi))
@@ -473,12 +484,14 @@ def take_2d(a, idx, idy, out=None):
     '''
     a = numpy.asarray(a, order='C')
     out = numpy.ndarray((len(idx),len(idy)), dtype=a.dtype, buffer=out)
-    if a.dtype == numpy.double:
-        fn = _np_helper.NPdtake_2d
-    else:
-        fn = _np_helper.NPztake_2d
     idx = numpy.asarray(idx, dtype=numpy.int32)
     idy = numpy.asarray(idy, dtype=numpy.int32)
+    if a.dtype == numpy.double:
+        fn = _np_helper.NPdtake_2d
+    elif a.dtype == numpy.complex:
+        fn = _np_helper.NPztake_2d
+    else:
+        return a[idx[:,None],idy]
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        idx.ctypes.data_as(ctypes.c_void_p),
@@ -501,12 +514,15 @@ def takebak_2d(out, a, idx, idy):
     '''
     assert(out.flags.c_contiguous)
     a = numpy.asarray(a, order='C')
-    if a.dtype == numpy.double:
-        fn = _np_helper.NPdtakebak_2d
-    else:
-        fn = _np_helper.NPztakebak_2d
     idx = numpy.asarray(idx, dtype=numpy.int32)
     idy = numpy.asarray(idy, dtype=numpy.int32)
+    if a.dtype == numpy.double:
+        fn = _np_helper.NPdtakebak_2d
+    elif a.dtype == numpy.complex:
+        fn = _np_helper.NPztakebak_2d
+    else:
+        out[idx[:,None], idy] += a
+        return out
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        idx.ctypes.data_as(ctypes.c_void_p),
@@ -537,7 +553,8 @@ def transpose(a, axes=None, inplace=False, out=None):
             a[c0:c1,c0:c1] = a[c0:c1,c0:c1].T
         return a
 
-    if not a.flags.c_contiguous:
+    if (not a.flags.c_contiguous
+        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
         if a.ndim == 2:
             arow, acol = a.shape
             out = numpy.empty((acol,arow), a.dtype)
@@ -602,7 +619,8 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
     else:
         out = numpy.ndarray(a.shape, a.dtype, buffer=out)
 
-    if not a.flags.c_contiguous:
+    if (not a.flags.c_contiguous
+        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
         if a.ndim == 2:
             na = a.shape[0]
             for c0, c1 in misc.prange(0, na, BLOCK_DIM):

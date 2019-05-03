@@ -716,7 +716,7 @@ def as_scanner(ci):
         def __init__(self, ci):
             self.__dict__.update(ci.__dict__)
             self._scf = ci._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
+        def __call__(self, mol_or_geom, ci0=None, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
             else:
@@ -727,9 +727,13 @@ def as_scanner(ci):
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
+            if getattr(self.ci, 'size', 0) != self.vector_size():
+                self.ci = None
+            if ci0 is None:
 # FIXME: Whether to use the initial guess from last step? If root flips, large
 # errors may be found in the solutions
-            self.kernel(self.ci, **kwargs)[0]
+                ci0 = self.ci
+            self.kernel(ci0, **kwargs)[0]
             return self.e_tot
     return CISD_Scanner(ci)
 
