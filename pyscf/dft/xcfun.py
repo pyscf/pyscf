@@ -364,7 +364,7 @@ def parse_xc(description):
         else:
             raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
-    def parse_token(token, suffix):
+    def parse_token(token, suffix, search_xc_alias=False):
         if token:
             if token[0] == '-':
                 sign = -1
@@ -401,12 +401,14 @@ def parse_xc(description):
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
-                if key in XC_CODES:
+                if search_xc_alias and key in XC_ALIAS:
+                    x_id = XC_ALIAS[key]
+                elif key in XC_CODES:
                     x_id = XC_CODES[key]
                 elif key+suffix in XC_CODES:
                     x_id = XC_CODES[key+suffix]
                 else:
-                    raise KeyError('Unknown XC key %s' % key)
+                    raise KeyError('Unknown %s functional  %s' % (suffix, key))
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
 # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
@@ -414,7 +416,7 @@ def parse_xc(description):
                         assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
-                    raise NotImplementedError(key)
+                    raise NotImplementedError('Unknown %s functional  %s' % (suffix, key))
                 else:
                     fn_facs.append((x_id, fac))
     def remove_dup(fn_facs):
@@ -447,7 +449,7 @@ def parse_xc(description):
             parse_token(token, 'C')
     else:
         for token in description.replace('-', '+-').split('+'):
-            parse_token(token, 'XC')
+            parse_token(token, 'XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
     return hyb, remove_dup(fn_facs)
