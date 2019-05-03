@@ -1549,6 +1549,7 @@ class Cell(mole.Mole):
                      shls_slice=None, non0tab=None, ao_loc=None, out=None):
         return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
                             shls_slice, non0tab, ao_loc, out)
+    pbc_eval_ao = pbc_eval_gto
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
@@ -1559,6 +1560,7 @@ class Cell(mole.Mole):
         else:
             return mole.eval_gto(self, eval_name, coords, comp,
                                  shls_slice, non0tab, ao_loc, out)
+    eval_ao = eval_gto
 
     def from_ase(self, ase_atom):
         '''Update cell based on given ase atom object

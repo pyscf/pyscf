@@ -2983,7 +2983,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    eval_gto = eval_gto
+    eval_ao = eval_gto = eval_gto
 
     energy_nuc = energy_nuc
     def get_enuc(self):
