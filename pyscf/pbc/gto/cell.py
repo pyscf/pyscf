@@ -1121,7 +1121,7 @@ class Cell(mole.Mole):
         from Cell object.
         '''
         if key[:2] == '__':  # Skip Python builtins
-            raise AttributeError
+            raise AttributeError('Cell object has no attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
                    '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
@@ -1165,9 +1165,9 @@ class Cell(mole.Mole):
             else:
                 mf = scf.HF(self)
 
-        method = getattr(mf, key)
+        method = getattr(mf, key, None)
         if method is None:
-            raise AttributeError
+            raise AttributeError('Cell object has no attribute %s' % key)
 
         mf.run()
         return method
