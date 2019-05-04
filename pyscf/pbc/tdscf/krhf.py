@@ -47,7 +47,7 @@ class TDA(rhf.TDA):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
 
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         singlet = self.singlet
         cell = mf.cell
         kpts = mf.kpts
@@ -116,7 +116,7 @@ class TDA(rhf.TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
         if x0 is None:
@@ -136,7 +136,7 @@ CIS = KTDA = TDA
 
 
 class TDHF(TDA):
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         '''
         [ A   B ][X]
         [-B* -A*][Y]
@@ -211,7 +211,7 @@ class TDHF(TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
