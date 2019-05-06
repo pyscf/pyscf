@@ -3111,6 +3111,60 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
 
+    def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
+              **kwargs):
+        '''Integral transformation for arbitrary orbitals and arbitrary
+        integrals.  See more detalied documentation in func:`ao2mo.kernel`.
+
+        Args:
+            mo_coeffs (an np array or a list of arrays) : A matrix of orbital
+                coefficients if it is a numpy ndarray, or four sets of orbital
+                coefficients, corresponding to the four indices of (ij|kl).
+
+        Kwargs:
+            erifile (str or h5py File or h5py Group object) : The file/object
+                to store the transformed integrals.  If not given, the return
+                value is an array (in memory) of the transformed integrals.
+            dataname : str
+                *Note* this argument is effective if erifile is given.
+                The dataset name in the erifile (ref the hierarchy of HDF5 format
+                http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
+                different dataname, the existed integral file can be reused.  If
+                the erifile contains the specified dataname, the old integrals
+                will be replaced by the new one under the key dataname.
+            intor (str) : integral name Name of the 2-electron integral.  Ref
+                to :func:`getints_by_shell`
+                for the complete list of available 2-electron integral names
+
+        Returns:
+            An array of transformed integrals if erifile is not given.
+            Otherwise, return the file/fileobject if erifile is assigned.
+
+
+        Examples:
+
+        >>> import pyscf
+        >>> mol = pyscf.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+        >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
+
+        >>> eri1 = mol.ao2mo(mo1)
+        >>> print(eri1.shape)
+        (55, 55)
+
+        >>> eri1 = mol.ao2mo(mo1, compact=False)
+        >>> print(eri1.shape)
+        (100, 100)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2))
+        >>> print(eri1.shape)
+        (80, 36)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2), erifile='water.h5')
+        '''
+        from pyscf import ao2mo
+        return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
+
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
     if callable(str_or_int_or_fn):

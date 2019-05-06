@@ -74,12 +74,12 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(eri.shape, (16,16))
 
         h5file = lib.H5TmpFile()
-        ao2mo.kernel(mol, mo, h5file, intor='int2e', dataname='eri')
+        ao2mo.kernel(mol, mo, erifile=h5file, intor='int2e', dataname='eri')
         with ao2mo.load(h5file, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))
 
         ftmp = tempfile.NamedTemporaryFile()
-        ao2mo.kernel(mol, mo, ftmp, intor='int2e', dataname='eri')
+        ao2mo.kernel(mol, mo, erifile=ftmp, intor='int2e', dataname='eri')
         with ao2mo.load(ftmp, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))
 
@@ -92,11 +92,11 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(eri.shape, (16,16))
 
         h5file = lib.H5TmpFile()
-        ao2mo.kernel(mol, [mo]*4, h5file, intor='int2e', dataname='eri')
+        ao2mo.kernel(mol, [mo]*4, erifile=h5file, intor='int2e', dataname='eri')
         self.assertEqual(h5file['eri'].shape, (10,10))
 
         ftmp = tempfile.NamedTemporaryFile()
-        ao2mo.kernel(mol, [mo]*4, ftmp, intor='int2e', dataname='eri')
+        ao2mo.kernel(mol, [mo]*4, erifile=ftmp, intor='int2e', dataname='eri')
         with ao2mo.load(ftmp.name, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))
 

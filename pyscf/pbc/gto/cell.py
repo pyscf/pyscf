@@ -1647,4 +1647,8 @@ class Cell(mole.Mole):
         '''Whether pseudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
+    def ao2mo(self, mo_coeffs, intor='int2e', erifile=None, dataname='eri_mo',
+              **kwargs):
+        raise NotImplementedError
+
 del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

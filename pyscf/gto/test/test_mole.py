@@ -838,6 +838,12 @@ O    SP
         self.assertRaises(AttributeError, lambda: mol.xyz)
         self.assertRaises(AttributeError, lambda: mol.TDxyz)
 
+    def test_ao2mo(self):
+        mol = gto.M(atom='He')
+        nao = mol.nao
+        eri = mol.ao2mo(numpy.eye(nao))
+        self.assertAlmostEqual(eri[0,0], 1.0557129427350722, 12)
+
 
 if __name__ == "__main__":
     print("test mole.py")
