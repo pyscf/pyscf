@@ -42,14 +42,15 @@ class gw_iter(gw):
       if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
     return si0
 
-  def si_c_lgmres_matvec(self):
+  def si_c_lgmres_matvec(self,ww):
     from scipy.sparse.linalg import lgmres
     from scipy.sparse.linalg import LinearOperator
     import numpy as np
-    ww = 1j*self.ww_ia
+    #ww = 1j*self.ww_ia
     #rf0 = si0 = self.rf0(ww)
+    si0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
     for iw,w in enumerate(ww):   
-      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
+      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)  #convert matvec to 1D array: k_c_opt.matvec(np.ones(gw.nprod))
       b = np.dot(k_c_opt, self.kernel_sq)   
       k_c_opt2 = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec2, dtype=self.dtypeComplex)
       for m in range(self.nprod): 
@@ -258,7 +259,7 @@ class gw_iter(gw):
 
   def get_snmw2sf_iter (self):
     """
-     For XVX instead of last precedure: multiplications were done by reshaping matrices in 2D shape in XVX.
+     For XVX instead of last precedure: multiplications were done by reshaping matrices in 2D shape of XVX.
     """
     import numpy as np    
     from scipy.sparse.linalg import LinearOperator    

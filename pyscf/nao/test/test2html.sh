@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#ml Anaconda3/5.1.0
+ml Anaconda3/5.1.0
 
 red=$( tput setaf 1 )
 green=$( tput setaf 2 )
