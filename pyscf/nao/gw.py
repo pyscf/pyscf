@@ -184,7 +184,7 @@ class gw(scf):
       b = dot(k_c, self.kernel_sq)               
       k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
       for m in range(self.nprod): 
-         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])   
+         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:], atol=1e-07)   
       if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
     return si0
 

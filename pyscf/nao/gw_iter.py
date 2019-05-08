@@ -29,7 +29,7 @@ class gw_iter(gw):
     import numpy as np
     from scipy.sparse import csc_matrix
     from scipy.sparse.linalg import lgmres
-    from pyscf.nao.m_lgmres import lgmres as mo_lgmres
+
     #ww = 1j*self.ww_ia
     rf0 = si0 = self.rf0(ww)    
     for iw,w in enumerate(ww):                                
@@ -38,7 +38,7 @@ class gw_iter(gw):
       b = dot(k_c, self.kernel_sq)               
       k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
       for m in range(self.nprod): 
-         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])   
+         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:], atol=self.tol_ev)   
       if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
     return si0
 
@@ -54,7 +54,7 @@ class gw_iter(gw):
       b = np.dot(k_c_opt, self.kernel_sq)   
       k_c_opt2 = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec2, dtype=self.dtypeComplex)
       for m in range(self.nprod): 
-         si0[iw,m,:],exitCode = lgmres(k_c_opt2, b[m,:])   
+         si0[iw,m,:],exitCode = lgmres(k_c_opt2, b[m,:], atol=self.tol_ev)   
       if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
     return si0
 
@@ -143,7 +143,7 @@ class gw_iter(gw):
         xmb = self.mo_coeff[0,s,:,:,0]       
         xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)
         for iw,w in enumerate(ww):                             #iw is number of grid and w is complex plane                                
-            k_c = np.dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
+            #k_c = np.dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
             #k_c_i = self.apply_rf0(self.kernel_sq[:,0], w)
             self.comega_current = w                             #appropriate ferequency for self.vext2veff_matvec
             k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
@@ -313,7 +313,7 @@ class gw_iter(gw):
                         b = self.apply_rf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
                         b = b.reshape(2,self.nprod)                 #removes added shape  
                         a = np.dot(self.kernel_sq, b[0])            #v\chi_{0}v XVX, this should be aquals to bxvx in last approach        
-                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, tol=1e-06)
+                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, atol=self.tol_ev)
             if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
             inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)        #I= XVX I_aux
         snm2i.append(np.real(inm))
