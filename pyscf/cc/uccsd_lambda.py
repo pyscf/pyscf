@@ -175,12 +175,12 @@ def make_intermediates(mycc, t1, t2, eris):
     wOVvo  = v4OVvo
     woVVo  = v4oVVo
     wOvvO  = v4OvvO
-    wovvo += numpy.einsum('jbld,kd,lc->jbck', ovov, t1a, -t1a)
-    wOVVO += numpy.einsum('jbld,kd,lc->jbck', OVOV, t1b, -t1b)
-    wovVO += numpy.einsum('jbLD,KD,LC->jbCK', ovOV, t1b, -t1b)
-    wOVvo += numpy.einsum('ldJB,kd,lc->JBck', ovOV, t1a, -t1a)
-    woVVo += numpy.einsum('jdLB,kd,LC->jBCk', ovOV, t1a,  t1b)
-    wOvvO += numpy.einsum('lbJD,KD,lc->JbcK', ovOV, t1b,  t1a)
+    wovvo += lib.einsum('jbld,kd,lc->jbck', ovov, t1a, -t1a)
+    wOVVO += lib.einsum('jbld,kd,lc->jbck', OVOV, t1b, -t1b)
+    wovVO += lib.einsum('jbLD,KD,LC->jbCK', ovOV, t1b, -t1b)
+    wOVvo += lib.einsum('ldJB,kd,lc->JBck', ovOV, t1a, -t1a)
+    woVVo += lib.einsum('jdLB,kd,LC->jBCk', ovOV, t1a,  t1b)
+    wOvvO += lib.einsum('lbJD,KD,lc->JbcK', ovOV, t1b,  t1a)
     wovvo -= einsum('jblk,lc->jbck', ovoo, t1a)
     wOVVO -= einsum('jblk,lc->jbck', OVOO, t1b)
     wovVO -= einsum('jbLK,LC->jbCK', ovOO, t1b)
@@ -240,10 +240,10 @@ def make_intermediates(mycc, t1, t2, eris):
 
     w3a += v5a
     w3b += v5b
-    w3a += numpy.einsum('cb,jb->cj', v1a, t1a)
-    w3b += numpy.einsum('cb,jb->cj', v1b, t1b)
-    w3a -= numpy.einsum('jk,jb->bk', v2a, t1a)
-    w3b -= numpy.einsum('jk,jb->bk', v2b, t1b)
+    w3a += lib.einsum('cb,jb->cj', v1a, t1a)
+    w3b += lib.einsum('cb,jb->cj', v1b, t1b)
+    w3a -= lib.einsum('jk,jb->bk', v2a, t1a)
+    w3b -= lib.einsum('jk,jb->bk', v2b, t1b)
 
     class _IMDS: pass
     imds = _IMDS()
@@ -331,14 +331,14 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     mOO = einsum('kicd,kjcd->ij', l2bb, t2bb) * .5
     mOO+= einsum('kIcD,kJcD->IJ', l2ab, t2ab)
 
-    #m3 = numpy.einsum('ijcd,cdab->ijab', l2, eris.vvvv) * .5
+    #m3 = lib.einsum('ijcd,cdab->ijab', l2, eris.vvvv) * .5
     m3aa, m3ab, m3bb = mycc._add_vvvv(None, (l2aa.conj(),l2ab.conj(),l2bb.conj()), eris)
     m3aa = m3aa.conj()
     m3ab = m3ab.conj()
     m3bb = m3bb.conj()
-    m3aa += numpy.einsum('klab,ikjl->ijab', l2aa, numpy.asarray(imds.woooo))
-    m3bb += numpy.einsum('klab,ikjl->ijab', l2bb, numpy.asarray(imds.wOOOO))
-    m3ab += numpy.einsum('kLaB,ikJL->iJaB', l2ab, numpy.asarray(imds.wooOO))
+    m3aa += lib.einsum('klab,ikjl->ijab', l2aa, numpy.asarray(imds.woooo))
+    m3bb += lib.einsum('klab,ikjl->ijab', l2bb, numpy.asarray(imds.wOOOO))
+    m3ab += lib.einsum('kLaB,ikJL->iJaB', l2ab, numpy.asarray(imds.wooOO))
 
     ovov = numpy.asarray(eris.ovov)
     ovov = ovov - ovov.transpose(0,3,2,1)
@@ -352,8 +352,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     if nvira > 0 and nocca > 0:
         ovvv = numpy.asarray(eris.get_ovvv())
         ovvv = ovvv - ovvv.transpose(0,3,2,1)
-        tmp = numpy.einsum('ijcd,kd->ijck', l2aa, t1a)
-        m3aa -= numpy.einsum('kbca,ijck->ijab', ovvv, tmp)
+        tmp = lib.einsum('ijcd,kd->ijck', l2aa, t1a)
+        m3aa -= lib.einsum('kbca,ijck->ijab', ovvv, tmp)
 
         tmp = einsum('ic,jbca->jiba', l1a, ovvv)
         tmp+= einsum('kiab,jk->ijab', l2aa, v2a)
@@ -365,8 +365,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     if nvirb > 0 and noccb > 0:
         OVVV = numpy.asarray(eris.get_OVVV())
         OVVV = OVVV - OVVV.transpose(0,3,2,1)
-        tmp = numpy.einsum('ijcd,kd->ijck', l2bb, t1b)
-        m3bb -= numpy.einsum('kbca,ijck->ijab', OVVV, tmp)
+        tmp = lib.einsum('ijcd,kd->ijck', l2bb, t1b)
+        m3bb -= lib.einsum('kbca,ijck->ijab', OVVV, tmp)
 
         tmp = einsum('ic,jbca->jiba', l1b, OVVV)
         tmp+= einsum('kiab,jk->ijab', l2bb, v2b)
@@ -377,8 +377,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
 
     if nvirb > 0 and nocca > 0:
         OVvv = numpy.asarray(eris.get_OVvv())
-        tmp = numpy.einsum('iJcD,KD->iJcK', l2ab, t1b)
-        m3ab -= numpy.einsum('KBca,iJcK->iJaB', OVvv, tmp)
+        tmp = lib.einsum('iJcD,KD->iJcK', l2ab, t1b)
+        m3ab -= lib.einsum('KBca,iJcK->iJaB', OVvv, tmp)
 
         tmp = einsum('ic,JAcb->JibA', l1a, OVvv)
         tmp-= einsum('kIaB,jk->IjaB', l2ab, v2a)
@@ -389,8 +389,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
 
     if nvira > 0 and noccb > 0:
         ovVV = numpy.asarray(eris.get_ovVV())
-        tmp = numpy.einsum('iJdC,kd->iJCk', l2ab, t1a)
-        m3ab -= numpy.einsum('kaCB,iJCk->iJaB', ovVV, tmp)
+        tmp = lib.einsum('iJdC,kd->iJCk', l2ab, t1a)
+        m3ab -= lib.einsum('kaCB,iJCk->iJaB', ovVV, tmp)
 
         tmp = einsum('IC,jbCA->jIbA', l1b, ovVV)
         tmp-= einsum('iKaB,JK->iJaB', l2ab, v2b)
@@ -400,21 +400,21 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
         ovVV = tmp = None
 
     tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
-    tmp = numpy.einsum('ijcd,klcd->ijkl', l2aa, tauaa)
+    tmp = lib.einsum('ijcd,klcd->ijkl', l2aa, tauaa)
     ovov = numpy.asarray(eris.ovov)
     ovov = ovov - ovov.transpose(0,3,2,1)
-    m3aa += numpy.einsum('kalb,ijkl->ijab', ovov, tmp) * .25
+    m3aa += lib.einsum('kalb,ijkl->ijab', ovov, tmp) * .25
 
-    tmp = numpy.einsum('ijcd,klcd->ijkl', l2bb, taubb)
+    tmp = lib.einsum('ijcd,klcd->ijkl', l2bb, taubb)
     OVOV = numpy.asarray(eris.OVOV)
     OVOV = OVOV - OVOV.transpose(0,3,2,1)
-    m3bb += numpy.einsum('kalb,ijkl->ijab', OVOV, tmp) * .25
+    m3bb += lib.einsum('kalb,ijkl->ijab', OVOV, tmp) * .25
 
-    tmp = numpy.einsum('iJcD,kLcD->iJkL', l2ab, tauab)
+    tmp = lib.einsum('iJcD,kLcD->iJkL', l2ab, tauab)
     ovOV = numpy.asarray(eris.ovOV)
-    m3ab += numpy.einsum('kaLB,iJkL->iJaB', ovOV, tmp) * .5
-    tmp = numpy.einsum('iJdC,lKdC->iJKl', l2ab, tauab)
-    m3ab += numpy.einsum('laKB,iJKl->iJaB', ovOV, tmp) * .5
+    m3ab += lib.einsum('kaLB,iJkL->iJaB', ovOV, tmp) * .5
+    tmp = lib.einsum('iJdC,lKdC->iJKl', l2ab, tauab)
+    m3ab += lib.einsum('laKB,iJKl->iJaB', ovOV, tmp) * .5
 
     u1a += numpy.einsum('ijab,jb->ia', m3aa, t1a)
     u1a += numpy.einsum('iJaB,JB->ia', m3ab, t1b)
@@ -527,12 +527,12 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
 
     tmp  = fova - numpy.einsum('kbja,jb->ka', ovov, t1a)
     tmp += numpy.einsum('kaJB,JB->ka', ovOV, t1b)
-    u1a -= numpy.einsum('ik,ka->ia', moo, tmp)
-    u1a -= numpy.einsum('ca,ic->ia', mvv, tmp)
+    u1a -= lib.einsum('ik,ka->ia', moo, tmp)
+    u1a -= lib.einsum('ca,ic->ia', mvv, tmp)
     tmp  = fovb - numpy.einsum('kbja,jb->ka', OVOV, t1b)
     tmp += numpy.einsum('jbKA,jb->KA', ovOV, t1a)
-    u1b -= numpy.einsum('ik,ka->ia', mOO, tmp)
-    u1b -= numpy.einsum('ca,ic->ia', mVV, tmp)
+    u1b -= lib.einsum('ik,ka->ia', mOO, tmp)
+    u1b -= lib.einsum('ca,ic->ia', mVV, tmp)
 
     eia = lib.direct_sum('i-j->ij', mo_ea_o, mo_ea_v)
     eIA = lib.direct_sum('i-j->ij', mo_eb_o, mo_eb_v)
