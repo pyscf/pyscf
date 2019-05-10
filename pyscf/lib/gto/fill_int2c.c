@@ -47,8 +47,7 @@ void GTOint2c(int (*intor)(), double *mat, int comp, int hermi,
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, mat, comp, hermi, ao_loc, opt, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int dims[] = {naoi, naoj};
         int ish, jsh, ij, i0, j0;
@@ -97,8 +96,7 @@ void GTOint2c_spinor(int (*intor)(), double complex *mat, int comp, int hermi,
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
                                                  atm, natm, bas, nbas, env);
 
-#pragma omp parallel default(none) \
-        shared(intor, mat, comp, hermi, ao_loc, opt, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int dims[] = {naoi, naoj};
         int ish, jsh, ij, i0, j0;
