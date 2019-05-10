@@ -827,19 +827,230 @@ class EOMEA_Ta(EOMEA):
 # EOM-EE-CCSD
 ########################################
 
+# def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
+#               eris=None, imds=None, diag=None, partition=None, kptlist=None,
+#               dtype=None, **kwargs0):
+#     '''See `eom_kccsd_ghf.kernel()` for a description of arguments.
+#
+#     This method is merely a simplified version of kernel() with a few parts
+#     removed, such as those involving `eom.mask_frozen()`. Slowly they will be
+#     added back for the completion of program.
+#     '''
+#
+#     evals = [None]*len(kptlist)
+#     evecs = [None]*len(kptlist)
+#     convs = [None]*len(kptlist)
+#     return convs, evals, evecs
 
 def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None):
-    return None
+    '''See `kernel_ee()` for a description of arguments.'''
+    raise NotImplementedError
+
+
+def eomee_ccsd_singlet(eom, nroots=1, koopmans=False, guess=None, left=False,
+                       eris=None, imds=None, diag=None, partition=None,
+                       kptlist=None, dtype=None):
+    eom.converged, eom.e, eom.v  \
+            = eom_kgccsd.kernel_ee(eom, nroots, koopmans, guess, left, eris=eris,
+                                   imds=imds, diag=diag, partition=partition,
+                                   kptlist=kptlist, dtype=dtype)
+    return eom.e, eom.v
+
+
+def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
+    '''Transform 1-dimensional array to 3- and 7-dimensional arrays, r1 and r2.
+
+    TODO Add more description
+    '''
+    nvir = nmo - nocc
+    nov = nocc*nvir
+
+    r1 = vector[:nkpts*nov].copy().reshape(nkpts, nocc, nvir)
+    r2 = np.zeros((nkpts**2*nov, nkpts*nov), dtype=vector.dtype)
+
+    # TODO Find a smarter way to unpack r2 vector
+    kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
+    kkov_struct = np.array(kkov_idx.shape)
+    kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
+    kov_struct = np.array(kov_idx.shape)
+
+    for ki in range(nkpts):
+        for i in range(nocc):
+            for a in range(nvir):
+                kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
+                for ka in range(nkpts):
+                    kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
+
+    vector = vector[nkpts*nov:]
+    offset = 0
+    for ki in range(nkpts):
+        for ka in range(nkpts):
+            for i in range(nocc):
+                for a in range(nvir):
+                    kia = kov_idx[ki, i, a]
+                    kkia = kkov_idx[ki, ka, i, a]
+                    for kj in range(nkpts):
+                        kb = kconserv[ki, ka, kj]
+                        for j in range(nocc):
+                            for b in range(nvir):
+                                kkjb = kkov_idx[kj, kb, j, b]
+                                kjb = kov_idx[kj, j, b]
+                                if kkia == kkjb:
+                                    r2[kkia, kjb] = vector[offset]
+                                elif kkia > kkjb:
+                                    r2[kkia, kjb] = r2[kkjb, kia] = vector[offset]
+                                offset += 1
+
+    # r2 indices (old): (k_i, k_a, i, a), (k_J, J, B)
+    # r2 indices (new): k_i, k_J, k_a, i, J, a, B
+    r2 = r2.reshape(nkpts, nkpts, nocc, nvir, nkpts, nocc, nvir).transpose(0, 4, 1, 2, 5, 3, 6)
+    return [r1, r2]
+
+
+def amplitudes_to_vector_singlet(r1, r2, kconserv):
+    '''Transform 3- and 7-dimensional arrays, r1 and r2, to a 1-dimensional
+    array with unique indices.
+
+    TODO Add more description
+    '''
+    # r1 indices: k_i, i, a
+    nkpts, nocc, nvir = np.asarray(r1.shape)[[0, 1, 2]]
+    nov = nocc * nvir
+
+    # r2 indices (old): k_i, k_J, k_a, i, J, a, B
+    # r2 indices (new): (k_i, k_a, i, a), (k_J, J, B)
+    r2 = r2.transpose(0,2,3,5,1,4,6).reshape(nkpts**2*nov, nkpts*nov)
+
+    # TODO Find a smarter way to save r2 vector
+    kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
+    kkov_struct = np.array(kkov_idx.shape)
+    kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
+    kov_struct = np.array(kov_idx.shape)
+
+    for ki in range(nkpts):
+        for i in range(nocc):
+            for a in range(nvir):
+                kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
+                for ka in range(nkpts):
+                    kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
+
+    vector = r1.ravel()
+
+    for ki in range(nkpts):
+        for ka in range(nkpts):
+            for i in range(nocc):
+                for a in range(nvir):
+                    kkia = kkov_idx[ki, ka, i, a]
+                    for kj in range(nkpts):
+                        kb = kconserv[ki, ka, kj]
+                        for j in range(nocc):
+                            for b in range(nvir):
+                                kkjb = kkov_idx[kj, kb, j, b]
+                                kjb = kov_idx[kj, j, b]
+                                if kkia >= kkjb:
+                                    vector = np.hstack((vector, r2[kkia, kjb]))
+
+    return vector
+
+
+def join_indices(indices, struct):
+    '''Returns a joined index for an array of indices.
+
+    Args:
+        indices (np.array): an array of indices
+        struct (np.array): an array of index ranges
+
+    Example:
+        indices = np.array((3, 4, 5))
+        struct = np.array((10, 10, 10))
+        join_indices(indices, struct): 345
+    '''
+    if not isinstance(indices, np.ndarray) or not isinstance(struct, np.ndarray):
+        raise TypeError("Arguments %s and %s should both be numpy.ndarray" %
+                        (repr(indices), repr(struct)))
+    if indices.size != struct.size:
+        raise ValueError("Structure shape mismatch: expected dimension = %d, found %d" %
+                         (struct.size, indices.size))
+    if (indices >= struct).all():
+        raise ValueError("Indices are out of range")
+
+    result = 0
+    for dim in range(struct.size):
+        result += indices[dim] * np.prod(struct[dim+1:])
+
+    return result
 
 
 def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
+    raise NotImplementedError
+
+def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
+    if imds is None: imds = eom.make_imds()
+
     return None
 
+def eeccsd_diag(eom, kshift=0, imds=None):
+    '''Diagonal elements of similarity-transformed Hamiltonian'''
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    nkpts, nocc, nvir = t1.shape
+    kconserv = eom.kconserv
+    kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
+    kconserv_r2 = eom.get_kconserv_ee_r2(kshift)
 
-def eeccsd_diag(eom, kshift, imds=None):
-    return None
+    Hr1 = np.zeros((nkpts, nocc, nvir), dtype=t1.dtype)
+    for ki in range(nkpts):
+        ka = kconserv_r1[ki]
+        Hr1[ki] -= imds.Foo[ki].diagonal()[:,None]
+        Hr1[ki] += imds.Fvv[ka].diagonal()[None,:]
+        Hr1[ki] += 2.*np.einsum('iaai->ia', imds.woVvO[ki, ka, ka])
+        Hr1[ki] -= np.einsum('iaia->ia', imds.woVoV[ki, ka, ki])
+
+    Hr2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=t1.dtype)
+    # TODO Allow partition='mp'
+    if eom.partition == "mp":
+        raise NotImplementedError
+    else:
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv_r2[ki, ka, kj]
+            Hr2[ki, kj, ka] -= imds.Foo[ki].diagonal()[:, None, None, None]
+            Hr2[ki, kj, ka] -= imds.Foo[kj].diagonal()[None, :, None, None]
+            Hr2[ki, kj, ka] += imds.Fvv[ka].diagonal()[None, None, :, None]
+            Hr2[ki, kj, ka] += imds.Fvv[kb].diagonal()[None, None, None, :]
+
+            Hr2[ki, kj, ka] += np.einsum('jbbj->jb', imds.woVvO[kj, kb, kb])[None, :, None, :]
+            Hr2[ki, kj, ka] -= np.einsum('jbjb->jb', imds.woVoV[kj, kb, kj])[None, :, None, :]
+            Hr2[ki, kj, ka] -= np.einsum('jaja->ja', imds.woVoV[kj, ka, kj])[None, :, :, None]
+            Hr2[ki, kj, ka] -= np.einsum('ibib->ib', imds.woVoV[ki, kb, ki])[:, None, None, :]
+            Hr2[ki, kj, ka] += np.einsum('iaai->ia', imds.woVvO[ki, ka, ka])[:, None, :, None]
+            Hr2[ki, kj, ka] -= np.einsum('iaia->ia', imds.woVoV[ki, ka, ki])[:, None, :, None]
+
+            Hr2[ki, kj, ka] += np.einsum('abab->ab', imds.wvVvV[ka, kb, ka])[None, None, :, :]
+            Hr2[ki, kj, ka] += np.einsum('ijij->ij', imds.woOoO[ki, kj, ki])[:, :, None, None]
+
+            # ki - ka + km - kb = G
+            # => ka - ki + kb - km = G
+            km = kconserv[ka, ki, kb]
+            Hr2[ki, kj, ka] -= 2. * np.einsum('imab,imab->iab', imds.woOvV[ki, km, ka], imds.t2[ki, km, ka])[:, None, :, :]
+            Hr2[ki, kj, ka] += np.einsum('miab,imab->iab', imds.woOvV[km, ki, ka], imds.t2[ki, km, ka])[:, None, :, :]
+            # km - ka + kj - kb = G
+            # => ka - kj + kb - km = G
+            km = kconserv[ka, kj, kb]
+            Hr2[ki, kj, ka] -= 2. * np.einsum('mjab,mjab->jab', imds.woOvV[km, kj, ka], imds.t2[km, kj, ka])[None, :, :, :]
+            Hr2[ki, kj, ka] += np.einsum('jmab,mjab->jab', imds.woOvV[kj, km, ka], imds.t2[km, kj, ka])[None, :, :, :]
+            # ki - ka + kj - ke = G
+            ke = kconserv[ki, ka, kj]
+            Hr2[ki, kj, ka] -= 2. * np.einsum('ijae,ijae->ija', imds.woOvV[ki, kj, ka], imds.t2[ki, kj, ka])[:, :, :, None]
+            Hr2[ki, kj, ka] += np.einsum('ijea,ijae->ija', imds.woOvV[ki, kj, ke], imds.t2[ki, kj, ka])[:, :, :, None]
+            # ki - ke + kj - kb = G
+            ke = kconserv[ki, kb, kj]
+            Hr2[ki, kj, ka] -= 2. * np.einsum('ijeb,ijeb->ijb', imds.woOvV[ki, kj, ke], imds.t2[ki, kj, ke])[:, :, None, :]
+            Hr2[ki, kj, ka] += np.einsum('ijbe,ijeb->ijb', imds.woOvV[ki, kj, kb], imds.t2[ki, kj, ke])[:, :, None, :]
+
+    vector = amplitudes_to_vector_singlet(Hr1, Hr2, kconserv_r2)
+    return vector
 
 
 class EOMEE(eom_kgccsd.EOMEE):
@@ -853,13 +1064,12 @@ class EOMEE(eom_kgccsd.EOMEE):
         return len(self.kpts)
 
     def vector_size(self, kshift=0):
-        return None
+        raise NotImplementedError
 
     def make_imds(self, eris=None):
-        return None
-
-    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
-        return None
+        imds = _IMDS(self._cc, eris)
+        imds.make_ee()
+        return imds
 
 
 class EOMEESinglet(EOMEE):
@@ -873,20 +1083,48 @@ class EOMEESinglet(EOMEE):
 
         r1 : r_{i k_i}${a k_a}
         r2 : r_{i k_i, J k_J}^{a k_a, B k_B}
+
+        Only r1aa, r2abab spin blocks are considered.
         '''
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
 
         size_r1 = nkpts*nocc*nvir
-        nokvk = nkpts*nocc*nkpts*nvir
-        size_r2 = nokvk*(nokvk+1)//2//nkpts
+
+        # TODO Find a smarter way to count r2 vector
+        kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
+        kkov_struct = np.array(kkov_idx.shape)
+        kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
+        kov_struct = np.array(kov_idx.shape)
+
+        for ki in range(nkpts):
+            for i in range(nocc):
+                for a in range(nvir):
+                    kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
+                    for ka in range(nkpts):
+                        kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
+
+        kconserv = self.get_kconserv_ee_r2(kshift)
+        size_r2 = 0
+        for ki in range(nkpts):
+            for ka in range(nkpts):
+                for i in range(nocc):
+                    for a in range(nvir):
+                        kkia = kkov_idx[ki, ka, i, a]
+                        for kj in range(nkpts):
+                            kb = kconserv[ki, ka, kj]
+                            for j in range(nocc):
+                                for b in range(nvir):
+                                    kkjb = kkov_idx[kj, kb, j, b]
+                                    if kkia >= kkjb:
+                                        size_r2 += 1
 
         return size_r1 + size_r2
 
     def gen_matvec(self, kshift, imds=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()
-        diag = self.get_diag(imds)[0]
+        diag = self.get_diag(kshift, imds)
         if left:
             # TODO allow left vectors to be computed
             raise NotImplementedError
@@ -894,13 +1132,16 @@ class EOMEESinglet(EOMEE):
             matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, kshift=None):
-        return vector_to_amplitudes_ee_singlet(vector, kshift)
+    def vector_to_amplitudes(self, vector, kshift=None, nkpts=None, nmo=None, nocc=None, kconserv=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        if nkpts is None: nkpts = self.nkpts
+        if kconserv is None: kconserv = self.get_kconserv_ee_r2(kshift)
+        return vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv)
 
-    def amplitudes_to_vector(self, r1, r2, kshift=None):
-        return amplitudes_to_vector_ee_singlet(r1, r2, kshift)
-
-
+    def amplitudes_to_vector(self, r1, r2, kshift=None, kconserv=None):
+        if kconserv is None: kconserv = self.get_kconserv_ee_r2(kshift)
+        return amplitudes_to_vector_singlet(r1, r2, kconserv)
 
 
 class EOMEETriplet(EOMEE):
@@ -1082,7 +1323,7 @@ class _IMDS:
         logger.timer_debug1(self, 'EOM-CCSD(T)a IP/EA intermediates', *cput0)
         return self
 
-    def make_ee(self):
+    def make_ee(self, ee_partition=None):
         self._make_shared_1e()
         if self._made_shared_2e is False:
             self._make_shared_2e()
@@ -1097,19 +1338,29 @@ class _IMDS:
         # Rename imds to match the notations in pyscf.cc.eom_rccsd
         self.Foo = self.Loo
         self.Fvv = self.Lvv
+        self.woOvV = self.Woovv
         self.woVvO = self.Wovvo
-        self.woVVo = -self.Wovov.transpose(0,1,3,2)
+        self.woVoV = self.Wovov
 
         if not self.made_ip_imds:
             # 0 or 1 virtuals
-            self.woOoO = imd.Woooo(t1, t2, eris)
-            self.woOoV = imd.Wooov(t1, t2, eris)
-            self.woVoO = imd.Wovoo(t1, t2, eris)
+            self.woOoO = imd.Woooo(t1, t2, eris, kconserv)
+            self.woOoV = imd.Wooov(t1, t2, eris, kconserv)
+            self.woVoO = imd.Wovoo(t1, t2, eris, kconserv)
         else:
             self.woOoO = self.Woooo
             self.woOoV = self.Wooov
             self.woVoO = self.Wovoo
-        
+
+        if not self.made_ea_imds:
+            # 3 or 4 virtuals
+            self.wvOvV = imd.Wvovv(t1, t2, eris, kconserv)
+            self.wvVvV = imd.Wvvvv(t1, t2, eris, kconserv)
+            self.wvVvO = imd.Wvvvo(t1, t2, eris, kconserv, self.wvVvV)
+        else:
+            self.wvOvV = self.Wvovv
+            self.wvVvV = self.Wvvvv
+            self.wvVvO = self.Wvvvo
+
         self.made_ee_imds = True
-        log.timer_debug1(self, 'EOM-CCSD EE intermediates', *cput0)
-        raise self
+        log.timer('EOM-CCSD EE intermediates', *cput0)
