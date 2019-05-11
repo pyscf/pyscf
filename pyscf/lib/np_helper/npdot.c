@@ -67,8 +67,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                         }
                 }
 
-#pragma omp parallel default(none) shared(a, b, c) \
-        private(i, j)
+#pragma omp parallel private(i, j)
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((k+nthread-1) / nthread, 1);
@@ -107,7 +106,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 
         } else if (m > n*2) { // parallelize m
 
-#pragma omp parallel default(none) shared(a, b, c)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((m+nthread-1) / nthread, 1);
@@ -130,7 +129,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 
         } else { // parallelize n
 
-#pragma omp parallel default(none) shared(a, b, c)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((n+nthread-1) / nthread, 1);
@@ -193,8 +192,7 @@ void NPzgemm(const char trans_a, const char trans_b,
                         }
                 }
 
-#pragma omp parallel default(none) shared(a, b, c, alpha) \
-        private(i, j)
+#pragma omp parallel private(i, j)
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((k+nthread-1) / nthread, 1);
@@ -233,7 +231,7 @@ void NPzgemm(const char trans_a, const char trans_b,
 
         } else if (m > n*2) { // parallelize m
 
-#pragma omp parallel default(none) shared(a, b, c, alpha, beta)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((m+nthread-1) / nthread, 1);
@@ -256,7 +254,7 @@ void NPzgemm(const char trans_a, const char trans_b,
 
         } else { // parallelize n
 
-#pragma omp parallel default(none) shared(a, b, c, alpha, beta)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((n+nthread-1) / nthread, 1);
