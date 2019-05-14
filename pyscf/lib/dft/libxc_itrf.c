@@ -102,6 +102,9 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
 
         switch (func_x->info->family) {
         case XC_FAMILY_LDA:
+#ifdef XC_FAMILY_HYB_LDA
+        case XC_FAMILY_HYB_LDA:
+#endif
                 // ex is the energy density
                 // NOTE libxc library added ex/ec into vrho/vcrho
                 // vrho = rho d ex/d rho + ex, see work_lda.c:L73
@@ -363,6 +366,9 @@ int LIBXC_is_hybrid(int xc_id)
         }
         switch(func.info->family)
         {
+#ifdef XC_FAMILY_HYB_LDA
+                case XC_FAMILY_HYB_LDA:
+#endif
                 case XC_FAMILY_HYB_GGA:
                 case XC_FAMILY_HYB_MGGA:
                         hyb = 1;
@@ -385,6 +391,9 @@ double LIBXC_hybrid_coeff(int xc_id)
         }
         switch(func.info->family)
         {
+#ifdef XC_FAMILY_HYB_LDA
+                case XC_FAMILY_HYB_LDA:
+#endif
                 case XC_FAMILY_HYB_GGA:
                 case XC_FAMILY_HYB_MGGA:
                         factor = xc_hyb_exx_coef(&func);
@@ -427,6 +436,7 @@ void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
  * XC_FAMILY_OEP          16
  * XC_FAMILY_HYB_GGA      32
  * XC_FAMILY_HYB_MGGA     64
+ * XC_FAMILY_HYB_LDA     128
  */
 int LIBXC_xc_type(int fn_id)
 {
@@ -466,6 +476,9 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                         if (spin == XC_POLARIZED) {
                                 switch (func.info->family) {
                                 case XC_FAMILY_LDA:
+#ifdef XC_FAMILY_HYB_LDA
+                                case XC_FAMILY_HYB_LDA:
+#endif
                                         nvar = MAX(nvar, 2);
                                         break;
                                 case XC_FAMILY_GGA:
