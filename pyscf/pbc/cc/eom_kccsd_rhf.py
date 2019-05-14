@@ -1213,7 +1213,7 @@ def eeccsd_diag(eom, kshift=0, imds=None):
         ka = kconserv_r1[ki]
         Hr1[ki] -= imds.Foo[ki].diagonal()[:,None]
         Hr1[ki] += imds.Fvv[ka].diagonal()[None,:]
-        Hr1[ki] += 2.*np.einsum('iaai->ia', imds.woVvO[ki, ka, ka])
+        Hr1[ki] += np.einsum('iaai->ia', imds.woVvO[ki, ka, ka])
         Hr1[ki] -= np.einsum('iaia->ia', imds.woVoV[ki, ka, ki])
 
     Hr2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=t1.dtype)
@@ -1241,21 +1241,16 @@ def eeccsd_diag(eom, kshift=0, imds=None):
             # ki - ka + km - kb = G
             # => ka - ki + kb - km = G
             km = kconserv[ka, ki, kb]
-            Hr2[ki, kj, ka] -= 2. * np.einsum('imab,imab->iab', imds.woOvV[ki, km, ka], imds.t2[ki, km, ka])[:, None, :, :]
-            Hr2[ki, kj, ka] += np.einsum('miab,imab->iab', imds.woOvV[km, ki, ka], imds.t2[ki, km, ka])[:, None, :, :]
+            Hr2[ki, kj, ka] -= np.einsum('imab,imab->iab', imds.woOvV[ki, km, ka], imds.t2[ki, km, ka])[:, None, :, :]
             # km - ka + kj - kb = G
             # => ka - kj + kb - km = G
             km = kconserv[ka, kj, kb]
-            Hr2[ki, kj, ka] -= 2. * np.einsum('mjab,mjab->jab', imds.woOvV[km, kj, ka], imds.t2[km, kj, ka])[None, :, :, :]
-            Hr2[ki, kj, ka] += np.einsum('jmab,mjab->jab', imds.woOvV[kj, km, ka], imds.t2[km, kj, ka])[None, :, :, :]
+            Hr2[ki, kj, ka] -= np.einsum('mjab,mjab->jab', imds.woOvV[km, kj, ka], imds.t2[km, kj, ka])[None, :, :, :]
             # ki - ka + kj - ke = G
-            ke = kconserv[ki, ka, kj]
-            Hr2[ki, kj, ka] -= 2. * np.einsum('ijae,ijae->ija', imds.woOvV[ki, kj, ka], imds.t2[ki, kj, ka])[:, :, :, None]
-            Hr2[ki, kj, ka] += np.einsum('ijea,ijae->ija', imds.woOvV[ki, kj, ke], imds.t2[ki, kj, ka])[:, :, :, None]
+            Hr2[ki, kj, ka] -= np.einsum('ijae,ijae->ija', imds.woOvV[ki, kj, ka], imds.t2[ki, kj, ka])[:, :, :, None]
             # ki - ke + kj - kb = G
             ke = kconserv[ki, kb, kj]
-            Hr2[ki, kj, ka] -= 2. * np.einsum('ijeb,ijeb->ijb', imds.woOvV[ki, kj, ke], imds.t2[ki, kj, ke])[:, :, None, :]
-            Hr2[ki, kj, ka] += np.einsum('ijbe,ijeb->ijb', imds.woOvV[ki, kj, kb], imds.t2[ki, kj, ke])[:, :, None, :]
+            Hr2[ki, kj, ka] -= np.einsum('ijeb,ijeb->ijb', imds.woOvV[ki, kj, ke], imds.t2[ki, kj, ke])[:, :, None, :]
 
     vector = amplitudes_to_vector_singlet(Hr1, Hr2, kconserv_r2)
     return vector
