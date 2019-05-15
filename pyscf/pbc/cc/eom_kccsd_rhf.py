@@ -987,6 +987,7 @@ def join_indices(indices, struct):
 def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     raise NotImplementedError
 
+
 def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
@@ -1098,12 +1099,20 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
             kn = kconserv[ki, km, kj]
             Hr2[ki, kj, ka] += np.einsum('mnij,mnab->ijab', imds.woOoO[km, kn, ki], r2[km, kn, ka])
 
+    # To be confirmed
     #
     # r_ijab <= - W_mnef t_imab (2 r_jnef - r_jnfe)
     # r_ijab <= - W_mnef t_jmba (2 r_inef - r_infe)
+    # r_ijab <= - W_mnef t_ijae (2 r_mnbf - r_mnfb)
+    # r_ijab <= - W_mnef t_jibe (2 r_mnaf - r_mnfa)
+    #
+    # r_ijab <= - (2 W_nmie - W_nmei) t_jnba r_me
+    # r_ijab <= - (2 W_nmje - W_nmej) t_inab r_me
+    # r_ijab <= + (2 W_amfe - W_amef) t_jibf r_me
+    # r_ijab <= + (2 W_bmfe - W_bmef) t_ijaf r_me
     #
     # First, build antisymmetrized r2   : rbar_ijab = 2 r_ijab - r_ijba
-    #          and antisymmetrized woOoV: wbar_nmie = 2 W_nmie - W_mnie
+    #          and antisymmetrized woOoV: wbar_nmie = 2 W_nmie - W_nmei
     #          and antisymmetrized wvOvV: wbar_amfe = 2 W_amfe - W_amef
     #
     r2bar = np.zeros_like(r2)
@@ -1113,91 +1122,108 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
         # rbar_ijab = 2 r_ijab - r_ijba
         #  ki - ka + kj - kb = kshift
         kb = kconserv_r2[ki, ka, kj]
-        r2bar[ki, kj, ka] = 2. * r2[ki, kj, ka] - r2[ki, kj, kb]
-        # wbar_nmie = 2 W_nmie - W_mnie
+        r2bar[ki, kj, ka] = 2. * r2[ki, kj, ka] - r2[ki, kj, kb].transpose(0,1,3,2)
+        # wbar_nmie = 2 W_nmie - W_nmei = 2 W_nmie - W_mnie
         #  ki->kn, kj->km, ka->ki
-        woOoV_bar[ki, kj, ka] = 2. * imds.woOoV[ki, kj, ka] - imds.woOoV[kj, ki, ka]
+        wkn = ki
+        wkm = kj
+        wki = ka
+        #  kn + km - ki - ke = G
+        wke = kconserv[wkn, wki, wkm]
+        woOoV_bar[wkn, wkm, wki] = 2. * imds.woOoV[wkn, wkm, wki] - imds.woOoV[wkm, wkn, wki].transpose(1,0,2,3)
         # wbar_amfe = 2 W_amfe - W_amef
         #  ki->ka, kj->km, ka->kf, kb->ke
-        wvOvV_bar[ki, kj, ka] = 2. * imds.wvOvV[ki, kj, ka] - imds.wvOvV[ki, kj, kb]
+        wka = ki
+        wkm = kj
+        wkf = ka
+        #  ka + km - kf - ke = G
+        wke = kconserv[wka, wkf, wkm]
+        wvOvV_bar[wka, wkm, wkf] = 2. * imds.wvOvV[wka, wkm, wkf] - imds.wvOvV[wka, wkm, wke].transpose(0,1,3,2)
     #
     # Second, build intermediates M = W.r
     #
-    tmp1_oo = np.zeros((nkpts, nocc, nocc), dtype=r2.dtype)
-    tmp1_vv = np.zeros((nkpts, nvir, nvir), dtype=r2.dtype)
-    tmp2_oo = np.zeros_like(tmp1_oo)
-    tmp2_vv = np.zeros_like(tmp1_vv)
+    wr2_oo = np.zeros((nkpts, nocc, nocc), dtype=r2.dtype)
+    wr2_vv = np.zeros((nkpts, nvir, nvir), dtype=r2.dtype)
+    wr1_oo = np.zeros_like(wr2_oo)
+    wr1_vv = np.zeros_like(wr2_vv)
     for kj in range(nkpts):
-        # M1_jm = W_mnef (2 r_jnef - r_jnfe) = W_mnef rbar_jnef
+        # Wr2_jm = W_mnef (2 r_jnef - r_jnfe) = W_mnef rbar_jnef
         #  km + kn - ke - kf = G
         #  kj + kn - ke - kf = kshift
         # => kj - km = kshift
         km = kconserv_r1[kj]
         # x: kn, y: ke
-        tmp1_oo[kj] += np.einsum('xymnef,xyjnef->jm', imds.woOvV[km], r2bar[kj])
+        wr2_oo[kj] += np.einsum('xymnef,xyjnef->jm', imds.woOvV[km], r2bar[kj])
 
-        # M1_eb = W_mnef (2 r_mnbf - r_mnfb) = W_mnef rbar_mnbf
+        # Wr2_eb = W_mnef (2 r_mnbf - r_mnfb) = W_mnef rbar_mnbf
         ke = kj
         #  km + kn - ke - kf = G
         #  km + kn - kb - kf = kshift
         # => ke - kb = kshift
         kb = kconserv_r1[ke]
         # x: km, y: kn
-        tmp1_vv[ke] += np.einsum('xymnef,xymnbf->eb', imds.woOvV[:, :, ke], r2bar[:, :, kb])
+        wr2_vv[ke] += np.einsum('xymnef,xymnbf->eb', imds.woOvV[:, :, ke], r2bar[:, :, kb])
 
-        # M2_in = (2 W_nmie - W_nmei) r_me = wbar_nmie r_me
+        # Wr1_in = (2 W_nmie - W_nmei) r_me = wbar_nmie r_me
         ki = kj
-        #  ki - kn = kshift
+        #  kn + km - ki - ke = G
+        #  km - ke = kshift
+        # => ki - kn = kshift
         kn = kconserv_r1[ki]
         # x: km
-        tmp2_oo[ki] += np.einsum('xnmie,xme->in', woOoV_bar[kn, :, ki], r1)
+        wr1_oo[ki] += np.einsum('xnmie,xme->in', woOoV_bar[kn, :, ki], r1)
 
-        # M2_fa = (2 W_amfe - W_mafe) r_me = wbar_amfe r_me
+        # Wr1_fa = (2 W_amfe - W_amef) r_me = wbar_amfe r_me
         kf = kj
-        #  kf - ka = kshift
+        #  ka + km - kf - ke = G
+        #  km - ke = kshift
+        # => kf - ka = kshift
         ka = kconserv_r1[kf]
         # x: km
-        tmp2_vv[kf] += np.einsum('xamfe,xme->fa', wvOvV_bar[ka, :, kf], r1)
+        wr1_vv[kf] += np.einsum('xamfe,xme->fa', wvOvV_bar[ka, :, kf], r1)
     #
     # Third, compute the whole contraction
     #
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-        # r_ijab <= - M1_jm t_imab
+        # ki + kj - ka - kb = kshift
+        kb = kconserv_r2[ki, ka, kj]
+        # r_ijab <= - Wr2_jm t_imab
         #  kj - km = kshift
         km = kconserv_r1[kj]
-        Hr2[ki, kj, ka] -= np.einsum('jm,imab->ijab', tmp1_oo[kj], imds.t2[ki, km, ka])
-        # r_ijab <= - M1_im t_jmba
+        Hr2[ki, kj, ka] -= np.einsum('jm,imab->ijab', wr2_oo[kj], imds.t2[ki, km, ka])
+        # r_ijab <= - Wr2_im t_jmba
         #  ki - km = kshift
         km = kconserv_r1[ki]
-        Hr2[ki, kj, ka] -= np.einsum('im,jmba->ijab', tmp1_oo[ki], imds.t2[kj, km, kb])
-        # r_ijab <= - M1_eb t_ijae
+        Hr2[ki, kj, ka] -= np.einsum('im,jmba->ijab', wr2_oo[ki], imds.t2[kj, km, kb])
+        # r_ijab <= - Wr2_eb t_ijae
         #  ki + kj - ka - ke = G
         ke = kconserv[ki, ka, kj]
-        Hr2[ki, kj, ka] -= np.einsum('eb,ijae->ijab', tmp1_vv[ke], imds.t2[ki, kj, ka])
-        # r_ijab <= - M1_ea t_jibe
+        Hr2[ki, kj, ka] -= np.einsum('eb,ijae->ijab', wr2_vv[ke], imds.t2[ki, kj, ka])
+        # r_ijab <= - Wr2_ea t_jibe
         #  kj + ki - kb - ke = G
         ke = kconserv[kj, kb, ki]
-        Hr2[ki, kj, ka] -= np.einsum('ea,jibe->ijab', tmp1_vv[ke], imds.t2[kj, ki, kb])
+        Hr2[ki, kj, ka] -= np.einsum('ea,jibe->ijab', wr2_vv[ke], imds.t2[kj, ki, kb])
 
-        # r_ijab <= - M2_in t_jnba
+        # r_ijab <= - Wr1_in t_jnba
         #  ki - kn = kshift
         kn = kconserv_r1[ki]
-        Hr2[ki, kj, ka] -= np.einsum('in,jnba->ijab', tmp2_oo[ki], imds.t2[kj, kn, kb])
-        # r_ijab <= - M2_jn t_inab
+        Hr2[ki, kj, ka] -= np.einsum('in,jnba->ijab', wr1_oo[ki], imds.t2[kj, kn, kb])
+        # r_ijab <= - Wr1_jn t_inab
         #  kj - kn = kshift
         kn = kconserv_r1[kj]
-        Hr2[ki, kj, ka] -= np.einsum('jn,inab->ijab', tmp2_oo[kj], imds.t2[ki, kn, ka])
-        # r_ijab <= M2_fa t_jibf
+        Hr2[ki, kj, ka] -= np.einsum('jn,inab->ijab', wr1_oo[kj], imds.t2[ki, kn, ka])
+        # r_ijab <= Wr1_fa t_jibf
         #  kj + ki - kb - kf = G
         kf = kconserv[kj, kb, ki]
-        Hr2[ki, kj, ka] += np.einsum('fa,jibf->ijab', tmp2_vv[kf], imds.t2[kj, ki, kb])
-        # r_ijab <= M2_fb t_ijaf
+        Hr2[ki, kj, ka] += np.einsum('fa,jibf->ijab', wr1_vv[kf], imds.t2[kj, ki, kb])
+        # r_ijab <= Wr1_fb t_ijaf
         #  ki + kj - ka - kf = G
         kf = kconserv[ki, ka, kj]
-        Hr2[ki, kj, ka] += np.einsum('fb,ijaf->ijab', tmp2_vv[kf], imds.t2[ki, kj, ka])
+        Hr2[ki, kj, ka] += np.einsum('fb,ijaf->ijab', wr1_vv[kf], imds.t2[ki, kj, ka])
 
     vector = amplitudes_to_vector_singlet(Hr1, Hr2, kconserv_r2)
     return vector
+
 
 def eeccsd_diag(eom, kshift=0, imds=None):
     '''Diagonal elements of similarity-transformed Hamiltonian'''
