@@ -83,7 +83,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
     if (isinstance(ci, (list, tuple)) and
         not isinstance(casscf.fcisolver, addons.StateAverageFCISolver)):
         log.warn('Mulitple states found in CASCI/CASSCF solver. Density '
-                 'matrix of first state is generated in .analyze() function.')
+                 'matrix of the first state is generated in .analyze() function.')
         civec = ci[0]
     else:
         civec = ci

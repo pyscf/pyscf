@@ -520,10 +520,15 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(mf_scanner(mol.atom), -76.075408156235909, 9)
 
         mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
-        ref = scf.RHF(mol1).x2c().density_fit().kernel()
+        ref = scf.RHF(mol1).x2c().density_fit().run()
         e1 = mf_scanner('H 0 0 0; H 0 0 .9')
         self.assertAlmostEqual(e1, -1.116394048204042, 9)
-        self.assertAlmostEqual(e1, ref, 9)
+        self.assertAlmostEqual(e1, ref.e_tot, 9)
+
+        mfs = scf.RHF(mol1).as_scanner()
+        mfs.__dict__.update(scf.chkfile.load(ref.chkfile, 'scf'))
+        e = mfs(mol1)
+        self.assertAlmostEqual(e, -1.1163913004438035, 9)
 
     def test_natm_eq_0(self):
         mol = gto.M()

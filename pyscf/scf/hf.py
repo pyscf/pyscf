@@ -26,6 +26,7 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
+import h5py
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -1172,10 +1173,9 @@ def as_scanner(mf):
                 dm0 = kwargs.pop('dm0')
             elif self.mo_coeff is None:
                 dm0 = None
-            elif self.chkfile:
+            elif self.chkfile and h5py.is_hdf5(self.chkfile):
                 dm0 = self.from_chk(self.chkfile)
             else:
-                from pyscf.scf import addons
                 dm0 = self.make_rdm1()
                 # dm0 form last calculation cannot be used in the current
                 # calculation if a completely different system is given.
@@ -1186,6 +1186,7 @@ def as_scanner(mf):
                 # last calculation.
                 if dm0.shape[-1] != mol.nao:
                     #TODO:
+                    #from pyscf.scf import addons
                     #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
                     #    dm0 = None
                     #elif non-relativistic:
