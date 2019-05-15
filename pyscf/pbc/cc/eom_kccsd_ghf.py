@@ -1354,11 +1354,13 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
                 return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond, pick=pickeig,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                           max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           max_space=eom.max_space, max_memory=eom.max_memory,
+                                           nroots=nroots, verbose=eom.verbose)
         else:
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond,
-                                       tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                       max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           tol=eom.conv_tol, max_cycle=eom.max_cycle,
+                                           max_space=eom.max_space, max_memory=eom.max_memory,
+                                           nroots=nroots, verbose=eom.verbose)
 
         evals_k = evals_k.real
         evals[k] = evals_k
