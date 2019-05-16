@@ -124,6 +124,28 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -108.39289688030243, 9)
         self.assertAlmostEqual(lib.finger(g1), -0.065094188906156134, 7)
 
+    def test_state_specific_scanner(self):
+        mc = mcscf.CASSCF(mf, 4, 4)
+        gs = mc.state_specific_(2).nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.2934575021119, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.044262001087456745, 7)
+
+    def test_state_average_scanner(self):
+        mc = mcscf.CASSCF(mf, 4, 4)
+        gs = mc.state_average_([0.5, 0.5]).nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.38384621394407, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.1034416391211391, 7)
+
+    def test_state_average_mix_scanner(self):
+        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        gs = mc.nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.39289688022976, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.06509352771703128, 7)
+
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
             mc = mcscf.CASSCF(mf.x2c(), 4, 4).run()

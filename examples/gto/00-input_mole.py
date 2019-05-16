@@ -29,6 +29,7 @@ mol.build()
 
 #
 # Shortcuts for initialization.
+#
 # Use the keyword arguments of mol.build() to initialize a molecule
 #
 mol = gto.Mole()
@@ -38,9 +39,15 @@ mol.build(
 )
 
 #
-# Use shortcut function gto.M to initialize a molecule
+# Use shortcut function gto.M or pyscf.M to initialize a molecule
 #
 mol = gto.M(
+    atom = '''O 0 0 0; H  0 1 0; H 0 0 1''',
+    basis = 'sto-3g',
+)
+
+import pyscf
+mol = pyscf.M(
     atom = '''O 0 0 0; H  0 1 0; H 0 0 1''',
     basis = 'sto-3g',
 )
@@ -85,4 +92,7 @@ mol.max_memory = 1000 # in MB
 #    export PYSCF_MAX_MEMORY=10000 # 10 GB
 #    python 00-input_mole.py
 
-
+# Whether to use Cartesian GTOs (New since version 1.5)
+# -----------------------------------------------------
+# default: False
+mol.cart = True

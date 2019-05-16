@@ -38,7 +38,6 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     mc = mc_grad.base
     if mo_coeff is None: mo_coeff = mc._scf.mo_coeff
     if ci is None: ci = mc.ci
-    assert(isinstance(ci, numpy.ndarray))
 
     time0 = time.clock(), time.time()
     log = logger.new_logger(mc_grad, verbose)
@@ -179,7 +178,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     return de
 
 
-def as_scanner(mcscf_grad, state=0):
+def as_scanner(mcscf_grad, state=None):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
 
     The returned solver is a function. This function requires one argument
@@ -202,8 +201,13 @@ def as_scanner(mcscf_grad, state=0):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
     from pyscf import gto
+    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
+    if (state is not None and
+        isinstance(mcscf_grad.base, StateAverageMCSCFSolver)):
+        raise RuntimeError('State-Average MCSCF Gradients does not support '
+                           'state-specific nuclear gradients.')
 
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
 
@@ -216,18 +220,22 @@ def as_scanner(mcscf_grad, state=0):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mc_scanner = self.base
-            if (mc_scanner.fcisolver.nroots > 1 and
-                state >= mc_scanner.fcisolver.nroots):
-                raise ValueError('State ID greater than the number of CASCI roots')
+            if state is None:
+                state = self.state
 
+            mc_scanner = self.base
 # TODO: Check root flip
             e_tot = mc_scanner(mol)
-            if mc_scanner.fcisolver.nroots > 1:
+            ci = mc_scanner.ci
+            if isinstance(mc_scanner, StateAverageMCSCFSolver):
+                e_tot = mc_scanner.e_average
+            elif not isinstance(e_tot, float):
+                if state >= mc_scanner.fcisolver.nroots:
+                    raise ValueError('State ID greater than the number of CASCI roots')
                 e_tot = e_tot[state]
-                ci = mc_scanner.ci[state]
-            else:
-                ci = mc_scanner.ci
+                # target at a specific state, to avoid overwriting self.state
+                # in self.kernel
+                ci = ci[state]
 
             self.mol = mol
             de = self.kernel(ci=ci, state=state, **kwargs)
@@ -238,17 +246,25 @@ def as_scanner(mcscf_grad, state=0):
 class Gradients(rhf_grad.GradientsBasics):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, mc):
-        self.state = 0  # of which the gradients to be computed.
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
+        if isinstance(mc, StateAverageMCSCFSolver):
+            self.state = None  # not a specific state
+        else:
+            self.state = 0  # of which the gradients to be computed.
         rhf_grad.GradientsBasics.__init__(self, mc)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self.base.converged:
-            log.warn('Ground state CASCI not converged')
+            log.warn('Ground state %s not converged', self.base.__class__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
-        if self.state != 0 and self.base.fcisolver.nroots > 1:
+        if self.state is None:
+            weights = self.base.weights
+            log.info('State-average gradients over %d states with weights %s',
+                     len(weights), weights)
+        elif self.state != 0 and self.base.fcisolver.nroots > 1:
             log.info('State ID = %d', self.state)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
@@ -260,12 +276,14 @@ class Gradients(rhf_grad.GradientsBasics):
                state=None, verbose=None):
         log = logger.new_logger(self, verbose)
         if ci is None: ci = self.base.ci
-        if isinstance(ci, (list, tuple)):
+
+        if self.state is None:  # state average MCSCF calculations
+            assert(state is None)
+        elif isinstance(ci, (list, tuple)):
             if state is None:
                 state = self.state
             else:
                 self.state = state
-
             ci = ci[state]
             log.info('Multiple roots are found in CASCI solver. '
                      'Nuclear gradients of root %d are computed.', state)
@@ -299,8 +317,12 @@ class Gradients(rhf_grad.GradientsBasics):
 
     def _finalize(self):
         if self.verbose >= logger.NOTE:
-            logger.note(self, '--------- %s gradients for state %d ----------',
-                        self.base.__class__.__name__, self.state)
+            if self.state is None:
+                logger.note(self, '--------- %s gradients ----------',
+                            self.base.__class__.__name__)
+            else:
+                logger.note(self, '--------- %s gradients for state %d ----------',
+                            self.base.__class__.__name__, self.state)
             self._write(self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 

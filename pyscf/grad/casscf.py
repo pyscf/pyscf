@@ -141,6 +141,7 @@ def as_scanner(mcscf_grad):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
     from pyscf import gto
+    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
@@ -157,6 +158,9 @@ def as_scanner(mcscf_grad):
 
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
+            if isinstance(mc_scanner, StateAverageMCSCFSolver):
+                e_tot = mc_scanner.e_average
+
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de

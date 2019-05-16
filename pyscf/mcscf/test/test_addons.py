@@ -184,9 +184,12 @@ class KnownValues(unittest.TestCase):
         mc.fcisolver = fci.solver(mol, singlet=False)
         mc.state_average_((.64,.36))
         e = mc.kernel()[0]
+        self.assertAlmostEqual(mc.e_average, -108.83342083775061, 7)
         self.assertAlmostEqual(e[0]*.64+e[1]*.36, -108.83342083775061, 7)
         dm1 = mc.analyze()
         self.assertAlmostEqual(lib.finger(dm1[0]), 0.52396929381500434, 4)
+
+        self.assertRaises(TypeError, mc.state_average_, (.64,.36))
 
     def test_state_average_fci_dmrg(self):
         fcisolver1 = fci.direct_spin1_symm.FCISolver(mol)
@@ -228,6 +231,7 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
                                              (0.25,0.25,0.5))
         e = mc.kernel()[0]
+        self.assertAlmostEqual(mc.e_average, -108.80340952016508, 7)
         self.assertAlmostEqual(numpy.dot(e,[.25,.25,.5]), -108.80340952016508, 7)
         dm1 = mc.analyze()
         self.assertAlmostEqual(lib.finger(dm1[0]), 0.52172669549357464, 4)

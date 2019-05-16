@@ -79,7 +79,7 @@ class KnowValues(unittest.TestCase):
             self.assertEqual(eri.shape, (10,10))
 
         ftmp = tempfile.NamedTemporaryFile()
-        ao2mo.kernel(mol, mo, erifile=ftmp, intor='int2e', dataname='eri')
+        ao2mo.kernel(mol, mo, ftmp, intor='int2e', dataname='eri')
         with ao2mo.load(ftmp, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))
 
@@ -96,7 +96,7 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(h5file['eri'].shape, (10,10))
 
         ftmp = tempfile.NamedTemporaryFile()
-        ao2mo.kernel(mol, [mo]*4, erifile=ftmp, intor='int2e', dataname='eri')
+        ao2mo.kernel(mol, [mo]*4, ftmp, intor='int2e', dataname='eri')
         with ao2mo.load(ftmp.name, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))
 

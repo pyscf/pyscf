@@ -92,12 +92,12 @@ mol.build()
 
 
 #
-# Label atoms
+# Atom labels
 # -----------
 # If you want to label one atom to distinguish it from the rest, you can prefix
 # or suffix number or special characters 1234567890~!@#$%^&*()_+.?:<>[]{}|
 # (execept "," and ";") to an atomic symbol.  It allows you specify
-# different basis for the labelled atom (see also 04-input_basis.py)
+# different basis for the labelled atoms (see also 04-input_basis.py)
 #
 # If the decorated atomic symbol is appeared in mol.atom but not mol.basis,
 # the basis parser will remove all decorations and seek the pure atomic symbol
