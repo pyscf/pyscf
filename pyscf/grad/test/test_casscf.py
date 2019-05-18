@@ -125,11 +125,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(g1), -0.065094188906156134, 7)
 
     def test_state_specific_scanner(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
         mc = mcscf.CASSCF(mf, 4, 4)
         gs = mc.state_specific_(2).nuc_grad_method().as_scanner()
         e, de = gs(mol)
-        self.assertAlmostEqual(e, -108.2934575021119, 9)
-        self.assertAlmostEqual(lib.finger(de), -0.044262001087456745, 7)
+        self.assertAlmostEqual(e, -108.68788613661442, 7)
+        self.assertAlmostEqual(lib.finger(de), -0.10695162143777398, 5)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        e1 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201'))
+        e2 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199'))
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
 
     def test_state_average_scanner(self):
         mc = mcscf.CASSCF(mf, 4, 4)
@@ -138,6 +146,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -108.38384621394407, 9)
         self.assertAlmostEqual(lib.finger(de), -0.1034416391211391, 7)
 
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_average
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_average
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
+
     def test_state_average_mix_scanner(self):
         mc = mcscf.CASSCF(mf, 4, 4)
         mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
@@ -145,6 +161,14 @@ class KnownValues(unittest.TestCase):
         e, de = gs(mol)
         self.assertAlmostEqual(e, -108.39289688022976, 9)
         self.assertAlmostEqual(lib.finger(de), -0.06509352771703128, 7)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_average
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_average
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
 
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
