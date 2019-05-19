@@ -21,7 +21,6 @@
 import time
 import copy
 import numpy
-import scipy.misc
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
