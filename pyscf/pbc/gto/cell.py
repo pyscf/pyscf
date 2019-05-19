@@ -23,8 +23,11 @@ import ctypes
 import warnings
 import numpy as np
 import scipy.linalg
-import scipy.misc
-import scipy.special
+try:
+  from scipy.special import factorial2
+except:
+  from scipy.misc import factorial2
+from scipy.special import erf, erfc, erfcx
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
@@ -467,7 +470,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     # than the energy cutoff for ERIs.  The estimated error is roughly
     #     error ~ 64 pi^3 c^2 /((2l+1)!!(4a)^l) (2Ecut)^{l+.5} e^{-Ecut/4a}
     # log_k0 = 3 + np.log(alpha) / 2
-    # l2fac2 = scipy.misc.factorial2(l*2+1)
+    # l2fac2 = factorial2(l*2+1)
     # log_rest = np.log(precision*l2fac2*(4*alpha)**l / (16*np.pi**2*c**2))
     # Enuc_cut = 4*alpha * (log_k0*(2*l+1) - log_rest)
     # Enuc_cut[Enuc_cut <= 0] = .5
@@ -479,7 +482,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     # summation which largely reduces the requirements to the energy cutoff.
     # In practice, the cutoff estimation for ERIs as below should be enough.
     log_k0 = 3 + np.log(alpha) / 2
-    l2fac2 = scipy.misc.factorial2(l*2+1)
+    l2fac2 = factorial2(l*2+1)
     log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (128*np.pi**4*c**4))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     Ecut[Ecut <= 0] = .5
@@ -507,8 +510,8 @@ def error_for_ke_cutoff(cell, ke_cutoff):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        fac = (256*np.pi**4*cs**4 * scipy.misc.factorial2(l*4+3)
-               / scipy.misc.factorial2(l*2+1)**2)
+        fac = (256*np.pi**4*cs**4 * factorial2(l*4+3)
+               / factorial2(l*2+1)**2)
         efac = np.exp(-ke_cutoff/(2*es))
         err1 = .5*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
         errmax = max(errmax, err1.max())
@@ -743,7 +746,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     rLij = None
     r[r<1e-16] = 1e200
     ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs,
-                            scipy.special.erfc(ew_eta * r) / r)
+                            erfc(ew_eta * r) / r)
 
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
@@ -779,15 +782,15 @@ def ewald(cell, ew_eta=None, ew_cut=None):
             large_idx = Gnorm_z > 20.0
             Gnorm_z[large_idx] = 0
             with np.errstate(over='ignore'):
-                ret = np.exp(Gnorm_z)*scipy.special.erfc(Gnorm/2./eta + eta*z)
+                ret = np.exp(Gnorm_z)*erfc(Gnorm/2./eta + eta*z)
             if len(large_idx) > 0:
                 x = Gnorm[large_idx]/2./eta + eta*z
-                ret[large_idx] = np.exp(Gnorm[large_idx]*z-x**2) * scipy.special.erfcx(x)
+                ret[large_idx] = np.exp(Gnorm[large_idx]*z-x**2) * erfcx(x)
             return ret
         def gn(eta,Gnorm,z):
             return np.pi/Gnorm*(fn(eta,Gnorm,z) + fn(eta,Gnorm,-z))
         def gn0(eta,z):
-            return -2*np.pi*(z*scipy.special.erf(eta*z) + np.exp(-(eta*z)**2)/eta/np.sqrt(np.pi))
+            return -2*np.pi*(z*erf(eta*z) + np.exp(-(eta*z)**2)/eta/np.sqrt(np.pi))
         ewg = 0.0
         b = cell.reciprocal_vectors()
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
