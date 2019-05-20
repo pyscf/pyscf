@@ -53,11 +53,11 @@ ekcc = mykcc.ecc
 ekip, wkip = mykcc.ipccsd(nroots=2, kptlist=[0])
 ekea, wkea = mykcc.eaccsd(nroots=2, kptlist=[0])
 
-print 'Difference between gamma/k-point mean-field calculation = %.15g' % (
-    abs(supcell_energy-kpoint_energy))
-print 'Difference between gamma/k-point ccsd calculation = %.15g' % (
-    abs(gccsd_energy - kccsd_energy))
-print 'Difference between gamma/k-point ip-eomccsd calculation = %.15g' % (
-    np.linalg.norm(np.array(eip) - np.array(ekip)))
-print 'Difference between gamma/k-point ea-eomccsd calculation = %.15g' % (
-    np.linalg.norm(np.array(eea) - np.array(ekea)))
+print('Difference between gamma/k-point mean-field calculation = %.15g' % (
+    abs(supcell_energy-kpoint_energy)))
+print('Difference between gamma/k-point ccsd calculation = %.15g' % (
+    abs(gccsd_energy - kccsd_energy)))
+print('Difference between gamma/k-point ip-eomccsd calculation = %.15g' % (
+    np.linalg.norm(np.array(eip) - np.array(ekip))))
+print('Difference between gamma/k-point ea-eomccsd calculation = %.15g' % (
+    np.linalg.norm(np.array(eea) - np.array(ekea))))
