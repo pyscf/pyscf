@@ -15,6 +15,7 @@
 
 import itertools
 import time
+import sys
 import numpy as np
 
 from pyscf import lib
@@ -864,6 +865,8 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
 
     TODO Add more description
     '''
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(sys.stdout, logger.DEBUG)
     nvir = nmo - nocc
     nov = nocc*nvir
 
@@ -907,6 +910,7 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
     # r2 indices (old): (k_i, k_a, i, a), (k_J, J, B)
     # r2 indices (new): k_i, k_J, k_a, i, J, a, B
     r2 = r2.reshape(nkpts, nkpts, nocc, nvir, nkpts, nocc, nvir).transpose(0, 4, 1, 2, 5, 3, 6)
+    log.timer("vector_to_amplitudes_singlet", *cput0)
     return [r1, r2]
 
 
@@ -916,6 +920,8 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
 
     TODO Add more description
     '''
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(sys.stdout, logger.DEBUG)
     # r1 indices: k_i, i, a
     nkpts, nocc, nvir = np.asarray(r1.shape)[[0, 1, 2]]
     nov = nocc * nvir
@@ -955,6 +961,7 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
                                     counter += 1
     vector = vector[:counter]
     vector = np.hstack((r1.ravel(), vector))
+    log.timer("amplitudes_to_vector_singlet", *cput0)
     return vector
 
 
@@ -991,6 +998,9 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
 
 def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
@@ -1230,6 +1240,7 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
         Hr2[ki, kj, ka] += np.einsum('fb,ijaf->ijab', wr1_vv[kf], imds.t2[ki, kj, ka])
 
     vector = amplitudes_to_vector_singlet(Hr1, Hr2, kconserv_r2)
+    log.timer("matvec EOMEE Singlet", *cput0)
     return vector
 
 
