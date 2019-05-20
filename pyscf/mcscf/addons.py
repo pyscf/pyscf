@@ -864,6 +864,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             return rdm1, rdm2
 
         large_ci = None
+        transform_ci_for_orbital_rotation = None
 
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec):

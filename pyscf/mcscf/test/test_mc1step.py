@@ -294,23 +294,23 @@ class KnownValues(unittest.TestCase):
         # Second and third root are degenerated
         #self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
 
-#    def test_state_average_mix(self):
-#        mc = mcscf.CASSCF(m, 4, 4)
-#        cis1 = copy.copy(mc.fcisolver)
-#        cis1.spin = 2
-#        mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.5, .5])
-#        mc.run()
-#        self.assertAlmostEqual(mc.e_tot[0], -108.7506795311190, 9)
-#        self.assertAlmostEqual(mc.e_tot[1], -108.8582272809495, 9)
-#
-#        mc.analyze()
-#        mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
-#
-#        mc.kernel(mo_coeff=mo_coeff)
-#        self.assertAlmostEqual(mc.e_tot[0], -108.7506795311190, 9)
-#        self.assertAlmostEqual(mc.e_tot[1], -108.8582272809495, 9)
-#        self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
-#        self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
+    def test_state_average_mix(self):
+        mc = mcscf.CASSCF(m, 4, 4)
+        cis1 = copy.copy(mc.fcisolver)
+        cis1.spin = 2
+        mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.5, .5])
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot[0], -108.7506795311190, 9)
+        self.assertAlmostEqual(mc.e_tot[1], -108.8582272809495, 9)
+
+        mc.analyze()
+        mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
+
+        mc.kernel(mo_coeff=mo_coeff)
+        self.assertAlmostEqual(mc.e_tot[0], -108.7506795311190, 9)
+        self.assertAlmostEqual(mc.e_tot[1], -108.8582272809495, 9)
+        self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
+        self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
 
 
 if __name__ == "__main__":
