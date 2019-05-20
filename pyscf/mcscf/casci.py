@@ -671,14 +671,15 @@ class CASCI(lib.StreamObject):
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
         self.ncas = ncas
-        self.nelecas = nelecas
         if isinstance(nelecas, (int, numpy.integer)):
             nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
-            nelecas = (neleca, nelecb)
+            self.nelecas = (neleca, nelecb)
+        else:
+            self.nelecas = (nelecas[0],nelecas[1])
         self.ncore = ncore
         singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
-                   and nelecas[0] == nelecas[1])  # leads to direct_spin1
+                   and self.nelecas[0] == self.nelecas[1])  # leads to direct_spin1
         self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = getattr(__config__,
@@ -703,10 +704,7 @@ class CASCI(lib.StreamObject):
     @property
     def ncore(self):
         if self._ncore is None:
-            if isinstance(self.nelecas, (int, numpy.integer)):
-                ncorelec = self.mol.nelectron - self.nelecas
-            else:
-                ncorelec = self.mol.nelectron - sum(self.nelecas)
+            ncorelec = self.mol.nelectron - sum(self.nelecas)
             assert(ncorelec % 2 == 0)
             return ncorelec // 2
         else:
@@ -723,12 +721,8 @@ class CASCI(lib.StreamObject):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        if isinstance(self.nelecas, (int, numpy.integer)):
-            log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
-                     self.nelecas, ncas, ncore, nvir)
-        else:
-            log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
-                     self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
