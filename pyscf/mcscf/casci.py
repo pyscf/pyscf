@@ -134,16 +134,22 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         if casscf._scf.mo_coeff is not None:
             addons.map2hf(casscf, casscf._scf.mo_coeff)
 
-        if getattr(casscf.fcisolver, 'large_ci', None) and ci is not None:
+        if (ci is not None and
+            (getattr(casscf.fcisolver, 'large_ci', None) or
+             getattr(casscf.fcisolver, 'states_large_ci', None))):
             log.info('** Largest CI components **')
             if isinstance(ci, (tuple, list)):
-                # Note: function large_ci does not support
-                # state_average_mix_ mcscf object
+                if hasattr(casscf.fcisolver, 'states_large_ci'):
+                    # defined in state_average_mix_ mcscf object
+                    res = casscf.fcisolver.states_large_ci(ci, casscf.ncas, casscf.nelecas,
+                                                           large_ci_tol, return_strs=False)
+                else:
+                    res = [casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas,
+                                                     large_ci_tol, return_strs=False)
+                           for civec in ci]
                 for i, civec in enumerate(ci):
-                    res = casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas,
-                                                    large_ci_tol, return_strs=False)
                     log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
-                    for c,ia,ib in res:
+                    for c,ia,ib in res[i]:
                         log.info('  %-20s %-30s %.12f', ia, ib, c)
             else:
                 log.info('  [alpha occ-orbitals] [beta occ-orbitals]            CI coefficient')
@@ -280,6 +286,8 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
               all(isinstance(x[0], numpy.ndarray) for x in ci)):
             fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
                       for x in ci]
+    elif getattr(mc.fcisolver, 'states_transform_ci_for_orbital_rotation', None):
+        fcivec = mc.fcisolver.states_transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
 
     if fcivec is None:
         log.info('FCI vector not available, call CASCI to update wavefunction')

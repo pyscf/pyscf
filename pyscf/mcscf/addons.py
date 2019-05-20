@@ -847,11 +847,9 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                           for solver in fcisolvers)
     has_large_ci = all(getattr(solver, 'large_ci', None)
                        for solver in fcisolvers)
+    has_transform_ci = all(getattr(solver, 'transform_ci_for_orbital_rotation', None)
+                           for solver in fcisolvers)
 
-    def collect(items):
-        items = list(items)
-        cols = [[item[i] for item in items] for i in range(len(items[0]))]
-        return cols
     def loop_solver(solvers, ci0):
         p0 = 0
         for solver in solvers:
@@ -875,6 +873,10 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             nelec = numpy.sum(nelec)
             nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
         return nelec
+    def collect(fname, ci0, norb, nelec, *args, **kwargs):
+        for solver, c in loop_civecs(fcisolvers, ci0):
+            fn = getattr(solver, fname)
+            yield fn(c, norb, get_nelec(solver, nelec), *args, **kwargs)
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self, mol):
@@ -929,14 +931,13 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
 
         def make_rdm1(self, ci0, norb, nelec, **kwargs):
             dm1 = 0
-            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1 += weights[i]*solver.make_rdm1(c, norb, get_nelec(solver, nelec), **kwargs)
+            for i, dm in enumerate(collect('make_rdm1', ci0, norb, nelec, **kwargs)):
+                dm1 += weights[i] * dm
             return dm1
 
         def make_rdm1s(self, ci0, norb, nelec, **kwargs):
             dm1a, dm1b = 0, 0
-            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1s = solver.make_rdm1s(c, norb, get_nelec(solver, nelec), **kwargs)
+            for i, dm1s in enumerate(collect('make_rdm1s', ci0, norb, nelec, **kwargs)):
                 dm1a += weights[i] * dm1s[0]
                 dm1b += weights[i] * dm1s[1]
             return dm1a, dm1b
@@ -944,14 +945,10 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         def make_rdm12(self, ci0, norb, nelec, **kwargs):
             rdm1 = 0
             rdm2 = 0
-            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1, dm2 = solver.make_rdm12(c, norb, get_nelec(solver, nelec), **kwargs)
+            for i, (dm1, dm2) in enumerate(collect('make_rdm12', ci0, norb, nelec, **kwargs)):
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
-
-        large_ci = None
-        transform_ci_for_orbital_rotation = None
 
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec, *args, **kwargs):
@@ -959,9 +956,24 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                 weights = self.weights
                 return numpy.dot(ss, weights), numpy.dot(multip, weights)
             def states_spin_square(self, ci0, norb, nelec, *args, **kwargs):
-                return collect(solver.spin_square(c0, norb, get_nelec(solver, nelec),
-                                                  *args, **kwargs)
-                               for solver, c0 in loop_civecs(fcisolvers, ci0))
+                res = list(collect('spin_square', ci0, norb, nelec, *args, **kwargs))
+                ss = [x[0] for x in res]
+                multip = [x[1] for x in res]
+                return ss, multip
+        else:
+            spin_square = None
+
+        large_ci = None
+        if has_large_ci:
+            def states_large_ci(self, fcivec, norb, nelec, *args, **kwargs):
+                return list(collect('large_ci', fcivec, norb, nelec, *args, **kwargs))
+
+        transform_ci_for_orbital_rotation = None
+        if has_transform_ci:
+            def states_transform_ci_for_orbital_rotation(self, fcivec, norb, nelec,
+                                                         *args, **kwargs):
+                return list(collect('transform_ci_for_orbital_rotation',
+                                    fcivec, norb, nelec, *args, **kwargs))
 
     fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
