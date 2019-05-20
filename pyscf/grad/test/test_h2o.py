@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
         mycc = cc.CCSD(rhf)
         mycc.kernel()
         mycc.solve_lambda()
-        g1 = grad.ccsd.kernel(mycc)
+        g1 = grad.ccsd.Gradients(mycc).kernel()
         self.assertAlmostEqual(finger(g1), 0.065802850540912422, 6)
 
     def test_rks_lda(self):

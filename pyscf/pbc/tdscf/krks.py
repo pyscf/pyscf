@@ -38,6 +38,22 @@ RPA = KTDDFT = TDDFT = krhf.TDHF
 TDDFTNoHybrid = TDDFT
 
 
+def tddft(mf):
+    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    if mf._numint.libxc.is_hybrid_xc(mf.xc):
+        return TDDFT(mf)
+    else:
+        return TDDFTNoHybrid(mf)
+
+from pyscf.pbc import dft
+dft.krks.KRKS.TDA   = lib.class_as_method(KTDA)
+dft.krks.KRKS.TDHF  = None
+dft.krks.KRKS.TDDFT = tddft
+dft.kroks.KROKS.TDA   = None
+dft.kroks.KROKS.TDHF  = None
+dft.kroks.KROKS.TDDFT = None
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto
     from pyscf.pbc import scf

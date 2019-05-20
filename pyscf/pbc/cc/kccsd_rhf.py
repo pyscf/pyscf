@@ -1103,6 +1103,11 @@ def _mem_usage(nkpts, nocc, nvir):
     return incore * 16 / 1e6, outcore * 16 / 1e6, basic * 16 / 1e6
 
 
+from pyscf.pbc import scf
+scf.khf.KRHF.CCSD = lib.class_as_method(KRCCSD)
+scf.krohf.KROHF.CCSD = None
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc
 

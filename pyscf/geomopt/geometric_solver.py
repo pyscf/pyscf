@@ -25,9 +25,17 @@ import geometric.molecule
 from pyscf import lib
 from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
 from pyscf import __config__
+from pyscf.grad.rhf import GradientsBasics
+
+try:
+    from geometric import internal, optimize, nifty, engine, molecule
+except ImportError:
+    msg = ('Geometry optimizer geomeTRIC not found.\ngeomeTRIC library '
+           'can be found on github https://github.com/leeping/geomeTRIC.\n'
+           'You can install geomeTRIC with "pip install geometric"')
+    raise ImportError(msg)
 
 # Overwrite units defined in geomeTRIC
-from geometric import internal, optimize, nifty, engine, molecule
 internal.ang2bohr = optimize.ang2bohr = nifty.ang2bohr = 1./lib.param.BOHR
 engine.bohr2ang = internal.bohr2ang = molecule.bohr2ang = nifty.bohr2ang = \
         optimize.bohr2ang = lib.param.BOHR
@@ -49,6 +57,7 @@ class PySCFEngine(geometric.engine.Engine):
 
         self.scanner = scanner
         self.cycle = 0
+        self.e_last = 0
         self.callback = None
         self.maxsteps = 100
         self.assert_convergence = False
@@ -60,8 +69,8 @@ class PySCFEngine(geometric.engine.Engine):
 
         g_scanner = self.scanner
         mol = self.mol
-        lib.logger.note(g_scanner, '\nGeometry optimization step %d', self.cycle)
         self.cycle += 1
+        lib.logger.note(g_scanner, '\nGeometry optimization cycle %d', self.cycle)
 
         # geomeTRIC requires coords and gradients in atomic unit
         coords = coords.reshape(-1,3)
@@ -69,6 +78,10 @@ class PySCFEngine(geometric.engine.Engine):
             dump_mol_geometry(mol, coords*lib.param.BOHR)
         mol.set_geom_(coords, unit='Bohr')
         energy, gradients = g_scanner(mol)
+        lib.logger.note(g_scanner,
+                        'cycle %d: E = %.12g  dE = %g  norm(grad) = %g', self.cycle,
+                        energy, energy - self.e_last, numpy.linalg.norm(gradients))
+        self.e_last = energy
 
         if callable(self.callback):
             self.callback(locals())
@@ -100,6 +113,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
+    elif isinstance(method, GradientsBasics):
+        g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
     else:
@@ -165,7 +180,9 @@ class GeometryOptimizer(lib.StreamObject):
     def mol(self, x):
         self.method.mol = x
 
-    def kernel(self):
+    def kernel(self, params=None):
+        if params is not None:
+            self.params.update(params)
         self.converged, self.mol = \
                 kernel(self.method, callback=self.callback,
                        maxsteps=self.max_cycle, **self.params)

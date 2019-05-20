@@ -15,6 +15,9 @@
 
 from pyscf.pbc import scf
 from pyscf.pbc.cc import ccsd
+from pyscf.pbc.cc import kccsd_rhf as krccsd
+from pyscf.pbc.cc import kccsd_uhf as kuccsd
+from pyscf.pbc.cc import kccsd     as kgccsd
 
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_rhf(mf)

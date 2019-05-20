@@ -33,8 +33,10 @@ def as_pyscf_method(mol, scan_function):
     >>> m = as_pyscf_method(mol, scan_fn)
     >>> pyscf.geomopt.berny_solver.kernel(m)
     '''
+    from pyscf.grad.rhf import GradientsBasics
     class OmniGrad(lib.GradScanner):
         def __init__(self, g):
+            self.__dict__.update(g.__dict__)
             self.base = g.base
         def __call__(self, mol):
             self.e_tot, grad = scan_function(mol)
@@ -43,9 +45,7 @@ def as_pyscf_method(mol, scan_function):
         def converged(self):
             return True
 
-    class Grad(object):
-        def __init__(self, base):
-            self.base = base
+    class Gradients(GradientsBasics):
         def as_scanner(self):
             return OmniGrad(self)
 
@@ -54,8 +54,9 @@ def as_pyscf_method(mol, scan_function):
             self.mol = mol
             self.verbose = mol.verbose
             self.stdout = mol.stdout
-        def nuc_grad_method(self):
-            return Grad(self)
+        def Gradients(self):
+            return Gradients(self)
+        nuc_grad_method = Gradients
     return OmniMethod(mol)
 
 def dump_mol_geometry(mol, new_coords, log=None):

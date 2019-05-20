@@ -42,8 +42,8 @@ mc = mcscf.CASCI(mf, 6, 6)
 mc.run()
 
 #
-# The other is to patch the MCSCF object with the background charge
-# information.
+# The other method is to patch the MCSCF object with the background charges.
+# Note: it updates the underlying SCF object inplace.
 #
 mo_init = mf.mo_coeff
 

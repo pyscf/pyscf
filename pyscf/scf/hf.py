@@ -26,6 +26,7 @@ import time
 from functools import reduce
 import numpy
 import scipy.linalg
+import h5py
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -1155,7 +1156,11 @@ def as_scanner(mf):
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
             mf_obj = self
-            while mf_obj is not None:
+            mf_objs = []
+            while (mf_obj is not None and
+                   # avoid endless loop caused by circular reference
+                   mf_obj not in mf_objs):
+                mf_objs.append(mf_obj)
                 mf_obj.reset(mol)
                 for key in ('with_df', 'with_x2c', 'grids', 'nlcgrids',
                             'with_solvent', 'with_dftd3'):
@@ -1168,10 +1173,9 @@ def as_scanner(mf):
                 dm0 = kwargs.pop('dm0')
             elif self.mo_coeff is None:
                 dm0 = None
-            elif self.chkfile:
+            elif self.chkfile and h5py.is_hdf5(self.chkfile):
                 dm0 = self.from_chk(self.chkfile)
             else:
-                from pyscf.scf import addons
                 dm0 = self.make_rdm1()
                 # dm0 form last calculation cannot be used in the current
                 # calculation if a completely different system is given.
@@ -1182,6 +1186,7 @@ def as_scanner(mf):
                 # last calculation.
                 if dm0.shape[-1] != mol.nao:
                     #TODO:
+                    #from pyscf.scf import addons
                     #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
                     #    dm0 = None
                     #elif non-relativistic:
@@ -1338,9 +1343,8 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if not mol.incore_anyway and not self._is_mem_enough():
-# Should I lazy initialize direct SCF?
-            self.opt = self.init_direct_scf(mol)
+        # lazily initialize direct SCF
+        self.opt = None
         return self
 
     def dump_flags(self):

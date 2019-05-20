@@ -489,6 +489,9 @@ class StreamObject(object):
             setattr(self, k, v)
         return self
 
+    # An alias to .set method
+    __call__ = set
+
     def apply(self, fn, *args, **kwargs):
         '''
         Apply the fn to rest arguments:  return fn(*args, **kwargs).  The
@@ -614,6 +617,7 @@ def class_as_method(cls):
         return cls(obj, *args, **kwargs)
     fn.__doc__ = cls.__doc__
     fn.__name__ = cls.__name__
+    fn.__module__ = cls.__module__
     return fn
 
 def import_as_method(fn, default_keys=None):

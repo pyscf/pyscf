@@ -373,7 +373,7 @@ class UHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
-        self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
+        self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
                            'with_breit', 'opt'))
 
@@ -418,8 +418,7 @@ class UHF(hf.SCF):
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if self.direct_scf:
-            self.opt = self.init_direct_scf(self.mol)
+        self.opt = None
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -478,7 +477,7 @@ class UHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
         log = logger.new_logger(self)
-        if self.direct_scf and self.opt[0] is None:
+        if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
         opt_llll, opt_ssll, opt_ssss, opt_gaunt = self.opt
 
@@ -564,7 +563,7 @@ class UHF(hf.SCF):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         self.mol = mol
         self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
-        self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
+        self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
 
 DHF = UHF

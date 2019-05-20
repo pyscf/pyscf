@@ -176,6 +176,12 @@ class GCCSD(ccsd.CCSD):
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vec, nmo, nocc)
 
+    def vector_size(self, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        return nocc * nvir + nocc*(nocc-1)//2*nvir*(nvir-1)//2
+
     def amplitudes_from_rccsd(self, t1, t2, orbspin=None):
         return amplitudes_from_rccsd(t1, t2, orbspin)
 

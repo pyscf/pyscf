@@ -1947,6 +1947,46 @@ class Mole(lib.StreamObject):
     def ms(self, x):
         self.spin = int(round(2*x, 4))
 
+    def __getattr__(self, key):
+        '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
+        from Mole object.
+        '''
+        if key[:2] == '__':  # Skip Python builtins
+            raise AttributeError('Mole object has no attribute %s' % key)
+        elif key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf import __all__
+        from pyscf import scf, dft
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if 'TD' in key[:3]:
+            if key in ('TDHF', 'TDA'):
+                mf = scf.HF(self)
+            else:
+                mf = dft.KS(self)
+                xc = key.split('TD', 1)[1]
+                if xc in dft.XC:
+                    mf.xc = xc
+                    key = 'TDDFT'
+        else:
+            mf = scf.HF(self)
+
+        method = getattr(mf, key, None)
+        if method is None:
+            raise AttributeError('Mole object has no attribute %s' % key)
+
+        mf.run()
+        return method
+
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
 # def __copy__(self):
@@ -2984,7 +3024,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    eval_gto = eval_gto
+    eval_ao = eval_gto = eval_gto
 
     energy_nuc = energy_nuc
     def get_enuc(self):
@@ -3065,31 +3105,65 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
-            from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
-            # Import all available modules. Some methods are registered when
-            # loading these modules.
-            from pyscf import grad, hessian, solvent, qmmm, prop
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, mcscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            if fn.upper() == 'TDHF':
-                return tdscf.TDHF(scf.HF(self).run(), *args, **kwargs)
-            else:
-                method = getattr(tdscf, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
+            method = getattr(self, fn.upper())
+            return method(*args, **kwargs)
         else:
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
+
+    def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
+              **kwargs):
+        '''Integral transformation for arbitrary orbitals and arbitrary
+        integrals.  See more detalied documentation in func:`ao2mo.kernel`.
+
+        Args:
+            mo_coeffs (an np array or a list of arrays) : A matrix of orbital
+                coefficients if it is a numpy ndarray, or four sets of orbital
+                coefficients, corresponding to the four indices of (ij|kl).
+
+        Kwargs:
+            erifile (str or h5py File or h5py Group object) : The file/object
+                to store the transformed integrals.  If not given, the return
+                value is an array (in memory) of the transformed integrals.
+            dataname : str
+                *Note* this argument is effective if erifile is given.
+                The dataset name in the erifile (ref the hierarchy of HDF5 format
+                http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
+                different dataname, the existed integral file can be reused.  If
+                the erifile contains the specified dataname, the old integrals
+                will be replaced by the new one under the key dataname.
+            intor (str) : integral name Name of the 2-electron integral.  Ref
+                to :func:`getints_by_shell`
+                for the complete list of available 2-electron integral names
+
+        Returns:
+            An array of transformed integrals if erifile is not given.
+            Otherwise, return the file/fileobject if erifile is assigned.
+
+
+        Examples:
+
+        >>> import pyscf
+        >>> mol = pyscf.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+        >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
+
+        >>> eri1 = mol.ao2mo(mo1)
+        >>> print(eri1.shape)
+        (55, 55)
+
+        >>> eri1 = mol.ao2mo(mo1, compact=False)
+        >>> print(eri1.shape)
+        (100, 100)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2))
+        >>> print(eri1.shape)
+        (80, 36)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2), erifile='water.h5')
+        '''
+        from pyscf import ao2mo
+        return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT

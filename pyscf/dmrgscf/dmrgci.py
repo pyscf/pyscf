@@ -55,7 +55,7 @@ except ImportError:
     settings.BLOCKVERSION = getattr(__config__, 'dmrgscf_BLOCKVERSION', None)
     if (settings.BLOCKEXE is None or settings.BLOCKSCRATCHDIR is None):
         import sys
-        sys.stderr.write('settings.py not found.  Please create %s\n'
+        sys.stderr.write('settings.py not found for module dmrgci.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 
@@ -284,7 +284,14 @@ class DMRGCI(lib.StreamObject):
             neleca = nelec - nelecb
         else :
             neleca, nelecb = nelec
-        dm1, dm2 = self.make_rdm12(state, norb, nelec, link_index, **kwargs)
+
+        # DO NOT call self.make_rdm12. Calling DMRGCI.make_rdm12 instead of
+        # self.make_rdm12 because self.make_rdm12 may be modified
+        # by state-average mcscf solver (see function mcscf.addons.state_average).
+        # When calling make_rdm1s from state-average FCI solver,
+        # DMRGCI.make_rdm12 ensures that the basic make_rdm12 method is called.
+        # (Issue https://github.com/pyscf/pyscf/issues/335)
+        dm1, dm2 = DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)
         dm1n = (2-(neleca+nelecb)/2.) * dm1 - numpy.einsum('pkkq->pq', dm2)
         dm1n *= 1./(neleca-nelecb+1)
         dm1a, dm1b = (dm1+dm1n)*.5, (dm1-dm1n)*.5
@@ -297,7 +304,7 @@ class DMRGCI(lib.StreamObject):
             neleca = nelec - nelecb
         else :
             neleca, nelecb = nelec
-        dm1, dm2 = self.trans_rdm12(statebra, stateket, norb, nelec, link_index, **kwargs)
+        dm1, dm2 = DMRGCI.trans_rdm12(self, statebra, stateket, norb, nelec, link_index, **kwargs)
         dm1n = (2-(neleca+nelecb)/2.) * dm1 - numpy.einsum('pkkq->pq', dm2)
         dm1n *= 1./(neleca-nelecb+1)
         dm1a, dm1b = (dm1+dm1n)*.5, (dm1-dm1n)*.5
@@ -305,7 +312,7 @@ class DMRGCI(lib.StreamObject):
 
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
         # Avoid calling self.make_rdm12 because it may be overloaded
-        return self.make_rdm12(state, norb, nelec, link_index, **kwargs)[0]
+        return DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)[0]
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -334,7 +341,7 @@ class DMRGCI(lib.StreamObject):
         return onepdm, twopdm
 
     def trans_rdm1(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
-        return self.trans_rdm12(statebra, stateket, norb, nelec, link_index, **kwargs)[0]
+        return DMRGCI.trans_rdm12(self, statebra, stateket, norb, nelec, link_index, **kwargs)[0]
 
     def trans_rdm12(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0

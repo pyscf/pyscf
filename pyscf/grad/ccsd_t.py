@@ -21,19 +21,26 @@ from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
 from pyscf.grad import ccsd as ccsd_grad
 
 # Only works with canonical orbitals
-def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           mf_grad=None, verbose=lib.logger.INFO):
+def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
+              verbose=lib.logger.INFO):
+    mycc = cc_grad.base
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
+    if eris is None: eris = mycc.ao2mo()
     d1 = ccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris,
                                           for_grad=True)
     fd2intermediate = lib.H5TmpFile()
     d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris,
                                     fd2intermediate, True)
-    return ccsd_grad.kernel(mycc, t1, t2, l1, l2, eris, atmlst, mf_grad,
-                            d1, d2, verbose)
+    cc_grad = ccsd_grad.Gradients(mycc)
+    de = ccsd_grad.grad_elec(cc_grad, t1, t2, l1, l2, eris, atmlst,
+                             d1, d2, verbose)
+    return de
+
+class Gradients(ccsd_grad.Gradients):
+    grad_elec = grad_elec
 
 
 if __name__ == '__main__':
@@ -64,7 +71,7 @@ if __name__ == '__main__':
     print(ehf+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
-    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
+    g1 = Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
     print(g1)
 
     myccs = mycc.as_scanner()
@@ -105,7 +112,7 @@ H          0.96345360     1.30488291    -0.10782263
     print(ehf0+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
-    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
+    g1 = Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
     print(g1)
 
     myccs = mycc.as_scanner()

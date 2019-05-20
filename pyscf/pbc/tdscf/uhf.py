@@ -45,49 +45,10 @@ class TDHF(uhf.TDHF):
     def nuc_grad_method(self):
         raise NotImplementedError
 
-
 RPA = TDUHF = TDHF
 
 
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom = [
-        ['H' , (0. , 0. , .917)],
-        ['F' , (0. , 0. , 0.)], ]
-    mol.basis = '631g'
-    mol.build()
-
-    mf = scf.UHF(mol).run()
-    td = TDA(mf)
-    td.nstates = 5
-    td.verbose = 3
-    print(td.kernel()[0] * 27.2114)
-# [ 11.01748568  11.01748568  11.90277134  11.90277134  13.16955369]
-
-    td = TDHF(mf)
-    td.nstates = 5
-    td.verbose = 3
-    print(td.kernel()[0] * 27.2114)
-# [ 10.89192986  10.89192986  11.83487865  11.83487865  12.6344099 ]
-
-    mol.spin = 2
-    mf = scf.UHF(mol).run()
-    td = TDA(mf)
-    td.nstates = 6
-    td.verbose = 3
-    print(td.kernel()[0] * 27.2114)
-# FIXME:  first state
-# [ 0.02231607274  3.32113736  18.55977052  21.01474222  21.61501962  25.0938973 ]
-
-    td = TDHF(mf)
-    td.nstates = 4
-    td.verbose = 3
-    print(td.kernel()[0] * 27.2114)
-# [ 3.31267103  18.4954748   20.84935404  21.54808392]
+from pyscf.pbc import scf
+scf.uhf.UHF.TDA = lib.class_as_method(TDA)
+scf.uhf.UHF.TDHF = lib.class_as_method(TDHF)
 

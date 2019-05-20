@@ -66,11 +66,11 @@ class KnownValues(unittest.TestCase):
     def test_with_x2c_scanner(self):
         mc1 = mcscf.UCASCI(m, 5, (4,2)).x2c()
         mc1.kernel()
-        self.assertAlmostEqual(mc1.e_tot, -75.782413394125896, 9)
+        self.assertAlmostEqual(mc1.e_tot, -75.782441558951504, 8)
 
         mc1 = mcscf.UCASCI(m, 5, (4,2)).x2c().as_scanner().as_scanner()
         mc1(mol)
-        self.assertAlmostEqual(mc1.e_tot, -75.782441558951504, 9)
+        self.assertAlmostEqual(mc1.e_tot, -75.782441558951504, 8)
 
 #    def test_fix_spin_(self):
 #        mc1 = mcscf.CASCI(m, 4, 4)

@@ -59,7 +59,7 @@ class KnowValues(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print('Full Tests for ao2mo.incore')
+    print('Full Tests for ao2mo.semi_incore')
     unittest.main()
 
 

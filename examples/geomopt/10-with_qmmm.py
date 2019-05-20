@@ -6,7 +6,6 @@ Optimize molecular geometry within the environment of QM/MM charges.
 
 import numpy
 from pyscf import gto, scf, cc, qmmm
-from pyscf.geomopt import berny_solver
 
 mol = gto.M(atom='''
 C       1.1879  -0.3829 0.0000
@@ -27,8 +26,13 @@ charges = (numpy.arange(5) + 1.) * -.001
 mf = qmmm.mm_charge(scf.RHF(mol), coords, charges)
 #mf.verbose=4
 #mf.kernel()
-mol1 = berny_solver.optimize(mf)
+mol1 = mf.Gradients().optimizer(solver='berny').kernel()
+# or
+#from pyscf.geomopt import berny_solver
+#mol1 = berny_solver.optimize(mf)
 
-from pyscf.geomopt import geometric_solver
 mycc = cc.CCSD(mf)
-mol1 = geometric_solver.optimize(mycc)
+mol1 = mycc.Gradients().optimizer().kernel()
+# or
+#from pyscf.geomopt import geometric_solver
+#mol1 = geometric_solver.optimize(mycc)

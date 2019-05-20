@@ -1127,6 +1127,10 @@ def _make_df_eris(cc, mo_coeff=None):
     return eris
 
 
+from pyscf.pbc import scf
+scf.kuhf.KUHF.CCSD = lib.class_as_method(KUCCSD)
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc
     from pyscf import lo

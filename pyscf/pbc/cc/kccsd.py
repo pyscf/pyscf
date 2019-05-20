@@ -799,6 +799,11 @@ class _IMDS:
         self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
+
+from pyscf.pbc import scf
+scf.kghf.KGHF.CCSD = lib.class_as_method(KGCCSD)
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc
 

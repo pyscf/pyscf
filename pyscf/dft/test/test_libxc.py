@@ -101,8 +101,8 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('APBE,')
         self.assertEqual(fn_facs, [(184, 1)])
 
-        hyb, fn_facs = dft.libxc.parse_xc('TF,')
-        self.assertEqual(fn_facs, [(50, 1)])
+        #hyb, fn_facs = dft.libxc.parse_xc('TF,')
+        #self.assertEqual(fn_facs, [(50, 1)])
 
         ref = [(1, 1), (7, 1)]
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))
@@ -119,6 +119,9 @@ class KnownValues(unittest.TestCase):
 
         self.assertEqual(dft.libxc.parse_xc('Xpbe,')[1], [(123,1)])
         self.assertEqual(dft.libxc.parse_xc('pbe,' )[1], [(101,1)])
+        hyb, fn_facs = dft.libxc.parse_xc('PBE*.4+LDA')
+        self.assertEqual(fn_facs, [(101, 0.4), (130, 0.4), (1, 1)])
+        self.assertRaises(KeyError, dft.libxc.parse_xc, 'PBE+VWN')
 
         self.assertTrue (dft.libxc.is_meta_gga('m05'))
         self.assertFalse(dft.libxc.is_meta_gga('pbe0'))

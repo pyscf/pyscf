@@ -19,6 +19,7 @@ import numpy
 from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci import rdm
+from pyscf.fci.addons import _unpack_nelec
 
 librdm = lib.load_library('libfci')
 
@@ -248,17 +249,6 @@ def contract_ss(fcivec, norb, nelec):
     ci1 *= .5
     ci1 += (neleca-nelecb)**2*.25*fcivec
     return ci1
-
-def _unpack_nelec(nelec, spin=None):
-    if spin is None:
-        spin = 0
-    else:
-        nelec = int(numpy.sum(nelec))
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = (nelec-spin)//2
-        neleca = nelec - nelecb
-        nelec = neleca, nelecb
-    return nelec
 
 
 if __name__ == '__main__':

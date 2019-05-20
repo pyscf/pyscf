@@ -8,7 +8,7 @@ berny_solver.
 
 import numpy as np
 from pyscf import gto, scf
-from pyscf.geomopt import berny_solver, as_pyscf_method
+from pyscf.geomopt import berny_solver, geometric_solver, as_pyscf_method
 
 mol = gto.M(atom='N 0 0 0; N 0 0 1.8', unit='Bohr', basis='ccpvdz')
 mf = scf.RHF(mol)
@@ -38,3 +38,9 @@ print(mol.atom_coords())
 
 print('New geometry (Bohr)')
 print(new_mol.atom_coords())
+
+#
+# Geometry can be also optimized with geomeTRIC library
+#
+new_mol = geometric_solver.optimize(fake_method)
+
