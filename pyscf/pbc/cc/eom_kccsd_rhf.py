@@ -937,8 +937,8 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
                 for ka in range(nkpts):
                     kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
 
-    vector = r1.ravel()
-
+    vector = np.empty(r2.size, dtype=r2.dtype)
+    counter = 0
     for ki in range(nkpts):
         for ka in range(nkpts):
             for i in range(nocc):
@@ -951,8 +951,10 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
                                 kkjb = kkov_idx[kj, kb, j, b]
                                 kjb = kov_idx[kj, j, b]
                                 if kkia >= kkjb:
-                                    vector = np.hstack((vector, r2[kkia, kjb]))
-
+                                    vector[counter] = r2[kkia, kjb]
+                                    counter += 1
+    vector = vector[:counter]
+    vector = np.hstack((r1.ravel(), vector))
     return vector
 
 
