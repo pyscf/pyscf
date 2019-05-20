@@ -272,14 +272,16 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 
-    # Note: function transform_ci_for_orbital_rotation does not support
-    # state_average_mix_ mcscf object
-    if isinstance(ci, numpy.ndarray):
-        fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
-    elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
-        fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
-                  for x in ci]
-    else:
+    fcivec = None
+    if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
+        if isinstance(ci, numpy.ndarray):
+            fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
+        elif (isinstance(ci, (tuple, list)) and
+              all(isinstance(x[0], numpy.ndarray) for x in ci)):
+            fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
+                      for x in ci]
+
+    if fcivec is None:
         log.info('FCI vector not available, call CASCI to update wavefunction')
         mocas = mo_coeff1[:,ncore:nocc]
         hcore = mc.get_hcore()

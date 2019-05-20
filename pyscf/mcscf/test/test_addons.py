@@ -241,7 +241,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(dm1[1]), 0.53366776017869022, 4)
         self.assertAlmostEqual(lib.finger(dm1[0]+dm1[1]), 1.0553944556722636, 4)
 
-        # mc.cas_natorb is not supported
+        mc.cas_natorb()
 
     def test_state_average_mix_fci_dmrg(self):
         fcisolver1 = fci.direct_spin0_symm.FCISolver(mol)
@@ -281,7 +281,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(dm1[0]), 1.0553944556722636, 4)
         self.assertEqual(dm1[1], None)
 
-        # mc.cas_natorb is not supported
+        mc.cas_natorb()
 
     def test_state_specific(self):
         mc = mcscf.CASSCF(mfr, 4, 4)
