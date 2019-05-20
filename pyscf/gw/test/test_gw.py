@@ -169,6 +169,6 @@ class H20KSTest(unittest.TestCase):
         assert eri is not None
         gw_slow = GW_slow(self.td_proxy_model, eri=eri)
         gw_slow.kernel()
-        # print self.gw.mo_energy
+        # print(self.gw.mo_energy)
 
         testing.assert_allclose(gw_slow.mo_energy, self.gw.mo_energy, atol=1e-6)

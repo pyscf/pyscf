@@ -1,1 +1,1 @@
-/home/pulkin/Projects/pyscf-mine/pyscf/pyscf/pbc/tdscf/test/test_common.py
+../../tdscf/test/test_common.py

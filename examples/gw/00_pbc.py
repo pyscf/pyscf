@@ -28,4 +28,4 @@ model_td.kernel()
 model_gw = KRGW(model_td)
 model_gw.kernel()
 
-print model_gw.mo_energy
+print(model_gw.mo_energy)
