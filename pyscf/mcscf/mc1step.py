@@ -712,8 +712,12 @@ class CASSCF(casci.CASCI):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
+        if isinstance(self.nelecas, (int, numpy.integer)):
+            log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
+                     self.nelecas, ncas, ncore, nvir)
+        else:
+            log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+                     self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         assert(nvir >= 0 and ncore >= 0 and ncas >= 0)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))

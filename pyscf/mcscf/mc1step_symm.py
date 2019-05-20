@@ -34,15 +34,12 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         mc1step.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
 
         assert(self.mol.symmetry)
-        singlet = (getattr(__config__, 'mcscf_mc1step_CASCI_fcisolver_direct_spin0', False)
-                   and self.nelecas[0] == self.nelecas[1])
-        self.fcisolver = fci.solver(self.mol, singlet, symm=True)
-        self.fcisolver.max_cycle = getattr(__config__,
-                                           'mcscf_mc1step_CASSCF_fcisolver_max_cycle', 50)
-        self.fcisolver.conv_tol = getattr(__config__,
-                                          'mcscf_mc1step_CASSCF_fcisolver_conv_tol', 1e-8)
-        self.fcisolver.lindep = getattr(__config__,
-                                        'mcscf_mc1step_CASCI_fcisolver_lindep', 1e-10)
+        fcisolver = self.fcisolver
+        if isinstance(fcisolver, fci.direct_spin0.FCISolver):
+            self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
+        else:
+            self.fcisolver = fci.direct_spin1_symm.FCISolver(self.mol)
+        self.fcisolver.__dict__.update(fcisolver.__dict__)
 
     @property
     def wfnsym(self):

@@ -137,6 +137,8 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         if getattr(casscf.fcisolver, 'large_ci', None) and ci is not None:
             log.info('** Largest CI components **')
             if isinstance(ci, (tuple, list)):
+                # Note: function large_ci does not support
+                # state_average_mix_ mcscf object
                 for i, civec in enumerate(ci):
                     res = casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas,
                                                     large_ci_tol, return_strs=False)
@@ -270,14 +272,15 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 
+    # Note: function transform_ci_for_orbital_rotation does not support
+    # state_average_mix_ mcscf object
     if isinstance(ci, numpy.ndarray):
-        fcivec = fci.addons.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
+        fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
     elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
-        # for state-average eigenfunctions
-        fcivec = [fci.addons.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
+        fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
                   for x in ci]
     else:
-        log.info('FCI vector not available, call CASCI for wavefunction')
+        log.info('FCI vector not available, call CASCI to update wavefunction')
         mocas = mo_coeff1[:,ncore:nocc]
         hcore = mc.get_hcore()
         dm_core = numpy.dot(mo_coeff1[:,:ncore]*2, mo_coeff1[:,:ncore].T)
@@ -648,15 +651,14 @@ class CASCI(lib.StreamObject):
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
         self.ncas = ncas
+        self.nelecas = nelecas
         if isinstance(nelecas, (int, numpy.integer)):
             nelecb = (nelecas-mol.spin)//2
             neleca = nelecas - nelecb
-            self.nelecas = (neleca, nelecb)
-        else:
-            self.nelecas = (nelecas[0],nelecas[1])
+            nelecas = (neleca, nelecb)
         self.ncore = ncore
         singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
-                   and self.nelecas[0] == self.nelecas[1])  # leads to direct_spin1
+                   and nelecas[0] == nelecas[1])  # leads to direct_spin1
         self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = getattr(__config__,
@@ -681,7 +683,10 @@ class CASCI(lib.StreamObject):
     @property
     def ncore(self):
         if self._ncore is None:
-            ncorelec = self.mol.nelectron - sum(self.nelecas)
+            if isinstance(self.nelecas, (int, numpy.integer)):
+                ncorelec = self.mol.nelectron - self.nelecas
+            else:
+                ncorelec = self.mol.nelectron - sum(self.nelecas)
             assert(ncorelec % 2 == 0)
             return ncorelec // 2
         else:
@@ -698,8 +703,12 @@ class CASCI(lib.StreamObject):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
+        if isinstance(self.nelecas, (int, numpy.integer)):
+            log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
+                     self.nelecas, ncas, ncore, nvir)
+        else:
+            log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+                     self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
