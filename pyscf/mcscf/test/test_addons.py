@@ -208,6 +208,9 @@ class KnownValues(unittest.TestCase):
             @orbsym.setter
             def orbsym(self, x):
                 fcisolver1.orbsym = x
+            spin_square = None
+            large_ci = None
+            transform_ci_for_orbital_rotation = None
 
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc.fcisolver = FCI_as_DMRG(mol)
@@ -234,6 +237,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(dm1[1]), 0.53366776017869022, 4)
         self.assertAlmostEqual(lib.finger(dm1[0]+dm1[1]), 1.0553944556722636, 4)
 
+        mc.cas_natorb()
+
     def test_state_average_mix_fci_dmrg(self):
         fcisolver1 = fci.direct_spin0_symm.FCISolver(mol)
         class FCI_as_DMRG(fci.direct_spin0_symm.FCISolver):
@@ -254,6 +259,9 @@ class KnownValues(unittest.TestCase):
             @orbsym.setter
             def orbsym(self, x):
                 fcisolver1.orbsym = x
+            spin_square = None
+            large_ci = None
+            transform_ci_for_orbital_rotation = None
 
         solver1 = FCI_as_DMRG(mol)
         solver1.spin =    fcisolver1.spin = 0
@@ -268,6 +276,8 @@ class KnownValues(unittest.TestCase):
         dm1 = mc.analyze()
         self.assertAlmostEqual(lib.finger(dm1[0]), 1.0553944556722636, 4)
         self.assertEqual(dm1[1], None)
+
+        mc.cas_natorb()
 
     def test_state_specific(self):
         mc = mcscf.CASSCF(mfr, 4, 4)

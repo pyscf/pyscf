@@ -29,7 +29,10 @@ PENALTY = getattr(__config__, 'fci_addons_fix_spin_shift', 0.2)
 def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     '''Search for the largest CI coefficients
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
+    na = cistring.num_strings(norb, neleca)
+    nb = cistring.num_strings(norb, nelecb)
+    assert(ci.shape == (na, nb))
     addra, addrb = numpy.where(abs(ci) > tol)
     if addra.size == 0:
         # No large CI coefficient > tol, search for the largest coefficient
@@ -50,7 +53,7 @@ def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
 def initguess_triplet(norb, nelec, binstring):
     '''Generate a triplet initial guess for FCI solver
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
     addr = cistring.str2addr(norb, neleca, int(binstring,2))
@@ -79,7 +82,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     Returns:
         CI coefficients 2D array which has the target symmetry.
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     orbsym = numpy.asarray(orbsym)
     if not isinstance(orbsym[0], numpy.number):
         raise RuntimeError('TODO: convert irrep symbol to irrep id')
@@ -214,7 +217,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
     >>> ci0 = fci.addons.cylindrical_init_guess(mol, 4, (3,3), orbsym, wfnsym=10, singlet=False)[0]
     >>> print(ci0.reshape(4,4))
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     if isinstance(orbsym[0], str):
         orbsym = [symm.irrep_name2id(mol.groupname, x) for x in orbsym]
     orbsym = numpy.asarray(orbsym)
@@ -377,7 +380,7 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     Returns:
         2D array which is the symmetrized CI coefficients
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
     strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     return _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym)
@@ -420,7 +423,7 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     Returns:
         Irrep ID
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
     strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     return _guess_wfnsym(ci, strsa, strsb, orbsym)
@@ -696,12 +699,13 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
             the orbital rotation to transform the old one-particle basis to new
             one-particle basis
     '''
-    neleca, nelecb = _unpack(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
     strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
     na = len(strsa)
     nb = len(strsb)
+    assert(ci.shape == (na, nb))
 
     if isinstance(u, numpy.ndarray) and u.ndim == 2:
         ua = ub = u
@@ -749,7 +753,7 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     return ci
 
 
-def _unpack(nelec, spin=None):
+def _unpack_nelec(nelec, spin=None):
     if spin is None:
         spin = 0
     else:

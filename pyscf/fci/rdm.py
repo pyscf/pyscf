@@ -28,6 +28,7 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.fci import cistring
+from pyscf.fci.addons import _unpack_nelec
 
 librdm = lib.load_library('libfci')
 
@@ -354,15 +355,4 @@ def reorder_dm1234(rdm1, rdm2, rdm3, rdm4, inplace=True):
             for u in range(norb):
                 rdm4[:,q,q,s,s,u,u,:] -= rdm1.T
     return rdm1, rdm2, rdm3, rdm4
-
-def _unpack_nelec(nelec, spin=None):
-    if spin is None:
-        spin = 0
-    else:
-        nelec = int(numpy.sum(nelec))
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = (nelec-spin)//2
-        neleca = nelec - nelecb
-        nelec = neleca, nelecb
-    return nelec
 
