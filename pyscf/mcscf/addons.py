@@ -845,6 +845,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     assert(nroots == len(weights))
     has_spin_square = all(getattr(solver, 'spin_square', None)
                           for solver in fcisolvers)
+    has_large_ci = all(getattr(solver, 'large_ci', None)
+                       for solver in fcisolvers)
 
     def collect(items):
         items = list(items)
@@ -947,6 +949,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
+
+        large_ci = None
 
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec, *args, **kwargs):
