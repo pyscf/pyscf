@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,19 +21,26 @@ from pyscf.cc import uccsd_t_rdm
 from pyscf.grad import uccsd as uccsd_grad
 
 # Only works with canonical orbitals
-def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           mf_grad=None, verbose=lib.logger.INFO):
+def kernel(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
+           verbose=lib.logger.INFO):
+    mycc = cc_grad.base
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
+    if eris is None: eris = mycc.ao2mo()
     d1 = uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris,
                                            for_grad=True)
     fd2intermediate = lib.H5TmpFile()
     d2 = uccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris,
                                      fd2intermediate, True)
-    return uccsd_grad.kernel(mycc, t1, t2, l1, l2, eris, atmlst, mf_grad,
-                             d1, d2, verbose)
+    cc_grad = uccsd_grad.Gradients(mycc)
+    de = uccsd_grad.grad_elec(cc_grad, t1, t2, l1, l2, eris, atmlst,
+                              d1, d2, verbose)
+    return de
+
+class Gradients(uccsd_grad.Gradients):
+    grad_elec = grad_elec
 
 
 if __name__ == '__main__':

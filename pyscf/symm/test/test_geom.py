@@ -19,6 +19,7 @@
 import unittest
 import numpy
 from functools import reduce
+from pyscf import lib
 from pyscf import gto
 from pyscf import symm
 from pyscf.symm import geom
@@ -355,6 +356,21 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(geom.check_given_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 1], [2], [3], [4, 5], [6], [7]])
+
+    def test_c3v_1(self):
+        mol = gto.M(atom='''
+C   0.948065  -0.081406  -0.007893
+C   0.462608  -0.144439   1.364854
+N   0.077738  -0.194439   2.453356
+H   0.591046   0.830035  -0.495369
+H   0.591062  -0.944369  -0.576807
+H   2.041481  -0.080642  -0.024174''')
+        gpname, orig, axes = geom.detect_symm(mol._atom)
+        self.assertEqual(gpname, 'C1')
+
+        with lib.temporary_env(geom, TOLERANCE=1e-3):
+            gpname, orig, axes = geom.detect_symm(mol._atom)
+        self.assertEqual(gpname, 'C3v')
 
     def test_t(self):
         atoms = [['C', ( 1.0   ,-1.0   , 1.0   )],
@@ -720,9 +736,8 @@ class KnownValues(unittest.TestCase):
             ['H', (-2.04168, -1.17876,  0.05942)],
             ['H', ( 0.00000, -1.43470,  1.20798)],
             ['H', ( 0.00000, -2.35753, -0.05942)], ]
-        tolbak, geom.TOLERANCE = geom.TOLERANCE, 1e-4
-        l, orig, axes = geom.detect_symm(atoms)
-        geom.TOLERANCE = tolbak
+        with lib.temporary_env(geom, TOLERANCE=1e-4):
+            l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'D3d')
 
     def test_quasi_c2v(self):
@@ -734,14 +749,12 @@ class KnownValues(unittest.TestCase):
             ['O' , ( 0.0000000000,   1.3265374484,   0.9444796669)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'Cs')
-        tolbak, geom.TOLERANCE = geom.TOLERANCE, 1e-2
-        l, orig, axes = geom.detect_symm(atoms)
-        geom.TOLERANCE = tolbak
+        with lib.temporary_env(geom, TOLERANCE=1e-2):
+            l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
 
-        tolbak, geom.TOLERANCE = geom.TOLERANCE, 1e-1
-        l, orig, axes = geom.detect_symm(atoms)
-        geom.TOLERANCE = tolbak
+        with lib.temporary_env(geom, TOLERANCE=1e-1):
+            l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'Td')
 
     def test_as_subgroup(self):

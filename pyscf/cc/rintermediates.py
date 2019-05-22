@@ -259,14 +259,16 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     foo = fock[:nocc, :nocc].diagonal()
     fvv = fock[nocc:, nocc:].diagonal()
     dtype = np.result_type(t1, t2)
+    if np.issubdtype(dtype, np.dtype(complex).type):
+        logger.error(cc, 't3p2 imds has not been strictly checked for use with complex integrals')
 
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:]
 
     ovov = _cp(eris.ovov)
     ovvv = _cp(eris.get_ovvv())
-    eris_vvov = eris.get_ovvv().conj().transpose(1,3,0,2)
-    eris_vooo = eris.ovoo[:].conj().transpose(1,0,3,2)
+    eris_vvov = eris.get_ovvv().conj().transpose(1,3,0,2)  # Physicist notation
+    eris_vooo = eris.ovoo[:].conj().transpose(1,0,3,2)  # Chemist notation
 
     ccsd_energy = cc.energy(t1, t2, eris)
     dtype = np.result_type(t1, t2)
@@ -280,7 +282,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     Wcbej = t3p2_ea_out
 
     tmp_t3  = np.einsum('abif,kjcf->ijkabc', eris_vvov, t2)
-    tmp_t3 -= np.einsum('aijm,mkbc->ijkabc', eris_vooo, t2)
+    tmp_t3 -= np.einsum('aimj,mkbc->ijkabc', eris_vooo, t2)
 
     tmp_t3 = (tmp_t3 + tmp_t3.transpose(0,2,1,3,5,4)
                      + tmp_t3.transpose(1,0,2,4,3,5)

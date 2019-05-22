@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -143,7 +143,10 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
         return gpname, rawsys.charge_center, axes
 
     else:
-        w1_degeneracy = _degeneracy(w1, decimals)
+        w1_degeneracy, w1_degen_values = _degeneracy(w1, decimals)
+        w2, u2 = rawsys.cartesian_tensor(2)
+        w2_degeneracy, w2_degen_values = _degeneracy(w2, decimals)
+        log.debug('2d tensor %s', w2)
 
         n = None
         c2x = None
@@ -151,12 +154,9 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
         if 3 in w1_degeneracy: # T, O, I
             # Because rotation vectors Rx Ry Rz are 3-degenerated representation
             # See http://www.webqc.org/symmetrypointgroup-td.html
-            w2, u2 = rawsys.cartesian_tensor(2)
-            w3, u3 = rawsys.cartesian_tensor(3)
-            w2_degeneracy = _degeneracy(w2, decimals)
-            w3_degeneracy = _degeneracy(w3, decimals)
 
-            log.debug('2d tensor %s', w2)
+            w3, u3 = rawsys.cartesian_tensor(3)
+            w3_degeneracy, w3_degen_values = _degeneracy(w3, decimals)
             log.debug('3d tensor %s', w3)
             if (5 in w2_degeneracy and
                 4 in w3_degeneracy and len(w3_degeneracy) == 3):  # I group
@@ -169,7 +169,8 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 if gpname is not None:
                     return gpname, rawsys.charge_center, _refine(new_axes)
 
-        elif 2 in w1_degeneracy:
+        elif (2 in w1_degeneracy and
+              numpy.any(w2_degeneracy[w2_degen_values>0] >= 2)):
             if numpy.allclose(w1[1], w1[2], atol=tol):
                 axes = axes[[1,2,0]]
             n = rawsys.search_c_highest(axes[2])[1]
@@ -756,8 +757,8 @@ def _search_ot_group(rawsys):
 def _degeneracy(e, decimals):
     e = numpy.around(e, decimals)
     u, idx = numpy.unique(e, return_inverse=True)
-    degen = [numpy.count_nonzero(idx==i) for i in range(len(u))]
-    return degen
+    degen = numpy.array([numpy.count_nonzero(idx==i) for i in range(len(u))])
+    return degen, u
 
 def _pseudo_vectors(vs):
     idy0 = abs(vs[:,1])<TOLERANCE

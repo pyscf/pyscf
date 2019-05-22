@@ -292,8 +292,10 @@ def casci_grad_with_ccsd_solver(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad
           casdm2[:no,:no,:no,no:])
     mc.mo_coeff = mo_coeff
     t1 = t2 = l1 = l2 = ci
-    return ccsd_grad.kernel(mc, t1, t2, l1, l2, None, atmlst, mf_grad,
-                            d1, d2, verbose)
+    de = ccsd_grad.grad_elec(mc.Gradients(), t1, t2, l1, l2, None, atmlst,
+                             d1, d2, verbose)
+    de += rhf_grad.grad_nuc(mol)
+    return de
 
 mol = gto.Mole()
 mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
@@ -310,7 +312,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_casci_grad(self):
         mc = mcscf.CASCI(mf, 4, 4).run()
-        g1 = casci_grad.kernel(mc)
+        g1 = casci_grad.Gradients(mc).kernel()
         self.assertAlmostEqual(lib.finger(g1), -0.066025991364829367, 7)
 
         g1ref = kernel(mc)
@@ -358,6 +360,51 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -108.38187009571901, 9)
         self.assertAlmostEqual(lib.finger(g1), -0.066025991364829367, 7)
 
+    def test_state_specific_scanner(self):
+        mc = mcscf.CASCI(mf, 4, 4)
+        gs = mc.state_specific_(2).nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.27330628098245, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.058111987691940134, 7)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        e1 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
+    def test_state_average_scanner(self):
+        mc = mcscf.CASCI(mf, 4, 4)
+        gs = mc.state_average_([0.5, 0.5]).nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.37395097152324, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.1170409338178659, 7)
+        self.assertRaises(RuntimeError, mc.nuc_grad_method().as_scanner, state=2)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_average
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_average
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
+    def test_state_average_mix_scanner(self):
+        mc = mcscf.CASCI(mf, 4, 4)
+        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        gs = mc.nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.38187009582806, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.0660259910725428, 7)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_average
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_average
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
             mcs = mcscf.CASCI(mf, 4, 4).as_scanner().x2c()
@@ -384,6 +431,9 @@ class KnownValues(unittest.TestCase):
         charges = [-0.1]
         mf = qmmm.add_mm_charges(scf.RHF(mol), coords, charges)
         mc = mcscf.CASCI(mf, 4, 4).as_scanner()
+        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
+        self.assertAlmostEqual(e_tot, -75.98156095286714, 9)
+        self.assertAlmostEqual(lib.finger(g), 0.08335504754051845, 6)
         e1 = mc(''' O                  0.00100000    0.00000000   -0.11081188
                  H                 -0.00000000   -0.84695236    0.59109389
                  H                 -0.00000000    0.89830571    0.52404783 ''')
@@ -391,8 +441,13 @@ class KnownValues(unittest.TestCase):
                  H                 -0.00000000   -0.84695236    0.59109389
                  H                 -0.00000000    0.89830571    0.52404783 ''')
         ref = (e1 - e2)/0.002 * lib.param.BOHR
-        g = mc.nuc_grad_method().kernel()
         self.assertAlmostEqual(g[0,0], ref, 4)
+
+        mf = scf.RHF(mol)
+        mc = qmmm.add_mm_charges(mcscf.CASCI(mf, 4, 4).as_scanner(), coords, charges)
+        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
+        self.assertAlmostEqual(e_tot, -75.98156095286714, 7)
+        self.assertAlmostEqual(lib.finger(g), 0.08335504754051845, 6)
 
 
 if __name__ == "__main__":

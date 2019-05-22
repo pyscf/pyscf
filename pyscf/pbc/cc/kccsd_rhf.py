@@ -209,21 +209,20 @@ def update_amps(cc, t1, t2, eris):
     for ki in range(nkpts):
         ka = ki
         # Remove zero/padded elements from denominator
-        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
         t1new[ki] /= eia
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        # For LARGE_DENOM, see t1new update above
-        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
 
-        ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-        n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
-        ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+        ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
+                       [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
         eijab = eia[:, None, :, None] + ejb[:, None, :]
 
         t2new[ki, kj, ka] /= eijab
@@ -231,6 +230,42 @@ def update_amps(cc, t1, t2, eris):
     time0 = log.timer_debug1('update t1 t2', *time0)
 
     return t1new, t2new
+
+
+def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
+    '''Create a denominator
+
+        fac[0]*e[kp,p0:p1] + fac[1]*e[kq,q0:q1]
+
+    where padded elements have been replaced by a large number.
+
+    Args:
+        pindices (5-list of object):
+            A list of p0, p1, kp, orbital values, and non-zero indicess for the first
+            denominator indices.
+        qindices (5-list of object):
+            A list of q0, q1, kq, orbital values, and non-zero indicess for the second
+            denominator element.
+        fac (3-list of float):
+            Factors to multiply the first and second denominator elements.
+        large_num (float):
+            Number to replace the padded elements.
+    '''
+    def get_idx(x0,x1,kx,n0_p):
+        return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
+
+    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    p0,p1,kp,mo_e_p,nonzero_p = pindices
+    q0,q1,kq,mo_e_q,nonzero_q = qindices
+    fac_p, fac_q = fac
+
+    epq = large_num * np.ones((p1-p0,q1-q0), dtype=mo_e_p[0].dtype)
+    idxp = get_idx(p0,p1,kp,nonzero_p)
+    idxq = get_idx(q0,q1,kq,nonzero_q)
+    n0_ovp_pq = np.ix_(nonzero_p[kp][idxp], nonzero_q[kq][idxq])
+    epq[n0_ovp_pq] = lib.direct_sum('p,q->pq', fac_p*mo_e_p[kp][p0:p1],
+                                               fac_q*mo_e_q[kq][q0:q1])[n0_ovp_pq]
+    return epq
 
 
 # TODO: pull these 3 methods to pyscf.util and make tests
@@ -553,13 +588,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             kb = kconserv[ki, ka, kj]
             # For discussion of LARGE_DENOM, see t1new update above
-            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+            eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                           [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                           fac=[1.0,-1.0])
 
-            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
-            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
+                           [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                           fac=[1.0,-1.0])
             eijab = eia[:, None, :, None] + ejb[:, None, :]
 
             eris_ijab = eris.oovv[ki, kj, ka]
@@ -1066,6 +1101,11 @@ def _mem_usage(nkpts, nocc, nvir):
     # TODO: Improve incore estimate and add outcore estimate
     outcore = basic = incore
     return incore * 16 / 1e6, outcore * 16 / 1e6, basic * 16 / 1e6
+
+
+from pyscf.pbc import scf
+scf.khf.KRHF.CCSD = lib.class_as_method(KRCCSD)
+scf.krohf.KROHF.CCSD = None
 
 
 if __name__ == '__main__':

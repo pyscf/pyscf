@@ -83,7 +83,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
     if (isinstance(ci, (list, tuple)) and
         not isinstance(casscf.fcisolver, addons.StateAverageFCISolver)):
         log.warn('Mulitple states found in CASCI/CASSCF solver. Density '
-                 'matrix of first state is generated in .analyze() function.')
+                 'matrix of the first state is generated in .analyze() function.')
         civec = ci[0]
     else:
         civec = ci
@@ -134,14 +134,22 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         if casscf._scf.mo_coeff is not None:
             addons.map2hf(casscf, casscf._scf.mo_coeff)
 
-        if getattr(casscf.fcisolver, 'large_ci', None) and ci is not None:
+        if (ci is not None and
+            (getattr(casscf.fcisolver, 'large_ci', None) or
+             getattr(casscf.fcisolver, 'states_large_ci', None))):
             log.info('** Largest CI components **')
             if isinstance(ci, (tuple, list)):
+                if hasattr(casscf.fcisolver, 'states_large_ci'):
+                    # defined in state_average_mix_ mcscf object
+                    res = casscf.fcisolver.states_large_ci(ci, casscf.ncas, casscf.nelecas,
+                                                           large_ci_tol, return_strs=False)
+                else:
+                    res = [casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas,
+                                                     large_ci_tol, return_strs=False)
+                           for civec in ci]
                 for i, civec in enumerate(ci):
-                    res = casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas,
-                                                    large_ci_tol, return_strs=False)
                     log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
-                    for c,ia,ib in res:
+                    for c,ia,ib in res[i]:
                         log.info('  %-20s %-30s %.12f', ia, ib, c)
             else:
                 log.info('  [alpha occ-orbitals] [beta occ-orbitals]            CI coefficient')
@@ -270,14 +278,19 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 
-    if isinstance(ci, numpy.ndarray):
-        fcivec = fci.addons.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
-    elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
-        # for state-average eigenfunctions
-        fcivec = [fci.addons.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
-                  for x in ci]
-    else:
-        log.info('FCI vector not available, call CASCI for wavefunction')
+    fcivec = None
+    if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
+        if isinstance(ci, numpy.ndarray):
+            fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
+        elif (isinstance(ci, (tuple, list)) and
+              all(isinstance(x[0], numpy.ndarray) for x in ci)):
+            fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
+                      for x in ci]
+    elif getattr(mc.fcisolver, 'states_transform_ci_for_orbital_rotation', None):
+        fcivec = mc.fcisolver.states_transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
+
+    if fcivec is None:
+        log.info('FCI vector not available, call CASCI to update wavefunction')
         mocas = mo_coeff1[:,ncore:nocc]
         hcore = mc.get_hcore()
         dm_core = numpy.dot(mo_coeff1[:,:ncore]*2, mo_coeff1[:,:ncore].T)
@@ -664,13 +677,7 @@ class CASCI(lib.StreamObject):
             self.nelecas = (neleca, nelecb)
         else:
             self.nelecas = (nelecas[0],nelecas[1])
-        if ncore is None:
-            ncorelec = mol.nelectron - (self.nelecas[0]+self.nelecas[1])
-            assert(ncorelec % 2 == 0)
-            self.ncore = ncorelec // 2
-        else:
-            assert(isinstance(ncore, (int, numpy.integer)))
-            self.ncore = ncore
+        self.ncore = ncore
         singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
                    and self.nelecas[0] == self.nelecas[1])  # leads to direct_spin1
         self.fcisolver = fci.solver(mol, singlet, symm=False)
@@ -694,13 +701,28 @@ class CASCI(lib.StreamObject):
         keys = set(('natorb', 'canonicalization', 'sorting_mo_energy'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
+    @property
+    def ncore(self):
+        if self._ncore is None:
+            ncorelec = self.mol.nelectron - sum(self.nelecas)
+            assert(ncorelec % 2 == 0)
+            return ncorelec // 2
+        else:
+            return self._ncore
+    @ncore.setter
+    def ncore(self, x):
+        assert(x is None or isinstance(x, (int, numpy.integer)))
+        self._ncore = x
+
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** CASCI flags ********')
-        nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
+        ncore = self.ncore
+        ncas = self.ncas
+        nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
+                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
@@ -759,10 +781,14 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         '''
         return self.ao2mo(mo_coeff)
     def ao2mo(self, mo_coeff=None):
+        ncore = self.ncore
+        ncas = self.ncas
+        nocc = ncore + ncas
         if mo_coeff is None:
-            mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
-        elif mo_coeff.shape[1] != self.ncas:
-            mo_coeff = mo_coeff[:,self.ncore:self.ncore+self.ncas]
+            ncore = self.ncore
+            mo_coeff = self.mo_coeff[:,ncore:nocc]
+        elif mo_coeff.shape[1] != ncas:
+            mo_coeff = mo_coeff[:,ncore:nocc]
 
         if self._scf._eri is not None:
             eri = ao2mo.full(self._scf._eri, mo_coeff,
@@ -882,10 +908,13 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
-    @lib.with_doc(addons.state_average_.__doc__)
+    @lib.with_doc(addons.state_average.__doc__)
     def state_average_(self, weights=(0.5,0.5)):
-        addons.state_average(self, weights)
+        addons.state_average_(self, weights)
         return self
+    @lib.with_doc(addons.state_average.__doc__)
+    def state_average(self, weights=(0.5,0.5)):
+        return addons.state_average(self, weights)
 
     @lib.with_doc(addons.state_specific_.__doc__)
     def state_specific_(self, state=1):
@@ -950,7 +979,9 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 
     def sfx2c1e(self):
         from pyscf.x2c import sfx2c1e
-        self._scf = sfx2c1e.sfx2c1e(self._scf)
+        self._scf = sfx2c1e.sfx2c1e(self._scf).run()
+        self.mo_coeff = self._scf.mo_coeff
+        self.mo_energy = self._scf.mo_energy
         return self
     x2c = x2c1e = sfx2c1e
 

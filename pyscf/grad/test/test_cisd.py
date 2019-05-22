@@ -45,7 +45,7 @@ class KnownValues(unittest.TestCase):
         myci = ci.cisd.CISD(mf)
         myci.conv_tol = 1e-10
         myci.kernel()
-        g1 = myci.nuc_grad_method().kernel(myci.ci, mf_grad=grad.RHF(mf), atmlst=[0,1,2])
+        g1 = myci.nuc_grad_method().kernel(myci.ci, atmlst=[0,1,2])
         self.assertAlmostEqual(lib.finger(g1), -0.032562347119070523, 6)
 
     def test_cisd_grad_finite_diff(self):
@@ -83,7 +83,7 @@ class KnownValues(unittest.TestCase):
         myci.frozen = [0,1,10,11,12]
         myci.max_memory = 1
         myci.kernel()
-        g1 = cisd_grad.kernel(myci, myci.ci, mf_grad=grad.RHF(mf))
+        g1 = cisd_grad.Gradients(myci).kernel(myci.ci)
         self.assertAlmostEqual(lib.finger(g1), 0.10224149952700579, 6)
 
     def test_as_scanner(self):

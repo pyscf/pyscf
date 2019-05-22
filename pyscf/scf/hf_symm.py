@@ -61,6 +61,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     ovlp_ao = mf.get_ovlp()
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
+        mf.dump_scf_summary(log)
+
         nirrep = len(mol.irrep_id)
         orbsym = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
         wfnsym = 0
@@ -536,6 +538,16 @@ class SymAdaptedROHF(rohf.ROHF):
                     logger.warn(self, 'No irrep %s', irname)
 
             check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+
+            alpha_open = beta_open = False
+            for ne in self.irrep_nelec.values():
+                if not isinstance(ne, (int, numpy.integer)):
+                    alpha_open = ne[0] > ne[1]
+                    beta_open = ne[0] < ne[1]
+                if alpha_open and beta_open:
+                    raise ValueError('A low-spin configuration was found in '
+                                     'the irrep_nelec input. ROHF does not '
+                                     'support low-spin systems.')
         return hf.RHF.build(self, mol)
 
     @lib.with_doc(eig.__doc__)
@@ -714,6 +726,8 @@ class SymAdaptedROHF(rohf.ROHF):
         ovlp_ao = self.get_ovlp()
         log = logger.new_logger(self, verbose)
         if log.verbose >= logger.NOTE:
+            self.dump_scf_summary(log)
+
             nirrep = len(mol.irrep_id)
             orbsym = get_orbsym(self.mol, mo_coeff)
             wfnsym = 0

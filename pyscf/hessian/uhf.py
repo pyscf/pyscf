@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ from pyscf.scf import ucphf
 from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.hessian import rhf as rhf_hess
 _get_jk = rhf_hess._get_jk
-
+_make_vhfopt = rhf_hess._make_vhfopt
 
 # import pyscf.grad.uhf to activate nuc_grad_method method
 from pyscf.grad import uhf
@@ -114,6 +114,12 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
+    e1, ej, ek = _partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
+                                   atmlst, max_memory, verbose, True)
+    return e1 + ej - ek  # (A,B,dR_A,dR_B)
+
+def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+                      atmlst=None, max_memory=4000, verbose=None, with_k=True):
     log = logger.new_logger(hessobj, verbose)
     time0 = t1 = (time.clock(), time.time())
 
@@ -139,49 +145,47 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     hcore_deriv = hessobj.hcore_generator(mol)
     s1aa, s1ab, s1a = rhf_hess.get_ovlp(mol)
 
-    vj1a, vj1b, vk1a, vk1b = \
+    vj1_diag, vk1a_diag, vk1b_diag = \
             _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
-                    ['lk->s1ij', dm0a, 'lk->s1ij', dm0b,
-                     'jk->s1il', dm0a, 'jk->s1il', dm0b])
-    vj1 = vj1a + vj1b
-    vhfa_diag = vj1 - vk1a
-    vhfb_diag = vj1 - vk1b
-    vhfa_diag = vhfa_diag.reshape(3,3,nao,nao)
-    vhfb_diag = vhfb_diag.reshape(3,3,nao,nao)
-    vj1 = vj1a = vj1b = vk1a = vk1b = None
+                    ['lk->s1ij', dm0,
+                     'jk->s1il', dm0a, 'jk->s1il', dm0b],
+                    vhfopt=_make_vhfopt(mol, dm0, 'ipip1', 'int2e_ipip1ipip2'))
+    vj1_diag = vj1_diag.reshape(3,3,nao,nao)
+    vk1a_diag = vk1a_diag.reshape(3,3,nao,nao)
+    vk1b_diag = vk1b_diag.reshape(3,3,nao,nao)
+    vj1a = vj1b = None
     t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
 
+    ip1ip2_opt = _make_vhfopt(mol, dm0, 'ip1ip2', 'int2e_ip1ip2')
+    ipvip1_opt = _make_vhfopt(mol, dm0, 'ipvip1', 'int2e_ipvip1ipvip2')
     aoslices = mol.aoslice_by_atom()
-    de2 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
+    e1 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
+    ej = numpy.zeros((mol.natm,mol.natm,3,3))
+    ek = numpy.zeros((mol.natm,mol.natm,3,3))
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
-        vj1a, vj1b, vk1a, vk1b, vk2a, vk2b = \
+        vj1, vk1a, vk1b, vk2a, vk2b = \
                 _get_jk(mol, 'int2e_ip1ip2', 9, 's1',
-                        ['ji->s1kl', dm0a[:,p0:p1], 'ji->s1kl', dm0b[:,p0:p1],
+                        ['ji->s1kl', dm0 [:,p0:p1],
                          'li->s1kj', dm0a[:,p0:p1], 'li->s1kj', dm0b[:,p0:p1],
                          'lj->s1ki', dm0a         , 'lj->s1ki', dm0b         ],
-                        shls_slice=shls_slice)
-        vj1 = vj1a + vj1b
-        vhfa = vj1 * 2 - vk1a
-        vhfb = vj1 * 2 - vk1b
-        vhfa[:,:,p0:p1] -= vk2a
-        vhfb[:,:,p0:p1] -= vk2b
+                        shls_slice=shls_slice, vhfopt=ip1ip2_opt)
+        vk1a[:,:,p0:p1] += vk2a
+        vk1b[:,:,p0:p1] += vk2b
         t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
-        vj1a, vj1b, vk1a, vk1b = \
+        vj2, vk2a, vk2b = \
                 _get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                        ['lk->s1ij', dm0a         , 'lk->s1ij', dm0b         ,
+                        ['lk->s1ij', dm0          ,
                          'li->s1kj', dm0a[:,p0:p1], 'li->s1kj', dm0b[:,p0:p1]],
-                        shls_slice=shls_slice)
-        vj1 = vj1a + vj1b
-        vhfa[:,:,p0:p1] += vj1.transpose(0,2,1)
-        vhfb[:,:,p0:p1] += vj1.transpose(0,2,1)
-        vhfa -= vk1a.transpose(0,2,1)
-        vhfb -= vk1b.transpose(0,2,1)
-        vj1 = vj1a = vj1b = vk1a = vk1b = vk2a = vk2b = None
+                        shls_slice=shls_slice, vhfopt=ipvip1_opt)
+        vj1[:,:,p0:p1] += vj2.transpose(0,2,1) * .5
+        vk1a += vk2a.transpose(0,2,1)
+        vk1b += vk2b.transpose(0,2,1)
         t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
-        vhfa = vhfa.reshape(3,3,nao,nao)
-        vhfb = vhfb.reshape(3,3,nao,nao)
+        vj1 = vj1.reshape(3,3,nao,nao)
+        vk1a = vk1a.reshape(3,3,nao,nao)
+        vk1b = vk1b.reshape(3,3,nao,nao)
 
         s1ao = numpy.zeros((3,nao,nao))
         s1ao[:,p0:p1] += s1a[:,p0:p1]
@@ -189,24 +193,28 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         s1ooa = numpy.einsum('xpq,pi,qj->xij', s1ao, mocca, mocca)
         s1oob = numpy.einsum('xpq,pi,qj->xij', s1ao, moccb, moccb)
 
-        de2[i0,i0] += numpy.einsum('xypq,pq->xy', vhfa_diag[:,:,p0:p1], dm0a[p0:p1])*2
-        de2[i0,i0] += numpy.einsum('xypq,pq->xy', vhfb_diag[:,:,p0:p1], dm0b[p0:p1])*2
-        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
+        ej[i0,i0] += numpy.einsum('xypq,pq->xy', vj1_diag[:,:,p0:p1], dm0[p0:p1])*2
+        ek[i0,i0] += numpy.einsum('xypq,pq->xy', vk1a_diag[:,:,p0:p1], dm0a[p0:p1])*2
+        ek[i0,i0] += numpy.einsum('xypq,pq->xy', vk1b_diag[:,:,p0:p1], dm0b[p0:p1])*2
+        e1[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
 
         for j0, ja in enumerate(atmlst[:i0+1]):
             q0, q1 = aoslices[ja][2:]
-            de2[i0,j0] += numpy.einsum('xypq,pq->xy', vhfa[:,:,q0:q1], dm0a[q0:q1])*2
-            de2[i0,j0] += numpy.einsum('xypq,pq->xy', vhfb[:,:,q0:q1], dm0b[q0:q1])*2
-            de2[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
+            ej[i0,j0] += numpy.einsum('xypq,pq->xy', vj1[:,:,q0:q1], dm0[q0:q1])*4
+            ek[i0,j0] += numpy.einsum('xypq,pq->xy', vk1a[:,:,q0:q1], dm0a[q0:q1])*2
+            ek[i0,j0] += numpy.einsum('xypq,pq->xy', vk1b[:,:,q0:q1], dm0b[q0:q1])*2
+            e1[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
 
             h1ao = hcore_deriv(ia, ja)
-            de2[i0,j0] += numpy.einsum('xypq,pq->xy', h1ao, dm0)
+            e1[i0,j0] += numpy.einsum('xypq,pq->xy', h1ao, dm0)
 
         for j0 in range(i0):
-            de2[j0,i0] = de2[i0,j0].T
+            e1[j0,i0] = e1[i0,j0].T
+            ej[j0,i0] = ej[i0,j0].T
+            ek[j0,i0] = ek[i0,j0].T
 
     log.timer('UHF partial hessian', *time0)
-    return de2
+    return e1, ej, ek
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     time0 = t1 = (time.clock(), time.time())

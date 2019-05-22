@@ -42,6 +42,7 @@ from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
+from pyscf.fci.addons import _unpack_nelec
 from pyscf import __config__
 
 libfci = lib.load_library('libfci')
@@ -64,7 +65,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = ao2mo.restore(4, eri, norb)
-    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     link_indexa, link_indexb = direct_spin1._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
@@ -175,7 +176,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
 def _id_wfnsym(cis, norb, nelec, orbsym, wfnsym):
     if wfnsym is None:
-        neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+        neleca, nelecb = _unpack_nelec(nelec)
         wfnsym = 0  # Ag, A1 or A
         for i in orbsym[nelecb:neleca]:
             wfnsym ^= i
@@ -218,7 +219,7 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
         raise IndexError('Configuration of required symmetry (wfnsym=%d) not found' % wfnsym)
     return ci0
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
-    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
     airreps = birreps = _gen_strs_irrep(strsa, orbsym)
     if neleca != nelecb:
@@ -296,15 +297,19 @@ class FCISolver(direct_spin1.FCISolver):
         return self
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
+        nelec = _unpack_nelec(nelec, self.spin)
         return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
 
     def make_hdiag(self, h1e, eri, norb, nelec):
+        nelec = _unpack_nelec(nelec, self.spin)
         return direct_spin1.make_hdiag(h1e, eri, norb, nelec)
 
     def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
+        nelec = _unpack_nelec(nelec, self.spin)
         return direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
 
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
+        nelec = _unpack_nelec(nelec, self.spin)
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
@@ -312,10 +317,12 @@ class FCISolver(direct_spin1.FCISolver):
         if orbsym is None: orbsym = self.orbsym
         if wfnsym is None: wfnsym = self.wfnsym
         wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+        nelec = _unpack_nelec(nelec, self.spin)
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, wfnsym, **kwargs)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         wfnsym = _id_wfnsym(self, norb, nelec, self.orbsym, self.wfnsym)
+        nelec = _unpack_nelec(nelec, self.spin)
         return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
 
     def guess_wfnsym(self, norb, nelec, fcivec=None, orbsym=None, wfnsym=None,
@@ -327,6 +334,7 @@ class FCISolver(direct_spin1.FCISolver):
         '''
         if orbsym is None:
             orbsym = self.orbsym
+        nelec = _unpack_nelec(nelec, self.spin)
         if fcivec is None:
             wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
         else:

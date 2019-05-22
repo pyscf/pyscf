@@ -146,6 +146,9 @@ class KRKS(khf.KRHF):
         weight = 1./len(h1e_kpts)
         e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
         tot_e = e1 + vhf.ecoul + vhf.exc
+        self.scf_summary['e1'] = e1.real
+        self.scf_summary['coul'] = vhf.ecoul.real
+        self.scf_summary['exc'] = vhf.exc.real
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
         return tot_e.real, vhf.ecoul + vhf.exc
 

@@ -62,18 +62,13 @@ class KnowValues(unittest.TestCase):
         z = numpy.einsum('xii,xii->', dip, dip)
         self.assertAlmostEqual(z, 98.670988758151907, 4)
 
-#        mo = loc.kernel(mf.mo_coeff[:,idx+1])
-#        dip = boys.dipole_integral(mol, mo)
-#        z = numpy.einsum('xii,xii->', dip, dip)
-#        self.assertAlmostEqual(z, 27.481320331665497, 4)
-
-    #def test_edmiston(self):
-    #    idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
-    #    loc = edmiston.EdmistonRuedenberg(mol)
-    #    mo = loc.kernel(mf.mo_coeff[:,idx])
-    #    dip = boys.dipole_integral(mol, mo)
-    #    z = numpy.einsum('xii,xii->', dip, dip)
-    #    self.assertAlmostEqual(z, 79.73132964805923, 9)
+    def test_edmiston(self):
+        idx = range(1, 5)
+        loc = edmiston.EdmistonRuedenberg(h2o)
+        mo = loc.kernel(mf_h2o.mo_coeff[:,idx])
+        dip = boys.dipole_integral(h2o, mo)
+        z = numpy.einsum('xii,xii->', dip, dip)
+        self.assertAlmostEqual(z, 17.96309963411759, 4)
 
     def test_pipek(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1

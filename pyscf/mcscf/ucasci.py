@@ -133,14 +133,7 @@ class UCASCI(casci.CASCI):
             self.nelecas = (neleca, nelecb)
         else:
             self.nelecas = (nelecas[0], nelecas[1])
-        if ncore is None:
-            ncorelec = mol.nelectron - (self.nelecas[0]+self.nelecas[1])
-            if ncorelec % 2:
-                self.ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
-            else:
-                self.ncore = (ncorelec//2, ncorelec//2)
-        else:
-            self.ncore = (ncore[0], ncore[1])
+        self.ncore = ncore
 
         self.fcisolver = fci.direct_uhf.FCISolver(mol)
         self.fcisolver.lindep = getattr(__config__,
@@ -158,6 +151,26 @@ class UCASCI(casci.CASCI):
         self.e_cas = 0
 
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def ncore(self):
+        if self._ncore is None:
+            ncorelec = self.mol.nelectron - sum(self.nelecas)
+            if ncorelec % 2:
+                ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
+            else:
+                ncore = (ncorelec//2, ncorelec//2)
+            return ncore
+        else:
+            return self._ncore
+    @ncore.setter
+    def ncore(self, x):
+        if x is None:
+            self._ncore = x
+        elif isinstance(x, (int, numpy.integer)):
+            self._ncore = (x, x)
+        else:
+            self._ncore = (x[0], x[1])
 
     def dump_flags(self):
         log = lib.logger.Logger(self.stdout, self.verbose)

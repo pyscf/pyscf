@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,8 +38,9 @@ from pyscf.grad import ccsd as ccsd_grad
 # Note: only works with canonical orbitals
 # Non-canonical formula refers to JCP, 95, 2639
 #
-def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
-           mf_grad=None, d1=None, d2=None, verbose=logger.INFO):
+def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
+              d1=None, d2=None, verbose=logger.INFO):
+    mycc = cc_grad.base
     if eris is not None:
         if (abs(eris.focka - numpy.diag(eris.focka.diagonal())).max() > 1e-3 or
             abs(eris.fockb - numpy.diag(eris.fockb.diagonal())).max() > 1e-3):
@@ -49,7 +50,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     if t2 is None: t2 = mycc.t2
     if l1 is None: l1 = mycc.l1
     if l2 is None: l2 = mycc.l2
-    if mf_grad is None: mf_grad = mycc._scf.nuc_grad_method()
 
     log = logger.new_logger(mycc, verbose)
     time0 = time.clock(), time.time()
@@ -64,7 +64,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         d2 = uccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, fdm2, True)
     time1 = log.timer_debug1('rdm2 intermediates', *time1)
 
-    mol = mycc.mol
+    mol = cc_grad.mol
     mo_a, mo_b = mycc.mo_coeff
     mo_ea, mo_eb = mycc._scf.mo_energy
     nao, nmoa = mo_a.shape
@@ -190,8 +190,12 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
     time1 = log.timer_debug1('response_rdm1', *time1)
 
     log.debug('h1 and JK1')
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = cc_grad.base._scf.nuc_grad_method()
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
+
     zeta = (mo_ea[:,None] + mo_ea) * .5
     zeta[nocca:,:nocca] = mo_ea[:nocca]
     zeta[:nocca,nocca:] = mo_ea[:nocca].reshape(-1,1)
@@ -234,7 +238,6 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k,0], dm1pa)
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k,1], dm1pb)
 
-    de += mf_grad.grad_nuc(mol)
     log.timer('%s gradients' % mycc.__class__.__name__, *time0)
     return de
 
@@ -483,10 +486,7 @@ def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
 class Gradients(ccsd_grad.Gradients):
-    def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None,
-               atmlst=None, mf_grad=None, verbose=None):
-        return ccsd_grad.Gradients.kernel(self, t1, t2, l1, l2, eris, atmlst,
-                                          mf_grad, verbose, _kern=kernel)
+    grad_elec = grad_elec
 
 Grad = Gradients
 

@@ -1,3 +1,71 @@
+PySCF 1.7.0 (2019-?-?)
+----------------------
+* Added
+  - k-CCSD density matrix
+  - k-CCSD(T) with core frozen
+  - sgX method (a pseudo-spectral method like COSX)
+  - Hooks pre_kernel and post_kernel in SCF driver
+  - Left IP/EA-CCSD for molecular code
+  - EOM-IP/EA-KCCSD, EOM-IP/EA-KRCCSD
+  - Methods EOM-IP/EA-KCCSD(T) T*(a), EOM-IP/EA-KRCCSD(T) T*(a)
+  - kEOM-IP/EA-CCSD*
+  - KUMP2
+  - KCCSD function spatial2spin that transforms amplitudes in spatial orbital to
+    that in spin-orbital
+* Improved
+  - Optimized regular get_j and density-fitting get_j
+  - Faster k-CCSD(T)
+  - Davidson diagonalization for multi-roots
+  - memory usage in CCSD
+* Bugfix
+  - Carbon ANO data
+  - Initial guess for EOM-KCCSD
+
+
+PySCF 1.6.2 (2019-?-?)
+----------------------
+* Improved
+  - DFHF class structure and method hooks
+* Bugfix
+  - Cartesian GTOs was not handled in RSH integrals
+  - geometric_solver for latest geomeTRIC release
+  - Initial guess of orbital localization solver
+
+
+PySCF 1.6.1 (2019-03-15)
+------------------------
+* Added
+  - k-point orbitals to gamma-point orbitals transformation function k2gamma
+  - Wigner D-matrix and d-matrix
+  - The interface geometric_solver to geometry optimization library geomeTRIC
+  - k-CCSD(T) for PBC k-point sampled systems
+  - AO basis truncation shortcut "@?s?p?d"
+  - Function in basis parser to restore general basis contraction from NWChem
+    optimized format
+  - inertia_moment function in Mole object
+  - keyword resolution in CHGCAR writer
+  - IAO for each k-point in PBC systems
+* Improved
+  - Geometry optimization module (GeometryOptimizer class, output format etc.)
+  - SCF Gradients class. A hook "extra_force" was added.
+  - MRLCC2 interface
+  - Import gradients, properties, solvent, and all post-SCF/extended methods in SCF class
+  - DFT-D3 interface
+  - Pople basis parser (supporting e.g. 6311++g(2d,p)).
+  - Normalizing SCF initial guess in PBC (to the right number of electrons/cell)
+  - mesh estimation for inf-vacuum
+  - Tuned threshold in point group symmetry detection functions
+  - SCF summary in the output message
+* Bugfix
+  - Solvent object initialization in SCF scanner function
+  - GHF bug fix
+  - QM/MM object initialization in SCF scanner function
+  - Missing virtual orbitals in MCSCF project_init_guess function
+  - MINAO basis data
+  - Analytical Fourier transform zero elements when basis functions do not overlap
+  - make_rdm1 function in state_average mcscf wrapper
+
+
 PySCF 1.6 (2018-12-31)
 ----------------------
 * Added

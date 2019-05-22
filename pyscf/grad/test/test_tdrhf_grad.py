@@ -69,8 +69,7 @@ class KnownValues(unittest.TestCase):
     def test_tdhf(self):
         td = tdscf.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
-        g1 = tdrhf_grad.kernel(tdg, td.xy[2])
-        g1 += tdg.grad_nuc()
+        g1 = tdg.kernel(td.xy[2])
         self.assertAlmostEqual(g1[0,2], -0.25240005833657309, 8)
 
         td_solver = td.as_scanner()

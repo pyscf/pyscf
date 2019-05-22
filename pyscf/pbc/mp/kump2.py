@@ -404,6 +404,11 @@ class KUMP2(kmp2.KMP2):
         logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
         return self.e_corr, self.t2
 
+
+from pyscf.pbc import scf
+scf.kuhf.KUHF.MP2 = lib.class_as_method(KUMP2)
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, mp
 

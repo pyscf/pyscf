@@ -291,9 +291,9 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
                 for ki, kj, kk in product(range(nkpts), repeat=3):
                     # eigenvalue denominator: e(i) + e(j) + e(k)
-                    eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_e_o[0].dtype)
-                    n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
-                    eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_e_o[ki], mo_e_o[kj], mo_e_o[kk])[n0_ovp_ijk]
+                    eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                                     [0,nocc,kj,mo_e_o,nonzero_opadding],
+                                     [0,nocc,kk,mo_e_o,nonzero_opadding])
 
                     # Find momentum conservation condition for triples
                     # amplitude t3ijkabc
@@ -308,10 +308,11 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                     else:
                         symm_kpt = 6.
 
-                    eijkabc = (eijk[None,None,None,:,:,:] -
-                               mo_e_v[ka][a0:a1][:,None,None,None,None,None] -
-                               mo_e_v[kb][b0:b1][None,:,None,None,None,None] -
-                               mo_e_v[kc][c0:c1][None,None,:,None,None,None])
+                    eabc = _get_epqr([a0,a1,ka,mo_e_v,nonzero_vpadding],
+                                     [b0,b1,kb,mo_e_v,nonzero_vpadding],
+                                     [c0,c1,kc,mo_e_v,nonzero_vpadding],
+                                     fac=[-1.,-1.,-1.])
+                    eijkabc = (eijk[None,None,None,:,:,:] + eabc[:,:,:,None,None,None])
 
                     pwijk = my_permuted_w[ki,kj,kk] + my_permuted_v[ki,kj,kk]
                     rwijk = (4. * my_permuted_w[ki,kj,kk] +
@@ -321,7 +322,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                              2. * my_permuted_w[kk,kj,ki].transpose(0,1,2,5,4,3) -
                              2. * my_permuted_w[kj,ki,kk].transpose(0,1,2,4,3,5))
                     rwijk = rwijk / eijkabc
-                    energy_t += symm_kpt * einsum('abcijk,abcijk', pwijk, rwijk.conj())
+                    energy_t += symm_kpt * einsum('abcijk,abcijk', rwijk, pwijk.conj())
 
     energy_t *= (1. / 3)
     energy_t /= nkpts
@@ -409,7 +410,7 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
         out = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=ooov.dtype)
 
     for ki, kj, ka in product(range(nkpts), repeat=3):
-        kb = kconserv[ki,ka,kj]
+        kb = kconserv[ki,kj,ka]
         # <bj|ai> -> (ba|ji)    (Physicist->Chemist)
         # (ij|ab) = (ba|ij)*    (Permutational symmetry)
         # out = (ij|ab).transpose(0,1,3,2)
@@ -457,7 +458,7 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
     if (unit*16 < max_memory):  # Store all in memory
         t2T = t2T[:]
         eris_vvop = eris_vvop[:]
-        eris_vooo_C[:]
+        eris_vooo_C = eris_vooo_C[:]
 
     return feri_tmp, t2T, eris_vvop, eris_vooo_C
 
@@ -550,29 +551,47 @@ def get_data_slices(kpt_indices, orb_indices, kconserv):
 
     return vvop_indices, vooo_indices, t2T_vvop_indices, t2T_vooo_indices
 
-# Gamma point calculation
-#
-# Parameters
-# ----------
-#     mesh : [24, 24, 24]
-#     kpt  : [1, 1, 2]
-# Returns
-# -------
-#     SCF     : -8.65192329453 Hartree per cell
-#     CCSD    : -0.15529836941 Hartree per cell
-#     CCSD(T) : -0.00191451068 Hartree per cell
+def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM):
+    '''Create a denominator
 
-# Gamma point calculation
-#
-# Parameters
-# ----------
-#     mesh : [24, 24, 24]
-#     kpt  : [1, 1, 3]
-# Returns
-# -------
-#     SCF     : -9.45719492074 Hartree per cell
-#     CCSD    : -0.16615913445 Hartree per cell
-#     CCSD(T) : -0.00403785264 Hartree per cell
+        fac[0]*e[kp,p0:p1] + fac[1]*e[kq,q0:q1] + fac[2]*e[kr,r0:r1]
+
+    where padded elements have been replaced by a large number.
+
+    Args:
+        pindices (5-list of object):
+            A list of p0, p1, kp, orbital values, and non-zero indices for the first
+            denominator element.
+        qindices (5-list of object):
+            A list of q0, q1, kq, orbital values, and non-zero indices for the second
+            denominator element.
+        rindices (5-list of object):
+            A list of r0, r1, kr, orbital values, and non-zero indices for the third
+            denominator element.
+        fac (3-list of float):
+            Factors to multiply the first and second denominator elements.
+        large_num (float):
+            Number to replace the padded elements.
+    '''
+    def get_idx(x0,x1,kx,n0_p):
+        return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
+
+    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    p0,p1,kp,mo_e_p,nonzero_p = pindices
+    q0,q1,kq,mo_e_q,nonzero_q = qindices
+    r0,r1,kr,mo_e_r,nonzero_r = rindices
+    fac_p, fac_q, fac_r = fac
+
+    epqr = large_num * np.ones((p1-p0,q1-q0,r1-r0), dtype=mo_e_p[0].dtype)
+    idxp = get_idx(p0,p1,kp,nonzero_p)
+    idxq = get_idx(q0,q1,kq,nonzero_q)
+    idxr = get_idx(r0,r1,kr,nonzero_r)
+    n0_ovp_pqr = np.ix_(nonzero_p[kp][idxp]-p0, nonzero_q[kq][idxq]-q0, nonzero_r[kr][idxr]-r0)
+    epqr[n0_ovp_pqr] = lib.direct_sum('p,q,r->pqr', fac_p*mo_e_p[kp][p0:p1],
+                                      fac_q*mo_e_q[kq][q0:q1],
+                                      fac_r*mo_e_r[kr][r0:r1])[n0_ovp_pqr]
+    #epqr[n0_ovp_pqr] = temp[n0_ovp_pqr]
+    return epqr
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
@@ -591,11 +610,12 @@ if __name__ == '__main__':
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
-    cell.verbose = 3
+    cell.verbose = 4
     cell.mesh = [24, 24, 24]
     cell.build()
 
-    kpts = cell.make_kpts([1, 1, 3])
+    nmp = [1,1,4]
+    kpts = cell.make_kpts(nmp)
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
     kmf.conv_tol = 1e-12
@@ -607,3 +627,22 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     ecc, t1, t2 = mycc.kernel(eris=eris)
     energy_t = kernel(mycc, eris=eris, verbose=9)
+
+    # Start of supercell calculations
+    from pyscf.pbc.tools.pbc import super_cell
+    supcell = super_cell(cell, nmp)
+    supcell.build()
+    kmf = scf.RHF(supcell, exxdiv=None)
+    kmf.conv_tol = 1e-12
+    kmf.conv_tol_grad = 1e-12
+    kmf.direct_scf_tol = 1e-16
+    sup_ehf = kmf.kernel()
+
+    myscc = cc.RCCSD(kmf)
+    eris = myscc.ao2mo()
+    sup_ecc, t1, t2 = myscc.kernel(eris=eris)
+    sup_energy_t = myscc.ccsd_t(eris=eris)
+    print("Kpoint    CCSD: %20.16f" % ecc)
+    print("Supercell CCSD: %20.16f" % (sup_ecc/np.prod(nmp)))
+    print("Kpoint    CCSD(T): %20.16f" % energy_t)
+    print("Supercell CCSD(T): %20.16f" % (sup_energy_t/np.prod(nmp)))

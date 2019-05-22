@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -184,11 +184,20 @@ class dTDA(TDA):
         mf.xc = ''
         TDA.__init__(self, mf)
 
+
+def tddft(mf):
+    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    if mf._numint.libxc.is_hybrid_xc(mf.xc):
+        return TDDFT(mf)
+    else:
+        return TDDFTNoHybrid(mf)
+
 from pyscf import dft
 dft.rks.RKS.TDA           = dft.rks_symm.RKS.TDA           = lib.class_as_method(TDA)
 dft.rks.RKS.TDHF          = dft.rks_symm.RKS.TDHF          = None
-dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = lib.class_as_method(TDDFT)
-dft.rks.RKS.TDDFTNoHybrid = dft.rks_symm.RKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+#dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = lib.class_as_method(TDDFT)
+#dft.rks.RKS.TDDFTNoHybrid = dft.rks_symm.RKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = tddft
 dft.rks.RKS.dTDA          = dft.rks_symm.RKS.dTDA          = lib.class_as_method(dTDA)
 dft.rks.RKS.dRPA          = dft.rks_symm.RKS.dRPA          = lib.class_as_method(dRPA)
 dft.roks.ROKS.TDA           = dft.rks_symm.ROKS.TDA           = None

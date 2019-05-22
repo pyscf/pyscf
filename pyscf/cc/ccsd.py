@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -67,8 +67,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
-                                  mycc.amplitudes_to_vector(t1, t2))
+        tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
+        tmpvec -= mycc.amplitudes_to_vector(t1, t2)
+        normt = numpy.linalg.norm(tmpvec)
+        tmpvec = None
         if mycc.iterative_damping < 1.0:
             alpha = mycc.iterative_damping
             t1new = (1-alpha) * t1 + alpha * t1new
@@ -784,11 +786,18 @@ def as_scanner(cc):
                 if sub_mod:
                     sub_mod.reset(mol)
 
+            if self.t2 is not None:
+                last_size = self.vector_size()
+            else:
+                last_size = 0
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
+            if last_size != self.vector_size():
+                self.t1 = self.t2 = None
             self.kernel(self.t1, self.t2, **kwargs)
             return self.e_tot
     return CCSD_Scanner(cc)
@@ -1169,6 +1178,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if nocc is None: nocc = self.nocc
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vec, nmo, nocc)
+
+    def vector_size(self, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        nov = nocc * nvir
+        return nov + nov*(nov+1)//2
 
     def dump_chk(self, t1_t2=None, frozen=None, mo_coeff=None, mo_occ=None):
         if not self.chkfile:

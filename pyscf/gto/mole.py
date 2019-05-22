@@ -1217,6 +1217,9 @@ def time_reversal_map(mol):
                     i += dj
     return numpy.asarray(tao, dtype=numpy.int32)
 
+
+CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
+
 def energy_nuc(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
@@ -1237,6 +1240,10 @@ def energy_nuc(mol, charges=None, coords=None):
     #        e += q1 * q2 / r
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
+    if CHECK_GEOM and numpy.any(rr < 1e-5):
+        for atm_idx in numpy.argwhere(rr<1e-5):
+            logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
+        raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
 
@@ -1940,6 +1947,46 @@ class Mole(lib.StreamObject):
     def ms(self, x):
         self.spin = int(round(2*x, 4))
 
+    def __getattr__(self, key):
+        '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
+        from Mole object.
+        '''
+        if key[:2] == '__':  # Skip Python builtins
+            raise AttributeError('Mole object has no attribute %s' % key)
+        elif key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf import __all__
+        from pyscf import scf, dft
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if 'TD' in key[:3]:
+            if key in ('TDHF', 'TDA'):
+                mf = scf.HF(self)
+            else:
+                mf = dft.KS(self)
+                xc = key.split('TD', 1)[1]
+                if xc in dft.XC:
+                    mf.xc = xc
+                    key = 'TDDFT'
+        else:
+            mf = scf.HF(self)
+
+        method = getattr(mf, key, None)
+        if method is None:
+            raise AttributeError('Mole object has no attribute %s' % key)
+
+        mf.run()
+        return method
+
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
 # def __copy__(self):
@@ -2026,10 +2073,17 @@ class Mole(lib.StreamObject):
         if parse_arg:
             _update_from_cmdargs_(self)
 
-        # avoid to open output file twice
-        if (parse_arg and self.output is not None and
-            not (getattr(self.stdout, 'name', None) and  # to handle StringIO().name bug
-                 self.stdout.name == self.output)):
+        # avoid opening output file twice
+        if (self.output is not None
+            # StringIO() does not have attribute 'name'
+            and getattr(self.stdout, 'name', None) != self.output):
+
+            if self.verbose > logger.QUIET:
+                if os.path.isfile(self.output):
+                    print('overwrite output file: %s' % self.output)
+                else:
+                    print('output file: %s' % self.output)
+
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
             else:
@@ -2450,8 +2504,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Retuen a temporary mol context which has the rquired charge
-        distribution on the "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
+        '''Retuen a temporary mol context which has the rquired Gaussian charge
+        distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
         Examples:
@@ -2463,8 +2517,9 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def with_rinv_as_nucleus(self, atm_id):
-        '''Retuen a temporary mol context which has the rquired origin of 1/r
-        operator and the required nuclear charge distribution on 1/r.
+        '''Retuen a temporary mol context in which the rinv operator (1/r) is
+        treated like the Coulomb potential of a Gaussian charge distribution
+        rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
         Examples:
 
@@ -2527,7 +2582,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol.build(False, False)
 
         if mol.verbose >= logger.INFO:
-            logger.info(mol, 'New geometry (unit Bohr)')
+            logger.info(mol, 'New geometry (unit %s)', unit)
             coords = mol.atom_coords()
             for ia in range(mol.natm):
                 logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f',
@@ -2579,6 +2634,11 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         '''
         return _std_symbol(self._atom[atm_id][0])
 
+    @property
+    def elements(self):
+        '''A list of elements in the molecule'''
+        return [self.atom_pure_symbol(i) for i in range(self.natm)]
+
     def atom_charge(self, atm_id):
         r'''Nuclear effective charge of the given atom id
         Note "atom_charge /= charge(atom_symbol)" when ECP is enabled.
@@ -2605,7 +2665,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         '''
         return charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
 
-    def atom_coord(self, atm_id):
+    def atom_coord(self, atm_id, unit='Bohr'):
         r'''Coordinates (ndarray) of the given atom id
 
         Args:
@@ -2619,12 +2679,18 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        return self._env[ptr:ptr+3]
+        if unit[:3].upper() == 'ANG':
+            return self._env[ptr:ptr+3] * param.BOHR
+        else:
+            return self._env[ptr:ptr+3]
 
-    def atom_coords(self):
+    def atom_coords(self, unit='Bohr'):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        return self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+        c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+        if unit[:3].upper() == 'ANG':
+            c *= param.BOHR
+        return c
 
     atom_mass_list = atom_mass_list
 
@@ -2958,7 +3024,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    eval_gto = eval_gto
+    eval_ao = eval_gto = eval_gto
 
     energy_nuc = energy_nuc
     def get_enuc(self):
@@ -3039,31 +3105,65 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
-            from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
-            # Import all available modules. Some methods are registered when
-            # loading these modules.
-            from pyscf import grad, hessian, solvent, qmmm, prop
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, mcscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            if fn.upper() == 'TDHF':
-                return tdscf.TDHF(scf.HF(self).run(), *args, **kwargs)
-            else:
-                method = getattr(tdscf, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
+            method = getattr(self, fn.upper())
+            return method(*args, **kwargs)
         else:
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
+
+    def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
+              **kwargs):
+        '''Integral transformation for arbitrary orbitals and arbitrary
+        integrals.  See more detalied documentation in func:`ao2mo.kernel`.
+
+        Args:
+            mo_coeffs (an np array or a list of arrays) : A matrix of orbital
+                coefficients if it is a numpy ndarray, or four sets of orbital
+                coefficients, corresponding to the four indices of (ij|kl).
+
+        Kwargs:
+            erifile (str or h5py File or h5py Group object) : The file/object
+                to store the transformed integrals.  If not given, the return
+                value is an array (in memory) of the transformed integrals.
+            dataname : str
+                *Note* this argument is effective if erifile is given.
+                The dataset name in the erifile (ref the hierarchy of HDF5 format
+                http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
+                different dataname, the existed integral file can be reused.  If
+                the erifile contains the specified dataname, the old integrals
+                will be replaced by the new one under the key dataname.
+            intor (str) : integral name Name of the 2-electron integral.  Ref
+                to :func:`getints_by_shell`
+                for the complete list of available 2-electron integral names
+
+        Returns:
+            An array of transformed integrals if erifile is not given.
+            Otherwise, return the file/fileobject if erifile is assigned.
+
+
+        Examples:
+
+        >>> import pyscf
+        >>> mol = pyscf.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+        >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
+
+        >>> eri1 = mol.ao2mo(mo1)
+        >>> print(eri1.shape)
+        (55, 55)
+
+        >>> eri1 = mol.ao2mo(mo1, compact=False)
+        >>> print(eri1.shape)
+        (100, 100)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2))
+        >>> print(eri1.shape)
+        (80, 36)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2), erifile='water.h5')
+        '''
+        from pyscf import ao2mo
+        return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
@@ -3096,15 +3196,6 @@ def _update_from_cmdargs_(mol):
 
         if opts.output:
             mol.output = opts.output
-
-    if mol.output is not None:
-        if os.path.isfile(mol.output):
-            #os.remove(mol.output)
-            if mol.verbose > logger.QUIET:
-                print('overwrite output file: %s' % mol.output)
-        else:
-            if mol.verbose > logger.QUIET:
-                print('output file: %s' % mol.output)
 
 
 def from_zmatrix(atomstr):

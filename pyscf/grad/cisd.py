@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import ccsd as ccsd_grad
 
 
-def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
-           verbose=logger.INFO):
+def grad_elec(cigrad, civec=None, eris=None, atmlst=None, verbose=logger.INFO):
+    myci = cigrad.base
     if civec is None: civec = myci.ci
     assert(not isinstance(civec, (list, tuple)))
     nocc = myci.nocc
@@ -38,8 +38,7 @@ def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
     fd2intermediate = lib.H5TmpFile()
     d2 = cisd._gamma2_outcore(myci, civec, nmo, nocc, fd2intermediate, True)
     t1 = t2 = l1 = l2 = civec
-    return ccsd_grad.kernel(myci, t1, t2, l1, l2, eris, atmlst, mf_grad,
-                            d1, d2, verbose)
+    return ccsd_grad.grad_elec(cigrad, t1, t2, l1, l2, eris, atmlst, d1, d2, verbose)
 
 
 def as_scanner(grad_ci, state=0):
@@ -73,6 +72,14 @@ def as_scanner(grad_ci, state=0):
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
+
+            # cache eris. It is used multiple times when calculating gradients
+            g_ao2mo = g.base.__class__.ao2mo
+            def _save_eris(self, *args, **kwargs):
+                self._eris = g_ao2mo(self, *args, **kwargs)
+                return self._eris
+            self.base.__class__.ao2mo = _save_eris
+
         def __call__(self, mol_or_geom, state=state, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
@@ -92,9 +99,9 @@ def as_scanner(grad_ci, state=0):
                 e_tot = ci_scanner.e_tot
                 civec = ci_scanner.ci
 
-            mf_grad = ci_scanner._scf.nuc_grad_method()
             self.mol = mol
-            de = self.kernel(civec, mf_grad=mf_grad, **kwargs)
+            de = self.kernel(civec, eris=ci_scanner._eris, **kwargs)
+            ci_scanner._eris = None  # release the resources occupied by .eris
             return e_tot, de
         @property
         def converged(self):
@@ -106,30 +113,27 @@ def as_scanner(grad_ci, state=0):
             return all((ci_scanner._scf.converged, ci_conv))
     return CISD_GradScanner(grad_ci)
 
-class Gradients(lib.StreamObject):
+class Gradients(rhf_grad.GradientsBasics):
     def __init__(self, myci):
-        self.base = myci
-        self.mol = myci.mol
-        self.stdout = myci.stdout
-        self.verbose = myci.verbose
         self.state = 0  # of which the gradients to be computed.
-        self.atmlst = None
-        self.de = None
-        self._keys = set(self.__dict__.keys())
+        rhf_grad.GradientsBasics.__init__(self, myci)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self.base.converged:
-            log.warn('Ground state HF not converged')
+            log.warn('Ground state %s not converged',
+                     self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
         if self.state != 0 and self.base.nroots > 1:
             log.info('State ID = %d', self.state)
         return self
 
-    def kernel(self, civec=None, eris=None, atmlst=None,
-               mf_grad=None, state=None, verbose=None, _kern=kernel):
+    grad_elec = grad_elec
+
+    def kernel(self, civec=None, eris=None, atmlst=None, state=None,
+               verbose=None):
         log = logger.new_logger(self, verbose)
         myci = self.base
         if civec is None: civec = myci.ci
@@ -155,15 +159,22 @@ class Gradients(lib.StreamObject):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        self.de = _kern(myci, civec, eris, atmlst, mf_grad, log)
+        de = self.grad_elec(civec, eris, atmlst, verbose=log)
+        self.de = de + self.grad_nuc(atmlst=atmlst)
         self._finalize()
         return self.de
 
+    # Calling the underlying SCF nuclear gradients because it may be modified
+    # by external modules (e.g. QM/MM, solvent)
+    def grad_nuc(self, mol=None, atmlst=None):
+        mf_grad = self.base._scf.nuc_grad_method()
+        return mf_grad.grad_nuc(mol, atmlst)
+
     def _finalize(self):
         if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '--------- %s gradients for state %d ----------',
+                        self.base.__class__.__name__, self.state)
+            self._write(self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner

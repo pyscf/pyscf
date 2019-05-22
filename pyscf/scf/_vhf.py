@@ -28,37 +28,40 @@ def _fpointer(name):
 class VHFOpt(object):
     def __init__(self, mol, intor,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
+        '''If function "qcondname" is presented, the qcond (sqrt(integrals))
+        and will be initialized in __init__.
+        '''
         intor = mol._add_suffix(intor)
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = intor
-        self._cintopt = lib.c_null_ptr()
+        self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
         self._dmcondname = dmcondname
-        self.init_cvhf_direct(mol, intor, prescreen, qcondname)
-
-    def init_cvhf_direct(self, mol, intor, prescreen, qcondname):
-        c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
-        c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
-        c_env = numpy.asarray(mol._env, dtype=numpy.double, order='C')
-        natm = ctypes.c_int(c_atm.shape[0])
-        nbas = ctypes.c_int(c_bas.shape[0])
-        self._cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
-
+        natm = ctypes.c_int(mol.natm)
+        nbas = ctypes.c_int(mol.nbas)
         libcvhf.CVHFinit_optimizer(ctypes.byref(self._this),
-                                   c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                                   c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                                   c_env.ctypes.data_as(ctypes.c_void_p))
-        self._this.contents.fprescreen = _fpointer(prescreen)
+                                   mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                                   mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                                   mol._env.ctypes.data_as(ctypes.c_void_p))
+        self.prescreen = prescreen
+        if qcondname is not None:
+            self.init_cvhf_direct(mol, intor, qcondname)
 
-        if prescreen != 'CVHFnoscreen' and qcondname is not None:
-            ao_loc = make_loc(c_bas, self._intor)
-            fsetqcond = getattr(libcvhf, qcondname)
-            fsetqcond(self._this,
-                      getattr(libcvhf, intor), self._cintopt,
-                      ao_loc.ctypes.data_as(ctypes.c_void_p),
-                      c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                      c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                      c_env.ctypes.data_as(ctypes.c_void_p))
+    def init_cvhf_direct(self, mol, intor, qcondname):
+        intor = mol._add_suffix(intor)
+        if intor == self._intor:
+            cintopt = self._cintopt
+        else:
+            cintopt = lib.c_null_ptr()
+        ao_loc = make_loc(mol._bas, intor)
+        fsetqcond = getattr(libcvhf, qcondname)
+        natm = ctypes.c_int(mol.natm)
+        nbas = ctypes.c_int(mol.nbas)
+        fsetqcond(self._this, getattr(libcvhf, intor), cintopt,
+                  ao_loc.ctypes.data_as(ctypes.c_void_p),
+                  mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                  mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                  mol._env.ctypes.data_as(ctypes.c_void_p))
 
     @property
     def direct_scf_tol(self):
@@ -340,7 +343,10 @@ def direct_mapdm(intor, aosym, jkdescript,
         vshape = (n_dm,ncomp) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
         for j in range(n_dm):
-            assert(dms[j].shape == get_dims(dmsym, shls_slice, ao_loc))
+            if dms[j].shape != get_dims(dmsym, shls_slice, ao_loc):
+                raise RuntimeError('dm[%d] shape %s is inconsistent with the '
+                                   'shls_slice shape %s' %
+                                   (j, dms[j].shape, get_dims(dmsym, shls_slice, ao_loc)))
             dmsptr[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             vjkptr[i*n_dm+j] = vjk[i][j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
@@ -415,7 +421,10 @@ def direct_bindm(intor, aosym, jkdescript,
     for i, (dmsym, vsym) in enumerate(descr_sym):
         f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
 
-        assert(dms[i].shape == get_dims(dmsym, shls_slice, ao_loc))
+        if dms[i].shape != get_dims(dmsym, shls_slice, ao_loc):
+            raise RuntimeError('dm[%d] shape %s is inconsistent with the '
+                               'shls_slice shape %s' %
+                               (i, dms[i].shape, get_dims(dmsym, shls_slice, ao_loc)))
         vshape = (ncomp,) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
         dmsptr[i] = dms[i].ctypes.data_as(ctypes.c_void_p)

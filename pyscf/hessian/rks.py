@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,94 +63,50 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         hyb = alpha + beta
     else:
         hyb = mf._numint.hybrid_coeff(mf.xc, spin=mol.spin)
+    de2, ej, ek = rhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
+                                             atmlst, max_memory, verbose,
+                                             abs(hyb) > 1e-10)
+    de2 += ej - hyb * ek  # (A,B,dR_A,dR_B)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     veff_diag = _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory)
-    if abs(hyb) > 1e-10:
-        vj1, vk1 = rhf_hess._get_jk(mol, 'int2e_ipip1', 9, 's2kl',
-                                    ['lk->s1ij', dm0,   # vj1
-                                     'jk->s1il', dm0])  # vk1
-        veff_diag += (vj1 - hyb * .5 * vk1).reshape(3,3,nao,nao)
-        if abs(omega) > 1e-10:
-            with mol.with_range_coulomb(omega):
-                vk1 = rhf_hess._get_jk(mol, 'int2e_ipip1', 9, 's2kl',
-                                       ['jk->s1il', dm0])[0]
-            veff_diag -= (alpha-hyb)*.5 * vk1.reshape(3,3,nao,nao)
-    else:
-        vj1 = rhf_hess._get_jk(mol, 'int2e_ipip1', 9, 's2kl',
-                               ['lk->s1ij', dm0])[0]
-        veff_diag += vj1.reshape(3,3,nao,nao)
-    vj1 = vk1 = None
+    if abs(omega) > 1e-10:
+        with mol.with_range_coulomb(omega):
+            vk1 = rhf_hess._get_jk(mol, 'int2e_ipip1', 9, 's2kl',
+                                   ['jk->s1il', dm0])[0]
+        veff_diag -= (alpha-hyb)*.5 * vk1.reshape(3,3,nao,nao)
+    vk1 = None
     t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
 
     aoslices = mol.aoslice_by_atom()
-    de2 = numpy.zeros((mol.natm,mol.natm,3,3))  # (A,B,dR_A,dR_B)
     vxc = _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory)
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         veff = vxc[ia]
-        if abs(hyb) > 1e-10:
-            vj1, vk1, vk2 = rhf_hess._get_jk(mol, 'int2e_ip1ip2', 9, 's1',
-                                             ['ji->s1kl', dm0[:,p0:p1],  # vj1
-                                              'li->s1kj', dm0[:,p0:p1],  # vk1
-                                              'lj->s1ki', dm0         ], # vk2
-                                             shls_slice=shls_slice)
-            veff += (vj1 * 2 - hyb * .5 * vk1).reshape(3,3,nao,nao)
-            veff[:,:,:,p0:p1] -= (hyb * .5 * vk2).reshape(3,3,nao,p1-p0)
-            if abs(omega) > 1e-10:
-                with mol.with_range_coulomb(omega):
-                    vk1, vk2 = rhf_hess._get_jk(mol, 'int2e_ip1ip2', 9, 's1',
-                                                ['li->s1kj', dm0[:,p0:p1],  # vk1
-                                                 'lj->s1ki', dm0         ], # vk2
-                                                shls_slice=shls_slice)
-                veff -= (alpha-hyb)*.5 * vk1.reshape(3,3,nao,nao)
-                veff[:,:,:,p0:p1] -= (alpha-hyb)*.5 * vk2.reshape(3,3,nao,p1-p0)
-            t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
-
-            vj1, vk1 = rhf_hess._get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                                        ['lk->s1ij', dm0,           # vj1
-                                         'li->s1kj', dm0[:,p0:p1]], # vk1
-                                        shls_slice=shls_slice)
-            veff[:,:,:,p0:p1] += vj1.transpose(0,2,1).reshape(3,3,nao,p1-p0)
-            veff -= hyb * .5 * vk1.transpose(0,2,1).reshape(3,3,nao,nao)
-            if abs(omega) > 1e-10:
-                with mol.with_range_coulomb(omega):
-                    vk1 = rhf_hess._get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                                           ['li->s1kj', dm0[:,p0:p1]], # vk1
-                                           shls_slice=shls_slice)[0]
-                veff -= (alpha-hyb)*.5 * vk1.transpose(0,2,1).reshape(3,3,nao,nao)
-            t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
-        else:
-            vj1 = rhf_hess._get_jk(mol, 'int2e_ip1ip2', 9, 's1',
-                                   ['ji->s1kl', dm0[:,p0:p1]],
-                                   shls_slice=shls_slice)[0]
-            veff += vj1.reshape(3,3,nao,nao) * 2
-            t1 = log.timer_debug1('contracting int2e_ip1ip2 for atom %d'%ia, *t1)
-
-            vj1 = rhf_hess._get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
-                                   ['lk->s1ij', dm0], shls_slice=shls_slice)[0]
-            veff[:,:,:,p0:p1] += vj1.transpose(0,2,1).reshape(3,3,nao,p1-p0)
-            t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
-        vj1 = vk1 = vk2 = None
-
-        s1ao = numpy.zeros((3,nao,nao))
-        s1ao[:,p0:p1] += s1a[:,p0:p1]
-        s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
-        s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
+        if abs(omega) > 1e-10:
+            with mol.with_range_coulomb(omega):
+                vk1, vk2 = rhf_hess._get_jk(mol, 'int2e_ip1ip2', 9, 's1',
+                                            ['li->s1kj', dm0[:,p0:p1],  # vk1
+                                             'lj->s1ki', dm0         ], # vk2
+                                            shls_slice=shls_slice)
+            veff -= (alpha-hyb)*.5 * vk1.reshape(3,3,nao,nao)
+            veff[:,:,:,p0:p1] -= (alpha-hyb)*.5 * vk2.reshape(3,3,nao,p1-p0)
+            t1 = log.timer_debug1('range-separated int2e_ip1ip2 for atom %d'%ia, *t1)
+            with mol.with_range_coulomb(omega):
+                vk1 = rhf_hess._get_jk(mol, 'int2e_ipvip1', 9, 's2kl',
+                                       ['li->s1kj', dm0[:,p0:p1]], # vk1
+                                       shls_slice=shls_slice)[0]
+            veff -= (alpha-hyb)*.5 * vk1.transpose(0,2,1).reshape(3,3,nao,nao)
+            t1 = log.timer_debug1('range-separated int2e_ipvip1 for atom %d'%ia, *t1)
+            vj1 = vk1 = vk2 = None
 
         de2[i0,i0] += numpy.einsum('xypq,pq->xy', veff_diag[:,:,p0:p1], dm0[p0:p1])*2
-        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
-
         for j0, ja in enumerate(atmlst[:i0+1]):
             q0, q1 = aoslices[ja][2:]
             de2[i0,j0] += numpy.einsum('xypq,pq->xy', veff[:,:,q0:q1], dm0[q0:q1])*2
-            de2[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
-
-            h1ao = hcore_deriv(ia, ja)
-            de2[i0,j0] += numpy.einsum('xypq,pq->xy', h1ao, dm0)
 
         for j0 in range(i0):
             de2[j0,i0] = de2[i0,j0].T
@@ -489,6 +445,7 @@ class Hessian(rhf_hess.Hessian):
     def __init__(self, mf):
         rhf_hess.Hessian.__init__(self, mf)
         self.grids = None
+        self.grid_response = False
         self._keys = self._keys.union(['grids'])
 
     partial_hess_elec = partial_hess_elec

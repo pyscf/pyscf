@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
         pt.frozen = [0,1,10,11,12]
         pt.max_memory = 1
         pt.kernel()
-        g1 = ump2_grad.kernel(pt, pt.t2, mf_grad=grad.UHF(mf))
+        g1 = ump2_grad.Gradients(pt).kernel(pt.t2)
         self.assertAlmostEqual(lib.finger(g1), -0.22437278030057645, 6)
 
     def test_as_scanner(self):

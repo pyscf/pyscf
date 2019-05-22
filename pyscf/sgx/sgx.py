@@ -153,8 +153,13 @@ class SGX(lib.StreamObject):
         self.dfj = False  # compute J matrix using DF
         self._auxbasis = auxbasis
 
+        # debug=True generates a dense tensor of the Coulomb integrals at each
+        # grids. debug=False utilizes the sparsity of the integral tensor and
+        # contracts the sparse tensor and density matrices on the fly.
+        self.debug = False
+
         self.grids = None
-        self.blockdim = 600
+        self.blockdim = 1200
         self.auxmol = None
         self._vjopt = None
         self._last_dm = 0

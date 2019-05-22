@@ -328,20 +328,19 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
             dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
 
-        if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->', dm_kpts, self.get_ovlp(cell)).real
-            # FIXME: consider the fractional num_electron or not? This maybe
-            # relates to the charged system.
-            nkpts = len(self.kpts)
-            nelec = sum(self.nelec)
-            if np.any(abs(ne - nelec) > 1e-7*nkpts):
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to the number '
-                            'of electrons', ne/nkpts)
-                dm_kpts *= nelec / ne
+        ne = np.einsum('xkij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        # FIXME: consider the fractional num_electron or not? This maybe
+        # relates to the charged system.
+        nkpts = len(self.kpts)
+        nelec = float(sum(self.nelec))
+        if np.any(abs(ne - nelec) > 1e-7*nkpts):
+            logger.debug(self, 'Big error detected in the electron number '
+                        'of initial guess density matrix (Ne/cell = %g)!\n'
+                        '  This can cause huge error in Fock matrix and '
+                        'lead to instability in SCF for low-dimensional '
+                        'systems.\n  DM is normalized wrt the number '
+                        'of electrons %g', ne/nkpts, nelec/nkpts)
+            dm_kpts *= nelec / ne
         return dm_kpts
 
     get_hcore = khf.KSCF.get_hcore
