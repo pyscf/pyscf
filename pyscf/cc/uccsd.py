@@ -44,9 +44,9 @@ def update_amps(cc, t1, t2, eris):
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     mo_ea_o = eris.mo_energy[0][:nocca]
-    mo_ea_v = eris.mo_energy[0][nocca:]
+    mo_ea_v = eris.mo_energy[0][nocca:] + cc.level_shift
     mo_eb_o = eris.mo_energy[1][:noccb]
-    mo_eb_v = eris.mo_energy[1][noccb:]
+    mo_eb_v = eris.mo_energy[1][noccb:] + cc.level_shift
     fova = eris.focka[:nocca,nocca:]
     fovb = eris.fockb[:noccb,noccb:]
 
