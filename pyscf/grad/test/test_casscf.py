@@ -215,6 +215,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_tot, -76.0461574155984, 7)
         self.assertAlmostEqual(lib.finger(g), 0.042835374915102364, 6)
 
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().CASSCF(4, 4).run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.12355818572359845, 7)
 
 
 if __name__ == "__main__":

@@ -96,7 +96,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ecp_grad(self):
         mol = gto.M(atom='Cu 0 0 0; H 0 0 1.5', basis='lanl2dz',
-                    ecp='lanl2dz', verbose=0)
+                    ecp='lanl2dz', symmetry=True, verbose=0)
         mf = scf.RHF(mol)
         g_scan = mf.nuc_grad_method().as_scanner().as_scanner()
         g = g_scan(mol.atom)[1]

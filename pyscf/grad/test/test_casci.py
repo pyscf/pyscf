@@ -449,6 +449,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_tot, -75.98156095286714, 7)
         self.assertAlmostEqual(lib.finger(g), 0.08335504754051845, 6)
 
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().CASCI(4, 4).run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.11555543375018221, 7)
+
 
 if __name__ == "__main__":
     print("Tests for CASCI gradients")
