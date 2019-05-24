@@ -86,8 +86,8 @@ def update_amps(cc, t1, t2, eris):
 
     mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
     mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
-    mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
-    mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
+    mo_ea_v = [e[nocca:] + cc.level_shift for e in eris.mo_energy[0]]
+    mo_eb_v = [e[noccb:] + cc.level_shift for e in eris.mo_energy[1]]
 
     Fvv_, FVV_ = kintermediates_uhf.cc_Fvv(cc, t1, t2, eris)
     Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, t1, t2, eris)
