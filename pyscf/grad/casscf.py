@@ -60,16 +60,17 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
 # gfock = Generalized Fock, Adv. Chem. Phys., 69, 63
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
     dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
-    aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_occ, mo_cas), compact=False)
-    aapa = aapa.reshape(ncas,ncas,nocc,ncas)
+    aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_coeff, mo_cas), compact=False)
+    aapa = aapa.reshape(ncas,ncas,nmo,ncas)
     vj, vk = mc._scf.get_jk(mol, (dm_core, dm_cas))
     h1 = mc.get_hcore()
     vhf_c = vj[0] - vk[0] * .5
     vhf_a = vj[1] - vk[1] * .5
-    gfock = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c + vhf_a, mo_occ)) * 2
-    gfock[:,ncore:nocc] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c, mo_cas, casdm1))
+    gfock = numpy.zeros ((nmo, nmo))
+    gfock[:,:ncore] = reduce(numpy.dot, (mo_coeff.T, h1 + vhf_c + vhf_a, mo_core)) * 2
+    gfock[:,ncore:nocc] = reduce(numpy.dot, (mo_coeff.T, h1 + vhf_c, mo_cas, casdm1))
     gfock[:,ncore:nocc] += numpy.einsum('uviw,vuwt->it', aapa, casdm2)
-    dme0 = reduce(numpy.dot, (mo_occ, (gfock+gfock.T)*.5, mo_occ.T))
+    dme0 = reduce(numpy.dot, (mo_coeff, (gfock+gfock.T)*.5, mo_coeff.T))
     aapa = vj = vk = vhf_c = vhf_a = h1 = gfock = None
 
     dm1 = dm_core + dm_cas
