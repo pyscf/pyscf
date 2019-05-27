@@ -116,6 +116,14 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     if not include_ghost:
         g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
 
+    # When symmetry is enabled, the molecule may be shifted or rotated to make
+    # the z-axis be the main axis. The transformation can cause inconsistency
+    # between the optimization steps. The transformation is muted by setting
+    # an explict point group to the keyword mol.symmetry (see symmetry
+    # detection code in Mole.build function).
+    if mol.symmetry:
+        mol.symmetry = mol.topgroup
+
 # temporary interface, taken from berny.py optimize function
     berny_log = to_berny_log(log)
     geom = to_berny_geom(mol, include_ghost)
@@ -188,6 +196,7 @@ class GeometryOptimizer(lib.StreamObject):
         self.converged, self.mol = \
                 kernel(self.method, callback=self.callback, **params)
         return self.mol
+    optimize = kernel
 
 del(INCLUDE_GHOST, ASSERT_CONV)
 
