@@ -687,9 +687,12 @@ def make_phi(pcmobj, dm, r_vdw, ui):
     cav_coords = cav_coords[extern_point_idx]
     v_phi_e = numpy.empty(cav_coords.shape[0])
     int3c2e = mol._add_suffix('int3c2e')
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                         mol._env, int3c2e)
     for i0, i1 in lib.prange(0, cav_coords.shape[0], blksize):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
-        v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij')
+        v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij',
+                                cintopt=cintopt)
         v_phi_e[i0:i1] = numpy.einsum('x,xk->k', tril_dm, v_nj)
     v_phi[extern_point_idx] -= v_phi_e
 
@@ -767,10 +770,13 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
     blksize = int(max(max_memory*1e6/8/nao**2, 400))
 
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                         mol._env, 'int3c2e')
     vmat_tril = 0
     for i0, i1 in lib.prange(0, xi_jn.size, blksize):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
-        v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij')
+        v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij',
+                                cintopt=cintopt)
         vmat_tril += numpy.einsum('xn,n->x', v_nj, xi_jn[i0:i1])
     vmat += lib.unpack_tril(vmat_tril)
     return psi, vmat, L_S
