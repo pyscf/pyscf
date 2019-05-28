@@ -1373,8 +1373,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     else:
         toloose = tol_residual
 
-    if not callable(precond):
-        precond = make_diag_precond(precond)
+    assert callable(precond)
 
     xs = [precond(b)]
     ax = [aop(xs[-1])]

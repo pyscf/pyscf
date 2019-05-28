@@ -183,11 +183,19 @@ def symmetrize(mol, de, atmlst=None):
     # The symmetry of gradients should be the same to the p-type functions.
     # We use p-type AOs to generate the symmetry adaptation projector.
     pmol.basis = {'default': [[1, (1, 1)]]}
+    # There is uncertainty for the output of the transformed molecular
+    # geometry when mol.symmetry is True. E.g., H2O can be placed either on
+    # xz-plane or on yz-plane for C2v symmetry. This uncertainty can lead to
+    # wrong symmetry adaptation basis. Molecular point group and coordinates
+    # should be explicitly given to avoid the uncertainty.
+    pmol.symmetry = mol.topgroup
+    pmol.atom = mol._atom
+    pmol.unit = 'Bohr'
     pmol.build(False, False)
-    natm = pmol.natm
+
     # irrep-p-function x irrep-gradients = total symmetric irrep
     a_id = pmol.irrep_id.index(0)
-    c = pmol.symm_orb[a_id].reshape(natm, 3, -1)
+    c = pmol.symm_orb[a_id].reshape(mol.natm, 3, -1)
     if atmlst is not None:
         c = c[:,atmlst,:]
     tmp = numpy.einsum('zx,zxi->i', de, c)
