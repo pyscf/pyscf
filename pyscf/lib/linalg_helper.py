@@ -1253,7 +1253,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     True
     '''
     if isinstance(aop, numpy.ndarray) and aop.ndim == 2:
-        return numpy.linalg.solve(aop, b)
+        return numpy.linalg.solve(aop+numpy.eye(aop.shape[0]), b)
 
     if isinstance(verbose, logger.Logger):
         log = verbose
