@@ -14,26 +14,21 @@
 # limitations under the License.
 
 import unittest
-from pyscf import lib
-from pyscf import gto, scf
-from pyscf.geomopt import berny_solver
+from pyscf import gto
+from pyscf.geomopt import addons
 
 class KnownValues(unittest.TestCase):
-    def test_as_pyscf_method(self):
+    def test_symmetrize(self):
         mol = gto.M(atom='''
             O  0.   0.       0.
             H  0.   -0.757   0.587
             H  0.   0.757    0.587
-                    ''', symmetry=True, verbose=0)
-        gs = scf.RHF(mol).nuc_grad_method().as_scanner()
-        f = lambda mol: gs(mol)
-        m = berny_solver.as_pyscf_method(mol, f)
-        mol1 = berny_solver.optimize(m)
-        self.assertAlmostEqual(lib.finger(mol1.atom_coords()),
-                               3.039311839766823, 4)
-        self.assertEqual(mol1.symmetry, 'C2v')
+                    ''', symmetry=True)
+        coords = mol.atom_coords()
+        sym_coords = addons.symmetrize(mol, coords)
+        self.assertAlmostEqual(abs(coords-sym_coords).max(), 0, 9)
 
 if __name__ == "__main__":
-    print("Tests for berny_solver")
+    print("Tests for addons")
     unittest.main()
 
