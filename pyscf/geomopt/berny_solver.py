@@ -29,7 +29,8 @@ except ImportError:
 import time
 import numpy
 from pyscf import lib
-from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
+from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
+                                  symmetrize)
 from pyscf import __config__
 # Overwrite pyberny's atomic unit
 coords.angstrom = 1./lib.param.BOHR
@@ -59,14 +60,13 @@ def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
         return geomlib.Molecule(species, coords)
 
 def _geom_to_atom(mol, geom, include_ghost):
-    atoms = list(geom)
-    position = numpy.array([x[1] for x in atoms])
+    coords = geom.coords
     if include_ghost:
-        atom_coords = position / lib.param.BOHR
+        atom_coords = coords / lib.param.BOHR
     else:
         atmlst = numpy.where(mol.atom_charges() != 0)[0]
         atom_coords = mol.atom_coords()
-        atom_coords[atmlst] = position / lib.param.BOHR
+        atom_coords[atmlst] = coords / lib.param.BOHR
     return atom_coords
 
 def to_berny_log(pyscf_log):
@@ -135,6 +135,10 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         if log.verbose >= lib.logger.NOTE:
             log.note('\nGeometry optimization cycle %d', cycle+1)
             dump_mol_geometry(mol, geom.coords, log)
+
+        if mol.symmetry:
+            geom.coords = symmetrize(mol, geom.coords)
+
         mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
         energy, gradients = g_scanner(mol)
         log.note('cycle %d: E = %.12g  dE = %g  norm(grad) = %g', cycle+1,

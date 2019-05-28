@@ -80,3 +80,27 @@ def dump_mol_geometry(mol, new_coords, log=None):
              (mol.atom_symbol(i),
               new_coords[i,0], new_coords[i,1], new_coords[i,2],
               dx[i,0], dx[i,1], dx[i,2]))
+
+def symmetrize(mol, coords):
+    '''Symmetrize the structure of a molecule.'''
+    assert(mol.symmetry)
+    pmol = mol.copy()
+    # p-type AOs has the same symmetry adaptation structure as the
+    # coordinates.
+    pmol.basis = {'default': [[1, (1, 1)]]}
+    # There is uncertainty for the output of the transformed molecular
+    # geometry when mol.symmetry is True. E.g., H2O can be placed either on
+    # xz-plane or on yz-plane for C2v symmetry. This uncertainty can lead to
+    # wrong symmetry adaptation basis. Molecular point group and coordinates
+    # should be explicitly given to avoid the uncertainty.
+    pmol.symmetry = mol.topgroup
+    pmol.atom = mol._atom
+    pmol.unit = 'Bohr'
+    pmol.build(False, False)
+
+    a_id = pmol.irrep_id.index(0)
+    c = pmol.symm_orb[a_id].reshape(mol.natm, 3, -1)
+    tmp = numpy.einsum('zx,zxi->i', coords, c)
+    proj_coords = numpy.einsum('i,zxi->zx', tmp, c)
+    return proj_coords
+
