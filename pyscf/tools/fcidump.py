@@ -135,7 +135,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     mo_coeff = mf.mo_coeff
     h1e = reduce(numpy.dot, (mo_coeff.T, mf.get_hcore(), mo_coeff))
     if mf._eri is None:
-        eri = ao2mo.full(mol, mo_coeff)
+        eri = ao2mo.full(mf.mol, mo_coeff)
     else:
         eri = ao2mo.full(mf._eri, mo_coeff)
     orbsym = getattr(mo_coeff, 'orbsym', None)
