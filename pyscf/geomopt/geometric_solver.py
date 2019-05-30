@@ -23,7 +23,8 @@ import geometric
 import geometric.molecule
 #from geometric import molecule
 from pyscf import lib
-from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
+from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
+                                  symmetrize)
 from pyscf import __config__
 
 try:
@@ -74,6 +75,10 @@ class PySCFEngine(geometric.engine.Engine):
         coords = coords.reshape(-1,3)
         if g_scanner.verbose >= lib.logger.NOTE:
             dump_mol_geometry(mol, coords*lib.param.BOHR)
+
+        if mol.symmetry:
+            coords = symmetrize(mol, coords)
+
         mol.set_geom_(coords, unit='Bohr')
         energy, gradients = g_scanner(mol)
 

@@ -112,10 +112,13 @@ def mm_charge(scf_method, coords, charges, unit=None):
                 nao = mol.nao
                 max_memory = self.max_memory - lib.current_memory()[0]
                 blksize = int(min(max_memory*1e6/8/nao**2, 200))
+                cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                                     mol._env, intor)
                 v = 0
                 for i0, i1 in lib.prange(0, charges.size, blksize):
                     fakemol = gto.fakemol_for_charges(coords[i0:i1])
-                    j3c = df.incore.aux_e2(mol, fakemol, intor=intor, aosym='s2ij')
+                    j3c = df.incore.aux_e2(mol, fakemol, intor=intor,
+                                           aosym='s2ij', cintopt=cintopt)
                     v += numpy.einsum('xk,k->x', j3c, -charges[i0:i1])
                 v = lib.unpack_tril(v)
             return h1e + v
@@ -213,10 +216,13 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
                 nao = mol.nao
                 max_memory = self.max_memory - lib.current_memory()[0]
                 blksize = int(min(max_memory*1e6/8/nao**2, 200))
+                cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                                     mol._env, intor)
                 v = 0
                 for i0, i1 in lib.prange(0, charges.size, blksize):
                     fakemol = gto.fakemol_for_charges(coords[i0:i1])
-                    j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1', comp=3)
+                    j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1',
+                                           comp=3, cintopt=cintopt)
                     v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
             return g_qm + v
 
