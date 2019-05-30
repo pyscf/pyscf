@@ -556,6 +556,8 @@ def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
 def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
     '''Default wrapper to patch ddCOSMO to post-SCF methods (CC, CI, MP,
     TDDFT etc.)
+
+    NOTE: this implementation often causes (macro iteration) convergence issue
     
     Kwargs:
         dm : if given, solvent does not response to the change of density
@@ -575,6 +577,10 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             scf_with_solvent.with_solvent = solvent_obj
     else:
         scf_with_solvent = ddcosmo_for_scf(method._scf, solvent_obj, dm)
+        if dm is None:
+            solvent_obj = scf_with_solvent.with_solvent
+            solvent_obj.epcm, solvent_obj.vpcm = \
+                    solvent_obj.kernel(scf_with_solvent.make_rdm1())
 
     # Post-HF objects access the solvent effects indirectly through the
     # underlying ._scf object.
@@ -590,8 +596,10 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
         def __init__(self, method):
             self.__dict__.update(method.__dict__)
             self._scf = scf_with_solvent
-            self.with_solvent = scf_with_solvent.with_solvent
-            self._keys.update(['with_solvent'])
+
+        @property
+        def with_solvent(self):
+            return self._scf.with_solvent
 
         def dump_flags(self, verbose=None):
             old_method.dump_flags(self)
@@ -617,6 +625,7 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             #log1.note, log1.info = log1.info, log1.debug
 
             e_last = 0
+            #diis = lib.diis.DIIS()
             for cycle in range(self.with_solvent.max_cycle):
                 log.info('\n** Solvent self-consistent cycle %d:', cycle)
                 # Solvent effects are applied when accessing the
@@ -627,11 +636,7 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
                 with lib.temporary_env(with_solvent, frozen=True):
                     e_tot = basic_scanner(self.mol)
                     dm = basic_scanner.make_rdm1(ao_repr=True)
-
-                if with_solvent.epcm is not None:
-                    edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                    e_tot = e_tot - edup + with_solvent.epcm
-                    log.debug('  E_diel = %.15g', with_solvent.epcm)
+                    #dm = diis.update(dm)
 
                 # To generate the solvent potential for ._scf object. Since
                 # frozen is set when calling basic_scanner, the solvent
@@ -648,16 +653,13 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
 
             # An extra cycle to compute the total energy
             log.info('\n** Extra cycle for solvent effects')
-            res = old_method.kernel(self)
             with lib.temporary_env(with_solvent, frozen=True):
                 #Update everything except the _scf object and _keys
                 basic_scanner(self.mol)
-                new_keys = self._keys
                 self.__dict__.update(basic_scanner.__dict__)
-                self._keys = new_keys
-                self._scf = scf_with_solvent
+                self._scf.__dict__.update(basic_scanner._scf.__dict__)
             self._finalize()
-            return res
+            return self.e_corr, None
 
         def nuc_grad_method(self):
             from pyscf.solvent import ddcosmo_grad
@@ -1151,7 +1153,7 @@ if __name__ == '__main__':
     e = ddcosmo_for_casci(mcscf.CASCI(mf, 4, 4)).kernel()[0]
     print(e - -75.5743583693215)
     cc_cosmo = ddcosmo_for_post_scf(cc.CCSD(mf)).run()
-    print(cc_cosmo.e_tot - -75.71096812100654)
+    print(cc_cosmo.e_tot - -75.70961637250134)
 
     mol = gto.Mole()
     mol.atom = ''' Fe                 0.00000000    0.00000000   -0.11081188
