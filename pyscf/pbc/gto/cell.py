@@ -1190,7 +1190,7 @@ class Cell(mole.Mole):
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
-            if np.any(exp_min) < 0.1:
+            if np.any(exp_min < 0.1):
                 sys.stderr.write('''WARNING!
   Very diffused basis functions are found in the basis set. They may lead to severe
   linear dependence and numerical instability.  You can set  cell.exp_to_discard=0.1

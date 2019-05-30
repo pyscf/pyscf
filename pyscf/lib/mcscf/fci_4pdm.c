@@ -51,9 +51,7 @@ static void rdm4_0b_t2(double *ci0, double *t2,
         FCI_t1ci_sf(ci0, t1, nb, stra_id, 0,
                     norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
 
-#pragma omp parallel default(none) \
-        shared(t1, t2, bcount, strb_id, norb, nlinkb, clink_indexb), \
-        private(i, j, k, l, a, str1, sign, pt1, pt2, tab)
+#pragma omp parallel private(i, j, k, l, a, str1, sign, pt1, pt2, tab)
 {
 #pragma omp for schedule(static, 1) nowait
         for (k = 0; k < bcount; k++) {
@@ -95,10 +93,7 @@ static void rdm4_a_t2(double *ci0, double *t2,
         double *pt1, *pt2;
         _LinkT *tab = clink_indexa + stra_id * nlinka;
 
-#pragma omp parallel default(none) \
-        shared(ci0, t2, bcount, strb_id, norb, na, nb, nlinka, nlinkb, \
-               clink_indexa, clink_indexb, tab), \
-        private(i, j, k, l, a, str1, sign, pt1, pt2)
+#pragma omp parallel private(i, j, k, l, a, str1, sign, pt1, pt2)
 {
         double *t1 = malloc(sizeof(double) * bcount * nnorb);
 #pragma omp for schedule(static, 40)
@@ -314,9 +309,7 @@ void FCI4pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
                             norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
         }
 
-#pragma omp parallel default(none) \
-        shared(rdm3, rdm4, t1ket, t2bra, t2ket, norb, bcount), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt2)
+#pragma omp parallel private(ij, i, j, k, l, n, tbra, pbra, pt2)
 {
         tbra = malloc(sizeof(double) * nnorb * bcount);
 #pragma omp for schedule(static, 1) nowait
@@ -395,9 +388,7 @@ void FCI4pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3, double *rdm4,
                             norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
         }
 
-#pragma omp parallel default(none) \
-        shared(rdm3, rdm4, t1ket, t2bra, t2ket, norb, stra_id, strb_id, fill1), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt2, factor)
+#pragma omp parallel private(ij, i, j, k, l, n, tbra, pbra, pt2, factor)
 {
         tbra = malloc(sizeof(double) * nnorb * fill1);
 #pragma omp for schedule(dynamic, 4)
@@ -498,9 +489,7 @@ void FCI3pdm_kern_sf(double *rdm1, double *rdm2, double *rdm3,
         FCI_t1ci_sf(ket, t1ket, bcount, stra_id, strb_id,
                     norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
 
-#pragma omp parallel default(none) \
-        shared(rdm3, t1ket, t2bra, norb, bcount), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt2)
+#pragma omp parallel private(ij, i, j, k, l, n, tbra, pbra, pt2)
 {
         tbra = malloc(sizeof(double) * nnorb * bcount);
 #pragma omp for schedule(dynamic, 4)
@@ -568,9 +557,7 @@ void FCI3pdm_kern_spin0(double *rdm1, double *rdm2, double *rdm3,
         FCI_t1ci_sf(ket, t1ket, fill1, stra_id, strb_id,
                     norb, na, nb, nlinka, nlinkb, clink_indexa, clink_indexb);
 
-#pragma omp parallel default(none) \
-        shared(rdm3, t1ket, t2bra, norb, stra_id, strb_id, fill1), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt2, factor)
+#pragma omp parallel private(ij, i, j, k, l, n, tbra, pbra, pt2, factor)
 {
         tbra = malloc(sizeof(double) * nnorb * fill1);
 #pragma omp for schedule(dynamic, 4)
