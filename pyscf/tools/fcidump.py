@@ -153,7 +153,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
         if getattr(mf, 'exxdiv'):  # PBC system
             eri = mf.with_df.ao2mo(mo_coeff)
         else:
-            eri = ao2mo.full(mol, mo_coeff)
+            eri = ao2mo.full(mf.mol, mo_coeff)
     else:  # Handle cached integrals or customized systems
         eri = ao2mo.full(mf._eri, mo_coeff)
     orbsym = getattr(mo_coeff, 'orbsym', None)
