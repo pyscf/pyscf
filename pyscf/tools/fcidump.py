@@ -90,7 +90,7 @@ def from_chkfile(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     mo_coeff = numpy.array(scf_rec['mo_coeff'])
     nmo = mo_coeff.shape[1]
 
-    s = reduce(numpy.dot, (mo_coeff, mol.intor_symmetric('int1e_ovlp'), mo_coeff))
+    s = reduce(numpy.dot, (mo_coeff.conj().T, mol.intor_symmetric('int1e_ovlp'), mo_coeff))
     if abs(s - numpy.eye(nmo)).max() > 1e-6:
         # Not support the chkfile from pbc calculation
         raise RuntimeError('Non-orthogonal orbitals found in chkfile')
