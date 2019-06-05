@@ -871,45 +871,34 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
     nov = nocc*nvir
 
     r1 = vector[:nkpts*nov].copy().reshape(nkpts, nocc, nvir)
-    r2 = np.zeros((nkpts**2*nov, nkpts*nov), dtype=vector.dtype)
 
-    # TODO Find a smarter way to unpack r2 vector
-    kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
-    kkov_struct = np.array(kkov_idx.shape)
-    kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
-    kov_struct = np.array(kov_idx.shape)
+    r2 = np.zeros((nkpts**2, nkpts, nov, nov), dtype=vector.dtype)
 
-    for ki in range(nkpts):
-        for i in range(nocc):
-            for a in range(nvir):
-                kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
-                for ka in range(nkpts):
-                    kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
+    idx, idy = np.tril_indices(nov)
+    nov2_tril = nov * (nov + 1) // 2
+    nov2 = nov * nov
 
-    vector = vector[nkpts*nov:]
+    r2_tril = vector[nkpts*nov:].copy()
     offset = 0
-    for ki in range(nkpts):
-        for ka in range(nkpts):
-            for i in range(nocc):
-                for a in range(nvir):
-                    kia = kov_idx[ki, i, a]
-                    kkia = kkov_idx[ki, ka, i, a]
-                    for kj in range(nkpts):
-                        kb = kconserv[ki, ka, kj]
-                        for j in range(nocc):
-                            for b in range(nvir):
-                                kkjb = kkov_idx[kj, kb, j, b]
-                                kjb = kov_idx[kj, j, b]
-                                if kkia == kkjb:
-                                    r2[kkia, kjb] = vector[offset]
-                                    offset += 1
-                                elif kkia > kkjb:
-                                    r2[kkia, kjb] = r2[kkjb, kia] = vector[offset]
-                                    offset += 1
+    for ki, ka, kj in kpts_helper.loop_kkk(nkpts):
+        kb = kconserv[ki, ka, kj]
+        kika = ki * nkpts + ka
+        kjkb = kj * nkpts + kb
+        if kika == kjkb:
+            tmp = r2_tril[offset:offset+nov2_tril]
+            r2[kika, kj, idx, idy] = tmp
+            r2[kjkb, ki, idy, idx] = tmp
+            offset += nov2_tril
+        elif kika > kjkb:
+            tmp = r2_tril[offset:offset+nov2].reshape(nov, nov)
+            r2[kika, kj] = tmp
+            r2[kjkb, ki] = tmp.transpose()
+            offset += nov2
 
-    # r2 indices (old): (k_i, k_a, i, a), (k_J, J, B)
+    # r2 indices (old): (k_i, k_a), (k_J), (i, a), (J, B)
     # r2 indices (new): k_i, k_J, k_a, i, J, a, B
-    r2 = r2.reshape(nkpts, nkpts, nocc, nvir, nkpts, nocc, nvir).transpose(0, 4, 1, 2, 5, 3, 6)
+    r2 = r2.reshape(nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir).transpose(0,2,1,3,5,4,6)
+
     log.timer("vector_to_amplitudes_singlet", *cput0)
     return [r1, r2]
 
@@ -927,40 +916,28 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
     nov = nocc * nvir
 
     # r2 indices (old): k_i, k_J, k_a, i, J, a, B
-    # r2 indices (new): (k_i, k_a, i, a), (k_J, J, B)
-    r2 = r2.transpose(0,2,3,5,1,4,6).reshape(nkpts**2*nov, nkpts*nov)
+    # r2 indices (new): (k_i, k_a), (k_J), (i, a), (J, B)
+    r2 = r2.transpose(0,2,1,3,5,4,6).reshape(nkpts**2, nkpts, nov, nov)
 
-    # TODO Find a smarter way to save r2 vector
-    kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
-    kkov_struct = np.array(kkov_idx.shape)
-    kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
-    kov_struct = np.array(kov_idx.shape)
-
-    for ki in range(nkpts):
-        for i in range(nocc):
-            for a in range(nvir):
-                kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
-                for ka in range(nkpts):
-                    kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
+    idx, idy = np.tril_indices(nov)
+    nov2_tril = nov * (nov + 1) // 2
+    nov2 = nov * nov
 
     vector = np.empty(r2.size, dtype=r2.dtype)
-    counter = 0
-    for ki in range(nkpts):
-        for ka in range(nkpts):
-            for i in range(nocc):
-                for a in range(nvir):
-                    kkia = kkov_idx[ki, ka, i, a]
-                    for kj in range(nkpts):
-                        kb = kconserv[ki, ka, kj]
-                        for j in range(nocc):
-                            for b in range(nvir):
-                                kkjb = kkov_idx[kj, kb, j, b]
-                                kjb = kov_idx[kj, j, b]
-                                if kkia >= kkjb:
-                                    vector[counter] = r2[kkia, kjb]
-                                    counter += 1
-    vector = vector[:counter]
-    vector = np.hstack((r1.ravel(), vector))
+    offset = 0
+    for ki, ka, kj in kpts_helper.loop_kkk(nkpts):
+        kb = kconserv[ki, ka, kj]
+        kika = ki * nkpts + ka
+        kjkb = kj * nkpts + kb
+        r2ovov = r2[kika, kj]
+        if kika == kjkb:
+            vector[offset:offset+nov2_tril] = r2ovov[idx, idy]
+            offset += nov2_tril
+        elif kika > kjkb:
+            vector[offset:offset+nov2] = r2ovov.ravel()
+            offset += nov2
+
+    vector = np.hstack((r1.ravel(), vector[:offset]))
     log.timer("amplitudes_to_vector_singlet", *cput0)
     return vector
 
@@ -996,7 +973,7 @@ def join_indices(indices, struct):
 def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     raise NotImplementedError
 
-
+@profile
 def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
@@ -1336,37 +1313,51 @@ class EOMEESinglet(EOMEE):
         '''
         nocc = self.nocc
         nvir = self.nmo - nocc
+        nov = nocc * nvir
         nkpts = self.nkpts
 
-        size_r1 = nkpts*nocc*nvir
+        size_r1 = nkpts*nov
 
         # TODO Find a smarter way to count r2 vector
-        kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
-        kkov_struct = np.array(kkov_idx.shape)
-        kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
-        kov_struct = np.array(kov_idx.shape)
+        # kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
+        # kkov_struct = np.array(kkov_idx.shape)
+        # kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
+        # kov_struct = np.array(kov_idx.shape)
 
-        for ki in range(nkpts):
-            for i in range(nocc):
-                for a in range(nvir):
-                    kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
-                    for ka in range(nkpts):
-                        kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
+        # for ki in range(nkpts):
+        #     for i in range(nocc):
+        #         for a in range(nvir):
+        #             kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
+        #             for ka in range(nkpts):
+        #                 kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
 
         kconserv = self.get_kconserv_ee_r2(kshift)
+        # size_r2 = 0
+        # # print("{:>3} {:>3} {:>3} {:>3} {:>4} {:>3} {:>3} {:>3} {:>3} {:>4}".format("ki", "ka", "i", "a", "kkia", "kj", "kb", "j", "b", "kkjb"))
+        # for ki in range(nkpts):
+        #     for ka in range(nkpts):
+        #         for i in range(nocc):
+        #             for a in range(nvir):
+        #                 kkia = kkov_idx[ki, ka, i, a]
+        #                 for kj in range(nkpts):
+        #                     kb = kconserv[ki, ka, kj]
+        #                     for j in range(nocc):
+        #                         for b in range(nvir):
+        #                             kkjb = kkov_idx[kj, kb, j, b]
+        #                             if kkia >= kkjb:
+        #                                 # print("{:>3} {:>3} {:>3} {:>3} {:>4} {:>3} {:>3} {:>3} {:>3} {:>4}".format(ki, ka, i, a, kkia, kj, kb, j, b, kkjb))
+        #                                 size_r2 += 1
+
         size_r2 = 0
-        for ki in range(nkpts):
-            for ka in range(nkpts):
-                for i in range(nocc):
-                    for a in range(nvir):
-                        kkia = kkov_idx[ki, ka, i, a]
-                        for kj in range(nkpts):
-                            kb = kconserv[ki, ka, kj]
-                            for j in range(nocc):
-                                for b in range(nvir):
-                                    kkjb = kkov_idx[kj, kb, j, b]
-                                    if kkia >= kkjb:
-                                        size_r2 += 1
+        kk_struct = np.array([nkpts, nkpts])
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki, ka, kj]
+            kika = join_indices(np.array([ki, ka]), kk_struct)
+            kjkb = join_indices(np.array([kj, kb]), kk_struct)
+            if kika == kjkb:
+                size_r2 += nov * (nov + 1) // 2
+            elif kika > kjkb:
+                size_r2 += nov**2
 
         return size_r1 + size_r2
 
