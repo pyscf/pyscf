@@ -973,7 +973,7 @@ def join_indices(indices, struct):
 def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     raise NotImplementedError
 
-@profile
+
 def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
@@ -1318,42 +1318,12 @@ class EOMEESinglet(EOMEE):
 
         size_r1 = nkpts*nov
 
-        # TODO Find a smarter way to count r2 vector
-        # kkov_idx = np.empty((nkpts, nkpts, nocc, nvir), dtype=int)
-        # kkov_struct = np.array(kkov_idx.shape)
-        # kov_idx = np.empty((nkpts, nocc, nvir), dtype=int)
-        # kov_struct = np.array(kov_idx.shape)
-
-        # for ki in range(nkpts):
-        #     for i in range(nocc):
-        #         for a in range(nvir):
-        #             kov_idx[ki, i, a] = join_indices(np.array((ki, i, a)), kov_struct)
-        #             for ka in range(nkpts):
-        #                 kkov_idx[ki, ka, i, a] = join_indices(np.array((ki, ka, i, a)), kkov_struct)
-
         kconserv = self.get_kconserv_ee_r2(kshift)
-        # size_r2 = 0
-        # # print("{:>3} {:>3} {:>3} {:>3} {:>4} {:>3} {:>3} {:>3} {:>3} {:>4}".format("ki", "ka", "i", "a", "kkia", "kj", "kb", "j", "b", "kkjb"))
-        # for ki in range(nkpts):
-        #     for ka in range(nkpts):
-        #         for i in range(nocc):
-        #             for a in range(nvir):
-        #                 kkia = kkov_idx[ki, ka, i, a]
-        #                 for kj in range(nkpts):
-        #                     kb = kconserv[ki, ka, kj]
-        #                     for j in range(nocc):
-        #                         for b in range(nvir):
-        #                             kkjb = kkov_idx[kj, kb, j, b]
-        #                             if kkia >= kkjb:
-        #                                 # print("{:>3} {:>3} {:>3} {:>3} {:>4} {:>3} {:>3} {:>3} {:>3} {:>4}".format(ki, ka, i, a, kkia, kj, kb, j, b, kkjb))
-        #                                 size_r2 += 1
-
         size_r2 = 0
-        kk_struct = np.array([nkpts, nkpts])
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            kika = join_indices(np.array([ki, ka]), kk_struct)
-            kjkb = join_indices(np.array([kj, kb]), kk_struct)
+            kika = ki * nkpts + ka
+            kjkb = kj * nkpts + kb
             if kika == kjkb:
                 size_r2 += nov * (nov + 1) // 2
             elif kika > kjkb:
