@@ -108,10 +108,10 @@ for i in range(mol.nbas):
         pi += di
 print('integral shape %s' % str(eri1.shape))
 # This integral block can be generated using mol.intor
-eri1 = mol.intor('int2e_ip1_sph', (bas_start, bas_end,
-                                   0, mol.nbas,
-                                   0, mol.nbas,
-                                   0, mol.nbas)
+eri1 = mol.intor('int2e_ip1_sph', shls_slice=(bas_start, bas_end,
+                                              0, mol.nbas,
+                                              0, mol.nbas,
+                                              0, mol.nbas)
 
 
 #
