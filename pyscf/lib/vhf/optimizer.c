@@ -287,8 +287,7 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         double qtmp, tmp;
         int ij, i, j, di, dj, ish, jsh;

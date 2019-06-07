@@ -294,13 +294,13 @@ More information of the compilation can be found in :file:`pyscf/lib/nao/README.
 DMRG solver
 -----------
 Density matrix renormalization group (DMRG) implementations Block
-(http://chemists.princeton.edu/chan/software/block-code-for-dmrg) and
+(https://sanshar.github.io/Block) and
 CheMPS2 (http://sebwouters.github.io/CheMPS2/index.html)
 are efficient DMRG solvers for ab initio quantum chemistry problem.
-`Installing Block <http://sanshar.github.io/Block/build.html>`_ requires
+`Installing Block <https://sanshar.github.io/Block/build.html>`_ requires
 C++11 compiler.  If C++11 is not supported by your compiler, you can
 register and download the precompiled Block binary from
-http://chemists.princeton.edu/chan/software/block-code-for-dmrg.
+https://sanshar.github.io/Block/build.html.
 Before using the Block or CheMPS2, you need create a configuration file
 ``pyscf/dmrgscf/settings.py``  (as shown by settings.py.example) to store
 the path where the DMRG solver was installed.
