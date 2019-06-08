@@ -1022,7 +1022,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
-        tril_shape = ((nkpts)*(nkpts+1))/2
+        tril_shape = ((nkpts)*(nkpts+1))//2
         t2_tril = numpy.zeros((tril_shape,nkpts,nocc,nocc,nvir,nvir),dtype=numpy.complex128)
         local_mp2 = numpy.array(0.0,dtype=numpy.complex128)
         self.emp2 = 0
