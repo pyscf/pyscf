@@ -8,6 +8,7 @@ fashion without any issues related to the Davidson procedure.
 This is a helper module defining basic interfaces.
 """
 
+import sys
 from pyscf.lib import logger
 
 from pyscf.pbc.tools import get_kconserv
@@ -17,6 +18,8 @@ from scipy.linalg import solve
 
 from itertools import count, groupby
 
+if sys.version_info >= (3,):
+    unicode = str
 
 def msize(m):
     """
