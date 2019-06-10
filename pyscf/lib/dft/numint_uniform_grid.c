@@ -1604,10 +1604,7 @@ void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
         if (dimension == 0) {
                 nimgs = 1;
         }
-#pragma omp parallel default(none) \
-        shared(eval_ints, weights, F_mat, comp, hermi, ao_loc, \
-               log_prec, dimension, nimgs, Ls, a, b, offset, submesh, mesh, \
-               atm, natm, bas, nbas, env, nenv)
+#pragma omp parallel
 {
         int ncij = comp * naoi * naoj;
         int nijsh = nish * njsh;
@@ -2642,10 +2639,7 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
                 nimgs = 1;
         }
         double *rhobufs[MAX_THREADS];
-#pragma omp parallel default(none) \
-        shared(eval_rho, rho, F_dm, comp, hermi, ao_loc, \
-               log_prec, dimension, a, b, offset, submesh, mesh, rhobufs, nimgs, Ls, \
-               atm, natm, bas, nbas, env, nenv)
+#pragma omp parallel
 {
         int ncij = naoi * naoj;
         int nijsh = nish * njsh;

@@ -48,7 +48,7 @@ Generates IBO files as VASP Chgcars
 '''
 for i in range(ibo.shape[1]):
     tools.cubegen.density(cell, 'diamond_ibo'+str(i+1)+'.vasp', ibo ,moN=i+1,fileFormat="vasp")
-    print "wrote cube "+str(i+1)
+    print("wrote cube "+str(i+1))
 
 '''
 Makes Population Analysis with IAOs

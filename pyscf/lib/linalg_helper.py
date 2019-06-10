@@ -1247,7 +1247,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     True
     '''
     if isinstance(aop, numpy.ndarray) and aop.ndim == 2:
-        return numpy.linalg.solve(aop, b)
+        return numpy.linalg.solve(aop+numpy.eye(aop.shape[0]), b)
 
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -1367,8 +1367,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     else:
         toloose = tol_residual
 
-    if not callable(precond):
-        precond = make_diag_precond(precond)
+    assert callable(precond)
 
     xs = [precond(b)]
     ax = [aop(xs[-1])]

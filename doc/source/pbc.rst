@@ -23,6 +23,12 @@ and KDFT methods.  On top of these KSCF methods, we have implemented k-point CCS
 k-point EOM-CCSD methods.  Other post-mean-field methods can be analogously written to
 explicitly enforce translational symmetry through k-point sampling.
 
+When using results of this code for publications, please cite the following papers:
+
+1) "Gaussian-Based Coupled-Cluster Theory for the Ground-State and Band Structure of Solids" J. McClain, Q. Sun, G. K.-L. Chan, and T. C. Berkelbach, J. Chem. Theory Comput. 13, 1209 (2017).
+
+2) "Gaussian and plane-wave mixed density fitting for periodic systems" Q. Sun, T. C. Berkelbach, J. McClain, G. K.-L. Chan, J. Chem. Phys. 147, 164119 (2017).
+
 The list of modules described in this chapter is:
 
 .. toctree::

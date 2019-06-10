@@ -136,3 +136,10 @@ mf.xc = 'PBE,'
 # Correlation part only
 mf.xc = ',PBE'
 
+# When defining custom functionals, compound functional will affect both the
+# exchange and correlation parts
+mf.xc = 'PBE + SLATER*.5'
+
+# The above input is equivalent to
+mf.xc = 'PBE + SLATER*.5, PBE'
+

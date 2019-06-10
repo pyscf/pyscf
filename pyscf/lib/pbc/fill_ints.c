@@ -933,10 +933,7 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
                                                  atm, natm, bas, nbas, env);
 
-#pragma omp parallel default(none) \
-        shared(intor, fill, eri, nkpts_ij, nkpts, comp, nimgs, \
-               Ls, expkL_r, expkL_i, kptij_idx, shls_slice, ao_loc, cintopt, pbcopt, \
-               atm, natm, bas, nbas, env, nenv, count)
+#pragma omp parallel
 {
         int ish, jsh, ij;
         double *env_loc = malloc(sizeof(double)*nenv);
@@ -1109,10 +1106,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
                                                  atm, natm, bas, nbas, env);
 
-#pragma omp parallel default(none) \
-        shared(intor, fill, out, nkpts, comp, nimgs, \
-               Ls, expkL_r, expkL_i, shls_slice, ao_loc, cintopt, pbcopt, \
-               atm, natm, bas, nbas, env, nenv)
+#pragma omp parallel
 {
         int jsh;
         double *env_loc = malloc(sizeof(double)*nenv);

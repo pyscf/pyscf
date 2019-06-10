@@ -124,8 +124,7 @@ void GTO2e_cart_or_sph(int (*intor)(), CINTOpt *cintopt, double *eri, int *ao_lo
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
 
-#pragma omp parallel default(none) \
-        shared(intor, eri, ao_loc, nbas, envs, vhfopt)
+#pragma omp parallel
 {
         int i, j, ij;
         double *buf = malloc(sizeof(double) * (di*di*nao*nao + cache_size));
