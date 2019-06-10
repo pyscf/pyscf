@@ -1,3 +1,4 @@
+import os
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF, KRHF, KRKS
 from pyscf.pbc.tdscf import rhf_slow as td, krhf_slow_supercell as ktd, proxy as tdp, kproxy_supercell as ktdp
@@ -135,7 +136,7 @@ class FrozenTest(unittest.TestCase):
     """Tests frozen behavior."""
     k = 2
     k_c = (0, 0, 0)
-    df_file = "../../tdscf/test/frozen_test_cderi.h5"
+    df_file = os.path.join(__file__, "..", "frozen_test_cderi.h5")
 
     @classmethod
     def setUpClass(cls):

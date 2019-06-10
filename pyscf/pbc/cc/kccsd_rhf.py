@@ -607,7 +607,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                              or type(cc._scf.with_df) is not df.GDF
                              # direct-vvvv for pbc-2D is not supported so far
                              or cell.dimension == 2)
-            if vvvv_required
+            if vvvv_required:
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
 
             # <ij|pq>  = (ip|jq)

@@ -33,7 +33,7 @@ def molecular_response_ov(vind, space_ov, nocc, nmo, double, log_dest):
     Retrieves a raw response matrix.
     Args:
         vind (Callable): a pyscf matvec routine;
-        space_ov (ndarray): the active `ov` space maks: either the same mask for both rows and columns (1D array) or
+        space_ov (ndarray): the active `ov` space mask: either the same mask for both rows and columns (1D array) or
         separate `ov` masks for rows and columns (2D array);
         nocc (int): the number of occupied orbitals (frozen and active);
         nmo (int): the total number of orbitals;
@@ -100,7 +100,7 @@ def molecular_response(vind, space, nocc, nmo, double, log_dest):
     Retrieves a raw response matrix.
     Args:
         vind (Callable): a pyscf matvec routine;
-        space (ndarray): the active orbital space maks: either the same mask for both rows and columns (1D array) or
+        space (ndarray): the active orbital space mask: either the same mask for both rows and columns (1D array) or
         separate orbital masks for rows and columns (2D array);
         nocc (int): the number of occupied orbitals (frozen and active);
         nmo (int): the total number of orbitals;
