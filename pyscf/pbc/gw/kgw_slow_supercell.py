@@ -43,11 +43,11 @@ def corrected_moe(eri, k, p):
             eri.mo_coeff_full[k2][:, :eri.nocc_full[k2]],
             eri.mo_coeff_full[k2][:, :eri.nocc_full[k2]],
             moc[:, numpy.newaxis],
-        ), (k, k2, k2, k)).squeeze().trace()
+        ), (k, k2, k2, k)).squeeze().trace().real
     vk /= nk
     mf = eri.model
     v_mf = mf.get_veff()[k] - mf.get_j()[k]
-    v_mf = einsum("i,ij,j", moc.conj(), v_mf, moc)
+    v_mf = einsum("i,ij,j", moc.conj(), v_mf, moc).real
     return moe + vk - v_mf
 
 

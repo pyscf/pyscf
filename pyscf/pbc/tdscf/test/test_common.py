@@ -44,7 +44,7 @@ def retrieve_m_khf(eri, k):
     )
 
 
-def test_m_complex_support(model, phase=None, **kwargs):
+def _test_m_complex_support(model, phase=None, **kwargs):
     if phase is None:
         phase = numpy.exp(2.j * numpy.pi * 0.2468) * 1.3579
     m1 = retrieve_m(model, **kwargs)

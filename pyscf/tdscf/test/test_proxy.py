@@ -86,7 +86,7 @@ class H20Test(unittest.TestCase):
                 raise
 
     def test_raw_response(self):
-        """Tests the `molecular_reponse` and whether it slices output properly."""
+        """Tests the `molecular_response` and whether it slices output properly."""
         eri = PhysERI(self.model_rks, "dft")
         ref_m_full = eri.proxy_response()
 
@@ -200,7 +200,7 @@ class H20HFTest(unittest.TestCase):
                 raise
 
     def test_raw_response(self):
-        """Tests the `molecular_reponse` and whether it slices output properly."""
+        """Tests the `molecular_response` and whether it slices output properly."""
         eri = PhysERI(self.model_rhf, "hf")
         ref_m_full = eri.proxy_response()
 
