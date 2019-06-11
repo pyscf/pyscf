@@ -19,7 +19,7 @@ from pyscf.lib import logger, linalg_helper, einsum
 from pyscf.lib.parameters import LARGE_DENOM
 
 from pyscf.pbc.lib.kpts_helper import VectorSplitter, VectorComposer
-from pyscf.pbc.mp.kmp2 import padding_k_idx_mp as padding_k_idx
+from pyscf.pbc.mp.kmp2 import padding_k_idx
 
 import numpy as np
 

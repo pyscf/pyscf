@@ -58,7 +58,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     mo_e_v = [mo_energy[k][nocc:] for k in range(nkpts)]
 
     # Get location of non-zero/padded elements in occupied and virtual space
-    nonzero_opadding, nonzero_vpadding = padding_k_idx_mp(mp, kind="split")
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mp, kind="split")
 
     if with_t2:
         t2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=complex)
@@ -100,49 +100,9 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     return emp2, t2
 
 
-def padding_k_idx(nmo, nocc, kind="split"):
+def _padding_k_idx(nmo, nocc, kind="split"):
     """A convention used for padding vectors, matrices and tensors in case when occupation numbers depend on the
     k-point index.
-
-    This implementation stores k-dependent Fock and other matrix in dense arrays with additional dimensions
-    corresponding to k-point indexes. In case when the occupation numbers depend on the k-point index (i.e. a metal) or
-    when some k-points have more Bloch basis functions than others the corresponding data structure has to be padded
-    with entries that are not used (fictitious occupied and virtual degrees of freedom). Current convention stores these
-    states at the Fermi level as shown in the following example.
-
-    +----+--------+--------+--------+
-    |    |  k=0   |  k=1   |  k=2   |
-    |    +--------+--------+--------+
-    |    | nocc=2 | nocc=3 | nocc=2 |
-    |    | nvir=4 | nvir=3 | nvir=3 |
-    +====+========+========+========+
-    | v3 |  k0v3  |  k1v2  |  k2v2  |
-    +----+--------+--------+--------+
-    | v2 |  k0v2  |  k1v1  |  k2v1  |
-    +----+--------+--------+--------+
-    | v1 |  k0v1  |  k1v0  |  k2v0  |
-    +----+--------+--------+--------+
-    | v0 |  k0v0  |        |        |
-    +====+========+========+========+
-    |          Fermi level          |
-    +====+========+========+========+
-    | o2 |        |  k1o2  |        |
-    +----+--------+--------+--------+
-    | o1 |  k0o1  |  k1o1  |  k2o1  |
-    +----+--------+--------+--------+
-    | o0 |  k0o0  |  k1o0  |  k2o0  |
-    +----+--------+--------+--------+
-
-    In the above example, `get_nmo(mp, per_kpoint=True) == (6, 6, 5)`, `get_nocc(mp, per_kpoint) == (2, 3, 2)`. The
-    resulting dense `get_nmo(mp) == 7` and `get_nocc(mp) == 3` correspond to padded dimensions. This function will
-    return the following indexes corresponding to the filled entries of the above table:
-
-    >>> padding_k_idx_mp(mp, kind="split")
-    ([(0, 1), (0, 1, 2), (0, 1)], [(0, 1, 2, 3), (1, 2, 3), (1, 2, 3)])
-
-    >>> padding_k_idx_mp(mp, kind="joint")
-    [(0, 1, 3, 4, 5, 6), (0, 1, 2, 4, 5, 6), (0, 1, 4, 5, 6)]
-
     Args:
         nmo (Iterable): k-dependent orbital number;
         nocc (Iterable): k-dependent occupation numbers;
@@ -188,9 +148,60 @@ def padding_k_idx(nmo, nocc, kind="split"):
         return indexes
 
 
-def padding_k_idx_mp(mp, kind="split"):
-    """An alias to padding_k_idx with an MP-like object argument."""
-    return padding_k_idx(mp.get_nmo(per_kpoint=True), mp.get_nocc(per_kpoint=True), kind=kind)
+def padding_k_idx(mp, kind="split"):
+    """A convention used for padding vectors, matrices and tensors in case when occupation numbers depend on the
+    k-point index.
+
+    This implementation stores k-dependent Fock and other matrix in dense arrays with additional dimensions
+    corresponding to k-point indexes. In case when the occupation numbers depend on the k-point index (i.e. a metal) or
+    when some k-points have more Bloch basis functions than others the corresponding data structure has to be padded
+    with entries that are not used (fictitious occupied and virtual degrees of freedom). Current convention stores these
+    states at the Fermi level as shown in the following example.
+
+    +----+--------+--------+--------+
+    |    |  k=0   |  k=1   |  k=2   |
+    |    +--------+--------+--------+
+    |    | nocc=2 | nocc=3 | nocc=2 |
+    |    | nvir=4 | nvir=3 | nvir=3 |
+    +====+========+========+========+
+    | v3 |  k0v3  |  k1v2  |  k2v2  |
+    +----+--------+--------+--------+
+    | v2 |  k0v2  |  k1v1  |  k2v1  |
+    +----+--------+--------+--------+
+    | v1 |  k0v1  |  k1v0  |  k2v0  |
+    +----+--------+--------+--------+
+    | v0 |  k0v0  |        |        |
+    +====+========+========+========+
+    |          Fermi level          |
+    +====+========+========+========+
+    | o2 |        |  k1o2  |        |
+    +----+--------+--------+--------+
+    | o1 |  k0o1  |  k1o1  |  k2o1  |
+    +----+--------+--------+--------+
+    | o0 |  k0o0  |  k1o0  |  k2o0  |
+    +----+--------+--------+--------+
+
+    In the above example, `get_nmo(mp, per_kpoint=True) == (6, 6, 5)`, `get_nocc(mp, per_kpoint) == (2, 3, 2)`. The
+    resulting dense `get_nmo(mp) == 7` and `get_nocc(mp) == 3` correspond to padded dimensions. This function will
+    return the following indexes corresponding to the filled entries of the above table:
+
+    >>> padding_k_idx(mp, kind="split")
+    ([(0, 1), (0, 1, 2), (0, 1)], [(0, 1, 2, 3), (1, 2, 3), (1, 2, 3)])
+
+    >>> padding_k_idx(mp, kind="joint")
+    [(0, 1, 3, 4, 5, 6), (0, 1, 2, 4, 5, 6), (0, 1, 4, 5, 6)]
+
+    Args:
+        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
+        kind (str): either "split" (occupied and virtual spaces are split) or "joint" (occupied and virtual spaces are
+        the joint;
+
+    Returns:
+        Two lists corresponding to the occupied and virtual spaces for kind="split". Each list contains integer arrays
+        with indexes pointing to actual non-zero entries in the padded vector/matrix/tensor. If kind="joint", a single
+        list of arrays is returned corresponding to the entire MO space.
+    """
+    return _padding_k_idx(mp.get_nmo(per_kpoint=True), mp.get_nocc(per_kpoint=True), kind=kind)
 
 
 def padded_mo_energy(mp, mo_energy):
@@ -205,7 +216,7 @@ def padded_mo_energy(mp, mo_energy):
         Padded molecular energies.
     """
     frozen_mask = get_frozen_mask(mp)
-    padding_convention = padding_k_idx_mp(mp, kind="joint")
+    padding_convention = padding_k_idx(mp, kind="joint")
     nkpts = mp.nkpts
 
     result = np.zeros((nkpts, mp.nmo), dtype=mo_energy[0].dtype)
@@ -227,7 +238,7 @@ def padded_mo_coeff(mp, mo_coeff):
         Padded molecular coefficients.
     """
     frozen_mask = get_frozen_mask(mp)
-    padding_convention = padding_k_idx_mp(mp, kind="joint")
+    padding_convention = padding_k_idx(mp, kind="joint")
     nkpts = mp.nkpts
 
     result = np.zeros((nkpts, mo_coeff[0].shape[0], mp.nmo), dtype=mo_coeff[0].dtype)
@@ -450,7 +461,7 @@ def make_rdm1(mp, t2=None, kind="compact"):
         raise ValueError("The 'kind' argument should be either 'compact' or 'padded'")
     d_imds = _gamma1_intermediates(mp, t2=t2)
     result = []
-    padding_idxs = padding_k_idx_mp(mp, kind="joint")
+    padding_idxs = padding_k_idx(mp, kind="joint")
     for (oo, vv), idxs in zip(zip(*d_imds), padding_idxs):
         oo += np.eye(*oo.shape)
         d = block_diag(oo, vv)

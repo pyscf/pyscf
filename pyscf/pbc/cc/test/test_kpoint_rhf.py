@@ -28,7 +28,6 @@ from pyscf.pbc import df as pbc_df
 
 import pyscf.pbc.cc as pbcc
 from pyscf.pbc.cc import eom_kccsd_rhf_ip, eom_kccsd_rhf_ea
-from pyscf.pbc.mp.kmp2 import padding_k_idx
 import make_test_cell
 from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
