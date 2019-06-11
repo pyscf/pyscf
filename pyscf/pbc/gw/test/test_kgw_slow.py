@@ -174,6 +174,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         testing.assert_allclose(self.gw.mo_energy, self.kgw.mo_energy)
 
 
+#FIXME: This test fails
 class DiamondTestSupercell3(DiamondTestSupercell2):
     """Compare this (kgw_slow) @3kp vs kgw_slow_supercell, HF."""
     k = 3

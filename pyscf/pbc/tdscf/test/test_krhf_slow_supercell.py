@@ -78,12 +78,7 @@ class DiamondTestGamma(unittest.TestCase):
         assert_vectors_close(model.xy, xy)
         # ... vs ref
         testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-5)
-        try:
-            assert_vectors_close(model.xy.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze(), atol=1e-12)
-        except Exception:
-            # TODO: this exception is triggered in case of fft density fitting
-            print("This is a known bug: vectors from davidson are wrong")
-            raise
+        assert_vectors_close(model.xy.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze(), atol=1e-12)
 
 
 class DiamondTestShiftedGamma(unittest.TestCase):

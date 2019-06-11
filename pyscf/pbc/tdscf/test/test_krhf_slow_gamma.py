@@ -81,12 +81,7 @@ class DiamondTest(unittest.TestCase):
         testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-5)
         nocc = nvirt = 4
         testing.assert_equal(model.xy.shape, (len(model.e), 2, self.k, nocc, nvirt))
-        try:
-            assert_vectors_close(model.xy, numpy.array(self.td_model_krhf.xy), atol=1e-2)
-        except Exception:
-            # TODO
-            print("This is a known bug: vector #1 from davidson is way off")
-            raise
+        assert_vectors_close(model.xy, numpy.array(self.td_model_krhf.xy), atol=1e-2)
 
 
 class FrozenTest(unittest.TestCase):

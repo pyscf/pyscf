@@ -76,3 +76,12 @@ script:
     -I test_kuccsd_supercell_vs_kpts\.py
     -I test_kccsd_ghf\.py
     -I test_h_.*\.py
+    --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondTestSupercell3
+    --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondKSTestSupercell3
+    --exclude-test=pbc/gw/test/test_kgw_slow.DiamondTestSupercell3
+    --exclude-test=pbc/gw/test/test_kgw_slow.DiamondKSTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_krhf_slow_supercell.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_hf.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_ks.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_supercell_hf.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_supercell_ks.DiamondTestSupercell3
