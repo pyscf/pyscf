@@ -146,10 +146,12 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
 
         eig = linalg_helper.eig
         if guess is not None or koopmans:
-            def pickeig(w, v, nr, envs):
+            def pickeig(w, v, nroots, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
-                idx = np.argmax(np.abs(np.dot(np.array(guess_k).conj(), np.array(x0).T)), axis=1)
-                return linalg_helper._eigs_cmplx2real(w, v, idx)
+                s = np.dot(np.asarray(guess_k).conj(), np.asarray(x0).T)
+                snorm = np.einsum('pi,pi->i', s.conj(), s)
+                idx = np.argsort(-snorm)[:nroots]
+                return linalg_helper._eigs_cmplx2real(w, v, idx, real_eigenvectors=False)
 
             evals_k, evecs_k = eig(lambda _arg: matvec(cc, _arg, kshift), guess_k, precond, pick=pickeig,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,

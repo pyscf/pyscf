@@ -115,7 +115,7 @@ def cc_Woooo(cc,t1,t2,eris,kconserv):
 
             ki = numpy.arange(nkpts)
             kj = kconserv[km,ki,kn]
-            kij = [ki,kj]
+            kij = (ki,kj)
             Wmnij[km,kn,:] += 0.25*einsum('yxijef,xmnef->ymnij',tau[kij],eris.oovv[km,kn])
             
             for ki in range(nkpts):

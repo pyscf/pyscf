@@ -55,20 +55,26 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     def precond(r, e0, x0):
         return r/(e0-diag+1e-12)
 
+    # GHF or customized RHF/UHF may be of complex type
+    real_system = (eom._cc._scf.mo_coeff[0].dtype == np.double)
+
     eig = lib.davidson_nosym1
     if user_guess or koopmans:
         assert len(guess) == nroots
-        def eig_close_to_init_guess(w, v, nr, envs):
+        def eig_close_to_init_guess(w, v, nroots, envs):
             x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
             s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
-            s = np.dot(s.conj().T, s).diagonal()
-            idx = np.argsort(-s)[:nroots]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
+            snorm = np.einsum('pi,pi->i', s.conj(), s)
+            idx = np.argsort(-snorm)[:nroots]
+            return lib.linalg_helper._eigs_cmplx2real(w, v, idx, real_system)
         conv, es, vs = eig(matvec, guess, precond, pick=eig_close_to_init_guess,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
     else:
-        conv, es, vs = eig(matvec, guess, precond,
+        def pickeig(w, v, nroots, envs):
+            real_idx = np.where(abs(w.imag) < 1e-3)[0]
+            return lib.linalg_helper._eigs_cmplx2real(w, v, real_idx, real_system)
+        conv, es, vs = eig(matvec, guess, precond, pick=pickeig,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
 

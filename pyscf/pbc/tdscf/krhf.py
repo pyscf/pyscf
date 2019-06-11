@@ -28,6 +28,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.pbc.dft import numint
 from pyscf.pbc.scf.newton_ah import _gen_rhf_response
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
@@ -216,11 +217,14 @@ class TDHF(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
+        real_system = (gamma_point(self._scf.kpts) and
+                       self._scf.mo_coeff[0].dtype == numpy.double)
+
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
