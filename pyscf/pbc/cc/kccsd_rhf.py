@@ -703,10 +703,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             eig = linalg_helper.eig
             if user_guess or koopmans:
-                def pickeig(w, v, nr, envs):
+                def pickeig(w, v, nroots, envs):
                     x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
-                    idx = np.argmax(np.abs(np.dot(np.array(guess).conj(), np.array(x0).T)), axis=1)
-                    return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
+                    s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
+                    snorm = np.einsum('pi,pi->i', s.conj(), s)
+                    idx = np.argsort(-snorm)[:nroots]
+                    return linalg_helper._eigs_cmplx2real(w, v, idx, real_eigenvectors=False)
 
                 evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess, precond, pick=pickeig,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
@@ -943,10 +945,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             eig = linalg_helper.eig
             if user_guess or koopmans:
-                def pickeig(w, v, nr, envs):
+                def pickeig(w, v, nroots, envs):
                     x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
-                    idx = np.argmax(np.abs(np.dot(np.array(guess).conj(), np.array(x0).T)), axis=1)
-                    return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
+                    s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
+                    snorm = np.einsum('pi,pi->i', s.conj(), s)
+                    idx = np.argsort(-snorm)[:nroots]
+                    return linalg_helper._eigs_cmplx2real(w, v, idx, real_eigenvectors=False)
 
                 evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess, precond, pick=pickeig,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
