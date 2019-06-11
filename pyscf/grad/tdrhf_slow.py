@@ -159,7 +159,7 @@ if __name__ == '__main__':
     td = tddft.rhf.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
-    #print e[0] + mf.e_tot
+    #print(e[0] + mf.e_tot)
     tdg = Gradients(td)
     hfg = rhf_grad.Gradients(mf)
     g1 = tdg.kernel(z[0])

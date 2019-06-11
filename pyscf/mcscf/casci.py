@@ -83,7 +83,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
     if (isinstance(ci, (list, tuple)) and
         not isinstance(casscf.fcisolver, addons.StateAverageFCISolver)):
         log.warn('Mulitple states found in CASCI/CASSCF solver. Density '
-                 'matrix of first state is generated in .analyze() function.')
+                 'matrix of the first state is generated in .analyze() function.')
         civec = ci[0]
     else:
         civec = ci
@@ -137,6 +137,8 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         if getattr(casscf.fcisolver, 'large_ci', None) and ci is not None:
             log.info('** Largest CI components **')
             if isinstance(ci, (tuple, list)):
+                # Note: function large_ci does not support
+                # state_average_mix_ mcscf object
                 for i, civec in enumerate(ci):
                     res = casscf.fcisolver.large_ci(civec, casscf.ncas, casscf.nelecas,
                                                     large_ci_tol, return_strs=False)
@@ -270,14 +272,17 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 
-    if isinstance(ci, numpy.ndarray):
-        fcivec = fci.addons.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
-    elif isinstance(ci, (tuple, list)) and isinstance(ci[0], numpy.ndarray):
-        # for state-average eigenfunctions
-        fcivec = [fci.addons.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
-                  for x in ci]
-    else:
-        log.info('FCI vector not available, call CASCI for wavefunction')
+    fcivec = None
+    if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
+        if isinstance(ci, numpy.ndarray):
+            fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
+        elif (isinstance(ci, (tuple, list)) and
+              all(isinstance(x[0], numpy.ndarray) for x in ci)):
+            fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
+                      for x in ci]
+
+    if fcivec is None:
+        log.info('FCI vector not available, call CASCI to update wavefunction')
         mocas = mo_coeff1[:,ncore:nocc]
         hcore = mc.get_hcore()
         dm_core = numpy.dot(mo_coeff1[:,:ncore]*2, mo_coeff1[:,:ncore].T)

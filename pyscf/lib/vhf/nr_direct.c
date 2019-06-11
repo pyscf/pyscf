@@ -255,9 +255,7 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
 
-#pragma omp parallel default(none) \
-        shared(intor, fdot, jkop, ao_loc, shls_slice, \
-               dms, vjk, n_dm, ncomp, nbas, vhfopt, envs)
+#pragma omp parallel
 {
         int i, j, ij, ij1;
         JKArray *v_priv[n_dm];

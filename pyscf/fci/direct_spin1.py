@@ -48,7 +48,9 @@ from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import spin_op
+from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
+from pyscf.fci.addons import _unpack_nelec
 from pyscf import __config__
 
 libfci = lib.load_library('libfci')
@@ -680,22 +682,27 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(absorb_h1e.__doc__)
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
+        nelec = _unpack_nelec(nelec, self.spin)
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
     @lib.with_doc(make_hdiag.__doc__)
     def make_hdiag(self, h1e, eri, norb, nelec):
+        nelec = _unpack_nelec(nelec, self.spin)
         return make_hdiag(h1e, eri, norb, nelec)
 
     @lib.with_doc(pspace.__doc__)
     def pspace(self, h1e, eri, norb, nelec, hdiag=None, np=400):
+        nelec = _unpack_nelec(nelec, self.spin)
         return pspace(h1e, eri, norb, nelec, hdiag, np)
 
     @lib.with_doc(contract_1e.__doc__)
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
+        nelec = _unpack_nelec(nelec, self.spin)
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     @lib.with_doc(contract_2e.__doc__)
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
+        nelec = _unpack_nelec(nelec, self.spin)
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
     def eig(self, op, x0=None, precond=None, **kwargs):
@@ -740,6 +747,7 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
+        nelec = _unpack_nelec(nelec, self.spin)
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
@@ -803,12 +811,16 @@ class FCISolver(lib.StreamObject):
     def large_ci(self, fcivec, norb, nelec,
                  tol=getattr(__config__, 'fci_addons_large_ci_tol', .1),
                  return_strs=getattr(__config__, 'fci_addons_large_ci_return_strs', True)):
-        from pyscf.fci import addons
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
+    def transform_ci_for_orbital_rotation(self, fcivec, norb, nelec, u):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
+
     def contract_ss(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op
+        nelec = _unpack_nelec(nelec, self.spin)
         return spin_op.contract_ss(fcivec, norb, nelec)
 
     def gen_linkstr(self, norb, nelec, tril=True, spin=None):
@@ -825,17 +837,6 @@ class FCISolver(lib.StreamObject):
 
 FCI = FCISolver
 
-
-def _unpack_nelec(nelec, spin=None):
-    if spin is None:
-        spin = 0
-    else:
-        nelec = int(numpy.sum(nelec))
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = (nelec-spin)//2
-        neleca = nelec - nelecb
-        nelec = neleca, nelecb
-    return nelec
 
 def _unpack(norb, nelec, link_index, spin=None):
     if link_index is None:

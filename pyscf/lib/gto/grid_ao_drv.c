@@ -344,9 +344,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         const size_t Ngrids = ngrids;
 
-#pragma omp parallel default(none) \
-        shared(fiter, feval, fexp, fac, param, ao_loc, shls_slice, ngrids, \
-               ao, coord, non0table, atm, natm, bas, nbas, env, shloc)
+#pragma omp parallel
 {
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];
@@ -402,9 +400,7 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         const size_t Ngrids = ngrids;
 
-#pragma omp parallel default(none) \
-        shared(feval, fexp, c2s, fac, ngrids, param, ao_loc, shls_slice, \
-               ao, coord, non0table, atm, natm, bas, nbas, env, shloc)
+#pragma omp parallel
 {
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];

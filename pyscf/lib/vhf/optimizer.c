@@ -205,8 +205,7 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(opt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         double qtmp, tmp;
         int ij, i, j, di, dj, ish, jsh;

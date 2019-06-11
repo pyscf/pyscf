@@ -832,7 +832,8 @@ class TDHF(TDA):
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
+                                                      real_eigenvectors=True)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

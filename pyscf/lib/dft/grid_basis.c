@@ -94,9 +94,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                 }
         }
 
-#pragma omp parallel default(none) \
-        shared(out, coords, atm_coords, atom_dist, radii_table, natm) \
-        private(i, j, dx, dy, dz)
+#pragma omp parallel private(i, j, dx, dy, dz)
 {
         double *grid_dist = malloc(sizeof(double) * natm*GRIDS_BLOCK);
         double *buf = malloc(sizeof(double) * natm*GRIDS_BLOCK);

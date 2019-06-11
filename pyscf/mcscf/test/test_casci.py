@@ -172,6 +172,53 @@ class KnownValues(unittest.TestCase):
         mc1.kernel(mo)
         self.assertAlmostEqual(mc1.e_tot, -105.82542805259033, 9)
 
+    def test_state_average(self):
+        mc = mcscf.CASCI(m, 4, 4)
+        mc.state_average_([0.5, 0.25, 0.25])
+        mc.fcisolver.spin = 2
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot[0], -108.72522194135607, 9)
+        self.assertAlmostEqual(mc.e_tot[1], -108.67148843338228, 9)
+        self.assertAlmostEqual(mc.e_tot[2], -108.67148843338228, 9)
+
+        mc.analyze()
+        mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
+
+        mc.kernel(mo_coeff=mo_coeff)
+        self.assertAlmostEqual(mc.e_tot[0], -108.72522194135607, 9)
+        self.assertAlmostEqual(mc.e_tot[1], -108.67148843338228, 9)
+        #FIXME: with the initial guess from mc, FCI solver may converge to
+        # another state
+        #self.assertAlmostEqual(mc.e_tot[2], -108.67148843338228, 9)
+        self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 9)
+        # Second and third root are degenerated
+        #self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 9)
+
+    def test_state_average_mix(self):
+        mc = mcscf.CASCI(m, 4, 4)
+        cis1 = copy.copy(mc.fcisolver)
+        cis1.spin = 2
+        cis1.nroots = 3
+        mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.25, .25, .25, .25])
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot[0], -108.72522194135607, 9)
+        self.assertAlmostEqual(mc.e_tot[1], -108.67148843338228, 9)
+        self.assertAlmostEqual(mc.e_tot[2], -108.67148843338228, 9)
+        self.assertAlmostEqual(mc.e_tot[3], -108.83741684447352, 9)
+
+        mc.analyze()
+        mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
+
+        mc.kernel(mo_coeff=mo_coeff)
+        self.assertAlmostEqual(mc.e_tot[0], -108.72522194135607, 9)
+        self.assertAlmostEqual(mc.e_tot[1], -108.67148843338228, 9)
+        #FIXME: with the initial guess from mc, FCI solver may converge to
+        # another state
+        #self.assertAlmostEqual(mc.e_tot[2], -108.67148843338228, 9)
+        self.assertAlmostEqual(mc.e_tot[3], -108.83741684447352, 9)
+        self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 9)
+        self.assertAlmostEqual(abs((civec[3]*mc.ci[3]).sum()), 1, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for CASCI")

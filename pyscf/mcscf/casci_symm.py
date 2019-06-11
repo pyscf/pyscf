@@ -35,15 +35,12 @@ class SymAdaptedCASCI(casci.CASCI):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
         assert(self.mol.symmetry)
-        singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
-                   and self.nelecas[0] == self.nelecas[1])
-        self.fcisolver = fci.solver(self.mol, singlet, symm=True)
-        self.fcisolver.lindep = getattr(__config__,
-                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
-        self.fcisolver.max_cycle = getattr(__config__,
-                                           'mcscf_casci_CASCI_fcisolver_max_cycle', 200)
-        self.fcisolver.conv_tol = getattr(__config__,
-                                          'mcscf_casci_CASCI_fcisolver_conv_tol', 1e-8)
+        fcisolver = self.fcisolver
+        if isinstance(fcisolver, fci.direct_spin0.FCISolver):
+            self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
+        else:
+            self.fcisolver = fci.direct_spin1_symm.FCISolver(self.mol)
+        self.fcisolver.__dict__.update(fcisolver.__dict__)
 
     @property
     def wfnsym(self):

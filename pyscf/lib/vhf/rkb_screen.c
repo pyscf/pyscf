@@ -152,8 +152,7 @@ static void set_qcond(int (*intor)(), CINTOpt *cintopt, double *qcond,
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, cintopt, qcond, ao_loc, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         double qtmp, tmp;
         int i, j, ij, di, dj, ish, jsh;
