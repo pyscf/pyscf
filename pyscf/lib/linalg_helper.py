@@ -568,7 +568,11 @@ def pick_real_eigs(w, v, nroots, envs):
         warnings.warn('%d eigenvalues with imaginary part > 0.01\n' %
                       numpy.count_nonzero(abs_imag > 1e-2))
 
-    w, v, idx = _eigs_cmplx2real(w, v, realidx, real_eigenvectors=False)
+    # Guess whether the matrix to diagonalize is real or complex
+    if envs.get('dtype') == numpy.double:
+        w, v, idx = _eigs_cmplx2real(w, v, realidx, real_eigenvectors=True)
+    else:
+        w, v, idx = _eigs_cmplx2real(w, v, realidx, real_eigenvectors=False)
     return w, v, idx
 
 def _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=True):
