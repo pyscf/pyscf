@@ -21,6 +21,7 @@ regular `numpy.linalg.eig` can be used to retrieve TD roots. Several variants of
 # * vector_to_amplitudes reshapes and normalizes the solution
 # * TDProxy provides a container
 
+from functools import reduce
 from pyscf.tdscf.common_slow import TDProxyMatrixBlocks, PeriodicMFMixin
 from pyscf.tdscf import proxy as mol_proxy
 from pyscf.pbc.tdscf import krhf_slow_supercell, KTDDFT, KTDHF

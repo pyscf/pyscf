@@ -887,7 +887,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
-    xnorm = numpy_helper.norm(x0, axis=1)
+    xnorm = numpy.array([numpy_helper.norm(x) for x in x0])
     enorm = xnorm < 1e-6
     if numpy.any(enorm):
         warnings.warn("{:d} davidson root{_s}: {} {_has} very small norm{_s}: {}".format(
