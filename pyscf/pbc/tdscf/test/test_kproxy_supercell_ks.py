@@ -186,7 +186,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         testing.assert_allclose(model.e.imag, 0, atol=1e-8)
 
     def test_raw_response(self):
-        """Tests the `supercell_reponse` and whether it slices output properly."""
+        """Tests the `supercell_response` and whether it slices output properly."""
         eri = kproxy_supercell.PhysERI(self.model_krks, "dft", [self.k, 1, 1], KRKS)
         ref_m_full = eri.proxy_response()
 
@@ -232,7 +232,7 @@ class DiamondTestSupercell2(unittest.TestCase):
             testing.assert_allclose(ref_m, m, atol=1e-12)
 
     def test_raw_response_ov(self):
-        """Tests the `molecular_reponse` and whether it slices output properly."""
+        """Tests the `molecular_response` and whether it slices output properly."""
         eri = kproxy_supercell.PhysERI(self.model_krks, "dft", [self.k, 1, 1], KRKS)
         ref_m_full = eri.proxy_response()
         s = sum(eri.nocc_full) * (sum(eri.nmo_full) - sum(eri.nocc_full))
