@@ -17,7 +17,7 @@ import pyscf.lib
 
 def tril_index(ki,kj):
     assert (numpy.array([ki<=kj])).all()
-    return (kj*(kj+1))/2 + ki
+    return (kj*(kj+1))//2 + ki
 
 # TODO: fairly messy and slow
 def unpack_tril(in_array,nkpts,kp,kq,kr,ks):

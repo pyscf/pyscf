@@ -15,6 +15,9 @@
 
 '''CASCI and CASSCF
 
+When using results of this code for publications, please cite the following paper:
+"A general second order complete active space self-consistent-field solver for large-scale systems", Q. Sun, J. Yang, and G. K.-L. Chan, Chem. Phys. Lett. 683, 291 (2017).
+
 Simple usage::
 
     >>> from pyscf import gto, scf, mcscf
