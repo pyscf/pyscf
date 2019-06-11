@@ -130,7 +130,7 @@ class TestHe(unittest.TestCase):
         self._test_ip_diag(cc)
         self._test_ea_diag(cc)
 
-    def test_he_212_diag(self):
+    def test_he_212_diag_high_cost(self):
         kpts = cell.make_kpts([2,1,2])
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
