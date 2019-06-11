@@ -82,7 +82,7 @@ def update_amps(cc, t1, t2, eris):
     t2new -= (tmp - tmp.transpose(0,1,3,2))
 
     mo_e = eris.fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:] - cc.level_shift
     eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
     t1new /= eia
     t2new /= eijab
