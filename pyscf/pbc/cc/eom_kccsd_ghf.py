@@ -109,10 +109,12 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
         eig = lib.davidson_nosym1
         if user_guess or koopmans:
-            def pickeig(w, v, nr, envs):
+            def pickeig(w, v, nroots, envs):
                 x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
-                idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
+                s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
+                snorm = np.einsum('pi,pi->i', s.conj(), s)
+                idx = np.argsort(-snorm)[:nroots]
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx, real_eigenvectors=False)
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond, pick=pickeig,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                                            max_space=eom.max_space, nroots=nroots, verbose=log)

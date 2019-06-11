@@ -243,11 +243,14 @@ class TDHF(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
+        real_system = (gamma_point(self._scf.kpts) and
+                       self._scf.mo_coeff[0][0].dtype == numpy.double)
+
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
