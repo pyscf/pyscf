@@ -34,7 +34,7 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point
+from pyscf.pbc.lib.kpts_helper import member, gamma_point, VectorComposer, VectorSplitter
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -451,8 +451,9 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
             return _Wvvvv[ka, kb, kc]
     else:
         fimd = lib.H5TmpFile()
-        _Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+        _Wvvvv = fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
         _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, _Wvvvv)
+
         def get_Wvvvv(ka, kb, kc):
             return _Wvvvv[ka, kb, kc]
 
@@ -512,6 +513,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     'made_ip_imds', 'made_ea_imds', 'ip_partition',
                     'ea_partition', 'max_space', 'direct'])
         self._keys = self._keys.union(keys)
+        self.__imds__ = None
 
     @property
     def nkpts(self):
@@ -525,46 +527,18 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self):
         return pyscf.cc.ccsd.CCSD.dump_flags(self)
 
-    @property
-    def ccsd_vector_desc(self):
-        """Description of the ground-state vector."""
-        nvir = self.nmo - self.nocc
-        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
-
     def amplitudes_to_vector(self, t1, t2):
         """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
+        vc = VectorComposer(t1.dtype)
+        vc.put(t1)
+        vc.put(t2)
+        return vc.flush()
 
     def vector_to_amplitudes(self, vec):
         """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ccsd_vector_desc)
-
-    @property
-    def ip_vector_desc(self):
-        """Description of the IP vector."""
-        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
-
-    def ip_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ip_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ip_vector_desc)
-
-    @property
-    def ea_vector_desc(self):
-        """Description of the EA vector."""
+        vs = VectorSplitter(vec)
         nvir = self.nmo - self.nocc
-        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
-
-    def ea_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ea_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ea_vector_desc)
+        return vs.get((self.nkpts, self.nocc, nvir)), vs.get((self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -673,13 +647,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
-    #####################################
-    # Wrapper functions for IP/EA-EOM
-    #####################################
+#####################################
+# Wrapper functions for IP/EA-EOM
+#####################################
+# TODO: ip/ea _matvec and _diag functions are not needed in pyscf-1.7 or
+# higher. Remove these wrapper functions in future release
     def ipccsd_matvec(self, vector, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
         imds = self.imds
@@ -688,8 +662,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def ipccsd_diag(self, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
         imds = self.imds
@@ -698,8 +670,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def eaccsd_matvec(self, vector, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
         imds = self.imds
@@ -708,13 +678,20 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def eaccsd_diag(self, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
         imds = self.imds
         myeom = eom_kccsd_rhf.EOMEA(self)
         return myeom.get_diag(kshift, imds=imds)
+
+    @property
+    def imds(self):
+        if self.__imds__ is None:
+            self.__imds__ = _IMDS(self)
+        return self.__imds__
+###########################################
+# End of Wrapper functions for IP/EA-EOM
+###########################################
 
 
 KRCCSD = RCCSD
@@ -825,8 +802,12 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             self.voov = self.feri1.create_dataset('voov', (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype.char)
             self.vovv = self.feri1.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), dtype.char)
 
-            if (not (cc.direct and type(cc._scf.with_df) is df.GDF)
-                or cell.dimension == 2):
+            vvvv_required = ((not cc.direct)
+                             # cc._scf.with_df needs to be df.GDF only (not MDF)
+                             or type(cc._scf.with_df) is not df.GDF
+                             # direct-vvvv for pbc-2D is not supported so far
+                             or cell.dimension == 2)
+            if vvvv_required:
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
 
             # <ij|pq>  = (ip|jq)
@@ -886,9 +867,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
             cput1 = time.clock(), time.time()
             mem_now = lib.current_memory()[0]
-            if (cc.direct and type(cc._scf.with_df) is df.GDF
-                and cell.dimension != 2):
-                # cc._scf.with_df needs to be df.GDF only (not MDF)
+            if not vvvv_required:
                 _init_df_eris(cc, self)
 
             elif nvir ** 4 * 16 / 1e6 + mem_now < cc.max_memory:

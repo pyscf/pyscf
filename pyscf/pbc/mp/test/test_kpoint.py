@@ -118,6 +118,35 @@ class KnownValues(unittest.TestCase):
         emp2 /= np.prod(nmp)
         self.assertAlmostEqual(emp2, -0.022416773725207319, 6)
 
+class RDM1(unittest.TestCase):
+    def test_rdm1(self):
+        cell = pbcgto.Cell()
+        cell.atom = '''Al 0 0 0'''
+        cell.basis = 'gth-szv'
+        cell.pseudo = 'gth-pade'
+        cell.a = '''
+        2.47332919 0 1.42797728
+        0.82444306 2.33187713 1.42797728
+        0, 0, 2.85595455
+        '''
+        cell.unit = 'angstrom'
+        cell.build()
+        cell.verbose = 4
+        cell.incore_anyway = True
+
+        abs_kpts = cell.make_kpts((2, 1, 1), scaled_center=(.1, .2, .3))
+        kmf = pbcscf.KRHF(cell, abs_kpts)
+        kmf.conv_tol = 1e-12
+        kmf.kernel()
+        mp = pyscf.pbc.mp.kmp2.KMP2(kmf)
+        mp.kernel(with_t2=True)
+        self.assertAlmostEqual(mp.e_corr, -0.00162057921874043)
+        dm = mp.make_rdm1()
+        np.testing.assert_allclose(np.trace(dm[0]) + np.trace(dm[1]), 6)
+        for kdm in dm:
+            np.testing.assert_allclose(kdm, kdm.conj().T)
+
+
 if __name__ == '__main__':
     print("Full kpoint test")
     unittest.main()
