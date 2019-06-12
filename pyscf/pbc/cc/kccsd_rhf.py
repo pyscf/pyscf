@@ -34,7 +34,7 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point, VectorComposer, VectorSplitter
+from pyscf.pbc.lib.kpts_helper import member, gamma_point
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -527,18 +527,46 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self):
         return pyscf.cc.ccsd.CCSD.dump_flags(self)
 
+    @property
+    def ccsd_vector_desc(self):
+        """Description of the ground-state vector."""
+        nvir = self.nmo - self.nocc
+        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
+
     def amplitudes_to_vector(self, t1, t2):
         """Ground state amplitudes to a vector."""
-        vc = VectorComposer(t1.dtype)
-        vc.put(t1)
-        vc.put(t2)
-        return vc.flush()
+        return nested_to_vector((t1, t2))[0]
 
     def vector_to_amplitudes(self, vec):
         """Ground state vector to apmplitudes."""
-        vs = VectorSplitter(vec)
+        return vector_to_nested(vec, self.ccsd_vector_desc)
+
+    @property
+    def ip_vector_desc(self):
+        """Description of the IP vector."""
+        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
+
+    def ip_amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def ip_vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.ip_vector_desc)
+
+    @property
+    def ea_vector_desc(self):
+        """Description of the EA vector."""
         nvir = self.nmo - self.nocc
-        return vs.get((self.nkpts, self.nocc, nvir)), vs.get((self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2)
+        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
+
+    def ea_amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def ea_vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.ea_vector_desc)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
