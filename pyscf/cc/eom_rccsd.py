@@ -1662,6 +1662,16 @@ class EOMEESpinFlip(EOMEE):
         naaba = nocc*(nocc-1)//2*nvir*nvir
         return nocc*nvir + nbaaa + naaba
 
+#TODO: Check whether EOM methods works with rccsd.RCCSD when orbitals are complex
+ccsd.CCSD.EOMIP         = lib.class_as_method(EOMIP)
+ccsd.CCSD.EOMIP_Ta      = lib.class_as_method(EOMIP_Ta)
+ccsd.CCSD.EOMEA         = lib.class_as_method(EOMEA)
+ccsd.CCSD.EOMEA_Ta      = lib.class_as_method(EOMEA_Ta)
+ccsd.CCSD.EOMEE         = lib.class_as_method(EOMEE)
+ccsd.CCSD.EOMEESinglet  = lib.class_as_method(EOMEESinglet)
+ccsd.CCSD.EOMEETriplet  = lib.class_as_method(EOMEETriplet)
+ccsd.CCSD.EOMEESpinFlip = lib.class_as_method(EOMEESpinFlip)
+
 
 class _IMDS:
     def __init__(self, cc, eris=None):
