@@ -28,7 +28,6 @@ from pyscf.pbc import dft as pbcdft
 from pyscf.pbc import df as pbc_df
 
 import pyscf.pbc.cc as pbcc
-from pyscf.pbc.cc import eom_kccsd_rhf_ip, eom_kccsd_rhf_ea
 import make_test_cell
 from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
@@ -124,39 +123,18 @@ def make_rand_kmf():
 
 rand_kmf = make_rand_kmf()
 
-#TODO Delete me; these functions were used to check the changes on
-#     master and dev to see whether the answers were the same after
-#     changes to the eris.mo_energy
 def _run_ip_matvec(cc, r1, r2, kshift):
-    try:  # Different naming & calling conventions between master/dev
-        vector = eom_kccsd_rhf_ip.amplitudes_to_vector(cc, r1, r2, kshift)
-    except:
-        vector = cc.amplitudes_to_vector_ip(r1, r2)
-    try:
-        vector = eom_kccsd_rhf_ip.matvec(cc, vector, kshift)
-    except:
-        cc.kshift = kshift
-        vector = cc.ipccsd_matvec(vector)
-    try:
-        Hr1, Hr2 = eom_kccsd_rhf_ip.vector_to_amplitudes(cc, vector, kshift)
-    except:
-        Hr1, Hr2 = cc.vector_to_amplitudes_ip(vector)
+    eom = cc.EOMIP()
+    vector = eom.amplitudes_to_vector(r1, r2, kshift)
+    vector = eom.matvec(vector, kshift)
+    Hr1, Hr2 = eom.vector_to_amplitudes(vector, kshift)
     return Hr1, Hr2
 
 def _run_ea_matvec(cc, r1, r2, kshift):
-    try:  # Different naming & calling conventions between master/dev
-        vector = eom_kccsd_rhf_ea.amplitudes_to_vector(cc, r1, r2, kshift)
-    except:
-        vector = cc.amplitudes_to_vector_ea(r1, r2)
-    try:
-        vector = eom_kccsd_rhf_ea.matvec(cc, vector, kshift)
-    except:
-        cc.kshift = kshift
-        vector = cc.eaccsd_matvec(vector)
-    try:
-        Hr1, Hr2 = eom_kccsd_rhf_ea.vector_to_amplitudes(cc, vector, kshift)
-    except:
-        Hr1, Hr2 = cc.vector_to_amplitudes_ea(vector)
+    eom = cc.EOMEA()
+    vector = eom.amplitudes_to_vector(r1, r2, kshift)
+    vector = eom.matvec(vector, kshift)
+    Hr1, Hr2 = eom.vector_to_amplitudes(vector, kshift)
     return Hr1, Hr2
 
 
