@@ -85,4 +85,4 @@ script:
     --exclude-test=pbc/tdscf/test/test_kproxy_ks.DiamondTestSupercell3
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_hf.DiamondTestSupercell3
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_ks.DiamondTestSupercell3
-    -I .*_slow.*py # tdscf/*_slow.py gw/*_slow.py do not compatible with python3.[456] and old numpy
+    -I .*_slow.*py -I .*_kproxy_.*py -I test_proxy.py # tdscf/*_slow.py gw/*_slow.py do not compatible with python3.[456] and old numpy
