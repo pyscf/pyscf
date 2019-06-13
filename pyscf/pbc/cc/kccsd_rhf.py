@@ -502,15 +502,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
-        self.made_ee_imds = False
-        self.made_ip_imds = False
-        self.made_ea_imds = False
         self.ip_partition = None
         self.ea_partition = None
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
 
-        keys = set(['kpts', 'khelper', 'made_ee_imds',
-                    'made_ip_imds', 'made_ea_imds', 'ip_partition',
+        keys = set(['kpts', 'khelper', 'ip_partition',
                     'ea_partition', 'max_space', 'direct'])
         self._keys = self._keys.union(keys)
         self.__imds__ = None
@@ -540,33 +536,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def vector_to_amplitudes(self, vec):
         """Ground state vector to apmplitudes."""
         return vector_to_nested(vec, self.ccsd_vector_desc)
-
-    @property
-    def ip_vector_desc(self):
-        """Description of the IP vector."""
-        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
-
-    def ip_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ip_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ip_vector_desc)
-
-    @property
-    def ea_vector_desc(self):
-        """Description of the EA vector."""
-        nvir = self.nmo - self.nocc
-        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
-
-    def ea_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ea_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ea_vector_desc)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -984,9 +953,8 @@ def _init_df_eris(cc, eris):
                 Lpv[ki,kj] = out.reshape(-1,nmo,nvir)
     return eris
 
+# TODO: Remove _IMDS
 imd = imdk
-
-
 class _IMDS:
     # Identical to molecular rccsd_slow
     def __init__(self, cc):

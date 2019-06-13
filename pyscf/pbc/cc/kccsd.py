@@ -699,6 +699,7 @@ def check_antisymm_34(cc, kpts, integrals):
     if diff > 1e-5:
         print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
 
+# TODO: Remove _IMDS, it was not used by any modules now
 imd = imdk
 class _IMDS:
     # Identical to molecular rccsd_slow

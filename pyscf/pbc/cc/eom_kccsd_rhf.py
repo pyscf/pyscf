@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Authors: James D. McClain
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import itertools
 import time
@@ -30,6 +34,9 @@ from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
+from pyscf.pbc.lib.kpts_helper import VectorSplitter, VectorComposer
+from pyscf.pbc.cc import eom_kccsd_rhf_ip
+from pyscf.pbc.cc import eom_kccsd_rhf_ea
 
 einsum = lib.einsum
 
@@ -393,30 +400,9 @@ class EOMIP(eom_kgccsd.EOMIP):
     def nkpts(self):
         return len(self.kpts)
 
-    @property
-    def ip_vector_desc(self):
-        """Description of the IP vector."""
-        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
-
-    def ip_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ip_vector_to_amplitudes(self, vec):
-        """Ground state vector to amplitudes."""
-        return vector_to_nested(vec, self.ip_vector_desc)
-
-    def vector_to_amplitudes(self, vector, kshift=None):
-        return self.ip_vector_to_amplitudes(vector)
-
-    def amplitudes_to_vector(self, r1, r2, kshift=None, kconserv=None):
-        return self.ip_amplitudes_to_vector(r1, r2)
-
-    def vector_size(self):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        nkpts = self.nkpts
-        return nocc + nkpts**2*nocc*nocc*nvir
+    vector_to_amplitudes = eom_kccsd_rhf_ip.vector_to_amplitudes
+    amplitudes_to_vector = eom_kccsd_rhf_ip.amplitudes_to_vector
+    vector_size = eom_kccsd_rhf_ip.vector_size
 
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris)
@@ -796,31 +782,9 @@ class EOMEA(eom_kgccsd.EOMEA):
     def nkpts(self):
         return len(self.kpts)
 
-    @property
-    def ea_vector_desc(self):
-        """Description of the EA vector."""
-        nvir = self.nmo - self.nocc
-        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
-
-    def ea_amplitudes_to_vector(self, t1, t2, kshift=None, kconserv=None):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ea_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ea_vector_desc)
-
-    def vector_to_amplitudes(self, vector, kshift=None):
-        return self.ea_vector_to_amplitudes(vector)
-
-    def amplitudes_to_vector(self, r1, r2, kshift=None, kconserv=None):
-        return self.ea_amplitudes_to_vector(r1, r2)
-
-    def vector_size(self):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        nkpts = self.nkpts
-        return nvir + nkpts**2*nocc*nvir*nvir
+    vector_to_amplitudes = eom_kccsd_rhf_ea.vector_to_amplitudes
+    amplitudes_to_vector = eom_kccsd_rhf_ea.amplitudes_to_vector
+    vector_size = eom_kccsd_rhf_ea.vector_size
 
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris)

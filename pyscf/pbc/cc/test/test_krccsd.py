@@ -125,7 +125,7 @@ rand_kmf = make_rand_kmf()
 
 def _run_ip_matvec(cc, r1, r2, kshift):
     from pyscf.pbc.cc import eom_kccsd_rhf
-    eom = eom_kccsd_rhf.EOMIP()
+    eom = eom_kccsd_rhf.EOMIP(cc)
     vector = eom.amplitudes_to_vector(r1, r2, kshift)
     vector = eom.matvec(vector, kshift)
     Hr1, Hr2 = eom.vector_to_amplitudes(vector, kshift)
@@ -133,7 +133,7 @@ def _run_ip_matvec(cc, r1, r2, kshift):
 
 def _run_ea_matvec(cc, r1, r2, kshift):
     from pyscf.pbc.cc import eom_kccsd_rhf
-    eom = eom_kccsd_rhf.EOMEA()
+    eom = eom_kccsd_rhf.EOMEA(cc)
     vector = eom.amplitudes_to_vector(r1, r2, kshift)
     vector = eom.matvec(vector, kshift)
     Hr1, Hr2 = eom.vector_to_amplitudes(vector, kshift)
