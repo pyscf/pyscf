@@ -39,7 +39,7 @@ def iter_12(cc_or_eom, k):
             yield (ki,), (ka,), o[ki], v[ka], v[kb]
 
 
-def amplitudes_to_vector(cc_or_eom, t1, t2, kshift=0):
+def amplitudes_to_vector(cc_or_eom, t1, t2, kshift=0, kconserv=None):
     """EA amplitudes to vector."""
     itr = iter_12(cc_or_eom, kshift)
     t1, t2 = np.asarray(t1), np.asarray(t2)
