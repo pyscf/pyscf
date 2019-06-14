@@ -39,9 +39,9 @@ def iter_12(cc_or_eom, k):
             yield (ki,), (ka,), o[ki], v[ka], v[kb]
 
 
-def amplitudes_to_vector(cc_or_eom, t1, t2, k=0):
+def amplitudes_to_vector(cc_or_eom, t1, t2, kshift=0):
     """EA amplitudes to vector."""
-    itr = iter_12(cc_or_eom, k)
+    itr = iter_12(cc_or_eom, kshift)
     t1, t2 = np.asarray(t1), np.asarray(t2)
 
     vc = VectorComposer(t1.dtype)
@@ -51,13 +51,13 @@ def amplitudes_to_vector(cc_or_eom, t1, t2, k=0):
     return vc.flush()
 
 
-def vector_to_amplitudes(cc_or_eom, vec, k=0):
+def vector_to_amplitudes(cc_or_eom, vec, kshift=0):
     """EA vector to apmplitudes."""
-    expected_vs = vector_size(cc_or_eom, k)
+    expected_vs = vector_size(cc_or_eom, kshift)
     if expected_vs != len(vec):
         raise ValueError("The size of the vector passed {:d} should be exactly {:d}".format(len(vec), expected_vs))
 
-    itr = iter_12(cc_or_eom, k)
+    itr = iter_12(cc_or_eom, kshift)
     nocc = cc_or_eom.nocc
     nmo = cc_or_eom.nmo
     nkpts = cc_or_eom.nkpts
@@ -71,9 +71,9 @@ def vector_to_amplitudes(cc_or_eom, vec, k=0):
     return r1, r2
 
 
-def vector_size(cc_or_eom, k=0):
+def vector_size(cc_or_eom, kshift=0):
     """The total number of elements in EA vector."""
     size = 0
-    for slc in iter_12(cc_or_eom, k):
+    for slc in iter_12(cc_or_eom, kshift):
         size += np.prod(tuple(len(i) for i in slc))
     return size
