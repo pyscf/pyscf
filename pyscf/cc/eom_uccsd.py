@@ -1927,6 +1927,12 @@ class EOMEESpinFlip(EOMEE):
         nbbab = noccb*(noccb-1)//2*nvira*nvirb
         return nocca*nvirb + noccb*nvira + nbaaa + naaba + nabbb + nbbab
 
+uccsd.UCCSD.EOMIP         = lib.class_as_method(EOMIP)
+uccsd.UCCSD.EOMEA         = lib.class_as_method(EOMEA)
+uccsd.UCCSD.EOMEE         = lib.class_as_method(EOMEE)
+uccsd.UCCSD.EOMEESpinKeep = lib.class_as_method(EOMEESpinKeep)
+uccsd.UCCSD.EOMEESpinFlip = lib.class_as_method(EOMEESpinFlip)
+
 
 class _IMDS:
     # Exactly the same as RCCSD IMDS except

@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy
+
 from pyscf import lib
 from pyscf.lib import logger
 
@@ -65,8 +67,8 @@ class UCCSD(uccsd.UCCSD):
         if mbpt2:
             pt = mp.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocca, nvira = self.nocc
-            nmoa, nmoa = self.nmo
+            nocca, noccb = self.nocc
+            nmoa, nmob = self.nmo
             nvira, nvirb = nmoa-nocca, nmob-noccb
             self.t1 = (numpy.zeros((nocca,nvira)), numpy.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2

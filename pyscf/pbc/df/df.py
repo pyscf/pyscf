@@ -634,8 +634,6 @@ class GDF(aft.AFTDF):
             blksize = max(16, min(int(blksize), self.blockdim))
             logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
-        if unpack:
-            buf = numpy.empty((blksize,nao*(nao+1)//2))
         def load(Lpq, b0, b1, bufR, bufI):
             Lpq = numpy.asarray(Lpq[b0:b1])
             if is_real:
@@ -662,6 +660,8 @@ class GDF(aft.AFTDF):
         LpqR = LpqI = None
         with _load3c(self._cderi, 'j3c', kpti_kptj, 'j3c-kptij') as j3c:
             naux = j3c.shape[0]
+            if unpack:
+                buf = numpy.empty((min(blksize, naux), nao * (nao + 1) // 2))
             for b0, b1 in lib.prange(0, naux, blksize):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI, 1
@@ -673,6 +673,8 @@ class GDF(aft.AFTDF):
             with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij',
                          ignore_key_error=True) as j3c:
                 naux = j3c.shape[0]
+                if unpack:
+                    buf = numpy.empty((min(blksize, naux), nao * (nao + 1) // 2))
                 for b0, b1 in lib.prange(0, naux, blksize):
                     LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                     yield LpqR, LpqI, -1
