@@ -85,17 +85,30 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     return ci1
 
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
-    r'''Contract the 2-electron Hamiltonian with a FCI vector to get a new FCI
-    vector.
-
-    Note the input arg eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
+    r'''Contract the 4-index tensor eri[pqrs] with a FCI vector
 
     .. math::
 
-        h2e &= eri_{pq,rs} p^+ q r^+ s \\
-            &= (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
+        |output\rangle = E_{pq} E_{rs} eri_{pq,rs} |CI\rangle \\
 
-    So eri is defined as
+        E_{pq}E_{rs} = E_{pr,qs} + \delta_{qr} E_{ps} \\
+
+        E_{pq} = p^+ q + \bar{p}^+ \bar{q}
+
+        E_{pr,qs} = p^+ r^+ s q + \bar{p}^+ r^+ s \bar{q} + ...
+
+    :math:`p,q,...` means spin-up orbitals and :math:`\bar{p}, \bar{q}` means
+    spin-down orbitals.
+
+    Note the input argument eri is NOT the 2e hamiltonian tensor. 2e hamiltonian is
+
+    .. math::
+
+        h2e &= (pq|rs) E_{pr,qs} \\
+            &= (pq|rs) (E_{pq}E_{rs} - \delta_{qr} E_{ps}) \\
+            &= eri_{pq,rs} E_{pq}E_{rs} \\
+
+    So the relation between eri and hamiltonian (the 2e-integral tensor) is
 
     .. math::
 

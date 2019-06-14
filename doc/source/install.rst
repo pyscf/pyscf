@@ -64,6 +64,7 @@ Another way to use PySCF in docker container is to start an Ipython shell::
   $ docker run -it pyscf/pyscf-1.5.0 start.sh ipython
 
 
+.. _compile_c_extensions:
 Manual installation from github repo
 ====================================
 
@@ -343,7 +344,7 @@ TBLIS
 -----
 `TBLIS <https://github.com/devinamatthews/tblis>`_ provides a native algorithm
 to perform tensor contraction for arbitrary high dimensional tensors. The native
-algorithm does not need to translate the tensors into matrices and call the BLAS
+algorithm does not need to transform tensors into matrices then call the BLAS
 libraries for the matrix contraction.  Tensor transposing and data moving are
 largely avoided in TBLIS tensor library.  The interface to TBLIS offers an
 efficient implementation for :func:`numpy.einsum` style tensor contraction.
