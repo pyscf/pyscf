@@ -32,6 +32,7 @@ import make_test_cell
 from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
+from pyscf.pbc.cc import eom_kccsd_rhf
 
 
 cell = pbcgto.Cell()
@@ -124,7 +125,6 @@ def make_rand_kmf():
 rand_kmf = make_rand_kmf()
 
 def _run_ip_matvec(cc, r1, r2, kshift):
-    from pyscf.pbc.cc import eom_kccsd_rhf
     eom = eom_kccsd_rhf.EOMIP(cc)
     vector = eom.amplitudes_to_vector(r1, r2, kshift)
     vector = eom.matvec(vector, kshift)
@@ -132,7 +132,6 @@ def _run_ip_matvec(cc, r1, r2, kshift):
     return Hr1, Hr2
 
 def _run_ea_matvec(cc, r1, r2, kshift):
-    from pyscf.pbc.cc import eom_kccsd_rhf
     eom = eom_kccsd_rhf.EOMEA(cc)
     vector = eom.amplitudes_to_vector(r1, r2, kshift)
     vector = eom.matvec(vector, kshift)
@@ -278,15 +277,15 @@ class KnownValues(unittest.TestCase):
         # Koopmans
         eip_k, _ = mycc.ipccsd(nroots=nroots, koopmans=True)
         # Manual (Koopmans)
-        guess = []
+        size = eom_kccsd_rhf.EOMIP(mycc).vector_size()
+        guess = np.zeros((nroots, size))
         for i in range(mycc.nkpts):
-            guess.append(np.zeros((nroots, eom_kccsd_rhf_ip.vector_size(mycc, i))))
             nocc = mycc.get_nocc(True)[i]
             rr = np.arange(nroots)
-            guess[-1][rr, nocc - rr - 1] = 1
+            guess[rr, nocc - rr - 1] = 1
         eip_m, _ = mycc.ipccsd(nroots=3, guess=guess)
 
-        np.testing.assert_allclose(eip_k, eip_m)
+        np.testing.assert_allclose(eip_k, eip_m)  # FIXME
         np.testing.assert_allclose(eip_d[:, 0], eip_k[:, 0], atol=1e-4)
 
         # EA
@@ -295,11 +294,11 @@ class KnownValues(unittest.TestCase):
         # Koopmans
         eea_k, _ = mycc.eaccsd(nroots=nroots, koopmans=True)
         # Manual (Koopmans)
-        guess = []
+        size = eom_kccsd_rhf.EOMEA(mycc).vector_size()
+        guess = np.zeros((nroots, size))
         for i in range(mycc.nkpts):
-            guess.append(np.zeros((nroots, eom_kccsd_rhf_ea.vector_size(mycc, i))))
             rr = np.arange(nroots)
-            guess[-1][rr, rr] = 1
+            guess[rr, rr] = 1
         eea_m, _ = mycc.eaccsd(nroots=3, guess=guess)
 
         np.testing.assert_allclose(eea_k, eea_m)
@@ -404,7 +403,7 @@ class KnownValues(unittest.TestCase):
         self._test_cu_metallic_frozen_occ(kmf, cell)
         self._test_cu_metallic_frozen_vir(kmf, cell)
 
-    def test_cu_metallic_smearing(self):
+    def test_cu_metallic_smearing_high_cost(self):
         mesh = 7
         cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
         nk = [1,1,2]

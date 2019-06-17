@@ -112,7 +112,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         diag = eom.mask_frozen(diag, kshift, const=LARGE_DENOM)
 
         user_guess = False
-        if guess:
+        if guess is not None:
             user_guess = True
             assert len(guess) == nroots
             for g in guess:
