@@ -59,7 +59,7 @@ def contract_2e(eri, civec, norb, nelec, link_index=None):
 
     # [(ia,ja|ja,ia) + (ib,jb|jb,ib)] ~ E_{ij}E_{ji} where i != j
     k_diag = numpy.einsum('ijji->ij', eri)
-    t2 = numpy.einsum('ij,ijp->ijp', k_diag, t2) * 2
+    t2 = numpy.einsum('ij,ijp->ijp', k_diag * 2, t2)
 
     # [(ia,ia|ja,ja) + (ia,ia|jb,jb) + ...] ~ E_{ii}E_{jj}
     j_diag = numpy.einsum('iijj->ij', eri)
@@ -97,23 +97,7 @@ def make_hdiag(h1e, eri, norb, nelec, opt=None):
     return numpy.array(hdiag)
 
 def kernel(h1e, eri, norb, nelec, ecore=0):
-    if isinstance(nelec, (int, numpy.integer)):
-        nelecb = nelec//2
-        neleca = nelec - nelecb
-    else:
-        neleca, nelecb = nelec
-    h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec, .5)
-    h2e = ao2mo.restore(1, h2e, norb)
-    na = cistring.num_strings(norb, neleca)
-    ci0 = numpy.zeros(na)
-    ci0[0] = 1
-
-    def hop(c):
-        return contract_2e(h2e, c, norb, nelec)
-    hdiag = make_hdiag(h1e, eri, norb, nelec)
-    precond = lambda x, e, *args: x/(hdiag-e+1e-4)
-    e, c = lib.davidson(hop, ci0.reshape(-1), precond)
-    return e+ecore
+    return DOCI().kernel(h1e, eri, norb, nelec, ecore=ecore)
 
 def make_rdm1(civec, norb, nelec, link_index=None):
     if isinstance(nelec, (int, numpy.integer)):
@@ -181,9 +165,12 @@ class DOCI(direct_spin1.FCI):
     def __init__(self, *args, **kwargs):
         super(DOCI, self).__init__(*args, **kwargs)
         self.davidson_only = True
+        self.link_index = {}
 
-    def contract_2e(self, eri, fcivec, norb, nelec, *args, **kwargs):
-        return contract_2e(eri, fcivec, norb, nelec)
+    def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
+        if link_index is None:
+            link_index = self.gen_linkstr(norb, nelec)
+        return contract_2e(eri, fcivec, norb, nelec, link_index)
 
     def make_hdiag(self, h1e, eri, norb, nelec, *args, **kwargs):
         return make_hdiag(h1e, eri, norb, nelec)
@@ -220,12 +207,29 @@ class DOCI(direct_spin1.FCI):
         return e+ecore, c
 
     def make_rdm1(self, civec, norb, nelec, link_index=None):
+        if link_index is None:
+            link_index = self.gen_linkstr(norb, nelec)
         return make_rdm1(civec, norb, nelec, link_index)
 
     def make_rdm12(self, civec, norb, nelec, link_index=None, reorder=True):
+        if link_index is None:
+            link_index = self.gen_linkstr(norb, nelec)
         return make_rdm12(civec, norb, nelec, link_index, reorder)
 
     spin_square = None
+
+    def gen_linkstr(self, norb, nelec):
+        if (norb, nelec) not in self.link_index:
+            if isinstance(nelec, (int, numpy.integer)):
+                nelecb = nelec//2
+                neleca = nelec - nelecb
+            else:
+                neleca, nelecb = nelec
+            assert(neleca == nelecb)
+            link_index = cistring.gen_linkstr_index(range(norb), neleca)
+            self.link_index[(norb,nelec)] = link_index
+
+        return self.link_index[(norb,nelec)]
 
 
 
@@ -276,7 +280,7 @@ if __name__ == '__main__':
     eri = ao2mo.kernel(mf._eri, mf.mo_coeff, compact=False)
     eri = eri.reshape(norb,norb,norb,norb)
 
-    e1 = kernel(h1e, eri, norb, nelec)
+    e1 = kernel(h1e, eri, norb, nelec)[0]
     print(e1, e1 - -7.9418573113478566)
 
     def kernel_ref(h1e, eri, norb, nelec, ecore=0, **kwargs):
