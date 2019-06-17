@@ -41,6 +41,7 @@ from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
+@lib.with_doc(direct_spin1.contract_2e.__doc__)
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     ci_coeff, nelec, ci_strs = _unpack(civec_strs, nelec)
     if link_index is None:
@@ -81,6 +82,13 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
                                    ctypes.c_int(ma), ctypes.c_int(mlinka),
                                    dd_indexa.ctypes.data_as(ctypes.c_void_p))
 
+    # Adding h_ps below to because contract_2e function computes the
+    # contraction  "E_{pq}E_{rs} V_{pqrs} |CI>" (~ p^+ q r^+ s |CI>) while
+    # the actual contraction for (aa|aa) and (bb|bb) part is
+    # "p^+ r^+ s q V_{pqrs} |CI>". To make (aa|aa) and (bb|bb) code reproduce
+    # "p^+ q r^+ s |CI>", we employ the identity
+    #    p^+ q r^+ s = p^+ r^+ s q  +  delta(qr) p^+ s
+    # the second term is the source of h_ps
     h_ps = numpy.einsum('pqqs->ps', eri)
     eri1 = eri * 2
     for k in range(norb):

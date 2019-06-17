@@ -66,9 +66,7 @@ void NEVPTkern_dfec_dfae(double *gt2, double *eri, double *t2ket,
         double *cp0, *cp1;
         double *t2t; // E^d_fE^a_e with ae transposed
 
-#pragma omp parallel default(none) \
-        shared(gt2, eri, t2ket, bcount, norb, na, nb) \
-        private(cp0, cp1, t2t, m, n, i, k)
+#pragma omp parallel private(cp0, cp1, t2t, m, n, i, k)
 {
         t2t = malloc(sizeof(double) * n4);
 #pragma omp for schedule(dynamic, 4)
@@ -106,9 +104,7 @@ void NEVPTkern_aedf_ecdf(double *gt2, double *eri, double *t2ket,
         double *cp0, *cp1;
         double *t2t;
 
-#pragma omp parallel default(none) \
-        shared(gt2, eri, t2ket, bcount, norb, na, nb) \
-        private(cp0, cp1, t2t, m, n, i, k)
+#pragma omp parallel private(cp0, cp1, t2t, m, n, i, k)
 {
         t2t = malloc(sizeof(double) * n4);
 #pragma omp for schedule(dynamic, 4)
@@ -144,9 +140,7 @@ void NEVPTkern_cedf_aedf(double *gt2, double *eri, double *t2ket,
         size_t k;
         int blen;
 
-#pragma omp parallel default(none) \
-        shared(gt2, eri, t2ket, bcount, norb, na, nb) \
-        private(k, blen)
+#pragma omp parallel private(k, blen)
 #pragma omp for schedule(dynamic, 1)
         for (k = 0; k < bcount; k+=8) {
                 blen = MIN(bcount-k, 8) * norb;
@@ -169,9 +163,7 @@ void NEVPTkern_dfea_dfec(double *gt2, double *eri, double *t2ket,
         const int n3 = nnorb * norb;
         size_t k;
 
-#pragma omp parallel default(none) \
-        shared(gt2, eri, t2ket, bcount, norb, na, nb) \
-        private(k)
+#pragma omp parallel private(k)
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < bcount; k++) {
                 dgemm_(&TRANS_N, &TRANS_T, &norb, &norb, &n3,
@@ -206,9 +198,7 @@ void NEVPTkern_sf(void (*contract_kernel)(),
 
         (*contract_kernel)(gt2, eri, t2ket, bcount, norb, na, nb);
 
-#pragma omp parallel default(none) \
-        shared(rdm2, rdm3, t1ket, t2ket, gt2, norb, bcount), \
-        private(ij, i, j, k, l, n, tbra, pbra, pt2)
+#pragma omp parallel private(ij, i, j, k, l, n, tbra, pbra, pt2)
 {
         tbra = malloc(sizeof(double) * nnorb * bcount);
 #pragma omp for schedule(dynamic, 4)

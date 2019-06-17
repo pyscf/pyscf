@@ -73,14 +73,6 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
-# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
-# h2e = eri_{pq,rs} p^+ q r^+ s
-#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
-# so eri is defined as
-#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
-# to restore the symmetry between pq and rs,
-#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
-# Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
     g2e_aa = ao2mo.restore(4, eri[0], norb)

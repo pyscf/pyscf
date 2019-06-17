@@ -288,6 +288,8 @@ class Gradients(rhf_grad.GradientsBasics):
 
         de = self.grad_elec(t2, atmlst, verbose=log)
         self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
         self._finalize()
         return self.de
 

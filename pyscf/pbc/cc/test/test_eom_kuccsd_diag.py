@@ -98,7 +98,7 @@ class KnownValues(unittest.TestCase):
         Escf = kmf.scf()
         self._test_ip_diag(kmf,kshift=1)
 
-    def test_he_212_ip_diag(self):
+    def test_he_212_ip_diag_high_cost(self):
         kpts = cell.make_kpts([2,1,2])
         kmf = pbcscf.KUHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
@@ -122,7 +122,7 @@ class KnownValues(unittest.TestCase):
         Escf = kmf.scf()
         self._test_ea_diag(kmf,kshift=1)
 
-    def test_he_212_ea_diag(self):
+    def test_he_212_ea_diag_high_cost(self):
         kpts = cell.make_kpts([2,1,2])
         kmf = pbcscf.KUHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
