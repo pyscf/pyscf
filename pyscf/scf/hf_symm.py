@@ -522,8 +522,8 @@ class SymAdaptedROHF(rohf.ROHF):
         self._irrep_soccs = []
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self

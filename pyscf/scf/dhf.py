@@ -376,11 +376,12 @@ class UHF(hf.SCF):
         self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
                            'with_breit', 'opt'))
 
-    def dump_flags(self):
-        hf.SCF.dump_flags(self)
-        logger.info(self, 'with_ssss %s, with_gaunt %s, with_breit %s',
-                    self.with_ssss, self.with_gaunt, self.with_breit)
-        logger.info(self, 'light speed = %s', lib.param.LIGHT_SPEED)
+    def dump_flags(self, verbose=None):
+        hf.SCF.dump_flags(self, verbose)
+        log = logger.new_logger(self, verbose)
+        log.info('with_ssss %s, with_gaunt %s, with_breit %s',
+                 self.with_ssss, self.with_gaunt, self.with_breit)
+        log.info('light speed = %s', lib.param.LIGHT_SPEED)
         return self
 
     @lib.with_doc(get_hcore.__doc__)

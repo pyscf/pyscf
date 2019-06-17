@@ -675,8 +675,8 @@ class UHF(hf.SCF):
         #raise RuntimeError('API updates')
         self.nelec = (x, self.mol.nelectron-x)
 
-    def dump_flags(self):
-        hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        hf.SCF.dump_flags(self, verbose)
         logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
 
     def eig(self, fock, s):

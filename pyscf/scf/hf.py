@@ -1341,36 +1341,37 @@ class SCF(lib.StreamObject):
             self.opt = self.init_direct_scf(mol)
         return self
 
-    def dump_flags(self):
-        if self.verbose < logger.INFO:
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        if log.verbose < logger.INFO:
             return self
 
-        logger.info(self, '\n')
-        logger.info(self, '******** %s ********', self.__class__)
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
         method = [cls.__name__ for cls in self.__class__.__mro__
                   if issubclass(cls, SCF) and cls != SCF]
-        logger.info(self, 'method = %s', '-'.join(method))
-        logger.info(self, 'initial guess = %s', self.init_guess)
-        logger.info(self, 'damping factor = %g', self.damp)
-        logger.info(self, 'level shift factor = %s', self.level_shift)
+        log.info('method = %s', '-'.join(method))
+        log.info('initial guess = %s', self.init_guess)
+        log.info('damping factor = %g', self.damp)
+        log.info('level shift factor = %s', self.level_shift)
         if isinstance(self.diis, lib.diis.DIIS):
-            logger.info(self, 'DIIS = %s', self.diis)
-            logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
-            logger.info(self, 'DIIS space = %d', self.diis.space)
+            log.info('DIIS = %s', self.diis)
+            log.info('DIIS start cycle = %d', self.diis_start_cycle)
+            log.info('DIIS space = %d', self.diis.space)
         elif self.diis:
-            logger.info(self, 'DIIS = %s', self.DIIS)
-            logger.info(self, 'DIIS start cycle = %d', self.diis_start_cycle)
-            logger.info(self, 'DIIS space = %d', self.diis_space)
-        logger.info(self, 'SCF tol = %g', self.conv_tol)
-        logger.info(self, 'SCF gradient tol = %s', self.conv_tol_grad)
-        logger.info(self, 'max. SCF cycles = %d', self.max_cycle)
-        logger.info(self, 'direct_scf = %s', self.direct_scf)
+            log.info('DIIS = %s', self.DIIS)
+            log.info('DIIS start cycle = %d', self.diis_start_cycle)
+            log.info('DIIS space = %d', self.diis_space)
+        log.info('SCF tol = %g', self.conv_tol)
+        log.info('SCF gradient tol = %s', self.conv_tol_grad)
+        log.info('max. SCF cycles = %d', self.max_cycle)
+        log.info('direct_scf = %s', self.direct_scf)
         if self.direct_scf:
-            logger.info(self, 'direct_scf_tol = %g', self.direct_scf_tol)
+            log.info('direct_scf_tol = %g', self.direct_scf_tol)
         if self.chkfile:
-            logger.info(self, 'chkfile to save SCF result = %s', self.chkfile)
-        logger.info(self, 'max_memory %d MB (current use %d MB)',
-                    self.max_memory, lib.current_memory()[0])
+            log.info('chkfile to save SCF result = %s', self.chkfile)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, lib.current_memory()[0])
         return self
 
 
