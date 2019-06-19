@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+'''
+FCIDUMP functions (write, read) for real Hamiltonian
+'''
+
 from functools import reduce
 import numpy
 from pyscf import ao2mo
@@ -82,10 +86,16 @@ def from_chkfile(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     2-electron integrals using the SCF orbitals.  The transformed integrals is
     written to FCIDUMP'''
     from pyscf import scf, symm
+    mol, scf_rec = scf.chkfile.load_scf(chkfile)
+    mo_coeff = numpy.array(scf_rec['mo_coeff'])
+    nmo = mo_coeff.shape[1]
+
+    s = reduce(numpy.dot, (mo_coeff.conj().T, mol.intor_symmetric('int1e_ovlp'), mo_coeff))
+    if abs(s - numpy.eye(nmo)).max() > 1e-6:
+        # Not support the chkfile from pbc calculation
+        raise RuntimeError('Non-orthogonal orbitals found in chkfile')
+
     with open(filename, 'w') as fout:
-        mol, scf_rec = scf.chkfile.load_scf(chkfile)
-        mo_coeff = numpy.array(scf_rec['mo_coeff'])
-        nmo = mo_coeff.shape[1]
         if mol.symmetry:
             orbsym = symm.label_orb_symm(mol, mol.irrep_id,
                                          mol.symm_orb, mo_coeff, check=False)
@@ -118,6 +128,9 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
     '''Use the given MOs to transfrom the 1-electron and 2-electron integrals
     then dump them to FCIDUMP.
     '''
+    if getattr(mol, '_mesh', None):
+        raise NotImplementedError('PBC system')
+
     if orbsym is None:
         orbsym = getattr(mo_coeff, 'orbsym', None)
     t = mol.intor_symmetric('int1e_kin')
@@ -133,10 +146,15 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     integrals then dump them to FCIDUMP.
     '''
     mo_coeff = mf.mo_coeff
+    assert mo_coeff.dtype == numpy.double
+
     h1e = reduce(numpy.dot, (mo_coeff.T, mf.get_hcore(), mo_coeff))
     if mf._eri is None:
-        eri = ao2mo.full(mol, mo_coeff)
-    else:
+        if getattr(mf, 'exxdiv'):  # PBC system
+            eri = mf.with_df.ao2mo(mo_coeff)
+        else:
+            eri = ao2mo.full(mf.mol, mo_coeff)
+    else:  # Handle cached integrals or customized systems
         eri = ao2mo.full(mf._eri, mo_coeff)
     orbsym = getattr(mo_coeff, 'orbsym', None)
     nuc = mf.energy_nuc()

@@ -129,6 +129,11 @@ class KnownValues(unittest.TestCase):
         ref = (e1 - e2)/0.002 * lib.param.BOHR
         self.assertAlmostEqual(g[0,0], ref, 4)
 
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().MP2().run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.049987975650731625, 7)
+
 
 if __name__ == "__main__":
     print("Tests for MP2 gradients")

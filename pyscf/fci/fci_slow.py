@@ -44,6 +44,7 @@ def contract_1e(f1e, fcivec, norb, nelec):
 
 
 def contract_2e(eri, fcivec, norb, nelec, opt=None):
+    '''Compute E_{pq}E_{rs}|CI>'''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -139,7 +140,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     return h2e * fac
 
 
-def make_hdiag(h1e, g2e, norb, nelec, opt=None):
+def make_hdiag(h1e, eri, norb, nelec, opt=None):
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -148,9 +149,9 @@ def make_hdiag(h1e, g2e, norb, nelec, opt=None):
 
     occslista = cistring._gen_occslst(range(norb), neleca)
     occslistb = cistring._gen_occslst(range(norb), nelecb)
-    g2e = ao2mo.restore(1, g2e, norb)
-    diagj = numpy.einsum('iijj->ij',g2e)
-    diagk = numpy.einsum('ijji->ij',g2e)
+    eri = ao2mo.restore(1, eri, norb)
+    diagj = numpy.einsum('iijj->ij', eri)
+    diagk = numpy.einsum('ijji->ij', eri)
     hdiag = []
     for aocc in occslista:
         for bocc in occslistb:
@@ -161,8 +162,8 @@ def make_hdiag(h1e, g2e, norb, nelec, opt=None):
             hdiag.append(e1 + e2*.5)
     return numpy.array(hdiag)
 
-def kernel(h1e, g2e, norb, nelec, ecore=0):
-    h2e = absorb_h1e(h1e, g2e, norb, nelec, .5)
+def kernel(h1e, eri, norb, nelec, ecore=0):
+    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
 
     na = cistring.num_strings(norb, nelec//2)
     ci0 = numpy.zeros((na,na))
@@ -171,7 +172,7 @@ def kernel(h1e, g2e, norb, nelec, ecore=0):
     def hop(c):
         hc = contract_2e(h2e, c, norb, nelec)
         return hc.reshape(-1)
-    hdiag = make_hdiag(h1e, g2e, norb, nelec)
+    hdiag = make_hdiag(h1e, eri, norb, nelec)
     precond = lambda x, e, *args: x/(hdiag-e+1e-4)
     e, c = lib.davidson(hop, ci0.reshape(-1), precond)
     return e+ecore

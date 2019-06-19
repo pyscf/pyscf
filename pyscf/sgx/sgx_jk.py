@@ -70,7 +70,8 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     if sgx.debug:
         batch_nuc = _gen_batch_nuc(mol)
     else:
-        batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol)
+        batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
+                                  sgx._opt)
     t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
 
     sn = numpy.zeros((nao,nao))
@@ -157,7 +158,8 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     if sgx.debug:
         batch_nuc = _gen_batch_nuc(mol)
     else:
-        batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol)
+        batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
+                                  sgx._opt)
 
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
@@ -241,24 +243,20 @@ def _gen_batch_nuc(mol):
         return lib.unpack_tril(j3c.T, out=out)
     return batch_nuc
 
-def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol):
+def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
     '''Contraction between sgX Coulomb integrals and density matrices
     J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid
        einsum('gij,xij->xg', gbn, dms) if dms are density matrices
     K: einsum('gtv,xgt->xgv', gbn, fg)
     '''
-    intor = mol._add_suffix('int3c2e')
-    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
+    if sgxopt is None:
+        from pyscf.sgx import sgx
+        sgxopt = sgx._make_opt(mol)
+    sgxopt.direct_scf_tol = direct_scf_tol
+
     ncomp = 1
     nao = mol.nao
-    # intor 'int1e_ovlp' is used by the prescreen method
-    # 'SGXnr_ovlp_prescreen' only. It is never be used again in other places.
-    # It can be released early
-    vhfopt = _vhf.VHFOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
-                         'SGXsetnr_direct_scf')
-    vhfopt._intor = None
-    vhfopt.direct_scf_tol = direct_scf_tol
-    cintor = _vhf._fpointer(intor)
+    cintor = _vhf._fpointer(sgxopt._intor)
     fdot = _vhf._fpointer('SGXdot_nr'+aosym)
     drv = _vhf.libcvhf.SGXnr_direct_drv
 
@@ -267,7 +265,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol):
         atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                           fakemol._atm, fakemol._bas, fakemol._env)
 
-        ao_loc = moleintor.make_loc(bas, intor)
+        ao_loc = moleintor.make_loc(bas, sgxopt._intor)
         shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, len(bas))
         ngrids = grid_coords.shape[0]
 
@@ -303,7 +301,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol):
         drv(cintor, fdot, fjk, dmsptr, vjkptr, n_dm, ncomp,
             (ctypes.c_int*6)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
-            cintopt, vhfopt._this,
+            sgxopt._cintopt, sgxopt._this,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
             env.ctypes.data_as(ctypes.c_void_p))

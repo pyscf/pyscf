@@ -28,6 +28,8 @@ mf = scf.RHF(mol).run()
 #
 mc = mcscf.CASSCF(mf, 8, 8)
 mc = solvent.ddCOSMO(mc)
+# Adjust solvent model by modifying the attribute .with_solvent
+mc.with_solvent.eps = 32.613  # methanol dielectric constant
 mc.run()
 
 #

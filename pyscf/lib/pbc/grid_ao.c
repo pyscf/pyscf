@@ -67,8 +67,7 @@ void PBCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
 
-#pragma omp parallel default(none) \
-        shared(Ls, nimgs, coords, ngrids, non0table, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int i, j, m;
         int np, nc, atm_id;
@@ -428,10 +427,7 @@ void PBCeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp,
                 di_max = MAX(di_max, ao_loc[i+1] - ao_loc[i]);
         }
 
-#pragma omp parallel default(none) \
-        shared(fiter, feval, fexp, param, ngrids, \
-               Ls, nimgs, di_max, expLk, nkpts, shls_slice, ao_loc, \
-               ao, coord, rcut, non0table, atm, natm, bas, nbas, env, shloc)
+#pragma omp parallel
 {
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];

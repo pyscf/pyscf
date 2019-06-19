@@ -23,6 +23,8 @@ Pseudo-spectral methods (COSX, PS, SN-K)
 import time
 import numpy
 from pyscf import lib
+from pyscf import gto
+from pyscf.scf import _vhf
 from pyscf.lib import logger
 from pyscf.sgx import sgx_jk
 from pyscf.df import df_jk
@@ -139,6 +141,19 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
 class _SGXHF:
     pass
 
+def _make_opt(mol):
+    '''Optimizer to genrate 3-center 2-electron integrals'''
+    intor = mol._add_suffix('int3c2e')
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
+    # intor 'int1e_ovlp' is used by the prescreen method
+    # 'SGXnr_ovlp_prescreen' only. Not used again in other places.
+    # It can be released early
+    vhfopt = _vhf.VHFOpt(mol, 'int1e_ovlp', 'SGXnr_ovlp_prescreen',
+                         'SGXsetnr_direct_scf')
+    vhfopt._intor = intor
+    vhfopt._cintopt = cintopt
+    return vhfopt
+
 
 class SGX(lib.StreamObject):
     def __init__(self, mol, auxbasis=None):
@@ -162,6 +177,7 @@ class SGX(lib.StreamObject):
         self.blockdim = 1200
         self.auxmol = None
         self._vjopt = None
+        self._opt = None
         self._last_dm = 0
         self._keys = set(self.__dict__.keys())
 
@@ -196,6 +212,7 @@ class SGX(lib.StreamObject):
         if level is None:
             level = self.grids_level_f
         self.grids = sgx_jk.get_gridss(self.mol, level, self.grids_thrd)
+        self._opt = _make_opt(self.mol)
         return self
 
     def kernel(self, *args, **kwargs):
@@ -208,6 +225,7 @@ class SGX(lib.StreamObject):
         self.auxmol = None
         self._cderi = None
         self._vjopt = None
+        self._opt = None
         self._last_dm = 0
         return self
 

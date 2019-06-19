@@ -1593,9 +1593,7 @@ void GTO_ft_fill_drv(int (*intor)(), FPtr_eval_gz eval_gz, void (*fill)(),
                 eval_aopair = &GTO_aopair_lazy_contract;
         }
 
-#pragma omp parallel default(none) \
-        shared(intor, eval_gz, eval_aopair, fill, mat, comp, shls_slice, \
-               ao_loc, Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int i, j, ij;
         double complex *buf = malloc(sizeof(double complex)
@@ -1641,11 +1639,7 @@ void GTO_ft_fill_shls_drv(int (*intor)(), FPtr_eval_gz eval_gz,
                 eval_aopair = &GTO_aopair_lazy_contract;
         }
 
-#pragma omp parallel default(none) \
-        shared(intor, eval_gz, eval_aopair, out, comp, Gv, b, gxyz, gs, \
-               nGv, npair, shls_lst, ao_loc, \
-               atm, natm, bas, nbas, env, ijloc) \
-        private(n)
+#pragma omp parallel private(n)
 {
         int ish, jsh;
         int dims[2];

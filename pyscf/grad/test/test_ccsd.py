@@ -229,6 +229,11 @@ class KnownValues(unittest.TestCase):
         g = ccs.nuc_grad_method().kernel()
         self.assertAlmostEqual(g[0,0], ref, 5)
 
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().CCSD().run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.10105388861195158, 7)
+
 
 if __name__ == "__main__":
     print("Tests for CCSD gradients")

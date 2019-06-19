@@ -18,7 +18,7 @@
 
 import unittest
 import numpy
-from pyscf import gto, scf
+from pyscf import gto, scf, lib
 from pyscf import tdscf
 from pyscf.grad import tdrhf as tdrhf_grad
 
@@ -76,6 +76,11 @@ class KnownValues(unittest.TestCase):
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 6)
+
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().TDA().run(nstates=1).Gradients().kernel(state=1)
+        self.assertAlmostEqual(lib.finger(g), -0.07887074405221786, 7)
 
 
 if __name__ == "__main__":

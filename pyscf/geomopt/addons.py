@@ -81,3 +81,10 @@ def dump_mol_geometry(mol, new_coords, log=None):
              (mol.atom_symbol(i),
               new_coords[i,0], new_coords[i,1], new_coords[i,2],
               dx[i,0], dx[i,1], dx[i,2]))
+
+def symmetrize(mol, coords):
+    '''Symmetrize the structure of a molecule.'''
+    from pyscf.grad.rhf import symmetrize
+    # Symmetrizing coordinates is the same to the symmetrization of gradients.
+    return symmetrize(mol, coords)
+

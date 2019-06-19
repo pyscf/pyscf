@@ -1022,7 +1022,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
-        tril_shape = ((nkpts)*(nkpts+1))/2
+        tril_shape = ((nkpts)*(nkpts+1))//2
         t2_tril = numpy.zeros((tril_shape,nkpts,nocc,nocc,nvir,nvir),dtype=numpy.complex128)
         local_mp2 = numpy.array(0.0,dtype=numpy.complex128)
         self.emp2 = 0
@@ -2351,7 +2351,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         e = []
         assert len(eaccsd_evecs.shape) == 2  # Done at a single k-point, kshift
         for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
-            print _eval, _evec.shape, _levec.shape
+            print(_eval, _evec.shape, _levec.shape)
             l1,l2 = self.vector_to_amplitudes_ea(_levec)
             r1,r2 = self.vector_to_amplitudes_ea(_evec)
 

@@ -56,10 +56,10 @@ Installation
         set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 
 * Using DMRG as the FCI solver for CASSCF.  There are two DMRG solver
-  interfaces avaialbe in pyscf.
-      Block (http://chemists.princeton.edu/chan/software/block-code-for-dmrg)
+  interfaces available in pyscf.
+      Block (https://sanshar.github.io/Block)
       CheMPS2 (https://github.com/SebWouters/CheMPS2)
-  After installing the DMRG solver, create a file future/dmrgscf/settings.py
+  After installing the DMRG solver, create a file dmrgscf/settings.py
   to store the path where the DMRG solver was installed.
 
 * Using FCIQMC as the FCI solver for CASSCF.

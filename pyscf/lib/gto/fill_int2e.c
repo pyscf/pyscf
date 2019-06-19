@@ -553,9 +553,7 @@ void GTOnr2e_fill_drv(int (*intor)(), void (*fill)(), int (*fprescreen)(),
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
 
-#pragma omp parallel default(none) \
-        shared(fill, fprescreen, eri, intor, comp, \
-               shls_slice, ao_loc, cintopt, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int ij, i, j;
         double *buf = malloc(sizeof(double) * (di*di*di*di*comp + cache_size));

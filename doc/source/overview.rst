@@ -32,6 +32,9 @@ Bibtex entry::
     eprint = {https://onlinelibrary.wiley.com/doi/pdf/10.1002/wcms.1340},
   }
 
+In addition, if you use Libcint to compute integrals, please cite the following paper:
+
+"Libcint: An efficient general integral library for Gaussian basis functions", Q. Sun, J. Comp. Chem. 36, 1664 (2015).
 
 Features
 ========

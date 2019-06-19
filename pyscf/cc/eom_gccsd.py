@@ -620,6 +620,12 @@ class EOMEE(eom_rccsd.EOMEE):
         imds.make_ee()
         return imds
 
+gccsd.GCCSD.EOMIP    = lib.class_as_method(EOMIP)
+gccsd.GCCSD.EOMIP_Ta = lib.class_as_method(EOMIP_Ta)
+gccsd.GCCSD.EOMEA    = lib.class_as_method(EOMEA)
+gccsd.GCCSD.EOMEA_Ta = lib.class_as_method(EOMEA_Ta)
+gccsd.GCCSD.EOMEE    = lib.class_as_method(EOMEE)
+
 class _IMDS:
     # Exactly the same as RCCSD IMDS except
     # -- rintermediates --> gintermediates

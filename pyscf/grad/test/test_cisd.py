@@ -95,6 +95,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -76.032220245016717, 9)
         self.assertAlmostEqual(lib.finger(g1), 0.10224149952700579, 6)
 
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().CISD().run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.11924457198332741, 7)
+
 
 if __name__ == "__main__":
     print("Tests for CISD gradients")

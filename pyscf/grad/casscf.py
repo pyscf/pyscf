@@ -187,6 +187,8 @@ class Gradients(casci_grad.Gradients):
 
         de = self.grad_elec(mo_coeff, ci, atmlst, log)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
         self._finalize()
         return self.de
 

@@ -176,6 +176,32 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     mo0e = mo0 * (mo_energy[mo_occ>0] * mo_occ[mo_occ>0])
     return numpy.dot(mo0e, mo0.T.conj())
 
+def symmetrize(mol, de, atmlst=None):
+    '''Symmetrize the gradients wrt the point group symmetry of the molecule.'''
+    assert(mol.symmetry)
+    pmol = mol.copy()
+    # The symmetry of gradients should be the same to the p-type functions.
+    # We use p-type AOs to generate the symmetry adaptation projector.
+    pmol.basis = {'default': [[1, (1, 1)]]}
+    # There is uncertainty for the output of the transformed molecular
+    # geometry when mol.symmetry is True. E.g., H2O can be placed either on
+    # xz-plane or on yz-plane for C2v symmetry. This uncertainty can lead to
+    # wrong symmetry adaptation basis. Molecular point group and coordinates
+    # should be explicitly given to avoid the uncertainty.
+    pmol.symmetry = mol.topgroup
+    pmol.atom = mol._atom
+    pmol.unit = 'Bohr'
+    pmol.build(False, False)
+
+    # irrep-p-function x irrep-gradients = total symmetric irrep
+    a_id = pmol.irrep_id.index(0)
+    c = pmol.symm_orb[a_id].reshape(mol.natm, 3, -1)
+    if atmlst is not None:
+        c = c[:,atmlst,:]
+    tmp = numpy.einsum('zx,zxi->i', de, c)
+    proj_de = numpy.einsum('i,zxi->zx', tmp, c)
+    return proj_de
+
 
 def as_scanner(mf_grad):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
@@ -307,6 +333,10 @@ class GradientsBasics(lib.StreamObject):
     def kernel(self):
         raise NotImplementedError
 
+    @lib.with_doc(symmetrize.__doc__)
+    def symmetrize(self, de, atmlst=None):
+        return symmetrize(self.mol, de, atmlst)
+
     grad = lib.alias(kernel, alias_name='grad')
 
     def _finalize(self):
@@ -365,6 +395,8 @@ class Gradients(GradientsBasics):
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
         self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
         logger.timer(self, 'SCF gradients', *cput0)
         self._finalize()
         return self.de
@@ -399,6 +431,7 @@ if __name__ == '__main__':
         [1   , (0. , 0.757  , 0.587)] ]
     h2o.basis = {'H': '631g',
                  'O': '631g',}
+    h2o.symmetry = True
     h2o.build()
     mf = scf.RHF(h2o)
     mf.conv_tol = 1e-14

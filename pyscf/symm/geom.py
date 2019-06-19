@@ -130,17 +130,18 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
     w1, u1 = rawsys.cartesian_tensor(1)
     axes = u1.T
     log.debug('principal inertia moments %s', w1)
+    charge_center = rawsys.charge_center
 
     if numpy.allclose(w1, 0, atol=tol):
         gpname = 'SO3'
-        return gpname, rawsys.charge_center, numpy.eye(3)
+        return gpname, charge_center, numpy.eye(3)
 
     elif numpy.allclose(w1[:2], 0, atol=tol): # linear molecule
         if rawsys.has_icenter():
             gpname = 'Dooh'
         else:
             gpname = 'Coov'
-        return gpname, rawsys.charge_center, axes
+        return gpname, charge_center, axes
 
     else:
         w1_degeneracy, w1_degen_values = _degeneracy(w1, decimals)
@@ -162,12 +163,12 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 4 in w3_degeneracy and len(w3_degeneracy) == 3):  # I group
                 gpname, new_axes = _search_i_group(rawsys)
                 if gpname is not None:
-                    return gpname, rawsys.charge_center, _refine(new_axes)
+                    return gpname, charge_center, _refine(new_axes)
 
             elif 3 in w2_degeneracy and len(w2_degeneracy) <= 3:  # T/O group
                 gpname, new_axes = _search_ot_group(rawsys)
                 if gpname is not None:
-                    return gpname, rawsys.charge_center, _refine(new_axes)
+                    return gpname, charge_center, _refine(new_axes)
 
         elif (2 in w1_degeneracy and
               numpy.any(w2_degeneracy[w2_degen_values>0] >= 2)):
@@ -226,7 +227,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 gpname = 'S%d' % (n*2)
             else:
                 gpname = 'C%d' % n
-            return gpname, rawsys.charge_center, _refine(axes)
+            return gpname, charge_center, _refine(axes)
 
         else:
             is_c2x = rawsys.has_rotation(axes[0], 2)
@@ -263,7 +264,9 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                     gpname = 'Cs'
                 else:
                     gpname = 'C1'
-    return gpname, rawsys.charge_center, axes
+                    axes = numpy.eye(3)
+                    charge_center = numpy.zeros(3)
+    return gpname, charge_center, axes
 
 
 # reduce to D2h and its subgroups
