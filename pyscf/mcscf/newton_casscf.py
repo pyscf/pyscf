@@ -303,6 +303,8 @@ def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     fcasscf.mo_coeff = mo
     if hasattr (casscf.fcisolver, 'orbsym'):
         fcasscf.fcisolver.orbsym = casscf.fcisolver.orbsym
+    if hasattr (casscf.fcisolver, 'wfnsym'):
+        fcasscf.fcisolver.wfnsym = casscf.fcisolver.wfnsym
 
     # Warning: do not call gen_g_hop from here with casscf: infinite recursion danger
     gh_roots = [gen_g_hop (fcasscf, mo, ci0_i, eris, verbose=verbose) for ci0_i in ci0]
