@@ -3010,7 +3010,7 @@ class _ERIS:
 
             mem = 0.5e9
             pre = 1.*nvir*nvir*nvir*nvir*16
-            unique_klist = khelper.symm_map.keys()
+            unique_klist = list(khelper.symm_map.keys())
             nUnique_klist = len(unique_klist)
             nkpts_blksize = min(max(int(numpy.floor(mem/pre)),1),nUnique_klist)
 
