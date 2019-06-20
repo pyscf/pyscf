@@ -295,7 +295,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
-    tril_shape = ((nkpts)*(nkpts+1))/2
+    tril_shape = ((nkpts)*(nkpts+1))//2
 
     mo_e_o = [e[:nocc] for e in eris.mo_energy]
     mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
@@ -2662,7 +2662,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nkpts = self.nkpts
         nov = nkpts*nocc*nvir
         t1 = vec[:nov].reshape(nkpts,nocc,nvir)
-        t2 = vec[nov:].reshape(nkpts*(nkpts+1)/2,nkpts,nocc,nocc,nvir,nvir)
+        t2 = vec[nov:].reshape(nkpts*(nkpts+1)//2,nkpts,nocc,nocc,nvir,nvir)
         return t1, t2
 
 class _ERIS:
