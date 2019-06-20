@@ -12,6 +12,7 @@ PySCF 1.7.0 (2019-?-?)
   - KUMP2
   - KCCSD function spatial2spin that transforms amplitudes in spatial orbital to
     that in spin-orbital
+  - DOCI solver, DOCI-CASCI, and DOCI-CASSCf
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
@@ -20,6 +21,8 @@ PySCF 1.7.0 (2019-?-?)
 * Bugfix
   - Carbon ANO data
   - Initial guess for EOM-KCCSD
+  - state-averge CASSCF analytical nuclear gradietns
+  - ddCOSMO self-consistency (as fast solvent) for post-SCF methods
 
 
 PySCF 1.6.2 (2019-?-?)
