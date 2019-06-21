@@ -43,6 +43,8 @@ from pyscf.pbc.tools.tril import tril_index, unpack_tril
 from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd_rhf
 from pyscf.pbc.cc.kccsd_rhf import padded_mo_coeff
+from pyscf.pbc.cc.eom_kccsd_rhf_ea import mask_frozen as mask_frozen_ea
+from pyscf.pbc.cc.eom_kccsd_rhf_ip import mask_frozen as mask_frozen_ip
 
 from mpi4py import MPI
 
@@ -1015,6 +1017,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         mf = _update_procs_mf(mf)
         pyscf.pbc.cc.kccsd_rhf.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)
+        self.__imds__ = None
 
     def _init_amps_tril(self, eris):
         time0 = time.clock(), time.time()
@@ -1583,6 +1586,15 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         return vector
 
+    def vector_size_ip(self):
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        nkpts = self.nkpts
+
+        size = nocc + nkpts ** 2 * nocc ** 2 * nvir
+        return size
+
+    mask_frozen_ip = mask_frozen_ip
 
     def vector_to_amplitudes_ip(self,vector):
         nocc = self.nocc
@@ -2300,6 +2312,16 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
 
+    def vector_size_ea(self):
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        nkpts = self.nkpts
+
+        size = nvir + nkpts ** 2 * nvir ** 2 * nocc
+        return size
+
+    mask_frozen_ea = mask_frozen_ea
+
     def vector_to_amplitudes_ea(self,vector):
         nocc = self.nocc
         nvir = self.nmo - nocc
@@ -2664,6 +2686,12 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         t1 = vec[:nov].reshape(nkpts,nocc,nvir)
         t2 = vec[nov:].reshape(nkpts*(nkpts+1)//2,nkpts,nocc,nocc,nvir,nvir)
         return t1, t2
+
+    @property
+    def imds(self):
+        if self.__imds__ is None:
+            self.__imds__ = _IMDS(self)
+        return self.__imds__
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
