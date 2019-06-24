@@ -31,6 +31,12 @@ from pyscf import gto,dft
 from pyscf.gto import mole
 from pyscf.gto import moleintor
 
+<<<<<<< HEAD
+=======
+
+import wmme
+
+>>>>>>> 5d9cf9a5f96e1d1f9c693e75c0eac8b46a290196
 def mdot(*args):
    """chained matrix product: mdot(A,B,C,..) = A*B*C*...
    No attempt is made to optimize the contraction order."""
