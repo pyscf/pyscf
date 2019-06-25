@@ -79,6 +79,8 @@ control at which level the timing information should be output.  It is 5
 
 import sys
 import time
+if sys.version_info >= (3,6):
+    time.clock = time.process_time
 
 from pyscf.lib import parameters as param
 import pyscf.__config__
