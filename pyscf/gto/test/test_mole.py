@@ -562,12 +562,13 @@ O    SP
         self.assertEqual([x[2] for x in aoslice], [0, 8, 56])
         self.assertEqual([x[3] for x in aoslice], [8, 56, 64])
 
-    def test_dump_loads(self):
+    def test_dump_loads_skip(self):
         import json
         tmpfile = tempfile.NamedTemporaryFile()
         lib.chkfile.save_mol(mol0, tmpfile.name)
         mol1 = gto.Mole()
         mol1.update(tmpfile.name)
+        # dumps() may produce different orders in different runs
         self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
         tmpfile = None
         mol1.loads(mol1.dumps())
