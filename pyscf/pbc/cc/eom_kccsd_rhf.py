@@ -605,7 +605,7 @@ def eaccsd_diag(eom, kshift, imds=None, diag=None):
                 Hr2[kj, ka] += imds.Lvv[ka].diagonal()[None, :, None]
                 Hr2[kj, ka] += imds.Lvv[kb].diagonal()
 
-                Wvvvv = imds.get_Wvvvv(ka, kb, kc)
+                Wvvvv = imds.get_Wvvvv(ka, kb, ka)
                 Hr2[kj, ka] += np.einsum('abab->ab', Wvvvv)
 
                 Hr2[kj, ka] -= np.einsum('jbjb->jb', imds.Wovov[kj, kb, kj])[:, None, :]
