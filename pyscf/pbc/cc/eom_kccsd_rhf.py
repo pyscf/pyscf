@@ -60,7 +60,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr1 += -2. * einsum('klid,kld->i', imds.Wooov[kk, kl, kshift], r2[kk, kl])
             Hr1 += einsum('lkid,kld->i', imds.Wooov[kl, kk, kshift], r2[kk, kl])
 
-    Hr2 = np.zeros(r2.shape, dtype=np.common_type(imds.Wovoo[0, 0, 0], r1))
+    Hr2 = np.zeros(r2.shape, dtype=np.result_type(imds.Wovoo.dtype, r1.dtype))
     # 2h1p-1h block
     for ki in range(nkpts):
         for kj in range(nkpts):
@@ -122,7 +122,7 @@ def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         kj = kconserv[kshift,ki,kb]
         Hr1 -= einsum('kbij,ijb->k',imds.Wovoo[kshift,kb,ki],r2[ki,kj])
 
-    Hr2 = np.zeros(r2.shape, dtype=np.common_type(imds.Wovoo[0, 0, 0], r1))
+    Hr2 = np.zeros(r2.shape, dtype=np.result_type(imds.Wovoo.dtype, r1.dtype))
     for kl, kk in itertools.product(range(nkpts), repeat=2):
         kd = kconserv[kk,kshift,kl]
         SWooov = (2. * imds.Wooov[kk,kl,kshift] -
@@ -151,7 +151,7 @@ def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             ki = kconserv[kk,kj,kl]
             Hr2[kk,kl] += einsum('klji,jid->kld',imds.Woooo[kk,kl,kj],r2[kj,ki])
 
-    tmp = np.zeros((nvir),dtype=np.common_type(imds.Wovoo[0, 0, 0], r1))
+    tmp = np.zeros(nvir, dtype=np.result_type(imds.Wovoo.dtype, r1.dtype))
     for ki, kj in itertools.product(range(nkpts), repeat=2):
         kc = kshift
         tmp += einsum('ijcb,ijb->c',t2[ki, kj, kc],r2[ki, kj])
@@ -459,7 +459,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     # Eq. (31)
     # 2p1h-1p block
-    Hr2 = np.zeros(r2.shape, dtype=np.common_type(imds.Wvvvo[0, 0, 0], r1))
+    Hr2 = np.zeros(r2.shape, dtype=np.result_type(imds.Wvvvo.dtype, r1.dtype))
     for kj in range(nkpts):
         for ka in range(nkpts):
             kb = kconserv[kshift,ka,kj]
@@ -490,7 +490,8 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
                 Hr2[kj, ka] += einsum('bd,jad->jab', imds.Lvv[kb], r2[kj, ka])
                 for kd in range(nkpts):
                     kc = kconserv[ka, kd, kb]
-                    Hr2[kj, ka] += einsum('abcd,jcd->jab', imds.Wvvvv[ka, kb, kc], r2[kj, kc])
+                    Wvvvv = imds.get_Wvvvv(ka, kb, kc)
+                    Hr2[kj, ka] += einsum('abcd,jcd->jab', Wvvvv, r2[kj, kc])
                     kl = kconserv[kd, kb, kj]
                     Hr2[kj, ka] += 2. * einsum('lbdj,lad->jab', imds.Wovvo[kl, kb, kd], r2[kl, ka])
                     # imds.Wvovo[kb,kl,kd,kj] <= imds.Wovov[kl,kb,kj,kd].transpose(1,0,3,2)
@@ -558,7 +559,8 @@ def leaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2[kl, kc] += -lib.einsum('lbcj,jdb->lcd', imds.Wovvo[kl, kb, kc], r2[kj, kd])
 
             ka = kconserv[kc, kb, kd]
-            Hr2[kl, kc] += lib.einsum('lab,abcd->lcd', r2[kl, ka], imds.Wvvvv[ka, kb, kc])
+            Wvvvv = imds.get_Wvvvv(ka, kb, kc)
+            Hr2[kl, kc] += lib.einsum('lab,abcd->lcd', r2[kl, ka], Wvvvv)
 
     tmp = np.zeros((nocc),dtype=t1.dtype)
     for ki, kc in itertools.product(range(nkpts), repeat=2):
@@ -603,7 +605,8 @@ def eaccsd_diag(eom, kshift, imds=None, diag=None):
                 Hr2[kj, ka] += imds.Lvv[ka].diagonal()[None, :, None]
                 Hr2[kj, ka] += imds.Lvv[kb].diagonal()
 
-                Hr2[kj, ka] += np.einsum('abab->ab', imds.Wvvvv[ka, kb, ka])
+                Wvvvv = imds.get_Wvvvv(ka, kb, kc)
+                Hr2[kj, ka] += np.einsum('abab->ab', Wvvvv)
 
                 Hr2[kj, ka] -= np.einsum('jbjb->jb', imds.Wovov[kj, kb, kj])[:, None, :]
                 Wovvo = np.einsum('jbbj->jb', imds.Wovvo[kj, kb, kb])
@@ -950,7 +953,8 @@ class _IMDS:
             nkpts, nocc, nvir = t1.shape
             vovv_dest = self._fimd.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), t1.dtype.char)
             vvvo_dest = self._fimd.create_dataset('vvvo', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), t1.dtype.char)
-            vvvv_dest = self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
+            if eris.vvvv is not None:
+                vvvv_dest = self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
         else:
             vovv_dest = vvvo_dest = vvvv_dest = None
 
@@ -959,7 +963,10 @@ class _IMDS:
         if ea_partition == 'mp' and np.all(t1 == 0):
             self.Wvvvo = imd.Wvvvo(t1, t2, eris, kconserv, vvvo_dest)
         else:
-            self.Wvvvv = imd.Wvvvv(t1, t2, eris, kconserv, vvvv_dest)
+            if eris.vvvv is None:
+                self.Wvvvv = None
+            else:
+                self.Wvvvv = imd.Wvvvv(t1, t2, eris, kconserv, vvvv_dest)
             self.Wvvvo = imd.Wvvvo(t1, t2, eris, kconserv, self.Wvvvv, vvvo_dest)
         self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
@@ -1003,3 +1010,13 @@ class _IMDS:
 
     def make_ee(self):
         raise NotImplementedError
+
+    def get_Wvvvv(self, ka, kb, kc):
+        if not self.made_ea_imds:
+            self.make_ea()
+
+        if self.Wvvvv is None:
+            return imd.get_Wvvvv(self.t1, self.t2, self.eris, self.kconserv,
+                                 ka, kb, kc)
+        else:
+            return self.Wvvvv[ka,kb,kc]

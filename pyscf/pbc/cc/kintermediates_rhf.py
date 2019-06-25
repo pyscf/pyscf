@@ -338,23 +338,35 @@ def Woooo(t1, t2, eris, kconserv, out=None):
 
 def Wvvvv(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-    Wabcd = _new(eris.vvvv.shape, t1.dtype, out)
-
+    Wabcd = _new((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t2.dtype, out)
     for ka in range(nkpts):
         for kb in range(nkpts):
             for kc in range(nkpts):
-                kd = kconserv[ka,kc,kb]
-                vvvv  = einsum('klcd,ka,lb->abcd',eris.oovv[ka,kb,kc],t1[ka],t1[kb])
-                vvvv += einsum('alcd,lb->abcd',eris.vovv[ka,kb,kc],-t1[kb])
-                vvvv += einsum('bkdc,ka->abcd',eris.vovv[kb,ka,kd],-t1[ka])
-                vvvv += eris.vvvv[ka,kb,kc]
-                for kk in range(nkpts):
-                    # kk + kl - kc - kd = 0
-                    # => kl = kc - kk + kd
-                    kl = kconserv[kc,kk,kd]
-                    vvvv += einsum('klcd,klab->abcd',eris.oovv[kk,kl,kc],t2[kk,kl,ka])
-                Wabcd[ka,kb,kc] = vvvv
+                Wabcd[ka,kb,kc] = get_Wvvvv(t1, t2, eris, kconserv, ka, kb, kc)
     return Wabcd
+
+def get_Wvvvv(t1, t2, eris, kconserv, ka, kb, kc):
+    kd = kconserv[ka, kc, kb]
+    nkpts, nocc, nvir = t1.shape
+    if getattr(eris, 'Lpv', None) is not None:
+        # Using GDF to generate Wvvvv on the fly
+        Lpv = eris.Lpv
+        Lac = (Lpv[ka,kc][:,nocc:] -
+               einsum('Lkc,ka->Lac', Lpv[ka,kc][:,:nocc], t1[ka]))
+        Lbd = (Lpv[kb,kd][:,nocc:] -
+               einsum('Lkd,kb->Lbd', Lpv[kb,kd][:,:nocc], t1[kb]))
+        vvvv = einsum('Lac,Lbd->abcd', Lac, Lbd)
+        vvvv *= (1. / nkpts)
+    else:
+        vvvv  = einsum('klcd,ka,lb->abcd',eris.oovv[ka,kb,kc],t1[ka],t1[kb])
+        vvvv += einsum('alcd,lb->abcd',eris.vovv[ka,kb,kc],-t1[kb])
+        vvvv += einsum('bkdc,ka->abcd',eris.vovv[kb,ka,kd],-t1[ka])
+        vvvv += eris.vvvv[ka,kb,kc]
+
+    for kk in range(nkpts):
+        kl = kconserv[kc,kk,kd]
+        vvvv += einsum('klcd,klab->abcd', eris.oovv[kk,kl,kc], t2[kk,kl,ka])
+    return vvvv
 
 def Wvvvo(t1, t2, eris, kconserv, _Wvvvv=None, out=None):
     nkpts, nocc, nvir = t1.shape
@@ -390,17 +402,20 @@ def Wvvvo(t1, t2, eris, kconserv, _Wvvvv=None, out=None):
                 vvvo += einsum('lkjc,lb,ka->abcj',eris.ooov[kb,ka,kj],t1[kb],t1[ka])
                 vvvo += einsum('lc,ljab->abcj',-FFov[kc],t2[kc,kj,ka])
                 Wabcj[ka,kb,kc] = vvvo
+
     # Check if t1=0 (HF+MBPT(2))
     # einsum will check, but don't make vvvv if you can avoid it!
     if np.any(t1 != 0):
-        if _Wvvvv is None:
-            _Wvvvv = Wvvvv(t1,t2,eris,kconserv)
         for ka in range(nkpts):
             for kb in range(nkpts):
                 for kc in range(nkpts):
                     kj = kconserv[ka,kc,kb]
+                    if _Wvvvv is None:
+                        Wvvvv = get_Wvvvv(t1, t2, eris, kconserv, ka, kb, kc)
+                    else:
+                        Wvvvv = _Wvvvv[ka, kb, kc]
                     Wabcj[ka,kb,kc] = (Wabcj[ka,kb,kc] +
-                                       einsum('abcd,jd->abcj',_Wvvvv[ka,kb,kc],t1[kj]))
+                                       einsum('abcd,jd->abcj', Wvvvv, t1[kj]))
     return Wabcj
 
 def Wovoo(t1, t2, eris, kconserv, out=None):

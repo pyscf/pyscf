@@ -693,6 +693,16 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
 KRCCSD = RCCSD
 
+#######################################
+#
+# _ERIS.
+#
+# Note the two electron integrals are stored in different orders from
+# kccsd_uhf._ERIS.  Integrals (ab|cd) are stored as [ka,kc,kb,a,c,b,d] here
+# while the order is [ka,kb,kc,a,b,c,d] in kccsd_uhf._ERIS
+#
+# TODO: use the same convention as kccsd_uhf
+#
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore'):
         from pyscf.pbc import df
@@ -806,6 +816,8 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                              or cell.dimension == 2)
             if vvvv_required:
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
+            else:
+                self.vvvv = None
 
             # <ij|pq>  = (ip|jq)
             cput1 = time.clock(), time.time()
@@ -1116,7 +1128,6 @@ if __name__ == '__main__':
     mycc.max_cycle = 100
     e_ea, _ = mycc.eaccsd(nroots=1, koopmans=True, kptlist=(0,))
     #print(e_ip, e_ea)
-    exit()
 
     ####
     cell = gto.Cell()
@@ -1164,13 +1175,14 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))  # FIXME
-    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))  # FIXME
+    print(lib.finger(Ht1) - (6.63584725357554   -0.1886803958548149j))
+    print(lib.finger(Ht2) - (-23.10640514550505 -142.54473917246457j))
 
-    kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
+    kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
     mycc = KRCCSD(kmf)
     eris = _ERIS(mycc, mycc.mo_coeff, method='outcore')
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))  # FIXME
-    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))  # FIXME
+    print(lib.finger(Ht1) - (6.608150224325518  -0.2219476427503148j))
+    print(lib.finger(Ht2) - (-23.253955060531297-137.76211601171295j))
+
