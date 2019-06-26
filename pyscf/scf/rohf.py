@@ -334,8 +334,8 @@ class ROHF(hf.RHF):
 
     check_sanity = hf.SCF.check_sanity
 
-    def dump_flags(self):
-        hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        hf.SCF.dump_flags(self, verbose)
         nelec = self.nelec
         logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
                     nelec[1], nelec[0]-nelec[1])

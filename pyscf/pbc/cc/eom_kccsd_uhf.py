@@ -131,10 +131,12 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #Hr2 = np.zeros_like(r2)
 
     r1a, r1b = r1
-    Hr1a = np.zeros((nocca), dtype=r1a.dtype)
-    Hr1b = np.zeros((noccb), dtype=r1b.dtype)
-
     r2aaa, r2baa, r2abb, r2bbb = r2
+
+    #Foo term
+    # -\sum_{kk,k} U_{kk,k,ki,i} s_{kk,k}
+    Hr1a = -np.einsum('mi,m->i', imds.Foo[kshift], r1a)
+    Hr1b = -np.einsum('MI,M->I', imds.FOO[kshift], r1b)
 
     #Fov term
     # \sum_{kL,kD,L,D} U_{kL,kD,L,D} S_{ki,i,kL,L}^{kD,D} + \sum_{kl,kd,l,d} U_{kl,kd,l,d} S_{ki,i,kl,l}^{kd,d}
@@ -143,13 +145,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr1a -= einsum('ME,iME->i', imds.FOV[km], r2abb[kshift,km])
         Hr1b += einsum('ME,MIE->I', imds.FOV[km], r2bbb[km,kshift])
         Hr1b -= einsum('me,Ime->I', imds.Fov[km], r2baa[kshift,km])
-
-    #Foo term
-    # -\sum_{kk,k} U_{kk,k,ki,i} s_{kk,k}
-    spatial_Foo = imds.Foo
-    spatial_FOO = imds.FOO
-    Hr1a += -np.einsum('mi,m->i', spatial_Foo[kshift], r1a)
-    Hr1b += -np.einsum('MI,M->I', spatial_FOO[kshift], r1b)
 
     #Wooov
     # \sum_{kk,kl,kd,k,l,d} W_{kk,ki,kl,kd,k,i,l,d} s_{kl,kk,l,k}^{kd,d}
@@ -161,10 +156,11 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr1b += -0.5 * einsum('NIME,MNE->I', imds.WOOOV[kn,kshift,km], r2bbb[km,kn])
             Hr1a +=        einsum('niME,nME->i', imds.WooOV[kn,kshift,km], r2abb[kn,km])
 
-    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nocca, nvira), dtype=r2aaa.dtype)
-    Hr2baa = np.zeros((nkpts, nkpts, noccb, nocca, nvira), dtype=r2baa.dtype)
-    Hr2abb = np.zeros((nkpts, nkpts, nocca, noccb, nvirb), dtype=r2abb.dtype)
-    Hr2bbb = np.zeros((nkpts, nkpts, noccb, noccb, nvirb), dtype=r2bbb.dtype)
+    dtype = np.result_type(Hr1a, *r2)
+    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nocca, nvira), dtype=dtype)
+    Hr2baa = np.zeros((nkpts, nkpts, noccb, nocca, nvira), dtype=dtype)
+    Hr2abb = np.zeros((nkpts, nkpts, nocca, noccb, nvirb), dtype=dtype)
+    Hr2bbb = np.zeros((nkpts, nkpts, noccb, noccb, nvirb), dtype=dtype)
 
     # Fvv term
     # \sum_{kd,d} U_{kb,kd,b,d} S_{ki,kj,i,j}^{kd,d} = (\bar{H}S)_{ki,kj,i,j}^{kb,b}
@@ -648,13 +644,15 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     r1, r2 = eom.vector_to_amplitudes(vector, kshift, nkpts, (nmoa, nmob), (nocca, noccb), kconserv)
 
     r1a, r1b = r1
-    Hr1a = np.zeros((nvira), dtype=r1a.dtype)
-    Hr1b = np.zeros((nvirb), dtype=r1b.dtype)
-
     r2aaa, r2aba, r2bab, r2bbb = r2
 
 
     # BEGINNING OF MATVEC CONTRACTIONS: ref - Nooijen 1995 EOM-CC for EA
+
+    # Fvv terms
+    # (\bar{H}S)^a = \sum_{kc,c} U_{ac} s^c
+    Hr1a = einsum('ac,c->a', imds.Fvv[kshift], r1a)
+    Hr1b = einsum('AC,C->A', imds.FVV[kshift], r1b)
 
     # Fov terms
     # (\bar{H}S)^a = \sum_{kL,kD, L, D} U_{kL,kD,L,D} s^{a,kD,D}_{kL,L} + \sum_{kl,kd,l,d} U_{kl, d}^{a,kd,d}_{kl,l}
@@ -663,11 +661,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr1a += einsum('LD,LaD->a', imds.FOV[kl], r2bab[kl,kshift])
         Hr1b += einsum('ld,lAd->A', imds.Fov[kl], r2aba[kl,kshift])
         Hr1b += einsum('LD,LAD->A', imds.FOV[kl], r2bbb[kl,kshift])
-
-    # Fvv terms
-    # (\bar{H}S)^a = \sum_{kc,c} U_{ac} s^c
-    Hr1a += einsum('ac,c->a', imds.Fvv[kshift], r1a)
-    Hr1b += einsum('AC,C->A', imds.FVV[kshift], r1b)
 
     # Wvovv
     # (\bar{H}S)^a = \sum_{kc,kL,kD,c,L,D} W_{kL,kc,kD,a,l,c,D} s_{kL,L}^{kc,kD,c,D}
@@ -678,23 +671,24 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr1b += 0.5*lib.einsum('ACLD,LCD->A', imds.WVVOV[kshift,kc,kl], r2bbb[kl,kc])
         Hr1b +=     lib.einsum('ACld,lCd->A', imds.WVVov[kshift,kc,kl], r2aba[kl,kc])
 
-    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nvira, nvira), dtype=r2aaa.dtype)
-    Hr2aba = np.zeros((nkpts, nkpts, nocca, nvirb, nvira), dtype=r2aba.dtype)
-    Hr2bab = np.zeros((nkpts, nkpts, noccb, nvira, nvirb), dtype=r2bab.dtype)
-    Hr2bbb = np.zeros((nkpts, nkpts, noccb, nvirb, nvirb), dtype=r2bbb.dtype)
+    dtype = np.result_type(Hr1a, *r2)
+    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nvira, nvira), dtype=dtype)
+    Hr2aba = np.zeros((nkpts, nkpts, nocca, nvirb, nvira), dtype=dtype)
+    Hr2bab = np.zeros((nkpts, nkpts, noccb, nvira, nvirb), dtype=dtype)
+    Hr2bbb = np.zeros((nkpts, nkpts, noccb, nvirb, nvirb), dtype=dtype)
 
     # Wvvvv
     # \sum_{kc,kd,c,d} W_{ka,kb,kc,kd,a,b,c,d} s_{kj,j}^{kc,kd,c,d} = (\bar{H}S)^{kb, a, b}_{kj,j}
     # \sum_{kc,kD,c,D} W{ka,kB,kc,kD,a,B,c,D} s_{kJ,kc,kD,J,c,D} = (\bar{H}S)^{kB, a, B}_{kJ,J}
-    if imds.Wvvvv is not None:
-        for kj, ka in itertools.product(range(nkpts), repeat=2):
-            kb = kconserv[kshift,ka,kj]
-            for kd in range(nkpts):
-                kc = kconserv[ka, kd, kb]
-                Hr2aaa[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', imds.Wvvvv[ka,kc,kb], r2aaa[kj,kc])
-                Hr2aba[kj,ka] +=      lib.einsum('bdac,jcd->jab', imds.WvvVV[kb,kd,ka], r2aba[kj,kc])
-                Hr2bab[kj,ka] +=      lib.einsum('acbd,jcd->jab', imds.WvvVV[ka,kc,kb], r2bab[kj,kc])
-                Hr2bbb[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', imds.WVVVV[ka,kc,kb], r2bbb[kj,kc])
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        for kc in range(nkpts):
+            kd = kconserv[ka, kc, kb]
+            Wvvvv, WvvVV, WVVVV = imds.get_Wvvvv(ka, kb, kc)
+            Hr2aaa[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', Wvvvv, r2aaa[kj,kc])
+            Hr2aba[kj,kb] +=      lib.einsum('bcad,jdc->jab', WvvVV, r2aba[kj,kd])
+            Hr2bab[kj,ka] +=      lib.einsum('acbd,jcd->jab', WvvVV, r2bab[kj,kc])
+            Hr2bbb[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', WVVVV, r2bbb[kj,kc])
 
     #Wvvvo
     # \sum_{kc,ka,kj,c,a,j} W_{kb,kc,kj,a,b,c,j} s^{kc,c} = (\bar{H}S)^{kb, a, b}_{kj,j}
@@ -883,10 +877,12 @@ def eaccsd_diag(eom, kshift, imds=None):
             Hr2aba[kj,ka] -= imds.Foo[kj].diagonal()[:,None,None]
 
             # Wvvvv
-            Hr2aaa[kj,ka] += lib.einsum('aabb->ab', imds.Wvvvv[ka,ka,kb])[None,:,:]
-            Hr2aba[kj,ka] += lib.einsum('bbAA->Ab', imds.WvvVV[kb,kb,ka])[None,:,:]
-            Hr2bab[kj,ka] += lib.einsum('aaBB->aB', imds.WvvVV[ka,ka,kb])[None,:,:]
-            Hr2bbb[kj,ka] += lib.einsum('AABB->AB', imds.WVVVV[ka,ka,kb])[None,:,:]
+            Wvvvv, WvvVV, WVVVV = imds.get_Wvvvv(ka, kb, ka)
+            # FIXME: Do Wvvvv and WVVVV have a factor 0.5?
+            Hr2aaa[kj,ka] += lib.einsum('aabb->ab', Wvvvv)[None,:,:]
+            Hr2aba[kj,kb] += lib.einsum('bbAA->Ab', WvvVV)[None,:,:]
+            Hr2bab[kj,ka] += lib.einsum('aaBB->aB', WvvVV)[None,:,:]
+            Hr2bbb[kj,ka] += lib.einsum('AABB->AB', WVVVV)[None,:,:]
 
             # Wovov term (physicist's Woovv)
             Hr2aaa[kj,ka] -= lib.einsum('kajb, kjab->jab', imds.Wovov[kshift,ka,kj], t2aa[kshift,kj,ka])
@@ -1074,8 +1070,8 @@ class _IMDS:
         # 2 virtuals
         self.Wovvo, self.WovVO, self.WOVvo, self.WOVVO = kintermediates_uhf.Wovvo(self._cc, t1, t2, eris)
         self.Woovv, self.WooVV, self.WOOvv, self.WOOVV = kintermediates_uhf.Woovv(self._cc, t1, t2, eris)
-        self.Wovov = eris.ovov - eris.ovov.transpose(2,1,0,5,4,3,6)
-        self.WOVOV = eris.OVOV - eris.OVOV.transpose(2,1,0,5,4,3,6)
+        self.Wovov = eris.ovov - np.asarray(eris.ovov).transpose(2,1,0,5,4,3,6)
+        self.WOVOV = eris.OVOV - np.asarray(eris.OVOV).transpose(2,1,0,5,4,3,6)
         self.WovOV = eris.ovOV
         self.WOVov = None
 
@@ -1112,7 +1108,10 @@ class _IMDS:
         # 3 or 4 virtuals
         #self.Wvovv, self.WvoVV, self.WVOvv, self.WVOVV = kintermediates_uhf.Wvovv(self._cc, t1, t2, eris)
         self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)
-        self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
+        if eris.vvvv is not None:
+            self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
+        else:
+            self.Wvvvv = self.WvvVV = self.WVVVV = None
         self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)
 
         self.made_ea_imds = True
@@ -1121,6 +1120,16 @@ class _IMDS:
 
     def make_ee(self):
         raise NotImplementedError
+
+    def get_Wvvvv(self, ka, kb, kc):
+        if not self.made_ea_imds:
+            self.make_ea()
+
+        if self.Wvvvv is None:
+            return kintermediates_uhf.get_Wvvvv(self._cc, self.t1, self.t2, self.eris,
+                                                ka, kb, kc)
+        else:
+            return self.Wvvvv[ka,kc,kb], self.WvvVV[ka,kc,kb], self.WVVVV[ka,kc,kb]
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc

@@ -163,7 +163,7 @@ def make_rdm12(civec, norb, nelec, link_index=None, reorder=True):
 
 class DOCI(direct_spin1.FCI):
     def __init__(self, *args, **kwargs):
-        super(DOCI, self).__init__(*args, **kwargs)
+        direct_spin1.FCI.__init__(self, *args, **kwargs)
         self.davidson_only = True
         self.link_index = {}
 
