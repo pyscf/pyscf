@@ -3,7 +3,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 
-import pyscf.lib.deps.lib.cppe as cppe
+import cppe
 
 
 def pe_scf(mf, pe_state):
@@ -51,7 +51,7 @@ def pe_scf(mf, pe_state):
     mf1 = SCFWithPE(pe_state)
     mf1.__dict__.update(mf.__dict__)
     return mf1
-    
+
 
 class PolEmbed(lib.StreamObject):
     def __init__(self, mol, options):
@@ -59,17 +59,20 @@ class PolEmbed(lib.StreamObject):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        
+
         if not isinstance(options, cppe.PeOptions):
             raise TypeError("Invalid type for options.")
-        
+
         self.options = options
         mol = cppe.Molecule()
         for z, coord in zip(self.mol.atom_charges(), self.mol.atom_coords()):
             mol.append(cppe.Atom(z, *coord))
-        self.cppe_state = cppe.CppeState(self.options, mol)
+
+        def callback(output):
+            logger.info(self, output)
+        self.cppe_state = cppe.CppeState(self.options, mol, callback)
         self.cppe_state.calculate_static_energies_and_fields()
-        self.potentials = self.cppe_state.get_potentials()
+        self.potentials = self.cppe_state.potentials
         self.V_es = None
 
 ##################################################
@@ -96,20 +99,18 @@ class PolEmbed(lib.StreamObject):
             V_es = numpy.zeros((self.mol.nao, self.mol.nao),
                                dtype=numpy.float64)
             for p in self.potentials:
-                site = p.get_site_position()
                 moments = []
-                for m in p.get_multipoles():
+                for m in p.multipoles:
                     m.remove_trace()
-                    moments.append(m.get_values())
-                V_es += self._compute_multipole_potential_integrals(site,
+                    moments.append(m.values)
+                V_es += self._compute_multipole_potential_integrals(p.position,
                                                                     m.k,
                                                                     moments)
             self.V_es = V_es
 
-        pe_energies = self.cppe_state.get_energies()
-        pe_energies.set("Electrostatic/Electronic",
-                        numpy.einsum('ij,ij->', self.V_es, dm))
-        self.cppe_state.set_energies(pe_energies)
+        self.cppe_state.energies["Electrostatic"]["Electronic"] = (
+            numpy.einsum('ij,ij->', self.V_es, dm)
+        )
 
         n_sitecoords = 3 * self.cppe_state.get_polarizable_site_number()
         V_ind = numpy.zeros((self.mol.nao, self.mol.nao),
@@ -119,28 +120,27 @@ class PolEmbed(lib.StreamObject):
             current_polsite = 0
             elec_fields = numpy.zeros(n_sitecoords, dtype=numpy.float64)
             for p in self.potentials:
-                if not p.is_polarizable():
+                if not p.is_polarizable:
                     continue
-                site = p.get_site_position()
-                elec_fields_s = self._compute_field(site, dm)
+                elec_fields_s = self._compute_field(p.position, dm)
                 elec_fields[3*current_polsite:3*current_polsite + 3] = elec_fields_s
                 current_polsite += 1
             self.cppe_state.update_induced_moments(elec_fields, elec_only)
             induced_moments = numpy.array(self.cppe_state.get_induced_moments())
             current_polsite = 0
             for p in self.potentials:
-                if not p.is_polarizable():
+                if not p.is_polarizable:
                     continue
-                site = p.get_site_position()
+                site = p.position
                 V_ind += self._compute_field_integrals(site=site,
                                                        moment=induced_moments[3*current_polsite:3*current_polsite + 3])
                 current_polsite += 1
-        e = self.cppe_state.get_energies().get_total_energy()
+        e = self.cppe_state.total_energy
         if not elec_only:
             vmat = self.V_es + V_ind
         else:
             vmat = V_ind
-            e = self.cppe_state.get_energies().get("Polarization/Electronic")
+            e = self.cppe_state.energies["Polarization"]["Electronic"]
         return e, vmat
 
     def _compute_multipole_potential_integrals(self, site, order, moments):
