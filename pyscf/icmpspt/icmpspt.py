@@ -1127,7 +1127,10 @@ def nevpt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore=F
 
 def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore=False, fciExtraLine=[],\
             have3RDM=False, root=0, nroots=1, verbose=None, AAAVsplit=1,\
-            do_dm3=True, do_dm4=False, fully_ic=False, third_order=False, cumulantE4=False, no_handcoded_E3=False, filetype="binary", legacy=False):
+            do_dm3=True, do_dm4=False, fully_ic=False, third_order=False, cumulantE4=False, no_handcoded_E3=False, filetype="binary", restart=None, legacy=False):
+    import os
+    from subprocess import check_call
+
     sys.stdout.flush()
     print("")
     print("")
@@ -1166,6 +1169,8 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
       df=True
     else:
       df=False
+    if (restart==None):
+        restart = have3RDM      # if we have 3RDM, we also have MPS-WF and want to use it
     #if (fully_ic and not (do_dm4 or cumulantE4)):
     #  print("WARNING: Fully IC needs do_dm4 or cumulantE4!")
     #  print("")
@@ -1194,17 +1199,19 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
     # =========================================
     # INITIATIONS
     # =========================================
-    # Remove the -1 state
-    import os
-    os.system("rm -f %s/node0/Rotation*.state-1.tmp"%(mc.fcisolver.scratchDirectory))
-    os.system("rm -f %s/node0/wave*.-1.tmp"         %(mc.fcisolver.scratchDirectory))
-    # os.system("rm -f %s/node0/RestartReorder.dat_1" %(mc.fcisolver.scratchDirectory))
+    if restart == False:        # Remove the -1 state
+        os.system("rm -f %s/node0/Rotation*.state-1.tmp"%(mc.fcisolver.scratchDirectory))
+        os.system("rm -f %s/node0/wave*.-1.tmp"         %(mc.fcisolver.scratchDirectory))
+        os.system("rm -f %s/node0/RestartReorder.dat_1" %(mc.fcisolver.scratchDirectory))
+    else:                       # Check beforehand if RestartReorder is there
+        assert os.path.isfile("%s/node0/RestartReorder.dat" %(mc.fcisolver.scratchDirectory)) \
+            or os.path.isfile("%s/node0/RestartReorder.dat_1" %(mc.fcisolver.scratchDirectory))
 
     # FCIsolver initiation
     mc.fcisolver.startM = 100
     mc.fcisolver.maxM = max(rdmM,501)
     mc.fcisolver.clearSchedule()
-    mc.fcisolver.restart = False
+    mc.fcisolver.restart = restart
     mc.fcisolver.generate_schedule()
     mc.fcisolver.extraline = []
     if (PTincore):
@@ -1216,7 +1223,6 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
       mc.fcisolver.has_threepdm = True
 
     # Prepare directory
-    import os
     intfolder=mc.fcisolver.scratchDirectory+'/int/'
     os.system("mkdir -p "+intfolder)
     if intfolder!='int/':
@@ -1237,7 +1243,7 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
         stateIter = range(nroots)
         stateIter.remove(root)
         for istate in stateIter:
-            dm3 = mc.fcisolver.make_rdm3(state=istate, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision)
+            dm3 = mc.fcisolver.make_rdm3(state=istate, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, restart=restart)
             # This is coherent with statement about indexes made in "make_rdm3"
             # This is done with SQA in mind.
             dm2 = numpy.einsum('ijklmk', dm3)/(nelec-2)
@@ -1246,7 +1252,7 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
 
     # RDM4 and RDM3
     if (do_dm4):
-      dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype=filetype)
+      dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype=filetype, restart=restart)
       # This is coherent with statement about indexes made in "make_rdm4"
       # This is done with SQA in mind
       if (nelec>3):
@@ -1255,7 +1261,7 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
         dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype=filetype)
       numpy.save(intfolder+"E4",dm4)
     elif (do_dm3):
-      dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype=filetype)
+      dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype=filetype, restart=restart)
 
     # RDM2 and RDM1
     # This is coherent with statement about indexes made in "make_rdm4" and "make_rdm3"
@@ -1318,18 +1324,16 @@ def icmpspt(mc, pttype="NEVPT", energyE0=0.0, rdmM=0, nfro=0, PTM=1000, PTincore
     reorder=[]
     reorder_bak_f = "%s/node0/RestartReorder.dat_1"%(mc.fcisolver.scratchDirectory)
     reorderf = "%s/node0/RestartReorder.dat"%(mc.fcisolver.scratchDirectory)
-    import os.path
     reorder_bak_present = os.path.isfile(reorder_bak_f)
     if (reorder_bak_present):
-        from subprocess import check_call
-        if os.path.isfile(reorder_bak_f):
-          check_call("cp -p %s %s"%(reorder_bak_f, reorderf), shell=True)
+        print("Found and use RestartReorder.dat_1")
+        check_call("cp -p %s %s"%(reorder_bak_f, reorderf), shell=True)
+        reorder = numpy.loadtxt(reorder_bak_f)
     else :
-        from subprocess import check_call
-        if os.path.isfile(reorderf):
-          check_call("cp -p %s %s"%(reorderf, reorder_bak_f), shell=True)
-    if os.path.isfile(reorderf):
-      reorder = numpy.loadtxt(reorderf)
+        assert os.path.isfile(reorderf)
+        reorder = numpy.loadtxt(reorderf)
+        check_call("cp -p %s %s"%(reorderf, reorder_bak_f), shell=True)
+    assert len(reorder) == mc.ncas
 
     # =========================================
     # NEVPT
