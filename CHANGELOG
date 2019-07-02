@@ -25,14 +25,27 @@ PySCF 1.7.0 (2019-?-?)
   - ddCOSMO self-consistency (as fast solvent) for post-SCF methods
 
 
-PySCF 1.6.2 (2019-?-?)
-----------------------
+PySCF 1.6.2 (2019-6-17)
+-----------------------
+* Added
+  - Slow version of KTDSCF and KGW methods for molecular systems
+  - Slow version of TDSCF and GW methods for PBC systems
+  - The support of various dtype (int, complex etc.) in numpy_helper functions
+  - Point group symmetry conservation in geometry optimization
 * Improved
   - DFHF class structure and method hooks
+  - Sanity checks when saving and loading FCIDUMP file
+  - Integration performance for solvent model
+  - Integration performance for QM/MM interface
+  - GCC 9 compatibility
 * Bugfix
   - Cartesian GTOs was not handled in RSH integrals
   - geometric_solver for latest geomeTRIC release
   - Initial guess of orbital localization solver
+  - MCSCF analyze function for state-averaged calculations
+  - The zero-norm bug in the non-hermitian matrix diagonalization function when
+    solving the complex eigenvectors for real eigenvalues.
+  - IOError when reading initial guess from chkfile in SCF scanner function
 
 
 PySCF 1.6.1 (2019-03-15)

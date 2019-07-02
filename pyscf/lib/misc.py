@@ -713,10 +713,10 @@ class ProcessWithReturnValue(Process):
                 raise e
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
+        Process.join(self)
         if self._e is not None:
-            raise ProcessRuntimeError('Error on process %s' % self)
+            raise ProcessRuntimeError('Error on process %s:\n%s' % (self, self._e))
         else:
-            Process.join(self)
             return self._q.get()
     get = join
 
@@ -736,10 +736,10 @@ class ThreadWithReturnValue(Thread):
                 raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
+        Thread.join(self)
         if self._e is not None:
-            raise ThreadRuntimeError('Error on thread %s' % self)
+            raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, self._e))
         else:
-            Thread.join(self)
 # Note: If the return value of target is huge, Queue.get may raise
 # SystemError: NULL result without error in PyObject_Call
 # It is because return value is cached somewhere by pickle but pickle is
@@ -759,10 +759,9 @@ class ThreadWithTraceBack(Thread):
                 raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
+        Thread.join(self)
         if self._e is not None:
-            raise ThreadRuntimeError('Error on thread %s' % self)
-        else:
-            Thread.join(self)
+            raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, self._e))
 
 class ThreadRuntimeError(RuntimeError):
     pass

@@ -18,7 +18,7 @@ import numpy
 from pyscf import lib
 
 class KnownValues(unittest.TestCase):
-    def test_call_in_background(self):
+    def test_call_in_background_skip(self):
         def bg_raise():
             def raise1():
                 raise ValueError
