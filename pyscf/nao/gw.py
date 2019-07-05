@@ -159,8 +159,8 @@ class gw(scf):
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
     rf0 = si0 = self.rf0(ww)
-    for iw,w in enumerate(ww):                   #devide ww into imaginary(w) and real(iw)             
-      k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb, rf0
+    for iw,w in enumerate(ww):                   #devide ww into complex(w) which is along imaginary axis (real=0) and grid index(iw)             
+      k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb or hartree, rf0
                                                  #is \chi_{0}, so here k_c=v*chi_{0}
       b = dot(k_c, self.kernel_sq)               #here v\chi_{0}v or k_c*v
       k_c = np.eye(self.nprod)-k_c               #here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
@@ -168,25 +168,50 @@ class gw(scf):
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
     return si0
 
-  def si_c_lgmres(self,ww):
+  def si_c2(self,ww):
     """This computes the correlation part of the screened interaction using lgmres
-       lgmres methods are much slower than np.linalg.solve !!
+       lgmres method is much slower than np.linalg.solve !!
     """
     import numpy as np
-    from scipy.sparse import csc_matrix
     from scipy.sparse.linalg import lgmres
-    from pyscf.nao.m_lgmres import lgmres as mo_lgmres
     #ww = 1j*self.ww_ia
     rf0 = si0 = self.rf0(ww)    
     for iw,w in enumerate(ww):                                
-      k_c = dot(self.kernel_sq, rf0[iw,:,:]) 
-      k_c_csc = csc_matrix(dot(self.kernel_sq, rf0[iw,:,:]))                                              
+      k_c = dot(self.kernel_sq, rf0[iw,:,:])                                            
       b = dot(k_c, self.kernel_sq)               
-      k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
+      k_c = np.eye(self.nprod)-k_c
       for m in range(self.nprod): 
-         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:], atol=1e-07)   
-      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
+         si0[iw,m,:],exitCode = lgmres(k_c, b[m,:], atol=1e-08)   
+      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+      #np.allclose(np.dot(k_c, si0), b, atol=1e-05) == True  #Test   
     return si0
+
+  def si_c3(self,ww):
+    """This computes the correlation part of the screened interaction using lgmres
+       1-vchi_0 is computed by linear opt, i.e. self.vext2veff_matvec, in form of vector
+    """
+    import numpy as np
+    from scipy.sparse.linalg import lgmres
+    from scipy.sparse.linalg import LinearOperator
+    #ww = 1j*self.ww_ia
+    si01 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
+    si02 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
+    rf0 = self.rf0(ww)
+    for iw,w in enumerate(ww):
+      self.comega_current = w
+      a = np.dot(self.kernel_sq, rf0[iw,:,:]) 
+      b = np.dot(a, self.kernel_sq)
+      c = np.eye(self.nprod)- a  
+      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
+      k_c_opt2 = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec2, dtype=self.dtypeComplex)  
+      aa = np.diag(k_c_opt2.matvec(np.ones(self.nprod)))    #this is equal to a=v*chi0
+      aaa=np.diag(k_c_opt.matvec(np.ones(self.nprod)))      #equal to c= 1-v*chi0 atol 1e-05
+      aaaa= np.dot(aa, self.kernel_sq)                      #equal to b= v*chi0*v atol 1e-03
+      for m in range(self.nprod):
+         si01[iw,m,:],exitCode = lgmres(c, b[m,:], atol=self.tol_ev) 
+         si02[iw,m,:],exitCode = lgmres(k_c_opt, aaaa[m,:], atol=self.tol_ev)   
+      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
+    return np.allclose(si01,si02,atol=1e-03)
 
   def si_c_check (self, tol = 1e-5):
     """
@@ -200,7 +225,7 @@ class gw(scf):
     t1 = time.time() - t
     print('numpy: {} sec'.format(t1))
     t2 = time.time()
-    si0_2 = self.si_c_lgmres(ww)       #method 2:  scipy.sparse.linalg.lgmres
+    si0_2 = self.si_c2(ww)       #method 2:  scipy.sparse.linalg.lgmres
     t3 = time.time() - t2
     print('lgmres: {} sec'.format(t3))
     summ = abs(si0_1 + si0_2).sum()
@@ -432,21 +457,32 @@ class gw(scf):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
-    if self.verbosity>2:
+    if self.verbosity>3:
+      dm1 = self.make_rdm1()
+      ecore = (self.get_hcore()*dm1[0,...,0]).sum()
+      vh,kmat = self.get_jk()
+      EX = -0.5*((kmat)*dm1[0,...,0]).sum()
       if self.nspin==1:
-        print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n %3s  %16s'%('no.','<H>'))
-        for i, ab in enumerate(zip(self.h0_vh_x_expval[0].T*HARTREE2EV)):
+        print('-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s'%('no.','<H>'))
+        for i, ab in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T*HARTREE2EV)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
             print (' %3d  %16.6f'%(i,ab[0]))
+        Vha = 0.5*(vh*dm1[0,...,0]).sum()
       if self.nspin==2:
-        print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n %3s  %16s  | %12s'%('no.','<H_up>','<H_dn>'))        
-        for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
+        print('-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s  | %12s'%('no.','<H_up>','<H_dn>'))        
+        for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
 	        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
-      print('mean-field Total energy   (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
+        Vha = 0.5*((vh[0]+vh[1])*dm1[0,...,0]).sum()
+      
+      print('\nmean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
+      print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
+      print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
+      print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
       S = self.spin/2
       S0 = S*(S+1)
       SS = self.mf.spin_square()
-      print('<S^2> and  2S+1               :%16.7f %16.7f'%(SS[0],SS[1]))
-      print('Instead of                    :%16.7f %16.7f'%(S0, 2*S+1))
+      if ( SS[0]!= S ):
+        print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
+        print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
       elapsed_time = time.time() - start_time
       print('\nRunning time is:',time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),'\n\n') 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
@@ -510,3 +546,29 @@ class gw(scf):
     from pyscf.nao.mf import mf
     mo_coeff = self.mo_coeff_gw if hasattr(self, 'mo_energy_gw') else self.mo_coeff
     return mf.spin_square(self, mo_coeff=mo_coeff)
+
+  def exfock(self):
+    """
+    This calculates the Exchange expectation value, when:
+    self.get_k() = Exchange operator/energy
+    mat1 is product of this operator and molecular coefficients and it will be diagonalized in expval by einsum
+    """
+    if self.nspin==1:
+      mat = -0.5*self.get_k()
+      mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
+      expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0]).reshape((1,self.norbs))
+      print('-----------| the Exchange expectation value (eV) |-----------\n %3s  %16s'%('no.','<Sigma_x> '))
+      for i, ab in enumerate(zip(expval[0].T*HARTREE2EV)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
+        if (i==self.nfermi[0]): print('-'*62)
+        print (' %3d  %16.6f'%(i,ab[0]))
+    elif self.nspin==2:
+      mat = -self.get_k()
+      expval = zeros((self.nspin, self.norbs))
+      for s in range(self.nspin):
+        mat1 = dot(self.mo_coeff[0,s,:,:,0], mat[s])
+        expval[s] = einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
+      print('-----------| the Exchange expectation value (eV) |-----------\n %3s  %16s  | %12s'%('no.','<Sigma_x>','<Sigma_x>'))        
+      for i , (ab) in enumerate(zip(expval[0].T* HARTREE2EV,expval[1].T* HARTREE2EV)):
+        if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*62)
+        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
+    #return expval
