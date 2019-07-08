@@ -87,13 +87,16 @@ def ddcosmo_grad(grad_method, pcmobj=None):
     return WithSolventGrad(pcmobj)
 
 
-# Inject DDCOSMO gradients into other modules
-from pyscf import grad
-for mod in dir(grad):
-    mod = getattr(grad, mod)
-    if hasattr(mod, 'Gradients'):
-        mod.Gradients.DDCOSMO = ddcosmo_grad
-del(mod, grad)
+## Inject DDCOSMO gradients into other modules
+# Since gradients are computed based on Hellmann-Feynman theorem, it does not
+# make too much sense to add solvent gradients contribution if the underlying
+# single point calculation is not converged with solvent.
+#from pyscf import grad
+#for mod in dir(grad):
+#    mod = getattr(grad, mod)
+#    if hasattr(mod, 'Gradients'):
+#        mod.Gradients.DDCOSMO = ddcosmo_grad
+#del(mod, grad)
 
 
 def kernel(pcmobj, dm, verbose=None):
