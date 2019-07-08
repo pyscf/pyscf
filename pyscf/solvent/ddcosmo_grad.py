@@ -86,15 +86,14 @@ def ddcosmo_grad(grad_method, pcmobj=None):
         pcmobj = ddcosmo.DDCOSMO(mf.mol)
     return WithSolventGrad(pcmobj)
 
+
 # Inject DDCOSMO gradients into other modules
-try:
-    from pyscf import grad
-    for mod in dir(grad):
-        if 1 or hasattr(mod, 'Gradients'):
-            mod.Gradients.DDCOSMO = ddcosmo_grad
-    del(mod, grad)
-except Exception as e:
-    print('Error for registering ddcosmo gradients: ' + str(e))
+from pyscf import grad
+for mod in dir(grad):
+    mod = getattr(grad, mod)
+    if hasattr(mod, 'Gradients'):
+        mod.Gradients.DDCOSMO = ddcosmo_grad
+del(mod, grad)
 
 
 def kernel(pcmobj, dm, verbose=None):
