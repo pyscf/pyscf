@@ -1278,6 +1278,41 @@ def eeccsd_diag(eom, kshift=0, imds=None):
     return vector
 
 
+def eeccsd_cis_approx(eom, kshift=0, imds=None, nroots=1):
+    '''Build initial R vector through diagonalization of <r1|Hbar|r1>'''
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    nkpts, nocc, nvir = imds.t1.shape
+    kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
+
+    H1 = np.zeros((nkpts, nkpts, nocc, nvir, nocc, nvir), dtype=t1.dtype)
+    for ki in range(nkpts):
+        ka = kconserv_r1[ki]
+        for kj in range(nkpts):
+            kb = kconserv_r1[kj]
+            if ki == kj:
+                H1[ki, kj] += imds.Foo[kj].transpose()[:, None, :, None]
+                H1[ki, kj] += imds.Fvv[ka][None, :, None, :]
+            H1[ki, kj] += imds.woVvO[kj, ka, kb].transpose(3,1,0,2)
+            H1[ki, kj] -= imds.woVoV[kj, ka, ki].transpose(2,1,0,3)
+
+    r1_size = nkpts * nocc * nvir
+    H1 = H1.transpose(0,2,3,1,4,5).reshape(r1_size, r1_size)
+
+    vector_size = eom.vector_size(kshift)
+    nroots = min(nroots, vector_size)
+    guess = []
+
+    eigval, eigvec = np.linalg.eig(H1)
+    idx = eigval.argsort()[:nroots]
+
+    for i in idx:
+        g = np.zeros(int(vector_size), dtype=t1.dtype)
+        g[:r1_size] = eigvec[:,i]
+        guess.append(g)
+    return guess
+
+
 class EOMEE(eom_kgccsd.EOMEE):
     kernel = eeccsd
     eeccsd = eeccsd
