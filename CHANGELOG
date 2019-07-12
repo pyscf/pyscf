@@ -1,5 +1,11 @@
+PySCF 1.6.3 (2019-??-??)
+------------------------
+* Improved
+  - Performance of exchange integrals in RSH functionals
+
+
 PySCF 1.6.2 (2019-6-17)
-----------------------
+-----------------------
 * Added
   - Slow version of KTDSCF and KGW methods for molecular systems
   - Slow version of TDSCF and GW methods for PBC systems

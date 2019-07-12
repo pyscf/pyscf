@@ -346,7 +346,7 @@ class capture_stdout(object):
 
     >>> import os
     >>> from pyscf import lib
-    >>> with lib.capture_stdout as out:
+    >>> with lib.capture_stdout() as out:
     ...     os.system('ls')
     >>> print(out.read())
     '''
