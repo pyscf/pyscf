@@ -1278,38 +1278,76 @@ def eeccsd_diag(eom, kshift=0, imds=None):
     return vector
 
 
-def eeccsd_cis_approx(eom, kshift=0, imds=None, nroots=1):
-    '''Build initial R vector through diagonalization of <r1|Hbar|r1>'''
+def eeccsd_matvec_singlet_Hr1(eom, vector, kshift, imds=None):
+    '''A mini version of eeccsd_matvec_singlet(), in the sense that
+    only Hbar.r1 is performed.'''
+
     if imds is None: imds = eom.make_imds()
-    t1, t2 = imds.t1, imds.t2
-    nkpts, nocc, nvir = imds.t1.shape
+    nkpts = eom.nkpts
+    nocc = eom.nocc
+    nvir = eom.nmo - nocc
+    r1_size = nkpts * nocc * nvir
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
 
-    H1 = np.zeros((nkpts, nkpts, nocc, nvir, nocc, nvir), dtype=t1.dtype)
+    if len(vector) != r1_size:
+        raise ValueError("vector length mismatch: expected {0}, "
+                         "found {1}".format(r1_size, len(vector)))
+    r1 = vector.reshape(nkpts, nocc, nvir)
+
+    Hr1 = np.zeros_like(r1)
     for ki in range(nkpts):
+        #  ki - ka = kshift
         ka = kconserv_r1[ki]
-        for kj in range(nkpts):
-            kb = kconserv_r1[kj]
-            if ki == kj:
-                H1[ki, kj] += imds.Foo[kj].transpose()[:, None, :, None]
-                H1[ki, kj] += imds.Fvv[ka][None, :, None, :]
-            H1[ki, kj] += imds.woVvO[kj, ka, kb].transpose(3,1,0,2)
-            H1[ki, kj] -= imds.woVoV[kj, ka, ki].transpose(2,1,0,3)
+        # r_ia <- - F_mi r_ma
+        #  km = ki
+        Hr1[ki] -= einsum('mi,ma->ia', imds.Foo[ki], r1[ki])
+        # r_ia <- F_ac r_ic
+        Hr1[ki] += einsum('ac,ic->ia', imds.Fvv[ka], r1[ki])
+        for km in range(nkpts):
+            # r_ia <- (2 W_amie - W_maie) r_me
+            #  km - ke = kshift
+            ke = kconserv_r1[km]
+            Hr1[ki] += 2. * einsum('maei,me->ia', imds.woVvO[km, ka, ke], r1[km])
+            Hr1[ki] -= einsum('maie,me->ia', imds.woVoV[km, ka, ki], r1[km])
 
+    return Hr1.ravel()
+
+
+def eeccsd_cis_approx_slow(eom, kshift, nroots=1, imds=None, **kwargs):
+    '''Build initial R vector through diagonalization of <r1|Hbar|r1>
+
+    This method evaluates the matrix elements of Hbar in r1 space in the following way:
+    - 1st col of Hbar = matvec(r1_col1) where r1_col1 = [1, 0, 0, 0, ...]
+    - 2nd col of Hbar = matvec(r1_col2) where r1_col2 = [0, 1, 0, 0, ...]
+    - and so on
+
+    Note that such evaluation has N^3 cost, but error free (because matvec() has been proven correct).
+    '''
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(eom.stdout, eom.verbose)
+
+    if imds is None: imds = eom.make_imds()
+    nkpts, nocc, nvir = imds.t1.shape
+    dtype = imds.t1.dtype
     r1_size = nkpts * nocc * nvir
-    H1 = H1.transpose(0,2,3,1,4,5).reshape(r1_size, r1_size)
-
     vector_size = eom.vector_size(kshift)
-    nroots = min(nroots, vector_size)
-    guess = []
+
+    H1 = np.zeros([r1_size, r1_size], dtype=dtype)
+    for col in range(r1_size):
+        vec = np.zeros(r1_size, dtype=dtype)
+        vec[col] = 1.0
+        H1[:, col] = eeccsd_matvec_singlet_Hr1(eom, vec, kshift, imds=imds)
 
     eigval, eigvec = np.linalg.eig(H1)
     idx = eigval.argsort()[:nroots]
 
+    guess = []
     for i in idx:
-        g = np.zeros(int(vector_size), dtype=t1.dtype)
-        g[:r1_size] = eigvec[:,i]
+        g = np.zeros(int(vector_size), dtype=dtype)
+        g[:r1_size] = eigvec[:, i]
         guess.append(g)
+    log.timer("EOMEE init guess (CIS-like)", *cput0)
+
     return guess
 
 
@@ -1336,6 +1374,7 @@ class EOMEESinglet(EOMEE):
     kernel = eomee_ccsd_singlet
     eomee_ccsd_singlet = eomee_ccsd_singlet
     matvec = eeccsd_matvec_singlet
+    get_init_guess = eeccsd_cis_approx_slow
 
     def vector_size(self, kshift=0):
         '''Size of the linear excitation operator R vector based on spatial

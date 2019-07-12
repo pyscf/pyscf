@@ -1332,7 +1332,7 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
         # work for the current `kshift` due to different vector_size. Thus for
         # now we keep `user_guess` false, and always compute `guess` on our own.
         user_guess = False
-        guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
+        guess = eom.get_init_guess(kshift, nroots, koopmans=koopmans, diag=diag, imds=imds)
         for ig, g in enumerate(guess):
             guess_norm = np.linalg.norm(g)
             guess_norm_tol = LOOSE_ZERO_TOL
@@ -1743,7 +1743,7 @@ class EOMEE(eom_rccsd.EOM):
 
         return size_r1 + size_r2
 
-    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None, **kwargs):
         """Initial guess vectors of R coefficients"""
         size = self.vector_size(kshift)
         dtype = getattr(diag, 'dtype', np.complex)
