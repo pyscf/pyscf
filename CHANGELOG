@@ -25,6 +25,12 @@ PySCF 1.7.0 (2019-?-?)
   - ddCOSMO self-consistency (as fast solvent) for post-SCF methods
 
 
+PySCF 1.6.3 (2019-??-??)
+------------------------
+* Improved
+  - Performance of exchange integrals in RSH functionals
+
+
 PySCF 1.6.2 (2019-6-17)
 -----------------------
 * Added

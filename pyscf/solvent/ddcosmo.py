@@ -678,7 +678,7 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
     return PostSCFWithSolvent(method)
 
 
-# Inject DDCOSMO to other methods
+# Inject DDCOSMO into other methods
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import mp, ci, cc

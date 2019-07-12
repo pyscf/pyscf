@@ -25,6 +25,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf.scf import _vhf
 from pyscf.scf import jk
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
@@ -118,7 +119,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:  # For range separated Coulomb operator
-                vklr = _get_k_lr(mol, ddm, omega, hermi)
+                vklr = _get_k_lr(mol, ddm, omega, hermi, ks.opt)
                 vklr *= (alpha - hyb)
                 vk += vklr
             vj += vhf_last.vj
@@ -127,7 +128,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = _get_k_lr(mol, dm, omega, hermi)
+                vklr = _get_k_lr(mol, dm, omega, hermi, ks.opt)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk * .5
@@ -143,7 +144,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
-def _get_k_lr(mol, dm, omega=0, hermi=0):
+# The vhfopt of standard Coulomb operator can be used here as an approximate
+# opt since long-range part Coulomb is always smaller than standard Coulomb.
+# It's safe to prescreen LR integrals with the integral estimation from
+# standard Coulomb.
+def _get_k_lr(mol, dm, omega=0, hermi=0, vhfopt=None):
     dm = numpy.asarray(dm)
 # Note, ks object caches the ERIs for small systems. The cached eris are
 # computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
@@ -154,8 +159,15 @@ def _get_k_lr(mol, dm, omega=0, hermi=0):
     with mol.with_range_coulomb(omega):
         # Compute the long range part of ERIs temporarily with omega. Restore
         # the original omega when the block ends
-        intor = mol._add_suffix('int2e')
-        vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms), intor=intor)
+        if vhfopt is None:
+            contents = lambda: None # just a place_holder
+        else:
+            contents = vhfopt._this.contents
+        with lib.temporary_env(contents,
+                               fprescreen=_vhf._fpointer('CVHFnrs8_vk_prescreen')):
+            intor = mol._add_suffix('int2e')
+            vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms), intor=intor,
+                             vhfopt=vhfopt)
     return numpy.asarray(vklr).reshape(dm.shape)
 
 

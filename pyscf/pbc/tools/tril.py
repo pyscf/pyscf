@@ -25,10 +25,10 @@ def unpack_tril(in_array,nkpts,kp,kq,kr,ks):
     #
     if in_array.shape[0] == nkpts:
         return in_array[kp,kq,kr].copy()
-    nints = sum([isinstance(x,int) for x in (kp,kq,kr)])
+    nints = sum([isinstance(x, (int, numpy.integer)) for x in (kp,kq,kr)])
     assert(nints>=2)
 
-    kp,kq,kr,ks = [[x] if isinstance(x,int) else x for x in (kp,kq,kr,ks)]
+    kp,kq,kr,ks = [[x] if isinstance(x, (int, numpy.integer)) else x for x in (kp,kq,kr,ks)]
     kp,kq,kr,ks = [numpy.array(x) for x in (kp,kq,kr,ks)]
     indices = numpy.array(pyscf.lib.cartesian_prod((kp,kq,kr)))
 
