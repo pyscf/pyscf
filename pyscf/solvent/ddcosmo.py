@@ -315,6 +315,8 @@ def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
             grad_method = oldMF.nuc_grad_method(self)
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
 
+        Gradients = nuc_grad_method
+
     mf1 = SCFWithSolvent(mf, solvent_obj)
     return mf1
 
@@ -427,6 +429,8 @@ def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
             from pyscf.solvent import ddcosmo_grad
             grad_method = oldCAS.nuc_grad_method(self)
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
+
+        Gradients = nuc_grad_method
 
     return CASSCFWithSolvent(mc, solvent_obj)
 
@@ -551,6 +555,8 @@ def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
             grad_method = oldCAS.nuc_grad_method(self)
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
 
+        Gradients = nuc_grad_method
+
     return CASCIWithSolvent(mc, solvent_obj)
 
 
@@ -666,6 +672,8 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             from pyscf.solvent import ddcosmo_grad
             grad_method = old_method.nuc_grad_method(self)
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
+
+        Gradients = nuc_grad_method
 
     return PostSCFWithSolvent(method)
 
