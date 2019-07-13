@@ -1369,7 +1369,10 @@ def get_init_guess_cis(eom, kshift, nroots=1, imds=None, **kwargs):
 
 
 def cis_easy(eom, nroots=1, kptlist=None, imds=None, **kwargs):
+    '''An easy implementation of k-point CIS based on EOMCC infrastructure.'''
+
     print("\n******** <function 'pyscf.pbc.cc.eom_kccsd_rhf.cis_easy'> ********")
+
     if imds is None:
         cc = eom._cc
         t1_old, t2_old = cc.t1.copy(), cc.t2.copy()
@@ -1380,17 +1383,23 @@ def cis_easy(eom, nroots=1, kptlist=None, imds=None, **kwargs):
 
         # Remake intermediates using zero t1, t2 => get bare Hamiltonian back
         imds = eom.make_imds()
-        # Recover t1, t2
+
+        # Recover t1, t2 so that the following calculations based on `eom` are
+        # not affected.
         cc.t1, cc.t2 = None, None
         cc.t1, cc.t2 = t1_old, t2_old
 
+    evals = [None]*len(kptlist)
+    evecs = [None]*len(kptlist)
     for k, kshift in enumerate(kptlist):
         print("\nkshift =", kshift)
         eigval, eigvec = eeccsd_cis_approx_slow(eom, kshift, nroots, imds)
+        evals[k] = eigval
+        evecs[k] = eigvec
         for i in range(nroots):
             print('CIS root {:d} E = {:.16g}'.format(i, eigval[i].real))
 
-    return eigvec, eigvec
+    return evals, evecs
 
 
 class EOMEE(eom_kgccsd.EOMEE):
