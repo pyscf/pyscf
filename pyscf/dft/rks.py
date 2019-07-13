@@ -119,7 +119,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:  # For range separated Coulomb operator
-                vklr = _get_k_lr(mol, ddm, omega, hermi, ks.opt)
+                vklr = ks.get_k(mol, ddm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
             vj += vhf_last.vj
@@ -128,7 +128,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = _get_k_lr(mol, dm, omega, hermi, ks.opt)
+                vklr = ks.get_k(mol, dm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk * .5
@@ -149,6 +149,9 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 # It's safe to prescreen LR integrals with the integral estimation from
 # standard Coulomb.
 def _get_k_lr(mol, dm, omega=0, hermi=0, vhfopt=None):
+    import sys
+    sys.stderr.write('This function is deprecated. '
+                     'It can be replaced by mol.get_k(mol, dm, omege=omega)')
     dm = numpy.asarray(dm)
 # Note, ks object caches the ERIs for small systems. The cached eris are
 # computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute

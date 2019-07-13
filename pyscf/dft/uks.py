@@ -89,7 +89,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, ddm, omega, hermi, ks.opt)
+                vklr = ks.get_k(mol, ddm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
             vj = vj[0] + vj[1] + vhf_last.vj
@@ -99,7 +99,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = vj[0] + vj[1]
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, dm, omega, hermi, ks.opt)
+                vklr = ks.get_k(mol, dm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk

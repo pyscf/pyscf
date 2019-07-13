@@ -745,7 +745,8 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         '''Coulomb (J) and exchange (K)
 
         Args:
@@ -754,12 +755,13 @@ class UHF(hf.SCF):
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+        if (not omega and
+            (self._eri is not None or mol.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
             vj, vk = hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
         else:
-            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
+            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
         return vj, vk
 
     @lib.with_doc(get_veff.__doc__)

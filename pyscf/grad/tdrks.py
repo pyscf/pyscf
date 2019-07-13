@@ -82,7 +82,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
         vj, vk = mf.get_jk(mol, dm, hermi=0)
         vk *= hyb
         if abs(omega) > 1e-10:
-            vk += rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+            vk += mf.get_k(mol, dm, hermi=0, omega=omega) * (alpha-hyb)
         veff0doo = vj[0] * 2 - vk[0] + f1oo[0] + k1ao[0] * 2
         wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
         if singlet:
@@ -120,7 +120,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
             vj, vk = mf.get_jk(mol, dm)
             veff = vj * 2 - hyb * vk + vindxc
             if abs(omega) > 1e-10:
-                veff -= rks._get_k_lr(mol, dm, omega, hermi=1) * (alpha-hyb)
+                veff -= mf.get_k(mol, dm, hermi=1, omega=omega) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm)
             veff = vj * 2 + vindxc
@@ -138,7 +138,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
         vj, vk = mf.get_jk(mol, z1ao, hermi=0)
         veff = vj * 2 - hyb * vk + fxcz1[0]
         if abs(omega) > 1e-10:
-            veff -= rks._get_k_lr(mol, z1ao, omega) * (alpha-hyb)
+            veff -= mf.get_k(mol, z1ao, hermi=0, omega=omega) * (alpha-hyb)
     else:
         vj = mf.get_j(mol, z1ao, hermi=1)
         veff = vj * 2 + fxcz1[0]
