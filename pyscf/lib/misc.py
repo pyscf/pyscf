@@ -32,7 +32,13 @@ import types
 import ctypes
 import numpy
 import h5py
-from concurrent.futures import ThreadPoolExecutor
+from threading import Thread
+from multiprocessing import Queue, Process
+try:
+    from concurrent.futures import ThreadPoolExecutor
+except ImportError:
+    ThreadPoolExecutor = None
+
 from pyscf.lib import param
 from pyscf import __config__
 
@@ -698,8 +704,6 @@ def izip(*args):
     else:
         return zip(*args)
 
-from threading import Thread
-from multiprocessing import Queue, Process
 class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
@@ -823,7 +827,6 @@ class call_in_background(object):
             fns = self.fns
             handlers = self.handlers
             ntasks = len(self.fns)
-            executor = ThreadPoolExecutor(max_workers=ntasks)
 
             if self.sync or imp.lock_held():
 # Some modules like nosetests, coverage etc
@@ -833,11 +836,22 @@ class call_in_background(object):
 # https://github.com/paramiko/paramiko/issues/104
 # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
 # Disable the asynchoronous mode for safe importing
-                def def_async_fn(fn):
-                    return fn
+                def def_async_fn(i):
+                    return fns[i]
 
-            else:
-                # Enable back-ground mode
+            elif ThreadPoolExecutor is None: # async mode, old python
+                def def_async_fn(i):
+                    def async_fn(*args, **kwargs):
+                        if self.handler[i] is not None:
+                            self.handler[i].join()
+                        self.handler[i] = ThreadWithTraceBack(target=fns[i], args=args,
+                                                              kwargs=kwargs)
+                        self.handler[i].start()
+                        return self.handler[i]
+                    return async_fn
+
+            else: # multiple executors in async mode, python 2.7.12 or newer
+                executor = ThreadPoolExecutor(max_workers=ntasks)
                 def def_async_fn(i):
                     def async_fn(*args, **kwargs):
                         if handlers[i] is not None:
