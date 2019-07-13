@@ -873,7 +873,10 @@ class call_in_background(object):
         for handler in self.handlers:
             if handler is not None:
                 try:
-                    handler.result()
+                    if ThreadPoolExecutor is None:
+                        handler.join()
+                    else:
+                        handler.result()
                 except Exception as e:
                     raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, e))
 
