@@ -1690,9 +1690,10 @@ class SCF(lib.StreamObject):
 
     as_scanner = as_scanner
 
-    def reset(self, mol):
+    def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
-        self.mol = mol
+        if mol is not None:
+            self.mol = mol
         self.opt = None
         self._eri = None
         return self

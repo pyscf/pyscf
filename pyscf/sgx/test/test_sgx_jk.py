@@ -80,6 +80,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vj), -19.100356543264645, 9)
         self.assertAlmostEqual(lib.finger(vk), -16.750915356787406, 9)
 
+    def test_rsh_get_jk(self):
+        mol = gto.M(verbose = 0,
+            atom = 'H 0 0 0; H 0 0 1',
+            basis = 'ccpvdz',
+        )
+        nao = mol.nao_nr()
+        numpy.random.seed(1)
+        dm = numpy.random.random((2,nao,nao))
+        sgxobj = sgx.SGX(mol)
+        sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
+        vj, vk = sgxobj.get_jk(dm, hermi=0, omega=1.1)
+        self.assertAlmostEqual(lib.finger(vj), 4.78603728911563 , 9)
+        self.assertAlmostEqual(lib.finger(vk), 8.614628576953983, 9)
+
+        vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
+        self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
+        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
+
 
 if __name__ == "__main__":
     print("Full Tests for sgx_jk")

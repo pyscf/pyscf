@@ -112,11 +112,8 @@ def density_fit(mf, auxbasis=None, with_df=None):
                    omega=None):
             if self.with_df:
                 if dm is None: dm = self.make_rdm1()
-                if omega is None:
-                    vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
-                                                 self.direct_scf_tol)
-                else:
-                    raise NotImplementedError
+                vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
+                                             self.direct_scf_tol, omega)
                 return vj, vk
             else:
                 return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
@@ -140,13 +137,12 @@ class _DFHF(object):
     pass
 
 
-def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13,
-           omega=None):
+def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
     assert(with_j or with_k)
     if (not with_k and not dfobj.mol.incore_anyway and
         # 3-center integral tensor is not initialized
         dfobj._cderi is None):
-        return get_j(dfobj, dm, hermi, direct_scf_tol, omega), None
+        return get_j(dfobj, dm, hermi, direct_scf_tol), None
 
     t0 = t1 = (time.clock(), time.time())
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
@@ -244,26 +240,24 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13,
     logger.timer(dfobj, 'df vj and vk', *t0)
     return vj, vk
 
-def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13, omega=None):
+def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     from pyscf.scf import _vhf
     from pyscf.scf import jk
     from pyscf.df import addons
     t0 = t1 = (time.clock(), time.time())
 
     mol = dfobj.mol
-    if dfobj._vjopt is None or getattr(dfobj._vjopt, 'omega', None) != omega:
+    if dfobj._vjopt is None:
         dfobj.auxmol = auxmol = addons.make_auxmol(mol, dfobj.auxbasis)
         opt = _vhf.VHFOpt(mol, 'int3c2e', 'CVHFnr3c2e_schwarz_cond')
         opt.direct_scf_tol = direct_scf_tol
 
         # q_cond part 1: the regular int2e (ij|ij) for mol's basis
-        with auxmol.with_range_coulomb(omega):
-            opt.init_cvhf_direct(mol, 'int2e', 'CVHFsetnr_direct_scf')
+        opt.init_cvhf_direct(mol, 'int2e', 'CVHFsetnr_direct_scf')
         mol_q_cond = lib.frompointer(opt._this.contents.q_cond, mol.nbas**2)
 
         # Update q_cond to include the 2e-integrals (auxmol|auxmol)
-        with auxmol.with_range_coulomb(omega):
-            j2c = auxmol.intor('int2c2e', hermi=1)
+        j2c = auxmol.intor('int2c2e', hermi=1)
         j2c_diag = numpy.sqrt(abs(j2c.diagonal()))
         aux_loc = auxmol.ao_loc
         aux_q_cond = [j2c_diag[i0:i1].max()
@@ -279,8 +273,6 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13, omega=None):
         except scipy.linalg.LinAlgError:
             opt.j2c = j2c
             opt.j2c_type = 'regular'
-
-        opt.omega = omega
 
         # jk.get_jk function supports 4-index integrals. Use bas_placeholder
         # (l=0, nctr=1, 1 function) to hold the last index.
@@ -305,10 +297,9 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13, omega=None):
     shls_slice = (0, nbas, 0, nbas, nbas, nbas1, nbas1, nbas1+1)
     with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass1_prescreen',
                            _dmcondname='CVHFsetnr_direct_scf_dm'):
-        with fakemol.with_range_coulomb(omega):
-            jaux = jk.get_jk(fakemol, dm, ['ijkl,ji->kl']*n_dm, 'int3c2e',
-                             aosym='s2ij', hermi=0, shls_slice=shls_slice,
-                             vhfopt=opt)
+        jaux = jk.get_jk(fakemol, dm, ['ijkl,ji->kl']*n_dm, 'int3c2e',
+                         aosym='s2ij', hermi=0, shls_slice=shls_slice,
+                         vhfopt=opt)
     # remove the index corresponding to bas_placeholder
     jaux = numpy.array(jaux)[:,:,0]
     t1 = logger.timer_debug1(dfobj, 'df-vj pass 1', *t1)
@@ -332,17 +323,16 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13, omega=None):
         fsetcond(opt._this, dm_cond.ctypes.data_as(ctypes.c_void_p),
                   ctypes.c_int(dm_cond.size))
 
-        with fakemol.with_range_coulomb(omega):
-            vj = jk.get_jk(fakemol, rho, ['ijkl,lk->ij']*n_dm, 'int3c2e',
-                           aosym='s2ij', hermi=1, shls_slice=shls_slice,
-                           vhfopt=opt)
+        vj = jk.get_jk(fakemol, rho, ['ijkl,lk->ij']*n_dm, 'int3c2e',
+                       aosym='s2ij', hermi=1, shls_slice=shls_slice,
+                       vhfopt=opt)
 
     t1 = logger.timer_debug1(dfobj, 'df-vj pass 2', *t1)
     logger.timer(dfobj, 'df-vj', *t0)
     return numpy.asarray(vj).reshape(dm_shape)
 
 
-def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True, omega=None):
+def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
     '''Relativistic density fitting JK'''
     t0 = (time.clock(), time.time())
     mol = dfobj.mol

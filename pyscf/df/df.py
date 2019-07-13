@@ -21,6 +21,7 @@ J-metric density fitting
 '''
 
 import time
+import copy
 import tempfile
 import numpy
 import h5py
@@ -87,6 +88,7 @@ class DF(lib.StreamObject):
         self._call_count = getattr(__config__, 'df_df_DF_call_count', None)
         self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
         self._vjopt = None
+        self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -157,12 +159,15 @@ class DF(lib.StreamObject):
     def kernel(self, *args, **kwargs):
         return self.build(*args, **kwargs)
 
-    def reset(self, mol):
+    def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
-        self.mol = mol
+        if mol is not None:
+            self.mol = mol
         self.auxmol = None
         self._cderi = None
+        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._vjopt = None
+        self._rsh_df = {}
         return self
 
     def loop(self, blksize=None):
@@ -201,7 +206,19 @@ class DF(lib.StreamObject):
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
                omega=None):
-        return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol, omega)
+        if omega is None:
+            return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
+
+        # A temporary treatment for RSH-DF integrals
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        with rsh_df.mol.with_range_coulomb(omega):
+            return df_jk.get_jk(rsh_df, dm, hermi, with_j, with_k, direct_scf_tol)
 
     def get_eri(self):
         nao = self.mol.nao_nr()
@@ -267,7 +284,19 @@ class DF4C(DF):
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
                omega=None):
-        return df_jk.r_get_jk(self, dm, hermi, with_j, with_k, omega)
+        if omega is None:
+            return df_jk.r_get_jk(self, dm, hermi, with_j, with_k)
+
+        # A temporary treatment for RSH-DF integrals
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        with rsh_df.mol.with_range_coulomb(omega):
+            return df_jk.r_get_jk(rsh_df, dm, hermi, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError

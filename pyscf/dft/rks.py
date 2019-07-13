@@ -151,7 +151,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 def _get_k_lr(mol, dm, omega=0, hermi=0, vhfopt=None):
     import sys
     sys.stderr.write('This function is deprecated. '
-                     'It can be replaced by mol.get_k(mol, dm, omege=omega)')
+                     'It is replaced by mol.get_k(mol, dm, omege=omega)')
     dm = numpy.asarray(dm)
 # Note, ks object caches the ERIs for small systems. The cached eris are
 # computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute

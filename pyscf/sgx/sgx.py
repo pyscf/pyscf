@@ -21,6 +21,7 @@ Pseudo-spectral methods (COSX, PS, SN-K)
 '''
 
 import time
+import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -116,7 +117,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             if dm is None: dm = self.make_rdm1()
             with_df = self.with_df
             if not with_df:
-                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k)
+                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
 
             if self._in_scf and not self.direct_scf:
                 if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd:
@@ -127,7 +128,8 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
                 else:
                     self._last_dm = numpy.asarray(dm)
 
-            return with_df.get_jk(dm, hermi, with_j, with_k, self.direct_scf_tol)
+            return with_df.get_jk(dm, hermi, with_j, with_k,
+                                  self.direct_scf_tol, omega)
 
         def post_kernel(self, envs):
             self._in_scf = False
@@ -180,6 +182,7 @@ class SGX(lib.StreamObject):
         self._vjopt = None
         self._opt = None
         self._last_dm = 0
+        self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -214,27 +217,48 @@ class SGX(lib.StreamObject):
             level = self.grids_level_f
         self.grids = sgx_jk.get_gridss(self.mol, level, self.grids_thrd)
         self._opt = _make_opt(self.mol)
+
+        # In the RSH-integral temporary treatment, recursively rebuild SGX
+        # objects in _rsh_df.
+        if self._rsh_df:
+            for k, v in self._rsh_df.items():
+                v.build(level)
         return self
 
     def kernel(self, *args, **kwargs):
         return self.build(*args, **kwargs)
 
-    def reset(self, mol):
+    def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
-        self.mol = mol
+        if mol is not None:
+            self.mol = mol
         self.grids = None
         self.auxmol = None
-        self._cderi = None
         self._vjopt = None
         self._opt = None
         self._last_dm = 0
+        self._rsh_df = {}
         return self
 
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
                omega=None):
         if omega is not None:
-            raise NotImplementedError
+            # A temporary treatment for RSH integrals
+            key = '%.6f' % omega
+            if key in self._rsh_df:
+                rsh_df = self._rsh_df[key]
+            else:
+                rsh_df = self._rsh_df[key] = copy.copy(self)
+                logger.info(self, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
+                # Not all attributes need to be reset. Resetting _vjopt
+                # because it is used by get_j method of regular DF object.
+                self._vjopt = self._rsh_df = None
+
+            with rsh_df.mol.with_range_coulomb(omega):
+                return rsh_df.get_jk(dm, hermi, with_j, with_k,
+                                     direct_scf_tol, omega=None)
+
         if with_j and self.dfj:
             vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
             if with_k:

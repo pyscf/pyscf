@@ -13,6 +13,7 @@ PySCF 1.7.0 (2019-?-?)
   - KCCSD function spatial2spin that transforms amplitudes in spatial orbital to
     that in spin-orbital
   - DOCI solver, DOCI-CASCI, and DOCI-CASSCf
+  - Support of RSH functionals in DF and sgX methods
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)

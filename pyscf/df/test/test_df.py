@@ -93,6 +93,31 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(df.density_fit(cc.CCSD(scf.RHF(mol))),
                                    dfccsd.RCCSD))
 
+    def test_rsh_get_jk(self):
+        nao = mol.nao_nr()
+        numpy.random.seed(1)
+        dm = numpy.random.random((2,nao,nao))
+        dfobj = df.DF(mol)
+        vj, vk = dfobj.get_jk(dm, hermi=0, omega=1.1)
+        self.assertAlmostEqual(lib.finger(vj), -181.5033531437091, 9)
+        self.assertAlmostEqual(lib.finger(vk), -37.78854217974532, 9)
+
+        vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
+        self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
+        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
+
+    def test_rsh_df4c_get_jk(self):
+        nao = mol.nao_nr() * 4
+        numpy.random.seed(1)
+        dm = numpy.random.random((2,nao,nao)) + 0j
+        dfobj = df.DF4C(mol)
+        vj, vk = dfobj.get_jk(dm, hermi=0, omega=1.1)
+        self.assertAlmostEqual(lib.finger(vj), 4.4552047176479235+50.015369284963256j, 9)
+        self.assertAlmostEqual(lib.finger(vk), 27.562574245800487+11.439296646723120j, 9)
+
+        vj1, vk1 = scf.dhf.get_jk(mol, dm, hermi=0, omega=1.1)
+        self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
+        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
 
 if __name__ == "__main__":
     print("Full Tests for df")
