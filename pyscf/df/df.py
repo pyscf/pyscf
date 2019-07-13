@@ -199,8 +199,9 @@ class DF(lib.StreamObject):
             return feri.shape[0]
 
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
-               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)):
-        return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
+               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
+               omega=None):
+        return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol, omega)
 
     def get_eri(self):
         nao = self.mol.nao_nr()
@@ -264,8 +265,9 @@ class DF4C(DF):
                     yield erill, eriss
 
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
-               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)):
-        return df_jk.r_get_jk(self, dm, hermi, with_j, with_k)
+               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
+               omega=None):
+        return df_jk.r_get_jk(self, dm, hermi, with_j, with_k, omega)
 
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError

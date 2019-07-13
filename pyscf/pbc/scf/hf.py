@@ -120,7 +120,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
 
 
 def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3),
-           kpts_band=None, with_j=True, with_k=True):
+           kpts_band=None, with_j=True, with_k=True, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -568,7 +568,7 @@ class SCF(mol_hf.SCF):
         return get_ovlp(cell, kpt)
 
     def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
-               with_j=True, with_k=True):
+               with_j=True, with_k=True, **kwargs):
         r'''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
         for particular k-point (kpt).
 
@@ -641,7 +641,7 @@ class SCF(mol_hf.SCF):
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         return vj - vk * .5
 
-    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None):
+    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, **kwargs):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         *Incore* version of Coulomb and exchange build only.

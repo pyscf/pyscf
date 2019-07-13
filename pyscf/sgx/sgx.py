@@ -111,7 +111,8 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         def pre_kernel(self, envs):
             self._in_scf = True
 
-        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+                  omega=None):
             if dm is None: dm = self.make_rdm1()
             with_df = self.with_df
             if not with_df:
@@ -230,7 +231,10 @@ class SGX(lib.StreamObject):
         return self
 
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
-               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)):
+               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
+               omega=None):
+        if omega is not None:
+            raise NotImplementedError
         if with_j and self.dfj:
             vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
             if with_k:

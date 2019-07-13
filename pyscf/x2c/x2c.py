@@ -153,7 +153,7 @@ def get_hcore(mol):
     x2c = X2C(mol)
     return x2c.get_hcore(mol)
 
-def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True):
+def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
@@ -278,7 +278,8 @@ class X2C_UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())

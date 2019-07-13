@@ -2452,12 +2452,16 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         erf(omega r12) / r12
         set omega to 0 to siwtch off the range-separated Coulomb
         '''
-        self._env[PTR_RANGE_OMEGA] = omega
+        if omega is None:
+            self._env[PTR_RANGE_OMEGA] = 0
+        else:
+            self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
 
     def with_range_coulomb(self, omega):
-        '''Retuen a temporary mol context which has the rquired
-        range-separated Coulomb parameter omega.
+        '''Retuen a temporary mol context which has the required parameter
+        omega for long range part of range-separated Coulomb operator.
+        If omega = None, it will be treated as the regular Coulomb operator.
         See also :func:`mol.set_range_coulomb`
 
         Examples:

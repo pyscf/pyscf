@@ -842,12 +842,12 @@ class call_in_background(object):
             elif ThreadPoolExecutor is None: # async mode, old python
                 def def_async_fn(i):
                     def async_fn(*args, **kwargs):
-                        if self.handler[i] is not None:
-                            self.handler[i].join()
-                        self.handler[i] = ThreadWithTraceBack(target=fns[i], args=args,
-                                                              kwargs=kwargs)
-                        self.handler[i].start()
-                        return self.handler[i]
+                        if self.handlers[i] is not None:
+                            self.handlers[i].join()
+                        self.handlers[i] = ThreadWithTraceBack(target=fns[i], args=args,
+                                                               kwargs=kwargs)
+                        self.handlers[i].start()
+                        return self.handlers[i]
                     return async_fn
 
             else: # multiple executors in async mode, python 2.7.12 or newer

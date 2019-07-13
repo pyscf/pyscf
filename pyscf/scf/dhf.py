@@ -77,34 +77,36 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
                      callback=callback, conv_check=conv_check)
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
-                   opt_llll=None, opt_ssll=None, opt_ssss=None, verbose=None):
+                   opt_llll=None, opt_ssll=None, opt_ssss=None, omega=None, verbose=None):
     log = logger.new_logger(mol, verbose)
-    if coulomb_allow.upper() == 'LLLL':
-        log.debug('Coulomb integral: (LL|LL)')
-        j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
-        n2c = j1.shape[1]
-        vj = numpy.zeros_like(dm)
-        vk = numpy.zeros_like(dm)
-        vj[...,:n2c,:n2c] = j1
-        vk[...,:n2c,:n2c] = k1
-    elif coulomb_allow.upper() == 'SSLL' \
-      or coulomb_allow.upper() == 'LLSS':
-        log.debug('Coulomb integral: (LL|LL) + (SS|LL)')
-        vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
-        j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
-        n2c = j1.shape[1]
-        vj[...,:n2c,:n2c] += j1
-        vk[...,:n2c,:n2c] += k1
-    else: # coulomb_allow == 'SSSS'
-        log.debug('Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
-        vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
-        j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
-        n2c = j1.shape[1]
-        vj[...,:n2c,:n2c] += j1
-        vk[...,:n2c,:n2c] += k1
-        j1, k1 = _call_veff_ssss(mol, dm, hermi, opt_ssss)
-        vj[...,n2c:,n2c:] += j1
-        vk[...,n2c:,n2c:] += k1
+    with mol.with_range_coulomb(omega):
+        if coulomb_allow.upper() == 'LLLL':
+            log.debug('Coulomb integral: (LL|LL)')
+            j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
+            n2c = j1.shape[1]
+            vj = numpy.zeros_like(dm)
+            vk = numpy.zeros_like(dm)
+            vj[...,:n2c,:n2c] = j1
+            vk[...,:n2c,:n2c] = k1
+        elif coulomb_allow.upper() == 'SSLL' \
+          or coulomb_allow.upper() == 'LLSS':
+            log.debug('Coulomb integral: (LL|LL) + (SS|LL)')
+            vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
+            j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
+            n2c = j1.shape[1]
+            vj[...,:n2c,:n2c] += j1
+            vk[...,:n2c,:n2c] += k1
+        else: # coulomb_allow == 'SSSS'
+            log.debug('Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
+            vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
+            j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
+            n2c = j1.shape[1]
+            vj[...,:n2c,:n2c] += j1
+            vk[...,:n2c,:n2c] += k1
+            j1, k1 = _call_veff_ssss(mol, dm, hermi, opt_ssss)
+            vj[...,n2c:,n2c:] += j1
+            vk[...,n2c:,n2c:] += k1
+
     return vj, vk
 get_jk = get_jk_coulomb
 
@@ -473,7 +475,8 @@ class UHF(hf.SCF):
         opt_gaunt = None
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
-    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
@@ -483,7 +486,7 @@ class UHF(hf.SCF):
         opt_llll, opt_ssll, opt_ssss, opt_gaunt = self.opt
 
         vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
-                                opt_llll, opt_ssll, opt_ssss, log)
+                                opt_llll, opt_ssll, opt_ssss, omega, log)
 
         if self.with_breit:
             if 'SSSS' in self._coulomb_now.upper():
