@@ -1330,7 +1330,6 @@ def eeccsd_cis_approx_slow(eom, kshift, nroots=1, imds=None, **kwargs):
     nkpts, nocc, nvir = imds.t1.shape
     dtype = imds.t1.dtype
     r1_size = nkpts * nocc * nvir
-    vector_size = eom.vector_size(kshift)
 
     H1 = np.zeros([r1_size, r1_size], dtype=dtype)
     for col in range(r1_size):
@@ -1340,15 +1339,58 @@ def eeccsd_cis_approx_slow(eom, kshift, nroots=1, imds=None, **kwargs):
 
     eigval, eigvec = np.linalg.eig(H1)
     idx = eigval.argsort()[:nroots]
+    eigval = eigval[idx]
+    eigvec = eigvec[:, idx]
 
+    log.timer("EOMEE CIS approx", *cput0)
+
+    return eigval, eigvec
+
+
+def get_init_guess_cis(eom, kshift, nroots=1, imds=None, **kwargs):
+    '''Build initial R vector through diagonalization of <r1|Hbar|r1>
+
+    Check eeccsd_cis_approx_slow() for details.
+    '''
+    if imds is None: imds = eom.make_imds()
+    nkpts, nocc, nvir = imds.t1.shape
+    dtype = imds.t1.dtype
+    r1_size = nkpts * nocc * nvir
+    vector_size = eom.vector_size(kshift)
+
+    eigval, eigvec = eeccsd_cis_approx_slow(eom, kshift, nroots, imds)
     guess = []
-    for i in idx:
+    for i in range(nroots):
         g = np.zeros(int(vector_size), dtype=dtype)
         g[:r1_size] = eigvec[:, i]
         guess.append(g)
-    log.timer("EOMEE init guess (CIS-like)", *cput0)
 
     return guess
+
+
+def cis_easy(eom, nroots=1, kptlist=None, imds=None, **kwargs):
+    print("\n******** <function 'pyscf.pbc.cc.eom_kccsd_rhf.cis_easy'> ********")
+    if imds is None:
+        cc = eom._cc
+        t1_old, t2_old = cc.t1.copy(), cc.t2.copy()
+
+        # Zero t1, t2
+        cc.t1 = np.zeros_like(t1_old)
+        cc.t2 = np.zeros_like(t2_old)
+
+        # Remake intermediates using zero t1, t2 => get bare Hamiltonian back
+        imds = eom.make_imds()
+        # Recover t1, t2
+        cc.t1, cc.t2 = None, None
+        cc.t1, cc.t2 = t1_old, t2_old
+
+    for k, kshift in enumerate(kptlist):
+        print("\nkshift =", kshift)
+        eigval, eigvec = eeccsd_cis_approx_slow(eom, kshift, nroots, imds)
+        for i in range(nroots):
+            print('CIS root {:d} E = {:.16g}'.format(i, eigval[i].real))
+
+    return eigvec, eigvec
 
 
 class EOMEE(eom_kgccsd.EOMEE):
@@ -1374,7 +1416,8 @@ class EOMEESinglet(EOMEE):
     kernel = eomee_ccsd_singlet
     eomee_ccsd_singlet = eomee_ccsd_singlet
     matvec = eeccsd_matvec_singlet
-    get_init_guess = eeccsd_cis_approx_slow
+    get_init_guess = get_init_guess_cis
+    cis = cis_easy
 
     def vector_size(self, kshift=0):
         '''Size of the linear excitation operator R vector based on spatial
