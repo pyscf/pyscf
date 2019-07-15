@@ -428,6 +428,17 @@ void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
         xc_func_end(&func);
 }
 
+int LIBXC_is_cam_rsh(int xc_id) {
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        int is_cam = func.info->flags & XC_FLAGS_HYB_CAM;
+        xc_func_end(&func);
+        return is_cam;
+}
+
 /*
  * XC_FAMILY_LDA           1
  * XC_FAMILY_GGA           2

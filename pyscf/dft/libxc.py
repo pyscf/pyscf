@@ -35,6 +35,7 @@ _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_hybrid.restype = ctypes.c_int
+_itrf.LIBXC_is_cam_rsh.restype = ctypes.c_int
 _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
 _itrf.LIBXC_number_of_functionals.restype = ctypes.c_int
 _itrf.LIBXC_functional_numbers.argtypes = (numpy.ctypeslib.ndpointer(dtype=numpy.intc, ndim=1, flags=("W", "C", "A")), )
@@ -314,12 +315,13 @@ def rsh_coeff(xc_code):
         _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
         if rsh_pars[0] == 0:
             rsh_pars[0] = rsh_tmp[0]
-        elif (rsh_tmp[0] != 0 and rsh_pars[0] != rsh_tmp[0]):
-            raise ValueError('Different values of omega found for RSH functionals')
-        # libxc-3.0.0 bug https://gitlab.com/libxc/libxc/issues/46
-        #if _itrf.LIBXC_is_hybrid(ctypes.c_int(xid)):
-        #    rsh_pars[1] += rsh_tmp[1] * fac
-        #    rsh_pars[2] += rsh_tmp[2] * fac
+        else:
+            # Check functional is actually a CAM functional
+            if rsh_tmp[0] != 0 and not _itrf.LIBXC_is_cam_rsh(ctypes.c_int(xid)):
+                warnings.warn('Libxc functional %i employs a range separation kernel that is not supported in PySCF' % xid)
+            # Check omega
+            if (rsh_tmp[0] != 0 and rsh_pars[0] != rsh_tmp[0]):
+                raise ValueError('Different values of omega found for RSH functionals')
         rsh_pars[1] += rsh_tmp[1] * fac
         rsh_pars[2] += rsh_tmp[2] * fac
     return rsh_pars
@@ -734,7 +736,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     if fn_ids_set.intersection(PROBLEMATIC_XC):
         problem_xc = [PROBLEMATIC_XC[k]
                       for k in fn_ids_set.intersection(PROBLEMATIC_XC)]
-        warnings.warn('Libxc functionals %s have large discrepancy to xcfun '
+        warnings.warn('Libxc functionals %s may have discrepancy to xcfun '
                       'library.\n' % problem_xc)
 
     n = len(fn_ids)
