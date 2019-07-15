@@ -674,3 +674,18 @@ int LIBXC_max_deriv_order(int xc_id)
         xc_func_end(&func);
         return ord;
 }
+
+int LIBXC_number_of_functionals()
+{
+  return xc_number_of_functionals();
+}
+
+void LIBXC_functional_numbers(int *list)
+{
+  return xc_available_functional_numbers(list);
+}
+
+char * LIBXC_functional_name(int ifunc)
+{
+  return xc_functional_get_name(ifunc);
+}

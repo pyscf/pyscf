@@ -28,7 +28,6 @@ import ctypes
 import math
 import numpy
 from pyscf import lib
-import pylibxc
 
 
 _itrf = lib.load_library('libxc_itrf')
@@ -37,6 +36,10 @@ _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_hybrid.restype = ctypes.c_int
 _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
+_itrf.LIBXC_number_of_functionals.restype = ctypes.c_int
+_itrf.LIBXC_functional_numbers.argtypes = (numpy.ctypeslib.ndpointer(dtype=numpy.intc, ndim=1, flags=("W", "C", "A")), )
+_itrf.LIBXC_functional_name.argtypes = [ctypes.c_int]
+_itrf.LIBXC_functional_name.restype = ctypes.c_char_p
 _itrf.LIBXC_hybrid_coeff.argtypes = [ctypes.c_int]
 _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
 _itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
@@ -95,9 +98,18 @@ XC_ALIASES = {
 'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
 }
 
+def available_libxc_functionals():
+    # Number of functionals is
+    nfunc = _itrf.LIBXC_number_of_functionals()
+    # Get functional numbers
+    numbers = numpy.zeros(nfunc, dtype=numpy.intc)
+    _itrf.LIBXC_functional_numbers(numbers)
+    # Returned array
+    return {'XC_' + _itrf.LIBXC_functional_name(x).decode("UTF-8").upper() : x for x in numbers}
+
 # xc functionals from libxc
-libxc_ids = pylibxc.util.xc_available_functional_numbers()
-XC_LIBXC = {'XC_' + pylibxc.util.xc_functional_get_name(x).upper() : x for x in libxc_ids}
+XC_LIBXC = available_libxc_functionals()
+print(XC_LIBXC)
 XC = XC_CODES = {**XC_ALIASES, **XC_LIBXC}
 
 def _xc_key_without_underscore(xc_keys):
