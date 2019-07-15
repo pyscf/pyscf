@@ -99,8 +99,8 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((2,nao,nao))
         dfobj = df.DF(mol)
         vj, vk = dfobj.get_jk(dm, hermi=0, omega=1.1)
-        self.assertAlmostEqual(lib.finger(vj), -181.5033531437091, 9)
-        self.assertAlmostEqual(lib.finger(vk), -37.78854217974532, 9)
+        self.assertAlmostEqual(lib.finger(vj), -181.5033531437091, 4)
+        self.assertAlmostEqual(lib.finger(vk), -37.78854217974532, 4)
 
         vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
@@ -112,8 +112,8 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((2,nao,nao)) + 0j
         dfobj = df.DF4C(mol)
         vj, vk = dfobj.get_jk(dm, hermi=0, omega=1.1)
-        self.assertAlmostEqual(lib.finger(vj), 4.4552047176479235+50.015369284963256j, 9)
-        self.assertAlmostEqual(lib.finger(vk), 27.562574245800487+11.439296646723120j, 9)
+        self.assertAlmostEqual(lib.finger(vj), 4.4552047176479235+50.015369284963256j, 4)
+        self.assertAlmostEqual(lib.finger(vk), 27.562574245800487+11.439296646723120j, 4)
 
         vj1, vk1 = scf.dhf.get_jk(mol, dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)

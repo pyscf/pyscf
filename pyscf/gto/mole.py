@@ -276,7 +276,11 @@ def format_atom(atoms, origin=0, axes=None,
             as the Bohr value (in angstrom), which should be around 0.53
 
     Returns:
-        "atoms" in the internal format as :attr:`~Mole._atom`
+        "atoms" in the internal format. The internal format is
+            | atom = [[atom1, (x, y, z)],
+            |         [atom2, (x, y, z)],
+            |         ...
+            |         [atomN, (x, y, z)]]
 
     Examples:
 
@@ -1708,6 +1712,82 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
     return abstract
 
 
+def tostring(mol, format='raw'):
+    '''Convert molecular geometry to a string of the required format.
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    format = format.lower()
+    if format == 'xyz' or format == 'raw':
+        coords = mol.atom_coords() * param.BOHR
+        output = []
+        if format == 'xyz':
+            output.append('%d' % mol.natm)
+            output.append('XYZ from PySCF')
+
+        for i in range(mol.natm):
+            symb = mol.atom_pure_symbol(i)
+            x, y, z = coords[i]
+            output.append('%4s %14.5f %14.5f %14.5f' %
+                          (symb, x, y, z))
+        return '\n'.join(output)
+    elif format == 'zmat':
+        coords = mol.atom_coords() * param.BOHR
+        zmat = cart2zmat(coords).splitlines()
+        output = []
+        for i, line in enumerate(zmat):
+            symb = mol.atom_pure_symbol(i)
+            output.append('%4s   %s' % (symb, line))
+        return '\n'.join(output)
+    else:
+        raise NotImplementedError
+
+def tofile(mol, filename, format='xyz'):
+    '''Write molecular geometry to a file of the required format.
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    string = tostring(mol, format)
+    with open(filename, 'w') as f:
+        f.write(string)
+        f.write('\n')
+    return string
+
+def fromfile(filename, format=None):
+    '''Read molecular geometry from a file
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    if format is None:
+        format = os.path.splitext(filename)[1][1:]
+    with open(filename, 'r') as f:
+        return fromstring(f.read(), format)
+
+
+def fromstring(string, format='xyz'):
+    '''Convert the string of the specified format to internal format
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    format = format.lower()
+    if format == 'zmat':
+        return from_zmatrix(string)
+    else:
+        raise NotImplementedError
+
+
 #
 # Mole class handles three layers: input, internal format, libcint arguments.
 # The relationship of the three layers are, eg
@@ -2896,6 +2976,13 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
 
     inertia_moment = inertia_moment
 
+    tostring = tostring
+    tofile = tofile
+    def fromstring(self, string, format='xyz'):
+        return fromstring(string, format)
+    def fromfile(self, filename, format=None):
+        return fromfile(filename, format)
+
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None):
         '''Integral generator.
@@ -3402,6 +3489,5 @@ class _TemporaryMoleContext(object):
         self.method(*self.args)
     def __exit__(self, type, value, traceback):
         self.method(*self.args_bak)
-
 
 del(BASE)

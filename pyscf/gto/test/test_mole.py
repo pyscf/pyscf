@@ -845,6 +845,26 @@ O    SP
         eri = mol.ao2mo(numpy.eye(nao))
         self.assertAlmostEqual(eri[0,0], 1.0557129427350722, 12)
 
+    def test_tofile(self):
+        tmpfile = tempfile.NamedTemporaryFile()
+        mol = gto.M(atom=[[1  , (0.,1.,1.)],
+                          ["O1", (0.,0.,0.)],
+                          [1  , (1.,1.,0.)], ])
+        out1 = mol.tofile(tmpfile.name, format='xyz')
+        ref = '''3
+XYZ from PySCF
+   H        0.00000        1.00000        1.00000
+   O        0.00000        0.00000        0.00000
+   H        1.00000        1.00000        0.00000
+'''
+        with open(tmpfile.name, 'r') as f:
+            self.assertEqual(f.read(), ref)
+        self.assertEqual(out1, ref[:-1])
+
+        tmpfile = tempfile.NamedTemporaryFile(suffix='.zmat')
+        str1 = mol.tofile(tmpfile.name, format='zmat')
+        #FIXME:self.assertEqual(mol._atom, mol.fromfile(tmpfile.name))
+
 
 if __name__ == "__main__":
     print("test mole.py")

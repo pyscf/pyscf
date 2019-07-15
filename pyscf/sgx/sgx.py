@@ -249,11 +249,13 @@ class SGX(lib.StreamObject):
             if key in self._rsh_df:
                 rsh_df = self._rsh_df[key]
             else:
-                rsh_df = self._rsh_df[key] = copy.copy(self)
-                logger.info(self, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
+                rsh_df = copy.copy(self)
+                rsh_df._rsh_df = None  # to avoid circular reference
                 # Not all attributes need to be reset. Resetting _vjopt
                 # because it is used by get_j method of regular DF object.
-                self._vjopt = self._rsh_df = None
+                rsh_df._vjopt = None
+                self._rsh_df[key] = rsh_df
+                logger.info(self, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
 
             with rsh_df.mol.with_range_coulomb(omega):
                 return rsh_df.get_jk(dm, hermi, with_j, with_k,
