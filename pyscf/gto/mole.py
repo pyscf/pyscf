@@ -1745,7 +1745,7 @@ def tostring(mol, format='raw'):
     else:
         raise NotImplementedError
 
-def tofile(mol, filename, format='xyz'):
+def tofile(mol, filename, format=None):
     '''Write molecular geometry to a file of the required format.
 
     Supported output formats:
@@ -1753,6 +1753,8 @@ def tofile(mol, filename, format='xyz'):
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
     '''
+    if format is None:  # Guess format based on filename
+        format = os.path.splitext(filename)[1][1:]
     string = tostring(mol, format)
     with open(filename, 'w') as f:
         f.write(string)
@@ -1767,7 +1769,7 @@ def fromfile(filename, format=None):
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
     '''
-    if format is None:
+    if format is None:  # Guess format based on filename
         format = os.path.splitext(filename)[1][1:]
     with open(filename, 'r') as f:
         return fromstring(f.read(), format)
