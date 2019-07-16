@@ -39,7 +39,7 @@ MAPSPDF = {'S': 0,
            'M': 9,
           }
 
-BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
+BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n|END\n')
 ECP_DELIMITER = re.compile('\n *ECP *\n')
 
 def parse(string, symb=None, optimize=True):
