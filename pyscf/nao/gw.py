@@ -557,7 +557,7 @@ class gw(scf):
       mat = -0.5*self.get_k()
       mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
       expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0]).reshape((1,self.norbs))
-      print('-----------| the Exchange expectation value (eV) |-----------\n %3s  %16s'%('no.','<Sigma_x> '))
+      print('-----------| Expectationvalues of Exchange energy(eV) |-----------\n %3s  %16s'%('no.','<Sigma_x> '))
       for i, ab in enumerate(zip(expval[0].T*HARTREE2EV)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
         if (i==self.nfermi[0]): print('-'*62)
         print (' %3d  %16.6f'%(i,ab[0]))
