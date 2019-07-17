@@ -557,18 +557,18 @@ class gw(scf):
       mat = -0.5*self.get_k()
       mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
       expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0]).reshape((1,self.norbs))
-      print('-----------| Expectationvalues of Exchange energy(eV) |-----------\n %3s  %16s'%('no.','<Sigma_x> '))
-      for i, ab in enumerate(zip(expval[0].T*HARTREE2EV)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
+      print('---------| Expectationvalues of Exchange energy(eV) |---------\n %3s  %16s  %3s'%('no.','<Sigma_x> ','occ'))
+      for i, (a,b) in enumerate(zip(expval.T*HARTREE2EV,self.mo_occ[0].T)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
         if (i==self.nfermi[0]): print('-'*62)
-        print (' %3d  %16.6f'%(i,ab[0]))
+        print (' %3d  %16.6f  %3d'%(i,a[0], b[0]))
     elif self.nspin==2:
       mat = -self.get_k()
       expval = zeros((self.nspin, self.norbs))
       for s in range(self.nspin):
         mat1 = dot(self.mo_coeff[0,s,:,:,0], mat[s])
         expval[s] = einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
-      print('-----------| the Exchange expectation value (eV) |-----------\n %3s  %16s  | %12s'%('no.','<Sigma_x>','<Sigma_x>'))        
-      for i , (ab) in enumerate(zip(expval[0].T* HARTREE2EV,expval[1].T* HARTREE2EV)):
-        if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*62)
-        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
+      print('-----------| the Exchange expectation value (eV) |-----------\n %3s  %16s  %3s  | %12s  %3s'%('no.','<Sigma_x>','occ','<Sigma_x>','occ'))        
+      for i , (a,b) in enumerate(zip(expval.T* HARTREE2EV,self.mo_occ[0].T)):
+        if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*60)
+        print(' %3d  %16.6f  %3d  | %12.6f  %3d'%(i, a[0],b[0],a[1], b[1]))
     #return expval
