@@ -463,12 +463,12 @@ class gw(scf):
       vh,kmat = self.get_jk()
       EX = -0.5*((kmat)*dm1[0,...,0]).sum()
       if self.nspin==1:
-        print('-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s'%('no.','<H>'))
+        print('\n-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s'%('no.','<H>'))
         for i, ab in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T*HARTREE2EV)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
             print (' %3d  %16.6f'%(i,ab[0]))
         Vha = 0.5*(vh*dm1[0,...,0]).sum()
       if self.nspin==2:
-        print('-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s  | %12s'%('no.','<H_up>','<H_dn>'))        
+        print('\n-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s  | %12s'%('no.','<H_up>','<H_dn>'))        
         for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
 	        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
         Vha = 0.5*((vh[0]+vh[1])*dm1[0,...,0]).sum()
