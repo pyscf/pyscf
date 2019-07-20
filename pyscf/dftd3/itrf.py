@@ -249,8 +249,8 @@ class _DFTD3(object):
     def dump_flags(self):
         mol = self.mol
         logger.info(mol, '** DFTD3 parameter **')
-        logger.info(mol, 'func', self.xc)
-        logger.info(mol, 'version', self.version)
+        logger.info(mol, 'func %s', self.xc)
+        logger.info(mol, 'version %s', self.version)
         return self
 
     def kernel(self):
