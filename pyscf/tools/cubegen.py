@@ -49,6 +49,8 @@ from pyscf import __config__
 RESOLUTION = getattr(__config__, 'cubegen_resolution', None)
 BOX_MARGIN = getattr(__config__, 'cubegen_box_margin', 3.0)
 ORIGIN = getattr(__config__, 'cubegen_box_origin', None)
+# If given, EXTENT should be a 3-element ndarray/list/tuple to represent the
+# extension in x, y, z
 EXTENT = getattr(__config__, 'cubegen_box_extent', None)
 
 
@@ -218,7 +220,7 @@ class Cube(object):
         self.ny = ny
         self.nz = nz
         # .../(nx-1) to get symmetric mesh
-        # see also the discussion on https://github.com/sunqm/pyscf/issues/154
+        # see also the discussion https://github.com/sunqm/pyscf/issues/154
         self.xs = numpy.arange(nx) * (numpy.diag(self.box)[0] / (nx - 1))
         self.ys = numpy.arange(ny) * (numpy.diag(self.box)[1] / (ny - 1))
         self.zs = numpy.arange(nz) * (numpy.diag(self.box)[2] / (nz - 1))
