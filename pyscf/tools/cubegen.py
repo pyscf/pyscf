@@ -48,6 +48,8 @@ from pyscf import __config__
 
 RESOLUTION = getattr(__config__, 'cubegen_resolution', None)
 BOX_MARGIN = getattr(__config__, 'cubegen_box_margin', 3.0)
+ORIGIN = getattr(__config__, 'cubegen_box_origin', None)
+EXTENT = getattr(__config__, 'cubegen_box_extent', None)
 
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
@@ -197,23 +199,29 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
 class Cube(object):
     '''  Read-write of the Gaussian CUBE files  '''
     def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
-                 margin=BOX_MARGIN):
+                 margin=BOX_MARGIN, origin=ORIGIN, extent=EXTENT):
         self.mol = mol
         coord = mol.atom_coords()
-        box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
-        self.box = numpy.diag(box)
-        self.boxorig = numpy.min(coord,axis=0) - margin
+        if extent is None:
+            box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+            self.box = numpy.diag(box)
+        else:
+            self.box = numpy.diag(extent)
+        if origin is None:
+            self.boxorig = numpy.min(coord,axis=0) - margin
+        else:
+            self.boxorig = numpy.array(origin)
         if resolution is not None:
-            nx, ny, nz = numpy.ceil(box / resolution).astype(int)
+            nx, ny, nz = numpy.ceil(numpy.diag(self.box) / resolution).astype(int)
 
         self.nx = nx
         self.ny = ny
         self.nz = nz
         # .../(nx-1) to get symmetric mesh
         # see also the discussion on https://github.com/sunqm/pyscf/issues/154
-        self.xs = numpy.arange(nx) * (box[0] / (nx - 1))
-        self.ys = numpy.arange(ny) * (box[1] / (ny - 1))
-        self.zs = numpy.arange(nz) * (box[2] / (nz - 1))
+        self.xs = numpy.arange(nx) * (numpy.diag(self.box)[0] / (nx - 1))
+        self.ys = numpy.arange(ny) * (numpy.diag(self.box)[1] / (ny - 1))
+        self.zs = numpy.arange(nz) * (numpy.diag(self.box)[2] / (nz - 1))
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored
