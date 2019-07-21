@@ -169,7 +169,7 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
         Vele[p0:p1] = numpy.einsum('ijp,ij->p', ints, dm)
 
     MEP = Vnuc - Vele     # MEP at each point
-    MEP = MEP.reshape(nx,ny,nz)
+    MEP = MEP.reshape(cc.nx,cc.ny,cc.nz)
 
     # Write the potential
     cc.write(MEP, outfile, 'Molecular electrostatic potential in real space')
