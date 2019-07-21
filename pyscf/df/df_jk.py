@@ -101,11 +101,11 @@ def density_fit(mf, auxbasis=None, with_df=None):
 
         See also the documents of class %s for other SCF attributes.
         ''' % mf_class
-        def __init__(self, mf):
+        def __init__(self, mf, df, auxbasis):
             self.__dict__.update(mf.__dict__)
             self._eri = None
             self.auxbasis = auxbasis
-            self.with_df = with_df
+            self.with_df = df
             self._keys = self._keys.union(['auxbasis', 'with_df'])
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
@@ -129,7 +129,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def nuc_grad_method(self):
             raise NotImplementedError
 
-    return DFHF(mf)
+    return DFHF(mf, with_df, auxbasis)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.

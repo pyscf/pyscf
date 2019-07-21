@@ -88,11 +88,11 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
 
     mf_class = mf.__class__
     class SGXHF(mf_class, _SGXHF):
-        def __init__(self, mf):
+        def __init__(self, mf, df, auxbasis):
             self.__dict__.update(mf.__dict__)
             self._eri = None
             self.auxbasis = auxbasis
-            self.with_df = with_df
+            self.with_df = df
 
             # Grids/Integral quality varies during SCF. VHF cannot be
             # constructed incrementally.
@@ -138,7 +138,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         def nuc_grad_method(self):
             raise NotImplementedError
 
-    return SGXHF(mf)
+    return SGXHF(mf, with_df, auxbasis)
 
 # A tag to label the derived SCF class
 class _SGXHF:
