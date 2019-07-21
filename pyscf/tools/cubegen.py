@@ -191,7 +191,7 @@ class Cube(object):
         self.ny = ny
         self.nz = nz
         # .../(nx-1) to get symmetric mesh
-        # see also the discussion on https://github.com/sunqm/pyscf/issues/154
+        # see also the discussion on https://github.com/pyscf/pyscf/issues/154
         self.xs = numpy.arange(nx) * (box[0] / (nx - 1))
         self.ys = numpy.arange(ny) * (box[1] / (ny - 1))
         self.zs = numpy.arange(nz) * (box[2] / (nz - 1))
