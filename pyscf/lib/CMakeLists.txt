@@ -138,22 +138,25 @@ option(BUILD_XCFUN "Download and build xcfun library" ON)
 if(NOT DISABLE_DFT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     ENABLE_LIBXC AND BUILD_LIBXC)
+  if(UNIX AND NOT APPLE)
+    set(LIBM "LIBS=-lm")
+  endif()
   ExternalProject_Add(libxc
-        #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
-        #GIT_TAG master
-        URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
-        INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-                   -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-                   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-                   -DCMAKE_INSTALL_LIBDIR=<INSTALL_DIR>/lib
-                   -DCMAKE_INSTALL_BINDIR=<INSTALL_DIR>/bin
-                   -DCMAKE_INSTALL_INCLUDEDIR=<INSTALL_DIR>/include
-                   -DNAMESPACE_INSTALL_INCLUDEDIR=/
-                   -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
-                   -DBUILD_FPIC=${BUILD_FPIC}
-                   -DENABLE_XHOST=OFF
-                   CMAKE_CACHE_ARGS -DCMAKE_C_FLAGS:STRING=${CMAKE_C_FLAGS}
+    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
+    #GIT_TAG master
+    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
+    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.1.tar.gz
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+          --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
+          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+
+## For git checkout
+#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+#          --enable-shared --disable-static --disable-fortran LIBS=-lm
+#          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
   )
 endif() # ENABLE_LIBXC
 
