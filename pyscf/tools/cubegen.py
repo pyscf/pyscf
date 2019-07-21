@@ -66,11 +66,16 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             Number of grid point divisions in x direction.
             Note this is function of the molecule's size; a larger molecule
             will have a coarser representation than a smaller one for the
-            same value.
+            same value. Conflicts to keyword resolution.
         ny : int
             Number of grid point divisions in y direction.
         nz : int
             Number of grid point divisions in z direction.
+        resolution: float
+            Resolution of the mesh grid in the cube box. If resolution is
+            given in the input, the input nx/ny/nz have no effects.  The value
+            of nx/ny/nz will be determined by the resolution and the cube box
+            size.
     """
 
     cc = Cube(mol, nx, ny, nz, resolution)
@@ -87,6 +92,8 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
 
     # Write out density to the .cube file
     cc.write(rho, outfile, comment='Electron density in real space (e/Bohr^3)')
+    return rho
+
 
 def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculate orbital value on real space grid and write out in cube format.
@@ -104,11 +111,16 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             Number of grid point divisions in x direction.
             Note this is function of the molecule's size; a larger molecule
             will have a coarser representation than a smaller one for the
-            same value.
+            same value. Conflicts to keyword resolution.
         ny : int
             Number of grid point divisions in y direction.
         nz : int
             Number of grid point divisions in z direction.
+        resolution: float
+            Resolution of the mesh grid in the cube box. If resolution is
+            given in the input, the input nx/ny/nz have no effects.  The value
+            of nx/ny/nz will be determined by the resolution and the cube box
+            size.
     """
     cc = Cube(mol, nx, ny, nz, resolution)
 
@@ -124,6 +136,7 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
 
     # Write out orbital to the .cube file
     cc.write(orb_on_grid, outfile, comment='Orbital value in real space (1/Bohr^3)')
+    return orb_on_grid
 
 
 def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
@@ -143,11 +156,16 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             Number of grid point divisions in x direction.
             Note this is function of the molecule's size; a larger molecule
             will have a coarser representation than a smaller one for the
-            same value.
+            same value. Conflicts to keyword resolution.
         ny : int
             Number of grid point divisions in y direction.
         nz : int
             Number of grid point divisions in z direction.
+        resolution: float
+            Resolution of the mesh grid in the cube box. If resolution is
+            given in the input, the input nx/ny/nz have no effects.  The value
+            of nx/ny/nz will be determined by the resolution and the cube box
+            size.
     """
     cc = Cube(mol, nx, ny, nz, resolution)
 
@@ -169,10 +187,11 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
         Vele[p0:p1] = numpy.einsum('ijp,ij->p', ints, dm)
 
     MEP = Vnuc - Vele     # MEP at each point
-    MEP = MEP.reshape(nx,ny,nz)
+    MEP = MEP.reshape(cc.nx,cc.ny,cc.nz)
 
     # Write the potential
     cc.write(MEP, outfile, 'Molecular electrostatic potential in real space')
+    return MEP
 
 
 class Cube(object):
