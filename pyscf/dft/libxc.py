@@ -110,8 +110,8 @@ def available_libxc_functionals():
 
 # xc functionals from libxc
 XC_LIBXC = available_libxc_functionals()
-#print(XC_LIBXC)
-XC = XC_CODES = {**XC_ALIASES, **XC_LIBXC}
+XC = XC_CODES
+XC.update(**XC_ALIASES)
 
 def _xc_key_without_underscore(xc_keys):
     new_xc = []
