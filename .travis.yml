@@ -42,7 +42,7 @@ install:
   #  blaslib=`basename libopenblas* .so | cut -c 4-` &&
   #  echo 'set(BLAS_LIBRARIES "-L${PROJECT_SOURCE_DIR} -l'${blaslib}'")' > cmake.arch.inc
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
-    curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.6-deps.tar.gz | tar xzf -
+    curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7-deps.tar.gz | tar xzf -
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     mkdir build &&
     cd build &&
