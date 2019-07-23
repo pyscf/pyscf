@@ -60,6 +60,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
 # gfock = Generalized Fock, Adv. Chem. Phys., 69, 63
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
     dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
+    # MRH flag: this is one of my kludges
     aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_coeff, mo_cas), compact=False)
     aapa = aapa.reshape(ncas,ncas,nmo,ncas)
     vj, vk = mc._scf.get_jk(mol, (dm_core, dm_cas))

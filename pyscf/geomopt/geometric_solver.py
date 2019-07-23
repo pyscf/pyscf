@@ -172,6 +172,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         from pyscf import geometric_solver
         newmol = geometric_solver.optimize(method, **conv_params)
     '''
+    # MRH bugfix
     return kernel(method, assert_convergence, include_ghost, constraints=constraints, callback=callback,
                   maxsteps=maxsteps, **kwargs)[1]
 
