@@ -255,6 +255,7 @@ ALIAS = {
     'augpcseg2' : 'aug-pcseg-2.dat',
     'augpcseg3' : 'aug-pcseg-3.dat',
     'augpcseg4' : 'aug-pcseg-4.dat',
+    'sarcdkh'   : 'sarc-dkh2.dat',
 # Burkatzki-Filippi-Dolg pseudo potential
     'bfdvdz'     : 'bfd_vdz.dat',
     'bfdvtz'     : 'bfd_vtz.dat',
