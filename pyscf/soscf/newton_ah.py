@@ -1052,7 +1052,7 @@ def newton(mf):
                 if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
                     mo_occ = (numpy.asarray(mo_occ >0, dtype=numpy.double),
                               numpy.asarray(mo_occ==2, dtype=numpy.double))
-                return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ)
+                return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ, dm0)
 
         return SecondOrderUHF(mf)
 
