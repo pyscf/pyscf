@@ -301,7 +301,7 @@ def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     fcasscf = casscf._base_class (casscf._scf, casscf.ncas, casscf.nelecas)
     fcasscf.fcisolver = casscf.fcisolver._base_class (casscf.mol)
     fcasscf.mo_coeff = mo
-    # MRH bugfix
+    # MRH, 07/23/2019: make sure to inherit symmetry!
     if hasattr (casscf.fcisolver, 'orbsym'):
         fcasscf.fcisolver.orbsym = casscf.fcisolver.orbsym
     if hasattr (casscf.fcisolver, 'wfnsym'):
