@@ -425,9 +425,11 @@ def _truncate(basis, contr_scheme, symb, split_name):
                                      segm[:][1:]]
                         contr_b.append([l] + save_segm)
                         n_saved += n_save
-            assert n_saved == n_keep, 'Only ' + str(n_saved) +\
-                ' l=' + str(l) + ' functions available for ' +\
-                symb + ' ' + split_name[0] + ', cannot truncate to ' + split_name[1]
+            assert n_saved == n_keep, ("@{} implies {} l={} function(s), but" +
+                                       "only {} in {}:{}").format(split_name[1],
+                                                                  contr_scheme[l],
+                                                                  l, n_saved, symb,
+                                                                  split_name[0])
     return contr_b
 
 optimize_contraction = parse_nwchem.optimize_contraction
