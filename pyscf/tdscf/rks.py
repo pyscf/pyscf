@@ -170,7 +170,7 @@ class dRPA(TDDFTNoHybrid):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_rhf(mf)
-        mf.xc = ''
+        mf.xc = '0.0*LDA'
         TDDFTNoHybrid.__init__(self, mf)
 
 TDH = dRPA
@@ -181,7 +181,7 @@ class dTDA(TDA):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_rhf(mf)
-        mf.xc = ''
+        mf.xc = '0.0*LDA'
         TDA.__init__(self, mf)
 
 from pyscf import dft
