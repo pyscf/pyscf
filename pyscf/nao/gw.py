@@ -476,13 +476,14 @@ class gw(scf):
       print('\nmean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
       print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
       print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
-      print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
-      S = self.spin/2
-      S0 = S*(S+1)
-      SS = self.mf.spin_square()
-      if ( SS[0]!= S ):
-        print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
-        print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
+      if hasattr(self, 'mf'): 
+        print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
+        S = self.spin/2
+        S0 = S*(S+1)
+        SS = self.mf.spin_square()
+        if ( SS[0]!= S ):
+          print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
+          print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
       elapsed_time = time.time() - start_time
       print('\nRunning time is:',time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),'\n\n') 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
