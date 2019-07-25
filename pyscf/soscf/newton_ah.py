@@ -282,7 +282,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if _is_dft_object(mf):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint
@@ -391,7 +391,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if _is_dft_object(mf):
         from pyscf.dft import rks
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -462,7 +462,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if _is_dft_object(mf):
         from pyscf.dft import numint
         raise NotImplementedError
 
@@ -1108,6 +1108,9 @@ def _force_Ex_Ey_degeneracy_(dr, orbsym):
             Ey = orbsym ==(ir + 1)
             dr[Ey[:,None]&Ey] = dr[Ex[:,None]&Ex]
     return dr
+
+def _is_dft_object(mf):
+    return getattr(mf, 'xc', None) is not None and hasattr(mf, '_numint')
 
 
 if __name__ == '__main__':

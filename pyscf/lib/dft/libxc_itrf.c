@@ -451,10 +451,11 @@ static int xc_output_length(int nvar, int deriv)
         return len;
 }
 
+// return value 0 means no functional needs to be evaluated.
 int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
 {
         int i;
-        int nvar = 1;
+        int nvar = 0;
         xc_func_type func;
         for (i = 0; i < nfn; i++) {
                 if (xc_func_init(&func, fn_id[i], spin) != 0) {
@@ -478,6 +479,9 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                                 }
                         } else {
                                 switch (func.info->family) {
+                                case XC_FAMILY_LDA:
+                                        nvar = MAX(nvar, 1);
+                                        break;
                                 case XC_FAMILY_GGA:
                                 case XC_FAMILY_HYB_GGA:
                                         nvar = MAX(nvar, 2);
@@ -543,7 +547,7 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
         case XC_FAMILY_HYB_MGGA:
                 vsegtot = 4;
                 fsegtot = 10;
-                ksegtot = 0;
+                ksegtot = 0;  // not supported
                 break;
         default: //case XC_FAMILY_LDA:
                 vsegtot = 1;
@@ -589,8 +593,13 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
 {
         assert(deriv <= 3);
         int nvar = LIBXC_input_length(nfn, fn_id, fac, spin);
+        if (nvar == 0) { // No functional needs to be evaluated.
+                return;
+        }
+
         int outlen = xc_output_length(nvar, deriv);
-        memset(output, 0, sizeof(double) * np*outlen);
+        // output buffer is zeroed in the Python caller
+        //memset(output, 0, sizeof(double) * np*outlen);
 
         double *ebuf = malloc(sizeof(double) * np);
         double *vbuf = NULL;
