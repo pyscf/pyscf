@@ -463,33 +463,31 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                                 fn_id[i]);
                         exit(1);
                 }
-                if (fac[i] == 0) {
-                        if (spin == XC_POLARIZED) {
-                                switch (func.info->family) {
-                                case XC_FAMILY_LDA:
-                                        nvar = MAX(nvar, 2);
-                                        break;
-                                case XC_FAMILY_GGA:
-                                case XC_FAMILY_HYB_GGA:
-                                        nvar = MAX(nvar, 5);
-                                        break;
-                                case XC_FAMILY_MGGA:
-                                case XC_FAMILY_HYB_MGGA:
-                                        nvar = MAX(nvar, 9);
-                                }
-                        } else {
-                                switch (func.info->family) {
-                                case XC_FAMILY_LDA:
-                                        nvar = MAX(nvar, 1);
-                                        break;
-                                case XC_FAMILY_GGA:
-                                case XC_FAMILY_HYB_GGA:
-                                        nvar = MAX(nvar, 2);
-                                        break;
-                                case XC_FAMILY_MGGA:
-                                case XC_FAMILY_HYB_MGGA:
-                                        nvar = MAX(nvar, 4);
-                                }
+                if (spin == XC_POLARIZED) {
+                        switch (func.info->family) {
+                        case XC_FAMILY_LDA:
+                                nvar = MAX(nvar, 2);
+                                break;
+                        case XC_FAMILY_GGA:
+                        case XC_FAMILY_HYB_GGA:
+                                nvar = MAX(nvar, 5);
+                                break;
+                        case XC_FAMILY_MGGA:
+                        case XC_FAMILY_HYB_MGGA:
+                                nvar = MAX(nvar, 9);
+                        }
+                } else {
+                        switch (func.info->family) {
+                        case XC_FAMILY_LDA:
+                                nvar = MAX(nvar, 1);
+                                break;
+                        case XC_FAMILY_GGA:
+                        case XC_FAMILY_HYB_GGA:
+                                nvar = MAX(nvar, 2);
+                                break;
+                        case XC_FAMILY_MGGA:
+                        case XC_FAMILY_HYB_MGGA:
+                                nvar = MAX(nvar, 4);
                         }
                 }
                 xc_func_end(&func);
@@ -622,12 +620,6 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
                         fprintf(stderr, "XC functional %d not found\n",
                                 fn_id[i]);
                         exit(1);
-                }
-                if (fac[i] == 0) {
-                        // Skip functionals if they have 0 contribution.
-                        // Size of output buffer is calculated without these
-                        // functionals.
-                        continue;
                 }
 #if defined XC_SET_RELATIVITY
                 xc_lda_x_set_params(&func, relativity);
