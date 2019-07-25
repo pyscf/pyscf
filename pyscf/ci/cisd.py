@@ -825,8 +825,8 @@ class CISD(lib.StreamObject):
                     'level_shift', 'direct'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)

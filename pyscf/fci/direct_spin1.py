@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -665,8 +665,7 @@ class FCISolver(lib.StreamObject):
         self.nroots = x
 
     def dump_flags(self, verbose=None):
-        if verbose is None: verbose = self.verbose
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         log.info('******** %s ********', self.__class__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)

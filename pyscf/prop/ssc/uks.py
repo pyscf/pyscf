@@ -26,14 +26,14 @@ from pyscf.prop.ssc import uhf as uhf_ssc
 
 
 class SpinSpinCoupling(uhf_ssc.SpinSpinCoupling):
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
-        logger.info(self, 'nuc_pair %s', self.nuc_pair)
-        logger.info(self, 'with Fermi-contact  %s', self.with_fc)
-        logger.info(self, 'with Fermi-contact + spin-dipole  %s', self.with_fcsd)
+        log.info('nuc_pair %s', self.nuc_pair)
+        log.info('with Fermi-contact  %s', self.with_fc)
+        log.info('with Fermi-contact + spin-dipole  %s', self.with_fcsd)
         if self.cphf:
             log.info('Solving MO10 eq with CPHF.')
             log.info('CPHF conv_tol = %g', self.conv_tol)

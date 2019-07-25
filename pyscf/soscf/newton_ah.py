@@ -816,10 +816,10 @@ class _CIAH_SOSCF(hf.SCF):
                            'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval',
                            'kf_trust_region'))
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        self._scf.dump_flags()
+        self._scf.dump_flags(verbose)
         log.info('******** %s Newton solver flags ********', self._scf.__class__)
         log.info('SCF tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s',    self.conv_tol_grad)

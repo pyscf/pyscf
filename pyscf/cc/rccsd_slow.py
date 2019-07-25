@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -154,8 +154,8 @@ class RCCSD(ccsd.CCSD):
         self.max_space = 20
         self._keys = self._keys.union(['max_space'])
 
-    def dump_flags(self):
-        ccsd.CCSD.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        ccsd.CCSD.dump_flags(self, verbose)
 
     def init_amps(self, eris):
         nocc = self.nocc

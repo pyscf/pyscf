@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -84,10 +84,10 @@ def sfx2c1e(mf):
             else:
                 return mf_class.get_hcore(self, mol)
 
-        def dump_flags(self):
-            mf_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            mf_class.dump_flags(self, verbose)
             if self.with_x2c:
-                self.with_x2c.dump_flags()
+                self.with_x2c.dump_flags(verbose)
             return self
 
     return SFX2C1E_SCF(mf)

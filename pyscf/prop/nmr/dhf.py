@@ -300,8 +300,8 @@ class NMR(rhf_nmr.NMR):
         self.mb = 'RMB'
         self._keys = self._keys.union(['mb'])
 
-    def dump_flags(self):
-        rhf_nmr.NMR.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rhf_nmr.NMR.dump_flags(self, verbose)
         logger.info(self, 'MB basis = %s', self.mb)
         return self
 

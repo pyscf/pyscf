@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -151,13 +151,13 @@ class GKS(ghf.GHF):
         ghf.GHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
-        ghf.GHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        ghf.GHF.dump_flags(self, verbose)
         logger.info(self, 'XC functionals = %s', self.xc)
         if self.nlc!='':
             logger.info(self, 'NLC functional = %s', self.nlc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
     energy_elec = rks.energy_elec

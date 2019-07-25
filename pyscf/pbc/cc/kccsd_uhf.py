@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -665,8 +665,8 @@ class KUCCSD(uccsd.UCCSD):
     update_amps = update_amps
     energy = energy
 
-    def dump_flags(self):
-        return uccsd.UCCSD.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        return uccsd.UCCSD.dump_flags(self, verbose)
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc.df.df import GDF

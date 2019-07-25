@@ -676,8 +676,8 @@ class TDA(lib.StreamObject):
         '''Excited state energies'''
         return self._scf.e_tot + self.e
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)

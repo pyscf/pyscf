@@ -202,8 +202,8 @@ class Gradients(uhf_grad.Gradients):
         self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
-    def dump_flags(self):
-        uhf_grad.Gradients.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        uhf_grad.Gradients.dump_flags(self, verbose)
         logger.info(self, 'grid_response = %s', self.grid_response)
         return self
 
