@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,8 +58,8 @@ class AtomSphericAverageRHF(hf.RHF):
         self._occ = None
         hf.SCF.__init__(self, mol)
 
-    def dump_flags(self):
-        hf.RHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        hf.RHF.dump_flags(self, verbose)
         logger.debug(self.mol, 'occupation averaged SCF for atom  %s',
                      self.mol.atom_symbol(0))
 

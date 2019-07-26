@@ -339,8 +339,8 @@ class Gradients(rhf_grad.Gradients):
         self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
-    def dump_flags(self):
-        rhf_grad.Gradients.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rhf_grad.Gradients.dump_flags(self, verbose)
         logger.info(self, 'grid_response = %s', self.grid_response)
         #if callable(self.base.grids.prune):
         #    logger.info(self, 'Grid pruning %s may affect DFT gradients accuracy.'

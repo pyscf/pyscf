@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -505,7 +505,7 @@ class Grids(lib.StreamObject):
             self.non0tab = None
         super(Grids, self).__setattr__(key, val)
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
         logger.info(self, 'pruning grids: %s', self.prune)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,10 +32,10 @@ class SymAdaptedRKS(hf_symm.SymAdaptedRHF):
         hf_symm.RHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         hf_symm.RHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = rks.get_veff
     energy_elec = rks.energy_elec

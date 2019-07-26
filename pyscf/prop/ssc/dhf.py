@@ -253,8 +253,8 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
         self.mb = 'sternheim' # or RMB, RKB
         rhf_ssc.SpinSpinCoupling.__init__(self, scf_method)
 
-    def dump_flags(self):
-        rhf_ssc.SpinSpinCoupling.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rhf_ssc.SpinSpinCoupling.dump_flags(self, verbose)
         logger.info(self, 'mb = %s', self.mb)
         return self
 

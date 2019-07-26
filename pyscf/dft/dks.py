@@ -126,11 +126,11 @@ class UKS(dhf.UHF):
         rks._dft_common_init_(self)
         self._numint = r_numint.RNumInt()
 
-    def dump_flags(self):
-        dhf.UHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        dhf.UHF.dump_flags(self, verbose)
         logger.info(self, 'XC functionals = %s', self.xc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
     energy_elec = energy_elec

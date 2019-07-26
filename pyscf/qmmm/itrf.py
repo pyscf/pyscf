@@ -92,8 +92,8 @@ def mm_charge(scf_method, coords, charges, unit=None):
         def __init__(self, scf_method):
             self.__dict__.update(scf_method.__dict__)
 
-        def dump_flags(self, *args, **kwargs):
-            method_class.dump_flags(self, *args, **kwargs)
+        def dump_flags(self, verbose=None):
+            method_class.dump_flags(self, verbose)
             logger.info(self, '** Add background charges for %s **',
                         method_class)
             if self.verbose >= logger.DEBUG:
@@ -206,8 +206,8 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
         def __init__(self, scf_grad):
             self.__dict__.update(scf_grad.__dict__)
 
-        def dump_flags(self):
-            grad_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            grad_class.dump_flags(self, verbose)
             logger.info(self, '** Add background charges for %s **', grad_class)
             if self.verbose >= logger.DEBUG1:
                 logger.debug1(self, 'Charge      Location')

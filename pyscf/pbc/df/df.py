@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -482,8 +482,8 @@ class GDF(aft.AFTDF):
                       'mesh = the number of PWs (=2*gs+1) for each direction.')
         self.mesh = [2*n+1 for n in x]
 
-    def dump_flags(self, log=None):
-        log = logger.new_logger(self, log)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
         log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))

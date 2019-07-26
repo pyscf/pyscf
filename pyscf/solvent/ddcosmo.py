@@ -267,9 +267,9 @@ def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
             self._keys.update(['with_solvent'])
 
         def dump_flags(self, verbose=None):
-            oldMF.dump_flags(self)
+            oldMF.dump_flags(self, verbose)
             self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags()
+            self.with_solvent.dump_flags(verbose)
             return self
 
         # Note vpcm should not be added to get_hcore for scf methods.
@@ -351,9 +351,9 @@ def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
             self._keys.update(['with_solvent'])
 
         def dump_flags(self, verbose=None):
-            oldCAS.dump_flags(self)
+            oldCAS.dump_flags(self, verbose)
             self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags()
+            self.with_solvent.dump_flags(verbose)
             if self.conv_tol < 1e-7:
                 logger.warn(self, 'CASSCF+ddCOSMO may not be able to '
                             'converge to conv_tol=%g', self.conv_tol)
@@ -467,7 +467,7 @@ def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
         def dump_flags(self, verbose=None):
             oldCAS.dump_flags(self, verbose)
             self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags()
+            self.with_solvent.dump_flags(verbose)
             return self
 
         def get_hcore(self, mol=None):
@@ -609,9 +609,9 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             return self._scf.with_solvent
 
         def dump_flags(self, verbose=None):
-            old_method.dump_flags(self)
+            old_method.dump_flags(self, verbose)
             self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags()
+            self.with_solvent.dump_flags(verbose)
             return self
 
         def kernel(self, *args, **kwargs):
@@ -1091,7 +1091,7 @@ class DDCOSMO(lib.StreamObject):
             self._solver_ = None
         super(DDCOSMO, self).__setattr__(key, val)
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
@@ -1101,7 +1101,7 @@ class DDCOSMO(lib.StreamObject):
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
         return self
 
     def kernel(self, dm):
