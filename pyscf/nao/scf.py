@@ -42,7 +42,7 @@ class scf(tddft_iter):
     """ This does the actual SCF loop so far only HF """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess()
-    etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
+    etot = self.pyscf_scf.kernel(dm0=dm0[0,...,0], dump_chk=dump_chk, **kw)
     #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
 
     if self.nspin==1:
@@ -72,10 +72,15 @@ class scf(tddft_iter):
   def vnucele_coo(self, **kw): # Compute matrix elements of nuclear-electron interaction (attraction)
     if self.pseudo:
       # This is wrong after a repeated SCF. A better way would be to use pseudo-potentials and really recompute.
-      tkin = (-0.5*self.laplace_coo()).tocsr()
-      vhar = self.vhartree_coo(dm=self.dm_mf, **kw).tocsr()
-      vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0].tocsr()
-      vne  = self.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc
+      tkin = (-0.5*self.laplace_coo())
+      print('dm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mf',self.dm_mf.shape)
+      vhar = self.vhartree_coo(dm=self.dm_mf, **kw)
+      vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0]
+      ham  = self.get_hamiltonian()
+
+      if (self.nspin==1): vne  = ham[0]-tkin-vhar-vxc
+      elif (self.nspin==2): vne  = ham[0]+ham[1]-tkin-vhar[0]-vhar[1]-vxc       
+
       #print(__name__)
     else :
       vne  = self.vnucele_coo_coulomb(**kw)
