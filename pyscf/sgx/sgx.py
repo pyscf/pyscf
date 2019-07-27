@@ -75,7 +75,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
                 mf.with_df = copy.copy(mf.with_df)
                 mf.with_df.auxbasis = auxbasis
             else:
-                raise RuntimeError('DFHF has been initialized. '
+                raise RuntimeError('SGX has been initialized. '
                                    'It cannot be initialized twice.')
         return mf
 
@@ -87,7 +87,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
-    class SGXHF(mf_class, _SGXHF):
+    class SGX(_SGXHF, mf_class):
         def __init__(self, mf, df, auxbasis):
             self.__dict__.update(mf.__dict__)
             self._eri = None
@@ -138,11 +138,24 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         def nuc_grad_method(self):
             raise NotImplementedError
 
-    return SGXHF(mf, with_df, auxbasis)
+    return SGX(mf, with_df, auxbasis)
 
 # A tag to label the derived SCF class
-class _SGXHF:
-    pass
+class _SGXHF(object):
+    def method_not_implemented(self, *args, **kwargs):
+        raise NotImplementedError
+    nuc_grad_method = Gradients = method_not_implemented
+    Hessian = method_not_implemented
+    NMR = method_not_implemented
+    NSR = method_not_implemented
+    Polarizability = method_not_implemented
+    RotationalGTensor = method_not_implemented
+    MP2 = method_not_implemented
+    CISD = method_not_implemented
+    CCSD = method_not_implemented
+    CASCI = method_not_implemented
+    CASSCF = method_not_implemented
+
 
 def _make_opt(mol):
     '''Optimizer to genrate 3-center 2-electron integrals'''

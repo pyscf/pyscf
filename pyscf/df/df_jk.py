@@ -72,7 +72,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
                 mf.with_df = copy.copy(mf.with_df)
                 mf.with_df.auxbasis = auxbasis
             else:
-                raise RuntimeError('DFHF has been initialized. '
+                raise RuntimeError('DF has been initialized. '
                                    'It cannot be initialized twice.')
         return mf
 
@@ -87,7 +87,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
-    class DFHF(_DFHF, mf_class):
+    class DF(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
 
@@ -126,15 +126,24 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def _cderi(self, x):
             self.with_df._cderi = x
 
-        def nuc_grad_method(self):
-            raise NotImplementedError
-
-    return DFHF(mf, with_df, auxbasis)
+    return DF(mf, with_df, auxbasis)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
 class _DFHF(object):
-    pass
+    def method_not_implemented(self, *args, **kwargs):
+        raise NotImplementedError
+    nuc_grad_method = Gradients = method_not_implemented
+    Hessian = method_not_implemented
+    NMR = method_not_implemented
+    NSR = method_not_implemented
+    Polarizability = method_not_implemented
+    RotationalGTensor = method_not_implemented
+    MP2 = method_not_implemented
+    CISD = method_not_implemented
+    CCSD = method_not_implemented
+    CASCI = method_not_implemented
+    CASSCF = method_not_implemented
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):

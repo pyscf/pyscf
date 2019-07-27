@@ -88,7 +88,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         method_class = scf_method._scf.__class__
 
-    class QMMM(method_class, _QMMM):
+    class QMMM(_QMMM, method_class):
         def __init__(self, scf_method):
             self.__dict__.update(scf_method.__dict__)
 
@@ -104,7 +104,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         def get_hcore(self, mol=None):
             if mol is None: mol = self.mol
-            if getattr(scf_method, 'get_hcore', None):
+            if getattr(method_class, 'get_hcore', None):
                 h1e = method_class.get_hcore(self, mol)
             else:  # DO NOT modify post-HF objects to avoid the MM charges applied twice
                 raise RuntimeError('mm_charge function cannot be applied on post-HF methods')
@@ -202,7 +202,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
     charges = numpy.asarray(charges)
 
     grad_class = scf_grad.__class__
-    class QMMM(grad_class, _QMMMGrad):
+    class QMMM(_QMMMGrad, grad_class):
         def __init__(self, scf_grad):
             self.__dict__.update(scf_grad.__dict__)
 
