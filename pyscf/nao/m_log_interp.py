@@ -221,7 +221,7 @@ class log_interp_c():
     dydy2m1 = dy*(dy2-1.0)
     dy2m4dym3 = (dy2-4.0)*(dy-3.0)
   
-    ir2c[0] = np.where(rr_wh<hp, 1.0,       -dydy2m1*(dy-2.0)*(dy-3.0))
+    ir2c[0] = np.where(rr_wh<hp, 120.0,     -dydy2m1*(dy-2.0)*(dy-3.0))
     ir2c[1] = np.where(rr_wh<hp, 0.0, + 5.0* dy* (dy-1.0)*dy2m4dym3)
     ir2c[2] = np.where(rr_wh<hp, 0.0, -10.0*    (dy2-1.0)*dy2m4dym3)
     ir2c[3] = np.where(rr_wh<hp, 0.0, +10.0* dy* (dy+1.0)*dy2m4dym3)
