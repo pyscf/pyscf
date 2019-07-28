@@ -87,7 +87,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
-    class SGX(_SGXHF, mf_class):
+    class SGXHF(_SGXHF, mf_class):
         def __init__(self, mf, df, auxbasis):
             self.__dict__.update(mf.__dict__)
             self._eri = None
