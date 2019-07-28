@@ -187,48 +187,72 @@ class ao_log(log_mesh):
     #
     #
     def siesta_ion_interp(self, sp2ion, fname='paos'):
-      from pyscf.nao.m_get_sp_mu2s import get_sp_mu2s
-      from pyscf.nao.m_spline_diff2 import spline_diff2
-      from pyscf.nao.m_spline_interp import spline_interp
+        from pyscf.nao.m_get_sp_mu2s import get_sp_mu2s
+        from pyscf.nao.m_spline_diff2 import spline_diff2
+        from pyscf.nao.m_spline_interp import spline_interp
+        """
+        Interpolation of orbitals or projectors given on linear grid in the ion dictionary  
+            rr : is the grid on which we want the function
+            sp2ion : list of dictionaries
+            fname : function name, can be 'paos' or 'kbs'
+        """
+        rr, nr, nsp = self.rr, len(self.rr), len(sp2ion)
+        pname = {'paos': 'orbital', 'kbs': 'projector'}[fname]
 
-      """
-      Interpolation of orbitals or projectors given on linear grid in the ion dictionary  
-      rr : is the grid on which we want the function
-      sp2ion : list of dictionaries
-      fname : function name, can be 'paos' or 'kbs'
-      """
-      rr, nr, nsp = self.rr, len(self.rr), len(sp2ion)
-      pname = {'paos': 'orbital', 'kbs': 'projector'}[fname]
+        self.nspecies = len(sp2ion)
+        self.sp2nmult = np.zeros(self.nspecies, dtype='int64')
+        self.sp_mu2rcut = [None]*self.nspecies
+        self.sp_mu2j = [None]*self.nspecies
+        self.sp_mu2s = [None]*self.nspecies
+        self.sp2norbs = np.zeros(self.nspecies, dtype='int64')
+        self.sp2rcut = np.zeros(self.nspecies)
+        self.sp2charge = np.zeros(self.nspecies, dtype='int64')
+        self.sp2valence = np.zeros(self.nspecies, dtype='int64')
+        
+        for isp, ion in enumerate(sp2ion):
+            if ion[fname] is None:
+                continue
+            self.sp2nmult[isp] = len(ion[fname]['data'])
+            self.sp_mu2rcut[isp] = np.array(ion[fname]["cutoff"])
+            self.sp_mu2j[isp] = np.array([o["l"] for o in ion[fname][pname]], dtype='int64')
+            
+            mu2s = np.zeros(self.sp2nmult[isp]+1, dtype='int64')
+            for mu in range(self.sp2nmult[isp]):
+                mu2s[mu+1] = sum(2*self.sp_mu2j[isp][0:mu+1]+1)
+            self.sp_mu2s[isp] = mu2s
+            self.sp2norbs[isp] = self.sp_mu2s[isp][self.sp2nmult[isp]]
+            self.sp2rcut[isp] = np.amax(self.sp_mu2rcut[isp])
+            self.sp2charge[isp] = int(self.sp2ion[isp]['z'])
+            self.sp2valence[isp] = int(self.sp2ion[isp]['valence'])
 
-      self.nspecies = len(sp2ion)
-      
-      self.sp2nmult = np.array([len(ion[fname]['data']) for ion in sp2ion], dtype='int64')
-      self.sp_mu2rcut = [np.array(ion[fname]["cutoff"]) for ion in sp2ion]
-      self.sp_mu2j = [np.array([o["l"] for o in ion[fname][pname]], dtype='int64') for ion in sp2ion]
-      self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
-      self.sp_mu2s = get_sp_mu2s(self.sp2nmult, self.sp_mu2j)
-      self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
+        self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j if mu2j is not None])
 
-      self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
-      self.sp2charge = np.array([int(ion['z']) for ion in self.sp2ion], dtype='int64')
-      self.sp2valence = np.array([int(ion['valence']) for ion in self.sp2ion], dtype='int64')
-      
-      if fname=='kbs':
-        self.sp_mu2vkb = [ np.array([0.5*p['ref_energy'] for p in ion['kbs']['projector'] ]) for ion in sp2ion]
+        if fname=='kbs':
+            self.sp_mu2vkb = [None]*self.nspecies
+            for isp, ion in enumerate(sp2ion):
+                if ion[fname] is None:
+                    continue
+                self.sp_mu2vkb[isp] = np.array([0.5*p['ref_energy'] for p in ion['kbs']['projector'] ])
     
-      self.psi_log_rl = []
-      for ion in sp2ion:
-        ff = np.zeros((len(ion[fname][pname]), nr))
-        for mu,(h,dat) in enumerate(zip(ion[fname]["delta"],ion[fname]["data"])):
-          diff2 = spline_diff2(h, dat[:,1], 0.0, 1.0e301)
-          for i,r in enumerate(rr): ff[mu,i] = spline_interp(h, dat[:,1],diff2,r)
-        self.psi_log_rl.append(ff)
+        self.psi_log_rl = [None]*self.nspecies
+        for isp, ion in enumerate(sp2ion):
+            if ion[fname] is None:
+                continue
+            ff = np.zeros((len(ion[fname][pname]), nr))
+            for mu,(h,dat) in enumerate(zip(ion[fname]["delta"],ion[fname]["data"])):
+                diff2 = spline_diff2(h, dat[:,1], 0.0, 1.0e301)
+                for i, r in enumerate(rr):
+                    ff[mu,i] = spline_interp(h, dat[:,1], diff2, r)
+            self.psi_log_rl[isp] = ff
 
-      self.psi_log = []
-      for (mu2ff,mu2j) in zip(self.psi_log_rl, self.sp_mu2j):
-        gg = np.zeros((len(mu2j), nr))
-        for mu,(ff,j) in enumerate(zip(mu2ff,mu2j)): gg[mu] = ff*(rr**j)
-        self.psi_log.append(gg)
+        self.psi_log = [None]*self.nspecies
+        for isp, (mu2ff, mu2j) in enumerate(zip(self.psi_log_rl, self.sp_mu2j)):
+            if mu2ff is None:
+                continue
+            gg = np.zeros((len(mu2j), nr))
+            for mu,(ff,j) in enumerate(zip(mu2ff,mu2j)): 
+                gg[mu] = ff*(rr**j)
+            self.psi_log[isp] = gg
 
 
     def init_ao_log_gpaw(self, **kw):

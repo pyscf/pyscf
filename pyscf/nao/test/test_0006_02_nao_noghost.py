@@ -20,13 +20,13 @@ class KnowValues(unittest.TestCase):
     def test_0006_02_nao_noghost(self):
         import os
         from pyscf.nao import nao
+        from pyscf.nao.m_overlap_am import overlap_am
 
         dname = os.path.join(os.path.split(__file__)[0], 'test_ag13_noghost')
-        print(dname)
         sv = nao(label='siesta', cd=dname)
         aa = sv.vna_coo().toarray()
-        print(aa)
-        print(sv.overlap_check())
+        oc = sv.overlap_check(funct=overlap_am)
+        self.assertTrue(oc[0])
     
 
 if __name__ == "__main__": 
