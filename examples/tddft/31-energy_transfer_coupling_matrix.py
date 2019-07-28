@@ -33,8 +33,8 @@ tdB = mfB.TDA().run()
 
 # CIS coeffcients
 state_id = 2  # The third excited state
-t1_A = tdA.xy[state_id][0]
-t1_B = tdB.xy[state_id][0]
+t1_A = tdA.xy[state_id][0] * np.sqrt(2)
+t1_B = tdB.xy[state_id][0] * np.sqrt(2)
 
 # The intermolecular 2e integrals
 molAB = molA + molB
@@ -81,9 +81,9 @@ def jk_ints(molA, molB, dm_ia, dm_jb):
                            fprescreen=_vhf._fpointer('CVHFnrs8_vj_prescreen')):
         shls_slice = (0        , molA.nbas , 0        , molA.nbas,
                       molA.nbas, molAB.nbas, molA.nbas, molAB.nbas)  # AABB
-        vJ = jk.get_jk(molAB, dm_ia.T, 'ijkl,ji->s2kl', shls_slice=shls_slice,
+        vJ = jk.get_jk(molAB, dm_jb, 'ijkl,lk->s2ij', shls_slice=shls_slice,
                        vhfopt=vhfopt, aosym='s4', hermi=1)
-        cJ = np.einsum('bj,jb->', vJ, dm_jb)
+        cJ = np.einsum('ia,ia->', vJ, dm_ia)
 
     with lib.temporary_env(vhfopt._this.contents,
                            fprescreen=_vhf._fpointer('CVHFnrs8_vk_prescreen')):
