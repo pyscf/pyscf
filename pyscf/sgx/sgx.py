@@ -66,9 +66,18 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
     from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
+    if with_df is None:
+        with_df = SGX(mf.mol)
+        with_df.max_memory = mf.max_memory
+        with_df.stdout = mf.stdout
+        with_df.verbose = mf.verbose
+        with_df.auxbasis = auxbasis
+
+    mf_class = mf.__class__
+
     if isinstance(mf, _SGXHF):
         if mf.with_df is None:
-            mf = mf.__class__(mf)
+            mf = mf_class(mf, with_df, auxbasis)
         elif mf.with_df.auxbasis != auxbasis:
             if (isinstance(mf, newton_ah._CIAH_SOSCF) and
                 isinstance(mf._scf, _SGXHF)):
@@ -79,14 +88,6 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
                                    'It cannot be initialized twice.')
         return mf
 
-    if with_df is None:
-        with_df = SGX(mf.mol)
-        with_df.max_memory = mf.max_memory
-        with_df.stdout = mf.stdout
-        with_df.verbose = mf.verbose
-        with_df.auxbasis = auxbasis
-
-    mf_class = mf.__class__
     class SGXHF(_SGXHF, mf_class):
         def __init__(self, mf, df, auxbasis):
             self.__dict__.update(mf.__dict__)
@@ -138,7 +139,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         def nuc_grad_method(self):
             raise NotImplementedError
 
-    return SGX(mf, with_df, auxbasis)
+    return SGXHF(mf, with_df, auxbasis)
 
 # A tag to label the derived SCF class
 class _SGXHF(object):

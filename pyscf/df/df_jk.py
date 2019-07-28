@@ -63,19 +63,6 @@ def density_fit(mf, auxbasis=None, with_df=None):
     from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
-    if isinstance(mf, _DFHF):
-        if mf.with_df is None:
-            mf = mf.__class__(mf)
-        elif mf.with_df.auxbasis != auxbasis:
-            if (isinstance(mf, newton_ah._CIAH_SOSCF) and
-                isinstance(mf._scf, _DFHF)):
-                mf.with_df = copy.copy(mf.with_df)
-                mf.with_df.auxbasis = auxbasis
-            else:
-                raise RuntimeError('DF has been initialized. '
-                                   'It cannot be initialized twice.')
-        return mf
-
     if with_df is None:
         if isinstance(mf, dhf.UHF):
             with_df = df.DF4C(mf.mol)
@@ -87,6 +74,20 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
+
+    if isinstance(mf, _DFHF):
+        if mf.with_df is None:
+            mf = mf_class(mf, with_df, auxbasis)
+        elif mf.with_df.auxbasis != auxbasis:
+            if (isinstance(mf, newton_ah._CIAH_SOSCF) and
+                isinstance(mf._scf, _DFHF)):
+                mf.with_df = copy.copy(mf.with_df)
+                mf.with_df.auxbasis = auxbasis
+            else:
+                raise RuntimeError('DF has been initialized. '
+                                   'It cannot be initialized twice.')
+        return mf
+
     class DFHF(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
@@ -126,7 +127,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def _cderi(self, x):
             self.with_df._cderi = x
 
-    return DF(mf, with_df, auxbasis)
+    return DFHF(mf, with_df, auxbasis)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
