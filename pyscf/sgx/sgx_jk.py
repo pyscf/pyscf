@@ -56,7 +56,7 @@ from pyscf.scf import _vhf
 
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
-                  direct_scf_tol=1e-13, omega=None):
+                  direct_scf_tol=1e-13):
     t0 = time.clock(), time.time()
     mol = sgx.mol
     grids = sgx.grids
@@ -145,7 +145,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
 
 
 def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
-                  direct_scf_tol=1e-13, omega=None):
+                  direct_scf_tol=1e-13):
     t0 = time.clock(), time.time()
     mol = sgx.mol
     grids = sgx.grids
