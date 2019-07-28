@@ -17,18 +17,16 @@ import unittest
 
 class KnowValues(unittest.TestCase):
 
-    def test_0006_01_nao_ghost(self):
+    def test_0006_02_nao_noghost(self):
         import os
         from pyscf.nao import nao
-        
-        dname = os.path.join(os.path.split(__file__)[0], 'test_ag13_ghost')
+
+        dname = os.path.join(os.path.split(__file__)[0], 'test_ag13_noghost')
         print(dname)
         sv = nao(label='siesta', cd=dname)
-        print(dir(sv))
-        print()
+        aa = sv.vna_coo().toarray()
+        print(aa)
         print(sv.overlap_check())
-        print(sv.vna_coo())
-        
     
 
 if __name__ == "__main__": 
