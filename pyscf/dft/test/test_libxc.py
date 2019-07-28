@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(dft.libxc.is_lda('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc('m05'))
         self.assertTrue (dft.libxc.is_hybrid_xc('pbe0,'))
-        self.assertFalse(dft.libxc.is_hybrid_xc('m05,'))
+        self.assertTrue (dft.libxc.is_hybrid_xc('m05,'))
         self.assertFalse(dft.libxc.is_hybrid_xc('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc((402,'vv10')))
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
@@ -220,19 +220,18 @@ class KnownValues(unittest.TestCase):
 
         self.assertRaises(ValueError, dft.libxc.define_xc, mf._numint, 0.1)
 
-# libxc-4.2.3 does not support m05x
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),
               numpy.array([.8, 1., 0., 0., 0., 0.1050]).reshape(-1,1))
         test_ref = numpy.array([-1.57876583, -2.12127045,-2.11264351,-0.00315462,
                                  0.00000000, -0.00444560, 3.45640232, 4.4349756])
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('m05,', rho, 1, deriv=1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho, 1, deriv=1)
         self.assertAlmostEqual(float(exc)*1.8, test_ref[0], 5)
         self.assertAlmostEqual(abs(vxc[0]-test_ref[1:3]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[1]-test_ref[3:6]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[3]-test_ref[6:8]).max(), 0, 5)
 
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('m05,', rho[0], 0, deriv=1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho[0], 0, deriv=1)
         self.assertAlmostEqual(float(exc), -0.5746231988116002, 5)
         self.assertAlmostEqual(float(vxc[0]), -0.8806121005703862, 6)
         self.assertAlmostEqual(float(vxc[1]), -0.0032300155406846756, 7)
@@ -248,7 +247,8 @@ class KnownValues(unittest.TestCase):
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))
         self.assertTrue(not dft.libxc.test_deriv_order('m05', 2, raise_error=False))
-        self.assertRaises(NotImplementedError, dft.libxc.test_deriv_order, 'pbe0', 3, True)
+        self.assertRaises(NotImplementedError, dft.libxc.test_deriv_order, 'camb3lyp', 3, True)
+        #self.assertRaises(NotImplementedError, dft.libxc.test_deriv_order, 'pbe0', 3, True)
         self.assertRaises(KeyError, dft.libxc.test_deriv_order, 'OL2', 3, True)
 
     def test_xc_type(self):

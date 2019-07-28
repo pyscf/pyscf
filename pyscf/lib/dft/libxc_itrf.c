@@ -102,6 +102,9 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
 
         switch (func_x->info->family) {
         case XC_FAMILY_LDA:
+#ifdef XC_FAMILY_HYB_LDA
+        case XC_FAMILY_HYB_LDA:
+#endif
                 // ex is the energy density
                 // NOTE libxc library added ex/ec into vrho/vcrho
                 // vrho = rho d ex/d rho + ex, see work_lda.c:L73
@@ -363,6 +366,9 @@ int LIBXC_is_hybrid(int xc_id)
         }
         switch(func.info->family)
         {
+#ifdef XC_FAMILY_HYB_LDA
+                case XC_FAMILY_HYB_LDA:
+#endif
                 case XC_FAMILY_HYB_GGA:
                 case XC_FAMILY_HYB_MGGA:
                         hyb = 1;
@@ -385,6 +391,9 @@ double LIBXC_hybrid_coeff(int xc_id)
         }
         switch(func.info->family)
         {
+#ifdef XC_FAMILY_HYB_LDA
+                case XC_FAMILY_HYB_LDA:
+#endif
                 case XC_FAMILY_HYB_GGA:
                 case XC_FAMILY_HYB_MGGA:
                         factor = xc_hyb_exx_coef(&func);
@@ -419,6 +428,17 @@ void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
         xc_func_end(&func);
 }
 
+int LIBXC_is_cam_rsh(int xc_id) {
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        int is_cam = func.info->flags & XC_FLAGS_HYB_CAM;
+        xc_func_end(&func);
+        return is_cam;
+}
+
 /*
  * XC_FAMILY_LDA           1
  * XC_FAMILY_GGA           2
@@ -427,6 +447,7 @@ void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
  * XC_FAMILY_OEP          16
  * XC_FAMILY_HYB_GGA      32
  * XC_FAMILY_HYB_MGGA     64
+ * XC_FAMILY_HYB_LDA     128
  */
 int LIBXC_xc_type(int fn_id)
 {
@@ -466,6 +487,9 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                 if (spin == XC_POLARIZED) {
                         switch (func.info->family) {
                         case XC_FAMILY_LDA:
+#ifdef XC_FAMILY_HYB_LDA
+                        case XC_FAMILY_HYB_LDA:
+#endif
                                 nvar = MAX(nvar, 2);
                                 break;
                         case XC_FAMILY_GGA:
@@ -479,6 +503,9 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                 } else {
                         switch (func.info->family) {
                         case XC_FAMILY_LDA:
+#ifdef XC_FAMILY_HYB_LDA
+                        case XC_FAMILY_HYB_LDA:
+#endif
                                 nvar = MAX(nvar, 1);
                                 break;
                         case XC_FAMILY_GGA:
@@ -667,4 +694,19 @@ int LIBXC_max_deriv_order(int xc_id)
 
         xc_func_end(&func);
         return ord;
+}
+
+int LIBXC_number_of_functionals()
+{
+  return xc_number_of_functionals();
+}
+
+void LIBXC_functional_numbers(int *list)
+{
+  return xc_available_functional_numbers(list);
+}
+
+char * LIBXC_functional_name(int ifunc)
+{
+  return xc_functional_get_name(ifunc);
 }

@@ -150,7 +150,6 @@ XC = XC_CODES = {
 'B97XC'         : 'B97X + B97C + HF*0.1943',
 'B97_1XC'       : 'B97_1X + B97_1C + HF*0.21',
 'B97_2XC'       : 'B97_2X + B97_2C + HF*0.21',
-'M05XC'         : '.28*HF + .72*M05X + M05C',
 'TPSSH'         : '0.1*HF + 0.9*TPSSX + TPSSC',
 'TF'            : 'TFK',
 }
@@ -206,6 +205,10 @@ XC_ALIAS = {
 #    'SCAN0'             : 'SCAN0,SCAN',
 #    'PBEOP'             : 'PBE,OPPBE',
 #    'BOP'               : 'B88,OPB88',
+    'M05'               : '.28*HF + .72*M05X + M05C',
+    'M06'               : '.27*HF +     M06X + M06C',
+    #'M052X'             : '.56*HF + .44*M05X2X + M06C2X',
+    #'M062X'             : '.54*HF +     M06X2X + M06C2X',
 }
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
@@ -433,8 +436,6 @@ def parse_xc(description):
         return list(zip(fn_ids, facs))
 
     description = description.replace(' ','').upper()
-    if description in XC_ALIAS:
-        description = XC_ALIAS[description]
 
     if '-' in description:  # To handle e.g. M06-L
         for key in _NAME_WITH_DASH:
@@ -872,7 +873,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 # MLGGA
     elif nvar == 3:
         if deriv > 0:
-            vxc = (outbuf[1], outbuf[2], numpy.zeros_like(outbuf[1]), outbuf[3])
+            vxc = (outbuf[1], outbuf[2], None, outbuf[3])
         if deriv > 1:
             fxc = (outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
                    None, outbuf[XC_D002], None, outbuf[XC_D101], None, None, outbuf[XC_D011])
