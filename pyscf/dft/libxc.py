@@ -693,8 +693,10 @@ XC_ALIAS = {
     'REVSCAN_VV10'      : 'MGGA_X_REVSCAN,XC_MGGA_C_REVSCAN_VV10',
     'SCAN_VV10'         : 'MGGA_X_SCAN,XC_MGGA_C_SCAN_VV10',
     'SCAN_RVV10'        : 'MGGA_X_SCAN,XC_MGGA_C_SCAN_RVV10',
-    # correspondingn to M05XC in xcfun.py
     'M05'               : 'HYB_MGGA_X_M05,MGGA_C_M05',
+    'M06'               : 'HYB_MGGA_X_M06,MGGA_C_M06',
+    'M052X'             : 'HYB_MGGA_X_M05_2X,MGGA_C_M05_2X',
+    'M062X'             : 'HYB_MGGA_X_M06_2X,MGGA_C_M06_2X',
 }
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
@@ -703,8 +705,7 @@ VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10',
                'REVSCAN_VV10', 'SCAN_VV10', 'SCAN_RVV10'))
 
 PROBLEMATIC_XC = dict([(XC_CODES[x], x) for x in
-                       ('GGA_C_SPBE', 'MGGA_X_TPSS', 'MGGA_X_REVTPSS',
-                        'MGGA_C_TPSSLOC', 'HYB_MGGA_XC_TPSSH')])
+                       ('GGA_C_SPBE', 'MGGA_X_REVTPSS')])
 
 def xc_type(xc_code):
     if isinstance(xc_code, str):
@@ -1071,8 +1072,6 @@ def parse_xc(description):
         return list(zip(fn_ids, facs))
 
     description = description.replace(' ','').upper()
-    if description in XC_ALIAS:
-        description = XC_ALIAS[description]
 
     if '-' in description:  # To handle e.g. M06-L
         for key in _NAME_WITH_DASH:

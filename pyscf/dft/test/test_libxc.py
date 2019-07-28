@@ -220,12 +220,6 @@ class KnownValues(unittest.TestCase):
 
         self.assertRaises(ValueError, dft.libxc.define_xc, mf._numint, 0.1)
 
-# exchange functional m05, m052x, m06, m062x, tpss, bloc in libxc-4.3.4 are different
-# to older libxc definitions.
-# correlation functional m05, m052x, m06, m062x, tpss in libxc-4.3.4 are different
-# to older libxc definitions.
-# correlation functional pw91 in libxc-4.3.4 has larger error than
-# older libxc.
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),
               numpy.array([.8, 1., 0., 0., 0., 0.1050]).reshape(-1,1))
