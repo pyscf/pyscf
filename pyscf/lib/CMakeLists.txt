@@ -136,8 +136,9 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
-    ENABLE_LIBXC AND BUILD_LIBXC)
+#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
+#    ENABLE_LIBXC AND BUILD_LIBXC)
+if(ENABLE_LIBXC AND BUILD_LIBXC)
   if(UNIX AND NOT APPLE)
     set(LIBM "LIBS=-lm")
   endif()
@@ -145,7 +146,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
     URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
-    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.1.tar.gz
+    #URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1

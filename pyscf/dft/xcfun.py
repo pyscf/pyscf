@@ -207,8 +207,8 @@ XC_ALIAS = {
 #    'BOP'               : 'B88,OPB88',
     'M05'               : '.28*HF + .72*M05X + M05C',
     'M06'               : '.27*HF +     M06X + M06C',
-    #'M052X'             : '.56*HF + .44*M05X2X + M06C2X',
-    #'M062X'             : '.54*HF +     M06X2X + M06C2X',
+    #'M05_2X'            : '.56*HF + .44*M05X2X + M06C2X',
+    #'M06_2X'            : '.54*HF +     M06X2X + M06C2X',
 }
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])

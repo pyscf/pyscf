@@ -255,7 +255,7 @@ class KnownValues(unittest.TestCase):
         check('TF,'  )
         check('PW91,' , e_place=6, v_place=4, f_place=2, k_place=-1)
         check('m05'  , deriv=1, e_place=6, v_place=6)
-        #check('m052x,', deriv=1, e_place=6, v_place=6)
+        #check('m05-2x,', deriv=1, e_place=6, v_place=6)
         check('m06'  , deriv=1, e_place=6, v_place=6)
         check('m06,'  , deriv=1, e_place=6, v_place=6)
         check('m062x,', deriv=1, e_place=6, v_place=6)
