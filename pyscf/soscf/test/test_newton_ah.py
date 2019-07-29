@@ -325,6 +325,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -75.9839484980661, 9)
 
 
+    def test_rohf_dinfh(self):
+        mol = gto.M(atom='Ti 0 0 0; O 0 0 1.9',
+                    basis={'Ti': 'sto3g', 'O':'6-31g*'},
+                    spin=2,
+                    symmetry=True)
+        mf = scf.ROHF(mol)
+        mf.irrep_nelec = {'E2x': (0, 0), 'E2y': (1, 0)}
+        mf.max_cycle = 5
+        mf = mf.newton().run()
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, -914.539361470649, 9)
+
+
 if __name__ == "__main__":
     print("Full Tests for Newton solver")
     unittest.main()

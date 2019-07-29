@@ -1022,7 +1022,7 @@ def newton(mf):
                     if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
                         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
                         _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
-                        _force_Ex_Ey_degeneracy_(dr[0], orbsymb)
+                        _force_Ex_Ey_degeneracy_(dr[1], orbsymb)
 
                 if isinstance(u0, int) and u0 == 1:
                     return numpy.asarray((expmat(dr[0]), expmat(dr[1])))
@@ -1106,7 +1106,15 @@ def _force_Ex_Ey_degeneracy_(dr, orbsym):
         if ir % 2 == 0:
             Ex = orbsym == ir
             Ey = orbsym ==(ir + 1)
-            dr[Ey[:,None]&Ey] = dr[Ex[:,None]&Ex]
+            dr_x = dr[Ex[:,None]&Ex]
+            dr_y = dr[Ey[:,None]&Ey]
+            # In certain open-shell systems, the rotation amplitudes dr_x may
+            # be equal to 0 while dr_y are not. In this case, we choose the
+            # larger one to represent the rotation amplitudes for both.
+            if numpy.linalg.norm(dr_x) > numpy.linalg.norm(dr_y):
+                dr[Ey[:,None]&Ey] = dr_x
+            else:
+                dr[Ex[:,None]&Ex] = dr_y
     return dr
 
 def _is_dft_object(mf):
