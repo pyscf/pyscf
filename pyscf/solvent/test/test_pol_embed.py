@@ -14,16 +14,23 @@
 # limitations under the License.
 import unittest
 from pyscf import gto, scf
-from pyscf.solvent import pol_embed
-import cppe
-import pyscf.solvent as solvent
 import os
 from numpy.testing import assert_allclose
+
+have_pe = False
+try:
+    import cppe
+    import pyscf.solvent as solvent
+    from pyscf.solvent import pol_embed
+    have_pe = True
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 dname = os.path.dirname(__file__)
 
 
+@unittest.skipIf(not have_pe, "CPPE library not found.")
 class TestPolEmbed(unittest.TestCase):
     def test_pol_embed_scf(self):
         mol = gto.Mole()
