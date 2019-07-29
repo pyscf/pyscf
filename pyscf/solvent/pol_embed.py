@@ -166,14 +166,16 @@ class PolEmbed(lib.StreamObject):
         integral2[2] *= 0.5
         integral2[5] *= 0.5
 
-        op0 = integral0 * moments[0] * cppe.prefactors(0)
-        op1 = numpy.einsum('aij,a->ij', integral1,
-                           moments[1] * cppe.prefactors(1))
-        op2 = numpy.einsum('aij,a->ij',
-                           integral2[[0, 1, 2, 4, 5, 8], :, :],
-                           moments[2] * cppe.prefactors(2))
+        op = integral0 * moments[0] * cppe.prefactors(0)
+        if order > 0:
+            op += numpy.einsum('aij,a->ij', integral1,
+                               moments[1] * cppe.prefactors(1))
+        if order > 1:
+            op += numpy.einsum('aij,a->ij',
+                               integral2[[0, 1, 2, 4, 5, 8], :, :],
+                               moments[2] * cppe.prefactors(2))
 
-        return op0 + op1 + op2
+        return op
 
     def _compute_field_integrals(self, site, moment):
         self.mol.set_rinv_orig(site)
