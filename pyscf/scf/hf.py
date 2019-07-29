@@ -635,8 +635,8 @@ def dot_eri_dm(eri, dm, hermi=0, with_j=True, with_k=True):
     return vj, vk
 
 
-def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-    '''Compute J, K matrices for the given density matrix
+def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
+    '''Compute J, K matrices for all input density matrices
 
     Args:
         mol : an instance of :class:`Mole`
@@ -656,6 +656,17 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
             A class which holds precomputed quantities to optimize the
             computation of J, K matrices
 
+        with_j : boolean
+            Whether to compute J matrices
+
+        with_k : boolean
+            Whether to compute K matrices
+
+        omega : float
+            Parameter of range-seperated Coulomb operator: erf( omega * r12 ) / r12.
+            If specified, integration are evaluated based on the long-range
+            part of the range-seperated Coulomb operator.
+
     Returns:
         Depending on the given dm, the function returns one J and one K matrix,
         or a list of J matrices and a list of K matrices, corresponding to the
@@ -672,22 +683,35 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
     (3, 2, 2)
     '''
     dm = numpy.asarray(dm, order='C')
-    nao = dm.shape[-1]
-    if dm.dtype == numpy.complex128:
-        dms = numpy.vstack((dm.real, dm.imag)).reshape(-1,nao,nao)
-        vj, vk = _vhf.direct(dms, mol._atm, mol._bas, mol._env,
+    dm_shape = dm.shape
+    dm_dtype = dm.dtype
+    nao = dm_shape[-1]
+
+    if dm_dtype == numpy.complex128:
+        dm = numpy.vstack((dm.real, dm.imag)).reshape(-1,nao,nao)
+        hermi = 0
+
+    if omega is None:
+        vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
                              vhfopt, 0, mol.cart, with_j, with_k)
+    else:
+# The vhfopt of standard Coulomb operator can be used here as an approximate
+# integral prescreening conditioner since long-range part Coulomb is always
+# smaller than standard Coulomb.  It's safe to filter LR integrals with the
+# integral estimation from standard Coulomb.
+        with mol.with_range_coulomb(omega):
+            vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
+                                 vhfopt, 0, mol.cart, with_j, with_k)
+
+    if dm_dtype == numpy.complex128:
         if with_j:
             vj = vj.reshape(2,-1)
             vj = vj[0] + vj[1] * 1j
-            vj = vj.reshape(dm.shape)
+            vj = vj.reshape(dm_shape)
         if with_k:
             vk = vk.reshape(2,-1)
             vk = vk[0] + vk[1] * 1j
-            vk = vk.reshape(dm.shape)
-    else:
-        vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
-                             vhfopt, hermi, mol.cart, with_j, with_k)
+            vk = vk.reshape(dm_shape)
     return vj, vk
 
 
@@ -1551,7 +1575,8 @@ class SCF(lib.StreamObject):
         return opt
 
     @lib.with_doc(get_jk.__doc__)
-    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
@@ -1559,27 +1584,27 @@ class SCF(lib.StreamObject):
             self.opt = self.init_direct_scf(mol)
 
         if with_j and with_k:
-            vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
+            vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k, omega)
         else:
             if with_j:
                 prescreen = 'CVHFnrs8_vj_prescreen'
             else:
                 prescreen = 'CVHFnrs8_vk_prescreen'
             with lib.temporary_env(self.opt, prescreen=prescreen):
-                vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
+                vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k, omega)
 
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, mol=None, dm=None, hermi=1):
-        '''Compute J matrix for the given density matrix.
+    def get_j(self, mol=None, dm=None, hermi=1, omega=None):
+        '''Compute J matrices for all input density matrices
         '''
-        return self.get_jk(mol, dm, hermi, with_k=False)[0]
+        return self.get_jk(mol, dm, hermi, with_k=False, omega=omega)[0]
 
-    def get_k(self, mol=None, dm=None, hermi=1):
-        '''Compute K matrix for the given density matrix.
+    def get_k(self, mol=None, dm=None, hermi=1, omega=None):
+        '''Compute K matrices for all input density matrices
         '''
-        return self.get_jk(mol, dm, hermi, with_j=False)[1]
+        return self.get_jk(mol, dm, hermi, with_j=False, omega=omega)[1]
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -1665,9 +1690,10 @@ class SCF(lib.StreamObject):
 
     as_scanner = as_scanner
 
-    def reset(self, mol):
+    def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
-        self.mol = mol
+        if mol is not None:
+            self.mol = mol
         self.opt = None
         self._eri = None
         return self
@@ -1754,16 +1780,18 @@ class RHF(SCF):
         return SCF.check_sanity(self)
 
     @lib.with_doc(get_jk.__doc__)
-    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
 # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+        if (not omega and
+            (self._eri is not None or mol.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
             vj, vk = dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
         else:
-            vj, vk = SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
+            vj, vk = SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
         return vj, vk
 
     @lib.with_doc(get_veff.__doc__)

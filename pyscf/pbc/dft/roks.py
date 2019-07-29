@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,10 +51,10 @@ class ROKS(rohf.ROHF):
         rohf.ROHF.__init__(self, cell, kpt)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
         lib.logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec

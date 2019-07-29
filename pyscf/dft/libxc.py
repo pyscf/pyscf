@@ -1212,9 +1212,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         non0idx = (rho_u[0] > 1e-10) & (rho_d[0] > 1e-10)
         rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
         rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
-        outbuf = numpy.empty((outlen,non0idx.sum()))
+        outbuf = numpy.zeros((outlen,non0idx.sum()))
     else:
-        outbuf = numpy.empty((outlen,ngrids))
+        outbuf = numpy.zeros((outlen,ngrids))
 
     _itrf.LIBXC_eval_xc(ctypes.c_int(n),
                         (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),

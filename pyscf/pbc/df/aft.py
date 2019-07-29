@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -267,7 +267,7 @@ class AFTDF(lib.StreamObject):
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))

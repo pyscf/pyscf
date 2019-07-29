@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = _get_k_lr(mol, ddm, omega, hermi)
+                vklr = ks.get_k(mol, ddm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
             vj += vhf_last.vj
@@ -101,7 +101,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = _get_k_lr(mol, dm, omega, hermi)
+                vklr = ks.get_k(mol, dm, hermi, omega=omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk
@@ -116,34 +116,6 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
-def _get_k_lr(mol, dm, omega=0, hermi=0):
-    nso = dm.shape[-1]
-    nao = nso // 2
-    dms = dm.reshape(-1,nso,nso)
-    n_dm = dms.shape[0]
-
-    dmaa = dms[:,:nao,:nao]
-    dmab = dms[:,nao:,:nao]
-    dmbb = dms[:,nao:,nao:]
-    dms = numpy.vstack((dmaa, dmbb, dmab))
-    if dm.dtype == numpy.complex128:
-        dms = numpy.vstack((dms.real, dms.imag))
-        hermi = 0
-
-    k1 = rks._get_k_lr(mol, dms, omega, hermi)
-    k1 = k1.reshape(-1,n_dm,nao,nao)
-
-    if dm.dtype == numpy.complex128:
-        k1 = k1[:3] + k1[3:] * 1j
-
-    vk = numpy.zeros((n_dm,nso,nso), dm.dtype)
-    vk[:,:nao,:nao] = k1[0]
-    vk[:,nao:,nao:] = k1[1]
-    vk[:,:nao,nao:] = k1[2]
-    vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
-    vk = vk.reshape(dm.shape)
-    return vk
-
 
 class GKS(ghf.GHF):
     '''Generalized Kohn-Sham'''
@@ -151,13 +123,13 @@ class GKS(ghf.GHF):
         ghf.GHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
-        ghf.GHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        ghf.GHF.dump_flags(self, verbose)
         logger.info(self, 'XC functionals = %s', self.xc)
         if self.nlc!='':
             logger.info(self, 'NLC functional = %s', self.nlc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
     energy_elec = rks.energy_elec

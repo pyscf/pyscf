@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,19 +63,6 @@ def density_fit(mf, auxbasis=None, with_df=None):
     from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
-    if isinstance(mf, _DFHF):
-        if mf.with_df is None:
-            mf = mf.__class__(mf)
-        elif mf.with_df.auxbasis != auxbasis:
-            if (isinstance(mf, newton_ah._CIAH_SOSCF) and
-                isinstance(mf._scf, _DFHF)):
-                mf.with_df = copy.copy(mf.with_df)
-                mf.with_df.auxbasis = auxbasis
-            else:
-                raise RuntimeError('DFHF has been initialized. '
-                                   'It cannot be initialized twice.')
-        return mf
-
     if with_df is None:
         if isinstance(mf, dhf.UHF):
             with_df = df.DF4C(mf.mol)
@@ -87,6 +74,20 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
+
+    if isinstance(mf, _DFHF):
+        if mf.with_df is None:
+            mf = mf_class(mf, with_df, auxbasis)
+        elif mf.with_df.auxbasis != auxbasis:
+            if (isinstance(mf, newton_ah._CIAH_SOSCF) and
+                isinstance(mf._scf, _DFHF)):
+                mf.with_df = copy.copy(mf.with_df)
+                mf.with_df.auxbasis = auxbasis
+            else:
+                raise RuntimeError('DF has been initialized. '
+                                   'It cannot be initialized twice.')
+        return mf
+
     class DFHF(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
@@ -101,23 +102,24 @@ def density_fit(mf, auxbasis=None, with_df=None):
 
         See also the documents of class %s for other SCF attributes.
         ''' % mf_class
-        def __init__(self, mf):
+        def __init__(self, mf, df, auxbasis):
             self.__dict__.update(mf.__dict__)
             self._eri = None
             self.auxbasis = auxbasis
-            self.with_df = with_df
+            self.with_df = df
             self._keys = self._keys.union(['auxbasis', 'with_df'])
 
-        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+                   omega=None):
             if self.with_df:
                 if dm is None: dm = self.make_rdm1()
                 vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
-                                             self.direct_scf_tol)
+                                             self.direct_scf_tol, omega)
                 return vj, vk
             else:
-                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k)
+                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
 
-# _cderi accesser for pyscf 1.0, 1.1 compatibility
+        # for pyscf 1.0, 1.1 compatibility
         @property
         def _cderi(self):
             return self.with_df._cderi
@@ -125,15 +127,24 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def _cderi(self, x):
             self.with_df._cderi = x
 
-        def nuc_grad_method(self):
-            raise NotImplementedError
-
-    return DFHF(mf)
+    return DFHF(mf, with_df, auxbasis)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
 class _DFHF(object):
-    pass
+    def method_not_implemented(self, *args, **kwargs):
+        raise NotImplementedError
+    nuc_grad_method = Gradients = method_not_implemented
+    Hessian = method_not_implemented
+    NMR = method_not_implemented
+    NSR = method_not_implemented
+    Polarizability = method_not_implemented
+    RotationalGTensor = method_not_implemented
+    MP2 = method_not_implemented
+    CISD = method_not_implemented
+    CCSD = method_not_implemented
+    CASCI = method_not_implemented
+    CASSCF = method_not_implemented
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):

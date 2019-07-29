@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -239,9 +239,7 @@ class DMRGCI(lib.StreamObject):
         return self
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** Block flags ********')
         log.info('executable             = %s', self.executable)

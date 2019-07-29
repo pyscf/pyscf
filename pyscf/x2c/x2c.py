@@ -37,9 +37,10 @@ class X2C(lib.StreamObject):
     basis = getattr(__config__, 'x2c_X2C_basis', None)
     def __init__(self, mol=None):
         self.mol = mol
+        self.verbose = mol.verbose
 
-    def dump_flags(self):
-        log = logger.Logger(self.mol.stdout, self.mol.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
         log.info('exp_drop = %g', self.exp_drop)
@@ -153,7 +154,7 @@ def get_hcore(mol):
     x2c = X2C(mol)
     return x2c.get_hcore(mol)
 
-def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True):
+def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
@@ -214,10 +215,10 @@ class X2C_UHF(hf.SCF):
             self.check_sanity()
         self.opt = None
 
-    def dump_flags(self):
-        hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        hf.SCF.dump_flags(self, verbose)
         if self.with_x2c:
-            self.with_x2c.dump_flags()
+            self.with_x2c.dump_flags(verbose)
         return self
 
     def init_guess_by_minao(self, mol=None):
@@ -278,7 +279,8 @@ class X2C_UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
@@ -313,13 +315,13 @@ try:
             rks._dft_common_init_(self)
             self._numint = r_numint.RNumInt()
 
-        def dump_flags(self):
-            hf.SCF.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            hf.SCF.dump_flags(self, verbose)
             logger.info(self, 'XC functionals = %s', self.xc)
             logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-            self.grids.dump_flags()
+            self.grids.dump_flags(verbose)
             if self.with_x2c:
-                self.with_x2c.dump_flags()
+                self.with_x2c.dump_flags(verbose)
             return self
 
         get_veff = dks.get_veff

@@ -262,8 +262,8 @@ class GradientsBasics(lib.StreamObject):
         self.de = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         if hasattr(self.base, 'converged') and not self.base.converged:
             log.warn('Ground state %s not converged',

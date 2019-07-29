@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, ddm, omega, hermi)
+                vklr = ks.get_k(mol, ddm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
             vj = vj[0] + vj[1] + vhf_last.vj
@@ -99,7 +99,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = vj[0] + vj[1]
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, dm, omega, hermi)
+                vklr = ks.get_k(mol, dm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk
@@ -133,13 +133,13 @@ class UKS(uhf.UHF):
         uhf.UHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
-        uhf.UHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        uhf.UHF.dump_flags(self, verbose)
         logger.info(self, 'XC functionals = %s', self.xc)
         if self.nlc!='':
             logger.info(self, 'NLC functional = %s', self.nlc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
     energy_elec = energy_elec

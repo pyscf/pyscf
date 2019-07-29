@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -82,8 +82,8 @@ class PipekMezey(boys.Boys):
         boys.Boys.__init__(self, mol, mo_coeff)
         self._keys = self._keys.union(['pop_method', 'exponent'])
 
-    def dump_flags(self):
-        boys.Boys.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        boys.Boys.dump_flags(self, verbose)
         logger.info(self, 'pop_method = %s',self.pop_method)
 
     def gen_g_hop(self, u):

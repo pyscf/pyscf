@@ -1079,6 +1079,140 @@ def make_tau_ab(t2ab, t1, r1, fac=1, out=None):
     tau1ab += t2ab
     return tau1ab
 
+def _fp(nocc, nmo):
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+
+    # vvvv
+    fp  = nocca**2 * nvira**4
+    fp += noccb**2 * nvirb**4
+    fp += nocca    * nvira**2 * noccb    * nvirb**2 * 2
+
+    # ovvv
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**3 * nvira**3 * 2
+    fp += nocca**3 * nvira**2 * 2
+
+    # OVVV
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**3 * nvirb**3 * 2
+    fp += noccb**3 * nvirb**2 * 2
+
+    # ovVV
+    fp += nocca    * nvira * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira            * nvirb**2 * 2
+    fp += nocca    * nvira * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira * noccb    * nvirb    * 2
+
+    # OVvv
+    fp += nocca    * nvira**2 * noccb    * nvirb * 2
+    fp +=            nvira**2 * noccb**2 * nvirb * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb * 2
+    fp += nocca    * nvira**2 * noccb**2 * nvirb * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb * 2
+
+    fp += nocca**4 * nvira    * 2
+    fp += nocca**4 * nvira**2 * 2
+    fp += nocca**4 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**3 * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+
+    fp += noccb**4 * nvirb    * 2
+    fp += noccb**4 * nvirb**2 * 2
+    fp += noccb**4 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**2 * nocca    * nvira    * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2            * noccb    * nvirb**2 * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+    fp += noccb**2            * nocca    * nvira**2 * 2
+
+    fp += nocca**2            * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb**2            * 2
+    fp += nocca**2 * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb**2 * nvirb    * 2
+
+    fp += nocca    * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb    * nvirb**2 * 2
+
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb**2 * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb**2 * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb**2 * nvirb    * 2
+
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2            * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb**2            * 2
+
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2            * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+    fp += noccb**2            * nocca    * nvira**2 * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+
+    fp += nocca**3 * nvira**3 * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += noccb**3 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**2 * nocca    * nvira    * 2
+
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb**2 * 2
+
+    fp += nocca**2 * nvira**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += nocca    * nvira    * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+
+    fp += nocca**2 * nvira**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    return fp
+
 
 if __name__ == '__main__':
     import copy

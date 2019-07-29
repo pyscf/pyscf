@@ -282,7 +282,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if _is_dft_object(mf):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint
@@ -326,7 +326,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
                         if abs(omega) > 1e-10:  # For range separated Coulomb
-                            vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
+                            vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
                         v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
@@ -349,7 +349,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
                         if abs(omega) > 1e-10:  # For range separated Coulomb
-                            vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
+                            vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
                         v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
@@ -370,7 +370,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 += -.5 * vk
                 return v1
 
@@ -391,7 +391,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if _is_dft_object(mf):
         from pyscf.dft import rks
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -434,13 +434,13 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                     vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 += vj[0] + vj[1] - vk
                 else:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 -= vk
             return v1
 
@@ -462,7 +462,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if _is_dft_object(mf):
         from pyscf.dft import numint
         raise NotImplementedError
 
@@ -817,10 +817,10 @@ class _CIAH_SOSCF(hf.SCF):
                            'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval',
                            'kf_trust_region'))
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        self._scf.dump_flags()
+        self._scf.dump_flags(verbose)
         log.info('******** %s Newton solver flags ********', self._scf.__class__)
         log.info('SCF tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s',    self.conv_tol_grad)
@@ -1050,7 +1050,7 @@ def newton(mf):
                 if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
                     mo_occ = (numpy.asarray(mo_occ >0, dtype=numpy.double),
                               numpy.asarray(mo_occ==2, dtype=numpy.double))
-                return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ)
+                return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ, dm0)
 
         return SecondOrderUHF(mf)
 
@@ -1106,6 +1106,9 @@ def _force_Ex_Ey_degeneracy_(dr, orbsym):
             Ey = orbsym ==(ir + 1)
             dr[Ey[:,None]&Ey] = dr[Ex[:,None]&Ex]
     return dr
+
+def _is_dft_object(mf):
+    return getattr(mf, 'xc', None) is not None and hasattr(mf, '_numint')
 
 
 if __name__ == '__main__':

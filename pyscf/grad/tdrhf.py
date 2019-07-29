@@ -228,8 +228,8 @@ class Gradients(rhf_grad.GradientsBasics):
         keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** LR %s gradients for %s ********',
                  self.base.__class__, self.base._scf.__class__)

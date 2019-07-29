@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,6 +46,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (time.clock(), time.time())
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    if abs(omega) > 1e-10:
+        raise NotImplementedError
     hybrid = abs(hyb) > 1e-10
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
@@ -118,10 +120,10 @@ class UKS(pbcuhf.UHF):
         pbcuhf.UHF.__init__(self, cell, kpt)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
-        pbcuhf.UHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        pbcuhf.UHF.dump_flags(self, verbose)
         logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec

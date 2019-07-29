@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2018-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,8 @@ from pyscf.gto import moleintor
 from pyscf.scf import _vhf
 
 
-def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
+def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
+                  direct_scf_tol=1e-13):
     t0 = time.clock(), time.time()
     mol = sgx.mol
     grids = sgx.grids
@@ -143,7 +144,8 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-
     return vj.reshape(dm_shape), vk.reshape(dm_shape)
 
 
-def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
+def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
+                  direct_scf_tol=1e-13):
     t0 = time.clock(), time.time()
     mol = sgx.mol
     grids = sgx.grids

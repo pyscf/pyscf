@@ -143,8 +143,8 @@ def _safe_solve(a, b):
 class RotationalGTensor(rhf_mag.Magnetizability):
     '''HF rotational g-tensors'''
 
-    def dump_flags(self):
-        rhf_mag.Magnetizability.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rhf_mag.Magnetizability.dump_flags(self, verbose)
         if self.gauge_orig is not None:
             logger.warn(self, 'Rotational g-tensor with '
                         'perturbation-independent basis is in testing.\n'

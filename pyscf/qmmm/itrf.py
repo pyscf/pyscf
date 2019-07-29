@@ -88,12 +88,12 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         method_class = scf_method._scf.__class__
 
-    class QMMM(method_class, _QMMM):
+    class QMMM(_QMMM, method_class):
         def __init__(self, scf_method):
             self.__dict__.update(scf_method.__dict__)
 
-        def dump_flags(self, *args, **kwargs):
-            method_class.dump_flags(self, *args, **kwargs)
+        def dump_flags(self, verbose=None):
+            method_class.dump_flags(self, verbose)
             logger.info(self, '** Add background charges for %s **',
                         method_class)
             if self.verbose >= logger.DEBUG:
@@ -104,7 +104,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         def get_hcore(self, mol=None):
             if mol is None: mol = self.mol
-            if getattr(scf_method, 'get_hcore', None):
+            if getattr(method_class, 'get_hcore', None):
                 h1e = method_class.get_hcore(self, mol)
             else:  # DO NOT modify post-HF objects to avoid the MM charges applied twice
                 raise RuntimeError('mm_charge function cannot be applied on post-HF methods')
@@ -202,12 +202,12 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
     charges = numpy.asarray(charges)
 
     grad_class = scf_grad.__class__
-    class QMMM(grad_class, _QMMMGrad):
+    class QMMM(_QMMMGrad, grad_class):
         def __init__(self, scf_grad):
             self.__dict__.update(scf_grad.__dict__)
 
-        def dump_flags(self):
-            grad_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            grad_class.dump_flags(self, verbose)
             logger.info(self, '** Add background charges for %s **', grad_class)
             if self.verbose >= logger.DEBUG1:
                 logger.debug1(self, 'Charge      Location')
