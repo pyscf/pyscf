@@ -46,7 +46,7 @@ install:
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     mkdir build &&
     cd build &&
-    cmake -DBUILD_XCFUN=OFF .. &&
+    cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF .. &&
     make &&
     cd ../..
 
