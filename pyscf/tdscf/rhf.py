@@ -20,6 +20,7 @@
 # J. Mol. Struct. THEOCHEM, 914, 3
 #
 
+import time
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -742,6 +743,7 @@ class TDA(lib.StreamObject):
     def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
+        cpu0 = (time.clock(), time.time())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -778,6 +780,7 @@ class TDA(lib.StreamObject):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDA', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
@@ -913,6 +916,7 @@ class TDHF(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        cpu0 = (time.clock(), time.time())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -959,6 +963,7 @@ class TDHF(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDDFT', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 

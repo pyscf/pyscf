@@ -1,7 +1,15 @@
-PySCF 1.6.3 (2019-??-??)
+PySCF 1.6.3 (2019-07-28)
 ------------------------
+* Added
+  - cube customization for cubegen
+  - Integral prescreening for RSH functional when evaluating K matrix
 * Improved
   - Performance of exchange integrals in RSH functionals
+* Fixed
+  - handle xc = '' in eval_ao
+  - cube shape in cubegen
+  - Basis parser when parsing last elements in some basis set
+  - ROHF-SOSCF for diatomic molecules
 
 
 PySCF 1.6.2 (2019-6-17)
