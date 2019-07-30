@@ -42,7 +42,8 @@ class scf(tddft_iter):
     """ This does the actual SCF loop so far only HF """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess()
-    etot = self.pyscf_scf.kernel(dm0=dm0[0,...,0], dump_chk=dump_chk, **kw)
+    if (self.nspin==2): dm0=dm0[0,...,0] 
+    etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
     #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
 
     if self.nspin==1:
@@ -70,18 +71,24 @@ class scf(tddft_iter):
     return hcore
 
   def vnucele_coo(self, **kw): # Compute matrix elements of nuclear-electron interaction (attraction)
+    '''
+    it subtracts the computed matrix elements from the total Hamiltonian to find out the 
+    nuclear-electron interaction in case of SIESTA import. This means that Vne is defined by 
+    Vne = H_KS - T - V_H - V_xc
+    '''
     if self.pseudo:
       # This is wrong after a repeated SCF. A better way would be to use pseudo-potentials and really recompute.
-      tkin = (-0.5*self.laplace_coo())
-      print('dm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mfdm=self.dm_mf',self.dm_mf.shape)
-      vhar = self.vhartree_coo(dm=self.dm_mf, **kw)
-      vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0]
-      ham  = self.get_hamiltonian()
+      tkin = (-0.5*self.laplace_coo()).tocsr()
+      vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0].tocsr()
+      ham  = self.get_hamiltonian()[0].tocsr()
+      vhar = self.vhartree_coo(dm=self.dm_mf, **kw)  
 
-      if (self.nspin==1): vne  = ham[0]-tkin-vhar-vxc
-      elif (self.nspin==2): vne  = ham[0]+ham[1]-tkin-vhar[0]-vhar[1]-vxc       
-
-      #print(__name__)
+      #vhar for spin has two components, so for tocsr() must be split 
+      if (self.nspin==1): vha = vhar.tocsr()
+      elif (self.nspin==2): vha = vhar[0].tocsr()+vhar[1].tocsr()
+    
+      vne  = ham-tkin-vha-vxc
+      
     else :
       vne  = self.vnucele_coo_coulomb(**kw)
     return vne.tocoo()
