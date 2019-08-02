@@ -443,10 +443,23 @@ class nao():
     self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
     self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
+
+
+    self.magnetization = kw['magnetization'] if 'magnetization' in kw else None #using this key for number of unpaired
     if self.nspin==1:
       self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
     elif self.nspin==2:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])
+      if 'nelec' in kw: self.nelec = kw['nelec']
+      else:
+        ne = self.hsx.nelec
+        nalpha = (ne + self.magnetization) // 2
+        nbeta = nalpha - self.magnetization
+        if nalpha + nbeta != ne:
+          raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                             'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' % (ne, self.magnetization))
+        self.nelec = np.array([nalpha, nbeta])
+
+
       if self.verbosity>0: print(__name__, 'not sure here: self.nelec', self.nelec)
     else:
       raise RuntimeError('0>nspin>2?')
@@ -468,6 +481,9 @@ class nao():
       np.set_printoptions(precision=2, linewidth=1000)
       print(__name__, "mo_occ:\n{}".format(self.mo_occ))
       np.set_printoptions(**po)
+
+
+
       
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
     # from pyscf.scf.hf import make_rdm1 -- different index order here
