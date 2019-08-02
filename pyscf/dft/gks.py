@@ -74,6 +74,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     #enabling range-separated hybrids
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
+    if ks.omega is not None:
+        omega = ks.omega
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None

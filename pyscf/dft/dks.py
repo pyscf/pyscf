@@ -83,6 +83,9 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         t0 = logger.timer(ks, 'vxc', *t0)
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
+    if ks.omega is not None:
+        omega = ks.omega
+
     if abs(hyb) < 1e-10:
         vk = None
         if (ks._eri is None and ks.direct_scf and
