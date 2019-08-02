@@ -1835,6 +1835,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
 class NumInt(object):
     def __init__(self):
         self.libxc = libxc
+        self.omega = None  # RSH paramter
 
     @lib.with_doc(nr_vxc.__doc__)
     def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
@@ -1946,8 +1947,11 @@ class NumInt(object):
     def rsh_coeff(self, xc_code):
         return self.libxc.rsh_coeff(xc_code)
 
-    def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
-        return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv, verbose)
+    def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, omega=None,
+                verbose=None):
+        if omega is None: omega = self.omega
+        return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv,
+                                  omega, verbose)
     eval_xc.__doc__ = libxc.eval_xc.__doc__
 
     def _xc_type(self, xc_code):
@@ -1966,6 +1970,9 @@ class NumInt(object):
         beta = c_SR - c_LR
         '''
         omega, alpha, beta = self.rsh_coeff(xc_code)
+        if self.omega is not None:
+            omega = self.omega
+
         if abs(omega) > 1e-10:
             hyb = alpha + beta
         else:

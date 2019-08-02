@@ -99,8 +99,6 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     #enabling range-separated hybrids
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-    if ks.omega is not None:
-        omega = ks.omega
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
@@ -223,9 +221,26 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return ks
 
 
-class RKS(hf.RHF):
-    __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + '''
-    Attributes for RKS:
+def _dft_common_init_(mf):
+    mf.xc = 'LDA,VWN'
+    mf.nlc = ''
+    mf.grids = gen_grid.Grids(mf.mol)
+    mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
+                             mf.grids.level)
+    mf.nlcgrids = gen_grid.Grids(mf.mol)
+    mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
+                                mf.nlcgrids.level)
+    # Use rho to filter grids
+    mf.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
+##################################################
+# don't modify the following attributes, they are not input options
+    mf._numint = numint.NumInt()
+    mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
+                               'small_rho_cutoff'])
+
+class KohnShamDFT(object):
+    '''
+    Attributes for Kohn-Sham DFT:
         xc : str
             'X_name,C_name' for the XC functional.  Default is 'lda,vwn'
         nlc : str
@@ -279,12 +294,17 @@ class RKS(hf.RHF):
     >>> mf.kernel()
     -76.415443079840458
     '''
-    def __init__(self, mol):
-        hf.RHF.__init__(self, mol)
-        _dft_common_init_(self)
+
+    __init__ = _dft_common_init_
+
+    @property
+    def omega(self):
+        return self._numint.omega
+    @omega.setter
+    def omega(self, v):
+        self._numint.omega = v
 
     def dump_flags(self, verbose=None):
-        hf.RHF.dump_flags(self, verbose)
         logger.info(self, 'XC functionals = %s', self.xc)
         if self.nlc!='':
             logger.info(self, 'NLC functional = %s', self.nlc)
@@ -293,32 +313,29 @@ class RKS(hf.RHF):
         if self.nlc!='':
             logger.info(self, '** Following is NLC Grids **')
             self.nlcgrids.dump_flags(verbose)
+        return self
+
+    define_xc_ = define_xc_
+
+
+class RKS(hf.RHF, KohnShamDFT):
+    __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + KohnShamDFT.__doc__
+
+    def __init__(self, mol):
+        hf.RHF.__init__(self, mol)
+        KohnShamDFT.__init__(self)
+
+    def dump_flags(self, verbose=None):
+        hf.RHF.dump_flags(self, verbose)
+        KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = energy_elec
-    define_xc_ = define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import rks as rks_grad
         return rks_grad.Gradients(self)
-
-def _dft_common_init_(mf):
-    mf.xc = 'LDA,VWN'
-    mf.nlc = ''
-    mf.omega = None
-    mf.grids = gen_grid.Grids(mf.mol)
-    mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
-                             mf.grids.level)
-    mf.nlcgrids = gen_grid.Grids(mf.mol)
-    mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
-                                mf.nlcgrids.level)
-    # Use rho to filter grids
-    mf.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
-##################################################
-# don't modify the following attributes, they are not input options
-    mf._numint = numint.NumInt()
-    mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
-                               'small_rho_cutoff'])
 
 
 if __name__ == '__main__':

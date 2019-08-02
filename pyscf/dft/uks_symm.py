@@ -26,21 +26,19 @@ from pyscf.dft import uks
 from pyscf.dft import rks
 
 
-class SymAdaptedUKS(uhf_symm.UHF):
+class SymAdaptedUKS(uhf_symm.UHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
         uhf_symm.UHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         uhf_symm.UHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = uks.get_veff
     energy_elec = uks.energy_elec
-    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import uks

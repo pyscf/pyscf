@@ -110,7 +110,7 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rks.get_rho(mf, dm[0]+dm[1], grids, kpt)
 
 
-class UKS(pbcuhf.UHF):
+class UKS(pbcuhf.UHF, rks.KohnShamDFT):
     '''UKS class adapted for PBCs.
 
     This is a literal duplication of the molecular UKS class with some `mol`
@@ -118,18 +118,16 @@ class UKS(pbcuhf.UHF):
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbcuhf.UHF.__init__(self, cell, kpt)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         pbcuhf.UHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
     get_rho = get_rho
-
-    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)

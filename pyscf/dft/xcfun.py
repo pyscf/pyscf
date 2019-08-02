@@ -444,12 +444,12 @@ def parse_xc(description):
 
     if ',' in description:
         x_code, c_code = description.split(',')
-        for token in x_code.replace('-', '+-').split('+'):
+        for token in x_code.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'X')
-        for token in c_code.replace('-', '+-').split('+'):
+        for token in c_code.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'C')
     else:
-        for token in description.replace('-', '+-').split('+'):
+        for token in description.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
@@ -463,14 +463,16 @@ _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
                    'M06-2X' : 'M062X',}
 
 
-def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
     r'''Interface to call xcfun library to evaluate XC functional, potential
     and functional derivatives.
 
     See also :func:`pyscf.dft.libxc.eval_xc`
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    return _eval_xc(fn_facs, rho, spin, relativity, deriv, verbose)
+    if omega is not None:
+        hyb[2] = float(omega)
+    return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
 
 XC_D0 = 0
 XC_D1 = 1
@@ -778,7 +780,7 @@ XC_D0000021 = 117
 XC_D0000012 = 118
 XC_D0000003 = 119
 
-def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv < 4)
     if spin == 0:
         rho_u = rho_d = numpy.asarray(rho, order='C')
@@ -795,6 +797,12 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
+    if hyb[2] != 0:
+        # Current implementation does not support different omegas for
+        # different functionals
+        omega = [hyb[2]] * len(facs)
+    else:
+        omega = [0] * len(facs)
 
     n = len(fn_ids)
     if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
@@ -819,7 +827,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     if n > 0:
         _itrf.XCFUN_eval_xc(ctypes.c_int(n),
-                            (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
+                            (ctypes.c_int*n)(*fn_ids),
+                            (ctypes.c_double*n)(*facs),
+                            (ctypes.c_double*n)(*omega),
                             ctypes.c_int(spin),
                             ctypes.c_int(deriv), ctypes.c_int(ngrids),
                             rho_u.ctypes.data_as(ctypes.c_void_p),

@@ -152,31 +152,6 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rho
 
 
-class RKS(pbchf.RHF):
-    '''RKS class adapted for PBCs.
-
-    This is a literal duplication of the molecular RKS class with some `mol`
-    variables replaced by `cell`.
-    '''
-    def __init__(self, cell, kpt=numpy.zeros(3)):
-        pbchf.RHF.__init__(self, cell, kpt)
-        _dft_common_init_(self)
-
-    def dump_flags(self, verbose=None):
-        pbchf.RHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
-
-    get_veff = get_veff
-    energy_elec = pyscf.dft.rks.energy_elec
-    get_rho = get_rho
-
-    define_xc_ = define_xc_
-
-    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
-    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
-
-
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'
     mf.grids = gen_grid.UniformGrids(mf.cell)
@@ -191,6 +166,47 @@ def _dft_common_init_(mf):
     else:
         mf._numint = numint.NumInt()
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+
+class KohnShamDFT(object):
+    __init__ = _dft_common_init_
+
+    @property
+    def omega(self):
+        return self._numint.omega
+    @omega.setter
+    def omega(self, v):
+        self._numint.omega = v
+
+    def dump_flags(self, verbose=None):
+        logger.info(self, 'XC functionals = %s', self.xc)
+        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
+        self.grids.dump_flags(verbose)
+        return self
+
+    define_xc_ = define_xc_
+
+
+class RKS(pbchf.RHF, KohnShamDFT):
+    '''RKS class adapted for PBCs.
+
+    This is a literal duplication of the molecular RKS class with some `mol`
+    variables replaced by `cell`.
+    '''
+    def __init__(self, cell, kpt=numpy.zeros(3)):
+        pbchf.RHF.__init__(self, cell, kpt)
+        KohnShamDFT.__init__(self)
+
+    def dump_flags(self, verbose=None):
+        pbchf.RHF.dump_flags(self, verbose)
+        KohnShamDFT.dump_flags(self, verbose)
+        return self
+
+    get_veff = get_veff
+    energy_elec = pyscf.dft.rks.energy_elec
+    get_rho = get_rho
+
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
 
 
 if __name__ == '__main__':

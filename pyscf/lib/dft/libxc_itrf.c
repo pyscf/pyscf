@@ -612,7 +612,8 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
         }
 }
 
-void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
+// omega is the range separation parameter mu in xcfun
+void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                    int spin, int deriv, int np,
                    double *rho_u, double *rho_d, double *output)
 {
@@ -640,7 +641,7 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
                 kbuf = malloc(sizeof(double) * np*35);
         }
 
-        int i;
+        int i, j;
         xc_func_type func;
         for (i = 0; i < nfn; i++) {
                 if (xc_func_init(&func, fn_id[i], spin) != 0) {
@@ -648,6 +649,28 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
                                 fn_id[i]);
                         exit(1);
                 }
+
+                // set the range-separated parameter
+                if (omega[i] != 0) {
+                        // skip if func is not a RSH functional
+                        if (func.cam_omega != 0) {
+                                func.cam_omega = omega[i];
+                        }
+                        // Recursively set the sub-functionals if they are RSH
+                        // functionals
+                        for (j = 0; j < func.n_func_aux; j++) {
+                                if (func.func_aux[j]->cam_omega != 0) {
+                                        func.func_aux[j]->cam_omega = omega[i];
+                                }
+                        }
+                }
+
+                // alpha and beta are hardcoded in many functionals in the libxc
+                // code, e.g. the coefficients of B88 (=1-alpha) and
+                // ITYH (=-beta) in cam-b3lyp.  Overwriting func->cam_alpha and
+                // func->cam_beta does not update the coefficients accordingly.
+                //func->cam_alpha = alpha;
+                //func->cam_beta  = beta;
 #if defined XC_SET_RELATIVITY
                 xc_lda_x_set_params(&func, relativity);
 #endif

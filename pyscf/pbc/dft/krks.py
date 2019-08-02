@@ -123,17 +123,17 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return rho
 
 
-class KRKS(khf.KRHF):
+class KRKS(khf.KRHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3))):
         khf.KRHF.__init__(self, cell, kpts)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         khf.KRHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
 
@@ -153,8 +153,6 @@ class KRKS(khf.KRHF):
         return tot_e.real, vhf.ecoul + vhf.exc
 
     get_rho = get_rho
-
-    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
