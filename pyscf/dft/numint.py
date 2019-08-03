@@ -763,7 +763,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'LDA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                      verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho * weight
                 nelec[idm] += den.sum()
@@ -781,7 +782,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                      verbose=verbose)[:2]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
                 excsum[idm] += numpy.dot(den, exc)
@@ -844,7 +846,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'MGGA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                      verbose=verbose)[:2]
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
@@ -940,7 +943,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose)[:2]
+                                      1, relativity, 1, verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho_a * weight
                 nelec[0,idm] += den.sum()
@@ -967,7 +970,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose)[:2]
+                                      1, relativity, 1, verbose=verbose)[:2]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
                 excsum[idm] += numpy.dot(den, exc)
@@ -995,7 +998,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose)[:2]
+                                      1, relativity, 1, verbose=verbose)[:2]
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
@@ -1114,7 +1117,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             if fxc is None:
                 rho = make_rho0(0, ao, mask, 'LDA')
-                fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2, verbose)[2]
+                fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2,
+                                  verbose=verbose)[2]
                 frr = fxc0[0]
             else:
                 frr = fxc[0][ip:ip+ngrid]
@@ -1139,7 +1143,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             else:
                 rho = numpy.asarray(rho0[:,ip:ip+ngrid], order='C')
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2, verbose)[1:3]
+                vxc0, fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2,
+                                        verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
                 fxc0 = (fxc[0][ip:ip+ngrid], fxc[1][ip:ip+ngrid], fxc[2][ip:ip+ngrid])
@@ -1394,7 +1399,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             if fxc is None:
                 rho0a = make_rho0(0, ao, mask, xctype)
                 rho0b = make_rho0(1, ao, mask, xctype)
-                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2, verbose)[2]
+                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2,
+                                  verbose=verbose)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
                 u_u, u_d, d_d = fxc[0][ip:ip+ngrid].T
@@ -1428,7 +1434,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 rho0a = rho0[0][:,ip:ip+ngrid]
                 rho0b = rho0[1][:,ip:ip+ngrid]
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2, verbose)[1:3]
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2,
+                                        verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
                 fxc0 = (fxc[0][ip:ip+ngrid], fxc[1][ip:ip+ngrid], fxc[2][ip:ip+ngrid])
