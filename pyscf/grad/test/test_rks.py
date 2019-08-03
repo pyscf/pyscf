@@ -389,7 +389,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'wb97x'
         mf.kernel()
         g = mf.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.finger(g), -0.02709881995968773, 7)
+        self.assertAlmostEqual(lib.finger(g), -0.027003819523762924, 7)
 
         mol1 = gto.M(atom="H; H 1 1.", basis='ccpvdz', verbose=0)
         mf = dft.RKS(mol1)
