@@ -62,7 +62,7 @@ class CIAHOptimizer(lib.StreamObject):
         idx = numpy.tril_indices(nmo, -1)
         mat = numpy.zeros((nmo,nmo))
         mat[idx] = v
-        return mat - mat.T
+        return mat - mat.conj().T
 
     def extract_rotation(self, dr, u0=1):
         dr = self.unpack_uniq_var(dr)

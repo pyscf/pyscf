@@ -211,8 +211,8 @@ def get_grad(mo_coeff, mo_occ, fock):
         focka, fockb = fock
     else:
         focka = fockb = fock
-    focka = reduce(numpy.dot, (mo_coeff.T.conj(), focka, mo_coeff))
-    fockb = reduce(numpy.dot, (mo_coeff.T.conj(), fockb, mo_coeff))
+    focka = reduce(numpy.dot, (mo_coeff.conj().T, focka, mo_coeff))
+    fockb = reduce(numpy.dot, (mo_coeff.conj().T, fockb, mo_coeff))
 
     g = numpy.zeros_like(focka)
     g[uniq_var_a]  = focka[uniq_var_a]
@@ -267,7 +267,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         if with_meta_lowdin:
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+            c = reduce(numpy.dot, (orth_coeff.conj().T, ovlp_ao, mo_coeff))
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
