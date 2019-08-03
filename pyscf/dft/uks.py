@@ -105,10 +105,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         vxc += vj - vk
 
         if ground_state:
-            exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
-                   numpy.einsum('ij,ji', dm[1], vk[1])) * .5
+            exc -=(numpy.einsum('ij,ji', dm[0], vk[0]).real +
+                   numpy.einsum('ij,ji', dm[1], vk[1]).real) * .5
     if ground_state:
-        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj) * .5
+        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj).real * .5
     else:
         ecoul = None
 

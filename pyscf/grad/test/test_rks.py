@@ -384,8 +384,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(dexc_t, exc1_full[2], 2)
 
     def test_range_separated(self):
-        mol = gto.M(atom="H; H 1 1.", basis='ccpvdz', verbose=0)
         mf = dft.RKS(mol)
+        mf.conv_tol = 1e-14
+        mf.xc = 'wb97x'
+        mf.kernel()
+        g = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.02709881995968773, 7)
+
+        mol1 = gto.M(atom="H; H 1 1.", basis='ccpvdz', verbose=0)
+        mf = dft.RKS(mol1)
         mf.xc = 'wb97x'
         mf.kernel()
         g = mf.nuc_grad_method().kernel()
@@ -396,6 +403,7 @@ class KnownValues(unittest.TestCase):
         e1 = smf(mol1)
         e2 = smf(mol2)
         self.assertAlmostEqual((e1-e2)/dx, g[1,0], 5)
+
 
 if __name__ == "__main__":
     print("Full Tests for RKS Gradients")
