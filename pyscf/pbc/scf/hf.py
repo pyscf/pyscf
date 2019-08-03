@@ -653,7 +653,7 @@ class SCF(mol_hf.SCF):
         Currently RHF always uses PBC AO integrals (unlike RKS), since
         exchange is currently computed by building PBC AO integrals.
         '''
-        if not omega:
+        if omega:
             raise NotImplementedError
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt

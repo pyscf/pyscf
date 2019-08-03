@@ -302,7 +302,7 @@ class KohnShamDFT(object):
         return self._numint.omega
     @omega.setter
     def omega(self, v):
-        self._numint.omega = v
+        self._numint.omega = float(v)
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'XC functionals = %s', self.xc)

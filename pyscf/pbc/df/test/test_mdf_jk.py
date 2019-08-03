@@ -236,6 +236,35 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vk0-vk2).max(), 0, 8)
         self.assertAlmostEqual(abs(vk0-vk3).max(), 0, 8)
 
+    def test_mdf_jk_0d(self):
+        from pyscf import scf
+        L = 4.
+        cell = pgto.Cell()
+        cell.verbose = 0
+        cell.a = numpy.eye(3)*L
+        cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+        cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.dimension = 0
+        cell.mesh = [60]*3
+        cell.build()
+        nao = cell.nao
+        numpy.random.seed(1)
+        dm = numpy.random.random((nao,nao))
+        dm = dm.dot(dm.conj().T).reshape(1,nao,nao)
+
+        vj0, vk0 = scf.hf.get_jk(cell, dm, hermi=0, omega=0.5)
+        self.assertAlmostEqual(lib.finger(vj0), 0.08265798268352553, 9)
+        self.assertAlmostEqual(lib.finger(vk0), 0.2375705823780625 , 9)
+        vj1, vk1 = pbcdf.GDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv='ewald')
+        vj2, vk2 = pbcdf.MDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv='ewald')
+        vj3, vk3 = pbcdf.AFTDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv='ewald')
+        self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 3)
+        self.assertAlmostEqual(abs(vj0-vj2).max(), 0, 3)
+        self.assertAlmostEqual(abs(vj0-vj3).max(), 0, 3)
+        self.assertAlmostEqual(abs(vk0-vk1).max(), 0, 3)
+        self.assertAlmostEqual(abs(vk0-vk2).max(), 0, 3)
+        self.assertAlmostEqual(abs(vk0-vk3).max(), 0, 3)
+
 
 if __name__ == '__main__':
     print("Full Tests for mdf_jk")
