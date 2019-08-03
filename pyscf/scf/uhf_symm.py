@@ -111,7 +111,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         if with_meta_lowdin:
             log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-            c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+            c_inv = numpy.dot(orth_coeff.conj().T, ovlp_ao)
             mo = c_inv.dot(mo_coeff[0])
         else:
             log.debug(' ** alpha MO coefficients (expansion on AOs) **')
@@ -211,7 +211,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
                 cs[:,idx] = numpy.dot(mo_coeff[:,idx], c)
@@ -230,7 +230,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
                 c = numpy.dot(mo_coeff[:,idx], c)

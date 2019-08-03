@@ -442,7 +442,7 @@ def init_guess_by_minao(mol):
     pmol._built = True
     c = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao_nr()), mol)
 
-    dm = numpy.dot(c*occ, c.T)
+    dm = numpy.dot(c*occ, c.conj().T)
 # normalize eletron number
 #    s = mol.intor_symmetric('int1e_ovlp')
 #    dm *= mol.nelectron / (dm*s).sum()
@@ -487,7 +487,7 @@ def init_guess_by_atom(mol):
     pmol = copy.copy(mol)
     pmol.cart = False
     c = addons.project_mo_nr2nr(pmol, mo, mol)
-    dm = numpy.dot(c*mo_occ, c.T)
+    dm = numpy.dot(c*mo_occ, c.conj().T)
 
     for k, v in atm_scf.items():
         logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
@@ -546,7 +546,7 @@ def damping(s, d, f, factor):
     #f0 = reduce(numpy.dot, (dm_vir, sinv, f, d, s))
     dm_vir = numpy.eye(s.shape[0]) - numpy.dot(s, d)
     f0 = reduce(numpy.dot, (dm_vir, f, d, s))
-    f0 = (f0+f0.T.conj()) * (factor/(factor+1.))
+    f0 = (f0+f0.conj().T) * (factor/(factor+1.))
     return f - f0
 
 
@@ -565,7 +565,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # array and modifications to DM array may be ignored.
-    return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.T.conj())
+    return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
 
 
 ################################################
@@ -872,7 +872,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     '''
     occidx = mo_occ > 0
     viridx = ~occidx
-    g = reduce(numpy.dot, (mo_coeff[:,viridx].T.conj(), fock_ao,
+    g = reduce(numpy.dot, (mo_coeff[:,viridx].conj().T, fock_ao,
                            mo_coeff[:,occidx])) * 2
     return g.ravel()
 
@@ -902,7 +902,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         if with_meta_lowdin:
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+            c = reduce(numpy.dot, (orth_coeff.conj().T, ovlp_ao, mo_coeff))
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
@@ -1017,7 +1017,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
 
     c = orth.restore_ao_character(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
-    c_inv = numpy.dot(orth_coeff.T, s)
+    c_inv = numpy.dot(orth_coeff.conj().T, s)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = reduce(numpy.dot, (c_inv, dm, c_inv.T.conj()))
     else:  # ROHF
@@ -1044,7 +1044,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
+        fock = mf.get_fock(dm=dm)
     coreidx = mo_occ == 2
     viridx = mo_occ == 0
     openidx = ~(coreidx | viridx)
@@ -1053,7 +1053,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     for idx in (coreidx, openidx, viridx):
         if numpy.count_nonzero(idx) > 0:
             orb = mo_coeff[:,idx]
-            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
             e, c = scipy.linalg.eigh(f1)
             mo[:,idx] = numpy.dot(orb, c)
             mo_e[idx] = e
@@ -1137,7 +1137,7 @@ def unpack_uniq_var(dx, mo_occ):
 
     x1 = numpy.zeros((nmo,nmo), dtype=dx.dtype)
     x1[idx] = dx
-    return x1 - x1.T.conj()
+    return x1 - x1.conj().T
 
 
 def as_scanner(mf):

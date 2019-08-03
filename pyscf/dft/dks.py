@@ -105,11 +105,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 #        vxc += vj - vk * hyb
 #
 #        if ground_state:
-#            exc -= numpy.einsum('ij,ji', dm, vk) * hyb * .5
+#            exc -= numpy.einsum('ij,ji', dm, vk).real * hyb * .5
         raise NotImplementedError
 
     if ground_state:
-        ecoul = numpy.einsum('ij,ji', dm, vj) * .5
+        ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
     else:
         ecoul = None
 

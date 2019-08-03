@@ -318,7 +318,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-        fock = mf.get_hcore() + mf.get_jk(mf.cell, dm)
+        fock = mf.get_fock(dm=dm)
     mo_coeff = []
     mo_energy = []
     for k, mo in enumerate(mo_coeff_kpts):

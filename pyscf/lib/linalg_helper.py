@@ -175,6 +175,8 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
 
+    Note: This function has an overhead of memory usage ~4*x0.size*nroots
+
     Args:
         aop : function(x) => array_like_x
             aop(x) to mimic the matrix vector multiplication :math:`\sum_{j}a_{ij}*x_j`.
@@ -262,6 +264,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
+
+    Note: This function has an overhead of memory usage ~4*x0.size*nroots
 
     Args:
         aop : function([x]) => [array_like_x]
@@ -367,6 +371,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     conv = [False] * nroots
     emin = None
 
+    from pyscf import lib
     for icyc in range(max_cycle):
         if fresh_start:
             if _incore:
@@ -414,16 +419,17 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         conv_last = conv
         for i in range(space):
             if head <= i < head+rnow:
+                axi = axt[i-head].conj()
                 for k in range(i-head+1):
-                    heff[head+k,i] = dot(xt[k].conj(), axt[i-head])
-                    heff[i,head+k] = heff[head+k,i].conj()
+                    heff[i,head+k] = dot(axi, xt[k])
+                    heff[head+k,i] = heff[i,head+k].conj()
             else:
-                axi = numpy.asarray(ax[i])
+                axi = numpy.asarray(ax[i]).conj()
                 for k in range(rnow):
-                    heff[head+k,i] = dot(xt[k].conj(), axi)
-                    heff[i,head+k] = heff[head+k,i].conj()
-                axi = None
-        axt = None
+                    heff[i,head+k] = dot(axi, xt[k])
+                    heff[head+k,i] = heff[i,head+k].conj()
+            axi = None
+        xt = axt = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space])
         if callable(pick):
@@ -1130,7 +1136,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                         heff[i,head+k] = heff[head+k,i].conj()
                         seff[head+k,i] = dot(xt[k].conj(), bxi)
                         seff[i,head+k] = seff[head+k,i].conj()
-                    axi = bxi = None
+                axi = bxi = None
         else:
             for i in range(space):
                 if head <= i < head+rnow:
@@ -1147,7 +1153,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                         heff[i,head+k] = heff[head+k,i].conj()
                         seff[head+k,i] = dot(xt[k].conj(), bxi)
                         seff[i,head+k] = seff[head+k,i].conj()
-                    axi = bxi = None
+                axi = bxi = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space], seff[:space,:space])
         if space < nroots or e.size != nroots:

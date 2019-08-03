@@ -225,7 +225,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     '''
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-        fock = mf.get_hcore() + mf.get_jk(mf.cell, dm)
+        fock = mf.get_fock(dm=dm)
 
     mo_coeff = []
     mo_energy = []

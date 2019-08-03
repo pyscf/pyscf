@@ -980,7 +980,7 @@ def newton(mf):
             mo = _CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
             if log is not None and log.verbose >= logger.DEBUG:
                 idx = self.mo_occ > 0
-                s = reduce(numpy.dot, (mo[:,idx].T, self._scf.get_ovlp(),
+                s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
                                        self.mo_coeff[:,idx]))
                 log.debug('Overlap to initial guess, SVD = %s',
                           _effective_svd(s, 1e-5))
