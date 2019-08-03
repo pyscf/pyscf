@@ -819,10 +819,15 @@ def rsh_coeff(xc_code):
     alpha = c_LR
     beta = c_SR - c_LR = hyb - alpha
     '''
+
+    check_omega = True
     if isinstance(xc_code, str) and ',' in xc_code:
         # Parse only X part for the RSH coefficients.  This is to handle
         # exceptions for C functionals such as M11.
         xc_code = xc_code.split(',')[0] + ','
+        if 'SR_HF' in xc_code or 'LR_HF' in xc_code or 'RSH(' in xc_code:
+            check_omega = False
+
     hyb, fn_facs = parse_xc(xc_code)
 
     hyb, alpha, omega = hyb
@@ -834,7 +839,7 @@ def rsh_coeff(xc_code):
         _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
         if rsh_pars[0] == 0:
             rsh_pars[0] = rsh_tmp[0]
-        else:
+        elif check_omega:
             # Check functional is actually a CAM functional
             if rsh_tmp[0] != 0 and not _itrf.LIBXC_is_cam_rsh(ctypes.c_int(xid)):
                 raise KeyError('Libxc functional %i employs a range separation kernel that is not supported in PySCF' % xid)
@@ -1090,12 +1095,12 @@ def parse_xc(description):
 
     if ',' in description:
         x_code, c_code = description.split(',')
-        for token in x_code.replace('-', '+-').split('+'):
+        for token in x_code.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'X or K')
-        for token in c_code.replace('-', '+-').split('+'):
+        for token in c_code.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'C')
     else:
-        for token in description.replace('-', '+-').split('+'):
+        for token in description.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'compound XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
@@ -1134,7 +1139,7 @@ _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
                    'CAM-B3LYP': 'CAM_B3LYP'}
 
 
-def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
     r'''Interface to call libxc library to evaluate XC functional, potential
     and functional derivatives.
 
@@ -1223,13 +1228,15 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
         see also libxc_itrf.c
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    return _eval_xc(fn_facs, rho, spin, relativity, deriv, verbose)
+    if omega is not None:
+        hyb[2] = float(omega)
+    return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
 
 
 SINGULAR_IDS = set((131,  # LYP functions
                     402, 404, 411, 416, 419,   # hybrid LYP functions
                     74 , 75 , 226, 227))       # M11L and MN12L functional
-def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv <= 3)
     if spin == 0:
         nspin = 1
@@ -1248,6 +1255,12 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
+    if hyb[2] != 0:
+        # Current implementation does not support different omegas for
+        # different RSH functionals if there are multiple RSHs
+        omega = [hyb[2]] * len(facs)
+    else:
+        omega = [0] * len(facs)
     fn_ids_set = set(fn_ids)
     if fn_ids_set.intersection(PROBLEMATIC_XC):
         problem_xc = [PROBLEMATIC_XC[k]
@@ -1283,7 +1296,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         outbuf = numpy.zeros((outlen,ngrids))
 
     _itrf.LIBXC_eval_xc(ctypes.c_int(n),
-                        (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
+                        (ctypes.c_int*n)(*fn_ids),
+                        (ctypes.c_double*n)(*facs),
+                        (ctypes.c_double*n)(*omega),
                         ctypes.c_int(nspin),
                         ctypes.c_int(deriv), ctypes.c_int(rho_u.shape[1]),
                         rho_u.ctypes.data_as(ctypes.c_void_p),

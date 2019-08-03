@@ -117,7 +117,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
 
 
 def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
-          **kwargs):
+          omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -134,7 +134,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_j, with_k,
-                                 exxdiv=mf.exxdiv)
+                                 omega, exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -542,21 +542,25 @@ class KSCF(pbchf.SCF):
     energy_elec = energy_elec
     get_fermi = get_fermi
 
-    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band, with_k=False)[0]
+    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
+              kpts_band=None, omega=None):
+        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
+                                 with_k=False, omega=omega)[0]
         return vj
 
-    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band, with_j=False)[1]
+    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
+              kpts_band=None, omega=None):
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band,
+                           with_j=False, omega=omega)[1]
 
     def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, **kwargs):
+               with_j=True, with_k=True, omega=None, **kwargs):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                     with_j, with_k, exxdiv=self.exxdiv)
+                                     with_j, with_k, omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 

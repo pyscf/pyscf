@@ -26,20 +26,19 @@ from pyscf.dft import rks
 from pyscf.dft import uks
 
 
-class SymAdaptedRKS(hf_symm.SymAdaptedRHF):
+class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
         hf_symm.RHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
-        hf_symm.RHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        hf_symm.RHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = rks.get_veff
     energy_elec = rks.energy_elec
-    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import rks
@@ -48,21 +47,19 @@ class SymAdaptedRKS(hf_symm.SymAdaptedRHF):
 RKS = SymAdaptedRKS
 
 
-class SymAdaptedROKS(hf_symm.SymAdaptedROHF):
+class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
         hf_symm.ROHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
-    def dump_flags(self):
-        hf_symm.ROHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags()
+    def dump_flags(self, verbose=None):
+        hf_symm.ROHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = uks.get_veff
     energy_elec = uks.energy_elec
-    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import roks

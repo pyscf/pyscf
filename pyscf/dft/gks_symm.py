@@ -26,21 +26,19 @@ from pyscf.dft import gks
 from pyscf.dft import rks
 
 
-class GKS(ghf_symm.GHF):
+class GKS(ghf_symm.GHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
         ghf_symm.GHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         ghf_symm.GHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = gks.get_veff
     energy_elec = rks.energy_elec
-    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         raise NotImplementedError

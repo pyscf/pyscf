@@ -126,24 +126,20 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     return rks.energy_elec(ks, dm, h1e, vhf)
 
 
-class UKS(uhf.UHF):
+class UKS(uhf.UHF, rks.KohnShamDFT):
     '''Unrestricted Kohn-Sham
     See pyscf/dft/rks.py RKS class for document of the attributes'''
     def __init__(self, mol):
         uhf.UHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         uhf.UHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        if self.nlc!='':
-            logger.info(self, 'NLC functional = %s', self.nlc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = energy_elec
-    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import uks

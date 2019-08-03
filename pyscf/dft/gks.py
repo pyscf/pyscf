@@ -117,23 +117,19 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return vxc
 
 
-class GKS(ghf.GHF):
+class GKS(ghf.GHF, rks.KohnShamDFT):
     '''Generalized Kohn-Sham'''
     def __init__(self, mol):
         ghf.GHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         ghf.GHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        if self.nlc!='':
-            logger.info(self, 'NLC functional = %s', self.nlc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = rks.energy_elec
-    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         raise NotImplementedError

@@ -474,6 +474,23 @@ class KnownValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
         self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
+    def test_camb3lyp_rsh_omega(self):
+        mf = dft.RKS(h2o)
+        mf.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        mf.run(xc='camb3lyp')
+        self.assertAlmostEqual(mf.e_tot, -76.35549300028714, 9)
+
+        mf1 = dft.RKS(h2o)
+        mf1.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        mf1.run(xc='camb3lyp', omega=0.15)
+        self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
+
+        mf2 = dft.RKS(h2o)
+        mf2.xc='RSH(0.65;-0.46;0.15) + 0.46*ITYH + .35*B88 + VWN5*0.19, LYP*0.81'
+        mf2.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        mf2.kernel()
+        self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

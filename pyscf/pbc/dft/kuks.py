@@ -83,11 +83,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vj = vj[0] + vj[1]
-        vxc += vj - vk * hyb
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk
 
         if ground_state:
             exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
-                    np.einsum('Kij,Kji', dm[1], vk[1])).real * hyb * .5 * weight
+                    np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * weight
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj).real * .5 * weight
@@ -121,23 +126,21 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
-class KUKS(kuhf.KUHF):
+class KUKS(kuhf.KUHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3))):
         kuhf.KUHF.__init__(self, cell, kpts)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         kuhf.KUHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = energy_elec
     get_rho = get_rho
-
-    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)

@@ -46,9 +46,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (time.clock(), time.time())
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(omega) > 1e-10:
-        raise NotImplementedError
-    hybrid = abs(hyb) > 1e-10
+    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
@@ -89,11 +87,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vj = vj[0] + vj[1]
-        vxc += vj - vk * hyb
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk
 
         if ground_state:
             exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
-                   numpy.einsum('ij,ji', dm[1], vk[1])).real * hyb * .5
+                   numpy.einsum('ij,ji', dm[1], vk[1])).real * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj).real * .5
@@ -110,7 +113,7 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rks.get_rho(mf, dm[0]+dm[1], grids, kpt)
 
 
-class UKS(pbcuhf.UHF):
+class UKS(pbcuhf.UHF, rks.KohnShamDFT):
     '''UKS class adapted for PBCs.
 
     This is a literal duplication of the molecular UKS class with some `mol`
@@ -118,18 +121,16 @@ class UKS(pbcuhf.UHF):
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbcuhf.UHF.__init__(self, cell, kpt)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
     def dump_flags(self, verbose=None):
         pbcuhf.UHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
     get_rho = get_rho
-
-    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)

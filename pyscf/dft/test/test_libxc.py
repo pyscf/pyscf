@@ -240,9 +240,17 @@ class KnownValues(unittest.TestCase):
     def test_camb3lyp(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('camb3lyp', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.5752559666317147, 5)
-        self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 5)
+        self.assertAlmostEqual(float(exc), -0.5752559666317147, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 7)
         self.assertAlmostEqual(float(vxc[1]), -0.0029862221286189846, 7)
+
+        self.assertEqual(dft.libxc.rsh_coeff('camb3lyp'), [0.33, 0.65, -0.46])
+
+        rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('RSH(0.65;-0.46;0.5) + 0.46*ITYH + .35*B88,', rho, 0, deriv=1)
+        self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
+        self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
+        self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
 
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))

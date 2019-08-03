@@ -309,24 +309,21 @@ UHF = X2C_UHF
 
 try:
     from pyscf.dft import rks, dks, r_numint
-    class X2C_UKS(X2C_UHF):
+    class X2C_UKS(X2C_UHF, rks.KohnShamDFT):
         def __init__(self, mol):
             X2C_UHF.__init__(self, mol)
-            rks._dft_common_init_(self)
+            rks.KohnShamDFT.__init__(self)
             self._numint = r_numint.RNumInt()
 
         def dump_flags(self, verbose=None):
             hf.SCF.dump_flags(self, verbose)
-            logger.info(self, 'XC functionals = %s', self.xc)
-            logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-            self.grids.dump_flags(verbose)
+            rks.KohnShamDFT.dump_flags(self, verbose)
             if self.with_x2c:
                 self.with_x2c.dump_flags(verbose)
             return self
 
         get_veff = dks.get_veff
         energy_elec = rks.energy_elec
-        define_xc_ = rks.define_xc_
 
     UKS = X2C_UKS
 except ImportError:
