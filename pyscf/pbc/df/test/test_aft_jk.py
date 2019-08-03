@@ -26,12 +26,16 @@ cell.a = numpy.eye(3) * 2.5
 cell.mesh = [21] * 3
 cell.build()
 
+def tearDownModule():
+    global cell
+    del cell
+
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_jk(self):
         mf0 = scf.RHF(cell)
         dm = mf0.get_init_guess()

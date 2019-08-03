@@ -120,7 +120,7 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
 
 
 def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3),
-           kpts_band=None, with_j=True, with_k=True, **kwargs):
+           kpts_band=None, with_j=True, with_k=True, omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -147,7 +147,7 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3),
         density matrix (both order and shape).
     '''
     return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, with_j, with_k,
-                                 exxdiv=mf.exxdiv)
+                                 omega, exxdiv=mf.exxdiv)
 
 
 def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
@@ -568,7 +568,7 @@ class SCF(mol_hf.SCF):
         return get_ovlp(cell, kpt)
 
     def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
-               with_j=True, with_k=True, **kwargs):
+               with_j=True, with_k=True, omega=None, **kwargs):
         r'''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
         for particular k-point (kpt).
 
@@ -588,7 +588,7 @@ class SCF(mol_hf.SCF):
         dm = np.asarray(dm)
         nao = dm.shape[-1]
 
-        if (kpts_band is None and
+        if (not omega and kpts_band is None and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
              (not self.direct_scf and self._is_mem_enough()))):
@@ -604,7 +604,7 @@ class SCF(mol_hf.SCF):
                                      vk.reshape(-1,nao,nao))
         else:
             vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                         kpt, kpts_band, with_j, with_k,
+                                         kpt, kpts_band, with_j, with_k, omega,
                                          exxdiv=self.exxdiv)
 
         if with_j:
@@ -614,7 +614,8 @@ class SCF(mol_hf.SCF):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+              omega=None):
         r'''Compute J matrix for the given density matrix and k-point (kpt).
         When kpts_band is given, the J matrices on kpts_band are evaluated.
 
@@ -623,12 +624,15 @@ class SCF(mol_hf.SCF):
         where r,s are orbitals on kpt. p and q are orbitals on kpts_band
         if kpts_band is given otherwise p and q are orbitals on kpt.
         '''
-        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_k=False)[0]
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_k=False,
+                           omega=omega)[0]
 
-    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+              omega=None):
         '''Compute K matrix for the given density matrix.
         '''
-        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_j=False)[1]
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_j=False,
+                           omega=omega)[1]
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
@@ -641,13 +645,16 @@ class SCF(mol_hf.SCF):
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         return vj - vk * .5
 
-    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, **kwargs):
+    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
+                      **kwargs):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         *Incore* version of Coulomb and exchange build only.
         Currently RHF always uses PBC AO integrals (unlike RKS), since
         exchange is currently computed by building PBC AO integrals.
         '''
+        if not omega:
+            raise NotImplementedError
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
         if self._eri is None:

@@ -83,11 +83,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vj = vj[0] + vj[1]
-        vxc += vj - vk * hyb
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk
 
         if ground_state:
             exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
-                    np.einsum('Kij,Kji', dm[1], vk[1])).real * hyb * .5 * weight
+                    np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * weight
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj).real * .5 * weight

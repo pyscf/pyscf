@@ -14,6 +14,7 @@ PySCF 1.7.0 (2019-?-?)
     that in spin-orbital
   - DOCI solver, DOCI-CASCI, and DOCI-CASSCf
   - Support of RSH functionals in DF and sgX methods
+  - Add RSH functionals for all PBC DFT methods
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
@@ -24,6 +25,7 @@ PySCF 1.7.0 (2019-?-?)
   - Initial guess for EOM-KCCSD
   - state-averge CASSCF analytical nuclear gradietns
   - ddCOSMO self-consistency (as fast solvent) for post-SCF methods
+  - range-separation paramter omega customization in RSH functionals
 
 
 PySCF 1.6.3 (2019-07-28)

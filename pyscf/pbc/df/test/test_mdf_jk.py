@@ -18,6 +18,7 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 import pyscf.pbc
+import pyscf.pbc.df as pbcdf
 from pyscf.pbc.df import mdf
 from pyscf.pbc.df import mdf_jk
 #from mpi4pyscf.pbc.df import mdf
@@ -41,12 +42,16 @@ cell.build()
 mf0 = pscf.RHF(cell)
 mf0.exxdiv = None
 
+def tearDownModule():
+    global cell, mf0
+    del cell, mf0
+
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(a.ravel(), w)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_jk_single_kpt(self):
         mf = mdf_jk.density_fit(mf0, auxbasis='weigend', mesh=(11,)*3)
         mf.with_df.mesh = [11]*3
@@ -203,6 +208,33 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vk[5]), (0.99252601243537697+0.012694645170334074j), 9)
         self.assertAlmostEqual(finger(vk[6]), (0.92165252496655681-0.012036431811316108j), 9)
         self.assertAlmostEqual(finger(vk[7]), (0.85167195537981   +0.010089165459944484j), 9)
+
+    def test_mdf_jk_rsh(self):
+        L = 4.
+        cell = pgto.Cell()
+        cell.verbose = 0
+        cell.a = numpy.eye(3)*L
+        cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+        cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.build()
+        nao = cell.nao
+        kpts = [[0.2, 0.2, 0.4]]
+        numpy.random.seed(1)
+        dm = numpy.random.random((nao,nao)) + .2j*numpy.random.random((nao,nao))
+        dm = dm.dot(dm.conj().T).reshape(1,nao,nao)
+
+        vj0, vk0 = pbcdf.FFTDF(cell, kpts).get_jk(dm, hermi=0, kpts=kpts, omega=0.3, exxdiv='ewald')
+        vj1, vk1 = pbcdf.GDF(cell, kpts).get_jk(dm, hermi=0, kpts=kpts, omega=0.3, exxdiv='ewald')
+        vj2, vk2 = pbcdf.MDF(cell, kpts).get_jk(dm, hermi=0, kpts=kpts, omega=0.3, exxdiv='ewald')
+        vj3, vk3 = pbcdf.AFTDF(cell, kpts).get_jk(dm, hermi=0, kpts=kpts, omega=0.3, exxdiv='ewald')
+        self.assertAlmostEqual(lib.finger(vj0), 0.007500219791944259, 9)
+        self.assertAlmostEqual(lib.finger(vk0), 0.0007724337759304424+0.00018842136513478529j, 9)
+        self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 8)
+        self.assertAlmostEqual(abs(vj0-vj2).max(), 0, 8)
+        self.assertAlmostEqual(abs(vj0-vj3).max(), 0, 8)
+        self.assertAlmostEqual(abs(vk0-vk1).max(), 0, 8)
+        self.assertAlmostEqual(abs(vk0-vk2).max(), 0, 8)
+        self.assertAlmostEqual(abs(vk0-vk3).max(), 0, 8)
 
 
 if __name__ == '__main__':

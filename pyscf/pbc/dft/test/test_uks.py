@@ -26,7 +26,20 @@ import pyscf.pbc
 pyscf.pbc.DEBUG = False
 
 
-class KnowValues(unittest.TestCase):
+L = 4.
+cell = pbcgto.Cell()
+cell.verbose = 0
+cell.a = np.eye(3)*L
+cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+cell.build()
+
+def tearDownModule():
+    global cell
+    del cell
+
+
+class KnownValues(unittest.TestCase):
     def test_pp_UKS(self):
         cell = pbcgto.Cell()
 
@@ -52,6 +65,14 @@ class KnowValues(unittest.TestCase):
 
         mf.xc = 'lda,vwn'
         self.assertAlmostEqual(mf.scf(), -7.6162130840535092, 8)
+
+    def test_rsh_df(self):
+        mf = pbcdft.UKS(cell).density_fit()
+        mf.xc = 'camb3lyp'
+        mf.omega = .15
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.399571378419408, 7)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.uks")

@@ -1055,11 +1055,6 @@ class NumInt(numint.NumInt):
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
 
-    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        omega, alpha, hyb = numint.NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
-        if abs(omega) > 1e-10:
-            raise NotImplementedError
-        return omega, alpha, hyb
 _NumInt = NumInt
 
 
@@ -1247,9 +1242,4 @@ class KNumInt(numint.NumInt):
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
 
-    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        omega, alpha, hyb = numint.NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
-        if abs(omega) > 1e-10:
-            raise NotImplementedError
-        return omega, alpha, hyb
 _KNumInt = KNumInt

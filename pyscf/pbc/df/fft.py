@@ -26,6 +26,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
+from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
@@ -177,6 +178,7 @@ class FFTDF(lib.StreamObject):
         # mimic the KRHF/KUHF object in the call to tools.get_coulG.
         self.exxdiv = None
         self._numint = numint.KNumInt()
+        self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -185,6 +187,12 @@ class FFTDF(lib.StreamObject):
     @mesh.setter
     def mesh(self, mesh):
         self.grids.mesh = mesh
+
+    def reset(self, cell=None):
+        if cell is not None:
+            self.cell = cell
+        self._rsh_df = {}
+        return self
 
     def dump_flags(self, verbose=None):
         logger.info(self, '\n')
@@ -260,9 +268,14 @@ class FFTDF(lib.StreamObject):
     # post-HF code, get_jk was often called with an incomplete DM (e.g. the
     # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
     # post-HF methods.
+
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv=None):
+               with_j=True, with_k=True, omega=None, exxdiv=None):
         from pyscf.pbc.df import fft_jk
+        if omega is not None:  # J/K for RSH functionals
+            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+                               with_j, with_k, omega, exxdiv)
+
         if kpts is None:
             if numpy.all(self.kpts == 0): # Gamma-point J/K by default
                 kpts = numpy.zeros(3)

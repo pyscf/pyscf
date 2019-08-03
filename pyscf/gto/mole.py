@@ -2540,6 +2540,11 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
 
+    @property
+    def omega(self):
+        return self._env[PTR_RANGE_OMEGA]
+    omega = omega.setter(set_range_coulomb)
+
     def with_range_coulomb(self, omega):
         '''Retuen a temporary mol context which has the required parameter
         omega for long range part of range-separated Coulomb operator.

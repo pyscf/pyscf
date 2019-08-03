@@ -24,8 +24,20 @@ from pyscf.pbc import dft as pbcdft
 import pyscf.pbc
 pyscf.pbc.DEBUG = False
 
+L = 4.
+cell = pbcgto.Cell()
+cell.verbose = 0
+cell.a = np.eye(3)*L
+cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+cell.build()
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global cell
+    del cell
+
+
+class KnownValues(unittest.TestCase):
 #    def test_lda_grid30(self):
 #        cell = pbcgto.Cell()
 #        cell.unit = 'B'
@@ -122,6 +134,34 @@ class KnowValues(unittest.TestCase):
         mf = pbcdft.RKS(cell).density_fit()
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -4.717699891018736, 7)
+
+    def test_rsh_fft(self):
+        mf = pbcdft.RKS(cell)
+        mf.xc = 'camb3lyp'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.3032261128220544, 7)
+
+    def test_rsh_df(self):
+        mf = pbcdft.RKS(cell).density_fit()
+        mf.xc = 'camb3lyp'
+        mf.omega = .15
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.399571378419408, 7)
+
+    def test_rsh_mdf(self):
+        mf = pbcdft.RKS(cell).mix_density_fit()
+        mf.xc = 'camb3lyp'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.303225896642264, 7)
+
+    def test_rsh_aft_high_cost(self):
+        from pyscf.pbc.df.aft import AFTDF
+        mf = pbcdft.RKS(cell)
+        mf.with_df = AFTDF(cell)
+        mf.xc = 'camb3lyp'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.303226113014942, 7)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")
