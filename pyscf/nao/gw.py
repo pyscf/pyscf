@@ -51,7 +51,7 @@ class gw(scf):
     else :
       self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
 
-    if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are (nocc) = {}, Number of virtual states (nvrt) = {}'.format(self.nocc, self.nvrt))
+    if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are gonna correct (nocc) = {}, Number of virtual states are gonna correct (nvrt) = {}'.format(self.nocc, self.nvrt))
 
     #self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
     frozen_core = kw['frozen_core'] if 'frozen_core' in kw else self.frozen_core
@@ -250,7 +250,7 @@ class gw(scf):
 
   def get_snmw2sf(self):
     """ 
-    This computes a spectral function of the GW correction.
+    This computes a matrix elements of W_c: <\Psi | W_c |\Psi>.
     sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
     where n runs from s...f, m runs from 0...norbs, w runs from 0...nff_ia, spin=0...1 or 2.
     """
@@ -396,62 +396,6 @@ class gw(scf):
         print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
     return sn2eval_gw
     
-  def report(self):
-    """ Prints the energy levels """
-    import re
-    emfev = self.mo_energy[0].T * HARTREE2EV
-    egwev = self.mo_energy_gw[0].T * HARTREE2EV
-    file_name= ''.join(self.get_symbols())
-    # The output should be possible to write more concise...
-    with open('report_'+file_name+'.out','w') as out_file:
-        print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
-        out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')
-        if self.nspin==1:
-            out_file.write('Energy-sorted MO indices \t {}'.format(self.argsort[0]))
-            if (np.allclose(self.argsort[0][:self.nfermi[0]],np.sort(self.argsort[0][:self.nfermi[0]]))==False):
-                    print ("Warning: Swapping in orbital energies below Fermi has happened!")
-                    out_file.write("\nWarning: Swapping in orbital energies below Fermi has happened!")
-            print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
-            out_file.write("\n   n  %14s %14s %7s \n" % ("E_mf", "E_gw", "occ") )
-            for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
-                print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
-                out_file.write("%5d  %14.7f %14.7f %7.2f\n" % (ie, emf[0], egw[0], f[0]) )
-            print('\nFermi energy        (eV):%16.7f'%(self.fermi_energy* HARTREE2EV))
-            out_file.write('\nFermi energy        (eV):%16.7f\n'%(self.fermi_energy* HARTREE2EV))            
-            print('G0W0 HOMO energy    (eV):%16.7f' % (egwev[self.nfermi[0]-1,0]))
-            out_file.write('G0W0 HOMO energy    (eV):%16.7f\n'%(egwev[self.nfermi[0]-1,0]))
-            print('G0W0 LUMO energy    (eV):%16.7f' % (egwev[self.nfermi[0],0]))
-            out_file.write('G0W0 LUMO energy    (eV):%16.7f\n'%(egwev[self.nfermi[0],0]))
-            print('G0W0 HOMO-LUMO gap  (eV):%16.7f' %(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
-            out_file.write('G0W0 HOMO-LUMO gap  (eV):%16.7f\n'%(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
-        elif self.nspin==2:
-            for s in range(2):
-                out_file.write('\nEnergy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
-                if (np.allclose(self.argsort[s][:self.nfermi[s]],np.sort(self.argsort[s][:self.nfermi[s]]))==False):
-                    print ("Warning: Swapping in orbital energies below Fermi has happened at spin {} channel!".format(s+1))
-                    out_file.write("\nWarning: Swapping in orbital energies below Fermi has happened at spin {} channel!\n".format(s+1))         
-            print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
-            out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
-            for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
-                print("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
-                out_file.write ("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f\n" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
-            print('\nFermi energy        (eV):%16.7f'%(self.fermi_energy* HARTREE2EV))
-            out_file.write('\nFermi energy        (eV):%16.7f\n'%(self.fermi_energy* HARTREE2EV))
-            print('G0W0 HOMO energy    (eV):%16.7f %16.7f'%(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
-            out_file.write('G0W0 HOMO energy    (eV):%16.7f %16.7f\n'%(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
-            print('G0W0 LUMO energy    (eV):%16.7f %16.7f'%(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
-            out_file.write('G0W0 LUMO energy    (eV):%16.7f %16.7f\n'%(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
-            print('G0W0 HOMO-LUMO gap  (eV):%16.7f %16.7f'%(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
-            out_file.write('G0W0 HOMO-LUMO gap  (eV):%16.7f %16.7f\n'%(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
-        else:
-            raise RuntimeError('not implemented...')
-        print('G0W0 Total energy   (eV):%16.7f' %(self.etot_gw*HARTREE2EV))
-        out_file.write('G0W0 Total energy   (eV):%16.7f\n'%(self.etot_gw*HARTREE2EV))
-        elapsed_time = time.time() - start_time
-        print('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
-        out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))         
-        out_file.close
- 
     
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
@@ -473,7 +417,8 @@ class gw(scf):
 	        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
         Vha = 0.5*((vh[0]+vh[1])*dm1[0,...,0]).sum()
       
-      print('\nmean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
+      print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(gw.energy_nuc()*HARTREE2EV))
+      print('mean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
       print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
       print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
       if hasattr(self, 'mf'): 
@@ -548,28 +493,18 @@ class gw(scf):
     mo_coeff = self.mo_coeff_gw if hasattr(self, 'mo_energy_gw') else self.mo_coeff
     return mf.spin_square(self, mo_coeff=mo_coeff)
 
-  def exfock(self):
-    """
-    This calculates the Exchange expectation value, when:
-    self.get_k() = Exchange operator/energy
-    mat1 is product of this operator and molecular coefficients and it will be diagonalized in expval by einsum
-    """
-    if self.nspin==1:
-      mat = -0.5*self.get_k()
-      mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
-      expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0]).reshape((1,self.norbs))
-      print('---------| Expectationvalues of Exchange energy(eV) |---------\n %3s  %16s  %3s'%('no.','<Sigma_x> ','occ'))
-      for i, (a,b) in enumerate(zip(expval.T*HARTREE2EV,self.mo_occ[0].T)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
-        if (i==self.nfermi[0]): print('-'*62)
-        print (' %3d  %16.6f  %3d'%(i,a[0], b[0]))
-    elif self.nspin==2:
-      mat = -self.get_k()
-      expval = zeros((self.nspin, self.norbs))
-      for s in range(self.nspin):
-        mat1 = dot(self.mo_coeff[0,s,:,:,0], mat[s])
-        expval[s] = einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
-      print('-----------| the Exchange expectation value (eV) |-----------\n %3s  %16s  %3s  | %12s  %3s'%('no.','<Sigma_x>','occ','<Sigma_x>','occ'))        
-      for i , (a,b) in enumerate(zip(expval.T* HARTREE2EV,self.mo_occ[0].T)):
-        if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*60)
-        print(' %3d  %16.6f  %3d  | %12.6f  %3d'%(i, a[0],b[0],a[1], b[1]))
-    #return expval
+
+  def report_mf(self):
+    """ Prints the energy levels of mean-field calculations"""
+    from pyscf.nao.m_report import report_mfx
+    return report_mfx(self)
+    
+  def report_ex(self):
+    """ Prints the exchange energy levels """
+    from pyscf.nao.m_report import exfock
+    return exfock(self)
+
+  def report(self):
+    """ Prints the energy levels of meanfield and G0W0"""
+    from pyscf.nao.m_report import report_gw
+    return report_gw(self)
