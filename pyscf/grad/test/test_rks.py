@@ -388,14 +388,18 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.xc = 'wb97x'
         mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -76.36324624711915, 12)
+
         g = mf.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.finger(g), -0.027003819523762924, 7)
+        self.assertAlmostEqual(lib.finger(g), -0.027003819523762924, 3)
 
         mol1 = gto.M(atom="H; H 1 1.", basis='ccpvdz', verbose=0)
         mf = dft.RKS(mol1)
         mf.xc = 'wb97x'
         mf.kernel()
         g = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.17166479488374434, 5)
+
         smf = mf.as_scanner()
         mol1 = gto.M(atom="H; H 1 1.001", basis='ccpvdz')
         mol2 = gto.M(atom="H; H 1 0.999", basis='ccpvdz')
