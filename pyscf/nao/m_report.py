@@ -6,7 +6,7 @@ import time
 start_time = time.time()
 
 def report_gw (self):
-    """ Prints the energy levels """
+    """ Prints the energy levels of mean-field and G0W0"""
     import re
     emfev = self.mo_energy[0].T * HARTREE2EV
     egwev = self.mo_energy_gw[0].T * HARTREE2EV
@@ -63,6 +63,13 @@ def report_gw (self):
 
 
 def report_mfx(self):
+    """
+    This calculates the h_core, Hartree (K) and Exchange(J) expectation value.
+    """
+    #import re
+    #import sys
+    #file_name= ''.join(self.get_symbols())
+    #sys.stdout=open('report_mf_'+file_name+'.out','w')
 
     dm1 = self.make_rdm1()
     H = self.get_hcore()
@@ -106,19 +113,19 @@ def report_mfx(self):
           print(' %3d  %12.6f  %12.6f %12.6f %12.6f  %3d  | %12.6f  %12.6f  %12.6f %12.6f  %3d'%(i, a[0],b[0],c[0],d[0],e[0],a[1],b[1],c[1],d[1],e[1]))
         EX = 0.5*(x*dm1[0,...,0]).sum()
 
-
-    print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(self.energy_nuc()))
-    print('mean-field Core energy       (eV):%16.6f'%(ecore))
-    print('mean-field Exchange energy   (eV):%16.6f'%(EX))
-    print('mean-field Hartree energy    (eV):%16.6f'%(Vha))
     if hasattr(self, 'mf'): 
-            print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot))
-            S = self.spin/2
-            S0 = S*(S+1)
-            SS = self.mf.spin_square()
-            if ( SS[0]!= S ):
-              print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
-              print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
+        print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(self.energy_nuc()))
+        print('mean-field Core energy       (eV):%16.6f'%(ecore))
+        print('mean-field Exchange energy   (eV):%16.6f'%(EX))
+        print('mean-field Hartree energy    (eV):%16.6f'%(Vha))
+        print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot))
+        S = self.spin/2
+        S0 = S*(S+1)
+        SS = self.mf.spin_square()
+        if ( SS[0]!= S ):
+            print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
+            print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
+    #sys.stdout.close()
 
 
 

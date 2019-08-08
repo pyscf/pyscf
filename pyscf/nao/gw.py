@@ -417,11 +417,11 @@ class gw(scf):
 	        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
         Vha = 0.5*((vh[0]+vh[1])*dm1[0,...,0]).sum()
       
-      print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(gw.energy_nuc()*HARTREE2EV))
-      print('mean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
-      print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
-      print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
-      if hasattr(self, 'mf'): 
+      if hasattr(self, 'mf'):
+        print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(gw.energy_nuc()*HARTREE2EV))
+        print('mean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
+        print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
+        print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
         print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
         S = self.spin/2
         S0 = S*(S+1)
