@@ -20,42 +20,35 @@
 All output is deleted after the run to keep the directory neat. Comment out the
 cleanup section to view output.
 """
-import time
+import os, time
 
-import numpy
-import math
-import os
-from pyscf import gto, scf, ao2mo, mcscf, tools, fci
-from pyscf.shciscf import shci, settings
+from pyscf import gto, scf, mcscf, dmrgscf
+from pyscf.shciscf import shci
 
 t0 = time.time()
 
-alpha = 0.007297351
+#
+# Mean Field
+#
 
-mol = gto.M(
-    atom="C 0 0 0; C 0 0 1.3119", basis="cc-pvqz", verbose=5, symmetry=1, spin=2
-)
-myhf = scf.RHF(mol)
-myhf.kernel()
+mol = gto.Mole()
+mol.build(verbose=3, atom="C 0 0 0; C 0 0 1.8", basis="ccpvdz")
+mf = scf.RHF(mol).run()
 
-##USE SHCISCF
-solver1 = shci.SHCI(mol)
-solver1.irrep_nelec = {"A1g": (2, 1), "A1u": (1, 1), "E1ux": (1, 1), "E1uy": (1, 0)}
-solver1.prefix = "solver1"
-solver1.epsilon2 = 1.0e-7
-solver1.stochastic = False
-
-solver2 = shci.SHCI(mol)
-solver2.irrep_nelec = {"A1g": (2, 1), "A1u": (1, 1), "E1ux": (1, 0), "E1uy": (1, 1)}
-solver2.prefix = "solver2"
-solver2.epsilon2 = 1.0e-7
-solver2.stochastic = False
-
-mycas = shci.SHCISCF(myhf, 8, 8)
-mcscf.state_average_mix_(mycas, [solver1, solver2], numpy.ones(2) / 2)
-mycas.kernel()
+#
+# Multireference
+#
+ncas = 8
+nelecas = 8
+mc = shci.SHCISCF(mf, ncas, nelecas)
+mc.fcisolver.sweep_iter = [0, 3]
+mc.fcisolver.sweep_epsilon = [1.0e-3, 1.0e-4]
+mc.fcisolver.runtimeDir = "custom_runtime"
+if not os.path.exists(mc.fcisolver.runtimeDir):
+    os.mkdir(mc.fcisolver.runtimeDir)
+mc.kernel()
 
 print("Total Time:    ", time.time() - t0)
 
 # File cleanup
-solver1.cleanup_dice_files()
+mc.fcisolver.cleanup_dice_files()
