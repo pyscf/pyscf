@@ -13,7 +13,10 @@ from timeit import default_timer as timer
 class scf(tddft_iter):
 
   def __init__(self, **kw):
-    """ Constructor a self-consistent field """
+    """
+    Constructor a self-consistent field
+    """
+
     self.perform_scf = kw['perform_scf'] if 'perform_scf' in kw else False
     self.kmat_algo = kw['kmat_algo'] if 'kmat_algo' in kw else None
     self.kmat_timing = 0.0 if 'kmat_timing' in kw else None
@@ -24,7 +27,10 @@ class scf(tddft_iter):
     self.xc_code_kernel = copy(self.xc_code)
     self.xc_code = self.xc_code_mf
     self.dm_mf   = self.make_rdm1() # necessary to get_hcore(...) in case of pp starting point
-    self.hkernel_den = pack2den_u(self.kernel)
+
+    if self.gen_pb:
+      self.hkernel_den = pack2den_u(self.kernel)
+
     if self.nspin==1:
       self.pyscf_scf = hf.SCF(self)
     else:

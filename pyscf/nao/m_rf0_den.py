@@ -1,10 +1,61 @@
 from __future__ import print_function, division
-import sys, numpy as np
+import sys
+import numpy as np
+import numba as nb
 from numpy import stack, dot, zeros, einsum, array
 from timeit import default_timer as timer
+import scipy.linalg.blas as blas
 
 def rf0_den(self, ww):
-  """ Full matrix response in the basis of atom-centered product functions for parallel spins"""
+  """
+  Full matrix response in the basis of atom-centered product functions for
+  parallel spins.
+
+  Blas version to speed up matrix matrix multiplication
+  spped up of 7.237 compared to einsum version for C20 system
+  """
+  
+  rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
+  if hasattr(self, 'pab2v_den'):
+    v = self.pab2v_den
+  else:
+    self.pab2v_den = v = einsum('pab->apb', self.pb.get_ac_vertex_array())
+  
+  zxvx = zeros((len(ww),self.nprod,self.bsize,self.bsize), dtype=self.dtypeComplex)
+
+  for s in range(self.nspin):
+    nn = list(range(0,self.nfermi[s],self.bsize))+[self.nfermi[s]]
+    mm = list(range(self.vstart[s],self.norbs,self.bsize))+[self.norbs]
+    
+    for nbs,nbf in zip(nn,nn[1:]):
+      vx = dot(v, self.x[s,nbs:nbf,:].T)
+      for mbs,mbf in zip(mm,mm[1:]):
+        xvx = calc_XVX(self.x[s,mbs:mbf,:], vx)
+
+        fmn = np.add.outer(-self.ksn2f[0,s,mbs:mbf], self.ksn2f[0,s,nbs:nbf])
+        emn = np.add.outer( self.ksn2e[0,s,mbs:mbf],-self.ksn2e[0,s,nbs:nbf])
+        zxvx.fill(0.0)
+        for iw,comega in enumerate(ww):
+          zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
+      
+        rf0 += calc_part_rf0(xvx, zxvx[:, :, 0:mbf-mbs, 0:nbf-nbs])
+
+  #rf0_ref = rf0_den_org(self, ww)
+  #print("mean: ", rf0.mean(), rf0_ref.mean())
+  #print("diff: ", np.sum(abs(rf0_ref.real - rf0.real)))
+  #print("diff: ", np.sum(abs(rf0_ref.imag - rf0.imag)))
+  #import sys
+  #sys.exit()
+
+  return rf0
+
+def rf0_den_einsum(self, ww):
+  """
+  Full matrix response in the basis of atom-centered product functions for 
+  parallel spins
+  
+  einsum version, slow
+  """
   
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   if hasattr(self, 'pab2v_den'):
@@ -22,6 +73,7 @@ def rf0_den(self, ww):
       vx = dot(v, self.x[s,nbs:nbf,:].T)
       for mbs,mbf in zip(mm,mm[1:]):
         xvx = einsum('mb,bpn->pmn', self.x[s,mbs:mbf,:],vx)
+
         fmn = np.add.outer(-self.ksn2f[0,s,mbs:mbf], self.ksn2f[0,s,nbs:nbf])
         emn = np.add.outer( self.ksn2e[0,s,mbs:mbf],-self.ksn2e[0,s,nbs:nbf])
         zxvx.fill(0.0)
@@ -32,6 +84,27 @@ def rf0_den(self, ww):
   
   return rf0
 
+def calc_part_rf0(xvx, zxvx):
+
+    rf0 = np.zeros((zxvx.shape[0], zxvx.shape[1], zxvx.shape[1]), dtype=np.complex128)
+
+    for iw in range(zxvx.shape[0]):
+
+        for ib in range(zxvx.shape[3]):
+            rf0[iw, :, :] += blas.zgemm(1.0, zxvx[iw, :, :, ib], xvx[:, :, ib], 
+                                trans_a = 0, trans_b = 1)
+
+    return rf0
+
+def calc_XVX(X, VX):
+
+    XVX = np.zeros((VX.shape[1], X.shape[0], VX.shape[2]))
+
+    for i in range(XVX.shape[2]):
+
+        XVX[:, :, i] = blas.dgemm(1.0, VX[:, :, i], X, trans_a=1, trans_b=1)
+
+    return XVX
 
 def rf0_cmplx_ref_blk(self, ww):
   """ Full matrix response in the basis of atom-centered product functions """

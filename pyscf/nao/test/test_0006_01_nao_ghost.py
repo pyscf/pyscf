@@ -12,18 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
+from __future__ import print_function, division
+import unittest
 
-#
-#
-#
-def get_sp_mu2s(sp2nmult,sp_mu2j):
-    """  Generates list of start indices for atomic orbitals, based on the counting arrays """
-    sp_mu2s = []
-    for sp,(nmu,mu2j) in enumerate(zip(sp2nmult,sp_mu2j)):
-        mu2s = np.zeros((nmu+1), dtype='int64')
-        for mu in range(nmu):
-            mu2s[mu+1] = sum(2*mu2j[0:mu+1]+1)
-        sp_mu2s.append(mu2s)
+class KnowValues(unittest.TestCase):
+
+    def test_0006_01_nao_ghost(self):
+        import os
+        from pyscf.nao import nao
+        from pyscf.nao.m_overlap_am import overlap_am
+        
+        dname = os.path.join(os.path.split(__file__)[0], 'test_ag13_ghost')
+        sv = nao(label='siesta', cd=dname)
+        oc = sv.overlap_check(funct=overlap_am)
+        self.assertTrue(oc[0])
+        vna = sv.vna_coo().toarray()
+        
     
-    return sp_mu2s
+
+if __name__ == "__main__": 
+    unittest.main()

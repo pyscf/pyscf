@@ -231,7 +231,8 @@ class nao():
     self.nkpoints  = self.wfsx.nkpoints
 
     self.sp2ion = []
-    for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
+    for sp in self.wfsx.sp2strspecie: 
+        self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
     _siesta_ion_add_sp2(self, self.sp2ion)
     #self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
     self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
@@ -622,38 +623,38 @@ class nao():
   def get_vkb(self): 
     """ Compose the vector of Kleinman-Bylander energies v^p = v^KB_ln, where p is a global projector index """
     atom2s, kb = np.zeros((self.natm+1), dtype=int), self.kb_log
-    for atom,sp in enumerate(self.atom2sp): atom2s[atom+1]=atom2s[atom]+kb.sp2norbs[sp]
+    for atom,sp in enumerate(self.atom2sp): 
+        atom2s[atom+1]=atom2s[atom]+kb.sp2norbs[sp]
     vkb = np.zeros(atom2s[-1])
     for sp,gs in zip(self.atom2sp,atom2s):
-      for v,s,f in zip(kb.sp_mu2vkb[sp], kb.sp_mu2s[sp], kb.sp_mu2s[sp][1:]): vkb[gs+s:gs+f] = v
+        for v,s,f in zip(kb.sp_mu2vkb[sp], kb.sp_mu2s[sp], kb.sp_mu2s[sp][1:]): 
+            vkb[gs+s:gs+f] = v
     return vkb
   
   def dipole_coo(self, **kw):   # Compute dipole matrix elements for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
     return dipole_coo(self, **kw)
   
-  def overlap_check(self, sv , tol=1e-8, **kw): # Works for pyscf and after init_siesta_xml()
-    if hasattr(self, 'mol'):
-      from pyscf import gto, scf                           
-      from pyscf.nao import nao
-      result = True
-      ovlp_pyscf = self.get_ovlp()
-      #sv = nao(gto=mol, rcut_tol=1e-8, nr=512, rmin=1e-5) 
-      #ovlp_nao = sv.overlap_coo().toarray()
-      ovlp_nao = sv.overlap_lil().toarray()
-      diff = (abs(ovlp_nao - ovlp_pyscf)).sum()
-      summ = (abs(ovlp_nao + ovlp_pyscf)).sum()
-      if diff/summ > tol or diff/ovlp_nao.size > tol:
-        result = False  #as might be expected due to the different sepherical harmonic part they must be different.
-      check = result,'tol:{}, MAX:{}'.format(tol,np.max(np.abs(ovlp_nao - ovlp_pyscf))), diff/summ
-    else:
-      ovlp_nao = sv.overlap_coo(**kvargs).tocsr()
-      diff = (sv.hsx.s4_csr - ovlp_nao).sum()
-      summ = (sv.hsx.s4_csr + ovlp_nao).sum()
-      if diff/summ > tol:
-        result = False
-      check = result,'tol:{}'.format(tol), diff/summ
-    return check
+  def overlap_check(self, **kw): # Works for pyscf and after init_siesta_xml()
+      if hasattr(self, 'mol'):
+          from pyscf import gto, scf                           
+          tol = kw.get('tol', 1e-7)
+          result = True
+          ovlp_pyscf = self.get_ovlp()
+          ovlp_nao = self.overlap_coo(**kw).toarray()
+          diff = (abs(ovlp_nao - ovlp_pyscf)).sum()
+          summ = (abs(ovlp_nao + ovlp_pyscf)).sum()
+          if diff/summ > tol or diff/ovlp_nao.size > tol:
+              result = False
+          check = result,'tol:{}, MAX:{}'.format(tol,np.max(np.abs(ovlp_nao - ovlp_pyscf))), diff/summ
+      else:
+          tol = kw.get('tol', 1e-5)
+          ovlp_nao = self.overlap_coo(**kw).tocsr()
+          diff = (self.hsx.s4_csr - ovlp_nao).sum()
+          summ = (self.hsx.s4_csr + ovlp_nao).sum()
+          result = diff/summ < tol
+          check = result, 'tol:{}'.format(tol), diff/summ
+      return check
 
   def energy_nuc(self, charges=None, coords=None):
     """ Potential energy of electrostatic repulsion of point nuclei """
@@ -733,19 +734,21 @@ class nao():
     return vnuc
 
   def vna(self, coords, **kw):
-    """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
+      """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
         The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
-    (sp2v,sp2rcut) = (kw['sp2v'],kw['sp2rcut']) if 'sp2v' in kw else (self.ao_log.sp2vna,self.ao_log.sp2rcut_vna)
-    atom2coord = kw['atom2coord'] if 'atom2coord' in kw else self.atom2coord
+      (sp2v,sp2rcut) = (kw['sp2v'],kw['sp2rcut']) if 'sp2v' in kw else (self.ao_log.sp2vna,self.ao_log.sp2rcut_vna)
+      atom2coord = kw['atom2coord'] if 'atom2coord' in kw else self.atom2coord
 
-    nc = coords.shape[0]
-    vna = np.zeros(nc)
-    for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
-      #print(__name__, ia, sp, sp2rcut[sp])
-      dd = cdist(R.reshape((1,3)), coords).reshape(nc)
-      vnaa = self.ao_log.interp_rr(sp2v[sp], dd, rcut=sp2rcut[sp])
-      vna = vna + vnaa
-    return vna
+      nc = coords.shape[0]
+      vna = np.zeros(nc)
+      for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
+          if sp2v[sp] is None: # This can be done better via preparation of a special atom2sp excluding ghost atoms
+              continue
+          #print(__name__, ia, sp, sp2rcut[sp])
+          dd = cdist(R.reshape((1,3)), coords).reshape(nc)
+          vnaa = self.ao_log.interp_rr(sp2v[sp], dd, rcut=sp2rcut[sp])
+          vna = vna + vnaa
+      return vna
 
   def vna_coo(self, **kw):
     """ Compute matrix elements of a potential which is given as superposition of central fields from each nuclei """
