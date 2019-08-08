@@ -5,7 +5,9 @@ ml Anaconda3/5.1.0
 red=$( tput setaf 1 )
 green=$( tput setaf 2 )
 sab=$( tput setaf 4 )
+white=$( tput setaf 7 )
 NC=$( tput setaf 255 )
+
 date="$(date +'%d/%m/%Y')"
 now=$(date +"%T")
 
@@ -20,6 +22,7 @@ printf "<p style="color:green">=================================================
 echo "${green}============================================="
 echo "$i ====> Repository will be UPDATED!"
 echo "=============================================${NC}"
+echo "${white}"
 git pull
 git pull https://github.com/cfm-mpc/pyscf nao
 
@@ -30,6 +33,7 @@ m=0
 n=0
 
 for i in $LIST; do
+    echo "${white}"
     if python "$i" ; then    
       printf "<p style="color:green">=============================================<br />\
       $i ====> TEST succeeded.<br />\

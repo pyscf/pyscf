@@ -256,7 +256,7 @@ class gw(scf):
     """
     wpq2si0 = self.si_c(ww = 1j*self.ww_ia).real
     v_pab = self.pb.get_ac_vertex_array()
-    self.snmw2sf_ncalls += 1
+    #self.snmw2sf_ncalls += 1
     snmw2sf = []
     for s in range(self.nspin):
       nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
@@ -384,7 +384,7 @@ class gw(scf):
 
       if self.verbosity>0:
         np.set_printoptions(linewidth=1000, suppress=True, precision=5)
-        print('Iteration #{}  Relative Error: {:.7f}'.format(i+1, err))
+        print('Iteration #{:3d}  Relative Error: {:.8f}'.format(i+1, err))
       if self.verbosity>1:
         #print(sn2mismatch)
         for s,n2ev in enumerate(sn2eval_gw):
@@ -418,7 +418,7 @@ class gw(scf):
         Vha = 0.5*((vh[0]+vh[1])*dm1[0,...,0]).sum()
       
       if hasattr(self, 'mf'):
-        print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(gw.energy_nuc()*HARTREE2EV))
+        print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(self.energy_nuc()*HARTREE2EV))
         print('mean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
         print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
         print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
@@ -454,7 +454,7 @@ class gw(scf):
       #print(self.mo_energy_g0w0)
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
       self.argsort.append(argsrt)
-      if self.verbosity>0: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
+      if self.verbosity>2: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  

@@ -449,7 +449,9 @@ class nao():
     self.magnetization = kw['magnetization'] if 'magnetization' in kw else None #using this key for number of unpaired
     if self.nspin==1:
       self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
-    elif self.nspin==2:
+    elif (self.nspin==2 and self.magnetization==None):
+      self.nelec =kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])
+    elif (self.nspin==2 and self.magnetization!=None):
       if 'nelec' in kw: self.nelec = kw['nelec']
       else:
         ne = self.hsx.nelec

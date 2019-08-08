@@ -48,7 +48,7 @@ class scf(tddft_iter):
     """ This does the actual SCF loop so far only HF """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess()
-    if (self.nspin==2): dm0=dm0[0,...,0] 
+    if (self.nspin==2 and dm0.ndim==5): dm0=dm0[0,...,0] 
     etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
     #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
 
