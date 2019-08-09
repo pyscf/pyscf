@@ -118,7 +118,7 @@ elif sys.platform.startswith('darwin'):
 elif sys.platform.startswith('win'):
     ostype = 'windows'
     so_ext = '.dll'
-elif sys.platform.startswith('aix'):
+elif sys.platform.startswith('aix') or sys.platform.startswith('os400'):
     ostype = 'aix'
     so_ext = '.so'
     LD_LIBRARY_PATH = 'LIBPATH'
@@ -278,7 +278,7 @@ def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir
             soname = pkg_name.split('.')[-1]
             extra_link_flags = extra_link_flags + ['-install_name', '@loader_path/'+soname+so_ext]
             runtime_library_dirs = []
-        if sys.platform.startswith('aix'):
+        if sys.platform.startswith('aix') or sys.platform.startswith('os400'):
             extra_compile_flags = extra_compile_flags + ['-fopenmp']
             extra_link_flags = extra_link_flags + ['-lblas', '-lgomp', '-Wl,-brtl']
             runtime_library_dirs = ['$ORIGIN', '.']
