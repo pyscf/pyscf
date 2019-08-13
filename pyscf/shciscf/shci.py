@@ -874,9 +874,10 @@ class SHCI(pyscf.lib.StreamObject):
         """
         Remove the files used for Dice communication.
         """
-        os.remove("input.dat")
-        os.remove("output.dat")
-        os.remove("FCIDUMP")
+        
+        os.remove(os.path.join(self.runtimeDir, self.configFile))
+        os.remove(os.path.join(self.runtimeDir, self.outputFile))
+        os.remove(os.path.join(self.runtimeDir, self.integralFile))
 
 
 def print1Int(h1, name):
@@ -995,6 +996,10 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
                         "number of irreps %s beta  electrons = %d" % (k, v[1]))
                     exit(1)
     f.write('\nend\n')
+
+    # Handle different cases for FCIDUMP file names/paths
+    f.write("orbitals {}\n".format(os.path.join(SHCI.runtimeDir, SHCI.integralFile)))
+
     f.write('nroots %r\n' % SHCI.nroots)
 
     # Variational Keyword Section
