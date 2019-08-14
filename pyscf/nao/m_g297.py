@@ -2739,8 +2739,9 @@ data={
                   'symbols': 'CCCCHHHHHHHHHH',
                   'thermal correction': 4.2633}}
 
-#prepares latex file for open-shell systems, number of atoms and their positions
+
 def pos_latex ():
+    '''prepares latex file for open-shell systems, number of atoms and their positions'''
     import re
     for k in sorted (data.keys()):
         if (data[k]['magmoms'] != None):    #open-shell
@@ -2761,7 +2762,7 @@ def pos_latex ():
 
 
 def pos_pyscf ():
-    #converts ase position lists to a long string which is readable for Pyscf   
+    '''converts ase position lists to a long string which is readable for Pyscf'''
     import re        
     import pprint
     for k in sorted (data.keys()):
@@ -2784,10 +2785,7 @@ def pyscf_input (dirname=None):
     '''writes the PySCF inputs in the given address'''
     import json
     import os
-    if (dirname==None):
-        dirname=os.getcwd() 
-    else:
-        dirname = dirname
+    if dirname is None: dirname=os.getcwd() 
     for k in sorted(data.keys()):
         d=data[k]
         if (d['magmoms']!=None): # writes output for openshell molecules
@@ -2803,8 +2801,15 @@ gw = gw_c(mf=gto_mf, gto=mol, verbosity=3, niter_max_ev=50, kmat_algo='sm0_sum')
 gw.kernel_gw()
 gw.report()
 '''.format(pos,int(m))
+
+            if not os.path.exists(dirname+'/{}'.format(k)):
+                try:
+                    os.makedirs(dirname+'/{}'.format(k))
+                except OSError as exc: # Guard against race condition
+                    if exc.errno != errno.EEXIST:
+                        raise
        
-            with open((dirname+"/{}.py".format(k)),'w') as f:
+            with open((dirname+"/{}/{}.py".format(k,k)),'w') as f:
                 f.writelines(output)
                 f.close()
 
@@ -2814,11 +2819,8 @@ def molgw_input (dirname=None):
     '''writes a standard MOLGW inputs for HF+G0W0 in the given address'''
     import json
     import os
-    if (dirname==None):
-        dirname=os.getcwd() 
-    else:
-        dirname = dirname
 
+    if dirname is None: dirname=os.getcwd() 
     for k in sorted(data.keys()):  
         d=data[k]
         if (d['magmoms']!=None): # writes output for openshell molecules
@@ -2827,7 +2829,7 @@ def molgw_input (dirname=None):
             pos=d['position_pyscf']
             nn=sum(1 for c in d['symbols'] if c.isupper())
             output='''&molgw
- scf='hf'
+ scf='HSE06'
  read_restart='no'
  print_restart='no'
  print_hartree='yes'
@@ -2860,4 +2862,4 @@ def molgw_input (dirname=None):
                 f.writelines(output)
                 f.close()
 
-pyscf_input('/home/masoud/calculations/training/co/UntitledFolder/aaaaaaaaaa')
+#pyscf_input('/home/masoud/calculations/training/co/UntitledFolder/aaaaaaaaaa')

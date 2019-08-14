@@ -155,3 +155,18 @@ class scf(tddft_iter):
     j = self.get_j(dm, **kw)
     k = self.get_k(dm, **kw)
     return j,k
+
+  def get_veff(self, dm=None, **kw):
+    '''Hartree-Fock potential matrix for the given density matrix'''
+    if dm is None: dm = self.make_rdm1()
+    vj, vk = self.get_jk (dm, **kw)
+    if (self.nspin==1): v_eff = vj - vk * .5
+    if (self.nspin==2): v_eff = vj[0] + vj[1] - vk
+    return v_eff
+
+  def get_fock(self, h1e=None, dm=None, **kw):
+    '''Fock matrix for the given density matrix (matrix elements of the Fockian).'''
+    if dm is None: dm = self.make_rdm1()
+    if h1e is None: h1e = self.get_hcore()
+    fock = h1e +  self.get_veff(dm, **kw) 
+    return fock
