@@ -2837,11 +2837,11 @@ def molgw_input (dirname=None):
  basis='cc-pVQZ'
  auxil_basis='cc-pVQZ-RI'
  !basis_path='/scratch/scicomp/CentOS/7.3.1611/Haswell/software/MOLGW/1.H-am7-intel-2017b/basis'
- nspin=2
- charge=0.0
+ nspin=2 !open-shell
+ charge=0.0 !neutral
  postscf='gw'
  selfenergy_state_range=10
- nomega_sigma=51
+ nomega_sigma=251
  step_sigma=0.01
  print_w='yes'
  print_pdos='yes'
@@ -2862,4 +2862,4 @@ def molgw_input (dirname=None):
                 f.writelines(output)
                 f.close()
 
-#pyscf_input('/home/masoud/calculations/training/co/UntitledFolder/aaaaaaaaaa')
+#pyscf_input('/home/masoud/calculations/training/')

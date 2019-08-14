@@ -494,10 +494,11 @@ class gw(scf):
     return mf.spin_square(self, mo_coeff=mo_coeff)
 
 
-  def report_mf(self):
+  def report_mf(self,dm=None):
     """ Prints the energy levels of mean-field calculations"""
     from pyscf.nao.m_report import report_mfx
-    return report_mfx(self)
+    if dm is None: dm = self.make_rdm1()
+    return report_mfx(self,dm)
     
   def report_ex(self):
     """ Prints the exchange energy levels """

@@ -62,18 +62,20 @@ def report_gw (self):
         out_file.close
 
 
-def report_mfx(self):
+def report_mfx(self, dm1=None):
     """
-    This calculates the h_core, Hartree (K) and Exchange(J) expectation value.
+    This collects the h_core, Hartree (K) and Exchange(J) and Fock expectation value with given density matrix.
     """
     #import re
     #import sys
     #file_name= ''.join(self.get_symbols())
     #sys.stdout=open('report_mf_'+file_name+'.out','w')
 
-    dm1 = self.make_rdm1()
+    if dm1 is None: dm1 = self.make_rdm1()
+    if dm1.ndim==5 : dm1=dm1[0,...,0]
+    assert dm1.shape == (self.nspin, self.norbs, self.norbs), "Given density matrix has wrong dimension"
     H = self.get_hcore()
-    ecore = (H*dm1[0,...,0]).sum()
+    ecore = (H*dm1).sum()
     co = self.get_j()
     fock = self.get_fock()
     exp_h = np.zeros((self.nspin, self.norbs))
@@ -95,13 +97,13 @@ def report_mfx(self):
         for i, (a,b,c,d,e,f) in enumerate(zip(exp_h.T*HARTREE2EV,exp_co.T*HARTREE2EV, exp_x.T*HARTREE2EV,exp_f.T*HARTREE2EV,self.mo_energy.T*HARTREE2EV, self.mo_occ[0].T)):   
           if (i==self.nfermi[0]): print('-'*78)
           print(' %3d  %12.6f  %12.6f %12.6f %12.6f  %12.6f  %3d'%(i, a,b,c,d,e,f))
-        Vha = 0.5*(co*dm1[0,...,0]).sum()
-        EX = 0.5*(x*dm1[0,...,0]).sum()
+        Vha = 0.5*(co*dm1).sum()
+        EX = 0.5*(x*dm1).sum()
 
     elif self.nspin==2:
         x = -self.get_k()
         cou = co[0]+co[1]
-        Vha = 0.5*(cou*dm1[0,...,0]).sum()
+        Vha = 0.5*(cou*dm1).sum()
         for s in range(self.nspin):
           mat_h = np.dot(self.mo_coeff[0,s,:,:,0], H)                   
           exp_h[s] = np.einsum('nb,nb->n', mat_h, self.mo_coeff[0,s,:,:,0])
@@ -116,7 +118,7 @@ def report_mfx(self):
         for i , (a,b,c,d,e,f) in enumerate(zip(exp_h.T*HARTREE2EV,exp_co.T*HARTREE2EV, exp_x.T*HARTREE2EV,exp_f.T*HARTREE2EV,self.mo_energy.T*HARTREE2EV, self.mo_occ[0].T)):
           if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*153)
           print(' %3d  %12.6f  %12.6f %12.6f %12.6f  %12.6f  %3d  | %12.6f  %12.6f  %12.6f  %12.6f %12.6f  %3d'%(i, a[0],b[0],c[0],d[0],e[0],f[0],a[1],b[1],c[1],d[1],e[1],f[1]))
-        EX = 0.5*(x*dm1[0,...,0]).sum()
+        EX = 0.5*(x*dm1).sum()
 
     if hasattr(self, 'mf'): 
         print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(self.energy_nuc()))
