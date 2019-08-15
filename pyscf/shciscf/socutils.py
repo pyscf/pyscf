@@ -11,33 +11,15 @@ from pyscf.x2c import x2c
 
 
 def print1Int(h1, name):
-    with open('%s.X' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[0].shape[0])
-        for i in range(h1[0].shape[0]):
-            for j in range(h1[0].shape[0]):
-                if (abs(h1[0, i, j]) > 1.e-8):
-                    fout.write('%16.10g %4d %4d\n' % (h1[0, i, j], i + 1, j + 1))
-
-    with open('%s.Y' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[1].shape[0])
-        for i in range(h1[1].shape[0]):
-            for j in range(h1[1].shape[0]):
-                if (abs(h1[1, i, j]) > 1.e-8):
-                    fout.write('%16.10g %4d %4d\n' % (h1[1, i, j], i + 1, j + 1))
-
-    with open('%s.Z' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[2].shape[0])
-        for i in range(h1[2].shape[0]):
-            for j in range(h1[2].shape[0]):
-                if (abs(h1[2, i, j]) > 1.e-8):
-                    fout.write('%16.10g %4d %4d\n' % (h1[2, i, j], i + 1, j + 1))
-
-    with open('%sZ' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[2].shape[0])
-        for i in range(h1[2].shape[0]):
-            for j in range(h1[2].shape[0]):
-                if (abs(h1[2, i, j]) > 1.e-8):
-                    fout.write('%16.10g %4d %4d\n' % (h1[2, i, j], i + 1, j + 1))
+    xyz = ["X", "Y", "Z"]
+    for k in range(3):
+        with open('%s.' % (name) + xyz[k], 'w') as fout:
+            fout.write('%d\n' % h1[k].shape[0])
+            for i in range(h1[k].shape[0]):
+                for j in range(h1[k].shape[0]):
+                    if (abs(h1[k, i, j]) > 1.e-8):
+                        fout.write(
+                            '%16.10g %4d %4d\n' % (h1[k, i, j], i + 1, j + 1))
 
 
 #by default h is returned in the contracted basis
@@ -151,41 +133,21 @@ def get_fso2e_0(mol, x, rp, pLL, pLS, pSS):
     ddint = mol.intor('int2e_ip1ip2_sph', 9).reshape(3, 3, nq)
     fso2e = numpy.zeros((3, nb, nb))
 
-    ddint[0, 0] = ddint[1, 2] - ddint[2, 1]
-    kint = ddint[0, 0].reshape(nb, nb, nb, nb)
-    gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
-    gsoLS = -1.0*numpy.einsum('mlkn,lk->mn',kint,pLS) \
-            -1.0*numpy.einsum('lmkn,lk->mn',kint,pLS)
-    gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
-            -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
-            +2.0*numpy.einsum('mlnk,lk',kint,pLL)
-    fso2e[0] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
-               + x.T.dot(gsoSS.dot(x))
-    fso2e[0] = reduce(numpy.dot, (rp.T, fso2e[0], rp))
-
-    ddint[0, 0] = ddint[2, 0] - ddint[2, 1]
-    kint = ddint[0, 0].reshape(nb, nb, nb, nb)
-    gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
-    gsoLS = -1.0*numpy.einsum('mlkn,lk->mn',kint,pLS) \
-            -1.0*numpy.einsum('lmkn,lk->mn',kint,pLS)
-    gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
-            -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
-            +2.0*numpy.einsum('mlnk,lk',kint,pLL)
-    fso2e[1] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
-                + x.T.dot(gsoSS.dot(x))
-    fso2e[1] = reduce(numpy.dot, (rp.T, fso2e[1], rp))
-
-    ddint[0, 0] = ddint[0, 1] - ddint[1, 0]
-    kint = ddint[0, 0].reshape(nb, nb, nb, nb)
-    gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
-    gsoLS = -1.0*numpy.einsum('mlkn,lk->mn',kint,pLS) \
-            -1.0*numpy.einsum('lmkn,lk->mn',kint,pLS)
-    gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
-            -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
-            +2.0*numpy.einsum('mlnk,lk',kint,pLL)
-    fso2e[2] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
-                + x.T.dot(gsoSS.dot(x))
-    fso2e[2] = reduce(numpy.dot, (rp.T, fso2e[2], rp))
+    xyz = [0, 1, 2]
+    for i_x in xyz:
+        i_y = xyz[i_x - 2]
+        i_z = xyz[i_x - 1]
+        ddint[0, 0] = ddint[i_y, i_z] - ddint[i_z, i_y] # x = yz - zy etc
+        kint = ddint[0, 0].reshape(nb, nb, nb, nb)
+        gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
+        gsoLS = -numpy.einsum('mlkn,lk->mn',kint,pLS) \
+                -numpy.einsum('lmkn,lk->mn',kint,pLS)
+        gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
+                -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
+                +2.0*numpy.einsum('mlnk,lk',kint,pLL)
+        fso2e[i_x] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
+                     + x.T.dot(gsoSS.dot(x))
+        fso2e[i_x] = reduce(numpy.dot, (rp.T, fso2e[i_x], rp))
     return fso2e
 
 
@@ -240,7 +202,7 @@ def get_fso2e_2(mol, x, rp, pLL, pLS, pSS):
                     kint = numpy.zeros(3 * shl_size[i] * shl_size[j] * shl_size[k] * shl_size[l]).reshape(
                         3, shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[0] = (ddint[1, 2] - ddint[2, 1]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
-                    kint[1] = (ddint[2, 0] - ddint[2, 1]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
+                    kint[1] = (ddint[2, 0] - ddint[0, 2]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[2] = (ddint[0, 1] - ddint[1, 0]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     end = time.clock()
                     print("Time elapsed for integral calculation:", end - start, i, j, k, l, nbas)
@@ -309,7 +271,7 @@ def get_fso2e_1c(mol, x, rp, pLL, pLS, pSS):
             3, shl_size[iatom], shl_size[iatom], shl_size[iatom], shl_size[iatom])
         kint[0] = (ddint[1, 2] - ddint[2, 1]).reshape(shl_size[iatom], shl_size[iatom], shl_size[iatom],
                                                       shl_size[iatom])
-        kint[1] = (ddint[2, 0] - ddint[2, 1]).reshape(shl_size[iatom], shl_size[iatom], shl_size[iatom],
+        kint[1] = (ddint[2, 0] - ddint[0, 2]).reshape(shl_size[iatom], shl_size[iatom], shl_size[iatom],
                                                       shl_size[iatom])
         kint[2] = (ddint[0, 1] - ddint[1, 0]).reshape(shl_size[iatom], shl_size[iatom], shl_size[iatom],
                                                       shl_size[iatom])
@@ -481,7 +443,7 @@ def writeSOCIntegrals(mc,
                       uncontract=True,
                       atomlist=None):
 
-    LIGHT_SPEED = 137.0359895000
+    from pyscf.lib.parameters import LIGHT_SPEED
     alpha = 1.0 / LIGHT_SPEED
 
     if ("bp" in pictureChange1e and "bp" in pictureChange2e):
@@ -510,7 +472,6 @@ def writeSOCIntegrals(mc,
 
     if ("x2c" in pictureChange1e or "x2c" in pictureChange2e):
         h1e_1c, x, rp = get_hxr(mc, uncontract=uncontract)
-        pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
 
     #two electron terms
     if (pictureChange2e == "bp"):
@@ -518,8 +479,7 @@ def writeSOCIntegrals(mc,
     elif (pictureChange2e == "bp1c"):
         hso1e += -(alpha)**2 * 0.5 * get_hso1e_bp1c(xmol, dm, atomlist)
     elif (pictureChange2e == "x2c"):
-        dm1 = dm * 0.5
-        pLL, pLS, pSS = get_p(dm1, x, rp)
+        pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
         hso1e += -(alpha)**2 * 0.5 * get_fso2e_2(xmol, x, rp, pLL, pLS, pSS)
     elif (pictureChange2e == "x2c1c"):
         pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
