@@ -23,6 +23,7 @@ Ref.
 J. Comput. Chem., 5, 589
 '''
 
+import sys
 import time
 from functools import reduce
 import numpy
@@ -32,6 +33,11 @@ from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.scf import cphf
+
+if sys.version_info < (3,):
+    RANGE_TYPE = list
+else:
+    RANGE_TYPE = range
 
 
 def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
@@ -264,7 +270,7 @@ class Gradients(lib.StreamObject):
         cput0 = (time.clock(), time.time())
         log = logger.new_logger(self, verbose)
         if ci is None: ci = self.base.ci
-        if isinstance(ci, (list, tuple)):
+        if isinstance(ci, (list, tuple, RANGE_TYPE)):
             if state is None:
                 state = self.state
             else:

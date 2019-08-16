@@ -142,7 +142,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
 
         if getattr(casscf.fcisolver, 'large_ci', None) and ci is not None:
             log.info('** Largest CI components **')
-            if isinstance(ci, (tuple, list)):
+            if isinstance(ci, (list, tuple, RANGE_TYPE)):
                 # Note: function large_ci does not support
                 # state_average_mix_ mcscf object
                 for i, civec in enumerate(ci):
@@ -283,7 +283,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
         if isinstance(ci, numpy.ndarray):
             fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
-        elif (isinstance(ci, (tuple, list)) and
+        elif (isinstance(ci, (list, tuple)) and
               all(isinstance(x[0], numpy.ndarray) for x in ci)):
             fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
                       for x in ci]
@@ -404,7 +404,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
     if casdm1 is None:
-        if (isinstance(ci, (list, tuple)) and
+        if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
             not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
             log.warn('Mulitple states found in CASCI solver. First state is '
                      'used to compute the natural orbitals in active space.')

@@ -21,6 +21,7 @@ UCASCI (CASCI with non-degenerated alpha and beta orbitals, typically UHF
 orbitals)
 '''
 
+import sys
 import time
 from functools import reduce
 import numpy
@@ -36,6 +37,11 @@ from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
 LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
+
+if sys.version_info < (3,):
+    RANGE_TYPE = list
+else:
+    RANGE_TYPE = range
 
 # TODO, different ncas space for alpha and beta
 
@@ -320,7 +326,7 @@ class UCASCI(casci.CASCI):
         mocas_b = mo_coeff[1][:,ncore[1]:ncore[1]+ncas]
 
         label = self.mol.ao_labels()
-        if (isinstance(ci, (list, tuple)) and
+        if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
             not isinstance(self.fcisolver, addons.StateAverageFCISolver)):
             log.warn('Mulitple states found in UCASCI solver. Density '
                      'matrix of first state is generated in .analyze() function.')
@@ -372,7 +378,7 @@ class UCASCI(casci.CASCI):
 
             if getattr(self.fcisolver, 'large_ci', None) and ci is not None:
                 log.info('\n** Largest CI components **')
-                if isinstance(ci, (tuple, list)):
+                if isinstance(ci, (list, tuple, RANGE_TYPE)):
                     for i, state in enumerate(ci):
                         log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
                         res = self.fcisolver.large_ci(state, self.ncas, self.nelecas,

@@ -31,6 +31,11 @@ from pyscf import __config__
 BASE = getattr(__config__, 'mcscf_addons_sort_mo_base', 1)
 MAP2HF_TOL = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
 
+if sys.version_info < (3,):
+    RANGE_TYPE = list
+else:
+    RANGE_TYPE = range
+
 
 def sort_mo(casscf, mo_coeff, caslst, base=BASE):
     '''Pick orbitals for CAS space
@@ -575,7 +580,7 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         if ovlp is None: ovlp = casscf._scf.get_ovlp()
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
-        if isinstance(ci, (list, tuple)):
+        if isinstance(ci, (list, tuple, RANGE_TYPE)):
             sscas = numpy.array([fci.spin_op.spin_square(c, ncas, nelecas, mocas, ovlp)[0]
                                  for c in ci])
         else:
