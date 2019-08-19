@@ -218,10 +218,13 @@ ALIAS = {
     'lanl2tz'    : 'lanl2tz.dat'    ,
     'lanl08'     : 'lanl08.dat'     ,
     'sbkjc'      : 'sbkjc.dat'      ,
+    # Stuttgart ECP http://www.tc.uni-koeln.de/PP/clickpse.en.html
     'stuttgart'  : 'stuttgart_dz.dat',
     'stuttgartdz': 'stuttgart_dz.dat',
     'stuttgartrlc': 'stuttgart_dz.dat',
     'stuttgartrsc': 'stuttgart_rsc.dat',
+    'stuttgartrsc_mdf': 'cc-pvdz-pp.dat',
+    #'stuttgartrsc_mwb': 'stuttgart_rsc.dat',
     'ccpwcvdzpp' : 'cc-pwCVDZ-PP.dat',
     'ccpwcvtzpp' : 'cc-pwCVTZ-PP.dat',
     'ccpwcvqzpp' : 'cc-pwCVQZ-PP.dat',

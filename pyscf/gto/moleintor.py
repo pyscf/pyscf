@@ -418,6 +418,7 @@ _INTOR_FUNCTIONS = {
     'ECPscalar_iprinv'          : (3, None),
     'ECPscalar_igrinv'          : (3, None),
     'ECPscalar_iprinvip'        : (9, None),
+    'ECPso'                     : (3, 1),
 }
 
 def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,

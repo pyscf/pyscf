@@ -232,7 +232,8 @@ def sph2spinor_coeff(mol):
         nctr = mol.bas_nctr(ib)
         ca.extend([ua]*nctr)
         cb.extend([ub]*nctr)
-    return scipy.linalg.block_diag(*ca), scipy.linalg.block_diag(*cb)
+    return numpy.stack([scipy.linalg.block_diag(*ca),
+                        scipy.linalg.block_diag(*cb)])
 real2spinor_whole = sph2spinor_coeff
 
 def cart2spinor(l):
