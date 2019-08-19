@@ -3395,6 +3395,10 @@ END
 # ELEMENTS                      REFERENCES
 #  ---------                       ----------
 #   
+#
+# SO-ECP parameters are downloaded from
+# https://people.clarkson.edu/~pchristi/elements/
+#
 
 
 ECP
