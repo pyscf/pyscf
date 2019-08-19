@@ -36,7 +36,7 @@ from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
-from pyscf.gto import ecp
+from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
 
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
@@ -59,6 +59,7 @@ NPRIM_OF   = 2
 NCTR_OF    = 3
 RADI_POWER = 3 # for ECP
 KAPPA_OF   = 4
+SO_TYPE_OF = 4 # for ECP
 PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
@@ -72,7 +73,7 @@ PTR_F12_ZETA    = 9
 PTR_GTG_ZETA    = 10
 AS_RINV_ORIG_ATOM = 17
 AS_ECPBAS_OFFSET = 18
-AS_NECPBAS     = 19
+AS_NECPBAS      = 19
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -194,7 +195,10 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
             c2smat *= 0.282094791773878143
         elif l == 1:
             c2smat *= 0.488602511902919921
-    return c2smat[:nf], c2smat[nf:]
+    # c2smat[0] is the transformation for spin up
+    # c2smat[1] is the transformation for spin down
+    c2smat = c2smat.reshape(2,nf,nd)
+    return c2smat
 cart2j_kappa = cart2spinor_kappa
 
 def cart2spinor_l(l, normalized=None):
@@ -855,13 +859,20 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
             for rorder, bi in enumerate(lb[1]):
                 if len(bi) > 0:
                     ec = numpy.array(sorted(bi, reverse=True))
+                    nexp, ncol = ec.shape
                     _env.append(ec[:,0])
-                    ptr_exp = ptr_env
                     _env.append(ec[:,1])
-                    ptr_coeff = ptr_exp + ec.shape[0]
-                    ptr_env = ptr_coeff + ec.shape[0]
-                    ecp0.append([0, lb[0], ec.shape[0], rorder, 0,
+                    ptr_exp, ptr_coeff = ptr_env, ptr_env + nexp
+                    ecp0.append([0, lb[0], nexp, rorder, 0,
                                  ptr_exp, ptr_coeff, 0])
+                    ptr_env += nexp * 2
+
+                    if ncol == 3:  # Has SO-ECP
+                        _env.append(ec[:,2])
+                        ptr_coeff, ptr_env = ptr_env, ptr_env + nexp
+                        ecp0.append([0, lb[0], nexp, rorder, 1,
+                                     ptr_exp, ptr_coeff, 0])
+
         _ecpdic[symb] = (nelec, numpy.asarray(ecp0, dtype=numpy.int32))
 
     _ecpbas = []
@@ -1293,7 +1304,7 @@ def sph_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
@@ -1343,7 +1354,7 @@ def cart_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         ncart = (l + 1) * (l + 2) // 2
@@ -1393,7 +1404,7 @@ def spinor_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):

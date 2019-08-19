@@ -86,6 +86,31 @@ def type2_by_shell(mol, shls, cart=False):
        cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
+AS_ECPBAS_OFFSET= 18
+AS_NECPBAS      = 19
+def so_by_shell(mol, shls):
+    '''Spin-orbit coupling ECP in spinor basis
+    i/2 <Pauli_matrix dot l U(r)>
+    '''
+    li = mol.bas_angular(shls[0])
+    lj = mol.bas_angular(shls[1])
+    di = (li*4+2) * mol.bas_nctr(shls[0])
+    dj = (lj*4+2) * mol.bas_nctr(shls[1])
+    bas = numpy.vstack((mol._bas, mol._ecpbas))
+    mol._env[AS_ECPBAS_OFFSET] = len(mol._bas)
+    mol._env[AS_NECPBAS] = len(mol._ecpbas)
+    buf = numpy.empty((di,dj), order='F', dtype=numpy.complex128)
+    cache = numpy.empty(buf.size*48)
+    fn = libecp.ECPso_spinor
+    fn(buf.ctypes.data_as(ctypes.c_void_p),
+       (ctypes.c_int*2)(di, dj),
+       (ctypes.c_int*2)(*shls),
+       mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+       bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
+    return buf
+
 def core_configuration(nelec_core):
     conf_dic = {
         0 : '0s0p0d0f',
