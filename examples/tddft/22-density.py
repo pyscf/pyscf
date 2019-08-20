@@ -54,3 +54,7 @@ cubegen.density(mol, 'tda_density.cube', dm)
 
 # Write the difference between excited state and ground state
 cubegen.density(mol, 'density_diff.cube', dm-mf.make_rdm1())
+
+# The positive and negative parts can be overlayed in Jmol
+# isosurface ID "surf1" cutoff  0.02 density_diff.cube
+# isosurface ID "surf2" cutoff -0.02 density_diff.cube

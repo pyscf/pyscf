@@ -16,8 +16,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import json
 import h5py
+
+if sys.version_info < (3,):
+    RANGE_TYPE = list
+else:
+    RANGE_TYPE = range
 
 def load(chkfile, key):
     '''Load array(s) from chkfile
@@ -105,7 +111,7 @@ def dump(chkfile, key, value):
             root1 = root.create_group(key)
             for k in value:
                 save_as_group(k, value[k], root1)
-        elif isinstance(value, (tuple, list)):
+        elif isinstance(value, (tuple, list, RANGE_TYPE)):
             root1 = root.create_group(key + '__from_list__')
             for k, v in enumerate(value):
                 save_as_group('%06d'%k, v, root1)
