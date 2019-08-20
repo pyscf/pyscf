@@ -234,6 +234,52 @@ class KnownValues(unittest.TestCase):
         e_tot = scf.RHF(mol).run().e_tot
         self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 6)
 
+    def test_scalar_vs_int1e_rinv(self):
+        mol = gto.M(atom='''
+                    Na 0.5 0.5 0.
+                    H  1.0 0.  0.2
+                    ''',
+                    basis={'Na': [(0, (1, 1)), (1, (4, 1)), (2, (1, 1))],
+                           'H': 'ccpvtz'},
+                    ecp = {'Na': gto.basis.parse_ecp('''
+Na nelec 8
+Na ul
+1      0.    -3.
+''')})
+        mat = mol.intor('ECPscalar')
+        with mol.with_rinv_orig(mol.atom_coord(0)):
+            ref = mol.intor('int1e_rinv')*-3
+        self.assertAlmostEqual(abs(mat-ref).max(), 0, 9)
+
+    def test_so_vs_int1e_rinv(self):
+        mol = gto.M(atom='''
+                    Na 0.5 0.5 0.
+                    ''',
+                    charge=1,
+                    basis={'Na': [(0, (1, 1)), (1, (4, 1)), (1, (1, 1)), (2, (1, 1))]},
+                    ecp = {'Na': gto.basis.parse_ecp('''
+Na nelec 8
+Na S
+1      0.    -3.    -3.
+Na P
+1      0.    -3.    -3.
+Na D
+1      0.    -3.    -3.
+Na F
+1      0.    -3.    -3.
+''')})
+        s = lib.PauliMatrices * .5
+        u = mol.sph2spinor_coeff()
+        ref = numpy.einsum('sxy,spq,xpi,yqj->ij', s,
+                           mol.intor('int1e_inuc_rxp'), u.conj(), u)
+
+        mat = mol.intor('ECPso_spinor')
+        self.assertAlmostEqual(abs(ref-mat).max(), 0, 11)
+
+        mat = numpy.einsum('sxy,spq,xpi,yqj->ij', lib.PauliMatrices,
+                           mol.intor('ECPso'), u.conj(), u)
+        self.assertAlmostEqual(abs(ref-mat).max(), 0, 11)
+
 
 
 if __name__ == '__main__':
