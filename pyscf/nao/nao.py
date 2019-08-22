@@ -432,6 +432,7 @@ class nao():
       for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
     self.init_mo_coeff_label(**kw)
+    self.spin = self.magnetization
 
     self.state = 'should be useful for something'
     return self
