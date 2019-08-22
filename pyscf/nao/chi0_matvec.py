@@ -100,6 +100,19 @@ class chi0_matvec(mf):
       pxx[iw] = np.dot(dn0, vext[0])
     return pxx
 
+  def comp_polariz_nonin_xx_atom_split(self, comegas):
+    """  Compute the non interacting polarizability along the xx direction """
+    aw2pxx = np.zeros((self.natoms, comegas.shape[0]), dtype=self.dtypeComplex)
+
+    vext = np.transpose(self.moms1)
+    for iw, comega in enumerate(comegas):
+      dn0 = self.apply_rf0(vext[0], comega)
+      for ia in range(self.natoms):
+          dn0_atom = np.zeros(self.nprod, dtype=complex)
+          dn0_atom[self.pb.c2s[ia]:self.pb.c2s[ia+1]] = dn0[self.pb.c2s[ia]:self.pb.c2s[ia+1]]
+          aw2pxx[ia, iw] = np.dot(dn0_atom, vext[0])
+    return aw2pxx
+
   def comp_polariz_nonin_ave(self, comegas , **kw):
     """  Compute the average non-interacting polarizability """
     p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
