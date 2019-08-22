@@ -62,7 +62,7 @@ class chi0_matvec(mf):
     self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
     self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
  
-    if self.verbosity>1 :
+    if self.verbosity>4 :
       #print(__name__, '\t====> self.dtype ', self.dtype)
       print(__name__, '\t====> self.xocc[0].dtype ', self.xocc[0].dtype)
       print(__name__, '\t====> self.xvrt[0].dtype ', self.xvrt[0].dtype)

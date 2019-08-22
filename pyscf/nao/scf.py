@@ -48,6 +48,7 @@ class scf(tddft_iter):
     """ This does the actual SCF loop so far only HF """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess()
+    if (self.nspin==2 and dm0.ndim==5): dm0=dm0[0,...,0] 
     etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
     #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
 
@@ -76,13 +77,24 @@ class scf(tddft_iter):
     return hcore
 
   def vnucele_coo(self, **kw): # Compute matrix elements of nuclear-electron interaction (attraction)
+    '''
+    it subtracts the computed matrix elements from the total Hamiltonian to find out the 
+    nuclear-electron interaction in case of SIESTA import. This means that Vne is defined by 
+    Vne = H_KS - T - V_H - V_xc
+    '''
     if self.pseudo:
       # This is wrong after a repeated SCF. A better way would be to use pseudo-potentials and really recompute.
       tkin = (-0.5*self.laplace_coo()).tocsr()
-      vhar = self.vhartree_coo(dm=self.dm_mf, **kw).tocsr()
       vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0].tocsr()
-      vne  = self.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc
-      #print(__name__)
+      ham  = self.get_hamiltonian()[0].tocsr()
+      vhar = self.vhartree_coo(dm=self.dm_mf, **kw)  
+
+      #vhar for spin has two components, so for tocsr() must be split 
+      if (self.nspin==1): vha = vhar.tocsr()
+      elif (self.nspin==2): vha = vhar[0].tocsr()+vhar[1].tocsr()
+    
+      vne  = ham-tkin-vha-vxc
+      
     else :
       vne  = self.vnucele_coo_coulomb(**kw)
     return vne.tocoo()
@@ -129,7 +141,7 @@ class scf(tddft_iter):
     
     kmat_algo = kw['kmat_algo'] if 'kmat_algo' in kw else self.kmat_algo
 
-    if self.verbosity>1: print(__name__, "\t\t====> Matrix elements of Fock exchange operator will be calculated by using '{}' algorithm.\f".format(kmat_algo))
+    #if self.verbosity>1: print(__name__, "\t\t====> Matrix elements of Fock exchange operator will be calculated by using '{}' algorithm.\f".format(kmat_algo))
     return kmat_den(self, dm=dm, algo=kmat_algo, **kw)
 
     if self.kmat_timing is not None: t1 = timer()
@@ -143,3 +155,18 @@ class scf(tddft_iter):
     j = self.get_j(dm, **kw)
     k = self.get_k(dm, **kw)
     return j,k
+
+  def get_veff(self, dm=None, **kw):
+    '''Hartree-Fock potential matrix for the given density matrix'''
+    if dm is None: dm = self.make_rdm1()
+    vj, vk = self.get_jk (dm, **kw)
+    if (self.nspin==1): v_eff = vj - vk * .5
+    if (self.nspin==2): v_eff = vj[0] + vj[1] - vk
+    return v_eff
+
+  def get_fock(self, h1e=None, dm=None, **kw):
+    '''Fock matrix for the given density matrix (matrix elements of the Fockian).'''
+    if dm is None: dm = self.make_rdm1()
+    if h1e is None: h1e = self.get_hcore()
+    fock = h1e +  self.get_veff(dm, **kw) 
+    return fock

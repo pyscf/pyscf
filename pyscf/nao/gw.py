@@ -51,7 +51,7 @@ class gw(scf):
     else :
       self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
 
-    if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are (nocc) = {}, Number of virtual states (nvrt) = {}'.format(self.nocc, self.nvrt))
+    if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are gonna correct (nocc) = {}, Number of virtual states are gonna correct (nvrt) = {}'.format(self.nocc, self.nvrt))
 
     #self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
     frozen_core = kw['frozen_core'] if 'frozen_core' in kw else self.frozen_core
@@ -101,6 +101,7 @@ class gw(scf):
     self.x = require(self.mo_coeff[0,:,:,:,0], dtype=self.dtype, requirements='CW')
 
     if self.perform_gw: self.kernel_gw()
+    self.snmw2sf_ncalls = 0
     
   def get_h0_vh_x_expval(self):
     """
@@ -158,8 +159,8 @@ class gw(scf):
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
     rf0 = si0 = self.rf0(ww)
-    for iw,w in enumerate(ww):                   #devide ww into imaginary(w) and real(iw)             
-      k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb, rf0
+    for iw,w in enumerate(ww):                   #devide ww into complex(w) which is along imaginary axis (real=0) and grid index(iw)             
+      k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb or hartree, rf0
                                                  #is \chi_{0}, so here k_c=v*chi_{0}
       b = dot(k_c, self.kernel_sq)               #here v\chi_{0}v or k_c*v
       k_c = np.eye(self.nprod)-k_c               #here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
@@ -167,25 +168,50 @@ class gw(scf):
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
     return si0
 
-  def si_c_lgmres(self,ww):
+  def si_c2(self,ww):
     """This computes the correlation part of the screened interaction using lgmres
-       lgmres methods are much slower than np.linalg.solve !!
+       lgmres method is much slower than np.linalg.solve !!
     """
     import numpy as np
-    from scipy.sparse import csc_matrix
     from scipy.sparse.linalg import lgmres
-    from pyscf.nao.m_lgmres import lgmres as mo_lgmres
     #ww = 1j*self.ww_ia
     rf0 = si0 = self.rf0(ww)    
     for iw,w in enumerate(ww):                                
-      k_c = dot(self.kernel_sq, rf0[iw,:,:]) 
-      k_c_csc = csc_matrix(dot(self.kernel_sq, rf0[iw,:,:]))                                              
+      k_c = dot(self.kernel_sq, rf0[iw,:,:])                                            
       b = dot(k_c, self.kernel_sq)               
-      k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
+      k_c = np.eye(self.nprod)-k_c
       for m in range(self.nprod): 
-         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])   
-      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
+         si0[iw,m,:],exitCode = lgmres(k_c, b[m,:], atol=1e-08)   
+      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+      #np.allclose(np.dot(k_c, si0), b, atol=1e-05) == True  #Test   
     return si0
+
+  def si_c3(self,ww):
+    """This computes the correlation part of the screened interaction using lgmres
+       1-vchi_0 is computed by linear opt, i.e. self.vext2veff_matvec, in form of vector
+    """
+    import numpy as np
+    from scipy.sparse.linalg import lgmres
+    from scipy.sparse.linalg import LinearOperator
+    #ww = 1j*self.ww_ia
+    si01 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
+    si02 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
+    rf0 = self.rf0(ww)
+    for iw,w in enumerate(ww):
+      self.comega_current = w
+      a = np.dot(self.kernel_sq, rf0[iw,:,:]) 
+      b = np.dot(a, self.kernel_sq)
+      c = np.eye(self.nprod)- a  
+      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
+      k_c_opt2 = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec2, dtype=self.dtypeComplex)  
+      aa = np.diag(k_c_opt2.matvec(np.ones(self.nprod)))    #this is equal to a=v*chi0
+      aaa=np.diag(k_c_opt.matvec(np.ones(self.nprod)))      #equal to c= 1-v*chi0 atol 1e-05
+      aaaa= np.dot(aa, self.kernel_sq)                      #equal to b= v*chi0*v atol 1e-03
+      for m in range(self.nprod):
+         si01[iw,m,:],exitCode = lgmres(c, b[m,:], atol=self.tol_ev) 
+         si02[iw,m,:],exitCode = lgmres(k_c_opt, aaaa[m,:], atol=self.tol_ev)   
+      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
+    return np.allclose(si01,si02,atol=1e-03)
 
   def si_c_check (self, tol = 1e-5):
     """
@@ -199,7 +225,7 @@ class gw(scf):
     t1 = time.time() - t
     print('numpy: {} sec'.format(t1))
     t2 = time.time()
-    si0_2 = self.si_c_lgmres(ww)       #method 2:  scipy.sparse.linalg.lgmres
+    si0_2 = self.si_c2(ww)       #method 2:  scipy.sparse.linalg.lgmres
     t3 = time.time() - t2
     print('lgmres: {} sec'.format(t3))
     summ = abs(si0_1 + si0_2).sum()
@@ -224,13 +250,13 @@ class gw(scf):
 
   def get_snmw2sf(self):
     """ 
-    This computes a spectral function of the GW correction.
+    This computes a matrix elements of W_c: <\Psi | W_c |\Psi>.
     sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
     where n runs from s...f, m runs from 0...norbs, w runs from 0...nff_ia, spin=0...1 or 2.
     """
     wpq2si0 = self.si_c(ww = 1j*self.ww_ia).real
     v_pab = self.pb.get_ac_vertex_array()
-
+    #self.snmw2sf_ncalls += 1
     snmw2sf = []
     for s in range(self.nspin):
       nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
@@ -238,7 +264,7 @@ class gw(scf):
       xna = self.mo_coeff[0,s,self.nn[s],:,0]                                           #n runs from s...f or states will be corrected: self.nn = [range(self.start_st[s], self.finish_st[s])
       #xna = self.mo_coeff[0,s,self.nn,:,0]
       xmb = self.mo_coeff[0,s,:,:,0]                                                    #m runs from 0...norbs
-      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m foe each side
+      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m for each side
       for iw,si0 in enumerate(wpq2si0):
         nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)                #This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx 
       snmw2sf.append(nmw2sf)
@@ -358,7 +384,7 @@ class gw(scf):
 
       if self.verbosity>0:
         np.set_printoptions(linewidth=1000, suppress=True, precision=5)
-        print('Iteration #{}  Relative Error: {:.7f}'.format(i+1, err))
+        print('Iteration #{:3d}  Relative Error: {:.8f}'.format(i+1, err))
       if self.verbosity>1:
         #print(sn2mismatch)
         for s,n2ev in enumerate(sn2eval_gw):
@@ -367,79 +393,42 @@ class gw(scf):
         if self.verbosity>0: print('-'*43,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*43,'\n')
         break
       if err>=self.tol_ev and i+1==self.niter_max_ev:
-        if self.verbosity>0: print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
+        print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
     return sn2eval_gw
     
-  def report(self):
-    """ Prints the energy levels """
-    import re
-    emfev = self.mo_energy[0].T * HARTREE2EV
-    egwev = self.mo_energy_gw[0].T * HARTREE2EV
-    file_name= ''.join(self.get_symbols())
-    # The output should be possible to write more concise...
-    with open('report_'+file_name+'.out','w') as out_file:
-        print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
-        out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')
-        if self.nspin==1:
-            out_file.write('Energy-sorted MO indices \t {}'.format(self.argsort[0]))
-            print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
-            out_file.write("\n   n  %14s %14s %7s \n" % ("E_mf", "E_gw", "occ") )
-            for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
-                print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
-                out_file.write("%5d  %14.7f %14.7f %7.2f\n" % (ie, emf[0], egw[0], f[0]) )
-            print('\nFermi energy        (eV):%16.7f'%(self.fermi_energy* HARTREE2EV))
-            out_file.write('\nFermi energy        (eV):%16.7f\n'%(self.fermi_energy* HARTREE2EV))            
-            print('G0W0 HOMO energy    (eV):%16.7f' % (egwev[self.nfermi[0]-1,0]))
-            out_file.write('G0W0 HOMO energy    (eV):%16.7f\n'%(egwev[self.nfermi[0]-1,0]))
-            print('G0W0 LUMO energy    (eV):%16.7f' % (egwev[self.nfermi[0],0]))
-            out_file.write('G0W0 LUMO energy    (eV):%16.7f\n'%(egwev[self.nfermi[0],0]))
-            print('G0W0 HOMO-LUMO gap  (eV):%16.7f' %(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
-            out_file.write('G0W0 HOMO-LUMO gap  (eV):%16.7f\n'%(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
-        elif self.nspin==2:
-            for s in range(2):
-              out_file.write('\nEnergy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
-            print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
-            out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
-            for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
-                print("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
-                out_file.write ("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f\n" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
-            print('\nFermi energy        (eV):%16.7f'%(self.fermi_energy* HARTREE2EV))
-            out_file.write('\nFermi energy        (eV):%16.7f\n'%(self.fermi_energy* HARTREE2EV))
-            print('G0W0 HOMO energy    (eV):%16.7f %16.7f'%(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
-            out_file.write('G0W0 HOMO energy    (eV):%16.7f %16.7f\n'%(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
-            print('G0W0 LUMO energy    (eV):%16.7f %16.7f'%(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
-            out_file.write('G0W0 LUMO energy    (eV):%16.7f %16.7f\n'%(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
-            print('G0W0 HOMO-LUMO gap  (eV):%16.7f %16.7f'%(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
-            out_file.write('G0W0 HOMO-LUMO gap  (eV):%16.7f %16.7f\n'%(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
-        else:
-            raise RuntimeError('not implemented...')
-        print('G0W0 Total energy   (eV):%16.7f' %(self.etot_gw*HARTREE2EV))
-        out_file.write('G0W0 Total energy   (eV):%16.7f\n'%(self.etot_gw*HARTREE2EV))
-        elapsed_time = time.time() - start_time
-        print('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
-        out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
-        out_file.close
- 
     
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
-    if self.verbosity>2:
+    if self.verbosity>3:
+      dm1 = self.make_rdm1()
+      ecore = (self.get_hcore()*dm1[0,...,0]).sum()
+      vh,kmat = self.get_jk()
+      EX = -0.5*((kmat)*dm1[0,...,0]).sum()
       if self.nspin==1:
-        print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n %3s  %16s'%('no.','<H>'))
-        for i, ab in enumerate(zip(self.h0_vh_x_expval[0].T*HARTREE2EV)):
+        print('\n-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s'%('no.','<H>'))
+        for i, ab in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T*HARTREE2EV)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
             print (' %3d  %16.6f'%(i,ab[0]))
+        Vha = 0.5*(vh*dm1[0,...,0]).sum()
       if self.nspin==2:
-        print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n %3s  %16s  | %12s'%('no.','<H_up>','<H_dn>'))        
-        for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
+        print('\n-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s  | %12s'%('no.','<H_up>','<H_dn>'))        
+        for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
 	        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
-      print('mean-field Total energy   (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
-      S = self.spin/2
-      S0 = S*(S+1)
-      SS = self.mf.spin_square()
-      print('<S^2> and  2S+1               :%16.7f %16.7f'%(SS[0],SS[1]))
-      print('Instead of                    :%16.7f %16.7f'%(S0, 2*S+1))
+        Vha = 0.5*((vh[0]+vh[1])*dm1[0,...,0]).sum()
+      
+      if hasattr(self, 'mf'):
+        print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(self.energy_nuc()*HARTREE2EV))
+        print('mean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
+        print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
+        print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
+        print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
+        S = self.spin/2
+        S0 = S*(S+1)
+        SS = self.mf.spin_square()
+        if ( SS[0]!= S ):
+          print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
+          print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
       elapsed_time = time.time() - start_time
       print('\nRunning time is:',time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),'\n\n') 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
@@ -465,12 +454,12 @@ class gw(scf):
       #print(self.mo_energy_g0w0)
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
       self.argsort.append(argsrt)
-      if self.verbosity>0: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
+      if self.verbosity>2: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
-    if self.verbosity>1:
+    if self.verbosity>4:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
     
@@ -503,3 +492,20 @@ class gw(scf):
     from pyscf.nao.mf import mf
     mo_coeff = self.mo_coeff_gw if hasattr(self, 'mo_energy_gw') else self.mo_coeff
     return mf.spin_square(self, mo_coeff=mo_coeff)
+
+
+  def report_mf(self,dm=None):
+    """ Prints the energy levels of mean-field calculations"""
+    from pyscf.nao.m_report import report_mfx
+    if dm is None: dm = self.make_rdm1()
+    return report_mfx(self,dm)
+    
+  def report_ex(self):
+    """ Prints the exchange energy levels """
+    from pyscf.nao.m_report import exfock
+    return exfock(self)
+
+  def report(self):
+    """ Prints the energy levels of meanfield and G0W0"""
+    from pyscf.nao.m_report import report_gw
+    return report_gw(self)

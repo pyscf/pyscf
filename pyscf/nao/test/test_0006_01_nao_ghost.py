@@ -22,7 +22,7 @@ class KnowValues(unittest.TestCase):
         from pyscf.nao import nao
         from pyscf.nao.m_overlap_am import overlap_am
         
-        dname = os.path.join(os.path.split(__file__)[0], 'test_ag13_ghost')
+        dname = os.getcwd()+'/test_ag13_ghost'
         sv = nao(label='siesta', cd=dname)
         oc = sv.overlap_check(funct=overlap_am)
         self.assertTrue(oc[0])
