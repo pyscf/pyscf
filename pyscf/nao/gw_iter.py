@@ -147,11 +147,7 @@ class gw_iter(gw):
 
 
   def get_snmw2sf_iter(self):
-    from scipy.sparse import csr_matrix, coo_matrix
-    from scipy.linalg import blas
-    from scipy.sparse.linalg import LinearOperator, lgmres    
-    from scipy.sparse import csc_matrix
-
+    from scipy.sparse.linalg import LinearOperator,lgmres
     ww = 1j*self.ww_ia
         
     v_pab = self.pb.get_ac_vertex_array()       #atom-centered product basis: V_{\mu}^{ab}
@@ -161,7 +157,7 @@ class gw_iter(gw):
     v_pd1 = v_pd.reshape(v_pd.shape[0]*self.norbs, self.norbs)      #2D shape of dominant produc
 
     c = self.pb.get_da2cc_den()                 #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
-                                                #V_{\mu}^{ab}= V_{\widetilde{\mu}}^{ab} * C_{\widetilde{\mu}}^{\mu}  
+                                              #V_{\mu}^{ab}= V_{\widetilde{\mu}}^{ab} * C_{\widetilde{\mu}}^{\mu}  
 
     snm2i = []
     for s in range(self.nspin):
@@ -198,44 +194,22 @@ class gw_iter(gw):
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
                     a = np.dot(self.kernel_sq, xvx3[n,m,:])     #v XVX
-                    #print('first aaaaaaa',a.shape)
-                    b = self.gw_applyrf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
-                    b = np.split(b, self.nspin)
-                    #print('bbbbbbb',len(b),len(b[s]))
-                    a = np.dot(self.kernel_sq, b[s])               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
-                    #print('second aaaaaaa',a.shape)
-                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, tol=1e-06)
-                    #print('done')
+                    b = self.gw_chi0_mv(a, self.comega_current)   #\chi_{0}v XVX by using matrix vector
+                    a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
+                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, atol=1e-05)
             if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
             inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx3, sf_aux)   #I= XVX I_aux
         snm2i.append(np.real(inm))
     return snm2i
 
 
-
   def gw_vext2veffmatvec(self,vin):
-    dn0 = self.gw_applyrf0(vin, self.comega_current)
-    #print('dnnnnnnnnnnnn',dn0.shape)
-    vcre,vcim = self.gw_applykernelspin(dn0)
-    #print('-'*40)
+    dn0 = self.gw_chi0_mv(vin, self.comega_current)
+    vcre,vcim = self.gw_applykernel_nspin1(dn0)
     return vin - (vcre + 1.0j*vcim)
 
 
-  def gw_applyrf0(self,sp2v, comega=1j*0.0):
-    if (self.nspin==2): sp2v = np.concatenate((sp2v, sp2v), axis=None)
-    return self.gw_chi0_mv(sp2v, comega)
-
-
-  def gw_applykernelspin(self,dn):
-    dn = np.split(dn, self.nspin)    
-    if self.nspin==1:
-      return self.gw_applykernel_nspin1(dn[0])
-    elif self.nspin==2:
-      return self.gw_applykernel_nspin1(dn[0])
-
-
   def gw_applykernel_nspin1(self,dn):
-    
     daux  = np.zeros(self.nprod, dtype=self.dtype)
     daux[:] = np.require(dn.real, dtype=self.dtype, requirements=["A","O"])
     vcre = self.spmv(self.nprod, 1.0, self.kernel, daux)
@@ -245,74 +219,60 @@ class gw_iter(gw):
     return vcre,vcim
 
 
-  def gw_applykernel_nspin2(self,dn):
-
-    vcre = np.zeros((2,self.nspin,self.nprod), dtype=self.dtype)
-    daux = np.zeros((self.nprod), dtype=self.dtype)
-    s2dn = dn.reshape((self.nspin,self.nprod))
-
-    for s in range(self.nspin):
-      for t in range(self.nspin):
-        for ireim,sreim in enumerate(('real', 'imag')):
-          daux[:] = np.require(getattr(s2dn[t], sreim), dtype=self.dtype, requirements=["A","O"])
-          vcre[ireim,s] += self.spmv(self.nprod, 1.0, self.ss2kernel[s][t], daux)
-    #print('*'*150,vcre,vcre.shape)
-    return vcre[0,0].reshape(-1),vcre[1,0].reshape(-1)
-
-
-  def gw_chi0_mv(self, dvin, comega=1j*0.0, dnout=None):
-    from scipy.sparse import csr_matrix, coo_matrix
+  def gw_chi0_mv(self,dvin, comega=1j*0.0, dnout=None):
     from scipy.linalg import blas
-    from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
-    import math
-   
-    if dnout is None: dnout = np.zeros_like(dvin, dtype=self.dtypeComplex)
-    
-    sp2v  = dvin.reshape((self.nspin,self.nprod))
-    #print('sp2v', sp2v,sp2v.shape)
-    sp2dn = dnout.reshape((self.nspin,self.nprod))
-    
+    from pyscf.nao.m_sparsetools import csr_matvec    
+    if dnout is None: 
+        dnout = np.zeros_like(dvin, dtype=self.dtypeComplex)
+
+    dnout.fill(0.0)
+
+    vdp = csr_matvec(self.cc_da, dvin.real)  # real part
+    sab_real = (vdp*self.v_dab).reshape((self.norbs,self.norbs))
+
+    vdp = csr_matvec(self.cc_da, dvin.imag)  # imaginary
+    sab_imag = (vdp*self.v_dab).reshape((self.norbs, self.norbs))
+
+    ab2v_re = np.zeros((self.norbs, self.norbs), dtype=self.dtype)
+    ab2v_im = np.zeros((self.norbs, self.norbs), dtype=self.dtype)
+
     for s in range(self.nspin):
-      vdp = csr_matvec(self.cc_da, sp2v[s].real)  # real part
-      sab = (vdp*self.v_dab).reshape((self.norbs,self.norbs))
+        nb2v = self.gemm(1.0, self.xocc[s], sab_real)
+        nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s].T)
     
-      nb2v = self.gemm(1.0, self.xocc[s], sab)
-      nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s].T)
+        nb2v = self.gemm(1.0, self.xocc[s], sab_imag)
+        nm2v_im = self.gemm(1.0, nb2v, self.xvrt[s].T)
+
+        vs, nf = self.vstart[s], self.nfermi[s]
     
-      vdp = csr_matvec(self.cc_da, sp2v[s].imag)  # imaginary
-      sab = (vdp*self.v_dab).reshape((self.norbs, self.norbs))
-      
-      nb2v = self.gemm(1.0, self.xocc[s], sab)
-      nm2v_im = self.gemm(1.0, nb2v, self.xvrt[s].T)
+        if self.use_numba:
+            self.div_numba(self.ksn2e[0,s], self.ksn2f[0,s], nf, vs, comega, nm2v_re, nm2v_im)
+        else:
+            for n,(en,fn) in enumerate(zip(self.ksn2e[0,s,:nf], self.ksn2f[0,s,:nf])):
+                for m,(em,fm) in enumerate(zip(self.ksn2e[0,s,vs:],self.ksn2f[0,s,vs:])):
+                    nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+                    nm2v = nm2v * (fn - fm) * \
+                    ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+                    nm2v_re[n, m] = nm2v.real
+                    nm2v_im[n, m] = nm2v.imag
 
-      vs,nf = self.vstart[s],self.nfermi[s]
+            for n in range(vs+1,nf): #padding m<n i.e. negative occupations' difference
+                for m in range(n-vs):  
+                    nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
+
+        nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s]) # real part
+        ab2v_re = self.gemm(1.0, self.xocc[s].T, nb2v, 1.0, ab2v_re)
+
+        nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s]) # imag part
+        ab2v_im = self.gemm(1.0, self.xocc[s].T, nb2v, 1.0, ab2v_im)
     
-      if self.use_numba:
-        self.div_numba(self.ksn2e[0,s], self.ksn2f[0,s], nf, vs, comega, nm2v_re, nm2v_im)
-      else:
-        for n,(en,fn) in enumerate(zip(self.ksn2e[0,s,:nf], self.ksn2f[0,s,:nf])):
-          for m,(em,fm) in enumerate(zip(self.ksn2e[0,s,vs:],self.ksn2f[0,s,vs:])):
-            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
-            nm2v = nm2v * (fn - fm) * \
-              ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-            nm2v_re[n, m] = nm2v.real
-            nm2v_im[n, m] = nm2v.imag
+    vdp = csr_matvec(self.v_dab, ab2v_re.reshape(self.norbs*self.norbs))
+    chi0_re = vdp*self.cc_da
 
-        for n in range(vs+1,nf): #padding m<n i.e. negative occupations' difference
-          for m in range(n-vs):  nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
+    vdp = csr_matvec(self.v_dab, ab2v_im.reshape(self.norbs*self.norbs))    
+    chi0_im = vdp*self.cc_da
 
-      nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s]) # real part
-      ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
-      vdp = csr_matvec(self.v_dab, ab2v)
-      chi0_re = vdp*self.cc_da
-
-      nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s]) # imag part
-      ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
-      vdp = csr_matvec(self.v_dab, ab2v)    
-      chi0_im = vdp*self.cc_da
-      
-      sp2dn[s] = chi0_re + 1.0j*chi0_im
-    #print('dnout', dnout.size)
+    dnout = chi0_re + 1.0j*chi0_im
     return dnout
 
 
@@ -384,6 +344,7 @@ class gw_iter(gw):
           #print(pole[0], pole[2], contr)
           sn2res[s][nl] += pole[2]*contr
     return sn2res
+
 
   def g0w0_eigvals_iter(self):
     """ This computes the G0W0 corrections to the eigenvalues """
@@ -494,12 +455,12 @@ if __name__=='__main__':
     from pyscf.nao import gw_iter   
 
     mol = gto.M(atom='''O 0.0, 0.0, 0.622978 ; O 0.0, 0.0, -0.622978''', basis='ccpvdz',spin=2)
-    mf = scf.RHF(mol)
+    mf = scf.UHF(mol)
     mf.kernel()
 
-    gw = gw_iter(mf=mf, gto=mol, verbosity=3, niter_max_ev=20, kmat_algo='sm0_sum')
-    gwiter = gw.get_snmw2sf_iter()
-    gwnon = gw.get_snmw2sf()
-    print(np.allclose(gwiter[0],gwnon[0],atol=1e-5)) #compares matrix element of W obtained by gw_iter with gw 
-    gw.kernel_gw_iter()
-    gw.report()
+    gw = gw_iter(mf=mf, gto=mol, verbosity=3, niter_max_ev=20, kmat_algo='sm0_sum', nff_ia=5)
+    gw_it = gw.get_snmw2sf_iter()
+    gw_no = gw.get_snmw2sf()
+    print('Compares between matrix element of W obtained by gw_iter and gw classes', np.allclose(gw_it,gw_no,atol=1e-5)) 
+    #gw.kernel_gw_iter()
+    #gw.report()
