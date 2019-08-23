@@ -255,7 +255,7 @@ class Cube(object):
             f.write('%5d%12.6f%12.6f%12.6f\n' % (self.nz, 0, 0, self.zs[1]))
             for ia in range(mol.natm):
                 chg = mol.atom_charge(ia)
-                f.write('%5d%12.6f'% (chg, chg))
+                f.write('%5d%12.6f'% (chg, 0.))
                 f.write('%12.6f%12.6f%12.6f\n' % tuple(coord[ia]))
 
             for ix in range(self.nx):
