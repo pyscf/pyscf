@@ -1393,6 +1393,9 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     if isinstance(description, str):
         ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
                 eval_xc(description, rho, *args, **kwargs)
+        ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
+        ni.rsh_coeff = lambda *args: rsh_coeff(description)
+        ni._xc_type = lambda *args: xc_type(description)
 
     elif callable(description):
         ni.eval_xc = description
