@@ -92,6 +92,10 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(hyb, [1.3, 1.02, 0.3])
         self.assertEqual(fn_facs, [(106, 0.5), (132, 0.5)])
 
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*RSH(.3, 2.04, 0.56) + 0.5*BP86')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+        self.assertEqual(fn_facs, [(106, 0.5), (132, 0.5)])
+
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'SR_HF(0.3) + LR_HF(.5)')
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
 
@@ -247,7 +251,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dft.libxc.rsh_coeff('camb3lyp'), [0.33, 0.65, -0.46])
 
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('RSH(0.65;-0.46;0.5) + 0.46*ITYH + .35*B88,', rho, 0, deriv=1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('RSH(0.5,0.65,-0.46) + 0.46*ITYH + .35*B88,', rho, 0, deriv=1)
         self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
         self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
         self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)

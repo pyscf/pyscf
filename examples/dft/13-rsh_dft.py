@@ -34,7 +34,7 @@ mf.kernel()
 #
 mol = gto.M(atom="H; F 1 1.", basis='631g')
 mf = dft.RKS(mol)
-mf.xc = 'RSH(0.65;-0.46;0.33) + 0.46*ITYH + .35*B88 + VWN5*0.19, LYP*0.81'
+mf.xc = 'RSH(0.33,0.65,-0.46) + 0.46*ITYH + .35*B88 + VWN5*0.19, LYP*0.81'
 mf.kernel()
 
 mol = gto.M(atom="H; F 1 1.", basis='631g')
@@ -45,11 +45,11 @@ mf.kernel()
 mol = gto.M(atom="H; F 1 1.", basis='631g')
 mf = dft.RKS(mol)
 mf._numint.libxc = dft.xcfun
-mf.xc = 'RSH(0.65;-0.46;0.33) + BECKECAMX + VWN5*0.19, LYPC*0.81'
+mf.xc = 'RSH(0.33,0.65,-0.46) + BECKECAMX + VWN5*0.19, LYPC*0.81'
 mf.kernel()
 
 mol = gto.M(atom="H; F 1 1.", basis='631g')
 mf = dft.RKS(mol)
-mf.xc = 'RSH(0.65;-0.46;0.9) + 0.46*ITYH + .35*B88 + VWN5*0.19, LYP*0.81'
+mf.xc = 'RSH(0.9,0.65,-0.46) + 0.46*ITYH + .35*B88 + VWN5*0.19, LYP*0.81'
 mf.kernel()
 

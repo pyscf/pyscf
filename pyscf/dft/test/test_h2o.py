@@ -486,7 +486,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
 
         mf2 = dft.RKS(h2o)
-        mf2.xc='RSH(0.65;-0.46;0.15) + 0.46*ITYH + .35*B88 + VWN5*0.19, LYP*0.81'
+        mf2.xc='RSH(.15,0.65,-0.46) + 0.46*ITYH + .35*B88 + VWN5*0.19, LYP*0.81'
         mf2.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         mf2.kernel()
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
