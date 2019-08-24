@@ -27,6 +27,9 @@ sv = nao(gto=mol)
 
 class KnowValues(unittest.TestCase):
 
+  def test_verify(self):
+      print(mol.spin, __file__)
+
   def test_gto2sv(self):
     """ Test transformation of the radial orbitals from GTO to NAO type"""
     psi_log = sv.ao_log.psi_log
@@ -71,5 +74,6 @@ class KnowValues(unittest.TestCase):
     e_gto = mol.energy_nuc()
     self.assertAlmostEqual(e_nao, e_gto)
 
-if __name__ == "__main__": unittest.main()
+if __name__ == "__main__": 
+    unittest.main()
 
