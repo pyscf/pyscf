@@ -8,6 +8,7 @@ start_time = time.time()
 def report_gw (self):
     """ Prints the energy levels of mean-field and G0W0"""
     import re
+    if not hasattr(self, 'mo_energy_gw'): self.kernel_gw()
     emfev = self.mo_energy[0].T * HARTREE2EV
     egwev = self.mo_energy_gw[0].T * HARTREE2EV
     file_name= ''.join(self.get_symbols())
