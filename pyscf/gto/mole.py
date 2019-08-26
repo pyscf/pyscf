@@ -1781,7 +1781,9 @@ def fromfile(filename, format=None):
         | zmat: Z-matrix format
     '''
     if format is None:  # Guess format based on filename
-        format = os.path.splitext(filename)[1][1:]
+        format = os.path.splitext(filename)[1][1:].lower()
+        if format not in ('xyz', 'zmat'):
+            format = 'raw'
     with open(filename, 'r') as f:
         return fromstring(f.read(), format)
 
@@ -1797,6 +1799,12 @@ def fromstring(string, format='xyz'):
     format = format.lower()
     if format == 'zmat':
         return from_zmatrix(string)
+    elif format == 'xyz':
+        dat = string.splitlines()
+        natm = int(dat[0])
+        return '\n'.join(dat[2:natm+2])
+    elif format == 'raw':
+        return string
     else:
         raise NotImplementedError
 
@@ -2187,8 +2195,7 @@ class Mole(lib.StreamObject):
 
         if isinstance(self.atom, (str, unicode)) and os.path.isfile(self.atom):
             try:
-                with open(self.atom, 'r') as f:
-                    atom_str = f.read()
+                atom_str = self.fromfile(self.atom)
                 self._atom = self.format_atom(atom_str, unit=self.unit)
             except ValueError:
                 self._atom = self.format_atom(self.atom, unit=self.unit)
