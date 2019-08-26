@@ -934,8 +934,11 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
             'LDA' or 'GGA' or 'MGGA'
         hyb : float
             hybrid functional coefficient
-        rsh : float
-            coefficients for range-separated hybrid functional
+        rsh : a list of three floats
+            coefficients (omega, alpha, beta) for range-separated hybrid functional.
+            omega is the exponent factor in attenuated Coulomb operator e^{-omega r_{12}}/r_{12}
+            alpha is the coefficient for long-range part, hybrid coefficient
+            can be obtained by alpha + beta
 
     Examples:
 

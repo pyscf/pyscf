@@ -1631,8 +1631,8 @@ class _IMDS:
                 ovvv = ovvv*2 - ovvv.transpose(0,3,2,1)
                 tmpab-= lib.einsum('mfbe,mifa->eiba', ovvv, theta[p0:p1,i0:i1]) * .5
                 wvOvV -= tmpab
-                self.wvOvV[:,i0:i1] = wvOvV
                 ovvv = tmpab = None
+            self.wvOvV[:,i0:i1] = wvOvV
 
         self.made_ee_imds = True
         log.timer('EOM-CCSD EE intermediates', *cput0)
