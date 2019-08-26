@@ -810,8 +810,8 @@ def nlc_coeff(xc_code):
 def rsh_coeff(xc_code):
     '''Range-separated parameter and HF exchange components: omega, alpha, beta
 
-    Exc_RSH = c_SR * SR_HFX + c_LR * LR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
-            = alpha * HFX + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+    Exc_RSH = c_LR * LR_HFX + c_SR * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+            = alpha * HFX   + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
             = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
 
     SR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
@@ -1374,8 +1374,11 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
             'LDA' or 'GGA' or 'MGGA'
         hyb : float
             hybrid functional coefficient
-        rsh : float
-            coefficients for range-separated hybrid functional
+        rsh : a list of three floats
+            coefficients (omega, alpha, beta) for range-separated hybrid functional.
+            omega is the exponent factor in attenuated Coulomb operator e^{-omega r_{12}}/r_{12}
+            alpha is the coefficient for long-range part, hybrid coefficient
+            can be obtained by alpha + beta
 
     Examples:
 
