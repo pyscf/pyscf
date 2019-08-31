@@ -895,7 +895,13 @@ def tot_electrons(mol):
     >>> mol.tot_electrons()
     6
     '''
-    nelectron = mol.atom_charges().sum() - mol.charge
+    if mol._atm.size != 0:
+        nelectron = mol.atom_charges().sum()
+    elif mol._atom:
+        nelectron = sum(charge(a[0]) for a in mol._atom)
+    else:
+        nelectron = sum(charge(a[0]) for a in format_atom(mol.atom))
+    nelectron -= mol.charge
     return int(nelectron)
 
 def copy(mol):
@@ -2121,9 +2127,12 @@ class Mole(lib.StreamObject):
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
 
-        # Access self.nelec in which the code checks whether the spin and
-        # number of electrons are consistent.
-        self.nelec
+        if self.spin is None:
+            self.spin = self.nelectron % 2
+        else:
+            # Access self.nelec in which the code checks whether the spin and
+            # number of electrons are consistent.
+            self.nelec
 
         if self.symmetry:
             from pyscf import symm
