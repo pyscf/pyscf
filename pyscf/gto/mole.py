@@ -299,6 +299,13 @@ def format_atom(atoms, origin=0, axes=None,
         return [_atom_symbol(dat[0]), [float(x) for x in dat[1:4]]]
 
     if isinstance(atoms, (str, unicode)):
+        # The input atoms points to a geometry file
+        if os.path.isfile(atoms):
+            try:
+                atoms = fromfile(atoms)
+            except ValueError:
+                pass
+
         atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
         fmt_atoms = []
         for dat in atoms.split('\n'):
@@ -2199,14 +2206,7 @@ class Mole(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        if isinstance(self.atom, (str, unicode)) and os.path.isfile(self.atom):
-            try:
-                atom_str = self.fromfile(self.atom)
-                self._atom = self.format_atom(atom_str, unit=self.unit)
-            except ValueError:
-                self._atom = self.format_atom(self.atom, unit=self.unit)
-        else:
-            self._atom = self.format_atom(self.atom, unit=self.unit)
+        self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
 
         if isinstance(self.basis, (str, unicode, tuple, list)):
