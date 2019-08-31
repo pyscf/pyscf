@@ -521,6 +521,14 @@ O    SP
         self.assertRaises(ValueError, mol0.gto_norm, -1, 1.)
 
     def test_nelectron(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [1  , (0.,1.,1.)],
+            ["O1", (0.,0.,0.)],
+            [1  , (1.,1.,0.)], ]
+        mol.charge = 1
+        self.assertEqual(mol.nelectron, 9)
+
         mol0.nelectron = mol0.nelectron
         mol0.nelectron = mol0.nelectron
         mol0.spin = 2
