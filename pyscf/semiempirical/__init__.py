@@ -1,4 +1,4 @@
-from mindo3 import RMINDO3, UMINDO3
+from .mindo3 import RMINDO3, UMINDO3
 
 def MINDO3(mol):
     if mol.spin == 0:
