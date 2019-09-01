@@ -34,6 +34,12 @@ IGNORE_H = getattr(__config__, 'molden_ignore_h', True)
 def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
                   occ=None, ignore_h=IGNORE_H):
     from pyscf.symm import label_orb_symm
+    if mol.cart:
+        # pyscf Cartesian GTOs are not normalized. This may not be consistent
+        # with the requirements of molden format. Normalize Cartesian GTOs here
+        norm = mol.intor('int1e_ovlp').diagonal() ** .5
+        mo_coeff = numpy.einsum('i,ij->ij', norm, mo_coeff)
+
     if ignore_h:
         mol, mo_coeff = remove_high_l(mol, mo_coeff)
     aoidx = order_ao_index(mol)
@@ -338,10 +344,18 @@ def load(moldenfile, verbose=0):
             elif sec_title in ('5D', '7F', '9G'):
                 mol.cart = False
 
+            elif sec_title in ('6D', '10F', '15G'):
+                mol.cart = True
+
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
     if mo_section_count == 0:
+        if mo.cart:
+            # pyscf Cartesian GTOs are not normalized. This may not be consistent
+            # with the requirements of molden format.
+            norm = mol.intor('int1e_ovlp').diagonal() ** -.5
+
         if spins[-1][0] == 'B':  # If including beta orbitals
             offset = spins.index(spins[-1])
             mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
@@ -349,6 +363,13 @@ def load(moldenfile, verbose=0):
             mo_occ       = mo_occ      [:offset], mo_occ      [offset:]
             irrep_labels = irrep_labels[:offset], irrep_labels[offset:]
             spins        = spins       [:offset], spins       [offset:]
+
+            if mol.cart:
+                mo_coeff = (numpy.einsum('i,ij->ij', norm, mo_coeff[0]),
+                            numpy.einsum('i,ij->ij', norm, mo_coeff[1]))
+
+        elif mol.cart:
+            mo_coeff = numpy.einsum('i,ij->ij', norm, mo_coeff)
 
     if isinstance(mo_occ, tuple):
         mol.spin = int(mo_occ[0].sum() - mo_occ[1].sum())
@@ -465,14 +486,19 @@ def remove_high_l(mol, mo_coeff=None):
     if mo_coeff is None:
         return pmol, None
     else:
-        k = 0
+        p1 = 0
         idx = []
         for ib in range(mol.nbas):
             l = mol.bas_angular(ib)
             nc = mol.bas_nctr(ib)
+            if mol.cart:
+                nd = (l + 1) * (l + 2) // 2
+            else:
+                nd = l * 2 + 1
+            p0, p1 = p1, p1 + nd * nc
             if l <= 4:
-                idx.append(range(k, k+(l*2+1)*nc))
-            k += (l*2+1) * nc
+                idx.append(range(p0, p1))
+
         idx = numpy.hstack(idx)
         return pmol, mo_coeff[idx]
 
