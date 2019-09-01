@@ -42,6 +42,7 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
 
     if ignore_h:
         mol, mo_coeff = remove_high_l(mol, mo_coeff)
+
     aoidx = order_ao_index(mol)
     nmo = mo_coeff.shape[1]
     if symm is None:
@@ -264,15 +265,13 @@ def _parse_mo(lines, envs):
 
     mo_energy = numpy.array(mo_energy)
     mo_occ = numpy.array(mo_occ)
+    aoidx = numpy.argsort(order_ao_index(mol))
+    mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
     if mol.cart:
-        aoidx = numpy.argsort(order_ao_index(mol, cart=True))
-        mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
-# AO are assumed to be normalized in molpro molden file
+# Cartesian GTOs are normalized in molden format but they are not in pyscf
         s = mol.intor('int1e_ovlp')
         mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
-    else:
-        aoidx = numpy.argsort(order_ao_index(mol))
-        mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
+
 
     return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
 
@@ -341,21 +340,16 @@ def load(moldenfile, verbose=0):
             elif sec_title in _SEC_PARSER:
                 _SEC_PARSER[sec_title.upper()](lines, tokens)
 
-            elif sec_title in ('5D', '7F', '9G'):
+            elif sec_title[:2] in ('5D', '7F', '9G'):
                 mol.cart = False
 
-            elif sec_title in ('6D', '10F', '15G'):
+            elif sec_title[:2] == '6D' or sec_title[:3] in ('10F', '15G'):
                 mol.cart = True
 
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
     if mo_section_count == 0:
-        if mo.cart:
-            # pyscf Cartesian GTOs are not normalized. This may not be consistent
-            # with the requirements of molden format.
-            norm = mol.intor('int1e_ovlp').diagonal() ** -.5
-
         if spins[-1][0] == 'B':  # If including beta orbitals
             offset = spins.index(spins[-1])
             mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
@@ -363,13 +357,6 @@ def load(moldenfile, verbose=0):
             mo_occ       = mo_occ      [:offset], mo_occ      [offset:]
             irrep_labels = irrep_labels[:offset], irrep_labels[offset:]
             spins        = spins       [:offset], spins       [offset:]
-
-            if mol.cart:
-                mo_coeff = (numpy.einsum('i,ij->ij', norm, mo_coeff[0]),
-                            numpy.einsum('i,ij->ij', norm, mo_coeff[1]))
-
-        elif mol.cart:
-            mo_coeff = numpy.einsum('i,ij->ij', norm, mo_coeff)
 
     if isinstance(mo_occ, tuple):
         mol.spin = int(mo_occ[0].sum() - mo_occ[1].sum())
@@ -393,6 +380,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
         fout.write('%s   %d   %d   ' % (symb, ia+1, chg))
         coord = mol.atom_coord(ia)
         fout.write('%18.14f   %18.14f   %18.14f\n' % tuple(coord))
+
     fout.write('[GTO]\n')
     for ia, (sh0, sh1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
         fout.write('%d 0\n' %(ia+1))
@@ -407,7 +395,11 @@ def header(mol, fout, ignore_h=IGNORE_H):
                 for ip in range(nprim):
                     fout.write('    %18.14g  %18.14g\n' % (es[ip], cs[ip,ic]))
         fout.write('\n')
-    fout.write('[5d]\n[9g]\n\n')
+
+    if mol.cart:
+        fout.write('[6d]\n[10f]\n[15g]\n')
+    else:
+        fout.write('[5d]\n[7f]\n[9g]\n')
 
     if mol.has_ecp():  # See https://github.com/zorkzou/Molden2AIM
         fout.write('[core]\n')
@@ -417,7 +409,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
                 fout.write('%s : %d\n' % (ia+1, nelec_ecp_core))
     fout.write('\n')
 
-def order_ao_index(mol, cart=False):
+def order_ao_index(mol):
 # reorder d,f,g fucntion to
 #  5D: D 0, D+1, D-1, D+2, D-2
 #  6D: xx, yy, zz, xy, xz, yz
@@ -429,7 +421,7 @@ def order_ao_index(mol, cart=False):
 # 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
     idx = []
     off = 0
-    if cart:
+    if mol.cart:
         for ib in range(mol.nbas):
             l = mol.bas_angular(ib)
             for n in range(mol.bas_nctr(ib)):
