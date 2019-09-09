@@ -118,6 +118,11 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = uccsd.UCCSD.__doc__
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf)
+
     if getattr(mf, 'with_df', None):
         raise NotImplementedError('DF-UCCSD')
     else:
@@ -126,6 +131,11 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = gccsd.GCCSD.__doc__
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
+        mf = scf.addons.convert_to_ghf(mf)
+
     if getattr(mf, 'with_df', None):
         raise NotImplementedError('DF-GCCSD')
     else:

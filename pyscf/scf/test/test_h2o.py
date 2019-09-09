@@ -325,7 +325,7 @@ class KnownValues(unittest.TestCase):
         H   0.   0.957   0.587'''
         mol1.basis = 'ccpvdz'
         mol1.build(0,0)
-        self.assertAlmostEqual(mf_scanner(mol1), -76.273052274103648, 8)
+        self.assertAlmostEqual(mf_scanner(mol1), -76.273052274103648, 7)
 
     def test_init(self):
         from pyscf import dft

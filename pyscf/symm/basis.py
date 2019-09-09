@@ -120,12 +120,13 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
                 ip += degen
 
     ao_loc = mol.ao_loc_nr()
-    l_idx = []
+    l_idx = {}
     ANG_OF = 1
     for l in range(mol._bas[:,ANG_OF].max()+1):
         idx = [numpy.arange(ao_loc[ib], ao_loc[ib+1])
                for ib in numpy.where(mol._bas[:,ANG_OF] == l)[0]]
-        l_idx.append(numpy.hstack(idx))
+        if idx:
+            l_idx[l] = numpy.hstack(idx)
 
     Ds = _ao_rotation_matrices(mol, coordinates)
     so = []
@@ -135,7 +136,7 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
             irrep_ids.append(ir)
             c_ir = numpy.vstack(c).T
             nso = c_ir.shape[1]
-            for l, idx in enumerate(l_idx):
+            for l, idx in l_idx.items():
                 c = c_ir[idx].reshape(-1,Ds[l].shape[1],nso)
                 c_ir[idx] = numpy.einsum('nm,smp->snp', Ds[l], c).reshape(-1,nso)
 
@@ -499,19 +500,20 @@ def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     irrep_ids = [irrep_ids[i] for i in irrep_idx]
 
     ao_loc = mol.ao_loc_nr()
-    l_idx = []
+    l_idx = {}
     ANG_OF = 1
     for l in range(mol._bas[:,ANG_OF].max()+1):
         idx = [numpy.arange(ao_loc[ib], ao_loc[ib+1])
                for ib in numpy.where(mol._bas[:,ANG_OF] == l)[0]]
-        l_idx.append(numpy.hstack(idx))
+        if idx:
+            l_idx[l] = numpy.hstack(idx)
 
     Ds = _ao_rotation_matrices(mol, coordinates)
     so = []
     for i in irrep_idx:
         c_ir = numpy.vstack(sodic[irrep_names[i]]).T
         nso = c_ir.shape[1]
-        for l, idx in enumerate(l_idx):
+        for l, idx in l_idx.items():
             c = c_ir[idx].reshape(-1,Ds[l].shape[1],nso)
             c_ir[idx] = numpy.einsum('nm,smp->snp', Ds[l], c).reshape(-1,nso)
 
