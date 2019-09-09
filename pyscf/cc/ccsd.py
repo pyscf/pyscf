@@ -1236,10 +1236,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
 CC = RCCSD = CCSD
 
-from pyscf import scf
-scf.hf.RHF.CCSD = lib.class_as_method(CCSD)
-scf.rohf.ROHF.CCSD = None
-
 
 class _ChemistsERIs:
     '''(pq|rs)'''

@@ -271,7 +271,7 @@ def format_atom(atoms, origin=0, axes=None,
         origin : ndarray
             new axis origin.
         axes : ndarray
-            (new_x, new_y, new_z), each entry is a length-3 array
+            (new_x, new_y, new_z), new coordinates
         unit : str or number
             If unit is one of strings (B, b, Bohr, bohr, AU, au), the coordinates
             of the input atoms are the atomic unit;  If unit is one of strings
@@ -1787,15 +1787,16 @@ def tofile(mol, filename, format=None):
 
 def fromfile(filename, format=None):
     '''Read molecular geometry from a file
+    (in testing)
 
-    Supported output formats:
+    Supported formats:
         | raw: Each line is  <symobl> <x> <y> <z>
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
     '''
     if format is None:  # Guess format based on filename
         format = os.path.splitext(filename)[1][1:].lower()
-        if format not in ('xyz', 'zmat'):
+        if format not in ('xyz', 'zmat', 'sdf'):
             format = 'raw'
     with open(filename, 'r') as f:
         return fromstring(f.read(), format)
@@ -1803,8 +1804,9 @@ def fromfile(filename, format=None):
 
 def fromstring(string, format='xyz'):
     '''Convert the string of the specified format to internal format
+    (in testing)
 
-    Supported output formats:
+    Supported formats:
         | raw: Each line is  <symobl> <x> <y> <z>
         | xyz: XYZ cartesian coordinates format
         | zmat: Z-matrix format
@@ -1816,6 +1818,14 @@ def fromstring(string, format='xyz'):
         dat = string.splitlines()
         natm = int(dat[0])
         return '\n'.join(dat[2:natm+2])
+    elif format == 'sdf':
+        raw = raw.splitlines()
+        natoms, nbonds = raw[3].split()[:2]
+        atoms = []
+        for line in raw[4:4+int(natoms)]:
+            d = line.split()
+            atoms.append('%s %s %s %s' % (d[3], d[0], d[1], d[2]))
+        return '\n'.join(atoms)
     elif format == 'raw':
         return string
     else:
@@ -2234,33 +2244,6 @@ class Mole(lib.StreamObject):
                 _ecp = self.ecp
             self._ecp = self.format_ecp(_ecp)
 
-        if self.symmetry:
-            from pyscf import symm
-            if isinstance(self.symmetry, (str, unicode)):
-                self.symmetry = str(symm.std_symb(self.symmetry))
-                self.topgroup = self.symmetry
-                orig = 0
-                axes = numpy.eye(3)
-                self.groupname, axes = symm.subgroup(self.topgroup, axes)
-                if not symm.check_given_symm(self.groupname, self._atom,
-                                             self._basis):
-                    self.topgroup, orig, axes = \
-                            symm.detect_symm(self._atom, self._basis)
-                    self.groupname, axes = symm.subgroup(self.topgroup, axes)
-                    _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
-                    _atom = '\n'.join([str(a) for a in _atom])
-                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
-                                         (self.symmetry, self.topgroup, _atom))
-            else:
-                self.topgroup, orig, axes = \
-                        symm.detect_symm(self._atom, self._basis)
-                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                        self.symmetry_subgroup)
-
-# Note the internal _format is in Bohr
-            self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
-
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod,
@@ -2277,6 +2260,23 @@ class Mole(lib.StreamObject):
 
         if self.symmetry:
             from pyscf import symm
+            self.topgroup, orig, axes = symm.detect_symm(self._atom, self._basis)
+
+            if isinstance(self.symmetry, (str, unicode)):
+                self.symmetry = str(symm.std_symb(self.symmetry))
+                self.groupname, axes = symm.subgroup(self.symmetry, axes)
+                prop_atoms = self.format_atom(self._atom, orig, axes, 'Bohr')
+                if symm.check_given_symm(self.groupname, prop_atoms, self._basis):
+                    self.topgroup = self.symmetry
+                else:
+                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
+                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
+                                         (self.symmetry, self.topgroup,
+                                          '\n'.join([str(a) for a in prop_atoms])))
+            else:
+                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                        self.symmetry_subgroup)
+
             if self.cart and self.groupname in ('Dooh', 'Coov'):
                 if self.groupname == 'Dooh':
                     self.groupname, lgroup = 'D2h', 'Dooh'
@@ -2285,13 +2285,9 @@ class Mole(lib.StreamObject):
                 logger.warn(self, 'This version does not support linear molecule '
                             'symmetry %s for cartesian GTO basis.  Its subgroup '
                             '%s is used', lgroup, self.groupname)
-            try:
-                eql_atoms = symm.symm_identical_atoms(self.groupname, self._atom)
-            except RuntimeError:
-                raise RuntimeError('''Given symmetry and molecule structure not match.
-Note when symmetry attributes is assigned, the molecule needs to be placed in a proper orientation.''')
+
             self.symm_orb, self.irrep_id = \
-                    symm.symm_adapted_basis(self, self.groupname, eql_atoms)
+                    symm.symm_adapted_basis(self, self.groupname, orig, axes)
             self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
                                for ir in self.irrep_id]
 
@@ -3012,10 +3008,23 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
 
     tostring = tostring
     tofile = tofile
+
     def fromstring(self, string, format='xyz'):
-        return fromstring(string, format)
+        '''Update the Mole object based on the input geometry string'''
+        self.atom = string
+        self._atom = mol.format_atom(fromstring(string, format))
+        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        if format == 'sdf' and 'M  CHG' in string:
+            raise NotImplementedError
+            #FIXME self.charge = 0
+        return self
+
     def fromfile(self, filename, format=None):
-        return fromfile(filename, format)
+        '''Update the Mole object based on the input geometry file'''
+        self.atom = filename
+        self._atom = mol.format_atom(fromfile(filename, format))
+        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        return self
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None):

@@ -31,6 +31,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import rccsd
 from pyscf.ao2mo import _ao2mo
 from pyscf.mp import ump2
+from pyscf import scf
 from pyscf import __config__
 
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
@@ -543,6 +544,7 @@ class UCCSD(ccsd.CCSD):
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        assert isinstance(mf, scf.uhf.UHF)
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     get_nocc = get_nocc
@@ -758,8 +760,6 @@ class UCCSD(ccsd.CCSD):
         #return get_d2_diagnostic(t2)
 
 CCSD = UCCSD
-from pyscf import scf
-scf.uhf.UHF.CCSD = lib.class_as_method(CCSD)
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
