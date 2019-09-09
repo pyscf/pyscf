@@ -31,6 +31,9 @@ def Dmatrix(l, alpha, beta, gamma, reorder_p=False):
 
     D_{mm'} = <lm|R(alpha,beta,gamma)|lm'>
     alpha, beta, gamma are Euler angles (in z-y-z convention)
+
+    Kwargs:
+        reorder_p (bool): Whether to put the p functions in the (x,y,z) order.
     '''
     if l == 0:
         return numpy.eye(1)
@@ -48,6 +51,9 @@ def Dmatrix(l, alpha, beta, gamma, reorder_p=False):
 def _dmat_to_real(l, d, reorder_p=False):
     ''' Transform the input D-matrix to make it compatible with the real
     spherical harmonic functions.
+
+    Kwargs:
+        reorder_p (bool): Whether to put the p functions in the (x,y,z) order.
     '''
     # The input D matrix works for pure spherical harmonics. The real
     # representation should be U^\dagger * D * U, where U is the unitary
@@ -115,8 +121,8 @@ def dmatrix(l, beta, reorder_p=False):
 
 
 def get_euler_angles(c1, c2):
-    '''Find the three Euler angles (alpha, beta, gamma) that rotates
-    coordinates c1 to coordinates c2.
+    '''Find the three Euler angles (alpha, beta, gamma in z-y-z convention)
+    that rotates coordinates c1 to coordinates c2.
 
     yp  = numpy.einsum('j,kj->k', c1[1], geom.rotation_mat(c1[2], beta))
     tmp = numpy.einsum('ij,kj->ik', c1 , geom.rotation_mat(c1[2], alpha))
