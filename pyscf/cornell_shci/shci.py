@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ except ImportError:
     settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
     if settings.SHCIEXE is None:
         import sys
-        sys.stderr.write('settings.py not found.  Please create %s\n'
+        sys.stderr.write('settings.py not found for module cornell_shci.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 

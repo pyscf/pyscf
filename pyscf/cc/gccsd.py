@@ -242,7 +242,7 @@ class GCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return gccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=False)
+        return gccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in MO space.  The density matrix is
@@ -293,6 +293,21 @@ class GCCSD(ccsd.CCSD):
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+    def get_t1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_t1_diagnostic(t1)
+
+    def get_d1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_d1_diagnostic(t1)
+
+    def get_d2_diagnostic(self, t2=None):
+        if t2 is None: t2 = self.t2
+        raise NotImplementedError
+        #return get_d2_diagnostic(self.spin2spatial(t2))
 
 CCSD = GCCSD
 

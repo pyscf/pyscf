@@ -10,17 +10,30 @@ A simple example to run HF calculation.
 .analyze() function calls the Mulliken population analysis etc.
 '''
 
-from pyscf import gto, scf
+import pyscf
 
-mol = gto.Mole()
-mol.build(
+mol = pyscf.M(
     atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
     basis = 'ccpvdz',
     symmetry = True,
 )
 
-myhf = scf.RHF(mol)
+myhf = mol.HF()
 myhf.kernel()
 
 # Orbital energies, Mulliken population etc.
 myhf.analyze()
+
+
+#
+# myhf object can also be created using the APIs of gto, scf module
+#
+from pyscf import gto, scf
+mol = gto.M(
+    atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
+    basis = 'ccpvdz',
+    symmetry = True,
+)
+myhf = scf.HF(mol)
+myhf.kernel()
+

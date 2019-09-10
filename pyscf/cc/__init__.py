@@ -71,6 +71,9 @@ from pyscf.cc import addons
 from pyscf.cc import rccsd
 from pyscf.cc import uccsd
 from pyscf.cc import gccsd
+from pyscf.cc import eom_rccsd
+from pyscf.cc import eom_uccsd
+from pyscf.cc import eom_gccsd
 
 def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__

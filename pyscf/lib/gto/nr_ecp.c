@@ -25,7 +25,9 @@
 //#define ATOM_OF         0
 //#define ANG_OF          1
 #define RADI_POWER      3
-#define ECP_LMAX        4
+#define SO_TYPE_OF      4
+
+#define ECP_LMAX        5
 //#define PTR_EXP         5
 //#define PTR_COEFF       6
 #define CART_MAX        128 // ~ lmax = 14
@@ -4573,6 +4575,83 @@ static int _cart_pow_z[] = {
 static int _offset_cart[] = {0, 1, 4, 10, 20, 35, 56, 84, 120,
                              165, 220, 286, 364, 455, 560};
 
+/*
+ * Matrix of angular moment operator l*1j on the real spherical harmonic basis.
+ * Obtained by the function below for l = 0..4
+ *
+def angular_moment_matrix(l):
+    lz = numpy.diag(numpy.arange(-l, l+1, dtype=numpy.complex))
+    lx = numpy.zeros_like(lz)
+    ly = numpy.zeros_like(lz)
+    for mi in range(-l, l+1):
+        mj = mi + 1
+        if mj <= l:
+            lx[l+mi,l+mj] = .5  * ((l+mj)*(l-mj+1))**.5
+            ly[l+mi,l+mj] = .5j * ((l+mj)*(l-mj+1))**.5
+        mj = mi - 1
+        if mj >= -l:
+            lx[l+mi,l+mj] = .5  * ((l-mj)*(l+mj+1))**.5
+            ly[l+mi,l+mj] =-.5j * ((l-mj)*(l+mj+1))**.5
+    u = sph_pure2real(l)
+    lx = u.conj().T.dot(lx).dot(u)
+    ly = u.conj().T.dot(ly).dot(u)
+    lz = u.conj().T.dot(lz).dot(u)
+    return numpy.array((lx, ly, lz)) * 1j
+*/
+static double _angular_moment_matrix_s[] = {
+        0, 0, 0
+};
+static double _angular_moment_matrix_p[] = {
+        0, 0, 0, 0, 0, 1, 0, -1, 0,
+        0, 0, -1, 0, 0, 0, 1, 0, 0,
+        0, 1, 0, -1, 0, 0, 0, 0, 0,
+};
+static double _angular_moment_matrix_d[] = {
+        0, 0, 0, 1, 0, 0, 0, 1.73205080756887719, 0, 1, 0, -1.73205080756887719, 0, 0, 0, -1, 0, 0, 0, 0, 0, -1, 0, 0, 0,
+        0, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1.73205080756887719, 0, 0, 0, -1.73205080756887719, 0, 1, 0, 0, 0, -1, 0,
+        0, 0, 0, 0, -2, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0,
+};
+static double _angular_moment_matrix_f[] = {
+        0, 0, 0, 0, 0, 1.22474487139158894, 0, 0, 0, 0, 0, 1.58113883008418976, 0, 1.22474487139158894, 0, 0, 0, 2.44948974278317788, 0, 1.58113883008418976, 0, 0, 0, -2.44948974278317788, 0, 0, 0, 0, 0, -1.58113883008418976, 0, 0, 0, 0, 0, -1.22474487139158894, 0, -1.58113883008418976, 0, 0, 0, 0, 0, -1.22474487139158894, 0, 0, 0, 0, 0,
+        0, -1.22474487139158894, 0, 0, 0, 0, 0, 1.22474487139158894, 0, -1.58113883008418976, 0, 0, 0, 0, 0, 1.58113883008418976, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.44948974278317788, 0, 0, 0, 0, 0, -2.44948974278317788, 0, 1.58113883008418976, 0, 0, 0, 0, 0, -1.58113883008418976, 0, 1.22474487139158894, 0, 0, 0, 0, 0, -1.22474487139158894, 0,
+        0, 0, 0, 0, 0, 0, -3, 0, 0, 0, 0, 0, -2, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0,
+};
+static double _angular_moment_matrix_g[] = {
+  0, 0, 0, 0, 0, 0, 0, 1.41421356237309515, 0, 0, 0, 0, 0, 0, 0, 1.87082869338697066, 0, 1.41421356237309515, 0, 0, 0, 0, 0, 2.12132034355964239, 0, 1.87082869338697066, 0, 0, 0, 0, 0, 3.16227766016837952, 0, 2.12132034355964239, 0, 0, 0, 0, 0, -3.16227766016837952, 0, 0, 0, 0, 0, 0, 0, -2.12132034355964239, 0, 0, 0, 0, 0, 0, 0, -1.87082869338697066, 0, -2.12132034355964239, 0, 0, 0, 0, 0, -1.41421356237309515, 0, -1.87082869338697066, 0, 0, 0, 0, 0, 0, 0, -1.41421356237309515, 0, 0, 0, 0, 0, 0, 0,
+  0, -1.41421356237309515, 0, 0, 0, 0, 0, 0, 0, 1.41421356237309515, 0, -1.87082869338697066, 0, 0, 0, 0, 0, 0, 0, 1.87082869338697066, 0, -2.12132034355964239, 0, 0, 0, 0, 0, 0, 0, 2.12132034355964239, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3.16227766016837952, 0, 0, 0, 0, 0, 0, 0, -3.16227766016837952, 0, 2.12132034355964239, 0, 0, 0, 0, 0, 0, 0, -2.12132034355964239, 0, 1.87082869338697066, 0, 0, 0, 0, 0, 0, 0, -1.87082869338697066, 0, 1.41421356237309515, 0, 0, 0, 0, 0, 0, 0, -1.41421356237309515, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, -4, 0, 0, 0, 0, 0, 0, 0, -3, 0, 0, 0, 0, 0, 0, 0, -2, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+static double *_angular_moment_matrix[] = {
+        _angular_moment_matrix_s,
+        _angular_moment_matrix_p,
+        _angular_moment_matrix_d,
+        _angular_moment_matrix_f,
+        _angular_moment_matrix_g,
+};
+// einsum('jfnq,lmn->ljfmq', angj, jmm)
+static void transform_angj(double *jmm_angj, double *angj, int lj, int lc)
+{
+        const int lj1 = lj + 1;
+        const int dlc = lc * 2 + 1;
+        const int ljlc1 = lj + lc + 1;
+        const int nfj = (lj+1) * (lj+2) / 2;
+        double *jmm;
+
+        const double D0 = 0;
+        const double D1 = 1;
+        const char TRANS_N = 'N';
+
+        int i, j;
+        for (i = 0; i < 3; i++) {
+                jmm = _angular_moment_matrix[lc] + i*dlc*dlc;
+                for (j = 0; j < lj1*nfj; j++) {
+                        dgemm_(&TRANS_N, &TRANS_N, &ljlc1, &dlc, &dlc,
+                               &D1, angj+j*dlc*ljlc1, &ljlc1, jmm, &dlc,
+                               &D0, jmm_angj+j*dlc*ljlc1, &ljlc1);
+                }
+                jmm_angj += lj1 * nfj * dlc * ljlc1;
+        }
+}
 
 /*
  * exponentially scaled modified spherical Bessel function of the first kind
@@ -5192,21 +5271,26 @@ void type1_rad_ang(double *rad_ang, int lmax, double *r, double *rad_all)
         } } }
 }
 
+// ecpbasis which have different r^n but the same l can be put in the same shell
+// and evaluated together in ECPrad_part function
 static int _loc_ecpbas(int *ecploc, int *ecpbas, int necpbas)
 {
-        int i, l, atm_id;
+        int i, l, so, atm_id;
         ecploc[0] = 0;
         int nslots = 0;
         int atm_last = ecpbas[ATOM_OF];
         int l_last = ecpbas[ANG_OF];
+        int so_last = ecpbas[SO_TYPE_OF];
         for (i = 1; i < necpbas; i++) {
                 atm_id = ecpbas[ATOM_OF+i*BAS_SLOTS];
                 l = ecpbas[ANG_OF +i*BAS_SLOTS];
-                if (atm_id != atm_last || l != l_last) {
+                so = ecpbas[SO_TYPE_OF + i*BAS_SLOTS];
+                if (atm_id != atm_last || l != l_last || so != so_last) {
                         nslots++;
                         ecploc[nslots] = i;
                         atm_last = atm_id;
                         l_last = l;
+                        so_last = so;
                 }
         }
         if (necpbas != 0) {
@@ -5281,6 +5365,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int nfi = (li+1) * (li+2) / 2;
         const int nfj = (lj+1) * (lj+2) / 2;
         const int di = nfi * nci;
+        const int ngctr = nci * ncj * nfi * nfj;
         const double *ri = env + atm[PTR_COORD+bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
         const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
 
@@ -5312,16 +5397,13 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double dca, dcb, s;
         double *rc, *pradi, *pradj, *prur;
         int has_value = 0;
-        int ecp_lmax = 0;
-        for (i = 0; i < necpbas; i++) {
-                ecp_lmax = MAX(ecp_lmax, ecpbas[ANG_OF +i*BAS_SLOTS]);
-        }
 
-        for (i = 0; i < nci*ncj*nfi*nfj; i++) { gctr[i] = 0; }
+        for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
 
         for (iloc = 0; iloc < nslots; iloc++) {
                 lc = ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS];
-                if (lc == -1) {
+                if (lc == -1 ||
+                    ecpbas[SO_TYPE_OF+ecploc[iloc]*BAS_SLOTS] == 1) {
                         continue;
                 }
                 atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
@@ -5443,6 +5525,208 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         return has_value;
 }
 
+int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
+                    int *atm, int natm, int *bas, int nbas, double *env,
+                    ECPOpt *opt, double *cache)
+{
+        if (necpbas == 0) {
+                return 0;
+        }
+        const int ish = shls[0];
+        const int jsh = shls[1];
+        const int li = bas[ANG_OF+ish*BAS_SLOTS];
+        const int lj = bas[ANG_OF+jsh*BAS_SLOTS];
+        const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
+        const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
+        const int nfi = (li+1) * (li+2) / 2;
+        const int nfj = (lj+1) * (lj+2) / 2;
+        const int di = nfi * nci;
+        const int ngctr = nci * ncj * nfi * nfj;
+        const double *ri = env + atm[PTR_COORD+bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
+        const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
+
+        int nrs = 1 << LEVEL_MAX;
+        int ecploc[necpbas+1];
+        int nslots = _loc_ecpbas(ecploc, ecpbas, necpbas);
+        int *ecpshls;
+        int iloc;
+
+        const double D0 = 0;
+        const double D1 = 1;
+        const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
+        double common_fac = CINTcommon_fac_sp(li) *
+                            CINTcommon_fac_sp(lj) * 16 * M_PI * M_PI;
+        common_fac *= .5; // s = 1/2 Pauli matrix
+        int atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq, jfmq;
+        int i, j, n, ic, jc;
+        int d2, d3;
+        double ur[nrs];
+        double rur[nrs*(li+lj+1)];
+        double radi[nci*(li+ECP_LMAX+1)*nrs];
+        double radj[ncj*(lj+ECP_LMAX+1)*nrs];
+        double angi[(li+1)*nfi*(ECP_LMAX*2+1)*(li+ECP_LMAX+1)];
+        double angj[(lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)];
+        double jmm_angj[(lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)*3];
+        double rad_all[nci*ncj*(li+lj+1)*(li+ECP_LMAX+1)*(lj+ECP_LMAX+1)];
+        double rca[3];
+        double rcb[3];
+        double buf[nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)];
+        double dca, dcb, s;
+        double *rc, *pradi, *pradj, *prur;
+        double *gctrx = gctr;
+        double *gctry = gctrx + ngctr;
+        double *gctrz = gctry + ngctr;
+
+        int has_value = 0;
+        int ecp_lmax[natm];
+        for (i = 0; i < natm; i++) {
+                ecp_lmax[i] = 0;
+        }
+        for (i = 0; i < necpbas; i++) {
+                n = ecpbas[ATOM_OF +i*BAS_SLOTS];
+                ecp_lmax[n] = MAX(ecp_lmax[n], ecpbas[ANG_OF +i*BAS_SLOTS]);
+        }
+
+        for (i = 0; i < ngctr*4; i++) { gctr[i] = 0; }
+
+        for (iloc = 0; iloc < nslots; iloc++) {
+                if (ecpbas[SO_TYPE_OF+ecploc[iloc]*BAS_SLOTS] != 1) {
+                        continue;
+                }
+                lc = ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS];
+                if (lc == -1) { // Treat Ul term as L_max in SO-ECP
+                        n = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
+                        lc = ecp_lmax[n] + 1;
+                }
+                atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
+                rc = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
+                ecpshls = ecploc + iloc;
+
+        if (!check_3c_overlap(shls, atm, bas, env, rc, ecpshls, ecpbas)) {
+                continue;
+        }
+
+        has_value = 1;
+        rca[0] = rc[0] - ri[0];
+        rca[1] = rc[1] - ri[1];
+        rca[2] = rc[2] - ri[2];
+        rcb[0] = rc[0] - rj[0];
+        rcb[1] = rc[1] - rj[1];
+        rcb[2] = rc[2] - rj[2];
+        dca = sqrt(SQUARE(rca));
+        dcb = sqrt(SQUARE(rcb));
+
+        dlc = lc * 2 + 1;
+        lilj1 = li + lj + 1;
+        lilc1 = li + lc + 1;
+        ljlc1 = lj + lc + 1;
+        d2 = lilc1 * ljlc1;
+        d3 = lilj1 * d2;
+        im = nfi * dlc;
+        mq = dlc * ljlc1;
+        jfmq = (lj+1) * nfj * mq;
+
+        int level, nrs0, start, step, ijl;
+        double wtscale;
+        double *prad;
+        double plast[d2];
+        char converged[nci*ncj*lilj1];
+        char all_conv;
+        double *rs = rs_gauss_chebyshev2047;
+        double *ws = ws_gauss_chebyshev2047;
+        for (i = 0; i < nci*ncj*lilj1; i++) { converged[i] = 0; }
+        for (i = 0; i < nci*ncj*d3; i++) { rad_all[i] = 0; }
+        nrs0 = (1 << LEVEL0) - 1;
+        step = 1 << (LEVEL_MAX - LEVEL0);
+        start = step - 1;
+        wtscale = step;
+        for (level = LEVEL0; level <= LEVEL_MAX; level++) {
+                nrs = ECPrad_part(ur, rs, start, nrs0, step, ecpshls, ecpbas,
+                                  atm, natm, bas, nbas, env, opt);
+                for (i = 0; i < nrs; i++) {
+                        ur[i] *= ws[start+i*step] * wtscale;
+                        rur[i] = ur[i];
+                        for (lab = 1; lab <= li+lj; lab++) {
+                                rur[nrs*lab+i] = rur[nrs*(lab-1)+i] * rs[start+i*step];
+                        }
+                }
+
+                type2_facs_rad(radi, ish, lc, dca, rs+start, nrs, step,
+                               atm, natm, bas, nbas, env);
+                type2_facs_rad(radj, jsh, lc, dcb, rs+start, nrs, step,
+                               atm, natm, bas, nbas, env);
+                all_conv = 1;
+                for (ijl = 0, ic = 0; ic < nci; ic++) {
+                for (jc = 0; jc < ncj; jc++) {
+                        pradi = radi + ic * nrs * lilc1;
+                        pradj = radj + jc * nrs * ljlc1;
+                        for (lab = 0; lab <= li+lj; lab++, ijl++) {
+                                if (!converged[ijl]) {
+        prur = rur + lab * nrs;
+        prad = rad_all + ijl*d2;
+        for (i = 0; i < d2; i++) {
+                plast[i] = prad[i];
+                prad[i] *= .5;
+        }
+
+        for (i = 0; i < lilc1; i++) {
+        for (j = 0; j < ljlc1; j++) {
+                s = prad[i*ljlc1+j];
+                for (n = 0; n < nrs; n++) {
+                        s += prur[n] * pradi[n*lilc1+i] * pradj[n*ljlc1+j];
+                }
+                prad[i*ljlc1+j] = s;
+        } }
+
+        for (i = 0; i < d2; i++) {
+                if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+                        converged[ijl] = 0;
+                        all_conv = 0;
+                        break;
+                }
+        }
+                                }
+                        }
+                } }
+
+                if (all_conv) {
+                        break;
+                } else {
+                        nrs0 = (1 << level) - 1;
+                        step = 1 << (LEVEL_MAX - level);
+                        start = (start - 1) / 2;
+                        wtscale *= .5;
+                }
+        }
+
+        type2_facs_ang(angi, li, lc, rca);
+        type2_facs_ang(angj, lj, lc, rcb);
+        transform_angj(jmm_angj, angj, lj, lc);
+
+        for (ic = 0; ic < nci; ic++) {
+        for (jc = 0; jc < ncj; jc++) {
+                prad = rad_all + (ic*ncj+jc)*d3;
+                for (i = 0; i <= li; i++) {
+                for (j = 0; j <= lj; j++) {
+                        dgemm_(&TRANS_N, &TRANS_N, &ljlc1, &im, &lilc1,
+                               &D1, prad+(i+j)*d2, &ljlc1,
+                               angi+i*nfi*dlc*lilc1, &lilc1, &D0, buf, &ljlc1);
+                        dgemm_(&TRANS_T, &TRANS_N, &nfi, &nfj, &mq,
+                               &common_fac, buf, &mq, jmm_angj       +j*nfj*dlc*ljlc1, &mq,
+                               &D1, gctrx+jc*nfj*di+ic*nfi, &di);
+                        dgemm_(&TRANS_T, &TRANS_N, &nfi, &nfj, &mq,
+                               &common_fac, buf, &mq, jmm_angj+jfmq  +j*nfj*dlc*ljlc1, &mq,
+                               &D1, gctry+jc*nfj*di+ic*nfi, &di);
+                        dgemm_(&TRANS_T, &TRANS_N, &nfi, &nfj, &mq,
+                               &common_fac, buf, &mq, jmm_angj+jfmq*2+j*nfj*dlc*ljlc1, &mq,
+                               &D1, gctrz+jc*nfj*di+ic*nfi, &di);
+                } }
+        } }
+        }
+        return has_value;
+}
+
 static void scale_coeff(double *cei, const double *ci, const double *ai,
                         const double r2ca, const int npi, const int nci, const int li)
 {
@@ -5521,6 +5805,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
         const int nfi = (li+1) * (li+2) / 2;
         const int nfj = (lj+1) * (lj+2) / 2;
+        const int ngctr = nci * ncj * nfi * nfj;
         const double *ai = env + bas[PTR_EXP+ish*BAS_SLOTS];
         const double *aj = env + bas[PTR_EXP+jsh*BAS_SLOTS];
         const double *ci = env + bas[PTR_COEFF+ish*BAS_SLOTS];
@@ -5563,7 +5848,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double *rc, *pifac, *pjfac, *pout;
         int has_value = 0;
 
-        for (i = 0; i < nci*ncj*nfi*nfj; i++) { gctr[i] = 0; }
+        for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
         for (i = 0; i < d3; i++) { rad_all[i] = 0; }
 
         for (iloc = 0; iloc < nslots; iloc++) {
@@ -5805,6 +6090,7 @@ void ECPscalar_distribute0(double *out, const int *dims,
         }
 }
 
+
 /*
  * For moleintor.getints function
  */
@@ -5871,7 +6157,7 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
         const int jsh = shls[1];
         const int li = bas[ANG_OF+ish*BAS_SLOTS];
         const int lj = bas[ANG_OF+jsh*BAS_SLOTS];
-        const int di = (li+1) * (li+2) / 2 * bas[NCTR_OF+ish*BAS_SLOTS];;
+        const int di = (li+1) * (li+2) / 2 * bas[NCTR_OF+ish*BAS_SLOTS];
         const int dj = (lj+1) * (lj+2) / 2 * bas[NCTR_OF+jsh*BAS_SLOTS];
         const int dij = di * dj;
 
@@ -5909,6 +6195,82 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
                 free(stack);
         }
         return has_value;
+}
+
+/* Port from libcint */
+void CINTc2s_bra_spinor_si(double complex *gsp, int nket,
+                           double complex *gcart, int kappa, int l);
+void CINTc2s_ket_spinor(double complex *gsp, int nbra,
+                        double complex *gcart, int kappa, int l);
+void CINTdcmplx_pp(const int n, double complex *z,
+                   const double *re, const double *im);
+void CINTdcmplx_pn(const int n, double complex *z,
+                   const double *re, const double *im);
+void CINTdcmplx_np(const int n, double complex *z,
+                   const double *re, const double *im);
+static void zcopy_ij(double complex *opij, const double complex *gctr,
+                     const int ni, const int nj, const int mi, const int mj)
+{
+        int i, j;
+
+        for (j = 0; j < mj; j++) {
+                for (i = 0; i < mi; i++) {
+                        opij[j*ni+i] = gctr[j*mi+i];
+                }
+        }
+}
+// multiply pauli_matrix
+static void cart2spinor(double complex *opij, double *gctr, int *dims,
+                        int *shls, int *bas, double *cache)
+{
+        //TODO: call libcint function c2s_si_1ei. Note c2s_si_1ei multiplies
+        //-1*pauli_matrix than pauli_matrix
+
+        int i_sh = shls[0];
+        int j_sh = shls[1];
+        int li = bas[ANG_OF+i_sh*BAS_SLOTS];
+        int lj = bas[ANG_OF+j_sh*BAS_SLOTS];
+        int i_kp = bas[KAPPA_OF+i_sh*BAS_SLOTS];
+        int j_kp = bas[KAPPA_OF+j_sh*BAS_SLOTS];
+        int i_ctr = bas[NCTR_OF+i_sh*BAS_SLOTS];
+        int j_ctr = bas[NCTR_OF+j_sh*BAS_SLOTS];
+        int di = CINTlen_spinor(i_sh, bas);
+        int dj = CINTlen_spinor(j_sh, bas);
+        int ni = dims[0];
+        int nj = dims[1];
+        int ofj = ni * dj;
+        int nfi = (li+1)*(li+2)/2;
+        int nfj = (lj+1)*(lj+2)/2;
+        int nf2i = nfi + nfi;
+        int nf2j = nfj + nfj;
+        int nf = nfi * nfj;
+        int ic, jc;
+        double *gc_x = gctr;
+        double *gc_y = gc_x + nf * i_ctr * j_ctr;
+        double *gc_z = gc_y + nf * i_ctr * j_ctr;
+        double *gc_1 = gc_z + nf * i_ctr * j_ctr;
+        double complex *tmp1 = (double complex *)cache;
+        double complex *tmp2 = (double complex *)cache + nf2i*nf2j;
+
+        for (jc = 0; jc < j_ctr; jc++) {
+        for (ic = 0; ic < i_ctr; ic++) {
+                //cmplx( gctr.POS_Z, gctr.POS_1)
+                //cmplx( gctr.POS_X,-gctr.POS_Y)
+                CINTdcmplx_pp(nf, tmp1, gc_z, gc_1);
+                CINTdcmplx_pn(nf, tmp1+nf, gc_x, gc_y);
+                //cmplx( gctr.POS_X, gctr.POS_Y)
+                //cmplx(-gctr.POS_Z, gctr.POS_1)
+                CINTdcmplx_pp(nf, tmp1+nfi*nf2j, gc_x, gc_y);
+                CINTdcmplx_np(nf, tmp1+nfi*nf2j+nf, gc_z, gc_1);
+                CINTc2s_bra_spinor_si(tmp2, nf2j, tmp1, i_kp, li);
+                CINTc2s_ket_spinor(tmp1, di, tmp2, j_kp, lj);
+                zcopy_ij(opij+ofj*jc+di*ic, tmp1, ni, nj, di, dj);
+
+                gc_x += nf;
+                gc_y += nf;
+                gc_z += nf;
+                gc_1 += nf;
+        } }
 }
 
 void ECPscalar_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, double *env)
@@ -5958,4 +6320,140 @@ void ECPdel_optimizer(ECPOpt **opt)
         }
         free(opt0);
         opt = NULL;
+}
+
+
+/*
+ * <i| i/2 l U(r)|j>
+ * Transforming to the integrals in spinor basis
+ *      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_cart, ui.conj(), uj)
+ */
+int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
+               int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
+{
+        const int ish = shls[0];
+        const int jsh = shls[1];
+        const int li = bas[ANG_OF+ish*BAS_SLOTS];
+        const int lj = bas[ANG_OF+jsh*BAS_SLOTS];
+        const int di = (li+1) * (li+2) / 2 * bas[NCTR_OF+ish*BAS_SLOTS];
+        const int dj = (lj+1) * (lj+2) / 2 * bas[NCTR_OF+jsh*BAS_SLOTS];
+        const int dij = di * dj;
+        const int comp = 4;
+
+        if (out == NULL) {
+                return dij * comp;
+        }
+        double *stack = NULL;
+        if (cache == NULL) {
+                stack = malloc(sizeof(double) * dij * comp);
+                cache = stack;
+        }
+
+        int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
+        int necpbas = (int)env[AS_NECPBAS];
+        double *buf1 = cache;
+        cache += dij * comp;
+        int has_value = ECPtype_so_cart(buf1, shls, ecpbas, necpbas,
+                                        atm, natm, bas, nbas, env, opt, cache);
+
+        if (has_value) {
+                // comp-1 for x, y, z components only
+                ECPscalar_distribute(out, buf1, dims, comp-1, di, dj);
+        } else {
+                ECPscalar_distribute0(out, dims, comp-1, di, dj);
+        }
+
+        if (stack != NULL) {
+                free(stack);
+        }
+        return has_value;
+}
+
+int ECPso_sph(double *out, int *dims, int *shls, int *atm, int natm,
+              int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
+{
+        const int ish = shls[0];
+        const int jsh = shls[1];
+        const int li = bas[ANG_OF+ish*BAS_SLOTS];
+        const int lj = bas[ANG_OF+jsh*BAS_SLOTS];
+        const int nfi = (li+1) * (li+2) / 2;
+        const int nfj = (lj+1) * (lj+2) / 2;
+        const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
+        const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
+        const int di = (li*2+1) * nci;
+        const int dj = (lj*2+1) * ncj;
+        const int dij = di * dj;
+        const int comp = 4;
+
+        if (out == NULL) {
+                return dij*comp + nfi*nfj*nci*ncj*comp*2;
+        }
+        double *stack = NULL;
+        if (cache == NULL) {
+                stack = malloc(sizeof(double) * (dij*comp+nfi*nfj*nci*ncj*comp*2));
+                cache = stack;
+        }
+
+        int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
+        int necpbas = (int)(env[AS_NECPBAS]);
+        double *buf1 = cache;
+        cache += dij * comp;
+        int has_value = ECPscalar_c2s_factory(ECPtype_so_cart, buf1, comp,
+                                              shls, ecpbas, necpbas,
+                                              atm, natm, bas, nbas, env, opt, cache);
+
+        if (has_value) {
+                // comp-1 for x, y, z components only
+                ECPscalar_distribute(out, buf1, dims, comp-1, di, dj);
+        } else {
+                ECPscalar_distribute0(out, dims, comp-1, di, dj);
+        }
+
+        if (stack != NULL) {
+                free(stack);
+        }
+        return has_value;
+}
+
+#define OF_CMPLX 2
+int ECPso_spinor(double complex *out, int *dims, int *shls, int *atm, int natm,
+                 int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
+{
+        const int ish = shls[0];
+        const int jsh = shls[1];
+        const int li = bas[ANG_OF+ish*BAS_SLOTS];
+        const int lj = bas[ANG_OF+jsh*BAS_SLOTS];
+        const int nfi = (li+1) * (li+2) / 2;
+        const int nfj = (lj+1) * (lj+2) / 2;
+        const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
+        const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
+        const int ngctr = nfi * nfj * nci * ncj;
+        const int di = CINTcgto_spinor(shls[0], bas);
+        const int dj = CINTcgto_spinor(shls[1], bas);
+
+        if (out == NULL) {
+                return ngctr*4 + nfi*nfj*8*OF_CMPLX;
+        }
+        double *stack = NULL;
+        if (cache == NULL) {
+                stack = malloc(sizeof(double) * (ngctr*4 + nfi*nfj*8*OF_CMPLX));
+                cache = stack;
+        }
+
+        int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
+        int necpbas = (int)(env[AS_NECPBAS]);
+        double *buf1 = cache;
+        cache += ngctr * 4;
+        int has_value = ECPtype_so_cart(buf1, shls, ecpbas, necpbas,
+                                        atm, natm, bas, nbas, env, opt, cache);
+        int counts[2] = {di, dj};
+        if (dims == NULL) {
+                dims = counts;
+        }
+        cart2spinor(out, buf1, dims, shls, bas, cache);
+
+        if (stack != NULL) {
+                free(stack);
+        }
+        return has_value;
 }

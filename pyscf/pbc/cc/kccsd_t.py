@@ -16,6 +16,9 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.misc import flatten
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
+from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -66,12 +69,20 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     nkpts, nocc, nvir = t1.shape
 
+    mo_energy = [eris.mo_energy[ki] for ki in range(nkpts)]
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
     fov = eris.fock[:, :nocc, nocc:]
 
+    mo_e = mo_energy
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
+
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
 
     energy_t = 0.0
 
@@ -79,7 +90,9 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         for kj in range(ki + 1):
             for kk in range(kj + 1):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
-                eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
+                eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                                 [0,nocc,kj,mo_e_o,nonzero_opadding],
+                                 [0,nocc,kk,mo_e_o,nonzero_opadding])
 
                 # Factors to include for permutational symmetry among k-points for occupied space
                 if ki == kj and kj == kk:
@@ -97,6 +110,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                         kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
                         if kc not in range(kb + 1):
                             continue
+
+                        # -1.0 so the LARGE_DENOM does not cancel with the one from eijk
+                        eabc = _get_epqr([0,nvir,ka,mo_e_v,nonzero_vpadding],
+                                         [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                                         [0,nvir,kc,mo_e_v,nonzero_vpadding],
+                                         fac=[-1.,-1.,-1.])
 
                         # Factors to include for permutational symmetry among k-points for virtual space
                         if ka == kb and kb == kc:
@@ -142,10 +161,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                                     symm_abc = 2.
 
                             # Form energy denominator
-                            eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
-                            # When padding for non-equal nocc per k-point, some fock elements will be zero
-                            idx = np.where(abs(eijkabc) < LOOSE_ZERO_TOL)[0]
-                            eijkabc[idx] = LARGE_DENOM
+                            eijkabc = (eijk[:,:,:] + eabc[a,b,c])
 
                             # Form connected triple excitation amplitude
                             t3c = np.zeros((nocc, nocc, nocc), dtype=dtype)

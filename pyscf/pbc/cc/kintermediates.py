@@ -18,11 +18,18 @@
 #
 
 #import numpy as np
+from itertools import product
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
 import numpy
+from pyscf.lib.parameters import LARGE_DENOM
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
+from pyscf.pbc.cc.kccsd_rhf import _get_epq
+from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 
-#einsum = np.einsum
+#einsum = numpy.einsum
 einsum = lib.einsum
 
 #################################################
@@ -115,9 +122,9 @@ def cc_Woooo(cc,t1,t2,eris,kconserv):
 
             ki = numpy.arange(nkpts)
             kj = kconserv[km,ki,kn]
-            kij = [ki,kj]
+            kij = (ki,kj)
             Wmnij[km,kn,:] += 0.25*einsum('yxijef,xmnef->ymnij',tau[kij],eris.oovv[km,kn])
-            
+
             for ki in range(nkpts):
                 kj = kconserv[km,ki,kn]
                 Wmnij[km,kn,ki] += tmp[ki,kj]
@@ -167,13 +174,13 @@ def cc_Wovvo(cc,t1,t2,eris,kconserv):
                 kj = kconserv[km,ke,kb]
                 Wmbej[km,kb,ke] += einsum('jf,mbef->mbej',t1[kj,:,:],eris.ovvv[km,kb,ke])
                 Wmbej[km,kb,ke] += -einsum('nb,mnej->mbej',t1[kb,:,:],eris_oovo[km,kb,ke])
+                temp = numpy.zeros([nkpts, nocc, nocc, nvir, nvir], dtype=t2.dtype)
                 for kn in range(nkpts):
                     kf = kconserv[km,ke,kn]
-                    Wmbej[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej',t2[kj,kn,kf],
-                                                   eris.oovv[km,kn,ke])
+                    temp[kn] = -0.5*t2[kj,kn,kf].copy()
                     if kn == kb and kf == kj:
-                        Wmbej[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1[kj],t1[kn],
-                                                   eris.oovv[km,kn,ke])
+                        temp[kn] -= einsum('jf,nb->jnfb', t1[kj], t1[kn])
+                Wmbej[km,kb,ke] += einsum('xjnfb, xmnef->mbej', temp, eris.oovv[km,:,ke])
     return Wmbej
 
 def cc_Wovvo_jk(cc, t1, t2, eris, kconserv):
@@ -346,3 +353,179 @@ def Wvvvo(cc,t1,t2,eris,kconserv,WWvvvv=None):
                                               eris.ooov[kn, km, ki],
                                               tau[km, kn, ka])
     return Wabei
+
+def get_full_t3p2(mycc, t1, t2, eris):
+    '''Build the entire T3[2] array in memory.
+    '''
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    kconserv = mycc.khelper.kconserv
+
+    def get_wijkabc(ki, kj, kk, ka, kb, kc):
+        '''Build T3[2] for `ijkabc` at a given set of k-points'''
+        km = kconserv[kc, kk, kb]
+        kf = kconserv[kk, kc, kj]
+        ret = einsum('kjcf,ifab->ijkabc', t2[kk,kj,kc], eris.ovvv[ki,kf,ka].conj())
+        ret = ret - einsum('jima,mkbc->ijkabc', eris.ooov[kj,ki,km].conj(), t2[km,kk,kb])
+        return ret
+
+    fock = eris.fock
+    fov = fock[:, :nocc, nocc:]
+    foo = numpy.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    fvv = numpy.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
+
+    t3 = numpy.empty((nkpts,nkpts,nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir,nvir),
+                      dtype=t2.dtype)
+    for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
+        kc = kpts_helper.get_kconserv3(mycc._scf.cell, mycc.kpts,
+                                       [ki, kj, kk, ka, kb])
+        # Perform P(abc)
+        t3[ki,kj,kk,ka,kb] =  get_wijkabc(ki,kj,kk,ka,kb,kc)
+        t3[ki,kj,kk,ka,kb] += get_wijkabc(ki,kj,kk,kb,kc,ka).transpose(0,1,2,5,3,4)
+        t3[ki,kj,kk,ka,kb] += get_wijkabc(ki,kj,kk,kc,ka,kb).transpose(0,1,2,4,5,3)
+
+    # Perform P(ijk)
+    t3 = (t3.transpose(0,1,2,3,4,5,6,7,8,9,10) +
+          t3.transpose(1,2,0,3,4,6,7,5,8,9,10) +
+          t3.transpose(2,0,1,3,4,7,5,6,8,9,10))
+
+    for ki, kj, kk in product(range(nkpts), repeat=3):
+        eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                         [0,nocc,kj,mo_e_o,nonzero_opadding],
+                         [0,nocc,kk,mo_e_o,nonzero_opadding])
+        for ka, kb in product(range(nkpts), repeat=2):
+            kc = kpts_helper.get_kconserv3(mycc._scf.cell, mycc.kpts,
+                                           [ki, kj, kk, ka, kb])
+            eabc = _get_epqr([0,nvir,ka,mo_e_v,nonzero_vpadding],
+                             [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                             [0,nvir,kc,mo_e_v,nonzero_vpadding],
+                             fac=[-1.,-1.,-1.])
+            eijkabc = eijk[:, :, :, None, None, None] + eabc[None, None, None, :, :, :]
+            t3[ki,kj,kk,ka,kb] /= eijkabc
+
+    return t3
+
+def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
+    """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
+    and intermediates used in IP/EA-CCSD(T)a
+
+    Args:
+        cc (:obj:`KGCCSD`):
+            Object containing coupled-cluster results.
+        t1 (:obj:`ndarray`):
+            T1 amplitudes.
+        t2 (:obj:`ndarray`):
+            T2 amplitudes from which the T3[2] amplitudes are formed.
+        eris (:obj:`_PhysicistsERIs`):
+            Antisymmetrized electron-repulsion integrals in physicist's notation.
+        t3p2_ip_out (:obj:`ndarray`):
+            Store results of the intermediate used in IP-EOM-CCSD(T)a.
+        t3p2_ea_out (:obj:`ndarray`):
+            Store results of the intermediate used in EA-EOM-CCSD(T)a.
+
+    Returns:
+        delta_ccsd (float):
+            Difference of perturbed and unperturbed CCSD ground-state energy,
+                energy(T1 + T1[2], T2 + T2[2]) - energy(T1, T2)
+        pt1 (:obj:`ndarray`):
+            Perturbatively corrected T1 amplitudes.
+        pt2 (:obj:`ndarray`):
+            Perturbatively corrected T2 amplitudes.
+
+    Reference:
+        D. A. Matthews, J. F. Stanton "A new approach to approximate..."
+            JCP 145, 124102 (2016), Equation 14
+        Shavitt and Bartlett "Many-body Methods in Physics and Chemistry"
+            2009, Equation 10.33
+    """
+    if eris is None:
+        eris = cc.ao2mo()
+    fock = eris.fock
+    nkpts, nocc, nvir = t1.shape
+    kconserv = cc.khelper.kconserv
+
+    fov = [fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)]
+    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
+    mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
+
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
+
+    ccsd_energy = cc.energy(t1, t2, eris)
+    dtype = numpy.result_type(t1, t2)
+
+    if t3p2_ip_out is None:
+        t3p2_ip_out = numpy.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
+    Wmcik = t3p2_ip_out
+
+    if t3p2_ea_out is None:
+        t3p2_ea_out = numpy.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), dtype=dtype)
+    Wacek = t3p2_ea_out
+
+    t3 = get_full_t3p2(cc, t1, t2, eris)
+
+    pt1 = numpy.zeros((nkpts, nocc, nvir), dtype=dtype)
+    for ki in range(nkpts):
+        ka = ki
+        for km, kn, ke in product(range(nkpts), repeat=3):
+            pt1[ki] += 0.25 * lib.einsum('mnef,imnaef->ia', eris.oovv[km,kn,ke], t3[ki,km,kn,ka,ke])
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
+        pt1[ki] /= eia
+
+    pt2 = numpy.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=dtype)
+    for ki, kj, ka in product(range(nkpts), repeat=3):
+        kb = kconserv[ki,ka,kj]
+        for km in range(nkpts):
+            pt2[ki,kj,ka] += lib.einsum('ijmabe,me->ijab', t3[ki,kj,km,ka,kb], fov[km])
+            for ke in range(nkpts):
+                kf = kconserv[km,ke,kb]
+                pt2[ki,kj,ka] += 0.5 * lib.einsum('ijmaef,mbfe->ijab', t3[ki,kj,km,ka,ke], eris.ovvv[km,kb,kf])
+                kf = kconserv[km,ke,ka]
+                pt2[ki,kj,ka] -= 0.5 * lib.einsum('ijmbef,mafe->ijab', t3[ki,kj,km,kb,ke], eris.ovvv[km,ka,kf])
+
+            for kn in range(nkpts):
+                pt2[ki,kj,ka] -= 0.5 * lib.einsum('inmabe,nmje->ijab', t3[ki,kn,km,ka,kb], eris.ooov[kn,km,kj])
+                pt2[ki,kj,ka] += 0.5 * lib.einsum('jnmabe,nmie->ijab', t3[kj,kn,km,ka,kb], eris.ooov[kn,km,ki])
+
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
+        ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
+                       [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
+        eijab = eia[:, None, :, None] + ejb[:, None, :]
+        pt2[ki,kj,ka] /= eijab
+
+    pt1 += t1
+    pt2 += t2
+
+    for ki, kj, kk, ka, kb in product(range(nkpts), repeat=5):
+        kc = kpts_helper.get_kconserv3(cc._scf.cell, cc.kpts,
+                                       [ki, kj, kk, ka, kb])
+        tmp = t3[ki,kj,kk,ka,kb]
+        km = kconserv[ki,kc,kk]
+        ke = kconserv[ka,kk,kc]
+
+        Wmcik[km,kc,ki] += 0.5*lib.einsum('ijkabc,mjab->mcik', tmp, eris.oovv[km,kj,ka])
+        Wacek[ka,kc,ke] += -0.5*lib.einsum('ijkabc,ijeb->acek', tmp, eris.oovv[ki,kj,ke])
+
+    delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
+    logger.info(cc, 'CCSD energy T3[2] correction : %14.8e', delta_ccsd_energy)
+    return delta_ccsd_energy, pt1, pt2, Wmcik, Wacek

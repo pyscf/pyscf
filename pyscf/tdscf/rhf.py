@@ -18,8 +18,10 @@
 # Ref:
 # Chem Phys Lett, 256, 454
 # J. Mol. Struct. THEOCHEM, 914, 3
+# Recent Advances in Density Functional Methods, Chapter 5, M. E. Casida
 #
 
+import time
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -676,8 +678,8 @@ class TDA(lib.StreamObject):
         '''Excited state energies'''
         return self._scf.e_tot + self.e
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
@@ -742,6 +744,7 @@ class TDA(lib.StreamObject):
     def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
+        cpu0 = (time.clock(), time.time())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -778,6 +781,7 @@ class TDA(lib.StreamObject):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDA', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
@@ -913,6 +917,7 @@ class TDHF(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        cpu0 = (time.clock(), time.time())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -934,7 +939,8 @@ class TDHF(TDA):
             # If the complex eigenvalue has small imaginary part, both the
             # real part and the imaginary part of the eigenvector can
             # approximately be used as the "real" eigen solutions.
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
+                                                      real_eigenvectors=True)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
@@ -958,6 +964,7 @@ class TDHF(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDDFT', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 

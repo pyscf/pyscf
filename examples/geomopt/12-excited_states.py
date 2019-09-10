@@ -24,17 +24,23 @@ mf = scf.RHF(mol).run()
 mc = mcscf.CASCI(mf, 4,4)
 mc.fcisolver.nstates = 3
 excited_grad = mc.nuc_grad_method().as_scanner(state=2)
-mol1 = geomopt.optimize(excited_grad)
+mol1 = excited_grad.optimizer().kernel()
+# or
+#mol1 = geomopt.optimize(excited_grad)
 
 
 td = tdscf.TDHF(mf)
 td.nstates = 5
 excited_grad = td.nuc_grad_method().as_scanner(state=4)
-mol1 = geomopt.optimize(excited_grad)
+mol1 = excited_grad.optimizer().kernel()
+# or
+#mol1 = geomopt.optimize(excited_grad)
 
 
 myci = ci.CISD(mf)
 myci.nstates = 2
 excited_grad = myci.nuc_grad_method().as_scanner(state=1)
-geomopt.optimize(excited_grad)
+mol1 = excited_grad.optimizer().kernel()
+# or
+#geomopt.optimize(excited_grad)
 

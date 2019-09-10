@@ -722,6 +722,11 @@ def as_scanner(ci):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            for key in ('with_df', 'with_solvent'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
@@ -825,8 +830,8 @@ class CISD(lib.StreamObject):
                     'level_shift', 'direct'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)

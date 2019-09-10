@@ -401,9 +401,11 @@ _INTOR_FUNCTIONS = {
     'int3c2e_ipspsp1'           : (12,3),
     'int3c2e_spsp1ip2'          : (12,3),
     'int3c2e_ipip1'             : (9, 9),
+    'int3c2e_ipip2'             : (9, 9),
     'int3c2e_ipvip1'            : (9, 9),
     'int3c2e_ip1ip2'            : (9, 9),
     'int2c2e_ip1ip2'            : (9, 9),
+    'int2c2e_ipip1'             : (9, 9),
     'int3c1e'                   : (1, 1),
     'int3c1e_p2'                : (1, 1),
     'int3c1e_iprinv'            : (3, 3),
@@ -416,6 +418,7 @@ _INTOR_FUNCTIONS = {
     'ECPscalar_iprinv'          : (3, None),
     'ECPscalar_igrinv'          : (3, None),
     'ECPscalar_iprinvip'        : (9, None),
+    'ECPso'                     : (3, 1),
 }
 
 def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,

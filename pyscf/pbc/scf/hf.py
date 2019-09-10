@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -119,7 +119,8 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
     return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
+def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3),
+           kpts_band=None, with_j=True, with_k=True, omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -145,7 +146,8 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, exxdiv=mf.exxdiv)
+    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, with_j, with_k,
+                                 omega, exxdiv=mf.exxdiv)
 
 
 def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
@@ -521,8 +523,8 @@ class SCF(mol_hf.SCF):
             self.check_sanity()
         return self
 
-    def dump_flags(self):
-        mol_hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
@@ -537,7 +539,7 @@ class SCF(mol_hf.SCF):
         logger.info(self, 'DF object = %s', self.with_df)
         if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
-            self.with_df.dump_flags()
+            self.with_df.dump_flags(verbose)
         return self
 
     def check_sanity(self):
@@ -565,7 +567,8 @@ class SCF(mol_hf.SCF):
         if kpt is None: kpt = self.kpt
         return get_ovlp(cell, kpt)
 
-    def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+               with_j=True, with_k=True, omega=None, **kwargs):
         r'''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
         for particular k-point (kpt).
 
@@ -585,30 +588,34 @@ class SCF(mol_hf.SCF):
         dm = np.asarray(dm)
         nao = dm.shape[-1]
 
-        if (kpts_band is None and
+        if (not omega and kpts_band is None and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
              (not self.direct_scf and self._is_mem_enough()))):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = mol_hf.dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = mol_hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
 
-            if self.exxdiv == 'ewald':
+            if with_k and self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not inculded in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         else:
             vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                         kpt, kpts_band, exxdiv=self.exxdiv)
+                                         kpt, kpts_band, with_j, with_k, omega,
+                                         exxdiv=self.exxdiv)
 
+        if with_j:
+            vj = _format_jks(vj, dm, kpts_band)
+        if with_k:
+            vk = _format_jks(vk, dm, kpts_band)
         logger.timer(self, 'vj and vk', *cpu0)
-        vj = _format_jks(vj, dm, kpts_band)
-        vk = _format_jks(vk, dm, kpts_band)
         return vj, vk
 
-    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+              omega=None):
         r'''Compute J matrix for the given density matrix and k-point (kpt).
         When kpts_band is given, the J matrices on kpts_band are evaluated.
 
@@ -617,32 +624,15 @@ class SCF(mol_hf.SCF):
         where r,s are orbitals on kpt. p and q are orbitals on kpts_band
         if kpts_band is given otherwise p and q are orbitals on kpt.
         '''
-        #return self.get_jk(cell, dm, hermi, kpt, kpts_band)[0]
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        if kpt is None: kpt = self.kpt
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_k=False,
+                           omega=omega)[0]
 
-        cpu0 = (time.clock(), time.time())
-        dm = np.asarray(dm)
-        nao = dm.shape[-1]
-
-        if (kpts_band is None and
-            (self._eri is not None or cell.incore_anyway or
-             (not self.direct_scf and self._is_mem_enough()))):
-            if self._eri is None:
-                logger.debug(self, 'Building PBC AO integrals incore')
-                self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = mol_hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
-        else:
-            vj = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                     kpt, kpts_band, with_k=False)[0]
-        logger.timer(self, 'vj', *cpu0)
-        return _format_jks(vj, dm, kpts_band)
-
-    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+              omega=None):
         '''Compute K matrix for the given density matrix.
         '''
-        return self.get_jk(cell, dm, hermi, kpt, kpts_band)[1]
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_j=False,
+                           omega=omega)[1]
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
@@ -655,13 +645,16 @@ class SCF(mol_hf.SCF):
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         return vj - vk * .5
 
-    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None):
+    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
+                      **kwargs):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         *Incore* version of Coulomb and exchange build only.
         Currently RHF always uses PBC AO integrals (unlike RKS), since
         exchange is currently computed by building PBC AO integrals.
         '''
+        if omega:
+            raise NotImplementedError
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
         if self._eri is None:

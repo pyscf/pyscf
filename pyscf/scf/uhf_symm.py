@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,6 +49,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     ovlp_ao = mf.get_ovlp()
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
+        mf.dump_scf_summary(log)
+
         nirrep = len(mol.irrep_id)
         ovlp_ao = mf.get_ovlp()
         orbsyma, orbsymb = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
@@ -109,7 +111,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         if with_meta_lowdin:
             log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-            c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+            c_inv = numpy.dot(orth_coeff.conj().T, ovlp_ao)
             mo = c_inv.dot(mo_coeff[0])
         else:
             log.debug(' ** alpha MO coefficients (expansion on AOs) **')
@@ -209,7 +211,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
                 cs[:,idx] = numpy.dot(mo_coeff[:,idx], c)
@@ -228,7 +230,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
                 c = numpy.dot(mo_coeff[:,idx], c)
@@ -301,8 +303,8 @@ class SymAdaptedUHF(uhf.UHF):
         self.irrep_nelec = {}
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        uhf.UHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        uhf.UHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self

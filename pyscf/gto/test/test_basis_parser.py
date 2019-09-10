@@ -54,6 +54,8 @@ class KnownValues(unittest.TestCase):
         bas = [b for b in bas if b[0]==0] + [b for b in bas if b[0]==1]
         self.assertEqual(bas, basdat1)
 
+        self.assertEqual(len(gto.basis.load('def2-svp', 'Rn')), 16)
+
     def test_basis_load_from_file(self):
         ftmp = tempfile.NamedTemporaryFile()
         ftmp.write('''

@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '1.6.1'
+__version__ = '1.7.0a'
 
 import os
 # Avoid too many threads being created in OMP loops.
@@ -46,12 +46,16 @@ os.environ['MKL_NUM_THREADS'] = '1'
 import sys
 from distutils.version import LooseVersion
 import numpy
-if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
+if LooseVersion(numpy.__version__) <= '1.8.0':
     raise SystemError("You're using an old version of Numpy (%s). "
-                      "It is recommended to upgrad numpy to 1.8.0 or newer. \n"
+                      "It is recommended to upgrade numpy to 1.8.0 or newer. \n"
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
+elif LooseVersion(numpy.__version__) >= '1.16':
+    sys.stderr.write('Numpy 1.16 has memory leak bug  '
+                     'https://github.com/numpy/numpy/issues/13808\n'
+                     'It is recommended to downgrade to numpy 1.15 or older\n')
 
 from pyscf import __config__
 from pyscf import lib
@@ -63,5 +67,13 @@ from pyscf import ao2mo
 __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = __config__.DEBUG
+
+def M(**kwargs):
+    '''Main driver to create Molecule object (mol) or Material crystal object (cell)'''
+    from pyscf import __all__
+    if kwargs.get('a') is not None:  # a is crystal lattice parameter
+        return __all__.pbc.gto.M(**kwargs)
+    else:  # Molecule
+        return gto.M(**kwargs)
 
 del(os, sys, LooseVersion, numpy)

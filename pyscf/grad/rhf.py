@@ -22,6 +22,7 @@ Non-relativistic Hartree-Fock analytical nuclear gradients
 
 import time
 import numpy
+import ctypes
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -102,6 +103,7 @@ def get_hcore(mol):
         h += mol.intor('ECPscalar_ipnuc', comp=3)
     return -h
 
+
 def hcore_generator(mf, mol=None):
     if mol is None: mol = mf.mol
     with_x2c = getattr(mf.base, 'with_x2c', None)
@@ -129,16 +131,38 @@ def hcore_generator(mf, mol=None):
 def get_ovlp(mol):
     return -mol.intor('int1e_ipovlp', comp=3)
 
+
 def get_jk(mol, dm):
     '''J = ((-nabla i) j| kl) D_lk
     K = ((-nabla i) j| kl) D_jk
     '''
-    intor = mol._add_suffix('int2e_ip1')
+    vhfopt = _vhf.VHFOpt(mol, 'int2e_ip1ip2', 'CVHFgrad_jk_prescreen',
+                         'CVHFgrad_jk_direct_scf')
+    dm = numpy.asarray(dm, order='C')
+    if dm.ndim == 3:
+        n_dm = dm.shape[0]
+    else:
+        n_dm = 1
+    ao_loc = mol.ao_loc_nr()
+    fsetdm = getattr(_vhf.libcvhf, 'CVHFgrad_jk_direct_scf_dm')
+    fsetdm(vhfopt._this,
+           dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
+           ao_loc.ctypes.data_as(ctypes.c_void_p),
+           mol._atm.ctypes.data_as(ctypes.c_void_p), mol.natm,
+           mol._bas.ctypes.data_as(ctypes.c_void_p), mol.nbas,
+           mol._env.ctypes.data_as(ctypes.c_void_p))
+
+    # Update the vhfopt's attributes intor.  Function direct_mapdm needs
+    # vhfopt._intor and vhfopt._cintopt to compute J/K.  intor was initialized
+    # as int2e_ip1ip2. It should be int2e_ip1
+    vhfopt._intor = intor = mol._add_suffix('int2e_ip1')
+    vhfopt._cintopt = None
+
     vj, vk = _vhf.direct_mapdm(intor,  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
                                ('lk->s1ij', 'jk->s1il'),
                                dm, 3, # xyz, 3 components
-                               mol._atm, mol._bas, mol._env)
+                               mol._atm, mol._bas, mol._env, vhfopt=vhfopt)
     return -vj, -vk
 
 def get_veff(mf_grad, mol, dm):
@@ -151,6 +175,32 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     mo0 = mo_coeff[:,mo_occ>0]
     mo0e = mo0 * (mo_energy[mo_occ>0] * mo_occ[mo_occ>0])
     return numpy.dot(mo0e, mo0.T.conj())
+
+def symmetrize(mol, de, atmlst=None):
+    '''Symmetrize the gradients wrt the point group symmetry of the molecule.'''
+    assert(mol.symmetry)
+    pmol = mol.copy()
+    # The symmetry of gradients should be the same to the p-type functions.
+    # We use p-type AOs to generate the symmetry adaptation projector.
+    pmol.basis = {'default': [[1, (1, 1)]]}
+    # There is uncertainty for the output of the transformed molecular
+    # geometry when mol.symmetry is True. E.g., H2O can be placed either on
+    # xz-plane or on yz-plane for C2v symmetry. This uncertainty can lead to
+    # wrong symmetry adaptation basis. Molecular point group and coordinates
+    # should be explicitly given to avoid the uncertainty.
+    pmol.symmetry = mol.topgroup
+    pmol.atom = mol._atom
+    pmol.unit = 'Bohr'
+    pmol.build(False, False)
+
+    # irrep-p-function x irrep-gradients = total symmetric irrep
+    a_id = pmol.irrep_id.index(0)
+    c = pmol.symm_orb[a_id].reshape(mol.natm, 3, -1)
+    if atmlst is not None:
+        c = c[:,atmlst,:]
+    tmp = numpy.einsum('zx,zxi->i', de, c)
+    proj_de = numpy.einsum('i,zxi->zx', tmp, c)
+    return proj_de
 
 
 def as_scanner(mf_grad):
@@ -197,24 +247,27 @@ def as_scanner(mf_grad):
     return SCF_GradScanner(mf_grad)
 
 
-class Gradients(lib.StreamObject):
-    '''Non-relativistic restricted Hartree-Fock gradients'''
-    def __init__(self, scf_method):
-        self.verbose = scf_method.verbose
-        self.stdout = scf_method.stdout
-        self.mol = scf_method.mol
-        self.base = scf_method
+class GradientsBasics(lib.StreamObject):
+    '''
+    Basic nuclear gradient functions for non-relativistic methods
+    '''
+    def __init__(self, method):
+        self.verbose = method.verbose
+        self.stdout = method.stdout
+        self.mol = method.mol
+        self.base = method
         self.max_memory = self.mol.max_memory
 
         self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        if not self.base.converged:
-            log.warn('Ground state SCF not converged')
+        if hasattr(self.base, 'converged') and not self.base.converged:
+            log.warn('Ground state %s not converged',
+                     self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
         log.info('max_memory %d MB (current use %d MB)',
@@ -236,7 +289,6 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        #TODO: direct_scf opt
         vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -254,6 +306,55 @@ class Gradients(lib.StreamObject):
         intor = mol._add_suffix('int2e_ip1')
         return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
                                   mol._atm, mol._bas, mol._env)
+
+    def grad_nuc(self, mol=None, atmlst=None):
+        if mol is None: mol = self.mol
+        return grad_nuc(mol, atmlst)
+
+    def optimizer(self, solver='geometric'):
+        '''Geometry optimization solver
+
+        Kwargs:
+            solver (string) : geometry optimization solver, can be "geomeTRIC"
+            (default) or "berny".
+        '''
+        if solver.lower() == 'geometric':
+            from pyscf.geomopt import geometric_solver
+            return geometric_solver.GeometryOptimizer(self.as_scanner())
+        elif solver.lower() == 'berny':
+            from pyscf.geomopt import berny_solver
+            return berny_solver.GeometryOptimizer(self.as_scanner())
+        else:
+            raise RuntimeError('Unknown geometry optimization solver %s' % solver)
+
+    def grad_elec(self):
+        raise NotImplementedError
+
+    def kernel(self):
+        raise NotImplementedError
+
+    @lib.with_doc(symmetrize.__doc__)
+    def symmetrize(self, de, atmlst=None):
+        return symmetrize(self.mol, de, atmlst)
+
+    grad = lib.alias(kernel, alias_name='grad')
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self.base.__class__.__name__)
+            self._write(self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
+
+    _write = _write
+
+    def as_scanner(self):
+        '''Generate Gradients Scanner'''
+        raise NotImplementedError
+
+
+class Gradients(GradientsBasics):
+    '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol
@@ -277,12 +378,6 @@ class Gradients(lib.StreamObject):
 
     grad_elec = grad_elec
 
-    def grad_nuc(self, mol=None, atmlst=None):
-        if mol is None: mol = self.mol
-        return grad_nuc(mol, atmlst)
-
-    def grad(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        return self.kernel(mo_energy, mo_coeff, mo_occ, atmlst)
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
         if mo_energy is None: mo_energy = self.base.mo_energy
@@ -300,16 +395,11 @@ class Gradients(lib.StreamObject):
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
         self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
         logger.timer(self, 'SCF gradients', *cput0)
         self._finalize()
         return self.de
-
-    def _finalize(self):
-        if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
-            _write(self, self.mol, self.de, self.atmlst)
-            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 
@@ -341,6 +431,7 @@ if __name__ == '__main__':
         [1   , (0. , 0.757  , 0.587)] ]
     h2o.basis = {'H': '631g',
                  'O': '631g',}
+    h2o.symmetry = True
     h2o.build()
     mf = scf.RHF(h2o)
     mf.conv_tol = 1e-14

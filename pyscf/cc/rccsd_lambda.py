@@ -238,7 +238,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     l1new += np.einsum('ijab,bj->ia', l2, imds.w3) * 2
     l1new -= np.einsum('ijba,bj->ia', l2, imds.w3)
 
-    eia = lib.direct_sum('i-j->ij', foo.diagonal(), fvv.diagonal())
+    eia = lib.direct_sum('i-j->ij', foo.diagonal(), fvv.diagonal() + mycc.level_shift)
     l1new /= eia
     l1new += l1
 

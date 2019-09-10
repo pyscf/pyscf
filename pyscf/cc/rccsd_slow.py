@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -154,8 +154,8 @@ class RCCSD(ccsd.CCSD):
         self.max_space = 20
         self._keys = self._keys.union(['max_space'])
 
-    def dump_flags(self):
-        ccsd.CCSD.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        ccsd.CCSD.dump_flags(self, verbose)
 
     def init_amps(self, eris):
         nocc = self.nocc
@@ -465,7 +465,7 @@ class RCCSD(ccsd.CCSD):
         vector[nocc:] = r2.copy().reshape(nocc*nocc*nvir)
         return vector
 
-    def ipccsd_star(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
+    def ipccsd_star_contract(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         assert(self.ip_partition == None)
         t1,t2,eris = self.t1, self.t2, self.eris
         fock = eris.fock
@@ -764,7 +764,7 @@ class RCCSD(ccsd.CCSD):
         vector[nvir:] = r2.copy().reshape(nocc*nvir*nvir)
         return vector
 
-    def eaccsd_star(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+    def eaccsd_star_contract(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         assert(self.ea_partition == None)
         t1,t2,eris = self.t1, self.t2, self.eris
         fock = eris.fock
@@ -1148,7 +1148,7 @@ if __name__ == '__main__':
     print(le[1] - 0.51876597800180335)
     print(le[2] - 0.67828755013874864)
 
-    e = mycc.ipccsd_star(e,v,lv)
+    e = mycc.ipccsd_star_contract(e,v,lv)
     print(e[0] - 0.43793202073189047)
     print(e[1] - 0.52287073446559729)
     print(e[2] - 0.67994597948852287)
@@ -1165,7 +1165,7 @@ if __name__ == '__main__':
     print(le[1] - 0.24027634198123343)
     print(le[2] - 0.51006809015066612)
 
-    e = mycc.eaccsd_star(e,v,lv)
+    e = mycc.eaccsd_star_contract(e,v,lv)
     print(e[0] - 0.16656250953550664)
     print(e[1] - 0.23944144521387614)
     print(e[2] - 0.41399436888830721)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,9 +51,8 @@ except ImportError:
     settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
     if (settings.SHCIEXE is None or settings.SHCISCRATCHDIR is None):
         import sys
-        sys.stderr.write(
-            'settings.py not found.  Please create %s\n' % os.path.join(
-                os.path.dirname(__file__), 'settings.py'))
+        sys.stderr.write('settings.py not found for module shciscf.  Please create %s\n'
+                         % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 
 # Libraries
@@ -242,9 +241,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.num_thrds = x
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** SHCI flags ********')
         log.info('executable             = %s', self.executable)
@@ -876,9 +873,10 @@ class SHCI(pyscf.lib.StreamObject):
         """
         Remove the files used for Dice communication.
         """
-        os.remove("input.dat")
-        os.remove("output.dat")
-        os.remove("FCIDUMP")
+        
+        os.remove(os.path.join(self.runtimeDir, self.configFile))
+        os.remove(os.path.join(self.runtimeDir, self.outputFile))
+        os.remove(os.path.join(self.runtimeDir, self.integralFile))
 
 
 def print1Int(h1, name):
@@ -997,6 +995,10 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
                         "number of irreps %s beta  electrons = %d" % (k, v[1]))
                     exit(1)
     f.write('\nend\n')
+
+    # Handle different cases for FCIDUMP file names/paths
+    f.write("orbitals {}\n".format(os.path.join(SHCI.runtimeDir, SHCI.integralFile)))
+
     f.write('nroots %r\n' % SHCI.nroots)
 
     # Variational Keyword Section

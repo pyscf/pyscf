@@ -100,8 +100,9 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm
 
 
+@lib.with_doc(hf.get_jk.__doc__)
 def get_jk(mol, dm, hermi=0,
-           with_j=True, with_k=True, jkbuild=hf.get_jk):
+           with_j=True, with_k=True, jkbuild=hf.get_jk, omega=None):
 
     dm = numpy.asarray(dm)
     nso = dm.shape[-1]
@@ -117,9 +118,9 @@ def get_jk(mol, dm, hermi=0,
         dms = numpy.vstack((dms.real, dms.imag))
         hermi = 0
 
-    j1, k1 = jkbuild(mol, dms, hermi)
-    j1 = j1.reshape(-1,n_dm,nao,nao)
-    k1 = k1.reshape(-1,n_dm,nao,nao)
+    j1, k1 = jkbuild(mol, dms, hermi, with_j, with_k, omega)
+    if with_j: j1 = j1.reshape(-1,n_dm,nao,nao)
+    if with_k: k1 = k1.reshape(-1,n_dm,nao,nao)
 
     if dm.dtype == numpy.complex128:
         if with_j: j1 = j1[:3] + j1[3:] * 1j
@@ -412,45 +413,38 @@ class GHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project)
 
-    def get_jk(self, mol=None, dm=None, hermi=0):
+    @lib.with_doc(hf.get_jk.__doc__)
+    def get_jk(self, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
-            return get_jk(mol, dm, hermi, True, True, self.get_jk)
-        else:
-            if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+        nao = mol.nao
+        dm = numpy.asarray(dm)
+
+        def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
+            if (not omega and
+                (self._eri is not None or mol.incore_anyway or self._is_mem_enough())):
                 if self._eri is None:
                     self._eri = mol.intor('int2e', aosym='s8')
-                vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
+                return hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
             else:
-                vj, vk = hf.SCF.get_jk(self, mol, dm, hermi)
-            return vj, vk
+                return hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
 
-    def get_j(self, mol=None, dm=None, hermi=0):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
-            return get_jk(mol, dm, hermi, True, False, self.get_jk)[0]
-        else:
-            return hf.SCF.get_j(self, mol, dm, hermi)
-
-    def get_k(self, mol=None, dm=None, hermi=0):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
-            return get_jk(mol, dm, hermi, False, True, self.get_jk)[1]
-        else:
-            return hf.SCF.get_k(self, mol, dm, hermi)
+        if nao == dm.shape[-1]:
+            vj, vk = jkbuild(mol, dm, hermi, with_j, with_k, omega)
+        else:  # GHF density matrix, shape (2N,2N)
+            vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
+        return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self._eri is not None or not self.direct_scf:
-            vj, vk = get_jk(mol, dm, hermi, True, True, self.get_jk)
+            vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj - vk
         else:
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj, vk = get_jk(mol, ddm, hermi, True, True, self.get_jk)
+            vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = vj - vk + numpy.asarray(vhf_last)
         return vhf
 

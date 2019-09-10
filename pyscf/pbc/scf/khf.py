@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -116,7 +116,8 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
+def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
+          omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -132,7 +133,8 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
         vk : (nkpts, nao, nao) ndarray
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
-    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, exxdiv=mf.exxdiv)
+    return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_j, with_k,
+                                 omega, exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -254,6 +256,8 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
     if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
@@ -269,6 +273,9 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     '''
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
+
+    mf.dump_scf_summary(verbose)
+
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
     ovlp_ao = mf.get_ovlp()
@@ -311,7 +318,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-        fock = mf.get_hcore() + mf.get_jk(mf.cell, dm)
+        fock = mf.get_fock(dm=dm)
     mo_coeff = []
     mo_energy = []
     for k, mo in enumerate(mo_coeff_kpts):
@@ -432,8 +439,8 @@ class KSCF(pbchf.SCF):
     def mo_occ_kpts(self):
         return self.mo_occ
 
-    def dump_flags(self):
-        mol_hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
@@ -458,7 +465,7 @@ class KSCF(pbchf.SCF):
         logger.info(self, 'DF object = %s', self.with_df)
         if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
-            self.with_df.dump_flags()
+            self.with_df.dump_flags(verbose)
         return self
 
     def check_sanity(self):
@@ -535,25 +542,25 @@ class KSCF(pbchf.SCF):
     energy_elec = energy_elec
     get_fermi = get_fermi
 
-    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
-        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band, with_k=False)[0]
-        logger.timer(self, 'vj', *cpu0)
+    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
+              kpts_band=None, omega=None):
+        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
+                                 with_k=False, omega=omega)[0]
         return vj
 
-    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)[1]
+    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
+              kpts_band=None, omega=None):
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band,
+                           with_j=False, omega=omega)[1]
 
-    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
+               with_j=True, with_k=True, omega=None, **kwargs):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                     exxdiv=self.exxdiv)
+                                     with_j, with_k, omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 

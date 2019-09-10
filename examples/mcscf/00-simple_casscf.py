@@ -7,20 +7,22 @@
 A simple example to run CASSCF calculation.
 '''
 
-import numpy
-from pyscf import gto, scf, mcscf
+import pyscf
 
-mol = gto.M(
+mol = pyscf.M(
     atom = 'O 0 0 0; O 0 0 1.2',
     basis = 'ccpvdz',
     spin = 2)
 
-myhf = scf.RHF(mol)
-myhf.kernel()
+myhf = mol.RHF().run()
 
 # 6 orbitals, 8 electrons
-mycas = mcscf.CASSCF(myhf, 6, 8)
-mycas.kernel()
+mycas = myhf.CASSCF(6, 8).run()
+#
+# Note this mycas object can also be created using the APIs of mcscf module:
+#
+# from pyscf import mcscf
+# mycas = mcscf.CASSCF(myhf, 6, 8).run()
 
 # Natural occupancy in CAS space, Mulliken population etc.
 # See also 00-simple_casci.py for the instruction of the output of analyze()

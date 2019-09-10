@@ -50,19 +50,19 @@ class KnownValues(unittest.TestCase):
         eriref = trans(eri0, [mo]*4)
         ftmp = tempfile.NamedTemporaryFile()
 
-        ao2mo.kernel(mol, mo, ftmp.name, intor='int2e_spinor', max_memory=10, ioblk_size=5)
+        ao2mo.kernel(mol, mo, erifile=ftmp.name, intor='int2e_spinor', max_memory=10, ioblk_size=5)
         with ao2mo.load(ftmp) as eri1:
             self.assertAlmostEqual(lib.finger(eri1), -550.72966498073129-1149.3561026721848j, 8)
             self.assertAlmostEqual(abs(eri1-eriref.reshape(n2c**2,n2c**2)).max(), 0, 9)
 
         eri1 = ao2mo.kernel(mol, (mo[:,:2], mo[:,:4], mo[:,:2], mo[:,:4]),
-                            ftmp.name, intor='int2e_spinor')
+                            erifile=ftmp.name, intor='int2e_spinor')
         with ao2mo.load(ftmp) as eri1:
             self.assertAlmostEqual(abs(eri1-eriref[:2,:4,:2,:4].reshape(8,8)).max(), 0, 9)
 
         ftmp = lib.H5TmpFile()
         ao2mo.kernel(mol, (mo[:,:2], mo[:,:4], mo[:,:2], mo[:,:4]),
-                     ftmp, intor='int2e_spinor', aosym='s1')
+                     erifile=ftmp, intor='int2e_spinor', aosym='s1')
         with ao2mo.load(ftmp) as eri1:
             self.assertAlmostEqual(abs(eri1-eriref[:2,:4,:2,:4].reshape(8,8)).max(), 0, 9)
 

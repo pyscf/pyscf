@@ -124,18 +124,10 @@ def get_coulomb_hf(mol, dm, level='SSSS'):
 get_veff = get_coulomb_hf
 
 
-class Gradients(rhf_grad.Gradients):
-    '''Unrestricted Dirac-Hartree-Fock gradients'''
-    def __init__(self, scf_method):
-        rhf_grad.Gradients.__init__(self, scf_method)
-        if scf_method.with_ssss:
-            self.level = 'SSSS'
-        else:
-            #self.level = 'NOSS'
-            #self.level = 'LLLL'
-            raise NotImplementedError
-        self._keys = self._keys.union(['level'])
-
+class GradientsBasics(rhf_grad.GradientsBasics):
+    '''
+    Basic nuclear gradient functions for 4C relativistic methods
+    '''
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         return get_hcore(mol)
@@ -165,15 +157,63 @@ class Gradients(rhf_grad.Gradients):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
+
+class Gradients(GradientsBasics):
+    '''Unrestricted Dirac-Hartree-Fock gradients'''
+    def __init__(self, scf_method):
+        GradientsBasics.__init__(self, scf_method)
+        if scf_method.with_ssss:
+            self.level = 'SSSS'
+        else:
+            #self.level = 'NOSS'
+            #self.level = 'LLLL'
+            raise NotImplementedError
+        self._keys = self._keys.union(['level'])
+
     def get_veff(self, mol, dm):
         return get_coulomb_hf(mol, dm, level=self.level)
 
-    def grad_elec(self, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  atmlst=None):
+    def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ
-        return grad_elec(self, mo_energy, mo_coeff, mo_occ, atmlst)
+        return make_rdm1e(mo_energy, mo_coeff, mo_occ)
+
+    grad_elec = grad_elec
+
+    def extra_force(self, atom_id, envs):
+        '''Hook for extra contributions in analytical gradients.
+
+        Contributions like the response of auxiliary basis in density fitting
+        method, the grid response in DFT numerical integration can be put in
+        this function.
+        '''
+        return 0
+
+    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+        cput0 = (time.clock(), time.time())
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
+        if atmlst is None:
+            atmlst = self.atmlst
+        else:
+            self.atmlst = atmlst
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        if self.verbose >= logger.INFO:
+            self.dump_flags()
+
+        de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
+        self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
+        logger.timer(self, 'SCF gradients', *cput0)
+        self._finalize()
+        return self.de
+
+    as_scanner = rhf_grad.as_scanner
 
 Grad = Gradients
 

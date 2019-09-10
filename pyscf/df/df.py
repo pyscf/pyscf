@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ J-metric density fitting
 '''
 
 import time
+import copy
 import tempfile
 import numpy
 import h5py
@@ -86,6 +87,8 @@ class DF(lib.StreamObject):
         self._cderi = None
         self._call_count = getattr(__config__, 'df_df_DF_call_count', None)
         self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
+        self._vjopt = None
+        self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -98,8 +101,8 @@ class DF(lib.StreamObject):
             self.auxmol = None
             self._cderi = None
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('******** %s ********', self.__class__)
         if self.auxmol is None:
             log.info('auxbasis = %s', self.auxbasis)
@@ -156,6 +159,17 @@ class DF(lib.StreamObject):
     def kernel(self, *args, **kwargs):
         return self.build(*args, **kwargs)
 
+    def reset(self, mol=None):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        if mol is not None:
+            self.mol = mol
+        self.auxmol = None
+        self._cderi = None
+        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        self._vjopt = None
+        self._rsh_df = {}
+        return self
+
     def loop(self, blksize=None):
         if self._cderi is None:
             self.build()
@@ -189,8 +203,22 @@ class DF(lib.StreamObject):
         with addons.load(self._cderi, 'j3c') as feri:
             return feri.shape[0]
 
-    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-        return df_jk.get_jk(self, dm, hermi, vhfopt, with_j, with_k)
+    def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
+               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
+               omega=None):
+        if omega is None:
+            return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
+
+        # A temporary treatment for RSH-DF integrals
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        with rsh_df.mol.with_range_coulomb(omega):
+            return df_jk.get_jk(rsh_df, dm, hermi, with_j, with_k, direct_scf_tol)
 
     def get_eri(self):
         nao = self.mol.nao_nr()
@@ -253,8 +281,22 @@ class DF4C(DF):
                     eriss = numpy.asarray(feriss[b0:b1], order='C')
                     yield erill, eriss
 
-    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
-        return df_jk.r_get_jk(self, dm, hermi)
+    def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
+               direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
+               omega=None):
+        if omega is None:
+            return df_jk.r_get_jk(self, dm, hermi, with_j, with_k)
+
+        # A temporary treatment for RSH-DF integrals
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = copy.copy(self).reset()
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        with rsh_df.mol.with_range_coulomb(omega):
+            return df_jk.r_get_jk(rsh_df, dm, hermi, with_j, with_k)
 
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError

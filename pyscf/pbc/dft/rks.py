@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (time.clock(), time.time())
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    hybrid = abs(hyb) > 1e-10
+    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
@@ -101,10 +101,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vxc += vj - vk * (hyb * .5)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk * .5
 
         if ground_state:
-            exc -= numpy.einsum('ij,ji', dm, vk).real * .5 * hyb*.5
+            exc -= numpy.einsum('ij,ji', dm, vk).real * .5 * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
@@ -115,8 +120,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return vxc
 
 def _patch_df_beckegrids(density_fit):
-    def new_df(self, auxbasis=None, with_df=None):
-        mf = density_fit(self, auxbasis, with_df)
+    def new_df(self, auxbasis=None, with_df=None, *args, **kwargs):
+        mf = density_fit(self, auxbasis, with_df, *args, **kwargs)
         mf.with_df._j_only = True
         mf.grids = gen_grid.BeckeGrids(self.cell)
         mf.grids.level = getattr(__config__, 'pbc_dft_rks_RKS_grids_level',
@@ -150,31 +155,6 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rho
 
 
-class RKS(pbchf.RHF):
-    '''RKS class adapted for PBCs.
-
-    This is a literal duplication of the molecular RKS class with some `mol`
-    variables replaced by `cell`.
-    '''
-    def __init__(self, cell, kpt=numpy.zeros(3)):
-        pbchf.RHF.__init__(self, cell, kpt)
-        _dft_common_init_(self)
-
-    def dump_flags(self):
-        pbchf.RHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
-
-    get_veff = get_veff
-    energy_elec = pyscf.dft.rks.energy_elec
-    get_rho = get_rho
-
-    define_xc_ = define_xc_
-
-    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
-    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
-
-
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'
     mf.grids = gen_grid.UniformGrids(mf.cell)
@@ -189,6 +169,47 @@ def _dft_common_init_(mf):
     else:
         mf._numint = numint.NumInt()
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+
+class KohnShamDFT(object):
+    __init__ = _dft_common_init_
+
+    @property
+    def omega(self):
+        return self._numint.omega
+    @omega.setter
+    def omega(self, v):
+        self._numint.omega = float(v)
+
+    def dump_flags(self, verbose=None):
+        logger.info(self, 'XC functionals = %s', self.xc)
+        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
+        self.grids.dump_flags(verbose)
+        return self
+
+    define_xc_ = define_xc_
+
+
+class RKS(pbchf.RHF, KohnShamDFT):
+    '''RKS class adapted for PBCs.
+
+    This is a literal duplication of the molecular RKS class with some `mol`
+    variables replaced by `cell`.
+    '''
+    def __init__(self, cell, kpt=numpy.zeros(3)):
+        pbchf.RHF.__init__(self, cell, kpt)
+        KohnShamDFT.__init__(self)
+
+    def dump_flags(self, verbose=None):
+        pbchf.RHF.dump_flags(self, verbose)
+        KohnShamDFT.dump_flags(self, verbose)
+        return self
+
+    get_veff = get_veff
+    energy_elec = pyscf.dft.rks.energy_elec
+    get_rho = get_rho
+
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
 
 
 if __name__ == '__main__':
