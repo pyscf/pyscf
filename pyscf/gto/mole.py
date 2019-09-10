@@ -963,10 +963,6 @@ def pack(mol):
             'ecp'     : mol.ecp,
             '_nelectron': mol._nelectron,
             'verbose' : mol.verbose}
-    if mol.symmetry and not isinstance(mol.symmetry, str):
-        mdic['symmetry'] = mol.groupname
-        mdic['atom'] = mol._atom
-        mdic['unit'] = 'AU'
     return mdic
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, to generate the input
@@ -980,8 +976,11 @@ def unpack(moldic):
 def dumps(mol):
     '''Serialize Mole object to a JSON formatted str.
     '''
-    exclude_keys = set(('output', 'stdout', '_keys'))
-    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas'))
+    exclude_keys = set(('output', 'stdout', '_keys',
+                        # Constructing in function loads
+                        'symm_orb', 'irrep_id', 'irrep_name'))
+    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas',
+                        '_symm_orig', '_symm_axes'))
 
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
@@ -993,18 +992,6 @@ def dumps(mol):
     moldic['basis']= repr(mol.basis)
     moldic['ecp' ] = repr(mol.ecp)
 
-    if mol.symm_orb is not None:
-        # compress symm_orb
-        symm_orb = []
-        for c in mol.symm_orb:
-            x,y = numpy.nonzero(c)
-            val = c[x,y]
-            if val.dtype == numpy.complex:
-                symm_orb.append(((val.real.tolist(), val.imag.tolist()),
-                                 x.tolist(), y.tolist(), c.shape))
-            else:
-                symm_orb.append(((val.tolist(), None), x.tolist(), y.tolist(), c.shape))
-        moldic['symm_orb'] = symm_orb
     try:
         return json.dumps(moldic)
     except TypeError:
@@ -1055,9 +1042,21 @@ def loads(molstr):
     mol._env = numpy.array(mol._env, dtype=numpy.double)
     mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
 
-    if mol.symm_orb is not None:
-        # decompress symm_orb
+    if mol._symm_orig is not None:
+        from pyscf import symm
+        mol._symm_orig = numpy.array(mol._symm_orig)
+        mol._symm_axes = numpy.array(mol._symm_axes)
+        mol.symm_orb, mol.irrep_id = \
+                symm.symm_adapted_basis(mol, mol.groupname,
+                                        mol._symm_orig, mol._symm_axes)
+        mol.irrep_name = [symm.irrep_id2name(mol.groupname, ir)
+                           for ir in mol.irrep_id]
+
+    elif mol.symm_orb is not None: # Backward compatibility. To load symm_orb
+                                   # from chkfile of pyscf-1.6 and earlier.
         symm_orb = []
+
+        # decompress symm_orb
         for val, x, y, shape in mol.symm_orb:
             if isinstance(val[0], list):
 # backward compatibility for chkfile of pyscf-1.4 in which val is an array of
@@ -1075,6 +1074,7 @@ def loads(molstr):
                 c[numpy.array(x),numpy.array(y)] = val
             symm_orb.append(c)
         mol.symm_orb = symm_orb
+
     return mol
 
 
@@ -2003,6 +2003,8 @@ class Mole(lib.StreamObject):
         self.symm_orb = None
         self.irrep_id = None
         self.irrep_name = None
+        self._symm_orig = None
+        self._symm_axes = None
         self._nelectron = None
         self._atom = []
         self._basis = {}
@@ -2276,6 +2278,8 @@ class Mole(lib.StreamObject):
             else:
                 self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
                                                         self.symmetry_subgroup)
+            self._symm_orig = orig
+            self._symm_axes = axes
 
             if self.cart and self.groupname in ('Dooh', 'Coov'):
                 if self.groupname == 'Dooh':
