@@ -52,10 +52,18 @@ if LooseVersion(numpy.__version__) <= '1.8.0':
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
-elif LooseVersion(numpy.__version__) >= '1.16':
-    sys.stderr.write('Numpy 1.16 has memory leak bug  '
-                     'https://github.com/numpy/numpy/issues/13808\n'
-                     'It is recommended to downgrade to numpy 1.15 or older\n')
+elif '1.16.2' <= LooseVersion(numpy.__version__) < '1.18':
+    #sys.stderr.write('Numpy 1.16 has memory leak bug  '
+    #                 'https://github.com/numpy/numpy/issues/13808\n'
+    #                 'It is recommended to downgrade to numpy 1.15 or older\n')
+    import ctypes
+    from numpy.core import _internal
+    def _get_void_ptr(arr):
+        simple_arr = numpy.asarray(_internal._unsafe_first_element_pointer(arr))
+        c_arr = (ctypes.c_char * 0).from_buffer(simple_arr)
+        return ctypes.cast(ctypes.byref(c_arr), ctypes.c_void_p)
+    # patch _get_void_ptr as a workaround to numpy issue #13808
+    _internal._get_void_ptr = _get_void_ptr
 
 from pyscf import __config__
 from pyscf import lib
@@ -68,4 +76,4 @@ __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = __config__.DEBUG
 
-del(os, sys, LooseVersion, numpy)
+del(os, sys, LooseVersion)
