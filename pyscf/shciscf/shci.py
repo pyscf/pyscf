@@ -135,6 +135,7 @@ class SHCI(pyscf.lib.StreamObject):
         nroots: int
         nPTiter: int
         DoRDM: bool
+        DoSOC: bool
         sweep_iter: [int]
         sweep_epsilon: [float]
         initialStates: [[int]]
@@ -162,6 +163,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.outputlevel = 2
 
         self.executable = settings.SHCIEXE
+        self.executableZDice2 = settings.ZSHCIEXE
         self.scratchDirectory = settings.SHCISCRATCHDIR
         self.mpiprefix = settings.MPIPREFIX
         self.memory = memory
@@ -196,6 +198,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.nroots = 1
         self.nPTiter = 0
         self.DoRDM = True
+        self.DoSOC = False
         self.sweep_iter = []
         self.sweep_epsilon = []
         self.maxIter = 6
@@ -809,8 +812,10 @@ class SHCI(pyscf.lib.StreamObject):
             return calc_e, roots
         if self.returnInt:
             return h1e, eri
-
-        executeSHCI(self)
+        if self.DoSOC:
+            executeZSHCI(self)
+        else:
+            executeSHCI(self)
         if self.verbose >= logger.DEBUG1:
             outFile = os.path.join(self.runtimeDir, self.outputFile)
             logger.debug1(self, open(outFile).read())
@@ -879,40 +884,6 @@ class SHCI(pyscf.lib.StreamObject):
         os.remove("input.dat")
         os.remove("output.dat")
         os.remove("FCIDUMP")
-
-
-def print1Int(h1, name):
-    with open('%s.X' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[0].shape[0])
-        for i in range(h1[0].shape[0]):
-            for j in range(h1[0].shape[0]):
-                if (abs(h1[0, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[0, i, j], i + 1, j + 1))
-
-    with open('%s.Y' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[1].shape[0])
-        for i in range(h1[1].shape[0]):
-            for j in range(h1[1].shape[0]):
-                if (abs(h1[1, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[1, i, j], i + 1, j + 1))
-
-    with open('%s.Z' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[2].shape[0])
-        for i in range(h1[2].shape[0]):
-            for j in range(h1[2].shape[0]):
-                if (abs(h1[2, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[2, i, j], i + 1, j + 1))
-
-    with open('%sZ' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[2].shape[0])
-        for i in range(h1[2].shape[0]):
-            for j in range(h1[2].shape[0]):
-                if (abs(h1[2, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[2, i, j], i + 1, j + 1))
 
 
 def make_sched(SHCI):
@@ -1039,6 +1010,8 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
         f.write('prefix %s\n' % (SHCI.scratchDirectory))
     if (SHCI.DoRDM):
         f.write('DoRDM\n')
+    if(SHCI.DoSOC):
+        f.write('DoSOC\n')        
     for line in SHCI.extraline:
         f.write('%s\n' % line)
 
@@ -1227,6 +1200,22 @@ def executeSHCI(SHCI):
         raise err
 
 
+def executeZSHCI(SHCI):
+    file1 = os.path.join(SHCI.runtimeDir, "%s/shci.e" % (SHCI.scratchDirectory))#what?
+    if os.path.exists(file1):                                                   #what?
+        os.remove(file1)                                                        #what?
+    inFile = os.path.join(SHCI.runtimeDir, SHCI.configFile)
+    outFile = os.path.join(SHCI.runtimeDir, SHCI.outputFile)
+    try:
+        cmd = ' '.join((SHCI.mpiprefix, SHCI.executableZDice2, inFile))
+        cmd = "%s > %s 2>&1" % (cmd, outFile)
+        check_call(cmd, shell=True)
+        #save_output(SHCI)
+    except CalledProcessError as err:
+        logger.error(SHCI, cmd)
+        raise err
+
+
 #def save_output(SHCI):
 #  for i in range(50):
 #    if os.path.exists(os.path.join(SHCI.runtimeDir, "output%02d.dat"%(i))):
@@ -1277,33 +1266,6 @@ def SHCISCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
         if not os.path.exists(settings.SHCISCRATCHDIR):
             os.makedirs(settings.SHCISCRATCHDIR)
     return mc
-
-
-def get_hso1e(wso, x, rp):
-    nb = x.shape[0]
-    hso1e = numpy.zeros((3, nb, nb))
-    for ic in range(3):
-        hso1e[ic] = reduce(numpy.dot, (rp.T, x.T, wso[ic], x, rp))
-    return hso1e
-
-
-def get_wso(mol):
-    nb = mol.nao_nr()
-    wso = numpy.zeros((3, nb, nb))
-    for iatom in range(mol.natm):
-        zA = mol.atom_charge(iatom)
-        xyz = mol.atom_coord(iatom)
-        mol.set_rinv_orig(xyz)
-        wso += zA * mol.intor('cint1e_prinvxp_sph',
-                              3)  # sign due to integration by part
-    return wso
-
-
-def get_p(dm, x, rp):
-    pLL = rp.dot(dm.dot(rp.T))
-    pLS = pLL.dot(x.T)
-    pSS = x.dot(pLL.dot(x.T))
-    return pLL, pLS, pSS
 
 
 def dryrun(mc, mo_coeff=None):
