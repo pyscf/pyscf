@@ -1,12 +1,7 @@
 from __future__ import print_function, division
 import sys, numpy as np
 from copy import copy
-from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
-from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
-from pyscf.nao.m_rf_den import rf_den
-from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
-from pyscf.nao.m_valence import get_str_fin
 from timeit import default_timer as timer
 from numpy import stack, dot, zeros, einsum, pi, log, array, require
 from pyscf.nao import scf, gw
@@ -62,7 +57,7 @@ class gw_iter(gw):
     #tip
     #v1 = v_pab.T.reshape(self.norbs,-1)                     #reshapes v_pab (norb, norb*nprod), decrease 3d to 2d-matrix
     #v2 = v1.reshape(self.norbs,self.norbs,self.nprod).T     #reshape to initial shape, so v2 is again v_pab=(norb, norb, nprod)
- 
+    xvx=[]
     for s in range(self.nspin):
         xna = self.mo_coeff[0,s,self.nn[s],:,0]             #(nstat,norbs)
         xmb = self.mo_coeff[0,s,:,:,0]                      #(nstat,norbs)
@@ -73,7 +68,7 @@ class gw_iter(gw):
             xvx_ref  = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)  #einsum: direct multiplication 
             xvx_ref2 = np.swapaxes(np.dot(xna, np.dot(v_pab,xmb.T)),1,2)                          #direct multiplication by using np.dot and swapping between axis
             #print('comparison between einsum and dot: ',np.allclose(xvx_ref,xvx_ref2,atol=1e-15)) #einsum=dot
-            return xvx_ref
+            xvx.append(xvx_ref)
 
         #2-atom-centered product basis
         if algol=='ac':
@@ -88,8 +83,8 @@ class gw_iter(gw):
             xvx1 = np.dot(xna,xvx1)
             xvx1 = xvx1.reshape(len(self.nn[s]),self.nprod,self.norbs)
             xvx1 = np.swapaxes(xvx1,1,2)
-            return xvx1            
-
+            xvx.append(xvx1)            
+        
         #3-dominant product basis
         if algol=='dp':
             v_pd  = self.pb.get_dp_vertex_array()     #dominant product basis: V_{\widetilde{\mu}}^{ab}
@@ -107,7 +102,7 @@ class gw_iter(gw):
             xvx2 = xvx2.reshape(len(self.nn[s]),size,self.norbs)
             xvx2 = np.swapaxes(xvx2,1,2)
             xvx2 = np.dot(xvx2,c)
-            return xvx2
+            xvx.append(xvx2)
 
         #4-dominant product basis in COO-format
         if algol=='dp_coo':
@@ -130,65 +125,44 @@ class gw_iter(gw):
             xvx3 = xvx3.reshape(len(self.nn[s]),size,self.norbs) #xvx(ns,p,b)
             xvx3 = np.swapaxes(xvx3,1,2)                         #xvx(ns,b,p)
             xvx3 = np.dot(xvx3,c)                                #XVX=xvx.c
-            return xvx3
+            xvx.append(xvx3)
 
         if algol=='check':
-            print('atom-centered with ref: ',np.allclose(self.gw_xvx(algo='simple'),self.gw_xvx(algo='ac'),atol=1e-15)) #equality with the direct np.dot
-            print('dominant product with ref: ',np.allclose(self.gw_xvx(algo='simple'),self.gw_xvx(algo='dp'),atol=1e-15)) #equality with the direct np.dot
-            print('Sparse_dominant product-ndCoo with ref: ',np.allclose(self.gw_xvx(algo='simple'), self.gw_xvx(algo='dp_coo'), atol=1e-15)) #equality with the direct np.dot
+            print('atom-centered with ref: ',np.allclose(self.gw_xvx(algo='simple')[0],self.gw_xvx(algo='ac')[0],atol=1e-15)) #equality with the direct np.dot
+            print('dominant product with ref: ',np.allclose(self.gw_xvx(algo='simple')[0],self.gw_xvx(algo='dp')[0],atol=1e-15)) #equality with the direct np.dot
+            print('Sparse_dominant product-ndCoo with ref: ',np.allclose(self.gw_xvx(algo='simple')[0], self.gw_xvx(algo='dp_coo')[0], atol=1e-15)) #equality with the direct np.dot
+    return xvx
 
 
   def get_snmw2sf_iter(self):
+    """ 
+    This computes a matrix elements of W_c: <\Psi | W_c |\Psi>.
+    sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
+    where n runs from s...f, m runs from 0...norbs, w runs from 0...nff_ia, spin=0...1 or 2.
+    1- XVX is calculated using dominant product in COO format: gw_xvx('dp_coo')
+    2- I_nm = W XVX = (1-v\chi_{0})^{-1}v\chi_{0}v
+    3- S_nm = XVX W XVX = XVX * I_nm
+    """
     from scipy.sparse.linalg import LinearOperator,lgmres
     ww = 1j*self.ww_ia
-        
-
-    v_pd  = self.pb.get_dp_vertex_array()       #dominant product basis: V_{\widetilde{\mu}}^{ab}
-    v_pd1 = v_pd.reshape(v_pd.shape[0]*self.norbs, self.norbs)  #2D shape of dominant produc
-
-    c = self.pb.get_da2cc_den()                 #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
-                                                #V_{\mu}^{ab}= V_{\widetilde{\mu}}^{ab} * C_{\widetilde{\mu}}^{\mu}  
-
+    xvx= self.gw_xvx('dp_coo')
     snm2i = []
     for s in range(self.nspin):
         sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtypeComplex)  
         inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtypeComplex)
-        
-        xna = self.mo_coeff[0,s,self.nn[s],:,0]             #(nstat in spin,norbs)
-        xmb = self.mo_coeff[0,s,:,:,0]                      #(nstat,norbs)
-
-
-        #dominant product basis in COO-format
-        #First step
-        size = self.cc_da.shape[0]
-        data = v_pd.reshape(-1)
-        i0,i1,i2 = np.mgrid[0:v_pd.shape[0],0:v_pd.shape[1],0:v_pd.shape[2] ].reshape((3,data.size))
-        from pyscf.nao import ndcoo
-        nc = ndcoo((data, (i0, i1, i2)))
-        m0 = nc.tocoo_pa_b('p,a,b->ap,b')
-        vx1 = m0*(xmb.T)
-        vx1 = vx1.reshape(size,self.norbs,self.norbs)  #shape (p,a,b)
-        vx1 = vx1.reshape(self.norbs,-1)               #shape(a,p*b)  
-        #Second Step
-        xvx3 = np.dot(xna,vx1)                         #xna(ns,a).V(a,p*b)=xvx(ns,p*b)
-        xvx3 = xvx3.reshape(len(self.nn[s]),size,self.norbs)     #xvx(ns,p,b)
-        xvx3 = np.swapaxes(xvx3,1,2)                   #xvx(ns,b,p)
-        xvx3 = np.dot(xvx3,c)                          #XVX=xvx.c
-        #xvx_ref  = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)
-        #print('comparison between Sparse_dp by using ndcoo clase and ref: ',np.allclose(xvx3, xvx_ref, atol=1e-15))
-        
+                      
         for iw,w in enumerate(ww):                     #iw is number of grid and w is complex plane                                
             self.comega_current = w                            
             k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
             #print('k_c_opt',k_c_opt.shape)
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
-                    a = np.dot(self.kernel_sq, xvx3[n,m,:])     #v XVX
+                    a = np.dot(self.kernel_sq, xvx[s][n,m,:])     #v XVX
                     b = self.gw_chi0_mv(a, self.comega_current) #\chi_{0}v XVX by using matrix vector
                     a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
                     sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, atol=1e-05)
             if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
-            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx3, sf_aux)   #I= XVX I_aux
+            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx[s], sf_aux)   #I= XVX I_aux
         snm2i.append(np.real(inm))
     return snm2i
 
@@ -309,7 +283,6 @@ class gw_iter(gw):
           k_c = np.eye(self.nprod)-k_c                      #(1-v\chi_{0})
           bxvx = np.einsum('pq,nmq->nmp', b, xvx)           #v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
           xvxbxvx = np.einsum ('nmp,nlp->np',xvx,bxvx)      #V_{ext}=X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
-          #print('xvxbxvx',xvxbxvx.shape)  
           for n in range (len(self.nn[s])):
               v_eff_ref[n,:] = self.gw_comp_veff(xvxbxvx[n,:]) #compute v_eff in tddft_iter class as referance
               v_eff[n,:]=solve(k_c, xvxbxvx[n,:])           #linear eq. for finding V_{eff} --> (1-v\chi_{0})V_{eff}=V_{ext}
@@ -318,21 +291,9 @@ class gw_iter(gw):
 
 
   def gw_corr_int_iter(self, sn2w, eps=None):
-    """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
+    """ This computes an integral part of the GW correction at GW class while uses get_snmw2sf_iter"""
     if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf_iter()
-
-    sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
-    eps = self.dw_excl if eps is None else eps
-    #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
-    for s,ww in enumerate(sn2w):
-      for n,w in enumerate(ww):
-        #print(__name__, 's,n,w int corr', s,n,w)
-        for m in range(self.norbs):
-          if abs(w-self.ksn2e[0,s,m])<eps : continue
-          state_corr = ((self.dw_ia*self.snmw2sf[s][n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
-          #print(n, m, -state_corr, w-self.ksn2e[0,s,m])
-          sn2int[s][n] -= state_corr
-    return sn2int
+    return self.gw_corr_int(sn2w, eps=None)
 
 
   def gw_corr_res_iter(self, sn2w):
@@ -456,5 +417,4 @@ if __name__=='__main__':
     gw_it = gw.get_snmw2sf_iter()
     gw_no = gw.get_snmw2sf()
     print('Comparison between matrix element of W obtained from gw_iter and gw classes: ', np.allclose(gw_it,gw_no,atol=1e-5)) 
-    #gw.kernel_gw_iter()
-    #gw.report()
+

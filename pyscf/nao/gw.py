@@ -247,8 +247,9 @@ class gw(scf):
 
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
-    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
-
+    if not hasattr(self, 'snmw2sf'): 
+        self.snmw2sf = self.get_snmw2sf()
+        print('gw_got')
     sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
     #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
