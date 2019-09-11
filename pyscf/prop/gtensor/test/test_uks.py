@@ -67,8 +67,9 @@ class KnowValues(unittest.TestCase):
         mf1.xc = 'b3lyp'
         g = gtensor.uks.GTensor(mf1)
         g.para_soc2e = 'SSO'
-        dat = g.make_para_soc2e(dm0, dm1, 1)
-        self.assertAlmostEqual(lib.finger(dat), -0.103162219789111, 9)
+        dm = numpy.einsum('xpi,xqi->xpq', dm0, dm0)
+        dat = g.make_para_soc2e(dm, dm1, 1)
+        self.assertAlmostEqual(lib.finger(dat), -0.20729647343641752, 9)
 
     def test_nr_uks(self):
         g = gtensor.uhf.GTensor(mf)

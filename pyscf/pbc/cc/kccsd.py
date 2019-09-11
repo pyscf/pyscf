@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -231,7 +231,11 @@ def spatial2spin(tx, orbspin, kconserv):
         return spatial2spin((tx,tx), orbspin, kconserv)
     elif isinstance(tx, numpy.ndarray) and tx.ndim == 7:
         # KRCCSD t2 amplitudes
-        t2aa = tx - tx.transpose(0,1,2,4,3,5,6)
+        t2aa = numpy.zeros_like(tx)
+        nkpts = t2aa.shape[2]
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            t2aa[ki,kj,ka] = tx[ki,kj,ka] - tx[ki,kj,kb].transpose(0,1,3,2)
         return spatial2spin((t2aa,tx,t2aa), orbspin, kconserv)
     elif len(tx) == 2:  # KUCCSD t1
         t1a, t1b = tx
@@ -333,6 +337,7 @@ class GCCSD(gccsd.GCCSD):
         if not isinstance(mf, scf.kghf.KGHF):
             mf = scf.addons.convert_to_ghf(mf)
         self.kpts = mf.kpts
+        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         gccsd.GCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @property
@@ -343,10 +348,10 @@ class GCCSD(gccsd.GCCSD):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, '\n')
         logger.info(self, '******** PBC CC flags ********')
-        gccsd.GCCSD.dump_flags(self)
+        gccsd.GCCSD.dump_flags(self, verbose)
         return self
 
     def init_amps(self, eris):
@@ -793,6 +798,11 @@ class _IMDS:
             self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv,self.Wvvvv, self._fimd['vvvo'])
         self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
+
+
+from pyscf.pbc import scf
+scf.kghf.KGHF.CCSD = lib.class_as_method(KGCCSD)
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc

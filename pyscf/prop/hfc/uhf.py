@@ -248,19 +248,20 @@ class HyperfineCoupling(lib.StreamObject):
         self.mo_e10 = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        logger.info(self, '\n')
-        logger.info(self, '******** %s for %s ********',
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        logger.info(self, 'HFC for atoms %s', str(self.hfc_nuc))
+        log.info('HFC for atoms %s', str(self.hfc_nuc))
         if self.cphf:
-            logger.info(self, 'CPHF conv_tol = %g', self.conv_tol)
-            logger.info(self, 'CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        logger.info(self, 'para_soc2e = %s', self.para_soc2e)
-        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
-                    self.so_eff_charge)
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        log.info('para_soc2e = %s', self.para_soc2e)
+        log.info('so_eff_charge = %s (1e SO effective charge)',
+                 self.so_eff_charge)
         if not self._scf.converged:
-            logger.warn('Ground state SCF is not converged')
+            log.warn('Ground state SCF is not converged')
         return self
 
     def kernel(self, mo1=None):

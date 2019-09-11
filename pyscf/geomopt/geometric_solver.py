@@ -23,8 +23,10 @@ import geometric
 import geometric.molecule
 #from geometric import molecule
 from pyscf import lib
-from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
+from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
+                                  symmetrize)
 from pyscf import __config__
+from pyscf.grad.rhf import GradientsBasics
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
@@ -56,6 +58,7 @@ class PySCFEngine(geometric.engine.Engine):
 
         self.scanner = scanner
         self.cycle = 0
+        self.e_last = 0
         self.callback = None
         self.maxsteps = 100
         self.assert_convergence = False
@@ -67,15 +70,23 @@ class PySCFEngine(geometric.engine.Engine):
 
         g_scanner = self.scanner
         mol = self.mol
-        lib.logger.note(g_scanner, '\nGeometry optimization step %d', self.cycle)
         self.cycle += 1
+        lib.logger.note(g_scanner, '\nGeometry optimization cycle %d', self.cycle)
 
         # geomeTRIC requires coords and gradients in atomic unit
         coords = coords.reshape(-1,3)
         if g_scanner.verbose >= lib.logger.NOTE:
             dump_mol_geometry(mol, coords*lib.param.BOHR)
+
+        if mol.symmetry:
+            coords = symmetrize(mol, coords)
+
         mol.set_geom_(coords, unit='Bohr')
         energy, gradients = g_scanner(mol)
+        lib.logger.note(g_scanner,
+                        'cycle %d: E = %.12g  dE = %g  norm(grad) = %g', self.cycle,
+                        energy, energy - self.e_last, numpy.linalg.norm(gradients))
+        self.e_last = energy
 
         if callable(self.callback):
             self.callback(locals())
@@ -107,6 +118,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
+    elif isinstance(method, GradientsBasics):
+        g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
     else:
@@ -120,6 +133,15 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     engine.maxsteps = maxsteps
     # To avoid overwritting method.mol
     engine.mol = g_scanner.mol.copy()
+
+    # When symmetry is enabled, the molecule may be shifted or rotated to make
+    # the z-axis be the main axis. The transformation can cause inconsistency
+    # between the optimization steps. The transformation is muted by setting
+    # an explict point group to the keyword mol.symmetry (see symmetry
+    # detection code in Mole.build function).
+    if engine.mol.symmetry:
+        engine.mol.symmetry = engine.mol.topgroup
+
     engine.assert_convergence = assert_convergence
     try:
         m = geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
@@ -150,8 +172,9 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         from pyscf import geometric_solver
         newmol = geometric_solver.optimize(method, **conv_params)
     '''
-    return kernel(method, assert_convergence, include_ghost, callback,
-                  maxsteps, **kwargs)[1]
+    # MRH, 07/23/2019: name all explicit kwargs for forward compatibility
+    return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost, 
+            constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
 
 class GeometryOptimizer(lib.StreamObject):
     '''Optimize the molecular geometry for the input method.
@@ -172,11 +195,14 @@ class GeometryOptimizer(lib.StreamObject):
     def mol(self, x):
         self.method.mol = x
 
-    def kernel(self):
+    def kernel(self, params=None):
+        if params is not None:
+            self.params.update(params)
         self.converged, self.mol = \
                 kernel(self.method, callback=self.callback,
                        maxsteps=self.max_cycle, **self.params)
         return self.mol
+    optimize = kernel
 
 class NotConvergedError(RuntimeError):
     pass

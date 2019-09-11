@@ -31,7 +31,7 @@ direct_nosym        No            No             No**               Yes
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
 '''
 
-import sys
+import warnings
 import ctypes
 import numpy
 import scipy.linalg
@@ -135,6 +135,11 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 
 
 class FCISolver(direct_spin1.FCISolver):
+    def __init__(self, *args, **kwargs):
+        direct_spin1.FCISolver.__init__(self, *args, **kwargs)
+        # pspace constructor only supports Hermitian Hamiltonian
+        self.davidson_only = True
+
     def contract_1e(self, h1e, fcivec, norb, nelec, link_index=None):
         return contract_1e(h1e, fcivec, norb, nelec, link_index)
 
@@ -170,6 +175,12 @@ class FCISolver(direct_spin1.FCISolver):
 
         # TODO: check the hermitian of Hamiltonian then determine whether to
         # call the non-hermitian diagonlization solver davidson_nosym1
+
+        warnings.warn('direct_nosym.kernel is not able to diagonalize '
+                      'non-Hermitian Hamiltonian. If h1e and h2e is not '
+                      'hermtian, calling symmetric diagonlization in eig '
+                      'can lead to wrong results.')
+
         self.converged, e, ci = \
                 lib.davidson1(lambda xs: [op(x) for x in xs],
                               x0, precond, lessio=self.lessio, **kwargs)

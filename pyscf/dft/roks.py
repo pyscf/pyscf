@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,21 +39,20 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return uks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
 
-class ROKS(rohf.ROHF):
+class ROKS(rohf.ROHF, rks.KohnShamDFT):
     '''Restricted open-shell Kohn-Sham
     See pyscf/dft/rks.py RKS class for the usage of the attributes'''
     def __init__(self, mol):
         rohf.ROHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
-        lib.logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = energy_elec
-    define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
         from pyscf.grad import roks

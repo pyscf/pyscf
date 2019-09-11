@@ -107,16 +107,16 @@ class HyperfineCoupling(lib.StreamObject):
         self.mo_e10 = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
-        lib.logger.warn(self, 'DHF-HFC is an experimental feature. It is '
-                        'still in testing.\nFeatures and APIs may be changed '
-                        'in the future.')
-        logger.info(self, 'nuc_pair %s', self.nuc_pair)
-        logger.info(self, 'mb = %s', self.mb)
+        log.warn('DHF-HFC is an experimental feature. It is '
+                 'still in testing.\nFeatures and APIs may be changed '
+                 'in the future.')
+        log.info('nuc_pair %s', self.nuc_pair)
+        log.info('mb = %s', self.mb)
         if self.cphf:
             log.info('Solving MO10 eq with CPHF.')
             log.info('CPHF conv_tol = %g', self.conv_tol)

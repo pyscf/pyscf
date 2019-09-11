@@ -218,10 +218,13 @@ ALIAS = {
     'lanl2tz'    : 'lanl2tz.dat'    ,
     'lanl08'     : 'lanl08.dat'     ,
     'sbkjc'      : 'sbkjc.dat'      ,
+    # Stuttgart ECP http://www.tc.uni-koeln.de/PP/clickpse.en.html
     'stuttgart'  : 'stuttgart_dz.dat',
     'stuttgartdz': 'stuttgart_dz.dat',
     'stuttgartrlc': 'stuttgart_dz.dat',
     'stuttgartrsc': 'stuttgart_rsc.dat',
+    'stuttgartrsc_mdf': 'cc-pvdz-pp.dat',
+    #'stuttgartrsc_mwb': 'stuttgart_rsc.dat',
     'ccpwcvdzpp' : 'cc-pwCVDZ-PP.dat',
     'ccpwcvtzpp' : 'cc-pwCVTZ-PP.dat',
     'ccpwcvqzpp' : 'cc-pwCVQZ-PP.dat',
@@ -252,6 +255,7 @@ ALIAS = {
     'augpcseg2' : 'aug-pcseg-2.dat',
     'augpcseg3' : 'aug-pcseg-3.dat',
     'augpcseg4' : 'aug-pcseg-4.dat',
+    'sarcdkh'   : 'sarc-dkh2.dat',
 # Burkatzki-Filippi-Dolg pseudo potential
     'bfdvdz'     : 'bfd_vdz.dat',
     'bfdvtz'     : 'bfd_vtz.dat',

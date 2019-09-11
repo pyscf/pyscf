@@ -283,6 +283,11 @@ def as_scanner(mp):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            for key in ('with_df', 'with_solvent'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
@@ -337,8 +342,8 @@ class MP2(lib.StreamObject):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)

@@ -378,6 +378,13 @@ class KnownValues(unittest.TestCase):
         t2b = mycc1._add_vvvv(t1, t2, eris1, t2sym='jiba')
         self.assertAlmostEqual(abs(t2a-t2b).max(), 0, 12)
 
+    def test_diagnostic(self):
+        t1_diag = mycc.get_t1_diagnostic()
+        d1_diag = mycc.get_d1_diagnostic()
+        d2_diag = mycc.get_d2_diagnostic()
+        self.assertAlmostEqual(t1_diag, 0.006002754773812036, 6)
+        self.assertAlmostEqual(d1_diag, 0.012738043220198926, 6)
+        self.assertAlmostEqual(d2_diag, 0.1169239107130769, 6)
 
 if __name__ == "__main__":
     print("Full Tests for RCCSD")

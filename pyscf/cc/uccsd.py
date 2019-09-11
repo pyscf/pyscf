@@ -44,9 +44,9 @@ def update_amps(cc, t1, t2, eris):
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     mo_ea_o = eris.mo_energy[0][:nocca]
-    mo_ea_v = eris.mo_energy[0][nocca:]
+    mo_ea_v = eris.mo_energy[0][nocca:] + cc.level_shift
     mo_eb_o = eris.mo_energy[1][:noccb]
-    mo_eb_v = eris.mo_energy[1][noccb:]
+    mo_eb_v = eris.mo_energy[1][noccb:] + cc.level_shift
     fova = eris.focka[:nocca,nocca:]
     fovb = eris.fockb[:noccb,noccb:]
 
@@ -643,7 +643,7 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=False)
+        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in spin-oribital basis.
@@ -741,6 +741,21 @@ class UCCSD(ccsd.CCSD):
 
     def amplitudes_from_rccsd(self, t1, t2):
         return amplitudes_from_rccsd(t1, t2)
+
+    def get_t1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_t1_diagnostic(t1)
+
+    def get_d1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_d1_diagnostic(t1)
+
+    def get_d2_diagnostic(self, t2=None):
+        if t2 is None: t2 = self.t2
+        raise NotImplementedError
+        #return get_d2_diagnostic(t2)
 
 CCSD = UCCSD
 from pyscf import scf
@@ -1063,6 +1078,140 @@ def make_tau_ab(t2ab, t1, r1, fac=1, out=None):
     tau1ab *= fac * .5
     tau1ab += t2ab
     return tau1ab
+
+def _fp(nocc, nmo):
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+
+    # vvvv
+    fp  = nocca**2 * nvira**4
+    fp += noccb**2 * nvirb**4
+    fp += nocca    * nvira**2 * noccb    * nvirb**2 * 2
+
+    # ovvv
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**3 * nvira**3 * 2
+    fp += nocca**3 * nvira**2 * 2
+
+    # OVVV
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**3 * nvirb**3 * 2
+    fp += noccb**3 * nvirb**2 * 2
+
+    # ovVV
+    fp += nocca    * nvira * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira            * nvirb**2 * 2
+    fp += nocca    * nvira * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira * noccb    * nvirb    * 2
+
+    # OVvv
+    fp += nocca    * nvira**2 * noccb    * nvirb * 2
+    fp +=            nvira**2 * noccb**2 * nvirb * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb * 2
+    fp += nocca    * nvira**2 * noccb**2 * nvirb * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb * 2
+
+    fp += nocca**4 * nvira    * 2
+    fp += nocca**4 * nvira**2 * 2
+    fp += nocca**4 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**2 * nvira**3 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**3 * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+
+    fp += noccb**4 * nvirb    * 2
+    fp += noccb**4 * nvirb**2 * 2
+    fp += noccb**4 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**2 * nocca    * nvira    * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2            * noccb    * nvirb**2 * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+    fp += noccb**2            * nocca    * nvira**2 * 2
+
+    fp += nocca**2            * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb**2            * 2
+    fp += nocca**2 * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb**2 * nvirb    * 2
+
+    fp += nocca    * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb    * nvirb**2 * 2
+
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb**2 * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb**2 * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb**2 * nvirb    * 2
+
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2            * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb**2            * 2
+
+    fp += nocca**3 * nvira**2 * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca**2            * noccb    * nvirb**2 * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+    fp += noccb**2            * nocca    * nvira**2 * 2
+    fp += noccb**2 * nvirb    * nocca    * nvira    * 2
+
+    fp += nocca**3 * nvira**3 * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += noccb**3 * nvirb**3 * 2
+    fp += noccb**2 * nvirb**2 * nocca    * nvira    * 2
+
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**2 * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb**2 * 2
+
+    fp += nocca**2 * nvira**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += nocca    * nvira    * noccb    * nvirb**2 * 2
+    fp += nocca    * nvira**2 * noccb    * nvirb    * 2
+    fp += nocca**3 * nvira**2 * 2
+    fp += noccb**3 * nvirb**2 * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+
+    fp += nocca**2 * nvira**3 * 2
+    fp += noccb**2 * nvirb**3 * 2
+    fp += nocca**2 * nvira    * noccb    * nvirb    * 2
+    fp += nocca    * nvira    * noccb**2 * nvirb    * 2
+    return fp
 
 
 if __name__ == '__main__':

@@ -159,6 +159,12 @@ class KnownValues(unittest.TestCase):
         cell.build()
         self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 4)
 
+        a = numpy.eye(3) * 3
+        a[0,1] = .2
+        c = pgto.M(atom='H 0 0.1 0; H 1.1 2.0 0; He 1.2 .3 0.2',
+                   a=a, dimension=2, verbose=0)
+        self.assertAlmostEqual(c.ewald(), -3.0902098018260418, 9)
+
     def test_ewald_1d_inf_vacuum(self):
         cell = pgto.Cell()
         cell.a = numpy.eye(3) * 4
@@ -326,6 +332,24 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(len(b), 2)
         self.assertEqual(len(b[0][1]), 4)
         self.assertEqual(len(b[1][1]), 2)
+
+    def test_getattr(self):
+        from pyscf.pbc import scf, dft, cc, tdscf
+        cell = pgto.M(atom='He', a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]})
+        self.assertEqual(cell.HF().__class__, scf.HF(cell).__class__)
+        self.assertEqual(cell.KS().__class__, dft.KS(cell).__class__)
+        self.assertEqual(cell.UKS().__class__, dft.UKS(cell).__class__)
+        self.assertEqual(cell.KROHF().__class__, scf.KROHF(cell).__class__)
+        self.assertEqual(cell.KKS().__class__, dft.KKS(cell).__class__)
+        self.assertEqual(cell.CCSD().__class__, cc.ccsd.RCCSD)
+        self.assertEqual(cell.TDA().__class__, tdscf.rhf.TDA)
+        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
+        self.assertEqual(cell.TDB3LYP().__class__, tdscf.rks.TDDFT)
+        self.assertEqual(cell.KCCSD().__class__, cc.kccsd_rhf.KRCCSD)
+        self.assertEqual(cell.KTDA().__class__, tdscf.krhf.TDA)
+        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFTNoHybrid)
+        self.assertRaises(AttributeError, lambda: cell.xyz)
+        self.assertRaises(AttributeError, lambda: cell.TDxyz)
 
 
 if __name__ == '__main__':

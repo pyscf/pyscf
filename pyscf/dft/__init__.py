@@ -27,10 +27,12 @@ Simple usage::
 
 try:
     from pyscf.dft import libxc
+    XC = libxc.XC
 except (ImportError, OSError):
     pass
 try:
     from pyscf.dft import xcfun
+    XC = xcfun.XC
 except (ImportError, OSError):
     pass
 #from pyscf.dft import xc

@@ -92,7 +92,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_casscf_grad(self):
         mc = mcscf.CASSCF(mf, 4, 4).run()
-        g1 = casscf_grad.kernel(mc)
+        g1 = casscf_grad.Gradients(mc).kernel()
         self.assertAlmostEqual(lib.finger(g1), -0.065094188906156134, 7)
 
         g1ref = grad_elec(mc, mf.nuc_grad_method())
@@ -124,9 +124,55 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -108.39289688030243, 9)
         self.assertAlmostEqual(lib.finger(g1), -0.065094188906156134, 7)
 
+    def test_state_specific_scanner(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
+        mc = mcscf.CASSCF(mf, 4, 4)
+        gs = mc.state_specific_(2).nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.68788613661442, 7)
+        self.assertAlmostEqual(lib.finger(de), -0.10695162143777398, 5)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        e1 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201'))
+        e2 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199'))
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
+    def test_state_average_scanner(self):
+        mc = mcscf.CASSCF(mf, 4, 4)
+        gs = mc.state_average_([0.5, 0.5]).nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.38384621394407, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.1034416391211391, 7)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_average
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_average
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
+
+    def test_state_average_mix_scanner(self):
+        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        gs = mc.nuc_grad_method().as_scanner()
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.39289688022976, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.06509352771703128, 7)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_average
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_average
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
+
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
-            mc = mcscf.CASSCF(mf, 4, 4).x2c().run()
+            mc = mcscf.CASSCF(mf.x2c(), 4, 4).run()
             gscan = mc.nuc_grad_method().as_scanner()
             g1 = gscan(mol)[1]
             self.assertAlmostEqual(lib.finger(g1), -0.070281684620797591, 7)
@@ -135,6 +181,44 @@ class KnownValues(unittest.TestCase):
             e1 = mcs('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')
             e2 = mcs('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
             self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
+    def test_with_qmmm_scanner(self):
+        from pyscf import qmmm
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.verbose = 0
+        mol.basis = '6-31g'
+        mol.build()
+
+        coords = [(0.5,0.6,0.1)]
+        #coords = [(0.0,0.0,0.0)]
+        charges = [-0.1]
+        mf = qmmm.add_mm_charges(scf.RHF(mol), coords, charges)
+        mc = mcscf.CASSCF(mf, 4, 4).as_scanner()
+        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
+        self.assertAlmostEqual(e_tot, -76.0461574155984, 7)
+        self.assertAlmostEqual(lib.finger(g), 0.042835374915102364, 6)
+        e1 = mc(''' O                  0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        e2 = mc(''' O                 -0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        ref = (e1 - e2)/0.002 * lib.param.BOHR
+        self.assertAlmostEqual(g[0,0], ref, 4)
+
+        mf = scf.RHF(mol)
+        mc = qmmm.add_mm_charges(mcscf.CASSCF(mf, 4, 4).as_scanner(), coords, charges)
+        e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
+        self.assertAlmostEqual(e_tot, -76.0461574155984, 7)
+        self.assertAlmostEqual(lib.finger(g), 0.042835374915102364, 6)
+
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().CASSCF(4, 4).run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.12355818572359845, 7)
 
 
 if __name__ == "__main__":

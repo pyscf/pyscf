@@ -36,7 +36,7 @@ from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
-from pyscf.gto import ecp
+from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
 
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
@@ -59,6 +59,7 @@ NPRIM_OF   = 2
 NCTR_OF    = 3
 RADI_POWER = 3 # for ECP
 KAPPA_OF   = 4
+SO_TYPE_OF = 4 # for ECP
 PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
@@ -69,9 +70,10 @@ PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
 PTR_RANGE_OMEGA = 8
 PTR_F12_ZETA    = 9
+PTR_GTG_ZETA    = 10
 AS_RINV_ORIG_ATOM = 17
 AS_ECPBAS_OFFSET = 18
-AS_NECPBAS     = 19
+AS_NECPBAS      = 19
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -193,7 +195,10 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
             c2smat *= 0.282094791773878143
         elif l == 1:
             c2smat *= 0.488602511902919921
-    return c2smat[:nf], c2smat[nf:]
+    # c2smat[0] is the transformation for spin up
+    # c2smat[1] is the transformation for spin down
+    c2smat = c2smat.reshape(2,nf,nd)
+    return c2smat
 cart2j_kappa = cart2spinor_kappa
 
 def cart2spinor_l(l, normalized=None):
@@ -275,7 +280,11 @@ def format_atom(atoms, origin=0, axes=None,
             as the Bohr value (in angstrom), which should be around 0.53
 
     Returns:
-        "atoms" in the internal format as :attr:`~Mole._atom`
+        "atoms" in the internal format. The internal format is
+            | atom = [[atom1, (x, y, z)],
+            |         [atom2, (x, y, z)],
+            |         ...
+            |         [atomN, (x, y, z)]]
 
     Examples:
 
@@ -850,13 +859,20 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
             for rorder, bi in enumerate(lb[1]):
                 if len(bi) > 0:
                     ec = numpy.array(sorted(bi, reverse=True))
+                    nexp, ncol = ec.shape
                     _env.append(ec[:,0])
-                    ptr_exp = ptr_env
                     _env.append(ec[:,1])
-                    ptr_coeff = ptr_exp + ec.shape[0]
-                    ptr_env = ptr_coeff + ec.shape[0]
-                    ecp0.append([0, lb[0], ec.shape[0], rorder, 0,
+                    ptr_exp, ptr_coeff = ptr_env, ptr_env + nexp
+                    ecp0.append([0, lb[0], nexp, rorder, 0,
                                  ptr_exp, ptr_coeff, 0])
+                    ptr_env += nexp * 2
+
+                    if ncol == 3:  # Has SO-ECP
+                        _env.append(ec[:,2])
+                        ptr_coeff, ptr_env = ptr_env, ptr_env + nexp
+                        ecp0.append([0, lb[0], nexp, rorder, 1,
+                                     ptr_exp, ptr_coeff, 0])
+
         _ecpdic[symb] = (nelec, numpy.asarray(ecp0, dtype=numpy.int32))
 
     _ecpbas = []
@@ -1288,7 +1304,7 @@ def sph_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
@@ -1338,7 +1354,7 @@ def cart_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         ncart = (l + 1) * (l + 2) // 2
@@ -1388,7 +1404,7 @@ def spinor_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
@@ -1707,6 +1723,84 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
     return abstract
 
 
+def tostring(mol, format='raw'):
+    '''Convert molecular geometry to a string of the required format.
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    format = format.lower()
+    if format == 'xyz' or format == 'raw':
+        coords = mol.atom_coords() * param.BOHR
+        output = []
+        if format == 'xyz':
+            output.append('%d' % mol.natm)
+            output.append('XYZ from PySCF')
+
+        for i in range(mol.natm):
+            symb = mol.atom_pure_symbol(i)
+            x, y, z = coords[i]
+            output.append('%4s %14.5f %14.5f %14.5f' %
+                          (symb, x, y, z))
+        return '\n'.join(output)
+    elif format == 'zmat':
+        coords = mol.atom_coords() * param.BOHR
+        zmat = cart2zmat(coords).splitlines()
+        output = []
+        for i, line in enumerate(zmat):
+            symb = mol.atom_pure_symbol(i)
+            output.append('%4s   %s' % (symb, line))
+        return '\n'.join(output)
+    else:
+        raise NotImplementedError
+
+def tofile(mol, filename, format=None):
+    '''Write molecular geometry to a file of the required format.
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    if format is None:  # Guess format based on filename
+        format = os.path.splitext(filename)[1][1:]
+    string = tostring(mol, format)
+    with open(filename, 'w') as f:
+        f.write(string)
+        f.write('\n')
+    return string
+
+def fromfile(filename, format=None):
+    '''Read molecular geometry from a file
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    if format is None:  # Guess format based on filename
+        format = os.path.splitext(filename)[1][1:]
+    with open(filename, 'r') as f:
+        return fromstring(f.read(), format)
+
+
+def fromstring(string, format='xyz'):
+    '''Convert the string of the specified format to internal format
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    format = format.lower()
+    if format == 'zmat':
+        return from_zmatrix(string)
+    else:
+        raise NotImplementedError
+
+
 #
 # Mole class handles three layers: input, internal format, libcint arguments.
 # The relationship of the three layers are, eg
@@ -1945,6 +2039,46 @@ class Mole(lib.StreamObject):
     @ms.setter
     def ms(self, x):
         self.spin = int(round(2*x, 4))
+
+    def __getattr__(self, key):
+        '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
+        from Mole object.
+        '''
+        if key[:2] == '__':  # Skip Python builtins
+            raise AttributeError('Mole object has no attribute %s' % key)
+        elif key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf import __all__
+        from pyscf import scf, dft
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if 'TD' in key[:3]:
+            if key in ('TDHF', 'TDA'):
+                mf = scf.HF(self)
+            else:
+                mf = dft.KS(self)
+                xc = key.split('TD', 1)[1]
+                if xc in dft.XC:
+                    mf.xc = xc
+                    key = 'TDDFT'
+        else:
+            mf = scf.HF(self)
+
+        method = getattr(mf, key, None)
+        if method is None:
+            raise AttributeError('Mole object has no attribute %s' % key)
+
+        mf.run()
+        return method
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
@@ -2411,12 +2545,21 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         erf(omega r12) / r12
         set omega to 0 to siwtch off the range-separated Coulomb
         '''
-        self._env[PTR_RANGE_OMEGA] = omega
+        if omega is None:
+            self._env[PTR_RANGE_OMEGA] = 0
+        else:
+            self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
 
+    @property
+    def omega(self):
+        return self._env[PTR_RANGE_OMEGA]
+    omega = omega.setter(set_range_coulomb)
+
     def with_range_coulomb(self, omega):
-        '''Retuen a temporary mol context which has the rquired
-        range-separated Coulomb parameter omega.
+        '''Retuen a temporary mol context which has the required parameter
+        omega for long range part of range-separated Coulomb operator.
+        If omega = None, it will be treated as the regular Coulomb operator.
         See also :func:`mol.set_range_coulomb`
 
         Examples:
@@ -2851,6 +2994,13 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
 
     inertia_moment = inertia_moment
 
+    tostring = tostring
+    tofile = tofile
+    def fromstring(self, string, format='xyz'):
+        return fromstring(string, format)
+    def fromfile(self, filename, format=None):
+        return fromfile(filename, format)
+
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None):
         '''Integral generator.
@@ -3064,31 +3214,65 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
-            from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
-            # Import all available modules. Some methods are registered when
-            # loading these modules.
-            from pyscf import grad, hessian, solvent, qmmm, prop
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, mcscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            if fn.upper() == 'TDHF':
-                return tdscf.TDHF(scf.HF(self).run(), *args, **kwargs)
-            else:
-                method = getattr(tdscf, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
+            method = getattr(self, fn.upper())
+            return method(*args, **kwargs)
         else:
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
+
+    def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
+              **kwargs):
+        '''Integral transformation for arbitrary orbitals and arbitrary
+        integrals.  See more detalied documentation in func:`ao2mo.kernel`.
+
+        Args:
+            mo_coeffs (an np array or a list of arrays) : A matrix of orbital
+                coefficients if it is a numpy ndarray, or four sets of orbital
+                coefficients, corresponding to the four indices of (ij|kl).
+
+        Kwargs:
+            erifile (str or h5py File or h5py Group object) : The file/object
+                to store the transformed integrals.  If not given, the return
+                value is an array (in memory) of the transformed integrals.
+            dataname : str
+                *Note* this argument is effective if erifile is given.
+                The dataset name in the erifile (ref the hierarchy of HDF5 format
+                http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
+                different dataname, the existed integral file can be reused.  If
+                the erifile contains the specified dataname, the old integrals
+                will be replaced by the new one under the key dataname.
+            intor (str) : integral name Name of the 2-electron integral.  Ref
+                to :func:`getints_by_shell`
+                for the complete list of available 2-electron integral names
+
+        Returns:
+            An array of transformed integrals if erifile is not given.
+            Otherwise, return the file/fileobject if erifile is assigned.
+
+
+        Examples:
+
+        >>> import pyscf
+        >>> mol = pyscf.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+        >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
+
+        >>> eri1 = mol.ao2mo(mo1)
+        >>> print(eri1.shape)
+        (55, 55)
+
+        >>> eri1 = mol.ao2mo(mo1, compact=False)
+        >>> print(eri1.shape)
+        (100, 100)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2))
+        >>> print(eri1.shape)
+        (80, 36)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2), erifile='water.h5')
+        '''
+        from pyscf import ao2mo
+        return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
@@ -3323,6 +3507,5 @@ class _TemporaryMoleContext(object):
         self.method(*self.args)
     def __exit__(self, type, value, traceback):
         self.method(*self.args_bak)
-
 
 del(BASE)

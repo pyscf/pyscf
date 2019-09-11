@@ -34,12 +34,7 @@ def f(mol):
     e_tot = mycc.e_tot + et_correction
 
     # Compute CCSD(T) gradients
-    eris = mycc.ao2mo()
-    t1, t2 = mycc.t1, mycc.t2
-    conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2,
-                                        verbose=mycc.verbose)
-    g = ccsd_t_grad.kernel(mycc, t1, t2, l1, l2, eris=eris,
-                           verbose=mycc.verbose)
+    g = ccsd_t_grad.Gradients(mycc).kernel()
     print('CCSD(T) nuclear gradients:')
     print(g)
     return e_tot, g

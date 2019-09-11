@@ -745,8 +745,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     r = np.sqrt(np.einsum('Lijx,Lijx->Lij', rLij, rLij))
     rLij = None
     r[r<1e-16] = 1e200
-    ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs,
-                            erfc(ew_eta * r) / r)
+    ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs, erfc(ew_eta * r) / r)
 
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
@@ -780,18 +779,17 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         def fn(eta,Gnorm,z):
             Gnorm_z = Gnorm*z
             large_idx = Gnorm_z > 20.0
-            Gnorm_z[large_idx] = 0
+            ret = np.zeros_like(Gnorm_z)
+            x = Gnorm/2./eta + eta*z
             with np.errstate(over='ignore'):
-                ret = np.exp(Gnorm_z)*erfc(Gnorm/2./eta + eta*z)
-            if len(large_idx) > 0:
-                x = Gnorm[large_idx]/2./eta + eta*z
-                ret[large_idx] = np.exp(Gnorm[large_idx]*z-x**2) * erfcx(x)
+                erfcx = erfc(x)
+                ret[~large_idx] = np.exp(Gnorm_z[~large_idx]) * erfcx[~large_idx]
+                ret[ large_idx] = np.exp((Gnorm*z-x**2)[large_idx]) * erfcx[large_idx]
             return ret
         def gn(eta,Gnorm,z):
             return np.pi/Gnorm*(fn(eta,Gnorm,z) + fn(eta,Gnorm,-z))
         def gn0(eta,z):
             return -2*np.pi*(z*erf(eta*z) + np.exp(-(eta*z)**2)/eta/np.sqrt(np.pi))
-        ewg = 0.0
         b = cell.reciprocal_vectors()
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
         # Perform the reciprocal space summation over  all reciprocal vectors
@@ -801,24 +799,12 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         absG2 = absG2[planarG2_idx]
         absG = absG2**(0.5)
         # Performing the G != 0 summation.
-        for i,ri in enumerate(coords):
-            qi = chargs[i]
-            for j,rj in enumerate(coords):
-                rij = rj - ri
-                qij = qi*chargs[j]
-
-                Gdotr = np.dot(Gv,rij.T)
-                val = qij*np.cos(Gdotr)*gn(ew_eta,absG,rij[2])
-                ewg += val.sum()
+        rij = coords[:,None,:] - coords[None,:,:]
+        Gdotr = np.einsum('ijx,gx->ijg', rij, Gv)
+        ewg = np.einsum('i,j,ijg,ijg->', chargs, chargs, np.cos(Gdotr),
+                        gn(ew_eta,absG,rij[:,:,2:3]))
         # Performing the G == 0 summation.
-        for i,vi in enumerate(coords):
-            qi = chargs[i]
-            for j,vj in enumerate(coords):
-                rij = vj - vi
-                qij = qi*chargs[j]
-
-                val = qij*gn0(ew_eta,rij[2])
-                ewg += val.sum()
+        ewg += np.einsum('i,j,ij->', chargs, chargs, gn0(ew_eta,rij[:,:,2]))
         ewg *= inv_area*0.5
 
     else:
@@ -1118,6 +1104,62 @@ class Cell(mole.Mole):
                 warnings.warn('Electron number %d and spin %d are not consistent '
                               'in unit cell\n' % (ne, self.spin))
             return nalpha, nbeta
+
+    def __getattr__(self, key):
+        '''To support accessing methods (cell.HF, cell.KKS, cell.KUCCSD, ...)
+        from Cell object.
+        '''
+        if key[:2] == '__':  # Skip Python builtins
+            raise AttributeError('Cell object has no attribute %s' % key)
+        elif key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf.pbc import __all__
+        from pyscf.pbc import scf, dft
+        from pyscf.dft import XC
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if key[0] == 'K':  # with k-point sampling
+            if 'TD' in key[:4]:
+                if key in ('KTDHF', 'KTDA'):
+                    mf = scf.KHF(self)
+                else:
+                    mf = dft.KKS(self)
+                    xc = key.split('TD', 1)[1]
+                    if xc in XC:
+                        mf.xc = xc
+                        key = 'KTDDFT'
+            else:
+                mf = scf.KHF(self)
+            # Remove prefix 'K' because methods are registered without the leading 'K'
+            key = key[1:]
+        else:
+            if 'TD' in key[:3]:
+                if key in ('TDHF', 'TDA'):
+                    mf = scf.HF(self)
+                else:
+                    mf = dft.KS(self)
+                    xc = key.split('TD', 1)[1]
+                    if xc in XC:
+                        mf.xc = xc
+                        key = 'TDDFT'
+            else:
+                mf = scf.HF(self)
+
+        method = getattr(mf, key, None)
+        if method is None:
+            raise AttributeError('Cell object has no attribute %s' % key)
+
+        mf.run()
+        return method
 
     tot_electrons = tot_electrons
 
@@ -1594,24 +1636,8 @@ class Cell(mole.Mole):
         '''Whether pseudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
-    def apply(self, fn, *args, **kwargs):
-        if callable(fn):
-            return lib.StreamObject.apply(self, fn, *args, **kwargs)
-        elif isinstance(fn, (str, unicode)):
-            from pyscf.pbc import scf, dft, mp, cc, ci, tdscf
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, tdscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
-        else:
-            raise TypeError('First argument of .apply method must be a '
-                            'function or a string.')
+    def ao2mo(self, mo_coeffs, intor='int2e', erifile=None, dataname='eri_mo',
+              **kwargs):
+        raise NotImplementedError
 
 del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

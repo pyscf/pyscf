@@ -37,9 +37,10 @@ class X2C(lib.StreamObject):
     basis = getattr(__config__, 'x2c_X2C_basis', None)
     def __init__(self, mol=None):
         self.mol = mol
+        self.verbose = mol.verbose
 
-    def dump_flags(self):
-        log = logger.Logger(self.mol.stdout, self.mol.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
         log.info('exp_drop = %g', self.exp_drop)
@@ -140,6 +141,11 @@ class X2C(lib.StreamObject):
             x = _x2c1e_xmatrix(t, v, w, s, c)
         return x
 
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        return self
+
 
 def get_hcore(mol):
     '''2-component X2c hcore Hamiltonian (including spin-free and
@@ -148,7 +154,7 @@ def get_hcore(mol):
     x2c = X2C(mol)
     return x2c.get_hcore(mol)
 
-def get_jk(mol, dm, hermi=1, mf_opt=None):
+def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
@@ -207,12 +213,12 @@ class X2C_UHF(hf.SCF):
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        self.opt = self.init_direct_scf(self.mol)
+        self.opt = None
 
-    def dump_flags(self):
-        hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        hf.SCF.dump_flags(self, verbose)
         if self.with_x2c:
-            self.with_x2c.dump_flags()
+            self.with_x2c.dump_flags(verbose)
         return self
 
     def init_guess_by_minao(self, mol=None):
@@ -273,13 +279,14 @@ class X2C_UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt)
+        vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
@@ -302,24 +309,21 @@ UHF = X2C_UHF
 
 try:
     from pyscf.dft import rks, dks, r_numint
-    class X2C_UKS(X2C_UHF):
+    class X2C_UKS(X2C_UHF, rks.KohnShamDFT):
         def __init__(self, mol):
             X2C_UHF.__init__(self, mol)
-            rks._dft_common_init_(self)
+            rks.KohnShamDFT.__init__(self)
             self._numint = r_numint.RNumInt()
 
-        def dump_flags(self):
-            hf.SCF.dump_flags(self)
-            logger.info(self, 'XC functionals = %s', self.xc)
-            logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-            self.grids.dump_flags()
+        def dump_flags(self, verbose=None):
+            hf.SCF.dump_flags(self, verbose)
+            rks.KohnShamDFT.dump_flags(self, verbose)
             if self.with_x2c:
-                self.with_x2c.dump_flags()
+                self.with_x2c.dump_flags(verbose)
             return self
 
         get_veff = dks.get_veff
         energy_elec = rks.energy_elec
-        define_xc_ = rks.define_xc_
 
     UKS = X2C_UKS
 except ImportError:

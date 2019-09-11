@@ -97,7 +97,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43584093045349137, 6)
         self.assertAlmostEqual(e[1], 0.50959675100507518, 6)
         self.assertAlmostEqual(e[2], 0.69021193094404043, 6)
@@ -137,7 +137,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMEA(mycc)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
-        e = myeom.eaccsd_star(e, v, lv)
+        e = myeom.eaccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.18931289565459147, 6)
         self.assertAlmostEqual(e[1], 0.28204643613789027, 6)
         self.assertAlmostEqual(e[2], 0.457836723621172  , 6)

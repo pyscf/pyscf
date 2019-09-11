@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -172,8 +172,8 @@ class UCASCI(casci.CASCI):
         else:
             self._ncore = (x[0], x[1])
 
-    def dump_flags(self):
-        log = lib.logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = lib.logger.new_logger(self, verbose)
         log.info('')
         log.info('******** UHF-CASCI flags ********')
         nmo = self.mo_coeff[0].shape[1]

@@ -28,6 +28,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.pbc.dft import numint
 from pyscf.pbc.scf.newton_ah import _gen_rhf_response
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
@@ -47,7 +48,7 @@ class TDA(rhf.TDA):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
 
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         singlet = self.singlet
         cell = mf.cell
         kpts = mf.kpts
@@ -116,7 +117,7 @@ class TDA(rhf.TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
         if x0 is None:
@@ -136,7 +137,7 @@ CIS = KTDA = TDA
 
 
 class TDHF(TDA):
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         '''
         [ A   B ][X]
         [-B* -A*][Y]
@@ -211,16 +212,19 @@ class TDHF(TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
+
+        real_system = (gamma_point(self._scf.kpts) and
+                       self._scf.mo_coeff[0].dtype == numpy.double)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
@@ -260,6 +264,13 @@ def _unpack(vo, mo_occ):
         p0, p1 = p1, p1 + no * nv
         z.append(vo[p0:p1].reshape(no,nv))
     return z
+
+
+from pyscf.pbc import scf
+scf.khf.KRHF.TDA  = lib.class_as_method(KTDA)
+scf.khf.KRHF.TDHF = lib.class_as_method(KTDHF)
+scf.krohf.KROHF.TDA  = None
+scf.krohf.KROHF.TDHF = None
 
 
 if __name__ == '__main__':

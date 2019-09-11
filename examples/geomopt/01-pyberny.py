@@ -11,10 +11,15 @@ mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='ccpvdz')
 mf = scf.RHF(mol)
 
 #
-# geometry optimization for HF
+# geometry optimization for HF.  There are two entries to invoke the berny
+# geometry optimization.
 #
-mol_eq = berny_solver.optimize(mf)
+# method 1: import the optimize function from pyscf.geomopt.berny_solver
+mol_eq = optimize(mf)
 print(mol_eq.atom_coords())
+
+# method 2: create the optimizer from Gradients class
+mol_eq = mf.Gradients().optimizer(solver='berny').kernel()
 
 #
 # geometry optimization for CASSCF
@@ -28,5 +33,8 @@ conv_params = {
     'stepmax': 2e-2,      # AA
     'steprms': 1.5e-2,    # AA
 }
-mol_eq = berny_solver.optimize(mc, **conv_params)
+# method 1
+mol_eq = optimize(mc, **conv_params)
 
+# method 2
+mol_eq = mc.Gradients().optimizer(solver='berny').kernel(conv_params)

@@ -45,7 +45,7 @@ static int eval_xc(xc_functional fun, int deriv, enum xc_vars vars,
         return outlen;
 }
 
-void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
+void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                    int spin, int deriv, int np,
                    double *rho_u, double *rho_d, double *output)
 {
@@ -58,6 +58,12 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
         for (i = 0; i < nfn; i++) {
                 name = xc_enumerate_parameters(fn_id[i]);
                 xc_set(fun, name, fac[i]);
+
+                if (omega[i] != 0) {
+                        xc_set(fun, "RANGESEP_MU", omega[i]);
+                }
+                //xc_set(fun, "CAM_ALPHA", val);
+                //xc_set(fun, "CAM_BETA", val);
         }
 
         if (spin == 0) {

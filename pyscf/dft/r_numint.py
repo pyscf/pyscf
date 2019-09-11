@@ -179,7 +179,8 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, rho, 1, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, rho, 1, relativity, 1,
+                                      verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()

@@ -3,14 +3,15 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
-from pyscf import gto
-
 '''
 Integrals for spin-orbit coupling
 
 See also functions  make_h1_soc, direct_spin_spin in  pyscf/prop/zfs/uhf.py
 '''
+
+import numpy
+from pyscf import gto
+from pyscf import lib
 
 mol = gto.M(
     verbose = 0,
@@ -43,12 +44,7 @@ def ss(mol):
     mat[1,1] -= h_fc
     mat[2,2] -= h_fc
 
-    s = numpy.array((((0, 1),
-                      (1, 0)),
-                     ((0, -1j),
-                      (1j, 0)),
-                     ((1, 0),
-                      (0, -1)))) * .5
+    s = lib.PauliMatrices * .5
 # wxyz are the spin indices, ijkl are the AO indicies
     alpha = 137.036
     fac = alpha ** 2 / 2

@@ -562,12 +562,13 @@ O    SP
         self.assertEqual([x[2] for x in aoslice], [0, 8, 56])
         self.assertEqual([x[3] for x in aoslice], [8, 56, 64])
 
-    def test_dump_loads(self):
+    def test_dump_loads_skip(self):
         import json
         tmpfile = tempfile.NamedTemporaryFile()
         lib.chkfile.save_mol(mol0, tmpfile.name)
         mol1 = gto.Mole()
         mol1.update(tmpfile.name)
+        # dumps() may produce different orders in different runs
         self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
         tmpfile = None
         mol1.loads(mol1.dumps())
@@ -823,6 +824,46 @@ O    SP
         s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
         self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
         mol0.cart = False
+
+    def test_getattr(self):
+        from pyscf import scf, dft, ci, tdscf
+        mol = gto.M(atom='He')
+        self.assertEqual(mol.HF().__class__, scf.HF(mol).__class__)
+        self.assertEqual(mol.KS().__class__, dft.KS(mol).__class__)
+        self.assertEqual(mol.UKS().__class__, dft.UKS(mol).__class__)
+        self.assertEqual(mol.CISD().__class__, ci.cisd.RCISD)
+        self.assertEqual(mol.TDA().__class__, tdscf.rhf.TDA)
+        self.assertEqual(mol.dTDA().__class__, tdscf.rks.dTDA)
+        self.assertEqual(mol.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
+        self.assertEqual(mol.TDB3LYP().__class__, tdscf.rks.TDDFT)
+        self.assertRaises(AttributeError, lambda: mol.xyz)
+        self.assertRaises(AttributeError, lambda: mol.TDxyz)
+
+    def test_ao2mo(self):
+        mol = gto.M(atom='He')
+        nao = mol.nao
+        eri = mol.ao2mo(numpy.eye(nao))
+        self.assertAlmostEqual(eri[0,0], 1.0557129427350722, 12)
+
+    def test_tofile(self):
+        tmpfile = tempfile.NamedTemporaryFile()
+        mol = gto.M(atom=[[1  , (0.,1.,1.)],
+                          ["O1", (0.,0.,0.)],
+                          [1  , (1.,1.,0.)], ])
+        out1 = mol.tofile(tmpfile.name, format='xyz')
+        ref = '''3
+XYZ from PySCF
+   H        0.00000        1.00000        1.00000
+   O        0.00000        0.00000        0.00000
+   H        1.00000        1.00000        0.00000
+'''
+        with open(tmpfile.name, 'r') as f:
+            self.assertEqual(f.read(), ref)
+        self.assertEqual(out1, ref[:-1])
+
+        tmpfile = tempfile.NamedTemporaryFile(suffix='.zmat')
+        str1 = mol.tofile(tmpfile.name, format='zmat')
+        #FIXME:self.assertEqual(mol._atom, mol.fromfile(tmpfile.name))
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@
 
 import numpy as np
 from pyscf import lib
+from pyscf.lib import logger
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -161,3 +162,119 @@ def Wvvvo(t1, t2, eris, _Wvvvv=None):
     Wabei += einsum('abef,if->abei', _Wvvvv, t1)
     return Wabei
 
+########################################
+# T3[2] related contributions to T1/T2
+########################################
+
+def _cp(a):
+    return np.array(a, copy=False, order='C')
+
+def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
+    """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
+    and intermediates used in IP/EA-CCSD(T)a
+
+    Args:
+        cc (:obj:`GCCSD`):
+            Object containing coupled-cluster results.
+        t1 (:obj:`ndarray`):
+            T1 amplitudes.
+        t2 (:obj:`ndarray`):
+            T2 amplitudes from which the T3[2] amplitudes are formed.
+        eris (:obj:`_PhysicistsERIs`):
+            Antisymmetrized electron-repulsion integrals in physicist's notation.
+        t3p2_ip_out (:obj:`ndarray`):
+            Store results of the intermediate used in IP-EOM-CCSD(T)a.
+        t3p2_ea_out (:obj:`ndarray`):
+            Store results of the intermediate used in EA-EOM-CCSD(T)a.
+
+    Returns:
+        delta_ccsd (float):
+            Difference of perturbed and unperturbed CCSD ground-state energy,
+                energy(T1 + T1[2], T2 + T2[2]) - energy(T1, T2)
+        pt1 (:obj:`ndarray`):
+            Perturbatively corrected T1 amplitudes.
+        pt2 (:obj:`ndarray`):
+            Perturbatively corrected T2 amplitudes.
+
+    Reference:
+        D. A. Matthews, J. F. Stanton "A new approach to approximate..."
+            JCP 145, 124102 (2016), Equation 14
+        Shavitt and Bartlett "Many-body Methods in Physics and Chemistry"
+            2009, Equation 10.33
+    """
+    if eris is None:
+        eris = cc.ao2mo()
+    fock = eris.fock
+    nocc, nvir = t1.shape
+
+    fov = fock[:nocc, nocc:]
+    foo = fock[:nocc, :nocc].diagonal()
+    fvv = fock[nocc:, nocc:].diagonal()
+
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:]
+
+    oovv = _cp(eris.oovv)
+    ovvv = _cp(eris.ovvv)
+    ooov = _cp(eris.ooov)
+    oovv = _cp(eris.oovv)
+    vooo = _cp(ooov).conj().transpose(3, 2, 1, 0)
+    vvvo = _cp(ovvv).conj().transpose(3, 2, 1, 0)
+
+    ccsd_energy = cc.energy(t1, t2, eris)
+    dtype = np.result_type(t1, t2)
+    if np.issubdtype(dtype, np.dtype(complex).type):
+        logger.error(cc, 't3p2 imds has not been strictly checked for use with complex integrals')
+
+    if t3p2_ip_out is None:
+        t3p2_ip_out = np.zeros((nocc,nvir,nocc,nocc), dtype=dtype)
+    Wmcik = t3p2_ip_out
+
+    if t3p2_ea_out is None:
+        t3p2_ea_out = np.zeros((nvir,nvir,nvir,nocc), dtype=dtype)
+    Wacek = t3p2_ea_out
+
+    tmp_t3 = lib.einsum('bcdk,ijad->ijkabc', vvvo, t2)
+    tmp_t3 -= lib.einsum('cmkj,imab->ijkabc', vooo, t2)
+
+    # P(ijk)
+    tmp_t3 = (tmp_t3 + tmp_t3.transpose(1, 2, 0, 3, 4, 5) +
+                       tmp_t3.transpose(2, 0, 1, 3, 4, 5))
+    # P(abc)
+    tmp_t3 = (tmp_t3 + tmp_t3.transpose(0, 1, 2, 4, 5, 3) +
+                       tmp_t3.transpose(0, 1, 2, 5, 3, 4))
+
+    eia = mo_e_o[:, None] - mo_e_v[None, :]
+    eijab = eia[:, None, :, None] + eia[None, :, None, :]
+    eijkabc = eijab[:, :, None, :, :, None] + eia[None, None, :, None, None, :]
+    tmp_t3 /= eijkabc
+
+    pt1 = 0.25 * lib.einsum('mnef,imnaef->ia', oovv, tmp_t3)
+
+    pt2 = lib.einsum('ijmabe,me->ijab', tmp_t3, fov)
+    tmp2 = ovvv - 0.0*lib.einsum('nmef,nb->mbfe', oovv, t1)
+    tmp = lib.einsum('ijmaef,mbfe->ijab', tmp_t3, tmp2)
+    tmp = tmp - tmp.transpose(0, 1, 3, 2)  # P(ab)
+    tmp *= 0.5
+    pt2 = pt2 + tmp
+    tmp2 = ooov + 0.0*lib.einsum('mnef,jf->nmje', oovv, t1)
+    tmp = lib.einsum('inmabe,nmje->ijab', tmp_t3, tmp2)
+    tmp *= -0.5
+    tmp = tmp - tmp.transpose(1, 0, 2, 3)  # P(ij)
+    pt2 = pt2 + tmp
+
+    eia = mo_e_o[:, None] - mo_e_v[None, :]
+    eijab = eia[:, None, :, None] + eia[None, :, None, :]
+
+    pt1 /= eia
+    pt2 /= eijab
+
+    pt1 = pt1 + t1
+    pt2 = pt2 + t2
+
+    Wmcik += 0.5*lib.einsum('ijkabc,mjab->mcik', tmp_t3, oovv)
+    Wacek += -0.5*lib.einsum('ijkabc,ijeb->acek', tmp_t3, oovv)
+
+    delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
+    logger.info(cc, 'CCSD energy T3[2] correction : %16.12e', delta_ccsd_energy)
+    return delta_ccsd_energy, pt1, pt2, Wmcik, Wacek

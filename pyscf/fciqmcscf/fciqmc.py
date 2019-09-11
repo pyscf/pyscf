@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ from subprocess import call
 try:
     from pyscf.fciqmcscf import settings
 except ImportError:
-    msg = '''settings.py not found.  Please create %s
+    msg = '''settings.py not found for module fciqmcscf.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
 
@@ -116,9 +116,7 @@ class FCIQMCCI(object):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         log.info('******** FCIQMC options ********')
         log.info('Number of walkers = %s', self.maxwalkers)
         log.info('Maximum number of iterations = %d', self.maxIter)

@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy
+
 from pyscf import lib
 from pyscf.lib import logger
 
@@ -49,10 +51,11 @@ class RCCSD(rccsd.RCCSD):
         #if mo_coeff is self._scf.mo_coeff:
         #    eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
         #else:
-        #    # Add the HFX correction of Ewald probe charge method.
-        #    # FIXME: Whether to add this correction for other exxdiv treatments?
-        #    # Without the correction, MP2 energy may be largely off the
-        #    # correct value.
+
+        # Add the HFX correction of Ewald probe charge method.
+        # FIXME: Whether to add this correction for other exxdiv treatments?
+        # Without the correction, MP2 energy may be largely off the
+        # correct value.
         madelung = tools.madelung(self._scf.cell, self._scf.kpt)
         eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris
@@ -64,8 +67,8 @@ class UCCSD(uccsd.UCCSD):
         if mbpt2:
             pt = mp.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocca, nvira = self.nocc
-            nmoa, nmoa = self.nmo
+            nocca, noccb = self.nocc
+            nmoa, nmob = self.nmo
             nvira, nvirb = nmoa-nocca, nmob-noccb
             self.t1 = (numpy.zeros((nocca,nvira)), numpy.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
@@ -144,3 +147,11 @@ def _adjust_occ(mo_energy, nocc, shift):
     mo_energy = mo_energy.copy()
     mo_energy[:nocc] += shift
     return mo_energy
+
+
+from pyscf.pbc import scf
+scf.hf.RHF.CCSD = lib.class_as_method(RCCSD)
+scf.uhf.UHF.CCSD = lib.class_as_method(UCCSD)
+scf.ghf.GHF.CCSD = lib.class_as_method(GCCSD)
+scf.rohf.ROHF.CCSD = None
+

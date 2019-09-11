@@ -28,37 +28,40 @@ def _fpointer(name):
 class VHFOpt(object):
     def __init__(self, mol, intor,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
+        '''If function "qcondname" is presented, the qcond (sqrt(integrals))
+        and will be initialized in __init__.
+        '''
         intor = mol._add_suffix(intor)
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = intor
-        self._cintopt = lib.c_null_ptr()
+        self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
         self._dmcondname = dmcondname
-        self.init_cvhf_direct(mol, intor, prescreen, qcondname)
-
-    def init_cvhf_direct(self, mol, intor, prescreen, qcondname):
-        c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
-        c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
-        c_env = numpy.asarray(mol._env, dtype=numpy.double, order='C')
-        natm = ctypes.c_int(c_atm.shape[0])
-        nbas = ctypes.c_int(c_bas.shape[0])
-        self._cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
-
+        natm = ctypes.c_int(mol.natm)
+        nbas = ctypes.c_int(mol.nbas)
         libcvhf.CVHFinit_optimizer(ctypes.byref(self._this),
-                                   c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                                   c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                                   c_env.ctypes.data_as(ctypes.c_void_p))
-        self._this.contents.fprescreen = _fpointer(prescreen)
+                                   mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                                   mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                                   mol._env.ctypes.data_as(ctypes.c_void_p))
+        self.prescreen = prescreen
+        if qcondname is not None:
+            self.init_cvhf_direct(mol, intor, qcondname)
 
-        if prescreen != 'CVHFnoscreen' and qcondname is not None:
-            ao_loc = make_loc(c_bas, self._intor)
-            fsetqcond = getattr(libcvhf, qcondname)
-            fsetqcond(self._this,
-                      getattr(libcvhf, intor), self._cintopt,
-                      ao_loc.ctypes.data_as(ctypes.c_void_p),
-                      c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                      c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                      c_env.ctypes.data_as(ctypes.c_void_p))
+    def init_cvhf_direct(self, mol, intor, qcondname):
+        intor = mol._add_suffix(intor)
+        if intor == self._intor:
+            cintopt = self._cintopt
+        else:
+            cintopt = lib.c_null_ptr()
+        ao_loc = make_loc(mol._bas, intor)
+        fsetqcond = getattr(libcvhf, qcondname)
+        natm = ctypes.c_int(mol.natm)
+        nbas = ctypes.c_int(mol.nbas)
+        fsetqcond(self._this, getattr(libcvhf, intor), cintopt,
+                  ao_loc.ctypes.data_as(ctypes.c_void_p),
+                  mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                  mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                  mol._env.ctypes.data_as(ctypes.c_void_p))
 
     @property
     def direct_scf_tol(self):
@@ -66,6 +69,16 @@ class VHFOpt(object):
     @direct_scf_tol.setter
     def direct_scf_tol(self, v):
         self._this.contents.direct_scf_cutoff = v
+
+    @property
+    def prescreen(self):
+        return self._this.contents.fprescreen
+    @prescreen.setter
+    def prescreen(self, v):
+        if isinstance(v, int):
+            self._this.contents.fprescreen = v
+        else:
+            self._this.contents.fprescreen = _fpointer(v)
 
     def set_dm(self, dm, atm, bas, env):
         if self._dmcondname is not None:
@@ -106,67 +119,106 @@ class _CVHFOpt(ctypes.Structure):
 # hermi = 1 : hermitian
 # hermi = 2 : anti-hermitian
 ################################################
-def incore(eri, dm, hermi=0):
-    assert(not numpy.iscomplexobj(eri))
-    eri = numpy.ascontiguousarray(eri)
-    dm = numpy.ascontiguousarray(dm)
-    nao = dm.shape[0]
-    vj = numpy.empty((nao,nao))
-    vk = numpy.empty((nao,nao))
+def incore(eri, dms, hermi=0, with_j=True, with_k=True):
+    assert(eri.dtype == numpy.double)
+    eri = numpy.asarray(eri, order='C')
+    dms = numpy.asarray(dms, order='C')
+    dms_shape = dms.shape
+    nao = dms_shape[-1]
+
+    dms = dms.reshape(-1,nao,nao)
+    n_dm = dms.shape[0]
+
+    vj = vk = None
+    if with_j:
+        vj = numpy.zeros((n_dm,nao,nao))
+    if with_k:
+        vk = numpy.zeros((n_dm,nao,nao))
+
+    dmsptr = []
+    vjkptr = []
+    fjkptr = []
+
     npair = nao*(nao+1)//2
     if eri.ndim == 2 and npair*npair == eri.size: # 4-fold symmetry eri
         fdrv = getattr(libcvhf, 'CVHFnrs4_incore_drv')
-        # 'ijkl,kl->ij'
-        fvj = _fpointer('CVHFics4_kl_s2ij')
-        # 'ijkl,il->jk'
-        fvk = _fpointer('CVHFics4_il_s1jk')
-        # or
-        ## 'ijkl,ij->kl'
-        #fvj = _fpointer('CVHFics4_ij_s2kl')
-        ## 'ijkl,jk->il'
-        #fvk = _fpointer('CVHFics4_jk_s1il')
+        if with_j:
+            # 'ijkl,kl->ij'
+            fvj = _fpointer('CVHFics4_kl_s2ij')
+            # or
+            ## 'ijkl,ij->kl'
+            #fvj = _fpointer('CVHFics4_ij_s2kl')
+            for i, dm in enumerate(dms):
+                dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+                vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
+                fjkptr.append(fvj)
+        if with_k:
+            # 'ijkl,il->jk'
+            fvk = _fpointer('CVHFics4_il_s1jk')
+            # or
+            ## 'ijkl,jk->il'
+            #fvk = _fpointer('CVHFics4_jk_s1il')
+            for i, dm in enumerate(dms):
+                dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+                vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
+                fjkptr.append(fvk)
 
-        tridm = dm
     elif eri.ndim == 1 and npair*(npair+1)//2 == eri.size: # 8-fold symmetry eri
         fdrv = getattr(libcvhf, 'CVHFnrs8_incore_drv')
-        fvj = _fpointer('CVHFics8_tridm_vj')
-        if hermi == 1:
-            fvk = _fpointer('CVHFics8_jk_s2il')
-        else:
-            fvk = _fpointer('CVHFics8_jk_s1il')
-        tridm = lib.pack_tril(lib.transpose_sum(dm))
-        i = numpy.arange(nao)
-        tridm[i*(i+1)//2+i] *= .5
+        if with_j:
+            fvj = _fpointer('CVHFics8_tridm_vj')
+            tridms = lib.pack_tril(lib.hermi_sum(dms, axes=(0,2,1)))
+            idx = numpy.arange(nao)
+            tridms[:,idx*(idx+1)//2+idx] *= .5
+            for i, tridm in enumerate(tridms):
+                dmsptr.append(tridm.ctypes.data_as(ctypes.c_void_p))
+                vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
+                fjkptr.append(fvj)
+        if with_k:
+            if hermi == 1:
+                fvk = _fpointer('CVHFics8_jk_s2il')
+            else:
+                fvk = _fpointer('CVHFics8_jk_s1il')
+            for i, dm in enumerate(dms):
+                dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+                vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
+                fjkptr.append(fvk)
     else:
         raise RuntimeError('Array shape not consistent: DM %s, eri %s'
-                           % (dm.shape, eri.shape))
+                           % (dms_shape, eri.shape))
+
+    n_ops = len(dmsptr)
     fdrv(eri.ctypes.data_as(ctypes.c_void_p),
-         tridm.ctypes.data_as(ctypes.c_void_p),
-         vj.ctypes.data_as(ctypes.c_void_p),
-         dm.ctypes.data_as(ctypes.c_void_p),
-         vk.ctypes.data_as(ctypes.c_void_p),
-         ctypes.c_int(nao), fvj, fvk)
-    if hermi != 0:
-        vj = lib.hermi_triu(vj, hermi)
-        vk = lib.hermi_triu(vk, hermi)
-    else:
-        vj = lib.hermi_triu(vj, 1)
+         (ctypes.c_void_p*n_ops)(*dmsptr), (ctypes.c_void_p*n_ops)(*vjkptr),
+         ctypes.c_int(n_ops), ctypes.c_int(nao),
+         (ctypes.c_void_p*n_ops)(*fjkptr))
+
+    if with_j:
+        for i in range(n_dm):
+            lib.hermi_triu(vj[i], 1, inplace=True)
+        vj = vj.reshape(dms_shape)
+    if with_k:
+        if hermi != 0:
+            for i in range(n_dm):
+                lib.hermi_triu(vk[i], hermi, inplace=True)
+        vk = vk.reshape(dms_shape)
     return vj, vk
 
 # use int2e_sph as cintor, CVHFnrs8_ij_s2kl, CVHFnrs8_jk_s2il as fjk to call
 # direct_mapdm
-def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
+def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
+           with_j=True, with_k=True):
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
-    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        dms = dms[numpy.newaxis,:,:]
-    n_dm = len(dms)
-    nao = dms[0].shape[0]
     dms = numpy.asarray(dms, order='C')
+    dms_shape = dms.shape
+    nao = dms_shape[-1]
+    dms = dms.reshape(-1,nao,nao)
+    n_dm = dms.shape[0]
 
     if vhfopt is None:
         if cart:
@@ -184,42 +236,54 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
 
     fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
     fdot = _fpointer('CVHFdot_nrs8')
-    fvj = _fpointer('CVHFnrs8_ji_s2kl')
-    if hermi == 1:
-        fvk = _fpointer('CVHFnrs8_li_s2kj')
-    else:
-        fvk = _fpointer('CVHFnrs8_li_s1kj')
-    vjk = numpy.empty((2,n_dm,nao,nao))
-    fjk = (ctypes.c_void_p*(2*n_dm))()
-    dmsptr = (ctypes.c_void_p*(2*n_dm))()
-    vjkptr = (ctypes.c_void_p*(2*n_dm))()
-    for i in range(n_dm):
-        dmsptr[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
-        vjkptr[i] = vjk[0,i].ctypes.data_as(ctypes.c_void_p)
-        fjk[i] = fvj
-    for i in range(n_dm):
-        dmsptr[n_dm+i] = dms[i].ctypes.data_as(ctypes.c_void_p)
-        vjkptr[n_dm+i] = vjk[1,i].ctypes.data_as(ctypes.c_void_p)
-        fjk[n_dm+i] = fvk
+
+    vj = vk = None
+    dmsptr = []
+    vjkptr = []
+    fjk = []
+
+    if with_j:
+        fvj = _fpointer('CVHFnrs8_ji_s2kl')
+        vj = numpy.empty((n_dm,nao,nao))
+        for i, dm in enumerate(dms):
+            dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+            vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
+            fjk.append(fvj)
+
+    if with_k:
+        if hermi == 1:
+            fvk = _fpointer('CVHFnrs8_li_s2kj')
+        else:
+            fvk = _fpointer('CVHFnrs8_li_s1kj')
+        vk = numpy.empty((n_dm,nao,nao))
+        for i, dm in enumerate(dms):
+            dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
+            vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
+            fjk.append(fvk)
+
     shls_slice = (ctypes.c_int*8)(*([0, c_bas.shape[0]]*4))
     ao_loc = make_loc(bas, intor)
-
-    fdrv(cintor, fdot, fjk, dmsptr, vjkptr,
-         ctypes.c_int(n_dm*2), ctypes.c_int(1),
+    n_ops = len(dmsptr)
+    comp = 1
+    fdrv(cintor, fdot, (ctypes.c_void_p*n_ops)(*fjk),
+         (ctypes.c_void_p*n_ops)(*dmsptr), (ctypes.c_void_p*n_ops)(*vjkptr),
+         ctypes.c_int(n_ops), ctypes.c_int(comp),
          shls_slice, ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cvhfopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,
          c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
-    # vj must be symmetric
-    for idm in range(n_dm):
-        vjk[0,idm] = lib.hermi_triu(vjk[0,idm], 1)
-    if hermi != 0: # vk depends
-        for idm in range(n_dm):
-            vjk[1,idm] = lib.hermi_triu(vjk[1,idm], hermi)
-    if n_dm == 1:
-        vjk = vjk.reshape(2,nao,nao)
-    return vjk
+    if with_j:
+        # vj must be symmetric
+        for i in range(n_dm):
+            lib.hermi_triu(vj[i], 1, inplace=True)
+        vj = vj.reshape(dms_shape)
+    if with_k:
+        if hermi != 0:
+            for i in range(n_dm):
+                lib.hermi_triu(vk[i], hermi, inplace=True)
+        vk = vk.reshape(dms_shape)
+    return vj, vk
 
 # call all fjk for each dm, the return array has len(dms)*len(jkdescript)*ncomp components
 # jkdescript: 'ij->s1kl', 'kl->s2ij', ...
@@ -238,7 +302,6 @@ def direct_mapdm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    nao = dms[0].shape[0]
     dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
@@ -323,7 +386,6 @@ def direct_bindm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    nao = dms[0].shape[0]
     dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)

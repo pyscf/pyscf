@@ -29,8 +29,11 @@ except ImportError:
 import time
 import numpy
 from pyscf import lib
-from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
+from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
+                                  symmetrize)
 from pyscf import __config__
+from pyscf.grad.rhf import GradientsBasics
+
 # Overwrite pyberny's atomic unit
 coords.angstrom = 1./lib.param.BOHR
 
@@ -59,14 +62,13 @@ def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
         return geomlib.Molecule(species, coords)
 
 def _geom_to_atom(mol, geom, include_ghost):
-    atoms = list(geom)
-    position = numpy.array([x[1] for x in atoms])
+    coords = geom.coords
     if include_ghost:
-        atom_coords = position / lib.param.BOHR
+        atom_coords = coords / lib.param.BOHR
     else:
         atmlst = numpy.where(mol.atom_charges() != 0)[0]
         atom_coords = mol.atom_coords()
-        atom_coords[atmlst] = position / lib.param.BOHR
+        atom_coords[atmlst] = coords / lib.param.BOHR
     return atom_coords
 
 def to_berny_log(pyscf_log):
@@ -109,12 +111,22 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     if isinstance(method, lib.GradScanner):
         g_scanner = method
+    elif isinstance(method, GradientsBasics):
+        g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
     else:
         raise NotImplementedError('Nuclear gradients of %s not available' % method)
     if not include_ghost:
         g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
+
+    # When symmetry is enabled, the molecule may be shifted or rotated to make
+    # the z-axis be the main axis. The transformation can cause inconsistency
+    # between the optimization steps. The transformation is muted by setting
+    # an explict point group to the keyword mol.symmetry (see symmetry
+    # detection code in Mole.build function).
+    if mol.symmetry:
+        mol.symmetry = mol.topgroup
 
 # temporary interface, taken from berny.py optimize function
     berny_log = to_berny_log(log)
@@ -127,6 +139,10 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         if log.verbose >= lib.logger.NOTE:
             log.note('\nGeometry optimization cycle %d', cycle+1)
             dump_mol_geometry(mol, geom.coords, log)
+
+        if mol.symmetry:
+            geom.coords = symmetrize(mol, geom.coords)
+
         mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
         energy, gradients = g_scanner(mol)
         log.note('cycle %d: E = %.12g  dE = %g  norm(grad) = %g', cycle+1,
@@ -182,12 +198,15 @@ class GeometryOptimizer(lib.StreamObject):
     def mol(self, x):
         self.method.mol = x
 
-    def kernel(self):
+    def kernel(self, params=None):
+        if params is not None:
+            self.params.update(params)
         params = dict(self.params)
         params['maxsteps'] = self.max_cycle
         self.converged, self.mol = \
                 kernel(self.method, callback=self.callback, **params)
         return self.mol
+    optimize = kernel
 
 del(INCLUDE_GHOST, ASSERT_CONV)
 
