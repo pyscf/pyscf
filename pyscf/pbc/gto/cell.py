@@ -55,6 +55,7 @@ EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
+    long = int
 
 libpbc = _pbcintor.libpbc
 
