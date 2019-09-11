@@ -2861,5 +2861,27 @@ def molgw_input (dirname=None):
                 output = output.replace('; ', '\n')
                 f.writelines(output)
                 f.close()
-
 #pyscf_input('/home/masoud/calculations/training/')
+
+
+
+def mol_name (in_name):
+    if in_name in data.keys():
+        pos=data[in_name]['position_pyscf']
+        if (data[in_name]['magmoms']!= None):
+            mag=str(int(sum(data[in_name]['magmoms'])))
+        else:
+            mag='0'
+        name="'''"+pos+"''', spin= "+mag
+        return name
+    else:
+        return print('Unknown species!')
+        
+
+def mol_cas(casno):
+    for k in data.keys():
+        d=data[k]
+        if (casno==d['CAS No.']):
+            return mol_name(k))
+    return print('Unknown species!')
+    

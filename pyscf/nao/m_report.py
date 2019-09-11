@@ -92,7 +92,7 @@ def report_mfx(self, dm1=None):
         exp_x = np.einsum('nb,nb->n', mat_x, self.mo_coeff[0,0,:,:,0])
         mat_f = np.dot(self.mo_coeff[0,0,:,:,0], fock)
         exp_f = np.einsum('nb,nb->n', mat_f, self.mo_coeff[0,0,:,:,0])
-        print('='*18,'| the Exchange expectation value (eV) |','='*18)
+        print('='*17,'| the mean-field expectation values (eV) |','='*17)
         print('%2s  %12s  %12s  %12s  %12s  %12s  %3s'%('no.','<H_core>','<K>  ','<Sigma_x>','Fock   ','MF energy ','occ'))
         for i, (a,b,c,d,e,f) in enumerate(zip(exp_h.T*HARTREE2EV,exp_co.T*HARTREE2EV, exp_x.T*HARTREE2EV,exp_f.T*HARTREE2EV,self.mo_energy.T*HARTREE2EV, self.mo_occ[0].T)):   
           if (i==self.nfermi[0]): print('-'*78)
@@ -113,7 +113,7 @@ def report_mfx(self, dm1=None):
           exp_x[s] = np.einsum('nb,nb->n', mat_x, self.mo_coeff[0,s,:,:,0])
           mat_f = np.dot(self.mo_coeff[0,s,:,:,0], fock[s])
           exp_f[s] = np.einsum('nb,nb->n', mat_f, self.mo_coeff[0,s,:,:,0])
-        print('='*56,'| the Exchange expectation value (eV) |','='*56)
+        print('='*55,'| the mean-field expectation values (eV) |','='*55)
         print('%2s  %12s  %12s  %12s  %12s  %12s  %3s |%12s  %12s  %12s  %12s  %12s  %3s '%('no.','<H_core>','<K>  ','<Sigma_x>','Fock   ','MF energy ','occ','<H_core>','<K>   ','<Sigma_x>','Fock  ','MF energy','occ'))        
         for i , (a,b,c,d,e,f) in enumerate(zip(exp_h.T*HARTREE2EV,exp_co.T*HARTREE2EV, exp_x.T*HARTREE2EV,exp_f.T*HARTREE2EV,self.mo_energy.T*HARTREE2EV, self.mo_occ[0].T)):
           if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*153)

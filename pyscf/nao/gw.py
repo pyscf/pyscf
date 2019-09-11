@@ -160,9 +160,9 @@ class gw(scf):
     """
     rf0 = si0 = self.rf0(ww)
     for iw,w in enumerate(ww):                   #devide ww into complex(w) which is along imaginary axis (real=0) and grid index(iw)             
-      k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb or hartree, rf0
+      k_c = np.dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb or hartree, rf0
                                                  #is \chi_{0}, so here k_c=v*chi_{0}
-      b = dot(k_c, self.kernel_sq)               #here v\chi_{0}v or k_c*v
+      b = np.dot(k_c, self.kernel_sq)               #here v\chi_{0}v or k_c*v
       k_c = np.eye(self.nprod)-k_c               #here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
       si0[iw,:,:] = solve(k_c, b)                # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
@@ -174,11 +174,10 @@ class gw(scf):
     """
     import numpy as np
     from scipy.sparse.linalg import lgmres
-    #ww = 1j*self.ww_ia
     rf0 = si0 = self.rf0(ww)    
     for iw,w in enumerate(ww):                                
-      k_c = dot(self.kernel_sq, rf0[iw,:,:])                                            
-      b = dot(k_c, self.kernel_sq)               
+      k_c = np.dot(self.kernel_sq, rf0[iw,:,:])                                            
+      b = np.dot(k_c, self.kernel_sq)               
       k_c = np.eye(self.nprod)-k_c
       for m in range(self.nprod): 
          si0[iw,m,:],exitCode = lgmres(k_c, b[m,:], atol=1e-08)   
@@ -186,32 +185,6 @@ class gw(scf):
       #np.allclose(np.dot(k_c, si0), b, atol=1e-05) == True  #Test   
     return si0
 
-  def si_c3(self,ww):
-    """This computes the correlation part of the screened interaction using lgmres
-       1-vchi_0 is computed by linear opt, i.e. self.vext2veff_matvec, in form of vector
-    """
-    import numpy as np
-    from scipy.sparse.linalg import lgmres
-    from scipy.sparse.linalg import LinearOperator
-    #ww = 1j*self.ww_ia
-    si01 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
-    si02 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
-    rf0 = self.rf0(ww)
-    for iw,w in enumerate(ww):
-      self.comega_current = w
-      a = np.dot(self.kernel_sq, rf0[iw,:,:]) 
-      b = np.dot(a, self.kernel_sq)
-      c = np.eye(self.nprod)- a  
-      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
-      k_c_opt2 = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec2, dtype=self.dtypeComplex)  
-      aa = np.diag(k_c_opt2.matvec(np.ones(self.nprod)))    #this is equal to a=v*chi0
-      aaa=np.diag(k_c_opt.matvec(np.ones(self.nprod)))      #equal to c= 1-v*chi0 atol 1e-05
-      aaaa= np.dot(aa, self.kernel_sq)                      #equal to b= v*chi0*v atol 1e-03
-      for m in range(self.nprod):
-         si01[iw,m,:],exitCode = lgmres(c, b[m,:], atol=self.tol_ev) 
-         si02[iw,m,:],exitCode = lgmres(k_c_opt, aaaa[m,:], atol=self.tol_ev)   
-      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
-    return np.allclose(si01,si02,atol=1e-03)
 
   def si_c_check (self, tol = 1e-5):
     """
@@ -401,45 +374,16 @@ class gw(scf):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
-    if self.verbosity>3:
-      dm1 = self.make_rdm1()
-      ecore = (self.get_hcore()*dm1[0,...,0]).sum()
-      vh,kmat = self.get_jk()
-      EX = -0.5*((kmat)*dm1[0,...,0]).sum()
-      if self.nspin==1:
-        print('\n-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s'%('no.','<H>'))
-        for i, ab in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T*HARTREE2EV)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
-            print (' %3d  %16.6f'%(i,ab[0]))
-        Vha = 0.5*(vh*dm1[0,...,0]).sum()
-      if self.nspin==2:
-        print('\n-----------| Expectation values of Hartree-Fock Hamiltonian (eV) |-----------\n %3s  %16s  | %12s'%('no.','<H_up>','<H_dn>'))        
-        for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0,:self.nfermi[0]].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
-	        print(' %3d  %16.6f  | %12.6f'%(i, ab[0],ab[1]))
-        Vha = 0.5*((vh[0]+vh[1])*dm1[0,...,0]).sum()
-      
-      if hasattr(self, 'mf'):
-        print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(self.energy_nuc()*HARTREE2EV))
-        print('mean-field core energy       (eV):%16.6f'%(ecore*HARTREE2EV))
-        print('mean-field exchange energy   (eV):%16.6f'%(EX*HARTREE2EV))
-        print('mean-field hartree energy    (eV):%16.6f'%(Vha*HARTREE2EV))
-        print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot*HARTREE2EV))
-        S = self.spin/2
-        S0 = S*(S+1)
-        SS = self.mf.spin_square()
-        if ( SS[0]!= S ):
-          print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
-          print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
-      elapsed_time = time.time() - start_time
-      print('\nRunning time is:',time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),'\n\n') 
+
+    if self.verbosity>3:    self.report_mf()
+
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
     
     # Update mo_energy_gw, mo_coeff_gw after the computation is done
     self.mo_energy_gw = np.copy(self.mo_energy)
     self.mo_coeff_gw = np.copy(self.mo_coeff)
-    #print(len(self.sn2eval_gw), type(self.sn2eval_gw))
-    #print(self.nn, type(self.nn))
-    #print(self.mo_energy_gw.shape, type(self.mo_energy_gw))
     self.argsort = []
+
     for s,nn in enumerate(self.nn):
       self.mo_energy_gw[0,s,nn] = self.sn2eval_gw[s]
       nn_occ = [n for n in nn if n<self.nocc_0t[s]]
@@ -495,7 +439,7 @@ class gw(scf):
 
 
   def report_mf(self,dm=None):
-    """ Prints the energy levels of mean-field calculations"""
+    """ Prints the energy levels of mean-field hamiltonian"""
     from pyscf.nao.m_report import report_mfx
     if dm is None: dm = self.make_rdm1()
     return report_mfx(self,dm)
