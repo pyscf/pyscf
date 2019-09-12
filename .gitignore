@@ -82,3 +82,4 @@ tmp/
 
 # IDEs
 .idea/
+.vscode/
