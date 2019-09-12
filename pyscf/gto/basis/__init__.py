@@ -278,6 +278,10 @@ ALIAS = {
     'augccpvtzoptri' : os.path.join('f12-basis', 'aug-cc-pVTZ-OptRI.dat' ),
     'augccpvqzoptri' : os.path.join('f12-basis', 'aug-cc-pVQZ-OptRI.dat' ),
     'augccpv5zoptri' : os.path.join('f12-basis', 'aug-cc-pV5Z-OptRI.dat' ),
+#
+    'pobtzvp'       :  'pob-tzvp.dat',
+    'pobtzvpp'      :  'pob-tzvpp.dat',
+    "crystalccpvdz" :  'crystal-cc-pvdz.dat',
 }
 
 def _is_pople_basis(basis):
