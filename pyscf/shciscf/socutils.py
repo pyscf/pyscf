@@ -26,7 +26,7 @@ def print1Int(h1, name):
 # x and r in the uncontracted basis
 def get_hxr(mc, uncontract=True):
     if (uncontract):
-        xmol, contr_coeff = x2c.X2C().get_xmol(mc.mol)
+        xmol, contr_coeff = x2c.X2C(mc.mol).get_xmol()
     else:
         xmol, contr_coeff = mc.mol, numpy.eye(mc.mo_coeff.shape[0])
 
@@ -440,7 +440,7 @@ def writeSOCIntegrals(mc,
         uncontract = False
 
     if (uncontract):
-        xmol, contr_coeff = x2c.X2C().get_xmol(mc.mol)
+        xmol, contr_coeff = x2c.X2C(mc.mol).get_xmol()
     else:
         xmol, contr_coeff = mc.mol, numpy.eye(mc.mo_coeff.shape[0])
 

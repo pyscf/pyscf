@@ -179,6 +179,7 @@ class SHCI(pyscf.lib.StreamObject):
 
         # TODO: Organize into pyscf and SHCI parameters
         # Standard SHCI Input parameters
+        self.dets = None
         self.davidsonTol = 5.e-5
         self.epsilon2 = 1.e-7
         self.epsilon2Large = 1000.
@@ -913,60 +914,76 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
     # Reference determinant section
     f.write('#system\n')
     f.write('nocc %i\n' % (nelec[0] + nelec[1]))
-    if SHCI.__class__.__name__ == 'FakeCISolver':
-        for i in range(nelec[0]):
-            f.write('%i ' % (2 * i))
-        for i in range(nelec[1]):
-            f.write('%i ' % (2 * i + 1))
-    else:
-        if SHCI.initialStates is not None:
-            for i in range(len(SHCI.initialStates)):
-                for j in SHCI.initialStates[i]:
-                    f.write('%i ' % (j))
-                if (i != len(SHCI.initialStates) - 1):
-                    f.write('\n')
-        elif SHCI.irrep_nelec is None:
-            for i in range(int(nelec[0])):
+    if SHCI.dets is None:
+        if SHCI.__class__.__name__ == 'FakeCISolver':
+            for i in range(nelec[0]):
                 f.write('%i ' % (2 * i))
-            for i in range(int(nelec[1])):
+            for i in range(nelec[1]):
                 f.write('%i ' % (2 * i + 1))
         else:
-            from pyscf import symm
-            from pyscf.dmrgscf import dmrg_sym
-            from pyscf.symm.basis import DOOH_IRREP_ID_TABLE
-            if SHCI.groupname is not None and SHCI.orbsym is not []:
-                orbsym = dmrg_sym.convert_orbsym(SHCI.groupname, SHCI.orbsym)
+            if SHCI.initialStates is not None:
+                for i in range(len(SHCI.initialStates)):
+                    for j in SHCI.initialStates[i]:
+                        f.write('%i ' % (j))
+                    if (i != len(SHCI.initialStates) - 1):
+                        f.write('\n')
+            elif SHCI.irrep_nelec is None:
+                for i in range(int(nelec[0])):
+                    f.write('%i ' % (2 * i))
+                for i in range(int(nelec[1])):
+                    f.write('%i ' % (2 * i + 1))
             else:
-                orbsym = [1] * norb
-            done = []
-            for k, v in SHCI.irrep_nelec.items():
+                from pyscf import symm
+                from pyscf.dmrgscf import dmrg_sym
+                from pyscf.symm.basis import DOOH_IRREP_ID_TABLE
+                if SHCI.groupname is not None and SHCI.orbsym is not []:
+                    orbsym = dmrg_sym.convert_orbsym(SHCI.groupname, SHCI.orbsym)
+                else:
+                    orbsym = [1] * norb
+                done = []
+                for k, v in SHCI.irrep_nelec.items():
 
-                irrep, nalpha, nbeta = [dmrg_sym.irrep_name2id(SHCI.groupname, k)],\
-                                       v[0], v[1]
+                    irrep, nalpha, nbeta = [dmrg_sym.irrep_name2id(SHCI.groupname, k)],\
+                                           v[0], v[1]
 
-                for i in range(len(orbsym)):  #loop over alpha electrons
-                    if (orbsym[i] == irrep[0] and nalpha != 0
-                            and i * 2 not in done):
-                        done.append(i * 2)
-                        f.write('%i ' % (i * 2))
-                        nalpha -= 1
-                    if (orbsym[i] == irrep[0] and nbeta != 0
-                            and i * 2 + 1 not in done):
-                        done.append(i * 2 + 1)
-                        f.write('%i ' % (i * 2 + 1))
-                        nbeta -= 1
-                if (nalpha != 0):
-                    print("number of irreps %s in active space = %d" %
-                          (k, v[0] - nalpha))
-                    print(
-                        "number of irreps %s alpha electrons = %d" % (k, v[0]))
-                    exit(1)
-                if (nbeta != 0):
-                    print("number of irreps %s in active space = %d" %
-                          (k, v[1] - nbeta))
-                    print(
-                        "number of irreps %s beta  electrons = %d" % (k, v[1]))
-                    exit(1)
+                    for i in range(len(orbsym)):  #loop over alpha electrons
+                        if (orbsym[i] == irrep[0] and nalpha != 0
+                                and i * 2 not in done):
+                            done.append(i * 2)
+                            f.write('%i ' % (i * 2))
+                            nalpha -= 1
+                        if (orbsym[i] == irrep[0] and nbeta != 0
+                                and i * 2 + 1 not in done):
+                            done.append(i * 2 + 1)
+                            f.write('%i ' % (i * 2 + 1))
+                            nbeta -= 1
+                    if (nalpha != 0):
+                        print("number of irreps %s in active space = %d" %
+                              (k, v[0] - nalpha))
+                        print(
+                            "number of irreps %s alpha electrons = %d" % (k, v[0]))
+                        exit(1)
+                    if (nbeta != 0):
+                        print("number of irreps %s in active space = %d" %
+                              (k, v[1] - nbeta))
+                        print(
+                            "number of irreps %s beta  electrons = %d" % (k, v[1]))
+                        exit(1)
+    else:
+        nelec_all = nelec[0] + nelec[1]
+        for det in SHCI.dets:
+            if len(det) is not nelec_all:
+                if len(det) is 1:
+                    print("SHCI.dets should be a 2d array.")
+                else:
+                    print("number of electrons in SHCI.dets %d does not equal to nelecas %d" % (len(det), nelec_all))
+                exit(1)
+            else:
+                for i in det:
+                    f.write('%i '%i)
+                if det is not SHCI.dets[-1]:
+                    f.write('\n')
+
     f.write('\nend\n')
     f.write('nroots %r\n' % SHCI.nroots)
 
