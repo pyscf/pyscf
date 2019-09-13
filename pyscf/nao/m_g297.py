@@ -1560,18 +1560,18 @@ data={
                        [0.0, -1.110576, -0.273729]],
          'symbols': 'FOF',
          'thermal correction': 2.5747},
- 'H': {'CAS No.': 12385136,
-       'charges': None,
-       'database': 'G2-1',
-       'description': 'H atom',
-       'enthalpy': 51.63,
-       'ionization energy': 13.6,
-       'magmoms': [1.0],
-       'name': 'Hydrogen',
-       'position_pyscf': 'H 0.0, 0.0, 0.0',
-       'positions': [[0.0, 0.0, 0.0]],
-       'symbols': 'H',
-       'thermal correction': 1.01},
+ #'H': {'CAS No.': 12385136,
+ #      'charges': None,
+ #      'database': 'G2-1',
+ #      'description': 'H atom',
+ #      'enthalpy': 51.63,
+ #      'ionization energy': 13.6,
+ #      'magmoms': [1.0],
+ #      'name': 'Hydrogen',
+ #      'position_pyscf': 'H 0.0, 0.0, 0.0',
+ #      'positions': [[0.0, 0.0, 0.0]],
+ #      'symbols': 'H',
+ #      'thermal correction': 1.01},
  'H2': {'CAS No.': 1333740,
         'ZPE': 6.2908,
         'charges': None,
@@ -2743,21 +2743,30 @@ data={
 def pos_latex ():
     '''prepares latex file for open-shell systems, number of atoms and their positions'''
     import re
+    p=0
+    file = open("positions.txt","w")
     for k in sorted (data.keys()):
         if (data[k]['magmoms'] != None):    #open-shell
+            p+=1
+            name = k
             nn=sum(1 for c in data[k]['symbols'] if c.isupper()) #number of atoms
             a=re.findall('[A-Z][^A-Z]*', data[k]['symbols']) #atom index e.g. a=['H','Al','Cl']
-            print('\ textbf{',k+'.xyz}\ \ ')
-            print(len(a),'\ \ ')            #number of atoms
-            print('\ begin{tabular}{llll}')
+            n0=re.findall(r'\d+', name)                      #subscript numbers in molecules' name
+            for i in range(len(n0)):
+                name = name.replace(n0[i], "$_"+n0[i]+"$")
+            file.write(str(p)+'- '+name+r'.xyz\\')
+            file.write(' \# '+str(len(a))+r'\\')            #number of atoms
+            file.write(r' \begin{tabular}{llll}')
             for i in range(len(data[k]['positions'])):
-                print('\t',a[i],'&')
+                file.write('\t'+str(a[i])+'&')
                 for j in range(3):
-                    print('\t',data[k]['positions'][i][j])
-                    if (j!=2): print('&')
-                print('\ \ ')
-            print('\ vspace{0.5 cm}')        
-            print('\ end{tabular}\ \ ')
+                    file.write('\t'+str(data[k]['positions'][i][j]))
+                    if (j!=2): file.write('&')
+                file.write(r'\\')
+            file.write(r' \vspace{0.5 cm}')        
+            file.write(r' \end{tabular} \\')
+            file.write('\n')
+    file.close()
         
 
 
@@ -2882,6 +2891,6 @@ def mol_cas(casno):
     for k in data.keys():
         d=data[k]
         if (casno==d['CAS No.']):
-            return mol_name(k))
+            return mol_name(k)
     return print('Unknown species!')
     

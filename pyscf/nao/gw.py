@@ -168,48 +168,6 @@ class gw(scf):
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
     return si0
 
-  def si_c2(self,ww):
-    """This computes the correlation part of the screened interaction using lgmres
-       lgmres method is much slower than np.linalg.solve !!
-    """
-    import numpy as np
-    from scipy.sparse.linalg import lgmres
-    rf0 = si0 = self.rf0(ww)    
-    for iw,w in enumerate(ww):                                
-      k_c = np.dot(self.kernel_sq, rf0[iw,:,:])                                            
-      b = np.dot(k_c, self.kernel_sq)               
-      k_c = np.eye(self.nprod)-k_c
-      for m in range(self.nprod): 
-         si0[iw,m,:],exitCode = lgmres(k_c, b[m,:], atol=1e-08)   
-      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
-      #np.allclose(np.dot(k_c, si0), b, atol=1e-05) == True  #Test   
-    return si0
-
-
-  def si_c_check (self, tol = 1e-5):
-    """
-    This compares np.solve and lgmres methods for solving linear equation (1-v\chi_{0}) * W_c = v\chi_{0}v
-    """
-    import time
-    import numpy as np
-    ww = 1j*self.ww_ia
-    t = time.time()
-    si0_1 = self.si_c(ww)              #method 1:  numpy.linalg.solve
-    t1 = time.time() - t
-    print('numpy: {} sec'.format(t1))
-    t2 = time.time()
-    si0_2 = self.si_c2(ww)       #method 2:  scipy.sparse.linalg.lgmres
-    t3 = time.time() - t2
-    print('lgmres: {} sec'.format(t3))
-    summ = abs(si0_1 + si0_2).sum()
-    diff = abs(si0_1 - si0_2).sum() 
-    if diff/summ < tol and diff/si0_1.size < tol:
-       print('OK! scipy.lgmres methods and np.linalg.solve have identical results')
-    else:
-       print('Results (W_c) are NOT similar!')     
-    return [[diff/summ] , [np.amax(abs(diff))] ,[tol]]
-
-
   def si_c_via_diagrpa(self, ww):
     """ 
     This method computes the correlation part of the screened interaction W_c
@@ -246,17 +204,20 @@ class gw(scf):
 
 
   def gw_corr_int(self, sn2w, eps=None):
-    """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
-    if not hasattr(self, 'snmw2sf'): 
-        self.snmw2sf = self.get_snmw2sf()
-        print('gw_got')
+    """
+    This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)]
+    -\frac{1}{2\pi}\int_{-\infty}^{+\infty } \sum_m \frac{I^{nm}(i\omega{'})}{E_n + i\omega{'}-E_m^0} d\omega{'}
+    see eq (16) within DOI: 10.1021/acs.jctc.9b00436
+    """
+    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
+
     sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
     #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
-    for s,ww in enumerate(sn2w):
-      for n,w in enumerate(ww):
+    for s,ww in enumerate(sn2w):            #split into mo_energies
+      for n,w in enumerate(ww):             #split mo_energies into each spin channel
         #print(__name__, 's,n,w int corr', s,n,w)
-        for m in range(self.norbs):
+        for m in range(self.norbs):         #runs over orbitals
           if abs(w-self.ksn2e[0,s,m])<eps : continue
           state_corr = ((self.dw_ia*self.snmw2sf[s][n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
           #print(n, m, -state_corr, w-self.ksn2e[0,s,m])
@@ -267,16 +228,16 @@ class gw(scf):
     """This computes a residue part of the GW correction at energies sn2w[spin,len(self.nn)]"""
     v_pab = self.pb.get_ac_vertex_array()
     sn2res = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
-    for s,ww in enumerate(sn2w):
+    for s,ww in enumerate(sn2w):    #split into spin and energies
       x = self.mo_coeff[0,s,:,:,0]
-      for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
-        lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
-        zww = array([pole[0] for pole in lsos])
+      for nl,(n,w) in enumerate(zip(self.nn[s],ww)):   #split into nl=counter, n=number of energy level and relevant w=mo_energy inside gw.nn 
+        lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)  #gives G's poles in n level with w energy
+        zww = array([pole[0] for pole in lsos]) #pole[0]=energies pole[1]=state in gw.nn and pole[2]=occupation number
         #print(__name__, s,n,w, 'len lsos', len(lsos))
-        si_ww = self.si_c(ww=zww)
+        si_ww = self.si_c(ww=zww) #send pole's frequency to calculate W
         xv = dot(v_pab,x[n])
         for pole,si in zip(lsos, si_ww.real):
-          xvx = dot(xv, x[pole[1]])
+          xvx = dot(xv, x[pole[1]]) #XVX for x=n v= ac produvt and x=states of poles
           contr = dot(xvx, dot(si, xvx))
           #print(pole[0], pole[2], contr)
           sn2res[s][nl] += pole[2]*contr
@@ -285,7 +246,8 @@ class gw(scf):
   def lsofs_inside_contour(self, ee, w, eps):
     """ 
       Computes number of states the eigenenergies of which are located inside an integration contour.
-      The integration contour depends on w 
+      The integration contour depends on w
+      z_n=E^0_n-\omega \pm i\eta 
     """ 
     nGamma_pos = 0
     nGamma_neg = 0
@@ -329,7 +291,7 @@ class gw(scf):
   
   def g0w0_eigvals(self):
     """ This computes the G0W0 corrections to the eigenvalues """
-    sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]  #self.ksn2e = self.mo_energy
+    sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]  #self.ksn2e = self.mo_energy in range of gw.nn
     sn2eval_gw_prev = copy(sn2eval_gw)
 
     self.nn_conv = []           # self.nn_conv -- list of states to converge, spin-resolved.

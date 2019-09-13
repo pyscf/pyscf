@@ -16,32 +16,73 @@ class gw_iter(gw):
     gw.__init__(self, **kw)
 
 
-  def si_c3(self,ww):
-    """This computes the correlation part of the screened interaction using lgmres
-       1-vchi_0 is computed by linear opt, i.e. self.vext2veff_matvec, in form of vector
+  def si_c2(self,ww):
+    """This computes the correlation part of the screened interaction using LinearOpt and lgmres
+       lgmres method is much slower than np.linalg.solve !!
     """
     import numpy as np
     from scipy.sparse.linalg import lgmres
     from scipy.sparse.linalg import LinearOperator
-    #ww = 1j*self.ww_ia
-    si01 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
-    si02 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtype)
-    rf0 = self.rf0(ww)
-    for iw,w in enumerate(ww):
+    rf0 = si0 = self.rf0(ww)    
+    for iw,w in enumerate(ww):                                
+      k_c = np.dot(self.kernel_sq, rf0[iw,:,:])                                         
+      b = np.dot(k_c, self.kernel_sq)               
       self.comega_current = w
-      a = np.dot(self.kernel_sq, rf0[iw,:,:]) 
-      b = np.dot(a, self.kernel_sq)
-      c = np.eye(self.nprod)- a  
-      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)
-      k_c_opt2 = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec2, dtype=self.dtypeComplex)  
-      aa = np.diag(k_c_opt2.matvec(np.ones(self.nprod)))    #this is equal to a=v*chi0
-      aaa=np.diag(k_c_opt.matvec(np.ones(self.nprod)))      #equal to c= 1-v*chi0 atol 1e-05
-      aaaa= np.dot(aa, self.kernel_sq)                      #equal to b= v*chi0*v atol 1e-03
-      for m in range(self.nprod):
-         si01[iw,m,:],exitCode = lgmres(c, b[m,:], atol=1e-05) 
-         si02[iw,m,:],exitCode = lgmres(k_c_opt, aaaa[m,:], atol=1e-05)   
-      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
-    return np.allclose(si01,si02,atol=1e-03)
+      k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)  
+      for m in range(self.nprod): 
+         si0[iw,m,:],exitCode = lgmres(k_c_opt, b[m,:], atol=1e-08)   
+      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+      #np.allclose(np.dot(k_c, si0), b, atol=1e-05) == True  #Test   
+    return si0
+
+  def si_c3(self,ww):
+    import numpy as np
+    from scipy.sparse.linalg import lgmres
+    from scipy.sparse.linalg import LinearOperator
+    rf0 = si0 = self.rf0(ww)    
+    for iw,w in enumerate(ww):                                
+        self.comega_current = w
+        k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)                                                
+        veff = np.ones(self.nprod, dtype=self.dtypeComplex)
+
+        dn_ref = np.dot(rf0[iw], veff)
+        dvh = np.dot(self.kernel_sq, dn_ref)
+        a = np.dot(self.kernel_sq, dvh)
+
+        dv = self.gw_vext2veffmatvec2(veff)
+        aa = np.dot(self.kernel_sq, dv)
+
+        print('a.shape, aa.shape',a.shape, aa.shape)
+        print(abs(a-aa).sum())
+
+        for m in range(self.nprod):
+            si0[iw,m,:] ,exitCode = lgmres(k_c_opt, a, atol=1e-05)
+        if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+    return si0
+
+
+  def si_c_check (self, tol = 1e-5):
+    """
+    This compares np.solve and LinearOpt-lgmres methods for solving linear equation (1-v\chi_{0}) * W_c = v\chi_{0}v
+    """
+    import time
+    import numpy as np
+    ww = 1j*self.ww_ia
+    t = time.time()
+    si0_1 = self.si_c(ww)              #method 1:  numpy.linalg.solve
+    t1 = time.time() - t
+    print('numpy: {} sec'.format(t1))
+    t2 = time.time()
+    si0_2 = self.si_c2(ww)       #method 2:  scipy.sparse.linalg.lgmres
+    t3 = time.time() - t2
+    print('lgmres: {} sec'.format(t3))
+    summ = abs(si0_1 + si0_2).sum()
+    diff = abs(si0_1 - si0_2).sum() 
+    if diff/summ < tol and diff/si0_1.size < tol:
+       print('OK! scipy.lgmres methods and np.linalg.solve have identical results')
+    else:
+       print('Results (W_c) are NOT similar!')     
+    return [[diff/summ] , [np.amax(abs(diff))] ,[tol]]
 
 
   def gw_xvx (self, algo=None):
