@@ -18,6 +18,7 @@
 
 import os
 import sys
+from os.path import join
 if sys.version_info < (2,7):
     import imp
 else:
@@ -85,43 +86,43 @@ ALIAS = {
     'faegredz'   : 'faegre_dz'      ,
     'iglo'       : 'iglo3'          ,
     'iglo3'      : 'iglo3'          ,
-    '321++g'     : os.path.join('pople-basis', '3-21++G.dat'   ),
-    '321++g*'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
-    '321++gs'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
-    '321g'       : os.path.join('pople-basis', '3-21G.dat'     ),
-    '321g*'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
-    '321gs'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
-    '431g'       : os.path.join('pople-basis', '4-31G.dat'     ),
-    '631++g'     : os.path.join('pople-basis', '6-31++G.dat'   ),
-    '631++g*'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
-    '631++gs'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
-    '631++g**'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
-    '631++gss'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
-    '631+g'      : os.path.join('pople-basis', '6-31+G.dat'    ),
-    '631+g*'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
-    '631+gs'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
-    '631+g**'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
-    '631+gss'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
-    '6311++g'    : os.path.join('pople-basis', '6-311++G.dat'  ),
-    '6311++g*'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
-    '6311++gs'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
-    '6311++g**'  : os.path.join('pople-basis', '6-311++Gss.dat'),
-    '6311++gss'  : os.path.join('pople-basis', '6-311++Gss.dat'),
-    '6311+g'     : os.path.join('pople-basis', '6-311+G.dat'   ),
-    '6311+g*'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
-    '6311+gs'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
-    '6311+g**'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
-    '6311+gss'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
-    '6311g'      : os.path.join('pople-basis', '6-311G.dat'    ),
-    '6311g*'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
-    '6311gs'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
-    '6311g**'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
-    '6311gss'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
-    '631g'       : os.path.join('pople-basis', '6-31G.dat'     ),
-    '631g*'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
-    '631gs'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
-    '631g**'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
-    '631gss'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
+    '321++g'     : join('pople-basis', '3-21++G.dat'   ),
+    '321++g*'    : join('pople-basis', '3-21++Gs.dat'  ),
+    '321++gs'    : join('pople-basis', '3-21++Gs.dat'  ),
+    '321g'       : join('pople-basis', '3-21G.dat'     ),
+    '321g*'      : join('pople-basis', '3-21Gs.dat'    ),
+    '321gs'      : join('pople-basis', '3-21Gs.dat'    ),
+    '431g'       : join('pople-basis', '4-31G.dat'     ),
+    '631++g'     : join('pople-basis', '6-31++G.dat'   ),
+    '631++g*'    : join('pople-basis', '6-31++Gs.dat'  ),
+    '631++gs'    : join('pople-basis', '6-31++Gs.dat'  ),
+    '631++g**'   : join('pople-basis', '6-31++Gss.dat' ),
+    '631++gss'   : join('pople-basis', '6-31++Gss.dat' ),
+    '631+g'      : join('pople-basis', '6-31+G.dat'    ),
+    '631+g*'     : join('pople-basis', '6-31+Gs.dat'   ),
+    '631+gs'     : join('pople-basis', '6-31+Gs.dat'   ),
+    '631+g**'    : join('pople-basis', '6-31+Gss.dat'  ),
+    '631+gss'    : join('pople-basis', '6-31+Gss.dat'  ),
+    '6311++g'    : join('pople-basis', '6-311++G.dat'  ),
+    '6311++g*'   : join('pople-basis', '6-311++Gs.dat' ),
+    '6311++gs'   : join('pople-basis', '6-311++Gs.dat' ),
+    '6311++g**'  : join('pople-basis', '6-311++Gss.dat'),
+    '6311++gss'  : join('pople-basis', '6-311++Gss.dat'),
+    '6311+g'     : join('pople-basis', '6-311+G.dat'   ),
+    '6311+g*'    : join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+gs'    : join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+g**'   : join('pople-basis', '6-311+Gss.dat' ),
+    '6311+gss'   : join('pople-basis', '6-311+Gss.dat' ),
+    '6311g'      : join('pople-basis', '6-311G.dat'    ),
+    '6311g*'     : join('pople-basis', '6-311Gs.dat'   ),
+    '6311gs'     : join('pople-basis', '6-311Gs.dat'   ),
+    '6311g**'    : join('pople-basis', '6-311Gss.dat'  ),
+    '6311gss'    : join('pople-basis', '6-311Gss.dat'  ),
+    '631g'       : join('pople-basis', '6-31G.dat'     ),
+    '631g*'      : join('pople-basis', '6-31Gs.dat'    ),
+    '631gs'      : join('pople-basis', '6-31Gs.dat'    ),
+    '631g**'     : join('pople-basis', '6-31Gss.dat'   ),
+    '631gss'     : join('pople-basis', '6-31Gss.dat'   ),
     'sto3g'      : 'sto-3g.dat'     ,
     'sto6g'      : 'sto-6g.dat'     ,
     'minao'      : 'minao'          ,
@@ -189,7 +190,7 @@ ALIAS = {
     'ccpcvdz'    : ('cc-pvdz.dat', 'cc-pCVDZ.dat'),
     'ccpcvtz'    : ('cc-pvtz.dat', 'cc-pCVTZ.dat'),
     'ccpcvqz'    : ('cc-pvqz.dat', 'cc-pCVQZ.dat'),
-    #'ccpcv5z'    : 'cc-pCV5Z.dat',
+    'ccpcv5z'    : 'cc-pCV5Z.dat',
     'ccpcv6z'    : 'cc-pCV6Z.dat',
     'ccpwcvdz'   : 'cc-pwCVDZ.dat',
     'ccpwcvtz'   : 'cc-pwCVTZ.dat',
@@ -198,10 +199,16 @@ ALIAS = {
     'ccpwcvdzdk' : 'cc-pwCVDZ-DK.dat',
     'ccpwcvtzdk' : 'cc-pwCVTZ-DK.dat',
     'ccpwcvqzdk' : 'cc-pwCVQZ-DK.dat',
+    'ccpwcv5zdk' : 'cc-pwCV5Z-DK.dat',
     'ccpwcvtzdk3': 'cc-pwCVTZ-DK3.dat',
     'ccpwcvqzdk3': 'cc-pwCVQZ-DK3.dat',
+    'augccpwcvdz': 'aug-cc-pwcvtz.dat',
+    'augccpwcvtz': 'aug-cc-pwcvtz.dat',
+    'augccpwcvqz': 'aug-cc-pwcvqz.dat',
+    'augccpwcv5z': 'aug-cc-pwcv5z.dat',
     'augccpwcvtzdk' : 'aug-cc-pwCVTZ-DK.dat',
     'augccpwcvqzdk' : 'aug-cc-pwCVQZ-DK.dat',
+    'augccpwcv5zdk' : 'aug-cc-pwcv5z-dk.dat',
     'augccpwcvtzdk3': 'aug-cc-pwCVTZ-DK3.dat',
     'augccpwcvqzdk3': 'aug-cc-pwCVQZ-DK3.dat',
     'dgaussa1cfit': 'DgaussA1_dft_cfit.dat',
@@ -260,24 +267,24 @@ ALIAS = {
     'bfd'        : 'bfd_pp.dat',
     'bfdpp'      : 'bfd_pp.dat',
 #
-    'ccpcvdzf12optri': os.path.join('f12-basis', 'cc-pCVDZ-F12-OptRI.dat'),
-    'ccpcvtzf12optri': os.path.join('f12-basis', 'cc-pCVTZ-F12-OptRI.dat'),
-    'ccpcvqzf12optri': os.path.join('f12-basis', 'cc-pCVQZ-F12-OptRI.dat'),
-    'ccpvdzf12optri' : os.path.join('f12-basis', 'cc-pVDZ-F12-OptRI.dat' ),
-    'ccpvtzf12optri' : os.path.join('f12-basis', 'cc-pVTZ-F12-OptRI.dat' ),
-    'ccpvqzf12optri' : os.path.join('f12-basis', 'cc-pVQZ-F12-OptRI.dat' ),
-    'ccpv5zf12'      : os.path.join('f12-basis', 'cc-pV5Z-F12.dat'       ),
-    'ccpvdzf12rev2'  : os.path.join('f12-basis', 'cc-pVDZ-F12rev2.dat'   ),
-    'ccpvtzf12rev2'  : os.path.join('f12-basis', 'cc-pVTZ-F12rev2.dat'   ),
-    'ccpvqzf12rev2'  : os.path.join('f12-basis', 'cc-pVQZ-F12rev2.dat'   ),
-    'ccpv5zf12rev2'  : os.path.join('f12-basis', 'cc-pV5Z-F12rev2.dat'   ),
-    'ccpvdzf12nz'    : os.path.join('f12-basis', 'cc-pVDZ-F12-nZ.dat'    ),
-    'ccpvtzf12nz'    : os.path.join('f12-basis', 'cc-pVTZ-F12-nZ.dat'    ),
-    'ccpvqzf12nz'    : os.path.join('f12-basis', 'cc-pVQZ-F12-nZ.dat'    ),
-    'augccpvdzoptri' : os.path.join('f12-basis', 'aug-cc-pVDZ-OptRI.dat' ),
-    'augccpvtzoptri' : os.path.join('f12-basis', 'aug-cc-pVTZ-OptRI.dat' ),
-    'augccpvqzoptri' : os.path.join('f12-basis', 'aug-cc-pVQZ-OptRI.dat' ),
-    'augccpv5zoptri' : os.path.join('f12-basis', 'aug-cc-pV5Z-OptRI.dat' ),
+    'ccpcvdzf12optri': join('f12-basis', 'cc-pCVDZ-F12-OptRI.dat'),
+    'ccpcvtzf12optri': join('f12-basis', 'cc-pCVTZ-F12-OptRI.dat'),
+    'ccpcvqzf12optri': join('f12-basis', 'cc-pCVQZ-F12-OptRI.dat'),
+    'ccpvdzf12optri' : join('f12-basis', 'cc-pVDZ-F12-OptRI.dat' ),
+    'ccpvtzf12optri' : join('f12-basis', 'cc-pVTZ-F12-OptRI.dat' ),
+    'ccpvqzf12optri' : join('f12-basis', 'cc-pVQZ-F12-OptRI.dat' ),
+    'ccpv5zf12'      : join('f12-basis', 'cc-pV5Z-F12.dat'       ),
+    'ccpvdzf12rev2'  : join('f12-basis', 'cc-pVDZ-F12rev2.dat'   ),
+    'ccpvtzf12rev2'  : join('f12-basis', 'cc-pVTZ-F12rev2.dat'   ),
+    'ccpvqzf12rev2'  : join('f12-basis', 'cc-pVQZ-F12rev2.dat'   ),
+    'ccpv5zf12rev2'  : join('f12-basis', 'cc-pV5Z-F12rev2.dat'   ),
+    'ccpvdzf12nz'    : join('f12-basis', 'cc-pVDZ-F12-nZ.dat'    ),
+    'ccpvtzf12nz'    : join('f12-basis', 'cc-pVTZ-F12-nZ.dat'    ),
+    'ccpvqzf12nz'    : join('f12-basis', 'cc-pVQZ-F12-nZ.dat'    ),
+    'augccpvdzoptri' : join('f12-basis', 'aug-cc-pVDZ-OptRI.dat' ),
+    'augccpvtzoptri' : join('f12-basis', 'aug-cc-pVTZ-OptRI.dat' ),
+    'augccpvqzoptri' : join('f12-basis', 'aug-cc-pVQZ-OptRI.dat' ),
+    'augccpv5zoptri' : join('f12-basis', 'aug-cc-pV5Z-OptRI.dat' ),
 }
 
 def _is_pople_basis(basis):
@@ -299,7 +306,7 @@ def _parse_pople_basis(basis, symb):
     # 6-31G, 6-311G etc.
     basename = mbas[0] + '-' + mbas[1:].upper()
     basename = basename.replace('+', '').replace('*', '')
-    pathtmp = os.path.join('pople-basis',
+    pathtmp = join('pople-basis',
                             basename + '-polarization-%s.dat')
     def convert(s):
         if len(s) == 0:
@@ -434,11 +441,11 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
     if 'dat' in basmod:
-        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb, optimize)
+        b = parse_nwchem.load(join(_BASIS_DIR, basmod), symb, optimize)
     elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
         b = []
         for f in basmod:
-            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb, optimize)
+            b += parse_nwchem.load(join(_BASIS_DIR, f), symb, optimize)
     else:
         if sys.version_info < (2,7):
             fp, pathname, description = imp.find_module(basmod, __path__)
@@ -468,7 +475,7 @@ def load_ecp(filename_or_basisname, symb):
     name = _format_basis_name(filename_or_basisname)
     if name in ALIAS:
         basmod = ALIAS[name]
-        return parse_nwchem.load_ecp(os.path.join(_BASIS_DIR, basmod), symb)
+        return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)
     else:
         return parse_ecp(filename_or_basisname, symb)
 
