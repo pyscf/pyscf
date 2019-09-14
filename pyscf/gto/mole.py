@@ -1042,7 +1042,7 @@ def loads(molstr):
     mol._env = numpy.array(mol._env, dtype=numpy.double)
     mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
 
-    if mol._symm_orig is not None:
+    if mol.symmetry and mol._symm_orig is not None:
         from pyscf import symm
         mol._symm_orig = numpy.array(mol._symm_orig)
         mol._symm_axes = numpy.array(mol._symm_axes)
@@ -1052,8 +1052,9 @@ def loads(molstr):
         mol.irrep_name = [symm.irrep_id2name(mol.groupname, ir)
                            for ir in mol.irrep_id]
 
-    elif mol.symm_orb is not None: # Backward compatibility. To load symm_orb
-                                   # from chkfile of pyscf-1.6 and earlier.
+    elif mol.symmetry and mol.symm_orb is not None:
+        # Backward compatibility. To load symm_orb from chkfile of pyscf-1.6
+        # and earlier.
         symm_orb = []
 
         # decompress symm_orb
@@ -1854,8 +1855,10 @@ class Mole(lib.StreamObject):
             Allowed memory in MB
         charge : int
             Charge of molecule. It affects the electron numbers
-        spin : int
-            2S, num. alpha electrons - num. beta electrons
+        spin : int or None
+            2S, num. alpha electrons - num. beta electrons to control
+            multiplicity. If spin = None is set, multiplicity will be guessed
+            based on the neutral molecule.
         symmetry : bool or str
             Whether to use symmetry.  When this variable is set to True, the
             molecule will be rotated and the highest rotation axis will be
@@ -2168,7 +2171,9 @@ class Mole(lib.StreamObject):
                 Charge of molecule. It affects the electron numbers
                 If given, overwrite :attr:`Mole.charge`
             spin : int
-                2S, num. alpha electrons - num. beta electrons
+                2S, num. alpha electrons - num. beta electrons to control
+                multiplicity. If setting spin = None , multiplicity will be
+                guessed based on the neutral molecule.
                 If given, overwrite :attr:`Mole.spin`
             symmetry : bool or str
                 Whether to use symmetry.  If given a string of point group
