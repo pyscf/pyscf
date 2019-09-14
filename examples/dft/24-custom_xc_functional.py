@@ -46,7 +46,7 @@ mol = gto.M(
 # * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
 #   put "HF" in C (correlation) functional part.
 # * String "RSH" means range-separated operator. Its format is
-#   RSH(alpha; beta; omega).  Another way to input RSH is to use keywords
+#   RSH(omega, alpha, beta).  Another way to input RSH is to use keywords
 #   SR_HF and LR_HF: "SR_HF(0.1) * alpha_plus_beta" and "LR_HF(0.1) *
 #   alpha" where the number in parenthesis is the value of omega.
 # * Be careful with the libxc convention on GGA functional, in which the LDA
@@ -124,7 +124,7 @@ mf.xc = '0.4*B3P86+0.6*CAM_B3LYP'
 mf.xc = '0.5*SR-HF(0.3) + .8*HF + .22*LR_HF'
 
 # RSH is another keyword to input range-separated functionals
-mf.xc = '0.5*RSH(2.04;0.56;0.3) + 0.5*BP86'
+mf.xc = '0.5*RSH(0.3,2.04,0.56) + 0.5*BP86'
 
 # A shorthand to input 'PBE,PBE', which is a compound functional. Note the
 # shorthand input is different to the two examples 'PBE,' and ',PBE' below.

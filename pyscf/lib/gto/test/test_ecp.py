@@ -318,7 +318,7 @@ def cache_fac(l, r):
 
 def sph_in(l, xs):
     '''Modified spherical Bessel function of the first kind'''
-    return numpy.asarray([scipy.special.sph_in(l, x)[0] for x in xs]).T
+    return numpy.asarray([scipy.special.spherical_in(numpy.arange(l+1), x) for x in xs]).T
 
 def sph_ine(l, xs):
     '''exponentially scaled modified spherical Bessel function'''
@@ -497,7 +497,7 @@ class KnownValues(unittest.TestCase):
         rs = radi.gauss_chebyshev(99)[0]
         bessel1 = numpy.empty(8)
         for i,x in enumerate(rs):
-            bessel0 = scipy.special.sph_in(7, x)[0] * numpy.exp(-x)
+            bessel0 = scipy.special.spherical_in(numpy.arange(7+1), x) * numpy.exp(-x)
             libecp.ECPsph_ine(bessel1.ctypes.data_as(ctypes.c_void_p),
                               ctypes.c_int(7), ctypes.c_double(x))
             self.assertTrue(numpy.allclose(bessel0, bessel1))

@@ -46,6 +46,8 @@ if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
                      'h5py-%s has bug in threading mode.\n'
                      'Async-IO is disabled.\n' % ((h5py.version.version,)*2))
+if h5py.version.version[:2] == '3.':
+    h5py.get_config().default_file_mode = 'a'
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
@@ -811,6 +813,7 @@ class call_in_background(object):
 
     def __init__(self, *fns, **kwargs):
         self.fns = fns
+        self.executor = None
         self.handlers = [None] * len(self.fns)
         self.sync = kwargs.get('sync', not ASYNC_IO)
 
@@ -851,7 +854,7 @@ class call_in_background(object):
                     return async_fn
 
             else: # multiple executors in async mode, python 2.7.12 or newer
-                executor = ThreadPoolExecutor(max_workers=ntasks)
+                executor = self.executor = ThreadPoolExecutor(max_workers=ntasks)
                 def def_async_fn(i):
                     def async_fn(*args, **kwargs):
                         if handlers[i] is not None:
@@ -879,6 +882,9 @@ class call_in_background(object):
                         handler.result()
                 except Exception as e:
                     raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, e))
+
+        if self.executor is not None:
+            self.executor.shutdown(wait=True)
 
 
 class H5TmpFile(h5py.File):

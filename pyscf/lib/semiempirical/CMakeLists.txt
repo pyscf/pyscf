@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''
-Python XC functional implementation, the backup module if neither libxc nor xcfun
-libraries are not available
-'''
+add_library(semiempirical SHARED 
+  repp.c rotate.c)
 
-def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
-    r'''XC functional, potential and functional derivatives.
-    '''
-    raise NotImplementedError
+set_target_properties(semiempirical PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+target_link_libraries(semiempirical ${BLAS_LIBRARIES})
+

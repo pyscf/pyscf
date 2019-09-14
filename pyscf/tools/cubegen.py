@@ -255,7 +255,7 @@ class Cube(object):
             f.write('%5d%12.6f%12.6f%12.6f\n' % (self.nz, 0, 0, self.zs[1]))
             for ia in range(mol.natm):
                 chg = mol.atom_charge(ia)
-                f.write('%5d%12.6f'% (chg, chg))
+                f.write('%5d%12.6f'% (chg, 0.))
                 f.write('%12.6f%12.6f%12.6f\n' % tuple(coord[ia]))
 
             for ix in range(self.nx):
@@ -265,7 +265,27 @@ class Cube(object):
                         f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
 
     def read(self, cube_file):
-        raise NotImplementedError
+        with open(cube_file, 'r') as f:
+            f.readline()
+            f.readline()
+            data = f.readline().split()
+            natm = int(data[0])
+            self.boxorig = numpy.array([float(x) for x in data[1:]])
+            def parse_nx(data):
+                d = data.split()
+                return int(d[0]), numpy.array([float(x) for x in d[1:]])
+            self.nx, self.xs = parse_nx(f.readline())
+            self.ny, self.ys = parse_nx(f.readline())
+            self.nz, self.zs = parse_nx(f.readline())
+            atoms = []
+            for ia in range(natm):
+                d = f.readline().split()
+                atoms.append([int(d[0]), [float(x) for x in d[2:]]])
+            self.mol = gto.M(atom=atoms, unit='Bohr')
+
+            data = f.read()
+        cube_data = numpy.array([float(x) for x in data.split()])
+        return cube_data.reshape([self.nx, self.ny, self.nz])
 
 
 if __name__ == '__main__':
@@ -278,4 +298,3 @@ if __name__ == '__main__':
     cubegen.density(mol, 'h2o_den.cube', mf.make_rdm1()) #makes total density
     cubegen.mep(mol, 'h2o_pot.cube', mf.make_rdm1())
     cubegen.orbital(mol, 'h2o_mo1.cube', mf.mo_coeff[:,0])
-

@@ -15,11 +15,13 @@ PySCF 1.7.0 (2019-?-?)
   - DOCI solver, DOCI-CASCI, and DOCI-CASSCf
   - Support of RSH functionals in DF and sgX methods
   - Add RSH functionals for all PBC DFT methods
+  - Semiempirical method MINDO/3
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
   - Davidson diagonalization for multi-roots
   - memory usage in CCSD
+  - Molecular orientation does not need to be changed when symmetry is enabled
 * Bugfix
   - Carbon ANO data
   - Initial guess for EOM-KCCSD

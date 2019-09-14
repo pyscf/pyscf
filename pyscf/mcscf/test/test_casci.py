@@ -68,10 +68,10 @@ class KnownValues(unittest.TestCase):
     def test_fix_spin_(self):
         mc1 = mcscf.CASCI(m, 4, 4)
         mc1.fix_spin_(ss=2).run()
-        self.assertAlmostEqual(mc1.e_tot, -108.03741684418183, 9)
+        self.assertAlmostEqual(mc1.e_tot, -108.03741684418183, 7)
 
         mc1.fix_spin_(ss=0).run()
-        self.assertAlmostEqual(mc1.e_tot, -108.83741684447352, 9)
+        self.assertAlmostEqual(mc1.e_tot, -108.83741684447352, 7)
 
     def test_cas_natorb(self):
         mc1 = mcscf.CASCI(msym, 4, 4, ncore=5)

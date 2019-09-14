@@ -31,6 +31,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import rccsd
 from pyscf.ao2mo import _ao2mo
 from pyscf.mp import ump2
+from pyscf import scf
 from pyscf import __config__
 
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
@@ -80,7 +81,7 @@ def update_amps(cc, t1, t2, eris):
     wOvvO = np.zeros((noccb,nvira,nvira,noccb), dtype=dtype)
 
     mem_now = lib.current_memory()[0]
-    max_memory = max(0, cc.max_memory - mem_now)
+    max_memory = max(0, cc.max_memory - mem_now - u2aa.size*8e-6)
     if nvira > 0 and nocca > 0:
         blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3+1)))
         for p0,p1 in lib.prange(0, nocca, blksize):
@@ -543,6 +544,7 @@ class UCCSD(ccsd.CCSD):
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        assert isinstance(mf, scf.uhf.UHF)
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     get_nocc = get_nocc
@@ -758,8 +760,6 @@ class UCCSD(ccsd.CCSD):
         #return get_d2_diagnostic(t2)
 
 CCSD = UCCSD
-from pyscf import scf
-scf.uhf.UHF.CCSD = lib.class_as_method(CCSD)
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):

@@ -311,9 +311,6 @@ class GCCSD(ccsd.CCSD):
 
 CCSD = GCCSD
 
-from pyscf import scf
-scf.ghf.GHF.CCSD = lib.class_as_method(CCSD)
-
 
 class _PhysicistsERIs:
     '''<pq||rs> = <pq|rs> - <pq|sr>'''

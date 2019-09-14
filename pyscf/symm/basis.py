@@ -26,6 +26,16 @@ from pyscf.data.elements import _symbol, _rm_digit
 from pyscf.symm import geom
 from pyscf.symm import param
 
+__all__ = ['tot_parity_odd',
+           'symm_adapted_basis',
+           'dump_symm_adapted_basis',
+           'symmetrize_matrix',
+           'linearmole_symm_descent',
+           'linearmole_irrep_symb2id',
+           'linearmole_irrep_id2symb',
+           'linearmole_symm_adapted_basis',
+          ]
+
 OP_PARITY_ODD = {
     'E'  : (0, 0, 0),
     'C2x': (0, 1, 1),
@@ -45,22 +55,27 @@ def tot_parity_odd(op, l, m):
         gx,gy,gz = param.SPHERIC_GTO_PARITY_ODD[l][l+m]
         return (ox and gx)^(oy and gy)^(oz and gz)
 
-def symm_adapted_basis(mol, gpname, eql_atom_ids=None):
-    if eql_atom_ids is None:
-        eql_atom_ids = geom.symm_identical_atoms(gpname, mol._atom)
+def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     if gpname in ('Dooh', 'Coov'):
-        return linearmole_symm_adapted_basis(mol, gpname, eql_atom_ids)
+        return linearmole_symm_adapted_basis(mol, gpname, orig, coordinates)
+
+    # prop_atoms are the atoms relocated wrt the charge center with proper
+    # orientation
+    if coordinates is None:
+        coordinates = numpy.eye(3)
+    prop_atoms = mol.format_atom(mol._atom, orig, coordinates, 'Bohr')
+    eql_atom_ids = geom.symm_identical_atoms(gpname, prop_atoms)
 
     ops = numpy.asarray([param.D2H_OPS[op] for op in param.OPERATOR_TABLE[gpname]])
     chartab = numpy.array([x[1:] for x in param.CHARACTER_TABLE[gpname]])
     nirrep = chartab.__len__()
     aoslice = mol.aoslice_by_atom()
     nao = mol.nao_nr()
-    atom_coords = mol.atom_coords()
+    atom_coords = numpy.array([a[1] for a in prop_atoms])
 
     sodic = [[] for i in range(8)]
     for atom_ids in eql_atom_ids:
-        r0 = mol.atom_coord(atom_ids[0])
+        r0 = atom_coords[atom_ids[0]]
         op_coords = numpy.einsum('x,nxy->ny', r0, ops)
 # Using ops to generate other atoms from atom_ids[0]
         coords0 = atom_coords[atom_ids]
@@ -103,13 +118,66 @@ def symm_adapted_basis(mol, gpname, eql_atom_ids=None):
                     c[ip:] = cbase[n,ir,:nao-ip] / norms[n,ir]
                     sodic[ir].append(c)
                 ip += degen
+
+    ao_loc = mol.ao_loc_nr()
+    l_idx = {}
+    ANG_OF = 1
+    for l in range(mol._bas[:,ANG_OF].max()+1):
+        idx = [numpy.arange(ao_loc[ib], ao_loc[ib+1])
+               for ib in numpy.where(mol._bas[:,ANG_OF] == l)[0]]
+        if idx:
+            l_idx[l] = numpy.hstack(idx)
+
+    Ds = _ao_rotation_matrices(mol, coordinates)
     so = []
     irrep_ids = []
     for ir, c in enumerate(sodic):
         if len(c) > 0:
             irrep_ids.append(ir)
-            so.append(numpy.vstack(c).T)
+            c_ir = numpy.vstack(c).T
+            nso = c_ir.shape[1]
+            for l, idx in l_idx.items():
+                c = c_ir[idx].reshape(-1,Ds[l].shape[1],nso)
+                c_ir[idx] = numpy.einsum('nm,smp->snp', Ds[l], c).reshape(-1,nso)
+
+            so.append(c_ir)
+
     return so, irrep_ids
+
+def _ao_rotation_matrices(mol, axes):
+    '''Cache the rotation matrices'''
+    from pyscf import lib
+    from pyscf.symm.Dmatrix import Dmatrix, get_euler_angles
+    alpha, beta, gamma = get_euler_angles(numpy.eye(3), axes)
+    ANG_OF = 1
+    l_max = mol._bas[:,ANG_OF].max()
+
+    if not mol.cart:
+        return [Dmatrix(l, alpha, beta, gamma, reorder_p=True)
+                for l in range(l_max+1)]
+
+    pp = Dmatrix(1, alpha, beta, gamma, reorder_p=True)
+
+    Ds = [numpy.ones((1,1))]
+    for l in range(1, l_max+1):
+        # All possible x,y,z combinations
+        cidx = numpy.sort(lib.cartesian_prod([(0, 1, 2)] * l), axis=1)
+
+        addr = 0
+        affine = numpy.ones((1,1))
+        for i in range(l):
+            nd = affine.shape[0] * 3
+            affine = numpy.einsum('ik,jl->ijkl', affine, pp).reshape(nd, nd)
+            addr = addr * 3 + cidx[:,i]
+
+        uniq_addr, rev_addr = numpy.unique(addr, return_inverse=True)
+        ncart = (l + 1) * (l + 2) // 2
+        assert ncart == uniq_addr.size
+        trans = numpy.zeros((ncart,ncart))
+        for i, k in enumerate(rev_addr):
+            trans[k] += affine[i,uniq_addr]
+        Ds.append(trans)
+    return Ds
 
 def dump_symm_adapted_basis(mol, so):
     raise RuntimeError('TODO')
@@ -261,11 +329,15 @@ def linearmole_irrep_id2symb(gpname, irrep_id):
     else:
         raise RuntimeError('%s is not proper for linear molecule.' % gpname)
 
-def linearmole_symm_adapted_basis(mol, gpname, eql_atom_ids=None):
+def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     assert(gpname in ('Dooh', 'Coov'))
     assert(not mol.cart)
-    if eql_atom_ids is None:
-        eql_atom_ids = geom.symm_identical_atoms(gpname, mol._atom)
+
+    if coordinates is None:
+        coordinates = numpy.eye(3)
+    prop_atoms = mol.format_atom(mol._atom, orig, coordinates, 'Bohr')
+    eql_atom_ids = geom.symm_identical_atoms(gpname, prop_atoms)
+
     aoslice = mol.aoslice_by_atom()
     basoff = aoslice[:,2]
     nao = mol.nao_nr()
@@ -420,15 +492,33 @@ def linearmole_symm_adapted_basis(mol, gpname, eql_atom_ids=None):
                             add_so('E%dy'%m, identity(idy0))
                 ip += nc * degen
 
-    so = []
     irrep_ids = []
     irrep_names = list(sodic.keys())
     for irname in irrep_names:
         irrep_ids.append(linearmole_irrep_symb2id(gpname, irname))
-    idx = numpy.argsort(irrep_ids)
-    for i in idx:
-        so.append(numpy.vstack(sodic[irrep_names[i]]).T)
-    irrep_ids = [irrep_ids[i] for i in idx]
+    irrep_idx = numpy.argsort(irrep_ids)
+    irrep_ids = [irrep_ids[i] for i in irrep_idx]
+
+    ao_loc = mol.ao_loc_nr()
+    l_idx = {}
+    ANG_OF = 1
+    for l in range(mol._bas[:,ANG_OF].max()+1):
+        idx = [numpy.arange(ao_loc[ib], ao_loc[ib+1])
+               for ib in numpy.where(mol._bas[:,ANG_OF] == l)[0]]
+        if idx:
+            l_idx[l] = numpy.hstack(idx)
+
+    Ds = _ao_rotation_matrices(mol, coordinates)
+    so = []
+    for i in irrep_idx:
+        c_ir = numpy.vstack(sodic[irrep_names[i]]).T
+        nso = c_ir.shape[1]
+        for l, idx in l_idx.items():
+            c = c_ir[idx].reshape(-1,Ds[l].shape[1],nso)
+            c_ir[idx] = numpy.einsum('nm,smp->snp', Ds[l], c).reshape(-1,nso)
+
+        so.append(c_ir)
+
     return so, irrep_ids
 
 

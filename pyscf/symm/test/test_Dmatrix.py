@@ -68,7 +68,21 @@ class KnownValues(unittest.TestCase):
         c1 = numpy.dot(geom.rotation_mat((0,0,1), alpha), c1)
         self.assertAlmostEqual(abs(c2 - c1).max(), 0, 12)
 
+        # transform coordinates
+        numpy.random.seed(1)
+        u, w, vh = numpy.linalg.svd(numpy.random.random((3,3)))
+        c1 = u.dot(vh)
+        u, w, vh = numpy.linalg.svd(c1+2*numpy.random.random((3,3)))
+        c2 = u.dot(vh)
+        alpha, beta, gamma = Dmatrix.get_euler_angles(c1, c2)
+        yp  = numpy.einsum('j,kj->k', c1[1], geom.rotation_mat(c1[2], alpha))
+        tmp = numpy.einsum('ij,kj->ik', c1 , geom.rotation_mat(c1[2], alpha))
+        tmp = numpy.einsum('ij,kj->ik', tmp, geom.rotation_mat(yp   , beta ))
+        c2p = numpy.einsum('ij,kj->ik', tmp, geom.rotation_mat(c2[2], gamma))
+        self.assertAlmostEqual((c2-c2p).max(), 0, 13)
+
 
 if __name__ == "__main__":
     print("Full Tests for Dmatrix")
     unittest.main()
+

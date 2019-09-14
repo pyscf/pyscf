@@ -26,6 +26,7 @@ import ctypes
 import math
 import numpy
 from pyscf import lib
+from pyscf.dft.xc.utils import remove_dup, format_xc_code
 
 _itrf = lib.load_library('libxcfun_itrf')
 
@@ -344,7 +345,7 @@ def parse_xc(description):
       correlation functional part is the same to putting "HF" in exchange
       part.
     * String "RSH" means range-separated operator. Its format is
-      RSH(alpha; beta; omega).  Another way to input RSH is to use keywords
+      RSH(omega, alpha, beta).  Another way to input RSH is to use keywords
       SR_HF and LR_HF: "SR_HF(0.1) * alpha_plus_beta" and "LR_HF(0.1) *
       alpha" where the number in parenthesis is the value of omega.
     * Be careful with the convention on GGA functional, in which the LDA
@@ -422,20 +423,8 @@ def parse_xc(description):
                     raise NotImplementedError('Unknown %s functional  %s' % (suffix, key))
                 else:
                     fn_facs.append((x_id, fac))
-    def remove_dup(fn_facs):
-        fn_ids = []
-        facs = []
-        n = 0
-        for key, val in fn_facs:
-            if key in fn_ids:
-                facs[fn_ids.index(key)] += val
-            else:
-                fn_ids.append(key)
-                facs.append(val)
-                n += 1
-        return list(zip(fn_ids, facs))
 
-    description = description.replace(' ','').upper()
+    description = format_xc_code(description)
 
     if '-' in description:  # To handle e.g. M06-L
         for key in _NAME_WITH_DASH:
@@ -945,8 +934,11 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
             'LDA' or 'GGA' or 'MGGA'
         hyb : float
             hybrid functional coefficient
-        rsh : float
-            coefficients for range-separated hybrid functional
+        rsh : a list of three floats
+            coefficients (omega, alpha, beta) for range-separated hybrid functional.
+            omega is the exponent factor in attenuated Coulomb operator e^{-omega r_{12}}/r_{12}
+            alpha is the coefficient for long-range part, hybrid coefficient
+            can be obtained by alpha + beta
 
     Examples:
 
@@ -973,6 +965,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
         ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
                 eval_xc(description, rho, *args, **kwargs)
         ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
+        ni.rsh_coeff = lambda *args: rsh_coeff(description)
         ni._xc_type = lambda *args: xc_type(description)
 
     elif callable(description):

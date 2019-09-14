@@ -55,6 +55,33 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(mf.mo_coeff[0]-mo_coeff[0]).max(), 0, 12)
             self.assertAlmostEqual(abs(mf.mo_coeff[1]-mo_coeff[1]).max(), 0, 12)
 
+    def test_dump_cartesian_gto_orbital(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        fname = ftmp.name
+        with lib.temporary_env(mol, cart=True, symmetry=False):
+            mf = scf.UHF(mol).run()
+            molden.dump_scf(mf, fname)
+
+            res = molden.read(fname)
+            mo_coeff = res[2]
+            self.assertAlmostEqual(abs(mf.mo_coeff[0]-mo_coeff[0]).max(), 0, 12)
+            self.assertAlmostEqual(abs(mf.mo_coeff[1]-mo_coeff[1]).max(), 0, 12)
+
+    def test_dump_cartesian_gto_symm_orbital(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        fname = ftmp.name
+
+        pmol = mol.copy()
+        pmol.cart = True
+        pmol.build()
+        mf = scf.RHF(pmol).run()
+        molden.from_mo(pmol, fname, mf.mo_coeff)
+
+        res = molden.read(fname)
+        mo_coeff = res[2]
+        self.assertAlmostEqual(abs(mf.mo_coeff-mo_coeff).max(), 0, 12)
+
+
 if __name__ == "__main__":
     print("Full Tests for molden")
     unittest.main()
