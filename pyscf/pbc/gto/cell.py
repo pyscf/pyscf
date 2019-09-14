@@ -467,7 +467,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     # than the energy cutoff for ERIs.  The estimated error is roughly
     #     error ~ 64 pi^3 c^2 /((2l+1)!!(4a)^l) (2Ecut)^{l+.5} e^{-Ecut/4a}
     # log_k0 = 3 + np.log(alpha) / 2
-    # l2fac2 = scipy.misc.factorial2(l*2+1)
+    # l2fac2 = scipy.special.factorial2(l*2+1)
     # log_rest = np.log(precision*l2fac2*(4*alpha)**l / (16*np.pi**2*c**2))
     # Enuc_cut = 4*alpha * (log_k0*(2*l+1) - log_rest)
     # Enuc_cut[Enuc_cut <= 0] = .5
@@ -479,7 +479,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     # summation which largely reduces the requirements to the energy cutoff.
     # In practice, the cutoff estimation for ERIs as below should be enough.
     log_k0 = 3 + np.log(alpha) / 2
-    l2fac2 = scipy.misc.factorial2(l*2+1)
+    l2fac2 = scipy.special.factorial2(l*2+1)
     log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (128*np.pi**4*c**4))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     Ecut[Ecut <= 0] = .5
@@ -507,8 +507,8 @@ def error_for_ke_cutoff(cell, ke_cutoff):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        fac = (256*np.pi**4*cs**4 * scipy.misc.factorial2(l*4+3)
-               / scipy.misc.factorial2(l*2+1)**2)
+        fac = (256*np.pi**4*cs**4 * scipy.special.factorial2(l*4+3)
+               / scipy.special.factorial2(l*2+1)**2)
         efac = np.exp(-ke_cutoff/(2*es))
         err1 = .5*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
         errmax = max(errmax, err1.max())
