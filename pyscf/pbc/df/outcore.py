@@ -45,7 +45,7 @@ def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     if isinstance(erifile, h5py.Group):
         feri = erifile
     elif h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
+        feri = h5py.File(erifile, 'a')
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:
@@ -164,7 +164,7 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     if isinstance(erifile, h5py.Group):
         feri = erifile
     elif h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
+        feri = h5py.File(erifile, 'a')
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:

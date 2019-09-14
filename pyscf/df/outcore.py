@@ -288,7 +288,7 @@ def _guess_shell_ranges(mol, buflen, aosym):
 
 def _create_h5file(erifile, dataname):
     if h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
+        feri = h5py.File(erifile, 'a')
         if dataname in feri:
             del(feri[dataname])
     else:
