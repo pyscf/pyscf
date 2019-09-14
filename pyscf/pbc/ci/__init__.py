@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from pyscf.pbc import scf
-from pyscf.pbc.ci import cisd
+from pyscf.pbc.ci import cisd, kcis_rhf
 
 def RCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_rhf(mf)
@@ -28,3 +28,9 @@ def UCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 def GCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_ghf(mf)
     return cisd.GCISD(mf, frozen, mo_coeff, mo_occ)
+
+def KCIS(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    mf = scf.addons.convert_to_rhf(mf)
+    return kcis_rhf.KCIS(mf, frozen, mo_coeff, mo_occ)
+
+CIS = KCIS
