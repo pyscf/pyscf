@@ -1,3 +1,19 @@
+PySCF 1.6.4 (2019-09-14)
+------------------------
+* Added
+  - aug-cc-pwCV*Z basis
+* Improved
+  - Memory footprint of FCI module
+  - Mole.spin initialization. A guess can be made for spin multiplicity based on
+    neutral system.
+* Fixed
+  - PBC SCF orbital canonicalization
+  - Missed complex conjugation in HF/KS modules
+  - SHCI runtime directory
+  - Normalization issue for Cartesian basis in Molden output
+  - cc-pwCV5Z basis
+
+
 PySCF 1.6.3 (2019-07-28)
 ------------------------
 * Added
