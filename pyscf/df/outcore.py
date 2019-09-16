@@ -314,15 +314,15 @@ if __name__ == '__main__':
 
     cderi0 = incore.cholesky_eri(mol)
     cholesky_eri(mol, 'cderi.dat')
-    with h5py.File('cderi.dat') as feri:
+    with h5py.File('cderi.dat', 'r') as feri:
         print(numpy.allclose(feri['j3c'], cderi0))
 
     cholesky_eri(mol, 'cderi.dat', ioblk_size=.5)
-    with h5py.File('cderi.dat') as feri:
+    with h5py.File('cderi.dat', 'r') as feri:
         print(numpy.allclose(feri['j3c'], cderi0))
 
     general(mol, (numpy.eye(mol.nao_nr()),)*2, 'cderi.dat',
             max_memory=.5, ioblk_size=.2, verbose=6)
-    with h5py.File('cderi.dat') as feri:
+    with h5py.File('cderi.dat', 'r') as feri:
         print(numpy.allclose(feri['j3c'], cderi0))
 

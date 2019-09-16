@@ -110,7 +110,7 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
     >>> from pyscf import gto, ao2mo
     >>> import h5py
     >>> def view(h5file, dataname='eri_mo'):
-    ...     with h5py.File(h5file) as f5:
+    ...     with h5py.File(h5file, 'r') as f5:
     ...         print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
@@ -233,7 +233,7 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
     >>> from pyscf import gto, ao2mo
     >>> import h5py
     >>> def view(h5file, dataname='eri_mo'):
-    ...     with h5py.File(h5file) as f5:
+    ...     with h5py.File(h5file, 'r') as f5:
     ...         print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
     >>> mo1 = numpy.random.random((mol.nao_nr(), 10))

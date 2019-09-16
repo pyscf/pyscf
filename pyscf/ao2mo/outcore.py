@@ -89,7 +89,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo',
     >>> from pyscf import ao2mo
     >>> import h5py
     >>> def view(h5file, dataname='eri_mo'):
-    ...     f5 = h5py.File(h5file)
+    ...     f5 = h5py.File(h5file, 'r')
     ...     print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     ...     f5.close()
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
@@ -173,7 +173,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     >>> from pyscf import ao2mo
     >>> import h5py
     >>> def view(h5file, dataname='eri_mo'):
-    ...     f5 = h5py.File(h5file)
+    ...     f5 = h5py.File(h5file, 'r')
     ...     print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     ...     f5.close()
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
@@ -629,7 +629,7 @@ def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=None,
     >>> from pyscf import ao2mo
     >>> import h5py
     >>> def view(h5file, dataname='eri_mo'):
-    ...     f5 = h5py.File(h5file)
+    ...     f5 = h5py.File(h5file, 'r')
     ...     print('dataset %s, shape %s' % (str(f5.keys()), str(f5[dataname].shape)))
     ...     f5.close()
     >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')

@@ -48,18 +48,18 @@ class KnownValues(unittest.TestCase):
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         cderi0 = df.incore.cholesky_eri(mol)
         df.outcore.cholesky_eri(mol, ftmp.name)
-        with h5py.File(ftmp.name) as feri:
+        with h5py.File(ftmp.name, 'r') as feri:
             self.assertTrue(numpy.allclose(feri['j3c'], cderi0))
 
         df.outcore.cholesky_eri(mol, ftmp.name, ioblk_size=.05)
-        with h5py.File(ftmp.name) as feri:
+        with h5py.File(ftmp.name, 'r') as feri:
             self.assertTrue(numpy.allclose(feri['j3c'], cderi0))
 
         nao = mol.nao_nr()
         naux = cderi0.shape[0]
         df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
                            max_memory=.05, ioblk_size=.02)
-        with h5py.File(ftmp.name) as feri:
+        with h5py.File(ftmp.name, 'r') as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
 
         ####
@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
         buf[:,idx[1],idx[0]] = cderi0
         cderi0 = buf
         df.outcore.cholesky_eri(mol, ftmp.name, aosym='s1', ioblk_size=.05)
-        with h5py.File(ftmp.name) as feri:
+        with h5py.File(ftmp.name, 'r') as feri:
             self.assertTrue(numpy.allclose(feri['j3c'], cderi0.reshape(naux,-1)))
 
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         cv = numpy.random.random((nao,25))
         cderi0 = numpy.einsum('kpq,pi,qj->kij', cderi0, co, cv)
         df.outcore.general(mol, (co,cv), ftmp.name, ioblk_size=.05)
-        with h5py.File(ftmp.name) as feri:
+        with h5py.File(ftmp.name, 'r') as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0.reshape(naux,-1)))
 
         cderi0 = df.incore.aux_e2(mol, auxmol, intor='int3c2e_ip1_sph',
@@ -91,19 +91,19 @@ class KnownValues(unittest.TestCase):
         df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
                            int3c='int3c2e_ip1_sph', aosym='s1', int2c='int2c2e_sph',
                            comp=3, max_memory=.05, ioblk_size=.02)
-        with h5py.File(ftmp.name) as feri:
+        with h5py.File(ftmp.name, 'r') as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
 
     def test_lindep(self):
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         df.outcore.cholesky_eri(mol, ftmp.name, auxmol=auxmol, verbose=7)
-        with h5py.File(ftmp.name) as f:
+        with h5py.File(ftmp.name, 'r') as f:
             cderi0 = f['j3c'].value
         auxmol1 = auxmol.copy()
         auxmol1.basis = {'O': 'weigend', 'H': ('weigend', 'weigend')}
         auxmol1.build(0, 0)
         cderi1 = df.outcore.cholesky_eri(mol, ftmp.name, auxmol=auxmol1)
-        with h5py.File(ftmp.name) as f:
+        with h5py.File(ftmp.name, 'r') as f:
             cderi1 = f['j3c'].value
         eri0 = numpy.dot(cderi0.T, cderi0)
         eri1 = numpy.dot(cderi1.T, cderi1)
@@ -113,7 +113,7 @@ class KnownValues(unittest.TestCase):
 #        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 #        df.outcore.cholesky_eri(mol, ftmp.name, int3c='int3c2e_ip1',
 #                                auxmol=auxmol, comp=3)
-#        with h5py.File(ftmp.name) as f:
+#        with h5py.File(ftmp.name, 'r') as f:
 #            cderi0 = f['j3c'].value
 
 
