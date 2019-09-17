@@ -1,7 +1,7 @@
 Copyright 2014-2018 The PySCF Developers.
 PySCF (www.pyscf.org) was developed by:
 
-Qiming Sun (Caltech)
+Qiming Sun (Caltech; Tencent America LLC)
 Sandeep Sharma (University of Colorado Boulder)
 Alexander Sokolov (Ohio State University)
 George H. Booth (Cambridge University)
@@ -34,9 +34,16 @@ Vijay Gopal Chilkuri (LPCQ)
 Zhihao Cui (Caltech)
 Nikolay Bogdanov (Max Planck Institute)
 Artem Pulkin (Caltech)
+James Smith (University of Colorado Boulder)
+Chong Sun (Caltech)
+Jason Yu (Caltech)
+Shining Sun (Caltech)
+Alec White (Caltech)
+Bryan Lau (University of Chicago)
+Matthew R. Hermes (University of Minnesota)
+Xiao Wang (CCQ)
 
 Developers who contribute debug/test code which are removed or not included in
 the source code
 
 Jun Yang (Hong Kong University)
-James Smith (University of Colorado Boulder)

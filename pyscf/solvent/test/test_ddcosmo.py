@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -186,6 +186,23 @@ class KnownValues(unittest.TestCase):
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol), pcm).run()
         self.assertAlmostEqual(mf.e_tot, -112.35450855007909, 9)
 
+    def test_ddcosmo_scf_with_overwritten_attributes(self):
+        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -75.57036436805902, 9)
+
+        mf.with_solvent.lebedev_order = 15
+        mf.with_solvent.lmax = 5
+        mf.with_solvent.eps = .5
+        mf.with_solvent.conv_tol = 1e-8
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -75.55326109712902, 9)
+
+        mf.with_solvent.grids.radi_method = dft.mura_knowles
+        mf.with_solvent.grids.atom_grid = {"H": (8, 50), "O": (8, 50),}
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -75.55216799624262, 9)
+
     def test_make_ylm(self):
         numpy.random.seed(1)
         lmax = 6
@@ -316,6 +333,28 @@ class KnownValues(unittest.TestCase):
             vmat1[i,i] = (e1 - e0) / dx
             dm1[i,i] -= dx
         self.assertAlmostEqual(abs(vmat0-vmat1).max(), 0, 4)
+
+    def test_as_scanner(self):
+        mol = gto.M(atom='''
+               6        0.000000    0.000000   -0.542500
+               8        0.000000    0.000000    0.677500
+               1        0.000000    0.935307   -1.082500
+               1        0.000000   -0.935307   -1.082500
+                    ''', basis='sto3g', verbose=7,
+                    output='/dev/null')
+        mf_scanner = ddcosmo.ddcosmo_for_scf(scf.RHF(mol)).as_scanner()
+        mf_scanner(mol)
+        self.assertEqual(mf_scanner.with_solvent.grids.coords.shape, (48212, 3))
+        mf_scanner('H  0. 0. 0.; H  0. 0. .9')
+        self.assertEqual(mf_scanner.with_solvent.grids.coords.shape, (20048, 3))
+
+        h2 = gto.M(atom='H  0. 0. 0.; H  0. 0. .9', basis='sto3g', verbose=7,
+                   output='/dev/null')
+        mf_h2 = ddcosmo.ddcosmo_for_scf(scf.RHF(h2)).run()
+        self.assertAlmostEqual(mf_h2.e_tot, mf_scanner.e_tot, 9)
+
+
+# TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 
 
 if __name__ == "__main__":

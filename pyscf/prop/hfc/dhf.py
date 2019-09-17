@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,12 +89,42 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
         hfc.append(e01)
     return numpy.asarray(hfc)
 
-class HyperfineCoupling(dhf_ssc.SSC):
-    def __init__(self, mf):
-        dhf_ssc.SSC.__init__(self, mf)
-        lib.logger.warn(self, 'DHF-HFC is an experimental feature. It is '
-                        'still in testing.\nFeatures and APIs may be changed '
-                        'in the future.')
+class HyperfineCoupling(lib.StreamObject):
+    def __init__(self, scf_method):
+        self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
+        self.chkfile = scf_method.chkfile
+        self._scf = scf_method
+
+        self.mb = 'sternheim' # or RMB, RKB
+
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s for %s (In testing) ********',
+                 self.__class__, self._scf.__class__)
+        log.warn('DHF-HFC is an experimental feature. It is '
+                 'still in testing.\nFeatures and APIs may be changed '
+                 'in the future.')
+        log.info('nuc_pair %s', self.nuc_pair)
+        log.info('mb = %s', self.mb)
+        if self.cphf:
+            log.info('Solving MO10 eq with CPHF.')
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        if not self._scf.converged:
+            log.warn('Ground state SCF is not converged')
+        return self
+
     kernel = kernel
 
 HFC = HyperfineCoupling

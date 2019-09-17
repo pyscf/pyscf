@@ -200,7 +200,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     ci0 = []
     for addra,addrb in init_strs:
         x = numpy.zeros((na,nb))
-        if addra == addrb == 0:
+        if addra == addrb:
             x[addra,addrb] = 1
         else:
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
@@ -225,6 +225,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if pspace_size is None: pspace_size = fci.pspace_size
 
     assert(fci.spin is None or fci.spin == 0)
+    assert(0 <= numpy.sum(nelec) <= norb*2)
 
     link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)
@@ -279,22 +280,22 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
 #TODO: check spin of initial guess
     if ci0 is None:
-        if hasattr(fci, 'get_init_guess'):
+        if callable(getattr(fci, 'get_init_guess', None)):
             ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
             def ci0():
                 x0 = []
                 for i in range(nroots):
-                    x = numpy.zeros(na,na)
-                    if addr[i] == 0:
-                        x[0,0] = 1
+                    x = numpy.zeros((na,na))
+                    addra = addr[i] // na
+                    addrb = addr[i] % na
+                    if addra == addrb:
+                        x[addra,addrb] = 1
                     else:
-                        addra = addr[i] // na
-                        addrb = addr[i] % na
                         x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
                     x0.append(x.ravel())
                 return x0
-    else:
+    elif not callable(ci0):
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*na:
             ci0 = [ci0.ravel()]
         else:

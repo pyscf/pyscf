@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -101,13 +101,6 @@ class UniformGrids(lib.StreamObject):
         else:
             self.cell = cell
 
-        if (cell.dimension < 2 or
-            (cell.dimension == 2 and cell.low_dim_ft_type is None)):
-            warnings.warn('Uniform grids are not adequate for low-dimension '
-                          'systems. It may lead to large errors in DFT-XC '
-                          'numerical integration. It is recommended to use '
-                          'BeckeGrids for low-dimension systems.')
-
         coords = self.coords
         weights = self.weights
 
@@ -117,7 +110,7 @@ class UniformGrids(lib.StreamObject):
             self.non0tab = None
         return coords, weights
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         if self.mesh is None:
             logger.info(self, 'Uniform grid, mesh = %s', self.cell.mesh)
         else:
@@ -151,10 +144,10 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 # When low_dim_ft_type is set, pbc_eval_gto treats the 2D system as a 3D system.
 # To get the correct particle number in numint module, the atomic grids needs to
 # be consistent with the treatment in pbc_eval_gto (see issue 164).
-    if cell.low_dim_ft_type == 'analytic_2d_1':
-        dimension = 3
-    else:
+    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
         dimension = cell.dimension
+    else:
+        dimension = 3
     Ls = cell.get_lattice_Ls(dimension=dimension)
 
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()

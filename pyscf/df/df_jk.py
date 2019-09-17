@@ -88,7 +88,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.auxbasis = auxbasis
 
     mf_class = mf.__class__
-    class DFHF(mf_class, _DFHF):
+    class DFHF(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
 
@@ -145,10 +145,14 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def _cderi(self, x):
             self.with_df._cderi = x
 
+        def nuc_grad_method(self):
+            raise NotImplementedError
+
     return DFHF(mf)
 
-# A tag to label the derived SCF class
-class _DFHF:
+# 1. A tag to label the derived SCF class
+# 2. A hook to register DF specific methods, such as nuc_grad_method.
+class _DFHF(object):
     pass
 
 
@@ -183,7 +187,7 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                 rho = numpy.einsum('px,x->p', eri1, dmtril[k])
                 vj[k] += numpy.einsum('p,px->x', rho, eri1)
 
-    elif hasattr(dm, 'mo_coeff'):
+    elif getattr(dm, 'mo_coeff', None) is not None:
 #TODO: test whether dm.mo_coeff matching dm
         mo_coeff = numpy.asarray(dm.mo_coeff, order='F')
         mo_occ   = numpy.asarray(dm.mo_occ)
@@ -251,8 +255,7 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
                     vj[k] += numpy.einsum('p,px->x', rho, eri1)
 
                 buf2 = lib.unpack_tril(eri1, out=buf[1])
-                vk[k] += lib.dot(buf1.reshape(-1,nao).T,
-                                 buf2.reshape(-1,nao))
+                vk[k] += lib.dot(buf1.reshape(-1,nao).T, buf2.reshape(-1,nao))
             t1 = log.timer_debug1('jk', *t1)
 
     if with_j: vj = lib.unpack_tril(vj, 1).reshape(dm_shape)

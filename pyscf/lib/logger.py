@@ -79,6 +79,8 @@ control at which level the timing information should be output.  It is 5
 
 import sys
 import time
+if sys.version_info >= (3,6):
+    time.clock = time.process_time
 
 from pyscf.lib import parameters as param
 import pyscf.__config__
@@ -223,7 +225,7 @@ def new_logger(rec=None, verbose=None):
     if isinstance(verbose, Logger):
         log = verbose
     elif isinstance(verbose, int):
-        if hasattr(rec, 'stdout'):
+        if getattr(rec, 'stdout', None):
             log = Logger(rec.stdout, verbose)
         else:
             log = Logger(sys.stdout, verbose)

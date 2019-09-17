@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,10 +32,10 @@ from pyscf.pbc.dft import uks
 @lib.with_doc(uks.get_veff.__doc__)
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpt=None, kpts_band=None):
-    if hasattr(dm, 'mo_coeff'):
+    if getattr(dm, 'mo_coeff', None) is not None:
         mo_coeff = dm.mo_coeff
-        mo_occ_a = (dm.mo_occ > 0).astype(np.double)
-        mo_occ_b = (dm.mo_occ ==2).astype(np.double)
+        mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
+        mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
         dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
                            mo_occ=(mo_occ_a,mo_occ_b))
     return uks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpt, kpts_band)
@@ -51,13 +51,15 @@ class ROKS(rohf.ROHF):
         rohf.ROHF.__init__(self, cell, kpt)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
         lib.logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
+    get_rho = uks.get_rho
+
     define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(rohf.ROHF.density_fit)

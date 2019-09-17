@@ -52,7 +52,20 @@ class mf(nao):
       self.nprod = self.cc_da.shape[1]
       if self.verbosity>0: print(__name__,'\t\t====> Number of dominant and atom-centered products {}'.format(cc.shape))
 
+
       #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
+
+  def make_rdm1(self, mo_coeff=None, mo_occ=None, **kw):
+    # from pyscf.scf.hf import make_rdm1 -- different index order here
+    if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
+    if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]
+    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
+    for s in range(self.nspin):
+      xocc = mo_coeff[s,mo_occ[s]>0,:]
+      focc = mo_occ[s,mo_occ[s]>0]
+      dm[0,s,:,:,0] = np.dot(xocc.T.conj() * focc, xocc)
+    return dm
+
 
   def init_mo_from_pyscf(self, **kw):
     """ Initializing from a previous pySCF mean-field calc. """

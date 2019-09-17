@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -58,6 +59,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
+                                       kpts, kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     # ndim = 3 : dm.shape = (nkpts, nao, nao)
     ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
                     kpts_band is None)
@@ -79,8 +91,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         t0 = logger.timer(ks, 'vxc', *t0)
 
     weight = 1./len(kpts)
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
+    if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
     else:
@@ -100,6 +111,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
+@lib.with_doc(khf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    if dm is None: dm = mf.make_rdm1()
+    if grids is None: grids = mf.grids
+    if kpts is None: kpts = mf.kpts
+    if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+        rho = mf.with_df.get_rho(dm, kpts)
+    else:
+        rho = mf._numint.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
+    return rho
+
 
 class KRKS(khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
@@ -108,10 +130,10 @@ class KRKS(khf.KRHF):
         khf.KRHF.__init__(self, cell, kpts)
         rks._dft_common_init_(self)
 
-    def dump_flags(self):
-        khf.KRHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        khf.KRHF.dump_flags(self, verbose)
         logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
 
     get_veff = get_veff
 
@@ -122,10 +144,12 @@ class KRKS(khf.KRHF):
             vhf = self.get_veff(self.cell, dm_kpts)
 
         weight = 1./len(h1e_kpts)
-        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts).real
+        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
         tot_e = e1 + vhf.ecoul + vhf.exc
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-        return tot_e, vhf.ecoul + vhf.exc
+        return tot_e.real, vhf.ecoul + vhf.exc
+
+    get_rho = get_rho
 
     define_xc_ = rks.define_xc_
 

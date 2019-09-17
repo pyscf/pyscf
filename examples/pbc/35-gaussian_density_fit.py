@@ -32,7 +32,7 @@ cell.build()
 # exponents alpha * beta**i, i = 1,..,N).  The even-tempered parameter alpha
 # is determined automatically based on the orbital basis.  beta is set to 2.0
 #
-mf = scf.RHF(cell).density_fit(auxbasis=auxbasis)
+mf = scf.RHF(cell).density_fit()
 mf.kernel()
 
 

@@ -29,5 +29,6 @@ mf = qmmm.mm_charge(scf.RHF(mol), coords, charges)
 #mf.kernel()
 mol1 = berny_solver.optimize(mf)
 
+from pyscf.geomopt import geometric_solver
 mycc = cc.CCSD(mf)
-mol1 = berny_solver.optimize(mycc)
+mol1 = geometric_solver.optimize(mycc)

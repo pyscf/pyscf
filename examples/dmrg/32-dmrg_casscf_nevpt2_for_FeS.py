@@ -383,7 +383,7 @@ nelec = 0.0
 nact = 0.0
 for iorb in range(nb):
     vec = lcoeff[:,iorb]**2
-    idx = list(numpy.argwhere(vec>pthresh))
+    idx = numpy.argwhere(vec>pthresh)[0]
     if ifACTONLY == False:
         if iorb < nc:
             print(' iorb_C=',iorb,' occ=',n_c[iorb],' fii=',e_c[iorb])

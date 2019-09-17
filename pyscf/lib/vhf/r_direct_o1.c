@@ -283,7 +283,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
                       CINTOpt *cintopt, CVHFOpt *vhfopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nao = ao_loc[nbas];
+        const size_t nao = ao_loc[nbas];
         int *tao = malloc(sizeof(int)*nao);
         CVHFtimerev_map(tao, bas, nbas);
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, tao,
@@ -294,9 +294,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, fdot, fjk, \
-               dms, vjk, n_dm, ncomp, nbas, cintopt, vhfopt, envs)
+#pragma omp parallel
 {
         int i, j, ij;
         double complex *v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);

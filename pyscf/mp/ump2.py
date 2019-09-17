@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ def get_frozen_mask(mp):
         raise NotImplementedError
     return moidxa,moidxb
 
-def make_rdm1(mp, t2=None):
+def make_rdm1(mp, t2=None, ao_repr=False):
     r'''
     One-particle spin density matrices dm1a, dm1b in MO basis (the
     occupied-virtual blocks due to the orbital response contribution are not
@@ -180,7 +180,7 @@ def make_rdm1(mp, t2=None):
     dov = numpy.zeros((nocca,nvira))
     dOV = numpy.zeros((noccb,nvirb))
     d1 = (doo, (dov, dOV), (dov.T, dOV.T), dvv)
-    return uccsd_rdm._make_rdm1(mp, d1, with_frozen=True)
+    return uccsd_rdm._make_rdm1(mp, d1, with_frozen=True, ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2):
     t2aa, t2ab, t2bb = t2
@@ -321,6 +321,11 @@ class UMP2(mp2.MP2):
         from pyscf.grad import ump2
         return ump2.Gradients(self)
 
+MP2 = UMP2
+
+from pyscf import scf
+scf.uhf.UHF.MP2 = lib.class_as_method(MP2)
+
 
 class _ChemistsERIs(mp2._ChemistsERIs):
     def __init__(self, mp, mo_coeff=None):
@@ -364,7 +369,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
             eris.ovOV = ao2mo.general(mp._scf._eri, (orboa,orbva,orbob,orbvb))
             eris.OVOV = ao2mo.general(mp._scf._eri, (orbob,orbvb,orbob,orbvb))
 
-    elif hasattr(mp._scf, 'with_df'):
+    elif getattr(mp._scf, 'with_df', None):
         logger.warn(mp, 'UMP2 detected DF being used in the HF object. '
                     'MO integrals are computed based on the DF 3-index tensors.\n'
                     'It\'s recommended to use DF-UMP2 module.')
@@ -529,6 +534,7 @@ del(WITH_T2)
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import scf
     from pyscf import gto
     from functools import reduce

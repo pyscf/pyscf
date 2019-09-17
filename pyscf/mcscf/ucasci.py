@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
+from pyscf import gto
 from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
@@ -61,7 +62,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
               mo_coeff[1][:,ncore[1]:ncore[1]+ncas])
 
     hcore = casci.get_hcore()
-    energy_core = casci._scf.energy_nuc()
+    energy_core = casci.energy_nuc()
     if mo_core[0].size == 0 and mo_core[1].size == 0:
         corevhf = (0,0)
     else:
@@ -112,8 +113,13 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
 class UCASCI(casci.CASCI):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
-    def __init__(self, mf, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         #assert('UHF' == mf.__class__.__name__)
+        if isinstance(mf_or_mol, gto.Mole):
+            mf = scf.UHF(mf_or_mol)
+        else:
+            mf = mf_or_mol
+
         mol = mf.mol
         self.mol = mol
         self._scf = mf
@@ -127,14 +133,7 @@ class UCASCI(casci.CASCI):
             self.nelecas = (neleca, nelecb)
         else:
             self.nelecas = (nelecas[0], nelecas[1])
-        if ncore is None:
-            ncorelec = mol.nelectron - (self.nelecas[0]+self.nelecas[1])
-            if ncorelec % 2:
-                self.ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
-            else:
-                self.ncore = (ncorelec//2, ncorelec//2)
-        else:
-            self.ncore = (ncore[0], ncore[1])
+        self.ncore = ncore
 
         self.fcisolver = fci.direct_uhf.FCISolver(mol)
         self.fcisolver.lindep = getattr(__config__,
@@ -153,8 +152,28 @@ class UCASCI(casci.CASCI):
 
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = lib.logger.Logger(self.stdout, self.verbose)
+    @property
+    def ncore(self):
+        if self._ncore is None:
+            ncorelec = self.mol.nelectron - sum(self.nelecas)
+            if ncorelec % 2:
+                ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
+            else:
+                ncore = (ncorelec//2, ncorelec//2)
+            return ncore
+        else:
+            return self._ncore
+    @ncore.setter
+    def ncore(self, x):
+        if x is None:
+            self._ncore = x
+        elif isinstance(x, (int, numpy.integer)):
+            self._ncore = (x, x)
+        else:
+            self._ncore = (x[0], x[1])
+
+    def dump_flags(self, verbose=None):
+        log = lib.logger.new_logger(self, verbose)
         log.info('')
         log.info('******** UHF-CASCI flags ********')
         nmo = self.mo_coeff[0].shape[1]
@@ -245,7 +264,7 @@ class UCASCI(casci.CASCI):
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
-        if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
+        if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             ncore = self.ncore
             ncas = self.ncas
             mocas = (self.mo_coeff[0][:,ncore[0]:ncore[0]+ncas],
@@ -351,7 +370,7 @@ class UCASCI(casci.CASCI):
             for i,j in idx:
                 log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
-            if hasattr(self.fcisolver, 'large_ci') and ci is not None:
+            if getattr(self.fcisolver, 'large_ci', None) and ci is not None:
                 log.info('\n** Largest CI components **')
                 if isinstance(ci, (tuple, list)):
                     for i, state in enumerate(ci):
@@ -379,7 +398,7 @@ class UCASCI(casci.CASCI):
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                   ncore=None):
+                   ncore=None, **kwargs):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
         if ncas is None: ncas = self.ncas
@@ -400,7 +419,7 @@ class UCASCI(casci.CASCI):
         return dm1a, dm1b
 
     def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                  ncore=None):
+                  ncore=None, **kwargs):
         dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
         return dm1a+dm1b
 
@@ -410,8 +429,6 @@ del(WITH_META_LOWDIN, LARGE_CI_TOL)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"

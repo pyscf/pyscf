@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -261,7 +261,7 @@ def _response_dm1(mycc, Xvo, eris=None):
             return numpy.hstack((va.ravel(), vb.ravel()))
     else:
         moidx = mycc.get_frozen_mask()
-        mo_energy = (eris.focka.diagonal(), eris.fockb.diagonal())
+        mo_energy = eris.mo_energy
         mo_occ = (mycc.mo_occ[0][moidx[0]], mycc.mo_occ[1][moidx[1]])
         ovvo = numpy.empty((nocca,nvira,nvira,nocca))
         ovVO = numpy.empty((nocca,nvira,nvirb,noccb))
@@ -338,16 +338,17 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     max_memory = mycc.max_memory - lib.current_memory()[0]
     blksize_a = int(max_memory*.9e6/8/(nao_pair+nmoa**2))
     blksize_a = min(nvira_pair, max(ccsd.BLKMIN, blksize_a))
+    chunks_a = (int(min(nao_pair, 4e8/blksize_a)), blksize_a)
     v_aa = fswap.create_dataset('v_aa', (nao_pair,nvira_pair), 'f8',
-                                chunks=(nao_pair,blksize_a))
+                                chunks=chunks_a)
     for p0, p1 in lib.prange(0, nvira_pair, blksize_a):
         v_aa[:,p0:p1] = _trans(lib.unpack_tril(dvvvv[p0:p1]*.25), mo_a,
                                (nocca,nmoa,nocca,nmoa)).T
 
     v_ba = fswap.create_dataset('v_ab', (nao_pair,nvira_pair), 'f8',
-                                chunks=(nao_pair,blksize_a))
+                                chunks=chunks_a)
     dvvOP = fswap.create_dataset('dvvOP', (nvira_pair,noccb,nmob), 'f8',
-                                 chunks=(nvira_pair,1,nmob))
+                                 chunks=(int(min(blksize_a,4e8/nmob)),1,nmob))
     for i in range(noccb):
         buf1 = numpy.empty((nmob,nvira,nvira))
         buf1[:noccb] = dOOvv[i] * .5
@@ -363,8 +364,9 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 
     blksize_b = int(max_memory*.9e6/8/(nao_pair+nmob**2))
     blksize_b = min(nvirb_pair, max(ccsd.BLKMIN, blksize_b))
+    chunks_b = (int(min(nao_pair, 4e8/blksize_b)), blksize_b)
     v_bb = fswap.create_dataset('v_bb', (nao_pair,nvirb_pair), 'f8',
-                                chunks=(nao_pair,blksize_b))
+                                chunks=chunks_b)
     for p0, p1 in lib.prange(0, nvirb_pair, blksize_b):
         v_bb[:,p0:p1] = _trans(lib.unpack_tril(dVVVV[p0:p1]*.25), mo_b,
                                (noccb,nmob,noccb,nmob)).T
@@ -373,9 +375,9 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 # transform dm2_ij to get lower triangular (dm2+dm2.transpose(0,1,3,2))
     blksize = int(max_memory*.9e6/8/(nao_pair+nmoa**2))
     blksize = min(nao_pair, max(ccsd.BLKMIN, blksize))
-    o_aa = fswap.create_dataset('o_aa', (nmoa,nocca,nao_pair), 'f8', chunks=(nmoa,nocca,blksize))
-    o_ab = fswap.create_dataset('o_ab', (nmoa,nocca,nao_pair), 'f8', chunks=(nmoa,nocca,blksize))
-    o_bb = fswap.create_dataset('o_bb', (nmob,noccb,nao_pair), 'f8', chunks=(nmob,noccb,blksize))
+    o_aa = fswap.create_dataset('o_aa', (nmoa,nocca,nao_pair), 'f8', chunks=(nocca,nocca,blksize))
+    o_ab = fswap.create_dataset('o_ab', (nmoa,nocca,nao_pair), 'f8', chunks=(nocca,nocca,blksize))
+    o_bb = fswap.create_dataset('o_bb', (nmob,noccb,nao_pair), 'f8', chunks=(noccb,noccb,blksize))
     buf1 = numpy.zeros((nocca,nocca,nmoa,nmoa))
     buf1[:,:,:nocca,:nocca] = _cp(doooo) * .25
     buf1[:,:,nocca:,nocca:] = _cp(doovv) * .5
@@ -430,8 +432,10 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     dovoo = buf1 = None
 
 # transform dm2_kl then dm2 + dm2.transpose(2,3,0,1)
-    dm2a = fsave.create_dataset('dm2aa+ab', (nao_pair,nao_pair), 'f8', chunks=(nao_pair,blksize))
-    dm2b = fsave.create_dataset('dm2bb+ab', (nao_pair,nao_pair), 'f8', chunks=(nao_pair,blksize))
+    dm2a = fsave.create_dataset('dm2aa+ab', (nao_pair,nao_pair), 'f8',
+                                chunks=(int(min(nao_pair,4e8/blksize)),blksize))
+    dm2b = fsave.create_dataset('dm2bb+ab', (nao_pair,nao_pair), 'f8',
+                                chunks=(int(min(nao_pair,4e8/blksize)),blksize))
     for p0, p1 in lib.prange(0, nao_pair, blksize):
         buf1 = numpy.zeros((p1-p0,nmoa,nmoa))
         buf1[:,nocca:,nocca:] = lib.unpack_tril(_cp(v_aa[p0:p1]))
@@ -484,6 +488,11 @@ class Gradients(ccsd_grad.Gradients):
         return ccsd_grad.Gradients.kernel(self, t1, t2, l1, l2, eris, atmlst,
                                           mf_grad, verbose, _kern=kernel)
 
+Grad = Gradients
+
+from pyscf.cc import uccsd
+uccsd.UCCSD.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -500,7 +509,7 @@ if __name__ == '__main__':
     )
     mf = scf.UHF(mol).run()
     mycc = uccsd.UCCSD(mf).run()
-    g1 = Gradients(mycc).kernel()
+    g1 = mycc.Gradients().kernel()
 # O    -0.0000000000    -0.0000000000     0.1474630318
 # H     0.0000000000     0.1118073694    -0.0737315159
 # H     0.0000000000    -0.1118073694    -0.0737315159

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -575,10 +575,14 @@ class Hessian(uhf_hess.Hessian):
     def __init__(self, mf):
         uhf_hess.Hessian.__init__(self, mf)
         self.grids = None
+        self.grid_response = False
         self._keys = self._keys.union(['grids'])
 
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
+
+from pyscf import dft
+dft.uks.UKS.Hessian = dft.uks_symm.UKS.Hessian = lib.class_as_method(Hessian)
 
 
 if __name__ == '__main__':
@@ -605,7 +609,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     mf.kernel()
     n3 = mol.natm * 3
-    hobj = Hessian(mf)
+    hobj = mf.Hessian()
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.42286407986042956)
     print(lib.finger(e2) - -0.45453541215680582)

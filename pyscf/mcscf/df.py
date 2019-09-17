@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,11 +18,9 @@
 
 import sys
 import time
-import tempfile
 import ctypes
 from functools import reduce
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
@@ -60,7 +58,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
     casscf_class = casscf.__class__
 
     if with_df is None:
-        if (hasattr(casscf._scf, 'with_df') and
+        if (getattr(casscf._scf, 'with_df', None) and
             (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
             with_df = casscf._scf.with_df
         else:
@@ -77,9 +75,11 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             self.with_df = with_df
             self._keys = self._keys.union(['with_df'])
 
-        def dump_flags(self):
-            casscf_class.dump_flags(self)
-            logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
+        def dump_flags(self, verbose=None):
+            casscf_class.dump_flags(self, verbose)
+            logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix '
+                        'and 2e integral transformation')
+            return self
 
         def ao2mo(self, mo_coeff=None):
             if self.with_df and 'CASSCF' in casscf_class.__name__:
@@ -89,10 +89,12 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 
         def get_h2eff(self, mo_coeff=None):  # For CASCI
             if self.with_df:
+                ncore = self.ncore
+                nocc = ncore + self.ncas
                 if mo_coeff is None:
-                    mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                    mo_coeff = self.mo_coeff[:,ncore:nocc]
                 elif mo_coeff.shape[1] != self.ncas:
-                    mo_coeff = mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                    mo_coeff = mo_coeff[:,ncore:nocc]
                 return self.with_df.ao2mo(mo_coeff)
             else:
                 return casscf_class.get_h2eff(self, mo_coeff)
@@ -126,6 +128,9 @@ def density_fit(casscf, auxbasis=None, with_df=None):
                 return paaa.reshape(nmo,ncas,ncas,ncas)
             else:
                 return casscf_class._exact_paaa(self, mol, u, out)
+
+        def nuc_grad_method(self):
+            raise NotImplementedError
 
     return DFCASSCF()
 
@@ -165,7 +170,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
     if 'CASCI' in str(casscf_class):
         return casscf  # because CASCI does not need orbital optimization
 
-    if hasattr(casscf, 'with_df') and casscf.with_df:
+    if getattr(casscf, 'with_df', None):
         return casscf
 
     if with_df is None:
@@ -187,8 +192,8 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             self.with_df = with_df
             self._keys = self._keys.union(['with_df'])
 
-        def dump_flags(self):
-            casscf_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            casscf_class.dump_flags(self, verbose)
             logger.info(self, 'CASSCF: density fitting for orbital hessian')
 
         def ao2mo(self, mo_coeff):
@@ -262,8 +267,7 @@ class _ERIS(object):
         k_cp = numpy.zeros((ncore,nmo))
 
         mo = numpy.asarray(mo, order='F')
-        _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        fxpp = h5py.File(_tmpfile1.name)
+        fxpp = lib.H5TmpFile()
         bufpa = numpy.empty((naoaux,nmo,ncas))
         bufs1 = numpy.empty((with_df.blockdim,nmo,nmo))
         fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
@@ -324,7 +328,6 @@ class _ERIS(object):
         bufs1 = bufs2 = buf = None
         t1 = log.timer('density fitting ppaa pass2', *t1)
 
-        fxpp.close()
         self.feri.flush()
 
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)

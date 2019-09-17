@@ -53,18 +53,56 @@
 #define NCTRMAX         72
 
 
-void CINTg1e_index_xyz(int *idx, const CINTEnvVars *envs);
 double CINTsquare_dist(const double *r1, const double *r2);
 double CINTcommon_fac_sp(int l);
-int CINTinit_int1e_EnvVars(CINTEnvVars *envs, const int *ng, const int *shls,
-                           const int *atm, const int natm,
-                           const int *bas, const int nbas, const double *env);
 
-void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
-                        const int *atm, const int natm,
-                        const int *bas, const int nbas, const double *env)
+/*
+ * Pyscf-1.5 (and older) use libcint function CINTinit_int1e_EnvVars and
+ * CINTg1e_index_xyz. It's unsafe since the CINTEnvVars type was redefined
+ * in ft_ao.h.  Copy the contents of CINTinit_int1e_EnvVars and
+ * CINTg1e_index_xyz here.
+ */
+#define IINC            0
+#define JINC            1
+#define GSHIFT          4
+#define POS_E1          5
+#define RYS_ROOTS       6
+#define TENSOR          7
+void GTO_ft_init1e_envs(CINTEnvVars *envs, int *ng, int *shls,
+                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        CINTinit_int1e_EnvVars(envs, ng, shls, atm, natm, bas, nbas, env);
+        envs->natm = natm;
+        envs->nbas = nbas;
+        envs->atm = atm;
+        envs->bas = bas;
+        envs->env = env;
+        envs->shls = shls;
+
+        const int i_sh = shls[0];
+        const int j_sh = shls[1];
+        envs->i_l = bas(ANG_OF, i_sh);
+        envs->j_l = bas(ANG_OF, j_sh);
+        envs->x_ctr[0] = bas(NCTR_OF, i_sh);
+        envs->x_ctr[1] = bas(NCTR_OF, j_sh);
+        envs->nfi = (envs->i_l+1)*(envs->i_l+2)/2;
+        envs->nfj = (envs->j_l+1)*(envs->j_l+2)/2;
+        envs->nf = envs->nfi * envs->nfj;
+        envs->common_factor = 1;
+
+        envs->gbits = ng[GSHIFT];
+        envs->ncomp_e1 = ng[POS_E1];
+        envs->ncomp_tensor = ng[TENSOR];
+
+        envs->li_ceil = envs->i_l + ng[IINC];
+        envs->lj_ceil = envs->j_l + ng[JINC];
+        if (ng[RYS_ROOTS] > 0) {
+                envs->nrys_roots = ng[RYS_ROOTS];
+        } else {
+                envs->nrys_roots = (envs->li_ceil + envs->lj_ceil)/2 + 1;
+        }
+
+        envs->ri = env + atm(PTR_COORD, bas(ATOM_OF, i_sh));
+        envs->rj = env + atm(PTR_COORD, bas(ATOM_OF, j_sh));
 
         int dli, dlj;
         if (envs->li_ceil < envs->lj_ceil) {
@@ -77,8 +115,49 @@ void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
         envs->g_stride_i = 1;
         envs->g_stride_j = dli;
         envs->g_size     = dli * dlj;
+
+        envs->lk_ceil = 1;
+        envs->ll_ceil = 1;
+        envs->g_stride_k = 0;
+        envs->g_stride_l = 0;
 }
 
+#define CART_MAX        128 // > (ANG_MAX*(ANG_MAX+1)/2)
+void CINTcart_comp(int *nx, int *ny, int *nz, const int lmax);
+static void _g2c_index_xyz(int *idx, const CINTEnvVars *envs)
+{
+        int i_l = envs->i_l;
+        int j_l = envs->j_l;
+        int nfi = envs->nfi;
+        int nfj = envs->nfj;
+        int di = envs->g_stride_i;
+        int dj = envs->g_stride_j;
+        int i, j, n;
+        int ofx, ofjx;
+        int ofy, ofjy;
+        int ofz, ofjz;
+        int i_nx[CART_MAX], i_ny[CART_MAX], i_nz[CART_MAX];
+        int j_nx[CART_MAX], j_ny[CART_MAX], j_nz[CART_MAX];
+
+        CINTcart_comp(i_nx, i_ny, i_nz, i_l);
+        CINTcart_comp(j_nx, j_ny, j_nz, j_l);
+
+        ofx = 0;
+        ofy = envs->g_size;
+        ofz = envs->g_size * 2;
+        n = 0;
+        for (j = 0; j < nfj; j++) {
+                ofjx = ofx + dj * j_nx[j];
+                ofjy = ofy + dj * j_ny[j];
+                ofjz = ofz + dj * j_nz[j];
+                for (i = 0; i < nfi; i++) {
+                        idx[n+0] = ofjx + di * i_nx[i];
+                        idx[n+1] = ofjy + di * i_ny[i];
+                        idx[n+2] = ofjz + di * i_nz[i];
+                        n += 3;
+                }
+        }
+}
 
 static const int _LEN_CART[] = {
         1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120, 136
@@ -921,7 +1000,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
         }
 
         int *idx = malloc(sizeof(int) * nf * 3);
-        CINTg1e_index_xyz(idx, envs);
+        _g2c_index_xyz(idx, envs);
 
         double rrij = CINTsquare_dist(ri, rj);
         double fac1 = SQRTPI * M_PI * CINTcommon_fac_sp(i_l) * CINTcommon_fac_sp(j_l);
@@ -1233,7 +1312,7 @@ static void _ft_zset0(double complex *out, int *dims, int *counts,
         int i, j, k, ic;
         for (ic = 0; ic < comp; ic++) {
                 for (j = 0; j < counts[1]; j++) {
-                        pout = out + j * counts[0] * NGv;
+                        pout = out + j * dims[0] * NGv;
                         for (i = 0; i < counts[0]; i++) {
                                 for (k = 0; k < NGv; k++) {
                                         pout[i*NGv+k] = 0;
@@ -1514,9 +1593,7 @@ void GTO_ft_fill_drv(int (*intor)(), FPtr_eval_gz eval_gz, void (*fill)(),
                 eval_aopair = &GTO_aopair_lazy_contract;
         }
 
-#pragma omp parallel default(none) \
-        shared(intor, eval_gz, eval_aopair, fill, mat, comp, shls_slice, \
-               ao_loc, Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int i, j, ij;
         double complex *buf = malloc(sizeof(double complex)
@@ -1562,11 +1639,7 @@ void GTO_ft_fill_shls_drv(int (*intor)(), FPtr_eval_gz eval_gz,
                 eval_aopair = &GTO_aopair_lazy_contract;
         }
 
-#pragma omp parallel default(none) \
-        shared(intor, eval_gz, eval_aopair, out, comp, Gv, b, gxyz, gs, \
-               nGv, npair, shls_lst, ao_loc, \
-               atm, natm, bas, nbas, env, ijloc) \
-        private(n)
+#pragma omp parallel private(n)
 {
         int ish, jsh;
         int dims[2];

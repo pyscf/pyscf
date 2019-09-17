@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
         dm_kpts : (nkpts, nao, nao) ndarray or a list of (nkpts,nao,nao) ndarray
             Density matrix at each k-point.  If a list of k-point DMs, eg,
             UHF alpha and beta DM, the alpha and beta DMs are contracted
-            separately.
+            separately.  It needs to be Hermitian.
 
     Kwargs:
         kpts_band : (k,3) ndarray
@@ -121,7 +121,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
 
     Args:
         dm_kpts : (nkpts, nao, nao) ndarray
-            Density matrix at each k-point
+            Density matrix at each k-point. It needs to be Hermitian.
 
     Kwargs:
         kpts_band : (3,) ndarray
@@ -164,8 +164,22 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     '''
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
-    nocc = np.count_nonzero(mo_occ_kpts != 0)
+
+    # mo_energy_kpts and mo_occ_kpts are k-point RHF quantities
+    assert(mo_energy_kpts[0].ndim == 1)
+    assert(mo_occ_kpts[0].ndim == 1)
+
+    # occ array in mo_occ_kpts may have different size. See issue #250
+    nocc = sum(mo_occ.sum() for mo_occ in mo_occ_kpts) / 2
+    # nocc may not be perfect integer when smearing is enabled
+    nocc = int(nocc.round(3))
     fermi = np.sort(np.hstack(mo_energy_kpts))[nocc-1]
+
+    for k, mo_e in enumerate(mo_energy_kpts):
+        mo_occ = mo_occ_kpts[k]
+        if mo_occ[mo_e > fermi].sum() > 1.:
+            logger.warn(mf, 'Occupied band above Fermi level: \n'
+                        'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
     return fermi
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
@@ -176,7 +190,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
     nkpts = len(mo_energy_kpts)
-    nocc = (mf.cell.nelectron * nkpts) // 2
+    nocc = mf.cell.tot_electrons(nkpts) // 2
 
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
@@ -218,7 +232,7 @@ def get_grad(mo_coeff_kpts, mo_occ_kpts, fock):
     return np.hstack(grad_kpts)
 
 
-def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     '''One particle density matrices for all k-points.
 
     Returns:
@@ -268,7 +282,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
 
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
-    '''Mulliken population analysis, based on meta-Lowdin AOs.
+    '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
     point density matrix.
@@ -277,7 +291,11 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     if s is None:
         s = get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for the gamma point')
+    log.note('Analyze output for *gamma point*')
+    log.info('    To include the contributions from k-points, transform to a '
+             'supercell then run the population analysis on the supercell\n'
+             '        from pyscf.pbc.tools import k2gamma\n'
+             '        k2gamma.k2gamma(mf).mulliken_meta()')
     log.note("KRHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
@@ -325,6 +343,43 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     return dm[0] + dm[1]
 
 
+def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpts=np.zeros((1,3))):
+    ''' Dipole moment in the unit cell (is it well defined)?
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm_kpts (a list of ndarrays) : density matrices of k-points
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if rho is None:
+        rho = numint.KNumInt().get_rho(cell, dm, grids, kpts, cell.max_memory)
+    return pbchf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
+
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    '''Compute density in real space
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if dm is None:
+        dm = mf.make_rdm1()
+    if getattr(dm[0], 'ndim', None) != 2:  # KUHF
+        dm = dm[0] + dm[1]
+    if grids is None:
+        grids = gen_grid.UniformGrids(mf.cell)
+    if kpts is None:
+        kpts = mf.kpts
+    ni = numint.KNumInt()
+    return ni.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
+
+
 class KSCF(pbchf.SCF):
     '''SCF base class with k-point sampling.
 
@@ -336,7 +391,6 @@ class KSCF(pbchf.SCF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
     direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
 
@@ -351,6 +405,7 @@ class KSCF(pbchf.SCF):
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpts = kpts
+        self.conv_tol = cell.precision * 10
 
         self.exx_built = False
         self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])
@@ -377,8 +432,8 @@ class KSCF(pbchf.SCF):
     def mo_occ_kpts(self):
         return self.mo_occ
 
-    def dump_flags(self):
-        mol_hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
@@ -388,17 +443,22 @@ class KSCF(pbchf.SCF):
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
-        if (self.cell.dimension == 3 and
+        cell = self.cell
+        if ((cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum') and
             isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
-            madelung = tools.pbc.madelung(self.cell, [self.kpts])
+            madelung = tools.pbc.madelung(cell, [self.kpts])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
+            nkpts = len(self.kpts)
+            # FIXME: consider the fractional num_electron or not? This maybe
+            # relates to the charged system.
+            nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
             logger.info(self, '    Total energy shift due to Ewald probe charge'
-                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
-                        madelung*self.cell.nelectron * -.5)
+                        ' = -1/2 * Nelec*madelung = %.12g',
+                        madelung*nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        if not hasattr(self.with_df, 'build'):
+        if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
-            self.with_df.dump_flags()
+            self.with_df.dump_flags(verbose)
         return self
 
     def check_sanity(self):
@@ -446,16 +506,19 @@ class KSCF(pbchf.SCF):
         if dm_kpts is None:
             dm_kpts = lib.asarray([dm]*len(self.kpts))
 
-        if cell.dimension < 3:
-            ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
-            if np.any(abs(ne - cell.nelectron) > 1e-7):
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne.mean())
-                dm_kpts *= cell.nelectron / ne.reshape(-1,1,1)
+        ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        # FIXME: consider the fractional num_electron or not? This maybe
+        # relate to the charged system.
+        nkpts = len(self.kpts)
+        nelectron = float(self.cell.tot_electrons(nkpts))
+        if abs(ne - nelectron) > 1e-7*nkpts:
+            logger.debug(self, 'Big error detected in the electron number '
+                        'of initial guess density matrix (Ne/cell = %g)!\n'
+                        '  This can cause huge error in Fock matrix and '
+                        'lead to instability in SCF for low-dimensional '
+                        'systems.\n  DM is normalized wrt the number '
+                        'of electrons %s', ne/nkpts, nelectron/nkpts)
+            dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 
     def init_guess_by_1e(self, cell=None):
@@ -529,7 +592,7 @@ class KSCF(pbchf.SCF):
             mo_coeff_kpts.append(c)
         return eig_kpts, mo_coeff_kpts
 
-    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
+    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
         if mo_coeff_kpts is None:
             # Note: this is actually "self.mo_coeff_kpts"
             # which is stored in self.mo_coeff of the scf.hf.RHF superclass
@@ -539,7 +602,7 @@ class KSCF(pbchf.SCF):
             # which is stored in self.mo_occ of the scf.hf.RHF superclass
             mo_occ_kpts = self.mo_occ
 
-        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs)
 
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
         '''Get energy bands at the given (arbitrary) 'band' k-points.
@@ -589,15 +652,30 @@ class KSCF(pbchf.SCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
+    def mulliken_pop(self):
+        raise NotImplementedError
+
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        if cell is None:
+            cell = self.cell
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
+
     canonicalize = canonicalize
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
-        return df_jk.density_fit(self, auxbasis, with_df)
+        return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
-        return mdf_jk.density_fit(self, auxbasis, with_df)
+        return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
@@ -614,6 +692,19 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
+
+    def to_rhf(self, mf):
+        '''Convert the input mean-field object to a KRHF/KROHF/KRKS/KROKS object'''
+        return addons.convert_to_rhf(mf)
+
+    def to_uhf(self, mf):
+        '''Convert the input mean-field object to a KUHF/KUKS object'''
+        return addons.convert_to_uhf(mf)
+
+    def to_ghf(self, mf):
+        '''Convert the input mean-field object to a KGHF/KGKS object'''
+        return addons.convert_to_ghf(mf)
+
 
 class KRHF(KSCF, pbchf.RHF):
     def check_sanity(self):

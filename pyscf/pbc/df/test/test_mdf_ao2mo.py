@@ -16,8 +16,8 @@ import unittest
 import numpy
 from pyscf.pbc.df import mdf
 import pyscf.pbc.gto as pgto
+from pyscf.pbc.lib import kpts_helper
 from pyscf import ao2mo
-mdf.df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 3
@@ -43,6 +43,7 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = mdf.MDF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -59,6 +60,7 @@ class KnowValues(unittest.TestCase):
         kpts[3] = kpts[0]
         kpts[2] = kpts[1]
         with_df = mdf.MDF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -72,6 +74,7 @@ class KnowValues(unittest.TestCase):
 
     def test_eri0000(self):
         with_df = mdf.MDF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = numpy.zeros((4,3))
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -90,6 +93,37 @@ class KnowValues(unittest.TestCase):
         eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
         eri1 = with_df.ao2mo(mo, with_df.kpts, compact=False)
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
+
+    def test_ao2mo_7d(self):
+        L = 3.
+        n = 6
+        cell = pgto.Cell()
+        cell.a = numpy.diag([L,L,L])
+        cell.mesh = [n,n,n]
+        cell.atom = '''He    2.    2.2      2.
+                       He    1.2   1.       1.'''
+        cell.basis = {'He': [[0, (1.2, 1)], [1, (0.6, 1)]]}
+        cell.verbose = 0
+        cell.build(0,0)
+
+        kpts = cell.make_kpts([1,3,1])
+        nkpts = len(kpts)
+        nao = cell.nao_nr()
+        numpy.random.seed(1)
+        mo =(numpy.random.random((nkpts,nao,nao)) +
+             numpy.random.random((nkpts,nao,nao))*1j)
+
+        with_df = mdf.MDF(cell, kpts)
+        out = with_df.ao2mo_7d(mo, kpts)
+        ref = numpy.empty_like(out)
+
+        kconserv = kpts_helper.get_kconserv(cell, kpts)
+        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+            kl = kconserv[ki, kj, kk]
+            tmp = with_df.ao2mo((mo[ki], mo[kj], mo[kk], mo[kl]), kpts[[ki,kj,kk,kl]])
+            ref[ki,kj,kk] = tmp.reshape([nao]*4)
+
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 12)
 
 if __name__ == '__main__':
     print("Full Tests for mdf ao2mo")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -418,9 +418,13 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
 
 
 class Gradients(tdrhf_grad.Gradients):
-
     def grad_elec(self, xy, singlet, atmlst=None):
         return kernel(self, xy, atmlst, self.max_memory, self.verbose)
+
+Grad = Gradients
+
+from pyscf import tdscf
+tdscf.uks.TDA.Gradients = tdscf.uks.TDDFT.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -449,7 +453,7 @@ if __name__ == '__main__':
     td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.72842011e-01]
@@ -469,7 +473,7 @@ if __name__ == '__main__':
     td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.05330714e-01]

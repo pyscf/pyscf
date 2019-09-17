@@ -26,14 +26,15 @@ General JK contraction function for
 
 import time
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 
 
 def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
-           aosym='s1', comp=None, hermi=0, shls_slice=None, verbose=logger.WARN):
+           aosym='s1', comp=None, hermi=0, shls_slice=None,
+           verbose=logger.WARN, vhfopt=None):
     '''Compute J/K matrices for the given density matrix
 
     Args:
@@ -155,20 +156,22 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     descript = []
     for script in scripts:
         dmsym, vsym = script.lower().split(',')[1].split('->')
-        if hermi == 0:
-            descript.append('->'.join((dmsym,'s1'+vsym)))
+        if vsym[:2] in ('a2', 's2', 's1'):
+            descript.append(dmsym + '->' + vsym)
+        elif hermi == 0:
+            descript.append(dmsym + '->s1' + vsym)
         else:
-            descript.append('->'.join((dmsym,'s2'+vsym)))
+            descript.append(dmsym + '->s2' + vsym)
 
     vs = _vhf.direct_bindm(intor, aosym, descript, dms, comp, atm, bas, env,
-                           shls_slice=shls_slice)
+                           vhfopt=vhfopt, shls_slice=shls_slice)
     if hermi != 0:
         for v in vs:
             if v.ndim == 3:
                 for vi in v:
-                    pyscf.lib.hermi_triu(vi, hermi, inplace=True)
+                    lib.hermi_triu(vi, hermi, inplace=True)
             else:
-                pyscf.lib.hermi_triu(v, hermi, inplace=True)
+                lib.hermi_triu(v, hermi, inplace=True)
 
     if single_script:
         vs = vs[0]
@@ -206,6 +209,24 @@ if __name__ == '__main__':
     ex = numpy.einsum('ij,ji', kcross, dm1)
     print(numpy.allclose(kcross, numpy.einsum('ijkl,jk->il', eri0[nao:,:nao,:nao,nao:], dm)))
     print(ex-numpy.einsum('ijkl,jk,li', eri0[nao:,:nao,:nao,nao:], dm, dm1))
+    kcross = get_jk((mol1,mol,mol,mol1), dm1, scripts='ijkl,li->kj')
+    ex = numpy.einsum('ij,ji', kcross, dm)
+    print(numpy.allclose(kcross, numpy.einsum('ijkl,li->kj', eri0[nao:,:nao,:nao,nao:], dm1)))
+    print(ex-numpy.einsum('ijkl,jk,li', eri0[nao:,:nao,:nao,nao:], dm, dm1))
+
+    j1part = get_jk((mol1,mol1,mol,mol), dm1[:1,:1], scripts='ijkl,ji->kl', intor='int2e',
+                    shls_slice=(0,1,0,1,0,mol.nbas,0,mol.nbas))
+    print(numpy.allclose(j1part, numpy.einsum('ijkl,ji->kl', eri0[nao:nao+1,nao:nao+1,:nao,:nao], dm1[:1,:1])))
+    k1part = get_jk((mol1,mol,mol,mol1), dm1[:,:1], scripts='ijkl,li->kj', intor='int2e',
+                    shls_slice=(0,1,0,1,0,mol.nbas,0,mol1.nbas))
+    print(numpy.allclose(k1part, numpy.einsum('ijkl,li->kj', eri0[nao:nao+1,:1,:nao,nao:], dm1[:,:1])))
+
+    j1part = get_jk(mol, dm[:1,1:2], scripts='ijkl,ji->kl', intor='int2e',
+                    shls_slice=(1,2,0,1,0,mol.nbas,0,mol.nbas))
+    print(numpy.allclose(j1part, numpy.einsum('ijkl,ji->kl', eri0[1:2,:1,:nao,:nao], dm[:1,1:2])))
+    k1part = get_jk(mol, dm[:,1:2], scripts='ijkl,li->kj', intor='int2e',
+                    shls_slice=(1,2,0,1,0,mol.nbas,0,mol.nbas))
+    print(numpy.allclose(k1part, numpy.einsum('ijkl,li->kj', eri0[:1,1:2,:nao,:nao], dm[:,1:2])))
 
     eri1 = gto.conc_mol(mol, mol1).intor('int2e_ip1_sph',comp=3).reshape([3]+[nao+nao1]*4)
     j1cross = get_jk((mol1,mol1,mol,mol), dm, scripts='ijkl,lk->ij', intor='int2e_ip1_sph', comp=3)

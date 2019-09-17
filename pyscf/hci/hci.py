@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -725,7 +725,7 @@ class SelectedCI(direct_spin1.FCISolver):
         return (h1, eri)
 
     def contract_2e(self, h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -734,7 +734,7 @@ class SelectedCI(direct_spin1.FCISolver):
 #        return contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
 
     def contract_ss(self, civec, norb, nelec):
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -742,7 +742,7 @@ class SelectedCI(direct_spin1.FCISolver):
         return contract_ss(civec, norb, nelec)
 
     def spin_square(self, civec, norb, nelec):
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -754,7 +754,7 @@ class SelectedCI(direct_spin1.FCISolver):
 
     def to_fci(self, civec, norb, nelec):
 
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -764,7 +764,7 @@ class SelectedCI(direct_spin1.FCISolver):
 
     def make_rdm12s(self, civec, norb, nelec):
 
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -788,7 +788,7 @@ def as_SCIvector(civec, ci_strs):
     return civec
 
 def as_SCIvector_if_not(civec, ci_strs):
-    if not hasattr(civec, '_strs'):
+    if getattr(civec, '_strs', None) is None:
         civec = as_SCIvector(civec, ci_strs)
     return civec
 

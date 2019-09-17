@@ -20,6 +20,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
+from pyscf.fci import fci_slow
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -66,6 +67,10 @@ g2ei = (ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False),
 numpy.random.seed(15)
 ci2 = numpy.random.random((na,nb))
 ci3 = numpy.random.random((na,nb))
+
+def tearDownModule():
+    global mol, m, h1er, h1ei, h1es, g2er, g2ei, g2es, ci0, ci1, ci2, ci3
+    del mol, m, h1er, h1ei, h1es, g2er, g2ei, g2es, ci0, ci1, ci2, ci3
 
 class KnownValues(unittest.TestCase):
     def test_contract(self):
@@ -167,6 +172,9 @@ class KnownValues(unittest.TestCase):
         ci0 = numpy.random.random((na,nb))
         ci1ref = fci.direct_uhf.contract_2e     ((u*1.1, u*2.2, u*1.8), ci0, norb, nelec)
         ci1 = fci.direct_uhf.contract_2e_hubbard((  1.1,   2.2,   1.8), ci0, norb, nelec)
+        self.assertTrue(numpy.allclose(ci1ref, ci1))
+
+        ci1 = fci_slow.contract_2e_hubbard((  1.1,   2.2,   1.8), ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
 
 

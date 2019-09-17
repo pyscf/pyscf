@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -225,8 +225,8 @@ class Gradients(rhf_grad.Gradients):
         keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** LR %s gradients for %s ********',
                  self.base.__class__, self.base._scf.__class__)
@@ -282,12 +282,17 @@ class Gradients(rhf_grad.Gradients):
 
     def _finalize(self):
         if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
+            logger.note(self, '--------- %s gradients for state %d ----------',
+                        self.base.__class__.__name__, self.state)
             rhf_grad._write(self, self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
+
+Grad = Gradients
+
+from pyscf import tdscf
+tdscf.rhf.TDA.Gradients = tdscf.rhf.TDHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -310,7 +315,7 @@ if __name__ == '__main__':
     td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     #tdg.verbose = 5
     g1 = tdg.kernel(z[0])
     print(g1)
@@ -326,7 +331,7 @@ if __name__ == '__main__':
     td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=1)
     print(g1)
     print(lib.finger(g1) - 0.18967687762609461)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from mpi_blksize import get_max_blocksize_from_mem
+from .mpi_blksize import get_max_blocksize_from_mem
 from pyscf.lib.numpy_helper import cartesian_prod
 import numpy
 from mpi4py import MPI

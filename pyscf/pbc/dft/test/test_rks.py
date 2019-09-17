@@ -111,6 +111,18 @@ class KnowValues(unittest.TestCase):
         mf.conv_check = False
         self.assertAlmostEqual(mf.scf(dm), -4.7090816314173365, 8)
 
+    def test_density_fit(self):
+        L = 4.
+        cell = pbcgto.Cell()
+        cell.a = np.eye(3)*L
+        cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],
+                    ['He' , ( L/2+1., L/2+0. ,   L/2+1.)]]
+        cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.build()
+        mf = pbcdft.RKS(cell).density_fit()
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -4.717699891018736, 7)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")
     unittest.main()

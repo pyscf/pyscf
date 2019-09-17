@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
                            mo_coeff[:,caslst],
                            mo_coeff[:,idx[ncore:]]))
 
-        if hasattr(mo_coeff, 'orbsym'):
+        if getattr(mo_coeff, 'orbsym', None) is not None:
             orbsym = mo_coeff.orbsym
             orbsym = numpy.hstack((orbsym[idx[:ncore]], orbsym[caslst],
                                    orbsym[idx[ncore:]]))
@@ -109,7 +109,7 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
                              mo_coeff[1][:,caslst[1]],
                              mo_coeff[1][:,idxb[ncore[1]:]]))
 
-        if hasattr(mo_coeff[0], 'orbsym'):
+        if getattr(mo_coeff[0], 'orbsym', None) is not None:
             orbsyma, orbsymb = mo_coeff[0].orbsym, mo_coeff[1].orbsym
             orbsyma = numpy.hstack((orbsyma[idxa[:ncore[0]]], orbsyma[caslst[0]],
                                     orbsyma[idxa[ncore[0]:]]))
@@ -179,7 +179,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             else:
                 irrep_ncore[k] = v
 
-        ncore_rest = casscf.ncore - sum(irrep_ncore.values())
+        ncore_rest = ncore - sum(irrep_ncore.values())
         if ncore_rest > 0:  # guess core configuration
             mask = numpy.ones(len(orbsym), dtype=bool)
             for ir in irrep_ncore:
@@ -188,12 +188,12 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             core_rest = dict([(ir, numpy.count_nonzero(core_rest==ir))
                               for ir in set(core_rest)])
             log.info('Given core space %s < casscf core size %d',
-                     cas_irrep_ncore, casscf.ncore)
+                     cas_irrep_ncore, ncore)
             log.info('Add %s to core configuration', core_rest)
             irrep_ncore.update(core_rest)
         elif ncore_rest < 0:
             raise ValueError('Given core space %s > casscf core size %d'
-                             % (cas_irrep_ncore, casscf.ncore))
+                             % (cas_irrep_ncore, ncore))
     else:
         irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
 
@@ -356,7 +356,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
 
     def project(mfmo, init_mo, ncore, s):
         s_init_mo = numpy.einsum('pi,pi->i', init_mo.conj(), s.dot(init_mo))
-        if abs(s_init_mo - 1).max() < 1e-7:
+        if abs(s_init_mo - 1).max() < 1e-7 and mfmo.shape[1] == init_mo.shape[1]:
             # Initial guess orbitals are orthonormal
             return init_mo
 # TODO: test whether the canonicalized orbitals are better than the projected orbitals
@@ -443,7 +443,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     return mo
 
 # on AO representation
-def make_rdm1(casscf, mo_coeff=None, ci=None):
+def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
     '''One-particle densit matrix in AO representation
 
     Args:
@@ -469,13 +469,13 @@ def make_rdm1(casscf, mo_coeff=None, ci=None):
     [ 0.0121563   0.0494735   0.0494735   1.95040395  1.95040395  1.98808879
       2.          2.          2.          2.        ]
     '''
-    return casscf.make_rdm1(mo_coeff, ci)
+    return casscf.make_rdm1(mo_coeff, ci, **kwargs)
 
 # make both alpha and beta density matrices
-def make_rdm1s(casscf, mo_coeff=None, ci=None):
+def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
     '''Alpha and beta one-particle densit matrices in AO representation
     '''
-    return casscf.make_rdm1s(mo_coeff, ci)
+    return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)
@@ -612,7 +612,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
                         '    mc.state_average_()\n' %
                         (casscf.fcisolver, fcibase_class.__base__.__module__,
                          fcibase_class.__base__.__name__))
-    has_spin_square = hasattr(casscf.fcisolver, 'spin_square')
+    has_spin_square = getattr(casscf.fcisolver, 'spin_square', None)
     e_states = [None]
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
@@ -639,33 +639,33 @@ def state_average_(casscf, weights=(0.5,0.5)):
                                         max_cycle=casscf.ci_response_space,
                                         nroots=self.nroots, **kwargs)
             return numpy.einsum('i,i->', e, weights), c
-        def make_rdm1(self, ci0, norb, nelec):
+        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
             dm1 = 0
             for i, wi in enumerate(weights):
-                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
+                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec, *args, **kwargs)
             return dm1
-        def make_rdm1s(self, ci0, norb, nelec):
+        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
             dm1a, dm1b = 0, 0
             for i, wi in enumerate(weights):
-                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec)
+                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec, *args, **kwargs)
                 dm1a += wi * dm1s[0]
                 dm1b += wi * dm1s[1]
             return dm1a, dm1b
-        def make_rdm12(self, ci0, norb, nelec):
+        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
             rdm1 = 0
             rdm2 = 0
             for i, wi in enumerate(weights):
-                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
+                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec, *args, **kwargs)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
 
         if has_spin_square:
-            def spin_square(self, ci0, norb, nelec):
+            def spin_square(self, ci0, norb, nelec, *args, **kwargs):
                 ss = 0
                 multip = 0
                 for i, wi in enumerate(weights):
-                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec)
+                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec, *args, **kwargs)
                     ss += wi * res[0]
                     multip += wi * res[1]
                 return ss, multip
@@ -729,7 +729,7 @@ def state_specific_(casscf, state=1):
                 c = [c]
             self._civec = c
             if casscf.verbose >= logger.DEBUG:
-                if hasattr(fcibase_class, 'spin_square'):
+                if getattr(fcibase_class, 'spin_square', None):
                     ss = fcibase_class.spin_square(self, c[state], norb, nelec)
                     logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
                                  state, e[state], ss[0])
@@ -767,8 +767,10 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
 #        fcibase_class = fcibase_class.__base__
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
-    has_spin_square = all(hasattr(solver, 'spin_square')
+    has_spin_square = all(getattr(solver, 'spin_square', None)
                           for solver in fcisolvers)
+    has_large_ci = all(getattr(solver, 'large_ci', None)
+                       for solver in fcisolvers)
     e_states = [None]
 
     def collect(items):
@@ -860,6 +862,9 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
+
+        large_ci = None
+        transform_ci_for_orbital_rotation = None
 
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec):

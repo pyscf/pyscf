@@ -17,7 +17,6 @@ import ctypes
 import unittest
 import numpy
 import scipy.special
-import scipy.misc
 from pyscf import lib
 from pyscf import gto
 from pyscf.dft import radi
@@ -385,7 +384,7 @@ def int_unit_xyz(i, j, k):
     else:
         return (_fac2[i-1] * _fac2[j-1] * _fac2[k-1] / _fac2[i+j+k+1])
 
-_fac2 = scipy.misc.factorial2(numpy.arange(80))
+_fac2 = scipy.special.factorial2(numpy.arange(80))
 _fac2[-1] = 1
 
 def c2s_bra(l, gcart):

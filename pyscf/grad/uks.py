@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -57,10 +57,10 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
+        logger.debug1(ks_grad, 'sum(grids response) %s', exc.sum(axis=0))
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
-    nao = vxc.shape[-1]
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
     if abs(hyb) < 1e-10:
@@ -202,14 +202,33 @@ class Gradients(uhf_grad.Gradients):
         self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
-    def dump_flags(self):
-        uhf_grad.Gradients.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        uhf_grad.Gradients.dump_flags(self, verbose)
         logger.info(self, 'grid_response = %s', self.grid_response)
         return self
 
     get_veff = get_veff
 
+    def extra_force(self, atom_id, envs):
+        '''Hook for extra contributions in analytical gradients.
+
+        Contributions like the response of auxiliary basis in density fitting
+        method, the grid response in DFT numerical integration can be put in
+        this function.
+        '''
+        if self.grid_response:
+            vhf = envs['vhf']
+            log = envs['log']
+            log.debug('grids response for atom %d %s',
+                      atom_id, vhf.exc1_grid[atom_id])
+            return vhf.exc1_grid[atom_id]
+        else:
+            return 0
+
 Grad = Gradients
+
+from pyscf import dft
+dft.uks.UKS.Gradients = dft.uks_symm.UKS.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -229,21 +248,24 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-12
     #mf.grids.atom_grid = (20,86)
     e0 = mf.scf()
-    g = Gradients(mf)
+    g = mf.Gradients()
     print(lib.finger(g.kernel()) - -0.12090786243525126)
-#[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
-# [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]
-# [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
+#[[-5.23195019e-16 -5.70291415e-16  5.32918387e-02]
+# [ 1.33417513e-16  6.75277008e-02 -2.66519852e-02]
+# [ 1.72274651e-16 -6.75277008e-02 -2.66519852e-02]]
     g.grid_response = True
     print(lib.finger(g.kernel()) - -0.12091122429043633)
+#[[-2.95956939e-16 -4.22275612e-16  5.32998759e-02]
+# [ 1.34532051e-16  6.75279140e-02 -2.66499379e-02]
+# [ 1.68146089e-16 -6.75279140e-02 -2.66499379e-02]]
 
     mf.xc = 'b88,p86'
     e0 = mf.scf()
     g = Gradients(mf)
     print(lib.finger(g.kernel()) - -0.11509739136150157)
-#[[ -8.20194970e-16  -2.04319288e-15   2.44405835e-02]
-# [  4.36709255e-18   2.73690416e-02  -1.22232039e-02]
-# [  3.44483899e-17  -2.73690416e-02  -1.22232039e-02]]
+#[[ 2.58483362e-16  5.82369026e-16  5.17616036e-02]
+# [-5.46977470e-17  6.39273304e-02 -2.58849008e-02]
+# [ 5.58302713e-17 -6.39273304e-02 -2.58849008e-02]]
     g.grid_response = True
     print(lib.finger(g.kernel()) - -0.11507986316077731)
 
@@ -251,9 +273,9 @@ if __name__ == '__main__':
     e0 = mf.scf()
     g = Gradients(mf)
     print(lib.finger(g.kernel()) - -0.10202554999695367)
-#[[ -3.59411142e-16  -2.68753987e-16   1.21557501e-02]
-# [  4.04977877e-17   2.11112794e-02  -6.08181640e-03]
-# [  1.52600378e-16  -2.11112794e-02  -6.08181640e-03]]
+#[[ 6.47874920e-16 -2.75292214e-16  3.97215970e-02]
+# [-6.60278148e-17  5.87909340e-02 -1.98650384e-02]
+# [ 6.75500259e-18 -5.87909340e-02 -1.98650384e-02]]
 
 
     mol = gto.Mole()
@@ -271,14 +293,14 @@ if __name__ == '__main__':
     mf.kernel()
     print(lib.finger(Gradients(mf).kernel()) - 0.10365160440876001)
 # sum over z direction non-zero, due to meshgrid response
-#[[ 0  0  -2.68934738e-03]
-# [ 0  0   2.69333577e-03]]
+# H    -0.0000000000     0.0000000000    -0.1481125370
+# F    -0.0000000000     0.0000000000     0.1481164667
     mf = dft.UKS(mol)
     mf.grids.prune = None
     mf.grids.level = 6
     mf.conv_tol = 1e-14
     mf.kernel()
     print(lib.finger(Gradients(mf).kernel()) - 0.10365040148752827)
-#[[ 0  0  -2.68931547e-03]
-# [ 0  0   2.68911282e-03]]
+# H     0.0000000000     0.0000000000    -0.1481124925
+# F    -0.0000000000     0.0000000000     0.1481122913
 

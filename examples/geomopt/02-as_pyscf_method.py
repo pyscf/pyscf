@@ -8,7 +8,7 @@ berny_solver.
 
 import numpy as np
 from pyscf import gto, scf
-from pyscf.geomopt import berny_solver
+from pyscf.geomopt import berny_solver, as_pyscf_method
 
 mol = gto.M(atom='N 0 0 0; N 0 0 1.8', unit='Bohr', basis='ccpvdz')
 mf = scf.RHF(mol)
@@ -24,5 +24,17 @@ def f(mol):
     print('Customized |g|', np.linalg.norm(g))
     return e, g
 
-fake_method = berny_solver.as_pyscf_method(mol, f)
-mol1 = berny_solver.optimize(fake_method)
+#
+# Function as_pyscf_method is a wrapper that convert the "energy-gradients"
+# function to berny_solver.  The "energy-gradients" function takes the Mole
+# object as geometry input, and returns the energy and gradients of that
+# geometry.
+#
+fake_method = as_pyscf_method(mol, f)
+new_mol = berny_solver.optimize(fake_method)
+
+print('Old geometry (Bohr)')
+print(mol.atom_coords())
+
+print('New geometry (Bohr)')
+print(new_mol.atom_coords())

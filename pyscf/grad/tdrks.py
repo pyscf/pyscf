@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -339,6 +339,11 @@ class Gradients(tdrhf.Gradients):
     def grad_elec(self, xy, singlet, atmlst=None):
         return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
 
+Grad = Gradients
+
+from pyscf import tdscf
+tdscf.rks.TDA.Gradients = tdscf.rks.TDDFT.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -366,7 +371,7 @@ if __name__ == '__main__':
     td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.31315477e-01]
@@ -387,7 +392,7 @@ if __name__ == '__main__':
     td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.21504524e-01]
@@ -424,7 +429,7 @@ if __name__ == '__main__':
     td.nstates = 3
     td.singlet = False
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=2)
     print(g1)
 # [[ 0  0  -0.3633334]

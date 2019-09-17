@@ -24,7 +24,7 @@ from pyscf import lib
 
 libfci = lib.load_library('libfci')
 
-def gen_strings4orblist(orb_list, nelec):
+def make_strings(orb_list, nelec):
     '''Generate string from the given orbital list.
 
     Returns:
@@ -35,9 +35,9 @@ def gen_strings4orblist(orb_list, nelec):
 
     Exampels:
 
-    >>> [bin(x) for x in gen_strings4orblist((0,1,2,3),2)]
+    >>> [bin(x) for x in make_strings((0,1,2,3),2)]
     [0b11, 0b101, 0b110, 0b1001, 0b1010, 0b1100]
-    >>> [bin(x) for x in gen_strings4orblist((3,1,0,2),2)]
+    >>> [bin(x) for x in make_strings((3,1,0,2),2)]
     [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
     '''
     orb_list = list(orb_list)
@@ -46,9 +46,9 @@ def gen_strings4orblist(orb_list, nelec):
 
     assert(nelec >= 0)
     if nelec == 0:
-        return [0]
+        return numpy.asarray([0], dtype=numpy.int64)
     elif nelec > len(orb_list):
-        return []
+        return numpy.asarray([], dtype=numpy.int64)
     def gen_str_iter(orb_list, nelec):
         if nelec == 1:
             res = [(1<<i) for i in orb_list]
@@ -67,6 +67,7 @@ def gen_strings4orblist(orb_list, nelec):
     strings = gen_str_iter(orb_list, nelec)
     assert(strings.__len__() == num_strings(len(orb_list),nelec))
     return numpy.asarray(strings, dtype=numpy.int64)
+gen_strings4orblist = make_strings
 
 def _gen_occslst(orb_list, nelec):
     '''Generate occupied orbital list for each string.
@@ -114,7 +115,7 @@ def num_strings(n, m):
 
 def gen_linkstr_index_o0(orb_list, nelec, strs=None):
     if strs is None:
-        strs = gen_strings4orblist(orb_list, nelec)
+        strs = make_strings(orb_list, nelec)
     strdic = dict(zip(strs,range(strs.__len__())))
     def propgate1e(str0):
         occ = []
@@ -204,7 +205,7 @@ def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
     str0, annihilating i, creating a, to get str1.
     '''
     if strs is None:
-        strs = gen_strings4orblist(orb_list, nocc)
+        strs = make_strings(orb_list, nocc)
 
     if isinstance(strs, OIndexList):
         return gen_linkstr_index_o1(orb_list, nocc, strs, tril)
@@ -224,7 +225,7 @@ def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
 
 def reform_linkstr_index(link_index):
     '''Compress the (a, i) pair index in linkstr_index to a lower triangular
-    index, to match the 4-fold symmetry of integrals.
+    index. The compressed indices can match the 4-fold symmetry of integrals.
     '''
     #for k, tab in enumerate(link_index):
     #    for j, (a, i, str1, sign) in enumerate(tab):
@@ -251,7 +252,7 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
 # return [cre, des, target_address, parity]
 def gen_cre_str_index_o0(orb_list, nelec):
     '''Slow version of gen_cre_str_index function'''
-    cre_strs = gen_strings4orblist(orb_list, nelec+1)
+    cre_strs = make_strings(orb_list, nelec+1)
     if isinstance(cre_strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
@@ -264,14 +265,14 @@ def gen_cre_str_index_o0(orb_list, nelec):
                 linktab.append((i, 0, credic[str1], cre_sign(i, str0)))
         return linktab
 
-    strs = gen_strings4orblist(orb_list, nelec)
+    strs = make_strings(orb_list, nelec)
     t = [progate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_cre_str_index_o1(orb_list, nelec):
     '''C implementation of gen_cre_str_index function'''
     norb = len(orb_list)
     assert(nelec < norb)
-    strs = gen_strings4orblist(orb_list, nelec)
+    strs = make_strings(orb_list, nelec)
     if isinstance(strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
@@ -296,7 +297,7 @@ def gen_cre_str_index(orb_list, nelec):
 # return [cre, des, target_address, parity]
 def gen_des_str_index_o0(orb_list, nelec):
     '''Slow version of gen_des_str_index function'''
-    des_strs = gen_strings4orblist(orb_list, nelec-1)
+    des_strs = make_strings(orb_list, nelec-1)
     if isinstance(des_strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
@@ -309,13 +310,13 @@ def gen_des_str_index_o0(orb_list, nelec):
                 linktab.append((0, i, desdic[str1], des_sign(i, str0)))
         return linktab
 
-    strs = gen_strings4orblist(orb_list, nelec)
+    strs = make_strings(orb_list, nelec)
     t = [progate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_des_str_index_o1(orb_list, nelec):
     '''C implementation of gen_des_str_index function'''
     assert(nelec > 0)
-    strs = gen_strings4orblist(orb_list, nelec)
+    strs = make_strings(orb_list, nelec)
     if isinstance(strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
@@ -369,7 +370,7 @@ def des_sign(p, string0):
 
 # Determine the sign of  string1 = p^+ q |string0>
 def parity(string0, string1):
-    sys.stderr.write('Function cistring.parity is deprecated\n')
+    #sys.stderr.write('Function cistring.parity is deprecated\n')
     ss = string1 - string0
     def count_bit1(n):
         # see Hamming weight problem and K&R C program
@@ -472,10 +473,10 @@ def sub_addrs(norb, nelec, orbital_indices, sub_nelec=0):
     '''
     assert(norb < 63)
     if sub_nelec == 0:
-        strs = gen_strings4orblist(orbital_indices, nelec)
+        strs = make_strings(orbital_indices, nelec)
         return strs2addr(norb, nelec, strs)
     else:
-        strs = gen_strings4orblist(range(norb), nelec)
+        strs = make_strings(range(norb), nelec)
         counts = numpy.zeros(len(strs), dtype=int)
         for i in orbital_indices:
             counts += (strs & (1<<i)) != 0
@@ -488,42 +489,16 @@ def tn_strs(norb, nelec, n):
     '''
     if nelec < n or norb-nelec < n:
         return numpy.zeros(0, dtype=int)
-    occs_allow = numpy.asarray(gen_strings4orblist(range(nelec), n)[::-1])
-    virs_allow = numpy.asarray(gen_strings4orblist(range(nelec,norb), n))
+    occs_allow = numpy.asarray(make_strings(range(nelec), n)[::-1])
+    virs_allow = numpy.asarray(make_strings(range(nelec,norb), n))
     hf_str = int('1'*nelec, 2)
     tns = (hf_str | virs_allow.reshape(-1,1)) ^ occs_allow
     return tns.ravel()
 
 if __name__ == '__main__':
-    #print([bin(i) for i in gen_strings4orblist(range(2,5), 2)])
-    #print(gen_strings4orblist(range(4), 2))
+    print([bin(i) for i in make_strings(range(2,5), 2)])
+    print(make_strings(range(4), 2))
     #print(gen_linkstr_index(range(6), 3))
 #    index = gen_linkstr_index(range(8), 4)
 #    idx16 = index[:16]
 #    print(idx16[:,:,2])
-    strs = gen_strings4orblist(range(8), 4)
-    occlst = _gen_occslst(range(8), 4)
-    print(abs(occlst - _strs2occslst(strs, 8)).sum())
-    print(abs(strs - _occslst2strs(occlst)).sum())
-    tab1 = gen_linkstr_index_o0(range(8), 4)
-    tab2 = gen_linkstr_index(range(8), 4)
-    print(abs(tab1 - tab2).sum())
-    tab3 = gen_linkstr_index_o1(range(8), 4)
-    print(abs(tab1 - tab3).sum())
-
-    print(addr2str_o0(6, 3, 7) - addr2str(6, 3, 7))
-    print(addr2str_o0(6, 3, 8) - addr2str(6, 3, 8))
-    print(addr2str_o0(7, 4, 9) - addr2str(7, 4, 9))
-
-    print(str2addr(6, 3, addr2str(6, 3, 7)) - 7)
-    print(str2addr(6, 3, addr2str(6, 3, 8)) - 8)
-    print(str2addr(7, 4, addr2str(7, 4, 9)) - 9)
-    print(numpy.allclose(numpy.arange(20),
-                         strs2addr(6, 3, addrs2str(6, 3, range(20)))))
-
-    tab1 = gen_cre_str_index_o0(range(8), 4)
-    tab2 = gen_cre_str_index_o1(range(8), 4)
-    print(abs(tab1 - tab2).sum())
-    tab1 = gen_des_str_index_o0(range(8), 4)
-    tab2 = gen_des_str_index_o1(range(8), 4)
-    print(abs(tab1 - tab2).sum())

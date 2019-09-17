@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -62,6 +62,22 @@ def make_h1_soc2e(hfcobj, dm0):
 
 class HyperfineCoupling(uhf_hfc.HyperfineCoupling):
     make_h1_soc2e = make_h1_soc2e
+
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s for %s (In testing) ********',
+                 self.__class__, self._scf.__class__)
+        log.info('HFC for atoms %s', str(self.hfc_nuc))
+        if self.cphf:
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        log.info('para_soc2e = %s', self.para_soc2e)
+        log.info('so_eff_charge = %s (1e SO effective charge)',
+                 self.so_eff_charge)
+        if not self._scf.converged:
+            log.warn('Ground state SCF is not converged')
+        return self
 
 HFC = HyperfineCoupling
 

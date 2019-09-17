@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -165,12 +165,12 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     >>> scf.uhf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
     '''
-    if hasattr(mo_coeff[0], 'orbsym'):
+    if getattr(mo_coeff[0], 'orbsym', None) is not None:
         orbsyma = mo_coeff[0].orbsym
     else:
         orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                       mo_coeff[0], s, False)
-    if hasattr(mo_coeff[1], 'orbsym'):
+    if getattr(mo_coeff[1], 'orbsym', None) is not None:
         orbsymb = mo_coeff[1].orbsym
     else:
         orbsymb = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -202,8 +202,9 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
 
-    if (hasattr(mo_coeff, 'orbsym') or
-        (hasattr(mo_coeff[0], 'orbsym') and hasattr(mo_coeff[1], 'orbsym'))):
+    if (getattr(mo_coeff, 'orbsym', None) is not None or
+        (getattr(mo_coeff[0], 'orbsym', None) is not None and
+         getattr(mo_coeff[1], 'orbsym', None) is not None)):
         orbsyma, orbsymb = get_orbsym(mol, mo_coeff)
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
@@ -244,7 +245,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     return mo_e, mo
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = numpy.asarray(mo_coeff.orbsym)
     else:
         orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
@@ -300,8 +301,8 @@ class SymAdaptedUHF(uhf.UHF):
         self.irrep_nelec = {}
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        uhf.UHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        uhf.UHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self
@@ -313,11 +314,7 @@ class SymAdaptedUHF(uhf.UHF):
                 if irname not in self.mol.irrep_name:
                     logger.warn(self, 'No irrep %s', irname)
 
-            if self.nelec is None:
-                nelec = self.mol.nelec
-            else:
-                nelec = self.nelec
-            hf_symm.check_irrep_nelec(mol, self.irrep_nelec, nelec)
+            hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
     def eig(self, h, s):
@@ -404,10 +401,7 @@ class SymAdaptedUHF(uhf.UHF):
                 idx_ea_left.append(ir_idxa)
                 idx_eb_left.append(ir_idxb)
 
-        if self.nelec is None:
-            nelec = self.mol.nelec
-        else:
-            nelec = self.nelec
+        nelec = self.nelec
         neleca_float = nelec[0] - neleca_fix
         nelecb_float = nelec[1] - nelecb_fix
         assert(neleca_float >= 0)

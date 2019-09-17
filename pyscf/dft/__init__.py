@@ -37,8 +37,10 @@ except (ImportError, OSError):
 from pyscf.dft import rks
 from pyscf.dft import roks
 from pyscf.dft import uks
+from pyscf.dft import gks
 from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
+from pyscf.dft import gks_symm
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
 from pyscf.df import density_fit
@@ -85,3 +87,8 @@ def UKS(mol, *args):
     else:
         return uks_symm.UKS(mol, *args)
 
+def GKS(mol, *args):
+    if not mol.symmetry or mol.groupname is 'C1':
+        return gks.GKS(mol, *args)
+    else:
+        return gks_symm.GKS(mol, *args)

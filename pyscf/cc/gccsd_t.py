@@ -38,7 +38,7 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
     majk = numpy.asarray(eris.ooov).conj().transpose(2,3,0,1)
     bcjk = numpy.asarray(eris.oovv).conj().transpose(2,3,0,1)
     fvo = eris.fock[nocc:,:nocc]
-    mo_e = eris.fock.diagonal().real
+    mo_e = eris.mo_energy
     eijk = lib.direct_sum('i+j+k->ijk', mo_e[:nocc], mo_e[:nocc], mo_e[:nocc])
     eabc = lib.direct_sum('a+b+c->abc', mo_e[nocc:], mo_e[nocc:], mo_e[nocc:])
 

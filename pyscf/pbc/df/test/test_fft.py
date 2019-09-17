@@ -27,6 +27,7 @@ from pyscf.pbc import lib as pbclib
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc import tools
+from pyscf.pbc.lib import kpts_helper
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -590,7 +591,11 @@ def finger(a):
     w = np.cos(np.arange(a.size))
     return np.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global cell, cell1, cell2, kpts, kpt0, kpts1, mf0
+    del cell, cell1, cell2, kpts, kpt0, kpts1, mf0
+
+class KnownValues(unittest.TestCase):
     def test_get_nuc(self):
         v0 = get_nuc(cell, kpts[0])
         v1 = fft.FFTDF(cell).get_nuc(kpts)
@@ -627,8 +632,8 @@ class KnowValues(unittest.TestCase):
 
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 2.3002596914518700, 9)
-        self.assertAlmostEqual(ek1, 3.3165691757797346, 9)
+        self.assertAlmostEqual(ej1, 2.3002596914518700*(6/6.82991739766009)**2, 9)
+        self.assertAlmostEqual(ek1, 3.3165691757797346*(6/6.82991739766009)**2, 9)
 
         dm = mf0.get_init_guess()
         vj0, vk0 = get_jk(mf0, cell, dm)
@@ -640,8 +645,8 @@ class KnowValues(unittest.TestCase):
 
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 2.4673139106639925, 9)
-        self.assertAlmostEqual(ek1, 3.6886674521354221, 9)
+        self.assertAlmostEqual(ej1, 2.4673139106639925*(6/6.82991739766009)**2, 9)
+        self.assertAlmostEqual(ek1, 3.6886674521354221*(6/6.82991739766009)**2, 9)
 
     def test_get_jk_kpts(self):
         df = fft.FFTDF(cell)
@@ -657,14 +662,14 @@ class KnowValues(unittest.TestCase):
 
         ej1 = numpy.einsum('xij,xji->', vj1, dms) / len(kpts)
         ek1 = numpy.einsum('xij,xji->', vk1, dms) / len(kpts)
-        self.assertAlmostEqual(ej1, 2.3163352969873445, 9)
-        self.assertAlmostEqual(ek1, 7.7311228144548600, 9)
+        self.assertAlmostEqual(ej1, 2.3163352969873445*(6/6.82991739766009)**2, 9)
+        self.assertAlmostEqual(ek1, 7.7311228144548600*(6/6.82991739766009)**2, 9)
 
         numpy.random.seed(1)
         kpts_band = numpy.random.random((2,3))
         vj1, vk1 = df.get_jk(dms, kpts=kpts, kpts_band=kpts_band, exxdiv=None)
-        self.assertAlmostEqual(lib.finger(vj1), 3.437188138446714+0.1360466492092307j, 9)
-        self.assertAlmostEqual(lib.finger(vk1), 7.479986541097368+1.1980593415201204j, 9)
+        self.assertAlmostEqual(lib.finger(vj1), 6/6.82991739766009*(3.437188138446714+0.1360466492092307j), 9)
+        self.assertAlmostEqual(lib.finger(vk1), 6/6.82991739766009*(7.479986541097368+1.1980593415201204j), 9)
 
         nao = dm.shape[0]
         mo_coeff = numpy.random.random((nkpts,nao,nao))
@@ -673,6 +678,18 @@ class KnowValues(unittest.TestCase):
         dms = lib.tag_array(lib.asarray(dms), mo_coeff=mo_coeff, mo_occ=mo_occ)
         vk1 = df.get_jk(dms, kpts=kpts, kpts_band=kpts_band, exxdiv=None)[1]
         self.assertAlmostEqual(lib.finger(vk1), 10.239828255099447+2.1190549216896182j, 9)
+
+    def test_get_j_non_hermitian(self):
+        kpt = kpts[0]
+        numpy.random.seed(2)
+        nao = cell2.nao
+        dm = numpy.random.random((nao,nao))
+        mydf = fft.FFTDF(cell2)
+        v1 = mydf.get_jk(dm, hermi=0, kpts=kpts[1], with_k=False)[0]
+        eri = mydf.get_eri([kpts[1]]*4).reshape(nao,nao,nao,nao)
+        ref = numpy.einsum('ijkl,ji->kl', eri, dm)
+        self.assertAlmostEqual(abs(ref - v1).max(), 0, 12)
+        self.assertTrue(abs(ref-ref.T.conj()).max() > 1e-5)
 
     def test_get_ao_eri(self):
         df = fft.FFTDF(cell)
@@ -801,9 +818,97 @@ class KnowValues(unittest.TestCase):
         eri_mo1 = df.get_mo_eri(mos, kpts1)
         self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
 
+    def test_ao2mo_7d(self):
+        L = 3.
+        n = 6
+        cell = pgto.Cell()
+        cell.a = numpy.diag([L,L,L])
+        cell.mesh = [n,n,n]
+        cell.atom = '''He    2.    2.2      2.
+                       He    1.2   1.       1.'''
+        cell.basis = {'He': [[0, (1.2, 1)], [1, (0.6, 1)]]}
+        cell.verbose = 0
+        cell.build(0,0)
+
+        kpts = cell.make_kpts([1,3,1])
+        nkpts = len(kpts)
+        nao = cell.nao_nr()
+        numpy.random.seed(1)
+        mo =(numpy.random.random((nkpts,nao,nao)) +
+             numpy.random.random((nkpts,nao,nao))*1j)
+
+        with_df = fft.FFTDF(cell, kpts)
+        out = with_df.ao2mo_7d(mo, kpts)
+        ref = numpy.empty_like(out)
+
+        kconserv = kpts_helper.get_kconserv(cell, kpts)
+        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+            kl = kconserv[ki, kj, kk]
+            tmp = with_df.ao2mo((mo[ki], mo[kj], mo[kk], mo[kl]), kpts[[ki,kj,kk,kl]])
+            ref[ki,kj,kk] = tmp.reshape([nao]*4)
+
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 12)
+
+    def test_get_jk_with_casscf(self):
+        from pyscf import mcscf
+        pcell = cell2.copy()
+        pcell.verbose = 0
+        pcell.mesh = [8]*3
+        mf = pbcscf.RHF(pcell)
+        mf.exxdiv = None
+        ehf = mf.kernel()
+
+        mc = mcscf.CASSCF(mf, 1, 2).run()
+        self.assertAlmostEqual(mc.e_tot, ehf, 9)
+
+        mc = mcscf.CASSCF(mf, 2, 0).run()
+        self.assertAlmostEqual(mc.e_tot, ehf, 9)
 
 if __name__ == '__main__':
     print("Full Tests for fft JK and ao2mo etc")
     unittest.main()
 
 
+#|| ======================================================================
+#|| FAIL: test_get_jk (__main__.KnownValues)
+#|| ----------------------------------------------------------------------
+#|| Traceback (most recent call last):
+#||   File "df/test/test_fft.py", line 635, in test_get_jk
+#||     self.assertAlmostEqual(ej1, 2.3002596914518700*6./6.82991739766009, 9)
+#|| AssertionError: (1.7752048157393747-2.5392293537889846e-19j) != 2.0207503759034617 within 9 places
+#|| 
+#|| ======================================================================
+#|| FAIL: test_get_jk_kpts (__main__.KnownValues)
+#|| ----------------------------------------------------------------------
+#|| Traceback (most recent call last):
+#||   File "df/test/test_fft.py", line 665, in test_get_jk_kpts
+#||     self.assertAlmostEqual(ej1, 2.3163352969873445*6./6.82991739766009, 9)
+#|| AssertionError: (1.7876110203371138+9.959029383250026e-19j) != 2.0348726013414873 within 9 places
+#|| 
+#|| ======================================================================
+#|| FAIL: test_get_jk_with_casscf (__main__.KnownValues)
+#|| ----------------------------------------------------------------------
+#|| Traceback (most recent call last):
+#||   File "df/test/test_fft.py", line 861, in test_get_jk_with_casscf
+#||     mc = mcscf.CASSCF(mf, 1, 2).run()
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/lib/misc.py", line 472, in run
+#||     self.kernel(*args)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/mc1step.py", line 796, in kernel
+#||     ci0=ci0, callback=callback, verbose=self.verbose)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/mc1step.py", line 346, in kernel
+#||     e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/mc1step.py", line 816, in casci
+#||     e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/mcscf/casci.py", line 493, in kernel
+#||     ecore=energy_core)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/fci/direct_spin1.py", line 738, in kernel
+#||     davidson_only, pspace_size, ecore=ecore, **kwargs)
+#||   File "/home/sunqm/workspace/program/pyscf/pyscf/fci/direct_spin1.py", line 448, in kernel_ms1
+#||     assert(0 < nelec[0] < norb and 0 < nelec[1] < norb)
+#|| AssertionError
+#|| 
+#|| ----------------------------------------------------------------------
+#|| Ran 14 tests in 9.418s
+#|| 
+#|| FAILED (failures=3)
+#|| [Finished in 10 seconds with code 1]

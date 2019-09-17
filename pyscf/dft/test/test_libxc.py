@@ -101,8 +101,8 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('APBE,')
         self.assertEqual(fn_facs, [(184, 1)])
 
-        hyb, fn_facs = dft.libxc.parse_xc('TF,')
-        self.assertEqual(fn_facs, [(50, 1)])
+        #hyb, fn_facs = dft.libxc.parse_xc('TF,')
+        #self.assertEqual(fn_facs, [(50, 1)])
 
         ref = [(1, 1), (7, 1)]
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))
@@ -119,6 +119,9 @@ class KnownValues(unittest.TestCase):
 
         self.assertEqual(dft.libxc.parse_xc('Xpbe,')[1], [(123,1)])
         self.assertEqual(dft.libxc.parse_xc('pbe,' )[1], [(101,1)])
+        hyb, fn_facs = dft.libxc.parse_xc('PBE*.4+LDA')
+        self.assertEqual(fn_facs, [(101, 0.4), (130, 0.4), (1, 1)])
+        self.assertRaises(KeyError, dft.libxc.parse_xc, 'PBE+VWN')
 
         self.assertTrue (dft.libxc.is_meta_gga('m05'))
         self.assertFalse(dft.libxc.is_meta_gga('pbe0'))
@@ -137,7 +140,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
 
     def test_libxc_cam_beta_bug(self):
-        '''As a detector for libxc-3.0.0. libxc-3.0.1 has fixed this bug
+        '''As a detector for libxc-3.0.0. libxc-3.0.1 fixed this bug
         '''
         import ctypes
         rsh_tmp = (ctypes.c_double*3)()
@@ -217,6 +220,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertRaises(ValueError, dft.libxc.define_xc, mf._numint, 0.1)
 
+# libxc-4.2.3 does not support m05x
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),
               numpy.array([.8, 1., 0., 0., 0., 0.1050]).reshape(-1,1))

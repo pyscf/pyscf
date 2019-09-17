@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 # type of cartesian functions.  Based on the degeneracy of cartesian function
 # basis, one can quickly filter out a few candidates of point groups for the
 # given molecule.  Regular operations (rotation, mirror etc) can be applied
-# next to identify the symmetry.  Current implementation only checks the
+# then to identify the symmetry.  Current implementation only checks the
 # rotation functions and it's roughly enough for D2h and subgroups.
 # 
 # There are special cases this detection method may break down, eg two H8 cube
@@ -130,20 +130,24 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
     w1, u1 = rawsys.cartesian_tensor(1)
     axes = u1.T
     log.debug('principal inertia moments %s', w1)
+    charge_center = rawsys.charge_center
 
     if numpy.allclose(w1, 0, atol=tol):
         gpname = 'SO3'
-        return gpname, rawsys.charge_center, numpy.eye(3)
+        return gpname, charge_center, numpy.eye(3)
 
     elif numpy.allclose(w1[:2], 0, atol=tol): # linear molecule
         if rawsys.has_icenter():
             gpname = 'Dooh'
         else:
             gpname = 'Coov'
-        return gpname, rawsys.charge_center, axes
+        return gpname, charge_center, axes
 
     else:
-        w1_degeneracy = _degeneracy(w1, decimals)
+        w1_degeneracy, w1_degen_values = _degeneracy(w1, decimals)
+        w2, u2 = rawsys.cartesian_tensor(2)
+        w2_degeneracy, w2_degen_values = _degeneracy(w2, decimals)
+        log.debug('2d tensor %s', w2)
 
         n = None
         c2x = None
@@ -151,25 +155,23 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
         if 3 in w1_degeneracy: # T, O, I
             # Because rotation vectors Rx Ry Rz are 3-degenerated representation
             # See http://www.webqc.org/symmetrypointgroup-td.html
-            w2, u2 = rawsys.cartesian_tensor(2)
-            w3, u3 = rawsys.cartesian_tensor(3)
-            w2_degeneracy = _degeneracy(w2, decimals)
-            w3_degeneracy = _degeneracy(w3, decimals)
 
-            log.debug('2d tensor %s', w2)
+            w3, u3 = rawsys.cartesian_tensor(3)
+            w3_degeneracy, w3_degen_values = _degeneracy(w3, decimals)
             log.debug('3d tensor %s', w3)
             if (5 in w2_degeneracy and
                 4 in w3_degeneracy and len(w3_degeneracy) == 3):  # I group
                 gpname, new_axes = _search_i_group(rawsys)
                 if gpname is not None:
-                    return gpname, rawsys.charge_center, _refine(new_axes)
+                    return gpname, charge_center, _refine(new_axes)
 
             elif 3 in w2_degeneracy and len(w2_degeneracy) <= 3:  # T/O group
                 gpname, new_axes = _search_ot_group(rawsys)
                 if gpname is not None:
-                    return gpname, rawsys.charge_center, _refine(new_axes)
+                    return gpname, charge_center, _refine(new_axes)
 
-        elif 2 in w1_degeneracy:
+        elif (2 in w1_degeneracy and
+              numpy.any(w2_degeneracy[w2_degen_values>0] >= 2)):
             if numpy.allclose(w1[1], w1[2], atol=tol):
                 axes = axes[[1,2,0]]
             n = rawsys.search_c_highest(axes[2])[1]
@@ -225,7 +227,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 gpname = 'S%d' % (n*2)
             else:
                 gpname = 'C%d' % n
-            return gpname, rawsys.charge_center, _refine(axes)
+            return gpname, charge_center, _refine(axes)
 
         else:
             is_c2x = rawsys.has_rotation(axes[0], 2)
@@ -262,7 +264,9 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                     gpname = 'Cs'
                 else:
                     gpname = 'C1'
-    return gpname, rawsys.charge_center, axes
+                    axes = numpy.eye(3)
+                    charge_center = numpy.zeros(3)
+    return gpname, charge_center, axes
 
 
 # reduce to D2h and its subgroups
@@ -393,6 +397,7 @@ def symm_ops(gpname, axes=None):
 
 def symm_identical_atoms(gpname, atoms):
     ''' Requires '''
+    from pyscf import gto
     # Dooh Coov for linear molecule
     if gpname == 'Dooh':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
@@ -410,13 +415,15 @@ def symm_identical_atoms(gpname, atoms):
         eql_atom_ids = [[i] for i,a in enumerate(atoms)]
         return eql_atom_ids
 
-    center = mole.charge_center(atoms)
+    charges = numpy.array([gto.charge(a[0]) for a in atoms])
+    coords = numpy.array([a[1] for a in atoms])
+    center = numpy.einsum('z,zr->r', charges, coords)/charges.sum()
+
 #    if not numpy.allclose(center, 0, atol=TOLERANCE):
 #        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
 #                        % center)
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
     idx = argsort_coords(coords)
     coords0 = coords[idx]
 
@@ -753,10 +760,10 @@ def _search_ot_group(rawsys):
 def _degeneracy(e, decimals):
     e = numpy.around(e, decimals)
     u, idx = numpy.unique(e, return_inverse=True)
-    degen = [numpy.count_nonzero(idx==i) for i in range(len(u))]
-    return degen
+    degen = numpy.array([numpy.count_nonzero(idx==i) for i in range(len(u))])
+    return degen, u
 
-def _pesudo_vectors(vs):
+def _pseudo_vectors(vs):
     idy0 = abs(vs[:,1])<TOLERANCE
     idz0 = abs(vs[:,2])<TOLERANCE
     vs = vs.copy()
@@ -776,7 +783,7 @@ def _remove_dupvec(vs):
             x = numpy.sum(abs(vs[1:]-vs[0]), axis=1)
             rest = rm_iter(vs[1:][x>TOLERANCE])
             return numpy.vstack((vs[0], rest))
-    return rm_iter(_pesudo_vectors(vs))
+    return rm_iter(_pseudo_vectors(vs))
 
 def _make_axes(z, x):
     y = numpy.cross(z, x)

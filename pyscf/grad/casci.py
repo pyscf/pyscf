@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -246,8 +246,8 @@ class Gradients(lib.StreamObject):
         self.de = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         if not self.base.converged:
             log.warn('Ground state CASCI not converged')
@@ -300,6 +300,9 @@ class Gradients(lib.StreamObject):
 
 Grad = Gradients
 
+from pyscf import mcscf
+mcscf.casci.CASCI.Gradients = lib.class_as_method(Gradients)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -311,7 +314,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.RHF(mol).run(conv_tol=1e-14)
     mc = mcscf.CASCI(mf, 4, 4).run()
-    g1 = mc.nuc_grad_method().kernel()
+    g1 = mc.Gradients().kernel()
     print(lib.finger(g1) - -0.066025991364829367)
 
     mcs = mc.as_scanner()

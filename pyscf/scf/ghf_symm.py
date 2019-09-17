@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     if not mol.symmetry:
         return ghf.canonicalize(mf, mo_coeff, mo_occ, fock)
 
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         return hf_symm.canonicalize(mf, mo_coeff, mo_occ, fock)
     else:
         raise NotImplementedError
@@ -104,8 +104,8 @@ class GHF(ghf.GHF):
         self.irrep_nelec = {}
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        ghf.GHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        ghf.GHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self
@@ -273,7 +273,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     if mo_coeff is None:
         orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
                                for i, ir in enumerate(mol.irrep_id)])
-    elif hasattr(mo_coeff, 'orbsym'):
+    elif getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
         nao = mo_coeff.shape[0] // 2

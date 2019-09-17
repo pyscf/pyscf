@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -160,7 +160,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.size)
 
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
         irreps = set(orbsym)
         for ir in irreps:
@@ -315,7 +315,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     if mo_coeff is None:
         orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
                                for i, ir in enumerate(mol.irrep_id)])
-    elif hasattr(mo_coeff, 'orbsym'):
+    elif getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
     else:
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -522,8 +522,8 @@ class SymAdaptedROHF(rohf.ROHF):
         self._irrep_soccs = []
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self
@@ -535,17 +535,23 @@ class SymAdaptedROHF(rohf.ROHF):
                 if irname not in self.mol.irrep_name:
                     logger.warn(self, 'No irrep %s', irname)
 
-            if getattr(self, 'nelec', None) is None:
-                nelec = self.mol.nelec
-            else:
-                nelec = self.nelec
-            check_irrep_nelec(mol, self.irrep_nelec, nelec)
+            check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+
+            alpha_open = beta_open = False
+            for ne in self.irrep_nelec.values():
+                if not isinstance(ne, (int, numpy.integer)):
+                    alpha_open = ne[0] > ne[1]
+                    beta_open = ne[0] < ne[1]
+                if alpha_open and beta_open:
+                    raise ValueError('A low-spin configuration was found in '
+                                     'the irrep_nelec input. ROHF does not '
+                                     'support low-spin systems.')
         return hf.RHF.build(self, mol)
 
     @lib.with_doc(eig.__doc__)
     def eig(self, fock, s):
         e, c = eig(self, fock, s)
-        if hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is not None:
             mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
             mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
             e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
@@ -573,7 +579,7 @@ class SymAdaptedROHF(rohf.ROHF):
         if not self.mol.symmetry:
             return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
 
-        if hasattr(mo_energy, 'mo_ea'):
+        if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea
             mo_eb = mo_energy.mo_eb
         else:
@@ -612,12 +618,7 @@ class SymAdaptedROHF(rohf.ROHF):
                                                    mo_ea[rest_idx], mo_eb[rest_idx],
                                                    ncore, nopen)
 
-        if self.nelec is None:
-            nelec = self.mol.nelec
-        else:
-            nelec = self.nelec
-        ncore = nelec[1]
-        nocc  = nelec[0]
+        nocc, ncore = self.nelec
         nopen = nocc - ncore
         vir_idx = (mo_occ==0)
         if self.verbose >= logger.INFO and nocc < nmo and ncore > 0:
@@ -669,7 +670,7 @@ class SymAdaptedROHF(rohf.ROHF):
             numpy.set_printoptions(threshold=1000)
         return mo_occ
 
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if mo_occ is None:
@@ -693,7 +694,7 @@ class SymAdaptedROHF(rohf.ROHF):
         idx = numpy.hstack((idx[self.mo_occ==2][c_sort],
                             idx[self.mo_occ==1][o_sort],
                             idx[self.mo_occ==0][v_sort]))
-        if hasattr(self.mo_energy, 'mo_ea'):
+        if getattr(self.mo_energy, 'mo_ea', None) is not None:
             mo_ea = self.mo_energy.mo_ea[idx]
             mo_eb = self.mo_energy.mo_eb[idx]
             self.mo_energy = lib.tag_array(self.mo_energy[idx],
@@ -747,7 +748,7 @@ class SymAdaptedROHF(rohf.ROHF):
             for k,ir in enumerate(mol.irrep_id):
                 irname_full[ir] = mol.irrep_name[k]
             irorbcnt = {}
-            if hasattr(mo_energy, 'mo_ea'):
+            if getattr(mo_energy, 'mo_ea', None) is not None:
                 mo_ea = mo_energy.mo_ea
                 mo_eb = mo_energy.mo_eb
                 log.note('                          Roothaan           | alpha              | beta')
@@ -811,13 +812,12 @@ class SymAdaptedROHF(rohf.ROHF):
 
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
-        if not hasattr(fock, 'focka'):
+        if getattr(fock, 'focka', None) is None:
             fock = self.get_fock(dm=self.make_rdm1(mo_coeff, mo_occ))
         mo_e, mo_coeff = canonicalize(self, mo_coeff, mo_occ, fock)
-        if hasattr(fock, 'focka'):
-            mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
-            mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
-            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
+        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+        mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         return mo_e, mo_coeff
 
     def get_orbsym(self, mo_coeff=None):

@@ -18,6 +18,7 @@
 
 import unittest
 import numpy
+from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.scf as pscf
 cell = pbcgto.Cell()
@@ -45,7 +46,7 @@ def tearDownModule():
     cell.stdout.close()
     del cell, kmf_ro, kmf_r, kmf_u, kmf_g
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_krhf_smearing(self):
         mf = pscf.KRHF(cell, cell.make_kpts([2,1,1]))
         nkpts = len(mf.kpts)
@@ -273,7 +274,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue (isinstance(mf1.convert_from_(kmf_u.mix_density_fit()).with_df, df.mdf.MDF))
 
     def test_canonical_occ(self):
-        mf1 = pscf.kuhf.KUHF(cell)
+        kpts = numpy.random.rand(2,3)
+        mf1 = pscf.kuhf.KUHF(cell, kpts)
         mo_energy_kpts = [numpy.array([[0, 2, 3, 4],[0, 0, 1, 2]])] * 2
         occ_ref = numpy.array([[[1, 0, 0, 0], [1, 1, 1, 0]]]*2)
         occ = mf1.get_occ(mo_energy_kpts)
@@ -284,6 +286,79 @@ class KnowValues(unittest.TestCase):
         occ = mf1.get_occ(mo_energy_kpts)
         self.assertAlmostEqual(abs(occ - occ_ref).max(), 0, 14)
 
+    def test_smearing_for_custom_H(self):
+        t = 1.0
+        U = 12.
+        Nx, Ny, Nkx, Nky, Nele = (2, 2, 3, 3, 4)
+        Nk = Nkx*Nky
+        Nsite = Nx*Ny
+
+        cell = pbcgto.M(
+             unit='B',
+             a=numpy.diag([Nx, Ny, 1.]),
+             verbose=0,
+        )
+        cell.nelectron = Nele
+        kpts = cell.make_kpts([Nkx,Nky,1])
+
+        def gen_H_tb(t,Nx,Ny,kvec):
+            H = numpy.zeros((Nx,Ny,Nx,Ny),dtype=numpy.complex)
+            for i in range(Nx):
+                for j in range(Ny):
+                    if i == Nx-1:
+                        H[i,j,0   ,j] += numpy.exp(-1j*numpy.dot(numpy.array(kvec),numpy.array([Nx,0])))
+                    else:
+                        H[i,j,i+1 ,j] += 1
+
+                    if i == 0:
+                        H[i,j,Nx-1,j] += numpy.exp(-1j*numpy.dot(numpy.array(kvec),numpy.array([-Nx,0])))
+                    else:
+                        H[i,j,i-1 ,j] += 1
+
+                    if j == Ny-1:
+                        H[i,j,i,0   ] += numpy.exp(-1j*numpy.dot(numpy.array(kvec),numpy.array([0,Ny])))
+                    else:
+                        H[i,j,i,j+1] += 1
+
+                    if j == 0:
+                        H[i,j,i,Ny-1] += numpy.exp(-1j*numpy.dot(numpy.array(kvec),numpy.array([0,-Ny])))
+                    else:
+                        H[i,j,i,j-1] += 1
+            return -t*H.reshape(Nx*Ny,Nx*Ny)
+
+        def get_H_tb_array(kpts,Nx,Ny,t):
+            H_tb_array=[]
+            for kpt in kpts:
+                H_tb = gen_H_tb(t, Nx, Ny, kpt[:2])
+                H_tb_array.append(H_tb)
+            return numpy.array(H_tb_array)
+
+        def get_veff(cell, dm, *args):
+            weight = 1./Nk
+            j_a = numpy.diag(weight * numpy.einsum('kii->i', dm[0]) * U)
+            k_a = numpy.diag(weight * numpy.einsum('kii->i', dm[0]) * U)
+            j_b = numpy.diag(weight * numpy.einsum('kii->i', dm[1]) * U)
+            k_b = numpy.diag(weight * numpy.einsum('kii->i', dm[1]) * U)
+            j = j_a + j_b
+            veff_a = numpy.array([j-k_a]*Nk)
+            veff_b = numpy.array([j-k_b]*Nk)
+            return (veff_a,veff_b)
+
+        kmf = pscf.KUHF(cell, kpts, exxdiv=None)
+        H_tb_array = get_H_tb_array(kpts,Nx,Ny,t)
+        kmf.get_hcore = lambda *args: H_tb_array
+        kmf.get_ovlp = lambda *args: numpy.array([numpy.eye(Nsite)]*Nk)
+        kmf.get_veff = get_veff
+
+        kmf = pscf.addons.smearing_(kmf, sigma=0.2, method='gaussian')
+
+        dm_a = numpy.array([numpy.eye(Nsite)]*Nk)
+        dm_b = dm_a * 0.5
+        kmf.max_cycle = 1
+        kmf.kernel([dm_a, dm_b])
+        self.assertAlmostEqual(kmf.entropy, 0.250750926026, 9)
+        self.assertAlmostEqual(kmf.e_free, 1.3942942592412, 9)
+        self.assertAlmostEqual(lib.finger(kmf.mo_occ), 0.035214493032250, 9)
 
 
 if __name__ == '__main__':

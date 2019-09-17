@@ -49,7 +49,7 @@ def prenao(mol, dm):
         # UHF or ROHF
         dm = dm[0] + dm[1]
 
-    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
         s = mol.pbc_intor('int1e_ovlp', hermi=1)
     else:
         s = mol.intor_symmetric('int1e_ovlp')
@@ -59,7 +59,7 @@ def prenao(mol, dm):
 
 def nao(mol, mf, s=None, restore=True):
     if s is None:
-        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
             s = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:
             s = mol.intor_symmetric('int1e_ovlp')
@@ -116,7 +116,7 @@ def _prenao_sub(mol, p, s):
 
 def _nao_sub(mol, pre_occ, pre_nao, s=None):
     if s is None:
-        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
             s = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:
             s = mol.intor_symmetric('int1e_ovlp')

@@ -191,9 +191,7 @@ void GTOr3c_drv(int (*intor)(), void (*fill)(), double complex *eri, int comp,
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 3);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, fill, eri, comp, shls_slice, ao_loc, cintopt, \
-               atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int ish, jsh, ij;
         double complex *buf = malloc(sizeof(double complex) *

@@ -81,7 +81,7 @@ def sfx2c1e(mf):
         def get_hcore(self, cell=None, kpts=None, kpt=None):
             if cell is None: cell = self.cell
             if kpts is None:
-                if hasattr(self, 'kpts'):
+                if getattr(self, 'kpts', None) is not None:
                     kpts = self.kpts
                 else:
                     if kpt is None:
@@ -111,7 +111,8 @@ class X2C(x2c.X2C):
     basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)
 
     def __init__(self, cell, kpts=None):
-        self.cell = self.mol = cell
+        self.cell = cell
+        x2c.X2C.__init__(self, cell)
 
 class SpinFreeX2C(X2C):
     def get_hcore(self, cell=None, kpts=None):
@@ -171,6 +172,29 @@ class SpinFreeX2C(X2C):
             h1_kpts = h1_kpts[0]
         return lib.asarray(h1_kpts)
 
+    def get_xmat(self, cell=None, kpts=None):
+        if cell is None: cell = self.cell
+        xcell, contr_coeff = self.get_xmol(cell)
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+        if 'ATOM' in self.approx.upper():
+            atom_slices = xcell.offset_nr_by_atom()
+            nao = xcell.nao_nr()
+            x = numpy.zeros((nao,nao))
+            for ia in range(xcell.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                t1 = xcell.intor('int1e_kin', shls_slice=shls_slice)
+                s1 = xcell.intor('int1e_ovlp', shls_slice=shls_slice)
+                with xcell.with_rinv_as_nucleus(ia):
+                    z = -xcell.atom_charge(ia)
+                    v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
+                    w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
+                x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+        else:
+            raise NotImplementedError
+        return x
+
 
 # Use Ewald-like technique to compute spVsp.
 # spVsp may not be divergent because the numeriator spsp and the denorminator
@@ -200,10 +224,6 @@ def get_pnucp(mydf, kpts=None):
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
-        if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            vG[G0idx] += charge.sum() * SI_on_z * coulG[G0idx]
-
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
 
     else:
@@ -223,19 +243,9 @@ def get_pnucp(mydf, kpts=None):
 
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
-        if cell.dimension != 0:
-            if cell.dimension == 1 or cell.dimension == 2:
-                Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-                ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
-                nucbar = numpy.einsum('i,i,i', ZSI.conj(), coulG[G0idx], SI_on_z)
-                nucbar -= numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
-                if abs(kpts).sum() < 1e-9:
-                    nucbar = nucbar.real
-                vG[G0idx] += charge.sum() * SI_on_z * coulG[G0idx]
-            else: # cell.dimension == 3
-                nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-                nucbar *= numpy.pi/cell.vol
+        if cell.dimension == 3:
+            nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+            nucbar *= numpy.pi/cell.vol
 
             ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
             for k in range(nkpts):
@@ -254,15 +264,6 @@ def get_pnucp(mydf, kpts=None):
             else:
                 wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
     t1 = log.timer_debug1('contracting pnucp', *t1)
-
-    if cell.dimension == 1 or cell.dimension == 2:
-        t = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
-        G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-        Zmod = numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
-        if abs(kpts).sum() < 1e-9:
-            Zmod = Zmod.real
-        for k, kpt in enumerate(kpts_lst):
-            wj[k] -= Zmod*2 * lib.pack_tril(t[k])
 
     wj_kpts = []
     for k, kpt in enumerate(kpts_lst):

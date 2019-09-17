@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -71,6 +71,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     return conv, ecisd, ci
 
 def make_diagonal(myci, eris):
+    # DO NOT use eris.mo_energy, it may differ to eris.fock.diagonal()
     mo_energy = eris.fock.diagonal()
     nmo = mo_energy.size
     jdiag = numpy.zeros((nmo,nmo))
@@ -201,17 +202,46 @@ def dot(v1, v2, nmo, nocc):
     return val
 
 def t1strs(norb, nelec):
-    '''FCI strings (address) for CIS single-excitation amplitues'''
+    '''Compute the FCI strings (address) for CIS single-excitation amplitudes
+    and the signs of the coefficients when transferring the reference from
+    physics vacuum to HF vacuum.
+    '''
+    addrs, signs = tn_addrs_signs(norb, nelec, 1)
+    return addrs, signs
+
+def tn_addrs_signs(norb, nelec, n_excite):
+    '''Compute the FCI strings (address) for CIS n-excitation amplitudes and
+    the signs of the coefficients when transferring the reference from physics
+    vacuum to HF vacuum.
+    '''
+    if n_excite > nelec:
+        print("Warning: Not enough occupied orbitals to excite.")
+        return [0], [0]
     nocc = nelec
-    hf_str = int('1'*nocc, 2)
-    addrs = []
-    signs = []
-    for a in range(nocc, norb):
-        for i in reversed(range(nocc)):
-            str1 = hf_str ^ (1 << i) | (1 << a)
-            addrs.append(cistring.str2addr(norb, nelec, str1))
-            signs.append(cistring.cre_des_sign(a, i, hf_str))
-    return numpy.asarray(addrs), numpy.asarray(signs)
+
+    hole_strs = cistring.gen_strings4orblist(range(nocc), nocc - n_excite)
+    # For HF vacuum, hole operators are ordered from low-lying to high-lying
+    # orbitals. It leads to the opposite string ordering.
+    hole_strs = hole_strs[::-1]
+    hole_sum = numpy.zeros(len(hole_strs), dtype=int)
+    for i in range(nocc):
+        hole_at_i = (hole_strs & (1<<i)) == 0
+        hole_sum[hole_at_i] += i
+
+    # The hole operators are listed from low-lying to high-lying orbitals
+    # (from left to right).  For i-th (0-based) hole operator, the number of
+    # orbitals which are higher than i determines the sign.  This number
+    # equals to nocc-(i+1).  After removing the highest hole operator, nocc
+    # becomes nocc-1, the sign for next hole operator j will be associated to
+    # nocc-1-(j+1).  By iteratively calling this procedure, the overall sign
+    # for annihilating three holes is (-1)**(3*nocc - 6 - sum i)
+    sign = (-1) ** (n_excite * nocc - n_excite*(n_excite+1)//2 - hole_sum)
+
+    particle_strs = cistring.gen_strings4orblist(range(nocc, norb), n_excite)
+    strs = hole_strs[:,None] ^ particle_strs
+    addrs = cistring.strs2addr(norb, nocc, strs.ravel())
+    signs = numpy.vstack([sign] * len(particle_strs)).T.ravel()
+    return addrs, signs
 
 def to_fcivec(cisdvec, norb, nelec, frozen=0):
     '''Convert CISD coefficients to FCI coefficients'''
@@ -234,30 +264,23 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     nmo = norb - nfroz
     nvir = nmo - nocc
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
-    t1addr, t1sign = t1strs(nmo, nocc)
+    t1addr, t1sign = tn_addrs_signs(nmo, nocc, 1)
 
     na = cistring.num_strings(nmo, nocc)
     fcivec = numpy.zeros((na,na))
     fcivec[0,0] = c0
-    c1 = c1[::-1].T.ravel()
-    fcivec[0,t1addr] = fcivec[t1addr,0] = c1 * t1sign
-    c2ab = c2[::-1,::-1].transpose(2,0,3,1).reshape(nocc*nvir,-1)
+    fcivec[0,t1addr] = fcivec[t1addr,0] = c1.ravel() * t1sign
+    c2ab = c2.transpose(0,2,1,3).reshape(nocc*nvir,-1)
     c2ab = numpy.einsum('i,j,ij->ij', t1sign, t1sign, c2ab)
-    lib.takebak_2d(fcivec, c2ab, t1addr, t1addr)
+    fcivec[t1addr[:,None],t1addr] = c2ab
 
     if nocc > 1 and nvir > 1:
-        hf_str = int('1'*nocc, 2)
-        for a in range(nocc, nmo):
-            for b in range(nocc, a):
-                for i in reversed(range(1, nocc)):
-                    for j in reversed(range(i)):
-                        c2aa = c2[i,j,a-nocc,b-nocc] - c2[j,i,a-nocc,b-nocc]
-                        str1 = hf_str ^ (1 << j) | (1 << b)
-                        c2aa*= cistring.cre_des_sign(b, j, hf_str)
-                        c2aa*= cistring.cre_des_sign(a, i, str1)
-                        str1^= (1 << i) | (1 << a)
-                        addr = cistring.str2addr(nmo, nocc, str1)
-                        fcivec[0,addr] = fcivec[addr,0] = c2aa
+        c2aa = c2 - c2.transpose(1,0,2,3)
+        ooidx = numpy.tril_indices(nocc, -1)
+        vvidx = numpy.tril_indices(nvir, -1)
+        c2aa = c2aa[ooidx][:,vvidx[0],vvidx[1]]
+        t2addr, t2sign = tn_addrs_signs(nmo, nocc, 2)
+        fcivec[0,t2addr] = fcivec[t2addr,0] = c2aa.ravel() * t2sign
 
     if nfroz == 0:
         return fcivec
@@ -298,6 +321,7 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
     if frozen is not 0:
         raise NotImplementedError
+
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -309,12 +333,169 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
 
     c0 = ci0[0,0]
     c1 = ci0[0,t1addr] * t1sign
-    c2 = numpy.einsum('i,j,ij->ij', t1sign, t1sign, ci0[t1addr][:,t1addr])
-    c1 = c1.reshape(nvir,nocc).T
-    c2 = c2.reshape(nvir,nocc,nvir,nocc).transpose(1,3,0,2)
-    return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
+    c2 = numpy.einsum('i,j,ij->ij', t1sign, t1sign, ci0[t1addr[:,None],t1addr])
+    c1 = c1.reshape(nocc,nvir)
+    c2 = c2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
+    return amplitudes_to_cisdvec(c0, c1, c2)
 
-def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+def overlap(cibra, ciket, nmo, nocc, s=None):
+    '''Overlap between two CISD wavefunctions.
+
+    Args:
+        s : 2D array
+            The overlap matrix of non-orthogonal one-particle basis
+    '''
+    if s is None:
+        return dot(cibra, ciket, nmo, nocc)
+
+    DEBUG = True
+
+    nvir = nmo - nocc
+    nov = nocc * nvir
+    bra0, bra1, bra2 = cisdvec_to_amplitudes(cibra, nmo, nocc)
+    ket0, ket1, ket2 = cisdvec_to_amplitudes(ciket, nmo, nocc)
+
+# Sort the ket orbitals to make the orbitals in bra one-one mapt to orbitals
+# in ket.
+    if ((not DEBUG) and
+        abs(numpy.linalg.det(s[:nocc,:nocc]) - 1) < 1e-2 and
+        abs(numpy.linalg.det(s[nocc:,nocc:]) - 1) < 1e-2):
+        ket_orb_idx = numpy.where(abs(s) > 0.9)[1]
+        s = s[:,ket_orb_idx]
+        oidx = ket_orb_idx[:nocc]
+        vidx = ket_orb_idx[nocc:] - nocc
+        ket1 = ket1[oidx[:,None],vidx]
+        ket2 = ket2[oidx[:,None,None,None],oidx[:,None,None],vidx[:,None],vidx]
+
+    ooidx = numpy.tril_indices(nocc, -1)
+    vvidx = numpy.tril_indices(nvir, -1)
+    bra2aa = bra2 - bra2.transpose(1,0,2,3)
+    bra2aa = lib.take_2d(bra2aa.reshape(nocc**2,nvir**2),
+                         ooidx[0]*nocc+ooidx[1], vvidx[0]*nvir+vvidx[1])
+    ket2aa = ket2 - ket2.transpose(1,0,2,3)
+    ket2aa = lib.take_2d(ket2aa.reshape(nocc**2,nvir**2),
+                         ooidx[0]*nocc+ooidx[1], vvidx[0]*nvir+vvidx[1])
+
+    occlist0 = numpy.arange(nocc).reshape(1,nocc)
+    occlists = numpy.repeat(occlist0, 1+nov+bra2aa.size, axis=0)
+    occlist0 = occlists[:1]
+    occlist1 = occlists[1:1+nov]
+    occlist2 = occlists[1+nov:]
+
+    ia = 0
+    for i in range(nocc):
+        for a in range(nocc, nmo):
+            occlist1[ia,i] = a
+            ia += 1
+
+    ia = 0
+    for i in range(nocc):
+        for j in range(i):
+            for a in range(nocc, nmo):
+                for b in range(nocc, a):
+                    occlist2[ia,i] = a
+                    occlist2[ia,j] = b
+                    ia += 1
+
+    na = len(occlists)
+    if DEBUG:
+        trans = numpy.empty((na,na))
+        for i, idx in enumerate(occlists):
+            s_sub = s[idx].T.copy()
+            minors = s_sub[occlists]
+            trans[i,:] = numpy.linalg.det(minors)
+
+        # Mimic the transformation einsum('ab,ap->pb', FCI, trans).
+        # The wavefunction FCI has the [excitation_alpha,excitation_beta]
+        # representation.  The zero blocks like FCI[S_alpha,D_beta],
+        # FCI[D_alpha,D_beta], are explicitly excluded.
+        bra_mat = numpy.zeros((na,na))
+        bra_mat[0,0] = bra0
+        bra_mat[0,1:1+nov] = bra_mat[1:1+nov,0] = bra1.ravel()
+        bra_mat[0,1+nov:] = bra_mat[1+nov:,0] = bra2aa.ravel()
+        bra_mat[1:1+nov,1:1+nov] = bra2.transpose(0,2,1,3).reshape(nov,nov)
+        ket_mat = numpy.zeros((na,na))
+        ket_mat[0,0] = ket0
+        ket_mat[0,1:1+nov] = ket_mat[1:1+nov,0] = ket1.ravel()
+        ket_mat[0,1+nov:] = ket_mat[1+nov:,0] = ket2aa.ravel()
+        ket_mat[1:1+nov,1:1+nov] = ket2.transpose(0,2,1,3).reshape(nov,nov)
+        ovlp = lib.einsum('ab,ap,bq,pq->', bra_mat, trans, trans, ket_mat)
+
+    else:
+        nov1 = 1 + nov
+        noovv = bra2aa.size
+        bra_SS = numpy.zeros((nov1,nov1))
+        bra_SS[0,0] = bra0
+        bra_SS[0,1:] = bra_SS[1:,0] = bra1.ravel()
+        bra_SS[1:,1:] = bra2.transpose(0,2,1,3).reshape(nov,nov)
+        ket_SS = numpy.zeros((nov1,nov1))
+        ket_SS[0,0] = ket0
+        ket_SS[0,1:] = ket_SS[1:,0] = ket1.ravel()
+        ket_SS[1:,1:] = ket2.transpose(0,2,1,3).reshape(nov,nov)
+
+        trans_SS = numpy.empty((nov1,nov1))
+        trans_SD = numpy.empty((nov1,noovv))
+        trans_DS = numpy.empty((noovv,nov1))
+        occlist01 = occlists[:nov1]
+        for i, idx in enumerate(occlist01):
+            s_sub = s[idx].T.copy()
+            minors = s_sub[occlist01]
+            trans_SS[i,:] = numpy.linalg.det(minors)
+
+            minors = s_sub[occlist2]
+            trans_SD[i,:] = numpy.linalg.det(minors)
+
+            s_sub = s[:,idx].copy()
+            minors = s_sub[occlist2]
+            trans_DS[:,i] = numpy.linalg.det(minors)
+
+        ovlp = lib.einsum('ab,ap,bq,pq->', bra_SS, trans_SS, trans_SS, ket_SS)
+        ovlp+= lib.einsum('ab,a ,bq, q->', bra_SS, trans_SS[:,0], trans_SD, ket2aa.ravel())
+        ovlp+= lib.einsum('ab,ap,b ,p ->', bra_SS, trans_SD, trans_SS[:,0], ket2aa.ravel())
+
+        ovlp+= lib.einsum(' b, p,bq,pq->', bra2aa.ravel(), trans_SS[0,:], trans_DS, ket_SS)
+        ovlp+= lib.einsum(' b, p,b ,p ->', bra2aa.ravel(), trans_SD[0,:], trans_DS[:,0], ket2aa.ravel())
+
+        ovlp+= lib.einsum('a ,ap, q,pq->', bra2aa.ravel(), trans_DS, trans_SS[0,:], ket_SS)
+        ovlp+= lib.einsum('a ,a , q, q->', bra2aa.ravel(), trans_DS[:,0], trans_SD[0,:], ket2aa.ravel())
+
+        # FIXME: whether to approximate the overlap between double excitation coefficients
+        if numpy.linalg.norm(bra2aa)*numpy.linalg.norm(ket2aa) < 1e-4:
+            # Skip the overlap if coefficients of double excitation are small enough
+            pass
+        if (abs(numpy.linalg.det(s[:nocc,:nocc]) - 1) < 1e-2 and
+            abs(numpy.linalg.det(s[nocc:,nocc:]) - 1) < 1e-2):
+            # If the overlap matrix close to identity enough, use the <D|D'> overlap
+            # for orthogonal single-particle basis to approximate the overlap
+            # for non-orthogonal basis.
+            ovlp+= numpy.dot(bra2aa.ravel(), ket2aa.ravel()) * trans_SS[0,0] * 2
+        else:
+            from multiprocessing import sharedctypes, Process
+            buf_ctypes = sharedctypes.RawArray('d', noovv)
+            trans_ket = numpy.ndarray(noovv, buffer=buf_ctypes)
+            def trans_dot_ket(i0, i1):
+                for i in range(i0, i1):
+                    s_sub = s[occlist2[i]].T.copy()
+                    minors = s_sub[occlist2]
+                    trans_ket[i] = numpy.linalg.det(minors).dot(ket2aa.ravel())
+
+            nproc = lib.num_threads()
+            if nproc > 1:
+                seg = (noovv+nproc-1) // nproc
+                ps = []
+                for i0,i1 in lib.prange(0, noovv, seg):
+                    p = Process(target=trans_dot_ket, args=(i0,i1))
+                    ps.append(p)
+                    p.start()
+                [p.join() for p in ps]
+            else:
+                trans_dot_ket(0, noovv)
+
+            ovlp+= numpy.dot(bra2aa.ravel(), trans_ket) * trans_SS[0,0] * 2
+
+    return ovlp
+
+def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     '''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
@@ -329,7 +510,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
-    return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
+    return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''
@@ -392,13 +573,13 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     #:dvvvv = lib.einsum('ijab,ijcd->abcd', c2, c2)
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3 + 1, nvir**3*2+nocc*nvir**2 + 1)
-    blksize = min(nvir, max(BLKMIN, int(max_memory*.95e6/8/unit)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dtype = numpy.result_type(civec).char
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
-                                  chunks=(nocc,nvir,blksize,nvir))
+                                  chunks=(nocc,min(nocc,nvir),1,nvir))
     if compress_vvvv:
         dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), dtype)
     else:
@@ -535,7 +716,7 @@ def as_scanner(ci):
         def __init__(self, ci):
             self.__dict__.update(ci.__dict__)
             self._scf = ci._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
+        def __call__(self, mol_or_geom, ci0=None, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
             else:
@@ -546,14 +727,58 @@ def as_scanner(ci):
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
+            if getattr(self.ci, 'size', 0) != self.vector_size():
+                self.ci = None
+            if ci0 is None:
 # FIXME: Whether to use the initial guess from last step? If root flips, large
 # errors may be found in the solutions
-            self.kernel(self.ci, **kwargs)[0]
+                ci0 = self.ci
+            self.kernel(ci0, **kwargs)[0]
             return self.e_tot
     return CISD_Scanner(ci)
 
 
 class CISD(lib.StreamObject):
+    '''restricted CISD
+
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        conv_tol : float
+            converge threshold.  Default is 1e-9.
+        max_cycle : int
+            max number of iterations.  Default is 50.
+        max_space : int
+            Davidson diagonalization space size.  Default is 12.
+        direct : bool
+            AO-direct CISD. Default is False.
+        async_io : bool
+            Allow for asynchronous function execution. Default is True.
+        frozen : int or list
+            If integer is given, the inner-most orbitals are frozen from CI
+            amplitudes.  Given the orbital indices (0-based) in a list, both
+            occupied and virtual orbitals can be frozen in CI calculation.
+
+            >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
+            >>> mf = scf.RHF(mol).run()
+            >>> # freeze 2 core orbitals
+            >>> myci = ci.CISD(mf).set(frozen = 2).run()
+            >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
+            >>> myci.set(frozen = [0,1,16,17,18]).run()
+
+    Saved results
+
+        converged : bool
+            CISD converged or not
+        e_corr : float
+            CISD correlation correction
+        e_tot : float
+            Total CCSD energy (HF + correlation)
+        ci :
+            CI wavefunction coefficients
+    '''
 
     conv_tol = getattr(__config__, 'ci_cisd_CISD_conv_tol', 1e-9)
     max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
@@ -565,8 +790,12 @@ class CISD(lib.StreamObject):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):
-             raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
-                                'CISD calculation should be initialized with HF object.')
+            raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
+                               'CISD calculation should be initialized with HF object.\n'
+                               'DFT object can be converted to HF object with '
+                               'the code below:\n'
+                               '    mf_hf = scf.RHF(mol)\n'
+                               '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ   is None: mo_occ   = mf.mo_occ
@@ -596,10 +825,10 @@ class CISD(lib.StreamObject):
                     'level_shift', 'direct'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', str(self.frozen))
@@ -684,7 +913,7 @@ class CISD(lib.StreamObject):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
-        mo_e = eris.fock.diagonal()
+        mo_e = eris.mo_energy
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
         ci0 = 1
         ci1 = eris.fock[:nocc,nocc:] / e_ia
@@ -737,7 +966,7 @@ class CISD(lib.StreamObject):
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return ccsd._make_eris_incore(self, mo_coeff)
 
-        elif hasattr(self._scf, 'with_df'):
+        elif getattr(self._scf, 'with_df', None):
             logger.warn(self, 'CISD detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
                         'It\'s recommended to use dfccsd.CCSD for the '
@@ -801,6 +1030,10 @@ class CISD(lib.StreamObject):
 
 class RCISD(CISD):
     pass
+
+from pyscf import scf
+scf.hf.RHF.CISD = lib.class_as_method(RCISD)
+scf.rohf.ROHF.CISD = None
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

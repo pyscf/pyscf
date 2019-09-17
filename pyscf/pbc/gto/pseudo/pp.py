@@ -28,8 +28,9 @@ import scipy.linalg
 import scipy.special
 from pyscf import lib
 from pyscf.gto import mole
+from pyscf.pbc.gto.pseudo import pp_int
 
-def get_alphas(cell, low_dim_ft_type=None):
+def get_alphas(cell):
     '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
 
     See ewald.pdf
@@ -37,60 +38,24 @@ def get_alphas(cell, low_dim_ft_type=None):
     Returns:
         alphas : (natm,) ndarray
     '''
-    return get_alphas_gth(cell, low_dim_ft_type)
+    return get_alphas_gth(cell)
 
-def get_alphas_gth(cell, low_dim_ft_type=None):
+def get_alphas_gth(cell):
     '''alpha parameters for the local GTH pseudopotential.'''
+    G0 = np.zeros((1,3))
+    return -get_gth_vlocG(cell, G0)
 
-    alphas = np.zeros(cell.natm)
-    for ia in range(cell.natm):
-        symb = cell.atom_symbol(ia)
-        if symb not in cell._pseudo:
-            continue
-
-        Zia = cell.atom_charge(ia)
-        pp = cell._pseudo[symb]
-        rloc, nexp, cexp = pp[1:3+1]
-
-        cfacs = [1., 3., 15., 105.]
-        alphas[ia] = ( 2*np.pi*Zia*rloc**2
-                     + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
-    if low_dim_ft_type is None or cell.dimension == 3:
-        # Do nothing
-        return alphas
-    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
-        for ia in range(cell.natm):
-            symb = cell.atom_symbol(ia)
-            if symb not in cell._pseudo:
-                continue
-
-            Zia = cell.atom_charge(ia)
-            b = cell.reciprocal_vectors()
-            inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
-            lzd2 = cell.vol * inv_area / 2
-            lz = lzd2*2.
-            ew_eta = 1./np.sqrt(2)/rloc
-            JexpG0 = ( - np.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 ) + np.pi/ew_eta**2 * scipy.special.erfc(ew_eta*lzd2)
-                       - np.sqrt(np.pi)*lz/ew_eta * np.exp( - (ew_eta*lzd2)**2 ) )
-            alphas[ia] -= Zia*JexpG0
-    else:
-        raise NotImplementedError('Low dimension ft_type ',
-            low_dim_ft_type, ' not implemented for dimension ',
-            cell.dimension)
-    return alphas
-
-def get_vlocG(cell, Gv=None, low_dim_ft_type=None):
-    '''Local PP kernel in G space: Vloc(G) for G!=0, 0 for G=0.
+def get_vlocG(cell, Gv=None):
+    '''Local PP kernel in G space: Vloc(G)
 
     Returns:
         (natm, ngrids) ndarray
     '''
     if Gv is None: Gv = cell.Gv
-    vlocG = get_gth_vlocG(cell, Gv, low_dim_ft_type)
-    vlocG[:,0] = 0.
+    vlocG = get_gth_vlocG(cell, Gv)
     return vlocG
 
-def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
+def get_gth_vlocG(cell, Gv):
     '''Local part of the GTH pseudopotential.
 
     See MH (4.79).
@@ -101,95 +66,31 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
     Returns:
          (natm, ngrids) ndarray
     '''
-    absG2 = np.einsum('xi,xi->x', Gv, Gv)
-    G = np.sqrt(absG2)
-    with np.errstate(divide='ignore'):
-        coulG = 4*np.pi / absG2
-        coulG[absG2==0] = 0
+    vlocG = pp_int.get_gth_vlocG_part1(cell, Gv)
 
-    vlocG = np.zeros((cell.natm,len(G)))
-    if low_dim_ft_type is None:
-        for ia in range(cell.natm):
-            Zia = cell.atom_charge(ia)
-            symb = cell.atom_symbol(ia)
-            if symb not in cell._pseudo:
-                vlocG[ia] = Zia * coulG
-                continue
-            pp = cell._pseudo[symb]
-            rloc, nexp, cexp = pp[1:3+1]
+    # Add the C1, C2, C3, C4 contributions
+    G2 = np.einsum('ix,ix->i', Gv, Gv)
+    for ia in range(cell.natm):
+        symb = cell.atom_symbol(ia)
+        if symb not in cell._pseudo:
+            continue
 
-            G_red = G*rloc
-            cfacs = np.array(
-                    [1*G_red**0,
-                     3 - G_red**2,
-                     15 - 10*G_red**2 + G_red**4,
-                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
+        pp = cell._pseudo[symb]
+        rloc, nexp, cexp = pp[1:3+1]
 
-            # Note the signs -- potential here is positive
-            vlocG[ia,:] = ( Zia * coulG * np.exp(-0.5*G_red**2)
-                           - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
-                                np.dot(cexp, cfacs[:nexp])) )
-    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
-        # The following 2D ewald summation is taken from:
-        # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
+        G2_red = G2 * rloc**2
+        cfacs = 0
+        if nexp >= 1:
+            cfacs += cexp[0]
+        if nexp >= 2:
+            cfacs += cexp[1] * (3 - G2_red)
+        if nexp >= 3:
+            cfacs += cexp[2] * (15 - 10*G2_red + G2_red**2)
+        if nexp >= 4:
+            cfacs += cexp[3] * (105 - 105*G2_red + 21*G2_red**2 - G2_red**3)
 
-        vlocG = np.zeros((cell.natm,len(G)))
-        b = cell.reciprocal_vectors()
-        inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
-        lzd2 = cell.vol * inv_area / 2
-        lz = lzd2*2.
+        vlocG[ia,:] -= (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G2_red) * cfacs
 
-        absG2[absG2==0] = 1e200
-        Gxy = np.linalg.norm(Gv[:,:2],axis=1)
-        Gz = abs(Gv[:,2])
-
-        for ia in range(cell.natm):
-            Zia = cell.atom_charge(ia)
-            symb = cell.atom_symbol(ia)
-            if symb not in cell._pseudo:
-                vlocG[ia] = Zia * coulG
-                continue
-            pp = cell._pseudo[symb]
-            rloc, nexp, cexp = pp[1:3+1]
-
-            G_red = G*rloc
-            cfacs = np.array(
-                    [1*G_red**0,
-                     3 - G_red**2,
-                     15 - 10*G_red**2 + G_red**4,
-                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
-
-            gzero = (G == 0.0)
-            ew_eta = 1./np.sqrt(2)/rloc
-
-            JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
-            fac = 4*np.pi / absG2 * np.cos(Gz*lzd2)
-            JexpG2 += ( - fac *
-                        (       np.exp(-Gxy*lzd2)
-                          - 0.5*np.exp(-Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz - Gxy) / (2.*ew_eta))
-                        )
-                        #+ np.exp(-absG2/(4*ew_eta**2)) * np.real(scipy.special.erfc((ew_eta**2 * lz - 1j*Gz) / (2.*ew_eta)))
-                      )
-
-            # Adding in contribution from the term, avoiding overflow from exponent
-            #    - 0.5*np.exp( Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy) / (2.*ew_eta))
-            small_idx = Gxy*lzd2 < 20.0
-            large_idx = ~small_idx
-            JexpG2[small_idx] += ( 4*np.pi / absG2[small_idx] * np.cos(Gz[small_idx]*lzd2) *
-                                   0.5*np.exp( Gxy[small_idx]*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy[small_idx]) / (2.*ew_eta)) )
-            if len(large_idx) > 0:
-                x = (ew_eta**2 * lz + Gxy[large_idx]) / (2.*ew_eta)
-                JexpG2[large_idx] += 0.5 * fac[large_idx] * (np.exp(Gxy[large_idx]*lzd2-x**2)/np.sqrt(np.pi)/x *
-                                      (1 - 0.5/x**2) )
-
-            # Note the signs -- potential here is positive
-            vlocG[ia,:] = ( Zia * JexpG2
-                           - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
-                                np.dot(cexp, cfacs[:nexp])) )
-    else:
-        raise NotImplementedError('Low dimension ft_type ',
-            cell.low_dim_ft_type, ' not implemented for dimension ',
-            cell.dimension)
     return vlocG
 
 def get_projG(cell, kpt=np.zeros(3)):
@@ -248,6 +149,11 @@ def projG_li(G, l, i, rl):
 
 def _qli(x,l,i):
     # MH Eqs. (4.82)-(4.93) :: beware typos!
+    # Mathematica formulas:
+    # p[l_, i_, r_] = Sqrt[2] r^(l + 2 (i - 1)) Exp[-r^2/(2 R^2)]/(R^(l + (4 i - 1)/2) Sqrt[Gamma[l + (4 i - 1)/2]])
+    # pG[l_, i_, G_] = Integrate[p[l, i, r] 4 Pi r^2 SphericalBesselJ[l, G r], {r, 0, Infinity}]
+    # qG[l_, i_, G_] := pG[l, i, G]/(Pi^(5/4) G^l Sqrt[R^(2 l + 3)]/Exp[(G R)^2/2])
+    # FullSimplify[qG[4, 3, G], R > 0 && G > 0]
     sqrt = np.sqrt
     if l==0 and i==0:
         return 4*sqrt(2.)
@@ -271,6 +177,18 @@ def _qli(x,l,i):
     elif l==2 and i==2:
         #return 32/3.*sqrt(2/15015.)*(63-36*x**2+4*x**4) # MH (wrong I think)
         return 32/3.*sqrt(2/15015.)*(63-18*x**2+x**4) # TCB
+    elif l==3 and i==0:
+        return 16*sqrt(1/105.)
+    elif l==3 and i==1:
+        return 32/3.*sqrt(1/1155.)*(9-x**2)
+    elif l==3 and i==2:
+        return 64/45.*sqrt(1/1001.)*(99-22*x**2+x**4)
+    elif l==4 and i==0:
+        return 16/3.*sqrt(2/105.)
+    elif l==4 and i==1:
+        return 32/3.*sqrt(2/15015.)*(11-x**2)
+    elif l==4 and i==2:
+        return 64/45.*sqrt(2/17017.)*(143-26*x**2+x**4)
     else:
         print("*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!")
         return 0.
@@ -308,7 +226,7 @@ def cart2polar(rvec):
     return r, theta, phi
 
 
-def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
+def get_pp(cell, kpt=np.zeros(3)):
     '''Get the periodic pseudotential nuc-el AO matrix
     '''
     from pyscf.pbc import tools
@@ -317,9 +235,9 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     nao = cell.nao_nr()
 
     SI = cell.get_SI()
-    vlocG = get_vlocG(cell, low_dim_ft_type)
+    vlocG = get_vlocG(cell)
     vpplocG = -np.sum(SI * vlocG, axis=0)
-    vpplocG[0] = np.sum(get_alphas(cell, low_dim_ft_type)) # from get_jvloc_G0 function
+    vpplocG[0] = np.sum(get_alphas(cell)) # from get_jvloc_G0 function
 
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.mesh).real
@@ -374,8 +292,8 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
         return vpploc + vppnl
 
 
-def get_jvloc_G0(cell, kpt=np.zeros(3), low_dim_ft_type=None):
+def get_jvloc_G0(cell, kpt=np.zeros(3)):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
     ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt)
-    return 1./cell.vol * np.sum(get_alphas(cell, low_dim_ft_type)) * ovlp
+    return 1./cell.vol * np.sum(get_alphas(cell)) * ovlp

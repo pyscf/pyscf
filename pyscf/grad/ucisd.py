@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -71,12 +71,14 @@ class Gradients(cisd_grad.Gradients):
         return cisd_grad.Gradients.kernel(self, civec, eris, atmlst, mf_grad,
                                           verbose, _kern=kernel)
 
+Grad = Gradients
+
+ucisd.UCISD.Gradients = lib.class_as_method(Gradients)
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
-    from pyscf.ci import ucisd
 
     mol = gto.M(
         atom = [
@@ -88,7 +90,7 @@ if __name__ == '__main__':
     )
     mf = scf.UHF(mol).run()
     myci = ucisd.UCISD(mf).run()
-    g1 = Gradients(myci).kernel()
+    g1 = myci.Gradients().kernel()
 # O     0.0000000000    -0.0000000000     0.1456473095
 # H    -0.0000000000     0.1107223084    -0.0728236548
 # H     0.0000000000    -0.1107223084    -0.0728236548

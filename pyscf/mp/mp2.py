@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,31 +68,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     return emp2.real, t2
 
-def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NOTE):
-    '''Spin-traced one-particle density matrix in the AO basis representation.
-    The occupied-virtual orbital response is not included.  This function uses
-    small amount of memory.  The MP2 t2 amplitudes are generated at the runtime
-    using the given eris object.
-
-    See also :func:`pyscf.mp.mp2.make_rdm1`
-    '''
-    if mo_energy is None or mo_coeff is None:
-        mo_energy = mp.mo_energy
-        mo_coeff = mp.mo_coeff
-    else:
-        assert(mp.frozen is 0 or mp.frozen is None)
-        mp = copy.copy(mp)
-        mp.mo_energy = mo_energy
-        mp.mo_coeff = mo_coeff
-
-    if eris is None: eris = mp.ao2mo(mo_coeff)
-
-    rdm1_mo = make_rdm1(mp, None, eris, verbose)
-    rdm1 = reduce(numpy.dot, (mo_coeff, rdm1_mo, mo_coeff.T))
-    return rdm1
-
-def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
-    '''Spin-traced one-particle density matrix in the AO basis representation.
+def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE, ao_repr=False):
+    '''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
@@ -100,6 +77,11 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     The contraction between 1-particle Hamiltonian and rdm1 is
     E = einsum('pq,qp', h1, rdm1)
+
+    Kwargs:
+        ao_repr : boolean
+            Whether to transfrom 1-particle density matrix to AO
+            representation.
     '''
     from pyscf.cc import ccsd_rdm
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
@@ -107,7 +89,8 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     nvir = dvv.shape[0]
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
-    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True)
+    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
     if t2 is None: t2 = mp.t2
@@ -192,6 +175,11 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
             dm2[oidx[i],vidx[:,None,None],oidx[:,None],vidx] = dovov
             dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.conj().transpose(0,2,1)
 
+    # Be careful with convention of dm1 and dm2
+    #   dm1[q,p] = <p^\dagger q>
+    #   dm2[p,q,r,s] = < p^\dagger r^\dagger s q >
+    #   E = einsum('pq,qp', h1, dm1) + .5 * einsum('pqrs,pqrs', eri, dm2)
+    # When adding dm1 contribution, dm1 subscripts need to be flipped
     for i in range(nocc0):
         dm2[i,i,:,:] += dm1.T * 2
         dm2[:,:,i,i] += dm1.T * 2
@@ -203,7 +191,7 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
 
-    return dm2
+    return dm2#.transpose(1,0,3,2)
 
 
 def get_nocc(mp):
@@ -349,10 +337,10 @@ class MP2(lib.StreamObject):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', self.frozen)
@@ -414,6 +402,10 @@ class MP2(lib.StreamObject):
 
 RMP2 = MP2
 
+from pyscf import scf
+scf.hf.RHF.MP2 = lib.class_as_method(MP2)
+scf.rohf.ROHF.MP2 = None
+
 
 def _mo_energy_without_core(mp, mo_energy):
     return mo_energy[get_frozen_mask(mp)]
@@ -461,7 +453,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         else:
             eris.ovov = ao2mo.general(mp._scf._eri, (co,cv,co,cv))
 
-    elif hasattr(mp._scf, 'with_df') and mp._scf.with_df:
+    elif getattr(mp._scf, 'with_df', None):
         # To handle the PBC or custom 2-electron with 3-index tensor.
         # Call dfmp2.MP2 for efficient DF-MP2 implementation.
         log.warn('DF-HF is found. (ia|jb) is computed based on the DF '
@@ -540,9 +532,8 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     time1 = time0 = log.timer('mp2 ao2mo_ovov pass1', *time0)
     eri = eribuf = tmp_i = tmp_li = buf_i = buf_li = buf1 = None
 
-    chunks = (nvir,nvir)
     h5dat = feri.create_dataset('ovov', (nocc*nvir,nocc*nvir), 'f8',
-                                chunks=chunks)
+                                chunks=(nvir,nvir))
     occblk = int(min(nocc, max(4, 250/nocc, max_memory*.9e6/8/(nao**2*nocc)/5)))
     def load(i0, eri):
         if i0 < nocc:

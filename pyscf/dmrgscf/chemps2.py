@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -70,9 +70,7 @@ class CheMPS2(object):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = pyscf.lib.logger.Logger(self.stdout, verbose)
+        log = pyscf.lib.logger.new_logger(self, verbose)
         log.info('******** CheMPS2 flags ********')
         log.info('dmrg_states = %s', str(self.dmrg_states))
         log.info('dmrg_noise = %s', str(self.dmrg_noise))
@@ -115,7 +113,7 @@ class CheMPS2(object):
         if isinstance(nelec, (int, numpy.integer)):
             spin2 = 0
         else:
-            spin2 = (nelec[0]-nelec[1]) * 2
+            spin2 = (nelec[0]-nelec[1])
             nelec = sum(nelec)
 
         Prob = PyCheMPS2.PyProblem(Ham, spin2, nelec, self.wfn_irrep)

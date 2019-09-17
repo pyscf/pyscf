@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
         conv_tol_grad = localizer.conv_tol_grad
 
     if mo_coeff is None:
-        if hasattr(localizer, 'mol') and localizer.mol.natm == 0:
+        if getattr(localizer, 'mol', None) and localizer.mol.natm == 0:
             # For customized Hamiltonian
             u0 = localizer.get_init_guess('random')
         else:
@@ -116,13 +116,14 @@ def atomic_init_guess(mol, mo_coeff):
     s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
     mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
-    nmo = mo_coeff.shape[1]
 # Find the AOs which have largest overlap to MOs
     idx = numpy.argsort(numpy.einsum('pi,pi->p', mo.conj(), mo))
     nmo = mo.shape[1]
-    idx = idx[-nmo:]
+    idx = sorted(idx[-nmo:])
+
+    # Rotate mo_coeff, make it as close as possible to AOs
     u, w, vh = numpy.linalg.svd(mo[idx])
-    return lib.dot(vh, u.conj().T)
+    return lib.dot(u, vh).conj().T
 
 class Boys(ciah.CIAHOptimizer):
 
@@ -148,10 +149,10 @@ class Boys(ciah.CIAHOptimizer):
                     'ah_max_cycle', 'init_guess'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('conv_tol = %s'       , self.conv_tol       )
         log.info('conv_tol_grad = %s'  , self.conv_tol_grad  )
         log.info('max_cycle = %s'      , self.max_cycle      )

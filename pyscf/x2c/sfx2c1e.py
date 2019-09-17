@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -84,10 +84,10 @@ def sfx2c1e(mf):
             else:
                 return mf_class.get_hcore(self, mol)
 
-        def dump_flags(self):
-            mf_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            mf_class.dump_flags(self, verbose)
             if self.with_x2c:
-                self.with_x2c.dump_flags()
+                self.with_x2c.dump_flags(verbose)
             return self
 
     return SFX2C1E_SCF(mf)
@@ -102,6 +102,9 @@ class SpinFreeX2C(x2c.X2C):
         '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
         '''
         if mol is None: mol = self.mol
+        if mol.has_ecp():
+            raise NotImplementedError
+
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
@@ -135,6 +138,36 @@ class SpinFreeX2C(x2c.X2C):
         if self.xuncontract and contr_coeff is not None:
             h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
+
+    def get_xmat(self, mol=None):
+        if mol is None:
+            xmol = self.get_xmol(mol)[0]
+        else:
+            xmol = mol
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+
+        if 'ATOM' in self.approx.upper():
+            atom_slices = xmol.offset_nr_by_atom()
+            nao = xmol.nao_nr()
+            x = numpy.zeros((nao,nao))
+            for ia in range(xmol.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
+                s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
+                with xmol.with_rinv_as_nucleus(ia):
+                    z = -xmol.atom_charge(ia)
+                    v1 = z * xmol.intor('int1e_rinv', shls_slice=shls_slice)
+                    w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)
+                x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+        else:
+            t = xmol.intor_symmetric('int1e_kin')
+            v = xmol.intor_symmetric('int1e_nuc')
+            s = xmol.intor_symmetric('int1e_ovlp')
+            w = xmol.intor_symmetric('int1e_pnucp')
+            x = x2c._x2c1e_xmatrix(t, v, w, s, c)
+        return x
 
     def hcore_deriv_generator(self, mol=None, deriv=1):
         from pyscf.x2c import sfx2c1e_grad

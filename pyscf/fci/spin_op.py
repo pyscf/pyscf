@@ -19,6 +19,7 @@ import numpy
 from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci import rdm
+from pyscf.fci.addons import _unpack_nelec
 
 librdm = lib.load_library('libfci')
 
@@ -148,7 +149,7 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
         s[:,lstnot] = 0
     else:
         if len(aolst) == 0:
-            aolst = range(norb)
+            aolst = numpy.arange(norb)
         s = numpy.zeros((norb,norb))
         s[aolst,aolst] = 1
     return spin_square(fcivec, norb, nelec, mo_coeff, s)
@@ -157,6 +158,7 @@ def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
 # dm(pq,rs) * [p(beta)^+ q(alpha) r(alpha)^+ s(beta)]
 # size of intermediate determinants (norb,neleca+1;norb,nelecb-1)
 def make_rdm2_baab(fcivec, norb, nelec):
+    from pyscf.fci import direct_spin1
     dm2aa, dm2ab, dm2bb = direct_spin1.make_rdm12s(fcivec, norb, nelec)[1]
     dm2baab = -dm2ab.transpose(2,1,0,3)
     return dm2baab
@@ -165,6 +167,7 @@ def make_rdm2_baab(fcivec, norb, nelec):
 # dm(pq,rs) * [q(alpha)^+ p(beta) s(beta)^+ r(alpha)]
 # size of intermediate determinants (norb,neleca-1;norb,nelecb+1)
 def make_rdm2_abba(fcivec, norb, nelec):
+    from pyscf.fci import direct_spin1
     dm2aa, dm2ab, dm2bb = direct_spin1.make_rdm12s(fcivec, norb, nelec)[1]
     dm2abba = -dm2ab.transpose(0,3,2,1)
     return dm2abba
@@ -247,17 +250,6 @@ def contract_ss(fcivec, norb, nelec):
     ci1 += (neleca-nelecb)**2*.25*fcivec
     return ci1
 
-def _unpack_nelec(nelec, spin=None):
-    if spin is None:
-        spin = 0
-    else:
-        nelec = int(numpy.sum(nelec))
-    if isinstance(nelec, (int, numpy.number)):
-        nelecb = (nelec-spin)//2
-        neleca = nelec - nelecb
-        nelec = neleca, nelecb
-    return nelec
-
 
 if __name__ == '__main__':
     from functools import reduce
@@ -300,7 +292,7 @@ if __name__ == '__main__':
     ss = spin_square0(ci0, norb, nelec)
     print(ss)
     ss = local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5))
-    print('local spin for H1..H5 = 0.998988389', ss[0])
+    print('local spin for H1..H5 = 0.999', ss[0])
     ci1 = numpy.zeros((4,4))
     ci1[0,0] = 1
     print(spin_square (ci1, 4, (3,1)))
@@ -308,56 +300,3 @@ if __name__ == '__main__':
 
     print(numpy.einsum('ij,ij->', ci1, contract_ss(ci1, 4, (3,1))),
           spin_square(ci1, 4, (3,1))[0])
-
-    numpy.random.seed(1)
-    n = cistring.num_strings(6,3)
-    ci0 = numpy.random.random((n,n))
-    print(numpy.einsum('ij,ij->', ci0,contract_ss(ci0, 6, 6)),
-          spin_square(ci0, 6, 6)[0])
-
-    na = cistring.num_strings(6,4)
-    nb = cistring.num_strings(6,2)
-    ci0 = numpy.random.random((na,nb))
-    print(numpy.einsum('ij,ij->', ci0,contract_ss(ci0, 6, (4,2))),
-          spin_square(ci0, 6, (4,2))[0])
-
-    print('----------')
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-    mol.atom = [
-        ['H', ( 0 ,  0    , 0.   )],
-        ['H', ( 0 ,  0    , 8.   )],
-    ]
-
-    mol.basis = {'H': 'cc-pvdz'}
-    mol.spin = 0
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-
-    cis = fci.direct_spin0.FCISolver(mol)
-    cis.verbose = 5
-    norb = m.mo_coeff.shape[1]
-    nelec = (mol.nelectron, 0)
-    nelec = mol.nelectron
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    eri = ao2mo.incore.full(m._eri, m.mo_coeff)
-    e, ci0 = cis.kernel(h1e, eri, norb, nelec)
-    ss = spin_square(ci0, norb, nelec, m.mo_coeff, m.get_ovlp())
-    print('local spin for H1+H2 = 0', ss[0])
-    ss = local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5))
-    print('local spin for H1 = 0.75', ss[0])
-    ss = local_spin(ci0, norb, nelec, m.mo_coeff, m.get_ovlp(), range(5,10))
-    print('local spin for H2 = 0.75', ss[0])
-
-    ss = spin_square0(ci0, norb, nelec)
-    print('tot spin for HH = 0', ss[0])
-
-    numpy.random.seed(1)
-    n = cistring.num_strings(10,5)
-    ci0 = numpy.random.random((n,n))
-    ss1 = numpy.einsum('ij,ij->', ci0, contract_ss(ci0, 10, 10))
-    print(ss1, spin_square(ci0, 10, 10)[0])

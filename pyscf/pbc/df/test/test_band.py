@@ -29,20 +29,21 @@ class KnowValues(unittest.TestCase):
     def test_fft_band(self):
         mf = scf.RHF(cell)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9966435479483238, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9966435479483238, 7)
 
     def test_aft_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.AFTDF(cell)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9966027703000777, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9966027703000777, 7)
 
     def test_df_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
+        mf.with_df.exp_to_discard = mf.with_df.eta
         mf.with_df.kpts_band = kband[0]
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9905548831851645, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.992205011752425, 7)
 
     def test_mdf_band(self):
         mf = scf.RHF(cell)
@@ -56,7 +57,7 @@ class KnowValues(unittest.TestCase):
         mf.kpts = cell.make_kpts([2]*3)
         mf.kernel()
         self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.758544475679261, 8)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 0.76562781841701533, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 0.76562781841701533, 7)
 
     def test_aft_bands(self):
         mf = scf.KRHF(cell)
@@ -64,16 +65,17 @@ class KnowValues(unittest.TestCase):
         mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
         self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.968506055533682, 8)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.0538585525613609, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.0538585525613609, 7)
 
     def test_df_bands(self):
         mf = scf.KRHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband
+        mf.with_df.exp_to_discard = mf.with_df.eta
         mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9630519740658308, 8)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.04461751922109, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9648945030342437, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.0455025876245683, 7)
 
     def test_mdf_bands_high_cost(self):
         mf = scf.KRHF(cell)

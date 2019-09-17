@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ Parsers for basis set in the NWChem format
 
 import re
 import numpy
+import scipy.linalg
 from pyscf.data.elements import _std_symbol
 
 MAXL = 10
@@ -38,7 +39,7 @@ MAPSPDF = {'S': 0,
            'M': 9,
           }
 
-BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
+BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n|END\n')
 ECP_DELIMITER = re.compile('\n *ECP *\n')
 
 def parse(string, symb=None, optimize=True):
@@ -69,6 +70,18 @@ def parse(string, symb=None, optimize=True):
     ...       0.6834831              0.39951283             0.60768372
     ...       0.2222899              0.70011547             0.39195739
     ... """)}
+
+    >>> gto.basis.parse("""
+    ... He    S
+    ...      13.6267000              0.1752300
+    ...       1.9993500              0.8934830
+    ...       0.3829930              0.0000000
+    ... He    S
+    ...      13.6267000              0.0000000
+    ...       1.9993500              0.0000000
+    ...       0.3829930              1.0000000
+    ... """, optimize=True)
+    [[0, [13.6267, 0.17523, 0.0], [1.99935, 0.893483, 0.0], [0.382993, 0.0, 1.0]]]
     '''
     if symb is not None:
         symb = _std_symbol(symb)
@@ -128,7 +141,7 @@ def search_seg(basisfile, symb):
         return [x.upper() for x in dat.splitlines() if x and 'END' not in x]
 
 def _search_seg(raw_data, symb):
-    for dat in raw_data[1:]:
+    for dat in raw_data:
         dat0 = dat.split(None, 1)
         if dat0 and dat0[0] == symb:
             return dat
@@ -237,8 +250,12 @@ def _parse(raw_basis, optimize=True):
     return basis_sorted
 
 def optimize_contraction(basis):
-    '''
-    Optimize contraction: segment contraction -> general contraction
+    '''Search the basis segments which have the same exponents then merge them
+    to the general contracted sets.
+
+    Note the difference to the function :func:`to_general_contraction`. The
+    return value of this function may still have multiple segments for each
+    angular moment section.
     '''
     basdic = {}
     for b in basis:
@@ -272,9 +289,49 @@ def optimize_contraction(basis):
             basis.append(b)
     return basis
 
+def to_general_contraction(basis):
+    '''Segmented contracted basis -> general contracted basis.
+
+    Combine multiple basis segments to one segment for each angular moment
+    section.
+
+    Examples:
+
+    >>> gto.contract(gto.uncontract(gto.load('sto3g', 'He')))
+    [[0, [6.36242139, 1.0, 0.0, 0.0], [1.158923, 0.0, 1.0, 0.0], [0.31364979, 0.0, 0.0, 1.0]]]
+    '''
+    basdic = {}
+    for b in basis:
+        if isinstance(b[1], int):  # kappa = b[1]
+            key = tuple(b[:2])
+            ec = numpy.array(b[2:])
+        else:
+            key = tuple(b[:1])
+            ec = numpy.array(b[1:])
+        if key in basdic:
+            basdic[key].append(ec)
+        else:
+            basdic[key] = [ec]
+
+    basis = []
+    for key in sorted(basdic.keys()):
+        l_kappa = list(key)
+        l = l_kappa[0]
+
+        es = numpy.hstack([ec[:,0] for ec in basdic[key]])
+        cs = scipy.linalg.block_diag(*[ec[:,1:] for ec in basdic[key]])
+
+        idx = numpy.unique(es.round(9), return_index=True)[1]
+        idx = idx[::-1]  # sort the exponents from large to small
+        ec = numpy.hstack((es[idx,None], cs[idx,:]))
+
+        basis.append(l_kappa + ec.tolist())
+
+    return basis
+
 def remove_zero(basis):
     '''
-    Remove the exponets if their contraction coefficients are all zeros.
+    Remove exponents if their contraction coefficients are all zeros.
     '''
     new_basis = []
     for b in basis:

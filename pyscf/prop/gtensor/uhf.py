@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -407,7 +407,7 @@ def _write(gobj, gtensor, title):
         gobj.stdout.write('sqrt(ggT) %s\n' % w)
 
 
-class GTensor(uhf_nmr.NMR):
+class GTensor(lib.StreamObject):
     '''dE = B dot gtensor dot s
 
     Attributes:
@@ -424,7 +424,13 @@ class GTensor(uhf_nmr.NMR):
             Whether to use Koseki effective SOC charge in 1-electron
             diamagnetic term and paramagnetic term.  Default is False.
     '''
-    def __init__(self, scf_method):
+    def __init__(self, mf):
+        self.mol = mf.mol
+        self.verbose = mf.mol.verbose
+        self.stdout = mf.mol.stdout
+        self.chkfile = mf.chkfile
+        self._scf = mf
+
         # dia_soc2e is 2-electron spin-orbit coupling for diamagnetic term
         # dia_soc2e can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
         self.dia_soc2e = False
@@ -435,13 +441,24 @@ class GTensor(uhf_nmr.NMR):
         self.para_soc2e = 'SSO+SOO'
         # Koseki effective SOC charge
         self.so_eff_charge = False
-        self.mb = False   # corresponding to RMB basis (DO NOT use, in testing)
-        uhf_nmr.NMR.__init__(self, scf_method)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+        # corresponding to RMB basis (DO NOT use. It's in testing)
+        self.mb = False
+
+# gauge_orig=None will call GIAO. A coordinate array leads to common gauge
+        self.gauge_orig = None
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        log.info('******** %s for %s ********',
+        log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
         if self.gauge_orig is None:
             log.info('gauge = GIAO')
@@ -451,10 +468,10 @@ class GTensor(uhf_nmr.NMR):
         if self.cphf:
             log.info('CPHF conv_tol = %g', self.conv_tol)
             log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        logger.info(self, 'dia_soc2e = %s', self.dia_soc2e)
-        logger.info(self, 'para_soc2e = %s', self.para_soc2e)
-        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
-                    self.so_eff_charge)
+        log.info('dia_soc2e = %s', self.dia_soc2e)
+        log.info('para_soc2e = %s', self.para_soc2e)
+        log.info('so_eff_charge = %s (1e SO effective charge)',
+                 self.so_eff_charge)
         return self
 
     def kernel(self, mo1=None):
@@ -496,6 +513,13 @@ class GTensor(uhf_nmr.NMR):
 
     make_dia_gc2e = make_dia_gc2e
     make_para_soc2e = make_para_soc2e
+    solve_mo1 = uhf_nmr.solve_mo1
+    get_fock = uhf_nmr.get_fock
+
+    def get_ovlp(self, mol=None, gauge_orig=None):
+        if mol is None: mol = self.mol
+        if gauge_orig is None: gauge_orig = self.gauge_orig
+        return rhf_nmr.get_ovlp(mol, gauge_orig)
 
     def align(self, gtensor):
         return align(gtensor)

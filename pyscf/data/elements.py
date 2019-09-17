@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy
+
 ELEMENTS = ['X',  # Ghost
     'H' , 'He', 'Li', 'Be', 'B' , 'C' , 'N' , 'O' , 'F' , 'Ne',
     'Na', 'Mg', 'Al', 'Si', 'P' , 'S' , 'Cl', 'Ar', 'K' , 'Ca',
@@ -752,7 +754,7 @@ def _std_symbol(symb_or_chg):
         return ELEMENTS[symb_or_chg]
 
 def _atom_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, int):
+    if isinstance(symb_or_chg, (int, numpy.integer)):
         symb = ELEMENTS[symb_or_chg]
     else:
         a = str(symb_or_chg.strip())
@@ -769,7 +771,7 @@ def _atom_symbol(symb_or_chg):
     return symb
 
 def is_ghost_atom(symb_or_chg):
-    if isinstance(symb_or_chg, int):
+    if isinstance(symb_or_chg, (int, numpy.integer)):
         return symb_or_chg == 0
     elif 'GHOST' in symb_or_chg.upper():
         return True

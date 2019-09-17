@@ -89,7 +89,7 @@ def get_H_tb_array(kpts,Nx,Ny,t):
 # attribute.  get_veff function is defined here to mimic the contractions of
 # two-particle integrals with the density matrices.
 #
-# No atoms in the system, exxdiv should be set to None.
+# Ignore finite-size exchange correction for this model system.
 #
 kmf = pbc.scf.KUHF(cell, kpts, exxdiv=None)
 

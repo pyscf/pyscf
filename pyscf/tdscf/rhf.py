@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -131,8 +131,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     mo = numpy.hstack((orbo,orbv))
     nmo = nocc + nvir
 
-    eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
-    a = numpy.diag(eai.T.ravel()).reshape(nocc,nvir,nocc,nvir)
+    e_ia = lib.direct_sum('a-i->ia', mo_energy[viridx], mo_energy[occidx])
+    a = numpy.diag(e_ia.ravel()).reshape(nocc,nvir,nocc,nvir)
     b = numpy.zeros_like(a)
 
     def add_hf_(a, b, hyb=1):
@@ -144,7 +144,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * 2
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
 
-    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint
@@ -496,7 +496,7 @@ def transition_velocity_octupole(tdobj, xy=None):
 def _charge_center(mol):
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
-    return gto.charge_center(mol, charges, coords)
+    return numpy.einsum('z,zr->r', charges, coords)/charges.sum()
 
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     if xy is None: xy = tdobj.xy
@@ -676,8 +676,8 @@ class TDA(lib.StreamObject):
         '''Excited state energies'''
         return self._scf.e_tot + self.e
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
@@ -722,19 +722,19 @@ class TDA(lib.StreamObject):
         mo_occ = mf.mo_occ
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
-        eai = (mo_energy[viridx,None] - mo_energy[occidx]).T
+        e_ia = mo_energy[viridx] - mo_energy[occidx,None]
 
         if wfnsym is not None and mf.mol.symmetry:
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mf.mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
             orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff) % 10
-            eai[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
+            e_ia[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
 
-        nov = eai.size
+        nov = e_ia.size
         nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(eai.ravel())
+        idx = numpy.argsort(e_ia.ravel())
         for i in range(nroot):
             x0[i,idx[i]] = 1  # Koopmans' excitations
         return x0
@@ -790,6 +790,8 @@ class TDA(lib.StreamObject):
     transition_quadrupole          = transition_quadrupole
     transition_octupole            = transition_octupole
     transition_velocity_dipole     = transition_velocity_dipole
+    transition_velocity_quadrupole = transition_velocity_quadrupole
+    transition_velocity_octupole   = transition_velocity_octupole
     transition_magnetic_dipole     = transition_magnetic_dipole
     transition_magnetic_quadrupole = transition_magnetic_quadrupole
 
@@ -879,6 +881,26 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
 
 class TDHF(TDA):
+    '''Time-dependent Hartree-Fock
+
+    Attributes:
+        conv_tol : float
+            Diagonalization convergence tolerance.  Default is 1e-9.
+        nstates : int
+            Number of TD states to be computed. Default is 3.
+
+    Saved results:
+
+        converged : bool
+            Diagonalization converged or not
+        e : 1D array
+            excitation energy for each excited state.
+        xy : A list of two 2D arrays
+            The two 2D arrays are Excitation coefficients X (shape [nocc,nvir])
+            and de-excitation coefficients Y (shape [nocc,nvir]) for each
+            excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
+            normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
+    '''
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf):
         return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)
@@ -909,8 +931,11 @@ class TDHF(TDA):
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            idx = realidx[w[realidx].real.argsort()]
-            return w[idx].real, v[:,idx].real, idx
+            # If the complex eigenvalue has small imaginary part, both the
+            # real part and the imaginary part of the eigenvector can
+            # approximately be used as the "real" eigen solutions.
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
+                                                      real_eigenvectors=True)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
@@ -943,6 +968,14 @@ class TDHF(TDA):
 
 RPA = TDRHF = TDHF
 
+from pyscf import scf
+scf.hf.RHF.TDA = lib.class_as_method(TDA)
+scf.hf.RHF.TDHF = lib.class_as_method(TDHF)
+scf.rohf.ROHF.TDA = None
+scf.rohf.ROHF.TDHF = None
+scf.hf_symm.ROHF.TDA = None
+scf.hf_symm.ROHF.TDHF = None
+
 del(OUTPUT_THRESHOLD)
 
 
@@ -960,7 +993,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.RHF(mol).run()
-    td = TDA(mf)
+    td = mf.TDA()
     td.verbose = 3
     print(td.kernel()[0] * 27.2114)
 # [ 11.90276464  11.90276464  16.86036434]
@@ -969,7 +1002,7 @@ if __name__ == '__main__':
     print(td.kernel()[0] * 27.2114)
 # [ 11.01747918  11.01747918  13.16955056]
 
-    td = TDHF(mf)
+    td = mf.TDHF()
     td.verbose = 3
     print(td.kernel()[0] * 27.2114)
 # [ 11.83487199  11.83487199  16.66309285]
