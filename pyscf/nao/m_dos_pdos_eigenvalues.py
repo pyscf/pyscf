@@ -29,6 +29,22 @@ def eigen_pdos(ksn2e, zomegas, nkpoints=1):
   return -pdos/np.pi/nkpoints
 
 
+def read_qp_molgw (filename):
+     '''reading QP energies from MOLGW output for DFT calculations'''
+     with open(filename) as f:
+         if (gw.nspin != int(f.readline())): raise NameError('incompatibility in no.spin')
+         if (gw.norbs != int(f.readline())): raise NameError('incompatibility in no.orbitals! check basis!')
+         with open (filename+'.txt','w') as f1:
+             for line in f.readlines()[0:]: #first two lines are already read
+                 f1.write(line)
+     data = np.loadtxt('ENERGY_QP.txt')
+     qp = np.zeros((1,gw.nspin, gw.norbs),dtype=float)
+     for s in range (gw.nspin):
+         qp[0,s,:] = data[:,s+1]
+     import os
+     os.remove(filename+'.txt')
+     return qp
+
 
 if __name__=='__main__':
     '''
@@ -45,7 +61,7 @@ if __name__=='__main__':
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif')
 
-    mol = gto.M( verbose = 1, atom ='C 0.0, 0.0, -0.611046 ; N 0.0, 0.0, 0.523753' , basis = 'cc-pvtz', spin=1, charge=0)
+    mol = gto.M( verbose = 1, atom ='C 0.0, 0.0, -0.611046 ; N 0.0, 0.0, 0.523753' , basis = 'cc-pvdz', spin=1, charge=0)
     mol.build()
     mf = scf.UHF(mol)
     mf.kernel()
@@ -63,16 +79,7 @@ if __name__=='__main__':
 
 
     #reading QP energies from output of MOLGW for GW@DFT
-    #with open('ENERGY_QP') as f:
-    #    with open ('ENERGY_QP.txt','w') as f1:
-    #        for line in f.readlines()[2:]:
-    #            f1.write(line)
-    #data = np.loadtxt('ENERGY_QP.txt')
-    #qp_MOLGW1 = data[:,1]
-    #qp_MOLGW2 = data[:,2]
-    #qp_MOLGW = np.vstack((qp_MOLGW1,qp_MOLGW2))
-    #os.remove("ENERGY_QP.txt")
-    #d_qp = np.expand_dims(qp_MOLGW, axis=0)
+    #d_qp = read_qp_molgw ('ENERGY_QP')
 
 
     #reading QP energies from PySCF for GW@UHF
