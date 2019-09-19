@@ -506,9 +506,9 @@ def project_mol(mol, dual_basis={}):
 # To include high order terms, we can generate mo_coeff every time u matrix
 # changed and insert the mo_coeff to g_op, h_op.
 # Seems the high order terms do not help optimization?
-def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
-                  conv_tol_grad=None, max_stepsize=None, verbose=None):
+def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
     log = logger.new_logger(mf, verbose)
+    mo_coeff, mo_occ, fock_ao, e_tot = yield
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(mf.conv_tol*.1)
@@ -614,13 +614,17 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     dm0 = dm
 # Use API to compute fock instead of "fock=h1e+vhf0". This is because get_fock
 # is the hook being overloaded in many places.
-                    fock = mf.get_fock(h1e, vhf=vhf0)
-                    g_kf1 = mf.get_grad(mo1, mo_occ, fock)
+                    fock_ao = mf.get_fock(h1e, vhf=vhf0)
+                    g_kf1 = mf.get_grad(mo1, mo_occ, fock_ao)
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
                     norm_dg = numpy.linalg.norm(g_kf1-g_orb)
                     jkcount += 1
-                    log.debug('Adjust keyframe g_orb to |g|= %4.3g  '
-                              '|g-correction|= %4.3g', norm_gkf1, norm_dg)
+                    if log.verbose >= logger.DEBUG:
+                        e_tot, e_last = mf._scf.energy_tot(dm, h1e, vhf0), e_tot
+                        log.debug('Adjust keyframe g_orb to |g|= %4.3g  '
+                                  '|g-correction|=%4.3g  E=%.12g dE=%.5g',
+                                  norm_gkf1, norm_dg, e_tot, e_tot-e_last)
+
                     if (norm_dg < norm_gorb*mf.ah_grad_trust_region  # kf not too diff
                         #or norm_gkf1 < norm_gkf  # grad is decaying
                         # close to solution
@@ -645,7 +649,7 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                   imic, jkcount, norm_gorb, numpy.linalg.norm(dr))
         h_op = h_diag = None
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-        mo_coeff, mo_occ, fock_ao = (yield u, g_kf, kfcount, jkcount)
+        mo_coeff, mo_occ, fock_ao, e_tot = (yield u, g_kf, kfcount, jkcount)
 
         g_kf, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
         norm_gkf = numpy.linalg.norm(g_kf)
@@ -701,13 +705,16 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mf._eri = mf._scf._eri
         mf.opt = mf._scf.opt
 
-    rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
-    u, g_orb, kfcount, jkcount = next(rotaiter)
-    kftot = kfcount + 1
-    jktot = jkcount
+    rotaiter = _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad, verbose=log)
+    next(rotaiter)  # start the iterator
+    kftot = jktot = 0
     cput1 = log.timer('initializing second order scf', *cput0)
 
     for imacro in range(max_cycle):
+        u, g_orb, kfcount, jkcount = rotaiter.send((mo_coeff, mo_occ, fock, e_tot))
+        kftot += kfcount + 1
+        jktot += jkcount
+
         dm_last = dm
         last_hf_e = e_tot
         norm_gorb = numpy.linalg.norm(g_orb)
@@ -739,10 +746,6 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 
         if scf_conv:
             break
-
-        u, g_orb, kfcount, jkcount = rotaiter.send((mo_coeff, mo_occ, fock))
-        kftot += kfcount + 1
-        jktot += jkcount
 
     if callable(callback):
         callback(locals())
