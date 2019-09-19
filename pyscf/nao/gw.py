@@ -213,7 +213,7 @@ class gw(scf):
 
     sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
-    #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
+
     for s,ww in enumerate(sn2w):            #split into mo_energies
       for n,w in enumerate(ww):             #split mo_energies into each spin channel
         #print(__name__, 's,n,w int corr', s,n,w)
