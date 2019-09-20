@@ -132,7 +132,7 @@ class DF(lib.StreamObject):
         naux = auxmol.nao_nr()
         nao_pair = nao*(nao+1)//2
 
-        max_memory = (self.max_memory - lib.current_memory()[0]) * .8
+        max_memory = self.max_memory - lib.current_memory()[0]
         int3c = mol._add_suffix('int3c2e')
         int2c = mol._add_suffix('int2c2e')
         if (nao_pair*naux*8/1e6 < .9*max_memory and
