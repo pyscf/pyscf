@@ -1756,7 +1756,7 @@ def tostring(mol, format='raw'):
         for i in range(mol.natm):
             symb = mol.atom_pure_symbol(i)
             x, y, z = coords[i]
-            output.append('%4s %14.5f %14.5f %14.5f' %
+            output.append('%-4s %14.5f %14.5f %14.5f' %
                           (symb, x, y, z))
         return '\n'.join(output)
     elif format == 'zmat':
@@ -1765,7 +1765,7 @@ def tostring(mol, format='raw'):
         output = []
         for i, line in enumerate(zmat):
             symb = mol.atom_pure_symbol(i)
-            output.append('%4s   %s' % (symb, line))
+            output.append('%-4s   %s' % (symb, line))
         return '\n'.join(output)
     else:
         raise NotImplementedError

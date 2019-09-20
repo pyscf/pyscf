@@ -135,7 +135,7 @@ class DF(lib.StreamObject):
         max_memory = (self.max_memory - lib.current_memory()[0]) * .8
         int3c = mol._add_suffix('int3c2e')
         int2c = mol._add_suffix('int2c2e')
-        if (nao_pair*naux*3*8/1e6 < max_memory and
+        if (nao_pair*naux*8/1e6 < .9*max_memory and
             not isinstance(self._cderi_to_save, str)):
             self._cderi = incore.cholesky_eri(mol, int3c=int3c, int2c=int2c,
                                               auxmol=auxmol, verbose=log)
@@ -161,11 +161,6 @@ class DF(lib.StreamObject):
                                        int3c=int3c, int2c=int2c, auxmol=auxmol,
                                        max_memory=max_memory, verbose=log)
             self._cderi = cderi
-
-            if nao_pair*naux*8/1e6 < max_memory:
-                cderi = next(self.loop(blksize=naux))
-                self._cderi = cderi
-
             log.timer_debug1('Generate density fitting integrals', *t0)
         return self
 

@@ -26,6 +26,7 @@ from pyscf.df import addons
 from pyscf import __config__
 
 
+MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
 LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 
 
@@ -88,7 +89,83 @@ def fill_2c2e(mol, auxmol, intor='int2c2e', comp=None, hermi=1, out=None):
 # array
 def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
                  int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
-                 verbose=0, fauxe2=aux_e2):
+                 max_memory=MAX_MEMORY, verbose=0, fauxe2=aux_e2):
+    '''
+    Returns:
+        2D array of (naux,nao*(nao+1)/2) in C-contiguous
+    '''
+    from pyscf.df.outcore import _guess_shell_ranges
+    assert(comp == 1)
+    t0 = (time.clock(), time.time())
+    log = logger.new_logger(mol, verbose)
+    if auxmol is None:
+        auxmol = addons.make_auxmol(mol, auxbasis)
+
+    j2c = auxmol.intor(int2c, hermi=1)
+    try:
+        low = scipy.linalg.cholesky(j2c, lower=True)
+        tag = 'cd'
+    except scipy.linalg.LinAlgError:
+        w, v = scipy.linalg.eigh(j2c)
+        idx = w > LINEAR_DEP_THR
+        low = (v[:,idx] / numpy.sqrt(w[idx]))
+        v = None
+        tag = 'eig'
+    j2c = None
+    naoaux, naux = low.shape
+    log.debug('size of aux basis %d', naux)
+    t1 = log.timer_debug1('2c2e', *t0)
+
+    int3c = gto.moleintor.ascint3(mol._add_suffix(int3c))
+    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                                      auxmol._atm, auxmol._bas, auxmol._env)
+    ao_loc = gto.moleintor.make_loc(bas, int3c)
+    nao = ao_loc[mol.nbas]
+
+    if aosym == 's1':
+        nao_pair = nao * nao
+    else:
+        nao_pair = nao * (nao+1) // 2
+
+    cderi = numpy.empty((naux, nao_pair))
+
+    max_words = max_memory*1e6/8 - low.size - cderi.size
+    buflen = min(max(int(max_words/naoaux/comp), 8), nao_pair)
+    shranges = _guess_shell_ranges(mol, buflen, aosym)
+    log.debug1('shranges = %s', shranges)
+
+    cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
+    bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
+
+    p1 = 0
+    for istep, sh_range in enumerate(shranges):
+        log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
+                  istep+1, len(shranges), *sh_range)
+        bstart, bend, nrow = sh_range
+        shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
+        ints = gto.moleintor.getints3c(int3c, atm, bas, env, shls_slice, comp,
+                                       aosym, ao_loc, cintopt, out=bufs1)
+
+        if ints.ndim == 3 and ints.flags.f_contiguous:
+            ints = lib.transpose(ints.T, axes=(0,2,1)).reshape(naoaux,-1)
+        else:
+            ints = ints.reshape((-1,naoaux)).T
+
+        p0, p1 = p1, p1 + nrow
+        if tag == 'cd':
+            cderi[:,p0:p1] = scipy.linalg.solve_triangular(low, ints, lower=True)
+        else:
+            cderi[:,p0:p1] = lib.dot(low.T, ints)
+        ints = None
+
+    log.timer('cholesky_eri', *t0)
+    return cderi
+
+# Debug version of cholesky_eri. Note the temporary memory usage is about
+# twice as large as the return cderi array
+def cholesky_eri_debug(mol, auxbasis='weigend+etb', auxmol=None,
+                       int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
+                       verbose=0, fauxe2=aux_e2):
     '''
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
@@ -182,11 +259,11 @@ if __name__ == '__main__':
     print(numpy.allclose(eri0, j2c))
 
     j3c = aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s2ij')
-    cderi = cholesky_eri(mol)
+    cderi = cholesky_eri(mol, auxmol=auxmol)
     eri0 = numpy.einsum('pi,pk->ik', cderi, cderi)
     eri1 = numpy.einsum('ik,kl->il', j3c, numpy.linalg.inv(j2c))
     eri1 = numpy.einsum('ip,kp->ik', eri1, j3c)
-    print(numpy.allclose(eri1, eri0))
+    print(abs(eri1 - eri0).max())
     eri0 = ao2mo.restore(1, eri0, nao)
 
     mf = scf.RHF(mol)
@@ -194,7 +271,7 @@ if __name__ == '__main__':
 
     nao = mf.mo_energy.size
     eri1 = ao2mo.restore(1, mf._eri, nao)
-    print(abs(eri1-eri0).max())
+    print(abs(eri1-eri0).max() - 0.0022142583265513105)
 
     mf._eri = ao2mo.restore(8, eri0, nao)
     ehf1 = mf.scf()
@@ -202,6 +279,6 @@ if __name__ == '__main__':
     mf = scf.RHF(mol).density_fit(auxbasis='weigend')
     ehf2 = mf.scf()
 
-    mf = mf.density_fit()
+    mf = mf.density_fit(auxbasis='weigend')
     ehf3 = mf.scf()
     print(ehf0, ehf1, ehf2, ehf3)

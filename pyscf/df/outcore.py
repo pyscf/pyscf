@@ -121,7 +121,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
         v = None
         tag = 'eig'
     j2c = None
-    naux = low.shape[0]
+    naoaux, naux = low.shape
     time1 = log.timer('Cholesky 2c2e', *time1)
 
     int3c = gto.moleintor.ascint3(mol._add_suffix(int3c))
@@ -140,8 +140,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
         shranges = _guess_shell_ranges(mol, buflen, 's2ij')
     log.debug('erifile %.8g MB, IO buf size %.8g MB',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
-    if log.verbose >= logger.DEBUG1:
-        log.debug1('shranges = %s', shranges)
+    log.debug1('shranges = %s', shranges)
     # TODO: Libcint-3.14 and newer version support to compute int3c2e without
     # the opt for the 3rd index.
     #if '3c2e' in int3c:
@@ -163,9 +162,9 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
 
     def transform(b):
         if b.ndim == 3 and b.flags.f_contiguous:
-            b = lib.transpose(b.T, axes=(0,2,1)).reshape(naux,-1)
+            b = lib.transpose(b.T, axes=(0,2,1)).reshape(naoaux,-1)
         else:
-            b = b.reshape((-1,naux)).T
+            b = b.reshape((-1,naoaux)).T
         if tag == 'cd':
             return scipy.linalg.solve_triangular(low, b, lower=True)
         else:
