@@ -134,7 +134,8 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
         # for pyscf 1.0, 1.1 compatibility
         @property
         def _cderi(self):
-            return self.with_df._cderi
+            naux = self.with_df.get_naoaux()
+            return next(self.with_df.loop(blksize=naux))
         @_cderi.setter
         def _cderi(self, x):
             self.with_df._cderi = x

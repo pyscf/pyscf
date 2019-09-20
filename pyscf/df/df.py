@@ -305,13 +305,15 @@ class DF4C(DF):
             raise NotImplementedError
         return self
 
-    def loop(self):
+    def loop(self, blksize=None):
         if self._cderi is None:
             self.build()
+        if blksize is None:
+            blksize = self.blockdim
         with addons.load(self._cderi[0], 'j3c') as ferill:
             naoaux = ferill.shape[0]
             with addons.load(self._cderi[1], 'j3c') as feriss: # python2.6 not support multiple with
-                for b0, b1 in self.prange(0, naoaux, self.blockdim):
+                for b0, b1 in self.prange(0, naoaux, blksize):
                     erill = numpy.asarray(ferill[b0:b1], order='C')
                     eriss = numpy.asarray(feriss[b0:b1], order='C')
                     yield erill, eriss
