@@ -28,7 +28,7 @@ from pyscf.ao2mo import _ao2mo
 
 libri = lib.load_library('libri')
 
-def density_fit(mf, auxbasis=None, with_df=None):
+def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.
 
@@ -40,6 +40,10 @@ def density_fit(mf, auxbasis=None, with_df=None):
             Same format to the input attribute mol.basis.  If auxbasis is
             None, optimal auxiliary basis based on AO basis (if possible) or
             even-tempered Gaussian basis will be used.
+
+        only_dfj : str
+            Compute Coulomb integrals only and no approximation for HF
+            exchange. Same to RIJONX in ORCA
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
@@ -107,17 +111,25 @@ def density_fit(mf, auxbasis=None, with_df=None):
             self._eri = None
             self.auxbasis = auxbasis
             self.with_df = df
-            self._keys = self._keys.union(['auxbasis', 'with_df'])
+            self.only_dfj = only_dfj
+            self._keys = self._keys.union(['auxbasis', 'with_df', 'only_dfj'])
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                    omega=None):
-            if self.with_df:
-                if dm is None: dm = self.make_rdm1()
+            if dm is None: dm = self.make_rdm1()
+            if self.with_df and self.only_dfj:
+                vj = vk = None
+                if with_j:
+                    vj, vk = self.with_df.get_jk(dm, hermi, True, False,
+                                                 self.direct_scf_tol, omega)
+                if with_k:
+                    vk = mf_class.get_jk(self, mol, dm, hermi, False, True, omega)[1]
+            elif self.with_df:
                 vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
                                              self.direct_scf_tol, omega)
-                return vj, vk
             else:
-                return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+                vj, vk = mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+            return vj, vk
 
         # for pyscf 1.0, 1.1 compatibility
         @property

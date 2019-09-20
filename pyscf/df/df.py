@@ -35,6 +35,7 @@ from pyscf.df import addons
 from pyscf.df import df_jk
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
+from pyscf.ao2mo.outcore import _load_from_h5g
 from pyscf import __config__
 
 class DF(lib.StreamObject):
@@ -89,6 +90,7 @@ class DF(lib.StreamObject):
         self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
         self._vjopt = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
+        self._compatible_mode = False  # Compatible to the format of pyscf-1.1 - pyscf-1.6
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -97,9 +99,8 @@ class DF(lib.StreamObject):
     @auxbasis.setter
     def auxbasis(self, x):
         if self._auxbasis != x:
+            self.reset()
             self._auxbasis = x
-            self.auxmol = None
-            self._cderi = None
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -143,16 +144,28 @@ class DF(lib.StreamObject):
                 cderi = self._cderi_to_save
             else:
                 cderi = self._cderi_to_save.name
+
             if isinstance(self._cderi, str):
+                # If cderi needs to be saved in
                 log.warn('Value of _cderi is ignored. DF integrals will be '
                          'saved in file %s .', cderi)
-            outcore.cholesky_eri(mol, cderi, dataname='j3c',
-                                 int3c=int3c, int2c=int2c, auxmol=auxmol,
-                                 max_memory=max_memory, verbose=log)
-            if nao_pair*naux*8/1e6 < max_memory:
-                with addons.load(cderi, 'j3c') as feri:
-                    cderi = numpy.asarray(feri)
+
+            if self._compatible_mode or isinstance(self._cderi_to_save, str):
+                outcore.cholesky_eri(mol, cderi, dataname='j3c',
+                                     int3c=int3c, int2c=int2c, auxmol=auxmol,
+                                     max_memory=max_memory, verbose=log)
+            else:
+                # Store DF tensor in blocks. This is to reduce the
+                # initiailzation overhead
+                outcore.cholesky_eri_b(mol, cderi, dataname='j3c',
+                                       int3c=int3c, int2c=int2c, auxmol=auxmol,
+                                       max_memory=max_memory, verbose=log)
             self._cderi = cderi
+
+            if nao_pair*naux*8/1e6 < max_memory:
+                cderi = next(self.loop(blksize=naux))
+                self._cderi = cderi
+
             log.timer_debug1('Generate density fitting integrals', *t0)
         return self
 
@@ -165,7 +178,8 @@ class DF(lib.StreamObject):
             self.mol = mol
         self.auxmol = None
         self._cderi = None
-        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        if not isinstance(self._cderi_to_save, str):
+            self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self._vjopt = None
         self._rsh_df = {}
         return self
@@ -175,11 +189,34 @@ class DF(lib.StreamObject):
             self.build()
         if blksize is None:
             blksize = self.blockdim
+
         with addons.load(self._cderi, 'j3c') as feri:
-            naoaux = feri.shape[0]
-            for b0, b1 in self.prange(0, naoaux, blksize):
-                eri1 = numpy.asarray(feri[b0:b1], order='C')
-                yield eri1
+            if isinstance(feri, numpy.ndarray):
+                naoaux = feri.shape[0]
+                for b0, b1 in self.prange(0, naoaux, blksize):
+                    yield numpy.asarray(feri[b0:b1], order='C')
+
+            else:
+                if isinstance(feri, h5py.Group):
+                    # starting from pyscf-1.7, DF tensor may be stored in
+                    # block format
+                    naoaux = feri['0'].shape[0]
+                    def load(b0, b1, prefetch):
+                        prefetch[0] = _load_from_h5g(feri, b0, b1)
+                else:
+                    naoaux = feri.shape[0]
+                    def load(b0, b1, prefetch):
+                        prefetch[0] = numpy.asarray(feri[b0:b1])
+
+                with lib.call_in_background(load) as bload:
+                    prefetch = [None]
+                    load(0, min(blksize, naoaux), prefetch)
+                    for b0, b1 in self.prange(blksize, naoaux, blksize):
+                        dat = prefetch[0]
+                        bload(b0, b1, prefetch)
+                        yield dat
+                    dat = prefetch[0]
+                    yield dat
 
     def prange(self, start, end, step):
         if isinstance(self._call_count, int):
@@ -201,7 +238,10 @@ class DF(lib.StreamObject):
         if self._cderi is None:
             self.build()
         with addons.load(self._cderi, 'j3c') as feri:
-            return feri.shape[0]
+            if isinstance(feri, h5py.Group):
+                return feri['0'].shape[0]
+            else:
+                return feri.shape[0]
 
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),

@@ -472,14 +472,24 @@ def half_e1(mol, mo_coeffs, swapfile,
     fswap = None
     return swapfile
 
-def _load_from_h5g(h5group, row0, row1, out):
-    nrow = row1 - row0
-    col0 = 0
-    for key in range(len(h5group)):
-        dat = h5group[str(key)][row0:row1]
-        col1 = col0 + dat.shape[1]
-        out[:nrow,col0:col1] = dat
-        col0 = col1
+def _load_from_h5g(h5group, row0, row1, out=None):
+    nkeys = len(h5group)
+    dat = h5group['0']
+    ncol = sum(h5group[str(key)].shape[-1] for key in range(nkeys))
+    if dat.ndim == 2:
+        out = numpy.ndarray((row1-row0, ncol), dat.dtype, buffer=out)
+        col1 = 0
+        for key in range(nkeys):
+            dat = h5group[str(key)][row0:row1]
+            col0, col1 = col1, col1 + dat.shape[1]
+            out[:,col0:col1] = dat
+    else:  # multiple components
+        out = numpy.ndarray((dat.shape[0], row1-row0, ncol), dat.dtype, buffer=out)
+        col1 = 0
+        for key in range(nkeys):
+            dat = h5group[str(key)][:,row0:row1]
+            col0, col1 = col1, col1 + dat.shape[2]
+            out[:,:,col0:col1] = dat
     return out
 
 def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):

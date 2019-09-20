@@ -51,14 +51,14 @@ class KnownValues(unittest.TestCase):
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['j3c'], cderi0))
 
-        df.outcore.cholesky_eri(mol, ftmp.name, ioblk_size=.05)
+        df.outcore.cholesky_eri(mol, ftmp.name, max_memory=.05)
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['j3c'], cderi0))
 
         nao = mol.nao_nr()
         naux = cderi0.shape[0]
         df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
-                           max_memory=.05, ioblk_size=.02)
+                           max_memory=.02)
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
 
@@ -68,7 +68,7 @@ class KnownValues(unittest.TestCase):
         buf[:,idx[0],idx[1]] = cderi0
         buf[:,idx[1],idx[0]] = cderi0
         cderi0 = buf
-        df.outcore.cholesky_eri(mol, ftmp.name, aosym='s1', ioblk_size=.05)
+        df.outcore.cholesky_eri(mol, ftmp.name, aosym='s1', max_memory=.05)
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['j3c'], cderi0.reshape(naux,-1)))
 
@@ -77,7 +77,7 @@ class KnownValues(unittest.TestCase):
         co = numpy.random.random((nao,4))
         cv = numpy.random.random((nao,25))
         cderi0 = numpy.einsum('kpq,pi,qj->kij', cderi0, co, cv)
-        df.outcore.general(mol, (co,cv), ftmp.name, ioblk_size=.05)
+        df.outcore.general(mol, (co,cv), ftmp.name, max_memory=.05)
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0.reshape(naux,-1)))
 
@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
         nao = mol.nao_nr()
         df.outcore.general(mol, (numpy.eye(nao),)*2, ftmp.name,
                            int3c='int3c2e_ip1_sph', aosym='s1', int2c='int2c2e_sph',
-                           comp=3, max_memory=.05, ioblk_size=.02)
+                           comp=3, max_memory=.02)
         with h5py.File(ftmp.name) as feri:
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
 
