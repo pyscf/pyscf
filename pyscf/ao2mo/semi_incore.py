@@ -306,7 +306,7 @@ if __name__ == '__main__':
     stop_time2 = time.time() - start_time
     print('    Time elapsed (s): ',stop_time2)
     print('How worse is the custom implemenation?',stop_time/stop_time2)
-    with h5py.File(tmpfile2.name) as f:
+    with h5py.File(tmpfile2.name, 'r') as f:
         print('\n\nIncore (pyscf) vs outcore (custom)?',numpy.allclose(onnn2,f['aa']))
         print('Outcore (pyscf) vs outcore (custom)?',numpy.allclose(f['ab'],f['aa']))
 
@@ -322,7 +322,7 @@ if __name__ == '__main__':
     stop_time2 = time.time() - start_time
     print('    Time elapsed (s): ',stop_time2)
     print('    How worse is the custom implemenation?',stop_time/stop_time2)
-    with h5py.File(tmpfile2.name) as f:
+    with h5py.File(tmpfile2.name, 'r') as f:
         print('\n\nIncore (pyscf) vs outcore (custom)?',numpy.allclose(eri_incore,f['aa']))
         print('Outcore (pyscf) vs outcore (custom)?',numpy.allclose(f['ab'],f['aa']))
 

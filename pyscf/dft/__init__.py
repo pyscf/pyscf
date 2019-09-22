@@ -60,6 +60,7 @@ def KS(mol, *args):
         return RKS(mol, *args)
     else:
         return UKS(mol, *args)
+DFT = KS
 
 def RKS(mol, *args):
     if mol.nelectron == 1:

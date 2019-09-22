@@ -44,7 +44,7 @@ def dump_mcscf(mc, chkfile=None, key='mcscf',
     #if ci_vector is None: ci_vector = mc.ci
 
     if h5py.is_hdf5(chkfile):
-        fh5 = h5py.File(chkfile)
+        fh5 = h5py.File(chkfile, 'a')
         if key in fh5:
             del(fh5[key])
     else:

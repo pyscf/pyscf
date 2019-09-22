@@ -96,7 +96,7 @@ def dump(chkfile, key, value):
     >>> from pyscf import lib
     >>> ci = {'Ci' : {'op': ('E', 'i'), 'irrep': ('Ag', 'Au')}}
     >>> lib.chkfile.save('symm.chk', 'symm', ci)
-    >>> f = h5py.File('symm.chk')
+    >>> f = h5py.File('symm.chk', 'r')
     >>> f.keys()
     ['symm']
     >>> f['symm'].keys()
