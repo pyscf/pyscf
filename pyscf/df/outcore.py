@@ -166,7 +166,10 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
         else:
             b = b.reshape((-1,naoaux)).T
         if tag == 'cd':
-            return scipy.linalg.solve_triangular(low, b, lower=True)
+            if b.flags.c_contiguous:
+                b = lib.transpose(b).T
+            return scipy.linalg.solve_triangular(low, b, lower=True,
+                                                 overwrite_b=True, check_finite=False)
         else:
             return lib.dot(low.T, b)
 

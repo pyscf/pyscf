@@ -138,6 +138,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
 
     cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
+    bufs2 = numpy.empty_like(bufs1)
 
     p1 = 0
     for istep, sh_range in enumerate(shranges):
@@ -149,16 +150,25 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
                                        aosym, ao_loc, cintopt, out=bufs1)
 
         if ints.ndim == 3 and ints.flags.f_contiguous:
-            ints = lib.transpose(ints.T, axes=(0,2,1)).reshape(naoaux,-1)
+            ints = lib.transpose(ints.T, axes=(0,2,1), out=bufs2).reshape(naoaux,-1)
+            bufs1, bufs2 = bufs2, bufs1
         else:
             ints = ints.reshape((-1,naoaux)).T
 
         p0, p1 = p1, p1 + nrow
         if tag == 'cd':
-            cderi[:,p0:p1] = scipy.linalg.solve_triangular(low, ints, lower=True)
+            if ints.flags.c_contiguous:
+                ints = lib.transpose(ints, out=bufs2).T
+                bufs1, bufs2 = bufs2, bufs1
+            dat = scipy.linalg.solve_triangular(low, ints, lower=True,
+                                                overwrite_b=True, check_finite=False)
+            if dat.flags.f_contiguous:
+                dat = lib.transpose(dat.T, out=bufs2)
+            cderi[:,p0:p1] = dat
+            dat = ints = None
         else:
-            cderi[:,p0:p1] = lib.dot(low.T, ints)
-        ints = None
+            cderi[:,p0:p1] = lib.dot(low.T, ints, c=bufs2)
+            ints = None
 
     log.timer('cholesky_eri', *t0)
     return cderi
