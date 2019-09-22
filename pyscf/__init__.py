@@ -40,8 +40,10 @@ __version__ = '1.6.4'
 import os
 # Avoid too many threads being created in OMP loops.
 # See issue https://github.com/pyscf/pyscf/issues/317
-os.environ['OPENBLAS_NUM_THREADS'] = '1'
-os.environ['MKL_NUM_THREADS'] = '1'
+if 'OPENBLAS_NUM_THREADS' not in os.environ:
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+if 'MKL_NUM_THREADS' not in os.environ:
+    os.environ['MKL_NUM_THREADS'] = '1'
 
 import sys
 from distutils.version import LooseVersion
