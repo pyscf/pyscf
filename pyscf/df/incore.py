@@ -129,8 +129,10 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
 
     cderi = numpy.empty((naux, nao_pair))
 
-    max_words = max_memory*1e6/8 - low.size - cderi.size
-    buflen = min(max(int(max_words/naoaux/comp), 8), nao_pair)
+    max_words = max_memory*.98e6/8 - low.size - cderi.size
+    # Divide by 3 because scipy.linalg.solve may create a temporary copy for
+    # ints and return another copy for results
+    buflen = min(max(int(max_words/naoaux/comp/3), 8), nao_pair)
     shranges = _guess_shell_ranges(mol, buflen, aosym)
     log.debug1('shranges = %s', shranges)
 

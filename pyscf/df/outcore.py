@@ -132,11 +132,11 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     naoaux = ao_loc[-1] - nao
     if aosym == 's1':
         nao_pair = nao * nao
-        buflen = min(max(int(max_memory*.28e6/8/naoaux/comp), 1), nao_pair)
+        buflen = min(max(int(max_memory*.24e6/8/naoaux/comp), 1), nao_pair)
         shranges = _guess_shell_ranges(mol, buflen, 's1')
     else:
         nao_pair = nao * (nao+1) // 2
-        buflen = min(max(int(max_memory*.28e6/8/naoaux/comp), 1), nao_pair)
+        buflen = min(max(int(max_memory*.24e6/8/naoaux/comp), 1), nao_pair)
         shranges = _guess_shell_ranges(mol, buflen, 's2ij')
     log.debug('erifile %.8g MB, IO buf size %.8g MB',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
