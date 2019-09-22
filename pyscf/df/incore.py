@@ -165,10 +165,10 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
             if dat.flags.f_contiguous:
                 dat = lib.transpose(dat.T, out=bufs2)
             cderi[:,p0:p1] = dat
-            dat = ints = None
         else:
-            cderi[:,p0:p1] = lib.dot(low.T, ints, c=bufs2)
-            ints = None
+            dat = numpy.ndarray((naux, ints.shape[1]), buffer=bufs2)
+            cderi[:,p0:p1] = lib.dot(low.T, ints, c=dat)
+        dat = ints = None
 
     log.timer('cholesky_eri', *t0)
     return cderi
