@@ -1660,9 +1660,9 @@ class SCF(lib.StreamObject):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis=None, with_df=None):
+    def density_fit(self, auxbasis=None, with_df=None, only_dfj=False):
         import pyscf.df.df_jk
-        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
+        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df, only_dfj)
 
     def sfx2c1e(self):
         import pyscf.x2c.sfx2c1e

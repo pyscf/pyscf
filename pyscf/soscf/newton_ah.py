@@ -508,18 +508,10 @@ def project_mol(mol, dual_basis={}):
 # Seems the high order terms do not help optimization?
 def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
     log = logger.new_logger(mf, verbose)
-    mo_coeff, mo_occ, fock_ao, e_tot = yield
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(mf.conv_tol*.1)
 #TODO: dynamically adjust max_stepsize, as done in mc1step.py
-
-    t2m = (time.clock(), time.time())
-    g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
-    g_kf = g_orb
-    norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
-    log.debug('    |g|= %4.3g (keyframe)', norm_gorb)
-    t3m = log.timer('gen h_op', *t2m)
 
     def precond(x, e):
         hdiagd = h_diag-(e-mf.ah_level_shift)
@@ -531,11 +523,30 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
 #            x *= 1e-2/norm_x
         return x
 
-    g_op = lambda: g_orb
-    x0_guess = g_orb
-
+    t3m = (time.clock(), time.time())
+    u = g_kf = g_orb = kfcount = jkcount = None
     kf_trust_region = mf.kf_trust_region
+    g_op = lambda: g_orb
     while True:
+        mo_coeff, mo_occ, vhf0, e_tot = (yield u, g_kf, kfcount, jkcount)
+        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        fock_ao = mf.get_fock(h1e, vhf=vhf0)
+
+        g_kf, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
+        norm_gkf = numpy.linalg.norm(g_kf)
+        if g_orb is None:
+            log.debug('    |g|= %4.3g (keyframe)', norm_gkf)
+            x0_guess = g_kf
+        else:
+            norm_dg = numpy.linalg.norm(g_kf-g_orb)
+            log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
+                      norm_gkf, norm_dg)
+            kf_trust_region = min(max(norm_gorb/(norm_dg+1e-9), mf.kf_trust_region), 10)
+            log.debug1('Set  kf_trust_region = %g', kf_trust_region)
+            x0_guess = dxi
+        g_orb = g_kf
+        norm_gorb = norm_gkf
+
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
         #ah_start_cycle = max(mf.ah_start_cycle, int(-numpy.log10(norm_gorb)))
@@ -546,10 +557,6 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
         jkcount = 0
         kfcount = 0
         ikf = 0
-        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        # NOTE: vhf0 cannot be computed as (fock_ao - h1e) because mf.get_fock
-        # may be overloaded and fock_ao != h1e + vhf0
-        vhf0 = mf._scf.get_veff(mf._scf.mol, dm0)
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
@@ -610,7 +617,6 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                     dm = mf.make_rdm1(mo1, mo_occ)
 # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
                     vhf0 = mf._scf.get_veff(mf._scf.mol, dm, dm_last=dm0, vhf_last=vhf0)
-                    kfcount += 1
                     dm0 = dm
 # Use API to compute fock instead of "fock=h1e+vhf0". This is because get_fock
 # is the hook being overloaded in many places.
@@ -619,6 +625,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
                     norm_dg = numpy.linalg.norm(g_kf1-g_orb)
                     jkcount += 1
+                    kfcount += 1
                     if log.verbose >= logger.DEBUG:
                         e_tot, e_last = mf._scf.energy_tot(dm, h1e, vhf0), e_tot
                         log.debug('Adjust keyframe g_orb to |g|= %4.3g  '
@@ -640,7 +647,6 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                         log.debug('Out of trust region. Restore previouse step')
                         break
 
-
         u = mf.update_rotate_matrix(dr, mo_occ, mo_coeff=mo_coeff)
         if ukf is not None:
             u = mf.rotate_mo(ukf, u)
@@ -649,21 +655,6 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                   imic, jkcount, norm_gorb, numpy.linalg.norm(dr))
         h_op = h_diag = None
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
-        mo_coeff, mo_occ, fock_ao, e_tot = (yield u, g_kf, kfcount, jkcount)
-
-        g_kf, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
-        norm_gkf = numpy.linalg.norm(g_kf)
-        norm_dg = numpy.linalg.norm(g_kf-g_orb)
-        log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
-                  norm_gkf, norm_dg)
-        kf_trust_region = min(max(norm_gorb/(norm_dg+1e-9), mf.kf_trust_region), 10)
-        log.debug1('Set  kf_trust_region = %g', kf_trust_region)
-        g_orb = g_kf
-        norm_gorb = norm_gkf
-        if norm_dxi != 0:
-            x0_guess = dxi
-        else:
-            x0_guess = g_kf
 
 
 def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
@@ -711,9 +702,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     cput1 = log.timer('initializing second order scf', *cput0)
 
     for imacro in range(max_cycle):
-        u, g_orb, kfcount, jkcount = rotaiter.send((mo_coeff, mo_occ, fock, e_tot))
+        u, g_orb, kfcount, jkcount = rotaiter.send((mo_coeff, mo_occ, vhf, e_tot))
         kftot += kfcount + 1
-        jktot += jkcount
+        jktot += jkcount + 1
 
         dm_last = dm
         last_hf_e = e_tot
@@ -734,8 +725,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
                  kfcount+1, jkcount)
         cput1 = log.timer('cycle= %d'%(imacro+1), *cput1)
 
-        if (abs((e_tot-last_hf_e)/e_tot)*1e2 < conv_tol and
-            norm_gorb < conv_tol_grad):
+        if callable(mf.check_convergence):
+            scf_conv = mf.check_convergence(locals())
+        elif abs((e_tot-last_hf_e)/e_tot)*1e3 < conv_tol and norm_gorb < conv_tol_grad:
             scf_conv = True
 
         if dump_chk:
@@ -758,7 +750,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         if dump_chk:
             mf.dump_chk(locals())
     log.info('macro X = %d  E=%.15g  |g|= %g  total %d KF %d JK',
-             imacro+1, e_tot, norm_gorb, kftot, jktot)
+             imacro+1, e_tot, norm_gorb, kftot+1, jktot+1)
     if (numpy.any(mo_occ==0) and
         mo_energy[mo_occ>0].max() > mo_energy[mo_occ==0].min()):
         log.warn('HOMO %s > LUMO %s was found in the canonicalized orbitals.',
