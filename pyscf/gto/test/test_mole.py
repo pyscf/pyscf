@@ -897,9 +897,9 @@ O    SP
         out1 = mol.tofile(tmpfile.name, format='xyz')
         ref = '''3
 XYZ from PySCF
-   H        0.00000        1.00000        1.00000
-   O        0.00000        0.00000        0.00000
-   H        1.00000        1.00000        0.00000
+H           0.00000        1.00000        1.00000
+O           0.00000        0.00000        0.00000
+H           1.00000        1.00000        0.00000
 '''
         with open(tmpfile.name, 'r') as f:
             self.assertEqual(f.read(), ref)

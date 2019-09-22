@@ -222,6 +222,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         mf1 = density_fit(mf1, auxbasis)
     else:
         mf1 = density_fit(newton(mf), auxbasis)
+    mf1.with_df._compatible_format = False
     mf1.direct_scf_tol = 1e-7
 
     if getattr(mf, 'grids', None):

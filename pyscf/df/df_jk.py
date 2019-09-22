@@ -315,6 +315,10 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     dm = dm.reshape(-1,nao,nao)
     n_dm = dm.shape[0]
 
+    # First compute the density in auxiliary basis
+    # j3c = fauxe2(mol, auxmol)
+    # jaux = numpy.einsum('ijk,ji->k', j3c, dm)
+    # rho = numpy.linalg.solve(auxmol.intor('int2c2e'), jaux)
     nbas = mol.nbas
     nbas1 = mol.nbas + dfobj.auxmol.nbas
     shls_slice = (0, nbas, 0, nbas, nbas, nbas1, nbas1, nbas1+1)
@@ -335,6 +339,9 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     rho = rho.T[:,numpy.newaxis,:]
     t1 = logger.timer_debug1(dfobj, 'df-vj solve ', *t1)
 
+    # Next compute the Coulomb matrix
+    # j3c = fauxe2(mol, auxmol)
+    # vj = numpy.einsum('ijk,k->ij', j3c, rho)
     with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass2_prescreen',
                            _dmcondname=None):
         # CVHFnr3c2e_vj_pass2_prescreen requires custom dm_cond

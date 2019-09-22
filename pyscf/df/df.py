@@ -72,6 +72,12 @@ class DF(lib.StreamObject):
             When reading DF integrals from disk the chunk size to load.  It is
             used to improve the IO performance.
     '''
+
+    blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
+
+    # Store DF tensor in a format compatible to pyscf-1.1 - pyscf-1.6
+    _compatible_format = getattr(__config__, 'df_df_DF_compatible_format', False)
+
     def __init__(self, mol, auxbasis=None):
         self.mol = mol
         self.stdout = mol.stdout
@@ -86,11 +92,8 @@ class DF(lib.StreamObject):
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
-        self._call_count = getattr(__config__, 'df_df_DF_call_count', None)
-        self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
         self._vjopt = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
-        self._compatible_mode = False  # Compatible to the format of pyscf-1.1 - pyscf-1.6
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -138,7 +141,8 @@ class DF(lib.StreamObject):
         if (nao_pair*naux*8/1e6 < .9*max_memory and
             not isinstance(self._cderi_to_save, str)):
             self._cderi = incore.cholesky_eri(mol, int3c=int3c, int2c=int2c,
-                                              auxmol=auxmol, verbose=log)
+                                              auxmol=auxmol,
+                                              max_memory=max_memory, verbose=log)
         else:
             if isinstance(self._cderi_to_save, str):
                 cderi = self._cderi_to_save
@@ -150,7 +154,7 @@ class DF(lib.StreamObject):
                 log.warn('Value of _cderi is ignored. DF integrals will be '
                          'saved in file %s .', cderi)
 
-            if self._compatible_mode or isinstance(self._cderi_to_save, str):
+            if self._compatible_format or isinstance(self._cderi_to_save, str):
                 outcore.cholesky_eri(mol, cderi, dataname='j3c',
                                      int3c=int3c, int2c=int2c, auxmol=auxmol,
                                      max_memory=max_memory, verbose=log)
@@ -214,18 +218,8 @@ class DF(lib.StreamObject):
                     yield dat
 
     def prange(self, start, end, step):
-        if isinstance(self._call_count, int):
-            self._call_count += 1
-            if self._call_count % 2 == 1:
-                for i in reversed(range(start, end, step)):
-                    yield i, min(i+step, end)
-            else:
-                for i in range(start, end, step):
-                    yield i, min(i+step, end)
-
-        else:
-            for i in range(start, end, step):
-                yield i, min(i+step, end)
+        for i in range(start, end, step):
+            yield i, min(i+step, end)
 
     def get_naoaux(self):
 # determine naoaux with self._cderi, because DF object may be used as CD
