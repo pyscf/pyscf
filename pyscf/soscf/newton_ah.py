@@ -69,6 +69,8 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if fock_ao is None:
         # dm0 is the density matrix in projected basis. Computing fock in
         # projected basis.
+        if getattr(mf, '_scf', None) and mf._scf.mol != mol:
+            h1e = mf.get_hcore(mol)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
         fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
@@ -175,6 +177,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     if fock_ao is None:
+        if getattr(mf, '_scf', None) and mf._scf.mol != mol:
+            h1e = mf.get_hcore(mol)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
         focka = reduce(numpy.dot, (mo_coeff[0].conj().T, fock_ao[0], mo_coeff[0]))
@@ -525,17 +529,17 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
 
     t3m = (time.clock(), time.time())
     u = g_kf = g_orb = kfcount = jkcount = None
-    kf_trust_region = mf.kf_trust_region
+    dm0 = vhf0 = None
     g_op = lambda: g_orb
     while True:
-        mo_coeff, mo_occ, vhf0, e_tot = (yield u, g_kf, kfcount, jkcount)
-        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = mf.get_fock(h1e, vhf=vhf0)
+        mo_coeff, mo_occ, dm0, vhf0, e_tot = (yield u, g_kf, kfcount, jkcount, dm0, vhf0)
+        fock_ao = mf.get_fock(h1e, s1e, vhf0, dm0)
 
         g_kf, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
         norm_gkf = numpy.linalg.norm(g_kf)
         if g_orb is None:
             log.debug('    |g|= %4.3g (keyframe)', norm_gkf)
+            kf_trust_region = mf.kf_trust_region
             x0_guess = g_kf
         else:
             norm_dg = numpy.linalg.norm(g_kf-g_orb)
@@ -620,7 +624,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                     dm0 = dm
 # Use API to compute fock instead of "fock=h1e+vhf0". This is because get_fock
 # is the hook being overloaded in many places.
-                    fock_ao = mf.get_fock(h1e, vhf=vhf0)
+                    fock_ao = mf.get_fock(h1e, s1e, vhf0, dm0)
                     g_kf1 = mf.get_grad(mo1, mo_occ, fock_ao)
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
                     norm_dg = numpy.linalg.norm(g_kf1-g_orb)
@@ -657,8 +661,8 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
         t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
 
 
-def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
-           max_cycle=50, dump_chk=True,
+def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
+           conv_tol=1e-10, conv_tol_grad=None, max_cycle=50, dump_chk=True,
            callback=None, verbose=logger.NOTE):
     cput0 = (time.clock(), time.time())
     log = logger.new_logger(mf, verbose)
@@ -670,22 +674,31 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)
         log.info('Set conv_tol_grad to %g', conv_tol_grad)
-    scf_conv = False
-    e_tot = mf.e_tot
 
 # call mf._scf.get_hcore, mf._scf.get_ovlp because they might be overloaded
     h1e = mf._scf.get_hcore(mol)
     s1e = mf._scf.get_ovlp(mol)
-    dm = mf.make_rdm1(mo_coeff, mo_occ)
+
+    dm_as_initguess = dm is not None
+    if dm is None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+
 # call mf._scf.get_veff, to avoid "newton().density_fit()" polluting get_veff
     vhf = mf._scf.get_veff(mol, dm)
     e_tot = mf._scf.energy_tot(dm, h1e, vhf)
     fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
+
+    if dm_as_initguess:
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    else:
+        # mo_coeff and mo_occ are initial guess, provided as input
+        # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
+        mo_energy, mo_tmp = mf.eig(fock, s1e)
+        mf.get_occ(mo_energy, mo_tmp)
+
     log.info('Initial guess E= %.15g  |g|= %g', e_tot,
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
-# NOTE: DO NOT change the initial guess mo_occ, mo_coeff
-    mo_energy, mo_tmp = mf.eig(fock, s1e)
-    mf.get_occ(mo_energy, mo_tmp)
 
     if dump_chk and mf.chkfile:
         chkfile.save_mol(mol, mf.chkfile)
@@ -694,19 +707,22 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 # twice.
     if mol is mf.mol and not getattr(mf, 'with_df', None):
         mf._eri = mf._scf._eri
-        mf.opt = mf._scf.opt
+        # If different direct_scf_cutoff is assigned to newton_ah mf.opt
+        # object, mf.opt should be different to mf._scf.opt
+        #mf.opt = mf._scf.opt
 
     rotaiter = _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad, verbose=log)
     next(rotaiter)  # start the iterator
     kftot = jktot = 0
+    scf_conv = False
     cput1 = log.timer('initializing second order scf', *cput0)
 
     for imacro in range(max_cycle):
-        u, g_orb, kfcount, jkcount = rotaiter.send((mo_coeff, mo_occ, vhf, e_tot))
+        u, g_orb, kfcount, jkcount, dm_last, vhf = \
+                rotaiter.send((mo_coeff, mo_occ, dm, vhf, e_tot))
         kftot += kfcount + 1
         jktot += jkcount + 1
 
-        dm_last = dm
         last_hf_e = e_tot
         norm_gorb = numpy.linalg.norm(g_orb)
         mo_coeff = mf.rotate_mo(mo_coeff, u, log)
@@ -853,37 +869,39 @@ class _CIAH_SOSCF(hf.SCF):
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (time.clock(), time.time())
         if dm0 is not None:
-            mo_coeff, mo_occ = self.from_dm(dm0)
+            pass
         elif mo_coeff is not None and mo_occ is None:
             logger.warn(self, 'Newton solver expects mo_coeff with '
                         'mo_occ as initial guess but the given initial '
                         'guess does not have mo_occ.\n      The given '
                         'argument is treated as density matrix.')
-            dm = mo_coeff
-            mo_coeff, mo_occ = self.from_dm(dm)
+            dm0 = mo_coeff
+            mo_coeff = mo_occ = None
         else:
+            # If mo_coeff and mo_occ are generated by certain pre-processing
+            # program and are available in SCF object, we prefer the available
+            # mo_coeff and mo_occ than density matrix initial guess.
             if mo_coeff is None: mo_coeff = self.mo_coeff
             if mo_occ is None: mo_occ = self.mo_occ
             if mo_coeff is None or mo_occ is None:
                 logger.debug(self, 'Initial guess orbitals not given. '
                              'Generating initial guess from %s density matrix',
                              self.init_guess)
-                if self.mol is self._scf.mol:
-                    dm = self.get_init_guess(self.mol, self.init_guess)
-                else:
-                    dm = self.get_init_guess(self._scf.mol, self.init_guess)
-                mo_coeff, mo_occ = self.from_dm(dm)
-
-        self.build(self.mol)
-        self.dump_flags()
+                dm0 = self.get_init_guess(self._scf.mol, self.init_guess)
+                mo_coeff = mo_occ = None
+            else:
+                dm0 = None
 
         # save initial guess because some methods may need them
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
 
+        self.build(self.mol)
+        self.dump_flags()
+
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
-                kernel(self, mo_coeff, mo_occ, conv_tol=self.conv_tol,
+                kernel(self, mo_coeff, mo_occ, dm0, conv_tol=self.conv_tol,
                        conv_tol_grad=self.conv_tol_grad,
                        max_cycle=self.max_cycle,
                        callback=self.callback, verbose=self.verbose)
@@ -975,10 +993,11 @@ def newton(mf):
             mo = _CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
             if log is not None and log.verbose >= logger.DEBUG:
                 idx = self.mo_occ > 0
-                s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
-                                       self.mo_coeff[:,idx]))
-                log.debug('Overlap to initial guess, SVD = %s',
-                          _effective_svd(s, 1e-5))
+                if self.mo_coeff is not None:
+                    s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
+                                           self.mo_coeff[:,idx]))
+                    log.debug('Overlap to initial guess, SVD = %s',
+                              _effective_svd(s, 1e-5))
                 log.debug('Overlap to last step, SVD = %s',
                           _effective_svd(u[idx][:,idx], 1e-5))
             return mo

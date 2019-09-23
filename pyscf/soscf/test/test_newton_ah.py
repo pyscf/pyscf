@@ -332,7 +332,7 @@ class KnownValues(unittest.TestCase):
                     symmetry=True)
         mf = scf.ROHF(mol)
         mf.irrep_nelec = {'E2x': (0, 0), 'E2y': (1, 0)}
-        mf.max_cycle = 5
+        mf.max_cycle = 7
         mf = mf.newton().run()
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, -914.539361470649, 9)
