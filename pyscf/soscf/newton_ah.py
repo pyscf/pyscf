@@ -697,6 +697,10 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
         mo_energy, mo_tmp = mf.eig(fock, s1e)
         mf.get_occ(mo_energy, mo_tmp)
 
+    # save the initial guess because some methods may need them
+    mf.mo_coeff = mo_coeff
+    mf.mo_occ = mo_occ
+
     log.info('Initial guess E= %.15g  |g|= %g', e_tot,
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 
@@ -891,10 +895,6 @@ class _CIAH_SOSCF(hf.SCF):
                 mo_coeff = mo_occ = None
             else:
                 dm0 = None
-
-        # save initial guess because some methods may need them
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
 
         self.build(self.mol)
         self.dump_flags()
