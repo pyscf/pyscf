@@ -48,6 +48,7 @@ class scf(tddft_iter):
     """ This does the actual SCF loop so far only HF """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess()
+    print('Densit matrix at get_init_guess', dm0.shape)
     if (self.nspin==2 and dm0.ndim==5): dm0=dm0[0,...,0] 
     etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
     #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
@@ -70,6 +71,49 @@ class scf(tddft_iter):
     self.xc_code = "HF"
     self.fermi_energy = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
     return etot
+
+  def get_hcore(self, mol=None, **kw):
+    hcore = -0.5*self.laplace_coo().toarray()
+    hcore += self.vnucele_coo(**kw).toarray()
+    return hcore
+
+
+  def rescf(self, dump_chk=False, **kw):
+    """ This does the reSCF loop for only HF """
+    from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
+    #dm0 = self.get_init_guess()
+    dm0 = np.random.rand(2,1000,1000)
+    print('Densit matrix at get_init_guess', dm0.shape)
+    if (self.nspin==2 and dm0.ndim==5): dm0=dm0[0,...,0]
+    hcore = self.get_hcore(mol=None)
+    j,k  = self.get_jk(mol=None, dm=dm0)
+    if (self.nspin==1): v_eff = j - k * .5
+    if (self.nspin==2): v_eff = j[0] + j[1] - k
+    fock = hcore + v_eff
+    ovlp = get_ovlp()
+    print('hcore.shape, fock.shape, ovlp.shape',hcore.shape, fock.shape, ovlp.shape)
+    
+    #etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
+    #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
+
+    #if self.nspin==1:
+    #  self.mo_coeff[0,0,:,:,0] = self.pyscf_scf.mo_coeff.T
+    #  self.mo_energy[0,0,:] = self.pyscf_scf.mo_energy
+    #  self.ksn2e = self.mo_energy
+    #  self.mo_occ[0,0,:] = self.pyscf_scf.mo_occ
+    #elif self.nspin==2:
+      #for s in range(self.nspin):
+        #self.mo_coeff[0,s,:,:,0] = self.pyscf_scf.mo_coeff[s].T
+        #self.mo_energy[0,s,:] = self.pyscf_scf.mo_energy[s]
+        #self.ksn2e = self.mo_energy
+        #self.mo_occ[0,s,:] = self.pyscf_scf.mo_occ[s]
+    #else:
+      #raise RuntimeError('0>nspin>2?')
+      
+    #self.xc_code_previous = copy(self.xc_code)
+    #self.xc_code = "HF"
+    #self.fermi_energy = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
+    #return etot
 
   def get_hcore(self, mol=None, **kw):
     hcore = -0.5*self.laplace_coo().toarray()

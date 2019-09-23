@@ -7,8 +7,26 @@ from numpy import stack, dot, zeros, einsum, pi, log, array, require
 from pyscf.nao import scf, gw
 import time
 
+def profile(fnc):
+    """Profiles any function in following class just by adding @profile above function"""
+    import cProfile, pstats, io
+    def inner (*args, **kwargs):
+        pr = cProfile.Profile()
+        pr.enable()
+        retval = fnc (*args, **kwargs)
+        pr.disable()
+        s = io.StringIO()
+        sortby = 'cumulative'   #Ordered
+        ps = pstats.Stats(pr,stream=s).strip_dirs().sort_stats(sortby)
+        n=20                    #reduced the list to be monitored
+        ps.print_stats(n)
+        #ps.dump_stats("profile.prof")
+        print(s.getvalue())
+        return retval
+    return inner
 
 start_time = time.time()
+
 class gw_iter(gw):
   """ Iterative G0W0 with integration along imaginary axis """
 
@@ -60,7 +78,7 @@ class gw_iter(gw):
        print('Results (W_c) are NOT similar!')     
     return [[diff/summ] , [np.amax(abs(diff))] ,[tol]]
 
-
+  
   def gw_xvx (self, algo=None):
     """
      calculates XVX = X_{a}^{n}V_{\nu}^{ab}X_{b}^{m} using 4-methods
@@ -183,7 +201,7 @@ class gw_iter(gw):
         snm2i.append(np.real(inm))
     return snm2i
 
-
+  
   def gw_vext2veffmatvec(self,vin):
     dn0 = self.gw_chi0_mv(vin, self.comega_current)
     vcre,vcim = self.gw_applykernel_nspin1(dn0)
@@ -324,16 +342,16 @@ class gw_iter(gw):
       for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
         zww = array([pole[0] for pole in lsos])
-        xv = dot(v_pab,x[n])
+        xv = np.dot(v_pab,x[n])
         for pole, z_real in zip(lsos, zww):
           self.comega_current = z_real
-          xvx = dot(xv, x[pole[1]])
+          xvx = np.dot(xv, x[pole[1]])
           a = np.dot(self.kernel_sq, xvx)
           b = self.gw_chi0_mv(a, self.comega_current)
           a = np.dot(self.kernel_sq, b)
           si_xvx, exitCode = lgmres(k_c_opt, a, atol=self.gw_iter_tol, maxiter=self.maxiter)
           if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
-          contr = dot(xvx, si_xvx)
+          contr = np.dot(xvx, si_xvx)
           sn2res[s][nl] += pole[2]*contr.real
     return sn2res
 
@@ -381,7 +399,7 @@ class gw_iter(gw):
         if self.verbosity>0: print('-'*30,' |  TAKE CARE! Convergence to tolerance {} not achieved after {}-iterations  | '.format(self.tol_ev,self.niter_max_ev),'-'*30,'\n')
     return sn2eval_gw
 
-
+  #@profile  
   def make_mo_g0w0_iter(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
@@ -420,6 +438,8 @@ class gw_iter(gw):
     return self.etot_gw()
         
   kernel_gw_iter = make_mo_g0w0_iter
+
+
 
 
 
