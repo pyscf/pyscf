@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -70,12 +70,12 @@ class DF(lib.StreamObject):
             When reading DF integrals from disk the chunk size to load.  It is
             used to improve the IO performance.
     '''
-    def __init__(self, mol, auxbasis=None):
+    def __init__(self, mol):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self._auxbasis = auxbasis
+        self._auxbasis = None
 
 ##################################################
 # Following are not input options
@@ -98,9 +98,9 @@ class DF(lib.StreamObject):
             self.auxmol = None
             self._cderi = None
 
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
-        log.info('******** %s ********', self.__class__)
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('******** %s flags ********', self.__class__)
         if self.auxmol is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:

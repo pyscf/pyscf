@@ -81,7 +81,6 @@ class KnownValues(unittest.TestCase):
         eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
         eris.vvvv = ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
         eris.fock = fock0
-        eris.mo_energy = fock0.diagonal()
 
         saved = ccsd_lambda.make_intermediates(mcc, t1, t2, eris)
         l1new, l2new = ccsd_lambda.update_lambda(mcc, t1, t2, l1, l2, eris, saved)

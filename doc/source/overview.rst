@@ -22,7 +22,7 @@ Bibtex entry::
   @Misc{PYSCF,
     title = {PySCF: the Python‐based simulations of chemistry framework},
     author = {Qiming Sun and Timothy C. Berkelbach and Nick S. Blunt and George H. Booth and Sheng Guo and Zhendong Li and Junzi Liu and James D. McClain and Elvira R. Sayfutyarova and Sandeep Sharma and Sebastian Wouters and Garnet Kin‐Lic Chan},
-    year = {2017},
+    year = {2017}
     journal = {Wiley Interdisciplinary Reviews: Computational Molecular Science},
     volume = {8},
     number = {1},
@@ -32,9 +32,6 @@ Bibtex entry::
     eprint = {https://onlinelibrary.wiley.com/doi/pdf/10.1002/wcms.1340},
   }
 
-In addition, if you use Libcint to compute integrals, please cite the following paper:
-
-"Libcint: An efficient general integral library for Gaussian basis functions", Q. Sun, J. Comp. Chem. 36, 1664 (2015).
 
 Features
 ========

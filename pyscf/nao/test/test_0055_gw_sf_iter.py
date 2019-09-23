@@ -13,14 +13,14 @@ class KnowValues(unittest.TestCase):
     gto_mf = scf.UHF(mol)
     gto_mf.kernel()
     
-    gw = gw_c(mf=gto_mf, gto=mol, verbosity=0, niter_max_ev=20)
-    gwi = gw_iter(mf=gto_mf, gto=mol, verbosity=0, niter_max_ev=20)
+    gw = gw_c(mf=gto_mf, gto=mol, verbosity=0, niter_max_ev=20, kmat_algo='sm0_sum')
+    gwi = gw_iter(mf=gto_mf, gto=mol, verbosity=0, niter_max_ev=20, kmat_algo='sm0_sum')
 
     sf = gw.get_snmw2sf()
-    sf_it = gwi.get_snmw2sf_iter()
-    self.assertEqual(len(sf), len(sf_it))
-    self.assertEqual(sf[0].shape, sf_it[0].shape)
-    self.assertTrue(np.allclose(sf, sf_it, atol = gwi.gw_iter_tol))
+    sf_i = gwi.get_snmw2sf_iter()
+    self.assertEqual(len(sf), len(sf_i))
+    self.assertEqual(sf[0].shape, sf_i[0].shape)
+    self.assertTrue(np.allclose(sf, sf_i,atol = 1e-05))
     
     
 if __name__ == "__main__": unittest.main()

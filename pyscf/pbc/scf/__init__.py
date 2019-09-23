@@ -63,35 +63,35 @@ def KHF(cell, *args, **kwargs):
         return kuhf.KUHF(cell, *args, **kwargs)
 
 
-def KS(cell, *args, **kwargs):
+def KS(cell, *args):
     from pyscf.pbc import dft
-    return dft.KS(cell, *args, **kwargs)
+    return dft.KS(cell)
 
-def KKS(cell, *args, **kwargs):
+def KKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.KKS(cell, *args, **kwargs)
+    return dft.KKS(cell)
 
-def RKS(cell, *args, **kwargs):
+def RKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.RKS(cell, *args, **kwargs)
+    return dft.RKS(cell)
 
-def ROKS(cell, *args, **kwargs):
+def ROKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.ROKS(cell, *args, **kwargs)
+    return dft.ROKS(cell, *args)
 
-def UKS(cell, *args, **kwargs):
+def UKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.UKS(cell, *args, **kwargs)
+    return dft.UKS(cell, *args)
 
-def KRKS(cell, *args, **kwargs):
+def KRKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.KRKS(cell, *args, **kwargs)
+    return dft.KRKS(cell)
 
-def KROKS(cell, *args, **kwargs):
+def KROKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.KROKS(cell, *args, **kwargs)
+    return dft.KROKS(cell, *args)
 
-def KUKS(cell, *args, **kwargs):
+def KUKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.KUKS(cell, *args, **kwargs)
+    return dft.KUKS(cell, *args)
 

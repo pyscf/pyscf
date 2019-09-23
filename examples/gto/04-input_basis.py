@@ -7,12 +7,11 @@ This example covers different ways to input basis
 3. Different basis for same elements (different atoms).
 4. Default basis for all elements, except the given basis of specific element.
 5. gto.basis.parse and gto.basis.load functions to input user-specified basis.
-6. Reading the basis set from a given file.
-7. Uncontracted basis with prefix "unc-".
-8. Basis truncation and a subset of a basis set with notation "@".
-9. Even tempered gaussian basis.
-10. Combining multiple basis sets into one basis set.
-11. Internal format (not recommended)
+6. Reading the basis set from a given file
+7. Uncontracted basis.
+8. Even tempered gaussian basis.
+9. Combining multiple basis sets into one basis set.
+10. Internal format (not recommended)
 '''
 
 import os
@@ -83,7 +82,7 @@ O    SP
 )
 
 #
-# Uncontracted basis, decontracting basis.
+# Uncontracted basis
 #
 mol = gto.M(
     atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
@@ -91,17 +90,6 @@ mol = gto.M(
                                 # It is equivalent to assigning
                                 #   'O': gto.uncontract(gto.load('ccpvdz', 'O')),
              'H': 'ccpvdz'  # H1 H2 will use the same basis ccpvdz
-            }
-)
-
-#
-# Basis truncation, basis subset with notation "@"
-#
-mol = gto.M(
-    atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
-    basis = {'O': 'ano@3s2p',  # Truncate the ANO basis and keep only 9
-                               # functions (3s, 2p) for O atom.
-             'H': 'ccpvdz@1s'  # One s function from cc-pVDZ basis
             }
 )
 
@@ -182,7 +170,7 @@ C    SP
 '''}
 mol.build()
 
-# Note the rule to uncontract basis also works here: If the basis string is
+# Note the rule to unctract basis also works here: If the basis string is
 # prefixed with unc, the basis set will be uncontracted.
 mol.basis = {'H': gto.basis.load('sto3g', 'H'),
              'O': '''unc

@@ -50,7 +50,7 @@ class VHFOpt(object):
                                    c_env.ctypes.data_as(ctypes.c_void_p))
         self._this.contents.fprescreen = _fpointer(prescreen)
 
-        if prescreen != 'CVHFnoscreen' and qcondname is not None:
+        if prescreen != 'CVHFnoscreen':
             ao_loc = make_loc(c_bas, self._intor)
             fsetqcond = getattr(libcvhf, qcondname)
             fsetqcond(self._this,
@@ -280,10 +280,7 @@ def direct_mapdm(intor, aosym, jkdescript,
         vshape = (n_dm,ncomp) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
         for j in range(n_dm):
-            if dms[j].shape != get_dims(dmsym, shls_slice, ao_loc):
-                raise RuntimeError('dm[%d] shape %s is inconsistent with the '
-                                   'shls_slice shape %s' %
-                                   (j, dms[j].shape, get_dims(dmsym, shls_slice, ao_loc)))
+            assert(dms[j].shape == get_dims(dmsym, shls_slice, ao_loc))
             dmsptr[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             vjkptr[i*n_dm+j] = vjk[i][j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
@@ -357,12 +354,13 @@ def direct_bindm(intor, aosym, jkdescript,
     dmsptr = (ctypes.c_void_p*(n_dm))()
     vjkptr = (ctypes.c_void_p*(n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
+        if dmsym in ('ij', 'kl', 'il', 'kj'):
+            sys.stderr.write('not support DM description %s, transpose to %s\n' %
+                             (dmsym, dmsym[::-1]))
+            dmsym = dmsym[::-1]
         f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
 
-        if dms[i].shape != get_dims(dmsym, shls_slice, ao_loc):
-            raise RuntimeError('dm[%d] shape %s is inconsistent with the '
-                               'shls_slice shape %s' %
-                               (i, dms[i].shape, get_dims(dmsym, shls_slice, ao_loc)))
+        assert(dms[i].shape == get_dims(dmsym, shls_slice, ao_loc))
         vshape = (ncomp,) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
         dmsptr[i] = dms[i].ctypes.data_as(ctypes.c_void_p)

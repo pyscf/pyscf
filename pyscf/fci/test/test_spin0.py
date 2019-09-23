@@ -21,7 +21,6 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import mcscf
 from pyscf import fci
-from pyscf.fci import fci_slow
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -56,10 +55,6 @@ ci1 = numpy.random.random((na,na))
 ci1 = ci1 + ci1.T
 ci1 /= numpy.linalg.norm(ci1)
 
-def tearDownModule():
-    global mol, m, h1e, g2e, ci0, ci1
-    del mol, m, h1e, g2e, ci0, ci1
-
 class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1 = fci.direct_spin0.contract_1e(h1e, ci0, norb, nelec)
@@ -83,14 +78,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm1ref, dm1))
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7059849569286722, 10)
 
-        norb1 = nelec
-        na = fci.cistring.num_strings(norb1, nelec//2)
-        ci1 = numpy.random.random((na,na))
-        ci1 = ci1 + ci1.T
-        dm1 = fci.direct_spin0.make_rdm1(ci1, norb1, nelec)
-        ref1 = fci_slow.make_rdm1(ci1, norb1, nelec)
-        self.assertAlmostEqual(abs(ref1-dm1).max(), 0, 10)
-
     def test_rdm12(self):
         dm1ref, dm2ref = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
         dm1, dm2 = fci.direct_spin0.make_rdm12(ci0, norb, nelec)
@@ -98,15 +85,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm2ref, dm2))
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 2.7059849569286731, 10)
         self.assertAlmostEqual(numpy.linalg.norm(dm2), 7.8811473403497736, 10)
-
-        norb1 = nelec
-        na = fci.cistring.num_strings(norb1, nelec//2)
-        ci1 = numpy.random.random((na,na))
-        ci1 = ci1 + ci1.T
-        dm1, dm2 = fci.direct_spin0.make_rdm12(ci1, norb1, nelec)
-        ref1, ref2 = fci_slow.make_rdm12(ci1, norb1, nelec)
-        self.assertAlmostEqual(abs(ref1-dm1).max(), 0, 10)
-        self.assertAlmostEqual(abs(ref2-dm2).max(), 0, 10)
 
     def test_trans_rdm1(self):
         dm1ref = fci.direct_spin1.trans_rdm1(ci0, ci1, norb, nelec)
@@ -150,39 +128,6 @@ class KnownValues(unittest.TestCase):
         ci0[0,0] = 1
         e, c = cis.kernel(h1e, eri, 2, 2, ci0)
         self.assertAlmostEqual(e, -0.80755526695538049, 10)
-
-        cis = fci.direct_spin0_symm.FCISolver(mol)
-        # Test the default initial guess. It should give "0" in the results
-        cis.get_init_guess = None
-        cis.dump_flags()
-        e, c = cis.kernel(h1e, eri, 2, 2, orbsym=mf.mo_coeff.orbsym[2:4])
-        self.assertAlmostEqual(e, 0, 10)
-
-    def test_gen_linkstr(self):
-        sol = fci.direct_spin0.FCI(mol)
-        link1 = sol.gen_linkstr(7, 6, tril=True)
-        link1[:,:,1] = 0
-        link2 = sol.gen_linkstr(7, (3,3), tril=False)
-        self.assertAlmostEqual(abs(link1 - fci.cistring.reform_linkstr_index(link2)).max(), 0, 12)
-
-    def test_small_system(self):
-        sol = fci.direct_spin0.FCI()
-
-        norb = 6
-        nelec = (3,3)
-        numpy.random.seed(9)
-        h1e = numpy.random.random((norb,norb))
-        h1e = h1e + h1e.T
-        g2e = numpy.random.random((norb,norb,norb,norb))
-        eri = .5* ao2mo.restore(1, ao2mo.restore(8, g2e, norb), norb)
-        h = fci.direct_spin1.pspace(h1e, eri, norb, nelec, np=5000)[1]
-        eref, c0 = numpy.linalg.eigh(h)
-
-        e, c1 = sol.kernel(h1e, eri, norb, (norb,norb))
-        self.assertAlmostEqual(e, 20.52279077686709, 12)
-
-        e, c1 = sol.kernel(h1e, eri, norb, nelec, nroots=4)
-        self.assertAlmostEqual(abs(eref[[0,1,3,5]] - e).max(), 0, 8)
 
 
 if __name__ == "__main__":

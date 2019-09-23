@@ -196,45 +196,6 @@ class KnownValues(unittest.TestCase):
                 dat = dat.reshape(3,3,di,dj)
                 self.assertAlmostEqual(abs(dat[:,2]-ref).max(), 0, 3)
 
-    def test_pp_int(self):
-        from pyscf import gto, scf
-        from pyscf.pbc import gto as pbcgto
-        from pyscf.pbc import scf as pbcscf
-        from pyscf.pbc import df
-        cell = pbcgto.Cell()
-        cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
-        cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
-                      'C' :'gth-szv',}
-        cell.pseudo = {'C':'gth-pade',
-                       'He': pbcgto.pseudo.parse('''He
-        2
-         0.40000000    3    -1.98934751    -0.75604821    0.95604821
-        2
-         0.29482550    3     1.23870466    .855         .3
-                                           .71         -1.1
-                                                        .9
-         0.32235865    2     2.25670239    -0.39677748
-                                            0.93894690
-                                                     ''')}
-        cell.a = numpy.eye(3)
-        cell.dimension = 0
-        cell.build()
-        mol = cell.to_mol()
-
-        hcore = scf.RHF(mol).get_hcore()
-        mydf = df.AFTDF(cell)
-        ref = mydf.get_pp() + mol.intor('int1e_kin')
-        self.assertAlmostEqual(abs(hcore-ref).max(), 0, 2)
-
-        mf = pbcscf.RHF(cell)
-        mf.with_df = mydf
-        mf.run()
-        e_ref = mf.e_tot
-
-        e_tot = scf.RHF(mol).run().e_tot
-        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 6)
-
-
 
 if __name__ == '__main__':
     print("Full Tests for ECP")

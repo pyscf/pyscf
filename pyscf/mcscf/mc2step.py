@@ -36,12 +36,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
     mo = mo_coeff
     nmo = mo.shape[1]
-    ncore = casscf.ncore
-    ncas = casscf.ncas
-    nocc = ncore + ncas
     eris = casscf.ao2mo(mo)
     e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if ncas == nmo and not casscf.internal_rotation:
+    if casscf.ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
             mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
@@ -68,7 +65,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         njk = 0
         t3m = t2m
         casdm1_old = casdm1
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
         t3m = log.timer('update CAS DM', *t3m)
         max_cycle_micro = 1 # casscf.micro_cycle_scheduler(locals())
@@ -136,7 +133,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
                                     casscf.natorb, casdm1, log)
         if casscf.natorb and dump_chk: # dump_chk may save casdm1
-            occ, ucas = casscf._eig(-casdm1, ncore, nocc)
+            nocc = casscf.ncore + casscf.ncas
+            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
             casdm1 = numpy.diag(-occ)
 
     if dump_chk:

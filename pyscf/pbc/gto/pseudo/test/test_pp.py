@@ -124,7 +124,6 @@ def get_pp(cell, kpt=np.zeros(3)):
 
     SI = cell.get_SI()
     vlocG = pseudo.get_vlocG(cell)
-    vlocG[:,0] = 0
     vpplocG = -np.sum(SI * vlocG, axis=0)
 
     # vpploc evaluated in real-space

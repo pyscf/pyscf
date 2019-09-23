@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 Non-relativistic ROKS analytical nuclear gradients
 '''
 
-from pyscf import lib
 from pyscf.scf import addons
 from pyscf.grad import uks as uks_grad
 
@@ -33,8 +32,6 @@ class Gradients(uks_grad.Gradients):
 
 Grad = Gradients
 
-from pyscf import dft
-dft.roks.ROKS.Gradients = dft.rks_symm.ROKS.Gradients = lib.class_as_method(Gradients)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -53,7 +50,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-12
     #mf.grids.atom_grid = (20,86)
     e0 = mf.scf()
-    g = mf.Gradients()
+    g = Gradients(mf)
     print(g.kernel())
 #[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
 # [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]

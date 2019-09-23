@@ -211,20 +211,8 @@ C    SP
           H1 -0.9444878100 0.0000000000 -1.3265673200''', basis={'H':'sto3g', 'H1':'321g'}, charge=1)
         self.assertTrue(not gto.same_mol(mol3, mol2))
 
-    def test_inertia_momentum(self):
-        mol1 = gto.Mole()
-        mol1.atom = mol0.atom
-        mol1.nucmod = 'G'
-        mol1.verbose = 5
-        mol1.nucprop = {'H': {'mass': 3}}
-        mol1.output = '/dev/null'
-        mol1.build(False, False)
-        self.assertAlmostEqual(lib.finger(gto.inertia_moment(mol1)),
-                               2.139593709454326, 9)
-
-        mass = mol0.atom_mass_list(isotope_avg=True)
-        self.assertAlmostEqual(lib.finger(gto.inertia_moment(mol1, mass)),
-                               2.1549269955776205, 9)
+    def test_mass_center(self):
+        self.assertAlmostEqual(abs(gto.mass_center(mol0._atom)[2]), 0.2038858832140481, 9)
 
     def test_chiral_mol(self):
         mol1 = gto.M(atom='C 0 0 0; H 1 1 1; He -1 -1 1; Li -1 1 -1; Be 1 -1 -1')
@@ -426,26 +414,12 @@ O    SP
         mol1.atom = mol0.atom
         mol1.nucmod = 'G'
         mol1.verbose = 5
-        mol1.nucprop = {'H': {'mass': 3}}
         mol1.output = '/dev/null'
         mol1.build(False, False)
-        mol1.set_nuc_mod(0, 2)
+        mol1.set_nuc_mod(1, 2)
         self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
-        self.assertAlmostEqual(mol1._env[mol1._atm[0,gto.PTR_ZETA]], 2, 9)
-        self.assertAlmostEqual(mol1._env[mol1._atm[1,gto.PTR_ZETA]], 586314366.54656982, 4)
-
         mol1.set_nuc_mod(1, 0)
         self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_POINT)
-
-        mol1.nucmod = None
-        mol1.build(False, False)
-        self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_POINT)
-
-        mol1.nucmod = {'H': gto.filatov_nuc_mod}
-        mol1.build(False, False)
-        self.assertTrue(mol1._atm[0,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
-        self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_POINT)
-        self.assertTrue(mol1._atm[2,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
 
     def test_zmat(self):
         coord = numpy.array((
@@ -558,17 +532,15 @@ O    SP
             self.assertEqual(len(shls), nshls)
             self.assertEqual(mol0.atom_nshells(i), nshls)
         aoslice = mol0.aoslice_2c_by_atom()
-        mol0.elements  # test property(elements) in Mole
         self.assertEqual([x[2] for x in aoslice], [0, 8, 56])
         self.assertEqual([x[3] for x in aoslice], [8, 56, 64])
 
-    def test_dump_loads_skip(self):
+    def test_dump_loads(self):
         import json
         tmpfile = tempfile.NamedTemporaryFile()
         lib.chkfile.save_mol(mol0, tmpfile.name)
         mol1 = gto.Mole()
         mol1.update(tmpfile.name)
-        # dumps() may produce different orders in different runs
         self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
         tmpfile = None
         mol1.loads(mol1.dumps())

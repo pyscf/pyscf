@@ -321,22 +321,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(lib.finger(td_hf.transition_magnetic_dipole()    [2])), 0                  , 5)
         self.assertAlmostEqual(abs(lib.finger(td_hf.transition_magnetic_quadrupole()[2])), 0.16558596265719450, 5)
 
-    def test_dRPA(self):
-        td = rks.dRPA(mf_lda)
-        td._scf.xc = ''
-        es = td.kernel(nstates=3)[0]
-        self.assertAlmostEqual(lib.finger(es), 0.32727702719009616, 6)
-
-    def test_dTDA(self):
-        td = rks.dTDA(mf_lda)
-        td._scf.xc = ''
-        es = td.kernel(nstates=3)[0]
-        self.assertAlmostEqual(lib.finger(es), 0.3237948650800024, 6)
-
-        td = rks.dTDA(mf_lda)
-        es = td.kernel(nstates=3)[0]
-        self.assertAlmostEqual(lib.finger(es), 0.3237948650800024, 6)
-
 
 if __name__ == "__main__":
     print("Full Tests for TD-RKS")

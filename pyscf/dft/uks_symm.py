@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,32 +21,25 @@ Non-relativistic Unrestricted Kohn-Sham
 '''
 
 from pyscf.lib import logger
-from pyscf.scf import uhf_symm
+import pyscf.scf
 from pyscf.dft import uks
 from pyscf.dft import rks
 
 
-class SymAdaptedUKS(uhf_symm.UHF):
+class UKS(pyscf.scf.uhf_symm.UHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol):
-        uhf_symm.UHF.__init__(self, mol)
+        pyscf.scf.uhf_symm.UHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
-    def dump_flags(self, verbose=None):
-        uhf_symm.UHF.dump_flags(self, verbose)
+    def dump_flags(self):
+        pyscf.scf.uhf_symm.UHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags(verbose)
+        self.grids.dump_flags()
 
     get_veff = uks.get_veff
     energy_elec = uks.energy_elec
-    define_xc_ = rks.define_xc_
-
-    def nuc_grad_method(self):
-        from pyscf.grad import uks
-        return uks.Gradients(self)
-
-UKS = SymAdaptedUKS
 
 
 if __name__ == '__main__':

@@ -37,21 +37,15 @@ AtomN ZN x y z          # ...
 Data on grids           # (N1*N2) lines of records, each line has N3 elements
 '''
 
-import time
 import numpy
+import time
 import pyscf
 from pyscf import lib
-from pyscf import gto
-from pyscf import df
 from pyscf.dft import numint
 from pyscf import __config__
 
 RESOLUTION = getattr(__config__, 'cubegen_resolution', None)
 BOX_MARGIN = getattr(__config__, 'cubegen_box_margin', 3.0)
-ORIGIN = getattr(__config__, 'cubegen_box_origin', None)
-# If given, EXTENT should be a 3-element ndarray/list/tuple to represent the
-# extension in x, y, z
-EXTENT = getattr(__config__, 'cubegen_box_extent', None)
 
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
@@ -70,16 +64,11 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             Number of grid point divisions in x direction.
             Note this is function of the molecule's size; a larger molecule
             will have a coarser representation than a smaller one for the
-            same value. Conflicts to keyword resolution.
+            same value.
         ny : int
             Number of grid point divisions in y direction.
         nz : int
             Number of grid point divisions in z direction.
-        resolution: float
-            Resolution of the mesh grid in the cube box. If resolution is
-            given in the input, the input nx/ny/nz have no effects.  The value
-            of nx/ny/nz will be determined by the resolution and the cube box
-            size.
     """
 
     cc = Cube(mol, nx, ny, nz, resolution)
@@ -96,8 +85,6 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
 
     # Write out density to the .cube file
     cc.write(rho, outfile, comment='Electron density in real space (e/Bohr^3)')
-    return rho
-
 
 def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculate orbital value on real space grid and write out in cube format.
@@ -115,16 +102,11 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             Number of grid point divisions in x direction.
             Note this is function of the molecule's size; a larger molecule
             will have a coarser representation than a smaller one for the
-            same value. Conflicts to keyword resolution.
+            same value.
         ny : int
             Number of grid point divisions in y direction.
         nz : int
             Number of grid point divisions in z direction.
-        resolution: float
-            Resolution of the mesh grid in the cube box. If resolution is
-            given in the input, the input nx/ny/nz have no effects.  The value
-            of nx/ny/nz will be determined by the resolution and the cube box
-            size.
     """
     cc = Cube(mol, nx, ny, nz, resolution)
 
@@ -140,7 +122,6 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
 
     # Write out orbital to the .cube file
     cc.write(orb_on_grid, outfile, comment='Orbital value in real space (1/Bohr^3)')
-    return orb_on_grid
 
 
 def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
@@ -160,16 +141,11 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             Number of grid point divisions in x direction.
             Note this is function of the molecule's size; a larger molecule
             will have a coarser representation than a smaller one for the
-            same value. Conflicts to keyword resolution.
+            same value.
         ny : int
             Number of grid point divisions in y direction.
         nz : int
             Number of grid point divisions in z direction.
-        resolution: float
-            Resolution of the mesh grid in the cube box. If resolution is
-            given in the input, the input nx/ny/nz have no effects.  The value
-            of nx/ny/nz will be determined by the resolution and the cube box
-            size.
     """
     cc = Cube(mol, nx, ny, nz, resolution)
 
@@ -184,46 +160,39 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
         Vnuc += Z / numpy.einsum('xi,xi->x', rp, rp)**.5
 
     # Potential of electron density
-    Vele = numpy.empty_like(Vnuc)
-    for p0, p1 in lib.prange(0, Vele.size, 600):
-        fakemol = gto.fakemol_for_charges(coords[p0:p1])
-        ints = df.incore.aux_e2(mol, fakemol)
-        Vele[p0:p1] = numpy.einsum('ijp,ij->p', ints, dm)
+    Vele = []
+    for p in coords:
+        mol.set_rinv_orig_(p)
+        Vele.append(numpy.einsum('ij,ij', mol.intor('int1e_rinv'), dm))
 
     MEP = Vnuc - Vele     # MEP at each point
-    MEP = MEP.reshape(cc.nx,cc.ny,cc.nz)
+
+    MEP = numpy.asarray(MEP)
+    MEP = MEP.reshape(nx,ny,nz)
 
     # Write the potential
     cc.write(MEP, outfile, 'Molecular electrostatic potential in real space')
-    return MEP
 
 
 class Cube(object):
     '''  Read-write of the Gaussian CUBE files  '''
     def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
-                 margin=BOX_MARGIN, origin=ORIGIN, extent=EXTENT):
+                 margin=BOX_MARGIN):
         self.mol = mol
         coord = mol.atom_coords()
-        if extent is None:
-            box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
-            self.box = numpy.diag(box)
-        else:
-            self.box = numpy.diag(extent)
-        if origin is None:
-            self.boxorig = numpy.min(coord,axis=0) - margin
-        else:
-            self.boxorig = numpy.array(origin)
+        self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+        self.boxorig = numpy.min(coord,axis=0) - margin
         if resolution is not None:
-            nx, ny, nz = numpy.ceil(numpy.diag(self.box) / resolution).astype(int)
+            nx, ny, nz = numpy.ceil(self.box / resolution).astype(int)
 
         self.nx = nx
         self.ny = ny
         self.nz = nz
         # .../(nx-1) to get symmetric mesh
-        # see also the discussion https://github.com/sunqm/pyscf/issues/154
-        self.xs = numpy.arange(nx) * (numpy.diag(self.box)[0] / (nx - 1))
-        self.ys = numpy.arange(ny) * (numpy.diag(self.box)[1] / (ny - 1))
-        self.zs = numpy.arange(nz) * (numpy.diag(self.box)[2] / (nz - 1))
+        # see also the discussion on https://github.com/sunqm/pyscf/issues/154
+        self.xs = numpy.arange(nx) * (self.box[0] / (nx - 1))
+        self.ys = numpy.arange(ny) * (self.box[1] / (ny - 1))
+        self.zs = numpy.arange(nz) * (self.box[2] / (nz - 1))
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored
@@ -235,6 +204,9 @@ class Cube(object):
 
     def get_ngrids(self):
         return self.nx * self.ny * self.nz
+
+    def get_volume_element(self):
+        return (self.xs[1]-self.xs[0])*(self.ys[1]-self.ys[0])*(self.zs[1]-self.zs[0])
 
     def write(self, field, fname, comment=None):
         """  Result: .cube file with the field in the file fname.  """
@@ -264,8 +236,7 @@ class Cube(object):
                         fmt = '%13.5E' * (iz1-iz0) + '\n'
                         f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
 
-    def read(self, cube_file):
-        raise NotImplementedError
+del(RESOLUTION, BOX_MARGIN)
 
 
 if __name__ == '__main__':

@@ -34,7 +34,7 @@ def get_ovlp(cell, grids=None):
     return s
 
 
-class KnownValues(unittest.TestCase):
+class KnowValues(unittest.TestCase):
     def test_becke_grids(self):
         L = 4.
         n = 61
@@ -68,7 +68,6 @@ class KnownValues(unittest.TestCase):
         cell.basis = {'He': [[0, (1.0, 1.0)]]}
         cell.rcut = 6.78614042442
         cell.dimension = 2
-        cell.low_dim_ft_type = 'inf_vacuum'
         cell.build()
         grids = gen_grid.BeckeGrids(cell)
         grids.level = 3
@@ -89,7 +88,6 @@ class KnownValues(unittest.TestCase):
         cell.basis = {'He': [[0, (1.0, 1.0)]]}
         cell.rcut = 6.78614042442
         cell.dimension = 1
-        cell.low_dim_ft_type = 'inf_vacuum'
         cell.build()
         grids = gen_grid.BeckeGrids(cell)
         grids.level = 3

@@ -24,8 +24,6 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
 from pyscf.dft.numint import _scale_ao, _contract_rho
-from pyscf.dft.numint import _rks_gga_wv0, _rks_gga_wv1
-from pyscf.dft.numint import _uks_gga_wv0, _uks_gga_wv1
 from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
@@ -145,16 +143,9 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
-        dm = dm.astype(numpy.complex128)
-# For GGA, function eval_rho returns   real(|\nabla i> D_ij <j| + |i> D_ij <\nabla j|)
-#       = real(|\nabla i> D_ij <j| + |i> D_ij <\nabla j|)
-#       = real(|\nabla i> D_ij <j| + conj(|\nabla j> conj(D_ij) < i|))
-#       = real(|\nabla i> D_ij <j|) + real(|\nabla j> conj(D_ij) < i|)
-#       = real(|\nabla i> [D_ij + (D^\dagger)_ij] <j|)
-# symmetrization dm (D + D.conj().T) then /2 because the code below computes
-#       2*real(|\nabla i> D_ij <j|)
         if not hermi:
             dm = (dm + dm.conj().T) * .5
+        dm = dm.astype(numpy.complex128)
 
         def dot_bra(bra, aodm):
             #:rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
@@ -527,7 +518,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
 
 def _format_uks_dm(dms):
     dma, dmb = dms
-    if getattr(dms, 'mo_coeff', None) is not None:
+    if hasattr(dms, 'mo_coeff'):
 #TODO: test whether dm.mo_coeff matching dm
         mo_coeff = dms.mo_coeff
         mo_occ = dms.mo_occ
@@ -627,9 +618,10 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 fxc0 = (fxc[0][ip:ip+ngrid], fxc[1][ip:ip+ngrid], fxc[2][ip:ip+ngrid])
                 ip += ngrid
 
+            wv = numpy.empty((4,ngrid))
             for i in range(nset):
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = _rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
+                wv = numint._rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         # call swapaxes method to swap last two indices because vmat may be a 3D
@@ -656,8 +648,6 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
 
     Ref. CPL, 256, 454
     '''
-    if kpts is None:
-        kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
 
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms_alpha)
@@ -728,8 +718,8 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = _rks_gga_wv1(rho, rho1, (None,fgamma),
-                                  (frho,frhogamma,fgg), weight)
+                wv = numint._rks_gga_wv1(rho, rho1, (None,fgamma),
+                                         (frho,frhogamma,fgg), weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
@@ -794,9 +784,9 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
-        dm0a, dm0b = _format_uks_dm(dm0)
-        make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)[0]
-        make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)[0]
+        dm0a, dm0b = _format_uks_dm(dms)
+        make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)
+        make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)
 
     shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
@@ -850,8 +840,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             for i in range(nset):
                 rho1a = make_rhoa(i, ao_k1, mask, xctype)
                 rho1b = make_rhob(i, ao_k1, mask, xctype)
-                wva, wvb = _uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
-                                        vxc0, fxc0, weight)
+                wva, wvb = numint._uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
+                                               vxc0, fxc0, weight)
                 vmata[i] += ni._fxc_mat(cell, ao_k1, wva, mask, xctype, ao_loc)
                 vmatb[i] += ni._fxc_mat(cell, ao_k1, wvb, mask, xctype, ao_loc)
 
@@ -912,15 +902,14 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def get_rho(ni, cell, dm, grids, kpts=numpy.zeros((1,3)), max_memory=2000):
-    '''Density in real space
+def get_rho(ni, cell, dm, grids, kpt=numpy.zeros(3), max_memory=2000):
+    '''Indices of density which are larger than given cutoff
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
-    assert(nset == 1)
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao_k1, ao_k2, mask, weight, coords \
-            in ni.block_loop(cell, grids, nao, 0, kpts, None, max_memory):
+            in ni.block_loop(cell, grids, nao, 0, kpt, None, max_memory):
         p0, p1 = p1, p1 + weight.size
         rho[p0:p1] = make_rho(0, ao_k1, mask, 'LDA')
     return rho
@@ -940,7 +929,6 @@ class NumInt(numint.NumInt):
                   verbose=None):
         return make_mask(cell, coords, relativity, shls_slice, verbose)
 
-    @lib.with_doc(eval_rho.__doc__)
     def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         return eval_rho(cell, ao, dm, non0tab, xctype, hermi, verbose)
 
@@ -1019,8 +1007,8 @@ class NumInt(numint.NumInt):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+            blksize = max(1, int(max_memory*1e6/(comp*2*nao*16*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1083,8 +1071,7 @@ class KNumInt(numint.NumInt):
 
     def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
                  hermi=0, verbose=None):
-        '''Collocate the *real* density (opt. gradients) on the real-space grid.
-
+        '''
         Args:
             cell : Mole or Cell object
             ao_kpts : (nkpts, ngrids, nao) ndarray
@@ -1188,8 +1175,8 @@ class KNumInt(numint.NumInt):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+            blksize = max(1, int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1213,7 +1200,7 @@ class KNumInt(numint.NumInt):
             ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
-        if getattr(dms, 'mo_coeff', None) is not None:
+        if hasattr(dms, 'mo_coeff'):
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ
             if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
@@ -1226,20 +1213,15 @@ class KNumInt(numint.NumInt):
                                       non0tab, xctype)
         else:
             if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
-                dms = [numpy.stack(dms)]
-            #if not hermi:
-            # Density (or response of density) is always real for DFT.
-            # Symmetrizing DM for gamma point should not change the value of
-            # density. However, when k-point is considered, unless dm and
-            # dm.conj().transpose produce the same real part of density, the
-            # symmetrization code below may be incorrect (proof is needed).
-            #    # dm.shape = (nkpts, nao, nao)
-            #    dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
+                dms = [numpy.asarray(dms)]
+            if not hermi:
+                #       dm.shape = (nkpts, nao, nao)
+                dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
             nao = dms[0].shape[-1]
             ndms = len(dms)
             def make_rho(idm, ao_kpts, non0tab, xctype):
                 return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype,
-                                     hermi=hermi)
+                                     hermi=1)
         return make_rho, ndms, nao
 
     nr_rks_fxc = nr_rks_fxc

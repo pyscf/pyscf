@@ -16,7 +16,6 @@
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-from functools import reduce
 import time
 import numpy as np
 import scipy.linalg
@@ -33,16 +32,7 @@ method = 'davidson'
 
 VERBOSE = False
 
-try:
-# Temporary fix for davidson when using mpicc
-    from mpi4py import MPI
-    FOUND_MPI4PY = True
-    MPI_RANK = MPI.COMM_WORLD.Get_rank()
-    MPI_COMM = MPI.COMM_WORLD
-except (ImportError, OSError):
-    FOUND_MPI4PY = False
-
-def eigs(matvec, size, nroots, x0=None, Adiag=None, guess=False, verbose=logger.INFO):
+def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
     '''Davidson diagonalization method to solve A c = E c
     when A is not Hermitian.
     '''
@@ -55,7 +45,7 @@ def eigs(matvec, size, nroots, x0=None, Adiag=None, guess=False, verbose=logger.
 
     if method == 'davidson':
         if guess == False:
-            conv, e, c, niter = davidson(matvec, size, nroots, x0, Adiag, verbose)
+            conv, e, c, niter = davidson(matvec, size, nroots, Adiag, verbose)
         else:
             conv, e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
         return conv, e, c
@@ -77,7 +67,7 @@ def eigs(matvec, size, nroots, x0=None, Adiag=None, guess=False, verbose=logger.
         return david.solve_iter()
 
 
-def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
+def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
     """Diagonalize a matrix via non-symmetric Davidson algorithm.
 
     mult_by_A() is a function which takes a vector of length N
@@ -117,14 +107,6 @@ def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
     lamda_k = 0
     target = 0
     conv = False
-    if x0 is not None:
-        assert x0.shape == (N, Mmin)
-        b = x0.copy()
-
-        Ab = np.zeros((N,Mmin),np.complex)
-        for m in range(Mmin):
-            Ab[:,m] = mult_by_A(b[:,m])
-
     for istep,M in enumerate(range(Mmin,Mmax+1)):
         if M == Mmin:
             # Set of M unit vectors from lowest Adiag (NxM)
@@ -172,9 +154,6 @@ def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
 
         # orthonormalize xi wrt b
         bxi,R = np.linalg.qr(np.column_stack((b,xi)))
-        if FOUND_MPI4PY:  # Ensure all processes search in same direction
-            bxi = MPI_COMM.bcast(bxi)
-
         # append orthonormalized xi to b
         b = np.column_stack((b,bxi[:,-1]))
 

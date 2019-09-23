@@ -188,8 +188,8 @@ static void assemble_v(double *vjk, JKArray *jkarray, int *ao_loc)
         int jsh0 = jkarray->v_ket_sh0;
         int jsh1 = jkarray->v_ket_sh1;
         int njsh = jsh1 - jsh0;
-        size_t vrow = jkarray->v_dims[0];
-        size_t vcol = jkarray->v_dims[1];
+        int vrow = jkarray->v_dims[0];
+        int vcol = jkarray->v_dims[1];
         int ncomp = jkarray->ncomp;
         int voffset = ao_loc[ish0] * vcol + ao_loc[jsh0];
         int i, j, ish, jsh;
@@ -255,7 +255,9 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(intor, fdot, jkop, ao_loc, shls_slice, \
+               dms, vjk, n_dm, ncomp, nbas, vhfopt, envs)
 {
         int i, j, ij, ij1;
         JKArray *v_priv[n_dm];

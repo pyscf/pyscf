@@ -51,7 +51,8 @@ def make_intermediates(mycc, t1, t2, eris):
     nocca, noccb = t2ab.shape[:2]
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[0]
-    mo_ea, mo_eb = eris.mo_energy
+    mo_ea = eris.focka.diagonal().real
+    mo_eb = eris.fockb.diagonal().real
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]
     eIA = mo_eb[:noccb,None] - mo_eb[noccb:]
     fvo = eris.focka[nocca:,:nocca]

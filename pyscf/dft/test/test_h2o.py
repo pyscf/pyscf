@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import dft
@@ -192,28 +191,6 @@ class KnownValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.926526046608529, 9)
 
-    def test_nr_gks_lsda(self):
-        method = dft.GKS(h2osym_cation)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        self.assertAlmostEqual(method.scf(), -75.350995324984709, 9)
-
-    def test_nr_gks_b3lypg(self):
-        method = dft.GKS(h2osym_cation)
-        method.xc = 'b3lypg'
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        self.assertAlmostEqual(method.scf(), -75.902391377392391, 9)
-
-    def test_nr_gks_b3lypg_direct(self):
-        method = dft.GKS(h2o_cation)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.xc = 'b3lypg'
-        method.max_memory = 0
-        method.direct_scf = True
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        self.assertAlmostEqual(method.scf(), -75.902391377392391, 9)
-
 #########
     def test_nr_symm_lda(self):
         method = dft.RKS(h2osym)
@@ -389,16 +366,6 @@ class KnownValues(unittest.TestCase):
         vxc = method.get_veff(h2o, dm, dm, vxc)
         self.assertAlmostEqual(lib.finger(vxc), 23.058813088809824, 8)
 
-    def test_nr_rks_rsh_cart(self):
-        mol1 = h2o.copy()
-        mol1.basis = 'ccpvdz'
-        mol1.cart = True
-        mol1.build(0, 0)
-        method = dft.RKS(mol1)
-        method.xc = 'B97M_V'
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        self.assertAlmostEqual(method.kernel(), -76.44022393692919, 9)
-
     def test_nr_uks_rsh(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()
@@ -426,31 +393,6 @@ class KnownValues(unittest.TestCase):
         vxc = method.get_veff(h2o, dm, dm, vxc)
         self.assertAlmostEqual(lib.finger(vxc[0]), 23.058813088809824, 8)
         self.assertAlmostEqual(lib.finger(vxc[1]), 23.058813088809824, 8)
-
-    def test_nr_gks_rsh(self):
-        method = dft.GKS(h2o)
-        dm = method.get_init_guess()
-        dm = dm + numpy.sin(dm)*.02j
-        dm = dm + dm.conj().T
-        method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 3.1818982731583274+0j, 8)
-
-        method._eri = None
-        method.max_memory = 0
-        method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc), 3.1818982731583274+0j, 8)
-
-        method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 2.0131447223203565+0j, 8)
-
-        method._eri = None
-        method.max_memory = 0
-        method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc), 2.0131447223203565+0j, 8)
 
     def test_nr_rks_vv10_high_cost(self):
         method = dft.RKS(h2o)

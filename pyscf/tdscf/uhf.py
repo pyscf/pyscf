@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,9 +74,9 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
-    e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
-    e_ia = hdiag = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
+    e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+    e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+    e_ai = hdiag = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
@@ -91,21 +91,21 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         if wfnsym is not None and mol.symmetry:
             zs = numpy.copy(zs)
             zs[:,sym_forbid] = 0
-        dmov = numpy.empty((2,nz,nao,nao))
+        dmvo = numpy.empty((2,nz,nao,nao))
         for i, z in enumerate(zs):
             za = z[:nocca*nvira].reshape(nocca,nvira)
             zb = z[nocca*nvira:].reshape(noccb,nvirb)
-            dmov[0,i] = reduce(numpy.dot, (orboa, za, orbva.conj().T))
-            dmov[1,i] = reduce(numpy.dot, (orbob, zb, orbvb.conj().T))
+            dmvo[0,i] = reduce(numpy.dot, (orboa, za, orbva.conj().T))
+            dmvo[1,i] = reduce(numpy.dot, (orbob, zb, orbvb.conj().T))
 
-        v1ao = vresp(dmov)
+        v1ao = vresp(dmvo)
         v1a = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo)).reshape(-1,nocca,nvira)
         v1b = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo)).reshape(-1,noccb,nvirb)
         for i, z in enumerate(zs):
             za = z[:nocca*nvira].reshape(nocca,nvira)
             zb = z[nocca*nvira:].reshape(noccb,nvirb)
-            v1a[i] += numpy.einsum('ia,ia->ia', e_ia_a, za)
-            v1b[i] += numpy.einsum('ia,ia->ia', e_ia_b, zb)
+            v1a[i] += numpy.einsum('ia,ia->ia', e_ai_a, za)
+            v1b[i] += numpy.einsum('ia,ia->ia', e_ai_b, zb)
         hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
         if wfnsym is not None and mol.symmetry:
             hx[:,sym_forbid] = 0
@@ -148,10 +148,10 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     nmo_a = nocc_a + nvir_a
     nmo_b = nocc_b + nvir_b
 
-    e_ia_a = (mo_energy[0][viridx_a,None] - mo_energy[0][occidx_a]).T
-    e_ia_b = (mo_energy[1][viridx_b,None] - mo_energy[1][occidx_b]).T
-    a_aa = numpy.diag(e_ia_a.ravel()).reshape(nocc_a,nvir_a,nocc_a,nvir_a)
-    a_bb = numpy.diag(e_ia_b.ravel()).reshape(nocc_b,nvir_b,nocc_b,nvir_b)
+    eai_a = mo_energy[0][viridx_a,None] - mo_energy[0][occidx_a]
+    eai_b = mo_energy[1][viridx_b,None] - mo_energy[1][occidx_b]
+    a_aa = numpy.diag(eai_a.T.ravel()).reshape(nocc_a,nvir_a,nocc_a,nvir_a)
+    a_bb = numpy.diag(eai_b.T.ravel()).reshape(nocc_b,nvir_b,nocc_b,nvir_b)
     a_ab = numpy.zeros((nocc_a,nvir_a,nocc_b,nvir_b))
     b_aa = numpy.zeros_like(a_aa)
     b_ab = numpy.zeros_like(a_ab)
@@ -182,7 +182,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         a_ab += numpy.einsum('iabj->iajb', eri_ab[:nocc_a,nocc_a:,nocc_b:,:nocc_b])
         b_ab += numpy.einsum('iajb->iajb', eri_ab[:nocc_a,nocc_a:,:nocc_b,nocc_b:])
 
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint
@@ -595,8 +595,8 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
 
 class TDA(rhf.TDA):
 
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
@@ -634,8 +634,8 @@ class TDA(rhf.TDA):
         occidxb = numpy.where(mo_occ[1]>0)[0]
         viridxa = numpy.where(mo_occ[0]==0)[0]
         viridxb = numpy.where(mo_occ[1]==0)[0]
-        e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
-        e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+        e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+        e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
 
         if wfnsym is not None and mol.symmetry:
             if isinstance(wfnsym, str):
@@ -644,14 +644,14 @@ class TDA(rhf.TDA):
             wfnsym = wfnsym % 10  # convert to D2h subgroup
             orbsyma = orbsyma % 10
             orbsymb = orbsymb % 10
-            e_ia_a[(orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym] = 1e99
-            e_ia_b[(orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym] = 1e99
+            e_ai_a[(orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym] = 1e99
+            e_ai_b[(orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym] = 1e99
 
-        e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
-        nov = e_ia.size
+        eai = numpy.hstack((e_ai_a.ravel(), e_ai_b.ravel()))
+        nov = eai.size
         nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia)
+        idx = numpy.argsort(eai)
         for i in range(nroot):
             x0[i,idx[i]] = 1  # lowest excitations
         return x0
@@ -747,9 +747,9 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
-    e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
-    e_ia = hdiag = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
+    e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+    e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+    e_ai = hdiag = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
@@ -790,10 +790,10 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
             x, y = xys[i].reshape(2,-1)
             hx[i,0,:nvira*nocca] = v1aov[i].ravel()
             hx[i,0,nvira*nocca:] = v1bov[i].ravel()
-            hx[i,0]+= e_ia * x  # AX
+            hx[i,0]+= e_ai * x  # AX
             hx[i,1,:nvira*nocca] =-v1avo[i].reshape(nvira,nocca).T.ravel()
             hx[i,1,nvira*nocca:] =-v1bvo[i].reshape(nvirb,noccb).T.ravel()
-            hx[i,1]-= e_ia * y  #-AY
+            hx[i,1]-= e_ai * y  #-AY
 
         if wfnsym is not None and mol.symmetry:
             hx[:,:,sym_forbid] = 0
@@ -832,8 +832,8 @@ class TDHF(TDA):
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
-                                                      real_eigenvectors=True)
+            idx = realidx[w[realidx].real.argsort()]
+            return w[idx].real, v[:,idx].real, idx
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
@@ -875,10 +875,6 @@ class TDHF(TDA):
 
 RPA = TDUHF = TDHF
 
-from pyscf import scf
-scf.uhf.UHF.TDA = lib.class_as_method(TDA)
-scf.uhf.UHF.TDHF = lib.class_as_method(TDHF)
-
 del(OUTPUT_THRESHOLD)
 
 
@@ -896,13 +892,13 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.UHF(mol).run()
-    td = mf.TDA()
+    td = TDA(mf)
     td.nstates = 5
     td.verbose = 3
     print(td.kernel()[0] * 27.2114)
 # [ 11.01748568  11.01748568  11.90277134  11.90277134  13.16955369]
 
-    td = mf.TDHF()
+    td = TDHF(mf)
     td.nstates = 5
     td.verbose = 3
     print(td.kernel()[0] * 27.2114)

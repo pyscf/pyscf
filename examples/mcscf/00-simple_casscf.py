@@ -23,7 +23,5 @@ mycas = mcscf.CASSCF(myhf, 6, 8)
 mycas.kernel()
 
 # Natural occupancy in CAS space, Mulliken population etc.
-# See also 00-simple_casci.py for the instruction of the output of analyze()
-# method
 mycas.verbose = 4
 mycas.analyze()

@@ -17,7 +17,6 @@ import re
 from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf import lo
@@ -102,16 +101,19 @@ def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False,
     9        0.0000822361
     10       0.0021017982
     '''
-    with lib.temporary_env(mol, cart=cart):
-        assert(mo_coeff.shape[0] == mol.nao)
-        s = mol.intor_symmetric('int1e_ovlp')
-        lao = lo.orth.orth_ao(mol, orth_method, s=s)
+    import copy
+    if cart and not mol.cart:
+        assert(mo_coeff.shape[0] == mol.nao_nr(cart=True))
+        mol = copy.copy(mol)
+        mol.cart = True
+    s = mol.intor_symmetric('int1e_ovlp')
+    lao = lo.orth.orth_ao(mol, orth_method, s=s)
 
-        idx = gto.mole._aolabels2baslst(mol, aolabels_or_baslst)
-        if len(idx) == 0:
-            logger.warn(mol, 'Required orbitals are not found')
-        mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
-        s1 = numpy.einsum('ki,ki->i', mo1, mo1)
+    idx = gto.mole._aolabels2baslst(mol, aolabels_or_baslst)
+    if len(idx) == 0:
+        logger.warn(mol, 'Required orbitals are not found')
+    mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
+    s1 = numpy.einsum('ki,ki->i', mo1, mo1)
     return s1
 
 del(BASE, MAP_TOL, ORTH_METHOD)

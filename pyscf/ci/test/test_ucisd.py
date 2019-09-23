@@ -261,30 +261,6 @@ class KnownValues(unittest.TestCase):
         check_frozen([[1,3], [2,5]])
         check_frozen([[2,5], [5]])
 
-    def test_overlap(self):
-        nmo = 8
-        nocc = nocca, noccb = (4,3)
-        numpy.random.seed(2)
-        nvira, nvirb = nmo-nocca, nmo-noccb
-        cibra = ucisd.amplitudes_to_cisdvec(numpy.random.rand(1),
-                                            (numpy.random.rand(nocca,nvira),
-                                             numpy.random.rand(noccb,nvirb)),
-                                            (numpy.random.rand(nocca,nocca,nvira,nvira),
-                                             numpy.random.rand(nocca,noccb,nvira,nvirb),
-                                             numpy.random.rand(noccb,noccb,nvirb,nvirb)))
-        ciket = ucisd.amplitudes_to_cisdvec(numpy.random.rand(1),
-                                            (numpy.random.rand(nocca,nvira),
-                                             numpy.random.rand(noccb,nvirb)),
-                                            (numpy.random.rand(nocca,nocca,nvira,nvira),
-                                             numpy.random.rand(nocca,noccb,nvira,nvirb),
-                                             numpy.random.rand(noccb,noccb,nvirb,nvirb)))
-        fcibra = ucisd.to_fcivec(cibra, nmo, nocc)
-        fciket = ucisd.to_fcivec(ciket, nmo, nocc)
-        s_mo = numpy.random.random((nmo,nmo))
-        s0 = fci.addons.overlap(fcibra, fciket, nmo, nocc, s_mo)
-        s1 = ucisd.overlap(cibra, ciket, nmo, nocc, (s_mo, s_mo))
-        self.assertAlmostEqual(s1, s0, 9)
-
 
 if __name__ == "__main__":
     print("Full Tests for UCISD")

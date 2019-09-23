@@ -91,13 +91,11 @@ for i, kpti in enumerate(kpts):
     eri_3d_kpts.append([])
     for j, kptj in enumerate(kpts):
         eri_3d = []
-        for LpqR, LpqI, sign in mydf.sr_loop([kpti,kptj], compact=False):
+        for LpqR, LpqI in mydf.sr_loop([kpti,kptj], compact=False):
             eri_3d.append(LpqR+LpqI*1j)
         eri_3d = numpy.vstack(eri_3d).reshape(-1,nao,nao)
         eri_3d_kpts[i].append(eri_3d)
 # Test 2-e integrals
-# Note, Coulomb integrals are positive definition in this example. The code
-# below does not work for 2D pbc system.
 eri = numpy.einsum('Lpq,Lrs->pqrs', eri_3d_kpts[0][3], eri_3d_kpts[3][0])
 print(abs(eri - mydf.get_eri([kpts[0],kpts[3],kpts[3],kpts[0]]).reshape([nao]*4)).max())
 

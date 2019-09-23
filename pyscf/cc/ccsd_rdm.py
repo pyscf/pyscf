@@ -109,7 +109,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     unit = nocc**2*nvir*6
     blksize = min(nocc, nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     doovv = h5fobj.create_dataset('doovv', (nocc,nocc,nvir,nvir), dtype,
-                                  chunks=(nocc,nocc,1,nvir))
+                                  chunks=(nocc,nocc,blksize,nvir))
 
     log.debug1('rdm intermediates pass 2: block size = %d, nvir = %d in %d blocks',
                blksize, nvir, int((nvir+blksize-1)/blksize))
@@ -148,14 +148,13 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     goovv = goooo = None
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-    unit = max(nocc**2*nvir*2+nocc*nvir**2*3,
-               nvir**3*2+nocc*nvir**2*2+nocc**2*nvir*2)
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
+    unit = max(nocc**2*nvir*2+nocc*nvir**2*3, nvir**3*2+nocc*nvir**2)
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
-                                  chunks=(nocc,min(nocc,nvir),1,nvir))
+                                  chunks=(nocc,nvir,blksize,nvir))
     time1 = time.clock(), time.time()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1]
@@ -216,7 +215,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
-def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm1(mycc, t1, t2, l1, l2):
     '''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
@@ -228,7 +227,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
+    return _make_rdm1(mycc, d1, with_frozen=True)
 
 def make_rdm2(mycc, t1, t2, l1, l2):
     r'''
@@ -244,7 +243,7 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
 
-def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
+def _make_rdm1(mycc, d1, with_frozen=True):
     '''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
@@ -269,10 +268,6 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
         moidx = numpy.where(mycc.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1
-
-    if ao_repr:
-        mo = mycc.mo_coeff
-        dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
     return dm1
 
 # Note vvvv part of 2pdm have been symmetrized.  It does not correspond to
@@ -357,7 +352,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
             dm2[i,i,:,:] += dm1 * 2
             dm2[:,:,i,i] += dm1 * 2
             dm2[:,i,i,:] -= dm1
-            dm2[i,:,:,i] -= dm1.T
+            dm2[i,:,:,i] -= dm1.conj()
 
         for i in range(nocc):
             for j in range(nocc):
@@ -372,7 +367,6 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
 
 
 if __name__ == '__main__':
-    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf.cc import ccsd

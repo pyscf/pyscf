@@ -32,13 +32,13 @@ from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     nao = cell.nao_nr()
     kptijkl = _format_kpts(kpts)
@@ -61,8 +61,11 @@ def get_eri(mydf, kpts=None,
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
-            lib.ddot(pqkR*coulG[p0:p1], pqkR.T, 1, eriR, 1)
-            lib.ddot(pqkI*coulG[p0:p1], pqkI.T, 1, eriR, 1)
+            vG = numpy.sqrt(coulG[p0:p1])
+            pqkR *= vG
+            pqkI *= vG
+            lib.ddot(pqkR, pqkR.T, 1, eriR, 1)
+            lib.ddot(pqkI, pqkI.T, 1, eriR, 1)
             pqkR = pqkI = None
         if not compact:
             eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
@@ -78,9 +81,11 @@ def get_eri(mydf, kpts=None,
         eriI = numpy.zeros((nao**2,nao**2))
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
+            vG = numpy.sqrt(coulG[p0:p1])
+            pqkR *= vG
+            pqkI *= vG
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
-            zdotNC(pqkR*coulG[p0:p1], pqkI*coulG[p0:p1], pqkR.T, pqkI.T,
-                   1, eriR, eriI, 1)
+            zdotNC(pqkR, pqkI, pqkR.T, pqkI.T, 1, eriR, eriI, 1)
             pqkR = pqkI = None
         pqkR = pqkI = coulG = None
 # transpose(0,1,3,2) because
@@ -158,14 +163,17 @@ def general(mydf, mo_coeffs, kpts=None,
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
+            vG = numpy.sqrt(coulG[p0:p1])
+            pqkR *= vG
+            pqkI *= vG
             buf = lib.transpose(pqkR, out=buf)
             ijR, klR = _dtrans(buf, ijR, ijmosym, moij, ijslice,
                                buf, klR, klmosym, mokl, klslice, sym)
-            lib.ddot(ijR.T, klR*coulG[p0:p1,None], 1, eri_mo, 1)
+            lib.ddot(ijR.T, klR, 1, eri_mo, 1)
             buf = lib.transpose(pqkI, out=buf)
             ijI, klI = _dtrans(buf, ijI, ijmosym, moij, ijslice,
                                buf, klI, klmosym, mokl, klslice, sym)
-            lib.ddot(ijI.T, klI*coulG[p0:p1,None], 1, eri_mo, 1)
+            lib.ddot(ijI.T, klI, 1, eri_mo, 1)
             pqkR = pqkI = None
         return eri_mo
 
@@ -185,9 +193,10 @@ def general(mydf, mo_coeffs, kpts=None,
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
             buf = lib.transpose(pqkR+pqkI*1j, out=buf)
+            buf *= numpy.sqrt(coulG[p0:p1]).reshape(-1,1)
             zij, zlk = _ztrans(buf, zij, moij, ijslice,
                                buf, zlk, molk, lkslice, sym)
-            lib.dot(zij.T, zlk.conj()*coulG[p0:p1,None], 1, eri_mo, 1)
+            lib.dot(zij.T, zlk.conj(), 1, eri_mo, 1)
             pqkR = pqkI = None
         nmok = mo_coeffs[2].shape[1]
         nmol = mo_coeffs[3].shape[1]
@@ -217,7 +226,7 @@ def general(mydf, mo_coeffs, kpts=None,
             zij = _ao2mo.r_e2(buf, moij, ijslice, tao, ao_loc, out=zij)
             buf = lib.transpose(rskR-rskI*1j, out=buf)
             zkl = _ao2mo.r_e2(buf, mokl, klslice, tao, ao_loc, out=zkl)
-            zij *= coulG[p0:p1,None]
+            zij *= coulG[p0:p1].reshape(-1,1)
             lib.dot(zij.T, zkl, 1, eri_mo, 1)
             pqkR = pqkI = rskR = rskI = None
         return eri_mo
@@ -290,108 +299,6 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
         pqk = (pqkR + pqkI*1j).reshape(nao,nao,-1)
         mo_pairs_G[p0:p1] = lib.einsum('pqk,pi,qj->kij', pqk, *mo_coeffs[:2])
     return mo_pairs_G.reshape(ngrids,nmoi*nmoj)
-
-def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
-    cell = mydf.cell
-    if kpts is None:
-        kpts = mydf.kpts
-    nkpts = len(kpts)
-
-    if isinstance(mo_coeff_kpts, numpy.ndarray) and mo_coeff_kpts.ndim == 3:
-        mo_coeff_kpts = [mo_coeff_kpts] * 4
-    else:
-        mo_coeff_kpts = list(mo_coeff_kpts)
-
-    # Shape of the orbitals can be different on different k-points. The
-    # orbital coefficients must be formatted (padded by zeros) so that the
-    # shape of the orbital coefficients are the same on all k-points. This can
-    # be achieved by calling pbc.mp.kmp2.padded_mo_coeff function
-    nmoi, nmoj, nmok, nmol = [x.shape[2] for x in mo_coeff_kpts]
-    eri_shape = (nkpts, nkpts, nkpts, nmoi, nmoj, nmok, nmol)
-    if gamma_point(kpts):
-        dtype = numpy.result_type(*mo_coeff_kpts)
-    else:
-        dtype = numpy.complex128
-
-    if out is None:
-        out = numpy.empty(eri_shape, dtype=dtype)
-    else:
-        assert(out.shape == eri_shape)
-
-    kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
-    kptis_lst = kptij_lst[:,0]
-    kptjs_lst = kptij_lst[:,1]
-    kpt_ji = kptjs_lst - kptis_lst
-    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
-    ngrids = numpy.prod(mydf.mesh)
-    nao = cell.nao
-
-    # To hold intermediates
-    fswap = lib.H5TmpFile()
-    tao = []
-    ao_loc = None
-    kconserv = kpts_helper.get_kconserv(cell, kpts)
-    for uniq_id, kpt in enumerate(uniq_kpts):
-        q = uniq_kpts[uniq_id]
-        adapted_ji_idx = numpy.where(uniq_inverse == uniq_id)[0]
-        kptjs = kptjs_lst[adapted_ji_idx]
-        coulG = mydf.weighted_coulG(q, False, mydf.mesh)
-        coulG *= factor
-
-        moij_list = []
-        ijslice_list = []
-        for ji, ji_idx in enumerate(adapted_ji_idx):
-            ki = ji_idx // nkpts
-            kj = ji_idx % nkpts
-            moij, ijslice = _conc_mos(mo_coeff_kpts[0][ki], mo_coeff_kpts[1][kj])[2:]
-            moij_list.append(moij)
-            ijslice_list.append(ijslice)
-            fswap.create_dataset('zij/'+str(ji), (ngrids,nmoi*nmoj), 'D')
-
-        for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, q, kptjs):
-            for ji, aoao in enumerate(aoaoks):
-                ki = adapted_ji_idx[ji] // nkpts
-                kj = adapted_ji_idx[ji] %  nkpts
-                buf = aoao.transpose(1,2,0).reshape(nao**2,ngrids)
-                zij = _ao2mo.r_e2(lib.transpose(buf), moij_list[ji],
-                                  ijslice_list[ji], tao, ao_loc)
-                zij *= coulG[p0:p1,None]
-                fswap['zij/'+str(ji)][p0:p1] = zij
-
-        mokl_list = []
-        klslice_list = []
-        for kk in range(nkpts):
-            kl = kconserv[ki, kj, kk]
-            mokl, klslice = _conc_mos(mo_coeff_kpts[2][kk], mo_coeff_kpts[3][kl])[2:]
-            mokl_list.append(mokl)
-            klslice_list.append(klslice)
-            fswap.create_dataset('zkl/'+str(kk), (ngrids,nmok*nmol), 'D')
-
-        ki = adapted_ji_idx[0] // nkpts
-        kj = adapted_ji_idx[0] % nkpts
-        kptls = kpts[kconserv[ki, kj, :]]
-        for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, q, -kptls):
-            for kk, aoao in enumerate(aoaoks):
-                buf = aoao.conj().transpose(1,2,0).reshape(nao**2,ngrids)
-                zkl = _ao2mo.r_e2(lib.transpose(buf), mokl_list[kk],
-                                  klslice_list[kk], tao, ao_loc)
-                fswap['zkl/'+str(kk)][p0:p1] = zkl
-
-        for ji, ji_idx in enumerate(adapted_ji_idx):
-            ki = ji_idx // nkpts
-            kj = ji_idx % nkpts
-            for kk in range(nkpts):
-                zij = numpy.asarray(fswap['zij/'+str(ji)])
-                zkl = numpy.asarray(fswap['zkl/'+str(kk)])
-                tmp = lib.dot(zij.T, zkl)
-                if dtype == numpy.double:
-                    tmp = tmp.real
-                out[ki,kj,kk] = tmp.reshape(eri_shape[3:])
-        del(fswap['zij'])
-        del(fswap['zkl'])
-
-    return out
-
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto

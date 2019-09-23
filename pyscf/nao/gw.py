@@ -113,14 +113,14 @@ class gw(scf):
     """
     if self.nspin==1:
       mat = self.get_hcore()+self.get_j()-0.5*self.get_k()
-      mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
+      mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
       expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0]).reshape((1,self.norbs))
     elif self.nspin==2:
       vh = self.get_j()
       mat = self.get_hcore()+vh[0]+vh[1]-self.get_k()
       expval = zeros((self.nspin, self.norbs))
       for s in range(self.nspin):
-        mat1 = np.dot(self.mo_coeff[0,s,:,:,0], mat[s])
+        mat1 = dot(self.mo_coeff[0,s,:,:,0], mat[s])
         expval[s] = einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
     return expval
     
@@ -176,7 +176,7 @@ class gw(scf):
     """
     rf = si0 = self.rf_pyscf(ww)
     for iw,r in enumerate(rf):
-      si0[iw] = np.dot(self.kernel_sq, np.dot(r, self.kernel_sq))
+      si0[iw] = dot(self.kernel_sq, dot(r, self.kernel_sq))
     return si0
 
   def get_snmw2sf(self):
@@ -213,7 +213,7 @@ class gw(scf):
 
     sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
-
+    #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
     for s,ww in enumerate(sn2w):            #split into mo_energies
       for n,w in enumerate(ww):             #split mo_energies into each spin channel
         #print(__name__, 's,n,w int corr', s,n,w)
@@ -235,10 +235,10 @@ class gw(scf):
         zww = array([pole[0] for pole in lsos]) #pole[0]=energies pole[1]=state in gw.nn and pole[2]=occupation number
         #print(__name__, s,n,w, 'len lsos', len(lsos))
         si_ww = self.si_c(ww=zww) #send pole's frequency to calculate W
-        xv = np.dot(v_pab,x[n])
+        xv = dot(v_pab,x[n])
         for pole,si in zip(lsos, si_ww.real):
-          xvx = np.dot(xv, x[pole[1]]) #XVX for x=n v= ac produvt and x=states of poles
-          contr = np.dot(xvx, np.dot(si, xvx))
+          xvx = dot(xv, x[pole[1]]) #XVX for x=n v= ac produvt and x=states of poles
+          contr = dot(xvx, dot(si, xvx))
           #print(pole[0], pole[2], contr)
           sn2res[s][nl] += pole[2]*contr
     return sn2res

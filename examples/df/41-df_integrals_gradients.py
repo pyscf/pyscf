@@ -61,6 +61,6 @@ eri1_direct = eri1_direct + eri1_direct.transpose(0,3,4,1,2)
 eri1_df = eri1_df + eri1_df.transpose(0,2,1,3,4)
 eri1_df += lib.einsum('xijp,pq,klq->xijkl', int3c_e2, int2c_inv, int3c)
 eri1_df = eri1_df + eri1_df.transpose(0,3,4,1,2)
-eri1_df -= lib.einsum('ijp,pq,xqr,rs,kls->xijkl', int3c, int2c_inv,
+eri1_df += lib.einsum('ijp,pq,xqr,rs,kls->xijkl', int3c, int2c_inv,
                       (int2c_e1+int2c_e1.transpose(0,2,1)), int2c_inv, int3c)
 print('max full derivative error', abs(eri1_direct - eri1_df).max())

@@ -41,10 +41,10 @@ class KnownValues(unittest.TestCase):
             mf.with_df = df.AFTDF(cell)
             dm = mf.get_init_guess()
             h1 = mf.get_hcore()
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), 2/3.7865300454631*-0.47578184212352159+0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.47578184212352159+0j, 8)
             kpts = cell.make_kpts([3,1,1])
             h1 = mf.get_hcore(kpt=kpts[1])
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), 2/3.7865300454631*-0.09637799091491725+0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.09637799091491725+0j, 8)
 
     def test_khf(self):
         with lib.light_speed(2) as c:
@@ -53,9 +53,9 @@ class KnownValues(unittest.TestCase):
             mf.kpts = cell.make_kpts([3,1,1])
             dm = mf.get_init_guess()
             h1 = mf.get_hcore()
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]),6/8.98384358326*-0.47578184212352159+0j, 8)
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]),6/8.98384358326*-0.09637799091491725+0j, 8)
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]),6/8.98384358326*-0.09637799091491725+0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]),-0.47578184212352159+0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]),-0.09637799091491725+0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]),-0.09637799091491725+0j, 8)
 
     def test_pnucp(self):
         cell1 = gto.Cell()

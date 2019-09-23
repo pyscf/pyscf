@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 Non-relativistic RHF analytical Hessian
 '''
 
-from functools import reduce
 import time
 import numpy
 from pyscf import lib
@@ -29,10 +28,6 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
 from pyscf.soscf.newton_ah import _gen_rhf_response
-
-
-# import pyscf.grad.rhf to activate nuc_grad_method method
-from pyscf.grad import rhf
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -211,12 +206,9 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
 def get_hcore(mol):
     '''Part of the second derivatives of core Hamiltonian'''
     h1aa = mol.intor('int1e_ipipkin', comp=9)
+    h1aa+= mol.intor('int1e_ipipnuc', comp=9)
     h1ab = mol.intor('int1e_ipkinip', comp=9)
-    if mol._pseudo:
-        NotImplementedError('Nuclear hessian for GTH PP')
-    else:
-        h1aa+= mol.intor('int1e_ipipnuc', comp=9)
-        h1ab+= mol.intor('int1e_ipnucip', comp=9)
+    h1ab+= mol.intor('int1e_ipnucip', comp=9)
     if mol.has_ecp():
         h1aa += mol.intor('ECPscalar_ipipnuc', comp=9)
         h1ab += mol.intor('ECPscalar_ipnucip', comp=9)
@@ -257,13 +249,6 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
               fx=None, atmlst=None, max_memory=4000, verbose=None):
-    '''Solve the first order equation
-
-    Kwargs:
-        fx : function(dm_mo) => v1_mo
-            A function to generate the induced potential.
-            See also the function gen_vind.
-    '''
     mol = mf.mol
     if atmlst is None: atmlst = range(mol.natm)
 
@@ -415,7 +400,7 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
         mo_e1 = mo_e1.reshape(nocc,nocc)
         dm1 = numpy.einsum('pi,qi->pq', mo1, mocc)
         dme1 = numpy.einsum('pi,qi,i->pq', mo1, mocc, mo_energy[mo_occ>0])
-        dme1 = dme1 + dme1.T + reduce(numpy.dot, (mocc, mo_e1.T, mocc.T))
+        dme1 = dme1 + dme1.T + reduce(numpy.dot, (mocc, mo_e1, mocc.T))
 
         for ja in range(natm):
             q0, q1 = aoslices[ja][2:]
@@ -478,16 +463,14 @@ class Hessian(lib.StreamObject):
                     rinv2aa *= zi
                     rinv2ab *= zi
                     if with_ecp and iatm in ecp_atoms:
-                        rinv2aa -= mol.intor('ECPscalar_ipiprinv', comp=9)
-                        rinv2ab -= mol.intor('ECPscalar_iprinvip', comp=9)
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
                 rinv2aa = rinv2aa.reshape(3,3,nao,nao)
                 rinv2ab = rinv2ab.reshape(3,3,nao,nao)
                 hcore = -rinv2aa - rinv2ab
                 hcore[:,:,i0:i1] += h1aa[:,:,i0:i1]
-                hcore[:,:,i0:i1] += rinv2aa[:,:,i0:i1]
-                hcore[:,:,i0:i1] += rinv2ab[:,:,i0:i1]
-                hcore[:,:,:,i0:i1] += rinv2aa[:,:,i0:i1].transpose(0,1,3,2)
-                hcore[:,:,:,i0:i1] += rinv2ab[:,:,:,i0:i1]
+                hcore[:,:,i0:i1] += rinv2aa[:,:,i0:i1] * 2
+                hcore[:,:,i0:i1] += rinv2ab[:,:,i0:i1] * 2
                 hcore[:,:,i0:i1,i0:i1] += h1ab[:,:,i0:i1,i0:i1]
 
             else:
@@ -500,8 +483,8 @@ class Hessian(lib.StreamObject):
                     rinv2aa *= zi
                     rinv2ab *= zi
                     if with_ecp and iatm in ecp_atoms:
-                        rinv2aa -= mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
-                        rinv2ab -= mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
                     hcore[:,:,j0:j1] += rinv2aa.reshape(3,3,j1-j0,nao)
                     hcore[:,:,j0:j1] += rinv2ab.reshape(3,3,j1-j0,nao).transpose(1,0,2,3)
 
@@ -512,8 +495,8 @@ class Hessian(lib.StreamObject):
                     rinv2aa *= zj
                     rinv2ab *= zj
                     if with_ecp and jatm in ecp_atoms:
-                        rinv2aa -= mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
-                        rinv2ab -= mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
                     hcore[:,:,i0:i1] += rinv2aa.reshape(3,3,i1-i0,nao)
                     hcore[:,:,i0:i1] += rinv2ab.reshape(3,3,i1-i0,nao)
             return hcore + hcore.conj().transpose(0,1,3,2)
@@ -545,10 +528,6 @@ class Hessian(lib.StreamObject):
 
     gen_hop = gen_hop
 
-# Inject to RHF class
-from pyscf import scf
-scf.hf.RHF.Hessian = lib.class_as_method(Hessian)
-
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -569,7 +548,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     mf.scf()
     n3 = mol.natm * 3
-    hobj = mf.Hessian()
+    hobj = Hessian(mf)
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.50693144355876429)
     #from hessian import rhf_o0

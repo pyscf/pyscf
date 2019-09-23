@@ -27,7 +27,7 @@ cell.a = '''
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
 cell.build()
-mf = scf.KRHF(cell, cell.make_kpts([2,2,2]))
+mf = scf.KRHF(cell, cell.make_kpts([2,2,2])).set(exxdiv=None)
 mf.run()
 
 td = tdscf.KTDA(mf)
@@ -40,14 +40,14 @@ td.nstates = 5
 td.verbose = 5
 print(td.kernel()[0] * 27.2114)
 
-mf = scf.RHF(cell)
+mf = scf.RHF(cell, exxdiv=None)
 mf.kernel()
 td = tdscf.TDA(mf)
 td.kernel()
 
 # TODO:
 #kpt = cell.get_abs_kpts([0.25, 0.25, 0.25])
-#mf = scf.RHF(cell, kpt=kpt)
+#mf = scf.RHF(cell, kpt=kpt, exxdiv=None)
 #mf.kernel()
 #td = tdscf.TDA(mf)
 #td.kernel()

@@ -62,14 +62,8 @@ typedef struct {
         int g2d_ijmax;
         int g2d_klmax;
         double common_factor;
-        // The next four words are _padding1 and rirj[3] in libcint/qcint.
-        // Replace them with four words (ai, aj, ak, al)
-        //double _padding1;
-        //double rirj[3];
-        double ai;
-        double aj;
-        double ak;
-        double al;
+        double _padding1;
+        double rirj[3]; // diff by sign in different g0_2d4d algorithm
         double rkrl[3];
         double *rx_in_rijrx;
         double *rx_in_rklrx;
@@ -79,7 +73,15 @@ typedef struct {
         double *rk;
         double *rl;
 
+        void (*f_g0_2e)();
+        void (*f_g0_2d4d)();
         void (*f_gout)();
+
+        int *idx;
+        double ai;
+        double aj;
+        double ak;
+        double al;
 
 // Other definitions in CINTEnvVars are different in libcint and qcint.
 // They should not be used in this function.
@@ -90,8 +92,9 @@ typedef void (*FPtr_eval_gz)(double complex *out, double aij, double *rij,
                              double complex fac, double *Gv, double *b,
                              int *gxyz, int *gs, size_t NGv);
 
-void GTO_ft_init1e_envs(CINTEnvVars *envs, int *ng, int *shls,
-                        int *atm, int natm, int *bas, int nbas, double *env);
+void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
+                        const int *atm, const int natm,
+                        const int *bas, const int nbas, const double *env);
 
 int GTO_ft_aopair_drv(double complex *out, int *dims,
                       int (*eval_aopair)(), FPtr_eval_gz eval_gz, void (*c2s)(),

@@ -95,7 +95,7 @@ def real_sph_ref(rvecs, lmax):
     return res
 
 
-class KnownValues(unittest.TestCase):
+class KnowValues(unittest.TestCase):
     def test_real2spinor(self):
         s0 = h2o.intor('int1e_ovlp_sph')
         s1 = h2o.intor('int1e_ovlp_spinor')

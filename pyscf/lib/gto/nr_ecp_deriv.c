@@ -378,8 +378,7 @@ static int _sph_factory(int (*intor_cart)(), double *out, int comp,
                 const int nfj = (lj+1) * (lj+2) / 2;
                 const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
                 const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
-                int stack_size = dij*2*comp + nfi*nfj*nci*ncj*(comp+2);
-                return stack_size;
+                return dij*2*comp + nfi*nfj*nci*ncj*2;
         }
         double *stack = NULL;
         if (cache == NULL) {
@@ -387,15 +386,14 @@ static int _sph_factory(int (*intor_cart)(), double *out, int comp,
                 const int nfj = (lj+1) * (lj+2) / 2;
                 const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
                 const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
-                int stack_size = dij*2*comp + nfi*nfj*nci*ncj*(comp+2);
-                stack = malloc(sizeof(double) * stack_size);
+                stack = malloc(sizeof(double) * (dij*2*comp+nfi*nfj*nci*ncj*2));
                 cache = stack;
         }
 
         double *buf = cache;
         cache += dij;
         int has_value;
-        has_value = ECPscalar_c2s_factory(intor_cart, buf, comp, shls, ecpbas, necpbas,
+        has_value = ECPscalar_c2s_factory(intor_cart, buf, 3, shls, ecpbas, necpbas,
                                           atm, natm, bas, nbas, env, opt, cache);
         if (has_value) {
                 ECPscalar_distribute(out, buf, dims, comp, di, dj);

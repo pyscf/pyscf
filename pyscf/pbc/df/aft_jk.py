@@ -159,6 +159,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         #buf1R = numpy.empty((blksize*nao**2))
         #buf1I = numpy.empty((blksize*nao**2))
         for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt, kptjs, max_memory=max_memory1):
+            coulG = numpy.sqrt(vkcoulG[p0:p1])
             nG = p1 - p0
             bufR = numpy.empty((nG*nao**2))
             bufI = numpy.empty((nG*nao**2))
@@ -176,14 +177,13 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                 pLqI = numpy.ndarray((nao,nG,nao), buffer=bufI)
                 pLqR[:] = aoao.real.reshape(nG,nao,nao).transpose(1,0,2)
                 pLqI[:] = aoao.imag.reshape(nG,nao,nao).transpose(1,0,2)
-                iLkR = numpy.ndarray((nao,nG,nao), buffer=buf1R)
-                iLkI = numpy.ndarray((nao,nG,nao), buffer=buf1I)
+                pLqR *= coulG.reshape(1,nG,1)
+                pLqI *= coulG.reshape(1,nG,1)
+                iLkR = numpy.ndarray((nao*nG,nao), buffer=buf1R)
+                iLkI = numpy.ndarray((nao*nG,nao), buffer=buf1I)
                 for i in range(nset):
-                    zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
-                           dmsR[i,kj], dmsI[i,kj], 1,
-                           iLkR.reshape(-1,nao), iLkI.reshape(-1,nao))
-                    iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
-                    iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
+                    iLkR, iLkI = zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
+                                        dmsR[i,kj], dmsI[i,kj], 1, iLkR, iLkI)
                     zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i,ki], vkI[i,ki], 1)
@@ -192,12 +192,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 #:v4 = numpy.einsum('iLj,lLk->ijkl', pqk, pqk.conj())
 #:vk += numpy.einsum('ijkl,li->kj', v4, dm)
                 if swap_2e and not is_zero(kpt):
+                    iLkR = iLkR.reshape(nao,-1)
+                    iLkI = iLkI.reshape(nao,-1)
                     for i in range(nset):
-                        zdotNN(dmsR[i,ki], dmsI[i,ki], pLqR.reshape(nao,-1),
-                               pLqI.reshape(nao,-1), 1,
-                               iLkR.reshape(nao,-1), iLkI.reshape(nao,-1))
-                        iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
-                        iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
+                        iLkR, iLkI = zdotNN(dmsR[i,ki], dmsI[i,ki], pLqR.reshape(nao,-1),
+                                            pLqI.reshape(nao,-1), 1, iLkR, iLkI)
                         zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                                iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
                                1, vkR[i,kj], vkI[i,kj], 1)
@@ -215,11 +214,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    # Add ewald_exxdiv contribution because G=0 was not included in the
-    # non-uniform grids
-    if (exxdiv == 'ewald' and
-        (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
-         (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
+    # G=0 was not included in the non-uniform grids
+    if cell.dimension != 3 and exxdiv:
+        assert(exxdiv.lower() == 'ewald')
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
@@ -300,26 +297,23 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         #t2 = log.timer_debug1('        with_j', *t2)
 
         if with_k:
+            coulG = numpy.sqrt(vkcoulG[p0:p1])
+            pqkR *= coulG
+            pqkI *= coulG
             #:v4 = numpy.einsum('ijL,lkL->ijkl', pqk, pqk.conj())
             #:vk += numpy.einsum('ijkl,jk->il', v4, dm)
             pLqR = lib.transpose(pqkR, axes=(0,2,1), out=pLqR).reshape(-1,nao)
             pLqI = lib.transpose(pqkI, axes=(0,2,1), out=pLqI).reshape(-1,nao)
-            nG = p1 - p0
-            iLkR = numpy.ndarray((nao,nG,nao), buffer=pqkR)
-            iLkI = numpy.ndarray((nao,nG,nao), buffer=pqkI)
+            iLkR = numpy.ndarray((nao*(p1-p0),nao), buffer=pqkR)
+            iLkI = numpy.ndarray((nao*(p1-p0),nao), buffer=pqkI)
             for i in range(nset):
                 if k_real:
-                    lib.dot(pLqR, dmsR[i], 1, iLkR.reshape(nao*nG,nao))
-                    lib.dot(pLqI, dmsR[i], 1, iLkI.reshape(nao*nG,nao))
-                    iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
-                    iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
+                    lib.dot(pLqR, dmsR[i], 1, iLkR)
+                    lib.dot(pLqI, dmsR[i], 1, iLkI)
                     lib.dot(iLkR.reshape(nao,-1), pLqR.reshape(nao,-1).T, 1, vkR[i], 1)
                     lib.dot(iLkI.reshape(nao,-1), pLqI.reshape(nao,-1).T, 1, vkR[i], 1)
                 else:
-                    zdotNN(pLqR, pLqI, dmsR[i], dmsI[i], 1,
-                           iLkR.reshape(-1,nao), iLkI.reshape(-1,nao))
-                    iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
-                    iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
+                    zdotNN(pLqR, pLqI, dmsR[i], dmsI[i], 1, iLkR, iLkI)
                     zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i], vkI[i])
@@ -340,11 +334,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        # Add ewald_exxdiv contribution because G=0 was not included in the
-        # non-uniform grids
-        if (exxdiv == 'ewald' and
-            (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
-             (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
+        if cell.dimension != 3 and exxdiv:
+            assert(exxdiv.lower() == 'ewald')
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
     return vj, vk

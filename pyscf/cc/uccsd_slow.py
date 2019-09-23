@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import reduce
 import time
 import numpy
 import numpy as np
@@ -23,7 +22,6 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
-from pyscf.mp import ump2
 from pyscf.cc import gintermediates as imd
 
 #einsum = np.einsum
@@ -99,9 +97,6 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
-get_frozen_mask = ump2.get_frozen_mask
-
-
 class UCCSD(ccsd.CCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -121,7 +116,6 @@ class UCCSD(ccsd.CCSD):
 
     get_nocc = uccsd.get_nocc
     get_nmo = uccsd.get_nmo
-    get_frozen_mask = get_frozen_mask
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -159,7 +153,7 @@ class UCCSD(ccsd.CCSD):
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
-        return _PhysicistsERIs(self, mo_coeff)
+        return _ChemistsERIs(self, mo_coeff)
 
     def update_amps(self, t1, t2, eris):
         return update_amps(self, t1, t2, eris)
@@ -184,7 +178,7 @@ class UCCSD(ccsd.CCSD):
 
     def ipccsd_matvec(self, vector):
         # Ref: Tu, Wang, and Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
-        if not getattr(self, 'imds', None):
+        if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip()
@@ -210,7 +204,7 @@ class UCCSD(ccsd.CCSD):
         return vector
 
     def ipccsd_diag(self):
-        if not getattr(self, 'imds', None):
+        if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip()
@@ -266,7 +260,7 @@ class UCCSD(ccsd.CCSD):
 
     def eaccsd_matvec(self,vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
-        if not getattr(self, 'imds', None):
+        if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea()
@@ -294,7 +288,7 @@ class UCCSD(ccsd.CCSD):
         return vector
 
     def eaccsd_diag(self):
-        if not getattr(self, 'imds', None):
+        if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea()
@@ -353,7 +347,7 @@ class UCCSD(ccsd.CCSD):
         # Ref: Wang, Tu, and Wang, J. Chem. Theory Comput. 10, 5567 (2014) Eqs.(9)-(10)
         # Note: Last line in Eq. (10) is superfluous.
         # See, e.g. Gwaltney, Nooijen, and Barlett, Chem. Phys. Lett. 248, 189 (1996)
-        if not getattr(self, 'imds', None):
+        if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ee_imds:
             self.imds.make_ee()
@@ -391,7 +385,7 @@ class UCCSD(ccsd.CCSD):
         return vector
 
     def eeccsd_diag(self):
-        if not getattr(self, 'imds', None):
+        if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ee_imds:
             self.imds.make_ee()
@@ -481,7 +475,7 @@ class UCCSD(ccsd.CCSD):
         return t1s, t2s
 
 
-class _PhysicistsERIs:
+class _ChemistsERIs:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())

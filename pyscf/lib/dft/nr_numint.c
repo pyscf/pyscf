@@ -106,7 +106,9 @@ void VXCdot_ao_dm(double *vm, double *ao, double *dm,
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(vm, ao, dm, nao, nocc, ngrids, nbas, \
+               non0table, shls_slice, ao_loc)
 {
         int ip, ib;
 #pragma omp for nowait schedule(static)
@@ -169,7 +171,9 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         memset(vv, 0, sizeof(double) * nao * nao);
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(vv, ao1, ao2, nao, ngrids, nbas, hermi, \
+               non0table, shls_slice, ao_loc)
 {
         int ip, ib;
         double *v_priv = calloc(nao*nao+2, sizeof(double));
@@ -197,7 +201,8 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
 void VXC_dscale_ao(double *aow, double *ao, double *wv,
                    int comp, int nao, int ngrids)
 {
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(aow, ao, wv, comp, nao, ngrids)
 {
         size_t Ngrids = ngrids;
         size_t ao_size = nao * Ngrids;
@@ -221,7 +226,8 @@ void VXC_dscale_ao(double *aow, double *ao, double *wv,
 void VXC_dcontract_rho(double *rho, double *bra, double *ket,
                        int nao, int ngrids)
 {
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(rho, bra, ket, nao, ngrids)
 {
         size_t Ngrids = ngrids;
         int nthread = omp_get_num_threads();

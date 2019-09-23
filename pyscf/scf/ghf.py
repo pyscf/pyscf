@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,8 +58,12 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     if project is None:
         project = not gto.same_basis_set(chk_mol, mol)
 
-    # Check whether the two molecules are similar
-    if abs(mol.inertia_moment() - chk_mol.inertia_moment()).sum() > 0.5:
+    # Check whether the two molecules are similar enough
+    def inertia_momentum(mol):
+        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
+                                  mol.atom_coords())
+        return scipy.linalg.eigh(im)[0]
+    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
         logger.warn(mol, "Large deviations found between the input "
                     "molecule and the molecule from chkfile\n"
                     "Initial guess density matrix may have large error.")
@@ -77,7 +81,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     nao = chk_mol.nao_nr()
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
-    if getattr(mo[0], 'ndim', None) == 1:  # RHF/GHF/DHF
+    if hasattr(mo[0], 'ndim') and mo[0].ndim == 1:  # RHF/GHF/DHF
         if nao*2 == mo.shape[0]:  # GHF or DHF
             if project:
                 raise NotImplementedError('Project initial guess from '
@@ -91,7 +95,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
             dma, dmb = uhf.make_rdm1([mo_coeff]*2, (mo_occa, mo_occb))
             dm = scipy.linalg.block_diag(dma, dmb)
     else: #UHF
-        if getattr(mo[0][0], 'ndim', None) == 2:  # KUHF
+        if hasattr(mo[0][0], 'ndim') and mo[0][0].ndim == 2:  # KUHF
             logger.warn(mol, 'k-point UHF results are found.  Density matrix '
                         'at Gamma point is used for the molecular SCF initial guess')
             mo = mo[0]
@@ -110,7 +114,7 @@ def get_jk(mol, dm, hermi=0,
     n_dm = dms.shape[0]
 
     dmaa = dms[:,:nao,:nao]
-    dmab = dms[:,:nao,nao:]
+    dmab = dms[:,nao:,:nao]
     dmbb = dms[:,nao:,nao:]
     dms = numpy.vstack((dmaa, dmbb, dmab))
     if dm.dtype == numpy.complex128:
@@ -445,7 +449,8 @@ class GHF(hf.SCF):
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if self._eri is not None or not self.direct_scf:
+        if (self._eri is not None or not self.direct_scf or
+            mol.incore_anyway or self._is_mem_enough()):
             vj, vk = get_jk(mol, dm, hermi, True, True, self.get_jk)
             vhf = vj - vk
         else:
@@ -512,8 +517,7 @@ class GHF(hf.SCF):
         from pyscf.scf.stability import ghf_stability
         return ghf_stability(self, verbose)
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+    nuc_grad_method = None
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5

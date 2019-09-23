@@ -87,7 +87,6 @@ class KnowValues(unittest.TestCase):
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #kmf.verbose = 7
-        mf.conv_tol = 1e-8
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -10.221426445656439, 8)
 

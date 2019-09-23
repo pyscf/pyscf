@@ -20,7 +20,7 @@ from .util import meta, MetaArray, ltri_ix, p
 
 from pyscf.lib.diis import DIIS
 from pyscf.lib.linalg_helper import davidson_nosym1 as davidson
-from pyscf.cc.uccsd_slow import _PhysicistsERIs as ERIS_uccsd_slow
+from pyscf.cc.uccsd_slow import _ChemistsERIs as ERIS_uccsd_slow
 from pyscf.cc.gccsd import _PhysicistsERIs as ERIS_gccsd
 import numpy
 
@@ -60,9 +60,9 @@ def res2amps(residuals, e_occ, e_vir, constant=None):
             for j, s in enumerate(res.metadata["labels"]):
                 ix[j] = slice(None)
                 if s == 'o':
-                    diagonal += e_occ[tuple(ix)]
+                    diagonal += e_occ[ix]
                 elif s == 'v':
-                    diagonal -= e_vir[tuple(ix)]
+                    diagonal -= e_vir[ix]
                 else:
                     raise ValueError("Unknown spec '{}' in {}".format(s, residuals.metadata["labels"]))
                 ix[j] = numpy.newaxis

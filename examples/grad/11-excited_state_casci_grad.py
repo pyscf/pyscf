@@ -24,11 +24,7 @@ mc = mcscf.CASCI(mf, 4, 4)
 mc.fcisolver.nroots = 4
 mc.run()
 
-# PySCF-1.6.1 and newer supports the .Gradients method to create a grad
-# object after grad module was imported. It is equivalent to call the
-# .nuc_grad_method method.
-from pyscf import grad
-g = mc.Gradients().kernel(state=3)
+g = mc.nuc_grad_method().kernel(state=3)
 print('Gradients of the 3rd excited state')
 print(g)
 

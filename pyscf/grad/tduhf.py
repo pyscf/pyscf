@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -213,13 +213,9 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
 
 
 class Gradients(tdrhf_grad.Gradients):
+
     def grad_elec(self, xy, singlet, atmlst=None):
         return kernel(self, xy, atmlst, self.max_memory, self.verbose)
-
-Grad = Gradients
-
-from pyscf import tdscf
-tdscf.uhf.TDA.Gradients = tdscf.uhf.TDHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -243,11 +239,11 @@ if __name__ == '__main__':
     td = tddft.TDA(mf)
     td.conv_tol = 1e-14
     e, z = td.kernel()
-    tdg = td.Gradients()
+    tdg = Gradients(td)
     #tdg.verbose = 5
     g1 = tdg.kernel(z[1])
     print(g1)
-    print(lib.finger(g1) - 0.3970638627132136)
+    print(lib.finger(g1) - 0.30223398112148536)
     td_solver = td.as_scanner()
     e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
     e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))

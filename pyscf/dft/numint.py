@@ -616,7 +616,7 @@ def _scale_ao(ao, wv, out=None):
     aow = numpy.ndarray((nao,ngrids), dtype=ao.dtype, buffer=out).T
 
     if not ao.flags.c_contiguous:
-        aow = numpy.einsum('nip,np->pi', ao, wv)
+        aow = numpy.einsum('nip,np->pi', ao, wv, out=aow)
     elif aow.dtype == numpy.double:
         libdft.VXC_dscale_ao(aow.ctypes.data_as(ctypes.c_void_p),
                              ao.ctypes.data_as(ctypes.c_void_p),
@@ -630,7 +630,7 @@ def _scale_ao(ao, wv, out=None):
                              ctypes.c_int(comp), ctypes.c_int(nao),
                              ctypes.c_int(ngrids))
     else:
-        aow = numpy.einsum('nip,np->pi', ao, wv)
+        aow = numpy.einsum('nip,np->pi', ao, wv, out=aow)
     return aow
 
 def _contract_rho(bra, ket):
@@ -1038,7 +1038,7 @@ def _format_uks_dm(dms):
         dma = dmb = dms * .5
     else:
         dma, dmb = dms
-    if getattr(dms, 'mo_coeff', None) is not None:
+    if hasattr(dms, 'mo_coeff'):
         mo_coeff = dms.mo_coeff
         mo_occ = dms.mo_occ
         if mo_coeff[0].ndim < dma.ndim: # handle ROKS
@@ -1822,7 +1822,6 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     '''Density in real space
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
-    assert(nset == 1)
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao, mask, weight, coords \
@@ -1892,8 +1891,8 @@ class NumInt(object):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = int(max_memory*1e6/(comp*2*nao*8*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+            blksize = max(1, int(max_memory*1e6/(comp*2*nao*8*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1910,7 +1909,7 @@ class NumInt(object):
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0):
-        if getattr(dms, 'mo_coeff', None) is not None:
+        if hasattr(dms, 'mo_coeff'):
 #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ

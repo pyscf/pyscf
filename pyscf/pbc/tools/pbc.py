@@ -30,14 +30,12 @@ def _fftn_blas(f, mesh):
     expRGx = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[0]), Gx))
     expRGy = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[2]), Gz))
-    out = np.empty(f.shape, dtype=np.complex128)
-    buf = np.empty(mesh, dtype=np.complex128)
-    for i, fi in enumerate(f):
-        buf[:] = fi.reshape(mesh)
-        g = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, c=out[i].reshape(-1,mesh[0]))
-        g = lib.dot(g.reshape(mesh[1],-1).T, expRGy, c=buf.reshape(-1,mesh[1]))
-        g = lib.dot(g.reshape(mesh[2],-1).T, expRGz, c=out[i].reshape(-1,mesh[2]))
-    return out.reshape(-1, *mesh)
+    g0 = g = lib.transpose(f.reshape(-1, mesh[1]*mesh[2])).astype(np.complex128)
+    g1 = np.empty_like(g0)
+    g = lib.dot(g.reshape(-1,mesh[0])  , expRGx, c=g1.reshape(-1,mesh[0]))
+    g = lib.dot(g.reshape(mesh[1],-1).T, expRGy, c=g0.reshape(-1,mesh[1]))
+    g = lib.dot(g.reshape(mesh[2],-1).T, expRGz, c=g1.reshape(-1,mesh[2]))
+    return g.reshape(-1, *mesh)
 
 def _ifftn_blas(g, mesh):
     Gx = np.fft.fftfreq(mesh[0])
@@ -46,14 +44,12 @@ def _ifftn_blas(g, mesh):
     expRGx = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[0]), Gx))
     expRGy = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[2]), Gz))
-    out = np.empty(g.shape, dtype=np.complex128)
-    buf = np.empty(mesh, dtype=np.complex128)
-    for i, gi in enumerate(g):
-        buf[:] = gi.reshape(mesh)
-        f = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, 1./mesh[0], c=out[i].reshape(-1,mesh[0]))
-        f = lib.dot(f.reshape(mesh[1],-1).T, expRGy, 1./mesh[1], c=buf.reshape(-1,mesh[1]))
-        f = lib.dot(f.reshape(mesh[2],-1).T, expRGz, 1./mesh[2], c=out[i].reshape(-1,mesh[2]))
-    return out.reshape(-1, *mesh)
+    f0 = f = lib.transpose(g.reshape(-1, mesh[1]*mesh[2])).astype(np.complex128)
+    f1 = np.empty_like(f0)
+    f = lib.dot(f.reshape(-1,mesh[0])  , expRGx, 1./mesh[0], c=f1.reshape(-1,mesh[0]))
+    f = lib.dot(f.reshape(mesh[1],-1).T, expRGy, 1./mesh[1], c=f0.reshape(-1,mesh[1]))
+    f = lib.dot(f.reshape(mesh[2],-1).T, expRGz, 1./mesh[2], c=f1.reshape(-1,mesh[2]))
+    return f.reshape(-1, *mesh)
 
 if FFT_ENGINE == 'FFTW':
     # pyfftw is slower than np.fft in most cases
@@ -188,7 +184,7 @@ def ifftk(g, mesh, expikr):
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
-              wrap_around=True, **kwargs):
+              wrap_around=True, low_dim_ft_type=None, **kwargs):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
@@ -221,11 +217,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     if Gv is None:
         Gv = cell.get_Gv(mesh)
 
-    if abs(k).sum() > 1e-9:
-        kG = k + Gv
-    else:
-        kG = Gv
-
+    kG = k + Gv
     equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
     if wrap_around and abs(k).sum() > 1e-9:
         # Here we 'wrap around' the high frequency k+G vectors into their lower
@@ -254,21 +246,63 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
-    if getattr(mf, 'kpts', None) is not None:
+    if mf is not None and hasattr(mf, 'kpts'):
         kpts = mf.kpts
     else:
         kpts = k.reshape(1,3)
     Nk = len(kpts)
 
-    if exxdiv == 'vcut_sph':  # PRB 77 193110
+    if not exxdiv:
+        if cell.dimension == 3 or low_dim_ft_type is None:
+            with np.errstate(divide='ignore'):
+                coulG = 4*np.pi/absG2
+            coulG[absG2==0] = 0
+        elif cell.dimension == 2 and low_dim_ft_type == 'analytic_2d_1':
+            # The following 2D analytical fourier transform is taken from:
+            # R. Sundararaman and T. Arias PRB 87, 2013
+            b = cell.reciprocal_vectors()
+            Ld2 = np.pi/np.linalg.norm(b[2])
+            Gz = kG[:,2]
+            Gp = np.linalg.norm(kG[:,:2], axis=1)
+            weights = 1. - np.cos(Gz*Ld2) * np.exp(-Gp*Ld2)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                coulG = weights*4*np.pi/absG2
+            coulG[absG2==0] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
+        else:
+            raise NotImplementedError('no method for PBC dimension %s, '
+                'dim-type %s and exxdiv = %s' %
+                (cell.dimension, low_dim_ft_type, exxdiv))
+    elif exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
         coulG[absG2==0] = 4*np.pi*0.5*Rc**2
-
+    elif exxdiv == 'ewald':
+        G0_idx = np.where(absG2==0)[0]
+        if cell.dimension == 3 or low_dim_ft_type is None:
+            with np.errstate(divide='ignore'):
+                coulG = 4*np.pi/absG2
+            if len(G0_idx) > 0:
+                coulG[G0_idx] = Nk*cell.vol*madelung(cell, kpts)
+        elif cell.dimension == 2 and low_dim_ft_type == 'analytic_2d_1':
+            b = cell.reciprocal_vectors()
+            Ld2 = np.pi/np.linalg.norm(b[2])
+            Gz = kG[:,2]
+            Gp = np.linalg.norm(kG[:,:2], axis=1)
+            weights = 1. - np.cos(Gz*Ld2) * np.exp(-Gp*Ld2)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                coulG = weights*4*np.pi/absG2
+            if len(G0_idx) > 0:
+                coulG[G0_idx] = -2*np.pi*(np.pi/
+                                np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
+                coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
+        else:
+            raise NotImplementedError('no method for PBC dimension %s, '
+                'dim-type %s and exxdiv = %s' %
+                (cell.dimension, low_dim_ft_type, exxdiv))
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert(cell.dimension == 3)
-        if not getattr(mf, '_ws_exx', None):
+        if not hasattr(mf, '_ws_exx'):
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
         exx_kcell = mf._ws_exx['kcell']
@@ -289,50 +323,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG = coulG.astype(np.complex128)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
-
-    else:
-        G0_idx = np.where(absG2==0)[0]
-        if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
-            with np.errstate(divide='ignore'):
-                coulG = 4*np.pi/absG2
-                coulG[G0_idx] = 0
-
-        elif cell.dimension == 2:
-            # The following 2D analytical fourier transform is taken from:
-            # R. Sundararaman and T. Arias PRB 87, 2013
-            b = cell.reciprocal_vectors()
-            Ld2 = np.pi/np.linalg.norm(b[2])
-            Gz = kG[:,2]
-            Gp = np.linalg.norm(kG[:,:2], axis=1)
-            weights = 1. - np.cos(Gz*Ld2) * np.exp(-Gp*Ld2)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                coulG = weights*4*np.pi/absG2
-            if len(G0_idx) > 0:
-                coulG[G0_idx] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
-
-        elif cell.dimension == 1:
-            logger.warn(cell, 'No method for PBC dimension 1, dim-type %s.'
-                        '  cell.low_dim_ft_type="inf_vacuum"  should be set.',
-                        cell.low_dim_ft_type)
-            raise NotImplementedError
-
-            # Carlo A. Rozzi, PRB 73, 205119 (2006)
-            a = cell.lattice_vectors()
-            # Rc is the cylindrical radius
-            Rc = np.sqrt(cell.vol / np.linalg.norm(a[0])) / 2
-            Gx = abs(kG[:,0])
-            Gp = np.linalg.norm(kG[:,1:], axis=1)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                weights = 1 + Gp*Rc * scipy.special.j1(Gp*Rc) * scipy.special.k0(Gx*Rc)
-                weights -= Gx*Rc * scipy.special.j0(Gp*Rc) * scipy.special.k1(Gx*Rc)
-                coulG = 4*np.pi/absG2 * weights
-                # TODO: numerical integation
-                # coulG[Gx==0] = -4*np.pi * (dr * r * scipy.special.j0(Gp*r) * np.log(r)).sum()
-            if len(G0_idx) > 0:
-                coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
-
-        if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
-            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
     coulG[equal2boundary] = 0
 

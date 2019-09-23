@@ -31,7 +31,8 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     nocca, noccb, nvira, nvirb = t2ab.shape
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[0]
-    mo_ea, mo_eb = eris.mo_energy
+    mo_ea = eris.focka.diagonal().real
+    mo_eb = eris.fockb.diagonal().real
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]
     eIA = mo_eb[:noccb,None] - mo_eb[noccb:]
     fvo = eris.focka[nocca:,:nocca]
@@ -155,7 +156,8 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     nocca, noccb, nvira, nvirb = t2ab.shape
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[0]
-    mo_ea, mo_eb = eris.mo_energy
+    mo_ea = eris.focka.diagonal().real
+    mo_eb = eris.fockb.diagonal().real
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]
     eIA = mo_eb[:noccb,None] - mo_eb[noccb:]
     fvo = eris.focka[nocca:,:nocca]
@@ -271,9 +273,9 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
 def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
     return _gamma2_intermediates(mycc, t1, t2, l1, l2, eris, compress_vvvv)
 
-def make_rdm1(mycc, t1, t2, l1, l2, eris=None, ao_repr=False):
+def make_rdm1(mycc, t1, t2, l1, l2, eris=None):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
-    return uccsd_rdm._make_rdm1(mycc, d1, True, ao_repr=ao_repr)
+    return uccsd_rdm._make_rdm1(mycc, d1, True)
 
 # rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2, eris=None):
@@ -297,7 +299,6 @@ def r4(w):
     return w
 
 if __name__ == '__main__':
-    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo

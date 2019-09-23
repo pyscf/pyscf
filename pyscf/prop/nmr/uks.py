@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -93,75 +93,65 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             rks_nmr._gga_sum_(vmat[0], mol, ao, giao, wva, mask, shls_slice, ao_loc)
             rks_nmr._gga_sum_(vmat[1], mol, ao, giao, wvb, mask, shls_slice, ao_loc)
             rho = vxc = vrho = vsigma = wv = aow = None
-    elif xctype == 'MGGA':
+    else:
         raise NotImplementedError('meta-GGA')
 
     return vmat - vmat.transpose(0,1,3,2)
 
-def get_fock(nmrobj, dm0=None, gauge_orig=None):
-    '''First order Fock matrix wrt external magnetic field'''
-    if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
-    if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
-
-    mol = nmrobj.mol
-
-    if gauge_orig is None:
-        log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
-        log.debug('First-order GIAO Fock matrix')
-
-        mf = nmrobj._scf
-        ni = mf._numint
-        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, mf.max_memory*.9-mem_now)
-        # Attach mo_coeff and mo_occ to improve get_vxc_giao efficiency
-        dm0 = lib.tag_array(dm0, mo_coeff=mf.mo_coeff, mo_occ=mf.mo_occ)
-        h1 = -get_vxc_giao(ni, mol, mf.grids, mf.xc, dm0,
-                           max_memory=max_memory, verbose=nmrobj.verbose)
-
-        intor = mol._add_suffix('int2e_ig1')
-        if abs(hyb) > 1e-10:
-            vj, vk = rhf_nmr.get_jk(mol, dm0)
-            h1 += vj[0] + vj[1] - hyb * vk
-            if abs(omega) > 1e-10:
-                with mol.with_range_coulomb(omega):
-                    h1 -= (alpha-hyb) * rhf_nmr.get_jk(mol, dm0)[1]
-        else:
-            vj = _vhf.direct_mapdm(intor, 'a4ij', 'lk->s1ij',
-                                   dm0, 3, mol._atm, mol._bas, mol._env)
-            h1 -= vj[0] + vj[1]
-
-        h1 -= .5 * mol.intor('int1e_giao_irjxp', 3)
-        h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
-        if mol.has_ecp():
-            h1 -= mol.intor_asymmetric('ECPscalar_ignuc', 3)
-        h1 -= mol.intor('int1e_igkin', 3)
-    else:
-        with mol.with_common_origin(gauge_orig):
-            h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-            h1 = (h1, h1)
-    if nmrobj.chkfile:
-        lib.chkfile.dump(nmrobj.chkfile, 'nmr/h1', h1)
-    return h1
-
-def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
-              h1=None, s1=None, with_cphf=None):
-    if with_cphf is None:
-        with_cphf = nmrobj.cphf
-    libxc = nmrobj._scf._numint.libxc
-    with_cphf = with_cphf and libxc.is_hybrid_xc(nmrobj._scf.xc)
-    return uhf_nmr.solve_mo1(nmrobj, mo_energy, mo_coeff, mo_occ,
-                             h1, s1, with_cphf)
-
 
 class NMR(uhf_nmr.NMR):
-    get_fock = get_fock
-    solve_mo1 = solve_mo1
+    def make_h10(self, mol=None, dm0=None, gauge_orig=None):
+        if mol is None: mol = self.mol
+        if dm0 is None: dm0 = self._scf.make_rdm1()
+        if gauge_orig is None: gauge_orig = self.gauge_orig
 
-from pyscf import dft
-dft.uks.UKS.NMR = dft.uks_symm.UKS.NMR = lib.class_as_method(NMR)
-del(dft)
+        if gauge_orig is None:
+            log = logger.Logger(self.stdout, self.verbose)
+            log.debug('First-order GIAO Fock matrix')
+
+            mf = self._scf
+            ni = mf._numint
+            omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.9-mem_now)
+            # Attach mo_coeff and mo_occ to improve get_vxc_giao efficiency
+            dm0 = lib.tag_array(dm0, mo_coeff=mf.mo_coeff, mo_occ=mf.mo_occ)
+            h1 = -get_vxc_giao(ni, mol, mf.grids, mf.xc, dm0,
+                               max_memory=max_memory, verbose=self.verbose)
+
+            intor = mol._add_suffix('int2e_ig1')
+            if abs(hyb) > 1e-10:
+                vj, vk = rhf_nmr.get_jk(mol, dm0)
+                h1 += vj[0] + vj[1] - hyb * vk
+                if abs(omega) > 1e-10:
+                    with mol.with_range_coulomb(omega):
+                        h1 -= (alpha-hyb) * rhf_nmr.get_jk(mol, dm0)[1]
+            else:
+                vj = _vhf.direct_mapdm(intor, 'a4ij', 'lk->s1ij',
+                                       dm0, 3, mol._atm, mol._bas, mol._env)
+                h1 -= vj[0] + vj[1]
+
+            h1 -= .5 * mol.intor('int1e_giao_irjxp', 3)
+            h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+            if mol.has_ecp():
+                h1 -= mol.intor_asymmetric('ECPscalar_ignuc', 3)
+            h1 -= mol.intor('int1e_igkin', 3)
+        else:
+            with mol.with_common_origin(gauge_orig):
+                h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
+                h1 = (h1, h1)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+        return h1
+
+    def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, s1=None,
+                  with_cphf=None):
+        if with_cphf is None:
+            with_cphf = self.cphf
+        libxc = self._scf._numint.libxc
+        with_cphf = with_cphf and libxc.is_hybrid_xc(self._scf.xc)
+        return uhf_nmr.NMR.solve_mo1(self, mo_energy, mo_occ, h1, s1, with_cphf)
 
 
 if __name__ == '__main__':
@@ -178,9 +168,9 @@ if __name__ == '__main__':
 
     mf = dft.UKS(mol)
     mf.kernel()
-    nmr = mf.NMR()
+    nmr = NMR(mf)
     msc = nmr.kernel() # _xx,_yy,_zz = 55.131555
-    print(lib.finger(msc) -  110.73521186810918)
+    print(msc)
 
     mol.atom = [
         [1   , (0. , 0. , .917)],
@@ -193,7 +183,7 @@ if __name__ == '__main__':
     mf.kernel()
     nmr = NMR(mf)
     msc = nmr.kernel() # _xx,_yy = 368.881201, _zz = 482.413385
-    print(lib.finger(msc) - -131.70852986500839)
+    print(msc)
 
     mol.basis = 'ccpvdz'
     mol.build(0, 0)
@@ -202,4 +192,5 @@ if __name__ == '__main__':
     mf.kernel()
     nmr = NMR(mf)
     msc = nmr.kernel() # _xx,_yy = 387.102778, _zz = 482.207925
-    print(lib.finger(msc) - -132.27069885713573)
+    print(msc)
+

@@ -81,7 +81,9 @@ void CCvhfs2kl(double *eri, double *dm, double *vj, double *vk, int ni, int nj)
         memset(vj, 0, sizeof(double)*ni*nj);
         memset(vk, 0, sizeof(double)*ni*nj);
 
-#pragma omp parallel private(ij, i, j, off)
+#pragma omp parallel default(none) \
+        shared(eri, dm, vj, vk, ni, nj) \
+        private(ij, i, j, off)
         {
                 double *vj_priv = malloc(sizeof(double)*ni*nj);
                 double *vk_priv = malloc(sizeof(double)*ni*nj);

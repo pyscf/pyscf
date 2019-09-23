@@ -14,11 +14,9 @@ from pyscf.lib.misc import tril_product
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.misc import flatten
-from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.lib.numpy_helper import pack_tril
-from pyscf.lib.parameters import LARGE_DENOM
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -30,7 +28,7 @@ einsum = lib.einsum
 #     and the equation should read [ia] >= [jb] >= [kc] (since the only
 #     symmetry in spin-less operators is the exchange of a column of excitation
 #     ooperators).
-def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
+def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     '''Returns the CCSD(T) for restricted closed-shell systems with k-points.
 
     Note:
@@ -56,6 +54,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     else:
         log = logger.Logger(mycc.stdout, verbose)
 
+    if eris is None: eris = mycc.eris
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
 
@@ -75,8 +74,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     nkpts, nocc, nvir = t1.shape
 
-    mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
-    mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
+    mo_energy_occ = [eris.fock[i].diagonal()[:nocc] for i in range(nkpts)]
+    mo_energy_vir = [eris.fock[i].diagonal()[nocc:] for i in range(nkpts)]
     fov = eris.fock[:, :nocc, nocc:]
 
     # Set up class for k-point conservation
@@ -86,8 +85,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts'''
         km = kconserv[ki, ka, kj]
         kf = kconserv[kk, kc, kj]
-        ret = einsum('kjf,fi->ijk', t2[kk, kj, kc, :, :, c, :], eris.vovv[kf, ki, kb, :, :, b, a].conj())
-        ret = ret - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, ki, km, :, :, :, a].conj())
+        ret = einsum('kjf,fi->ijk', t2[kk, kj, kc, :, :, c, :], -eris.vovv[kf, ki, kb, :, :, b, a].conj())
+        ret = ret - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], -eris.ooov[kj, ki, km, :, :, :, a].conj())
         return ret
 
     def get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c):
@@ -116,7 +115,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         kf = kconserv[ki, ka, kj]
         ret = np.zeros((nocc, nocc, nocc), dtype=dtype)
         if kk == kc:
-            ret = ret + einsum('k,ij->ijk', t1[kk, :, c], eris.oovv[ki, kj, ka, :, :, a, b].conj())
+            ret = ret + einsum('k,ij->ijk', t1[kk, :, c], -eris.oovv[ki, kj, ka, :, :, a, b].conj())
             ret = ret + einsum('k,ij->ijk', fov[kk, :, c], t2[ki, kj, ka, :, :, a, b])
         return ret
 
@@ -132,16 +131,11 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     energy_t = 0.0
 
-    # Get location of padded elements in occupied and virtual space
-    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
-
     for ki in range(nkpts):
         for kj in range(ki + 1):
             for kk in range(kj + 1):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
-                eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_energy_occ[0].dtype)
-                n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
-                eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])[n0_ovp_ijk]
+                eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
 
                 for ka in range(nkpts):
                     for kb in range(nkpts):
@@ -180,10 +174,10 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
                         for a, b, c in abc_indices:
                             # Form energy denominator
-                            # Make sure we only loop over non-frozen and/or padded elements
-                            if( not ((a in nonzero_vpadding[ka]) and (b in nonzero_vpadding[kb]) and (c in nonzero_vpadding[kc]))):
-                                continue
                             eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
+                            # When padding for non-equal nocc per k-point, some fock elements will be zero
+                            idx = np.where(abs(eijkabc) < LOOSE_ZERO_TOL)[0]
+                            eijkabc[idx] = LARGE_DENOM
 
                             # See symm_3d and abc_indices above for description of factors
                             symm_abc = 1.

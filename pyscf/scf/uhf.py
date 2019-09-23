@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,11 +83,12 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     if project is None:
         project = not gto.same_basis_set(chk_mol, mol)
 
-    # Check whether the two molecules are similar
-    im1 = scipy.linalg.eigvalsh(mol.inertia_moment())
-    im2 = scipy.linalg.eigvalsh(chk_mol.inertia_moment())
-    # im1+1e-7 to avoid 'divide by zero' error
-    if abs((im1-im2)/(im1+1e-7)).max() > 0.01:
+    # Check whether the two molecules are similar enough
+    def inertia_momentum(mol):
+        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
+                                  mol.atom_coords())
+        return scipy.linalg.eigh(im)[0]
+    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
         logger.warn(mol, "Large deviations found between the input "
                     "molecule and the molecule from chkfile\n"
                     "Initial guess density matrix may have large error.")
@@ -104,7 +105,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
 
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
-    if getattr(mo[0], 'ndim', None) == 1:  # RHF
+    if hasattr(mo[0], 'ndim') and mo[0].ndim == 1:  # RHF
         if numpy.iscomplexobj(mo):
             raise NotImplementedError('TODO: project DHF orbital to UHF orbital')
         mo_coeff = fproj(mo)
@@ -112,7 +113,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         mo_occb = mo_occ - mo_occa
         dm = make_rdm1([mo_coeff,mo_coeff], [mo_occa,mo_occb])
     else: #UHF
-        if getattr(mo[0][0], 'ndim', None) == 2:  # KUHF
+        if hasattr(mo[0][0], 'ndim') and mo[0][0].ndim == 2:  # KUHF
             logger.warn(mol, 'k-point UHF results are found.  Density matrix '
                         'at Gamma point is used for the molecular SCF initial guess')
             mo = mo[0]
@@ -122,7 +123,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
 def get_init_guess(mol, key='minao'):
     return UHF(mol).get_init_guess(mol, key)
 
-def make_rdm1(mo_coeff, mo_occ, **kwargs):
+def make_rdm1(mo_coeff, mo_occ):
     '''One-particle density matrix
 
     Returns:
@@ -130,12 +131,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''
     mo_a = mo_coeff[0]
     mo_b = mo_coeff[1]
-    dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.conj().T)
-    dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.conj().T)
-# DO NOT make tag_array for DM here because the DM arrays may be modified and
-# passed to functions like get_jk, get_vxc.  These functions may take the tags
-# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
-# arrays and modifications to DM arrays may be ignored.
+    dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.T.conj())
+    dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.T.conj())
     return numpy.array((dm_a,dm_b))
 
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
@@ -207,7 +204,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
+    if vhf is None: vhf = mf.get_veff(dm=dm)
     f = h1e + vhf
     if f.ndim == 2:
         f = (f, f)
@@ -251,7 +248,10 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     e_sort_a = mo_energy[0][e_idx_a]
     e_sort_b = mo_energy[1][e_idx_b]
     nmo = mo_energy[0].size
-    n_a, n_b = mf.nelec
+    if mf.nelec is None:
+        n_a, n_b = mf.mol.nelec
+    else:
+        n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
     mo_occ[0,e_idx_a[:n_a]] = 1
     mo_occ[1,e_idx_b[:n_b]] = 1
@@ -311,12 +311,10 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm[0])
-    e1+= numpy.einsum('ij,ji', h1e, dm[1])
+    e1 = numpy.einsum('ij,ij', h1e.conj(), dm[0]+dm[1])
     e_coul =(numpy.einsum('ij,ji', vhf[0], dm[0]) +
-             numpy.einsum('ij,ji', vhf[1], dm[1])) * .5
-    logger.debug(mf, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
-    return (e1+e_coul).real, e_coul
+             numpy.einsum('ij,ji', vhf[1], dm[1])).real * .5
+    return e1+e_coul, e_coul
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mo, s=1):
@@ -436,12 +434,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    nmo = len(mo_occ[0])
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
         log.note('**** MO energy ****')
         log.note('                             alpha | beta                alpha | beta')
-        for i in range(nmo):
+        for i in range(mo_occ.shape[1]):
             log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
                      i+MO_BASE, mo_energy[0][i], mo_energy[1][i],
                      mo_occ[0][i], mo_occ[1][i])
@@ -653,36 +650,28 @@ class UHF(hf.SCF):
         # self.mo_coeff => [mo_a, mo_b]
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
+
         self.nelec = None
+        self._keys = self._keys.union(['nelec'])
 
-    @property
-    def nelec(self):
-        if self._nelec is not None:
-            return self._nelec
+    def dump_flags(self):
+        if hasattr(self, 'nelectron_alpha'):  # pragma: no cover
+            logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
+            #raise RuntimeError('API updates')
+            self.nelec = (self.nelectron_alpha,
+                          self.mol.nelectron-self.nelectron_alpha)
+            delattr(self, 'nelectron_alpha')
+        if self.nelec is None:
+            nelec = self.mol.nelec
         else:
-            return self.mol.nelec
-    @nelec.setter
-    def nelec(self, x):
-        self._nelec = x
-
-    @property
-    def nelectron_alpha(self):
-        return self.nelec[0]
-    @nelectron_alpha.setter
-    def nelectron_alpha(self, x):
-        logger.warn(self, 'WARN: Attribute .nelectron_alpha is deprecated. '
-                    'Set .nelec instead')
-        #raise RuntimeError('API updates')
-        self.nelec = (x, self.mol.nelectron-x)
-
-    def dump_flags(self, verbose=None):
-        hf.SCF.dump_flags(self, verbose)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+            nelec = self.nelec
+        hf.SCF.dump_flags(self)
+        logger.info(self, 'number electrons alpha = %d  beta = %d', *nelec)
 
     def eig(self, fock, s):
         e_a, c_a = self._eigh(fock[0], s)
         e_b, c_b = self._eigh(fock[1], s)
-        return numpy.array((e_a,e_b)), numpy.array((c_a,c_b))
+        return (e_a,e_b), (c_a,c_b)
 
     get_fock = get_fock
 
@@ -695,12 +684,12 @@ class UHF(hf.SCF):
         return get_grad(mo_coeff, mo_occ, fock)
 
     @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if mo_occ is None:
             mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
+        return make_rdm1(mo_coeff, mo_occ)
 
     energy_elec = energy_elec
 
@@ -761,7 +750,8 @@ class UHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.asarray((dm*.5,dm*.5))
-        if self._eri is not None or not self.direct_scf:
+        if (self._eri is not None or not self.direct_scf or
+            mol.incore_anyway or self._is_mem_enough()):
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj[0] + vj[1] - vk
         else:

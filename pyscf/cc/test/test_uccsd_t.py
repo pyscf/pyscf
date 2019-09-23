@@ -98,7 +98,6 @@ class KnownValues(unittest.TestCase):
         eris = cc.uccsd._ChemistsERIs()
         eris.nocca = nocca
         eris.noccb = noccb
-        eris.nocc = (nocca, noccb)
         eri1 = (numpy.random.random((3,nmo,nmo,nmo,nmo)) +
                 numpy.random.random((3,nmo,nmo,nmo,nmo)) * .8j - .5-.4j)
         eri1 = eri1 + eri1.transpose(0,2,1,4,3).conj()
@@ -130,12 +129,9 @@ class KnownValues(unittest.TestCase):
              numpy.random.random((2,nmo,nmo)) * .4j)
         eris.focka = f[0]+f[0].T.conj() + numpy.diag(numpy.arange(nmo))
         eris.fockb = f[1]+f[1].T.conj() + numpy.diag(numpy.arange(nmo))
-        eris.mo_energy = (eris.focka.diagonal().real,
-                          eris.fockb.diagonal().real)
         t1 = t1a, t1b
         t2 = t2aa, t2ab, t2bb
         mcc = cc.UCCSD(scf.UHF(mol))
-        mcc.nocc = eris.nocc
         e0 = uccsd_t.kernel(mcc, eris, t1, t2)
 
         eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=eri1.dtype)
@@ -155,7 +151,6 @@ class KnownValues(unittest.TestCase):
         eris1.oovv = eri2[:nocc,:nocc,nocc:,nocc:]
         eris1.ooov = eri2[:nocc,:nocc,:nocc,nocc:]
         eris1.fock = fock
-        eris1.mo_energy = fock.diagonal().real
         t1 = gccsd.spatial2spin(t1, orbspin)
         t2 = gccsd.spatial2spin(t2, orbspin)
         gcc = gccsd.GCCSD(scf.GHF(gto.M()))

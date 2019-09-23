@@ -1,4 +1,4 @@
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
         mf = scf.addons.convert_to_rhf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         return dfmp2.DFMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return mp2.RMP2(mf, frozen, mo_coeff, mo_occ)
@@ -58,7 +58,7 @@ def UMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-UMP2')
     else:
         return ump2.UMP2(mf, frozen, mo_coeff, mo_occ)
@@ -70,7 +70,7 @@ def GMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
         mf = scf.addons.convert_to_ghf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-GMP2')
     else:
         return gmp2.GMP2(mf, frozen, mo_coeff, mo_occ)

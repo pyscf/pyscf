@@ -38,17 +38,17 @@ class KnowValues(unittest.TestCase):
 
         mydf = aft.AFTDF(cell)
         mydf.mesh = [11]*3
-        vj, vk = mydf.get_jk(dm, exxdiv='ewald')
+        vj, vk = mydf.get_jk(dm)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 3.0455881073561235*(4./3.66768353356587)**2, 9)
-        self.assertAlmostEqual(ek1, 7.7905480251964629*(4./3.66768353356587)**2, 9)
+        self.assertAlmostEqual(ej1, 3.0455881073561235, 9)
+        self.assertAlmostEqual(ek1, 7.7905480251964629, 9)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
-        vj1, vk1 = mydf.get_jk(dm, hermi=0, exxdiv='ewald')
+        vj1, vk1 = mydf.get_jk(dm, hermi=0)
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
         self.assertAlmostEqual(ej1, 12.234106555081793, 9)
@@ -56,7 +56,7 @@ class KnowValues(unittest.TestCase):
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
-        vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv='ewald')
+        vj, vk = mydf.get_jk(dm, 1, kpt)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
         self.assertAlmostEqual(ej1, 12.233546641482697, 9)

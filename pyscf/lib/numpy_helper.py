@@ -278,12 +278,8 @@ def pack_tril(mat, axis=-1, out=None):
         out = numpy.ndarray(shape, mat.dtype, buffer=out)
         if mat.dtype == numpy.double:
             fn = _np_helper.NPdpack_tril_2d
-        elif mat.dtype == numpy.complex:
-            fn = _np_helper.NPzpack_tril_2d
         else:
-            out[:] = mat[numpy.tril_indices(nd)]
-            return out
-
+            fn = _np_helper.NPzpack_tril_2d
         fn(ctypes.c_int(count), ctypes.c_int(nd),
            out.ctypes.data_as(ctypes.c_void_p),
            mat.ctypes.data_as(ctypes.c_void_p))
@@ -333,15 +329,16 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
 
-    if (tril.dtype != numpy.double and tril.dtype != numpy.complex):
-        out = numpy.ndarray(shape, tril.dtype, buffer=out)
-        idx, idy = numpy.tril_indices(nd)
-        if filltriu == ANTIHERMI:
-            out[...,idy,idx] = -tril
+    if (numpy.issubdtype(tril.dtype, numpy.integer) and
+        (filltriu == HERMITIAN or filltriu == SYMMETRIC)):
+        idx = numpy.tril_indices(nd)
+        idxy = numpy.empty((nd,nd), dtype=numpy.int)
+        idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
+        out = numpy.take(tril, idxy.ravel(), axis=axis, out=out)
+        if axis == 0 and tril.ndim == 1:
+            return out.reshape(nd,nd,-1)
         else:
-            out[...,idy,idx] = tril
-        out[...,idx,idy] = tril
-        return out
+            return out.reshape(shape)
 
     elif tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
@@ -394,14 +391,8 @@ def unpack_row(tril, row_id):
     mat = numpy.empty(nd, tril.dtype)
     if tril.dtype == numpy.double:
         fn = _np_helper.NPdunpack_row
-    elif tril.dtype == numpy.complex:
-        fn = _np_helper.NPzunpack_row
     else:
-        p0 = row_id*(row_id+1)//2
-        p1 = row_id*(row_id+1)//2 + row_id
-        idx = numpy.arange(row_id, nd)
-        return numpy.append(tril[p0:p1], tril[idx*(idx+1)//2+row_id])
-
+        fn = _np_helper.NPzunpack_row
     fn.restype = ctypes.c_void_p
     fn(ctypes.c_int(nd), ctypes.c_int(row_id),
        tril.ctypes.data_as(ctypes.c_void_p),
@@ -444,10 +435,8 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
 
     if mat.dtype == numpy.double:
         fn = _np_helper.NPdsymm_triu
-    elif mat.dtype == numpy.complex:
-        fn = _np_helper.NPzhermi_triu
     else:
-        raise NotImplementedError
+        fn = _np_helper.NPzhermi_triu
     fn.restype = ctypes.c_void_p
     fn(ctypes.c_int(nd), buf.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(hermi))
@@ -484,14 +473,12 @@ def take_2d(a, idx, idy, out=None):
     '''
     a = numpy.asarray(a, order='C')
     out = numpy.ndarray((len(idx),len(idy)), dtype=a.dtype, buffer=out)
-    idx = numpy.asarray(idx, dtype=numpy.int32)
-    idy = numpy.asarray(idy, dtype=numpy.int32)
     if a.dtype == numpy.double:
         fn = _np_helper.NPdtake_2d
-    elif a.dtype == numpy.complex:
-        fn = _np_helper.NPztake_2d
     else:
-        return a[idx[:,None],idy]
+        fn = _np_helper.NPztake_2d
+    idx = numpy.asarray(idx, dtype=numpy.int32)
+    idy = numpy.asarray(idy, dtype=numpy.int32)
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        idx.ctypes.data_as(ctypes.c_void_p),
@@ -514,15 +501,12 @@ def takebak_2d(out, a, idx, idy):
     '''
     assert(out.flags.c_contiguous)
     a = numpy.asarray(a, order='C')
-    idx = numpy.asarray(idx, dtype=numpy.int32)
-    idy = numpy.asarray(idy, dtype=numpy.int32)
     if a.dtype == numpy.double:
         fn = _np_helper.NPdtakebak_2d
-    elif a.dtype == numpy.complex:
-        fn = _np_helper.NPztakebak_2d
     else:
-        out[idx[:,None], idy] += a
-        return out
+        fn = _np_helper.NPztakebak_2d
+    idx = numpy.asarray(idx, dtype=numpy.int32)
+    idy = numpy.asarray(idy, dtype=numpy.int32)
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        idx.ctypes.data_as(ctypes.c_void_p),
@@ -553,8 +537,7 @@ def transpose(a, axes=None, inplace=False, out=None):
             a[c0:c1,c0:c1] = a[c0:c1,c0:c1].T
         return a
 
-    if (not a.flags.c_contiguous
-        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
+    if not a.flags.c_contiguous:
         if a.ndim == 2:
             arow, acol = a.shape
             out = numpy.empty((acol,arow), a.dtype)
@@ -619,8 +602,7 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
     else:
         out = numpy.ndarray(a.shape, a.dtype, buffer=out)
 
-    if (not a.flags.c_contiguous
-        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
+    if not a.flags.c_contiguous:
         if a.ndim == 2:
             na = a.shape[0]
             for c0, c1 in misc.prange(0, na, BLOCK_DIM):
@@ -846,35 +828,12 @@ def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
     numpy.asarray function.
     '''
-    try:  # numpy.stack function is not available in numpy-1.8
-        a = numpy.stack(a)
+    try:
+        a0_shape = numpy.shape(a[0])
+        a = numpy.vstack(a).reshape(-1, *a0_shape)
     except:
         pass
     return numpy.asarray(a, dtype, order)
-
-def frompointer(pointer, count, dtype=float):
-    '''Interpret a buffer that the pointer refers to as a 1-dimensional array.
-
-    Args:
-        pointer : int or ctypes pointer
-            address of a buffer
-        count : int
-            Number of items to read.
-        dtype : data-type, optional
-            Data-type of the returned array; default: float.
-
-    Examples:
-
-    >>> s = numpy.ones(3, dtype=numpy.int32)
-    >>> ptr = s.ctypes.data
-    >>> frompointer(ptr, count=6, dtype=numpy.int16)
-    [1, 0, 1, 0, 1, 0]
-    '''
-    dtype = numpy.dtype(dtype)
-    count *= dtype.itemsize
-    buf = (ctypes.c_char * count).from_address(pointer)
-    a = numpy.ndarray(count, dtype=numpy.int8, buffer=buf)
-    return a.view(dtype)
 
 from distutils.version import LooseVersion
 if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
@@ -938,13 +897,18 @@ def cartesian_prod(arrays, out=None):
     dtype = numpy.result_type(*arrays)
     nd = len(arrays)
     dims = [nd] + [len(x) for x in arrays]
-    out = numpy.ndarray(dims, dtype, buffer=out)
+
+    if out is None:
+        out = numpy.empty(dims, dtype)
+    else:
+        out = numpy.ndarray(dims, dtype, buffer=out)
+    tout = out.reshape(dims)
 
     shape = [-1] + [1] * nd
     for i, arr in enumerate(arrays):
-        out[i] = arr.reshape(shape[:nd-i])
+        tout[i] = arr.reshape(shape[:nd-i])
 
-    return out.reshape(nd,-1).T
+    return tout.reshape(nd,-1).T
 
 def direct_sum(subscripts, *operands):
     '''Apply the summation over many operands with the einsum fashion.
@@ -1082,25 +1046,17 @@ class NPArrayWithTag(numpy.ndarray):
         numpy.ndarray.__setstate__(self, state[0:-1])
         self.__dict__.update(state[-1])
 
-    # Whenever the contents of the array was modified (through ufunc), the tag
-    # should be expired. Overwrite the output of ufunc to restore ndarray type.
-    def __array_wrap__(self, out, context=None):
-        return numpy.ndarray.__array_wrap__(self, out, context).view(numpy.ndarray)
-
-
 def tag_array(a, **kwargs):
     '''Attach attributes to numpy ndarray. The attribute name and value are
     obtained from the keyword arguments.
     '''
-    # Make a shadow copy in any circumstance by converting it to an nparray.
-    # If a is an object of NPArrayWithTag, all attributes will be lost in this
-    # conversion. They need to be restored.
-    t = numpy.asarray(a).view(NPArrayWithTag)
-
-    if isinstance(a, NPArrayWithTag):
-        t.__dict__.update(a.__dict__)
-    t.__dict__.update(kwargs)
-    return t
+    # Do not check isinstance(a, xxx) here since a may be the object of a
+    # derived class of the immutable class (list, tuple, ndarray), which
+    # allows to update attributes dynamically.
+    if a.__class__ in (numpy.ndarray, tuple, list):
+        a = numpy.asarray(a).view(NPArrayWithTag)
+    a.__dict__.update(kwargs)
+    return a
 
 if __name__ == '__main__':
     a = numpy.random.random((30,40,5,10))

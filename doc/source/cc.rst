@@ -113,7 +113,7 @@ a general solver for arbitrary Hamiltonians.  It allows users to overwrite the
 default molecular Hamiltonian with their own effective Hamiltonians.  In this
 example, we create a Hubbard model and feed its Hamiltonian to the CCSD module.
 
-.. literalinclude:: ../../examples/cc/40-ccsd_custom_hamiltonian.py
+.. literalinclude:: ../../examples/cc/40-ccsd_with_given_hamiltonian.py
 
 
 Using CCSD as CASCI active space solver

@@ -180,8 +180,7 @@ def search_inc_path(incname, extra_paths=None):
             return os.path.abspath(path)
 
 if 'LDFLAGS' in os.environ:
-    blas_found = any(x in os.environ['LDFLAGS']
-                     for x in ('blas', 'atlas', 'openblas', 'mkl', 'Accelerate'))
+    blas_found = any(x in os.environ['LDFLAGS'] for x in ('blas', 'atlas', 'openblas', 'mkl'))
 else:
     blas_found = False
 

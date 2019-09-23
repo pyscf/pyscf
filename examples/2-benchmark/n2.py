@@ -39,7 +39,7 @@ with open('/proc/cpuinfo') as f:
             break
 with open('/proc/meminfo') as f:
     log.note(f.readline()[:-1])
-log.note('OMP_NUM_THREADS=%s\n', os.environ.get('OMP_NUM_THREADS', None))
+log.note('OMP_NUM_THREADS=%s\n', os.environ['OMP_NUM_THREADS'])
 
 for bas in ('3-21g', '6-31g*', 'cc-pVTZ', 'ANO-Roos-TZ'):
     mol.atom = 'N 0 0 0; N 0 0 1.1'

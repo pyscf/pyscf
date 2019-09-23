@@ -136,17 +136,13 @@ def gen_sf_hfw(mol, approx='1E'):
             v2cc -= rinv2aa + rinv2ab
             v2cc[:,:,i0:i1      ]+= v2aa[:,:,i0:i1      ]
             v2cc[:,:,i0:i1,j0:j1]+= v2ab[:,:,i0:i1,j0:j1]
-            v2cc[:,:,i0:i1      ]+= rinv2aa[:,:,i0:i1]
-            v2cc[:,:,i0:i1      ]+= rinv2ab[:,:,i0:i1]
-            v2cc[:,:,:    ,i0:i1]+= rinv2aa[:,:,i0:i1].transpose(0,1,3,2)
-            v2cc[:,:,:    ,i0:i1]+= rinv2ab[:,:,:,i0:i1]
+            v2cc[:,:,i0:i1      ]+= rinv2aa[:,:,i0:i1] * 2
+            v2cc[:,:,i0:i1      ]+= rinv2ab[:,:,i0:i1] * 2
             w2cc -= prinvp2aa + prinvp2ab
             w2cc[:,:,i0:i1      ]+= w2aa[:,:,i0:i1      ]
             w2cc[:,:,i0:i1,j0:j1]+= w2ab[:,:,i0:i1,j0:j1]
-            w2cc[:,:,i0:i1      ]+= prinvp2aa[:,:,i0:i1]
-            w2cc[:,:,i0:i1      ]+= prinvp2ab[:,:,i0:i1]
-            w2cc[:,:,:    ,i0:i1]+= prinvp2aa[:,:,i0:i1].transpose(0,1,3,2)
-            w2cc[:,:,:    ,i0:i1]+= prinvp2ab[:,:,:,i0:i1]
+            w2cc[:,:,i0:i1      ]+= prinvp2aa[:,:,i0:i1] * 2
+            w2cc[:,:,i0:i1      ]+= prinvp2ab[:,:,i0:i1] * 2
 
         else:
             s2cc[:,:,i0:i1,j0:j1] = s2ab[:,:,i0:i1,j0:j1]
@@ -370,7 +366,7 @@ if __name__ == '__main__':
     h2 = h2_deriv(0,0)
     h2_ref = (h1_deriv_1(0)[2] - h1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
     print(abs(h2[2,2]-h2_ref).max())
-    print(lib.finger(h2) - 33.71188112440316)
+    print(lib.finger(h2) - 33.947069092725265)
 
     h2 = h2_deriv(1,0)
     h2_ref = (h1_deriv_1(1)[2] - h1_deriv_2(1)[2]) / 0.0002 * lib.param.BOHR

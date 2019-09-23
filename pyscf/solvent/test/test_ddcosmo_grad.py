@@ -172,17 +172,17 @@ class KnownValues(unittest.TestCase):
 
     def test_scf_grad(self):
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol0)).run()
-        de_cosmo = ddcosmo_grad.kernel(mf.with_solvent, mf.make_rdm1())
+        de_cosmo = ddcosmo_grad.kernel(mf._solvent, mf.make_rdm1())
         de = mf.nuc_grad_method().kernel()
         dm1 = mf.make_rdm1()
 
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol1)).run()
         e1 = mf.e_tot
-        e1_cosmo = mf.with_solvent.energy(dm1)
+        e1_cosmo = mf._solvent.energy(dm1)
 
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol2)).run()
         e2 = mf.e_tot
-        e2_cosmo = mf.with_solvent.energy(dm1)
+        e2_cosmo = mf._solvent.energy(dm1)
         self.assertAlmostEqual(abs((e2-e1)/dx - de[0,2]).max(), 0, 7)
         self.assertAlmostEqual(abs((e2_cosmo-e1_cosmo)/dx - de_cosmo[0,2]).max(), 0, 7)
 

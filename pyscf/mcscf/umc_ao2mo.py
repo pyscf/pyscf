@@ -20,7 +20,9 @@ MO integrals for UCASSCF methods
 import sys
 import ctypes
 import time
+import tempfile
 import numpy
+import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
@@ -70,15 +72,19 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 def trans_e1_outcore(mol, mo, ncore, ncas,
                      max_memory=None, ioblk_size=512, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
-    log = logger.new_logger(mol, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     nao, nmo = mo[0].shape
     nao_pair = nao*(nao+1)//2
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
 
-    fswap = lib.H5TmpFile()
-    ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), fswap,
+    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), swapfile.name,
                           verbose=log, compact=False)
 
+    fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_bufa(bfn_id):
         if log.verbose >= logger.DEBUG1:
@@ -105,13 +111,15 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
                          ao_loc)[:4]
     time0 = log.timer('trans_CVCV', *time0)
     tmp = None
+    fswap.close()
 
     ###########################
 
-    fswap = lib.H5TmpFile()
-    ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), fswap,
+    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), swapfile.name,
                           verbose=log, compact=False)
 
+    fswap = h5py.File(swapfile.name, 'r')
     klaoblks = len(fswap['0'])
     def load_bufb(bfn_id):
         if log.verbose >= logger.DEBUG1:
@@ -134,6 +142,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
     jc_pp, jc_PP, kc_pp, Icvcv, cvCV = \
             _trans_cvcv_(mo, ncore, ncas, load_bufb, ao_loc)
     time0 = log.timer('trans_cvcv', *time0)
+    fswap.close()
 
     jkcpp = jc_pp - kc_pp
     jkcPP = jC_PP - kC_PP
@@ -223,9 +232,11 @@ def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
 class _ERIS(object):
     def __init__(self, casscf, mo, method='incore'):
         mol = casscf.mol
-        ncore = self.ncore = casscf.ncore
-        ncas  = self.ncas  = casscf.ncas
+        self.ncore = casscf.ncore
+        self.ncas = casscf.ncas
         nmo = mo[0].shape[1]
+        ncore = self.ncore
+        ncas = self.ncas
         mem_incore, mem_outcore, mem_basic = _mem_usage(ncore, ncas, nmo)
         mem_now = lib.current_memory()[0]
 
@@ -240,7 +251,7 @@ class _ERIS(object):
             self.appa, self.apPA, self.APPA, \
             self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
             self.Icvcv, self.ICVCV, self.cvCV = \
-                    trans_e1_incore(eri, mo, ncore, ncas)
+                    trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
             self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
                           numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)
         else:
@@ -257,7 +268,7 @@ class _ERIS(object):
                 self.appa, self.apPA, self.APPA, \
                 self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
                 self.Icvcv, self.ICVCV, self.cvCV = \
-                        trans_e1_outcore(mol, mo, ncore, ncas,
+                        trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
                                          max_memory=max_memory, verbose=log)
                 self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
                               numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)

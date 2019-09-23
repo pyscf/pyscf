@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,14 +17,6 @@ from pyscf.prop.ssc import rhf
 from pyscf.prop.ssc import uhf
 from pyscf.prop.ssc import dhf
 
-RHF = rhf.SSC
-UHF = uhf.SSC
-DHF = dhf.SSC
-
-try:
-    from pyscf.prop.ssc import rks
-    from pyscf.prop.ssc import uks
-    RKS = rks.SSC
-    UKS = uks.SSC
-except ImportError:
-    pass
+from pyscf.prop.ssc.rhf import SSC as RHF
+from pyscf.prop.ssc.uhf import SSC as UHF
+from pyscf.prop.ssc.dhf import SSC as DHF

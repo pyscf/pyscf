@@ -25,10 +25,8 @@ Ref:
 
 import numpy
 from pyscf import lib
-from pyscf import ao2mo
 from pyscf.fci import cistring
-from pyscf.fci import rdm
-from pyscf.fci.direct_spin1 import _unpack_nelec
+import pyscf.fci
 
 #                              site-1   ,...,site-N
 #                              v             v
@@ -47,13 +45,21 @@ def contract_all(t, u, g, hpp, ci0, nsite, nelec, nphonon):
     return ci1
 
 def make_shape(nsite, nelec, nphonon):
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     na = cistring.num_strings(nsite, neleca)
     nb = cistring.num_strings(nsite, nelecb)
     return (na,nb)+(nphonon+1,)*nsite
 
 def contract_1e(h1e, fcivec, nsite, nelec, nphonon):
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index(range(nsite), neleca)
     link_indexb = cistring.gen_linkstr_index(range(nsite), nelecb)
     cishape = make_shape(nsite, nelec, nphonon)
@@ -71,7 +77,11 @@ def contract_1e(h1e, fcivec, nsite, nelec, nphonon):
 # eri is a list of 2e hamiltonian (a for alpha, b for beta)
 # [(aa|aa), (aa|bb), (bb|bb)]
 def contract_2e(eri, fcivec, nsite, nelec, nphonon):
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index(range(nsite), neleca)
     link_indexb = cistring.gen_linkstr_index(range(nsite), nelecb)
     cishape = make_shape(nsite, nelec, nphonon)
@@ -86,9 +96,9 @@ def contract_2e(eri, fcivec, nsite, nelec, nphonon):
         for a, i, str1, sign in tab:
             t1b[a,i,:,str1] += sign * ci0[:,str0]
 
-    g2e_aa = ao2mo.restore(1, eri[0], nsite)
-    g2e_ab = ao2mo.restore(1, eri[1], nsite)
-    g2e_bb = ao2mo.restore(1, eri[2], nsite)
+    g2e_aa = pyscf.ao2mo.restore(1, eri[0], nsite)
+    g2e_ab = pyscf.ao2mo.restore(1, eri[1], nsite)
+    g2e_bb = pyscf.ao2mo.restore(1, eri[2], nsite)
     t2a = numpy.dot(g2e_aa.reshape(nsite**2,-1), t1a.reshape(nsite**2,-1))
     t2a+= numpy.dot(g2e_ab.reshape(nsite**2,-1), t1b.reshape(nsite**2,-1))
     t2b = numpy.dot(g2e_ab.reshape(nsite**2,-1).T, t1a.reshape(nsite**2,-1))
@@ -106,7 +116,11 @@ def contract_2e(eri, fcivec, nsite, nelec, nphonon):
     return fcinew.reshape(fcivec.shape)
 
 def contract_2e_hubbard(u, fcivec, nsite, nelec, nphonon):
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(nsite), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(nsite), nelecb))
     cishape = make_shape(nsite, nelec, nphonon)
@@ -131,7 +145,11 @@ def slices_for_des(psite_id, nsite, nphonon):
 # N_alpha N_beta * \sum_{p} (p^+ + p)
 # N_alpha, N_beta are particle number operator, p^+ and p are phonon creation annihilation operator
 def contract_ep(g, fcivec, nsite, nelec, nphonon):
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     strsa = numpy.asarray(cistring.gen_strings4orblist(range(nsite), neleca))
     strsb = numpy.asarray(cistring.gen_strings4orblist(range(nsite), nelecb))
     cishape = make_shape(nsite, nelec, nphonon)
@@ -205,7 +223,11 @@ def contract_pp(hpp, fcivec, nsite, nelec, nphonon):
     return fcinew.reshape(fcivec.shape)
 
 def make_hdiag(t, u, g, hpp, nsite, nelec, nphonon):
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index(range(nsite), neleca)
     link_indexb = cistring.gen_linkstr_index(range(nsite), nelecb)
     occslista = [tab[:neleca,0] for tab in link_indexa]
@@ -252,9 +274,13 @@ def kernel(t, u, g, hpp, nsite, nelec, nphonon,
     return e+ecore, c
 
 
+# dm_pq = <|p^+ q|> for electron part
 def make_rdm1e(fcivec, nsite, nelec):
-    '''1-electron density matrix dm_pq = <|p^+ q|>'''
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index(range(nsite), neleca)
     link_indexb = cistring.gen_linkstr_index(range(nsite), nelecb)
     na = cistring.num_strings(nsite, neleca)
@@ -272,12 +298,15 @@ def make_rdm1e(fcivec, nsite, nelec):
             rdm1[a,i] += sign * numpy.einsum('ax,ax->', ci0[:,str1],ci0[:,str0])
     return rdm1
 
+# 1-electron density matrix and 2-electron density matrix
+# dm_pq = <|p^+ q|>
+# dm_{pqrs} = <|p^+ r^+ q s|>   note 2pdm is ordered in chemist notation
 def make_rdm12e(fcivec, nsite, nelec):
-    '''1-electron and 2-electron density matrices
-    dm_pq = <|p^+ q|>
-    dm_{pqrs} = <|p^+ r^+ q s|>  (note 2pdm is ordered in chemist notation)
-    '''
-    neleca, nelecb = _unpack_nelec(nelec)
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
     link_indexa = cistring.gen_linkstr_index(range(nsite), neleca)
     link_indexb = cistring.gen_linkstr_index(range(nsite), nelecb)
     na = cistring.num_strings(nsite, neleca)
@@ -300,11 +329,11 @@ def make_rdm12e(fcivec, nsite, nelec):
         #:rdm2 += numpy.einsum('ijmp,klmp->jikl', t1, t1)
         tmp = lib.dot(t1.reshape(nsite**2,-1), t1.reshape(nsite**2,-1).T)
         rdm2 += tmp.reshape((nsite,)*4).transpose(1,0,2,3)
-    rdm1, rdm2 = rdm.reorder_rdm(rdm1, rdm2, True)
+    rdm1, rdm2 = pyscf.fci.rdm.reorder_rdm(rdm1, rdm2, True)
     return rdm1, rdm2
 
+# dm_pq = <|p^+ q|> for phonon part
 def make_rdm1p(fcivec, nsite, nelec, nphonon):
-    '''1-phonon density matrix dm_pq = <|p^+ q|>'''
     cishape = make_shape(nsite, nelec, nphonon)
     ci0 = fcivec.reshape(cishape)
 

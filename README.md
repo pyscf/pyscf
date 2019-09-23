@@ -1,15 +1,15 @@
 <div align="left">
-  <img src="https://github.com/pyscf/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
+  <img src="https://github.com/sunqm/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
 </div>
 
 Python-based Simulations of Chemistry Framework
 ===============================================
-[![Build Status](https://travis-ci.org/pyscf/pyscf.svg?branch=master)](https://travis-ci.org/pyscf/pyscf)
+[![Build Status](https://travis-ci.org/sunqm/pyscf.svg?branch=master)](https://travis-ci.org/sunqm/pyscf)
 
-2019-03-15
+2018-07-01
 
-* [Stable release 1.6.1](https://github.com/pyscf/pyscf/releases/tag/v1.6.1)
-* [1.7 alpha](https://github.com/pyscf/pyscf/tree/dev)
+* [Stable release 1.5.1](https://github.com/sunqm/pyscf/releases/tag/v1.5.1)
+* [1.6 alpha](https://github.com/sunqm/pyscf/tree/dev)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
@@ -56,10 +56,10 @@ Installation
         set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 
 * Using DMRG as the FCI solver for CASSCF.  There are two DMRG solver
-  interfaces available in pyscf.
-      Block (https://sanshar.github.io/Block)
+  interfaces avaialbe in pyscf.
+      Block (http://chemists.princeton.edu/chan/software/block-code-for-dmrg)
       CheMPS2 (https://github.com/SebWouters/CheMPS2)
-  After installing the DMRG solver, create a file dmrgscf/settings.py
+  After installing the DMRG solver, create a file future/dmrgscf/settings.py
   to store the path where the DMRG solver was installed.
 
 * Using FCIQMC as the FCI solver for CASSCF.
@@ -67,8 +67,8 @@ Installation
   After installing the NECI, create a file future/fciqmc/settings.py
   to store the path where the NECI was installed.
 
-* Using optimized integral library on X86 platform.  [Qcint](https://github.com/sunqm/qcint.git)
-  is a branch of libcint library.
+* Using optimized integral library on X86 platform.  Qcint
+  (https://github.com/sunqm/qcint.git) is a branch of libcint library.
   It is heavily optimized against X86_64 platforms.  To replace the
   default libcint library with qcint library, edit the URL of the
   integral library in lib/CMakeLists.txt file
@@ -89,7 +89,7 @@ Installation
 
 Tutorials
 ---------
-* A user-guide written in Ipython notebook can be found in https://github.com/nmardirossian/PySCF_Tutorial.
+* An Ipython notebook of user-guide can be found in https://github.com/nmardirossian/PySCF_Tutorial.
   This repository documents the basic structure of PySCF input script and the
   use of regular methods which were routinely executed in most quantum chemistry
   packages.  It also provides an implementation to drive PySCF program in a

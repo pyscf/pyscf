@@ -46,8 +46,6 @@ def update_amps(cc, t1, t2, eris):
     assert(isinstance(eris, ccsd._ChemistsERIs))
     nocc, nvir = t1.shape
     fock = eris.fock
-    mo_e_o = eris.mo_energy[:nocc]
-    mo_e_v = eris.mo_energy[nocc:] + cc.level_shift
 
     fov = fock[:nocc,nocc:].copy()
     foo = fock[:nocc,:nocc].copy()
@@ -58,8 +56,8 @@ def update_amps(cc, t1, t2, eris):
     Fov = imd.cc_Fov(t1,t2,eris)
 
     # Move energy terms to the other side
-    Foo[np.diag_indices(nocc)] -= mo_e_o
-    Fvv[np.diag_indices(nvir)] -= mo_e_v
+    Foo -= np.diag(np.diag(foo))
+    Fvv -= np.diag(np.diag(fvv))
 
     # T1 equation
     t1new  =-2*np.einsum('kc,ka,ic->ia', fov, t1, t1)
@@ -113,14 +111,12 @@ def update_amps(cc, t1, t2, eris):
     else:
         Loo = imd.Loo(t1, t2, eris)
         Lvv = imd.Lvv(t1, t2, eris)
-        Loo[np.diag_indices(nocc)] -= mo_e_o
-        Lvv[np.diag_indices(nvir)] -= mo_e_v
-
+        Loo -= np.diag(np.diag(foo))
+        Lvv -= np.diag(np.diag(fvv))
         Woooo = imd.cc_Woooo(t1, t2, eris)
         Wvoov = imd.cc_Wvoov(t1, t2, eris)
         Wvovo = imd.cc_Wvovo(t1, t2, eris)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
-
         tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
         t2new += lib.einsum('klij,klab->ijab', Woooo, tau)
         t2new += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
@@ -136,7 +132,8 @@ def update_amps(cc, t1, t2, eris):
         tmp = lib.einsum('bkci,kjac->ijab', Wvovo, t2)
         t2new -= (tmp + tmp.transpose(1,0,3,2))
 
-    eia = mo_e_o[:,None] - mo_e_v
+    mo_e = eris.fock.diagonal().real
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
     eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
     t1new /= eia
     t2new /= eijab
@@ -169,6 +166,20 @@ class RCCSD(ccsd.CCSD):
     Ground-state CCSD is performed in optimized ccsd.CCSD and EOM is performed here.
     '''
 
+    def init_amps(self, eris):
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        mo_e = eris.fock.diagonal().real
+        eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+        eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
+        t1 = eris.fock[:nocc,nocc:].conj() / eia
+        eris_ovov = np.asarray(eris.ovov)
+        t2 = eris_ovov.transpose(0,2,1,3).conj() / eijab
+        self.emp2  = 2*np.einsum('ijab,iajb', t2, eris_ovov)
+        self.emp2 -=   np.einsum('ijab,ibja', t2, eris_ovov)
+        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
+        return self.emp2, t1, t2
+
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
         return self.ccsd(t1, t2, eris, mbpt2)
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
@@ -200,7 +211,7 @@ class RCCSD(ccsd.CCSD):
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff)
 
-        elif getattr(self._scf, 'with_df', None):
+        elif hasattr(self._scf, 'with_df'):
             logger.warn(self, 'CCSD detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
                         'It\'s recommended to use dfccsd.CCSD for the '
@@ -288,7 +299,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
-    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8')
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8', chunks=(nocc,1,nvir,nvir))
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
     max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
@@ -400,7 +411,6 @@ if __name__ == '__main__':
     eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:].copy()
     eris.vvvv = eri0[nocc:,nocc:,nocc:,nocc:].copy()
     eris.fock = np.diag(mf.mo_energy)
-    eris.mo_energy = mf.mo_energy
 
     np.random.seed(1)
     t1 = np.random.random((nocc,nvir)) + np.random.random((nocc,nvir))*.1j - .5

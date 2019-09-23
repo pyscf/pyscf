@@ -13,66 +13,13 @@
 # limitations under the License.
 
 from pyscf.solvent import ddcosmo
-from pyscf.solvent import ddpcm
 from pyscf.solvent.ddcosmo import DDCOSMO
 from pyscf.solvent.ddpcm import DDPCM
 
-def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
-    '''Initialize ddCOSMO model.
+for_scf = ddcosmo.ddcosmo_for_scf
 
-    Examples::
+def ddCOSMO(method):
+    return ddcosmo.ddcosmo_for_scf(method)
 
-    >>> mf = ddCOSMO(scf.RHF(mol))
-    >>> mf.kernel()
-    >>> sol = ddCOSMO(mol)
-    >>> mc = ddCOSMO(CASCI(mf, 6, 6), sol)
-    >>> mc.kernel()
-    '''
-    from pyscf import gto
-    from pyscf import scf, mcscf
-    from pyscf import tdscf
-
-    if isinstance(method_or_mol, gto.mole.Mole):
-        return DDCOSMO(mol)
-
-    elif isinstance(method_or_mol, scf.hf.SCF):
-        return ddcosmo.ddcosmo_for_scf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.mc1step.CASSCF):
-        return ddcosmo.ddcosmo_for_casscf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.casci.CASCI):
-        return ddcosmo.ddcosmo_for_casci(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        raise NotImplementedError('Solvent model for %s' % method_or_mol)
-    else:
-        return ddcosmo.ddcosmo_for_post_scf(method_or_mol, solvent_obj, dm)
-
-
-def ddPCM(method_or_mol, solvent_obj=None, dm=None):
-    '''Initialize ddPCM model.
-
-    Examples::
-
-    >>> mf = ddPCM(scf.RHF(mol))
-    >>> mf.kernel()
-    >>> sol = ddPCM(mol)
-    >>> mc = ddPCM(CASCI(mf, 6, 6), sol)
-    >>> mc.kernel()
-    '''
-    from pyscf import gto
-    from pyscf import scf, mcscf
-    from pyscf import tdscf
-
-    if isinstance(method_or_mol, gto.mole.Mole):
-        return DDPCM(mol)
-
-    elif isinstance(method_or_mol, scf.hf.SCF):
-        return ddpcm.ddpcm_for_scf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.mc1step.CASSCF):
-        return ddpcm.ddpcm_for_casscf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.casci.CASCI):
-        return ddpcm.ddpcm_for_casci(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        raise NotImplementedError('Solvent model for %s' % method_or_mol)
-    else:
-        return ddpcm.ddpcm_for_post_scf(method_or_mol, solvent_obj, dm)
-
+def ddPCM(method):
+    return ddpcm.ddpcm_for_scf(method)

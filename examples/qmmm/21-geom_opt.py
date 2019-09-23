@@ -1,1 +1,0 @@
-../geomopt/10-with_qmmm.py

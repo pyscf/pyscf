@@ -82,11 +82,6 @@ def num_threads(n=None):
     '''Set the number of OMP threads.  If argument is not specified, the
     function will return the total number of available OMP threads.
 
-    It's recommended to call this function to set OMP threads than
-    "os.environ['OMP_NUM_THREADS'] = int(n)". This is because environment
-    variables like OMP_NUM_THREADS were read when a module was imported. They
-    cannot be reset through os.environ after the module was loaded.
-
     Examples:
 
     >>> from pyscf import lib
@@ -346,7 +341,7 @@ class capture_stdout(object):
 
     >>> import os
     >>> from pyscf import lib
-    >>> with lib.capture_stdout() as out:
+    >>> with lib.capture_stdout as out:
     ...     os.system('ls')
     >>> print(out.read())
     '''
@@ -478,7 +473,7 @@ class StreamObject(object):
         method set is the object itself.  This allows a series of
         functions/methods to be executed in pipe.
         '''
-        #if getattr(self, '_keys', None):
+        #if hasattr(self, '_keys'):
         #    for k,v in kwargs.items():
         #        setattr(self, k, v)
         #        if k not in self._keys:
@@ -510,7 +505,7 @@ class StreamObject(object):
         of functions/methods to be executed in pipe.
         '''
         if (self.verbose > 0 and  # logger.QUIET
-            getattr(self, '_keys', None)):
+            hasattr(self, '_keys')):
             check_sanity(self, self._keys, self.stdout)
         return self
 
@@ -529,7 +524,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(dir(obj.__class__))
+        class_attr = set(obj.__class__.__dict__)
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('Overwritten attributes  %s  of %s\n' %
@@ -561,60 +556,10 @@ def with_doc(doc):
 
         fn.__doc__ = doc
     '''
-    def fn_with_doc(fn):
+    def make_fn(fn):
         fn.__doc__ = doc
         return fn
-    return fn_with_doc
-
-def alias(fn, alias_name=None):
-    '''
-    The statement "fn1 = alias(fn)" in a class is equivalent to define the
-    following method in the class:
-
-    .. code-block:: python
-        def fn1(self, *args, **kwargs):
-            return self.fn(*args, **kwargs)
-
-    Using alias function instead of fn1 = fn because some methods may be
-    overloaded in the child class. Using "alias" can make sure that the
-    overloaded mehods were called when calling the aliased method.
-    '''
-    fname = fn.__name__
-    def aliased_fn(self, *args, **kwargs):
-        return getattr(self, fname)(*args, **kwargs)
-
-    if alias_name is not None:
-        aliased_fn.__name__ = alias_name
-
-    doc_str = 'An alias to method %s\n' % fname
-    if sys.version_info >= (3,):
-        from inspect import signature
-        sig = str(signature(fn))
-        if alias_name is None:
-            doc_str += 'Function Signature: %s\n' % sig
-        else:
-            doc_str += 'Function Signature: %s%s\n' % (alias_name, sig)
-    doc_str += '----------------------------------------\n\n'
-
-    if fn.__doc__ is not None:
-        doc_str += fn.__doc__
-
-    aliased_fn.__doc__ = doc_str
-    return aliased_fn
-
-def class_as_method(cls):
-    '''
-    The statement "fn1 = alias(Class)" is equivalent to:
-
-    .. code-block:: python
-        def fn1(self, *args, **kwargs):
-            return Class(self, *args, **kwargs)
-    '''
-    def fn(obj, *args, **kwargs):
-        return cls(obj, *args, **kwargs)
-    fn.__doc__ = cls.__doc__
-    fn.__name__ = cls.__name__
-    return fn
+    return make_fn
 
 def import_as_method(fn, default_keys=None):
     '''
@@ -708,10 +653,10 @@ class ProcessWithReturnValue(Process):
                 raise e
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Process.join(self)
         if self._e is not None:
-            raise ProcessRuntimeError('Error on process %s:\n%s' % (self, self._e))
+            raise ProcessRuntimeError('Error on process %s' % self)
         else:
+            Process.join(self)
             return self._q.get()
     get = join
 
@@ -731,10 +676,10 @@ class ThreadWithReturnValue(Thread):
                 raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Thread.join(self)
         if self._e is not None:
-            raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, self._e))
+            raise ThreadRuntimeError('Error on thread %s' % self)
         else:
+            Thread.join(self)
 # Note: If the return value of target is huge, Queue.get may raise
 # SystemError: NULL result without error in PyObject_Call
 # It is because return value is cached somewhere by pickle but pickle is
@@ -754,9 +699,10 @@ class ThreadWithTraceBack(Thread):
                 raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Thread.join(self)
         if self._e is not None:
-            raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, self._e))
+            raise ThreadRuntimeError('Error on thread %s' % self)
+        else:
+            Thread.join(self)
 
 class ThreadRuntimeError(RuntimeError):
     pass
@@ -913,43 +859,7 @@ class GradScanner:
         conv = getattr(self.base, 'converged', True)
         return conv
 
-class temporary_env(object):
-    '''Within the context of this macro, the attributes of the object are
-    temporarily updated. When the program goes out of the scope of the
-    context, the original value of each attribute will be restored.
-
-    Examples:
-
-    >>> with temporary_env(lib.param, LIGHT_SPEED=15., BOHR=2.5):
-    ...     print(lib.param.LIGHT_SPEED, lib.param.BOHR)
-    15. 2.5
-    >>> print(lib.param.LIGHT_SPEED, lib.param.BOHR)
-    137.03599967994 0.52917721092
-    '''
-    def __init__(self, obj, **kwargs):
-        self.obj = obj
-
-        # Should I skip the keys which are not presented in obj?
-        #keys = [key for key in kwargs.keys() if hasattr(obj, key)]
-        #self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in keys]
-        #self.env_new = [(key, kwargs[key]) for key in keys]
-
-        self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in kwargs]
-        self.env_new = [(key, kwargs[key]) for key in kwargs]
-
-    def __enter__(self):
-        for k, v in self.env_new:
-            setattr(self.obj, k, v)
-        return self
-
-    def __exit__(self, type, value, traceback):
-        for k, v in self.env_bak:
-            if isinstance(v, str) and v == 'TO_DEL':
-                delattr(self.obj, k)
-            else:
-                setattr(self.obj, k, v)
-
-class light_speed(temporary_env):
+class light_speed(object):
     '''Within the context of this macro, the environment varialbe LIGHT_SPEED
     can be customized.
 
@@ -962,11 +872,13 @@ class light_speed(temporary_env):
     137.03599967994
     '''
     def __init__(self, c):
-        temporary_env.__init__(self, param, LIGHT_SPEED=c)
+        self.bak = param.LIGHT_SPEED
         self.c = c
     def __enter__(self):
-        temporary_env.__enter__(self)
+        param.LIGHT_SPEED = self.c
         return self.c
+    def __exit__(self, type, value, traceback):
+        param.LIGHT_SPEED = self.bak
 
 
 if __name__ == '__main__':

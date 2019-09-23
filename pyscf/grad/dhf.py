@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -175,11 +175,6 @@ class Gradients(rhf_grad.Gradients):
         if mo_occ is None: mo_occ = self.base.mo_occ
         return grad_elec(self, mo_energy, mo_coeff, mo_occ, atmlst)
 
-Grad = Gradients
-
-from pyscf import scf
-scf.dhf.UHF.Gradients = lib.class_as_method(Gradients)
-
 
 def _call_vhf1_llll(mol, dm):
     n2c = dm.shape[0] // 2
@@ -239,7 +234,7 @@ if __name__ == "__main__":
                      "O": '6-31g',}
         h2o.build()
         method = scf.dhf.UHF(h2o).run()
-        g = method.Gradients().kernel()
+        g = Gradients(method).kernel()
         print(g)
 
         ms = method.as_scanner()

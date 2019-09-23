@@ -63,11 +63,6 @@ class KnownValues(unittest.TestCase):
         a = cl1.get_SI()
         self.assertAlmostEqual(finger(a), (16.506917823339265+1.6393578329869585j), 10)
 
-        np.random.seed(2)
-        Gv = np.random.random((5,3))
-        a = cl1.get_SI(Gv)
-        self.assertAlmostEqual(finger(a), (0.65237631847195221-1.5736011413431059j), 10)
-
     def test_mixed_basis(self):
         cl = pgto.Cell()
         cl.build(
@@ -146,45 +141,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cell.ewald(2, 10), -2.3711356723457615, 9)
         self.assertAlmostEqual(cell.ewald(2,  5), -2.3711356723457615, 9)
 
-    def test_ewald_2d_inf_vacuum(self):
-        cell = pgto.Cell()
-        cell.a = numpy.eye(3) * 4
-        cell.atom = 'He 0 0 0; He 0 1 1'
-        cell.unit = 'B'
-        cell.mesh = [9,9,60]
-        cell.verbose = 0
-        cell.dimension = 2
-        cell.low_dim_ft_type = 'inf_vacuum'
-        cell.rcut = 3.6
-        cell.build()
-        self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 4)
-
-    def test_ewald_1d_inf_vacuum(self):
-        cell = pgto.Cell()
-        cell.a = numpy.eye(3) * 4
-        cell.atom = 'He 0 0 0; He 0 1 1'
-        cell.unit = 'B'
-        cell.mesh = [9,60,60]
-        cell.verbose = 0
-        cell.dimension = 1
-        cell.low_dim_ft_type = 'inf_vacuum'
-        cell.rcut = 3.6
-        cell.build()
-        self.assertAlmostEqual(cell.ewald(), 70.875156940393225, 8)
-
-    def test_ewald_0d_inf_vacuum(self):
-        cell = pgto.Cell()
-        cell.a = numpy.eye(3)
-        cell.atom = 'He 0 0 0; He 0 1 1'
-        cell.unit = 'B'
-        cell.mesh = [60] * 3
-        cell.verbose = 0
-        cell.dimension = 0
-        cell.low_dim_ft_type = 'inf_vacuum'
-        cell.build()
-        eref = cell.to_mol().energy_nuc()
-        self.assertAlmostEqual(cell.ewald(), eref, 2)
-
     def test_ewald_2d(self):
         cell = pgto.Cell()
         cell.a = numpy.eye(3) * 4
@@ -195,31 +151,31 @@ class KnownValues(unittest.TestCase):
         cell.dimension = 2
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), -5.1194779101355596, 9)
+        self.assertAlmostEqual(cell.ewald(), -2.0207698225112987, 6)
 
-#    def test_ewald_1d(self):
-#        cell = pgto.Cell()
-#        cell.a = numpy.eye(3) * 4
-#        cell.atom = 'He 0 0 0; He 0 1 1'
-#        cell.unit = 'B'
-#        cell.mesh = [9,60,60]
-#        cell.verbose = 0
-#        cell.dimension = 1
-#        cell.rcut = 3.6
-#        cell.build()
-#        self.assertAlmostEqual(cell.ewald(), 70.875156940393225, 8)
-#
-#    def test_ewald_0d(self):
-#        cell = pgto.Cell()
-#        cell.a = numpy.eye(3)
-#        cell.atom = 'He 0 0 0; He 0 1 1'
-#        cell.unit = 'B'
-#        cell.mesh = [60] * 3
-#        cell.verbose = 0
-#        cell.dimension = 0
-#        cell.build()
-#        eref = cell.to_mol().energy_nuc()
-#        self.assertAlmostEqual(cell.ewald(), eref, 2)
+    def test_ewald_1d(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 4
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.mesh = [9,60,60]
+        cell.verbose = 0
+        cell.dimension = 1
+        cell.rcut = 3.6
+        cell.build()
+        self.assertAlmostEqual(cell.ewald(), 6.4055183018897317, 4)
+
+    def test_ewald_0d(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3)
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.mesh = [60] * 3
+        cell.verbose = 0
+        cell.dimension = 0
+        cell.build()
+        eref = cell.to_mol().energy_nuc()
+        self.assertAlmostEqual(cell.ewald(), eref, 2)
 
     def test_pbc_intor(self):
         numpy.random.seed(12)
@@ -308,24 +264,6 @@ class KnownValues(unittest.TestCase):
             atom = 'Mg 0 0 1',
             pseudo = {'Mg': 'gth-lda q2'})
         self.assertEqual(cell.atom_nelec_core(0), 10)
-
-    def pbc_intor_symmetry(self):
-        a = cl1.lattice_vectors()
-        b = numpy.linalg.inv(a).T * (numpy.pi*2)
-        kpts = numpy.random.random((4,3))
-        kpts[1] = b[0]+b[1]+b[2]-kpts[0]
-        kpts[2] = b[0]-b[1]-b[2]-kpts[0]
-        kpts[3] = b[0]-b[1]+b[2]+kpts[0]
-        s = cl1.pbc_intor('int1e_ovlp', kpts=kpts)
-        self.assertAlmostEqual(abs(s[0]-s[1].conj()).max(), 0, 12)
-        self.assertAlmostEqual(abs(s[0]-s[2].conj()).max(), 0, 12)
-        self.assertAlmostEqual(abs(s[0]-s[3]       ).max(), 0, 12)
-
-    def test_basis_truncation(self):
-        b = pgto.basis.load('gthtzvp@3s1p', 'C')
-        self.assertEqual(len(b), 2)
-        self.assertEqual(len(b[0][1]), 4)
-        self.assertEqual(len(b[1][1]), 2)
 
 
 if __name__ == '__main__':

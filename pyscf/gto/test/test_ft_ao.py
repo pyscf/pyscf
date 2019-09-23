@@ -174,13 +174,6 @@ class KnownValues(unittest.TestCase):
         dat = ft_ao.ft_aopair(mol, Gv, intor='GTO_ft_pxp_sph', comp=3)
         self.assertAlmostEqual(finger(dat), (3.7490985032017079+43.665863070814687j), 8)
 
-    def test_ft_aopair_overlap0(self):
-        G = numpy.asarray([[-1.679872,  1.679872,  2.937055],
-                           [-1.425679,  1.425679 , 2.492629],
-                           [-1.187609 , 1.187609 , 2.076392]])
-        mol = gto.M(atom='Ne 7 0.0 0.0; Ne 7 0.0 0.0', basis='3-21g')
-        dat = ft_ao.ft_aopair(mol, G)
-        self.assertAlmostEqual(lib.finger(dat), (-1.4150713647161861-0.8020058716859948j), 12)
 
 if __name__ == '__main__':
     print('Full Tests for ft_ao')

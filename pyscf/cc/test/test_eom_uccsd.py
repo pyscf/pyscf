@@ -72,11 +72,11 @@ ucc1.t2 = r2
 
 ucc = cc.UCCSD(mf)
 ucc.max_space = 0
-ucc.conv_tol = 1e-8
+ucc.conv_tol = 1e-10
 ecc = ucc.kernel()[0]
 
 ucc0 = cc.UCCSD(mf0)
-ucc0.conv_tol = 1e-8
+ucc0.conv_tol = 1e-10
 ucc0.direct = True
 ucc0.kernel()
 

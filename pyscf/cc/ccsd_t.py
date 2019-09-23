@@ -182,7 +182,7 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         orbsym = numpy.asarray(orbsym, dtype=numpy.int32)
         o_sorted = _irrep_argsort(orbsym[:nocc])
         v_sorted = _irrep_argsort(orbsym[nocc:])
-        mo_energy = eris.mo_energy
+        mo_energy = eris.fock.diagonal().real
         mo_energy = numpy.hstack((mo_energy[:nocc][o_sorted],
                                   mo_energy[nocc:][v_sorted]))
         t1T = numpy.asarray(t1.T[v_sorted][:,o_sorted], order='C')
@@ -220,7 +220,7 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         t1T = t1.T.copy()
         t2T = lib.transpose(t2.reshape(nocc**2,nvir**2))
         t2T = lib.transpose(t2T.reshape(nvir**2,nocc,nocc), axes=(0,2,1), out=t2)
-        mo_energy = numpy.asarray(eris.mo_energy, order='C')
+        mo_energy = numpy.asarray(eris.fock.diagonal().real, order='C')
         def restore_t2_inplace(t2T):
             tmp = lib.transpose(t2T.reshape(nvir**2,nocc,nocc), axes=(0,2,1))
             t2 = lib.transpose(tmp.reshape(nvir**2,nocc**2), out=t2T)

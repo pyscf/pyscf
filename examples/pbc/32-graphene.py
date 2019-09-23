@@ -14,18 +14,20 @@ non-periodic direction.
 
 '''
 
+import numpy
 import time
+from pyscf import scf
 from pyscf.pbc import df as pdf
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbchf
+from pyscf.pbc import tools
 
 nk = 1
 kpts = [nk,nk,1]
 Lz = 25 # Smallest Lz value for ~1e-6 convergence in absolute energy
 a = 1.42 # bond length in graphene
 fft_ke_cut = 300
-# Much smaller mesh needed for AFTDF with the setting cell.low_dim_ft_type='inf_vacuum'
-aft_mesh = [30,30,40]
+aft_mesh = [30,30,40] # Much smaller mesh needed for AFTDF
 e = []
 t = []
 pseudo = 'gth-pade'
@@ -41,7 +43,6 @@ cell.build(unit = 'B',
            atom = 'C 0 0 0; C 0 2.67303283 0',
            mesh = aft_mesh,
            dimension=2,
-           low_dim_ft_type = 'inf_vacuum',
            pseudo = pseudo,
            verbose = 7,
            precision = 1e-6,
@@ -72,40 +73,14 @@ cell.build(unit = 'B',
            basis='gth-szv')
 t0 = time.time()
 mf = pbchf.KRHF(cell, exxdiv='ewald')
+#mf = pbchf.KRHF(cell, exxdiv=None)
 mf.with_df = pdf.FFTDF(cell)
 mf.kpts = cell.make_kpts(kpts)
 mf.conv_tol = 1e-6
 e.append(mf.kernel())
 t.append(time.time() - t0)
 
-##################################################
-#
-# 2D PBC with GDF
-#
-##################################################
-t0 = time.time()
-mf = pbchf.KRHF(cell)
-mf.with_df = pdf.GDF(cell)
-mf.kpts = cell.make_kpts(kpts)
-mf.conv_tol = 1e-6
-e.append(mf.kernel())
-t.append(time.time() - t0)
-
-##################################################
-#
-# 2D PBC with MDF
-#
-##################################################
-t0 = time.time()
-mf = pbchf.KRHF(cell)
-mf.with_df = pdf.MDF(cell)
-mf.kpts = cell.make_kpts(kpts)
-mf.conv_tol = 1e-6
-e.append(mf.kernel())
-t.append(time.time() - t0)
-
-print('Energy (AFTDF) (FFTDF) (GDF)   (MDF)')
+print('Energy (AFTDF) (FFTDF)')
 print(e)
-print('Timing (AFTDF) (FFTDF) (GDF)   (MDF)')
+print('Timing (AFTDF) (FFTDF)')
 print(t)
-

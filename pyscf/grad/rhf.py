@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,18 +52,21 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        p0, p1 = aoslices [ia,2:]
+        shl0, shl1, p0, p1 = aoslices[ia]
         h1ao = hcore_deriv(ia)
         de[k] += numpy.einsum('xij,ij->x', h1ao, dm0)
 # nabla was applied on bra in vhf, *2 for the contributions of nabla|ket>
         de[k] += numpy.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
-
-        de[k] += mf_grad.extra_force(ia, locals())
-
+        if mf_grad.grid_response: # Only effective in DFT gradients
+            de[k] += vhf.exc1_grid[ia]
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
+        if mf_grad.grid_response:
+            log.debug('grids response contributions')
+            _write(log, mol, vhf.exc1_grid[atmlst], atmlst)
+            log.debug1('sum(de) %s', vhf.exc1_grid.sum(axis=0))
     return de
 
 def _write(dev, mol, de, atmlst):
@@ -93,11 +96,8 @@ def grad_nuc(mol, atmlst=None):
 
 def get_hcore(mol):
     '''Part of the nuclear gradients of core Hamiltonian'''
-    h = mol.intor('int1e_ipkin', comp=3)
-    if mol._pseudo:
-        NotImplementedError('Nuclear gradients for GTH PP')
-    else:
-        h+= mol.intor('int1e_ipnuc', comp=3)
+    h =(mol.intor('int1e_ipkin', comp=3)
+      + mol.intor('int1e_ipnuc', comp=3))
     if mol.has_ecp():
         h += mol.intor('ECPscalar_ipnuc', comp=3)
     return -h
@@ -205,13 +205,16 @@ class Gradients(lib.StreamObject):
         self.mol = scf_method.mol
         self.base = scf_method
         self.max_memory = self.mol.max_memory
+# This parameter has no effects for HF gradients. Add this attribute so that
+# the kernel function can be reused in the DFT gradients code.
+        self.grid_response = False
 
         self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self.base.converged:
             log.warn('Ground state SCF not converged')
@@ -266,15 +269,6 @@ class Gradients(lib.StreamObject):
         if mo_occ is None: mo_occ = self.base.mo_occ
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
-    def extra_force(self, atom_id, envs):
-        '''Hook for extra contributions in analytical gradients.
-
-        Contributions like the response of auxiliary basis in density fitting
-        method, the grid response in DFT numerical integration can be put in
-        this function.
-        '''
-        return 0
-
     grad_elec = grad_elec
 
     def grad_nuc(self, mol=None, atmlst=None):
@@ -315,10 +309,6 @@ class Gradients(lib.StreamObject):
 
 Grad = Gradients
 
-from pyscf import scf
-# Inject to RHF class
-scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
-
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -342,19 +332,19 @@ if __name__ == '__main__':
     h2o.basis = {'H': '631g',
                  'O': '631g',}
     h2o.build()
-    mf = scf.RHF(h2o)
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = Gradients(mf)
+    rhf = scf.RHF(h2o)
+    rhf.conv_tol = 1e-14
+    e0 = rhf.scf()
+    g = Gradients(rhf)
     print(g.grad())
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]
 # [ 0  -4.39690522e-03   1.20567128e-02]]
 
-    mf = scf.RHF(h2o).x2c()
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = mf.Gradients()
+    rhf = scf.RHF(h2o).x2c()
+    rhf.conv_tol = 1e-14
+    e0 = rhf.scf()
+    g = Gradients(rhf)
     print(g.grad())
 #[[ 0   0               -2.40286232e-02]
 # [ 0   4.27908498e-03   1.20143116e-02]

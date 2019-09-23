@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
         pyscf/examples/loc_orb/40-hubbard_model_PM_localization.py for the PM
         localization of site-based population for hubbard model.
     '''
-    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
         s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
     else:
         s = mol.intor_symmetric('int1e_ovlp')
@@ -82,8 +82,8 @@ class PipekMezey(boys.Boys):
         boys.Boys.__init__(self, mol, mo_coeff)
         self._keys = self._keys.union(['pop_method', 'exponent'])
 
-    def dump_flags(self, verbose=None):
-        boys.Boys.dump_flags(self, verbose)
+    def dump_flags(self):
+        boys.Boys.dump_flags(self)
         logger.info(self, 'pop_method = %s',self.pop_method)
 
     def gen_g_hop(self, u):

@@ -217,7 +217,6 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
                 }
 #pragma omp critical
                 axpy2d(ci1+ib, ci1buf, na, nb, blen);
-#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);

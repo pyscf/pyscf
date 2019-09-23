@@ -90,7 +90,7 @@ def kernel(mf, dm, aolabels_or_baslst, threshold=THRESHOLD,
     if s is None:
         s = mf.get_ovlp()
 
-    if (not isinstance(mf, scf.hf.SCF)) and getattr(mf, '_scf', None):
+    if (not isinstance(mf, scf.hf.SCF)) and hasattr(mf, '_scf'):
         mf = mf._scf
 
     baslst = gto.mole._aolabels2baslst(mol, aolabels_or_baslst, base)

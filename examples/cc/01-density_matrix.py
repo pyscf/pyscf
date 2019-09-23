@@ -33,12 +33,3 @@ E = numpy.einsum('pq,qp', h1, dm1)
 E+= numpy.einsum('pqrs,pqrs', eri, dm2) * .5
 E+= mol.energy_nuc()
 print('E(CCSD) = %s, reference %s' % (E, mycc.e_tot))
-
-
-# When plotting CCSD density on the grids, CCSD density matrices need to be
-# first transformed to AO basis.
-dm1_ao = numpy.einsum('pi,ij,qj->pq', mf.mo_coeff, dm1, mf.mo_coeff.conj())
-
-from pyscf.tools import cubegen
-cubegen.density(mol, 'rho_ccsd.cube', dm1_ao)
-

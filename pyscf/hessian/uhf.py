@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 Non-relativistic UHF analytical Hessian
 '''
 
-from functools import reduce
 import time
 import numpy
 from pyscf import lib
@@ -29,10 +28,6 @@ from pyscf.scf import ucphf
 from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.hessian import rhf as rhf_hess
 _get_jk = rhf_hess._get_jk
-
-
-# import pyscf.grad.uhf to activate nuc_grad_method method
-from pyscf.grad import uhf
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -449,8 +444,6 @@ class Hessian(rhf_hess.Hessian):
         return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                          fx, atmlst, max_memory, verbose)
 
-from pyscf import scf
-scf.uhf.UHF.Hessian = lib.class_as_method(Hessian)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -471,7 +464,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     mf.scf()
     n3 = mol.natm * 3
-    hobj = mf.Hessian()
+    hobj = Hessian(mf)
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.50693144355876429)
 

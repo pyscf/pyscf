@@ -35,7 +35,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
 
-    nocca, noccb = mycc.nocc
+    nocca = eris.nocca
+    noccb = eris.noccb
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[0]
     nvira = nmoa - nocca
@@ -66,8 +67,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     bufsize = max(8, int((max_memory*.5e6/8-nocca**3*3*lib.num_threads())*.4/(nocca*nmoa)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(nocca, dtype=int)
-    contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, eris.focka,
-                                 eris.mo_energy[0], orbsym, log)
+    contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, eris.focka, orbsym, log)
     with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
         for a0, a1 in reversed(list(lib.prange_tril(0, nvira, bufsize))):
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
@@ -92,8 +92,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     bufsize = max(8, int((max_memory*.5e6/8-noccb**3*3*lib.num_threads())*.4/(noccb*nmob)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(noccb, dtype=int)
-    contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, eris.fockb,
-                                 eris.mo_energy[1], orbsym, log)
+    contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, eris.fockb, orbsym, log)
     with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
         for a0, a1 in reversed(list(lib.prange_tril(0, nvirb, bufsize))):
             cache_row_a = numpy.asarray(eris_VVOP[a0:a1,:a1], order='C')
@@ -123,7 +122,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     ts = t1aT, t1bT, t2aaT, t2abT
     fock = (eris.focka, eris.fockb)
     vooo = (eris_vooo, eris_vOoO, eris_VoOo)
-    contract = _gen_contract_baa(ts, vooo, fock, eris.mo_energy, orbsym, log)
+    contract = _gen_contract_baa(ts, vooo, fock, orbsym, log)
     with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
         for a0, a1 in lib.prange(0, nvirb, int(bufsize/nvira+1)):
             cache_row_a = numpy.asarray(eris_VvOp[a0:a1,:], order='C')
@@ -141,9 +140,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     # abb
     ts = t1bT, t1aT, t2bbT, t2baT
     fock = (eris.fockb, eris.focka)
-    mo_energy = (eris.mo_energy[1], eris.mo_energy[0])
     vooo = (eris_VOOO, eris_VoOo, eris_vOoO)
-    contract = _gen_contract_baa(ts, vooo, fock, mo_energy, orbsym, log)
+    contract = _gen_contract_baa(ts, vooo, fock, orbsym, log)
     for a0, a1 in lib.prange(0, nvira, int(bufsize/nvirb+1)):
         with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
             cache_row_a = numpy.asarray(eris_vVoP[a0:a1,:], order='C')
@@ -167,9 +165,9 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     log.note('UCCSD(T) correction = %.15g', et)
     return et
 
-def _gen_contract_aaa(t1T, t2T, vooo, fock, mo_energy, orbsym, log):
+def _gen_contract_aaa(t1T, t2T, vooo, fock, orbsym, log):
     nvir, nocc = t1T.shape
-    mo_energy = numpy.asarray(mo_energy, order='C')
+    mo_energy = fock.diagonal().real.copy()
     fvo = fock[nocc:,:nocc].copy()
 
     cpu2 = [time.clock(), time.time()]
@@ -213,14 +211,14 @@ def _gen_contract_aaa(t1T, t2T, vooo, fock, mo_energy, orbsym, log):
         cpu2[:] = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu2)
     return contract
 
-def _gen_contract_baa(ts, vooo, fock, mo_energy, orbsym, log):
+def _gen_contract_baa(ts, vooo, fock, orbsym, log):
     t1aT, t1bT, t2aaT, t2abT = ts
     focka, fockb = fock
     vooo, vOoO, VoOo = vooo
     nvira, nocca = t1aT.shape
     nvirb, noccb = t1bT.shape
-    mo_ea = numpy.asarray(mo_energy[0], order='C')
-    mo_eb = numpy.asarray(mo_energy[1], order='C')
+    mo_ea = focka.diagonal().real.copy()
+    mo_eb = fockb.diagonal().real.copy()
     fvo = focka[nocca:,:nocca].copy()
     fVO = fockb[noccb:,:noccb].copy()
 
@@ -257,7 +255,8 @@ def _gen_contract_baa(ts, vooo, fock, mo_energy, orbsym, log):
 
 def _sort_eri(mycc, eris, h5tmp, log):
     cpu1 = (time.clock(), time.time())
-    nocca, noccb = mycc.nocc
+    nocca = eris.nocca
+    noccb = eris.noccb
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[0]
     nvira = nmoa - nocca

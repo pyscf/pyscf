@@ -62,7 +62,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(np.array(bands_ref) - np.array(bands)).max(), 0, 9)
         self.assertAlmostEqual(finger(bands), -0.61562245312227049, 8)
 
-# TODO: test get_bands for hf/uhf with/without DF
 
 if __name__ == '__main__':
     print("Full Tests for kpt-bands")

@@ -621,7 +621,8 @@ void CVHFnrs8_incore_drv(double *eri, double *dmj, double *vj,
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(eri, dmj, dmk, vj, vk, n)
         {
                 int i, j;
                 size_t ij, off;
@@ -655,7 +656,8 @@ void CVHFnrs4_incore_drv(double *eri, double *dmj, double *vj,
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(eri, dmj, dmk, vj, vk, n)
         {
                 int i, j;
                 size_t ij, off;
@@ -689,7 +691,8 @@ void CVHFnrs2ij_incore_drv(double *eri, double *dmj, double *vj,
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(eri, dmj, dmk, vj, vk, n)
         {
                 int i, j;
                 size_t ij, off;
@@ -723,7 +726,8 @@ void CVHFnrs2kl_incore_drv(double *eri, double *dmj, double *vj,
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(eri, dmj, dmk, vj, vk, n)
         {
                 int i, j;
                 size_t ij, off;
@@ -756,7 +760,8 @@ void CVHFnrs1_incore_drv(double *eri, double *dmj, double *vj,
         memset(vj, 0, sizeof(double)*n*n);
         memset(vk, 0, sizeof(double)*n*n);
 
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(eri, dmj, dmk, vj, vk, n)
         {
                 int i, j;
                 size_t ij, off;

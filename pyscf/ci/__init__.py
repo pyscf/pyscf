@@ -39,7 +39,7 @@ def RCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
         mf = scf.addons.convert_to_rhf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-RCISD')
     else:
         return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
@@ -51,7 +51,7 @@ def UCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-UCISD')
     else:
         return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
@@ -64,7 +64,7 @@ def GCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
         mf = scf.addons.convert_to_ghf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-GCISD')
     else:
         return gcisd.GCISD(mf, frozen, mo_coeff, mo_occ)

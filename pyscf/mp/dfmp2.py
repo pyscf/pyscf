@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 class DFMP2(mp2.MP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        if getattr(mf, 'with_df', None):
+        if hasattr(mf, 'with_df') and mf.with_df:
             self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)
@@ -91,20 +91,13 @@ class DFMP2(mp2.MP2):
             Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
             yield Lov
 
-#    def make_rdm1(self, t2=None, ao_repr=False):
+#    def make_rdm1(self, t2=None):
 #        if t2 is None: t2 = self.t2
 #        return make_rdm1(self, t2, self.verbose)
 #
 #    def make_rdm2(self, t2=None):
 #        if t2 is None: t2 = self.t2
 #        return make_rdm2(self, t2, self.verbose)
-
-MP2 = DFMP2
-
-from pyscf import scf
-scf.hf.RHF.DFMP2 = lib.class_as_method(DFMP2)
-scf.rohf.ROHF.DFMP2 = None
-scf.uhf.UHF.DFMP2 = None
 
 del(WITH_T2)
 

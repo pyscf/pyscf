@@ -451,11 +451,10 @@ static int xc_output_length(int nvar, int deriv)
         return len;
 }
 
-// return value 0 means no functional needs to be evaluated.
 int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
 {
         int i;
-        int nvar = 0;
+        int nvar = 1;
         xc_func_type func;
         for (i = 0; i < nfn; i++) {
                 if (xc_func_init(&func, fn_id[i], spin) != 0) {
@@ -463,31 +462,30 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                                 fn_id[i]);
                         exit(1);
                 }
-                if (spin == XC_POLARIZED) {
-                        switch (func.info->family) {
-                        case XC_FAMILY_LDA:
-                                nvar = MAX(nvar, 2);
-                                break;
-                        case XC_FAMILY_GGA:
-                        case XC_FAMILY_HYB_GGA:
-                                nvar = MAX(nvar, 5);
-                                break;
-                        case XC_FAMILY_MGGA:
-                        case XC_FAMILY_HYB_MGGA:
-                                nvar = MAX(nvar, 9);
-                        }
-                } else {
-                        switch (func.info->family) {
-                        case XC_FAMILY_LDA:
-                                nvar = MAX(nvar, 1);
-                                break;
-                        case XC_FAMILY_GGA:
-                        case XC_FAMILY_HYB_GGA:
-                                nvar = MAX(nvar, 2);
-                                break;
-                        case XC_FAMILY_MGGA:
-                        case XC_FAMILY_HYB_MGGA:
-                                nvar = MAX(nvar, 4);
+                if (fac[i] > 1e-14 || fac[i] < -1e-14) {
+                        if (spin == XC_POLARIZED) {
+                                switch (func.info->family) {
+                                case XC_FAMILY_LDA:
+                                        nvar = MAX(nvar, 2);
+                                        break;
+                                case XC_FAMILY_GGA:
+                                case XC_FAMILY_HYB_GGA:
+                                        nvar = MAX(nvar, 5);
+                                        break;
+                                case XC_FAMILY_MGGA:
+                                case XC_FAMILY_HYB_MGGA:
+                                        nvar = MAX(nvar, 9);
+                                }
+                        } else {
+                                switch (func.info->family) {
+                                case XC_FAMILY_GGA:
+                                case XC_FAMILY_HYB_GGA:
+                                        nvar = MAX(nvar, 2);
+                                        break;
+                                case XC_FAMILY_MGGA:
+                                case XC_FAMILY_HYB_MGGA:
+                                        nvar = MAX(nvar, 4);
+                                }
                         }
                 }
                 xc_func_end(&func);
@@ -545,7 +543,7 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
         case XC_FAMILY_HYB_MGGA:
                 vsegtot = 4;
                 fsegtot = 10;
-                ksegtot = 0;  // not supported
+                ksegtot = 0;
                 break;
         default: //case XC_FAMILY_LDA:
                 vsegtot = 1;
@@ -591,13 +589,8 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac,
 {
         assert(deriv <= 3);
         int nvar = LIBXC_input_length(nfn, fn_id, fac, spin);
-        if (nvar == 0) { // No functional needs to be evaluated.
-                return;
-        }
-
         int outlen = xc_output_length(nvar, deriv);
-        // output buffer is zeroed in the Python caller
-        //memset(output, 0, sizeof(double) * np*outlen);
+        memset(output, 0, sizeof(double) * np*outlen);
 
         double *ebuf = malloc(sizeof(double) * np);
         double *vbuf = NULL;

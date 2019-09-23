@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,9 +48,7 @@ from pyscf.lib import logger
 from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import spin_op
-from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
-from pyscf.fci.addons import _unpack_nelec
 from pyscf import __config__
 
 libfci = lib.load_library('libfci')
@@ -159,7 +157,8 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''
     if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
-    h2e = ao2mo.restore(1, eri.copy(), norb)
+    eri = eri.copy()
+    h2e = ao2mo.restore(1, eri, norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
@@ -198,25 +197,9 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
                             strb.ctypes.data_as(ctypes.c_void_p),
                             ctypes.c_int(norb), ctypes.c_int(np))
 
-    HERMITIAN_THRESHOLD = 1e-10
-    if (abs(h1e - h1e.T).max() < HERMITIAN_THRESHOLD and
-        abs(eri - eri.transpose(1,0,3,2)).max() < HERMITIAN_THRESHOLD):
-        # symmetric Hamiltonian
-        h0 = lib.hermi_triu(h0)
-    else:
-        # Fill the upper triangular part
-        h0 = numpy.asarray(h0, order='F')
-        h1e = numpy.asarray(h1e.T, order='C')
-        eri = numpy.asarray(eri.transpose(1,0,3,2), order='C')
-        libfci.FCIpspace_h0tril(h0.ctypes.data_as(ctypes.c_void_p),
-                                h1e.ctypes.data_as(ctypes.c_void_p),
-                                eri.ctypes.data_as(ctypes.c_void_p),
-                                stra.ctypes.data_as(ctypes.c_void_p),
-                                strb.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_int(norb), ctypes.c_int(np))
-
-    idx = numpy.arange(np)
-    h0[idx,idx] = hdiag[addr]
+    for i in range(np):
+        h0[i,i] = hdiag[addr[i]]
+    h0 = lib.hermi_triu(h0)
     return addr, h0
 
 # be careful with single determinant initial guess. It may diverge the
@@ -243,9 +226,9 @@ def _kfactory(Solver, h1e, eri, norb, nelec, ci0=None, level_shift=1e-3,
 
     unknown = {}
     for k in kwargs:
+        setattr(cis, k, kwargs[k])
         if not hasattr(cis, k):
             unknown[k] = kwargs[k]
-        setattr(cis, k, kwargs[k])
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))
@@ -447,7 +430,6 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if pspace_size is None: pspace_size = fci.pspace_size
 
     nelec = _unpack_nelec(nelec, fci.spin)
-    assert(0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
@@ -486,7 +468,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         return hc.ravel()
 
     if ci0 is None:
-        if callable(getattr(fci, 'get_init_guess', None)):
+        if hasattr(fci, 'get_init_guess'):
             ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
             def ci0():  # lazy initialization to reduce memory footprint
@@ -496,7 +478,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                     x[addr[i]] = 1
                     x0.append(x)
                 return x0
-    elif not callable(ci0):
+    else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
             ci0 = [ci0.ravel()]
         else:
@@ -544,7 +526,11 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return precond
 
 def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
-    return lib.make_diag_precond(hdiag, level_shift)
+    def precond(x, e, *args):
+        hdiagd = hdiag-(e-level_shift)
+        hdiagd[abs(hdiagd)<1e-8] = 1e-8
+        return x/hdiagd
+    return precond
 
 
 class FCISolver(lib.StreamObject):
@@ -665,8 +651,9 @@ class FCISolver(lib.StreamObject):
         self.nroots = x
 
     def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
-        log.info('******** %s ********', self.__class__)
+        if verbose is None: verbose = self.verbose
+        log = logger.Logger(self.stdout, verbose)
+        log.info('******** %s flags ********', self.__class__)
         log.info('max. cycles = %d', self.max_cycle)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('davidson only = %s', self.davidson_only)
@@ -681,27 +668,22 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(absorb_h1e.__doc__)
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
-        nelec = _unpack_nelec(nelec, self.spin)
         return absorb_h1e(h1e, eri, norb, nelec, fac)
 
     @lib.with_doc(make_hdiag.__doc__)
     def make_hdiag(self, h1e, eri, norb, nelec):
-        nelec = _unpack_nelec(nelec, self.spin)
         return make_hdiag(h1e, eri, norb, nelec)
 
     @lib.with_doc(pspace.__doc__)
     def pspace(self, h1e, eri, norb, nelec, hdiag=None, np=400):
-        nelec = _unpack_nelec(nelec, self.spin)
         return pspace(h1e, eri, norb, nelec, hdiag, np)
 
     @lib.with_doc(contract_1e.__doc__)
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
-        nelec = _unpack_nelec(nelec, self.spin)
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     @lib.with_doc(contract_2e.__doc__)
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
-        nelec = _unpack_nelec(nelec, self.spin)
         return contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
 
     def eig(self, op, x0=None, precond=None, **kwargs):
@@ -746,7 +728,6 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
-        nelec = _unpack_nelec(nelec, self.spin)
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.reshape(-1), ci1.reshape(-1))
@@ -810,16 +791,12 @@ class FCISolver(lib.StreamObject):
     def large_ci(self, fcivec, norb, nelec,
                  tol=getattr(__config__, 'fci_addons_large_ci_tol', .1),
                  return_strs=getattr(__config__, 'fci_addons_large_ci_return_strs', True)):
+        from pyscf.fci import addons
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
-    def transform_ci_for_orbital_rotation(self, fcivec, norb, nelec, u):
-        nelec = _unpack_nelec(nelec, self.spin)
-        return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
-
     def contract_ss(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op
-        nelec = _unpack_nelec(nelec, self.spin)
         return spin_op.contract_ss(fcivec, norb, nelec)
 
     def gen_linkstr(self, norb, nelec, tril=True, spin=None):
@@ -836,6 +813,17 @@ class FCISolver(lib.StreamObject):
 
 FCI = FCISolver
 
+
+def _unpack_nelec(nelec, spin=None):
+    if spin is None:
+        spin = 0
+    else:
+        nelec = int(numpy.sum(nelec))
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = (nelec-spin)//2
+        neleca = nelec - nelecb
+        nelec = neleca, nelecb
+    return nelec
 
 def _unpack(norb, nelec, link_index, spin=None):
     if link_index is None:

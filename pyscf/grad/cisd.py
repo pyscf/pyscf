@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -117,8 +117,8 @@ class Gradients(lib.StreamObject):
         self.de = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self.base.converged:
             log.warn('Ground state HF not converged')
@@ -134,8 +134,7 @@ class Gradients(lib.StreamObject):
         myci = self.base
         if civec is None: civec = myci.ci
         if civec is None: civec = myci.kernel(eris=eris)
-        if (isinstance(civec, (list, tuple)) or
-            (isinstance(civec, numpy.ndarray) and civec.ndim > 1)):
+        if isinstance(civec, (list, tuple)):
             if state is None:
                 state = self.state
             else:
@@ -168,10 +167,6 @@ class Gradients(lib.StreamObject):
 
     as_scanner = as_scanner
 
-Grad = Gradients
-
-cisd.CISD.Gradients = lib.class_as_method(Gradients)
-
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -191,7 +186,7 @@ if __name__ == '__main__':
 
     myci = cisd.CISD(mf)
     myci.kernel()
-    g1 = myci.Gradients().kernel()
+    g1 = Gradients(myci).kernel()
 # O     0.0000000000    -0.0000000000     0.0065498854
 # H    -0.0000000000     0.0208760610    -0.0032749427
 # H    -0.0000000000    -0.0208760610    -0.0032749427

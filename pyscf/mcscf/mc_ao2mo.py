@@ -16,6 +16,7 @@
 import sys
 import ctypes
 import time
+import tempfile
 from functools import reduce
 import numpy
 import h5py
@@ -78,17 +79,18 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                      max_memory=None, level=1, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
-    log = logger.new_logger(mol, verbose)
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(mol.stdout, verbose)
     log.debug1('trans_e1_outcore level %d  max_memory %d', level, max_memory)
     nao, nmo = mo.shape
     nao_pair = nao*(nao+1)//2
     nocc = ncore + ncas
 
-    faapp_buf = lib.H5TmpFile()
-    if isinstance(erifile, h5py.Group):
-        feri = erifile
-    else:
-        feri = lib.H5TmpFile(erifile, 'w')
+    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    faapp_buf = h5py.File(_tmpfile1.name)
+    feri = h5py.File(erifile, 'w')
 
     mo_c = numpy.asarray(mo, order='C')
     mo = numpy.asarray(mo, order='F')
@@ -253,6 +255,9 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     tmp = tmp1 = None
     time1 = log.timer('ppaa pass 2', *time1)
 
+    faapp_buf.close()
+    feri.close()
+    _tmpfile1 = None
     time0 = log.timer('mc_ao2mo', *time0)
     return j_pc, k_pc
 
@@ -279,20 +284,22 @@ class _ERIS(object):
             if eri is None:
                 eri = mol.intor('int2e', aosym='s8')
             self.j_pc, self.k_pc, self.ppaa, self.papa = \
-                    trans_e1_incore(eri, mo, ncore, ncas)
+                    trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
         else:
             import gc
             gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
-            self.feri = lib.H5TmpFile()
+            self._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             max_memory = max(3000, casscf.max_memory*.9-mem_now)
             if max_memory < mem_basic:
                 log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                          (mem_basic+mem_now)/.9, casscf.max_memory)
             self.j_pc, self.k_pc = \
-                    trans_e1_outcore(mol, mo, ncore, ncas, self.feri,
+                    trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
+                                     self._tmpfile.name,
                                      max_memory=max_memory,
                                      level=level, verbose=log)
+            self.feri = lib.H5TmpFile(self._tmpfile.name, 'r')
             self.ppaa = self.feri['ppaa']
             self.papa = self.feri['papa']
 

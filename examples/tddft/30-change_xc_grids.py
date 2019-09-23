@@ -22,9 +22,7 @@ mf = dft.RKS(mol).run(xc='pbe0')
 # calculation.  Changing to xcfun library for TDDFT can solve this problem
 #
 mf._numint.libxc = dft.xcfun
-# PySCF-1.6.1 and newer supports the .TDDFT method to create a TDDFT
-# object after importing tdscf module.
-td = mf.TDDFT()
+td = tddft.TDDFT(mf)
 print(td.kernel()[0] * 27.2114)
 
 #
@@ -33,7 +31,7 @@ print(td.kernel()[0] * 27.2114)
 #
 mf.xc = 'lda,vwn'
 mf.grids.set(level=2).kernel(with_non0tab=True)
-td = mf.TDDFT()
+td = tddft.TDDFT(mf)
 print(td.kernel()[0] * 27.2114)
 
 #
@@ -48,5 +46,5 @@ mf1.grids = dft.Grids(mol)
 mf1.grids.level = 2
 mf1._numint = numint.NumInt()
 mf1._numint.libxc = dft.xcfun
-td = mf1.TDDFT()
+td = tddft.TDDFT(mf1)
 print(td.kernel()[0] * 27.2114)

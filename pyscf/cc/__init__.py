@@ -100,7 +100,7 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
         mf = scf.addons.convert_to_rhf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
@@ -118,7 +118,7 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-UCCSD')
     else:
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
@@ -132,7 +132,7 @@ def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
         mf = scf.addons.convert_to_ghf(mf)
 
-    if getattr(mf, 'with_df', None):
+    if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-GCCSD')
     else:
         return gccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)

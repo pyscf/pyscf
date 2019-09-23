@@ -163,6 +163,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(ao1), (-2.4066959390326477-0.98044994099240701j), 8)
 
     def test_nr_rks(self):
+        pbcgto.eval_gto.EXTRA_PREC, bak = 1e-5, pbcgto.eval_gto.EXTRA_PREC
         cell = pbcgto.Cell()
         cell.verbose = 5
         cell.output = '/dev/null'
@@ -181,26 +182,24 @@ class KnowValues(unittest.TestCase):
         dms = np.random.random((2,nao,nao))
         dms = (dms + dms.transpose(0,2,1)) * .5
         ni = numint.NumInt()
-        with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 0, kpts[0])
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 0, kpts[0])
         self.assertAlmostEqual(ne, 5.0499199224525153, 8)
         self.assertAlmostEqual(exc, -3.8870579114663886, 8)
         self.assertAlmostEqual(finger(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
         ni = numint.KNumInt()
-        with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, 0, kpts)
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, 0, kpts)
         self.assertAlmostEqual(ne, 6.0923292346269742, 8)
         self.assertAlmostEqual(exc, -3.9899423803106466, 8)
         self.assertAlmostEqual(finger(vmat[0]), -2348.9577179701278-60.733087913116719j, 7)
         self.assertAlmostEqual(finger(vmat[1]), -2353.0350086740673-117.74811536967495j, 7)
 
-        with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], 0, kpts)
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], 0, kpts)
         self.assertAlmostEqual(ne[1], 6.0923292346269742, 8)
         self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
         self.assertAlmostEqual(finger(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 7)
         self.assertAlmostEqual(finger(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 7)
+        pbcgto.eval_gto.EXTRA_PREC = bak
 
     def test_eval_rho(self):
         cell, grids = make_grids([61]*3)
@@ -273,7 +272,6 @@ class KnowValues(unittest.TestCase):
         cell.atom = 'He     1.    0.       1.'
         cell.basis = {'He': '321g'}
         cell.dimension = 2
-        cell.low_dim_ft_type = 'inf_vacuum'
         cell.verbose = 0
         cell.mesh = [10,10,30]
         cell.build()
@@ -294,7 +292,6 @@ class KnowValues(unittest.TestCase):
         cell.atom = 'He     1.    0.       1.'
         cell.basis = {'He': '321g'}
         cell.dimension = 1
-        cell.low_dim_ft_type = 'inf_vacuum'
         cell.verbose = 0
         cell.mesh = [10,30,30]
         cell.build()

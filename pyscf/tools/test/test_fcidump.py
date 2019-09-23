@@ -34,13 +34,10 @@ mol.spin = 0 #2*S; multiplicity-1
 mol.verbose = 0
 mol.build(0, 0)
 
-mf = scf.RHF(mol).run()
+mf = scf.RHF(mol)
+mf.scf()
 
-def tearDownModule():
-    global mol, mf
-    del mol, mf
-
-class KnownValues(unittest.TestCase):
+class KnowValues(unittest.TestCase):
     def test_from_chkfile(self):
         tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15)

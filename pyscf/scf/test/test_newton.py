@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -281,10 +281,10 @@ class KnownValues(unittest.TestCase):
         mf = dft.UKS(h4_z1_s)
         mf.xc = 'b3lyp'
         mf1 = scf.fast_newton(mf)
-        self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 8)
+        self.assertAlmostEqual(mf1.e_tot, -39.696083841107587, 9)
 
         mf1 = scf.fast_newton(dft.UKS(h4_z1_s))
-        self.assertAlmostEqual(mf1.e_tot, -39.330377813428001, 8)
+        self.assertAlmostEqual(mf1.e_tot, -39.330377813428001, 9)
 
     def test_nr_rks_fast_newton(self):
         mf = dft.RKS(h4_z0_s)
@@ -312,17 +312,6 @@ class KnownValues(unittest.TestCase):
         nr = scf.newton(mf)
         g, hop, hdiag = nr.gen_g_hop(mo, mo_occ, (mf.get_hcore(),)*2)
         self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 33565.97987644776, 7)
-
-    def test_with_df(self):
-        mf = scf.RHF(h2o_z0).density_fit().newton().run()
-        self.assertTrue(mf._eri is None)
-        self.assertTrue(mf._scf._eri is None)
-        self.assertAlmostEqual(mf.e_tot, -75.983944727996, 9)
-
-        mf = scf.RHF(h2o_z0).newton().density_fit().run()
-        self.assertTrue(mf._eri is None)
-        self.assertTrue(mf._scf._eri is not None)
-        self.assertAlmostEqual(mf.e_tot, -75.9839484980661, 9)
 
 
 if __name__ == "__main__":

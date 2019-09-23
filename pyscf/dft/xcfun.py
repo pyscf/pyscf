@@ -364,7 +364,7 @@ def parse_xc(description):
         else:
             raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
-    def parse_token(token, suffix, search_xc_alias=False):
+    def parse_token(token, suffix):
         if token:
             if token[0] == '-':
                 sign = -1
@@ -401,14 +401,12 @@ def parse_xc(description):
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
-                if search_xc_alias and key in XC_ALIAS:
-                    x_id = XC_ALIAS[key]
-                elif key in XC_CODES:
+                if key in XC_CODES:
                     x_id = XC_CODES[key]
                 elif key+suffix in XC_CODES:
                     x_id = XC_CODES[key+suffix]
                 else:
-                    raise KeyError('Unknown %s functional  %s' % (suffix, key))
+                    raise KeyError('Unknown XC key %s' % key)
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
 # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
@@ -416,7 +414,7 @@ def parse_xc(description):
                         assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
-                    raise NotImplementedError('Unknown %s functional  %s' % (suffix, key))
+                    raise NotImplementedError(key)
                 else:
                     fn_facs.append((x_id, fac))
     def remove_dup(fn_facs):
@@ -449,7 +447,7 @@ def parse_xc(description):
             parse_token(token, 'C')
     else:
         for token in description.replace('-', '+-').split('+'):
-            parse_token(token, 'XC', search_xc_alias=True)
+            parse_token(token, 'XC')
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
     return hyb, remove_dup(fn_facs)
@@ -784,8 +782,6 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         rho_u = numpy.asarray(rho[0], order='C')
         rho_d = numpy.asarray(rho[1], order='C')
-    assert(rho_u.dtype == numpy.double)
-    assert(rho_d.dtype == numpy.double)
 
     if rho_u.ndim == 2:
         ngrids = rho_u.shape[1]
@@ -794,10 +790,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
-
-    n = len(fn_ids)
-    if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
-        all((is_lda(x) for x in fn_ids))):  # LDA
+    if all((is_lda(x) for x in fn_ids)):  # LDA
         if spin == 0:
             nvar = 1
         else:
@@ -814,16 +807,16 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-    outbuf = numpy.zeros((ngrids,outlen))
+    outbuf = numpy.empty((ngrids,outlen))
 
-    if n > 0:
-        _itrf.XCFUN_eval_xc(ctypes.c_int(n),
-                            (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
-                            ctypes.c_int(spin),
-                            ctypes.c_int(deriv), ctypes.c_int(ngrids),
-                            rho_u.ctypes.data_as(ctypes.c_void_p),
-                            rho_d.ctypes.data_as(ctypes.c_void_p),
-                            outbuf.ctypes.data_as(ctypes.c_void_p))
+    n = len(fn_ids)
+    _itrf.XCFUN_eval_xc(ctypes.c_int(n),
+                        (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
+                        ctypes.c_int(spin),
+                        ctypes.c_int(deriv), ctypes.c_int(ngrids),
+                        rho_u.ctypes.data_as(ctypes.c_void_p),
+                        rho_d.ctypes.data_as(ctypes.c_void_p),
+                        outbuf.ctypes.data_as(ctypes.c_void_p))
 
     outbuf = outbuf.T
     exc = outbuf[0]

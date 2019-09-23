@@ -169,7 +169,6 @@ class KnownValues(unittest.TestCase):
 
         eris.focka = numpy.diag(mf.mo_energy[0])
         eris.fockb = numpy.diag(mf.mo_energy[1])
-        eris.mo_energy = mf.mo_energy
 
         t1[0] = t1[0] + numpy.sin(t1[0]) * .05j
         t1[1] = t1[1] + numpy.sin(t1[1]) * .05j
@@ -209,7 +208,6 @@ class KnownValues(unittest.TestCase):
         mo_e[orbspin==0] = mf.mo_energy[0]
         mo_e[orbspin==1] = mf.mo_energy[1]
         erig.fock = numpy.diag(mo_e)
-        erig.mo_energy = mo_e.real
 
         myccg = gccsd.GCCSD(scf.addons.convert_to_ghf(mf))
         t1 = myccg.spatial2spin(t1, orbspin)

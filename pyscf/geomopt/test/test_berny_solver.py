@@ -24,14 +24,13 @@ class KnownValues(unittest.TestCase):
             O  0.   0.       0.
             H  0.   -0.757   0.587
             H  0.   0.757    0.587
-                    ''', symmetry=True, verbose=0)
+                    ''', verbose=0)
         gs = scf.RHF(mol).nuc_grad_method().as_scanner()
         f = lambda mol: gs(mol)
         m = berny_solver.as_pyscf_method(mol, f)
         mol1 = berny_solver.optimize(m)
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()),
-                               3.039311839766823, 4)
-        self.assertEqual(mol1.symmetry, 'C2v')
+                               2.2000335948443315, 5)
 
 if __name__ == "__main__":
     print("Tests for berny_solver")

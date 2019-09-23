@@ -97,10 +97,8 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
             max_shells = 4 - conf.count(0)
             emin_by_l = [1e99] * 8
             emax_by_l = [0] * 8
-            l_max = 0
             for b in mol._basis[symb]:
                 l = b[0]
-                l_max = max(l_max, l)
                 if l >= max_shells+1:
                     continue
 
@@ -114,25 +112,22 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
                 emax_by_l[l] = max(es.max(), emax_by_l[l])
                 emin_by_l[l] = min(es.min(), emin_by_l[l])
 
-            l_max1 = l_max + 1
-            emin_by_l = numpy.array(emin_by_l[:l_max1])
-            emax_by_l = numpy.array(emax_by_l[:l_max1])
-
+            l_max = 8 - emax_by_l.count(0)
+            emin_by_l = numpy.array(emin_by_l[:l_max])
+            emax_by_l = numpy.array(emax_by_l[:l_max])
 # Estimate the exponents ranges by geometric average
             emax = numpy.sqrt(numpy.einsum('i,j->ij', emax_by_l, emax_by_l))
             emin = numpy.sqrt(numpy.einsum('i,j->ij', emin_by_l, emin_by_l))
-            liljsum = numpy.arange(l_max1)[:,None] + numpy.arange(l_max1)
-            emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max1*2-1)]
-            emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max1*2-1)]
+            liljsum = numpy.arange(l_max)[:,None] + numpy.arange(l_max)
+            emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max*2-1)]
+            emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max*2-1)]
             # Tune emin and emax
             emin_by_l = numpy.array(emin_by_l) * 2  # *2 for alpha+alpha on same center
-            emax_by_l = numpy.array(emax_by_l) * 2  #/ (numpy.arange(l_max1*2-1)*.5+1)
+            emax_by_l = numpy.array(emax_by_l) * 2  #/ (numpy.arange(l_max*2-1)*.5+1)
 
             ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
-            etb = []
-            for l, n in enumerate(numpy.ceil(ns).astype(int)):
-                if n > 0:
-                    etb.append((l, n, emin_by_l[l], beta))
+            etb = [(l, max(n,1), emin_by_l[l], beta)
+                   for l, n in enumerate(numpy.ceil(ns).astype(int))]
             newbasis[symb] = gto.expand_etbs(etb)
 
     return newbasis

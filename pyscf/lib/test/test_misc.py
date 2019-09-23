@@ -18,7 +18,7 @@ import numpy
 from pyscf import lib
 
 class KnownValues(unittest.TestCase):
-    def test_call_in_background_skip(self):
+    def test_call_in_background(self):
         def bg_raise():
             def raise1():
                 raise ValueError
@@ -38,17 +38,6 @@ class KnownValues(unittest.TestCase):
         i1, j1 = lib.index_tril_to_pair(ij)
         self.assertTrue(numpy.all(i0 == i1))
         self.assertTrue(numpy.all(j0 == j1))
-
-    def test_class_as_method(self):
-        class A:
-            def f1(self):
-                return 'a'
-            f2 = lib.alias(f1)
-        class B(A):
-            def f1(self):
-                return 'b'
-        b = B()
-        self.assertEqual(b.f2(), 'b')
 
 if __name__ == "__main__":
     unittest.main()

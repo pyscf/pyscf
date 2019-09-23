@@ -21,7 +21,6 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 import pyscf.symm
-from pyscf.fci import fci_slow
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -48,10 +47,6 @@ na = fci.cistring.num_strings(norb, nelec//2)
 ci0 = numpy.random.random((na,na))
 ci0 = (ci0 + ci0.T) * .5
 
-def tearDownModule():
-    global mol, m, h1e, g2e, ci0, cis
-    del mol, m, h1e, g2e, ci0, cis
-
 class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=0)
@@ -72,9 +67,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -84.200905534209554, 8)
         e = fci.direct_spin0_symm.energy(h1e, g2e, c, norb, nelec)
         self.assertAlmostEqual(e, -84.200905534209554, 8)
-
-        eref = fci_slow.kernel(h1e, g2e, norb, nelec)
-        self.assertAlmostEqual(e, eref, 9)
 
 
 if __name__ == "__main__":

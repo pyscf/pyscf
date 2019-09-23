@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -156,6 +156,25 @@ def to_ucisdvec(civec, nmo, nocc, orbspin):
                       'norm(UCISD) = %s' % unorm)
     return ucisdvec
 
+t1strs = cisd.t1strs
+
+def t2strs(norb, nelec):
+    nocc = nelec
+    hf_str = int('1'*nocc, 2)
+    addrs = []
+    signs = []
+    for a in range(nocc+1, norb):
+        for b in range(nocc, a):
+            for i in reversed(range(1,nocc)):
+                for j in reversed(range(i)):
+                    str1 = hf_str ^ (1 << j) | (1 << b)
+                    sign = cistring.cre_des_sign(b, j, hf_str)
+                    sign*= cistring.cre_des_sign(a, i, str1)
+                    str1^= (1 << i) | (1 << a)
+                    addrs.append(cistring.str2addr(norb, nelec, str1))
+                    signs.append(sign)
+    return numpy.asarray(addrs), numpy.asarray(signs)
+
 def to_fcivec(cisdvec, nelec, orbspin, frozen=0):
     assert(numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
@@ -195,7 +214,7 @@ def from_fcivec(ci0, nelec, orbspin, frozen=0):
     return from_ucisdvec(ucisdvec, nocc, orbspin[~frozen_mask])
 
 
-def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
+def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     r'''
     One-particle density matrix in the molecular spin-orbital representation
     (the occupied-virtual blocks from the orbital response contribution are
@@ -211,7 +230,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
-    return gccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
+    return gccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''
@@ -321,7 +340,7 @@ class GCISD(cisd.CISD):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         time0 = time.clock(), time.time()
-        mo_e = eris.mo_energy
+        mo_e = eris.fock.diagonal()
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
@@ -363,7 +382,7 @@ class GCISD(cisd.CISD):
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return gccsd._make_eris_incore(self, mo_coeff)
-        elif getattr(self._scf, 'with_df', None):
+        elif hasattr(self._scf, 'with_df'):
             raise NotImplementedError
         else:
             return gccsd._make_eris_outcore(self, mo_coeff)
@@ -423,11 +442,6 @@ class GCISD(cisd.CISD):
             if orbspin is not None:
                 orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
-
-CISD = GCISD
-
-from pyscf import scf
-scf.ghf.GHF.CISD = lib.class_as_method(CISD)
 
 
 if __name__ == '__main__':

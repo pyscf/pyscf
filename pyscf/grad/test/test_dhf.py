@@ -40,9 +40,9 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_dhf_grad_with_ssss_high_cost(self):
         with lib.light_speed(30):
-            mf = scf.DHF(h2o).run(conv_tol=1e-12)
+            mf = scf.DHF(h2o).run()
             g = mf.nuc_grad_method().kernel()
-            self.assertAlmostEqual(lib.finger(g), 0.0074947016737157545, 7)
+            self.assertAlmostEqual(lib.finger(g), 0.0074940105486053926, 7)
 
             ms = mf.as_scanner()
             pmol = h2o.copy()
@@ -52,12 +52,12 @@ class KnownValues(unittest.TestCase):
             e2 = ms(pmol.set_geom_([["O" , (0. , 0.     , 0.001)],
                                     [1   , (0. , -0.757 , 0.587)],
                                     [1   , (0. , 0.757  , 0.587)]], unit='Ang'))
-            self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 5)
+            self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 6)
 
 #    def test_dhf_grad_without_ssss(self):
 #        with lib.light_speed(30):
 #            mf = scf.DHF(h2o).set(with_ssss=False).run()
-#            g = mf.nuc_grad_method().kernel()  # NotImplemented
+#            g = mf.nuc_grad_method().kernel()
 #            self.assertAlmostEqual(lib.finger(g), 0.035838032078025273, 7)
 #
 #            ms = mf.as_scanner()

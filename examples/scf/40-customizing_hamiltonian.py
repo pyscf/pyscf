@@ -19,8 +19,7 @@ Three steps to define Hamiltonian for SCF:
 
 Note you will see warning message on the screen:
 
-        Overwritten attributes  get_ovlp get_hcore  of <class 'pyscf.scf.hf.RHF'>
-
+        overwrite keys get_ovlp get_hcore of <class 'pyscf.scf.hf.RHF'>
 '''
 
 mol = gto.M()

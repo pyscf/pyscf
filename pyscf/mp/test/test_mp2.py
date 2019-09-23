@@ -103,10 +103,10 @@ class KnownValues(unittest.TestCase):
         for i in range(nocc):
             dm1ref[i,i] += 2
         dm1refao = reduce(numpy.dot, (mf.mo_coeff, dm1ref, mf.mo_coeff.T))
-        rdm1 = mp.mp2.make_rdm1(pt, t2ref0, ao_repr=True)
+        rdm1 = mp.mp2.make_rdm1_ao(pt, mf.mo_energy, mf.mo_coeff)
         self.assertTrue(numpy.allclose(rdm1, dm1refao))
         self.assertTrue(numpy.allclose(pt.make_rdm1(), dm1ref))
-        rdm1 = mp.mp2.make_rdm1(pt, ao_repr=True)
+        rdm1 = mp.mp2.make_rdm1_ao(pt)
         self.assertTrue(numpy.allclose(rdm1, dm1refao))
 
         dm2ref = numpy.zeros((nmo*2,)*4)

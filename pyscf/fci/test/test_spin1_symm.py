@@ -47,10 +47,6 @@ numpy.random.seed(15)
 na = fci.cistring.num_strings(norb, nelec//2)
 ci0 = numpy.random.random((na,na))
 
-def tearDownModule():
-    global mol, m, h1e, g2e, ci0, cis
-    del mol, m, h1e, g2e, ci0, cis
-
 class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=0)

@@ -21,7 +21,6 @@
 Generate Xian-CI input file and integral file
 '''
 
-from functools import reduce
 import numpy
 import h5py
 from pyscf import ao2mo
@@ -65,10 +64,9 @@ class XianCiInpHandler(object):
     def __init__(self, method, inputfile, integralfile):
         self.mol = method.mol
         assert(mol.symmetry)
-        if getattr(method, '_eri', None) is not None:
+        if hasattr(method, '_eri'):
             self._eri = method._eri
-        elif (getattr(method, '_scf', None) and
-              getattr(method._scf, '_eri', None) is not None):
+        elif hasattr(method, '_scf') and hasattr(method._scf, '_eri'):
             self._eri = method._scf._eri
         else:
             self._eri = None

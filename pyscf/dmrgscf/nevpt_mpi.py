@@ -89,10 +89,10 @@ def write_chk(mc,root,chkfile):
     fh5['mc/orbe']    =       mc.mo_energy
     fh5['mc/nroots']   =       mc.fcisolver.nroots
     fh5['mc/wfnsym']   =       mc.fcisolver.wfnsym
-    if getattr(mc.mo_coeff, 'orbsym', None) is not None:
+    if hasattr(mc.mo_coeff, 'orbsym'):
         fh5.create_dataset('mc/orbsym',data=mc.mo_coeff.orbsym)
 
-    if getattr(mc.mo_coeff, 'orbsym', None) is not None and mc.mol.symmetry:
+    if hasattr(mc.mo_coeff, 'orbsym') and mc.mol.symmetry:
         orbsym = numpy.asarray(mc.mo_coeff.orbsym)
         pair_irrep = orbsym.reshape(-1,1) ^ orbsym
     else:
@@ -154,19 +154,8 @@ def write_chk(mc,root,chkfile):
 
     logger.timer(mc,'Write MPS NEVPT integral', *t0)
 
-def default_nevpt_schedule(fcisolver, maxM=500, tol=1e-7):
-    nevptsolver = dmrgci.DMRGCI(fcisolver.mol, maxM, tol)
-    nevptsolver.stdout = fcisolver.stdout
-    nevptsolver.verbose = fcisolver.verbose
-    if isinstance(fcisolver, dmrgci.DMRGCI):
-        nevptsolver.memory = fcisolver.memory
-        nevptsolver.outputlevel = fcisolver.outputlevel
-        nevptsolver.executable = fcisolver.executable
-        nevptsolver.scratchDirectory = fcisolver.scratchDirectory
-        nevptsolver.mpiprefix = fcisolver.mpiprefix
-        nevptsolver.spin = fcisolver.spin
-        nevptsolver.groupname = fcisolver.groupname
-
+def default_nevpt_schedule(mol, maxM=500, tol=1e-7):
+    nevptsolver = dmrgci.DMRGCI(mol, maxM, tol)
     nevptsolver.scheduleSweeps = [0, 4]
     nevptsolver.scheduleMaxMs  = [maxM, maxM]
     nevptsolver.scheduleTols   = [0.0001, tol]
@@ -201,7 +190,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         nevpt_integral_file = None
 
     if nevptsolver is None:
-        nevptsolver = default_nevpt_schedule(mc.fcisolver, maxM, tol)
+        nevptsolver = default_nevpt_schedule(mol, maxM, tol)
         #nevptsolver.__dict__.update(mc.fcisolver.__dict__)
         nevptsolver.wfnsym = wfnsym
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword

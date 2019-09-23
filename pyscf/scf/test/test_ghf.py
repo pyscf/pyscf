@@ -150,7 +150,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(vj.shape, (2,nao,nao))
         self.assertEqual(vk.shape, (2,nao,nao))
         self.assertAlmostEqual(lib.finger(vj), 246.24944977538354, 9)
-        self.assertAlmostEqual(lib.finger(vk), 53.22954677121744, 9)
+        self.assertAlmostEqual(lib.finger(vk), 37.840557968925779, 9)
 
         numpy.random.seed(1)
         d1 = numpy.random.random((nao,nao)) + 1j*numpy.random.random((nao,nao))
@@ -160,7 +160,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(vj.shape, (2,nao,nao))
         self.assertEqual(vk.shape, (2,nao,nao))
         self.assertAlmostEqual(lib.finger(vj), 254.68614111766146+0j, 9)
-        self.assertAlmostEqual(lib.finger(vk), 62.08832587927003-8.640597547171135j, 9)
+        self.assertAlmostEqual(lib.finger(vk), 53.629159066971539-2.1298002812909353j, 9)
 
         nao = mol.nao_nr()
         numpy.random.seed(1)
@@ -290,7 +290,7 @@ H     0    0.757    0.587'''
         vhf4 = mf1.get_veff(pmol, dm, hermi=0)
         self.assertEqual(vhf4.ndim, 4)
         self.assertAlmostEqual(lib.finger(vhf4),
-                               17.264430281812047-5.533144783448073j, 12)
+                               -5.1441200982786057-5.5331447834480718j, 12)
         self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
 
         vj = mf1.get_j(pmol, dm[0,0], hermi=0)

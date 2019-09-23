@@ -152,7 +152,8 @@ static void set_qcond(int (*intor)(), CINTOpt *cintopt, double *qcond,
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel
+#pragma omp parallel default(none) \
+        shared(intor, cintopt, qcond, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp, tmp;
         int i, j, ij, di, dj, ish, jsh;
@@ -248,29 +249,27 @@ static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
                        double direct_scf_cutoff, int nset, int *ao_loc,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const size_t nao = ao_loc[nbas];
+        const int nao = ao_loc[nbas];
         double dmax, dmaxi, tmp;
         int i, j, ish, jsh;
         int iset;
         double complex *pdm;
 
         for (ish = 0; ish < nbas; ish++) {
-        for (jsh = 0; jsh <= ish; jsh++) {
+        for (jsh = 0; jsh < nbas; jsh++) {
                 dmax = 0;
                 for (iset = 0; iset < nset; iset++) {
                         dmaxi = 0;
                         pdm = dm + nao*nao*iset;
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                tmp = .5 * (cabs(pdm[i*nao+j]) + cabs(pdm[j*nao+i]));
+                                tmp = cabs(pdm[i*nao+j]);
                                 dmaxi = MAX(dmaxi, tmp);
                         } }
                         dmscond[iset*nbas*nbas+ish*nbas+jsh] = dmaxi;
-                        dmscond[iset*nbas*nbas+jsh*nbas+ish] = dmaxi;
                         dmax = MAX(dmax, dmaxi);
                 }
                 dmcond[ish*nbas+jsh] = dmax;
-                dmcond[jsh*nbas+ish] = dmax;
         } }
 }
 

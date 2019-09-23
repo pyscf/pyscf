@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#         James D. McClain
-#         Timothy Berkelbach <tim.berkelbach@gmail.com>
-#
 
 import time
 import numpy as np
@@ -55,26 +50,21 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     def precond(r, e0, x0):
         return r/(e0-diag+1e-12)
 
-    # GHF or customized RHF/UHF may be of complex type
-    real_system = (eom._cc._scf.mo_coeff[0].dtype == np.double)
-
     eig = lib.davidson_nosym1
     if user_guess or koopmans:
         assert len(guess) == nroots
-        def eig_close_to_init_guess(w, v, nroots, envs):
+        def eig_close_to_init_guess(w, v, nr, envs):
             x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
             s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
-            snorm = np.einsum('pi,pi->i', s.conj(), s)
-            idx = np.argsort(-snorm)[:nroots]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, idx, real_system)
+            s = np.dot(s.conj().T, s).diagonal()
+            idx = np.argsort(-s)[:nroots]
+            idx = idx[np.argsort(w[idx])]  # sort eigenvalue w
+            return w[idx].real, v[:,idx].real, idx
         conv, es, vs = eig(matvec, guess, precond, pick=eig_close_to_init_guess,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
     else:
-        def pickeig(w, v, nroots, envs):
-            real_idx = np.where(abs(w.imag) < 1e-3)[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, real_idx, real_system)
-        conv, es, vs = eig(matvec, guess, precond, pick=pickeig,
+        conv, es, vs = eig(matvec, guess, precond,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
 
@@ -116,9 +106,9 @@ class EOM(lib.StreamObject):
         self.nmo = cc.nmo
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self, verbose=None):
+    def dump_flags(self):
         logger.info(self, '')
-        logger.info(self, '******** %s ********', self.__class__)
+        logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'max_space = %d', self.max_space)
         logger.info(self, 'max_cycle = %d', self.max_cycle)
         logger.info(self, 'conv_tol = %s', self.conv_tol)
@@ -260,14 +250,13 @@ def lipccsd_matvec(eom, vector, imds=None, diag=None):
 def ipccsd_diag(eom, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
-    dtype = np.result_type(t1, t2)
     nocc, nvir = t1.shape
     fock = imds.eris.fock
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
 
     Hr1 = -np.diag(imds.Loo)
-    Hr2 = np.zeros((nocc,nocc,nvir), dtype)
+    Hr2 = np.zeros((nocc,nocc,nvir), t1.dtype)
     for i in range(nocc):
         for j in range(nocc):
             for b in range(nvir):
@@ -410,7 +399,7 @@ class EOMIP(EOM):
         return nocc + nocc*nocc*nvir
 
     def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris=eris)
+        imds = _IMDS(self._cc, eris)
         imds.make_ip(self.partition)
         return imds
 
@@ -536,7 +525,6 @@ def leaccsd_matvec(eom, vector, imds=None, diag=None):
 def eaccsd_diag(eom, imds=None):
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
-    dtype = np.result_type(t1, t2)
     nocc, nvir = t1.shape
 
     fock = imds.eris.fock
@@ -544,7 +532,7 @@ def eaccsd_diag(eom, imds=None):
     fvv = fock[nocc:,nocc:]
 
     Hr1 = np.diag(imds.Lvv)
-    Hr2 = np.zeros((nocc,nvir,nvir), dtype)
+    Hr2 = np.zeros((nocc,nvir,nvir), t1.dtype)
     for a in range(nvir):
         if eom.partition != 'mp':
             _Wvvvva = np.array(imds.Wvvvv[a])
@@ -690,7 +678,7 @@ class EOMEA(EOM):
         return nvir + nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris=eris)
+        imds = _IMDS(self._cc, eris)
         imds.make_ea(self.partition)
         return imds
 
@@ -858,13 +846,11 @@ def vector_to_amplitudes_eomsf(vector, nmo, nocc):
     return t1, (t2baaa, t2aaba)
 
 def amplitudes_to_vector_triplet(t1, t2, out=None):
-    t2aa, t2ab = t2
-    dtype = np.result_type(t1, t2aa, t2ab)
     nocc, nvir = t1.shape
     nov = nocc * nvir
     size1 = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
     size = size1 + nov*(nov+1)//2
-    vector = np.ndarray(size, dtype, buffer=out)
+    vector = np.ndarray(size, t1.dtype, buffer=out)
     ccsd.amplitudes_to_vector_s4(t1, t2[0], out=vector)
     t2ab = t2[1].transpose(0,2,1,3).reshape(nov,nov)
     lib.pack_tril(t2ab, out=vector[size1:])
@@ -1184,7 +1170,6 @@ def eeccsd_diag(eom, imds=None):
     if imds is None: imds = eom.make_imds()
     eris = imds.eris
     t1, t2 = imds.t1, imds.t2
-    dtype = np.result_type(t1, t2)
     tau = _make_tau(t2, t1, t1)
     nocc, nvir = t1.shape
 
@@ -1248,7 +1233,7 @@ def eeccsd_diag(eom, imds=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
-    tmp = np.zeros((nvir,nvir), dtype=dtype)
+    tmp = np.zeros((nvir,nvir), dtype=t1.dtype)
     for p0,p1 in lib.prange(0, nocc, blksize):
         ovvv = eris.get_ovvv(slice(p0,p1))  # ovvv = eris.ovvv[p0:p1]
         tmp += np.einsum('mb,mbaa->ab', t1[p0:p1], ovvv)
@@ -1260,7 +1245,7 @@ def eeccsd_diag(eom, imds=None):
     Wvvaa = Wvvaa + Wvvaa.T
     if eris.vvvv is None: # AO-direct CCSD, vvvv is not generated.
         pass
-    elif len(eris.vvvv.shape) == 4:  # DO NOT use .ndim here for h5py library
+    elif len(eris.vvvv.shape) == 4:  # DO not use .ndim here for h5py library
                                      # backward compatbility
         eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv), t1.shape[1])
         tmp = np.einsum('aabb->ab', eris_vvvv)
@@ -1320,7 +1305,7 @@ class EOMEE(EOM):
         return nocc*nvir + nocc*nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris=eris)
+        imds = _IMDS(self._cc, eris)
         imds.make_ee()
         return imds
 
@@ -1489,7 +1474,6 @@ class _IMDS:
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
-        dtype = np.result_type(t1, t2)
         if np.iscomplexobj(t2):
             raise NotImplementedError('Complex integrals are not supported in EOM-EE-CCSD')
 
@@ -1497,7 +1481,7 @@ class _IMDS:
         nvir_pair = nvir*(nvir+1)//2
 
         self.saved = lib.H5TmpFile()
-        self.wvOvV = self.saved.create_dataset('vOvV', (nvir,nocc,nvir,nvir), dtype.char)
+        self.wvOvV = self.saved.create_dataset('vOvV', (nvir,nocc,nvir,nvir), t1.dtype.char)
 
         foo = eris.fock[:nocc,:nocc]
         fov = eris.fock[:nocc,nocc:]
@@ -1511,10 +1495,10 @@ class _IMDS:
         #:tau = _make_tau(t2, t1, t1)
         #:self.woVoO  = 0.5 * lib.einsum('mebf,ijef->mbij', eris_ovvv, tau)
         #:self.woVoO += 0.5 * lib.einsum('mfbe,ijfe->mbij', eris_ovvv, tau)
-        self.Fvv = np.zeros((nvir,nvir), dtype=dtype)
-        self.woVoO = np.empty((nocc,nvir,nocc,nocc), dtype=dtype)
-        woVvO = np.empty((nocc,nvir,nvir,nocc), dtype=dtype)
-        woVVo = np.empty((nocc,nvir,nvir,nocc), dtype=dtype)
+        self.Fvv = np.zeros((nvir,nvir), dtype=t1.dtype)
+        self.woVoO = np.empty((nocc,nvir,nocc,nocc), dtype=t1.dtype)
+        woVvO = np.empty((nocc,nvir,nvir,nocc), dtype=t1.dtype)
+        woVVo = np.empty((nocc,nvir,nvir,nocc), dtype=t1.dtype)
         tau = _make_tau(t2, t1, t1)
         mem_now = lib.current_memory()[0]
         max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
@@ -1563,7 +1547,7 @@ class _IMDS:
         tmp = None
         ovoo = eris_ovoo*2 - eris_ovoo.transpose(2,1,0,3)
         self.woVoO += lib.einsum('nemi,njeb->mbij', ovoo, theta) * .5
-        self.woOoV = np.array(eris_ovoo.transpose(2,0,3,1), dtype=dtype)
+        self.woOoV = eris_ovoo.transpose(2,0,3,1).copy()
         self.Foo += np.einsum('ne,nemi->mi', t1, ovoo)
         ovoo = None
 

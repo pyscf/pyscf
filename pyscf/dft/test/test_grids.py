@@ -125,12 +125,6 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(non0.sum(), 106)
         self.assertAlmostEqual(lib.finger(non0), -0.81399929716237085, 9)
 
-    def test_overwriting_grids_attribute(self):
-        g = gen_grid.Grids(h2o).run()
-        self.assertEqual(g.weights.size, 34310)
-
-        g.atom_grid = {"H": (10, 110), "O": (10, 110),}
-        self.assertTrue(g.weights is None)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ from pyscf.pbc.dft.kuks import energy_elec
 @lib.with_doc(kuks.get_veff.__doc__)
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
-    if getattr(dm, 'mo_coeff', None) is not None:
+    if hasattr(dm, 'mo_coeff'):
         mo_coeff = dm.mo_coeff
         mo_occ_a = [(x > 0).astype(np.double) for x in dm.mo_occ]
         mo_occ_b = [(x ==2).astype(np.double) for x in dm.mo_occ]
@@ -47,15 +47,13 @@ class KROKS(krohf.KROHF):
         krohf.KROHF.__init__(self, cell, kpts)
         rks._dft_common_init_(self)
 
-    def dump_flags(self, verbose=None):
-        krohf.KROHF.dump_flags(self, verbose)
+    def dump_flags(self):
+        krohf.KROHF.dump_flags(self)
         lib.logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        self.grids.dump_flags()
 
     get_veff = get_veff
     energy_elec = energy_elec
-    get_rho = kuks.get_rho
-
     define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(krohf.KROHF.density_fit)

@@ -334,15 +334,10 @@ def finger(a):
     return np.dot(w, a.ravel())
 
 class KnownValues(unittest.TestCase):
-    def test_get_pp_loc_part1_high_cost(self):
-        df = aft.AFTDF(cell)
-        v1 = aft.get_pp_loc_part1(df, kpts[0])
-        self.assertAlmostEqual(finger(v1), (-6.0893491060887159+0.19823828749533859j), 8)
-
     def test_aft_get_nuc(self):
         df = aft.AFTDF(cell)
         v1 = df.get_nuc(kpts[0])
-        self.assertAlmostEqual(finger(v1), (-5.764786312608102+0.19126292955145852j), 8)
+        self.assertAlmostEqual(finger(v1), (-6.0893491060887159+0.19823828749533859j), 8)
 
     def test_aft_get_pp(self):
         v0 = pgto.pseudo.get_pp(cell, kpts[0])

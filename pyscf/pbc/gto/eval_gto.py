@@ -128,10 +128,10 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
 
     # For atoms near the boundary of the cell, it is necessary (even in low-
     # dimensional systems) to include lattice translations in all 3 dimensions.
-    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
-    else:
+    if cell.low_dim_ft_type == 'analytic_2d_1':
         Ls = cell.get_lattice_Ls(dimension=3)
+    else:
+        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
     rcut = _estimate_rcut(cell)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -174,8 +174,12 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     if project is None:
         project = not gto.same_basis_set(chk_mol, mol)
 
-    # Check whether the two molecules are similar
-    if abs(mol.inertia_moment() - chk_mol.inertia_moment()).sum() > 0.5:
+    # Check whether the two molecules are similar enough
+    def inertia_momentum(mol):
+        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
+                                  mol.atom_coords())
+        return scipy.linalg.eigh(im)[0]
+    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
         logger.warn(mol, "Large deviations found between the input "
                     "molecule and the molecule from chkfile\n"
                     "Initial guess density matrix may have large error.")
@@ -376,12 +380,11 @@ class UHF(hf.SCF):
         self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
                            'with_breit', 'opt'))
 
-    def dump_flags(self, verbose=None):
-        hf.SCF.dump_flags(self, verbose)
-        log = logger.new_logger(self, verbose)
-        log.info('with_ssss %s, with_gaunt %s, with_breit %s',
-                 self.with_ssss, self.with_gaunt, self.with_breit)
-        log.info('light speed = %s', lib.param.LIGHT_SPEED)
+    def dump_flags(self):
+        hf.SCF.dump_flags(self)
+        logger.info(self, 'with_ssss %s, with_gaunt %s, with_breit %s',
+                    self.with_ssss, self.with_gaunt, self.with_breit)
+        logger.info(self, 'light speed = %s', lib.param.LIGHT_SPEED)
         return self
 
     @lib.with_doc(get_hcore.__doc__)
@@ -443,10 +446,10 @@ class UHF(hf.SCF):
         return mo_occ
 
     # full density matrix for UHF
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ, **kwargs)
+        return make_rdm1(mo_coeff, mo_occ)
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
@@ -583,7 +586,7 @@ class RHF(UHF):
         UHF.__init__(self, mol)
 
     # full density matrix for RHF
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None):
         r'''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
         D(UHF) = \psi_i^\dag\psi_i + \psi_{Ti}^\dag\psi_{Ti}
         RHF average the density of spin up and spin down:
@@ -591,7 +594,7 @@ class RHF(UHF):
         '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
-        dm = make_rdm1(mo_coeff, mo_occ, **kwargs)
+        dm = make_rdm1(mo_coeff, mo_occ)
         return (dm + time_reversal_matrix(self.mol, dm)) * .5
 
 

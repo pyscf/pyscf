@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 Non-relativistic ROHF analytical nuclear gradients
 '''
 
-from pyscf import lib
+from pyscf.scf import addons
 from pyscf.grad import uhf as uhf_grad
 
 
@@ -28,12 +28,9 @@ class Gradients(uhf_grad.Gradients):
     '''Non-relativistic ROHF gradients
     '''
     def __init__(self, mf):
-        uhf_grad.Gradients.__init__(self, scf.addons.convert_to_uhf(mf))
+        uhf_grad.Gradients.__init__(self, addons.convert_to_uhf(mf))
 
 Grad = Gradients
-
-from pyscf import scf
-scf.rohf.ROHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -45,7 +42,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.ROHF(mol)
     mf.scf()
-    g = mf.Gradients()
+    g = Gradients(mf)
     print(g.grad())
 
     mol = gto.Mole()

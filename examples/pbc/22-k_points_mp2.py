@@ -26,7 +26,7 @@ cell.build()
 # KHF and KMP2 with 2x2x2 k-points
 #
 kpts = cell.make_kpts([2,2,2])
-kmf = scf.KRHF(cell)
+kmf = scf.KRHF(cell, exxdiv=None)
 kmf.kpts = kpts
 ehf = kmf.kernel()
 
@@ -38,7 +38,7 @@ print("KMP2 energy (per unit cell) =", mypt.e_tot)
 # The KHF and KMP2 for single k-point calculation.
 #
 kpts = cell.get_abs_kpts([0.25, 0.25, 0.25])
-kmf = scf.KRHF(cell)
+kmf = scf.KRHF(cell, exxdiv=None)
 kmf.kpts = kpts
 ehf = kmf.kernel()
 
@@ -55,7 +55,7 @@ print("KMP2 energy (per unit cell) =", mypt.e_tot)
 # were provided in the molecular program.
 #
 kpt = cell.get_abs_kpts([0.25, 0.25, 0.25])
-mf = scf.RHF(cell, kpt=kpt)
+mf = scf.RHF(cell, kpt=kpt, exxdiv=None)
 ehf = mf.kernel()
 
 mypt = mp.RMP2(mf).run()

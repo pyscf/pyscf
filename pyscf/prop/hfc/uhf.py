@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,8 +38,7 @@ from pyscf.prop.gtensor.uhf import align, get_jk
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 
-def make_fcdip(hfcobj, dm0, hfc_nuc=None, verbose=None):
-    '''The contribution of Fermi-contact term and dipole-dipole interactions'''
+def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     log = logger.new_logger(hfcobj, verbose)
     mol = hfcobj.mol
     if hfc_nuc is None:
@@ -56,46 +55,26 @@ def make_fcdip(hfcobj, dm0, hfc_nuc=None, verbose=None):
     au2MHz = nist.HARTREE2J / nist.PLANCK * 1e-6
     fac = nist.ALPHA**2 / 2 / effspin * e_gyro * au2MHz
 
+    coords = mol.atom_coords()
+    ao = numint.eval_ao(mol, coords)
+
+    nao = dma.shape[0]
     hfc = []
     for i, atm_id in enumerate(hfc_nuc):
         nuc_gyro = get_nuc_g_factor(mol.atom_symbol(atm_id)) * nuc_mag
-        h1 = _get_integrals_fcdip(mol, atm_id)
+        mol.set_rinv_origin(mol.atom_coord(atm_id))
+# a01p[mu,sigma] the imaginary part of integral <vec{r}/r^3 cross p>
+        a01p = mol.intor('int1e_sa01sp', 12).reshape(3,4,nao,nao)
+        h1 = -(a01p[:,:3] + a01p[:,:3].transpose(0,1,3,2))
         fcsd = numpy.einsum('xyij,ji->xy', h1, spindm)
-
-        h1fc = _get_integrals_fc(mol, atm_id)
-        fc = numpy.einsum('ij,ji', h1fc, spindm)
-
-        sd = fcsd + numpy.eye(3) * fc
+        fc = 8*numpy.pi/3 * numpy.einsum('i,j,ji', ao[atm_id], ao[atm_id], spindm)
+        sd = fcsd - numpy.eye(3) * fc
 
         log.info('FC of atom %d  %s (in MHz)', atm_id, fac * nuc_gyro * fc)
         if hfcobj.verbose >= logger.INFO:
             _write(hfcobj, align(fac*nuc_gyro*sd)[0], 'SD of atom %d (in MHz)' % atm_id)
         hfc.append(fac * nuc_gyro * fcsd)
     return numpy.asarray(hfc)
-
-def _get_integrals_fcdip(mol, atm_id):
-    '''AO integrals for FC + Dipole-dipole'''
-    nao = mol.nao
-    with mol.with_rinv_origin(mol.atom_coord(atm_id)):
-        # Note the fermi-contact part is different to the fermi-contact
-        # operator in SSC.  FC here is associated to the the integrals of
-        # (\nabla \nabla 1/r), which includes the contribution of Poisson
-        # equation, 4\pi rho.  Factor 4.\pi/3 is used in the Fermi contact
-        # contribution.  In SSC, the factor of FC part is -8\pi/3.
-        ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
-        ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
-        h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
-        h1ao = h1ao + h1ao.transpose(0,1,3,2)
-        trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
-        idx = numpy.arange(3)
-        h1ao[idx,idx] -= trace
-    return h1ao
-
-def _get_integrals_fc(mol, atm_id):
-    '''AO integrals for Fermi contact term'''
-    coords = mol.atom_coord(atm_id).reshape(1, 3)
-    ao = mol.eval_gto('GTOval', coords)
-    return 4*numpy.pi/3 * numpy.einsum('ip,iq->pq', ao, ao)
 
 # Note mo1 is the imaginary part of MO^1
 def make_pso_soc(hfcobj, hfc_nuc=None):
@@ -141,8 +120,7 @@ def make_pso_soc(hfcobj, hfc_nuc=None):
         para.append(de)
     return numpy.asarray(para)
 
-def solve_mo1_soc(hfcobj, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  h1=None, s1=None, with_cphf=None):
+def solve_mo1_soc(hfcobj, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
     if h1 is None:
         if mo_occ is None:
             mo_occ = hfcobj._scf.mo_occ
@@ -157,8 +135,7 @@ def solve_mo1_soc(hfcobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         h1a = numpy.asarray([reduce(numpy.dot, (orbva.T, x, orboa)) for x in h1a])
         h1b = numpy.asarray([reduce(numpy.dot, (orbvb.T, x, orbob)) for x in h1b])
         h1 = (h1a, h1b)
-    mo1, mo_e1 = uhf_ssc.solve_mo1(hfcobj, mo_energy, mo_coeff, mo_occ,
-                                   h1, s1, with_cphf)
+    mo1, mo_e1 = uhf_ssc.SSC.solve_mo1(hfcobj, mo_energy, mo_occ, h1, with_cphf)
     return mo1, mo_e1
 
 def make_h1_soc(hfcobj, dm0):
@@ -224,44 +201,30 @@ def _write(hfcobj, tensor, title):
         hfcobj.stdout.flush()
 
 
-class HyperfineCoupling(lib.StreamObject):
+class HyperfineCoupling(uhf_ssc.SSC):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
-        self.mol = scf_method.mol
-        self.verbose = scf_method.mol.verbose
-        self.stdout = scf_method.mol.stdout
-        self.chkfile = scf_method.chkfile
-        self._scf = scf_method
-
         # para_soc2e can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
         # 'SOMF', 'AMFI' (='AMFI+SSO+SOO'), 'SOMF+AMFI', 'AMFI+SSO',
         # 'AMFI+SOO', 'AMFI+SSO+SOO'
         self.para_soc2e = 'SSO+SOO'
         self.so_eff_charge = False  # Koseki effective SOC charge
         self.hfc_nuc = range(scf_method.mol.natm)
+        uhf_nmr.NMR.__init__(self, scf_method)
 
-        self.cphf = True
-        self.max_cycle_cphf = 20
-        self.conv_tol = 1e-9
-
-        self.mo10 = None
-        self.mo_e10 = None
-        self._keys = set(self.__dict__.keys())
-
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
-        log.info('\n')
-        log.info('******** %s for %s ********',
+    def dump_flags(self):
+        logger.info(self, '\n')
+        logger.info(self, '******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        log.info('HFC for atoms %s', str(self.hfc_nuc))
+        logger.info(self, 'HFC for atoms %s', str(self.hfc_nuc))
         if self.cphf:
-            log.info('CPHF conv_tol = %g', self.conv_tol)
-            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        log.info('para_soc2e = %s', self.para_soc2e)
-        log.info('so_eff_charge = %s (1e SO effective charge)',
-                 self.so_eff_charge)
+            logger.info(self, 'CPHF conv_tol = %g', self.conv_tol)
+            logger.info(self, 'CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        logger.info(self, 'para_soc2e = %s', self.para_soc2e)
+        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
+                    self.so_eff_charge)
         if not self._scf.converged:
-            log.warn('Ground state SCF is not converged')
+            logger.warn('Ground state SCF is not converged')
         return self
 
     def kernel(self, mo1=None):
@@ -271,7 +234,7 @@ class HyperfineCoupling(lib.StreamObject):
         mol = self.mol
 
         dm0 = self._scf.make_rdm1()
-        hfc_tensor = self.make_fcdip(dm0, self.hfc_nuc)
+        hfc_tensor = self.make_fcsd(dm0, self.hfc_nuc)
         hfc_tensor += self.make_pso_soc(self.hfc_nuc)
 
         logger.timer(self, 'HFC tensor', *cput0)
@@ -282,7 +245,7 @@ class HyperfineCoupling(lib.StreamObject):
                        % (atm_id, mol.atom_symbol(atm_id)))
         return hfc_tensor
 
-    make_fcdip = make_fcdip
+    make_fcsd = make_fcsd
     make_pso_soc = make_pso_soc
     solve_mo1 = solve_mo1_soc
     make_h1_soc2e = make_h1_soc2e
@@ -299,7 +262,7 @@ if __name__ == '__main__':
     #hfc.verbose = 4
     hfc.para_soc2e = 'SSO+SOO'
     hfc.so_eff_charge = False
-    print(lib.finger(hfc.kernel()) - -2050.5830130636241)
+    print(lib.finger(hfc.kernel()) - 1230.8972071813887)
 
     mol = gto.M(atom='C 0 0 0; O 0 0 1.12',
                 basis='ccpvdz', spin=1, charge=1, verbose=3)

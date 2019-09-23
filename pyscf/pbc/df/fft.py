@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 import copy
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
@@ -33,21 +34,22 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
+    cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    cell = mydf.cell
+    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
 
-    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
+    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv, low_dim_ft_type=low_dim_ft_type)
     vneG = rhoG * coulG
-    vneR = tools.ifft(vneG, mesh).real
+    vneR = tools.ifft(vneG, mydf.mesh).real
 
     vne = [0] * len(kpts_lst)
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):
@@ -63,18 +65,20 @@ def get_nuc(mydf, kpts=None):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
-    from pyscf import gto
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
+    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
-    vpplocG = pseudo.get_vlocG(cell, Gv)
+    vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
+    # from get_jvloc_G0 function
+    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, low_dim_ft_type))
     ngrids = len(vpplocG)
 
     # vpploc evaluated in real-space
@@ -165,6 +169,7 @@ class FFTDF(lib.StreamObject):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
+        self.low_dim_ft_type = cell.low_dim_ft_type
 
         self.kpts = kpts
         self.grids = gen_grid.UniformGrids(cell)
@@ -172,10 +177,8 @@ class FFTDF(lib.StreamObject):
         # to mimic molecular DF object
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
-        # The following attributes are not input options.
-        # self.exxdiv has no effects. It was set in the get_k_kpts function to
-        # mimic the KRHF/KUHF object in the call to tools.get_coulG.
-        self.exxdiv = None
+# Not input options
+        self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._numint = numint.KNumInt()
         self._keys = set(self.__dict__.keys())
 
@@ -186,9 +189,9 @@ class FFTDF(lib.StreamObject):
     def mesh(self, mesh):
         self.grids.mesh = mesh
 
-    def dump_flags(self, verbose=None):
+    def dump_flags(self):
         logger.info(self, '\n')
-        logger.info(self, '******** %s ********', self.__class__)
+        logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
@@ -197,11 +200,15 @@ class FFTDF(lib.StreamObject):
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
-        if (cell.dimension < 2 or
-            (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+        if cell.dimension < 2:
             raise RuntimeError('FFTDF method does not support 0D/1D low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
+        if cell.dimension == 2 and self.low_dim_ft_type is None:
+            raise RuntimeError('FFTDF method does not support low_dim_ft_type of None '
+                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
+                               '\nSee also examples/pbc/32-graphene.py')
+
         if not cell.has_ecp():
             logger.warn(self, 'FFTDF integrals are found in all-electron '
                         'calculation.  It often causes huge error.\n'
@@ -236,11 +243,14 @@ class FFTDF(lib.StreamObject):
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 
-        if (cell.dimension < 2 or
-            (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+        if cell.dimension < 2:
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
+        if cell.dimension == 2 and self.low_dim_ft_type is None:
+            raise RuntimeError('FFTDF method only supports low_dim_ft_type of None '
+                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
+                               '\nSee also examples/pbc/32-graphene.py')
 
         max_memory = max(2000, self.max_memory-lib.current_memory()[0])
         ni = self._numint
@@ -255,16 +265,12 @@ class FFTDF(lib.StreamObject):
     get_pp = get_pp
     get_nuc = get_nuc
 
-    # Note: Special exxdiv by default should not be used for an arbitrary
-    # input density matrix. When the df object was used with the molecular
-    # post-HF code, get_jk was often called with an incomplete DM (e.g. the
-    # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
-    # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv=None):
+               with_j=True, with_k=True, exxdiv='ewald'):
         from pyscf.pbc.df import fft_jk
         if kpts is None:
-            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
+            if numpy.all(self.kpts == 0):
+                # Gamma-point calculation by default
                 kpts = numpy.zeros(3)
             else:
                 kpts = self.kpts
@@ -284,7 +290,6 @@ class FFTDF(lib.StreamObject):
 
     get_eri = get_ao_eri = fft_ao2mo.get_eri
     ao2mo = get_mo_eri = fft_ao2mo.general
-    ao2mo_7d = fft_ao2mo.ao2mo_7d
     get_ao_pairs_G = get_ao_pairs = fft_ao2mo.get_ao_pairs_G
     get_mo_pairs_G = get_mo_pairs = fft_ao2mo.get_mo_pairs_G
 
@@ -297,15 +302,11 @@ class FFTDF(lib.StreamObject):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
-        if self.cell.dimension < 3:
-            raise RuntimeError('ERIs of 1D and 2D systems are not positive '
-                               'definite. Current API only supports postive '
-                               'definite ERIs.')
-
         if blksize is None:
             blksize = self.blockdim
         kpts0 = numpy.zeros((2,3))
-        coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh)
+        coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh,
+                                low_dim_ft_type=self.low_dim_ft_type)
         ngrids = len(coulG)
         ao_pairs_G = self.get_ao_pairs_G(kpts0, compact=True)
         ao_pairs_G *= numpy.sqrt(coulG*(self.cell.vol/ngrids**2)).reshape(-1,1)
