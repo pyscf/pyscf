@@ -3,7 +3,7 @@ from numpy import zeros_like, zeros
 
 def eigen_dos(ksn2e, zomegas, nkpoints=1): 
   """ Compute the Density of States using the eigenvalues """
-  dos = zeros(len(zomegas))
+  dos = np.zeros(len(zomegas))
   for iw,zw in enumerate(zomegas): dos[iw] = (1.0/(zw - ksn2e)).sum().imag
   return -dos/np.pi/nkpoints
   
@@ -11,7 +11,7 @@ def eigen_dos(ksn2e, zomegas, nkpoints=1):
 def eigen_pdos(ksn2e, zomegas, nkpoints=1): 
   """ Compute the Partial Density of States using the eigenvalues """
   jmx = gw.ao_log.jmx   #varies over L
-  jksn2w = zeros([jmx+1]+list(ksn2e.shape))
+  jksn2w = np.zeros([jmx+1]+list(ksn2e.shape))
   over = gw.overlap_lil().toarray()
   orb2j = gw.get_orb2j()
   for j in range(jmx+1):
@@ -21,7 +21,7 @@ def eigen_pdos(ksn2e, zomegas, nkpoints=1):
         for n in range(gw.norbs):
           jksn2w[j,k,s,n] = np.dot( np.dot(mask*gw.mo_coeff_gw[k,s,n,:,0], over), gw.mo_coeff_gw[k,s,n,:,0])
   
-  pdos = zeros((gw.nspin,jmx+1,len(zomegas)))
+  pdos = np.zeros((gw.nspin,jmx+1,len(zomegas)))
   for s in range(gw.nspin):
       for j in range(jmx+1):
         for iw,zw in enumerate(zomegas):
@@ -46,46 +46,26 @@ def read_qp_molgw (filename):
      return qp
 
 
-if __name__=='__main__':
-    '''
-    This computes DOS and PDOS of CN molecule based on the eigenvelues obtained by 
-    PySCF for GW@UHF or MOLGW for GW@DFT and plots DOS and PDOS diagrams.
-    '''
-    import numpy as np
+def plot (d_qp=None):
+    """This plot DOS and PDOS for spin-polarized calculations in both mean-field and GW levels"""
     import matplotlib.pyplot as plt
-    from pyscf import gto, scf, dft
-    from pyscf.dft import UKS
-    from pyscf.nao import gw as gw_c
-    import sys, os
     from matplotlib import rc
     plt.rc('text', usetex=True)
     plt.rc('font', family='serif')
 
-    mol = gto.M( verbose = 1, atom ='C 0.0, 0.0, -0.611046 ; N 0.0, 0.0, 0.523753' , basis = 'cc-pvdz', spin=1, charge=0)
-    mol.build()
-    mf = scf.UHF(mol)
-    mf.kernel()
-    #mf=UKS(mol).run(conv_tol=1e-14)
-    #mf.xc='b3lyp'
-    #mf.scf()
+    d_qp= gw.mo_energy_gw if d_qp is None else d_qp 
 
-    gw = gw_c(mf=mf, gto=mol, verbosity=1, niter_max_ev=20)  
-    gw.kernel_gw()
-    gw.report()
+    #reading mean-field from Pyscf
+    d_mf = gw.mo_energy
 
-
-    #mesh along X
-    omegas = np.arange(-1.0, 1.0, 0.005)+1j*0.01
-
+    #reading QP energies from PySCF for GW@UHF
+    #d_qp = gw.mo_energy_gw
 
     #reading QP energies from output of MOLGW for GW@DFT
     #d_qp = read_qp_molgw ('ENERGY_QP')
 
-
-    #reading QP energies from PySCF for GW@UHF
-    d_qp = gw.mo_energy_gw
-    d_mf = gw.mo_energy
-
+    #mesh along X
+    omegas = np.arange(-1.0, 1.0, 0.005)+1j*0.01
 
     #Total DOS
     dos_qp = np.zeros((gw.nspin, len(omegas)))
@@ -120,7 +100,6 @@ if __name__=='__main__':
     #plt.savefig("dos.svg", dpi=900)
     plt.show()
     plt.clf()
-
 
     #PDOS
     pdos_qp= eigen_pdos(d_qp,omegas)
@@ -159,3 +138,24 @@ if __name__=='__main__':
     plt.legend()
     #plt.savefig("Pdos.svg", dpi=900)
     plt.show()
+
+
+if __name__=='__main__':
+    '''
+    This computes DOS and PDOS of CN molecule based on the eigenvelues obtained by 
+    PySCF for GW@UHF or MOLGW for GW@DFT and plots DOS and PDOS diagrams.
+    '''
+    from pyscf import gto, scf, dft
+    from pyscf.dft import UKS
+    from pyscf.nao import gw as gw_c
+    mol = gto.M( verbose = 1, atom ='C 0.0, 0.0, -0.611046 ; N 0.0, 0.0, 0.523753' , basis = 'cc-pvdz', spin=1, charge=0)
+    mol.build()
+    mf = scf.UHF(mol)
+    mf.kernel()
+    #mf=UKS(mol).run(conv_tol=1e-14)
+    #mf.xc='b3lyp'
+    #mf.scf()
+
+    gw = gw_c(mf=mf, gto=mol, verbosity=1, niter_max_ev=20)  
+    gw.kernel_gw()
+    plot() 

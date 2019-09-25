@@ -86,3 +86,12 @@ if __name__=='__main__':
   print('comparison between ref and m3: ====>\t ', np.allclose(m3, ref))
 
 
+    # Constructing a matrix using ijv format
+    #row  = np.array([0, 3, 1, 0])
+    #col  = np.array([0, 3, 1, 2])
+    #data = np.array([4, 5, 7, 9])
+    #coo_matrix((data, (row, col)), shape=(4, 4)).toarray()
+    #array([[4, 0, 9, 0],
+    #       [0, 7, 0, 0],
+    #       [0, 0, 0, 0],
+    #       [0, 0, 0, 5]])

@@ -181,7 +181,7 @@ class gw(scf):
 
   def get_snmw2sf(self):
     """ 
-    This computes a matrix elements of W_c: <\Psi | W_c |\Psi>.
+    This computes a matrix elements of W_c: <\Psi\Psi | W_c |\Psi\Psi>.
     sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
     where n runs from s...f, m runs from 0...norbs, w runs from 0...nff_ia, spin=0...1 or 2.
     """

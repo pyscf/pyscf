@@ -127,12 +127,12 @@ def report_mfx(self, dm1=None):
         print('mean-field Exchange energy   (eV):%16.6f'%(EX))
         print('mean-field Hartree energy    (eV):%16.6f'%(Vha))
         print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot))
-        S = self.spin/2
-        S0 = S*(S+1)
-        SS = self.mf.spin_square()
-        if ( SS[0]!= S ):
-            print('<S^2> and  2S+1                  :%16.7f %16.7f'%(SS[0],SS[1]))
-            print('Instead of                       :%16.7f %16.7f'%(S0, 2*S+1))
+        if (self.nspin==2):
+            sp = self.spin/2
+            s_ref = sp*(sp+1)
+            ss = self.mf.spin_square()
+            print('<S^2> and  2S+1                  :%16.7f %16.7f'%(ss[0],ss[1]))
+            print('Instead of                       :%16.7f %16.7f'%(s_ref, 2*sp+1))
     #sys.stdout.close()
 
 

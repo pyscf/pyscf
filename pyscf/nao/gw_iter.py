@@ -146,7 +146,7 @@ class gw_iter(gw):
             c = self.pb.get_da2cc_den()             #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
                                      #V_{\mu}^{ab}= V_{\widetilde{\mu}}^{ab} * C_{\widetilde{\mu}}^{\mu} 
             #First step
-            data = v_pd.reshape(-1)
+            data = v_pd.ravel() #v_pd.reshape(-1)
             i0,i1,i2 = np.mgrid[0:v_pd.shape[0],0:v_pd.shape[1],0:v_pd.shape[2] ].reshape((3,data.size))
             from pyscf.nao import ndcoo
             nc = ndcoo((data, (i0, i1, i2)))
@@ -180,7 +180,7 @@ class gw_iter(gw):
     """
     from scipy.sparse.linalg import LinearOperator,lgmres
     ww = 1j*self.ww_ia
-    xvx= self.gw_xvx('dp_coo')
+    xvx= self.gw_xvx('dp')
     snm2i = []
     k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
 
