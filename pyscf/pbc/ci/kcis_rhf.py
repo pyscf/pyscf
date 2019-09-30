@@ -270,7 +270,6 @@ class _CIS_ERIS:
 
         mo_coeff = self.mo_coeff = padded_mo_coeff(cis, mo_coeff)
 
-        print(cis._scf.mo_energy)
         if cis.keep_exxdiv:
             self.fock = np.asarray([np.diag(mo_e) for k, mo_e in enumerate(cis._scf.mo_energy)], dtype=dtype)
             self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
