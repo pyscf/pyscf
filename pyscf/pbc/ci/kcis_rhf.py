@@ -38,6 +38,7 @@ from pyscf.pbc.cc.ccsd import _adjust_occ
 
 # einsum = np.einsum
 einsum = lib.einsum
+direct_sum = lib.direct_sum
 
 def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
     """[summary]
@@ -77,11 +78,14 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
     for k, kshift in enumerate(kptlist):
         print("\nkshift =", kshift)
 
-        H = np.zeros([r_size, r_size], dtype=dtype)
-        for col in range(r_size):
-            vec = np.zeros(r_size, dtype=dtype)
-            vec[col] = 1.0
-            H[:, col] = cis_matvec_singlet(cis, vec, kshift, eris=eris)
+        if not cis.build_full_H:
+            H = np.zeros([r_size, r_size], dtype=dtype)
+            for col in range(r_size):
+                vec = np.zeros(r_size, dtype=dtype)
+                vec[col] = 1.0
+                H[:, col] = cis_matvec_singlet(cis, vec, kshift, eris=eris)
+        else:
+            H = cis_H(cis, kshift, eris=eris)
 
         eigval, eigvec = np.linalg.eig(H)
         idx = eigval.argsort()[:nroots]
@@ -93,7 +97,7 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
 
         evals[k] = eigval
         evecs[k] = eigvec
-    log.timer("CIS matvec+diagonalization", *cpu1)
+    log.timer("CIS diagonalization", *cpu1)
 
     log.timer("CIS", *cpu0)
     return evals, evecs
@@ -152,6 +156,80 @@ def cis_matvec_singlet(cis, vector, kshift, eris=None):
     vector = cis.amplitudes_to_vector(Hr)
     return vector
 
+def cis_H(cis, kshift, eris=None):
+    """[summary]
+    
+    Arguments:
+        cis {[type]} -- [description]
+        kshift {[type]} -- [description]
+    
+    Keyword Arguments:
+        eris {[type]} -- [description] (default: {None})
+    
+    Raises:
+        MemoryError: [description]
+    
+    Returns:
+        [type] -- [description]
+    """
+    cpu0 = (time.clock(), time.time())
+    log = logger.Logger(cis.stdout, cis.verbose)
+
+    if eris is None:
+        eris = cis.ao2mo()
+    nkpts = cis.nkpts
+    nocc = cis.nocc
+    nmo = cis.nmo
+    nvir = nmo - nocc
+
+    nov = nocc * nvir
+    r_size = nkpts * nov
+
+    memory_needed = (r_size ** 2) * 16 / 1e6
+    memory_now = lib.current_memory()[0]
+    if memory_needed + memory_now >= cis.max_memory:
+        raise MemoryError("Not enough memory to store full CIS Hamiltonian")
+
+    kconserv_r = cis.get_kconserv_r(kshift)
+    dtype = eris.dtype
+    epsilons = [eris.fock[k].diagonal().real for k in range(nkpts)]
+
+    H = np.zeros((nkpts, nkpts, nov, nov), dtype=dtype)
+    # <ia|H|jb> <- (esp_a - esp_i) \delta{i,j} \delta{a,b}
+    for ki in range(nkpts):
+        ka = kconserv_r[ki]
+        diag_ia = direct_sum("a-i->ia", epsilons[ka][nocc:], epsilons[ki][:nocc])
+        diag_ia = np.ravel(diag_ia)
+        np.fill_diagonal(H[ki, ki], diag_ia)
+
+    # <ia|H|jb> <- 2<ja|bi> - <ja|ib>
+    if not cis.direct:
+        for ki in range(nkpts):
+            ka = kconserv_r[ki]
+            for kj in range(nkpts):
+                kb = kconserv_r[kj]
+                # contribution from 2 <ja|bi> = 2 <aj|ib>
+                tmp =  2. * eris.voov[ka, kj, ki].transpose(2,0,1,3)
+                # contribution from -<ja|ib>
+                tmp -= eris.ovov[kj, ka, ki].transpose(2,1,0,3)
+                H[ki, kj] += tmp.reshape(nov, nov)
+    else:
+        for ki in range(nkpts):
+            ka = kconserv_r[ki]
+            for kj in range(nkpts):
+                kb = kconserv_r[kj]
+                # contribution from 2 (ai|jb) = 2 B^L_ai B^L_jb
+                tmp = 2. * einsum("Lai,Ljb->iajb", eris.Lpq_mo[ka,ki][:, nocc:, :nocc], eris.Lpq_mo[kj,kb][:, :nocc, nocc:])
+                # contribution from -(ab|ji) = - B^L_ab B^L_ji
+                tmp -= einsum("Lab,Lji->iajb", eris.Lpq_mo[ka,kb][:, nocc:, nocc:], eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
+                tmp *= 1. / nkpts
+                H[ki, kj] += tmp.reshape(nov, nov)
+    
+    H = H.reshape(nkpts, nkpts, nocc, nvir, nocc, nvir).transpose(0,2,3,1,4,5).reshape(r_size, r_size)
+    log.timer("build full CIS Hamiltonian", *cpu0)
+    return H
+
+
 class KCIS(lib.StreamObject):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, keep_exxdiv=False):
         """[summary]
@@ -178,6 +256,7 @@ class KCIS(lib.StreamObject):
         self.max_memory = mf.max_memory
         self.keep_exxdiv = keep_exxdiv
         self.direct = False
+        self.build_full_H = False
 
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.mo_coeff = mo_coeff
