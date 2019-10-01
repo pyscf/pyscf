@@ -73,6 +73,7 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
 
     evals = [None] * len(kptlist)
     evecs = [None] * len(kptlist)
+    cpu1 = (time.clock(), time.time())
     for k, kshift in enumerate(kptlist):
         print("\nkshift =", kshift)
 
@@ -92,6 +93,7 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
 
         evals[k] = eigval
         evecs[k] = eigvec
+    log.timer("CIS matvec+diagonalization", *cpu1)
 
     log.timer("CIS", *cpu0)
     return evals, evecs
@@ -126,9 +128,26 @@ def cis_matvec_singlet(cis, vector, kshift, eris=None):
         ka = kconserv_r[ki]
         Hr[ki] += einsum('ia,a->ia', r[ki], epsilons[ka][nocc:])
         Hr[ki] -= einsum('ia,i->ia', r[ki], epsilons[ki][:nocc])
-        # x: kj
-        Hr[ki] += 2.0 * einsum("xjb,xajib->ia", r, eris.voov[ka, :, ki])
-        Hr[ki] -= einsum("xjb,xjaib->ia", r, eris.ovov[:, ka, ki])
+        
+    if not cis.direct:
+        for ki in range(nkpts):
+            ka = kconserv_r[ki]
+            # x: kj
+            Hr[ki] += 2.0 * einsum("xjb,xajib->ia", r, eris.voov[ka, :, ki])
+            Hr[ki] -= einsum("xjb,xjaib->ia", r, eris.ovov[:, ka, ki])
+    else:
+        for ki in range(nkpts):
+            ka = kconserv_r[ki]
+            for kj in range(nkpts):
+                kb = kconserv_r[kj]
+                # r_ia <- 2 r_jb (ai|jb) = 2 r_jb B^L_jb B^L_ai
+                L = 2.0 * einsum("jb,Ljb->L", r[kj], eris.Lpq_mo[kj,kb][:, :nocc, nocc:])
+                tmp = einsum("L,Lai->ia", L, eris.Lpq_mo[ka,ki][:, nocc:, :nocc])
+        
+                # r_ia <- - r_jb (ab|ji) = -r_jb B^L_ab B^L_ji
+                Lja = -1.0 * einsum("jb,Lab->Lja", r[kj], eris.Lpq_mo[ka,kb][:, nocc:, nocc:])
+                tmp += einsum("Lja,Lji->ia", Lja, eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
+                Hr[ki] += (1. / nkpts) * tmp
 
     vector = cis.amplitudes_to_vector(Hr)
     return vector
@@ -158,6 +177,7 @@ class KCIS(lib.StreamObject):
         self.verbose = mf.verbose
         self.max_memory = mf.max_memory
         self.keep_exxdiv = keep_exxdiv
+        self.direct = False
 
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.mo_coeff = mo_coeff
@@ -181,6 +201,8 @@ class KCIS(lib.StreamObject):
             self.max_memory,
             lib.current_memory()[0],
         )
+        if self.direct:
+            logger.info(self, "cis.direct = True; voov and ovov will not be computed")
         return self
 
     @property
@@ -325,80 +347,143 @@ class _CIS_ERIS:
         kconserv = cis.khelper.kconserv
         khelper = cis.khelper
 
-        if (
-            method == "incore"
-            and (memory_needed + memory_now < cis.max_memory)
-            or cell.incore_anyway
-        ):
-            log.info("using incore ERI storage")
-            self.ovov = np.empty(
-                (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), dtype=dtype
-            )
-            self.voov = np.empty(
-                (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype=dtype
-            )
-
-            for (ikp, ikq, ikr) in khelper.symm_map.keys():
-                iks = kconserv[ikp, ikq, ikr]
-                eri_kpt = fao2mo(
-                    (mo_coeff[ikp], mo_coeff[ikq], mo_coeff[ikr], mo_coeff[iks]),
-                    (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]),
-                    compact=False,
-                )
-                if dtype == np.float:
-                    eri_kpt = eri_kpt.real
-                eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
-                for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
-                    eri_kpt_symm = khelper.transform_symm(
-                        eri_kpt, kp, kq, kr
-                    ).transpose(0, 2, 1, 3)
-                    self.ovov[kp, kr, kq] = (
-                        eri_kpt_symm[:nocc, nocc:, :nocc, nocc:] / nkpts
-                    )
-                    self.voov[kp, kr, kq] = (
-                        eri_kpt_symm[nocc:, :nocc, :nocc, nocc:] / nkpts
-                    )
-
-            self.dtype = dtype
+        if (cis.direct and type(cis._scf.with_df) is df.GDF 
+            and cell.dimension != 2):
+            # cis._scf.with_df needs to be df.GDF only (not MDF)
+            _init_cis_df_eris(cis, self)
         else:
-            log.info("using HDF5 ERI storage")
-            self.feri1 = lib.H5TmpFile()
+            if (
+                method == "incore"
+                and (memory_needed + memory_now < cis.max_memory)
+                or cell.incore_anyway
+            ):
+                log.info("using incore ERI storage")
+                self.ovov = np.empty(
+                    (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), dtype=dtype
+                )
+                self.voov = np.empty(
+                    (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype=dtype
+                )
 
-            self.ovov = self.feri1.create_dataset(
-                "ovov", (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), dtype.char
-            )
-            self.voov = self.feri1.create_dataset(
-                "voov", (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype.char
-            )
+                for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                    iks = kconserv[ikp, ikq, ikr]
+                    eri_kpt = fao2mo(
+                        (mo_coeff[ikp], mo_coeff[ikq], mo_coeff[ikr], mo_coeff[iks]),
+                        (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]),
+                        compact=False,
+                    )
+                    if dtype == np.float:
+                        eri_kpt = eri_kpt.real
+                    eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
+                    for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
+                        eri_kpt_symm = khelper.transform_symm(
+                            eri_kpt, kp, kq, kr
+                        ).transpose(0, 2, 1, 3)
+                        self.ovov[kp, kr, kq] = (
+                            eri_kpt_symm[:nocc, nocc:, :nocc, nocc:] / nkpts
+                        )
+                        self.voov[kp, kr, kq] = (
+                            eri_kpt_symm[nocc:, :nocc, :nocc, nocc:] / nkpts
+                        )
 
-            # <ia|pq> = (ip|aq)
-            cput1 = time.clock(), time.time()
-            for kp in range(nkpts):
-                for kq in range(nkpts):
-                    for kr in range(nkpts):
-                        ks = kconserv[kp, kq, kr]
-                        orbo_p = mo_coeff[kp][:, :nocc]
-                        orbv_r = mo_coeff[kr][:, nocc:]
-                        buf_kpt = fao2mo(
-                            (orbo_p, mo_coeff[kq], orbv_r, mo_coeff[ks]),
-                            (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
-                            compact=False,
-                        )
-                        if mo_coeff[0].dtype == np.float:
-                            buf_kpt = buf_kpt.real
-                        buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(
-                            0, 2, 1, 3
-                        )
-                        self.dtype = buf_kpt.dtype
-                        self.ovov[kp, kr, kq, :, :, :, :] = (
-                            buf_kpt[:, :, :nocc, nocc:] / nkpts
-                        )
-                        self.voov[kr, kp, ks, :, :, :, :] = (
-                            buf_kpt[:, :, nocc:, :nocc].transpose(1, 0, 3, 2) / nkpts
-                        )
-            cput1 = log.timer_debug1("transforming ovpq", *cput1)
+                self.dtype = dtype
+            else:
+                log.info("using HDF5 ERI storage")
+                self.feri1 = lib.H5TmpFile()
+
+                self.ovov = self.feri1.create_dataset(
+                    "ovov", (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), dtype.char
+                )
+                self.voov = self.feri1.create_dataset(
+                    "voov", (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype.char
+                )
+
+                # <ia|pq> = (ip|aq)
+                cput1 = time.clock(), time.time()
+                for kp in range(nkpts):
+                    for kq in range(nkpts):
+                        for kr in range(nkpts):
+                            ks = kconserv[kp, kq, kr]
+                            orbo_p = mo_coeff[kp][:, :nocc]
+                            orbv_r = mo_coeff[kr][:, nocc:]
+                            buf_kpt = fao2mo(
+                                (orbo_p, mo_coeff[kq], orbv_r, mo_coeff[ks]),
+                                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                                compact=False,
+                            )
+                            if mo_coeff[0].dtype == np.float:
+                                buf_kpt = buf_kpt.real
+                            buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(
+                                0, 2, 1, 3
+                            )
+                            self.dtype = buf_kpt.dtype
+                            self.ovov[kp, kr, kq, :, :, :, :] = (
+                                buf_kpt[:, :, :nocc, nocc:] / nkpts
+                            )
+                            self.voov[kr, kp, ks, :, :, :, :] = (
+                                buf_kpt[:, :, nocc:, :nocc].transpose(1, 0, 3, 2) / nkpts
+                            )
+                cput1 = log.timer_debug1("transforming ovpq", *cput1)
 
         log.timer("CIS integral transformation", *cput0)
+
+
+def _init_cis_df_eris(cis, eris):
+    from pyscf.pbc.df import df
+    from pyscf.ao2mo import _ao2mo
+    from pyscf.pbc.lib.kpts_helper import gamma_point
+
+    log = logger.Logger(cis.stdout, cis.verbose)
+
+    if cis._scf.with_df._cderi is None:
+        cis._scf.with_df.build()
+
+    cell = cis._scf.cell
+    if cell.dimension == 2:
+        # 2D ERIs are not positive definite. The 3-index tensors are stored in
+        # two part. One corresponds to the positive part and one corresponds
+        # to the negative part. The negative part is not considered in the
+        # DF-driven CCSD implementation.
+        raise NotImplementedError
+
+    nocc = cis.nocc
+    nmo = cis.nmo
+    nao = cell.nao_nr()
+
+    kpts = cis.kpts
+    nkpts = len(kpts)
+    if gamma_point(kpts):
+        dtype = np.double
+    else:
+        dtype = np.complex128
+    eris.dtype = dtype = np.result_type(dtype, *eris.mo_coeff)
+    eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
+
+    cput0 = (time.clock(), time.time())
+
+    with h5py.File(cis._scf.with_df._cderi, 'r') as f:
+        kptij_lst = f['j3c-kptij'].value 
+        tao = []
+        ao_loc = None
+        for ki, kpti in enumerate(kpts):
+            for kj, kptj in enumerate(kpts):
+                kpti_kptj = np.array((kpti, kptj))
+                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+
+                mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj]))
+                mo = np.asarray(mo, dtype=dtype, order='F')
+                if dtype == np.double:
+                    out = _ao2mo.nr_e2(Lpq_ao, mo, (0, nmo, nmo, nmo+nmo), aosym='s2')
+                else:
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq_ao[0].size != nao**2:  # aosym = 's2'
+                        Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
+                    out = _ao2mo.r_e2(Lpq_ao, mo, (0, nmo, nmo, nmo+nmo), tao, ao_loc)
+                Lpq_mo[ki, kj] = out.reshape(-1, nmo, nmo)
+
+    log.timer_debug1("transforming DF-CIS integrals", *cput0)
+
+    return eris
 
 
 if __name__ == "__main__":
