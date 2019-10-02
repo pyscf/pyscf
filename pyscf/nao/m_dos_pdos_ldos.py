@@ -67,19 +67,20 @@ if __name__=='__main__':
     from pyscf import gto, scf
     from pyscf.nao import gw as gw_c
 
-    mol = gto.M( verbose = 0, atom = '''Be 0.0, 0.0, 0.269654 ; H 0.0, 0.0, -1.078616''', basis = 'cc-pvdz', spin=1, charge=0)
+    mol = gto.M( verbose = 0, atom = '''C 0.0, 0.0, -0.611046 ; N 0.0, 0.0, 0.523753''', basis = 'cc-pvdz', spin=1, charge=0)
     gto_mf_UHF = scf.UHF(mol)
     gto_mf_UHF.kernel()
     gw = gw_c(mf=gto_mf_UHF, gto=mol, verbosity=1, niter_max_ev=20)  
     omegas = np.arange(-1.0, 1.0, 0.005)+1j*0.01
-    dos= gw.lsoa_dos(omegas)
-    pdos= gw.pdos(omegas)
+    dos= lsoa_dos(mf=gw, zomegas=omegas)
+    pdos= pdos(mf=gw, zomegas=omegas)
     data=np.zeros((pdos.shape[0]+2, pdos.shape[1]))
     data[0,:] = omegas.real*27.2114
     data[1, :] = dos.clip(min=0)
     data[2:, :] = pdos.clip(min=0)
     np.savetxt('dos.dat', data.T, fmt='%14.6f', header='  Energy(eV)\t     Total DOS\t    s_state\t   p_state\t  d_state')
-    #plotting
+
+    #plotting DOS and PDOS
     x = data.T [:,0]    #Energies
     y1 = data.T [:,1]   #Total DOS
     y2 = data.T [:,2]   #s_state
@@ -95,3 +96,15 @@ if __name__=='__main__':
     plt.ylabel('Density of States (electron/eV)', fontsize=15)
     plt.legend()
     plt.show()
+
+    #plots DOS for each atoms 
+    for i in range (gw.natoms):
+        local_dos= lsoa_dos(mf=gw, zomegas=omegas,lsoa=[i])
+        data[1,:] = local_dos.clip(min=0)
+        plt.plot(x, data.T [:,1], label='Local DOS of atom '+gw.sp2symbol[i])
+    plt.xlabel('Energy (eV)', fontsize=15) 
+    plt.axvline(x=gw.fermi_energy*27.2114,color='k', linestyle='--', label='Fermi Energy')
+    plt.ylabel('Local Density of States (electron/eV)', fontsize=12)
+    plt.legend()
+    plt.show()
+

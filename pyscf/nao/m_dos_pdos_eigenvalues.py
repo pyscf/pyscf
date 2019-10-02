@@ -115,7 +115,7 @@ def plot (d_qp=None):
     #np.savetxt('pdos.dat', data.T, fmt='%14.3f', header='  Energy(eV)\t QP_s_UP\t QP_p_UP\t QP_d_UP\t .... MF_s_UP\t MF_p_UP\t MF_d_UP\t .... | QP_s_DN\t QP_p_DN\t QP_d_DN\t ... MF_s_DN\t MF_p_DN\t MF_d_DN ...')
   
     #plotting PDOS
-    orb_name = ['$s$','$p$','$d$','$f$','$g$','$h$','$i$']
+    orb_name = ['$s$','$p$','$d$','$f$','$g$','$h$','$i$','$k$']
     orb_colo = ['r','g','b','y','k','m','c']
     for i, (n,c) in enumerate(zip(orb_name[0:size],orb_colo[0:size])):
         #GW_spin_UP
