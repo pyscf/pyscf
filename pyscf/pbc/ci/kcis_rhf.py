@@ -25,6 +25,7 @@ import h5py
 from pyscf import lib
 import pyscf.ao2mo
 from pyscf.lib import logger
+from pyscf import __config__
 
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
@@ -74,23 +75,42 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
 
     evals = [None] * len(kptlist)
     evecs = [None] * len(kptlist)
+    convs = [None] * len(kptlist)
+
     cpu1 = (time.clock(), time.time())
     for k, kshift in enumerate(kptlist):
         print("\nkshift =", kshift)
 
-        if not cis.build_full_H:
-            H = np.zeros([r_size, r_size], dtype=dtype)
-            for col in range(r_size):
-                vec = np.zeros(r_size, dtype=dtype)
-                vec[col] = 1.0
-                H[:, col] = cis_matvec_singlet(cis, vec, kshift, eris=eris)
-        else:
-            H = cis_H(cis, kshift, eris=eris)
+        if cis.davidson:
+            # Davidson diagonalization
+            matvec, diag = cis.gen_matvec(kshift, eris=eris)
+            if diag.size != r_size:
+                raise ValueError("Number of diagonal elements in H does not match r     vector size")
 
-        eigval, eigvec = np.linalg.eig(H)
-        idx = eigval.argsort()[:nroots]
-        eigval = eigval[idx]
-        eigvec = eigvec[:, idx]
+            guess = cis.get_init_guess(nroots, diag=diag)
+            def precond(r, e0, x0):
+                return r/(e0-diag+1e-12)
+
+            eig = lib.davidson_nosym1
+            conv, eigval, eigvec = eig(matvec, guess, precond, tol=cis.conv_tol, 
+                                       max_cycle=cis.max_cycle, max_space=cis.max_space, 
+                                       max_memory=cis.max_memory, nroots=nroots, verbose=cis.verbose)
+
+        else:
+            # Exact diagonalization            
+            if not cis.build_full_H:
+                H = np.zeros([r_size, r_size], dtype=dtype)
+                for col in range(r_size):
+                    vec = np.zeros(r_size, dtype=dtype)
+                    vec[col] = 1.0
+                    H[:, col] = cis_matvec_singlet(cis, vec, kshift, eris=eris)
+            else:
+                H = cis_H(cis, kshift, eris=eris)
+
+            eigval, eigvec = np.linalg.eig(H)
+            idx = eigval.argsort()[:nroots]
+            eigval = eigval[idx]
+            eigvec = eigvec[:, idx]
 
         for n in range(nroots):
             logger.info(cis, "CIS root %d E = %.16g", n, eigval[n])
@@ -229,6 +249,48 @@ def cis_H(cis, kshift, eris=None):
     log.timer("build full CIS Hamiltonian", *cpu0)
     return H
 
+def cis_diag(cis, kshift, eris=None):
+    """[summary]
+    
+    Arguments:
+        cis {[type]} -- [description]
+        kshift {[type]} -- [description]
+    
+    Keyword Arguments:
+        eris {[type]} -- [description] (default: {None})
+    
+    Returns:
+        [type] -- [description]
+    """
+    if eris is None: 
+        eris = cis.ao2mo()
+    nkpts = cis.nkpts
+    nocc = cis.nocc
+    nmo = cis.nmo
+    nvir = nmo - nocc
+    kconserv_r = cis.get_kconserv_r(kshift)
+    dtype = eris.dtype
+    epsilons = [eris.fock[k].diagonal().real for k in range(nkpts)]
+
+    Hdiag = np.zeros((nkpts, nocc, nvir), dtype=dtype)
+    for ki in range(nkpts):
+        ka = kconserv_r[ki]
+        Hdiag[ki] = direct_sum("a-i->ia", epsilons[ka][nocc:], epsilons[ki][:nocc])
+
+    if not cis.direct:
+        for ki in range(nkpts):
+            ka = kconserv_r[ki]
+            Hdiag[ki] += 2. * einsum("aiia->ia", eris.voov[ka, ki, ki])
+            Hdiag[ki] -= einsum("iaia->ia", eris.ovov[ki, ka, ki])
+    else:
+        for ki in range(nkpts):
+            ka = kconserv_r[ki]
+            tmp = 2. * einsum("Lai,Lia->ia", eris.Lpq_mo[ka, ki][:, nocc:, :nocc], eris.Lpq_mo[ki,ka][:, :nocc, nocc:])
+            tmp -= einsum("Laa,Lii->ia", eris.Lpq_mo[ka, ka][:, nocc:, nocc:], eris.Lpq_mo[ki, ki][:, :nocc, :nocc])
+            Hdiag[ki] += (1. / nkpts) * tmp
+
+    return np.ravel(Hdiag)
+
 
 class KCIS(lib.StreamObject):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, keep_exxdiv=False):
@@ -254,9 +316,15 @@ class KCIS(lib.StreamObject):
         self.kpts = mf.kpts
         self.verbose = mf.verbose
         self.max_memory = mf.max_memory
+
+        self.max_space = getattr(__config__, 'kcis_rhf_max_space', 20)
+        self.max_cycle = getattr(__config__, 'kcis_rhf_max_cycle', 50)
+        self.conv_tol = getattr(__config__, 'kcis_rhf_conv_tol', 1e-7)
+
         self.keep_exxdiv = keep_exxdiv
         self.direct = False
         self.build_full_H = False
+        self.davidson = False
 
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.mo_coeff = mo_coeff
@@ -299,6 +367,8 @@ class KCIS(lib.StreamObject):
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+    get_diag = cis_diag
+    matvec = cis_matvec_singlet
     kernel = kernel
 
     def vector_size(self):
@@ -323,6 +393,25 @@ class KCIS(lib.StreamObject):
 
     def ao2mo(self, mo_coeff=None):
         return _CIS_ERIS(self, mo_coeff)
+
+    def gen_matvec(self, kshift, eris=None, **kwargs):
+        if eris is None: 
+            eris = self.ao2mo()
+        diag = self.get_diag(kshift, eris)
+        matvec = lambda xs: [self.matvec(x, kshift, eris) for x in xs]
+        return matvec, diag
+
+    def get_init_guess(self, nroots=1, diag=None):
+        idx = diag.argsort()
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', self.mo_coeff[0].dtype)
+        nroots = min(nroots, size)
+        guess = []
+        for i in idx[:nroots]:
+            g = np.zeros(size, dtype)
+            g[i] = 1.0
+            guess.append(g)
+        return guess
 
     def get_kconserv_r(self, kshift):
         """Get the momentum conservation array for a set of k-points.
@@ -508,6 +597,18 @@ class _CIS_ERIS:
 
 
 def _init_cis_df_eris(cis, eris):
+    """[summary]
+    
+    Arguments:
+        cis {[type]} -- [description]
+        eris {[type]} -- [description]
+    
+    Raises:
+        NotImplementedError: [description]
+    
+    Returns:
+        [type] -- [description]
+    """
     from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     from pyscf.pbc.lib.kpts_helper import gamma_point
