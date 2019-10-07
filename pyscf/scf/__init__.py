@@ -194,8 +194,8 @@ def sfx2c1e(mf):
     return mf.sfx2c1e()
 sfx2c = sfx2c1e
 
-def density_fit(mf, auxbasis=None, with_df=None):
-    return mf.density_fit(auxbasis, with_df)
+def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
+    return mf.density_fit(auxbasis, with_df, only_dfj)
 
 def newton(mf):
     from pyscf.soscf import newton_ah
