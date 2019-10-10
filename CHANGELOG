@@ -4,18 +4,21 @@ PySCF 1.7.0 (2019-?-?)
   - k-CCSD density matrix
   - k-CCSD(T) with core frozen
   - sgX method (a pseudo-spectral method like COSX)
-  - Hooks pre_kernel and post_kernel in SCF driver
-  - Left IP/EA-CCSD for molecular code
+  - pre_kernel and post_kernel hooks in SCF driver
+  - Left eigenvectors of IP/EA-CCSD for molecular code
   - EOM-IP/EA-KCCSD, EOM-IP/EA-KRCCSD
   - Methods EOM-IP/EA-KCCSD(T) T*(a), EOM-IP/EA-KRCCSD(T) T*(a)
   - kEOM-IP/EA-CCSD*
   - KUMP2
-  - KCCSD function spatial2spin that transforms amplitudes in spatial orbital to
-    that in spin-orbital
+  - KCCSD function spatial2spin that transforms amplitudes in spatial orbital
+    representation to that in spin-orbital representation
   - DOCI solver, DOCI-CASCI, and DOCI-CASSCf
   - Support of RSH functionals in DF and sgX methods
   - Add RSH functionals for all PBC DFT methods
   - Semiempirical method MINDO/3
+  - Analytical nuclear gradients with density-fitting
+  - Analytical nuclear hessian with density-fitting
+  - Thermo-chemistry and frequency analysis
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)

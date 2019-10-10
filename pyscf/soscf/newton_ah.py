@@ -678,17 +678,35 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 # call mf._scf.get_hcore, mf._scf.get_ovlp because they might be overloaded
     h1e = mf._scf.get_hcore(mol)
     s1e = mf._scf.get_ovlp(mol)
-    dm = mf.make_rdm1(mo_coeff, mo_occ)
-# call mf._scf.get_veff, to avoid "newton().density_fit()" polluting get_veff
-    vhf = mf._scf.get_veff(mol, dm)
+
+    if mo_coeff is not None and mo_occ is not None:
+        dm = mf.make_rdm1(mo_coeff, mo_occ)
+        # call mf._scf.get_veff, to avoid "newton().density_fit()" polluting get_veff
+        vhf = mf._scf.get_veff(mol, dm)
+        fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
+        mo_energy, mo_tmp = mf.eig(fock, s1e)
+        mf.get_occ(mo_energy, mo_tmp)
+        mo_tmp = None
+
+    else:
+        if dm is None:
+            logger.debug(mf, 'Initial guess density matrix is not given. '
+                         'Generating initial guess from %s', mf.init_guess)
+            dm = mf.get_init_guess(mf._scf.mol, mf.init_guess)
+        vhf = mf._scf.get_veff(mol, dm)
+        fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+        dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
+        vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
+
+    # Save mo_coeff and mo_occ because they are needed by function rotate_mo
+    mf.mo_coeff, mf.mo_occ = mo_coeff, mo_occ
+
     e_tot = mf._scf.energy_tot(dm, h1e, vhf)
     fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
     log.info('Initial guess E= %.15g  |g|= %g', e_tot,
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
-
-# NOTE: DO NOT change the initial guess mo_occ, mo_coeff
-    mo_energy, mo_tmp = mf.eig(fock, s1e)
-    mf.get_occ(mo_energy, mo_tmp)
 
     if dump_chk and mf.chkfile:
         chkfile.save_mol(mol, mf.chkfile)
@@ -859,33 +877,27 @@ class _CIAH_SOSCF(hf.SCF):
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (time.clock(), time.time())
         if dm0 is not None:
-            mo_coeff, mo_occ = self.from_dm(dm0)
+            if isinstance(dm0, str):
+                sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
+                dm0 = mf.from_chk(dm0)
+
         elif mo_coeff is not None and mo_occ is None:
             logger.warn(self, 'Newton solver expects mo_coeff with '
-                        'mo_occ as initial guess but the given initial '
-                        'guess does not have mo_occ.\n      The given '
+                        'mo_occ as initial guess but mo_occ is not found in '
+                        'the arguments.\n      The given '
                         'argument is treated as density matrix.')
-            dm = mo_coeff
-            mo_coeff, mo_occ = self.from_dm(dm)
+            dm0 = mo_coeff
+            mo_coeff = mo_occ = None
+
         else:
             if mo_coeff is None: mo_coeff = self.mo_coeff
             if mo_occ is None: mo_occ = self.mo_occ
-            if mo_coeff is None or mo_occ is None:
-                logger.debug(self, 'Initial guess orbitals not given. '
-                             'Generating initial guess from %s density matrix',
-                             self.init_guess)
-                if self.mol is self._scf.mol:
-                    dm = self.get_init_guess(self.mol, self.init_guess)
-                else:
-                    dm = self.get_init_guess(self._scf.mol, self.init_guess)
-                mo_coeff, mo_occ = self.from_dm(dm)
+
+            # TODO: assert mo_coeff orth-normality. If not orth-normal,
+            # build dm from mo_coeff and mo_occ then unset mo_coeff and mo_occ.
 
         self.build(self.mol)
         self.dump_flags()
-
-        # save initial guess because some methods may need them
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
 
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ = \
@@ -899,24 +911,13 @@ class _CIAH_SOSCF(hf.SCF):
         return self.e_tot
 
     def from_dm(self, dm):
-        '''Transform density matrix to the initial guess'''
-# * If possible, prefer the methods of SOSCF object to evaluate the Fock
-#   matrix and diagonalize Fock matrix. This is because the addons or settings
-#   of underlying SCF method (self._scf) are automatically transfer to the
-#   SOSCF object. Some addons or settings may be applied (initialized) to
-#   SOSCF object only. In that case, self._scf should not be used.
-# * If self.mol and self._scf.mol are different, SOSCF was approximated by a
-#   different mol object. The underlying self._scf has to be used to get right
-#   dimension for the initial guess.
-        if self.mol is self._scf.mol:
-            mf = self
-        else:
-            mf = self._scf
+        '''Transform the initial guess density matrix to initial orbital
+        coefficients.
 
-        if isinstance(dm, str):
-            sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
-            dm = mf.from_chk(dm, True)
-
+        Note kernel function can handle initial guess properly in pyscf-1.7 or
+        newer versions. This function is kept for backward compatibility.
+        '''
+        mf = self._scf
         mol = mf.mol
         h1e = mf.get_hcore(mol)
         s1e = mf.get_ovlp(mol)
