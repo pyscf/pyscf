@@ -212,8 +212,10 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
                              numpy.sqrt(mo_occ[k][mo_occ[k]>0]))
             orbo.append(numpy.asarray(c, order='F'))
 
-        buf = numpy.empty((dfobj.blockdim*nao,nao))
-        for eri1 in dfobj.loop():
+        max_memory = dfobj.max_memory - lib.current_memory()[0]
+        blksize = max(4, int(min(dfobj.blockdim, max_memory*.3e6/8/nao**2)))
+        buf = numpy.empty((blksize*nao,nao))
+        for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
             assert(nao_pair == nao*(nao+1)//2)
             if with_j:
@@ -239,8 +241,10 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
         rargs = (ctypes.c_int(nao), (ctypes.c_int*4)(0, nao, 0, nao),
                  null, ctypes.c_int(0))
         dms = [numpy.asarray(x, order='F') for x in dms]
-        buf = numpy.empty((2,dfobj.blockdim,nao,nao))
-        for eri1 in dfobj.loop():
+        max_memory = dfobj.max_memory - lib.current_memory()[0]
+        blksize = max(4, int(min(dfobj.blockdim, max_memory*.22e6/8/nao**2)))
+        buf = numpy.empty((2,blksize,nao,nao))
+        for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
             if with_j:
                 rho = numpy.einsum('ix,px->ip', dmtril, eri1)

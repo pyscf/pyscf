@@ -70,7 +70,7 @@ class DF(lib.StreamObject):
             N is the number of basis functions of the orbital basis.
         blockdim : int
             When reading DF integrals from disk the chunk size to load.  It is
-            used to improve the IO performance.
+            used to improve IO performance.
     '''
 
     blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
