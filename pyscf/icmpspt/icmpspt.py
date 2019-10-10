@@ -412,12 +412,12 @@ def writeFCIDUMPs_NEVPT(mc,eris,eris_sp,aaavsplit,energy_core,energyE0,nfro):
     else:
         orbsymout = []
 
-    virtOrbs = range(nocc, eris_sp['h1eff'].shape[0])
-    chunks = len(virtOrbs)/aaavsplit
-    virtRange = [virtOrbs[i:i+chunks] for i in xrange(0, len(virtOrbs), chunks)]
+    virtOrbs = list(range(nocc, eris_sp['h1eff'].shape[0]))
+    chunks = len(virtOrbs) // aaavsplit
+    virtRange = [virtOrbs[i:i+chunks] for i in range(0, len(virtOrbs), chunks)]
 
     for K in range(aaavsplit):
-        currentOrbs = range(ncor, nocc)+virtRange[K]
+        currentOrbs = list(range(ncor, nocc)) + virtRange[K]
         fout = open('FCIDUMP_aaav%d'%(K),'w')
         #tools.fcidump.write_head(fout, eris_sp['h1eff'].shape[0]-ncor, mol.nelectron-2*ncor, orbsym= orbsymout[ncor:])
 
@@ -863,9 +863,9 @@ def ReadWriteEnergy(outfile,method):
 def writeAAAConfFile(neleca, nelecb, ncor, ncas, norb,\
         DMRGCI, maxM, perturber, memory, numthrds,\
         reorder, extraline, root=0, approx= False, aaavsplit=1, aaavIter=0, name= "MRLCC"):
-    virtOrbs = range(norb-ncor-ncas)
-    chunks = len(virtOrbs)/aaavsplit
-    virtRange = [virtOrbs[i:i+chunks] for i in xrange(0, len(virtOrbs), chunks)]
+    virtOrbs = list(range(norb - ncor - ncas))
+    chunks = len(virtOrbs) // aaavsplit
+    virtRange = [virtOrbs[i:i+chunks] for i in range(0, len(virtOrbs), chunks)]
 
     if (perturber == "AAAC"):
         configFile = "response%s_aaac.conf"%(name)
