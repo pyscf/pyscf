@@ -13,9 +13,15 @@ kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), 
 kmf.conv_tol = 1e-10
 kmf.scf()
 
+cell_n3 = make_test_cell.test_cell_n3()
+cell_n3.mesh = [29] * 3
+cell_n3.build()
+kmf_n3 = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([1,1,2]), exxdiv=None)
+kmf_n3.kernel()
+
 def tearDownModule():
-    global cell_n3d, kmf
-    del cell_n3d, kmf
+    global cell_n3d, kmf, cell_n3, kmf_n3
+    del cell_n3d, kmf, cell_n3, kmf_n3
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
@@ -165,3 +171,28 @@ class KnownValues(unittest.TestCase):
         # Usually slightly higher agreement when comparing directly against one another
         self.assertAlmostEqual(eea_gccsd[0][0], eea_rccsd[0][0], 9)
         self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 9)
+
+    def test_n3_ee(self):
+        ehf_bench = -8.65192351414987
+        ecc_bench = -0.1552983842036319
+        eee_bench = [0.267866987019175  , 0.2678670115360931, 0.2687043844504475]
+
+        ekrhf = kmf_n3.e_tot
+        self.assertAlmostEqual(ekrhf, ehf_bench, 6)
+
+        mycc = pbcc.KRCCSD(kmf_n3, keep_exxdiv=True)
+        ekrcc, t1, t2 = mycc.kernel()
+        self.assertAlmostEqual(ekrcc, ecc_bench, 6)
+
+        # EOM-EE-KRCCSD singlet
+        nroots = 3  # number of roots requested
+        kptlist = [0]  # index(indices) of targetted k_shift(s) 
+
+        from pyscf.pbc.cc import eom_kccsd_rhf as eom_krccsd
+        myeomee = eom_krccsd.EOMEESinglet(mycc)
+        myeomee.max_space = nroots * 10
+        eee, vee = myeomee.kernel(nroots=nroots, kptlist=kptlist)
+        self.assertAlmostEqual(eee[0][0], eee_bench[0], 5)
+        self.assertAlmostEqual(eee[0][1], eee_bench[1], 5)
+        self.assertAlmostEqual(eee[0][2], eee_bench[2], 5)
+        
