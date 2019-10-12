@@ -96,10 +96,11 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
         dm = (dmzooa, dmzvopa+dmzvopa.T, dmzvoma-dmzvoma.T,
               dmzoob, dmzvopb+dmzvopb.T, dmzvomb-dmzvomb.T)
         vj, vk = mf.get_jk(mol, dm, hermi=0)
-        vj = vj.reshape(2,3,nao,nao)
-        vk = vk.reshape(2,3,nao,nao) * hyb
+        vk *= hyb
         if abs(omega) > 1e-10:
             vk += mf.get_k(mol, dm, hermi=0, omega=omega) * (alpha-hyb)
+        vj = vj.reshape(2,3,nao,nao)
+        vk = vk.reshape(2,3,nao,nao)
 
         veff0doo = vj[0,0]+vj[1,0] - vk[:,0] + f1oo[:,0] + k1ao[:,0] * 2
         wvoa = reduce(numpy.dot, (orbva.T, veff0doo[0], orboa)) * 2
