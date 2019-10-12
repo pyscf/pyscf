@@ -145,10 +145,40 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
 class _DFHF(object):
+    def nuc_grad_method(self):
+        from pyscf.df.grad import rhf, uhf, rks, uks
+        if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
+            if getattr(self, 'xc', None):
+                return uks.Gradients(self)
+            else:
+                return uhf.Gradients(self)
+        elif isinstance(self, scf.rhf.RHF):
+            if getattr(self, 'xc', None):
+                return rks.Gradients(self)
+            else:
+                return rhf.Gradients(self)
+        else:
+            raise NotImplementedError
+
+    Gradients = nuc_grad_method
+
+    def Hessian(self):
+        from pyscf.df.hessian import rhf, uhf, rks, uks
+        if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
+            if getattr(self, 'xc', None):
+                return uks.Hessian(self)
+            else:
+                return uhf.Hessian(self)
+        elif isinstance(self, scf.rhf.RHF):
+            if getattr(self, 'xc', None):
+                return rks.Hessian(self)
+            else:
+                return rhf.Hessian(self)
+        else:
+            raise NotImplementedError
+
     def method_not_implemented(self, *args, **kwargs):
         raise NotImplementedError
-    nuc_grad_method = Gradients = method_not_implemented
-    Hessian = method_not_implemented
     NMR = method_not_implemented
     NSR = method_not_implemented
     Polarizability = method_not_implemented
