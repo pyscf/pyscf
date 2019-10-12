@@ -182,7 +182,9 @@ class SGX(lib.StreamObject):
         self.grids_level_i = 0  # initial grids level
         self.grids_level_f = 1  # final grids level
         self.grids_switch_thrd = 0.03
-        self.dfj = False  # compute J matrix using DF
+        # compute J matrix using DF and K matrix using SGX. It's identical to
+        # the RIJCOSX method in ORCA
+        self.dfj = False
         self._auxbasis = auxbasis
 
         # debug=True generates a dense tensor of the Coulomb integrals at each

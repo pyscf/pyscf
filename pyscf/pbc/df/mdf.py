@@ -128,7 +128,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         j2ctag = 'eig'
         return j2c, j2c_negative, j2ctag
 
-    feri = h5py.File(cderi_file)
+    feri = h5py.File(cderi_file, 'a')
     feri['j3c-kptij'] = kptij_lst
     nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id, cholesky_j2c):  # kpt = kptj - kpti

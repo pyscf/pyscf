@@ -1383,18 +1383,18 @@ class SCF(lib.StreamObject):
         log.info('method = %s', '-'.join(method))
         log.info('initial guess = %s', self.init_guess)
         log.info('damping factor = %g', self.damp)
-        log.info('level shift factor = %s', self.level_shift)
+        log.info('level_shift factor = %s', self.level_shift)
         if isinstance(self.diis, lib.diis.DIIS):
             log.info('DIIS = %s', self.diis)
-            log.info('DIIS start cycle = %d', self.diis_start_cycle)
-            log.info('DIIS space = %d', self.diis.space)
+            log.info('diis_start_cycle = %d', self.diis_start_cycle)
+            log.info('diis_space = %d', self.diis.space)
         elif self.diis:
             log.info('DIIS = %s', self.DIIS)
-            log.info('DIIS start cycle = %d', self.diis_start_cycle)
-            log.info('DIIS space = %d', self.diis_space)
-        log.info('SCF tol = %g', self.conv_tol)
-        log.info('SCF gradient tol = %s', self.conv_tol_grad)
-        log.info('max. SCF cycles = %d', self.max_cycle)
+            log.info('diis_start_cycle = %d', self.diis_start_cycle)
+            log.info('diis_space = %d', self.diis_space)
+        log.info('SCF conv_tol = %g', self.conv_tol)
+        log.info('SCF conv_tol_grad = %s', self.conv_tol_grad)
+        log.info('SCF max_cycles = %d', self.max_cycle)
         log.info('direct_scf = %s', self.direct_scf)
         if self.direct_scf:
             log.info('direct_scf_tol = %g', self.direct_scf_tol)
@@ -1660,9 +1660,9 @@ class SCF(lib.StreamObject):
         nbf = self.mol.nao_nr()
         return nbf**4/1e6+lib.current_memory()[0] < self.max_memory*.95
 
-    def density_fit(self, auxbasis=None, with_df=None):
+    def density_fit(self, auxbasis=None, with_df=None, only_dfj=False):
         import pyscf.df.df_jk
-        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
+        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df, only_dfj)
 
     def sfx2c1e(self):
         import pyscf.x2c.sfx2c1e
