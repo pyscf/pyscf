@@ -29,7 +29,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf import scf
 from pyscf import df
-from pyscf.ao2mo.outcore import balance_partition, _load_from_h5g
+from pyscf.ao2mo.outcore import balance_partition
 from pyscf.gto.moleintor import getints, make_cintopt
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
