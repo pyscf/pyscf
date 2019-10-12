@@ -31,6 +31,12 @@ direct_nosym        No            No             No**               Yes
 
 *  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+
+direct_spin0 solver is specified for singlet state. However, calling this
+solver sometimes ends up with the error "State not singlet x.xxxxxxe-06" due
+to numerical issues. Calling direct_spin1 for singlet state is slightly
+slower but more robust than direct_spin0 especially when combining to energy
+penalty method (:func:`fix_spin_`)
 '''
 
 import sys
