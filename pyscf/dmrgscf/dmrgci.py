@@ -487,7 +487,7 @@ class DMRGCI(lib.StreamObject):
             print('Reading binary 3RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
-            libunpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+            libunpack.unpackE3(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
             E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
           else:
@@ -566,7 +566,7 @@ class DMRGCI(lib.StreamObject):
             print('Reading binary 4RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
-            libunpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+            libunpack.unpackE4(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
             E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
             E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
           else:
