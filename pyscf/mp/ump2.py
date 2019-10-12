@@ -63,7 +63,13 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     emp2 = 0.0
     for i in range(nocca):
-        eris_ovov = numpy.asarray(eris.ovov[i*nvira:(i+1)*nvira])
+        if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
+            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # ovov integrals might be in a 4-index tensor.
+            eris_ovov = eris.ovov[i]
+        else:
+            eris_ovov = numpy.asarray(eris.ovov[i*nvira:(i+1)*nvira])
+
         eris_ovov = eris_ovov.reshape(nvira,nocca,nvira).transpose(1,0,2)
         t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_a[i], eia_a)
         emp2 += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
@@ -71,7 +77,12 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         if with_t2:
             t2aa[i] = t2i - t2i.transpose(0,2,1)
 
-        eris_ovov = numpy.asarray(eris.ovOV[i*nvira:(i+1)*nvira])
+        if isinstance(eris.ovOV, numpy.ndarray) and eris.ovOV.ndim == 4:
+            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # ovov integrals might be in a 4-index tensor.
+            eris_ovov = eris.ovOV[i]
+        else:
+            eris_ovov = numpy.asarray(eris.ovOV[i*nvira:(i+1)*nvira])
         eris_ovov = eris_ovov.reshape(nvira,noccb,nvirb).transpose(1,0,2)
         t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_a[i], eia_b)
         emp2 += numpy.einsum('JaB,JaB', t2i, eris_ovov)
@@ -79,7 +90,12 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
             t2ab[i] = t2i
 
     for i in range(noccb):
-        eris_ovov = numpy.asarray(eris.OVOV[i*nvirb:(i+1)*nvirb])
+        if isinstance(eris.OVOV, numpy.ndarray) and eris.OVOV.ndim == 4:
+            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # ovov integrals might be in a 4-index tensor.
+            eris_ovov = eris.OVOV[i]
+        else:
+            eris_ovov = numpy.asarray(eris.OVOV[i*nvirb:(i+1)*nvirb])
         eris_ovov = eris_ovov.reshape(nvirb,noccb,nvirb).transpose(1,0,2)
         t2i = eris_ovov.conj()/lib.direct_sum('a+jb->jab', eia_b[i], eia_b)
         emp2 += numpy.einsum('jab,jab', t2i, eris_ovov) * .5
