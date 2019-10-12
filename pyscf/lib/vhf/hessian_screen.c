@@ -93,7 +93,7 @@ void CVHFgrad_jk_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
+#pragma omp parallel \
         shared(opt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp;
@@ -269,7 +269,7 @@ void CVHFipip1_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
+#pragma omp parallel \
         shared(opt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp;
