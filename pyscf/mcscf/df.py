@@ -211,8 +211,11 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
             fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
             ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
-            bufs1 = numpy.empty((self.with_df.blockdim,nmo,nmo))
-            for eri1 in self.with_df.loop():
+
+            max_memory = self.max_memory - lib.current_memory()[0]
+            blksize = max(4, int(min(self.with_df.blockdim, max_memory*.3e6/8/nmo**2)))
+            bufs1 = numpy.empty((blksize,nmo,nmo))
+            for eri1 in self.with_df.loop(blksize):
                 naux = eri1.shape[0]
                 buf = bufs1[:naux]
                 fdrv(ftrans, fmmm,
@@ -268,14 +271,16 @@ class _ERIS(object):
 
         mo = numpy.asarray(mo, order='F')
         fxpp = lib.H5TmpFile()
+
+        blksize = max(4, int(min(with_df.blockdim, (max_memory*.95e6/8-naoaux*nmo*ncas)/3/nmo**2)))
         bufpa = numpy.empty((naoaux,nmo,ncas))
-        bufs1 = numpy.empty((with_df.blockdim,nmo,nmo))
+        bufs1 = numpy.empty((blksize,nmo,nmo))
         fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
         fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
         ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
         fxpp_keys = []
         b0 = 0
-        for k, eri1 in enumerate(with_df.loop()):
+        for k, eri1 in enumerate(with_df.loop(blksize)):
             naux = eri1.shape[0]
             bufpp = bufs1[:naux]
             fdrv(ftrans, fmmm,

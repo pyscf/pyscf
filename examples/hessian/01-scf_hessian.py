@@ -4,11 +4,10 @@
 #
 
 '''
-SCF analytical nuclear hessian calculation. SCF hessian object can be created
-by calling .Hessian() for pyscf-1.6.1 and newer.
+SCF analytical nuclear hessian calculation.
 '''
 
-from pyscf import gto, scf, hessian
+from pyscf import gto
 
 mol = gto.M(
     atom = [
@@ -17,10 +16,11 @@ mol = gto.M(
         ['H' , 0. ,  0.757 , 0.587]],
     basis = '631g')
 
-mf = scf.RHF(mol).run()
+mf = mol.RHF().run()
 # The stucture of h is
 # h[Atom_1, Atom_2, Atom_1_XYZ, Atom_1_XYZ]
 h = mf.Hessian().kernel()
+print(h.shape)
 
 mf = mol.apply('UKS').x2c().run()
 h = mf.Hessian().kernel()

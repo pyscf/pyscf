@@ -647,7 +647,7 @@ class KSCF(pbchf.SCF):
     def dump_chk(self, envs):
         if self.chkfile:
             mol_hf.SCF.dump_chk(self, envs)
-            with h5py.File(self.chkfile) as fh5:
+            with h5py.File(self.chkfile, 'a') as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
 

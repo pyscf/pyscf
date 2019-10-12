@@ -6,20 +6,24 @@ Version history
 
 ===============  ==========
 ---------------  ----------
-1.6_             2018-12-31
+1.6.4_           2019-09-14
+1.6.3            2019-07-28
+1.6.2            2019-06-17
+1.6.1            2019-03-15
+1.6              2018-12-31
 1.6 beta         2018-11-26 (feature frozen)
 1.6 alpha        2018-08-15
-1.5.5            2018-12-31
+1.5.5_           2018-12-31
 1.5.4            2018-11-16
 1.5.3            2018-09-06
 1.5.2            2018-08-15
 1.5.1            2018-07-01
-1.5_             2018-06-08
+1.5              2018-06-08
 1.5 beta         2018-04-15 (feature frozen)
 1.5 alpha        2018-03-21
 1.4.7_           2018-04-15
 1.4.4            2018-03-20
-1.4_             2017-10-05
+1.4              2017-10-05
 1.4 beta         2017-08-22 (feature frozen)
 1.4 alpha        2017-06-24
 1.3.5_           2017-08-12
@@ -48,8 +52,7 @@ Version history
 1.0 alpha 1      2015-04-07
 ===============  ==========
 
-.. _1.6: https://github.com/sunqm/pyscf/releases/tag/v1.6.0
-.. _1.5: https://github.com/sunqm/pyscf/releases/tag/v1.5.4
+.. _1.6.4: https://github.com/sunqm/pyscf/releases/tag/v1.6.4
+.. _1.5.5: https://github.com/sunqm/pyscf/releases/tag/v1.5.5
 .. _1.4.7: https://github.com/sunqm/pyscf/releases/tag/v1.4.7
-.. _1.4: https://github.com/sunqm/pyscf/releases/tag/v1.4
 .. _1.3.5: https://github.com/sunqm/pyscf/releases/tag/v1.3.5

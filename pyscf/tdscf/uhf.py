@@ -505,7 +505,7 @@ def analyze(tdobj, verbose=None):
 
     e_ev = numpy.asarray(tdobj.e) * nist.HARTREE2EV
     e_wn = numpy.asarray(tdobj.e) * nist.HARTREE2WAVENUMBER
-    wave_length = 1e11/e_wn
+    wave_length = 1e7/e_wn
 
     log.note('\n** Excitation energies and oscillator strengths **')
 
