@@ -446,6 +446,7 @@ class KSCF(pbchf.SCF):
         logger.info(self, 'N kpts = %d', len(self.kpts))
         logger.debug(self, 'kpts = %s', self.kpts)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
+        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
         #if self.exxdiv == 'vcut_ws':
         #    if self.exx_built is False:
         #        self.precompute_exx()
@@ -544,9 +545,8 @@ class KSCF(pbchf.SCF):
 
     def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
               kpts_band=None, omega=None):
-        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                 with_k=False, omega=omega)[0]
-        return vj
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band,
+                           with_k=False, omega=omega)[0]
 
     def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
               kpts_band=None, omega=None):
