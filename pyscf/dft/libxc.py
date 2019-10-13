@@ -671,7 +671,9 @@ def is_lda(xc_code):
     return xc_type(xc_code) == 'LDA'
 
 def is_hybrid_xc(xc_code):
-    if isinstance(xc_code, str):
+    if xc_code is None:
+        return False
+    elif isinstance(xc_code, str):
         if xc_code.isdigit():
             return _itrf.LIBXC_is_hybrid(ctypes.c_int(int(xc_code)))
         else:
