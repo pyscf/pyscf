@@ -108,10 +108,10 @@ for i in range(mol.nbas):
         pi += di
 print('integral shape %s' % str(eri1.shape))
 # This integral block can be generated using mol.intor
-eri1 = mol.intor('int2e_ip1_sph', shls_slice=(bas_start, bas_end,
-                                              0, mol.nbas,
-                                              0, mol.nbas,
-                                              0, mol.nbas)
+eri1 = mol.intor('int2e_ip1_sph', shls_slice=(bas_start, bas_end,\
+                                              0, mol.nbas,\
+                                              0, mol.nbas,\
+                                              0, mol.nbas))
 
 
 #
@@ -154,8 +154,8 @@ sub_eri = sub_eri.reshape(nao_i*nao_j,nao_k*nao_l)
 # and b on another molecule and d on the third molecule.
 #
 mol1 = mol
-mol2 = gto.M('He', basis='ccpvdz')
-mol3 = gto.M('O', basis='sto-3g')
+mol2 = gto.M(atom='He', basis='ccpvdz')
+mol3 = gto.M(atom='O', basis='sto-3g')
 
 mol123 = mol1 + mol2 + mol3
 eri = mol123.intor('int2e', shls_slice=(0, mol1.nbas,
