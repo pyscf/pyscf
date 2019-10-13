@@ -909,6 +909,10 @@ class GradScanner:
     @property
     def e_tot(self):
         return self.base.e_tot
+    @e_tot.setter
+    def e_tot(self, x):
+        self.base.e_tot = x
+
     @property
     def converged(self):
 # Some base methods like MP2 does not have the attribute converged
