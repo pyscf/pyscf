@@ -47,4 +47,4 @@ mf = dft.RKS(mol).density_fit()
 mf.with_df.build()
 mf.kernel()
 print('CPU time', time.time() - t0)
-print(mf.with_df._cderi is None)
+print(mf.with_df._cderi is None)  # ._cderi will not be created

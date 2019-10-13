@@ -74,10 +74,10 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(res[0][1:], ('0b110100', '0b1101'))
 
     def test__init__file(self):
-        c1 = fci.FCI(mol, m.mo_coeff)
+        c1 = fci.FCI(mol, m.mo_coeff, singlet=True)
         self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)
 
-        c1 = fci.FCI(m)
+        c1 = fci.FCI(m, singlet=True)
         self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)
 
     def test_init_triplet(self):
