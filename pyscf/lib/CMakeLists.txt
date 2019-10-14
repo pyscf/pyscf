@@ -147,8 +147,9 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     # Stick to libxc-3.0.1 because libxc-4.2.3 does not support M05X, M06X. They
     # are defined in libxc-3.0.1 and agree very well to xcfun.
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.2.3/libxc-4.2.3.tar.gz
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/3.0.1/libxc-3.0.1.tar.gz
+    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/3.0.1/libxc-3.0.1.tar.gz
     #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.1.tar.gz
+    URL /home/jia/Software/pyscf/pyscf/lib/build/deps/src/libxc-3.0.1.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
