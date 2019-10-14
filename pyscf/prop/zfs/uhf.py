@@ -54,6 +54,10 @@ def koseki_charge(z):
         return z * (.3 + z * .05)
     elif z <= 18:
         return z * (1.05 - z * .0125)
+    elif z <= 30:
+        return z * ( 0.385 + 0.025 * (z - 18 - 2) ) # Jia: J. Phys. Chem. A 1998, 102, 10430
+    elif z < 48:
+        return z * ( 4.680 + 0.060 * (z - 36 - 2) )
     else:
         return z
 
@@ -294,8 +298,8 @@ class ZeroFieldSplitting(lib.StreamObject):
         logger.warn(self, 'UHF-ZFS is an experimental feature. It is still in '
                     'testing\nFeatures and APIs may be changed in the future.')
 
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
@@ -303,10 +307,10 @@ class ZeroFieldSplitting(lib.StreamObject):
         if self.cphf:
             log.info('CPHF conv_tol = %g', self.conv_tol)
             log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        log.info('sso = %s (2e spin-same-orbit coupling)', self.sso)
-        log.info('soo = %s (2e spin-other-orbit coupling)', self.soo)
-        log.info('so_eff_charge = %s (1e SO effective charge)',
-                 self.so_eff_charge)
+        logger.info(self, 'sso = %s (2e spin-same-orbit coupling)', self.sso)
+        logger.info(self, 'soo = %s (2e spin-other-orbit coupling)', self.soo)
+        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
+                    self.so_eff_charge)
         return self
 
     def kernel(self, mo1=None):
