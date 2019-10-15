@@ -1,5 +1,5 @@
 <div align="left">
-  <img src="https://github.com/pyscf/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
+  <img src="https://github.com/pyscf/pyscf-doc/blob/master/logo/pyscf-logo.png" height="80px"/>
 </div>
 
 Python-based Simulations of Chemistry Framework
