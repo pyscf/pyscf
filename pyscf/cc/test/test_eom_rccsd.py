@@ -23,7 +23,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
-from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates
+from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates, gintermediates
 
 mol = gto.Mole()
 mol.atom = [
@@ -798,12 +798,12 @@ class KnownValues(unittest.TestCase):
         myt1 = mycc1.t1 + 1j * numpy.sin(mycc1.t1) * mycc1.t1
         myt2 = mycc1.t2 + 1j * numpy.sin(mycc1.t2) * mycc1.t2
         myt2 = myt2 + myt2.transpose(1,0,3,2)
-        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
-        self.assertAlmostEqual(lib.finger(e), 23230.479347478944, 6)
-        self.assertAlmostEqual(lib.finger(pt1), (-5.218888542372856+6.26563618296775e-05j), 6)
-        self.assertAlmostEqual(lib.finger(pt2), (46.19512409968981-0.0007574997568293397j), 6)
-        self.assertAlmostEqual(lib.finger(Wmcik), (-18.479280056078426+0.00039725891265209376j), 6)
-        self.assertAlmostEqual(lib.finger(Wacek), (-7.101360230612007-0.00019032711858324745j), 6)
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=erisi)
+        self.assertAlmostEqual(lib.finger(e), 23223.465490572264, 6)
+        self.assertAlmostEqual(lib.finger(pt1), (-5.2202836452466705-0.09570164571057749j), 6)
+        self.assertAlmostEqual(lib.finger(pt2), (46.188012063609506-1.303867687778909j), 6)
+        self.assertAlmostEqual(lib.finger(Wmcik), (-18.438930654297778+1.5734161307568773j), 6)
+        self.assertAlmostEqual(lib.finger(Wacek), (-7.187576764072701+0.7399185332889747j), 6)
 
     def test_t3p2_intermediates_real(self):
         myt1 = mycc1.t1.copy()
@@ -815,6 +815,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(pt2), 46.19512409958347, 6)
         self.assertAlmostEqual(lib.finger(Wmcik), -18.47928005593598, 6)
         self.assertAlmostEqual(lib.finger(Wacek), -7.101360230151883, 6)
+
+    def test_t3p2_intermediates_against_so(self):
+        from pyscf.cc.addons import convert_to_gccsd
+        myt1 = mycc1.t1.copy()
+        myt2 = mycc1.t2.copy()
+        e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
+
+        mygcc = convert_to_gccsd(mycc1)
+        mygt1 = mygcc.t1.copy()
+        mygt2 = mygcc.t2.copy()
+        ge, gpt1, gpt2, gWmcik, gWacek = gintermediates.get_t3p2_imds_slow(mygcc, mygt1, mygt2)
+        self.assertAlmostEqual(lib.finger(pt1), -2.6094405706617727, 6)
+        self.assertAlmostEqual(lib.finger(pt2), 23.097562049844235, 6)
+        self.assertAlmostEqual(lib.finger(pt1), lib.finger(gpt1[::2,::2]), 6)
+        self.assertAlmostEqual(lib.finger(pt2), lib.finger(gpt2[::2,1::2,::2,1::2]), 6)
 
     def test_h2o_star(self):
         mol_h2o = gto.Mole()

@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,19 +54,13 @@ def TDDFT(mf):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
         if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return uks.TDDFT(mf)
-            else:
-                return uks.TDDFTNoHybrid(mf)
+            return uks.tddft(mf)
         else:
             return uhf.TDHF(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)
         if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return rks.TDDFT(mf)
-            else:
-                return rks.TDDFTNoHybrid(mf)
+            return rks.tddft(mf)
         else:
             return rhf.TDHF(mf)
 

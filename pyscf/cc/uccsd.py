@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -727,6 +727,17 @@ class UCCSD(ccsd.CCSD):
         if nocc is None: nocc = self.nocc
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vector, nmo, nocc)
+
+    def vector_size(self, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nocca, noccb = nocc
+        nmoa, nmob = nmo
+        nvira, nvirb = nmoa-nocca, nmob-noccb
+        sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
+        sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
+        sizeab = nocca * noccb * nvira * nvirb
+        return sizea + sizeb + sizeab
 
     def amplitudes_from_rccsd(self, t1, t2):
         return amplitudes_from_rccsd(t1, t2)

@@ -118,6 +118,7 @@ def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
                 vhf = self.get_veff(self.mol, dm)
             e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf)
             e_tot += vhf.epcm
+            self.scf_summary['epcm'] = vhf.epcm.real
             logger.debug(self, '  E_diel = %.15g', vhf.epcm)
             return e_tot, e_coul
 

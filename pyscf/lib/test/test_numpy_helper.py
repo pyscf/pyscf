@@ -31,6 +31,11 @@ class KnownValues(unittest.TestCase):
         a = a.reshape(40,10,-1)
         self.assertAlmostEqual(abs(a.transpose(0,2,1) - lib.transpose(a,(0,2,1))).max(), 0, 12)
 
+        a = (a*1000).astype(numpy.int32)
+        at = lib.transpose(a)
+        self.assertAlmostEqual(abs(a.T - at).max(), 0, 12)
+        self.assertTrue(at.dtype == numpy.int32)
+
     def test_transpose_sum(self):
         a = numpy.random.random((3,400,400))
         self.assertAlmostEqual(abs(a[0]+a[0].T - lib.hermi_sum(a[0])).max(), 0, 12)
@@ -46,6 +51,12 @@ class KnownValues(unittest.TestCase):
         b = a + a.T.conj()
         c = lib.transpose_sum(a)
         self.assertAlmostEqual(abs(b-c).max(), 0, 12)
+
+        a = (a*1000).astype(numpy.int32)
+        b = a + a.T
+        c = lib.transpose_sum(a)
+        self.assertAlmostEqual(abs(b-c).max(), 0, 12)
+        self.assertTrue(c.dtype == numpy.int32)
 
     def test_unpack(self):
         a = numpy.random.random((400,400))
@@ -70,6 +81,60 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         a = numpy.random.random((5050,20))
         self.assertAlmostEqual(lib.finger(lib.unpack_tril(a, axis=0)), -103.03970592075423, 10)
+
+    def test_unpack_tril_integer(self):
+        a = lib.unpack_tril(numpy.arange(6, dtype=numpy.int32))
+        self.assertTrue(a.dtype == numpy.int32)
+        self.assertTrue(numpy.array_equal(a, numpy.array([(0,1,3),(1,2,4),(3,4,5)])))
+
+    def test_pack_tril_integer(self):
+        a = lib.pack_tril(numpy.arange(9, dtype=numpy.int32).reshape(3,3))
+        self.assertTrue(numpy.array_equal(a, numpy.array((0,3,4,6,7,8))))
+        self.assertTrue(a.dtype == numpy.int32)
+
+    def test_unpack_row(self):
+        row = numpy.arange(28.)
+        ref = lib.unpack_tril(row)[4]
+        self.assertTrue(numpy.array_equal(ref, lib.unpack_row(row, 4)))
+
+        row = numpy.arange(28, dtype=numpy.int32)
+        ref = lib.unpack_tril(row)[4]
+        a = lib.unpack_row(row, 4)
+        self.assertTrue(numpy.array_equal(ref, a))
+        self.assertTrue(a.dtype == numpy.int32)
+
+    def test_hermi_triu_int(self):
+        a = numpy.arange(9).reshape(3,3)
+        self.assertRaises(NotImplementedError, lib.hermi_triu, a)
+
+    def test_take_2d(self):
+        a = numpy.arange(49.).reshape(7,7)
+        idx = [3,0,5]
+        idy = [5,4,1]
+        ref = a[idx][:,idy]
+        self.assertTrue(numpy.array_equal(ref, lib.take_2d(a, idx, idy)))
+
+        a = numpy.arange(49, dtype=numpy.int32).reshape(7,7)
+        ref = a[idx][:,idy]
+        self.assertTrue(numpy.array_equal(ref, lib.take_2d(a, idx, idy)))
+        self.assertTrue(lib.take_2d(a, idx, idy).dtype == numpy.int32)
+
+    def test_takebak_2d(self):
+        b = numpy.arange(9.).reshape((3,3))
+        a = numpy.arange(49.).reshape(7,7)
+        idx = numpy.array([3,0,5])
+        idy = numpy.array([5,4,1])
+        ref = a.copy()
+        ref[idx[:,None],idy] += b
+        lib.takebak_2d(a, b, idx, idy)
+        self.assertTrue(numpy.array_equal(ref, a))
+
+        b = numpy.arange(9, dtype=numpy.int32).reshape((3,3))
+        a = numpy.arange(49, dtype=numpy.int32).reshape(7,7)
+        ref = a.copy()
+        ref[idx[:,None],idy] += b
+        lib.takebak_2d(a, b, idx, idy)
+        self.assertTrue(numpy.array_equal(ref, a))
 
     def test_dot(self):
         a = numpy.random.random((400,400))

@@ -1,11 +1,16 @@
+import copy
 import make_test_cell
+import numpy
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.pbc import gto
 from pyscf.pbc import cc as pbcc
 from pyscf.pbc import scf as pbcscf
 from pyscf.pbc.cc.eom_kccsd_rhf import EOMIP, EOMEA
 from pyscf.pbc.cc.eom_kccsd_rhf import EOMIP_Ta, EOMEA_Ta
+from pyscf.pbc.lib import kpts_helper
 from pyscf.cc import eom_uccsd
+from pyscf.pbc.cc import kintermediates, kintermediates_rhf
+from pyscf import lib
 import unittest
 
 cell_n3d = make_test_cell.test_cell_n3_diffuse()
@@ -19,9 +24,85 @@ cell_n3.build()
 kmf_n3 = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([1,1,2]), exxdiv=None)
 kmf_n3.kernel()
 
+# Helper functions
+def kconserve_pmatrix(nkpts, kconserv):
+    Ps = numpy.zeros((nkpts, nkpts, nkpts, nkpts))
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
+                kb = kconserv[ki, ka, kj]
+                Ps[ki, kj, ka, kb] = 1
+    return Ps
+
+def rand_t1_t2(kmf, mycc):
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    numpy.random.seed(1)
+    t1 = (numpy.random.random((nkpts, nocc, nvir)) +
+          numpy.random.random((nkpts, nocc, nvir)) * 1j - .5 - .5j)
+    t2 = (numpy.random.random((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)) +
+          numpy.random.random((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)) * 1j - .5 - .5j)
+    kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
+    Ps = kconserve_pmatrix(nkpts, kconserv)
+    t2 = t2 + numpy.einsum('xyzijab,xyzw->yxwjiba', t2, Ps)
+    return t1, t2
+
+def rand_r1_r2_ip(kmf, mycc):
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    numpy.random.seed(1)
+    r1 = (numpy.random.random((nocc,)) +
+          numpy.random.random((nocc,)) * 1j - .5 - .5j)
+    r2 = (numpy.random.random((nkpts, nkpts, nocc, nocc, nvir)) +
+          numpy.random.random((nkpts, nkpts, nocc, nocc, nvir)) * 1j - .5 - .5j)
+    return r1, r2
+
+def rand_r1_r2_ea(kmf, mycc):
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    numpy.random.seed(1)
+    r1 = (numpy.random.random((nvir,)) +
+          numpy.random.random((nvir,)) * 1j - .5 - .5j)
+    r2 = (numpy.random.random((nkpts, nkpts, nocc, nvir, nvir)) +
+          numpy.random.random((nkpts, nkpts, nocc, nvir, nvir)) * 1j - .5 - .5j)
+    return r1, r2
+
+def make_rand_kmf(nkpts=3):
+    # Not perfect way to generate a random mf.
+    # CSC = 1 is not satisfied and the fock matrix is neither
+    # diagonal nor sorted.
+    numpy.random.seed(2)
+    nkpts = nkpts
+    kmf = pbcscf.KRHF(cell_n3d, kpts=cell_n3d.make_kpts([1, 1, nkpts]))
+    kmf.exxdiv = None
+    nmo = cell_n3d.nao_nr()
+    kmf.mo_occ = numpy.zeros((nkpts, nmo))
+    kmf.mo_occ[:, :2] = 2
+    kmf.mo_energy = numpy.arange(nmo) + numpy.random.random((nkpts, nmo)) * .3
+    kmf.mo_energy[kmf.mo_occ == 0] += 2
+    kmf.mo_coeff = (numpy.random.random((nkpts, nmo, nmo)) +
+                    numpy.random.random((nkpts, nmo, nmo)) * 1j - .5 - .5j)
+    ## Round to make this insensitive to small changes between PySCF versions
+    #mat_veff = kmf.get_veff().round(4)
+    #mat_hcore = kmf.get_hcore().round(4)
+    #kmf.get_veff = lambda *x: mat_veff
+    #kmf.get_hcore = lambda *x: mat_hcore
+    return kmf
+
+rand_kmf = make_rand_kmf()
+rand_kmf1 = make_rand_kmf(nkpts=1)
+rand_kmf2 = make_rand_kmf(nkpts=2)
+
 def tearDownModule():
-    global cell_n3d, kmf, cell_n3, kmf_n3
-    del cell_n3d, kmf, cell_n3, kmf_n3
+    global cell_n3d, kmf, cell_n3, kmf_n3, rand_kmf, rand_kmf1, rand_kmf2
+    del cell_n3d, kmf, cell_n3, kmf_n3, rand_kmf, rand_kmf1, rand_kmf2
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
@@ -196,3 +277,134 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eee[0][1], eee_bench[1], 5)
         self.assertAlmostEqual(eee[0][2], eee_bench[2], 5)
         
+    def test_t3p2_imds_complex_slow(self):
+        '''Test `_slow` t3p2 implementation.'''
+        kmf = copy.copy(rand_kmf)
+        # Round to make this insensitive to small changes between PySCF versions
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds_slow(rand_cc, t1, t2)
+        self.assertAlmostEqual(lib.finger(e),47165803.39384298, 3)
+        self.assertAlmostEqual(lib.finger(pt1),10444.351837617747+20016.35108560657j, 4)
+        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
+        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
+        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
+
+    def test_t3p2_imds_complex(self):
+        '''Test t3p2 implementation.'''
+        kmf = copy.copy(rand_kmf)
+        # Round to make this insensitive to small changes between PySCF versions
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
+        self.assertAlmostEqual(lib.finger(e), 47165803.393840045, 3)
+        self.assertAlmostEqual(lib.finger(pt1),10444.3518376177471509+20016.3510856065695407j, 4)
+        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
+        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
+        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
+
+    def test_t3p2_imds_complex_against_so(self):
+        '''Test t3[2] implementation against spin-orbital implmentation.'''
+        from pyscf.pbc.scf.addons import convert_to_ghf
+        kmf = copy.copy(rand_kmf2)
+        # Round to make this insensitive to small changes between PySCF versions
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
+        self.assertAlmostEqual(lib.finger(e), 3867.812511518491, 6)
+        self.assertAlmostEqual(lib.finger(pt1),(179.0050003787795+521.7529255474592j), 6)
+        self.assertAlmostEqual(lib.finger(pt2),(361.4902731606503+1079.5387279755082j), 6)
+        self.assertAlmostEqual(lib.finger(Wmcik),(34.9811459194098-86.93467379996585j), 6)
+        self.assertAlmostEqual(lib.finger(Wacek),(183.86684834783233+179.66583663669644j), 6)
+
+        gkmf = convert_to_ghf(rand_kmf2)
+        # Round to make this insensitive to small changes between PySCF versions
+        mat_veff = gkmf.get_veff().round(4)
+        mat_hcore = gkmf.get_hcore().round(4)
+        gkmf.get_veff = lambda *x: mat_veff
+        gkmf.get_hcore = lambda *x: mat_hcore
+
+        rand_gcc = pbcc.KGCCSD(gkmf)
+        eris = rand_gcc.ao2mo(rand_gcc.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_gcc.nkpts)]
+        gt1 = rand_gcc.spatial2spin(t1)
+        gt2 = rand_gcc.spatial2spin(t2)
+        rand_gcc.t1, rand_gcc.t2, rand_gcc.eris = gt1, gt2, eris
+
+        ge, gpt1, gpt2, gWmcik, gWacek = kintermediates.get_t3p2_imds_slow(rand_gcc, gt1, gt2)
+        self.assertAlmostEqual(lib.finger(ge), lib.finger(e), 8)
+        self.assertAlmostEqual(lib.finger(gpt1[:,::2,::2]), lib.finger(pt1), 8)
+        self.assertAlmostEqual(lib.finger(gpt2[:,:,:,::2,1::2,::2,1::2]), lib.finger(pt2), 8)
+        self.assertAlmostEqual(lib.finger(gWmcik[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wmcik), 8)
+        self.assertAlmostEqual(lib.finger(gWacek[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wacek), 8)
+
+    def test_t3p2_imds_complex_against_so_frozen(self):
+        '''Test t3[2] implementation against spin-orbital implmentation with frozen orbitals.'''
+        from pyscf.pbc.scf.addons import convert_to_ghf
+        kmf = copy.copy(rand_kmf2)
+        # Round to make this insensitive to small changes between PySCF versions
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        rand_cc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=1)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
+        self.assertAlmostEqual(lib.finger(e), -328.44609187669454, 6)
+        self.assertAlmostEqual(lib.finger(pt1),(-64.29455737653288+94.36604246905883j), 6)
+        self.assertAlmostEqual(lib.finger(pt2),(-24.663592135920723+36.00181963359046j), 6)
+        self.assertAlmostEqual(lib.finger(Wmcik),(6.692675632408793+6.926864923969868j), 6)
+        self.assertAlmostEqual(lib.finger(Wacek),(24.78958393361647-15.627512899715132j), 6)
+
+        gkmf = convert_to_ghf(rand_kmf2)
+        # Round to make this insensitive to small changes between PySCF versions
+        mat_veff = gkmf.get_veff().round(4)
+        mat_hcore = gkmf.get_hcore().round(4)
+        gkmf.get_veff = lambda *x: mat_veff
+        gkmf.get_hcore = lambda *x: mat_hcore
+
+        rand_gcc = pbcc.KGCCSD(gkmf, frozen=2)
+        eris = rand_gcc.ao2mo(rand_gcc.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_gcc.nkpts)]
+        gt1 = rand_gcc.spatial2spin(t1)
+        gt2 = rand_gcc.spatial2spin(t2)
+        rand_gcc.t1, rand_gcc.t2, rand_gcc.eris = gt1, gt2, eris
+
+        ge, gpt1, gpt2, gWmcik, gWacek = kintermediates.get_t3p2_imds_slow(rand_gcc, gt1, gt2)
+        self.assertAlmostEqual(lib.finger(ge), lib.finger(e), 8)
+        self.assertAlmostEqual(lib.finger(gpt1[:,::2,::2]), lib.finger(pt1), 8)
+        self.assertAlmostEqual(lib.finger(gpt2[:,:,:,::2,1::2,::2,1::2]), lib.finger(pt2), 8)
+        self.assertAlmostEqual(lib.finger(gWmcik[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wmcik), 8)
+        self.assertAlmostEqual(lib.finger(gWacek[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wacek), 8)

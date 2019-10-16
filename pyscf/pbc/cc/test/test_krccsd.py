@@ -17,6 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import copy
 import unittest
 import numpy as np
 
@@ -104,20 +105,21 @@ def make_rand_kmf():
     # CSC = 1 is not satisfied and the fock matrix is neither
     # diagonal nor sorted.
     np.random.seed(2)
-    kmf = pbcscf.KRHF(cell, kpts=cell.make_kpts([1, 1, 3]))
+    nkpts = 3
+    kmf = pbcscf.KRHF(cell, kpts=cell.make_kpts([1, 1, nkpts]))
     kmf.exxdiv = None
     nmo = cell.nao_nr()
-    kmf.mo_occ = np.zeros((3, nmo))
+    kmf.mo_occ = np.zeros((nkpts, nmo))
     kmf.mo_occ[:, :2] = 2
-    kmf.mo_energy = np.arange(nmo) + np.random.random((3, nmo)) * .3
+    kmf.mo_energy = np.arange(nmo) + np.random.random((nkpts, nmo)) * .3
     kmf.mo_energy[kmf.mo_occ == 0] += 2
-    kmf.mo_coeff = (np.random.random((3, nmo, nmo)) +
-                    np.random.random((3, nmo, nmo)) * 1j - .5 - .5j)
-    # Round to make this insensitive to small changes between PySCF versions
-    mat_veff = kmf.get_veff().round(4)
-    mat_hcore = kmf.get_hcore().round(4)
-    kmf.get_veff = lambda *x: mat_veff
-    kmf.get_hcore = lambda *x: mat_hcore
+    kmf.mo_coeff = (np.random.random((nkpts, nmo, nmo)) +
+                    np.random.random((nkpts, nmo, nmo)) * 1j - .5 - .5j)
+    ## Round to make this insensitive to small changes between PySCF versions
+    #mat_veff = kmf.get_veff().round(4)
+    #mat_hcore = kmf.get_hcore().round(4)
+    #kmf.get_veff = lambda *x: mat_veff
+    #kmf.get_hcore = lambda *x: mat_hcore
     return kmf
 
 rand_kmf = make_rand_kmf()
@@ -233,7 +235,7 @@ class KnownValues(unittest.TestCase):
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
-        self.assertAlmostEqual(ecc, ecc_bench, 8)
+        self.assertAlmostEqual(ecc, ecc_bench, 7)
 
     def test_ao2mo(self):
         kmf = make_rand_kmf()
@@ -287,7 +289,7 @@ class KnownValues(unittest.TestCase):
         eris.mo_energy = [f.diagonal() for f in eris.fock]
         ecc1, t1, t2 = mycc.kernel(eris=eris)
 
-        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
+        self.assertAlmostEqual(ecc1, ecc1_bench, 5)
 
     def _test_cu_metallic_frozen_occ(self, kmf, cell):
         assert cell.mesh == [7, 7, 7]
@@ -632,6 +634,36 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ekrcc_t, -0.0021709465899365336, 6)
         self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
 
+    def test_rccsd_t_non_hf_against_so_frozen(self):
+        '''Tests rccsd_t with gccsd_t with frozen orbitals.'''
+        n = 7
+        cell = make_test_cell.test_cell_n3([n]*3)
+        #import sys
+        #cell.stdout = sys.stdout
+        #cell.verbose = 7
+
+        nk = [2, 1, 1]
+        kpts = cell.make_kpts(nk)
+        kpts -= kpts[0]
+        kks = pbcscf.KRKS(cell, kpts=kpts)
+        ekks = kks.kernel()
+
+        khf = pbcscf.KRHF(cell)
+        khf.__dict__.update(kks.__dict__)
+
+        mycc = pbcc.KGCCSD(khf, frozen=[[],[0,1]])
+        eris = mycc.ao2mo()
+        ekgcc, t1, t2 = mycc.kernel(eris=eris)
+        ekgcc_t = mycc.ccsd_t(eris=eris)
+
+        mycc = pbcc.KRCCSD(khf, frozen=[[],[0]])
+        eris = mycc.ao2mo()
+        ekrcc, t1, t2 = mycc.kernel(eris=eris)
+        ekrcc_t = mycc.ccsd_t(eris=eris)
+
+        self.assertAlmostEqual(ekrcc_t, -0.0018712836246782309, 6)
+        self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
+
     def test_ccsd_t_high_cost(self):
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
@@ -650,12 +682,53 @@ class KnownValues(unittest.TestCase):
         energy_t_bench = -0.00191443154358
         self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 
+    def test_rccsd_t_vs_gccsd_t(self):
+        '''Test rccsd(t) vs gccsd(t) with k-points.'''
+        from pyscf.pbc.scf.addons import convert_to_ghf
+        kmf = copy.copy(rand_kmf)
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        rand_cc = pbcc.KRCCSD(kmf)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+        energy_t = kccsd_t_rhf.kernel(rand_cc, eris=eris)
+
+        gkmf = convert_to_ghf(rand_kmf)
+        # Round to make this insensitive to small changes between PySCF versions
+        mat_veff = gkmf.get_veff().round(4)
+        mat_hcore = gkmf.get_hcore().round(4)
+        gkmf.get_veff = lambda *x: mat_veff
+        gkmf.get_hcore = lambda *x: mat_hcore
+
+        from pyscf.pbc.cc import kccsd_t
+        rand_gcc = pbcc.KGCCSD(gkmf)
+        eris = rand_gcc.ao2mo(rand_gcc.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        gt1 = rand_gcc.spatial2spin(t1)
+        gt2 = rand_gcc.spatial2spin(t2)
+        rand_gcc.t1, rand_gcc.t2, rand_gcc.eris = gt1, gt2, eris
+        genergy_t = kccsd_t.kernel(rand_gcc, eris=eris)
+
+        self.assertAlmostEqual(energy_t, -65.5365125645066, 6)
+        self.assertAlmostEqual(energy_t, genergy_t, 8)
+
     def test_rand_ccsd(self):
         '''Single (eom-)ccsd iteration with random t1/t2.'''
-        rand_cc = pbcc.KRCCSD(rand_kmf)
-        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        kmf = copy.copy(rand_kmf)
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        rand_cc = pbcc.KRCCSD(kmf)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
-        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         t1, t2 = rand_cc.t1, rand_cc.t2
@@ -665,12 +738,12 @@ class KnownValues(unittest.TestCase):
 
         # Excited state results
         kshift = 0
-        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ip(kmf, rand_cc)
         Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(finger(Hr1), (-0.456418558025-0.0485067398162j), 6)
         self.assertAlmostEqual(finger(Hr2), (0.616016341219+2.08777776589j), 6)
 
-        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ea(kmf, rand_cc)
         Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(finger(Hr1), (-0.234979092885-0.218401823892j), 6)
         self.assertAlmostEqual(finger(Hr2), (-3.56244154449+2.12051064183j), 6)
@@ -678,20 +751,26 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen0(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and lowest lying orbital
         at multiple k-points frozen.'''
-        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=1)
-        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        kmf = copy.copy(rand_kmf)
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        rand_cc = pbcc.KRCCSD(kmf, frozen=1)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
 
-        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
         self.assertAlmostEqual(finger(Ht1), (-8.06918006043+8.2779236131j), 6)
         self.assertAlmostEqual(finger(Ht2), (30.6692903818-14.2701276046j), 6)
 
         frozen = [[0,],[0,],[0,]]
-        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
-        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
-        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
         self.assertAlmostEqual(finger(Ht1), (-8.06918006043+8.2779236131j), 6)
         self.assertAlmostEqual(finger(Ht2), (30.6692903818-14.2701276046j), 6)
@@ -700,12 +779,12 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         kshift = 0
-        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ip(kmf, rand_cc)
         Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(finger(Hr1), (0.289384011655-0.394002590665j), 6)
         self.assertAlmostEqual(finger(Hr2), (0.056437476036+0.156522915807j), 6)
 
-        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ea(kmf, rand_cc)
         Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(finger(Hr1), (0.298028415374+0.0944020804565j), 6)
         self.assertAlmostEqual(finger(Hr2), (-0.243561845158+0.869173612894j), 6)
@@ -713,11 +792,17 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen1(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen occupied
         orbital.'''
+        kmf = copy.copy(rand_kmf)
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
         frozen = [[0,],[],[]]
-        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
-        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
-        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
         # Manually zero'ing out the frozen elements of the t1/t2
         # N.B. the 0'th element frozen means we are freezing the 1'th
         #      element in the current padding scheme
@@ -733,7 +818,7 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         kshift = 0
-        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ip(kmf, rand_cc)
         r1[1] = 0.0
         r2[0, :, 1] = 0.0
         r2[:, 0, :, 1] = 0.0
@@ -741,7 +826,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(Hr1), (-0.558560718395-0.344470539404j), 6)
         self.assertAlmostEqual(finger(Hr2), (0.882960101238+0.0752022769822j), 6)
 
-        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ea(kmf, rand_cc)
         r2[0, :, 1] = 0.0
         Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(finger(Hr1), (0.010947007472-0.287095461151j), 6)
@@ -750,11 +835,17 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen2(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and full occupied frozen
         at a single k-point.'''
+        kmf = copy.copy(rand_kmf)
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
         frozen = [[],[0,1],[]]
-        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
-        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
-        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
         # Manually zero'ing out the frozen elements of the t1/t2
         # N.B. the 0'th element frozen means we are freezing the 1'th
         #      element in the current padding scheme
@@ -770,7 +861,7 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         kshift = 1
-        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ip(kmf, rand_cc)
         r1[[0,1]] = 0.0
         r2[1, :, [0,1]] = 0.0
         r2[:, 1, :, [0,1]] = 0.0
@@ -778,7 +869,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(Hr1), (0.0 + 0.0j), 6)
         self.assertAlmostEqual(finger(Hr2), (-0.336011745573-0.0454220386975j), 6)
 
-        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ea(kmf, rand_cc)
         r2[1, :, [0,1]] = 0.0
         Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
         self.assertAlmostEqual(finger(Hr1), (-0.00152035195068-0.502318229581j), 6)
@@ -787,13 +878,19 @@ class KnownValues(unittest.TestCase):
     def test_rand_ccsd_frozen3(self):
         '''Single (eom-)ccsd iteration with random t1/t2 and single frozen virtual
         orbital.'''
-        kconserv = kpts_helper.get_kconserv(rand_kmf.cell, rand_kmf.kpts)
+        kmf = copy.copy(rand_kmf)
+        mat_veff = kmf.get_veff().round(4)
+        mat_hcore = kmf.get_hcore().round(4)
+        kmf.get_veff = lambda *x: mat_veff
+        kmf.get_hcore = lambda *x: mat_hcore
+
+        kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
 
         frozen = [[],[],[3]]  # freezing one virtual
-        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
-        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
-        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        t1, t2 = rand_t1_t2(kmf, rand_cc)
         # Manually zero'ing out the frozen elements of the t1/t2
         t1[2, :, 0] = 0.0
         for ki in range(rand_cc.nkpts):
@@ -813,7 +910,7 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         kshift = 2
-        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ip(kmf, rand_cc)
         r1[0] = 0.0
         for ki in range(rand_cc.nkpts):
           for kj in range(rand_cc.nkpts):
@@ -825,7 +922,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(Hr1), (0.4067595510145880 +  0.0770280877446436j), 6)
         self.assertAlmostEqual(finger(Hr2), (0.0926714318228812 + -1.0702702421619084j), 6)
 
-        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r1, r2 = rand_r1_r2_ea(kmf, rand_cc)
         r1[0] = 0.0
         for kj in range(rand_cc.nkpts):
           for ka in range(rand_cc.nkpts):

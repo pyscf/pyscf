@@ -17,7 +17,6 @@ import ctypes
 import unittest
 import numpy
 import scipy.special
-import scipy.misc
 from pyscf import lib
 from pyscf import gto
 from pyscf.dft import radi

@@ -65,7 +65,7 @@ class KnownValues(unittest.TestCase):
         kmf.diis = None
         e2 = kmf.kernel()
         self.assertAlmostEqual(e1, e2, 9)
-        self.assertAlmostEqual(e1, -3.3035461870274085, 9)
+        self.assertAlmostEqual(e1, -3.3046228601655607, 9)
 
     def test_init_guess_by_chkfile(self):
         np.random.seed(1)
@@ -88,10 +88,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 1.6424482249196493, 9)
+        self.assertAlmostEqual(lib.finger(dip), 1.6424482249196493, 7)
 
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.7361493256233677, 9)
+        self.assertAlmostEqual(lib.finger(dip), 0.7361493256233677, 7)
 
     def test_get_init_guess(self):
         cell1 = cell.copy()

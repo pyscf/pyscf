@@ -35,15 +35,12 @@ class SymAdaptedCASCI(casci.CASCI):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
         assert(self.mol.symmetry)
-        singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
-                   and self.nelecas[0] == self.nelecas[1])
-        self.fcisolver = fci.solver(self.mol, singlet, symm=True)
-        self.fcisolver.lindep = getattr(__config__,
-                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
-        self.fcisolver.max_cycle = getattr(__config__,
-                                           'mcscf_casci_CASCI_fcisolver_max_cycle', 200)
-        self.fcisolver.conv_tol = getattr(__config__,
-                                          'mcscf_casci_CASCI_fcisolver_conv_tol', 1e-8)
+        fcisolver = self.fcisolver
+        if isinstance(fcisolver, fci.direct_spin0.FCISolver):
+            self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
+        else:
+            self.fcisolver = fci.direct_spin1_symm.FCISolver(self.mol)
+        self.fcisolver.__dict__.update(fcisolver.__dict__)
 
     @property
     def wfnsym(self):
@@ -97,12 +94,12 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
     #irrep_name = mc.mol.irrep_name
     irrep_name = mc.mol.irrep_id
     s = mc._scf.get_ovlp()
+    ncore = mc.ncore
+    nocc = ncore + mc.ncas
     try:
         orbsym = scf.hf_symm.get_orbsym(mc._scf.mol, mo_coeff, s, True)
     except ValueError:
         log.warn('mc1step_symm symmetrizes input orbitals')
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         mo_cor = symm.symmetrize_space(mc.mol, mo_coeff[:,    :ncore], s=s, check=False)
         mo_act = symm.symmetrize_space(mc.mol, mo_coeff[:,ncore:nocc], s=s, check=False)
         mo_vir = symm.symmetrize_space(mc.mol, mo_coeff[:,nocc:     ], s=s, check=False)
@@ -113,8 +110,6 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
 
     active_orbsym = getattr(mc.fcisolver, 'orbsym', [])
     if (not getattr(active_orbsym, '__len__', None)) or len(active_orbsym) == 0:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         mc.fcisolver.orbsym = orbsym[ncore:nocc]
     log.debug('Active space irreps %s', str(mc.fcisolver.orbsym))
 
@@ -133,8 +128,6 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
             mc.fcisolver.wfnsym = wfnsym
             log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
         elif getattr(mo_coeff, 'orbsym', None) is not None:  # It may be reordered SCF orbitals
-            ncore = mc.ncore
-            nocc = mc.ncore + mc.ncas
             cas_orb = mo_coeff[:,ncore:nocc]
             s = reduce(numpy.dot, (cas_orb.T, mc._scf.get_ovlp(), mc._scf.mo_coeff))
             if numpy.all(numpy.max(s, axis=1) > 1-1e-9):

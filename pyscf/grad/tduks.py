@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ from pyscf import __config__
 #
 # Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
+def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
@@ -216,8 +216,11 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     im0b = reduce(numpy.dot, (mo_coeff[1], im0b+zeta_b*dm1b, mo_coeff[1].T))
     im0 = im0a + im0b
 
-    hcore_deriv = td_grad.hcore_generator(mol)
-    s1 = td_grad.get_ovlp(mol)
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = td_grad.base._scf.nuc_grad_method()
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
 
     dmz1dooa = z1ao[0] + dmzooa
     dmz1doob = z1ao[1] + dmzoob
@@ -284,6 +287,7 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
 
     log.timer('TDUHF nuclear gradients', *time0)
     return de
+
 
 # dmov, dmoo in AO-representation
 # Note spin-trace is applied for fxc, kxc
@@ -418,8 +422,9 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
 
 
 class Gradients(tdrhf_grad.Gradients):
+    @lib.with_doc(grad_elec.__doc__)
     def grad_elec(self, xy, singlet, atmlst=None):
-        return kernel(self, xy, atmlst, self.max_memory, self.verbose)
+        return grad_elec(self, xy, atmlst, self.max_memory, self.verbose)
 
 Grad = Gradients
 

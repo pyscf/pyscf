@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -141,7 +141,7 @@ def search_seg(basisfile, symb):
         return [x.upper() for x in dat.splitlines() if x and 'END' not in x]
 
 def _search_seg(raw_data, symb):
-    for dat in raw_data[1:]:
+    for dat in raw_data:
         dat0 = dat.split(None, 1)
         if dat0 and dat0[0] == symb:
             return dat

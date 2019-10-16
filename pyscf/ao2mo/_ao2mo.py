@@ -107,6 +107,7 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
     assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
+    assert(mo_coeff.dtype == numpy.double)
     nao = mo_coeff.shape[0]
     i0, i1, j0, j1 = orbs_slice
     icount = i1 - i0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ from pyscf.grad import cisd as cisd_grad
 from pyscf.grad import uccsd as uccsd_grad
 
 
-def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
-           verbose=logger.INFO):
+def grad_elec(cigrad, civec=None, eris=None, atmlst=None, verbose=logger.INFO):
+    myci = cigrad.base
     if civec is None: civec = mycc.ci
     nocc = myci.nocc
     nmo = myci.nmo
@@ -62,14 +62,11 @@ def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
           (dovvv, dovVV, dOVvv, dOVVV),
           (dooov, dooOV, dOOov, dOOOV))
     t1 = t2 = l1 = l2 = civec
-    return uccsd_grad.kernel(myci, t1, t2, l1, l2, eris, atmlst, mf_grad,
-                             d1, d2, verbose)
+    return uccsd_grad.grad_elec(cigrad, t1, t2, l1, l2, eris, atmlst,
+                                d1, d2, verbose)
 
 class Gradients(cisd_grad.Gradients):
-    def kernel(self, civec=None, eris=None, atmlst=None, mf_grad=None,
-               verbose=None):
-        return cisd_grad.Gradients.kernel(self, civec, eris, atmlst, mf_grad,
-                                          verbose, _kern=kernel)
+    grad_elec = grad_elec
 
 Grad = Gradients
 

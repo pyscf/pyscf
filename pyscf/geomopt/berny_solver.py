@@ -31,6 +31,8 @@ import numpy
 from pyscf import lib
 from pyscf.geomopt.addons import as_pyscf_method, dump_mol_geometry
 from pyscf import __config__
+from pyscf.grad.rhf import GradientsBasics
+
 # Overwrite pyberny's atomic unit
 coords.angstrom = 1./lib.param.BOHR
 
@@ -79,8 +81,8 @@ def to_berny_log(pyscf_log):
     return BernyLogger()
 
 
-def optimize(method, assert_convergence=ASSERT_CONV,
-             include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
+def kernel(method, assert_convergence=ASSERT_CONV,
+           include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
     '''Optimize geometry with pyberny for the given method.
     
     To adjust the convergence threshold, parameters can be set in kwargs as
@@ -93,8 +95,10 @@ def optimize(method, assert_convergence=ASSERT_CONV,
             'stepmax': 1.8e-3,       # Angstrom
             'steprms': 1.2e-3,       # Angstrom
         }
-        from pyscf import geometric_solver
-        geometric_solver.optimize(method, **conv_params)
+        from pyscf.geomopt import berny_solver
+        opt = berny_solver.GeometryOptimizer(method)
+        opt.params = conv_params
+        opt.kernel()
     '''
     t0 = time.clock(), time.time()
     mol = method.mol.copy()
@@ -107,6 +111,8 @@ def optimize(method, assert_convergence=ASSERT_CONV,
 
     if isinstance(method, lib.GradScanner):
         g_scanner = method
+    elif isinstance(method, GradientsBasics):
+        g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
     else:
@@ -139,8 +145,55 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         t1 = log.timer('geomoetry optimization cycle %d'%cycle, *t1)
 
     t0 = log.timer('geomoetry optimization', *t0)
-    return mol
-kernel = optimize
+    return optimizer._converged, mol
+
+def optimize(method, assert_convergence=ASSERT_CONV,
+             include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
+    '''Optimize geometry with pyberny for the given method.
+    
+    To adjust the convergence threshold, parameters can be set in kwargs as
+    below:
+
+    .. code-block:: python
+        conv_params = {  # They are default settings
+            'gradientmax': 0.45e-3,  # Eh/Angstrom
+            'gradientrms': 0.15e-3,  # Eh/Angstrom
+            'stepmax': 1.8e-3,       # Angstrom
+            'steprms': 1.2e-3,       # Angstrom
+        }
+        from pyscf.geomopt import berny_solver
+        newmol = berny_solver.optimize(method, **conv_params)
+    '''
+    return kernel(method, assert_convergence, include_ghost, callback,
+                  **kwargs)[1]
+
+class GeometryOptimizer(lib.StreamObject):
+    '''Optimize the molecular geometry for the input method.
+
+    Note the method.mol will be changed after calling .kernel() method.
+    '''
+    def __init__(self, method):
+        self.method = method
+        self.callback = None
+        self.params = {}
+        self.converged = False
+        self.max_cycle = 100
+
+    @property
+    def mol(self):
+        return self.method.mol
+    @mol.setter
+    def mol(self, x):
+        self.method.mol = x
+
+    def kernel(self, params=None):
+        if params is not None:
+            self.params.update(params)
+        params = dict(self.params)
+        params['maxsteps'] = self.max_cycle
+        self.converged, self.mol = \
+                kernel(self.method, callback=self.callback, **params)
+        return self.mol
 
 del(INCLUDE_GHOST, ASSERT_CONV)
 

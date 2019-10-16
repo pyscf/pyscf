@@ -347,6 +347,13 @@ algorithm does not need to translate the tensors into matrices and call the BLAS
 libraries for the matrix contraction.  Tensor transposing and data moving are
 largely avoided in TBLIS tensor library.  The interface to TBLIS offers an
 efficient implementation for :func:`numpy.einsum` style tensor contraction.
+To enable the tlibs-einsum plugin, you can set the cmake flags
+``-DENABLE_TBLIS`` when compiling the C extensions::
+
+  $ cmake -DENABLE_TBLIS=ON ..
+
+Note TBLIS library was implemented with C++11 standard. You need at least GCC
+5.2 to compile this plugin.
 
 
 Pyberny

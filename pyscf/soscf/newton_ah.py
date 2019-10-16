@@ -697,8 +697,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 
 # Copy the integral file to soscf object to avoid the integrals being cached
 # twice.
-    if mol == mf.mol and not getattr(mf, 'with_df', None):
+    if mol is mf.mol and not getattr(mf, 'with_df', None):
         mf._eri = mf._scf._eri
+        mf.opt = mf._scf.opt
 
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
     u, g_orb, kfcount, jkcount = next(rotaiter)
@@ -850,10 +851,7 @@ class _CIAH_SOSCF(hf.SCF):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self._scf.build(mol)
-        if self._scf.mol == mol:
-            self.opt = self._scf.opt
-        else:
-            self.opt = self.init_direct_scf(mol)
+        self.opt = None
         self._eri = None
         return self
 
@@ -875,7 +873,7 @@ class _CIAH_SOSCF(hf.SCF):
                 logger.debug(self, 'Initial guess orbitals not given. '
                              'Generating initial guess from %s density matrix',
                              self.init_guess)
-                if self.mol == self._scf.mol:
+                if self.mol is self._scf.mol:
                     dm = self.get_init_guess(self.mol, self.init_guess)
                 else:
                     dm = self.get_init_guess(self._scf.mol, self.init_guess)
@@ -909,7 +907,7 @@ class _CIAH_SOSCF(hf.SCF):
 # * If self.mol and self._scf.mol are different, SOSCF was approximated by a
 #   different mol object. The underlying self._scf has to be used to get right
 #   dimension for the initial guess.
-        if self.mol == self._scf.mol:
+        if self.mol is self._scf.mol:
             mf = self
         else:
             mf = self._scf

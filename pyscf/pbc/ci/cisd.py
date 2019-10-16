@@ -107,3 +107,11 @@ class GCISD(gcisd.GCISD):
             madelung = tools.madelung(self._scf.cell, self._scf.kpt)
             eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris
+
+
+from pyscf.pbc import scf
+scf.hf.RHF.CISD = lib.class_as_method(RCISD)
+scf.uhf.UHF.CISD = lib.class_as_method(UCISD)
+scf.ghf.GHF.CISD = lib.class_as_method(GCISD)
+scf.rohf.ROHF.CISD = None
+

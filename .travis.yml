@@ -25,6 +25,8 @@ python:
   - 3.4
   - 3.5
   - 3.6
+# 3.7 not available in group deprecated-2017Q4
+#  - 3.7
 
 #virtualenv:  affect python 3.5 3.6?
 #    system_site_packages: true

@@ -262,6 +262,13 @@ def _unpack(vo, mo_occ):
     return z
 
 
+from pyscf.pbc import scf
+scf.khf.KRHF.TDA  = lib.class_as_method(KTDA)
+scf.khf.KRHF.TDHF = lib.class_as_method(KTDHF)
+scf.krohf.KROHF.TDA  = None
+scf.krohf.KROHF.TDHF = None
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto
     from pyscf.pbc import scf

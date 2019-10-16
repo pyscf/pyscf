@@ -49,7 +49,7 @@ except ImportError:
     settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
     if (settings.SHCIEXE is None or settings.SHCISCRATCHDIR is None):
         import sys
-        sys.stderr.write('settings.py not found.  Please create %s\n'
+        sys.stderr.write('settings.py not found for module shciscf.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 

@@ -31,6 +31,7 @@ def GMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_ghf(mf)
     return mp2.GMP2(mf, frozen, mo_coeff, mo_occ)
 
-def KMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    return kmp2.KMP2(mf, frozen, mo_coeff, mo_occ)
+def KRMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    return kmp2.KRMP2(mf, frozen, mo_coeff, mo_occ)
 
+KMP2 = KRMP2

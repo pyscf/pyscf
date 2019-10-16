@@ -37,6 +37,8 @@ from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib.kpts_helper import member, gamma_point
 from pyscf import __config__
 from pyscf.pbc.cc import kintermediates as imd
+from pyscf.pbc.cc.kccsd_rhf import _get_epq
+from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
 
@@ -138,11 +140,11 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
                 return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond, pick=pickeig,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                           max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           max_space=eom.max_space, nroots=nroots, verbose=log)
         else:
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                           max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           max_space=eom.max_space, nroots=nroots, verbose=log)
 
         evals_k = evals_k.real
         evals[k] = evals_k
@@ -539,8 +541,8 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
 
         deltaE = 0.0 + 1j*0.0
         for ka, kb in itertools.product(range(nkpts), repeat=2):
-            lijkab = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
-            rijkab = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            lijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
+            rijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
             kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
                           [ka,kb,kshift,range(nkpts),range(nkpts)])
 
@@ -550,52 +552,65 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
 
                 # lijkab update
                 if kk == kshift and kb == kconserv[ki,ka,kj]:
-                    lijkab[ki,kj,kk] += lib.einsum('ijab,k->ijkab', eris.oovv[ki,kj,ka], l1)
+                    lijkab[ki,kj] += lib.einsum('ijab,k->ijkab', eris.oovv[ki,kj,ka], l1)
 
                 km = kconserv[kj,ka,ki]
                 tmp = lib.einsum('jima,mkb->ijkab', eris.ooov[kj,ki,km], l2[km,kk])
                 km = kconserv[kj,kb,ki]
                 tmpT = lib.einsum('jimb,mka->ijkab', eris.ooov[kj,ki,km], l2[km,kk])
-                lijkab[ki,kj,kk] += (-tmp + tmpT)
+                lijkab[ki,kj] += (-tmp + tmpT)
 
                 ke = kconserv[ka,ki,kb]
-                lijkab[ki,kj,kk] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka], l2[kj,kk])
+                lijkab[ki,kj] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka], l2[kj,kk])
 
                 # rijkab update
                 tmp = lib.einsum('mbke,m->bke', eris.ovov[kshift,kb,kk], r1)
                 tmp = lib.einsum('bke,ijae->ijkab', tmp, t2[ki,kj,ka])
                 tmpT = lib.einsum('make,m->ake', eris.ovov[kshift,ka,kk], r1)
                 tmpT = lib.einsum('ake,ijbe->ijkab', tmpT, t2[ki,kj,kb])
-                rijkab[ki,kj,kk] -= (tmp - tmpT)
+                rijkab[ki,kj] -= (tmp - tmpT)
 
                 km = kconserv[kj,kshift,kk]
                 tmp = lib.einsum('mnjk,n->mjk', eris.oooo[km,kshift,kj], r1)
                 tmp = lib.einsum('mjk,imab->ijkab', tmp, t2[ki,km,ka])
-                rijkab[ki,kj,kk] += tmp
+                rijkab[ki,kj] += tmp
 
                 km = kconserv[kj,ka,ki]
                 tmp = lib.einsum('jima,mkb->ijkab', eris.ooov[kj,ki,km].conj(), r2[km,kk])
                 km = kconserv[kj,kb,ki]
                 tmpT = lib.einsum('jimb,mka->ijkab', eris.ooov[kj,ki,km].conj(), r2[km,kk])
-                rijkab[ki,kj,kk] -= (tmp - tmpT)
+                rijkab[ki,kj] -= (tmp - tmpT)
 
                 ke = kconserv[ka,ki,kb]
-                rijkab[ki,kj,kk] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka].conj(), r2[kj,kk])
+                rijkab[ki,kj] += lib.einsum('ieab,jke->ijkab', eris.ovvv[ki,ke,ka].conj(), r2[kj,kk])
 
-            # P(ijk)
-            lijkab = lijkab + lijkab.transpose(1,2,0,4,5,3,6,7) + lijkab.transpose(2,0,1,5,3,4,6,7)
-            rijkab = rijkab + rijkab.transpose(1,2,0,4,5,3,6,7) + rijkab.transpose(2,0,1,5,3,4,6,7)
+            eijk = np.zeros((nkpts,nkpts,nocc,nocc,nocc), dtype=dtype)
+            Plijkab = np.zeros_like(lijkab)
+            Prijkab = np.zeros_like(rijkab)
+            for ki, kj in itertools.product(range(nkpts), repeat=2):
+                kk = kklist[ki,kj]
+                # P(ijk)
+                Plijkab[ki,kj] = (lijkab[ki,kj] + lijkab[kj,kk].transpose(2,0,1,3,4) +
+                                                  lijkab[kk,ki].transpose(1,2,0,3,4))
+
+                Prijkab[ki,kj] = (rijkab[ki,kj] + rijkab[kj,kk].transpose(2,0,1,3,4) +
+                                                  rijkab[kk,ki].transpose(1,2,0,3,4))
+
+
+                eijk[ki,kj] = _get_epqr([0,nocc,ki,mo_e_o,eom.nonzero_opadding],
+                                        [0,nocc,kj,mo_e_o,eom.nonzero_opadding],
+                                        [0,nocc,kk,mo_e_o,eom.nonzero_opadding])
 
             # Creating denominator
-            eijk = (mo_e_o[:, None, None, :, None, None] + mo_e_o[None, :, None, None, :, None] +
-                    mo_e_o[None, None, :, None, None, :])
-            eab = mo_e_v[ka][:, None] + mo_e_v[kb][None, :]
-            eijkab = (eijk[:, :, :, :, :, :, None, None] -
-                      eab[None, None, None, None, None, None, :, :])
+            eab = _get_epq([0,nvir,ka,mo_e_v,eom.nonzero_vpadding],
+                           [0,nvir,kb,mo_e_v,eom.nonzero_vpadding],
+                           fac=[-1.,-1.])
+            eijkab = (eijk[:, :, :, :, :, None, None] +
+                      eab[None, None, None, None, None, :, :])
             denom = eijkab + ip_eval
             denom = 1. / denom
 
-            deltaE += lib.einsum('xyzijkab,xyzijkab,xyzijkab', lijkab, rijkab, denom)
+            deltaE += lib.einsum('xyijkab,xyijkab,xyijkab', Plijkab, Prijkab, denom)
 
         deltaE *= 1./12
         deltaE = deltaE.real
@@ -1093,8 +1108,8 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
 
         deltaE = 0.0 + 1j*0.0
         for ki, kj in itertools.product(range(nkpts), repeat=2):
-            lijabc = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
-            rijabc = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
+            lijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
+            rijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
             kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
                           [ki,kj,kshift,range(nkpts),range(nkpts)])
 
@@ -1104,22 +1119,22 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
 
                 # lijabc update
                 if kc == kshift and kb == kconserv[ki,ka,kj]:
-                    lijabc[ka,kb,kc] -= lib.einsum('ijab,c->ijabc', eris.oovv[ki,kj,ka], l1)
+                    lijabc[ka,kb] -= lib.einsum('ijab,c->ijabc', eris.oovv[ki,kj,ka], l1)
 
                 km = kconserv[kj,ka,ki]
-                lijabc[ka,kb,kc] -= lib.einsum('jima,mbc->ijabc', eris.ooov[kj,ki,km], l2[km,kb])
+                lijabc[ka,kb] -= lib.einsum('jima,mbc->ijabc', eris.ooov[kj,ki,km], l2[km,kb])
 
                 ke = kconserv[ka,ki,kb]
                 tmp = lib.einsum('ieab,jce->ijabc', eris.ovvv[ki,ke,ka], l2[kj,kc])
                 ke = kconserv[ka,kj,kb]
                 tmpT = lib.einsum('jeab,ice->ijabc', eris.ovvv[kj,ke,ka], l2[ki,kc])
-                lijabc[ka,kb,kc] -= (tmp - tmpT)
+                lijabc[ka,kb] -= (tmp - tmpT)
 
                 # rijabc update
                 ke = kconserv[kb,kshift,kc]
                 tmp = lib.einsum('bcef,f->bce', eris.vvvv[kb,kc,ke], r1)
                 tmp = lib.einsum('bce,ijae->ijabc', tmp, t2[ki,kj,ka])
-                rijabc[ka,kb,kc] -= tmp
+                rijabc[ka,kb] -= tmp
 
                 km = kconserv[kj,kc,kshift]
                 tmp = lib.einsum('mcje,e->mcj', eris.ovov[km,kc,kj], r1)
@@ -1127,31 +1142,44 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
                 km = kconserv[ki,kc,kshift]
                 tmpT = lib.einsum('mcie,e->mci', eris.ovov[km,kc,ki], r1)
                 tmpT = lib.einsum('mci,jmab->ijabc', tmpT, t2[kj,km,ka])
-                rijabc[ka,kb,kc] += (tmp - tmpT)
+                rijabc[ka,kb] += (tmp - tmpT)
 
                 km = kconserv[kj,ka,ki]
-                rijabc[ka,kb,kc] += lib.einsum('jima,mcb->ijabc', eris.ooov[kj,ki,km].conj(), r2[km,kc])
+                rijabc[ka,kb] += lib.einsum('jima,mcb->ijabc', eris.ooov[kj,ki,km].conj(), r2[km,kc])
 
                 ke = kconserv[ka,ki,kb]
                 tmp = lib.einsum('ieab,jce->ijabc', eris.ovvv[ki,ke,ka].conj(), r2[kj,kc])
                 ke = kconserv[ka,kj,kb]
                 tmpT = lib.einsum('jeab,ice->ijabc', eris.ovvv[kj,ke,ka].conj(), r2[ki,kc])
-                rijabc[ka,kb,kc] -= (tmp - tmpT)
+                rijabc[ka,kb] -= (tmp - tmpT)
 
-            # P(ijk)
-            lijabc = lijabc + lijabc.transpose(1,2,0,3,4,6,7,5) + lijabc.transpose(2,0,1,3,4,7,5,6)
-            rijabc = rijabc + rijabc.transpose(1,2,0,3,4,6,7,5) + rijabc.transpose(2,0,1,3,4,7,5,6)
+            eabc = np.zeros((nkpts,nkpts,nvir,nvir,nvir), dtype=dtype)
+            Plijabc = np.zeros_like(lijabc)
+            Prijabc = np.zeros_like(rijabc)
+            for ka, kb in itertools.product(range(nkpts), repeat=2):
+                kc = kklist[ka,kb]
+                # P(abc)
+                Plijabc[ka,kb] = (lijabc[ka,kb] + lijabc[kb,kc].transpose(0,1,4,2,3) +
+                                                  lijabc[kc,ka].transpose(0,1,3,4,2))
+
+                Prijabc[ka,kb] = (rijabc[ka,kb] + rijabc[kb,kc].transpose(0,1,4,2,3) +
+                                                  rijabc[kc,ka].transpose(0,1,3,4,2))
+
+
+                eabc[ka,kb] = _get_epqr([0,nvir,ka,mo_e_v,eom.nonzero_vpadding],
+                                        [0,nvir,kb,mo_e_v,eom.nonzero_vpadding],
+                                        [0,nvir,kc,mo_e_v,eom.nonzero_vpadding],
+                                        fac=[-1.,]*3)
 
             # Creating denominator
-            eabc = (mo_e_v[:, None, None, :, None, None] + mo_e_v[None, :, None, None, :, None] +
-                    mo_e_v[None, None, :, None, None, :])
-            eij = mo_e_o[ki][:, None] + mo_e_o[kj][None, :]
-            eijabc = (eij[None, None, None, :, :, None, None, None] -
-                      eabc[:, :, :, None, None, :, :, :])
+            eij = _get_epq([0,nocc,ki,mo_e_o,eom.nonzero_opadding],
+                           [0,nocc,kj,mo_e_o,eom.nonzero_opadding])
+            eijabc = (eij[None, None, :, :, None, None, None] +
+                      eabc[:, :, None, None, :, :, :])
             denom = eijabc + ea_eval
             denom = 1. / denom
 
-            deltaE += lib.einsum('xyzijabc,xyzijabc,xyzijabc', lijabc, rijabc, denom)
+            deltaE += lib.einsum('xyijabc,xyijabc,xyijabc', Plijabc, Prijabc, denom)
 
         deltaE *= 1./12
         deltaE = deltaE.real
