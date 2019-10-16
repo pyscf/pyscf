@@ -27,7 +27,7 @@ def report_gw (self):
                 print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
                 out_file.write("%5d  %14.7f %14.7f %7.2f\n" % (ie, emf[0], egw[0], f[0]) )
             print('\nFermi energy        (eV):%16.7f'%(self.fermi_energy* HARTREE2EV))
-            out_file.write('\nFermi energy        (eV):%16.7f\n'%(self.fermi_energy* HARTREE2EV))            
+            out_file.write('\nFermi energy        (eV):%16.7f\n'%(self.fermi_energy* HARTREE2EV))
             print('G0W0 HOMO energy    (eV):%16.7f' % (egwev[self.nfermi[0]-1,0]))
             out_file.write('G0W0 HOMO energy    (eV):%16.7f\n'%(egwev[self.nfermi[0]-1,0]))
             print('G0W0 LUMO energy    (eV):%16.7f' % (egwev[self.nfermi[0],0]))
@@ -39,7 +39,7 @@ def report_gw (self):
                 out_file.write('\nEnergy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
                 if (np.allclose(self.argsort[s][:self.nfermi[s]],np.sort(self.argsort[s][:self.nfermi[s]]))==False):
                     print ("Warning: Swapping in orbital energies below Fermi has happened at spin {} channel!".format(s+1))
-                    out_file.write("\nWarning: Swapping in orbital energies below Fermi has happened at spin {} channel!\n".format(s+1))         
+                    out_file.write("\nWarning: Swapping in orbital energies below Fermi has happened at spin {} channel!\n".format(s+1))
             print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -59,7 +59,7 @@ def report_gw (self):
         out_file.write('G0W0 Total energy   (eV):%16.7f\n'%(self.etot_gw*HARTREE2EV))
         elapsed_time = time.time() - start_time
         print('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
-        out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))         
+        out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c"))) 
         out_file.close
 
 
@@ -85,15 +85,15 @@ def report_mfx(self, dm1=None):
     exp_f = np.zeros((self.nspin, self.norbs))
     if self.nspin==1:
         x = -0.5* self.get_k()
-        mat_h = np.dot(self.mo_coeff[0,0,:,:,0], H)                   
+        mat_h = np.dot(self.mo_coeff[0,0,:,:,0], H)   
         exp_h = np.einsum('nb,nb->n', mat_h, self.mo_coeff[0,0,:,:,0])
-        mat_co = np.dot(self.mo_coeff[0,0,:,:,0], co)                   
+        mat_co = np.dot(self.mo_coeff[0,0,:,:,0], co)  
         exp_co = np.einsum('nb,nb->n', mat_co, self.mo_coeff[0,0,:,:,0])
         mat_x = np.dot(self.mo_coeff[0,0,:,:,0], x)
         exp_x = np.einsum('nb,nb->n', mat_x, self.mo_coeff[0,0,:,:,0])
         mat_f = np.dot(self.mo_coeff[0,0,:,:,0], fock)
         exp_f = np.einsum('nb,nb->n', mat_f, self.mo_coeff[0,0,:,:,0])
-        print('='*20,'| the mean-field expectation values (eV) |','='*20)
+        print('='*20,'| Restricted HF expectation values (eV) |','='*20)
         print('%2s  %13s  %13s  %13s  %13s  %13s  %3s'%('no.','<H_core>','<K>  ','<Sigma_x>','Fock   ','MF energy ','occ'))
         for i, (a,b,c,d,e,f) in enumerate(zip(exp_h.T*HARTREE2EV,exp_co.T*HARTREE2EV, exp_x.T*HARTREE2EV,exp_f.T*HARTREE2EV,self.mo_energy.T*HARTREE2EV, self.mo_occ[0].T)):   
           if (i==self.nfermi[0]): print('-'*84)
@@ -106,27 +106,27 @@ def report_mfx(self, dm1=None):
         cou = co[0]+co[1]
         Vha = 0.5*(cou*dm1).sum()
         for s in range(self.nspin):
-          mat_h = np.dot(self.mo_coeff[0,s,:,:,0], H)                   
+          mat_h = np.dot(self.mo_coeff[0,s,:,:,0], H)   
           exp_h[s] = np.einsum('nb,nb->n', mat_h, self.mo_coeff[0,s,:,:,0])
-          mat_co = np.dot(self.mo_coeff[0,s,:,:,0], cou)                   
+          mat_co = np.dot(self.mo_coeff[0,s,:,:,0], cou)  
           exp_co[s] = np.einsum('nb,nb->n', mat_co, self.mo_coeff[0,s,:,:,0])
           mat_x = np.dot(self.mo_coeff[0,s,:,:,0], x[s])
           exp_x[s] = np.einsum('nb,nb->n', mat_x, self.mo_coeff[0,s,:,:,0])
           mat_f = np.dot(self.mo_coeff[0,s,:,:,0], fock[s])
           exp_f[s] = np.einsum('nb,nb->n', mat_f, self.mo_coeff[0,s,:,:,0])
-        print('='*59,'| the mean-field expectation values (eV) |','='*60)
-        print('%2s  %13s  %13s  %13s  %13s  %13s  %3s |%13s  %13s  %13s  %13s  %13s  %3s '%('no.','<H_core>','<K>  ','<Sigma_x>','Fock   ','MF energy ','occ','<H_core>','<K>   ','<Sigma_x>','Fock  ','MF energy','occ'))        
+        print('='*59,'| Unrestricted HF expectation values (eV) |','='*60)
+        print('%2s  %13s  %13s  %13s  %13s  %13s  %3s |%13s  %13s  %13s  %13s  %13s  %3s '%('no.','<H_core>','<K>  ','<Sigma_x>','Fock   ','MF energy ','occ','<H_core>','<K>   ','<Sigma_x>','Fock  ','MF energy','occ'))
         for i , (a,b,c,d,e,f) in enumerate(zip(exp_h.T*HARTREE2EV,exp_co.T*HARTREE2EV, exp_x.T*HARTREE2EV,exp_f.T*HARTREE2EV,self.mo_energy.T*HARTREE2EV, self.mo_occ[0].T)):
           if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*163)
           print(' %3d  %13.6f  %13.6f %13.6f %13.6f  %13.6f  %3d  | %13.6f  %13.6f  %13.6f  %13.6f %13.6f  %3d'%(i, a[0],b[0],c[0],d[0],e[0],f[0],a[1],b[1],c[1],d[1],e[1],f[1]))
         EX = 0.5*(x*dm1).sum()
 
     if hasattr(self, 'mf'): 
-        print('\nmean-field Nucleus-Nucleus   (eV):%16.6f'%(self.energy_nuc()))
-        print('mean-field Core energy       (eV):%16.6f'%(ecore))
-        print('mean-field Exchange energy   (eV):%16.6f'%(EX))
-        print('mean-field Hartree energy    (eV):%16.6f'%(Vha))
-        print('mean-field Total energy      (eV):%16.6f'%(self.mf.e_tot))
+        print('\nmean-field Nucleus-Nucleus   (Ha):%16.6f'%(self.energy_nuc()))
+        print('mean-field Core energy       (Ha):%16.6f'%(ecore))
+        print('mean-field Exchange energy   (Ha):%16.6f'%(EX))
+        print('mean-field Hartree energy    (Ha):%16.6f'%(Vha))
+        print('mean-field Total energy      (Ha):%16.6f'%(self.mf.e_tot))
         if (self.nspin==2):
             sp = self.spin/2
             s_ref = sp*(sp+1)
@@ -138,19 +138,20 @@ def report_mfx(self, dm1=None):
 
 
 
-def exfock(self):
+def sigma_xc(self):
     """
-    This calculates the Exchange expectation value, when:
+    This calculates the Exchange expectation value and correlation part of self energy, when:
     self.get_k() = Exchange operator/energy
     mat1 is product of this operator and molecular coefficients and it will be diagonalized in expval by einsum
+    Sigma_c = E_GW - E_HF
     """
     if self.nspin==1:
       mat = -0.5*self.get_k()
       mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
       expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0]).reshape((1,self.norbs))
-      print('---------| Expectationvalues of Exchange energy(eV) |---------\n %3s  %16s  %3s'%('no.','<Sigma_x> ','occ'))
+      print('---| Expectationvalues of Exchange energy(eV) |---\n %3s  %16s  %3s'%('no.','<Sigma_x> ','occ'))
       for i, (a,b) in enumerate(zip(expval.T*HARTREE2EV,self.mo_occ[0].T)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
-        if (i==self.nfermi[0]): print('-'*62)
+        if (i==self.nfermi[0]): print('-'*50)
         print (' %3d  %16.6f  %3d'%(i,a[0], b[0]))
     elif self.nspin==2:
       mat = -self.get_k()
@@ -158,13 +159,25 @@ def exfock(self):
       for s in range(self.nspin):
         mat1 = np.dot(self.mo_coeff[0,s,:,:,0], mat[s])
         expval[s] = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
-      print('-----------| the Exchange expectation value (eV) |-----------\n %3s  %16s  %3s  | %12s  %3s'%('no.','<Sigma_x>','occ','<Sigma_x>','occ'))        
+      print('--------| Expectationvalues of Exchange energy(eV) |--------\n %3s  %16s  %3s  | %13s  %4s'%('no.','<Sigma_x>','occ','<Sigma_x>','occ'))
       for i , (a,b) in enumerate(zip(expval.T* HARTREE2EV,self.mo_occ[0].T)):
         if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*60)
         print(' %3d  %16.6f  %3d  | %13.6f  %3d'%(i, a[0],b[0],a[1], b[1]))
-    #return expval
-
-
+    if hasattr(self,'mo_energy_gw'):
+        sigma_gw_c = self.mo_energy_gw - self.mo_energy
+        #sigma_gw_c= np.asanyarray([gw.mo_energy_gw[0,s,nn] -  gw.mo_energy[0,s,nn] for s,nn in enumerate(gw.nn) ]) #Only corrected by GW not scisorres
+        if self.nspin==1:
+            print('\n---| Correlation contribution of GW@HF (eV) |---\n %3s  %16s  %3s'%('no.','<Sigma_c> ','occ'))
+            for i, (a,b) in enumerate(zip(sigma_gw_c.T*HARTREE2EV,self.mo_occ[0].T)):   #self.h0_vh_x_expval[0,:self.nfermi[0]+5] to limit the virual states
+                if (i==self.nfermi[0]): print('-'*48)
+                print (' %3d  %16.6f  %3d'%(i,a[0], b[0]))
+        elif self.nspin==2:
+            print('\n--------| Correlation contribution of GW@HF (eV) |---------\n %3s  %16s  %3s  | %13s  %4s'%('no.','<Sigma_c>','occ','<Sigma_c>','occ'))
+            for i , (a,b) in enumerate(zip(sigma_gw_c.T* HARTREE2EV,self.mo_occ[0].T)):
+                if (i==self.nfermi[0] or i==self.nfermi[1]): print('-'*60)
+                print(' %3d  %16.6f  %3d  | %13.6f  %3d'%(i, a[0],b[0],a[1], b[1]))
+            
+        
 
 #
 # Example of reporting expectation values of mean-field calculations.

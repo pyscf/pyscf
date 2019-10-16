@@ -151,6 +151,7 @@ class gw(scf):
   rf = rf_den                                   #Full matrix interacting response from NAO GW class
   rf_pyscf = rf_den_pyscf                       #Full matrix interacting response from tdscf class
 
+
   def si_c(self, ww):
     from numpy.linalg import solve
     """ 
@@ -179,6 +180,15 @@ class gw(scf):
       si0[iw] = np.dot(self.kernel_sq, np.dot(r, self.kernel_sq))
     return si0
 
+  def epsilon(self, ww):
+    """ 
+    This computes the dynamic dielectric function epsilon(r,r'.\omega)=\delta(r,r') - v(r.r") * \chi_0(r",r',\omega)
+    """
+    rf0 = epsilon = self.rf0(ww)
+    for iw,w in enumerate(ww):                                
+      epsilon[iw,:,:] = np.eye(self.nprod)- np.dot(self.kernel_sq, rf0[iw,:,:])
+    return epsilon
+
   def get_snmw2sf(self):
     """ 
     This computes a matrix elements of W_c: <\Psi\Psi | W_c |\Psi\Psi>.
@@ -200,7 +210,6 @@ class gw(scf):
         nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)                #This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx 
       snmw2sf.append(nmw2sf)
     return snmw2sf
-
 
 
   def gw_corr_int(self, sn2w, eps=None):
@@ -330,8 +339,7 @@ class gw(scf):
         break
       if err>=self.tol_ev and i+1==self.niter_max_ev:
         print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
-    return sn2eval_gw
-    
+    return sn2eval_gw  
     
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
@@ -408,9 +416,9 @@ class gw(scf):
     return report_mfx(self,dm)
     
   def report_ex(self):
-    """ Prints the exchange energy levels """
-    from pyscf.nao.m_report import exfock
-    return exfock(self)
+    """ Prints the self energy components in HF levels """
+    from pyscf.nao.m_report import sigma_xc
+    return sigma_xc(self)
 
   def report(self):
     """ Prints the energy levels of meanfield and G0W0"""

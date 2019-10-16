@@ -35,6 +35,8 @@ class gw_iter(gw):
     self.gw_iter_tol = kw['gw_iter_tol'] if 'gw_iter_tol' in kw else 1e-4
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
 
+    self.h0_vh_x_expval = self.get_h0_vh_x_expval()
+
   def si_c2(self,ww):
     """This computes the correlation part of the screened interaction using LinearOpt and lgmres
        lgmres method is much slower than np.linalg.solve !!
@@ -78,28 +80,25 @@ class gw_iter(gw):
        print('Results (W_c) are NOT similar!')     
     return [[diff/summ] , [np.amax(abs(diff))] ,[tol]]
 
-  
+  #@profile
   def gw_xvx (self, algo=None):
     """
      calculates basis products \Psi(r')\Psi(r') = XVX[spin,(nn, norbs, nprod)] = X_{a}^{n}V_{\nu}^{ab}X_{b}^{m} using 4-methods
      1- direct multiplication by using np.dot and np.einsum via swapping between axis
      2- using atom-centered product basis
-     3- using dominant product basis
-     4- using dominant product basis in COOrdinate format
+     3- using atom-centered product basis and BLAS multiplication
+     4- using dominant product basis
+     5- using dominant product basis in COOrdinate format
     """
-    import numpy as np  
     algol = algo.lower() if algo is not None else 'dp_coo'  
-    #tip
-    #v1 = v_pab.T.reshape(self.norbs,-1)                     #reshapes v_pab (norb, norb*nprod), decrease 3d to 2d-matrix
-    #v2 = v1.reshape(self.norbs,self.norbs,self.nprod).T     #reshape to initial shape, so v2 is again v_pab=(norb, norb, nprod)
     xvx=[]
 
     #1-direct multiplication with np and einsum
     if algol=='simple':
         v_pab = self.pb.get_ac_vertex_array()       #atom-centered product basis: V_{\mu}^{ab}
         for s in range(self.nspin):
-            xna = self.mo_coeff[0,s,self.nn[s],:,0]             #(nstat,norbs)
-            xmb = self.mo_coeff[0,s,:,:,0]                      #(norbs,norbs)
+            xna = self.mo_coeff[0,s,self.nn[s],:,0]      #(nstat,norbs)
+            xmb = self.mo_coeff[0,s,:,:,0]               #(norbs,norbs)
             xvx_ref  = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)  #einsum: direct multiplication 
             xvx_ref2 = np.swapaxes(np.dot(xna, np.dot(v_pab,xmb.T)),1,2)  #direct multiplication by using np.dot and swapping between axis
             #print('comparison between einsum and dot: ',np.allclose(xvx_ref,xvx_ref2,atol=1e-15)) #einsum=dot
@@ -107,14 +106,14 @@ class gw_iter(gw):
 
     #2-atom-centered product basis
     if algol=='ac':
-        v_pab = self.pb.get_ac_vertex_array()       #atom-centered product basis: V_{\mu}^{ab}
+        v_pab = self.pb.get_ac_vertex_array()       
         #First step
-        v_pab1= v_pab.reshape(self.nprod*self.norbs, self.norbs)          #2D shape of atom-centered product
+        v_pab1= v_pab.reshape(self.nprod*self.norbs, self.norbs)  #2D shape
         for s in range(self.nspin):
             xna = self.mo_coeff[0,s,self.nn[s],:,0]
             xmb = self.mo_coeff[0,s,:,:,0]
-            vx  = np.dot(v_pab1,xmb.T)                          #multiplications were done one by one in 2D shape
-            vx  = vx.reshape(self.nprod, self.norbs, self.norbs) #reshape it into initial 3D shape
+            vx  = np.dot(v_pab1,xmb.T)        #multiplications were done one by one in 2D shape
+            vx  = vx.reshape(self.nprod, self.norbs, self.norbs) #reshape into initial 3D shape
             #Second step
             xvx1 = np.swapaxes(vx,0,1)
             xvx1 = xvx1.reshape(self.norbs,-1)
@@ -122,16 +121,25 @@ class gw_iter(gw):
             xvx1 = np.dot(xna,xvx1)
             xvx1 = xvx1.reshape(len(self.nn[s]),self.nprod,self.norbs)
             xvx1 = np.swapaxes(xvx1,1,2)
-            xvx.append(xvx1)            
+            xvx.append(xvx1)
+
+    #3-atom-centered product basis and BLAS
+    if algol=='blas':
+        from pyscf.nao.m_rf0_den import calc_XVX      #uses BLAS
+        v = np.einsum('pab->apb', self.pb.get_ac_vertex_array())
+        for s in range(self.nspin):
+            vx = np.dot(v, self.mo_coeff[0,s,self.nn[s],:,0].T)
+            xvx0 = calc_XVX(self.mo_coeff[0,s,:,:,0], vx)
+            xvx.append(xvx0.T)          
         
-    #3-dominant product basis
+    #4-dominant product basis
     if algol=='dp':
         size = self.cc_da.shape[0]
-        v_pd  = self.pb.get_dp_vertex_array()     #dominant product basis: V_{\widetilde{\mu}}^{ab}
-        c = self.pb.get_da2cc_den()               #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
-                                       #V_{\mu}^{ab}= V_{\widetilde{\mu}}^{ab} * C_{\widetilde{\mu}}^{\mu}
+        v_pd  = self.pb.get_dp_vertex_array()   #dominant product basis: V_{\widetilde{\mu}}^{ab}
+        c = self.pb.get_da2cc_den()             #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
+                                 #V_{\mu}^{ab}= V_{\widetilde{\mu}}^{ab} * C_{\widetilde{\mu}}^{\mu}
         #First step
-        v_pd1 = v_pd.reshape(v_pd.shape[0]*self.norbs, self.norbs)    #2D shape of dominant product
+        v_pd1 = v_pd.reshape(v_pd.shape[0]*self.norbs, self.norbs)    #2D shape
         for s in range(self.nspin):
             xna = self.mo_coeff[0,s,self.nn[s],:,0]
             xmb = self.mo_coeff[0,s,:,:,0]
@@ -148,7 +156,7 @@ class gw_iter(gw):
             xvx.append(xvx2)
 
 
-    #4-dominant product basis in COOrdinate-format instead of reshape
+    #5-dominant product basis in COOrdinate-format instead of reshape
     if algol=='dp_coo':
         size = self.cc_da.shape[0]
         v_pd  = self.pb.get_dp_vertex_array() 
@@ -168,23 +176,25 @@ class gw_iter(gw):
             #Second Step
             vx1 = vx1.reshape(size,self.norbs,self.norbs)   #shape (p,a,b)
             vx_ref = vx1.reshape(self.norbs,-1)             #shape (b,p*a)
-            data = vx1.ravel()
-            i0,i1,i2 = np.ogrid[0:vx1.shape[0],0:vx1.shape[1],0:vx1.shape[2]]
-            i00,i11,i22 = np.asarray(np.broadcast_arrays(i0,i1,i2)).reshape((3,data.size))
-            nc1 = ndcoo((data, (i00, i11, i22)))
-            m1 = nc1.tocoo_pa_b('p,a,b->ap,b')  
+            #data = vx1.ravel()
+            #i0,i1,i2 = np.ogrid[0:vx1.shape[0],0:vx1.shape[1],0:vx1.shape[2]]
+            #i00,i11,i22 = np.asarray(np.broadcast_arrays(i0,i1,i2)).reshape((3,data.size))
+            #nc1 = ndcoo((data, (i00, i11, i22)))
+            #m1 = nc1.tocoo_pa_b('p,a,b->ap,b')  
             #Third Step
             xvx3 = np.dot(xna,vx_ref)                               #xna(ns,a).V(a,p*b)=xvx(ns,p*b)
             xvx3 = xvx3.reshape(len(self.nn[s]),size,self.norbs) #xvx(ns,p,b)
             xvx3 = np.swapaxes(xvx3,1,2)                         #xvx(ns,b,p)
             xvx3 = np.dot(xvx3,c)                                #XVX=xvx.c
             xvx.append(xvx3)
-
+    
     if algol=='check':
+        ref = self.gw_xvx(algo='simple')
         for s in range(self.nspin):
-            print('Spin {}, atom-centered with ref: {}'.format(s+1,np.allclose(self.gw_xvx(algo='simple')[s],self.gw_xvx(algo='ac')[s],atol=1e-15)))
-            print('Spin {}, dominant product with ref: {}'.format(s+1,np.allclose(self.gw_xvx(algo='simple')[s],self.gw_xvx(algo='dp')[s],atol=1e-15)))
-            print('Spin {}, sparse_dominant product-ndCoo with ref: {}'.format(s+1,np.allclose(self.gw_xvx(algo='simple')[s], self.gw_xvx(algo='dp_coo')[s], atol=1e-15)))
+            print('Spin {}, atom-centered with ref: {}'.format(s+1,np.allclose(ref[s],self.gw_xvx(algo='ac')[s],atol=1e-15)))
+            print('Spin {}, atom-centered (BLAS) with ref: {}'.format(s+1,np.allclose(ref[s],self.gw_xvx(algo='blas')[s],atol=1e-15)))
+            print('Spin {}, dominant product with ref: {}'.format(s+1,np.allclose(ref[s],self.gw_xvx(algo='dp')[s],atol=1e-15)))
+            print('Spin {}, sparse_dominant product-ndCoo with ref: {}'.format(s+1,np.allclose(ref[s], self.gw_xvx(algo='dp_coo')[s], atol=1e-15)))
     return xvx
 
 
@@ -199,7 +209,7 @@ class gw_iter(gw):
     """
     from scipy.sparse.linalg import LinearOperator,lgmres
     ww = 1j*self.ww_ia
-    xvx= self.gw_xvx('ac')
+    xvx= self.gw_xvx('blas')
     snm2i = []
     k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
 

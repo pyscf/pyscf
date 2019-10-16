@@ -214,17 +214,17 @@ class mf(nao):
 
   def pdos(self, comegas, **kw):
     """ Partial Density of States (resolved in angular momentum of atomic orbitals) """
-    from pyscf.nao.pdos import pdos
+    from pyscf.nao.m_dos_pdos_ldos import pdos
     return pdos(self, comegas, **kw)
 
   def lsoa_dos(self, comegas, **kw):
     """ Partial Density of States (contributions from a given list of atoms) """
-    from pyscf.nao.pdos import lsoa_dos
+    from pyscf.nao.m_dos_pdos_ldos import lsoa_dos
     return lsoa_dos(self, comegas, **kw)
 
   def gdos(self, comegas, **kw):
     """ Some molecular orbital population analysis """
-    from pyscf.nao.pdos import gdos
+    from pyscf.nao.m_dos_pdos_ldos import gdos
     return gdos(self, comegas, **kw)
 
   def read_wfsx(self, fname, **kw):
