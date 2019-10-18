@@ -324,7 +324,7 @@ class KCIS(lib.StreamObject):
         self.keep_exxdiv = keep_exxdiv
         self.direct = False
         self.build_full_H = False
-        self.davidson = False
+        self.davidson = True
 
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.mo_coeff = mo_coeff
@@ -514,6 +514,9 @@ class _CIS_ERIS:
 
         kconserv = cis.khelper.kconserv
         khelper = cis.khelper
+
+        if cis.direct and type(cis._scf.with_df) is not df.GDF:
+            raise ValueError("CIS direct method must be used with GDF")
 
         if (cis.direct and type(cis._scf.with_df) is df.GDF 
             and cell.dimension != 2):
