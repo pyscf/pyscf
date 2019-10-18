@@ -21,8 +21,10 @@ kmf.scf()
 cell_n3 = make_test_cell.test_cell_n3()
 cell_n3.mesh = [29] * 3
 cell_n3.build()
-kmf_n3 = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([1,1,2]), exxdiv=None)
+kmf_n3 = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([2,1,1]), exxdiv=None)
 kmf_n3.kernel()
+kmf_n3_ewald = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([2,1,1]), exxdiv='ewald')
+kmf_n3_ewald.kernel()
 
 # Helper functions
 def kconserve_pmatrix(nkpts, kconserv):
@@ -101,8 +103,8 @@ rand_kmf1 = make_rand_kmf(nkpts=1)
 rand_kmf2 = make_rand_kmf(nkpts=2)
 
 def tearDownModule():
-    global cell_n3d, kmf, cell_n3, kmf_n3, rand_kmf, rand_kmf1, rand_kmf2
-    del cell_n3d, kmf, cell_n3, kmf_n3, rand_kmf, rand_kmf1, rand_kmf2
+    global cell_n3d, kmf, cell_n3, kmf_n3, kmf_n3_ewald, rand_kmf, rand_kmf1, rand_kmf2
+    del cell_n3d, kmf, cell_n3, kmf_n3, kmf_n3_ewald, rand_kmf, rand_kmf1, rand_kmf2
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
@@ -254,28 +256,46 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 9)
 
     def test_n3_ee(self):
-        ehf_bench = -8.65192351414987
-        ecc_bench = -0.1552983842036319
-        eee_bench = [0.267866987019175  , 0.2678670115360931, 0.2687043844504475]
+        ehf_bench = [-8.651923514149, -10.530905169078]
+        ecc_bench = [-0.155298299344, -0.093617975270]
 
         ekrhf = kmf_n3.e_tot
-        self.assertAlmostEqual(ekrhf, ehf_bench, 6)
+        self.assertAlmostEqual(ekrhf, ehf_bench[0], 6)
+        ekrhf = kmf_n3_ewald.e_tot
+        self.assertAlmostEqual(ekrhf, ehf_bench[1], 6)
 
-        mycc = pbcc.KRCCSD(kmf_n3, keep_exxdiv=True)
+        mycc = pbcc.KRCCSD(kmf_n3)
         ekrcc, t1, t2 = mycc.kernel()
-        self.assertAlmostEqual(ekrcc, ecc_bench, 6)
+        self.assertAlmostEqual(ekrcc, ecc_bench[0], 6)
+        mycc_ewald = pbcc.KRCCSD(kmf_n3_ewald, keep_exxdiv=True)
+        ekrcc, t1, t2 = mycc_ewald.kernel()
+        self.assertAlmostEqual(ekrcc, ecc_bench[1], 6)
 
         # EOM-EE-KRCCSD singlet
-        nroots = 3  # number of roots requested
-        kptlist = [0]  # index(indices) of targetted k_shift(s) 
-
         from pyscf.pbc.cc import eom_kccsd_rhf as eom_krccsd
+        nroots = 2  # number of roots requested
+
         myeomee = eom_krccsd.EOMEESinglet(mycc)
         myeomee.max_space = nroots * 10
-        eee, vee = myeomee.kernel(nroots=nroots, kptlist=kptlist)
-        self.assertAlmostEqual(eee[0][0], eee_bench[0], 5)
-        self.assertAlmostEqual(eee[0][1], eee_bench[1], 5)
-        self.assertAlmostEqual(eee[0][2], eee_bench[2], 5)
+        eee, vee = myeomee.kernel(nroots=nroots, kptlist=[0])
+        print(eee)
+        self.assertAlmostEqual(eee[0][0], 0.267867075425, 4)
+        self.assertAlmostEqual(eee[0][1], 0.268704338187, 4)
+        eee, vee = myeomee.kernel(nroots=nroots, kptlist=[1])
+        print(eee)
+        self.assertAlmostEqual(eee[0][0], 0.389795492091, 4)
+        self.assertAlmostEqual(eee[0][1], 0.407782858154, 4)
+
+        myeomee = eom_krccsd.EOMEESinglet(mycc_ewald)
+        myeomee.max_space = nroots * 10
+        eee, vee = myeomee.kernel(nroots=nroots, kptlist=[0])
+        print(eee)
+        self.assertAlmostEqual(eee[0][0], 0.707047835495, 4)
+        self.assertAlmostEqual(eee[0][1], 0.707047835495, 4)
+        eee, vee = myeomee.kernel(nroots=nroots, kptlist=[1])
+        print(eee)
+        self.assertAlmostEqual(eee[0][0], 0.815872164169, 4)
+        self.assertAlmostEqual(eee[0][1], 0.845417271088, 4)
         
     def test_t3p2_imds_complex_slow(self):
         '''Test `_slow` t3p2 implementation.'''
