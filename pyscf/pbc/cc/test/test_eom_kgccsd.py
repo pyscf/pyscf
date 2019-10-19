@@ -1,7 +1,7 @@
 import make_test_cell
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.pbc import gto, scf, cc
-from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP, EOMEA
+from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP, EOMEA, EOMEE
 from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP_Ta, EOMEA_Ta
 from pyscf.cc import eom_gccsd
 import unittest
@@ -92,6 +92,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e2_obt[0][0], 1.227583017804503, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.2275830178298166, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.3830379190440196, 6)
+
+        # Basis eeccsd
+        eom = EOMEE(mycc)
+        imds = eom.make_imds(eris=eris)
+        ee, v = eom.eeccsd(nroots=3, kptlist=[0], imds=imds)
+        self.assertAlmostEqual(ee[0][0], 0.118301677904104, 6)
+        self.assertAlmostEqual(ee[0][1], 0.118301914631351, 6)
+        self.assertAlmostEqual(ee[0][2], 0.128285117266903, 6)
+        ee, v = eom.eeccsd(nroots=3, kptlist=[1], imds=imds)
+        self.assertAlmostEqual(ee[0][0], 0.07928010716890202, 6)
+        self.assertAlmostEqual(ee[0][1], 0.07928011416043479, 6)
+        self.assertAlmostEqual(ee[0][2], 0.07928011417159982, 6)
 
     def test_n3_diffuse_frozen(self):
         ehf2 = kmf.e_tot
