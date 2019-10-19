@@ -4,32 +4,86 @@ PySCF 1.7.0 (2019-?-?)
   - k-CCSD density matrix
   - k-CCSD(T) with core frozen
   - sgX method (a pseudo-spectral method like COSX)
-  - Hooks pre_kernel and post_kernel in SCF driver
-  - Left IP/EA-CCSD for molecular code
+  - pre_kernel and post_kernel hooks in SCF driver
+  - Left eigenvectors of IP/EA-CCSD for molecular code
   - EOM-IP/EA-KCCSD, EOM-IP/EA-KRCCSD
   - Methods EOM-IP/EA-KCCSD(T) T*(a), EOM-IP/EA-KRCCSD(T) T*(a)
   - kEOM-IP/EA-CCSD*
   - KUMP2
-  - KCCSD function spatial2spin that transforms amplitudes in spatial orbital to
-    that in spin-orbital
+  - KCCSD function spatial2spin that transforms amplitudes in spatial orbital
+    representation to that in spin-orbital representation
+  - DOCI solver, DOCI-CASCI, and DOCI-CASSCf
+  - Support of RSH functionals in DF and sgX methods
+  - Add RSH functionals for all PBC DFT methods
+  - Semiempirical method MINDO/3
+  - Analytical nuclear gradients with density-fitting
+  - Analytical nuclear hessian with density-fitting
+  - Thermo-chemistry and frequency analysis
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
   - Davidson diagonalization for multi-roots
   - memory usage in CCSD
+  - Molecular orientation does not need to be changed when symmetry is enabled
 * Bugfix
   - Carbon ANO data
   - Initial guess for EOM-KCCSD
+  - state-averge CASSCF analytical nuclear gradietns
+  - ddCOSMO self-consistency (as fast solvent) for post-SCF methods
+  - range-separation paramter omega customization in RSH functionals
 
 
-PySCF 1.6.2 (2019-?-?)
-----------------------
+PySCF 1.6.4 (2019-09-14)
+------------------------
+* Added
+  - aug-cc-pwCV*Z basis
+* Improved
+  - Memory footprint of FCI module
+  - Mole.spin initialization. A guess can be made for spin multiplicity based on
+    neutral system.
+* Fixed
+  - PBC SCF orbital canonicalization
+  - Missed complex conjugation in HF/KS modules
+  - SHCI runtime directory
+  - Normalization issue for Cartesian basis in Molden output
+  - cc-pwCV5Z basis
+
+
+PySCF 1.6.3 (2019-07-28)
+------------------------
+* Added
+  - cube customization for cubegen
+  - Integral prescreening for RSH functional when evaluating K matrix
+* Improved
+  - Performance of exchange integrals in RSH functionals
+* Fixed
+  - handle xc = '' in eval_ao
+  - cube shape in cubegen
+  - Basis parser when parsing last elements in some basis set
+  - ROHF-SOSCF for diatomic molecules
+
+
+PySCF 1.6.2 (2019-6-17)
+-----------------------
+* Added
+  - Slow version of KTDSCF and KGW methods for molecular systems
+  - Slow version of TDSCF and GW methods for PBC systems
+  - The support of various dtype (int, complex etc.) in numpy_helper functions
+  - Point group symmetry conservation in geometry optimization
 * Improved
   - DFHF class structure and method hooks
+  - Sanity checks when saving and loading FCIDUMP file
+  - Integration performance for solvent model
+  - Integration performance for QM/MM interface
+  - GCC 9 compatibility
 * Bugfix
   - Cartesian GTOs was not handled in RSH integrals
   - geometric_solver for latest geomeTRIC release
   - Initial guess of orbital localization solver
+  - MCSCF analyze function for state-averaged calculations
+  - The zero-norm bug in the non-hermitian matrix diagonalization function when
+    solving the complex eigenvectors for real eigenvalues.
+  - IOError when reading initial guess from chkfile in SCF scanner function
 
 
 PySCF 1.6.1 (2019-03-15)

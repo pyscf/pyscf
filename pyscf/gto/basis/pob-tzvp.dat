@@ -1,3 +1,7 @@
+#
+# M. F. Peintinger, D. V. Oliveira, T. Bredow, J. Comput. Chem. 34, 451 (2012). Consistent Gaussian basis sets of triple‐zeta valence with polarization quality for solid‐state calculations 
+#
+
 #BASIS SET: (5S, 1P) -> [3S, 1P]
 H    S
   34.061341000000    0.006025197800

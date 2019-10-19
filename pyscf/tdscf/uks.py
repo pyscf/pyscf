@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import time
 from functools import reduce
 import numpy
 from pyscf import symm
@@ -122,6 +123,7 @@ class TDDFTNoHybrid(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDDFT diagonalization solver
         '''
+        cpu0 = (time.clock(), time.time())
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
@@ -191,6 +193,7 @@ class TDDFTNoHybrid(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDDFT', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
@@ -205,7 +208,7 @@ class dRPA(TDDFTNoHybrid):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_uhf(mf)
-        mf.xc = ''
+        mf.xc = '0.0*LDA'
         TDDFTNoHybrid.__init__(self, mf)
 
 TDH = dRPA
@@ -216,7 +219,7 @@ class dTDA(TDA):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_uhf(mf)
-        mf.xc = ''
+        mf.xc = '0.0*LDA'
         TDA.__init__(self, mf)
 
 
@@ -231,7 +234,7 @@ from pyscf import dft
 dft.uks.UKS.TDA           = dft.uks_symm.UKS.TDA           = lib.class_as_method(TDA)
 dft.uks.UKS.TDHF          = dft.uks_symm.UKS.TDHF          = None
 #dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = lib.class_as_method(TDDFT)
-#dft.uks.UKS.TDDFTNoHybrid = dft.uks_symm.UKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.uks.UKS.TDDFTNoHybrid = dft.uks_symm.UKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
 dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = tddft
 dft.uks.UKS.dTDA          = dft.uks_symm.UKS.dTDA          = lib.class_as_method(dTDA)
 dft.uks.UKS.dRPA          = dft.uks_symm.UKS.dRPA          = lib.class_as_method(dRPA)

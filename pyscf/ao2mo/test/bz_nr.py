@@ -44,8 +44,8 @@ mol.build()
 # SCF result
 import time
 rhf = scf.RHF(mol)
-print 'E_RHF =', rhf.scf()
-print time.clock()
+print('E_RHF =', rhf.scf())
+print(time.clock())
 
 import os
 import tempfile

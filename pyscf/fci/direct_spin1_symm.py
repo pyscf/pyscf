@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -284,9 +284,8 @@ class FCISolver(direct_spin1.FCISolver):
         self.wfnsym = None
 
     def dump_flags(self, verbose=None):
-        if verbose is None: verbose = self.verbose
         direct_spin1.FCISolver.dump_flags(self, verbose)
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         if isinstance(self.wfnsym, str):
             log.info('Input CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.number)):

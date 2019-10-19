@@ -287,8 +287,7 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         double qtmp, tmp;
         int ij, i, j, di, dj, ish, jsh;
@@ -362,8 +361,8 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
 // symmetrize dm_cond because nrs8_prescreen only tests the lower (or upper)
-// triangular part of dm_cond. If density matrix is not hermitian, some
-// integrals may be skipped incorrectly.
+// triangular part of dm_cond. Without the symmetrization, some integrals may be
+// incorrectly skipped.
                                 tmp = .5 * (fabs(pdm[i*nao+j]) + fabs(pdm[j*nao+i]));
                                 dmax = MAX(dmax, tmp);
                         } }

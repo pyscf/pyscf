@@ -113,6 +113,9 @@ def sph_pure2real(l, reorder_p=True):
     O(-1) = i/\sqrt(2){Y(-1) + Y(1)};   O(1) = 1/\sqrt(2){Y(-1) - Y(1)}
     O(-2) = i/\sqrt(2){Y(-2) - Y(2)};   O(2) = 1/\sqrt(2){Y(-2) + Y(2)}
 
+    Kwargs:
+        reorder_p (bool): Whether the p functions are in the (x,y,z) order.
+
     Returns:
         2D array U_{complex,real}
     '''
@@ -148,8 +151,7 @@ def sph_real2pure(l, reorder_p=True):
     spherical harmonic functions.
 
     Kwargs:
-        reorder_p (bool): Whether the real p functions are presented in the
-            (x,y,z) order.
+        reorder_p (bool): Whether the real p functions are in the (x,y,z) order.
     '''
     # numpy.linalg.inv(sph_pure2real(l))
     return sph_pure2real(l, reorder_p).conj().T
@@ -232,7 +234,8 @@ def sph2spinor_coeff(mol):
         nctr = mol.bas_nctr(ib)
         ca.extend([ua]*nctr)
         cb.extend([ub]*nctr)
-    return scipy.linalg.block_diag(*ca), scipy.linalg.block_diag(*cb)
+    return numpy.stack([scipy.linalg.block_diag(*ca),
+                        scipy.linalg.block_diag(*cb)])
 real2spinor_whole = sph2spinor_coeff
 
 def cart2spinor(l):

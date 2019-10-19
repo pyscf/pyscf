@@ -227,10 +227,7 @@ void FCIrdm12_drv(void (*dm12kernel)(),
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
 
-#pragma omp parallel default(none) \
-        shared(dm12kernel, bra, ket, norb, na, nb, nlinka, \
-               nlinkb, clinka, clinkb, rdm1, rdm2, symm), \
-        private(strk, i, ib, blen, pdm1, pdm2)
+#pragma omp parallel private(strk, i, ib, blen, pdm1, pdm2)
 {
         pdm1 = calloc(nnorb+2, sizeof(double));
         pdm2 = calloc(nnorb*nnorb+2, sizeof(double));

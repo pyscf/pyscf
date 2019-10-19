@@ -71,10 +71,13 @@ from pyscf.cc import addons
 from pyscf.cc import rccsd
 from pyscf.cc import uccsd
 from pyscf.cc import gccsd
+from pyscf.cc import eom_rccsd
+from pyscf.cc import eom_uccsd
+from pyscf.cc import eom_gccsd
+from pyscf import scf
 
 def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
-    from pyscf import scf
     if isinstance(mf, scf.uhf.UHF):
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
     elif isinstance(mf, scf.ghf.GHF):
@@ -82,11 +85,13 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     else:
         return RCCSD(mf, frozen, mo_coeff, mo_occ)
 
+scf.hf.SCF.CCSD = CCSD
+
+
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
     import numpy
     from pyscf import lib
-    from pyscf import scf
     from pyscf.soscf import newton_ah
     from pyscf.cc import dfccsd
 
@@ -95,6 +100,7 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     elif isinstance(mf, scf.rohf.ROHF):
         lib.logger.warn(mf, 'RCCSD method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UCCSD method is called.')
+        mf = scf.addons.convert_to_uhf(mf)
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
@@ -112,7 +118,6 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = uccsd.UCCSD.__doc__
-    from pyscf import scf
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
@@ -126,7 +131,6 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = gccsd.GCCSD.__doc__
-    from pyscf import scf
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):

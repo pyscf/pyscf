@@ -88,12 +88,12 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         method_class = scf_method._scf.__class__
 
-    class QMMM(method_class, _QMMM):
+    class QMMM(_QMMM, method_class):
         def __init__(self, scf_method):
             self.__dict__.update(scf_method.__dict__)
 
-        def dump_flags(self, *args, **kwargs):
-            method_class.dump_flags(self, *args, **kwargs)
+        def dump_flags(self, verbose=None):
+            method_class.dump_flags(self, verbose)
             logger.info(self, '** Add background charges for %s **',
                         method_class)
             if self.verbose >= logger.DEBUG:
@@ -104,7 +104,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
         def get_hcore(self, mol=None):
             if mol is None: mol = self.mol
-            if getattr(scf_method, 'get_hcore', None):
+            if getattr(method_class, 'get_hcore', None):
                 h1e = method_class.get_hcore(self, mol)
             else:  # DO NOT modify post-HF objects to avoid the MM charges applied twice
                 raise RuntimeError('mm_charge function cannot be applied on post-HF methods')
@@ -122,10 +122,13 @@ def mm_charge(scf_method, coords, charges, unit=None):
                 nao = mol.nao
                 max_memory = self.max_memory - lib.current_memory()[0]
                 blksize = int(min(max_memory*1e6/8/nao**2, 200))
+                cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                                     mol._env, intor)
                 v = 0
                 for i0, i1 in lib.prange(0, charges.size, blksize):
                     fakemol = gto.fakemol_for_charges(coords[i0:i1])
-                    j3c = df.incore.aux_e2(mol, fakemol, intor=intor, aosym='s2ij')
+                    j3c = df.incore.aux_e2(mol, fakemol, intor=intor,
+                                           aosym='s2ij', cintopt=cintopt)
                     v += numpy.einsum('xk,k->x', j3c, -charges[i0:i1])
                 v = lib.unpack_tril(v)
             return h1e + v
@@ -199,12 +202,12 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
     charges = numpy.asarray(charges)
 
     grad_class = scf_grad.__class__
-    class QMMM(grad_class, _QMMMGrad):
+    class QMMM(_QMMMGrad, grad_class):
         def __init__(self, scf_grad):
             self.__dict__.update(scf_grad.__dict__)
 
-        def dump_flags(self):
-            grad_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            grad_class.dump_flags(self, verbose)
             logger.info(self, '** Add background charges for %s **', grad_class)
             if self.verbose >= logger.DEBUG1:
                 logger.debug1(self, 'Charge      Location')
@@ -230,10 +233,13 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
                 nao = mol.nao
                 max_memory = self.max_memory - lib.current_memory()[0]
                 blksize = int(min(max_memory*1e6/8/nao**2, 200))
+                cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                                     mol._env, intor)
                 v = 0
                 for i0, i1 in lib.prange(0, charges.size, blksize):
                     fakemol = gto.fakemol_for_charges(coords[i0:i1])
-                    j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1', comp=3)
+                    j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1',
+                                           comp=3, cintopt=cintopt)
                     v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
             return g_qm + v
 

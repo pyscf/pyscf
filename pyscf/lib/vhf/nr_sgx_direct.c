@@ -145,14 +145,15 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
 
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
-        const int nksh = ksh1 - ksh0;
-        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
-                                                 atm, natm, bas, nbas, env);
+        int nksh = ksh1 - ksh0;
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
+                                           atm, natm, bas, nbas, env);
 
 #pragma omp parallel default(none) \
         shared(intor, fdot, jkop, ao_loc, shls_slice, \
-               dms, vjk, n_dm, ncomp, nbas, vhfopt, envs)
+               dms, vjk, n_dm, ncomp, nbas, vhfopt, envs, \
+               nksh, di, cache_size)
 {
         int i, ksh;
         SGXJKArray *v_priv[n_dm];
@@ -196,10 +197,10 @@ void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         opt->q_cond = q_cond;
 
         int shls_slice[] = {0, nbas};
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
-                                                 atm, natm, bas, nbas, env);
+        int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
+                                           atm, natm, bas, nbas, env);
 #pragma omp parallel default(none) \
-        shared(intor, q_cond, ao_loc, atm, natm, bas, nbas, env)
+        shared(intor, q_cond, ao_loc, atm, natm, bas, nbas, env, cache_size)
 {
         double qtmp, tmp;
         int ij, i, j, di, dj, ish, jsh;

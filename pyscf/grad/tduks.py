@@ -96,10 +96,11 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
         dm = (dmzooa, dmzvopa+dmzvopa.T, dmzvoma-dmzvoma.T,
               dmzoob, dmzvopb+dmzvopb.T, dmzvomb-dmzvomb.T)
         vj, vk = mf.get_jk(mol, dm, hermi=0)
-        vj = vj.reshape(2,3,nao,nao)
-        vk = vk.reshape(2,3,nao,nao) * hyb
+        vk *= hyb
         if abs(omega) > 1e-10:
-            vk += rks._get_k_lr(mol, dm, omega).reshape(2,3,nao,nao) * (alpha-hyb)
+            vk += mf.get_k(mol, dm, hermi=0, omega=omega) * (alpha-hyb)
+        vj = vj.reshape(2,3,nao,nao)
+        vk = vk.reshape(2,3,nao,nao)
 
         veff0doo = vj[0,0]+vj[1,0] - vk[:,0] + f1oo[:,0] + k1ao[:,0] * 2
         wvoa = reduce(numpy.dot, (orbva.T, veff0doo[0], orboa)) * 2
@@ -152,7 +153,7 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
             vj, vk = mf.get_jk(mol, dm1)
             veff = vj[0] + vj[1] - hyb * vk + vindxc
             if abs(omega) > 1e-10:
-                veff -= rks._get_k_lr(mol, dm1, omega, hermi=1) * (alpha-hyb)
+                veff -= mf.get_k(mol, dm1, hermi=1, omega=omega) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm1)
             veff = vj[0] + vj[1] + vindxc
@@ -174,7 +175,7 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
         vj, vk = mf.get_jk(mol, z1ao, hermi=0)
         veff = vj[0]+vj[1] - hyb * vk + fxcz1[:,0]
         if abs(omega) > 1e-10:
-            veff -= rks._get_k_lr(mol, z1ao, omega) * (alpha-hyb)
+            veff -= mf.get_k(mol, z1ao, hermi=0, omega=omega) * (alpha-hyb)
     else:
         vj = mf.get_j(mol, z1ao, hermi=1)
         veff = vj[0]+vj[1] + fxcz1[:,0]

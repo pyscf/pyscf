@@ -65,7 +65,7 @@ void unpackE3(char* file, char* fout, int norb) {
                   size_t p = (A*A*A + 3*A*A + 2*A)/6  +  (B*B + B)/2 + C ;
 
                   // fully square number
-                  int q = i+j*norb+k*norb2+l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
+                  size_t q = i+j*norb+k*norb2+l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
 
                   e3[q] = fj[p];
                 }
@@ -165,7 +165,7 @@ void unpackE4(char* file, char* fout, int norb) {
                   size_t p = (A*A*A*A + 6*A*A*A + 11*A*A + 6*A)/24 + (B*B*B + 3*B*B + 2*B)/6  +  (C*C + C)/2 + D ;
 
                   // fully square number
-                  int q = i+j*norb+k*norb2+h*norb*norb2+l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
+                  size_t q = i+j*norb+k*norb2+h*norb*norb2+l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
 
                   e4[q] = fj[p];
                 }
@@ -199,8 +199,8 @@ void unpackE3_BLOCK(char* file, char* fout, int norb) {
               for (n=0; n<norb; n++)
                 {
                   // is given as E^ijk_nml and is expected to come out as E^ijk_lmn
-                  int p = i+j*norb+k*norb2  +n*norb*norb2+m*norb2*norb2+l*norb2*norb2*norb;
-                  int q = i+j*norb+k*norb2  +l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
+                  size_t p = i+j*norb+k*norb2  +n*norb*norb2+m*norb2*norb2+l*norb2*norb2*norb;
+                  size_t q = i+j*norb+k*norb2  +l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
                   e3[q] = fj[p];
                 };
 }
@@ -232,8 +232,8 @@ void unpackE4_BLOCK(char* file, char* fout, int norb) {
               for (o=0; o<norb; o++)
                 {
                   // is given as E^ijkh_onml and is expected to come out as E^ijkh_lmno
-                  int p = i+j*norb+k*norb2+h*norb*norb2 +o*norb2*norb2+n*norb*norb2*norb2+m*norb2*norb2*norb2+l*norb*norb2*norb2*norb2;
-                  int q = i+j*norb+k*norb2+h*norb*norb2 +l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
+                  size_t p = i+j*norb+k*norb2+h*norb*norb2 +o*norb2*norb2+n*norb*norb2*norb2+m*norb2*norb2*norb2+l*norb*norb2*norb2*norb2;
+                  size_t q = i+j*norb+k*norb2+h*norb*norb2 +l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
                   e4[q] = fj[p];
                 };
     FILE *f2 = fopen(fout, "wb");

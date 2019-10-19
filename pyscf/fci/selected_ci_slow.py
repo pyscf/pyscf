@@ -24,6 +24,7 @@ from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
+    '''Compute E_{pq}E_{rs}|CI>'''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -48,6 +49,14 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     na = len(strsa)
     nb = len(strsb)
 
+    # Adding Eq (*) below to fcinew because contract_2e function computes the
+    # contraction  "E_{pq}E_{rs} V_{pqrs} |CI>" (~ p^+ q r^+ s |CI>) while
+    # the actual contraction for (aa|aa) and (bb|bb) part is
+    # "p^+ r^+ s q V_{pqrs} |CI>". To make (aa|aa) and (bb|bb) code reproduce
+    # "p^+ q r^+ s |CI>", we employ the identity
+    #    p^+ q r^+ s = p^+ r^+ s q  +  delta(qr) p^+ s
+    # the second term is the source of Eq (*)
+
     fcivec = ci_coeff.reshape(na,nb)
     fcinew = numpy.zeros_like(fcivec)
     # (bb|aa)
@@ -56,7 +65,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
         for a, i, str0, sign in tab:
             if a >= 0:
                 t1[a,i,str1] += sign * fcivec[str0]
-    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)
+    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)  # (*)
     t1 = numpy.dot(eri.reshape(norb*norb,-1), t1.reshape(norb*norb,-1))
     t1 = t1.reshape(norb,norb,na,nb)
     for str1, tab in enumerate(cd_indexb):
@@ -70,7 +79,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
         for a, i, str0, sign in tab:
             if a >= 0:
                 t1[a,i,:,str1] += sign * fcivec[:,str0]
-    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)
+    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)  # (*)
     t1 = numpy.dot(eri.reshape(norb*norb,-1), t1.reshape(norb*norb,-1))
     t1 = t1.reshape(norb,norb,na,nb)
     for str1, tab in enumerate(cd_indexa):

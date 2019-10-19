@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -225,7 +225,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     '''
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-        fock = mf.get_hcore() + mf.get_jk(mf.cell, dm)
+        fock = mf.get_fock(dm=dm)
 
     mo_coeff = []
     mo_energy = []
@@ -285,8 +285,8 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
     def nelec(self, x):
         self._nelec = x
 
-    def dump_flags(self):
-        khf.KSCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        khf.KSCF.dump_flags(self, verbose)
         logger.info(self, 'number of electrons per unit cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self

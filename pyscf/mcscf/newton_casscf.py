@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -300,6 +300,12 @@ def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     nroots = casscf.fcisolver.nroots
     fcasscf = casscf._base_class (casscf._scf, casscf.ncas, casscf.nelecas)
     fcasscf.fcisolver = casscf.fcisolver._base_class (casscf.mol)
+    fcasscf.mo_coeff = mo
+    # MRH, 07/23/2019: make sure to inherit symmetry!
+    if hasattr (casscf.fcisolver, 'orbsym'):
+        fcasscf.fcisolver.orbsym = casscf.fcisolver.orbsym
+    if hasattr (casscf.fcisolver, 'wfnsym'):
+        fcasscf.fcisolver.wfnsym = casscf.fcisolver.wfnsym
 
     # Warning: do not call gen_g_hop from here with casscf: infinite recursion danger
     gh_roots = [gen_g_hop (fcasscf, mo, ci0_i, eris, verbose=verbose) for ci0_i in ci0]
@@ -683,8 +689,8 @@ class CASSCF(mc1step.CASSCF):
 
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         ncore = self.ncore

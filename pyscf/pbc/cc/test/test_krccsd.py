@@ -27,12 +27,12 @@ from pyscf.pbc import scf as pbcscf
 from pyscf.pbc import dft as pbcdft
 from pyscf.pbc import df as pbc_df
 
-import pyscf.cc
 import pyscf.pbc.cc as pbcc
 import make_test_cell
 from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
+from pyscf.pbc.cc import eom_kccsd_rhf
 
 
 cell = pbcgto.Cell()
@@ -124,39 +124,18 @@ def make_rand_kmf():
 
 rand_kmf = make_rand_kmf()
 
-#TODO Delete me; these functions were used to check the changes on
-#     master and dev to see whether the answers were the same after
-#     changes to the eris.mo_energy
 def _run_ip_matvec(cc, r1, r2, kshift):
-    try:  # Different naming & calling conventions between master/dev
-        vector = cc.ip_amplitudes_to_vector(r1, r2)
-    except:
-        vector = cc.amplitudes_to_vector_ip(r1, r2)
-    try:
-        vector = cc.ipccsd_matvec(vector, kshift)
-    except:
-        cc.kshift = kshift
-        vector = cc.ipccsd_matvec(vector)
-    try:
-        Hr1, Hr2 = cc.ip_vector_to_amplitudes(vector)
-    except:
-        Hr1, Hr2 = cc.vector_to_amplitudes_ip(vector)
+    eom = eom_kccsd_rhf.EOMIP(cc)
+    vector = eom.amplitudes_to_vector(r1, r2, kshift)
+    vector = eom.matvec(vector, kshift)
+    Hr1, Hr2 = eom.vector_to_amplitudes(vector, kshift)
     return Hr1, Hr2
 
 def _run_ea_matvec(cc, r1, r2, kshift):
-    try:  # Different naming & calling conventions between master/dev
-        vector = cc.ea_amplitudes_to_vector(r1, r2)
-    except:
-        vector = cc.amplitudes_to_vector_ea(r1, r2)
-    try:
-        vector = cc.eaccsd_matvec(vector, kshift)
-    except:
-        cc.kshift = kshift
-        vector = cc.eaccsd_matvec(vector)
-    try:
-        Hr1, Hr2 = cc.ea_vector_to_amplitudes(vector)
-    except:
-        Hr1, Hr2 = cc.vector_to_amplitudes_ea(vector)
+    eom = eom_kccsd_rhf.EOMEA(cc)
+    vector = eom.amplitudes_to_vector(r1, r2, kshift)
+    vector = eom.matvec(vector, kshift)
+    Hr1, Hr2 = eom.vector_to_amplitudes(vector, kshift)
     return Hr1, Hr2
 
 
@@ -291,6 +270,40 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ecc1, ecc1_bench, 5)
 
+        # IP
+        nroots = 3
+        # Default
+        eip_d, _ = mycc.ipccsd(nroots=nroots)
+        # Koopmans
+        eip_k, _ = mycc.ipccsd(nroots=nroots, koopmans=True)
+        # Manual (Koopmans)
+        size = eom_kccsd_rhf.EOMIP(mycc).vector_size()
+        guess = np.zeros((nroots, size))
+        for i in range(mycc.nkpts):
+            nocc = mycc.get_nocc(True)[i]
+            rr = np.arange(nroots)
+            guess[rr, nocc - rr - 1] = 1
+        eip_m, _ = mycc.ipccsd(nroots=3, guess=guess)
+
+        np.testing.assert_allclose(eip_k, eip_m)  # FIXME
+        np.testing.assert_allclose(eip_d[:, 0], eip_k[:, 0], atol=1e-4)
+
+        # EA
+        # Default
+        eea_d, _ = mycc.eaccsd(nroots=nroots)
+        # Koopmans
+        eea_k, _ = mycc.eaccsd(nroots=nroots, koopmans=True)
+        # Manual (Koopmans)
+        size = eom_kccsd_rhf.EOMEA(mycc).vector_size()
+        guess = np.zeros((nroots, size))
+        for i in range(mycc.nkpts):
+            rr = np.arange(nroots)
+            guess[rr, rr] = 1
+        eea_m, _ = mycc.eaccsd(nroots=3, guess=guess)
+
+        np.testing.assert_allclose(eea_k, eea_m)
+        np.testing.assert_allclose(eea_d[1, :], eea_k[1, :], atol=1e-4)
+
     def _test_cu_metallic_frozen_occ(self, kmf, cell):
         assert cell.mesh == [7, 7, 7]
         ecc2_bench = -0.7651806468801496
@@ -390,7 +403,7 @@ class KnownValues(unittest.TestCase):
         self._test_cu_metallic_frozen_occ(kmf, cell)
         self._test_cu_metallic_frozen_vir(kmf, cell)
 
-    def test_cu_metallic_smearing(self):
+    def test_cu_metallic_smearing_high_cost(self):
         mesh = 7
         cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
         nk = [1,1,2]

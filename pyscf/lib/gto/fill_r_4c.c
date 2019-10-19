@@ -85,9 +85,7 @@ void GTOr4c_drv(int (*intor)(), void (*fill)(), int (*prescreen)(),
         const int njsh = jsh1 - jsh0;
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, fill, eri, comp, shls_slice, ao_loc, cintopt, \
-               atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int ish, jsh, ij;
         double *buf = malloc(sizeof(double) * cache_size);

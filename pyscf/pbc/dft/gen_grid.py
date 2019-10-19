@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ class UniformGrids(lib.StreamObject):
             self.non0tab = None
         return coords, weights
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         if self.mesh is None:
             logger.info(self, 'Uniform grid, mesh = %s', self.cell.mesh)
         else:

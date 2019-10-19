@@ -175,6 +175,8 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
 
+    Note: This function has an overhead of memory usage ~4*x0.size*nroots
+
     Args:
         aop : function(x) => array_like_x
             aop(x) to mimic the matrix vector multiplication :math:`\sum_{j}a_{ij}*x_j`.
@@ -262,6 +264,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
+
+    Note: This function has an overhead of memory usage ~4*x0.size*nroots
 
     Args:
         aop : function([x]) => [array_like_x]
@@ -367,6 +371,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     conv = [False] * nroots
     emin = None
 
+    from pyscf import lib
     for icyc in range(max_cycle):
         if fresh_start:
             if _incore:
@@ -414,16 +419,17 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         conv_last = conv
         for i in range(space):
             if head <= i < head+rnow:
+                axi = axt[i-head].conj()
                 for k in range(i-head+1):
-                    heff[head+k,i] = dot(xt[k].conj(), axt[i-head])
-                    heff[i,head+k] = heff[head+k,i].conj()
+                    heff[i,head+k] = dot(axi, xt[k])
+                    heff[head+k,i] = heff[i,head+k].conj()
             else:
-                axi = numpy.asarray(ax[i])
+                axi = numpy.asarray(ax[i]).conj()
                 for k in range(rnow):
-                    heff[head+k,i] = dot(xt[k].conj(), axi)
-                    heff[i,head+k] = heff[head+k,i].conj()
-                axi = None
-        axt = None
+                    heff[i,head+k] = dot(axi, xt[k])
+                    heff[head+k,i] = heff[i,head+k].conj()
+            axi = None
+        xt = axt = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space])
         if callable(pick):
@@ -563,10 +569,9 @@ def eigh(a, *args, **kwargs):
 dsyev = eigh
 
 
-def pick_real_eigs(w, v, nroots, x0):
+def pick_real_eigs(w, v, nroots, envs):
     '''This function searchs the real eigenvalues or eigenvalues with small
-    imaginary component, then constructs approximate real eigenvectors if
-    quasi-real eigenvalues were found.
+    imaginary component.
     '''
     threshold = 1e-3
     abs_imag = abs(w.imag)
@@ -578,24 +583,38 @@ def pick_real_eigs(w, v, nroots, x0):
         warnings.warn('Only %d eigenvalues (out of %3d requested roots) with imaginary part < %4.3g.\n'
                       % (nbelow_thresh, min(w.size,nroots), threshold))
 
-    w, v, idx = _eigs_cmplx2real(w, v, real_idx)
+    # Guess whether the matrix to diagonalize is real or complex
+    if envs.get('dtype') == numpy.double:
+        w, v, idx = _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=True)
+    else:
+        w, v, idx = _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=False)
     return w, v, idx
 
-# If the complex eigenvalue has small imaginary part, both the real part
-# and the imaginary part of the eigenvector can approximately be used as
-# the "real" eigen solutions.
-def _eigs_cmplx2real(w, v, real_idx):
-    '''Note: Problems can arise when we take the imaginary part of the
-    eigenvector when it has zero-norm.'''
+def _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=True):
+    '''
+    For non-hermitian diagonalization, this function transforms the complex
+    eigenvectors to real eigenvectors.
+
+    If the complex eigenvalue has small imaginary part, both the real part
+    and the imaginary part of the eigenvector can approximately be used as
+    the "real" eigen solutions.
+
+    NOTE: If real_eigenvectors is set to True, this function can only be used
+    for real matrix and real eigenvectors. It discards the imaginary part of
+    the eigenvectors then returns only the real part of the eigenvectors.
+    '''
     idx = real_idx[w[real_idx].real.argsort()]
     w = w[idx]
     v = v[:,idx]
-    degen_idx = numpy.where(abs(w.imag) > 1e-10)[0]
-    if degen_idx.size > 0:
-        # Take the imaginary part of the "degenerated" eigenvectors as an
-        # independent eigenvector
-        v[:,degen_idx[1::2]] = v[:,degen_idx[1::2]].imag
-    return w.real, v.real, idx
+
+    if real_eigenvectors:
+        degen_idx = numpy.where(w.imag != 0)[0]
+        if degen_idx.size > 0:
+            # Take the imaginary part of the "degenerated" eigenvectors as an
+            # independent eigenvector then discard the imaginary part of v
+            v[:,degen_idx[1::2]] = v[:,degen_idx[1::2]].imag
+        v = v.real
+    return w.real, v, idx
 
 def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
@@ -904,10 +923,21 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
+    xnorm = numpy.array([numpy_helper.norm(x) for x in x0])
+    enorm = xnorm < 1e-6
+    if numpy.any(enorm):
+        warnings.warn("{:d} davidson root{_s}: {} {_has} very small norm{_s}: {}".format(
+            enorm.sum(),
+            ", ".join("#{:d}".format(i) for i in numpy.argwhere(enorm)[:, 0]),
+            ", ".join("{:.3e}".format(i) for i in xnorm[enorm]),
+            _s='s' if enorm.sum() > 1 else "",
+            _has="have" if enorm.sum() > 1 else "has a",
+        ))
+
     if left:
         warnings.warn('Left eigenvectors from subspace diagonalization method may not be converged')
         w, vl, v = scipy.linalg.eig(heff[:space,:space], left=True)
-        e, v, idx = pick(w, v, nroots, x0)
+        e, v, idx = pick(w, v, nroots, locals())
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
         xl = [x for x in xl]  # nparray -> list
@@ -1106,7 +1136,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                         heff[i,head+k] = heff[head+k,i].conj()
                         seff[head+k,i] = dot(xt[k].conj(), bxi)
                         seff[i,head+k] = seff[head+k,i].conj()
-                    axi = bxi = None
+                axi = bxi = None
         else:
             for i in range(space):
                 if head <= i < head+rnow:
@@ -1123,7 +1153,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                         heff[i,head+k] = heff[head+k,i].conj()
                         seff[head+k,i] = dot(xt[k].conj(), bxi)
                         seff[i,head+k] = seff[head+k,i].conj()
-                    axi = bxi = None
+                axi = bxi = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space], seff[:space,:space])
         if space < nroots or e.size != nroots:
@@ -1253,7 +1283,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     True
     '''
     if isinstance(aop, numpy.ndarray) and aop.ndim == 2:
-        return numpy.linalg.solve(aop, b)
+        return numpy.linalg.solve(aop+numpy.eye(aop.shape[0]), b)
 
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -1373,8 +1403,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     else:
         toloose = tol_residual
 
-    if not callable(precond):
-        precond = make_diag_precond(precond)
+    assert callable(precond)
 
     xs = [precond(b)]
     ax = [aop(xs[-1])]

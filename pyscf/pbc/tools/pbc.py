@@ -308,7 +308,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             with np.errstate(divide='ignore', invalid='ignore'):
                 coulG = weights*4*np.pi/absG2
             if len(G0_idx) > 0:
-                coulG[G0_idx] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
+                coulG[G0_idx] = -2*np.pi*Ld2**2 #-pi*L_z^2/2
 
         elif cell.dimension == 1:
             logger.warn(cell, 'No method for PBC dimension 1, dim-type %s.'
@@ -335,6 +335,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
     coulG[equal2boundary] = 0
+
+    # Scale the coulG kernel for attenuated Coulomb integrals. cell.omega is
+    # often set by DFT code when RSH functionals are used.
+    if cell.omega != 0:
+        coulG *= np.exp(-.25/cell.omega**2 * absG2)
 
     return coulG
 
@@ -392,16 +397,29 @@ def precompute_exx(cell, kpts):
 def madelung(cell, kpts):
     Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = copy.copy(cell)
-    ecell._atm = np.array([[1, 0, 0, 0, 0, 0]])
-    ecell._env = np.array([0., 0., 0.])
+    ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
+    ecell._env = np.append(cell._env, [0., 0., 0.])
     ecell.unit = 'B'
     #ecell.verbose = 0
     ecell.a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
     ecell.mesh = np.asarray(cell.mesh) * Nk
-    ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
-    lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
-                      Nk, ew_eta, ew_cut)
-    return -2*ecell.ewald(ew_eta, ew_cut)
+
+    if cell.omega == 0:
+        ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
+        lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
+                          Nk, ew_eta, ew_cut)
+        return -2*ecell.ewald(ew_eta, ew_cut)
+
+    else:
+        # cell.ewald function does not use the Coulomb kernel function
+        # get_coulG. When computing the nuclear interactions with attenuated
+        # Coulomb operator, the Ewald summation technique is not needed
+        # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
+        # quickly.
+        coulG = get_coulG(ecell)
+        Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
+        ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
+        return -np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
 
 
 def get_monkhorst_pack_size(cell, kpts):

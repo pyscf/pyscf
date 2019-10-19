@@ -41,12 +41,16 @@ cell.build()
 mf0 = pscf.RHF(cell)
 mf0.exxdiv = None
 
+def tearDownModule():
+    global cell, mf0
+    del cell, mf0
+
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(a.ravel(), w)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_jk_single_kpt(self):
         mf = df_jk.density_fit(mf0, auxbasis='weigend', mesh=(11,)*3)
         mf.with_df.mesh = cell.mesh

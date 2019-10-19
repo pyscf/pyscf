@@ -83,7 +83,7 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v3.0.15
+    GIT_TAG v3.0.18
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
@@ -129,6 +129,7 @@ add_subdirectory(ri)
 add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
+add_subdirectory(semiempirical)
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
@@ -136,24 +137,45 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
-    ENABLE_LIBXC AND BUILD_LIBXC)
+#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
+#    ENABLE_LIBXC AND BUILD_LIBXC)
+if(ENABLE_LIBXC AND BUILD_LIBXC)
   if(UNIX AND NOT APPLE)
     set(LIBM "LIBS=-lm")
   endif()
+if(APPLE)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
-    # Stick to libxc-3.0.1 because libxc-4.2.3 does not support M05X, M06X. They
-    # are defined in libxc-3.0.1 and agree very well to xcfun.
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.2.3/libxc-4.2.3.tar.gz
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/3.0.1/libxc-3.0.1.tar.gz
-    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.1.tar.gz
+    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
+    #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
+    URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    BUILD_IN_SOURCE 1
+    # When Xcode was installed on Mac, CMAKE_C_COMPILER may be set to the
+    # Xcode C compiler, which leads to "stdio.h not found" error. See relevant
+    # discussion in
+    # https://stackoverflow.com/questions/52509602/cant-compile-c-program-on-a-mac-after-upgrade-to-mojave
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+          --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
+
+## For git checkout
+#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+#          --enable-shared --disable-static --disable-fortran LIBS=-lm
+  )
+else()
+  ExternalProject_Add(libxc
+    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
+    #GIT_TAG master
+    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
+    #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
+    URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-shared --disable-static --disable-fortran ${LIBM}
+          --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
 
 ## For git checkout
@@ -161,6 +183,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
 #          --enable-shared --disable-static --disable-fortran LIBS=-lm
 #          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
   )
+endif()
 endif() # ENABLE_LIBXC
 
 #if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
@@ -169,7 +192,9 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
-    PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
+    # Range seperated parameters can be set in the python code. This patch to
+    # RSH omega is not needed anymore.
+    #PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1

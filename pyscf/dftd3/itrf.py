@@ -160,10 +160,10 @@ def dftd3(scf_method):
     # the functions of object scf_method, these patches may not be realized by
     # other extensions.
     class DFTD3(method_class, _DFTD3):
-        def dump_flags(self):
-            method_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            method_class.dump_flags(self, verbose)
             if self.with_dftd3:
-                self.with_dftd3.dump_flags()
+                self.with_dftd3.dump_flags(verbose)
             return self
 
         def energy_nuc(self):
@@ -240,17 +240,17 @@ def grad(scf_grad):
 class _DFTD3(object):
     def __init__(self, mol):
         self.mol = mol
+        self.verbose = mol.verbose
         self.xc = 'hf'
         self.version = 4  # 1..6
         self.libdftd3 = libdftd3
         self.edisp = None
         self.grads = None
 
-    def dump_flags(self):
-        mol = self.mol
-        logger.info(mol, '** DFTD3 parameter **')
-        logger.info(mol, 'func', self.xc)
-        logger.info(mol, 'version', self.version)
+    def dump_flags(self, verbose=None):
+        logger.info(self, '** DFTD3 parameter **')
+        logger.info(self, 'func %s', self.xc)
+        logger.info(self, 'version %s', self.version)
         return self
 
     def kernel(self):

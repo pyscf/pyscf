@@ -1,5 +1,7 @@
 #
-#N.J. DeYonker, K.A. Peterson, A.K. Wilson, J. Phys. Chem. A 111, 11383 (2007). Core-valence correlation consistent polarized Valence Quadruple- Basis Set for Ga Note: these should be added to the all-electron cc-pVQZ basis sets
+#N.J. DeYonker, K.A. Peterson, A.K. Wilson, J. Phys. Chem. A 111, 11383 (2007).
+#Core-valence correlation consistent polarized Valence Quadruple- Basis Set for
+#Ga Note: these should be added to the all-electron cc-pVQZ basis sets
 #
 
 #BASIS SET:

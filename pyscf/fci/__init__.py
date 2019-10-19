@@ -52,7 +52,7 @@ from pyscf.fci import selected_ci_symm
 from pyscf.fci import selected_ci_spin0_symm
 from pyscf.fci.selected_ci import SelectedCI, SCI
 
-def solver(mol=None, singlet=True, symm=None):
+def solver(mol=None, singlet=False, symm=None):
     if mol and symm is None:
         symm = mol.symmetry
     if symm:
@@ -62,11 +62,16 @@ def solver(mol=None, singlet=True, symm=None):
             return direct_spin1_symm.FCISolver(mol)
     else:
         if singlet:
+            # The code for singlet direct_spin0 sometimes gets error of 
+            # "State not singlet x.xxxxxxe-06" due to numerical issues.
+            # Calling direct_spin1 is slightly slower but more robust than
+            # direct_spin0 especially when combining to energy penalty method
+            # (:func:`fix_spin_`)
             return direct_spin0.FCISolver(mol)
         else:
             return direct_spin1.FCISolver(mol)
 
-def FCI(mol_or_mf, mo=None, singlet=True):
+def FCI(mol_or_mf, mo=None, singlet=False):
     '''FCI solver
     '''
     from functools import reduce

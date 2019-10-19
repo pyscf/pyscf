@@ -34,6 +34,6 @@ mc.kernel()
 
 # Read one of the saved orbitals for the initial guess for new calculation
 mc = mcscf.CASSCF(mf, 6, (4,2))
-mo = numpy.load('mcscf-mo-6-1.npy')
+mo = numpy.load('mcscf-mo-6-2.npy')
 mc.kernel(mo)
 

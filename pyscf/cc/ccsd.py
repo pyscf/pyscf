@@ -125,13 +125,14 @@ def update_amps(mycc, t1, t2, eris):
     fwVOov, fwVooV = _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap)
     time1 = log.timer_debug1('ovvv', *time1)
 
+    woooo = numpy.asarray(eris.oooo).transpose(0,2,1,3).copy()
+
     unit = nocc**2*nvir*7 + nocc**3 + nocc*nvir**2
-    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - mem_now)
     blksize = min(nvir, max(BLKMIN, int((max_memory*.9e6/8-nocc**4)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-
-    woooo = numpy.asarray(eris.oooo).transpose(0,2,1,3).copy()
 
     for p0, p1 in lib.prange(0, nvir, blksize):
         wVOov = fwVOov[p0:p1]
@@ -951,8 +952,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
@@ -1107,7 +1108,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=False)
+        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in MO space.  The density matrix is
@@ -1234,10 +1235,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
 
 CC = RCCSD = CCSD
-
-from pyscf import scf
-scf.hf.RHF.CCSD = lib.class_as_method(CCSD)
-scf.rohf.ROHF.CCSD = None
 
 
 class _ChemistsERIs:

@@ -118,8 +118,8 @@ class Gradients(rhf_grad.GradientsBasics):
         self.state = 0  # of which the gradients to be computed.
         rhf_grad.GradientsBasics.__init__(self, myci)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         if not self.base.converged:
             log.warn('Ground state %s not converged',
@@ -161,6 +161,8 @@ class Gradients(rhf_grad.GradientsBasics):
 
         de = self.grad_elec(civec, eris, atmlst, verbose=log)
         self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
         self._finalize()
         return self.de
 

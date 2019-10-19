@@ -292,10 +292,10 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     viridxa = ~occidxa
     viridxb = ~occidxb
 
-    ga = reduce(numpy.dot, (mo_coeff[0][:,viridxa].T, fock_ao[0].T,
-                            mo_coeff[0][:,occidxa].conj()))
-    gb = reduce(numpy.dot, (mo_coeff[1][:,viridxb].T, fock_ao[1].T,
-                            mo_coeff[1][:,occidxb].conj()))
+    ga = reduce(numpy.dot, (mo_coeff[0][:,viridxa].conj().T, fock_ao[0],
+                            mo_coeff[0][:,occidxa]))
+    gb = reduce(numpy.dot, (mo_coeff[1][:,viridxb].conj().T, fock_ao[1],
+                            mo_coeff[1][:,occidxb]))
     return numpy.hstack((ga.ravel(), gb.ravel()))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
@@ -424,7 +424,7 @@ def spin_square(mo, s=1):
     mo_a, mo_b = mo
     nocc_a = mo_a.shape[1]
     nocc_b = mo_b.shape[1]
-    s = reduce(numpy.dot, (mo_a.T.conj(), s, mo_b))
+    s = reduce(numpy.dot, (mo_a.conj().T, s, mo_b))
     ssxy = (nocc_a+nocc_b) * .5 - numpy.einsum('ij,ij->', s.conj(), s)
     ssz = (nocc_b-nocc_a)**2 * .25
     ss = (ssxy + ssz).real
@@ -459,7 +459,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         if with_meta_lowdin:
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
             orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-            c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+            c_inv = numpy.dot(orth_coeff.conj().T, ovlp_ao)
             dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label,
                               start=MO_BASE, **kwargs)
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
@@ -521,9 +521,9 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
         dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
     c = orth.restore_ao_character(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
-    c_inv = numpy.dot(orth_coeff.T, s)
-    dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.T.conj()))
-    dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.T.conj()))
+    c_inv = numpy.dot(orth_coeff.conj().T, s)
+    dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.conj().T))
+    dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.conj().T))
 
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
@@ -537,7 +537,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     assert(mo_occ.ndim == 2)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
+        fock = mf.get_fock(dm=dm)
     occidxa = mo_occ[0] == 1
     occidxb = mo_occ[1] == 1
     viridxa = mo_occ[0] == 0
@@ -545,7 +545,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     def eig_(fock, mo_coeff, idx, es, cs):
         if numpy.count_nonzero(idx) > 0:
             orb = mo_coeff[:,idx]
-            f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+            f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
             cs[:,idx] = numpy.dot(orb, c)
@@ -632,8 +632,8 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
     mo1_b = mo1[1][:, occ1[1]>0]
     mo2_a = mo2[0][:, occ2[0]>0]
     mo2_b = mo2[1][:, occ2[1]>0]
-    dm_a = reduce(numpy.dot, (mo1_a, x[0], mo2_a.T.conj()))
-    dm_b = reduce(numpy.dot, (mo1_b, x[1], mo2_b.T.conj()))
+    dm_a = reduce(numpy.dot, (mo1_a, x[0], mo2_a.conj().T))
+    dm_b = reduce(numpy.dot, (mo1_b, x[1], mo2_b.conj().T))
     return numpy.array((dm_a, dm_b))
 
 dip_moment = hf.dip_moment
@@ -682,8 +682,8 @@ class UHF(hf.SCF):
         #raise RuntimeError('API updates')
         self.nelec = (x, self.mol.nelectron-x)
 
-    def dump_flags(self):
-        hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        hf.SCF.dump_flags(self, verbose)
         logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
 
     def eig(self, fock, s):
@@ -745,7 +745,8 @@ class UHF(hf.SCF):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
-    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         '''Coulomb (J) and exchange (K)
 
         Args:
@@ -754,12 +755,13 @@ class UHF(hf.SCF):
         '''
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+        if (not omega and
+            (self._eri is not None or mol.incore_anyway or self._is_mem_enough())):
             if self._eri is None:
                 self._eri = mol.intor('int2e', aosym='s8')
             vj, vk = hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
         else:
-            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k)
+            vj, vk = hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
         return vj, vk
 
     @lib.with_doc(get_veff.__doc__)

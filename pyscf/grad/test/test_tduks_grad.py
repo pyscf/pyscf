@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
-    def test_range_separated_high_cost(self):
+    def test_range_separated(self):
         mol = gto.M(atom="H; H 1 1.", basis='631g', verbose=0)
         mf = dft.UKS(mol).set(xc='CAMB3LYP')
         mf._numint.libxc = dft.xcfun

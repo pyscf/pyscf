@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -116,7 +116,8 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True):
+def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
+          omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -133,7 +134,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True):
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, with_j, with_k,
-                                 exxdiv=mf.exxdiv)
+                                 omega, exxdiv=mf.exxdiv)
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
@@ -317,7 +318,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-        fock = mf.get_hcore() + mf.get_jk(mf.cell, dm)
+        fock = mf.get_fock(dm=dm)
     mo_coeff = []
     mo_energy = []
     for k, mo in enumerate(mo_coeff_kpts):
@@ -438,13 +439,14 @@ class KSCF(pbchf.SCF):
     def mo_occ_kpts(self):
         return self.mo_occ
 
-    def dump_flags(self):
-        mol_hf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
         logger.debug(self, 'kpts = %s', self.kpts)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
+        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
         #if self.exxdiv == 'vcut_ws':
         #    if self.exx_built is False:
         #        self.precompute_exx()
@@ -464,7 +466,7 @@ class KSCF(pbchf.SCF):
         logger.info(self, 'DF object = %s', self.with_df)
         if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
-            self.with_df.dump_flags()
+            self.with_df.dump_flags(verbose)
         return self
 
     def check_sanity(self):
@@ -541,21 +543,24 @@ class KSCF(pbchf.SCF):
     energy_elec = energy_elec
     get_fermi = get_fermi
 
-    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        vj = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band, with_k=False)[0]
-        return vj
+    def get_j(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
+              kpts_band=None, omega=None):
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band,
+                           with_k=False, omega=omega)[0]
 
-    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None):
-        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band, with_j=False)[1]
+    def get_k(self, cell=None, dm_kpts=None, hermi=1, kpts=None,
+              kpts_band=None, omega=None):
+        return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band,
+                           with_j=False, omega=omega)[1]
 
     def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True):
+               with_j=True, with_k=True, omega=None, **kwargs):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                     with_j, with_k, exxdiv=self.exxdiv)
+                                     with_j, with_k, omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -642,7 +647,7 @@ class KSCF(pbchf.SCF):
     def dump_chk(self, envs):
         if self.chkfile:
             mol_hf.SCF.dump_chk(self, envs)
-            with h5py.File(self.chkfile) as fh5:
+            with h5py.File(self.chkfile, 'a') as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
 

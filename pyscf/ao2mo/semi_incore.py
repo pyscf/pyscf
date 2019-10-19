@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2018-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Bryan Lau
+#         Qiming Sun <osirpt.sun@gmail.com>
 #
 
 """
@@ -31,12 +32,16 @@ to IO overhead.
 """
 
 import time
+import ctypes
 import numpy
 import h5py
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
+from pyscf.ao2mo.outcore import _load_from_h5g
+from pyscf.ao2mo import _ao2mo
 
-IOBLK_SIZE = 128
+IOBLK_SIZE = 128  # MB
 
 def general(eri, mo_coeffs, erifile, dataname='eri_mo',
             ioblk_size=IOBLK_SIZE, compact=True, verbose=logger.NOTE):
@@ -116,40 +121,26 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
     log = logger.new_logger(None, verbose)
     log.info('******** ao2mo disk, custom eri ********')
 
-    nmoi = mo_coeffs[0].shape[1]
+    eri_ao = numpy.asarray(eri, order='C')
+    nao, nmoi = mo_coeffs[0].shape
     nmoj = mo_coeffs[1].shape[1]
-    nmok = mo_coeffs[2].shape[1]
-    nmol = mo_coeffs[3].shape[1]
-    nao = mo_coeffs[0].shape[0]
-
-    nao_pair = nao*(nao+1) // 2
-    if compact and iden_coeffs(mo_coeffs[0], mo_coeffs[1]):
-        ij_red = False
-        nij_pair = nmoi*(nmoi+1) // 2
-    else:
-        ij_red = True
-        nij_pair = nmoi*nmoj
-    if compact and iden_coeffs(mo_coeffs[2], mo_coeffs[3]):
-        kl_red = False
-        nkl_pair = nmok*(nmok+1) // 2
-    else:
-        kl_red = True
-        nkl_pair = nmok*nmol
-
+    nao_pair = nao*(nao+1)//2
+    ijmosym, nij_pair, moij, ijshape = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
+    klmosym, nkl_pair, mokl, klshape = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
+    ijshape = (ijshape[0], ijshape[1]-ijshape[0],
+               ijshape[2], ijshape[3]-ijshape[2])
     dtype = numpy.result_type(eri, *mo_coeffs)
     typesize = dtype.itemsize/1e6 # in MB
-    chunks_half = (max(1, numpy.minimum(int(ioblk_size//(nao_pair*typesize)),nmoj)),
-                   max(1, numpy.minimum(int(ioblk_size//(nij_pair*typesize)),nmol)))
-    '''
-    ideally, the final transformed eris should have a chunk of nmoj x nmol to
-    optimize read operations. However, I'm chunking the row size so that the
-    write operations during the transform can be done as fast as possible.
-    '''
-    chunks_full = (numpy.minimum(int(ioblk_size//(nkl_pair*typesize)),nmoj),nmol)
+
+    if nij_pair == 0:
+        return numpy.empty((nij_pair,nkl_pair))
+
+    ij_red = ijmosym == 's1'
+    kl_red = klmosym == 's1'
 
     if isinstance(erifile, str):
         if h5py.is_hdf5(erifile):
-            feri = h5py.File(erifile)
+            feri = h5py.File(erifile, 'a')
             if dataname in feri:
                 del(feri[dataname])
         else:
@@ -158,120 +149,100 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
 
-    h5d_eri = feri.create_dataset(dataname,(nij_pair,nkl_pair),
-                                  dtype.char, chunks=chunks_full)
-
+    h5d_eri = feri.create_dataset(dataname,(nij_pair,nkl_pair), dtype.char)
     feri_swap = lib.H5TmpFile(libver='latest')
-    half_eri = feri_swap.create_dataset(dataname,(nij_pair,nao_pair),
-                                        dtype.char, chunks=chunks_half)
+    chunk_size = min(nao_pair, max(4, int(ioblk_size*1e6/8/nao_pair)))
 
     log.debug('Memory information:')
-    log.debug('  IOBLK_SIZE (MB): {}'.format(ioblk_size))
-    log.debug('  jxl {}x{}, half eri chunk dim  {}x{}'.format(nmoj,nmol,chunks_half[0],chunks_half[1]))
-    log.debug('  jxl {}x{}, full eri chunk dim {}x{}'.format(nmoj,nmol,chunks_full[0],chunks_full[1]))
-    log.debug('  Final disk eri size (MB): {:.3g}, chunked {:.3g}'
-              .format(nij_pair*nkl_pair*typesize,numpy.prod(chunks_full)*typesize))
-    log.debug('  Half transformed eri size (MB): {:.3g}, chunked {:.3g}'
-              .format(nij_pair*nao_pair*typesize,numpy.prod(chunks_half)*typesize))
-    log.debug('  RAM buffer for half transform (MB): {:.3g}'
-             .format(nij_pair*chunks_half[1]*typesize*2))
-    log.debug('  RAM buffer for full transform (MB): {:.3g}'
-             .format(typesize*chunks_full[0]*nkl_pair*2 + chunks_half[0]*nao_pair*typesize*2))
+    log.debug('  IOBLK_SIZE (MB): {}  chunk_size: {}'
+              .format(ioblk_size, chunk_size))
+    log.debug('  Final disk eri size (MB): {:.3g}'
+              .format(nij_pair*nkl_pair*typesize))
+    log.debug('  Half transformed eri size (MB): {:.3g}'
+              .format(nij_pair*nao_pair*typesize))
+    log.debug('  RAM buffer (MB): {:.3g}'
+             .format(nij_pair*IOBLK_SIZE*typesize*2))
 
-    def save1(piece,buf):
-        start = piece*chunks_half[1]
-        stop = (piece+1)*chunks_half[1]
-        if stop > nao_pair:
-            stop = nao_pair
-        half_eri[:,start:stop] = buf[:,:stop-start]
-        return
+    if eri_ao.size == nao_pair**2: # 4-fold symmetry
+        # half_e1 first transforms the indices which are contiguous in memory
+        # transpose the 4-fold integrals to make ij the contiguous indices
+        eri_ao = lib.transpose(eri_ao)
+        ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s4
+    elif eri_ao.size == nao_pair*(nao_pair+1)//2:
+        ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s8
+    else:
+        raise NotImplementedError
 
-    def load2(piece):
-        start = piece*chunks_half[0]
-        stop = (piece+1)*chunks_half[0]
-        if stop > nij_pair:
-            stop = nij_pair
-            if start >= nij_pair:
-                start = stop - 1
-        return half_eri[start:stop,:]
+    if ijmosym == 's2':
+        fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_s2
+    elif nmoi <= nmoj:
+        fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
+    else:
+        fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_igtj
+    fdrv = getattr(_ao2mo.libao2mo, 'AO2MOnr_e1incore_drv')
 
-    def prefetch2(piece):
-        start = piece*chunks_half[0]
-        stop = (piece+1)*chunks_half[0]
-        if stop > nij_pair:
-            stop = nij_pair
-            if start >= nij_pair:
-                start = stop - 1
-        buf_prefetch[:stop-start,:] = half_eri[start:stop,:]
-        return
-
-    def save2(piece,buf):
-        start = piece*chunks_full[0]
-        stop = (piece+1)*chunks_full[0]
-        if stop > nij_pair:
-            stop = nij_pair
-        h5d_eri[start:stop,:] = buf[:stop-start,:]
-        return
+    def save(piece, buf):
+        feri_swap[str(piece)] = buf.T
 
     # transform \mu\nu -> ij
     cput0 = time.clock(), time.time()
-    Cimu = mo_coeffs[0].conj().transpose()
-    buf_write = numpy.empty((nij_pair,chunks_half[1]))
-    buf_out = numpy.empty_like(buf_write)
-    wpiece = 0
-    with lib.call_in_background(save1) as async_write:
-        for lo in range(nao_pair):
-            if lo % chunks_half[1] == 0 and lo > 0:
-                #save1(wpiece,buf_write)
-                buf_out, buf_write = buf_write, buf_out
-                async_write(wpiece,buf_out)
-                wpiece += 1
-            buf = lib.unpack_row(eri,lo)
-            uv = lib.unpack_tril(buf)
-            uv = Cimu.dot(uv).dot(mo_coeffs[1])
-            if ij_red:
-                ij = numpy.ravel(uv) # grabs by row
-            else:
-                ij = lib.pack_tril(uv)
-            buf_write[:,lo % chunks_half[1]] = ij
-    # final write operation & cleanup
-    save1(wpiece,buf_write)
+    with lib.call_in_background(save) as async_write:
+        for istep, (p0, p1) in enumerate(lib.prange(0, nao_pair, chunk_size)):
+            if dtype == numpy.double:
+                buf = numpy.empty((p1-p0, nij_pair))
+                fdrv(ftrans, fmmm,
+                     buf.ctypes.data_as(ctypes.c_void_p),
+                     eri_ao.ctypes.data_as(ctypes.c_void_p),
+                     moij.ctypes.data_as(ctypes.c_void_p),
+                     ctypes.c_int(p0), ctypes.c_int(p1-p0),
+                     ctypes.c_int(nao),
+                     ctypes.c_int(ijshape[0]), ctypes.c_int(ijshape[1]),
+                     ctypes.c_int(ijshape[2]), ctypes.c_int(ijshape[3]))
+            else:  # complex
+                tmp = numpy.empty((p1-p0, nao_pair))
+                for i in range(p0, p1):
+                    tmp[i-p0] = lib.unpack_row(eri_ao, i)
+                tmp = lib.unpack_tril(tmp, filltriu=lib.SYMMETRIC)
+                buf = lib.einsum('xpq,pi,qj->xij', tmp, mo_coeffs[0].conj(), mo_coeffs[1])
+                if ij_red:
+                    buf = buf.reshape(p1-p0,-1) # grabs by row
+                else:
+                    buf = lib.pack_tril(buf)
+
+            async_write(istep, buf)
+
     log.timer('(uv|lo) -> (ij|lo)', *cput0)
-    uv = None
-    ij = None
-    buf = None
 
     # transform \lambda\sigma -> kl
     cput1 = time.clock(), time.time()
-    Cklam = mo_coeffs[2].conj().transpose()
-    buf_write = numpy.empty((chunks_full[0],nkl_pair))
-    buf_out = numpy.empty_like(buf_write)
-    buf_read = numpy.empty((chunks_half[0],nao_pair))
+    Cklam = mo_coeffs[2].conj()
+    buf_read = numpy.empty((chunk_size,nao_pair), dtype=dtype)
     buf_prefetch = numpy.empty_like(buf_read)
-    rpiece = 0
-    wpiece = 0
-    with lib.call_in_background(save2,prefetch2) as (async_write,prefetch):
-        buf_read = load2(rpiece)
-        prefetch(rpiece+1)
-        for ij in range(nij_pair):
-            if ij % chunks_full[0] == 0 and ij > 0:
-                #save2(wpiece,buf_write)
-                buf_out, buf_write = buf_write, buf_out
-                async_write(wpiece,buf_out)
-                wpiece += 1
-            if ij % chunks_half[0] == 0 and ij > 0:
-                #buf_read = load2(rpiece)
-                buf_read, buf_prefetch = buf_prefetch, buf_read
-                rpiece += 1
-                prefetch(rpiece+1)
-            lo = lib.unpack_tril(buf_read[ij % chunks_half[0],:])
-            lo = Cklam.dot(lo).dot(mo_coeffs[3])
+
+    def load(start, stop, buf):
+        if start < stop:
+            _load_from_h5g(feri_swap, start, stop, buf)
+
+    def save(start, stop, buf):
+        if start < stop:
+            h5d_eri[start:stop] = buf[:stop-start]
+
+    with lib.call_in_background(save,load) as (async_write, prefetch):
+        for p0, p1 in lib.prange(0, nij_pair, chunk_size):
+            if p0 == 0:
+                load(p0, p1, buf_prefetch)
+
+            buf_read, buf_prefetch = buf_prefetch, buf_read
+            prefetch(p1, min(p1+chunk_size, nij_pair), buf_prefetch)
+
+            lo = lib.unpack_tril(buf_read[:p1-p0], filltriu=lib.SYMMETRIC)
+            lo = lib.einsum('xpq,pi,qj->xij', lo, Cklam, mo_coeffs[3])
             if kl_red:
-                kl = numpy.ravel(lo)
+                kl = lo.reshape(p1-p0,-1)
             else:
                 kl = lib.pack_tril(lo)
-            buf_write[ij % chunks_full[0],:] = kl
-    save2(wpiece,buf_write)
+            async_write(p0, p1, kl)
+
     log.timer('(ij|lo) -> (ij|kl)', *cput1)
 
     if isinstance(erifile, str):
@@ -335,7 +306,7 @@ if __name__ == '__main__':
     stop_time2 = time.time() - start_time
     print('    Time elapsed (s): ',stop_time2)
     print('How worse is the custom implemenation?',stop_time/stop_time2)
-    with h5py.File(tmpfile2.name) as f:
+    with h5py.File(tmpfile2.name, 'r') as f:
         print('\n\nIncore (pyscf) vs outcore (custom)?',numpy.allclose(onnn2,f['aa']))
         print('Outcore (pyscf) vs outcore (custom)?',numpy.allclose(f['ab'],f['aa']))
 
@@ -351,7 +322,7 @@ if __name__ == '__main__':
     stop_time2 = time.time() - start_time
     print('    Time elapsed (s): ',stop_time2)
     print('    How worse is the custom implemenation?',stop_time/stop_time2)
-    with h5py.File(tmpfile2.name) as f:
+    with h5py.File(tmpfile2.name, 'r') as f:
         print('\n\nIncore (pyscf) vs outcore (custom)?',numpy.allclose(eri_incore,f['aa']))
         print('Outcore (pyscf) vs outcore (custom)?',numpy.allclose(f['ab'],f['aa']))
 

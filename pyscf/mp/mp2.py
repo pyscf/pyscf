@@ -58,7 +58,13 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     emp2 = 0
     for i in range(nocc):
-        gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
+        if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
+            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # ovov integrals might be in a 4-index tensor.
+            gi = eris.ovov[i]
+        else:
+            gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
+
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
         emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
@@ -342,8 +348,8 @@ class MP2(lib.StreamObject):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)

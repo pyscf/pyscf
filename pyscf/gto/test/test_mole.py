@@ -521,6 +521,14 @@ O    SP
         self.assertRaises(ValueError, mol0.gto_norm, -1, 1.)
 
     def test_nelectron(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [1  , (0.,1.,1.)],
+            ["O1", (0.,0.,0.)],
+            [1  , (1.,1.,0.)], ]
+        mol.charge = 1
+        self.assertEqual(mol.nelectron, 9)
+
         mol0.nelectron = mol0.nelectron
         mol0.nelectron = mol0.nelectron
         mol0.spin = 2
@@ -562,12 +570,13 @@ O    SP
         self.assertEqual([x[2] for x in aoslice], [0, 8, 56])
         self.assertEqual([x[3] for x in aoslice], [8, 56, 64])
 
-    def test_dump_loads(self):
+    def test_dump_loads_skip(self):
         import json
         tmpfile = tempfile.NamedTemporaryFile()
         lib.chkfile.save_mol(mol0, tmpfile.name)
         mol1 = gto.Mole()
         mol1.update(tmpfile.name)
+        # dumps() may produce different orders in different runs
         self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
         tmpfile = None
         mol1.loads(mol1.dumps())
@@ -598,11 +607,11 @@ O    SP
         mol1 = mol0.copy()
         with mol1.with_rinv_as_nucleus(1):
             self.assertTrue(mol1._env[gto.PTR_RINV_ZETA] != 0)
-            self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 0.46288647587915266, 9)
+            self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 0, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ZETA], 0, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
         with mol1.with_rinv_as_nucleus(0):
-            self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 1.8515459035166109, 9)
+            self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 1.8897261245650618, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
 
         with mol1.with_rinv_zeta(20):
@@ -633,7 +642,7 @@ O    SP
         mol1.verbose = 5
         mol1.output = '/dev/null'
         mol1.build()
-        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 4.2517312170868475, 9)
+        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 3.4708548731841296, 9)
 
         mol1 = gto.Mole()
         mol1 = gto.Mole()
@@ -652,7 +661,7 @@ O    SP
         mol1.symmetry = True
         mol1.symmetry_subgroup = 'D2h'
         mol1.build()
-        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
+        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), -1.1939459267317516, 9)
 
         mol1.atom = 'H 0 0 -1; H 0 0 1'
         mol1.unit = 'B'
@@ -661,7 +670,7 @@ O    SP
         mol1.build()
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
 
-        mol1.atom = 'H 1 0 -1; H 0 0 1'
+        mol1.atom = 'H 1 0 -1; H 0 0 1; He 0 0 2'
         mol1.symmetry = 'Coov'
         self.assertRaises(RuntimeWarning, mol1.build)
 
@@ -675,7 +684,43 @@ O    SP
         mol1.symmetry = True
         mol1.symmetry_subgroup = 'C2v'
         mol1.build()
-        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), -0.5215310671099358, 9)
+        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 2.9413856643164618, 9)
+
+    def test_symm_orb(self):
+        rs = numpy.array([[.1, -.3, -.2],
+                          [.3,  .1,  .8]])
+        mol = gto.M(atom=[('H', c) for c in rs], unit='Bohr',
+                    basis={'H': [[0, (1, 1)], [1, (.9, 1)], [2, (.8, 1)], [3, (.7, 1)]]})
+
+        numpy.random.seed(1)
+        u, w, vh = numpy.linalg.svd(numpy.random.random((3,3)))
+        rs1 = rs.dot(u) + numpy.array([-.5, -.3, .9])
+        mol1 = gto.M(atom=[('H', c) for c in rs1], unit='Bohr',
+                     basis={'H': [[0, (1, 1)], [1, (.9, 1)], [2, (.8, 1)], [3, (.7, 1)]]})
+
+        mol.symmetry = 1
+        mol.build()
+        mol1.symmetry = 1
+        mol1.build()
+
+        s0 = mol.intor('int1e_ovlp')
+        s0 = [c.T.dot(s0).dot(c) for c in mol.symm_orb]
+        s1 = mol1.intor('int1e_ovlp')
+        s1 = [c.T.dot(s1).dot(c) for c in mol1.symm_orb]
+        self.assertTrue(all(abs(s0[i]-s1[i]).max()<1e-12 for i in range(len(mol.symm_orb))))
+
+        mol.cart = True
+        mol.symmetry = 1
+        mol.build()
+        mol1.cart = True
+        mol1.symmetry = 1
+        mol1.build()
+
+        s0 = mol.intor('int1e_ovlp')
+        s0 = [c.T.dot(s0).dot(c) for c in mol.symm_orb]
+        s1 = mol1.intor('int1e_ovlp')
+        s1 = [c.T.dot(s1).dot(c) for c in mol1.symm_orb]
+        self.assertTrue(all(abs(s0[i]-s1[i]).max()<1e-12 for i in range(len(mol.symm_orb))))
 
     def test_search_ao_label(self):
         mol1 = mol0.copy()
@@ -843,6 +888,26 @@ O    SP
         nao = mol.nao
         eri = mol.ao2mo(numpy.eye(nao))
         self.assertAlmostEqual(eri[0,0], 1.0557129427350722, 12)
+
+    def test_tofile(self):
+        tmpfile = tempfile.NamedTemporaryFile()
+        mol = gto.M(atom=[[1  , (0.,1.,1.)],
+                          ["O1", (0.,0.,0.)],
+                          [1  , (1.,1.,0.)], ])
+        out1 = mol.tofile(tmpfile.name, format='xyz')
+        ref = '''3
+XYZ from PySCF
+H           0.00000        1.00000        1.00000
+O           0.00000        0.00000        0.00000
+H           1.00000        1.00000        0.00000
+'''
+        with open(tmpfile.name, 'r') as f:
+            self.assertEqual(f.read(), ref)
+        self.assertEqual(out1, ref[:-1])
+
+        tmpfile = tempfile.NamedTemporaryFile(suffix='.zmat')
+        str1 = mol.tofile(tmpfile.name, format='zmat')
+        #FIXME:self.assertEqual(mol._atom, mol.fromfile(tmpfile.name))
 
 
 if __name__ == "__main__":

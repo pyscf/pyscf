@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -451,8 +451,9 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
             return _Wvvvv[ka, kb, kc]
     else:
         fimd = lib.H5TmpFile()
-        _Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+        _Wvvvv = fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
         _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, _Wvvvv)
+
         def get_Wvvvv(ka, kb, kc):
             return _Wvvvv[ka, kb, kc]
 
@@ -501,18 +502,15 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
-        self.made_ee_imds = False
-        self.made_ip_imds = False
-        self.made_ea_imds = False
         self.ip_partition = None
         self.ea_partition = None
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
         self.keep_exxdiv = keep_exxdiv
 
-        keys = set(['kpts', 'khelper', 'made_ee_imds',
-                    'made_ip_imds', 'made_ea_imds', 'ip_partition',
+        keys = set(['kpts', 'khelper', 'ip_partition',
                     'ea_partition', 'max_space', 'direct'])
         self._keys = self._keys.union(keys)
+        self.__imds__ = None
 
     @property
     def nkpts(self):
@@ -523,8 +521,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
-        return pyscf.cc.ccsd.CCSD.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        return pyscf.cc.ccsd.CCSD.dump_flags(self, verbose)
 
     @property
     def ccsd_vector_desc(self):
@@ -539,33 +537,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def vector_to_amplitudes(self, vec):
         """Ground state vector to apmplitudes."""
         return vector_to_nested(vec, self.ccsd_vector_desc)
-
-    @property
-    def ip_vector_desc(self):
-        """Description of the IP vector."""
-        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
-
-    def ip_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ip_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ip_vector_desc)
-
-    @property
-    def ea_vector_desc(self):
-        """Description of the EA vector."""
-        nvir = self.nmo - self.nocc
-        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
-
-    def ea_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ea_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ea_vector_desc)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -674,13 +645,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
-    #####################################
-    # Wrapper functions for IP/EA-EOM
-    #####################################
+#####################################
+# Wrapper functions for IP/EA-EOM
+#####################################
+# TODO: ip/ea _matvec and _diag functions are not needed in pyscf-1.7 or
+# higher. Remove these wrapper functions in future release
     def ipccsd_matvec(self, vector, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
         imds = self.imds
@@ -689,8 +660,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def ipccsd_diag(self, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
             self.imds.make_ip(self.ip_partition)
         imds = self.imds
@@ -699,8 +668,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def eaccsd_matvec(self, vector, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
         imds = self.imds
@@ -709,17 +676,34 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def eaccsd_diag(self, kshift):
         from pyscf.pbc.cc import eom_kccsd_rhf
-        if not getattr(self, 'imds', None):
-            self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
             self.imds.make_ea(self.ea_partition)
         imds = self.imds
         myeom = eom_kccsd_rhf.EOMEA(self)
         return myeom.get_diag(kshift, imds=imds)
 
+    @property
+    def imds(self):
+        if self.__imds__ is None:
+            self.__imds__ = _IMDS(self)
+        return self.__imds__
+###########################################
+# End of Wrapper functions for IP/EA-EOM
+###########################################
+
 
 KRCCSD = RCCSD
 
+#######################################
+#
+# _ERIS.
+#
+# Note the two electron integrals are stored in different orders from
+# kccsd_uhf._ERIS.  Integrals (ab|cd) are stored as [ka,kc,kb,a,c,b,d] here
+# while the order is [ka,kb,kc,a,b,c,d] in kccsd_uhf._ERIS
+#
+# TODO: use the same convention as kccsd_uhf
+#
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore'):
         from pyscf.pbc import df
@@ -830,9 +814,15 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             self.voov = self.feri1.create_dataset('voov', (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype.char)
             self.vovv = self.feri1.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), dtype.char)
 
-            if (not (cc.direct and type(cc._scf.with_df) is df.GDF)
-                or cell.dimension == 2):
+            vvvv_required = ((not cc.direct)
+                             # cc._scf.with_df needs to be df.GDF only (not MDF)
+                             or type(cc._scf.with_df) is not df.GDF
+                             # direct-vvvv for pbc-2D is not supported so far
+                             or cell.dimension == 2)
+            if vvvv_required:
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
+            else:
+                self.vvvv = None
 
             # <ij|pq>  = (ip|jq)
             cput1 = time.clock(), time.time()
@@ -891,9 +881,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
             cput1 = time.clock(), time.time()
             mem_now = lib.current_memory()[0]
-            if (cc.direct and type(cc._scf.with_df) is df.GDF
-                and cell.dimension != 2):
-                # cc._scf.with_df needs to be df.GDF only (not MDF)
+            if not vvvv_required:
                 _init_df_eris(cc, self)
 
             elif nvir ** 4 * 16 / 1e6 + mem_now < cc.max_memory:
@@ -982,9 +970,8 @@ def _init_df_eris(cc, eris):
                 Lpv[ki,kj] = out.reshape(-1,nmo,nvir)
     return eris
 
+# TODO: Remove _IMDS
 imd = imdk
-
-
 class _IMDS:
     # Identical to molecular rccsd_slow
     def __init__(self, cc):
@@ -1146,7 +1133,6 @@ if __name__ == '__main__':
     mycc.max_cycle = 100
     e_ea, _ = mycc.eaccsd(nroots=1, koopmans=True, kptlist=(0,))
     #print(e_ip, e_ea)
-    exit()
 
     ####
     cell = gto.Cell()
@@ -1194,13 +1180,14 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))  # FIXME
-    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))  # FIXME
+    print(lib.finger(Ht1) - (6.63584725357554   -0.1886803958548149j))
+    print(lib.finger(Ht2) - (-23.10640514550505 -142.54473917246457j))
 
-    kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
+    kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
     mycc = KRCCSD(kmf)
     eris = _ERIS(mycc, mycc.mo_coeff, method='outcore')
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))  # FIXME
-    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))  # FIXME
+    print(lib.finger(Ht1) - (6.608150224325518  -0.2219476427503148j))
+    print(lib.finger(Ht2) - (-23.253955060531297-137.76211601171295j))
+

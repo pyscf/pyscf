@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import time
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -504,7 +505,7 @@ def analyze(tdobj, verbose=None):
 
     e_ev = numpy.asarray(tdobj.e) * nist.HARTREE2EV
     e_wn = numpy.asarray(tdobj.e) * nist.HARTREE2WAVENUMBER
-    wave_length = 1e11/e_wn
+    wave_length = 1e7/e_wn
 
     log.note('\n** Excitation energies and oscillator strengths **')
 
@@ -545,7 +546,7 @@ def analyze(tdobj, verbose=None):
                      i+1, dip[0], dip[1], dip[2], numpy.dot(dip, dip),
                      f_oscillator[i])
 
-        log.info('\n** Transition velocity dipole moments (imaginary part AU) **')
+        log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
         log.info('state          X           Y           Z        Dip. S.      Osc.')
         trans_v = tdobj.transition_velocity_dipole()
         f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
@@ -554,7 +555,7 @@ def analyze(tdobj, verbose=None):
             log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
                      i+1, v[0], v[1], v[2], numpy.dot(v, v), f_v[i])
 
-        log.info('\n** Transition magnetic dipole moments (AU) **')
+        log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
         log.info('state          X           Y           Z')
         trans_m = tdobj.transition_magnetic_dipole()
         for i, ei in enumerate(tdobj.e):
@@ -595,8 +596,8 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
 
 class TDA(rhf.TDA):
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
@@ -659,6 +660,7 @@ class TDA(rhf.TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
+        cpu0 = (time.clock(), time.time())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -697,6 +699,7 @@ class TDA(rhf.TDA):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDA', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
@@ -814,6 +817,7 @@ class TDHF(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        cpu0 = (time.clock(), time.time())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -832,7 +836,8 @@ class TDHF(TDA):
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
+                                                      real_eigenvectors=True)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
@@ -865,6 +870,7 @@ class TDHF(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDDFT', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 

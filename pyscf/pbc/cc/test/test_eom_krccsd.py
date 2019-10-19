@@ -1,6 +1,7 @@
 import copy
 import make_test_cell
 import numpy
+import numpy as np
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.pbc import gto
 from pyscf.pbc import cc as pbcc
@@ -428,3 +429,141 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(gpt2[:,:,:,::2,1::2,::2,1::2]), lib.finger(pt2), 8)
         self.assertAlmostEqual(lib.finger(gWmcik[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wmcik), 8)
         self.assertAlmostEqual(lib.finger(gWacek[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wacek), 8)
+
+    def test_eomea_matvec(self):
+        cell = gto.Cell()
+        cell.atom = '''
+        He 0.000000000000   0.000000000000   0.000000000000
+        He 1.685068664391   1.685068664391   1.685068664391
+        '''
+        cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+        cell.a = '''
+        0.000000000, 3.370137329, 3.370137329
+        3.370137329, 0.000000000, 3.370137329
+        3.370137329, 3.370137329, 0.000000000'''
+        cell.unit = 'B'
+        cell.build()
+
+        np.random.seed(2)
+# Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
+        kmf = pbcscf.KRHF(cell, kpts=cell.make_kpts([1, 1, 3]), exxdiv=None)
+        nmo = cell.nao_nr()
+        kmf.mo_occ = np.zeros((3, nmo))
+        kmf.mo_occ[:, :2] = 2
+        kmf.mo_energy = np.arange(nmo) + np.random.random((3, nmo)) * .3
+        kmf.mo_energy[kmf.mo_occ == 0] += 2
+        kmf.mo_coeff = (np.random.random((3, nmo, nmo)) +
+                        np.random.random((3, nmo, nmo)) * 1j - .5 - .5j)
+
+        mycc = pbcc.KRCCSD(kmf)
+        t1, t2 = rand_t1_t2(kmf, mycc)
+        mycc.t1 = t1
+        mycc.t2 = t2
+
+        eris = mycc.ao2mo()
+        eom = EOMEA(mycc)
+        imds = eom.make_imds(eris)
+        np.random.seed(9)
+        vector = np.random.random(eom.vector_size())
+
+        hc = eom.matvec(vector, 0, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-2.615041322934018 -0.19907655222705176j), 9)
+        hc = eom.matvec(vector, 1, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9105694363906784+0.4623840337230889j ), 9)
+        hc = eom.matvec(vector, 2, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-3.5191624937262938-0.09803982911194647j), 9)
+
+
+        kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
+        mycc._scf = kmf
+
+        mycc.max_memory = 0
+        eris = mycc.ao2mo()
+        imds = eom.make_imds(eris)
+        hc = eom.matvec(vector, 0, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-2.6242967982318532-0.19622574939883755j), 9)
+        hc = eom.matvec(vector, 1, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 9)
+        hc = eom.matvec(vector, 2, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 9)
+
+        mycc.max_memory = 4000
+        eris = mycc.ao2mo()
+        imds = eom.make_imds(eris)
+        hc = eom.matvec(vector, 0, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-2.6242967982318532-0.19622574939883755j), 9)
+        hc = eom.matvec(vector, 1, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 9)
+        hc = eom.matvec(vector, 2, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 9)
+
+    def test_eomea_l_matvec(self):
+        cell = gto.Cell()
+        cell.atom = '''
+        He 0.000000000000   0.000000000000   0.000000000000
+        He 1.685068664391   1.685068664391   1.685068664391
+        '''
+        cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+        cell.a = '''
+        0.000000000, 3.370137329, 3.370137329
+        3.370137329, 0.000000000, 3.370137329
+        3.370137329, 3.370137329, 0.000000000'''
+        cell.unit = 'B'
+        cell.build()
+
+        np.random.seed(2)
+# Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
+        kmf = pbcscf.KRHF(cell, kpts=cell.make_kpts([1, 1, 3]), exxdiv=None)
+        nmo = cell.nao_nr()
+        kmf.mo_occ = np.zeros((3, nmo))
+        kmf.mo_occ[:, :2] = 2
+        kmf.mo_energy = np.arange(nmo) + np.random.random((3, nmo)) * .3
+        kmf.mo_energy[kmf.mo_occ == 0] += 2
+        kmf.mo_coeff = (np.random.random((3, nmo, nmo)) +
+                        np.random.random((3, nmo, nmo)) * 1j - .5 - .5j)
+
+        mycc = pbcc.KRCCSD(kmf)
+        t1, t2 = rand_t1_t2(kmf, mycc)
+        mycc.t1 = t1
+        mycc.t2 = t2
+
+        eris = mycc.ao2mo()
+        eom = EOMEA(mycc)
+        imds = eom.make_imds(eris)
+        np.random.seed(9)
+        vector = np.random.random(eom.vector_size())
+
+        hc = eom.l_matvec(vector, 0, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-0.9490117387531858-1.726564412656459j), 9)
+        hc = eom.l_matvec(vector, 1, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-0.4497554439273588-5.620765390422395j), 9)
+        hc = eom.l_matvec(vector, 2, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9057184472068758+2.7776122802218817j), 9)
+
+
+        kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
+        mycc._scf = kmf
+        mycc.max_memory = 0
+        eris = mycc.ao2mo()
+        imds = eom.make_imds(eris)
+        hc = eom.l_matvec(vector, 0, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 9)
+        hc = eom.l_matvec(vector, 1, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 9)
+        hc = eom.l_matvec(vector, 2, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 9)
+
+        mycc.max_memory = 4000
+        eris = mycc.ao2mo()
+
+        imds = eom.make_imds(eris)
+        hc = eom.l_matvec(vector, 0, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 9)
+        hc = eom.l_matvec(vector, 1, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 9)
+        hc = eom.l_matvec(vector, 2, imds)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 9)
+
+if __name__ == '__main__':
+    print("eom_kccsd_rhf tests")
+    unittest.main()

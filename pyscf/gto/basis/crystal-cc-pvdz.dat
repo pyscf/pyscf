@@ -1,3 +1,7 @@
+#
+# M. Lorenz, L. Maschio, M. Schutz, D. Usvyat, J. Chem. Phys. 137, 204119 (2012). Local ab initio methods for calculating optical bandgaps in periodic systems. II. Periodic density fitted local configuration interaction singles method for solids 
+#
+
 #BASIS SET: (4S, 1P) -> [2S, 1P]
 H    S
   13.010000000000    0.019685000000

@@ -173,7 +173,7 @@ class DDPCM(ddcosmo.DDCOSMO):
     def __init__(self, mol):
         ddcosmo.DDCOSMO.__init__(self, mol)
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, '******** %s (In testing) ********', self.__class__)
         logger.warn(self, 'ddPCM is an experimental feature. It is '
                     'still in testing.\nFeatures and APIs may be changed '
@@ -186,7 +186,7 @@ class DDPCM(ddcosmo.DDCOSMO):
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
-        self.grids.dump_flags()
+        self.grids.dump_flags(verbose)
         return self
 
     gen_solver = as_solver = gen_ddpcm_solver

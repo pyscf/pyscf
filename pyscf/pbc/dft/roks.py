@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return uks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpt, kpts_band)
 
 
-class ROKS(rohf.ROHF):
+class ROKS(rohf.ROHF, rks.KohnShamDFT):
     '''UKS class adapted for PBCs.
 
     This is a literal duplication of the molecular UKS class with some `mol`
@@ -49,18 +49,16 @@ class ROKS(rohf.ROHF):
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         rohf.ROHF.__init__(self, cell, kpt)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
-        lib.logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
     get_rho = uks.get_rho
-
-    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(rohf.ROHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(rohf.ROHF.mix_density_fit)

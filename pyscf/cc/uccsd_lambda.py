@@ -311,9 +311,9 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     u2ab = numpy.zeros_like(l2ab)
     u2bb = numpy.zeros_like(l2bb)
     mo_ea_o = eris.mo_energy[0][:nocca]
-    mo_ea_v = eris.mo_energy[0][nocca:]
+    mo_ea_v = eris.mo_energy[0][nocca:] + mycc.level_shift
     mo_eb_o = eris.mo_energy[1][:noccb]
-    mo_eb_v = eris.mo_energy[1][noccb:]
+    mo_eb_v = eris.mo_energy[1][noccb:] + mycc.level_shift
 
     fova = eris.focka[:nocca,nocca:]
     fovb = eris.fockb[:noccb,noccb:]

@@ -35,23 +35,37 @@ to try out the package::
 
 '''
 
-__version__ = '1.7.1'
+__version__ = '1.7.0a'
 
 import os
 # Avoid too many threads being created in OMP loops.
 # See issue https://github.com/pyscf/pyscf/issues/317
-os.environ['OPENBLAS_NUM_THREADS'] = '1'
-os.environ['MKL_NUM_THREADS'] = '1'
+if 'OPENBLAS_NUM_THREADS' not in os.environ:
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+if 'MKL_NUM_THREADS' not in os.environ:
+    os.environ['MKL_NUM_THREADS'] = '1'
 
 import sys
 from distutils.version import LooseVersion
 import numpy
-if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
+if LooseVersion(numpy.__version__) <= '1.8.0':
     raise SystemError("You're using an old version of Numpy (%s). "
-                      "It is recommended to upgrad numpy to 1.8.0 or newer. \n"
+                      "It is recommended to upgrade numpy to 1.8.0 or newer. \n"
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
+elif '1.16.2' <= LooseVersion(numpy.__version__) < '1.18':
+    #sys.stderr.write('Numpy 1.16 has memory leak bug  '
+    #                 'https://github.com/numpy/numpy/issues/13808\n'
+    #                 'It is recommended to downgrade to numpy 1.15 or older\n')
+    import ctypes
+    from numpy.core import _internal
+    def _get_void_ptr(arr):
+        simple_arr = numpy.asarray(_internal._unsafe_first_element_pointer(arr))
+        c_arr = (ctypes.c_char * 0).from_buffer(simple_arr)
+        return ctypes.cast(ctypes.byref(c_arr), ctypes.c_void_p)
+    # patch _get_void_ptr as a workaround to numpy issue #13808
+    _internal._get_void_ptr = _get_void_ptr
 
 from pyscf import __config__
 from pyscf import lib
@@ -72,4 +86,4 @@ def M(**kwargs):
     else:  # Molecule
         return gto.M(**kwargs)
 
-del(os, sys, LooseVersion, numpy)
+del(os, sys, LooseVersion)

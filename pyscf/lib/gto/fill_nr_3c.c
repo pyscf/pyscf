@@ -214,9 +214,7 @@ void GTOnr3c_drv(int (*intor)(), void (*fill)(), double *eri, int comp,
                                                  atm, natm, bas, nbas, env);
         const int njobs = (MAX(nish,njsh) / BLKSIZE + 1) * nksh;
 
-#pragma omp parallel default(none) \
-        shared(intor, fill, eri, comp, shls_slice, ao_loc, cintopt, \
-               atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         int jobid;
         double *buf = malloc(sizeof(double) * (di*di*di*comp + cache_size));

@@ -90,7 +90,8 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho_a = make_rho(0, ao[0], mask, 'LDA')
             rho_b = make_rho(1, ao[0], mask, 'LDA')
-            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[1]
+            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                             verbose=verbose)[1]
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,0])
             rks_grad._d1_dot_(vmat[0], mol, ao[1:4], aow, mask, ao_loc, True)
@@ -104,7 +105,8 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho_a = make_rho(0, ao[:4], mask, 'GGA')
             rho_b = make_rho(1, ao[:4], mask, 'GGA')
-            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[1]
+            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                             verbose=verbose)[1]
             wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
 
             rks_grad._gga_grad_sum_(vmat[0], mol, ao, wva, mask, ao_loc)
@@ -141,7 +143,8 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[0], mask, 'LDA')
             rho_b = make_rho(1, ao[0], mask, 'LDA')
-            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                                  verbose=verbose)[:2]
             vrho = vxc[0]
 
             vtmp = numpy.zeros((3,nao,nao))
@@ -168,7 +171,8 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[:4], mask, 'GGA')
             rho_b = make_rho(1, ao[:4], mask, 'GGA')
-            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                                  verbose=verbose)[:2]
             wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
 
             vtmp = numpy.zeros((3,nao,nao))
@@ -202,8 +206,8 @@ class Gradients(uhf_grad.Gradients):
         self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
-    def dump_flags(self):
-        uhf_grad.Gradients.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        uhf_grad.Gradients.dump_flags(self, verbose)
         logger.info(self, 'grid_response = %s', self.grid_response)
         return self
 

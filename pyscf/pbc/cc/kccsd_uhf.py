@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -86,8 +86,8 @@ def update_amps(cc, t1, t2, eris):
 
     mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
     mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
-    mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
-    mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
+    mo_ea_v = [e[nocca:] + cc.level_shift for e in eris.mo_energy[0]]
+    mo_eb_v = [e[noccb:] + cc.level_shift for e in eris.mo_energy[1]]
 
     Fvv_, FVV_ = kintermediates_uhf.cc_Fvv(cc, t1, t2, eris)
     Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, t1, t2, eris)
@@ -588,61 +588,41 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
             WvvVV *= (1./nkpts)
             WVVVV *= (1./nkpts)
             return Wvvvv, WvvVV, WVVVV
-
-        for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
-            kd = kconserv[ka,kc,kb]
-            Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
-            for ki in range(nkpts):
-                kj = kconserv[ka,ki,kb]
-                tauaa = t2aa[ki,kj,kc].copy()
-                tauab = t2ab[ki,kj,kc].copy()
-                taubb = t2bb[ki,kj,kc].copy()
-                if ki == kc and kj == kd:
-                    tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
-                    tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
-                    taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
-                if ki == kd and kj == kc:
-                    tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
-                    taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
-
-                tmp = lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
-                Ht2aa[ki,kj,ka] += tmp
-                Ht2aa[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-
-                tmp = lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
-                Ht2bb[ki,kj,ka] += tmp
-                Ht2bb[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-
-                Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
-            Wvvvv = WvvVV = WVVVV = None
     else:
-        _Wvvvv, _WvvVV, _WVVVV = kintermediates_uhf.cc_Wvvvv(cc, t1, t2, eris)
+        _Wvvvv, _WvvVV, _WVVVV = kintermediates_uhf.cc_Wvvvv_half(cc, t1, t2, eris)
         def get_Wvvvv(ka, kc, kb):
             return _Wvvvv[ka,kc,kb], _WvvVV[ka,kc,kb], _WVVVV[ka,kc,kb]
 
-        #:Ht2aa += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', tauaa, _Wvvvv, P, P) * .5
-        #:Ht2bb += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', taubb, _WVVVV, P, P) * .5
-        #:Ht2ab += np.einsum('xyuiJeF,zuwaeBF,xyuv,zwuv->xyziJaB', tauab, _WvvVV, P, P)
-        for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
-            kd = kconserv[ka,kc,kb]
-            Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
-            for ki in range(nkpts):
-                kj = kconserv[ka,ki,kb]
-                tauaa = t2aa[ki,kj,kc].copy()
-                tauab = t2ab[ki,kj,kc].copy()
-                taubb = t2bb[ki,kj,kc].copy()
-                if ki == kc and kj == kd:
-                    tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
-                    tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
-                    taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
-                if ki == kd and kj == kc:
-                    tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
-                    taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
+    #:Ht2aa += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', tauaa, _Wvvvv-_Wvvvv.transpose(2,1,0,5,4,3,6), P, P) * .5
+    #:Ht2bb += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', taubb, _WVVVV-_WVVVV.transpose(2,1,0,5,4,3,6), P, P) * .5
+    #:Ht2ab += np.einsum('xyuiJeF,zuwaeBF,xyuv,zwuv->xyziJaB', tauab, _WvvVV, P, P)
+    for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
+        kd = kconserv[ka,kc,kb]
+        Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
+        for ki in range(nkpts):
+            kj = kconserv[ka,ki,kb]
+            tauaa = t2aa[ki,kj,kc].copy()
+            tauab = t2ab[ki,kj,kc].copy()
+            taubb = t2bb[ki,kj,kc].copy()
+            if ki == kc and kj == kd:
+                tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
+                tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
+                taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
+            if ki == kd and kj == kc:
+                tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
+                taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
 
-                Ht2aa[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
-                Ht2bb[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
-                Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
-        _Wvvvv = _WvvVV = _WVVVV = None
+            tmp = lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
+            Ht2aa[ki,kj,ka] += tmp
+            Ht2aa[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+
+            tmp = lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
+            Ht2bb[ki,kj,ka] += tmp
+            Ht2bb[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+
+            Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
+        Wvvvv = WvvVV = WVVVV = None
+    _Wvvvv = _WvvVV = _WVVVV = None
 
     # Contractions below are merged to Woooo intermediates
     # tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, t2, t1, t1)
@@ -683,8 +663,8 @@ class KUCCSD(uccsd.UCCSD):
     update_amps = update_amps
     energy = energy
 
-    def dump_flags(self):
-        return uccsd.UCCSD.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        return uccsd.UCCSD.dump_flags(self, verbose)
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc.df.df import GDF
@@ -787,6 +767,16 @@ class KUCCSD(uccsd.UCCSD):
 UCCSD = KUCCSD
 
 
+#######################################
+#
+# _ERIS.
+#
+# Note the two electron integrals are stored in different orders from
+# kccsd_rhf._ERIS.  Integrals (ab|cd) are stored as [ka,kb,kc,a,b,c,d] here
+# while the order is [ka,kc,kb,a,c,b,d] in kccsd_rhf._ERIS
+#
+# TODO: use the same convention as kccsd_rhf
+#
 def _make_eris_incore(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:

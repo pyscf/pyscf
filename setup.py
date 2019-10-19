@@ -48,6 +48,8 @@ CLASSIFIERS = [
 'Programming Language :: Python :: 3.4',
 'Programming Language :: Python :: 3.5',
 'Programming Language :: Python :: 3.6',
+'Programming Language :: Python :: 3.7',
+'Programming Language :: Python :: 3.8',
 'Topic :: Software Development',
 'Topic :: Scientific/Engineering',
 'Operating System :: POSIX',
@@ -118,6 +120,12 @@ elif sys.platform.startswith('darwin'):
 elif sys.platform.startswith('win'):
     ostype = 'windows'
     so_ext = '.dll'
+elif sys.platform.startswith('aix') or sys.platform.startswith('os400'):
+    ostype = 'aix'
+    so_ext = '.so'
+    LD_LIBRARY_PATH = 'LIBPATH'
+    if(os.environ.get('PYSCF_INC_DIR') is None):
+        os.environ['PYSCF_INC_DIR'] = '/QOpenSys/pkgs:/QOpenSys/usr:/usr:/usr/local'
 else:
     raise OSError('Unknown platform')
     ostype = None
@@ -272,6 +280,10 @@ def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir
             soname = pkg_name.split('.')[-1]
             extra_link_flags = extra_link_flags + ['-install_name', '@loader_path/'+soname+so_ext]
             runtime_library_dirs = []
+        if sys.platform.startswith('aix') or sys.platform.startswith('os400'):
+            extra_compile_flags = extra_compile_flags + ['-fopenmp']
+            extra_link_flags = extra_link_flags + ['-lblas', '-lgomp', '-Wl,-brtl']
+            runtime_library_dirs = ['$ORIGIN', '.']
         else:
             extra_compile_flags = extra_compile_flags + ['-fopenmp']
             extra_link_flags = extra_link_flags + ['-fopenmp']

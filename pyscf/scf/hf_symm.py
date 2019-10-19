@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         if with_meta_lowdin:
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+            c = reduce(numpy.dot, (orth_coeff.conj().T, ovlp_ao, mo_coeff))
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
@@ -171,7 +171,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 idx = idx0 & idx1
                 if numpy.count_nonzero(idx) > 0:
                     orb = mo_coeff[:,idx]
-                    f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                    f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                     e, c = scipy.linalg.eigh(f1)
                     mo[:,idx] = numpy.dot(mo_coeff[:,idx], c)
                     mo_e[idx] = e
@@ -180,7 +180,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         for idx in (coreidx, openidx, viridx):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 c = numpy.dot(mo_coeff[:,idx], c)
                 mo[:,idx] = _symmetrize_canonicalization_(mf, e, c, s)
@@ -209,9 +209,9 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
         cs = []
         for i,ir in enumerate(mol.irrep_id):
             so = mol.symm_orb[i]
-            sosc = numpy.dot(so.T, scsub)
-            s_ir = reduce(numpy.dot, (so.T, s, so))
-            fock_ir = numpy.dot(sosc*esub, sosc.T)
+            sosc = numpy.dot(so.conj().T, scsub)
+            s_ir = reduce(numpy.dot, (so.conj().T, s, so))
+            fock_ir = numpy.dot(sosc*esub, sosc.conj().T)
             mo_energy, u = mf._eigh(fock_ir, s_ir)
             idx = abs(mo_energy) > emin
             es.append(mo_energy[idx])
@@ -275,7 +275,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
         raise ValueError(msg)
     else:
         logger.info(mol, 'Freeze %d electrons in irreps %s',
-                    fix_ne, irrep_nelec.keys())
+                    fix_ne, list(irrep_nelec.keys()))
 
     if len(set(float_irname)) == 0 and fix_ne != mol.nelectron:
         msg =('Num electrons defined by irrep_nelec != total num electrons. '
@@ -524,8 +524,8 @@ class SymAdaptedROHF(rohf.ROHF):
         self._irrep_soccs = []
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self
@@ -679,8 +679,8 @@ class SymAdaptedROHF(rohf.ROHF):
             mo_occ = self.mo_occ
         mo_a = mo_coeff[:,mo_occ>0]
         mo_b = mo_coeff[:,mo_occ==2]
-        dm_a = numpy.dot(mo_a, mo_a.T)
-        dm_b = numpy.dot(mo_b, mo_b.T)
+        dm_a = numpy.dot(mo_a, mo_a.conj().T)
+        dm_b = numpy.dot(mo_b, mo_b.conj().T)
         return numpy.array((dm_a, dm_b))
 
     def _finalize(self):
@@ -788,7 +788,7 @@ class SymAdaptedROHF(rohf.ROHF):
             if with_meta_lowdin:
                 log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
                 orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-                c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+                c = reduce(numpy.dot, (orth_coeff.conj().T, ovlp_ao, mo_coeff))
             else:
                 log.debug(' ** MO coefficients (expansion on AOs) **')
                 c = mo_coeff
