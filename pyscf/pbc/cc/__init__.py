@@ -38,10 +38,10 @@ def KGCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_ghf(mf)
     return kccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 
-def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None, keep_exxdiv=False):
     from pyscf.pbc.cc import kccsd_rhf
     mf = scf.addons.convert_to_rhf(mf)
-    return kccsd_rhf.RCCSD(mf, frozen, mo_coeff, mo_occ)
+    return kccsd_rhf.RCCSD(mf, frozen, mo_coeff, mo_occ, keep_exxdiv)
 
 KCCSD = KRCCSD
 

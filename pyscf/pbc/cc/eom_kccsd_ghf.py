@@ -1350,6 +1350,8 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
         nroots = min(nroots, size)
 
         matvec, diag = eom.gen_matvec(kshift, imds, left=left, **kwargs)
+        if diag.size != size:
+            raise ValueError("Number of diagonal elements in effective H does not match R vector size")
         # TODO update `diag` in case of frozen orbitals
 
         # TODO allow user provided guess vector
@@ -1358,7 +1360,7 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
         # work for the current `kshift` due to different vector_size. Thus for
         # now we keep `user_guess` false, and always compute `guess` on our own.
         user_guess = False
-        guess = eom.get_init_guess(kshift, nroots, koopmans, diag)
+        guess = eom.get_init_guess(kshift, nroots, koopmans=koopmans, diag=diag, imds=imds)
         for ig, g in enumerate(guess):
             guess_norm = np.linalg.norm(g)
             guess_norm_tol = LOOSE_ZERO_TOL
@@ -1380,11 +1382,13 @@ def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
                 return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond, pick=pickeig,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                           max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           max_space=eom.max_space, max_memory=eom.max_memory,
+                                           nroots=nroots, verbose=eom.verbose)
         else:
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond,
-                                       tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                                       max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
+                                           tol=eom.conv_tol, max_cycle=eom.max_cycle,
+                                           max_space=eom.max_space, max_memory=eom.max_memory,
+                                           nroots=nroots, verbose=eom.verbose)
 
         evals_k = evals_k.real
         evals[k] = evals_k
@@ -1627,7 +1631,6 @@ def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
     satisfy (i k_i) > (j k_j) and (a k_a) > (b k_b)
         return: [r1, r2], where
         r1 = r_{i k_i}^{a k_a} is a 3-d array whose elements can be accessed via
-
             r1[k_i, i, a].
 
         r2 = r_{i k_i, j k_j}^{a k_a, b k_b} is a 7-d array whose elements can
@@ -1767,7 +1770,7 @@ class EOMEE(eom_rccsd.EOM):
 
         return size_r1 + size_r2
 
-    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
+    def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None, **kwargs):
         """Initial guess vectors of R coefficients"""
         size = self.vector_size(kshift)
         dtype = getattr(diag, 'dtype', np.complex)
