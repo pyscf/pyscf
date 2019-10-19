@@ -835,24 +835,10 @@ class EOMEA_Ta(EOMEA):
         imds.make_t3p2_ea(self._cc)
         return imds
 
+
 ########################################
 # EOM-EE-CCSD
 ########################################
-
-# def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
-#               eris=None, imds=None, diag=None, partition=None, kptlist=None,
-#               dtype=None, **kwargs0):
-#     '''See `eom_kccsd_ghf.kernel()` for a description of arguments.
-#
-#     This method is merely a simplified version of kernel() with a few parts
-#     removed, such as those involving `eom.mask_frozen()`. Slowly they will be
-#     added back for the completion of program.
-#     '''
-#
-#     evals = [None]*len(kptlist)
-#     evecs = [None]*len(kptlist)
-#     convs = [None]*len(kptlist)
-#     return convs, evals, evecs
 
 def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
@@ -864,6 +850,7 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
 def eomee_ccsd_singlet(eom, nroots=1, koopmans=False, guess=None, left=False,
                        eris=None, imds=None, diag=None, partition=None,
                        kptlist=None, dtype=None):
+    '''See `eom_kgccsd.kernel()` for a description of arguments.'''
     eom.converged, eom.e, eom.v  \
             = eom_kgccsd.kernel_ee(eom, nroots, koopmans, guess, left, eris=eris,
                                    imds=imds, diag=diag, partition=partition,
@@ -874,7 +861,16 @@ def eomee_ccsd_singlet(eom, nroots=1, koopmans=False, guess=None, left=False,
 def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
     '''Transform 1-dimensional array to 3- and 7-dimensional arrays, r1 and r2.
 
-    TODO Add more description
+    For example:
+        vector: a 1-d array with all r1 elements, and r2 elements whose indices
+    satisfy (i k_i a k_a) >= (j k_j b k_b)
+
+        return: [r1, r2], where
+        r1 = r_{i k_i}^{a k_a} is a 3-d array whose elements can be accessed via
+            r1[k_i, i, a].
+
+        r2 = r_{i k_i, j k_j}^{a k_a, b k_b} is a 7-d array whose elements can
+            be accessed via r2[k_i, k_j, k_a, i, j, a, b]
     '''
     cput0 = (time.clock(), time.time())
     log = logger.Logger(sys.stdout, logger.DEBUG)
@@ -918,7 +914,11 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
     '''Transform 3- and 7-dimensional arrays, r1 and r2, to a 1-dimensional
     array with unique indices.
 
-    TODO Add more description
+    For example:
+        r1: t_{i k_i}^{a k_a}
+        r2: t_{i k_i, j k_j}^{a k_a, b k_b}
+        return: a vector with all r1 elements, and r2 elements whose indices
+    satisfy (i k_i a k_a) >= (j k_j b k_b)
     '''
     cput0 = (time.clock(), time.time())
     log = logger.Logger(sys.stdout, logger.DEBUG)
@@ -986,6 +986,11 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
 
 def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
+    """Spin-restricted, k-point EOM-EE-CCSD equations for singlet excitation only.
+    
+    This implementation can be checked against the spin-orbital version in 
+    `eom_kccsd_ghf.eeccsd_matvec()`.
+    """
     cput0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
 

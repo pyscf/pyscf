@@ -1631,7 +1631,6 @@ def vector_to_amplitudes_ee(vector, kshift, nkpts, nmo, nocc, kconserv):
     satisfy (i k_i) > (j k_j) and (a k_a) > (b k_b)
         return: [r1, r2], where
         r1 = r_{i k_i}^{a k_a} is a 3-d array whose elements can be accessed via
-
             r1[k_i, i, a].
 
         r2 = r_{i k_i, j k_j}^{a k_a, b k_b} is a 7-d array whose elements can
