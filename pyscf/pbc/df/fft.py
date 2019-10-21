@@ -158,6 +158,9 @@ def get_pp(mydf, kpts=None):
 class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
+
+    #print('qrtq00023421')    
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         from pyscf.pbc.dft import gen_grid
         from pyscf.pbc.dft import numint
@@ -178,6 +181,9 @@ class FFTDF(lib.StreamObject):
         self.exxdiv = None
         self._numint = numint.KNumInt()
         self._keys = set(self.__dict__.keys())
+        # for occ-fft
+        self.occ = False
+
 
     @property
     def mesh(self):
@@ -262,7 +268,8 @@ class FFTDF(lib.StreamObject):
     # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, exxdiv=None):
-        from pyscf.pbc.df import fft_jk
+
+        from pyscf.pbc.df import fft_jk, fft_occk
         if kpts is None:
             if numpy.all(self.kpts == 0): # Gamma-point J/K by default
                 kpts = numpy.zeros(3)
@@ -270,16 +277,19 @@ class FFTDF(lib.StreamObject):
                 kpts = self.kpts
         else:
             kpts = numpy.asarray(kpts)
-
         vj = vk = None
         if kpts.shape == (3,):
             vj, vk = fft_jk.get_jk(self, dm, hermi, kpts, kpts_band,
                                    with_j, with_k, exxdiv)
         else:
-            if with_k:
-                vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
             if with_j:
                 vj = fft_jk.get_j_kpts(self, dm, hermi, kpts, kpts_band)
+            if with_k:
+                if self.occ == False:
+                    vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
+                else:
+                    vk = fft_occk.get_k_kpts_occ(self, dm, hermi, kpts, kpts_band, exxdiv)
+
         return vj, vk
 
     get_eri = get_ao_eri = fft_ao2mo.get_eri
