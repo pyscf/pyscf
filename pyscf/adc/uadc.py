@@ -20,73 +20,43 @@
 Unrestricted algebraic diagrammatic construction
 '''
 
-#import time
+import time
 #import ctypes
 #from functools import reduce
-#import numpy
+import numpy
 #from pyscf import gto
-#from pyscf import lib
-#from pyscf.lib import logger
-#from pyscf import ao2mo
+from pyscf import lib
+from pyscf.lib import logger
+from pyscf.adc import uadc_ao2mo
 #from pyscf.ao2mo import _ao2mo
 #from pyscf.cc import _ccsd
 #from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
-#from pyscf import __config__
+from pyscf import __config__
 #
 #BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
 #MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
+def kernel(myadc, eris, verbose=None):
 
-#def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
-#           tolnormt=1e-6, verbose=None):
-#    log = logger.new_logger(mycc, verbose)
-#    if eris is None:
-#        eris = mycc.ao2mo(mycc.mo_coeff)
-#    if t1 is None and t2 is None:
-#        t1, t2 = mycc.get_init_guess(eris)
-#    elif t2 is None:
-#        t2 = mycc.get_init_guess(eris)[1]
-#
-#    cput1 = cput0 = (time.clock(), time.time())
-#    eold = 0
-#    eccsd = mycc.energy(t1, t2, eris)
-#    log.info('Init E(CCSD) = %.15g', eccsd)
-#
-#    if isinstance(mycc.diis, lib.diis.DIIS):
-#        adiis = mycc.diis
-#    elif mycc.diis:
-#        adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
-#        adiis.space = mycc.diis_space
-#    else:
-#        adiis = None
-#
-#    conv = False
-#    for istep in range(max_cycle):
-#        t1new, t2new = mycc.update_amps(t1, t2, eris)
-#        tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
-#        tmpvec -= mycc.amplitudes_to_vector(t1, t2)
-#        normt = numpy.linalg.norm(tmpvec)
-#        tmpvec = None
-#        if mycc.iterative_damping < 1.0:
-#            alpha = mycc.iterative_damping
-#            t1new = (1-alpha) * t1 + alpha * t1new
-#            t2new *= alpha
-#            t2new += (1-alpha) * t2
-#        t1, t2 = t1new, t2new
-#        t1new = t2new = None
-#        t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
-#        eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
-#        log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-#                 istep+1, eccsd, eccsd - eold, normt)
-#        cput1 = log.timer('CCSD iter', *cput1)
-#        if abs(eccsd-eold) < tol and normt < tolnormt:
-#            conv = True
-#            break
-#    log.timer('CCSD', *cput0)
-#    return conv, eccsd, t1, t2
+    log = logger.new_logger(myadc, verbose)
+    if eris is None:
+        #eris = mycc.ao2mo(mycc.mo_coeff)
+        # TODO: transform integrals if they are not provided
+        raise NotImplementedError('Integrals for UADC amplitudes')
+
+    cput0 = (time.clock(), time.time())
+
+    t1, t2 = myadc.compute_amplitudes(eris)
+    e_corr = myadc.energy(t1, t2, eris)
+
+    log.info('E(corr) = %.15g', e_corr)
+    log.timer('ADC ground-state energy', *cput0)
+    return e_corr, t1, t2
 
 
 class UADC(lib.StreamObject):
+
+    incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         from pyscf import gto
@@ -111,8 +81,27 @@ class UADC(lib.StreamObject):
         self.e_corr = None
         self.t1 = None
         self.t2 = None
-        self._nocc = None
-        self._nmo = None
+        self._nocc = mf.mol.nelectron
+        self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
         self.chkfile = mf.chkfile
+
+    def kernel(self):
+        assert(self.mo_coeff is not None)
+        assert(self.mo_occ is not None)
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        # TODO: Implement
+        #self.dump_flags()
+
+        # TODO: ao2mo transformation if eris is None
+        eris = uadc_ao2mo.transform_integrals(self)
+        exit()
+
+        self.e_corr, self.t1, self.t2 = kernel(self, eris, verbose=self.verbose)
+
+        # TODO: Implement
+        #self._finalize()
+        return self.e_corr, self.t1, self.t2
 
 # TODO: add a test main section
