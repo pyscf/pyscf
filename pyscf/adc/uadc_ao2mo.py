@@ -26,6 +26,7 @@ def transform_integrals(myadc):
     vir_a = myadc.mo_coeff[0][:,myadc._nocc[0]:]
     vir_b = myadc.mo_coeff[1][:,myadc._nocc[1]:]
 
+
     occ = occ_a, occ_b
     vir = vir_a, vir_b
 
@@ -36,17 +37,17 @@ def transform_integrals(myadc):
     eris.oooo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,occ,occ,occ))
     eris.voov = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,occ,vir))
     eris.ooov = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,occ,occ,vir))
-    eris.vovv = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,vir,vir), myadc.disk)
+    eris.vovv = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,vir,vir))
     eris.vvoo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,occ,occ))
-    eris.vvvo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,vir,occ), myadc.disk)
+    eris.vvvo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,vir,occ))
     eris.ovoo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,occ,occ))
     eris.ovov = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,occ,vir))
     eris.vooo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,occ,occ))
     eris.oovo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,occ,vir,occ))
     eris.vovo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,vir,occ))
-    eris.vvov = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,occ,vir), myadc.disk)
+    eris.vvov = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,occ,vir))
     eris.ovvo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,vir,occ))
-    eris.ovvv = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,vir,vir), myadc.disk)
+    eris.ovvv = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,vir,vir))
 
     return eris
 
