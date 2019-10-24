@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
-# Author: Alexander Sokolov <alexander.y.sokolov@gmail.com>
+#         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
 # TODO: Add description of the module

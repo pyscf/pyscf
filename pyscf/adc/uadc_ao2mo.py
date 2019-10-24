@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
-# Author: Alexander Sokolov <alexander.y.sokolov@gmail.com>
+#         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
 import numpy as np
@@ -51,6 +51,7 @@ def transform_integrals(myadc):
 
     return eris
 
+# TODO: disk flag
 def transform_antisymmetrize_integrals(v2e_ao, mo, disk = False):
 
     mo_1, mo_2, mo_3, mo_4 = mo

@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
-# Author: Alexander Sokolov <alexander.y.sokolov@gmail.com>
+#         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
 '''
@@ -36,28 +36,79 @@ from pyscf import __config__
 #BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
 #MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
-def kernel(myadc, eris, verbose=None):
-
-    log = logger.new_logger(myadc, verbose)
-    if eris is None:
-        #eris = mycc.ao2mo(mycc.mo_coeff)
-        # TODO: transform integrals if they are not provided
-        raise NotImplementedError('Integrals for UADC amplitudes')
+def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     cput0 = (time.clock(), time.time())
+    log = logger.Logger(adc.stdout, adc.verbose)
+    if adc.verbose >= logger.WARN:
+        adc.check_sanity()
+    adc.dump_flags()
+
+    matvec, diag = adc.gen_matvec(eris)
+
+    exit()
+
+    size = eom.vector_size()
+    nroots = min(nroots, size)
+    if guess is not None:
+        user_guess = True
+        for g in guess:
+            assert g.size == size
+    else:
+        user_guess = False
+        guess = eom.get_init_guess(nroots, koopmans, diag)
+
+    def precond(r, e0, x0):
+        return r/(e0-diag+1e-12)
+
+    # GHF or customized RHF/UHF may be of complex type
+    real_system = (eom._cc._scf.mo_coeff[0].dtype == np.double)
+
+    eig = lib.davidson_nosym1
+    if user_guess or koopmans:
+        assert len(guess) == nroots
+        def eig_close_to_init_guess(w, v, nroots, envs):
+            x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
+            s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
+            snorm = np.einsum('pi,pi->i', s.conj(), s)
+            idx = np.argsort(-snorm)[:nroots]
+            return lib.linalg_helper._eigs_cmplx2real(w, v, idx, real_system)
+        conv, es, vs = eig(matvec, guess, precond, pick=eig_close_to_init_guess,
+                           tol=eom.conv_tol, max_cycle=eom.max_cycle,
+                           max_space=eom.max_space, nroots=nroots, verbose=log)
+    else:
+        def pickeig(w, v, nroots, envs):
+            real_idx = np.where(abs(w.imag) < 1e-3)[0]
+            return lib.linalg_helper._eigs_cmplx2real(w, v, real_idx, real_system)
+        conv, es, vs = eig(matvec, guess, precond, pick=pickeig,
+                           tol=eom.conv_tol, max_cycle=eom.max_cycle,
+                           max_space=eom.max_space, nroots=nroots, verbose=log)
+
+    if eom.verbose >= logger.INFO:
+        for n, en, vn, convn in zip(range(nroots), es, vs, conv):
+            r1, r2 = eom.vector_to_amplitudes(vn)
+            if isinstance(r1, np.ndarray):
+                qp_weight = np.linalg.norm(r1)**2
+            else: # for EOM-UCCSD
+                r1 = np.hstack([x.ravel() for x in r1])
+                qp_weight = np.linalg.norm(r1)**2
+            logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %.6g  conv = %s',
+                        n, en, qp_weight, convn)
+        log.timer('EOM-CCSD', *cput0)
+    if nroots == 1:
+        return conv[0], es[0].real, vs[0]
+    else:
+        return conv, es.real, vs
+    return e_corr, t1, t2
+
+
+def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     t1, t2 = myadc.compute_amplitudes(eris)
-    e_corr_2, e_corr_3 = myadc.energy(t1, t2, eris)
-
-    log.info('E(corr(MP2)) = %.15g', e_corr_2)
-    log.info('E(corr(mp3)) = %.15g', e_corr_3)
-    #log.timer('ADC ground-state energy', *cput0)
-    return e_corr_2, e_corr_3, t1, t2
+    e_corr = myadc.compute_energy(t1, t2, eris)
+    return e_corr, t1, t2
 
 def compute_amplitudes(myadc, eris):
-
-    t1 = (None,) 
-    t2 = (None,) 
 
     nocc_a = myadc._nocc[0]
     nocc_b = myadc._nocc[1]  
@@ -313,14 +364,15 @@ def compute_amplitudes(myadc, eris):
     t1_3_a = t1_3_a/D1_a
     t1_3_b = t1_3_b/D1_b
  
-    t1_3 = (t1_3_a , t1_3_b)
+    t1_3 = (t1_3_a, t1_3_b)
 
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
 
     return t1, t2
 
-def energy(myadc, t1, t2, eris):
+
+def compute_energy(myadc, t1, t2, eris):
 
     v2e_oovv_a, v2e_oovv_ab, v2e_oovv_b = eris.oovv
     v2e_oooo_a, v2e_oooo_ab, v2e_oooo_b = eris.oooo
@@ -355,8 +407,9 @@ def energy(myadc, t1, t2, eris):
 #    e_mp3 +=  np.einsum('ijab,kjcb,kaci',t2_1_b, t2_1_ab, v2e_ovvo_ab)
 
     e_corr_2 = e_mp2
-    e_corr_3 = e_mp3
-    return e_corr_2, e_corr_3
+#    e_corr_3 = e_mp3
+    return e_corr_2
+
 
 class UADC(lib.StreamObject):
 
@@ -376,6 +429,10 @@ class UADC(lib.StreamObject):
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
+        # TODO: make sure default values are reasonable
+        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 20)
+        self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 40)
+        self.conv_tol = getattr(__config__, 'eom_rccsd_EOM_conv_tol', 1e-6)
         self.scf_energy = mf.scf()
 
         self.frozen = frozen
@@ -386,19 +443,34 @@ class UADC(lib.StreamObject):
         self.e_corr = None
         self.t1 = None
         self.t2 = None
+        self.eris = None
         self._nocc = mf.nelec
         self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
         self.mo_energy_a = mf.mo_energy[0]
         self.mo_energy_b = mf.mo_energy[1]
         self.chkfile = mf.chkfile
+        self.method = "adc(2)"
 
     compute_amplitudes = compute_amplitudes
-    energy = energy
+    compute_energy = compute_energy
+
+    def dump_flags(self, verbose=None):
+        logger.info(self, '')
+        logger.info(self, '******** %s ********', self.__class__)
+        logger.info(self, 'max_space = %d', self.max_space)
+        logger.info(self, 'max_cycle = %d', self.max_cycle)
+        logger.info(self, 'conv_tol = %s', self.conv_tol)
+        logger.info(self, 'max_memory %d MB (current use %d MB)',
+                    self.max_memory, lib.current_memory()[0])
+        return self
 
     def kernel(self):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
+
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+            raise NotImplementedError(self.method)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -407,11 +479,32 @@ class UADC(lib.StreamObject):
 
         # TODO: ao2mo transformation if eris is None
         eris = uadc_ao2mo.transform_integrals(self)
-        
-        self.e_corr_2, self.e_corr_3, self.t1, self.t2 = kernel(self, eris, verbose=self.verbose)
+        self.eris = uadc_ao2mo.transform_integrals(self)
+        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, self.eris, verbose=self.verbose)
 
         # TODO: Implement
         #self._finalize()
         return self.e_corr, self.t1, self.t2
 
+    def ea_adc(self, nroots = 1, guess = None):
+        return UADCEA(self).kernel(nroots, guess)
+
+class UADCEA(UADC):
+
+    # matvec
+    # get_diag
+
+    def __init__(self, adc):
+        self.verbose = adc.verbose
+        self.stdout = adc.stdout
+        self.max_memory = adc.max_memory
+        self.max_space = adc.max_space
+        self.max_cycle = adc.max_cycle
+        self.conv_tol  = adc.conv_tol
+        self.t1 = adc.t1
+        self.t2 = adc.t2
+        self.eris = adc.eris
+        self.e_corr = adc.e_corr
+
+    kernel = kernel
 # TODO: add a test main section
