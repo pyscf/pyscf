@@ -47,11 +47,12 @@ def kernel(myadc, eris, verbose=None):
     cput0 = (time.clock(), time.time())
 
     t1, t2 = myadc.compute_amplitudes(eris)
-    e_corr = myadc.energy(t1, t2, eris)
+    e_corr_2, e_corr_3 = myadc.energy(t1, t2, eris)
 
-    log.info('E(corr) = %.15g', e_corr)
+    log.info('E(corr(MP2)) = %.15g', e_corr_2)
+    log.info('E(corr(mp3)) = %.15g', e_corr_3)
     #log.timer('ADC ground-state energy', *cput0)
-    return e_corr, t1, t2
+    return e_corr_2, e_corr_3, t1, t2
 
 def compute_amplitudes(myadc, eris):
 
@@ -322,6 +323,12 @@ def compute_amplitudes(myadc, eris):
 def energy(myadc, t1, t2, eris):
 
     v2e_oovv_a, v2e_oovv_ab, v2e_oovv_b = eris.oovv
+    v2e_oooo_a, v2e_oooo_ab, v2e_oooo_b = eris.oooo
+    v2e_vvvv_a, v2e_vvvv_ab, v2e_vvvv_b = eris.vvvv
+    v2e_voov_a, v2e_voov_ab, v2e_voov_b = eris.voov
+    v2e_ovvo_a, v2e_ovvo_ab, v2e_ovvo_b = eris.ovvo
+    v2e_ovov_a, v2e_ovov_ab, v2e_ovov_b = eris.ovov
+    v2e_vovo_a, v2e_vovo_ab, v2e_vovo_b = eris.vovo
 
     t2_1_a, t2_1_ab, t2_1_b  = t2[0]
 
@@ -329,8 +336,27 @@ def energy(myadc, t1, t2, eris):
     e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oovv_ab)
     e_mp2 += 0.25 * np.einsum('ijab,ijab', t2_1_b, v2e_oovv_b)
 
-    e_corr = e_mp2
-    return e_corr
+#    e_mp3 = 0.125 * np.einsum('ijab,ijcd,abcd',t2_1_a, t2_1_a, v2e_vvvv_a)
+#    e_mp3 += 0.5 * np.einsum('ijab,ijcd,abcd',t2_1_ab, t2_1_ab, v2e_vvvv_ab)
+#    e_mp3 += 0.125 * np.einsum('ijab,ijcd,abcd',t2_1_b, t2_1_b, v2e_vvvv_b)
+#    e_mp3 += 0.125 * np.einsum('ijab,klab,klij',t2_1_a, t2_1_a, v2e_oooo_a)
+#    e_mp3 += 0.5 * np.einsum('ijab,klab,klij',t2_1_ab, t2_1_ab, v2e_oooo_ab)
+#    e_mp3 += 0.125 * np.einsum('ijab,klab,klij',t2_1_b, t2_1_b, v2e_oooo_b)
+#
+#    e_mp3 +=  np.einsum('ijab,kjcb,akic',t2_1_a, t2_1_a, v2e_voov_a)
+#    e_mp3 +=  np.einsum('ijab,kjcb,akic',t2_1_b, t2_1_b, v2e_voov_b)
+#    e_mp3 +=  np.einsum('ijab,kjcb,akic',t2_1_ab, t2_1_ab, v2e_voov_a)
+#    e_mp3 -=  np.einsum('ijba,kjbc,kaic',t2_1_ab, t2_1_ab, v2e_ovov_ab)
+#    e_mp3 -=  np.einsum('jiab,jkcb,akci',t2_1_ab, t2_1_ab, v2e_vovo_ab)
+#    e_mp3 +=  np.einsum('jiba,jkbc,akic',t2_1_ab, t2_1_ab, v2e_voov_b)
+#    e_mp3 +=  np.einsum('ijab,kjcb,akic',t2_1_ab, t2_1_b, v2e_voov_ab)
+#    e_mp3 +=  np.einsum('jiba,kjcb,kaci',t2_1_ab, t2_1_a, v2e_ovvo_ab)
+#    e_mp3 +=  np.einsum('ijab,jkbc,akic',t2_1_a, t2_1_ab, v2e_voov_ab)
+#    e_mp3 +=  np.einsum('ijab,kjcb,kaci',t2_1_b, t2_1_ab, v2e_ovvo_ab)
+
+    e_corr_2 = e_mp2
+    e_corr_3 = e_mp3
+    return e_corr_2, e_corr_3
 
 class UADC(lib.StreamObject):
 
@@ -382,8 +408,7 @@ class UADC(lib.StreamObject):
         # TODO: ao2mo transformation if eris is None
         eris = uadc_ao2mo.transform_integrals(self)
         
-
-        self.e_corr, self.t1, self.t2 = kernel(self, eris, verbose=self.verbose)
+        self.e_corr_2, self.e_corr_3, self.t1, self.t2 = kernel(self, eris, verbose=self.verbose)
 
         # TODO: Implement
         #self._finalize()
