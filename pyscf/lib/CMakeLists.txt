@@ -148,8 +148,8 @@ if(APPLE)
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
     #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
-    URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
-    #URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
+    #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
+    URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
@@ -157,7 +157,7 @@ if(APPLE)
     # Xcode C compiler, which leads to "stdio.h not found" error. See relevant
     # discussion in
     # https://stackoverflow.com/questions/52509602/cant-compile-c-program-on-a-mac-after-upgrade-to-mojave
-    CONFIGURE_COMMAND autoreconf -i || autoreconf && <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
           --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
 
 ## For git checkout
