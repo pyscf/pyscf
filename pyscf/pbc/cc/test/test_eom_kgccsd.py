@@ -1,4 +1,4 @@
-import make_test_cell
+import pyscf.pbc.tools.make_test_cell as make_test_cell
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.pbc import gto, scf, cc
 from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP, EOMEA, EOMEE

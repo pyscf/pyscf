@@ -1,5 +1,5 @@
 import numpy as np
-import make_test_cell
+import pyscf.pbc.tools.make_test_cell as make_test_cell
 from pyscf import lib
 from pyscf import lo
 from pyscf.pbc.tools.pbc import super_cell

@@ -1,4 +1,4 @@
-import pyscf.pbc.cc.test.make_test_cell as make_test_cell
+import pyscf.pbc.tools.make_test_cell as make_test_cell
 from pyscf.pbc import gto, scf, ci
 from pyscf.pbc.ci import KCIS
 import unittest
