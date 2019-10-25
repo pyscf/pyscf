@@ -268,7 +268,8 @@ class KnownValues(unittest.TestCase):
         mycc = pbcc.KRCCSD(kmf_n3)
         ekrcc, t1, t2 = mycc.kernel()
         self.assertAlmostEqual(ekrcc, ecc_bench[0], 6)
-        mycc_ewald = pbcc.KRCCSD(kmf_n3_ewald, keep_exxdiv=True)
+        mycc_ewald = pbcc.KRCCSD(kmf_n3_ewald)
+        mycc_ewald.keep_exxdiv = True
         ekrcc, t1, t2 = mycc_ewald.kernel()
         self.assertAlmostEqual(ekrcc, ecc_bench[1], 6)
 

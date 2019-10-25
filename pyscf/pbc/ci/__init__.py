@@ -29,8 +29,8 @@ def GCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_ghf(mf)
     return cisd.GCISD(mf, frozen, mo_coeff, mo_occ)
 
-def KCIS(mf, frozen=0, mo_coeff=None, mo_occ=None, keep_exxdiv=False):
+def KCIS(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_rhf(mf)
-    return kcis_rhf.KCIS(mf, frozen, mo_coeff, mo_occ, keep_exxdiv)
+    return kcis_rhf.KCIS(mf, frozen, mo_coeff, mo_occ)
 
 CIS = KCIS

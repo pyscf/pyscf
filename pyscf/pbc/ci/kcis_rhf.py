@@ -318,7 +318,7 @@ def cis_diag(cis, kshift, eris=None):
 
 
 class KCIS(lib.StreamObject):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, keep_exxdiv=False):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         assert isinstance(mf, scf.khf.KSCF)
 
         if mo_coeff is None:
@@ -335,7 +335,9 @@ class KCIS(lib.StreamObject):
         self.max_cycle = getattr(__config__, 'kcis_rhf_max_cycle', 50)
         self.conv_tol = getattr(__config__, 'kcis_rhf_conv_tol', 1e-7)
 
-        self.keep_exxdiv = keep_exxdiv
+        ##################################################
+        # don't modify the following attributes, unless you know what you are doing
+        self.keep_exxdiv = False
         self.direct = False
         self.build_full_H = False
         self.davidson = True

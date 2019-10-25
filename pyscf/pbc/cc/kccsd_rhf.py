@@ -497,7 +497,7 @@ def kconserve_pmatrix(nkpts, kconserv):
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, keep_exxdiv=False):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
@@ -505,7 +505,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.ip_partition = None
         self.ea_partition = None
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
-        self.keep_exxdiv = keep_exxdiv
+        
+        ##################################################
+        # don't modify the following attributes, unless you know what you are doing
+        self.keep_exxdiv = False
 
         keys = set(['kpts', 'khelper', 'ip_partition',
                     'ea_partition', 'max_space', 'direct'])

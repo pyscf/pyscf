@@ -33,7 +33,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eci[0][0], 0.291182202333)
         self.assertAlmostEqual(eci[0][1], 0.330573456724)
 
-        myci = ci.KCIS(kmf_n3_ewald, keep_exxdiv=True)
+        myci = ci.KCIS(kmf_n3_ewald)
+        myci.keep_exxdiv = True
         eci, v = myci.kernel(nroots=2, kptlist=[0])
         self.assertAlmostEqual(eci[0][0], 0.693665750383)
         self.assertAlmostEqual(eci[0][1], 0.693665750384)
