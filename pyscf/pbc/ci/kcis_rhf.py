@@ -476,24 +476,19 @@ class _CIS_ERIS:
 
         mo_coeff = self.mo_coeff = padded_mo_coeff(cis, mo_coeff)
 
-        if cis.keep_exxdiv:
-            self.fock = np.asarray([np.diag(mo_e) for k, mo_e in enumerate(cis._scf.mo_energy)], dtype=dtype)
-            self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
-        else:
-            # Re-make our fock MO matrix elements from density and fock AO
-            dm = cis._scf.make_rdm1(cis.mo_coeff, cis.mo_occ)
-            with lib.temporary_env(cis._scf, exxdiv=None):
-                # _scf.exxdiv affects eris.fock. HF exchange correction should be
-                # excluded from the Fock matrix.
-                fockao = cis._scf.get_hcore() + cis._scf.get_veff(cell, dm)
-            self.fock = np.asarray(
-                [
-                    reduce(np.dot, (mo.T.conj(), fockao[k], mo))
-                    for k, mo in enumerate(mo_coeff)
-                ]
-            )
+        # Re-make our fock MO matrix elements from density and fock AO
+        dm = cis._scf.make_rdm1(cis.mo_coeff, cis.mo_occ)
+        exxdiv = cis._scf.exxdiv if cis.keep_exxdiv else None
+        with lib.temporary_env(cis._scf, exxdiv=exxdiv):
+            # _scf.exxdiv affects eris.fock. HF exchange correction should be
+            # excluded from the Fock matrix.
+            fockao = cis._scf.get_hcore() + cis._scf.get_veff(cell, dm)
+        self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
+                                for k, mo in enumerate(mo_coeff)])
 
-            self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
+        self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
+
+        if not cis.keep_exxdiv:
             # Add HFX correction in the self.mo_energy to improve convergence in
             # CCSD iteration. It is useful for the 2D systems since their occupied and
             # the virtual orbital energies may overlap which may lead to numerical
