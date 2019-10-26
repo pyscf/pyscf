@@ -27,27 +27,18 @@ class KnownValues(unittest.TestCase):
         # KCIS
         myci = ci.KCIS(kmf_n3_none)
         eci, v = myci.kernel(nroots=2, kptlist=[0])
-        self.assertAlmostEqual(eci[0][0], 0.223920101177)
-        self.assertAlmostEqual(eci[0][1], 0.223920101177)
+        self.assertAlmostEqual(eci[0][0], 0.223920101177, 5)
+        self.assertAlmostEqual(eci[0][1], 0.223920101177, 5)
         eci, v = myci.kernel(nroots=2, kptlist=[1])
-        self.assertAlmostEqual(eci[0][0], 0.291182202333)
-        self.assertAlmostEqual(eci[0][1], 0.330573456724)
+        self.assertAlmostEqual(eci[0][0], 0.291182202333, 5)
+        self.assertAlmostEqual(eci[0][1], 0.330573456724, 5)
 
         myci = ci.KCIS(kmf_n3_ewald)
         myci.keep_exxdiv = True
         eci, v = myci.kernel(nroots=2, kptlist=[0])
-        self.assertAlmostEqual(eci[0][0], 0.693665750383)
-        self.assertAlmostEqual(eci[0][1], 0.693665750384)
+        self.assertAlmostEqual(eci[0][0], 0.693665750383, 5)
+        self.assertAlmostEqual(eci[0][1], 0.693665750384, 5)
         eci, v = myci.kernel(nroots=2, kptlist=[1])
-        self.assertAlmostEqual(eci[0][0], 0.760927568875)
-        self.assertAlmostEqual(eci[0][1], 0.800318837778)
+        self.assertAlmostEqual(eci[0][0], 0.760927568875, 5)
+        self.assertAlmostEqual(eci[0][1], 0.800318837778, 5)
         
-
-
-
-
-
-
-
-
-

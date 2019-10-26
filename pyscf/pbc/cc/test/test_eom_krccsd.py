@@ -280,22 +280,18 @@ class KnownValues(unittest.TestCase):
         myeomee = eom_krccsd.EOMEESinglet(mycc)
         myeomee.max_space = nroots * 10
         eee, vee = myeomee.kernel(nroots=nroots, kptlist=[0])
-        print(eee)
         self.assertAlmostEqual(eee[0][0], 0.267867075425, 4)
         self.assertAlmostEqual(eee[0][1], 0.268704338187, 4)
         eee, vee = myeomee.kernel(nroots=nroots, kptlist=[1])
-        print(eee)
         self.assertAlmostEqual(eee[0][0], 0.389795492091, 4)
         self.assertAlmostEqual(eee[0][1], 0.407782858154, 4)
 
         myeomee = eom_krccsd.EOMEESinglet(mycc_ewald)
         myeomee.max_space = nroots * 10
         eee, vee = myeomee.kernel(nroots=nroots, kptlist=[0])
-        print(eee)
         self.assertAlmostEqual(eee[0][0], 0.707047835495, 4)
         self.assertAlmostEqual(eee[0][1], 0.707047835495, 4)
         eee, vee = myeomee.kernel(nroots=nroots, kptlist=[1])
-        print(eee)
         self.assertAlmostEqual(eee[0][0], 0.815872164169, 4)
         self.assertAlmostEqual(eee[0][1], 0.845417271088, 4)
         
