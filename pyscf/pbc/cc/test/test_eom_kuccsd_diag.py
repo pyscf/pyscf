@@ -8,7 +8,7 @@ from pyscf.pbc import df as pbc_df
 
 import pyscf.cc
 import pyscf.pbc.cc as pbcc
-import make_test_cell
+import pyscf.pbc.tools.make_test_cell as make_test_cell
 from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd_uhf as kccsd
 import pyscf.pbc.cc.eom_kccsd_uhf as kccsd_uhf

@@ -1515,8 +1515,8 @@ class SCF(lib.StreamObject):
     energy_elec = energy_elec
     energy_tot = energy_tot
 
-    def energy_nuc(self):
-        return self.mol.energy_nuc()
+    def energy_nuc(self):            
+        return gto.mole.energy_nuc(self.mol)
 
     # A hook for overloading convergence criteria in SCF iterations. Assigning
     # a function

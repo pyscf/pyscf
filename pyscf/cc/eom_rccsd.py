@@ -622,21 +622,21 @@ def amplitudes_to_vector_ea(r1, r2):
     return vector
 
 def eaccsd_matvec(eom, vector, imds=None, diag=None):
-    # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
+    # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1995) Eqs.(30)-(31)
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
     nvir = nmo - nocc
     r1, r2 = vector_to_amplitudes_ea(vector, nmo, nocc)
 
-    # Eq. (30)
+    # Eq. (37)
     # 1p-1p block
     Hr1 =  np.einsum('ac,c->a', imds.Lvv, r1)
     # 1p-2p1h block
     Hr1 += np.einsum('ld,lad->a', 2.*imds.Fov, r2)
     Hr1 += np.einsum('ld,lda->a',   -imds.Fov, r2)
     Hr1 += np.einsum('alcd,lcd->a', 2.*imds.Wvovv-imds.Wvovv.transpose(0,1,3,2), r2)
-    # Eq. (31)
+    # Eq. (38)
     # 2p1h-1p block
     Hr2 = np.einsum('abcj,c->jab', imds.Wvvvo, r1)
     # 2p1h-2p1h block
