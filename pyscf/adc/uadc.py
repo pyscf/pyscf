@@ -44,17 +44,13 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         adc.check_sanity()
     adc.dump_flags()
 
-    #matvec, diag = adc.gen_matvec(eris)
-    #Mab = adc.get_Mab()
-    #Mij = adc.get_Mij()
-    #matvec, diag = adc.gen_matvec(Mij)
-    imds = adc.make_imds()
+    imds = adc.get_imds()
     matvec, diag = adc.gen_matvec(imds)
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
-    #E_ea, U_ea = lib.linalg_helper.davidson(matvec, guess, diag, nroots=nroots, verbose=log, max_cycle=adc.max_cycle, max_space=adc.max_space)
-    E_ip, U_ip = lib.linalg_helper.davidson(matvec, guess, diag, nroots=nroots, verbose=log, max_cycle=adc.max_cycle, max_space=adc.max_space)
+    E, U = lib.linalg_helper.davidson(matvec, guess, diag, nroots=nroots, verbose=log, max_cycle=adc.max_cycle, max_space=adc.max_space)
+
 #    eig = lib.davidson_nosym1
 #    if user_guess or koopmans:
 #        assert len(guess) == nroots
@@ -91,8 +87,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 #    else:
 #        return conv, es.real, vs
 #    return e_corr, t1, t2
-    #return E_ea, U_ea
-    return E_ip, U_ip
+
+    return E, U
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -178,6 +174,7 @@ def compute_amplitudes(myadc, eris):
     t1_2 = (t1_2_a , t1_2_b)
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+
     # Compute second-order doubles t2 (tijab) 
 
         temp = t2_1_a.reshape(nocc_a*nocc_a,nvir_a*nvir_a)
@@ -498,7 +495,7 @@ class UADC(lib.StreamObject):
     def ip_adc(self, nroots=1, guess=None):
         return UADCIP(self).kernel(nroots, guess)
 
-def get_Mab(adc):
+def get_imds_ea(adc):
 
     method = adc.method
 
@@ -762,7 +759,7 @@ def get_Mab(adc):
 
     return M_ab
 
-def get_Mij(adc):
+def get_imds_ip(adc):
 
     method = adc.method
 
@@ -1027,7 +1024,8 @@ def get_Mij(adc):
 
 def ea_adc_diag(adc,Mab=None):
    
-    M_ab = adc.get_Mab()
+    #M_ab = adc.get_imds_ea()
+    M_ab = adc.get_imds()
     M_ab_a, M_ab_b = M_ab[0], M_ab[1]
 
     nocc_a = adc.nocc_a
@@ -1113,7 +1111,7 @@ def ea_adc_diag(adc,Mab=None):
 
 def ip_adc_diag(adc,Mij=None):
    
-    M_ij = adc.get_Mij()
+    M_ij = adc.get_imds()
     M_ij_a, M_ij_b = M_ij[0], M_ij[1]
 
     nocc_a = adc.nocc_a
@@ -1287,7 +1285,7 @@ def ea_adc_matvec(adc, Mab=None):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    Mab = adc.get_Mab()
+    Mab = adc.get_imds()
     M_ab_a, M_ab_b = Mab
 
     #Calculate sigma vector
@@ -1742,7 +1740,7 @@ def ip_adc_matvec(adc, Mij=None):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    Mij = adc.get_Mij()
+    Mij = adc.get_imds()
     M_ij_a, M_ij_b = Mij
 
     #Calculate sigma vector
@@ -2089,7 +2087,7 @@ class UADCEA(UADC):
         self.mo_energy_b = adc.mo_energy_b
 
     kernel = kernel
-    get_Mab = get_Mab
+    get_imds = get_imds_ea
     matvec = ea_adc_matvec
     get_diag = ea_adc_diag
 
@@ -2112,15 +2110,16 @@ class UADCEA(UADC):
        return guess
 
     def gen_matvec(self,imds=None):
-        if imds is None: imds = self.make_imds()
+        #if imds is None: imds = self.make_imds()
+        if imds is None: imds = self.get_imds()
         diag = self.get_diag(imds)
         matvec = self.matvec(imds)
         #matvec = lambda x: self.matvec() 
         return matvec, diag
 
-    def make_imds(self):
-        imds = self.get_Mab
-        return imds
+    #def make_imds(self):
+    #    imds = self.get_Mab
+    #    return imds
 
 class UADCIP(UADC):
 
@@ -2144,7 +2143,7 @@ class UADCIP(UADC):
         self.mo_energy_b = adc.mo_energy_b
 
     kernel = kernel
-    get_Mij = get_Mij
+    get_imds = get_imds_ip
     get_diag = ip_adc_diag
     matvec = ip_adc_matvec
 
@@ -2173,7 +2172,4 @@ class UADCIP(UADC):
         #matvec = lambda x: self.matvec() 
         return matvec, diag
 
-    def make_imds(self):
-        imds = self.get_Mij
-        return imds
 # TODO: add a test main section
