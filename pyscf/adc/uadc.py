@@ -51,6 +51,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     E, U = lib.linalg_helper.davidson(matvec, guess, diag, nroots=nroots, verbose=log, max_cycle=adc.max_cycle, max_space=adc.max_space)
 
+    spec_factors = adc.get_spec_factors(nroots, U)
+
 #    eig = lib.davidson_nosym1
 #    if user_guess or koopmans:
 #        assert len(guess) == nroots
@@ -88,7 +90,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 #        return conv, es.real, vs
 #    return e_corr, t1, t2
 
-    return E, U
+    return E, U, spec_factors
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -2081,6 +2083,207 @@ def ip_adc_matvec(adc, Mij=None):
 
     return sigma_
 
+def ea_spec_factors(adc, nroots=1, U=None):
+
+    print ("\nComputing spectroscopic intensity:")
+
+    nmo_a  = adc.nmo_a
+    nmo_b  = adc.nmo_b
+
+    P = np.zeros((nroots))
+
+    U = np.array(U)
+
+    for orb in range(nmo_a):
+
+            T_a = adc.compute_trans_moments_ea(orb, spin = "alpha")
+
+            T_a = np.dot(T_a, U.T)
+            for i in range(nroots):
+                P[i] += np.square(np.absolute(T_a[i]))
+
+    for orb in range(nmo_b):
+
+            T_b = adc.compute_trans_moments_ea(orb, spin = "beta")
+
+            T_b = np.dot(T_b, U.T)
+            for i in range(nroots):
+                P[i] += np.square(np.absolute(T_b[i]))
+
+    return P
+
+def compute_trans_moments_ea(adc, orb, spin=None):
+
+    method = adc.method
+
+    t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
+    t1_2_a, t1_2_b = adc.t1[0]
+
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+
+    ab_ind_a = np.tril_indices(nvir_a, k=-1)
+    ab_ind_b = np.tril_indices(nvir_b, k=-1)
+
+    n_singles_a = nvir_a
+    n_singles_b = nvir_b
+    n_doubles_aaa = nvir_a* (nvir_a - 1) * nocc_a // 2
+    n_doubles_bab = nocc_b * nvir_a* nvir_b
+    n_doubles_aba = nocc_a * nvir_b* nvir_a
+    n_doubles_bbb = nvir_b* (nvir_b - 1) * nocc_b // 2
+
+    dim = n_singles_a + n_singles_b + n_doubles_aaa + n_doubles_bab + n_doubles_aba + n_doubles_bbb
+
+    idn_occ_a = np.identity(nocc_a)
+    idn_occ_b = np.identity(nocc_b)
+    idn_vir_a = np.identity(nvir_a)
+    idn_vir_b = np.identity(nvir_b)
+
+    v2e_oovv_a , v2e_oovv_ab, v2e_oovv_b = adc.eris.oovv
+    v2e_vvvo_a , v2e_vvvo_ab, v2e_vvvo_b = adc.eris.vvvo
+    v2e_ovoo_a , v2e_ovoo_ab, v2e_ovoo_b = adc.eris.ovoo
+    v2e_voov_a , v2e_voov_ab, v2e_voov_b = adc.eris.voov
+    v2e_ovov_a , v2e_ovov_ab, v2e_ovov_b = adc.eris.ovov
+    v2e_vovv_a , v2e_vovv_ab, v2e_vovv_b = adc.eris.vovv
+    v2e_ooov_a , v2e_ooov_ab, v2e_ooov_b = adc.eris.ooov
+
+    s_a = 0
+    f_a = n_singles_a
+    s_b = f_a
+    f_b = s_b + n_singles_b
+    s_aaa = f_b
+    f_aaa = s_aaa + n_doubles_aaa
+    s_bab = f_aaa
+    f_bab = s_bab + n_doubles_bab
+    s_aba = f_bab
+    f_aba = s_aba + n_doubles_aba
+    s_bbb = f_aba
+    f_bbb = s_bbb + n_doubles_bbb
+
+    T = np.zeros((dim))
+
+######## spin = alpha  ############################################
+    if spin=="alpha":
+######## ADC(2) part  ############################################
+
+        if orb < nocc_a:
+
+            T[s_a:f_a] = -t1_2_a[orb,:]
+
+            t2_1_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]].copy()
+            t2_1_ab_t = -t2_1_ab.transpose(1,0,2,3).copy()
+
+            T[s_aaa:f_aaa] += t2_1_t[:,orb,:].reshape(-1)
+            T[s_bab:f_bab] += t2_1_ab_t[:,orb,:,:].reshape(-1)
+
+        else :
+
+            T[s_a:f_a] += idn_vir_a[(orb-nocc_a), :]
+            T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_a[:,:,(orb-nocc_a),:], t2_1_a, optimize = True)
+            T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
+            T[s_a:f_a] -= 0.25*np.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
+
+######## ADC(3) 2p-1h  part  ############################################
+
+        if(method=='adc(2)-e'or method=='adc(3)'):
+
+            t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
+
+            if orb < nocc_a:
+
+                t2_2_t = t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]].copy()
+                t2_2_ab_t = -t2_2_ab.transpose(1,0,2,3).copy()
+
+                T[s_aaa:f_aaa] += t2_2_t[:,orb,:].reshape(-1)
+                T[s_bab:f_bab] += t2_2_ab_t[:,orb,:,:].reshape(-1)
+
+######### ADC(3) 1p part  ############################################
+
+        if(method=='adc(3)'):
+
+            t1_3_a, t1_3_b = adc.t1[1]
+
+            if orb < nocc_a:
+
+                T[s_a:f_a] += 0.5*np.einsum('kac,ck->a',t2_1_a[:,orb,:,:], t1_2_a.T,optimize = True)
+                T[s_a:f_a] -= 0.5*np.einsum('kac,ck->a',t2_1_ab[orb,:,:,:], t1_2_b.T,optimize = True)
+
+                T[s_a:f_a] -= t1_3_a[orb,:]
+
+            else:
+
+                T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_a[:,:,(orb-nocc_a),:], t2_2_a, optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_2_ab, optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_2_ab, optimize = True)
+
+                T[s_a:f_a] -= 0.25*np.einsum('klac,klc->a',t2_1_a, t2_2_a[:,:,(orb-nocc_a),:],optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('klac,klc->a',t2_1_ab, t2_2_ab[:,:,(orb-nocc_a),:],optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('lkac,lkc->a',t2_1_ab, t2_2_ab[:,:,(orb-nocc_a),:],optimize = True)
+
+######### spin = beta  ############################################
+    if spin=="beta":
+######## ADC(2) part  ############################################
+
+
+        if orb < nocc_b:
+
+            T[s_b:f_b] = -t1_2_b[orb,:]
+
+            t2_1_t = t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]].copy()
+            t2_1_ab_t = -t2_1_ab.transpose(0,1,3,2).copy()
+
+            T[s_bbb:f_bbb] += t2_1_t[:,orb,:].reshape(-1)
+            T[s_aba:f_aba] += t2_1_ab_t[:,orb,:,:].reshape(-1)
+
+        else :
+
+            T[s_b:f_b] += idn_vir_b[(orb-nocc_b), :]
+            T[s_b:f_b] -= 0.25*np.einsum('klc,klac->a',t2_1_b[:,:,(orb-nocc_b),:], t2_1_b, optimize = True)
+            T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_1_ab, optimize = True)
+            T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_1_ab, optimize = True)
+
+######### ADC(3) 2p-1h part  ############################################
+
+        if(method=='adc(2)-e'or method=='adc(3)'):
+
+            t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
+
+            if orb < nocc_b:
+
+                t2_2_t = t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]].copy()
+                t2_2_ab_t = -t2_2_ab.transpose(0,1,3,2).copy()
+
+                T[s_bbb:f_bbb] += t2_2_t[:,orb,:].reshape(-1)
+                T[s_aba:f_aba] += t2_2_ab_t[:,orb,:,:].reshape(-1)
+
+######### ADC(2) 1p part  ############################################
+
+        if(method=='adc(3)'):
+
+            t1_3_a, t1_3_b = adc.t1[1]
+
+            if orb < nocc_b:
+
+                T[s_b:f_b] += 0.5*np.einsum('kac,ck->a',t2_1_b[:,orb,:,:], t1_2_b.T,optimize = True)
+                T[s_b:f_b] -= 0.5*np.einsum('kca,ck->a',t2_1_ab[:,orb,:,:], t1_2_a.T,optimize = True)
+
+                T[s_b:f_b] -= t1_3_b[orb,:]
+
+            else:
+
+                T[s_b:f_b] -= 0.25*np.einsum('klc,klac->a',t2_1_b[:,:,(orb-nocc_b),:], t2_2_b, optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_2_ab, optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_2_ab, optimize = True)
+
+                T[s_b:f_b] -= 0.25*np.einsum('klac,klc->a',t2_1_b, t2_2_b[:,:,(orb-nocc_b),:],optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('lkca,lkc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('klca,klc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
+    return T
+
+
+
 class UADCEA(UADC):
 
     def __init__(self, adc):
@@ -2101,11 +2304,15 @@ class UADCEA(UADC):
         self.nvir_b = adc._nvir[1]
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b
+        self.nmo_a = adc._nmo[0]
+        self.nmo_b = adc._nmo[1]
 
     kernel = kernel
     get_imds = get_imds_ea
     matvec = ea_adc_matvec
     get_diag = ea_adc_diag
+    compute_trans_moments_ea = compute_trans_moments_ea
+    get_spec_factors = ea_spec_factors
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
