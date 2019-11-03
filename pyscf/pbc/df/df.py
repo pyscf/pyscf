@@ -953,5 +953,5 @@ def _round_off_to_odd_mesh(mesh):
     # between k and -k is used (function conj_j2c) to overcome the error
     # caused by auxiliary basis linear dependency. More detalis of this
     # problem can be found in function _make_j3c.
-    return (mesh // 2) * 2 + 1
+    return [(i//2)*2+1 for i in mesh]
 
