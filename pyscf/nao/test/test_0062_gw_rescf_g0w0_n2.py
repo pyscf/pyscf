@@ -8,8 +8,9 @@ class KnowValues(unittest.TestCase):
     """ Hartree-Fock than G0W0 N2 example is marked with level-ordering change """
     
     dname = os.path.dirname(os.path.abspath(__file__))
-    gw = gw_c(label='n2', cd=dname, verbosity=0, jcutoff=9, nff_ia=64, tol_ia=1e-6, rescf=True)
+    gw = gw_c(label='n2', cd=dname, verbosity=0, jcutoff=9, nff_ia=64, tol_ia=1e-6, rescf=True) 
     gw.kernel_gw()
+    gw.report()
     #np.savetxt('eigvals_g0w0_pyscf_rescf_n2_0062.txt', gw.mo_energy_gw.T)
 
     fc = """-1.294910390463269723e+00

@@ -16,7 +16,7 @@ from __future__ import print_function, division
 import unittest
 from pyscf import gto
 from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
-from pyscf.nao import ao_log_c
+from pyscf.nao.ao_log import ao_log
 
 mol = gto.M(
     verbose = 1,
@@ -36,7 +36,7 @@ class KnowValues(unittest.TestCase):
     sp2ion = []
     sp2ion.append(siesta_ion_xml(dname+'/H.ion.xml'))
     sp2ion.append(siesta_ion_xml(dname+'/O.ion.xml'))
-    ao = ao_log_c().init_ao_log_ion(sp2ion, nr=512, rmin=0.0025)
+    ao = ao_log(sp2ion=sp2ion, nr=512, rmin=0.0025)
     self.assertEqual(ao.nr, 512)
     self.assertAlmostEqual(ao.rr[0], 0.0025)
     self.assertAlmostEqual(ao.rr[-1], 11.105004591662)
@@ -48,9 +48,13 @@ class KnowValues(unittest.TestCase):
 
   def test_ao_log_gto(self):
     """ This is indeed for initializing with auxiliary basis set"""
-    from pyscf.nao import ao_log_c, nao
+    from pyscf.nao import nao
     sv = nao(gto=mol)
-    ao = ao_log_c().init_ao_log_gto_lm(gto=mol, nao=sv, lm=sv.ao_log)
+    ao = ao_log(gto=mol, nao=sv)
+    #print(__name__, dir(ao))
+    self.assertEqual(ao.nr, 1024)
+    self.assertEqual(ao.jmx, 2)
+    for a,b in zip(sv.sp2charge, ao.sp2charge): self.assertEqual(a,b)
     
 
 if __name__ == "__main__": unittest.main()

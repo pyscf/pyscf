@@ -18,19 +18,21 @@ from pyscf.nao import bse_iter
 
 class KnowValues(unittest.TestCase):
 
-  def test_bse_rpa(self):
+  def test_0040_bse_rpa_nao(self):
     """ Compute polarization with RPA via 2-point non-local potentials (BSE solver)  """
     from timeit import default_timer as timer
 
     dname = os.path.dirname(os.path.abspath(__file__))
-    bse = bse_iter(label='water', cd=dname, iter_broadening=1e-2, xc_code='RPA', verbosity=0)
-    omegas = np.linspace(0.0,2.0,150)+1j*bse.eps
+    bse = bse_iter(label='water', cd=dname, xc_code='RPA', verbosity=0)
+    omegas = np.linspace(0.0,2.0,150)+1j*0.01
+    #print(__name__, omegas.shape)
     
     pxx = np.zeros(len(omegas))
     for iw,omega in enumerate(omegas):
       for ixyz in range(1):
-        vab = bse.apply_l(bse.dip_ab[ixyz], omega)
-        pxx[iw] = pxx[iw] - (vab.imag*bse.dip_ab[ixyz]).sum()
+        dip = bse.dip_ab[ixyz]
+        vab = bse.apply_l(dip, omega)
+        pxx[iw] = pxx[iw] - (vab.imag*dip.reshape(-1)).sum()
         
     data = np.array([omegas.real*27.2114, pxx])
     np.savetxt('water.bse_iter_rpa.omega.inter.pxx.txt', data.T, fmt=['%f','%f'])

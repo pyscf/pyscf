@@ -10,7 +10,7 @@ class KnowValues(unittest.TestCase):
     sv = mf(fireball="fireball.out", gen_pb=False)
     s_ref = sv.hsx.s4_csr.toarray()
     s = sv.overlap_coo().toarray()
-    print(abs(s-s_ref).sum())
+    #print(abs(s-s_ref).sum())
 
 if __name__ == "__main__": unittest.main()
 

@@ -15,6 +15,7 @@
 from __future__ import print_function, division
 from numpy import zeros,extract, array
 from scipy.sparse import csr_matrix
+from timeit import default_timer as timer
 
 #
 def lsofcsr(coo3, dtype=float, shape=None, axis=0):
@@ -30,21 +31,25 @@ def lsofcsr(coo3, dtype=float, shape=None, axis=0):
   (d, it) = coo3
   assert len(it)==3
   for ia in it: assert len(d)==len(ia)
-  shape = (max(ia) for ia in it) if shape is None else shape
+  shape = [max(ia)+1 for ia in it] if shape is None else shape
   #print( len(d) )
   #print( shape )
   
   iir = [i for i in range(len(shape)) if i!=axis]
-  #print(iir)
+  #print(__name__, iir)
+  #print(__name__, type(it), type(it[0]==0))
+  #print(__name__, it[0]==0)
   
   lsofcsr = [0] * shape[axis]
   sh = [shape[i] for i in iir]
-  #print(sh, shape)
   for i in range(shape[axis]):
     mask = it[axis]==i
     csrm = csr_matrix( (extract(mask,d), (extract(mask,it[iir[0]]),extract(mask,it[iir[1]]) )), shape=sh, dtype=dtype)
     csrm.eliminate_zeros()
     lsofcsr[i] = csrm
+    
+  #print(__name__, 'ttot', ttot)
+  
   return lsofcsr
 
 #
@@ -60,9 +65,12 @@ class lsofcsr_c():
 
   def __getitem__(self, i):
     return self.lsofcsr[i] 
-
+  
+  def __len__(self):
+    return len(self.lsofcsr)
+         
   def toarray(self):
-    vab_arr = zeros(self.shape)
+    vab_arr = zeros(self.shape, dtype=self.dtype)
     if self.axis==2 :
       for b,m in enumerate(self): vab_arr[:,:,b]=m.toarray()
     elif self.axis==1:

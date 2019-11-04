@@ -1,8 +1,9 @@
 from __future__ import print_function, division
 import numpy as np
-from numpy import require, zeros
+from numpy import require, zeros, array, where, unravel_index, einsum
 from pyscf.nao import nao, prod_basis
 from pyscf.nao import conv_yzx2xyz_c
+from pyscf.dft.rks import _dft_common_init_
     
 #
 #
@@ -13,15 +14,13 @@ class mf(nao):
     """ Constructor a mean field class (store result of a mean-field calc, deliver density matrix etc) """
     #print(__name__, 'before construct')
     nao.__init__(self, **kw)
-    self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
-    self.pseudo = hasattr(self, 'sp2ion') 
-    self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
-    
+
     if 'mf' in kw:
       self.init_mo_from_pyscf(**kw)      
     elif 'label' in kw: # init KS orbitals with SIESTA
-      self.init_mo_coeff_label(**kw)
       self.k2xyzw = self.xml_dict["k2xyzw"]
+      self.xc_code = 'LDA,PZ' # just a guess...
+    elif 'wfsx_fname' in kw: # init KS orbitals with WFSX file from SIESTA output
       self.xc_code = 'LDA,PZ' # just a guess...
     elif 'fireball' in kw: # init KS orbitals with Fireball
       self.init_mo_coeff_fireball(**kw)
@@ -34,24 +33,26 @@ class mf(nao):
       self.xc_code = 'GGA,PBE' # just a guess...
       pass
     else:
+      print(__name__, kw.keys())
       raise RuntimeError('unknown constructor')
-    if self.verbosity>0: print(__name__, ' pseudo ', self.pseudo)
-    self.init_libnao()
-    if self.gen_pb:
-      self.pb = prod_basis(nao=self, **kw)
-      if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
-      #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
-  def make_rdm1(self, mo_coeff=None, mo_occ=None, **kw):
-    # from pyscf.scf.hf import make_rdm1 -- different index order here
-    if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
-    if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]
-    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
-    for s in range(self.nspin):
-      xocc = mo_coeff[s,mo_occ[s]>0,:]
-      focc = mo_occ[s,mo_occ[s]>0]
-      dm[0,s,:,:,0] = np.dot(xocc.T.conj() * focc, xocc)
-    return dm
+    #_dft_common_init_(self)
+
+    if self.verbosity>0:
+      print(__name__,'\t\t====> self.pseudo: ', self.pseudo)
+      print(__name__,'\t\t====> Number of orbitals: ', self.norbs)
+
+    self.init_libnao()
+
+    self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
+    if self.gen_pb:
+      self.pb = pb = prod_basis(nao=self, **kw)
+      self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype).tocsr()
+      self.cc_da = cc = pb.get_da2cc_sparse(dtype=self.dtype).tocsr()
+      self.nprod = self.cc_da.shape[1]
+      if self.verbosity>0: print(__name__,'\t\t====> Number of dominant and atom-centered products {}'.format(cc.shape))
+
+      #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
   def init_mo_from_pyscf(self, **kw):
     """ Initializing from a previous pySCF mean-field calc. """
@@ -59,54 +60,24 @@ class mf(nao):
     from pyscf.nao.m_color import color as tc
     self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
     self.mf = mf = kw['mf']
-    if type(mf.mo_energy) == tuple: 
-      self.nspin = len(mf.mo_energy)
-    elif type(mf.mo_energy) == np.ndarray:
-      self.nspin = 1
-      assert mf.mo_coeff.shape[0]==mf.mo_coeff.shape[1]
-      assert len(mf.mo_coeff.shape)==2
-    else:
-      raise RuntimeError(tc.RED+'unknown type of mo_energy %s %s' % (type(mf.mo_energy), tc.ENDC))
-    
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
     self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
+    
+    self.mo_energy = np.asarray(mf.mo_energy)
+    self.nspin = self.mo_energy.ndim
+    assert self.nspin in [1,2]
     nspin,n=self.nspin,self.norbs
+    self.mo_energy = require( self.mo_energy.reshape((1, nspin, n)), requirements='CW')
+    self.mo_occ = require( mf.mo_occ.reshape((1,nspin,n)), requirements='CW')    
     self.mo_coeff =  require(zeros((1,nspin,n,n,1), dtype=self.dtype), requirements='CW')
-    self.mo_energy = require(zeros((1,nspin,n), dtype=self.dtype), requirements='CW')
-    self.mo_occ =    require(zeros((1,nspin,n),dtype=self.dtype), requirements='CW')
-
     conv = conv_yzx2xyz_c(kw['gto'])
-    if nspin==1 :
-      self.mo_coeff[0,0,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff, conv.m_xyz2m_yzx).T
-      self.mo_energy[0,0,:] = self.mf.mo_energy
-      self.mo_occ[0,0,:] = self.mf.mo_occ
-    else:
-      for s in range(self.nspin):
-        self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff[s], conv.m_xyz2m_yzx).T
-        self.mo_energy[0,s,:] = self.mf.mo_energy[s]
-      self.mo_occ[0,0:self.nspin,:] = self.mf.mo_occ
-      
+    aaux = np.asarray(mf.mo_coeff).reshape((nspin,n,n))
+    for s in range(nspin):
+      self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(aaux[s], conv.m_xyz2m_yzx).T
+
     self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(s2o.sum()) for s2o in self.mo_occ[0]])
     fermi = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
-
-  def init_mo_coeff_label(self, **kw):
-    """ Constructor a mean-field class from the preceeding SIESTA calculation """
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
-    self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
-    self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
-    if self.nspin==1:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
-    elif self.nspin==2:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
-      print(__name__, 'not sure here: self.nelec', self.nelec)
-    else:
-      raise RuntimeError('0>nspin>2?')
-      
-    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
-    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
-    self.mo_occ = (3-self.nspin)*ksn2fd
 
   def init_mo_coeff_fireball(self, **kw):
     """ Constructor a mean-field class from the preceeding FIREBALL calculation """
@@ -115,12 +86,12 @@ class mf(nao):
     from pyscf.nao.m_fireball_hsx import fireball_hsx
     self.telec = kw['telec'] if 'telec' in kw else self.telec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
-    self.mo_energy = np.require(fireball_get_eigen_dat(self.cd), dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(fireball_get_eigen_dat(self.cd), dtype=self.dtype, requirements='CW')
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
     if abs(self.nelectron-self.mo_occ.sum())>1e-6: raise RuntimeError("mo_occ wrong?" )
-    print(__name__, ' self.nspecies ', self.nspecies)
-    print(self.sp_mu2j)
+    #print(__name__, ' self.nspecies ', self.nspecies)
+    #print(self.sp_mu2j)
     
     self.hsx = fireball_hsx(self, **kw)
     #print(self.telec)
@@ -185,21 +156,42 @@ class mf(nao):
     if info.value!=0: raise RuntimeError("info!=0")
     return self
 
-  def vxc_lil(self, **kw):   # Compute exchange-correlation potentials
+  def vxc_lil(self, **kw):   # Compute matrix elements of exchange-correlation potential
     from pyscf.nao.m_vxc_lil import vxc_lil
     return vxc_lil(self, deriv=1, **kw)
 
+  def vhartree_pbc(self, dens, **kw): 
+    """  Compute Hartree potential for the density given in an equidistant grid  """
+    from pyscf.nao.m_vhartree_pbc import vhartree_pbc
+    return vhartree_pbc(self, dens, **kw)
+
+  def vhartree_pbc_coo(self, density_factors=[1,0], **kw): 
+    """  Compute matrix elements of Hartree potential for the density given in an equidistant grid  """
+    from pyscf.nao.m_vhartree_pbc import vhartree_pbc
+    g = self.mesh3d.get_3dgrid()
+    f = density_factors
+    dens = np.zeros(g.shape)
+    if abs(f[0])>0: dens += f[0]*self.dens_elec(g.coords, self.make_rdm1()).reshape(g.shape)
+    if abs(f[1])>0: dens += f[1]*self.vna(g.coords,sp2v=self.ao_log.sp2chlocal,sp2rcut=self.ao_log.sp2rcut_chlocal).reshape(g.shape)
+
+    #print(__name__, dens.sum()*self.mesh3d.dv)
+    vh = self.vhartree_pbc(dens)
+    return self.matelem_int3d_coo(g, vh)
+    
   def dens_elec(self, coords, dm): # Compute electronic density for a given density matrix and on a given set of coordinates
     from pyscf.nao.m_dens_libnao import dens_libnao
     from pyscf.nao.m_init_dm_libnao import init_dm_libnao
     from pyscf.nao.m_init_dens_libnao import init_dens_libnao
+    # end of imports 
     if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
     if init_dm_libnao(dm) is None : raise RuntimeError('init_dm_libnao(dm) is None')
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
     return dens_libnao(coords, self.nspin)
 
-  def exc(self, dm, xc_code, **kw):   # Compute exchange-correlation energies
+  def exc(self, dm=None, xc_code=None, **kw):   # Compute exchange-correlation energies
     from pyscf.nao.m_exc import exc
+    dm = self.make_rdm1() if dm is None else dm
+    xc_code = self.xc_code if xc_code is None else xc_code
     return exc(self, dm, xc_code, **kw)
 
   def get_init_guess(self, mol=None, key=None):
@@ -222,17 +214,17 @@ class mf(nao):
 
   def pdos(self, comegas, **kw):
     """ Partial Density of States (resolved in angular momentum of atomic orbitals) """
-    from pyscf.nao.pdos import pdos
+    from pyscf.nao.m_dos_pdos_ldos import pdos
     return pdos(self, comegas, **kw)
 
   def lsoa_dos(self, comegas, **kw):
     """ Partial Density of States (contributions from a given list of atoms) """
-    from pyscf.nao.pdos import lsoa_dos
+    from pyscf.nao.m_dos_pdos_ldos import lsoa_dos
     return lsoa_dos(self, comegas, **kw)
 
   def gdos(self, comegas, **kw):
     """ Some molecular orbital population analysis """
-    from pyscf.nao.pdos import gdos
+    from pyscf.nao.m_dos_pdos_ldos import gdos
     return gdos(self, comegas, **kw)
 
   def read_wfsx(self, fname, **kw):
@@ -252,8 +244,8 @@ class mf(nao):
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.x[k,s,n,:,:])
 
-    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
-    self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
     self.nelec = kw['nelec'] if 'nelec' in kw else self.hsx.nelec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
@@ -295,6 +287,98 @@ class mf(nao):
     ax.axvline(x=0, color='k')
     plt.ylim(-3.0,3.0)
     plt.show()
+
+  def get_vertex_pov(self):
+    """ Computes the occupied-virtual-product basis vertex"""
+    assert hasattr(self, 'pb')
+    pab = self.pb.get_ac_vertex_array()
+    pov = list()
+    nprd = pab.shape[0]
+    for s,occ in enumerate(self.mo_occ):
+      no = np.count_nonzero(occ>0.0)
+      nv = np.count_nonzero(occ==0.0)
+      assert nv+no==self.mo_coeff.shape[-2]
+      pov.append(np.zeros([nprd,no,nv], dtype=self.dtype))
+      pov[s] = np.einsum('oa,pab,vb->pov', self.mo_coeff[0,s,0:no,:,0], pab, self.mo_coeff[0,s,no:,:,0])
+    return pov
+
+  def nonin_osc_strength(self):
+    from scipy.sparse import spmatrix 
+    """ Computes the non-interacting oscillator strengths and energies """
+
+    x,y,z = map(spmatrix.toarray, self.dipole_coo())
+    i2d = array((x,y,z))
+    n = self.mo_occ.shape[-1]
+    
+    p = zeros((len(comega)), dtype=np.complex128) # result to accumulate
+    
+    for s in range(self.nspin):
+      o,e,cc = self.mo_occ[0,s],self.mo_energy[0,s],self.mo_coeff[0,s,:,:,0]
+      oo1,ee1 = np.subtract.outer(o,o).reshape(n*n), np.subtract.outer(e,e).reshape(n*n)
+      idx = unravel_index( np.intersect1d(where(oo1<0.0), where(ee1<eemax)), (n,n))
+      ivrt,iocc = array(list(set(idx[0]))), array(list(set(idx[1])))
+      voi2d = einsum('nia,ma->nmi', einsum('iab,nb->nia', i2d, cc[ivrt]), cc[iocc])
+      t2osc = 2.0/3.0*einsum('voi,voi->vo', voi2d, voi2d)
+      t2w =  np.subtract.outer(e[ivrt],e[iocc])
+      t2o = -np.subtract.outer(o[ivrt],o[iocc])
+
+      for iw,w in enumerate(comega):
+        p[iw] += 0.5*(t2osc*((t2o/(w-t2w))-(t2o/(w+t2w)))).sum()      
+    return p
+
+  def polariz_nonin_ave_matelem(self, comega):
+    from scipy.sparse import spmatrix 
+    """ Computes the non-interacting optical polarizability via the dipole matrix elements."""
+
+    x,y,z = map(spmatrix.toarray, self.dipole_coo())
+    i2d = array((x,y,z))
+    n = self.mo_occ.shape[-1]
+    eemax = max(comega.real)+20.0*max(comega.imag)
+    
+    p = zeros((len(comega)), dtype=np.complex128) # result to accumulate
+
+    #print(__name__, 'Fermi energy', self.fermi_energy)
+    #np.set_printoptions(linewidth=1000)
+    for s in range(self.nspin):
+      o,e,cc = self.mo_occ[0,s],self.mo_energy[0,s],self.mo_coeff[0,s,:,:,0]
+      #print(o[:10])
+      #print(e[:10])
+
+      oo1,ee1 = np.subtract.outer(o,o).reshape(n*n), np.subtract.outer(e,e).reshape(n*n)
+      idx = unravel_index( np.intersect1d(where(oo1<0.0), where(ee1<eemax)), (n,n))
+      ivrt,iocc = array(list(set(idx[0]))), array(list(set(idx[1])))
+      voi2d = einsum('nia,ma->nmi', einsum('iab,nb->nia', i2d, cc[ivrt]), cc[iocc])
+      t2osc = 2.0/3.0*einsum('voi,voi->vo', voi2d, voi2d)
+      t2w =  np.subtract.outer(e[ivrt],e[iocc])
+      t2o = -np.subtract.outer(o[ivrt],o[iocc])
+
+      for iw,w in enumerate(comega):
+        p[iw] += 0.5*(t2osc*((t2o/(w-t2w))-(t2o/(w+t2w)))).sum()
+      
+    return p
+    
+  def spin_square(self, mo_coeff=None, mo_occ=None):
+    from functools import reduce
+
+    mo_coeff = self.mo_coeff if mo_coeff is None else mo_coeff
+    mo_occ = self.mo_occ if mo_occ is None else mo_occ
+    
+    if self.nspin==1:
+      mo_a = mo_coeff[0,0,mo_occ[0,0]>0,:,0]
+      mo_b = mo_coeff[0,0,mo_occ[0,0]>1,:,0]
+    elif self.nspin==2:
+      mo_a = mo_coeff[0,0,mo_occ[0,0]>0,:,0]
+      mo_b = mo_coeff[0,1,mo_occ[0,1]>0,:,0]
+
+    nocc_a, nocc_b = mo_a.shape[0], mo_b.shape[0]
+    over = self.overlap_coo().toarray()
+    s = reduce(np.dot, (mo_a, over, mo_b.T))
+    ssxy = (nocc_a+nocc_b) * 0.5 - (s.conj()*s).sum()
+    ssz = (nocc_b-nocc_a)**2 * 0.25
+    ss = (ssxy + ssz).real
+    s = np.sqrt(ss+0.25) - 0.5
+    
+    return ss, s*2+1
 
 #
 # Example of reading pySCF mean-field calculation.
