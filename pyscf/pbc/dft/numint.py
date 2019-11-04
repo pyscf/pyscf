@@ -387,7 +387,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
         nelec = nelec[0]
         excsum = excsum[0]
         vmat = vmat[0]
-    return nelec, excsum, vmat
+    return nelec, excsum, numpy.asarray(vmat)
 
 def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
            kpts=None, kpts_band=None, max_memory=2000, verbose=None):
@@ -523,7 +523,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
         excsum = excsum[0]
         vmata = vmata[0]
         vmatb = vmatb[0]
-    return nelec, excsum, lib.asarray((vmata,vmatb))
+    return nelec, excsum, numpy.asarray((vmata,vmatb))
 
 def _format_uks_dm(dms):
     dma, dmb = dms
@@ -644,7 +644,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     if isinstance(dms, numpy.ndarray) and dms.ndim == vmat[0].ndim:
         # One set of DMs in the input
         vmat = vmat[0]
-    return lib.asarray(vmat)
+    return numpy.asarray(vmat)
 
 def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
@@ -740,7 +740,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
 
     if isinstance(dms_alpha, numpy.ndarray) and dms_alpha.ndim == vmat[0].ndim:
         vmat = vmat[0]
-    return lib.asarray(vmat)
+    return numpy.asarray(vmat)
 
 
 def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
@@ -864,7 +864,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     if dma.ndim == vmata[0].ndim:  # One set of DMs in the input
         vmata = vmata[0]
         vmatb = vmatb[0]
-    return lib.asarray((vmata,vmatb))
+    return numpy.asarray((vmata,vmatb))
 
 def _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc):
     shls_slice = (0, cell.nbas)

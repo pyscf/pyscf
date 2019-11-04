@@ -379,6 +379,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(wv - wva).max(), 0, 10)
         self.assertAlmostEqual(abs(wv - wvb).max(), 0, 10)
 
+    def test_complex_dm(self):
+        mf = dft.RKS(h2o)
+        mf.xc = 'b3lyp'
+        nao = h2o.nao
+        numpy.random.seed(1)
+        dm = (numpy.random.random((nao,nao)) +
+              numpy.random.random((nao,nao))*1j)
+        dm = dm + dm.conj().T
+        v = mf.get_veff(h2o, dm)
+        self.assertAlmostEqual(finger(v), 30.543789621782576-0.23207622637751305j, 9)
+
 
 if __name__ == "__main__":
     print("Test numint")
