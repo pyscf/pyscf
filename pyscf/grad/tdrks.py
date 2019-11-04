@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,8 +36,8 @@ from pyscf.grad import tdrhf
 #
 # Given Y = 0, TDDFT gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, x_y, singlet=True, atmlst=None,
-           max_memory=2000, verbose=logger.INFO):
+def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
+              max_memory=2000, verbose=logger.INFO):
     log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
@@ -82,7 +82,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vj, vk = mf.get_jk(mol, dm, hermi=0)
         vk *= hyb
         if abs(omega) > 1e-10:
-            vk += rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+            vk += mf.get_k(mol, dm, hermi=0, omega=omega) * (alpha-hyb)
         veff0doo = vj[0] * 2 - vk[0] + f1oo[0] + k1ao[0] * 2
         wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
         if singlet:
@@ -120,7 +120,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
             vj, vk = mf.get_jk(mol, dm)
             veff = vj * 2 - hyb * vk + vindxc
             if abs(omega) > 1e-10:
-                veff -= rks._get_k_lr(mol, dm, omega, hermi=1) * (alpha-hyb)
+                veff -= mf.get_k(mol, dm, hermi=1, omega=omega) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm)
             veff = vj * 2 + vindxc
@@ -138,7 +138,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vj, vk = mf.get_jk(mol, z1ao, hermi=0)
         veff = vj * 2 - hyb * vk + fxcz1[0]
         if abs(omega) > 1e-10:
-            veff -= rks._get_k_lr(mol, z1ao, omega) * (alpha-hyb)
+            veff -= mf.get_k(mol, z1ao, hermi=0, omega=omega) * (alpha-hyb)
     else:
         vj = mf.get_j(mol, z1ao, hermi=1)
         veff = vj * 2 + fxcz1[0]
@@ -162,8 +162,11 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dm1[:nocc,:nocc] += numpy.eye(nocc)*2 # for ground state
     im0 = reduce(numpy.dot, (mo_coeff, im0+zeta*dm1, mo_coeff.T))
 
-    hcore_deriv = td_grad.hcore_generator(mol)
-    s1 = td_grad.get_ovlp(mol)
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = td_grad.base._scf.nuc_grad_method()
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
 
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
@@ -221,6 +224,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
 
     log.timer('TDDFT nuclear gradients', *time0)
     return de
+
 
 # dmvo, dmoo in AO-representation
 # Note spin-trace is applied for fxc, kxc
@@ -336,8 +340,14 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
 
 
 class Gradients(tdrhf.Gradients):
+    @lib.with_doc(grad_elec.__doc__)
     def grad_elec(self, xy, singlet, atmlst=None):
-        return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+        return grad_elec(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+
+Grad = Gradients
+
+from pyscf import tdscf
+tdscf.rks.TDA.Gradients = tdscf.rks.TDDFT.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -366,7 +376,7 @@ if __name__ == '__main__':
     td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.31315477e-01]
@@ -387,7 +397,7 @@ if __name__ == '__main__':
     td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.21504524e-01]
@@ -424,7 +434,7 @@ if __name__ == '__main__':
     td.nstates = 3
     td.singlet = False
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=2)
     print(g1)
 # [[ 0  0  -0.3633334]

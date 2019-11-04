@@ -36,7 +36,7 @@ from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
-from pyscf.gto import ecp
+from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
 
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
@@ -59,6 +59,7 @@ NPRIM_OF   = 2
 NCTR_OF    = 3
 RADI_POWER = 3 # for ECP
 KAPPA_OF   = 4
+SO_TYPE_OF = 4 # for ECP
 PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
@@ -69,9 +70,10 @@ PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
 PTR_RANGE_OMEGA = 8
 PTR_F12_ZETA    = 9
+PTR_GTG_ZETA    = 10
 AS_RINV_ORIG_ATOM = 17
 AS_ECPBAS_OFFSET = 18
-AS_NECPBAS     = 19
+AS_NECPBAS      = 19
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -193,7 +195,10 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
             c2smat *= 0.282094791773878143
         elif l == 1:
             c2smat *= 0.488602511902919921
-    return c2smat[:nf], c2smat[nf:]
+    # c2smat[0] is the transformation for spin up
+    # c2smat[1] is the transformation for spin down
+    c2smat = c2smat.reshape(2,nf,nd)
+    return c2smat
 cart2j_kappa = cart2spinor_kappa
 
 def cart2spinor_l(l, normalized=None):
@@ -266,7 +271,7 @@ def format_atom(atoms, origin=0, axes=None,
         origin : ndarray
             new axis origin.
         axes : ndarray
-            (new_x, new_y, new_z), each entry is a length-3 array
+            (new_x, new_y, new_z), new coordinates
         unit : str or number
             If unit is one of strings (B, b, Bohr, bohr, AU, au), the coordinates
             of the input atoms are the atomic unit;  If unit is one of strings
@@ -275,7 +280,11 @@ def format_atom(atoms, origin=0, axes=None,
             as the Bohr value (in angstrom), which should be around 0.53
 
     Returns:
-        "atoms" in the internal format as :attr:`~Mole._atom`
+        "atoms" in the internal format. The internal format is
+            | atom = [[atom1, (x, y, z)],
+            |         [atom2, (x, y, z)],
+            |         ...
+            |         [atomN, (x, y, z)]]
 
     Examples:
 
@@ -290,6 +299,13 @@ def format_atom(atoms, origin=0, axes=None,
         return [_atom_symbol(dat[0]), [float(x) for x in dat[1:4]]]
 
     if isinstance(atoms, (str, unicode)):
+        # The input atoms points to a geometry file
+        if os.path.isfile(atoms):
+            try:
+                atoms = fromfile(atoms)
+            except ValueError:
+                pass
+
         atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
         fmt_atoms = []
         for dat in atoms.split('\n'):
@@ -411,7 +427,7 @@ def uncontracted_basis(_basis):
     Examples:
 
     >>> gto.uncontract(gto.load('sto3g', 'He'))
-    [[0, [6.3624213899999997, 1]], [0, [1.1589229999999999, 1]], [0, [0.31364978999999998, 1]]]
+    [[0, [6.36242139, 1]], [0, [1.158923, 1]], [0, [0.31364979, 1]]]
     '''
     ubasis = []
     for b in _basis:
@@ -425,6 +441,7 @@ def uncontracted_basis(_basis):
                 ubasis.append([angl, [p[0], 1]])
     return ubasis
 uncontract = uncontracted_basis
+contract = contracted_basis = basis.to_general_contraction
 
 def to_uncontracted_cartesian_basis(mol):
     '''Decontract the basis of a Mole or a Cell.  Returns a Mole (Cell) object
@@ -849,13 +866,20 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
             for rorder, bi in enumerate(lb[1]):
                 if len(bi) > 0:
                     ec = numpy.array(sorted(bi, reverse=True))
+                    nexp, ncol = ec.shape
                     _env.append(ec[:,0])
-                    ptr_exp = ptr_env
                     _env.append(ec[:,1])
-                    ptr_coeff = ptr_exp + ec.shape[0]
-                    ptr_env = ptr_coeff + ec.shape[0]
-                    ecp0.append([0, lb[0], ec.shape[0], rorder, 0,
+                    ptr_exp, ptr_coeff = ptr_env, ptr_env + nexp
+                    ecp0.append([0, lb[0], nexp, rorder, 0,
                                  ptr_exp, ptr_coeff, 0])
+                    ptr_env += nexp * 2
+
+                    if ncol == 3:  # Has SO-ECP
+                        _env.append(ec[:,2])
+                        ptr_coeff, ptr_env = ptr_env, ptr_env + nexp
+                        ecp0.append([0, lb[0], nexp, rorder, 1,
+                                     ptr_exp, ptr_coeff, 0])
+
         _ecpdic[symb] = (nelec, numpy.asarray(ecp0, dtype=numpy.int32))
 
     _ecpbas = []
@@ -894,7 +918,13 @@ def tot_electrons(mol):
     >>> mol.tot_electrons()
     6
     '''
-    nelectron = mol.atom_charges().sum() - mol.charge
+    if mol._atm.size != 0:
+        nelectron = mol.atom_charges().sum()
+    elif mol._atom:
+        nelectron = sum(charge(a[0]) for a in mol._atom)
+    else:
+        nelectron = sum(charge(a[0]) for a in format_atom(mol.atom))
+    nelectron -= mol.charge
     return int(nelectron)
 
 def copy(mol):
@@ -933,10 +963,6 @@ def pack(mol):
             'ecp'     : mol.ecp,
             '_nelectron': mol._nelectron,
             'verbose' : mol.verbose}
-    if mol.symmetry and not isinstance(mol.symmetry, str):
-        mdic['symmetry'] = mol.groupname
-        mdic['atom'] = mol._atom
-        mdic['unit'] = 'AU'
     return mdic
 def unpack(moldic):
     '''Unpack a dict which is packed by :func:`pack`, to generate the input
@@ -950,8 +976,11 @@ def unpack(moldic):
 def dumps(mol):
     '''Serialize Mole object to a JSON formatted str.
     '''
-    exclude_keys = set(('output', 'stdout', '_keys'))
-    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas'))
+    exclude_keys = set(('output', 'stdout', '_keys',
+                        # Constructing in function loads
+                        'symm_orb', 'irrep_id', 'irrep_name'))
+    nparray_keys = set(('_atm', '_bas', '_env', '_ecpbas',
+                        '_symm_orig', '_symm_axes'))
 
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
@@ -963,18 +992,6 @@ def dumps(mol):
     moldic['basis']= repr(mol.basis)
     moldic['ecp' ] = repr(mol.ecp)
 
-    if mol.symm_orb is not None:
-        # compress symm_orb
-        symm_orb = []
-        for c in mol.symm_orb:
-            x,y = numpy.nonzero(c)
-            val = c[x,y]
-            if val.dtype == numpy.complex:
-                symm_orb.append(((val.real.tolist(), val.imag.tolist()),
-                                 x.tolist(), y.tolist(), c.shape))
-            else:
-                symm_orb.append(((val.tolist(), None), x.tolist(), y.tolist(), c.shape))
-        moldic['symm_orb'] = symm_orb
     try:
         return json.dumps(moldic)
     except TypeError:
@@ -1025,9 +1042,22 @@ def loads(molstr):
     mol._env = numpy.array(mol._env, dtype=numpy.double)
     mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
 
-    if mol.symm_orb is not None:
-        # decompress symm_orb
+    if mol.symmetry and mol._symm_orig is not None:
+        from pyscf import symm
+        mol._symm_orig = numpy.array(mol._symm_orig)
+        mol._symm_axes = numpy.array(mol._symm_axes)
+        mol.symm_orb, mol.irrep_id = \
+                symm.symm_adapted_basis(mol, mol.groupname,
+                                        mol._symm_orig, mol._symm_axes)
+        mol.irrep_name = [symm.irrep_id2name(mol.groupname, ir)
+                           for ir in mol.irrep_id]
+
+    elif mol.symmetry and mol.symm_orb is not None:
+        # Backward compatibility. To load symm_orb from chkfile of pyscf-1.6
+        # and earlier.
         symm_orb = []
+
+        # decompress symm_orb
         for val, x, y, shape in mol.symm_orb:
             if isinstance(val[0], list):
 # backward compatibility for chkfile of pyscf-1.4 in which val is an array of
@@ -1045,6 +1075,7 @@ def loads(molstr):
                 c[numpy.array(x),numpy.array(y)] = val
             symm_orb.append(c)
         mol.symm_orb = symm_orb
+
     return mol
 
 
@@ -1215,6 +1246,9 @@ def time_reversal_map(mol):
                     i += dj
     return numpy.asarray(tao, dtype=numpy.int32)
 
+
+CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
+
 def energy_nuc(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
@@ -1235,6 +1269,10 @@ def energy_nuc(mol, charges=None, coords=None):
     #        e += q1 * q2 / r
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
+    if CHECK_GEOM and numpy.any(rr < 1e-5):
+        for atm_idx in numpy.argwhere(rr<1e-5):
+            logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
+        raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
 
@@ -1280,7 +1318,7 @@ def sph_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
@@ -1330,7 +1368,7 @@ def cart_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         ncart = (l + 1) * (l + 2) // 2
@@ -1380,7 +1418,7 @@ def spinor_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = ecp.core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
@@ -1585,7 +1623,7 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
 
     def finger(mol, chgs, coord):
         center = numpy.einsum('z,zr->r', chgs, coord) / chgs.sum()
-        im = inertia_momentum(mol, chgs, coord)
+        im = inertia_moment(mol, chgs, coord)
         # Divid im by chgs.sum(), to normalize im. Otherwise the input tol may
         # not reflect the actual deviation.
         im /= chgs.sum()
@@ -1644,14 +1682,15 @@ def chiral_mol(mol1, mol2=None):
     return (not same_mol(mol1, mol2, ignore_chiral=False) and
             same_mol(mol1, mol2, ignore_chiral=True))
 
-def inertia_momentum(mol, mass=None, coords=None):
+def inertia_moment(mol, mass=None, coords=None):
     if mass is None:
-        mass = atom_mass_list(mol)
+        mass = mol.atom_mass_list()
     if coords is None:
         coords = mol.atom_coords()
     mass_center = numpy.einsum('i,ij->j', mass, coords)/mass.sum()
     coords = coords - mass_center
     im = numpy.einsum('i,ij,ik->jk', mass, coords, coords)
+    im = numpy.eye(3) * im.trace() - im
     return im
 
 def atom_mass_list(mol, isotope_avg=False):
@@ -1698,6 +1737,102 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
     return abstract
 
 
+def tostring(mol, format='raw'):
+    '''Convert molecular geometry to a string of the required format.
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    format = format.lower()
+    if format == 'xyz' or format == 'raw':
+        coords = mol.atom_coords() * param.BOHR
+        output = []
+        if format == 'xyz':
+            output.append('%d' % mol.natm)
+            output.append('XYZ from PySCF')
+
+        for i in range(mol.natm):
+            symb = mol.atom_pure_symbol(i)
+            x, y, z = coords[i]
+            output.append('%-4s %14.5f %14.5f %14.5f' %
+                          (symb, x, y, z))
+        return '\n'.join(output)
+    elif format == 'zmat':
+        coords = mol.atom_coords() * param.BOHR
+        zmat = cart2zmat(coords).splitlines()
+        output = []
+        for i, line in enumerate(zmat):
+            symb = mol.atom_pure_symbol(i)
+            output.append('%-4s   %s' % (symb, line))
+        return '\n'.join(output)
+    else:
+        raise NotImplementedError
+
+def tofile(mol, filename, format=None):
+    '''Write molecular geometry to a file of the required format.
+
+    Supported output formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    if format is None:  # Guess format based on filename
+        format = os.path.splitext(filename)[1][1:]
+    string = tostring(mol, format)
+    with open(filename, 'w') as f:
+        f.write(string)
+        f.write('\n')
+    return string
+
+def fromfile(filename, format=None):
+    '''Read molecular geometry from a file
+    (in testing)
+
+    Supported formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    if format is None:  # Guess format based on filename
+        format = os.path.splitext(filename)[1][1:].lower()
+        if format not in ('xyz', 'zmat', 'sdf'):
+            format = 'raw'
+    with open(filename, 'r') as f:
+        return fromstring(f.read(), format)
+
+
+def fromstring(string, format='xyz'):
+    '''Convert the string of the specified format to internal format
+    (in testing)
+
+    Supported formats:
+        | raw: Each line is  <symobl> <x> <y> <z>
+        | xyz: XYZ cartesian coordinates format
+        | zmat: Z-matrix format
+    '''
+    format = format.lower()
+    if format == 'zmat':
+        return from_zmatrix(string)
+    elif format == 'xyz':
+        dat = string.splitlines()
+        natm = int(dat[0])
+        return '\n'.join(dat[2:natm+2])
+    elif format == 'sdf':
+        raw = raw.splitlines()
+        natoms, nbonds = raw[3].split()[:2]
+        atoms = []
+        for line in raw[4:4+int(natoms)]:
+            d = line.split()
+            atoms.append('%s %s %s %s' % (d[3], d[0], d[1], d[2]))
+        return '\n'.join(atoms)
+    elif format == 'raw':
+        return string
+    else:
+        raise NotImplementedError
+
+
 #
 # Mole class handles three layers: input, internal format, libcint arguments.
 # The relationship of the three layers are, eg
@@ -1720,8 +1855,10 @@ class Mole(lib.StreamObject):
             Allowed memory in MB
         charge : int
             Charge of molecule. It affects the electron numbers
-        spin : int
-            2S, num. alpha electrons - num. beta electrons
+        spin : int or None
+            2S, num. alpha electrons - num. beta electrons to control
+            multiplicity. If spin = None is set, multiplicity will be guessed
+            based on the neutral molecule.
         symmetry : bool or str
             Whether to use symmetry.  When this variable is set to True, the
             molecule will be rotated and the highest rotation axis will be
@@ -1869,6 +2006,8 @@ class Mole(lib.StreamObject):
         self.symm_orb = None
         self.irrep_id = None
         self.irrep_name = None
+        self._symm_orig = None
+        self._symm_axes = None
         self._nelectron = None
         self._atom = []
         self._basis = {}
@@ -1937,6 +2076,46 @@ class Mole(lib.StreamObject):
     def ms(self, x):
         self.spin = int(round(2*x, 4))
 
+    def __getattr__(self, key):
+        '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
+        from Mole object.
+        '''
+        if key[:2] == '__':  # Skip Python builtins
+            raise AttributeError('Mole object has no attribute %s' % key)
+        elif key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf import __all__
+        from pyscf import scf, dft
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if 'TD' in key[:3]:
+            if key in ('TDHF', 'TDA'):
+                mf = scf.HF(self)
+            else:
+                mf = dft.KS(self)
+                xc = key.split('TD', 1)[1]
+                if xc in dft.XC:
+                    mf.xc = xc
+                    key = 'TDDFT'
+        else:
+            mf = scf.HF(self)
+
+        method = getattr(mf, key, None)
+        if method is None:
+            raise AttributeError('Mole object has no attribute %s' % key)
+
+        mf.run()
+        return method
+
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
 # def __copy__(self):
@@ -1965,7 +2144,7 @@ class Mole(lib.StreamObject):
     def build(self, dump_input=True, parse_arg=True,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
-              charge=None, spin=None, symmetry=None, symmetry_subgroup=None,
+              charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
               cart=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
@@ -1992,7 +2171,9 @@ class Mole(lib.StreamObject):
                 Charge of molecule. It affects the electron numbers
                 If given, overwrite :attr:`Mole.charge`
             spin : int
-                2S, num. alpha electrons - num. beta electrons
+                2S, num. alpha electrons - num. beta electrons to control
+                multiplicity. If setting spin = None , multiplicity will be
+                guessed based on the neutral molecule.
                 If given, overwrite :attr:`Mole.spin`
             symmetry : bool or str
                 Whether to use symmetry.  If given a string of point group
@@ -2015,7 +2196,7 @@ class Mole(lib.StreamObject):
         if nucmod is not None: self.nucmod = nucmod
         if ecp is not None: self.ecp = ecp
         if charge is not None: self.charge = charge
-        if spin is not None: self.spin = spin
+        if spin is not 0: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
         if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
         if cart is not None: self.cart = cart
@@ -2023,10 +2204,17 @@ class Mole(lib.StreamObject):
         if parse_arg:
             _update_from_cmdargs_(self)
 
-        # avoid to open output file twice
-        if (parse_arg and self.output is not None and
-            not (getattr(self.stdout, 'name', None) and  # to handle StringIO().name bug
-                 self.stdout.name == self.output)):
+        # avoid opening output file twice
+        if (self.output is not None
+            # StringIO() does not have attribute 'name'
+            and getattr(self.stdout, 'name', None) != self.output):
+
+            if self.verbose > logger.QUIET:
+                if os.path.isfile(self.output):
+                    print('overwrite output file: %s' % self.output)
+                else:
+                    print('output file: %s' % self.output)
+
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
             else:
@@ -2035,15 +2223,7 @@ class Mole(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        if isinstance(self.atom, (str, unicode)) and os.path.isfile(self.atom):
-            try:
-                with open(self.atom, 'r') as f:
-                    atom_str = f.read()
-                self._atom = self.format_atom(atom_str, unit=self.unit)
-            except ValueError:
-                self._atom = self.format_atom(self.atom, unit=self.unit)
-        else:
-            self._atom = self.format_atom(self.atom, unit=self.unit)
+        self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
 
         if isinstance(self.basis, (str, unicode, tuple, list)):
@@ -2071,33 +2251,6 @@ class Mole(lib.StreamObject):
                 _ecp = self.ecp
             self._ecp = self.format_ecp(_ecp)
 
-        if self.symmetry:
-            from pyscf import symm
-            if isinstance(self.symmetry, (str, unicode)):
-                self.symmetry = str(symm.std_symb(self.symmetry))
-                self.topgroup = self.symmetry
-                orig = 0
-                axes = numpy.eye(3)
-                self.groupname, axes = symm.subgroup(self.topgroup, axes)
-                if not symm.check_given_symm(self.groupname, self._atom,
-                                             self._basis):
-                    self.topgroup, orig, axes = \
-                            symm.detect_symm(self._atom, self._basis)
-                    self.groupname, axes = symm.subgroup(self.topgroup, axes)
-                    _atom = self.format_atom(self._atom, orig, axes, 'Bohr')
-                    _atom = '\n'.join([str(a) for a in _atom])
-                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
-                                         (self.symmetry, self.topgroup, _atom))
-            else:
-                self.topgroup, orig, axes = \
-                        symm.detect_symm(self._atom, self._basis)
-                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                        self.symmetry_subgroup)
-
-# Note the internal _format is in Bohr
-            self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
-
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod,
@@ -2105,12 +2258,34 @@ class Mole(lib.StreamObject):
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
 
-        # Access self.nelec in which the code checks whether the spin and
-        # number of electrons are consistent.
-        self.nelec
+        if self.spin is None:
+            self.spin = self.nelectron % 2
+        else:
+            # Access self.nelec in which the code checks whether the spin and
+            # number of electrons are consistent.
+            self.nelec
 
         if self.symmetry:
             from pyscf import symm
+            self.topgroup, orig, axes = symm.detect_symm(self._atom, self._basis)
+
+            if isinstance(self.symmetry, (str, unicode)):
+                self.symmetry = str(symm.std_symb(self.symmetry))
+                self.groupname, axes = symm.subgroup(self.symmetry, axes)
+                prop_atoms = self.format_atom(self._atom, orig, axes, 'Bohr')
+                if symm.check_given_symm(self.groupname, prop_atoms, self._basis):
+                    self.topgroup = self.symmetry
+                else:
+                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
+                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
+                                         (self.symmetry, self.topgroup,
+                                          '\n'.join([str(a) for a in prop_atoms])))
+            else:
+                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                        self.symmetry_subgroup)
+            self._symm_orig = orig
+            self._symm_axes = axes
+
             if self.cart and self.groupname in ('Dooh', 'Coov'):
                 if self.groupname == 'Dooh':
                     self.groupname, lgroup = 'D2h', 'Dooh'
@@ -2119,13 +2294,9 @@ class Mole(lib.StreamObject):
                 logger.warn(self, 'This version does not support linear molecule '
                             'symmetry %s for cartesian GTO basis.  Its subgroup '
                             '%s is used', lgroup, self.groupname)
-            try:
-                eql_atoms = symm.symm_identical_atoms(self.groupname, self._atom)
-            except RuntimeError:
-                raise RuntimeError('''Given symmetry and molecule structure not match.
-Note when symmetry attributes is assigned, the molecule needs to be placed in a proper orientation.''')
+
             self.symm_orb, self.irrep_id = \
-                    symm.symm_adapted_basis(self, self.groupname, eql_atoms)
+                    symm.symm_adapted_basis(self, self.groupname, orig, axes)
             self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
                                for ir in self.irrep_id]
 
@@ -2395,12 +2566,21 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         erf(omega r12) / r12
         set omega to 0 to siwtch off the range-separated Coulomb
         '''
-        self._env[PTR_RANGE_OMEGA] = omega
+        if omega is None:
+            self._env[PTR_RANGE_OMEGA] = 0
+        else:
+            self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
 
+    @property
+    def omega(self):
+        return self._env[PTR_RANGE_OMEGA]
+    omega = omega.setter(set_range_coulomb)
+
     def with_range_coulomb(self, omega):
-        '''Retuen a temporary mol context which has the rquired
-        range-separated Coulomb parameter omega.
+        '''Retuen a temporary mol context which has the required parameter
+        omega for long range part of range-separated Coulomb operator.
+        If omega = None, it will be treated as the regular Coulomb operator.
         See also :func:`mol.set_range_coulomb`
 
         Examples:
@@ -2447,8 +2627,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Retuen a temporary mol context which has the rquired charge
-        distribution on the "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
+        '''Retuen a temporary mol context which has the rquired Gaussian charge
+        distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
         Examples:
@@ -2460,8 +2640,9 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def with_rinv_as_nucleus(self, atm_id):
-        '''Retuen a temporary mol context which has the rquired origin of 1/r
-        operator and the required nuclear charge distribution on 1/r.
+        '''Retuen a temporary mol context in which the rinv operator (1/r) is
+        treated like the Coulomb potential of a Gaussian charge distribution
+        rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
         Examples:
 
@@ -2494,10 +2675,20 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol._env = mol._env.copy()
         if unit is None:
             unit = mol.unit
+        else:
+            mol.unit = unit
         if symmetry is None:
             symmetry = mol.symmetry
 
+        if isinstance(atoms_or_coords, numpy.ndarray):
+            mol.atom = list(zip([x[0] for x in mol._atom],
+                                atoms_or_coords.tolist()))
+        else:
+            mol.atom = atoms_or_coords
+
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
+            mol._atom = mol.atom
+
             if isinstance(unit, (str, unicode)):
                 if unit.upper().startswith(('B', 'AU')):
                     unit = 1.
@@ -2510,16 +2701,11 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
             mol._env[ptr+2] = unit * atoms_or_coords[:,2]
         else:
-            if isinstance(atoms_or_coords, numpy.ndarray):
-                mol.atom = list(zip([x[0] for x in mol._atom], atoms_or_coords))
-            else:
-                mol.atom = atoms_or_coords
-            mol.unit = unit
             mol.symmetry = symmetry
             mol.build(False, False)
 
         if mol.verbose >= logger.INFO:
-            logger.info(mol, 'New geometry (unit Bohr)')
+            logger.info(mol, 'New geometry (unit %s)', unit)
             coords = mol.atom_coords()
             for ia in range(mol.natm):
                 logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f',
@@ -2571,6 +2757,11 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         '''
         return _std_symbol(self._atom[atm_id][0])
 
+    @property
+    def elements(self):
+        '''A list of elements in the molecule'''
+        return [self.atom_pure_symbol(i) for i in range(self.natm)]
+
     def atom_charge(self, atm_id):
         r'''Nuclear effective charge of the given atom id
         Note "atom_charge /= charge(atom_symbol)" when ECP is enabled.
@@ -2597,7 +2788,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         '''
         return charge(self.atom_symbol(atm_id)) - self.atom_charge(atm_id)
 
-    def atom_coord(self, atm_id):
+    def atom_coord(self, atm_id, unit='Bohr'):
         r'''Coordinates (ndarray) of the given atom id
 
         Args:
@@ -2611,12 +2802,18 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         [ 0.          0.          2.07869874]
         '''
         ptr = self._atm[atm_id,PTR_COORD]
-        return self._env[ptr:ptr+3]
+        if unit[:3].upper() == 'ANG':
+            return self._env[ptr:ptr+3] * param.BOHR
+        else:
+            return self._env[ptr:ptr+3]
 
-    def atom_coords(self):
+    def atom_coords(self, unit='Bohr'):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        return self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+        c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+        if unit[:3].upper() == 'ANG':
+            c *= param.BOHR
+        return c
 
     atom_mass_list = atom_mass_list
 
@@ -2816,6 +3013,28 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
 
     tmap = time_reversal_map = time_reversal_map
 
+    inertia_moment = inertia_moment
+
+    tostring = tostring
+    tofile = tofile
+
+    def fromstring(self, string, format='xyz'):
+        '''Update the Mole object based on the input geometry string'''
+        self.atom = string
+        self._atom = mol.format_atom(fromstring(string, format))
+        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        if format == 'sdf' and 'M  CHG' in string:
+            raise NotImplementedError
+            #FIXME self.charge = 0
+        return self
+
+    def fromfile(self, filename, format=None):
+        '''Update the Mole object based on the input geometry file'''
+        self.atom = filename
+        self._atom = mol.format_atom(fromfile(filename, format))
+        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        return self
+
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None):
         '''Integral generator.
@@ -2948,7 +3167,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
                                           self._env, comp)
 
-    eval_gto = eval_gto
+    eval_ao = eval_gto = eval_gto
 
     energy_nuc = energy_nuc
     def get_enuc(self):
@@ -3029,21 +3248,65 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
-            from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, mcscf, tdscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
+            method = getattr(self, fn.upper())
+            return method(*args, **kwargs)
         else:
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
+
+    def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
+              **kwargs):
+        '''Integral transformation for arbitrary orbitals and arbitrary
+        integrals.  See more detalied documentation in func:`ao2mo.kernel`.
+
+        Args:
+            mo_coeffs (an np array or a list of arrays) : A matrix of orbital
+                coefficients if it is a numpy ndarray, or four sets of orbital
+                coefficients, corresponding to the four indices of (ij|kl).
+
+        Kwargs:
+            erifile (str or h5py File or h5py Group object) : The file/object
+                to store the transformed integrals.  If not given, the return
+                value is an array (in memory) of the transformed integrals.
+            dataname : str
+                *Note* this argument is effective if erifile is given.
+                The dataset name in the erifile (ref the hierarchy of HDF5 format
+                http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
+                different dataname, the existed integral file can be reused.  If
+                the erifile contains the specified dataname, the old integrals
+                will be replaced by the new one under the key dataname.
+            intor (str) : integral name Name of the 2-electron integral.  Ref
+                to :func:`getints_by_shell`
+                for the complete list of available 2-electron integral names
+
+        Returns:
+            An array of transformed integrals if erifile is not given.
+            Otherwise, return the file/fileobject if erifile is assigned.
+
+
+        Examples:
+
+        >>> import pyscf
+        >>> mol = pyscf.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> mo1 = numpy.random.random((mol.nao_nr(), 10))
+        >>> mo2 = numpy.random.random((mol.nao_nr(), 8))
+
+        >>> eri1 = mol.ao2mo(mo1)
+        >>> print(eri1.shape)
+        (55, 55)
+
+        >>> eri1 = mol.ao2mo(mo1, compact=False)
+        >>> print(eri1.shape)
+        (100, 100)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2))
+        >>> print(eri1.shape)
+        (80, 36)
+
+        >>> eri1 = mol.ao2mo(eri, (mo1,mo2,mo2,mo2), erifile='water.h5')
+        '''
+        from pyscf import ao2mo
+        return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
@@ -3076,15 +3339,6 @@ def _update_from_cmdargs_(mol):
 
         if opts.output:
             mol.output = opts.output
-
-    if mol.output is not None:
-        if os.path.isfile(mol.output):
-            #os.remove(mol.output)
-            if mol.verbose > logger.QUIET:
-                print('overwrite output file: %s' % mol.output)
-        else:
-            if mol.verbose > logger.QUIET:
-                print('output file: %s' % mol.output)
 
 
 def from_zmatrix(atomstr):
@@ -3287,6 +3541,5 @@ class _TemporaryMoleContext(object):
         self.method(*self.args)
     def __exit__(self, type, value, traceback):
         self.method(*self.args_bak)
-
 
 del(BASE)

@@ -3,8 +3,7 @@
 
 sudo: required
 language: python
-group: deprecated-2017Q4
-os: linux
+group: travis_lts
 
 git:
   depth: 20
@@ -22,9 +21,9 @@ git:
 
 python:
   - 2.7
-  - 3.4
   - 3.5
   - 3.6
+  - 3.7
 
 #virtualenv:  affect python 3.5 3.6?
 #    system_site_packages: true
@@ -40,11 +39,11 @@ install:
   #  blaslib=`basename libopenblas* .so | cut -c 4-` &&
   #  echo 'set(BLAS_LIBRARIES "-L${PROJECT_SOURCE_DIR} -l'${blaslib}'")' > cmake.arch.inc
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
-    curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.5-deps.tar.gz | tar xzf -
+    curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7-deps.tar.gz | tar xzf -
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     mkdir build &&
     cd build &&
-    cmake -DBUILD_XCFUN=OFF .. &&
+    cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF .. &&
     make &&
     cd ../..
 
@@ -56,8 +55,9 @@ script:
     echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
   - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
     nosetests -v
-    -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
-    -e cornell_shci
+    --exclude-dir=geomopt --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
+    --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
+    --exclude-dir=cornell_shci
     -e test_bz
     -e h2o_vdz
     -e test_mc2step_4o4e
@@ -73,3 +73,13 @@ script:
     -I test_kuccsd_supercell_vs_kpts\.py
     -I test_kccsd_ghf\.py
     -I test_h_.*\.py
+    --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondTestSupercell3
+    --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondKSTestSupercell3
+    --exclude-test=pbc/gw/test/test_kgw_slow.DiamondTestSupercell3
+    --exclude-test=pbc/gw/test/test_kgw_slow.DiamondKSTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_krhf_slow_supercell.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_hf.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_ks.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_supercell_hf.DiamondTestSupercell3
+    --exclude-test=pbc/tdscf/test/test_kproxy_supercell_ks.DiamondTestSupercell3
+    -I .*_slow.*py -I .*_kproxy_.*py -I test_proxy.py # tdscf/*_slow.py gw/*_slow.py do not compatible with python3.[456] and old numpy

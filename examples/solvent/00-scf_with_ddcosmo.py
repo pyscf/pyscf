@@ -23,3 +23,11 @@ solvent.ddCOSMO(mf).run()
 mf = dft.UKS(mol)
 mf.xc = 'b3lyp'
 solvent.ddPCM(mf).run()
+
+# Once solvent module is imported, PySCF-1.6.1 and newer supports the .DDCOSMO
+# and .DDPCM methods to create solvent model.
+from pyscf import solvent
+mf = mf.DDCOSMO()
+# Adjust solvent model by modifying the attribute .with_solvent
+mf.with_solvent.eps = 32.613  # methanol dielectric constant
+mf.run()

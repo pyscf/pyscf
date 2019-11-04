@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -160,10 +160,10 @@ def dftd3(scf_method):
     # the functions of object scf_method, these patches may not be realized by
     # other extensions.
     class DFTD3(method_class, _DFTD3):
-        def dump_flags(self):
-            method_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            method_class.dump_flags(self, verbose)
             if self.with_dftd3:
-                self.with_dftd3.dump_flags()
+                self.with_dftd3.dump_flags(verbose)
             return self
 
         def energy_nuc(self):
@@ -178,6 +178,7 @@ def dftd3(scf_method):
         def nuc_grad_method(self):
             scf_grad = method_class.nuc_grad_method(self)
             return grad(scf_grad)
+        Gradients = lib.alias(nuc_grad_method, alias_name='Gradients')
 
     mf = DFTD3.__new__(DFTD3)
     mf.__dict__.update(scf_method.__dict__)
@@ -239,17 +240,17 @@ def grad(scf_grad):
 class _DFTD3(object):
     def __init__(self, mol):
         self.mol = mol
+        self.verbose = mol.verbose
         self.xc = 'hf'
         self.version = 4  # 1..6
         self.libdftd3 = libdftd3
         self.edisp = None
         self.grads = None
 
-    def dump_flags(self):
-        mol = self.mol
-        logger.info(mol, '** DFTD3 parameter **')
-        logger.info(mol, 'func', self.xc)
-        logger.info(mol, 'version', self.version)
+    def dump_flags(self, verbose=None):
+        logger.info(self, '** DFTD3 parameter **')
+        logger.info(self, 'func %s', self.xc)
+        logger.info(self, 'version %s', self.version)
         return self
 
     def kernel(self):
@@ -276,20 +277,23 @@ class _DFTD3(object):
         edisp = ctypes.c_double(0)
         grads = numpy.zeros((mol.natm,3))
 
-        drv = self.libdftd3.wrapper_
-        drv(ctypes.byref(ctypes.c_int(mol.natm)),
+        drv = self.libdftd3.wrapper
+        drv(ctypes.c_int(mol.natm),
             coords.ctypes.data_as(ctypes.c_void_p),
             nuc_types.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_char_p(func),
-            ctypes.byref(ctypes.c_int(self.version)),
-            ctypes.byref(ctypes.c_int(tz)),
+            ctypes.c_int(self.version),
+            ctypes.c_int(tz),
             ctypes.byref(edisp),
-            grads.ctypes.data_as(ctypes.c_void_p),
-            # Fortran character len
-            ctypes.c_int(len(func)))
+            grads.ctypes.data_as(ctypes.c_void_p))
         self.edisp = edisp.value
         self.grads = grads
         return edisp.value, grads
+
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        return self
 
 class _DFTD3Grad:
     pass

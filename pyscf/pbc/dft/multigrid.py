@@ -1709,7 +1709,7 @@ class MultiGridFFTDF(fft.FFTDF):
     get_nuc = get_nuc
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv='ewald'):
+               with_j=True, with_k=True, exxdiv='ewald', **kwargs):
         from pyscf.pbc.df import fft_jk
         if with_k:
             logger.warn(self, 'MultiGridFFTDF does not support HFX. '

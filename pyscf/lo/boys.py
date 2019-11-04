@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -116,13 +116,14 @@ def atomic_init_guess(mol, mo_coeff):
     s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
     mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
-    nmo = mo_coeff.shape[1]
 # Find the AOs which have largest overlap to MOs
     idx = numpy.argsort(numpy.einsum('pi,pi->p', mo.conj(), mo))
     nmo = mo.shape[1]
-    idx = idx[-nmo:]
+    idx = sorted(idx[-nmo:])
+
+    # Rotate mo_coeff, make it as close as possible to AOs
     u, w, vh = numpy.linalg.svd(mo[idx])
-    return lib.dot(vh, u.conj().T)
+    return lib.dot(u, vh).conj().T
 
 class Boys(ciah.CIAHOptimizer):
 
@@ -148,8 +149,8 @@ class Boys(ciah.CIAHOptimizer):
                     'ah_max_cycle', 'init_guess'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
         log.info('conv_tol = %s'       , self.conv_tol       )

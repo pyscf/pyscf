@@ -42,7 +42,7 @@ class TDA(uhf.TDA):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
 
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         '''Compute Ax'''
         singlet = self.singlet
         cell = mf.cell
@@ -126,7 +126,7 @@ class TDA(uhf.TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
@@ -149,7 +149,7 @@ CIS = KTDA = TDA
 
 
 class TDHF(TDA):
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         singlet = self.singlet
         cell = mf.cell
         kpts = mf.kpts
@@ -238,16 +238,19 @@ class TDHF(TDA):
         self.check_sanity()
         self.dump_flags()
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
+
+        real_system = (gamma_point(self._scf.kpts) and
+                       self._scf.mo_coeff[0][0].dtype == numpy.double)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
@@ -289,6 +292,11 @@ def _unpack(vo, mo_occ):
         p0, p1 = p1, p1 + no * nv
         zb.append(vo[p0:p1].reshape(no,nv))
     return za, zb
+
+
+from pyscf.pbc import scf
+scf.kuhf.KUHF.TDA  = lib.class_as_method(KTDA)
+scf.kuhf.KUHF.TDHF = lib.class_as_method(KTDHF)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,13 @@
 
 from pyscf.prop.nsr import rhf
 from pyscf.prop.nsr import uhf
-from pyscf.prop.nsr import rks
-from pyscf.prop.nsr import uks
-
 RHF = rhf.NSR
 UHF = uhf.NSR
-RKS = rks.NSR
-UKS = uks.NSR
+
+try:
+    from pyscf.prop.nsr import rks
+    from pyscf.prop.nsr import uks
+    RKS = rks.NSR
+    UKS = uks.NSR
+except ImportError:
+    pass

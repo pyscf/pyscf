@@ -11,3 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from . import efg
+from . import freq
+from . import gtensor
+from . import hfc
+from . import magnetizability
+from . import nmr
+from . import nsr
+from . import polarizability
+from . import rotational_gtensor
+from . import ssc
+from . import zfs

@@ -49,8 +49,7 @@ class KnownValues(unittest.TestCase):
     def test_tda_lda(self):
         td = tdscf.TDA(mf_lda).run(nstates=3)
         tdg = td.nuc_grad_method()
-        g1 = tduks_grad.kernel(tdg, td.xy[2])
-        g1 += tdg.grad_nuc()
+        g1 = tdg.kernel(td.xy[2])
         self.assertAlmostEqual(g1[0,2], -0.40279473514282405, 6)
 
         td_solver = td.as_scanner()
@@ -94,7 +93,7 @@ class KnownValues(unittest.TestCase):
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
-    def test_range_separated_high_cost(self):
+    def test_range_separated(self):
         mol = gto.M(atom="H; H 1 1.", basis='631g', verbose=0)
         mf = dft.UKS(mol).set(xc='CAMB3LYP')
         mf._numint.libxc = dft.xcfun

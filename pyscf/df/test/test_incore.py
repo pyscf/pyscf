@@ -135,6 +135,9 @@ class KnownValues(unittest.TestCase):
         eri1 = numpy.einsum('ip,kp->ik', eri1, j3c)
         self.assertTrue(numpy.allclose(eri1, eri0))
 
+        cderi1 = df.incore.cholesky_eri_debug(mol)
+        self.assertAlmostEqual(abs(cderi-cderi1).max(), 0, 9)
+
     def test_r_incore(self):
         j3c = df.r_incore.aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1')
         nao = mol.nao_2c()

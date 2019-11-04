@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 import os
 import sys
+from os.path import join
 if sys.version_info < (2,7):
     import imp
 else:
@@ -85,43 +86,43 @@ ALIAS = {
     'faegredz'   : 'faegre_dz'      ,
     'iglo'       : 'iglo3'          ,
     'iglo3'      : 'iglo3'          ,
-    '321++g'     : os.path.join('pople-basis', '3-21++G.dat'   ),
-    '321++g*'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
-    '321++gs'    : os.path.join('pople-basis', '3-21++Gs.dat'  ),
-    '321g'       : os.path.join('pople-basis', '3-21G.dat'     ),
-    '321g*'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
-    '321gs'      : os.path.join('pople-basis', '3-21Gs.dat'    ),
-    '431g'       : os.path.join('pople-basis', '4-31G.dat'     ),
-    '631++g'     : os.path.join('pople-basis', '6-31++G.dat'   ),
-    '631++g*'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
-    '631++gs'    : os.path.join('pople-basis', '6-31++Gs.dat'  ),
-    '631++g**'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
-    '631++gss'   : os.path.join('pople-basis', '6-31++Gss.dat' ),
-    '631+g'      : os.path.join('pople-basis', '6-31+G.dat'    ),
-    '631+g*'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
-    '631+gs'     : os.path.join('pople-basis', '6-31+Gs.dat'   ),
-    '631+g**'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
-    '631+gss'    : os.path.join('pople-basis', '6-31+Gss.dat'  ),
-    '6311++g'    : os.path.join('pople-basis', '6-311++G.dat'  ),
-    '6311++g*'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
-    '6311++gs'   : os.path.join('pople-basis', '6-311++Gs.dat' ),
-    '6311++g**'  : os.path.join('pople-basis', '6-311++Gss.dat'),
-    '6311++gss'  : os.path.join('pople-basis', '6-311++Gss.dat'),
-    '6311+g'     : os.path.join('pople-basis', '6-311+G.dat'   ),
-    '6311+g*'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
-    '6311+gs'    : os.path.join('pople-basis', '6-311+Gs.dat'  ),
-    '6311+g**'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
-    '6311+gss'   : os.path.join('pople-basis', '6-311+Gss.dat' ),
-    '6311g'      : os.path.join('pople-basis', '6-311G.dat'    ),
-    '6311g*'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
-    '6311gs'     : os.path.join('pople-basis', '6-311Gs.dat'   ),
-    '6311g**'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
-    '6311gss'    : os.path.join('pople-basis', '6-311Gss.dat'  ),
-    '631g'       : os.path.join('pople-basis', '6-31G.dat'     ),
-    '631g*'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
-    '631gs'      : os.path.join('pople-basis', '6-31Gs.dat'    ),
-    '631g**'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
-    '631gss'     : os.path.join('pople-basis', '6-31Gss.dat'   ),
+    '321++g'     : join('pople-basis', '3-21++G.dat'   ),
+    '321++g*'    : join('pople-basis', '3-21++Gs.dat'  ),
+    '321++gs'    : join('pople-basis', '3-21++Gs.dat'  ),
+    '321g'       : join('pople-basis', '3-21G.dat'     ),
+    '321g*'      : join('pople-basis', '3-21Gs.dat'    ),
+    '321gs'      : join('pople-basis', '3-21Gs.dat'    ),
+    '431g'       : join('pople-basis', '4-31G.dat'     ),
+    '631++g'     : join('pople-basis', '6-31++G.dat'   ),
+    '631++g*'    : join('pople-basis', '6-31++Gs.dat'  ),
+    '631++gs'    : join('pople-basis', '6-31++Gs.dat'  ),
+    '631++g**'   : join('pople-basis', '6-31++Gss.dat' ),
+    '631++gss'   : join('pople-basis', '6-31++Gss.dat' ),
+    '631+g'      : join('pople-basis', '6-31+G.dat'    ),
+    '631+g*'     : join('pople-basis', '6-31+Gs.dat'   ),
+    '631+gs'     : join('pople-basis', '6-31+Gs.dat'   ),
+    '631+g**'    : join('pople-basis', '6-31+Gss.dat'  ),
+    '631+gss'    : join('pople-basis', '6-31+Gss.dat'  ),
+    '6311++g'    : join('pople-basis', '6-311++G.dat'  ),
+    '6311++g*'   : join('pople-basis', '6-311++Gs.dat' ),
+    '6311++gs'   : join('pople-basis', '6-311++Gs.dat' ),
+    '6311++g**'  : join('pople-basis', '6-311++Gss.dat'),
+    '6311++gss'  : join('pople-basis', '6-311++Gss.dat'),
+    '6311+g'     : join('pople-basis', '6-311+G.dat'   ),
+    '6311+g*'    : join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+gs'    : join('pople-basis', '6-311+Gs.dat'  ),
+    '6311+g**'   : join('pople-basis', '6-311+Gss.dat' ),
+    '6311+gss'   : join('pople-basis', '6-311+Gss.dat' ),
+    '6311g'      : join('pople-basis', '6-311G.dat'    ),
+    '6311g*'     : join('pople-basis', '6-311Gs.dat'   ),
+    '6311gs'     : join('pople-basis', '6-311Gs.dat'   ),
+    '6311g**'    : join('pople-basis', '6-311Gss.dat'  ),
+    '6311gss'    : join('pople-basis', '6-311Gss.dat'  ),
+    '631g'       : join('pople-basis', '6-31G.dat'     ),
+    '631g*'      : join('pople-basis', '6-31Gs.dat'    ),
+    '631gs'      : join('pople-basis', '6-31Gs.dat'    ),
+    '631g**'     : join('pople-basis', '6-31Gss.dat'   ),
+    '631gss'     : join('pople-basis', '6-31Gss.dat'   ),
     'sto3g'      : 'sto-3g.dat'     ,
     'sto6g'      : 'sto-6g.dat'     ,
     'minao'      : 'minao'          ,
@@ -189,19 +190,25 @@ ALIAS = {
     'ccpcvdz'    : ('cc-pvdz.dat', 'cc-pCVDZ.dat'),
     'ccpcvtz'    : ('cc-pvtz.dat', 'cc-pCVTZ.dat'),
     'ccpcvqz'    : ('cc-pvqz.dat', 'cc-pCVQZ.dat'),
-    #'ccpcv5z'    : 'cc-pCV5Z.dat',
+    'ccpcv5z'    : 'cc-pCV5Z.dat',
     'ccpcv6z'    : 'cc-pCV6Z.dat',
-    'ccpwcvdz'   : ('cc-pvdz.dat', 'cc-pwCVDZ.dat'),
+    'ccpwcvdz'   : 'cc-pwCVDZ.dat',
     'ccpwcvtz'   : 'cc-pwCVTZ.dat',
     'ccpwcvqz'   : 'cc-pwCVQZ.dat',
     'ccpwcv5z'   : 'cc-pwCV5Z.dat',
-    'ccpwcvdzdk' : ('cc-pvdz.dat', 'cc-pwCVDZ-DK.dat'),
+    'ccpwcvdzdk' : 'cc-pwCVDZ-DK.dat',
     'ccpwcvtzdk' : 'cc-pwCVTZ-DK.dat',
     'ccpwcvqzdk' : 'cc-pwCVQZ-DK.dat',
+    'ccpwcv5zdk' : 'cc-pwCV5Z-DK.dat',
     'ccpwcvtzdk3': 'cc-pwCVTZ-DK3.dat',
     'ccpwcvqzdk3': 'cc-pwCVQZ-DK3.dat',
+    'augccpwcvdz': 'aug-cc-pwcvtz.dat',
+    'augccpwcvtz': 'aug-cc-pwcvtz.dat',
+    'augccpwcvqz': 'aug-cc-pwcvqz.dat',
+    'augccpwcv5z': 'aug-cc-pwcv5z.dat',
     'augccpwcvtzdk' : 'aug-cc-pwCVTZ-DK.dat',
     'augccpwcvqzdk' : 'aug-cc-pwCVQZ-DK.dat',
+    'augccpwcv5zdk' : 'aug-cc-pwcv5z-dk.dat',
     'augccpwcvtzdk3': 'aug-cc-pwCVTZ-DK3.dat',
     'augccpwcvqzdk3': 'aug-cc-pwCVQZ-DK3.dat',
     'dgaussa1cfit': 'DgaussA1_dft_cfit.dat',
@@ -218,10 +225,13 @@ ALIAS = {
     'lanl2tz'    : 'lanl2tz.dat'    ,
     'lanl08'     : 'lanl08.dat'     ,
     'sbkjc'      : 'sbkjc.dat'      ,
+    # Stuttgart ECP http://www.tc.uni-koeln.de/PP/clickpse.en.html
     'stuttgart'  : 'stuttgart_dz.dat',
     'stuttgartdz': 'stuttgart_dz.dat',
     'stuttgartrlc': 'stuttgart_dz.dat',
     'stuttgartrsc': 'stuttgart_rsc.dat',
+    'stuttgartrsc_mdf': 'cc-pvdz-pp.dat',
+    #'stuttgartrsc_mwb': 'stuttgart_rsc.dat',
     'ccpwcvdzpp' : 'cc-pwCVDZ-PP.dat',
     'ccpwcvtzpp' : 'cc-pwCVTZ-PP.dat',
     'ccpwcvqzpp' : 'cc-pwCVQZ-PP.dat',
@@ -252,6 +262,7 @@ ALIAS = {
     'augpcseg2' : 'aug-pcseg-2.dat',
     'augpcseg3' : 'aug-pcseg-3.dat',
     'augpcseg4' : 'aug-pcseg-4.dat',
+    'sarcdkh'   : 'sarc-dkh2.dat',
 # Burkatzki-Filippi-Dolg pseudo potential
     'bfdvdz'     : 'bfd_vdz.dat',
     'bfdvtz'     : 'bfd_vtz.dat',
@@ -278,6 +289,10 @@ ALIAS = {
     'augccpvtzoptri' : os.path.join('f12-basis', 'aug-cc-pVTZ-OptRI.dat' ),
     'augccpvqzoptri' : os.path.join('f12-basis', 'aug-cc-pVQZ-OptRI.dat' ),
     'augccpv5zoptri' : os.path.join('f12-basis', 'aug-cc-pV5Z-OptRI.dat' ),
+# All-electron basis designed for periodic calculations, available in Crystal
+    'pobtzvp'       :  'pob-tzvp.dat',
+    'pobtzvpp'      :  'pob-tzvpp.dat',
+    'crystalccpvdz' :  'crystal-cc-pvdz.dat',
 }
 
 def _is_pople_basis(basis):
@@ -295,8 +310,12 @@ def _parse_pople_basis(basis, symb):
         mbas = basis
         extension = ''
 
-    pathtmp = os.path.join('pople-basis',
-                           mbas[0]+'-'+mbas[1:].upper() + '-polarization-%s.dat')
+    # polarized functions are defined based on pople basis name prefix like
+    # 6-31G, 6-311G etc.
+    basename = mbas[0] + '-' + mbas[1:].upper()
+    basename = basename.replace('+', '').replace('*', '')
+    pathtmp = join('pople-basis',
+                            basename + '-polarization-%s.dat')
     def convert(s):
         if len(s) == 0:
             return []
@@ -326,6 +345,57 @@ def parse_ecp(string, symb=None):
     return parse_nwchem.parse_ecp(string, symb)
 parse_ecp.__doc__ = parse_nwchem.parse_ecp.__doc__
 
+def _convert_contraction(contr_string):
+    '''Parse contraction scheme string into a list
+
+    Args:
+        contr_string : str
+            Desired contraction scheme in conventional 'XsYpZd...' form,
+            where X, Y, Z are the total numbers of corresponding functions.
+    '''
+    import re
+    l_fun={'s': 0, 'p': 1, 'd': 2, 'f': 3, 'g': 4, 'h': 5, 'i': 6}
+    l_fun.update({chr(num): num-100 for num in range(ord('k'), ord('p'))})
+    num_contr = [int(digit) for digit in re.findall(r'\d+', contr_string)]
+    basis_labels = re.findall(r'[d-z]+', contr_string)
+    assert len(num_contr)==len(basis_labels)
+    basis_l = [l_fun[basis] for basis in basis_labels]
+    assert basis_l == sorted(basis_l), 'Contraction scheme ' + contr_string +\
+        ' has to be ordered by l'
+    assert len(basis_l) == len(set(basis_l)), 'Some of l in ' + contr_string +\
+        ' appears more than once'
+    # Prepare zero list to ensure the total length is equal to the highest l+1
+    contraction_list = [0] * (1+max(basis_l))
+    for (l, n_contr) in zip(basis_l, num_contr):
+        contraction_list[l] = n_contr
+    return contraction_list
+
+def _truncate(basis, contr_scheme, symb, split_name):
+    # keep only first n_keep contractions for each l
+    contr_b = []
+    b_index = 0
+    for l, n_keep in enumerate(contr_scheme):
+        n_saved = 0
+        if n_keep > 0:
+            for segm in basis:
+                segm_l = segm[0]
+                if segm_l == l:
+                    segm_len = len(segm[1][1:])
+                    n_save = min(segm_len, n_keep - n_saved)
+                    if n_save > 0:
+                        save_segm = [line[:n_save+1] for line in
+                                     segm[:][1:]]
+                        contr_b.append([l] + save_segm)
+                        n_saved += n_save
+            assert n_saved == n_keep, 'Only ' + str(n_saved) +\
+                ' l=' + str(l) + ' functions available for ' +\
+                symb + ' ' + split_name[0] + ', cannot truncate to ' + split_name[1]
+    return contr_b
+
+optimize_contraction = parse_nwchem.optimize_contraction
+to_general_contraction = parse_nwchem.to_general_contraction
+
+
 def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
 
@@ -352,6 +422,14 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
                 return parse_nwchem.parse(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
+    if '@' in name:
+        split_name = name.split('@')
+        assert len(split_name) == 2
+        name = split_name[0]
+        contr_scheme = _convert_contraction(split_name[1])
+    else:
+        contr_scheme = 'Full'
+
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
@@ -371,11 +449,11 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
     if 'dat' in basmod:
-        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb, optimize)
+        b = parse_nwchem.load(join(_BASIS_DIR, basmod), symb, optimize)
     elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
         b = []
         for f in basmod:
-            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb, optimize)
+            b += parse_nwchem.load(join(_BASIS_DIR, f), symb, optimize)
     else:
         if sys.version_info < (2,7):
             fp, pathname, description = imp.find_module(basmod, __path__)
@@ -385,6 +463,9 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         else:
             mod = importlib.import_module('.'+basmod, __package__)
             b = mod.__getattribute__(symb)
+
+    if contr_scheme != 'Full':
+        b = _truncate(b, contr_scheme, symb, split_name)
     return b
 
 def load_ecp(filename_or_basisname, symb):
@@ -402,7 +483,7 @@ def load_ecp(filename_or_basisname, symb):
     name = _format_basis_name(filename_or_basisname)
     if name in ALIAS:
         basmod = ALIAS[name]
-        return parse_nwchem.load_ecp(os.path.join(_BASIS_DIR, basmod), symb)
+        return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)
     else:
         return parse_ecp(filename_or_basisname, symb)
 

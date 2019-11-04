@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 import time
 import copy
 import numpy
-import scipy.misc
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -266,15 +265,22 @@ class AFTDF(lib.StreamObject):
 
         # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
+        self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
+        return self
+
+    def reset(self, cell=None):
+        if cell is not None:
+            self.cell = cell
+        self._rsh_df = {}
         return self
 
     def check_sanity(self):
@@ -308,7 +314,7 @@ class AFTDF(lib.StreamObject):
         if cell.dimension < 3:
             err = numpy.exp(-0.436392335*min(self.mesh[cell.dimension:]) - 2.99944305)
             err *= cell.nelectron
-            meshz = (numpy.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
+            meshz = pbcgto.cell._mesh_inf_vaccum(cell)
             mesh_guess[cell.dimension:] = int(meshz)
             if err > cell.precision*10:
                 logger.warn(self, 'mesh %s of AFTDF may not be enough to get '
@@ -317,7 +323,7 @@ class AFTDF(lib.StreamObject):
                             'Recommended mesh is %s.',
                             self.mesh, cell.precision, cell.dimension, err, mesh_guess)
             if (cell.mesh[cell.dimension:]/(1.*meshz) > 1.1).any():
-                meshz = (numpy.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
+                meshz = pbcgto.cell._mesh_inf_vaccum(cell)
                 logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
                             '(=%s) can result in an unnecessarily slow calculation.\n'
                             'For coulomb integral error of ~ %.2g Eh in %dD PBC, \n'
@@ -446,13 +452,18 @@ class AFTDF(lib.StreamObject):
     # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
     # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv=None):
+               with_j=True, with_k=True, omega=None, exxdiv=None):
+        if omega is not None:  # J/K for RSH functionals
+            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+                               with_j, with_k, omega, exxdiv)
+
         if kpts is None:
             if numpy.all(self.kpts == 0):
                 # Gamma-point calculation by default
                 kpts = numpy.zeros(3)
             else:
                 kpts = self.kpts
+        kpts = numpy.asarray(kpts)
 
         if kpts.shape == (3,):
             return aft_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
@@ -554,6 +565,19 @@ def _compensate_nuccell(mydf):
     nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
     nuccell._env = numpy.hstack((cell._env, chg_env))
     return nuccell
+
+def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
+                with_j=True, with_k=True, omega=None, exxdiv=None):
+    key = '%.6f' % omega
+    if key in dfobj._rsh_df:
+        rsh_df = dfobj._rsh_df[key]
+    else:
+        rsh_df = dfobj._rsh_df[key] = copy.copy(dfobj).reset()
+        logger.info(dfobj, 'Create RSH-%s object %s for omega=%s',
+                    dfobj.__class__.__name__, rsh_df, omega)
+    with rsh_df.cell.with_range_coulomb(omega):
+        return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                             omega=None, exxdiv=exxdiv)
 
 del(CUTOFF, PRECISION)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,14 +26,14 @@ from pyscf.prop.ssc import uhf as uhf_ssc
 
 
 class SpinSpinCoupling(uhf_ssc.SpinSpinCoupling):
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
-        logger.info(self, 'nuc_pair %s', self.nuc_pair)
-        logger.info(self, 'with Fermi-contact  %s', self.with_fc)
-        logger.info(self, 'with Fermi-contact + spin-dipole  %s', self.with_fcsd)
+        log.info('nuc_pair %s', self.nuc_pair)
+        log.info('with Fermi-contact  %s', self.with_fc)
+        log.info('with Fermi-contact + spin-dipole  %s', self.with_fcsd)
         if self.cphf:
             log.info('Solving MO10 eq with CPHF.')
             log.info('CPHF conv_tol = %g', self.conv_tol)
@@ -48,6 +48,12 @@ class SpinSpinCoupling(uhf_ssc.SpinSpinCoupling):
 
 SSC = SpinSpinCoupling
 
+from pyscf import lib
+from pyscf import dft
+dft.uks.UKS.SSC = dft.uks.UKS.SpinSpinCoupling = \
+dft.uks_symm.UKS.SSC = dft.uks_symm.UKS.SpinSpinCoupling = \
+        lib.class_as_method(SSC)
+
 if __name__ == '__main__':
     from pyscf import lib, gto, dft
 
@@ -58,7 +64,7 @@ if __name__ == '__main__':
                 basis='6-31g')
 
     mf1 = dft.UKS(mol).set(xc='b3lyp').run()
-    ssc = SSC(mf1)
+    ssc = mf1.SSC()
     ssc.with_fc = True
     ssc.with_fcsd = True
     jj = ssc.kernel()

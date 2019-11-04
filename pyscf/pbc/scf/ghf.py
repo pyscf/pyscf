@@ -31,7 +31,7 @@ from pyscf.pbc.scf import chkfile
 
 
 def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
-           with_j=True, with_k=True):
+           with_j=True, with_k=True, **kwargs):
     if cell is None: cell = mf.cell
     if dm is None: dm = mf.make_rdm1()
     if kpt is None: kpt = mf.kpt
@@ -84,10 +84,12 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
     get_jk = get_jk
     get_occ = mol_ghf.get_occ
 
-    def get_j(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None):
+    def get_j(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
+              **kwargs):
         return self.get_jk(cell, dm, hermi, kpt, kpts_band, True, False)[0]
 
-    def get_k(self, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None):
+    def get_k(self, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
+              **kwargs):
         return self.get_jk(cell, dm, hermi, kpt, kpts_band, False, True)[1]
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -110,19 +112,7 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_ghf.GHF.get_init_guess(self, cell, key)
-        if cell.dimension < 3:
-            if isinstance(dm, np.ndarray) and dm.ndim == 2:
-                ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
-            else:
-                ne = np.einsum('xij,ji', dm, self.get_ovlp(cell))
-            if abs(ne - cell.nelectron).sum() > 1e-7:
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne)
-                dm *= cell.nelectron / ne
+        dm = pbchf.normalize_dm_(self, dm)
         return dm
 
     def convert_from_(self, mf):

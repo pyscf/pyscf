@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ UCASCI (CASCI with non-degenerated alpha and beta orbitals, typically UHF
 orbitals)
 '''
 
+import sys
 import time
 from functools import reduce
 import numpy
@@ -36,6 +37,11 @@ from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
 LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
+
+if sys.version_info < (3,):
+    RANGE_TYPE = list
+else:
+    RANGE_TYPE = range
 
 # TODO, different ncas space for alpha and beta
 
@@ -133,14 +139,7 @@ class UCASCI(casci.CASCI):
             self.nelecas = (neleca, nelecb)
         else:
             self.nelecas = (nelecas[0], nelecas[1])
-        if ncore is None:
-            ncorelec = mol.nelectron - (self.nelecas[0]+self.nelecas[1])
-            if ncorelec % 2:
-                self.ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
-            else:
-                self.ncore = (ncorelec//2, ncorelec//2)
-        else:
-            self.ncore = (ncore[0], ncore[1])
+        self.ncore = ncore
 
         self.fcisolver = fci.direct_uhf.FCISolver(mol)
         self.fcisolver.lindep = getattr(__config__,
@@ -159,8 +158,28 @@ class UCASCI(casci.CASCI):
 
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = lib.logger.Logger(self.stdout, self.verbose)
+    @property
+    def ncore(self):
+        if self._ncore is None:
+            ncorelec = self.mol.nelectron - sum(self.nelecas)
+            if ncorelec % 2:
+                ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
+            else:
+                ncore = (ncorelec//2, ncorelec//2)
+            return ncore
+        else:
+            return self._ncore
+    @ncore.setter
+    def ncore(self, x):
+        if x is None:
+            self._ncore = x
+        elif isinstance(x, (int, numpy.integer)):
+            self._ncore = (x, x)
+        else:
+            self._ncore = (x[0], x[1])
+
+    def dump_flags(self, verbose=None):
+        log = lib.logger.new_logger(self, verbose)
         log.info('')
         log.info('******** UHF-CASCI flags ********')
         nmo = self.mo_coeff[0].shape[1]
@@ -307,7 +326,7 @@ class UCASCI(casci.CASCI):
         mocas_b = mo_coeff[1][:,ncore[1]:ncore[1]+ncas]
 
         label = self.mol.ao_labels()
-        if (isinstance(ci, (list, tuple)) and
+        if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
             not isinstance(self.fcisolver, addons.StateAverageFCISolver)):
             log.warn('Mulitple states found in UCASCI solver. Density '
                      'matrix of first state is generated in .analyze() function.')
@@ -359,7 +378,7 @@ class UCASCI(casci.CASCI):
 
             if getattr(self.fcisolver, 'large_ci', None) and ci is not None:
                 log.info('\n** Largest CI components **')
-                if isinstance(ci, (tuple, list)):
+                if isinstance(ci, (list, tuple, RANGE_TYPE)):
                     for i, state in enumerate(ci):
                         log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
                         res = self.fcisolver.large_ci(state, self.ncas, self.nelecas,

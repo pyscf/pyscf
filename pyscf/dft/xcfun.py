@@ -26,6 +26,7 @@ import ctypes
 import math
 import numpy
 from pyscf import lib
+from pyscf.dft.xc.utils import remove_dup, format_xc_code
 
 _itrf = lib.load_library('libxcfun_itrf')
 
@@ -150,7 +151,6 @@ XC = XC_CODES = {
 'B97XC'         : 'B97X + B97C + HF*0.1943',
 'B97_1XC'       : 'B97_1X + B97_1C + HF*0.21',
 'B97_2XC'       : 'B97_2X + B97_2C + HF*0.21',
-'M05XC'         : '.28*HF + .72*M05X + M05C',
 'TPSSH'         : '0.1*HF + 0.9*TPSSX + TPSSC',
 'TF'            : 'TFK',
 }
@@ -206,6 +206,10 @@ XC_ALIAS = {
 #    'SCAN0'             : 'SCAN0,SCAN',
 #    'PBEOP'             : 'PBE,OPPBE',
 #    'BOP'               : 'B88,OPB88',
+    'M05'               : '.28*HF + .72*M05X + M05C',
+    'M06'               : '.27*HF +     M06X + M06C',
+    #'M05_2X'            : '.56*HF + .44*M05X2X + M06C2X',
+    #'M06_2X'            : '.54*HF +     M06X2X + M06C2X',
 }
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
@@ -341,7 +345,7 @@ def parse_xc(description):
       correlation functional part is the same to putting "HF" in exchange
       part.
     * String "RSH" means range-separated operator. Its format is
-      RSH(alpha; beta; omega).  Another way to input RSH is to use keywords
+      RSH(omega, alpha, beta).  Another way to input RSH is to use keywords
       SR_HF and LR_HF: "SR_HF(0.1) * alpha_plus_beta" and "LR_HF(0.1) *
       alpha" where the number in parenthesis is the value of omega.
     * Be careful with the convention on GGA functional, in which the LDA
@@ -364,7 +368,7 @@ def parse_xc(description):
         else:
             raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
-    def parse_token(token, suffix):
+    def parse_token(token, suffix, search_xc_alias=False):
         if token:
             if token[0] == '-':
                 sign = -1
@@ -401,12 +405,14 @@ def parse_xc(description):
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
-                if key in XC_CODES:
+                if search_xc_alias and key in XC_ALIAS:
+                    x_id = XC_ALIAS[key]
+                elif key in XC_CODES:
                     x_id = XC_CODES[key]
                 elif key+suffix in XC_CODES:
                     x_id = XC_CODES[key+suffix]
                 else:
-                    raise KeyError('Unknown XC key %s' % key)
+                    raise KeyError('Unknown %s functional  %s' % (suffix, key))
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
 # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
@@ -414,25 +420,11 @@ def parse_xc(description):
                         assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
-                    raise NotImplementedError(key)
+                    raise NotImplementedError('Unknown %s functional  %s' % (suffix, key))
                 else:
                     fn_facs.append((x_id, fac))
-    def remove_dup(fn_facs):
-        fn_ids = []
-        facs = []
-        n = 0
-        for key, val in fn_facs:
-            if key in fn_ids:
-                facs[fn_ids.index(key)] += val
-            else:
-                fn_ids.append(key)
-                facs.append(val)
-                n += 1
-        return list(zip(fn_ids, facs))
 
-    description = description.replace(' ','').upper()
-    if description in XC_ALIAS:
-        description = XC_ALIAS[description]
+    description = format_xc_code(description)
 
     if '-' in description:  # To handle e.g. M06-L
         for key in _NAME_WITH_DASH:
@@ -441,13 +433,13 @@ def parse_xc(description):
 
     if ',' in description:
         x_code, c_code = description.split(',')
-        for token in x_code.replace('-', '+-').split('+'):
+        for token in x_code.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'X')
-        for token in c_code.replace('-', '+-').split('+'):
+        for token in c_code.replace('-', '+-').replace(';+', ';').split('+'):
             parse_token(token, 'C')
     else:
-        for token in description.replace('-', '+-').split('+'):
-            parse_token(token, 'XC')
+        for token in description.replace('-', '+-').replace(';+', ';').split('+'):
+            parse_token(token, 'XC', search_xc_alias=True)
     if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
         hyb[1] = 0
     return hyb, remove_dup(fn_facs)
@@ -460,14 +452,16 @@ _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
                    'M06-2X' : 'M062X',}
 
 
-def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
     r'''Interface to call xcfun library to evaluate XC functional, potential
     and functional derivatives.
 
     See also :func:`pyscf.dft.libxc.eval_xc`
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    return _eval_xc(fn_facs, rho, spin, relativity, deriv, verbose)
+    if omega is not None:
+        hyb[2] = float(omega)
+    return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
 
 XC_D0 = 0
 XC_D1 = 1
@@ -775,7 +769,7 @@ XC_D0000021 = 117
 XC_D0000012 = 118
 XC_D0000003 = 119
 
-def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
+def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv < 4)
     if spin == 0:
         rho_u = rho_d = numpy.asarray(rho, order='C')
@@ -792,6 +786,12 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
+    if hyb[2] != 0:
+        # Current implementation does not support different omegas for
+        # different functionals
+        omega = [hyb[2]] * len(facs)
+    else:
+        omega = [0] * len(facs)
 
     n = len(fn_ids)
     if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
@@ -816,7 +816,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     if n > 0:
         _itrf.XCFUN_eval_xc(ctypes.c_int(n),
-                            (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
+                            (ctypes.c_int*n)(*fn_ids),
+                            (ctypes.c_double*n)(*facs),
+                            (ctypes.c_double*n)(*omega),
                             ctypes.c_int(spin),
                             ctypes.c_int(deriv), ctypes.c_int(ngrids),
                             rho_u.ctypes.data_as(ctypes.c_void_p),
@@ -870,7 +872,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 # MLGGA
     elif nvar == 3:
         if deriv > 0:
-            vxc = (outbuf[1], outbuf[2], numpy.zeros_like(outbuf[1]), outbuf[3])
+            vxc = (outbuf[1], outbuf[2], None, outbuf[3])
         if deriv > 1:
             fxc = (outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
                    None, outbuf[XC_D002], None, outbuf[XC_D101], None, None, outbuf[XC_D011])
@@ -932,8 +934,11 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
             'LDA' or 'GGA' or 'MGGA'
         hyb : float
             hybrid functional coefficient
-        rsh : float
-            coefficients for range-separated hybrid functional
+        rsh : a list of three floats
+            coefficients (omega, alpha, beta) for range-separated hybrid functional.
+            omega is the exponent factor in attenuated Coulomb operator e^{-omega r_{12}}/r_{12}
+            alpha is the coefficient for long-range part, hybrid coefficient
+            can be obtained by alpha + beta
 
     Examples:
 
@@ -960,6 +965,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
         ni.eval_xc = lambda xc_code, rho, *args, **kwargs: \
                 eval_xc(description, rho, *args, **kwargs)
         ni.hybrid_coeff = lambda *args, **kwargs: hybrid_coeff(description)
+        ni.rsh_coeff = lambda *args: rsh_coeff(description)
         ni._xc_type = lambda *args: xc_type(description)
 
     elif callable(description):

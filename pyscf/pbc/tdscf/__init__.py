@@ -65,19 +65,13 @@ def TDDFT(mf):
     if isinstance(mf, scf.uhf.UHF):
         #mf = scf.addons.convert_to_uhf(mf)
         if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return uks.TDDFT(mf)
-            else:
-                return uks.TDDFTNoHybrid(mf)
+            return uks.tddft(mf)
         else:
             return uhf.TDHF(mf)
     else:
         #mf = scf.addons.convert_to_rhf(mf)
         if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return rks.TDDFT(mf)
-            else:
-                return rks.TDDFTNoHybrid(mf)
+            return rks.tddft(mf)
         else:
             return rhf.TDHF(mf)
 
@@ -107,18 +101,12 @@ def KTDDFT(mf):
     from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
         if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return kuks.TDDFT(mf)
-            else:
-                return kuks.TDDFTNoHybrid(mf)
+            return kuks.tddft(mf)
         else:
             return kuhf.TDHF(mf)
     else:
         if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return krks.TDDFT(mf)
-            else:
-                return krks.TDDFTNoHybrid(mf)
+            return krks.tddft(mf)
         else:
             return krhf.TDHF(mf)
 

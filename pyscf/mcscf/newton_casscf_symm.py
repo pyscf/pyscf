@@ -31,7 +31,6 @@ class CASSCF(newton_casscf.CASSCF):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         newton_casscf.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
         assert(self.mol.symmetry)
-        #self.fcisolver = fci.solver(self.mol, self.nelecas[0]==self.nelecas[1], True)
         self.fcisolver = fci.solver(self.mol, False, True)
         self.fcisolver.max_cycle = 25
         #self.fcisolver.max_space = 25

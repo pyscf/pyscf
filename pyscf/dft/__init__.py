@@ -27,10 +27,12 @@ Simple usage::
 
 try:
     from pyscf.dft import libxc
+    XC = libxc.XC
 except (ImportError, OSError):
     pass
 try:
     from pyscf.dft import xcfun
+    XC = xcfun.XC
 except (ImportError, OSError):
     pass
 #from pyscf.dft import xc
@@ -58,6 +60,7 @@ def KS(mol, *args):
         return RKS(mol, *args)
     else:
         return UKS(mol, *args)
+DFT = KS
 
 def RKS(mol, *args):
     if mol.nelectron == 1:

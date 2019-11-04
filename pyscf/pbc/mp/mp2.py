@@ -86,3 +86,11 @@ def _gen_ao2mofn(mf):
     def ao2mofn(mo_coeff):
         return with_df.ao2mo(mo_coeff, kpt, compact=False)
     return ao2mofn
+
+
+from pyscf.pbc import scf
+scf.hf.RHF.MP2 = lib.class_as_method(RMP2)
+scf.uhf.UHF.MP2 = lib.class_as_method(UMP2)
+scf.ghf.GHF.MP2 = lib.class_as_method(GMP2)
+scf.rohf.ROHF.MP2 = None
+

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@
 from pyscf.prop.nmr import rhf
 from pyscf.prop.nmr import uhf
 from pyscf.prop.nmr import dhf
-from pyscf.prop.nmr import rks
-from pyscf.prop.nmr import uks
 
 RHF = rhf.NMR
 UHF = uhf.NMR
 DHF = dhf.NMR
-RKS = rks.NMR
-UKS = uks.NMR
+
+try:
+    from pyscf.prop.nmr import rks
+    from pyscf.prop.nmr import uks
+    RKS = rks.NMR
+    UKS = uks.NMR
+except ImportError:
+    pass

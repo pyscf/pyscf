@@ -228,7 +228,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         block_conf = [l for l in block_conf if 'prefix' not in l]
         block_conf = ''.join(block_conf)
 
-    with h5py.File(nevpt_integral_file) as fh5:
+    with h5py.File(nevpt_integral_file, 'a') as fh5:
         if 'dmrg.conf' in fh5:
             del(fh5['dmrg.conf'])
         fh5['dmrg.conf'] = block_conf

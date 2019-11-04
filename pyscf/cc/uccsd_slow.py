@@ -23,6 +23,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
+from pyscf.mp import ump2
 from pyscf.cc import gintermediates as imd
 
 #einsum = np.einsum
@@ -81,7 +82,7 @@ def update_amps(cc, t1, t2, eris):
     t2new -= (tmp - tmp.transpose(0,1,3,2))
 
     mo_e = eris.fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:] - cc.level_shift
     eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
     t1new /= eia
     t2new /= eijab
@@ -96,6 +97,9 @@ def energy(cc, t1, t2, eris):
     e += 0.25*np.einsum('ijab,ijab', t2, eris.oovv)
     e += 0.5 *np.einsum('ia,jb,ijab', t1, t1, eris.oovv)
     return e.real
+
+
+get_frozen_mask = ump2.get_frozen_mask
 
 
 class UCCSD(ccsd.CCSD):
@@ -117,6 +121,7 @@ class UCCSD(ccsd.CCSD):
 
     get_nocc = uccsd.get_nocc
     get_nmo = uccsd.get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -154,7 +159,7 @@ class UCCSD(ccsd.CCSD):
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
-        return _ChemistsERIs(self, mo_coeff)
+        return _PhysicistsERIs(self, mo_coeff)
 
     def update_amps(self, t1, t2, eris):
         return update_amps(self, t1, t2, eris)
@@ -476,7 +481,7 @@ class UCCSD(ccsd.CCSD):
         return t1s, t2s
 
 
-class _ChemistsERIs:
+class _PhysicistsERIs:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())

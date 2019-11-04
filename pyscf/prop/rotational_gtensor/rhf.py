@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -143,8 +143,8 @@ def _safe_solve(a, b):
 class RotationalGTensor(rhf_mag.Magnetizability):
     '''HF rotational g-tensors'''
 
-    def dump_flags(self):
-        rhf_mag.Magnetizability.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rhf_mag.Magnetizability.dump_flags(self, verbose)
         if self.gauge_orig is not None:
             logger.warn(self, 'Rotational g-tensor with '
                         'perturbation-independent basis is in testing.\n'
@@ -160,7 +160,7 @@ class RotationalGTensor(rhf_mag.Magnetizability):
         mag_dia = self.dia(self.gauge_orig)
         mag_para = self.para(self.gauge_orig)
         e_nuc = nuc(self.mol)
-        e2 = mag_para + mag_dia + nuc
+        e2 = mag_para + mag_dia + e_nuc
 
         logger.timer(self, 'Rotational g-tensors', *cput0)
         if self.verbose >= logger.NOTE:
@@ -170,11 +170,14 @@ class RotationalGTensor(rhf_mag.Magnetizability):
             #See JCP, 105, 2804
             #_write(self.stdout, mag_dia, 'dia-magnetic contributions (au)')
             #_write(self.stdout, mag_para, 'para-magnetic contributions (au)')
-            _write(self.stdout, nuc, 'nuclear contributions (au)')
+            _write(self.stdout, e_nuc, 'nuclear contributions (au)')
         return e2
 
     dia = dia
     para = para
+
+from pyscf import scf
+scf.hf.RHF.RotationalGTensor = lib.class_as_method(RotationalGTensor)
 
 
 if __name__ == '__main__':
@@ -190,7 +193,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.RHF(mol).run()
-    rotg = RotationalGTensor(mf)
+    rotg = mf.RotationalGTensor()
     m = rotg.kernel()
     print(m[0,0] - 0.740149929639848)
 

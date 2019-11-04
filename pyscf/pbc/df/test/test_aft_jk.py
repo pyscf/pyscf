@@ -26,12 +26,16 @@ cell.a = numpy.eye(3) * 2.5
 cell.mesh = [21] * 3
 cell.build()
 
+def tearDownModule():
+    global cell
+    del cell
+
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_jk(self):
         mf0 = scf.RHF(cell)
         dm = mf0.get_init_guess()
@@ -41,8 +45,8 @@ class KnowValues(unittest.TestCase):
         vj, vk = mydf.get_jk(dm, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 3.0455881073561235, 9)
-        self.assertAlmostEqual(ek1, 7.7905480251964629, 9)
+        self.assertAlmostEqual(ej1, 3.0455881073561235*(4./3.66768353356587)**2, 9)
+        self.assertAlmostEqual(ek1, 7.7905480251964629*(4./3.66768353356587)**2, 9)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()

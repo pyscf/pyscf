@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -67,8 +67,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
-                                  mycc.amplitudes_to_vector(t1, t2))
+        tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
+        tmpvec -= mycc.amplitudes_to_vector(t1, t2)
+        normt = numpy.linalg.norm(tmpvec)
+        tmpvec = None
         if mycc.iterative_damping < 1.0:
             alpha = mycc.iterative_damping
             t1new = (1-alpha) * t1 + alpha * t1new
@@ -123,13 +125,14 @@ def update_amps(mycc, t1, t2, eris):
     fwVOov, fwVooV = _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap)
     time1 = log.timer_debug1('ovvv', *time1)
 
+    woooo = numpy.asarray(eris.oooo).transpose(0,2,1,3).copy()
+
     unit = nocc**2*nvir*7 + nocc**3 + nocc*nvir**2
-    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - mem_now)
     blksize = min(nvir, max(BLKMIN, int((max_memory*.9e6/8-nocc**4)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-
-    woooo = numpy.asarray(eris.oooo).transpose(0,2,1,3).copy()
 
     for p0, p1 in lib.prange(0, nvir, blksize):
         wVOov = fwVOov[p0:p1]
@@ -712,6 +715,35 @@ def restore_from_diis_(mycc, diis_file, inplace=True):
         mycc.diis = adiis
     return mycc
 
+def get_t1_diagnostic(t1):
+    '''Returns the t1 amplitude norm, normalized by number of correlated electrons.'''
+    nelectron = 2 * t1.shape[0]
+    return numpy.sqrt(numpy.linalg.norm(t1)**2 / nelectron)
+
+def get_d1_diagnostic(t1):
+    '''D1 diagnostic given in
+
+        Janssen, et. al Chem. Phys. Lett. 290 (1998) 423
+    '''
+    f = lambda x: numpy.sqrt(numpy.sort(numpy.abs(x[0])))[-1]
+    d1norm_ij = f(numpy.linalg.eigh(numpy.einsum('ia,ja->ij',t1,t1)))
+    d1norm_ab = f(numpy.linalg.eigh(numpy.einsum('ia,ib->ab',t1,t1)))
+    d1norm = max(d1norm_ij, d1norm_ab)
+    return d1norm
+
+def get_d2_diagnostic(t2):
+    '''D2 diagnostic given in
+
+        Nielsen, et. al Chem. Phys. Lett. 310 (1999) 568
+
+    Note: This is currently only defined in the literature for restricted
+    closed-shell systems.
+    '''
+    f = lambda x: numpy.sqrt(numpy.sort(numpy.abs(x[0])))[-1]
+    d2norm_ij = f(numpy.linalg.eigh(numpy.einsum('ikab,jkab->ij',t2,t2)))
+    d2norm_ab = f(numpy.linalg.eigh(numpy.einsum('ijac,ijbc->ab',t2,t2)))
+    d2norm = max(d2norm_ij, d2norm_ab)
+    return d2norm
 
 def as_scanner(cc):
     '''Generating a scanner/solver for CCSD PES.
@@ -750,11 +782,23 @@ def as_scanner(cc):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            for key in ('with_df', 'with_solvent'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
+            if self.t2 is not None:
+                last_size = self.vector_size()
+            else:
+                last_size = 0
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
+            if last_size != self.vector_size():
+                self.t1 = self.t2 = None
             self.kernel(self.t1, self.t2, **kwargs)
             return self.e_tot
     return CCSD_Scanner(cc)
@@ -908,8 +952,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
@@ -1064,7 +1108,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=False)
+        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in MO space.  The density matrix is
@@ -1136,6 +1180,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vec, nmo, nocc)
 
+    def vector_size(self, nmo=None, nocc=None):
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
+        nvir = nmo - nocc
+        nov = nocc * nvir
+        return nov + nov*(nov+1)//2
+
     def dump_chk(self, t1_t2=None, frozen=None, mo_coeff=None, mo_occ=None):
         if not self.chkfile:
             return self
@@ -1169,6 +1220,19 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def nuc_grad_method(self):
         from pyscf.grad import ccsd
         return ccsd.Gradients(self)
+
+    def get_t1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        return get_t1_diagnostic(t1)
+
+    def get_d1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        return get_d1_diagnostic(t1)
+
+    def get_d2_diagnostic(self, t2=None):
+        if t2 is None: t2 = self.t2
+        return get_d2_diagnostic(t2)
+
 
 CC = RCCSD = CCSD
 
@@ -1397,12 +1461,6 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     nvir_pair = nvir*(nvir+1)//2
     orbo = mo_coeff[:,:nocc]
     orbv = mo_coeff[:,nocc:]
-    oooo = numpy.zeros((nocc*nocc,nocc*nocc))
-    ovoo = numpy.zeros((nocc*nvir,nocc*nocc))
-    oovv = numpy.zeros((nocc*nocc,nvir*nvir))
-    ovvo = numpy.zeros((nocc*nvir,nvir*nocc))
-    ovvv = numpy.zeros((nocc*nvir,nvir_pair))
-    vvvv = numpy.zeros((nvir_pair,nvir_pair))
 
     naux = mycc._scf.with_df.get_naoaux()
     Loo = numpy.empty((naux,nocc,nocc))

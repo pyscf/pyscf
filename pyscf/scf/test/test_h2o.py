@@ -313,7 +313,10 @@ class KnownValues(unittest.TestCase):
 
         mf_scanner = dft.RKS(molsym).set(xc='bp86').as_scanner()
         self.assertAlmostEqual(mf_scanner(molsym), -76.385043416002361, 8)
-        self.assertAlmostEqual(mf_scanner(mol1), -76.372784697245777, 8)
+        eref = dft.RKS(mol1).set(xc='bp86').kernel()
+        e1 = mf_scanner(mol1)
+        self.assertAlmostEqual(e1, -76.372784697245777, 8)
+        self.assertAlmostEqual(e1, eref, 8)
 
         # Test init_guess_by_chkfile for stretched geometry and different basis set
         mol1.atom = '''
@@ -322,7 +325,7 @@ class KnownValues(unittest.TestCase):
         H   0.   0.957   0.587'''
         mol1.basis = 'ccpvdz'
         mol1.build(0,0)
-        self.assertAlmostEqual(mf_scanner(mol1), -76.273052274103648, 8)
+        self.assertAlmostEqual(mf_scanner(mol1), -76.273052274103648, 7)
 
     def test_init(self):
         from pyscf import dft

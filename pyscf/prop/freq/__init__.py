@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,10 +15,13 @@
 
 from pyscf.prop.freq import rhf
 from pyscf.prop.freq import uhf
-from pyscf.prop.freq import rks
-from pyscf.prop.freq import uks
-
 RHF = rhf.Freq
 UHF = uhf.Freq
-RKS = rks.Freq
-UKS = uks.Freq
+
+try:
+    from pyscf.prop.freq import rks
+    from pyscf.prop.freq import uks
+    RKS = rks.Freq
+    UKS = uks.Freq
+except ImportError:
+    pass

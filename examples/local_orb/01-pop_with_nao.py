@@ -6,6 +6,7 @@ Mulliken population analysis with NAO
 
 import numpy
 from pyscf import gto, scf, lo
+from functools import reduce
 
 x = .63
 mol = gto.M(atom=[['C', (0, 0, 0)],

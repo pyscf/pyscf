@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from pyscf import lib
 from pyscf.tdscf import uks
 from pyscf.pbc.tdscf.uhf import TDA
 from pyscf.pbc.tdscf.uhf import TDHF as TDDFT
@@ -33,4 +34,19 @@ class TDDFTNoHybrid(uks.TDDFTNoHybrid):
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+def tddft(mf):
+    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    if mf._numint.libxc.is_hybrid_xc(mf.xc):
+        return TDDFT(mf)
+    else:
+        return TDDFTNoHybrid(mf)
+
+from pyscf import lib
+from pyscf.pbc import dft
+dft.uks.UKS.TDA           = lib.class_as_method(TDA)
+dft.uks.UKS.TDHF          = None
+dft.uks.UKS.TDDFT         = tddft
+#dft.rks.RKS.dTDA          = lib.class_as_method(dTDA)
+#dft.rks.RKS.dRPA          = lib.class_as_method(dRPA)
 

@@ -23,8 +23,11 @@ import ctypes
 import warnings
 import numpy as np
 import scipy.linalg
-import scipy.misc
-import scipy.special
+try:
+  from scipy.special import factorial2
+except:
+  from scipy.misc import factorial2
+from scipy.special import erf, erfc, erfcx
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
@@ -52,6 +55,7 @@ EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
+    long = int
 
 libpbc = _pbcintor.libpbc
 
@@ -183,14 +187,14 @@ def pack(cell):
     '''
     cldic = mole.pack(cell)
     cldic['a'] = cell.a
-    cldic['mesh'] = cell.mesh
     cldic['precision'] = cell.precision
     cldic['pseudo'] = cell.pseudo
     cldic['ke_cutoff'] = cell.ke_cutoff
-    cldic['rcut'] = cell.rcut
     cldic['exp_to_discard'] = cell.exp_to_discard
-    cldic['ew_eta'] = cell.ew_eta
-    cldic['ew_cut'] = cell.ew_cut
+    cldic['_mesh'] = cell._mesh
+    cldic['_rcut'] = cell._rcut
+    cldic['_ew_eta'] = cell._ew_eta
+    cldic['_ew_cut'] = cell._ew_cut
     cldic['dimension'] = cell.dimension
     cldic['low_dim_ft_type'] = cell.low_dim_ft_type
     return cldic
@@ -467,7 +471,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     # than the energy cutoff for ERIs.  The estimated error is roughly
     #     error ~ 64 pi^3 c^2 /((2l+1)!!(4a)^l) (2Ecut)^{l+.5} e^{-Ecut/4a}
     # log_k0 = 3 + np.log(alpha) / 2
-    # l2fac2 = scipy.misc.factorial2(l*2+1)
+    # l2fac2 = factorial2(l*2+1)
     # log_rest = np.log(precision*l2fac2*(4*alpha)**l / (16*np.pi**2*c**2))
     # Enuc_cut = 4*alpha * (log_k0*(2*l+1) - log_rest)
     # Enuc_cut[Enuc_cut <= 0] = .5
@@ -479,7 +483,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     # summation which largely reduces the requirements to the energy cutoff.
     # In practice, the cutoff estimation for ERIs as below should be enough.
     log_k0 = 3 + np.log(alpha) / 2
-    l2fac2 = scipy.misc.factorial2(l*2+1)
+    l2fac2 = factorial2(l*2+1)
     log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (128*np.pi**4*c**4))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     Ecut[Ecut <= 0] = .5
@@ -507,8 +511,8 @@ def error_for_ke_cutoff(cell, ke_cutoff):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        fac = (256*np.pi**4*cs**4 * scipy.misc.factorial2(l*4+3)
-               / scipy.misc.factorial2(l*2+1)**2)
+        fac = (256*np.pi**4*cs**4 * factorial2(l*4+3)
+               / factorial2(l*2+1)**2)
         efac = np.exp(-ke_cutoff/(2*es))
         err1 = .5*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
         errmax = max(errmax, err1.max())
@@ -742,8 +746,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     r = np.sqrt(np.einsum('Lijx,Lijx->Lij', rLij, rLij))
     rLij = None
     r[r<1e-16] = 1e200
-    ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs,
-                            scipy.special.erfc(ew_eta * r) / r)
+    ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs, erfc(ew_eta * r) / r)
 
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
@@ -777,18 +780,17 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         def fn(eta,Gnorm,z):
             Gnorm_z = Gnorm*z
             large_idx = Gnorm_z > 20.0
-            Gnorm_z[large_idx] = 0
+            ret = np.zeros_like(Gnorm_z)
+            x = Gnorm/2./eta + eta*z
             with np.errstate(over='ignore'):
-                ret = np.exp(Gnorm_z)*scipy.special.erfc(Gnorm/2./eta + eta*z)
-            if len(large_idx) > 0:
-                x = Gnorm[large_idx]/2./eta + eta*z
-                ret[large_idx] = np.exp(Gnorm[large_idx]*z-x**2) * scipy.special.erfcx(x)
+                erfcx = erfc(x)
+                ret[~large_idx] = np.exp(Gnorm_z[~large_idx]) * erfcx[~large_idx]
+                ret[ large_idx] = np.exp((Gnorm*z-x**2)[large_idx]) * erfcx[large_idx]
             return ret
         def gn(eta,Gnorm,z):
             return np.pi/Gnorm*(fn(eta,Gnorm,z) + fn(eta,Gnorm,-z))
         def gn0(eta,z):
-            return -2*np.pi*(z*scipy.special.erf(eta*z) + np.exp(-(eta*z)**2)/eta/np.sqrt(np.pi))
-        ewg = 0.0
+            return -2*np.pi*(z*erf(eta*z) + np.exp(-(eta*z)**2)/eta/np.sqrt(np.pi))
         b = cell.reciprocal_vectors()
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
         # Perform the reciprocal space summation over  all reciprocal vectors
@@ -798,24 +800,12 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         absG2 = absG2[planarG2_idx]
         absG = absG2**(0.5)
         # Performing the G != 0 summation.
-        for i,ri in enumerate(coords):
-            qi = chargs[i]
-            for j,rj in enumerate(coords):
-                rij = rj - ri
-                qij = qi*chargs[j]
-
-                Gdotr = np.dot(Gv,rij.T)
-                val = qij*np.cos(Gdotr)*gn(ew_eta,absG,rij[2])
-                ewg += val.sum()
+        rij = coords[:,None,:] - coords[None,:,:]
+        Gdotr = np.einsum('ijx,gx->ijg', rij, Gv)
+        ewg = np.einsum('i,j,ijg,ijg->', chargs, chargs, np.cos(Gdotr),
+                        gn(ew_eta,absG,rij[:,:,2:3]))
         # Performing the G == 0 summation.
-        for i,vi in enumerate(coords):
-            qi = chargs[i]
-            for j,vj in enumerate(coords):
-                rij = vj - vi
-                qij = qi*chargs[j]
-
-                val = qij*gn0(ew_eta,rij[2])
-                ewg += val.sum()
+        ewg += np.einsum('i,j,ij->', chargs, chargs, gn0(ew_eta,rij[:,:,2]))
         ewg *= inv_area*0.5
 
     else:
@@ -996,6 +986,12 @@ def tot_electrons(cell, nkpts=1):
     nelectron = int(nelectron+0.5)
     return nelectron
 
+def _mesh_inf_vaccum(cell):
+    #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
+    meshz = (np.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
+    # meshz has to be even number due to the symmetry on z+ and z-
+    return int(meshz*.5 + .999) * 2
+
 
 class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
@@ -1042,7 +1038,6 @@ class Cell(mole.Mole):
     def __init__(self, **kwargs):
         mole.Mole.__init__(self, **kwargs)
         self.a = None # lattice vectors, (a1,a2,a3)
-        self.mesh = None
         self.ke_cutoff = None # if set, defines a spherical cutoff
                               # of fourier components, with .5 * G**2 < ke_cutoff
         self.pseudo = None
@@ -1054,14 +1049,47 @@ class Cell(mole.Mole):
 
 ##################################################
 # These attributes are initialized by build function if not given
+        self.mesh = None
         self.ew_eta = None
         self.ew_cut = None
         self.rcut = None
 
 ##################################################
 # don't modify the following variables, they are not input arguments
-        keys = set(('precision', 'exp_to_discard'))
+        keys = ('precision', 'exp_to_discard')
         self._keys = self._keys.union(self.__dict__).union(keys)
+
+    @property
+    def mesh(self):
+        return self._mesh
+    @mesh.setter
+    def mesh(self, x):
+        self._mesh = x
+        self._mesh_from_build = False
+
+    @property
+    def rcut(self):
+        return self._rcut
+    @rcut.setter
+    def rcut(self, x):
+        self._rcut = x
+        self._rcut_from_build = False
+
+    @property
+    def ew_eta(self):
+        return self._ew_eta
+    @ew_eta.setter
+    def ew_eta(self, val):
+        self._ew_eta = val
+        self._ew_from_build = False
+
+    @property
+    def ew_cut(self):
+        return self._ew_cut
+    @ew_cut.setter
+    def ew_cut(self, val):
+        self._ew_cut = val
+        self._ew_from_build = False
 
     if not getattr(__config__, 'pbc_gto_cell_Cell_verify_nelec', False):
 # nelec method defined in Mole class raises error when the attributes .spin
@@ -1077,6 +1105,62 @@ class Cell(mole.Mole):
                 warnings.warn('Electron number %d and spin %d are not consistent '
                               'in unit cell\n' % (ne, self.spin))
             return nalpha, nbeta
+
+    def __getattr__(self, key):
+        '''To support accessing methods (cell.HF, cell.KKS, cell.KUCCSD, ...)
+        from Cell object.
+        '''
+        if key[:2] == '__':  # Skip Python builtins
+            raise AttributeError('Cell object has no attribute %s' % key)
+        elif key in ('_ipython_canary_method_should_not_exist_',
+                   '_repr_mimebundle_'):
+            # https://github.com/mewwts/addict/issues/26
+            # https://github.com/jupyter/notebook/issues/2014
+            raise AttributeError
+
+        # Import all available modules. Some methods are registered to other
+        # classes/modules when importing modules in __all__.
+        from pyscf.pbc import __all__
+        from pyscf.pbc import scf, dft
+        from pyscf.dft import XC
+        for mod in (scf, dft):
+            method = getattr(mod, key, None)
+            if callable(method):
+                return method(self)
+
+        if key[0] == 'K':  # with k-point sampling
+            if 'TD' in key[:4]:
+                if key in ('KTDHF', 'KTDA'):
+                    mf = scf.KHF(self)
+                else:
+                    mf = dft.KKS(self)
+                    xc = key.split('TD', 1)[1]
+                    if xc in XC:
+                        mf.xc = xc
+                        key = 'KTDDFT'
+            else:
+                mf = scf.KHF(self)
+            # Remove prefix 'K' because methods are registered without the leading 'K'
+            key = key[1:]
+        else:
+            if 'TD' in key[:3]:
+                if key in ('TDHF', 'TDA'):
+                    mf = scf.HF(self)
+                else:
+                    mf = dft.KS(self)
+                    xc = key.split('TD', 1)[1]
+                    if xc in XC:
+                        mf.xc = xc
+                        key = 'TDDFT'
+            else:
+                mf = scf.HF(self)
+
+        method = getattr(mf, key, None)
+        if method is None:
+            raise AttributeError('Cell object has no attribute %s' % key)
+
+        mf.run()
+        return method
 
     tot_electrons = tot_electrons
 
@@ -1149,7 +1233,7 @@ class Cell(mole.Mole):
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
-            if np.any(exp_min) < 0.1:
+            if np.any(exp_min < 0.1):
                 sys.stderr.write('''WARNING!
   Very diffused basis functions are found in the basis set. They may lead to severe
   linear dependence and numerical instability.  You can set  cell.exp_to_discard=0.1
@@ -1227,9 +1311,10 @@ class Cell(mole.Mole):
                 self.dump_input()
             return self
 
-        if self.rcut is None:
-            self.rcut = max([self.bas_rcut(ib, self.precision)
-                             for ib in range(self.nbas)] + [0])
+        if self.rcut is None or self._rcut_from_build:
+            self._rcut = max([self.bas_rcut(ib, self.precision)
+                              for ib in range(self.nbas)] + [0])
+            self._rcut_from_build = True
 
         _a = self.lattice_vectors()
         if np.linalg.det(_a) < 0:
@@ -1246,21 +1331,26 @@ class Cell(mole.Mole):
   Size of vacuum may not be enough. The recommended vacuum size is %s AA (%s Bohr)\n\n'''
                                  % (Lz_guess*param.BOHR, Lz_guess))
 
-        if self.mesh is None:
+        if self.mesh is None or self._mesh_from_build:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)
             else:
                 ke_cutoff = self.ke_cutoff
-            self.mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
+            self._mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
 
             if (self.dimension < 2 or
                 (self.dimension == 2 and self.low_dim_ft_type == 'inf_vacuum')):
-                #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
-                meshz = (np.log(self.nelectron/self.precision)-2.99944305)/0.436392335
-                self.mesh[self.dimension:] = int(meshz)
+                self._mesh[self.dimension:] = _mesh_inf_vaccum(self)
+            self._mesh_from_build = True
 
-        if self.ew_eta is None or self.ew_cut is None:
-            self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.mesh)
+            # Set minimal mesh grids to handle the case mesh==0. since Madelung
+            # constant may be computed even if the unit cell has 0 atoms. In this
+            # system, cell.mesh was initialized to 0.
+            self._mesh[self._mesh == 0] = 30
+
+        if self.ew_eta is None or self.ew_cut is None or self._ew_from_build:
+            self._ew_eta, self._ew_cut = self.get_ewald_params(self.precision, self.mesh)
+            self._ew_from_build = True
 
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()
@@ -1505,6 +1595,7 @@ class Cell(mole.Mole):
                      shls_slice=None, non0tab=None, ao_loc=None, out=None):
         return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
                             shls_slice, non0tab, ao_loc, out)
+    pbc_eval_ao = pbc_eval_gto
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
@@ -1515,6 +1606,7 @@ class Cell(mole.Mole):
         else:
             return mole.eval_gto(self, eval_name, coords, comp,
                                  shls_slice, non0tab, ao_loc, out)
+    eval_ao = eval_gto
 
     def from_ase(self, ase_atom):
         '''Update cell based on given ase atom object
@@ -1538,31 +1630,15 @@ class Cell(mole.Mole):
         # gth-PP) will not be recognized by mole.build function.
         mol = self.view(mole.Mole)
         delattr(mol, 'a')
-        delattr(mol, 'mesh')
+        delattr(mol, '_mesh')
         return mol
 
     def has_ecp(self):
         '''Whether pseudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
-    def apply(self, fn, *args, **kwargs):
-        if callable(fn):
-            return lib.StreamObject.apply(self, fn, *args, **kwargs)
-        elif isinstance(fn, (str, unicode)):
-            from pyscf.pbc import scf, dft, mp, cc, ci, tdscf
-            for mod in (scf, dft):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(self, *args, **kwargs)
-
-            for mod in (mp, cc, ci, tdscf):
-                method = getattr(mod, fn.upper(), None)
-                if method is not None and callable(method):
-                    return method(scf.HF(self).run(), *args, **kwargs)
-
-            raise ValueError('Unknown method %s' % fn)
-        else:
-            raise TypeError('First argument of .apply method must be a '
-                            'function or a string.')
+    def ao2mo(self, mo_coeffs, intor='int2e', erifile=None, dataname='eri_mo',
+              **kwargs):
+        raise NotImplementedError
 
 del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

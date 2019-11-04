@@ -16,6 +16,9 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.misc import flatten
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
+from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -25,7 +28,7 @@ einsum = lib.einsum
 #
 # There are some complex conjugates not included in the equations
 # by Watts, Gauss, Bartlett JCP (98), 1993
-def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
+def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     '''Returns the CCSD(T) for general spin-orbital integrals with k-points.
 
     Note:
@@ -51,14 +54,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     else:
         log = logger.Logger(mycc.stdout, verbose)
 
-    if eris is None: eris = mycc.ao2mo()
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
 
-    if eris is None:
-        raise TypeError('Electron repulsion integrals, `eris`, must be passed in '
-                        'to the CCSD(T) kernel or created in the cc object for '
-                        'the k-point CCSD(T) to run!')
     if t1 is None or t2 is None:
         raise TypeError('Must pass in t1/t2 amplitudes to k-point CCSD(T)! (Maybe '
                         'need to run `.ccsd()` on the ccsd object?)')
@@ -71,12 +69,20 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
     nkpts, nocc, nvir = t1.shape
 
-    mo_energy_occ = [eris.fock[i].diagonal()[:nocc] for i in range(nkpts)]
-    mo_energy_vir = [eris.fock[i].diagonal()[nocc:] for i in range(nkpts)]
+    mo_energy = [eris.mo_energy[ki] for ki in range(nkpts)]
+    mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
+    mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
     fov = eris.fock[:, :nocc, nocc:]
+
+    mo_e = mo_energy
+    mo_e_o = mo_energy_occ
+    mo_e_v = mo_energy_vir
 
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mycc, kind="split")
 
     energy_t = 0.0
 
@@ -84,7 +90,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         for kj in range(ki + 1):
             for kk in range(kj + 1):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
-                eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
+                eijk = _get_epqr([0,nocc,ki,mo_e_o,nonzero_opadding],
+                                 [0,nocc,kj,mo_e_o,nonzero_opadding],
+                                 [0,nocc,kk,mo_e_o,nonzero_opadding])
 
                 # Factors to include for permutational symmetry among k-points for occupied space
                 if ki == kj and kj == kk:
@@ -103,6 +111,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         if kc not in range(kb + 1):
                             continue
 
+                        # -1.0 so the LARGE_DENOM does not cancel with the one from eijk
+                        eabc = _get_epqr([0,nvir,ka,mo_e_v,nonzero_vpadding],
+                                         [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                                         [0,nvir,kc,mo_e_v,nonzero_vpadding],
+                                         fac=[-1.,-1.,-1.])
+
                         # Factors to include for permutational symmetry among k-points for virtual space
                         if ka == kb and kb == kc:
                             symm_abc_kpt = 1.  # one unique combination of (ka, kb, kc)
@@ -115,7 +129,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         # determined by the k-point symmetry.
                         abc_indices = cartesian_prod([range(nvir)] * 3)
                         symm_3d = symm_2d_ab = symm_2d_bc = False
-                        if ka == kc == kc:
+                        if ka == kc:  # == kb from lower triangular summation
                             abc_indices = tril_product(range(nvir), repeat=3, tril_idx=[0, 1, 2])  # loop a >= b >= c
                             symm_3d = True
                         elif ka == kb:
@@ -147,10 +161,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     symm_abc = 2.
 
                             # Form energy denominator
-                            eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
-                            # When padding for non-equal nocc per k-point, some fock elements will be zero
-                            idx = np.where(abs(eijkabc) < LOOSE_ZERO_TOL)[0]
-                            eijkabc[idx] = LARGE_DENOM
+                            eijkabc = (eijk[:,:,:] + eabc[a,b,c])
 
                             # Form connected triple excitation amplitude
                             t3c = np.zeros((nocc, nocc, nocc), dtype=dtype)
@@ -206,41 +217,41 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                             # First term: 1 - p(ij) - p(ik)
                             if ki == ka:
                                 t3d = t3d + einsum('i,jk->ijk',  t1[ki, :, a], -eris.oovv[kj, kk, kb, :, :, b, c].conj())
-                                t3d = t3d + einsum('i,jk->ijk', fov[ki, :, a],         t2[kj, kk, kb, :, :, b, c])
+                                t3d = t3d + einsum('i,jk->ijk',-fov[ki, :, a],         t2[kj, kk, kb, :, :, b, c])
 
                             if kj == ka:
                                 t3d = t3d - einsum('j,ik->ijk',  t1[kj, :, a], -eris.oovv[ki, kk, kb, :, :, b, c].conj())
-                                t3d = t3d - einsum('j,ik->ijk', fov[kj, :, a],         t2[ki, kk, kb, :, :, b, c])
+                                t3d = t3d - einsum('j,ik->ijk',-fov[kj, :, a],         t2[ki, kk, kb, :, :, b, c])
 
                             if kk == ka:
                                 t3d = t3d - einsum('k,ji->ijk',  t1[kk, :, a], -eris.oovv[kj, ki, kb, :, :, b, c].conj())
-                                t3d = t3d - einsum('k,ji->ijk', fov[kk, :, a],         t2[kj, ki, kb, :, :, b, c])
+                                t3d = t3d - einsum('k,ji->ijk',-fov[kk, :, a],         t2[kj, ki, kb, :, :, b, c])
 
                             # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
                             if ki == kb:
                                 t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, b], -eris.oovv[kj, kk, ka, :, :, a, c].conj())
-                                t3d = t3d - einsum('i,jk->ijk', fov[ki, :, b],         t2[kj, kk, ka, :, :, a, c])
+                                t3d = t3d - einsum('i,jk->ijk',-fov[ki, :, b],         t2[kj, kk, ka, :, :, a, c])
 
                             if kj == kb:
                                 t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, b], -eris.oovv[ki, kk, ka, :, :, a, c].conj())
-                                t3d = t3d + einsum('j,ik->ijk', fov[kj, :, b],         t2[ki, kk, ka, :, :, a, c])
+                                t3d = t3d + einsum('j,ik->ijk',-fov[kj, :, b],         t2[ki, kk, ka, :, :, a, c])
 
                             if kk == kb:
                                 t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, b], -eris.oovv[kj, ki, ka, :, :, a, c].conj())
-                                t3d = t3d + einsum('k,ji->ijk', fov[kk, :, b],         t2[kj, ki, ka, :, :, a, c])
+                                t3d = t3d + einsum('k,ji->ijk',-fov[kk, :, b],         t2[kj, ki, ka, :, :, a, c])
 
                             # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
                             if ki == kc:
                                 t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, c], -eris.oovv[kj, kk, kb, :, :, b, a].conj())
-                                t3d = t3d - einsum('i,jk->ijk', fov[ki, :, c],         t2[kj, kk, kb, :, :, b, a])
+                                t3d = t3d - einsum('i,jk->ijk',-fov[ki, :, c],         t2[kj, kk, kb, :, :, b, a])
 
                             if kj == kc:
                                 t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, c], -eris.oovv[ki, kk, kb, :, :, b, a].conj())
-                                t3d = t3d + einsum('j,ik->ijk', fov[kj, :, c],         t2[ki, kk, kb, :, :, b, a])
+                                t3d = t3d + einsum('j,ik->ijk',-fov[kj, :, c],         t2[ki, kk, kb, :, :, b, a])
 
                             if kk == kc:
                                 t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, c], -eris.oovv[kj, ki, kb, :, :, b, a].conj())
-                                t3d = t3d + einsum('k,ji->ijk', fov[kk, :, c],         t2[kj, ki, kb, :, :, b, a])
+                                t3d = t3d + einsum('k,ji->ijk',-fov[kk, :, c],         t2[kj, ki, kb, :, :, b, a])
 
                             t3c_plus_d = t3c + t3d
                             t3c_plus_d /= eijkabc

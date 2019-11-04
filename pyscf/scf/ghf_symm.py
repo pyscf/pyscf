@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,8 +104,8 @@ class GHF(ghf.GHF):
         self.irrep_nelec = {}
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        ghf.GHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        ghf.GHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self

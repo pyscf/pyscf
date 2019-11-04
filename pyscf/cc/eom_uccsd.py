@@ -308,6 +308,7 @@ class EOMIP(eom_rccsd.EOMIP):
     l_matvec = None
     get_diag = ipccsd_diag
     ipccsd_star = None
+    ccsd_star_contract = None
 
     def __init__(self, cc):
         eom_rccsd.EOMIP.__init__(self, cc)
@@ -826,6 +827,7 @@ class EOMEA(eom_rccsd.EOMEA):
     l_matvec = None
     get_diag = eaccsd_diag
     eaccsd_star = None
+    ccsd_star_contract = None
 
     def __init__(self, cc):
         eom_rccsd.EOMEA.__init__(self, cc)
@@ -1924,6 +1926,12 @@ class EOMEESpinFlip(EOMEE):
         nabbb = nocca*noccb*nvirb*(nvirb-1)//2
         nbbab = noccb*(noccb-1)//2*nvira*nvirb
         return nocca*nvirb + noccb*nvira + nbaaa + naaba + nabbb + nbbab
+
+uccsd.UCCSD.EOMIP         = lib.class_as_method(EOMIP)
+uccsd.UCCSD.EOMEA         = lib.class_as_method(EOMEA)
+uccsd.UCCSD.EOMEE         = lib.class_as_method(EOMEE)
+uccsd.UCCSD.EOMEESpinKeep = lib.class_as_method(EOMEESpinKeep)
+uccsd.UCCSD.EOMEESpinFlip = lib.class_as_method(EOMEESpinFlip)
 
 
 class _IMDS:

@@ -95,16 +95,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(de), 0.12763259021187467, 6)
 
     def test_ccsd_scanner(self):
-        mol1 = mol.copy()
-        mol1.set_geom_('''
-        H   0.   0.   0.9
-        F   0.   0.1  0.''')
         mycc = cc.CCSD(scf.RHF(mol).set(conv_tol=1e-14))
         cc_scanner = mycc.nuc_grad_method().as_scanner()
         e, de = cc_scanner(mol)
         self.assertAlmostEqual(finger(de), 0.4330503011412547, 5)
+
+        mol1 = gto.M(atom='''
+        H   0.   0.   0.9
+        F   0.   0.1  0.''', verbose=0)
         e, de = cc_scanner(mol1)
-        self.assertAlmostEqual(finger(de), 0.10534638975831109, 5)
+        self.assertAlmostEqual(finger(de), 0.2618586029073042, 5)
 
 
 if __name__ == "__main__":

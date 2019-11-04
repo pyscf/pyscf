@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ if __name__ == '__main__':
                 basis='6-31g', verbose=3)
 
     mf = dft.RKS(mol).set(xc='b3lyp').run()
-    ssc = SSC(mf)
+    ssc = mf.SSC()
     ssc.with_fc = True
     ssc.with_fcsd = True
     jj = ssc.kernel()

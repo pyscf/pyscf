@@ -3,7 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, dft
+import pyscf
 
 '''
 A simple example to run DFT calculation.
@@ -12,14 +12,13 @@ See also pyscf/dft/libxc.py and pyscf/dft/xcfun.py for the complete list of
 available XC functionals.
 '''
 
-mol = gto.Mole()
-mol.build(
+mol = pyscf.M(
     atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
     basis = '631g',
     symmetry = True,
 )
 
-mf = dft.RKS(mol)
+mf = mol.KS()
 #mf.xc = 'svwn' # shorthand for slater,vwn
 #mf.xc = 'bp86' # shorthand for b88,p86
 #mf.xc = 'blyp' # shorthand for b88,lyp

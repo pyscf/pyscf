@@ -8,7 +8,7 @@ import h5py
 from pyscf import gto, df, scf, mcscf
 
 '''
-Input Cholesky decomposed integrals for CASSCF
+Using the Cholesky decomposed 2-electron integrals to define the Hamiltonian in CASSCF
 
 See also examples/df/40-precompute_df_ints.py
 '''

@@ -53,7 +53,7 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
                 for k, kpt in enumerate(kpts)]
 
 
-def smearing_(mf, sigma=None, method=SMEARING_METHOD):
+def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
     '''Fermi-Dirac or Gaussian smearing'''
     from pyscf.scf import uhf
     from pyscf.pbc.scf import khf
@@ -106,16 +106,23 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
             f_occ = gaussian_smearing_occ
 
         mo_energy = numpy.sort(mo_es.ravel())
-        fermi = mo_energy[nocc-1]
+
+        # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
         sigma = mf.sigma
-        def nelec_cost_fn(m):
-            mo_occ_kpts = f_occ(m, mo_es, sigma)
-            if not is_uhf:
-                mo_occ_kpts *= 2
-            return (mo_occ_kpts.sum() - nelectron)**2
-        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
-        mu = res.x
-        mo_occs = f = f_occ(mu, mo_es, sigma)
+        fermi = mo_energy[nocc-1]
+        if mu0 is None:
+            def nelec_cost_fn(m):
+                mo_occ_kpts = f_occ(m, mo_es, sigma)
+                if not is_uhf:
+                    mo_occ_kpts *= 2
+                return (mo_occ_kpts.sum() - nelectron)**2
+            res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
+            mu = res.x
+            mo_occs = f = f_occ(mu, mo_es, sigma)
+        else:
+            mu = mu0
+            mo_occs = f = f_occ(mu, mo_es, sigma)
+            
 
         # See https://www.vasp.at/vasp-workshop/slides/k-points.pdf
         if mf.smearing_method.lower() == 'fermi':
@@ -440,6 +447,7 @@ if __name__ == '__main__':
     cell.build()
     nks = [2,1,1]
     mf = pscf.KUHF(cell, cell.make_kpts(nks))
-    mf = smearing_(mf, .1) # -5.86052594663696
+    #mf = smearing_(mf, .1) # -5.86052594663696
+    mf = smearing_(mf, .1, mu0=0.280911009667) # -5.86052594663696
     #mf = smearing_(mf, .1, method='gauss')
     mf.kernel()

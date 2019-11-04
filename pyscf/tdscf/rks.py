@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@
 # J. Mol. Struct. THEOCHEM, 914, 3
 #
 
+import time
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import symm
-from pyscf import dft
 from pyscf.dft import numint
 from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
@@ -105,6 +105,7 @@ class TDDFTNoHybrid(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDDFT diagonalization solver
         '''
+        cpu0 = (time.clock(), time.time())
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
@@ -157,6 +158,7 @@ class TDDFTNoHybrid(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
+        log.timer('TDDFT', *cpu0)
         log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
@@ -171,6 +173,9 @@ class dRPA(TDDFTNoHybrid):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_rhf(mf)
+        # commit fc8d1967995b7e033b60d4428ddcca87aac78e4f handles xc='' .
+        # xc='0*LDA' is equivalent to xc=''
+        #mf.xc = '0.0*LDA'
         mf.xc = ''
         TDDFTNoHybrid.__init__(self, mf)
 
@@ -182,8 +187,34 @@ class dTDA(TDA):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         from pyscf import scf
         mf = scf.addons.convert_to_rhf(mf)
+        # commit fc8d1967995b7e033b60d4428ddcca87aac78e4f handles xc='' .
+        # xc='0*LDA' is equivalent to xc=''
+        #mf.xc = '0.0*LDA'
         mf.xc = ''
         TDA.__init__(self, mf)
+
+
+def tddft(mf):
+    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    if mf._numint.libxc.is_hybrid_xc(mf.xc):
+        return TDDFT(mf)
+    else:
+        return TDDFTNoHybrid(mf)
+
+from pyscf import dft
+dft.rks.RKS.TDA           = dft.rks_symm.RKS.TDA           = lib.class_as_method(TDA)
+dft.rks.RKS.TDHF          = dft.rks_symm.RKS.TDHF          = None
+#dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = lib.class_as_method(TDDFT)
+dft.rks.RKS.TDDFTNoHybrid = dft.rks_symm.RKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = tddft
+dft.rks.RKS.dTDA          = dft.rks_symm.RKS.dTDA          = lib.class_as_method(dTDA)
+dft.rks.RKS.dRPA          = dft.rks_symm.RKS.dRPA          = lib.class_as_method(dRPA)
+dft.roks.ROKS.TDA           = dft.rks_symm.ROKS.TDA           = None
+dft.roks.ROKS.TDHF          = dft.rks_symm.ROKS.TDHF          = None
+dft.roks.ROKS.TDDFT         = dft.rks_symm.ROKS.TDDFT         = None
+dft.roks.ROKS.TDDFTNoHybrid = dft.rks_symm.ROKS.TDDFTNoHybrid = None
+dft.roks.ROKS.dTDA          = dft.rks_symm.ROKS.dTDA          = None
+dft.roks.ROKS.dRPA          = dft.rks_symm.ROKS.dRPA          = None
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -202,7 +233,7 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.xc = 'lda, vwn_rpa'
     mf.scf()
-    td = TDDFTNoHybrid(mf)
+    td = mf.TDDFTNoHybrid()
     #td.verbose = 5
     td.nstates = 5
     print(td.kernel()[0] * 27.2114)
@@ -214,7 +245,7 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.xc = 'b88,p86'
     mf.scf()
-    td = TDDFT(mf)
+    td = mf.TDDFT()
     td.nstates = 5
     #td.verbose = 5
     print(td.kernel()[0] * 27.2114)
@@ -226,7 +257,7 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.xc = 'lda,vwn'
     mf.scf()
-    td = TDA(mf)
+    td = mf.TDA()
     print(td.kernel()[0] * 27.2114)
 # [  9.68872769   9.68872769  15.07122478]
     td.singlet = False

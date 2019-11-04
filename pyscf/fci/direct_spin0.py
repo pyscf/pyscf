@@ -31,6 +31,12 @@ direct_nosym        No            No             No**               Yes
 
 *  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+
+direct_spin0 solver is specified for singlet state. However, calling this
+solver sometimes ends up with the error "State not singlet x.xxxxxxe-06" due
+to numerical issues. Calling direct_spin1 for singlet state is slightly
+slower but more robust than direct_spin0 especially when combining to energy
+penalty method (:func:`fix_spin_`)
 '''
 
 import sys
@@ -223,13 +229,22 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
+    if max_memory is None:
+        max_memory = fci.max_memory - lib.current_memory()[0]
+    log = logger.new_logger(fci, verbose)
 
     assert(fci.spin is None or fci.spin == 0)
+    assert(0 <= numpy.sum(nelec) <= norb*2)
 
     link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)
     eri = numpy.ascontiguousarray(eri)
     na = link_index.shape[0]
+
+    if max_memory < na**2*6*8e-6:
+        log.warn('Not enough memory for FCI solver. '
+                 'The minimal requirement is %.0f MB', na**2*60e-6)
+
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
     nroots = min(hdiag.size, nroots)
 
@@ -304,15 +319,13 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if lindep is None: lindep = fci.lindep
     if max_cycle is None: max_cycle = fci.max_cycle
     if max_space is None: max_space = fci.max_space
-    if max_memory is None: max_memory = fci.max_memory
-    if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
     tol_residual = getattr(fci, 'conv_tol_residual', None)
 
     with lib.with_omp_threads(fci.threads):
         #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
         e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                        max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                       max_memory=max_memory, verbose=verbose, follow_state=True,
+                       max_memory=max_memory, verbose=log, follow_state=True,
                        tol_residual=tol_residual, **kwargs)
     if nroots > 1:
         return e+ecore, [_check_(ci.reshape(na,na)) for ci in c]

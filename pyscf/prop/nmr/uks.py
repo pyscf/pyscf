@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -159,6 +159,10 @@ class NMR(uhf_nmr.NMR):
     get_fock = get_fock
     solve_mo1 = solve_mo1
 
+from pyscf import dft
+dft.uks.UKS.NMR = dft.uks_symm.UKS.NMR = lib.class_as_method(NMR)
+del(dft)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -174,7 +178,7 @@ if __name__ == '__main__':
 
     mf = dft.UKS(mol)
     mf.kernel()
-    nmr = NMR(mf)
+    nmr = mf.NMR()
     msc = nmr.kernel() # _xx,_yy,_zz = 55.131555
     print(lib.finger(msc) -  110.73521186810918)
 

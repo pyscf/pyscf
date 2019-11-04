@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -716,20 +716,29 @@ def as_scanner(ci):
         def __init__(self, ci):
             self.__dict__.update(ci.__dict__)
             self._scf = ci._scf.as_scanner()
-        def __call__(self, mol_or_geom, **kwargs):
+        def __call__(self, mol_or_geom, ci0=None, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
+            for key in ('with_df', 'with_solvent'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
 
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
+            if getattr(self.ci, 'size', 0) != self.vector_size():
+                self.ci = None
+            if ci0 is None:
 # FIXME: Whether to use the initial guess from last step? If root flips, large
 # errors may be found in the solutions
-            self.kernel(self.ci, **kwargs)[0]
+                ci0 = self.ci
+            self.kernel(ci0, **kwargs)[0]
             return self.e_tot
     return CISD_Scanner(ci)
 
@@ -821,8 +830,8 @@ class CISD(lib.StreamObject):
                     'level_shift', 'direct'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)
@@ -1026,6 +1035,10 @@ class CISD(lib.StreamObject):
 
 class RCISD(CISD):
     pass
+
+from pyscf import scf
+scf.hf.RHF.CISD = lib.class_as_method(RCISD)
+scf.rohf.ROHF.CISD = None
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

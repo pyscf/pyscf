@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ from pyscf import __config__
 #
 # Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, x_y, singlet=True, atmlst=None,
-           max_memory=2000, verbose=logger.INFO):
+def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
+              max_memory=2000, verbose=logger.INFO):
     log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
@@ -105,8 +105,11 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dm1[:nocc,:nocc] += numpy.eye(nocc)*2 # for ground state
     im0 = reduce(numpy.dot, (mo_coeff, im0+zeta*dm1, mo_coeff.T))
 
-    hcore_deriv = td_grad.hcore_generator(mol)
-    s1 = td_grad.get_ovlp(mol)
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = td_grad.base._scf.nuc_grad_method()
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
 
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
@@ -206,7 +209,7 @@ def as_scanner(td_grad, state=1):
         return TDSCF_GradScanner(td_grad)
 
 
-class Gradients(rhf_grad.Gradients):
+class Gradients(rhf_grad.GradientsBasics):
 
     cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
     cphf_conv_tol = getattr(__config__, 'grad_tdrhf_Gradients_cphf_conv_tol', 1e-8)
@@ -225,8 +228,8 @@ class Gradients(rhf_grad.Gradients):
         keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** LR %s gradients for %s ********',
                  self.base.__class__, self.base._scf.__class__)
@@ -239,8 +242,9 @@ class Gradients(rhf_grad.Gradients):
         log.info('\n')
         return self
 
+    @lib.with_doc(grad_elec.__doc__)
     def grad_elec(self, xy, singlet, atmlst=None):
-        return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+        return grad_elec(self, xy, singlet, atmlst, self.max_memory, self.verbose)
 
     def kernel(self, xy=None, state=None, singlet=None, atmlst=None):
         '''
@@ -248,7 +252,6 @@ class Gradients(rhf_grad.Gradients):
             state : int
                 Excited state ID.  state = 1 means the first excited state.
         '''
-        cput0 = (time.clock(), time.time())
         if xy is None:
             if state is None:
                 state = self.state
@@ -275,19 +278,30 @@ class Gradients(rhf_grad.Gradients):
 
         de = self.grad_elec(xy, singlet, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
-
-        logger.timer(self, 'TD gradients', *cput0)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
         self._finalize()
         return self.de
+
+    # Calling the underlying SCF nuclear gradients because it may be modified
+    # by external modules (e.g. QM/MM, solvent)
+    def grad_nuc(self, mol=None, atmlst=None):
+        mf_grad = self.base._scf.nuc_grad_method()
+        return mf_grad.grad_nuc(mol, atmlst)
 
     def _finalize(self):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------- %s gradients for state %d ----------',
                         self.base.__class__.__name__, self.state)
-            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            self._write(self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
+
+Grad = Gradients
+
+from pyscf import tdscf
+tdscf.rhf.TDA.Gradients = tdscf.rhf.TDHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -310,7 +324,7 @@ if __name__ == '__main__':
     td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     #tdg.verbose = 5
     g1 = tdg.kernel(z[0])
     print(g1)
@@ -326,7 +340,7 @@ if __name__ == '__main__':
     td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
-    tdg = Gradients(td)
+    tdg = td.Gradients()
     g1 = tdg.kernel(state=1)
     print(g1)
     print(lib.finger(g1) - 0.18967687762609461)

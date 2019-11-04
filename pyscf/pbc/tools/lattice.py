@@ -63,6 +63,7 @@ def get_ase_wurtzite(A='Zn', B='O'):
     else:
         raise NotImplementedError('No formula found for system ',
             A, B, '.  Choose a different system?  Or add it to the list!')
+    return ase_atom
 
 def get_bandpath_fcc(ase_atom, npoints=30):
     # Set-up the band-path via special points

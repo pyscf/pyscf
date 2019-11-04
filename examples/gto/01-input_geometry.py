@@ -9,13 +9,14 @@ PySCF supports input molecule geometry in
 2. Z-matrix in one string
 3. Internal format (not recommended)
 4. Mixed inputs
+5. Read geometry from a file
 '''
 
 import numpy
 from pyscf import gto
 
 #
-# Input cartesian coordinates
+# Input Cartesian coordinates
 # * Four columns, the first column is atom, the next three are x,y,z coordinates
 # * Coordinates are in Angstrom by default
 #
@@ -74,7 +75,7 @@ mol.atom = ['8 1 1 1.5',
             ('H', numpy.random.random(3))]
 #
 # You can make use of all possible Python language features to create the
-# geometry, eg import geometry from external module, parsing geometry
+# geometry, e.g. import geometry from external module, parsing geometry
 # database.  Following are examples to generate geometry using python snippet
 #
 mol.atom = ['O 1 1 1.5']
@@ -92,12 +93,12 @@ mol.build()
 
 
 #
-# Label atoms
+# Atom labels
 # -----------
 # If you want to label one atom to distinguish it from the rest, you can prefix
 # or suffix number or special characters 1234567890~!@#$%^&*()_+.?:<>[]{}|
 # (execept "," and ";") to an atomic symbol.  It allows you specify
-# different basis for the labelled atom (see also 04-input_basis.py)
+# different basis for the labelled atoms (see also 04-input_basis.py)
 #
 # If the decorated atomic symbol is appeared in mol.atom but not mol.basis,
 # the basis parser will remove all decorations and seek the pure atomic symbol
@@ -106,4 +107,25 @@ mol.build()
 #
 mol.atom = [[8,(0, 0, 0)], ['h1',(0, 1, 0)], ['H2',(0, 0, 1)]]
 mol.basis = {'O': 'sto-3g', 'H': 'sto3g', 'H1': '6-31G'}
+mol.build()
 
+
+
+
+#
+# Read geometry from a file. If the file name is assigned to mol.atom, the
+# build method will guess the file format and parse the contents accordingly
+#
+import tempfile
+with tempfile.NamedTemporaryFile(mode='w', suffix='.xyz') as f:
+    f.write('''3
+
+O 0 0 0
+H 0 1 0
+H 0 0 1
+            ''')
+    f.flush()
+    print('xyz file', f.name)
+
+    mol.atom = f.name
+    mol.build()

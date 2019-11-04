@@ -64,6 +64,7 @@ Another way to use PySCF in docker container is to start an Ipython shell::
   $ docker run -it pyscf/pyscf-1.5.0 start.sh ipython
 
 
+.. _compile_c_extensions:
 Manual installation from github repo
 ====================================
 
@@ -294,13 +295,13 @@ More information of the compilation can be found in :file:`pyscf/lib/nao/README.
 DMRG solver
 -----------
 Density matrix renormalization group (DMRG) implementations Block
-(http://chemists.princeton.edu/chan/software/block-code-for-dmrg) and
+(https://sanshar.github.io/Block) and
 CheMPS2 (http://sebwouters.github.io/CheMPS2/index.html)
 are efficient DMRG solvers for ab initio quantum chemistry problem.
-`Installing Block <http://sanshar.github.io/Block/build.html>`_ requires
+`Installing Block <https://sanshar.github.io/Block/build.html>`_ requires
 C++11 compiler.  If C++11 is not supported by your compiler, you can
 register and download the precompiled Block binary from
-http://chemists.princeton.edu/chan/software/block-code-for-dmrg.
+https://sanshar.github.io/Block/build.html.
 Before using the Block or CheMPS2, you need create a configuration file
 ``pyscf/dmrgscf/settings.py``  (as shown by settings.py.example) to store
 the path where the DMRG solver was installed.
@@ -343,10 +344,17 @@ TBLIS
 -----
 `TBLIS <https://github.com/devinamatthews/tblis>`_ provides a native algorithm
 to perform tensor contraction for arbitrary high dimensional tensors. The native
-algorithm does not need to translate the tensors into matrices and call the BLAS
+algorithm does not need to transform tensors into matrices then call the BLAS
 libraries for the matrix contraction.  Tensor transposing and data moving are
 largely avoided in TBLIS tensor library.  The interface to TBLIS offers an
 efficient implementation for :func:`numpy.einsum` style tensor contraction.
+To enable the tlibs-einsum plugin, you can set the cmake flags
+``-DENABLE_TBLIS`` when compiling the C extensions::
+
+  $ cmake -DENABLE_TBLIS=ON ..
+
+Note TBLIS library was implemented with C++11 standard. You need at least GCC
+5.2 to compile this plugin.
 
 
 Pyberny

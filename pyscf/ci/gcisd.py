@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -423,6 +423,11 @@ class GCISD(cisd.CISD):
             if orbspin is not None:
                 orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
+
+CISD = GCISD
+
+from pyscf import scf
+scf.ghf.GHF.CISD = lib.class_as_method(CISD)
 
 
 if __name__ == '__main__':

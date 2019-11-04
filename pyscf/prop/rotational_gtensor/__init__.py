@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@
 from pyscf.prop.rotational_gtensor import rhf
 from pyscf.prop.rotational_gtensor import uhf
 #from pyscf.prop.magnetizability import dhf
-from pyscf.prop.rotational_gtensor import rks
-from pyscf.prop.rotational_gtensor import uks
 
 RHF = rhf.RotationalGTensor
 UHF = uhf.RotationalGTensor
 #DHF = dhf.RotationalGTensor
-RKS = rks.RotationalGTensor
-UKS = uks.RotationalGTensor
+
+try:
+    from pyscf.prop.rotational_gtensor import rks
+    from pyscf.prop.rotational_gtensor import uks
+    RKS = rks.RotationalGTensor
+    UKS = uks.RotationalGTensor
+except ImportError:
+    pass

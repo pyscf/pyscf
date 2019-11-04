@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy
+
 from pyscf import lib
 from pyscf.lib import logger
 
@@ -46,15 +48,16 @@ class RCCSD(rccsd.RCCSD):
         # get better orbital energies. It is important for the low-dimension
         # systems since their occupied and the virtual orbital energies may
         # overlap which may lead to numerical issue in the CCSD iterations.
-        if mo_coeff is self._scf.mo_coeff:
-            eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
-        else:
-            # Add the HFX correction of Ewald probe charge method.
-            # FIXME: Whether to add this correction for other exxdiv treatments?
-            # Without the correction, MP2 energy may be largely off the
-            # correct value.
-            madelung = tools.madelung(self._scf.cell, self._scf.kpt)
-            eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
+        #if mo_coeff is self._scf.mo_coeff:
+        #    eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
+        #else:
+
+        # Add the HFX correction of Ewald probe charge method.
+        # FIXME: Whether to add this correction for other exxdiv treatments?
+        # Without the correction, MP2 energy may be largely off the
+        # correct value.
+        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
+        eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris
 
 class UCCSD(uccsd.UCCSD):
@@ -64,8 +67,8 @@ class UCCSD(uccsd.UCCSD):
         if mbpt2:
             pt = mp.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocca, nvira = self.nocc
-            nmoa, nmoa = self.nmo
+            nocca, noccb = self.nocc
+            nmoa, nmob = self.nmo
             nvira, nvirb = nmoa-nocca, nmob-noccb
             self.t1 = (numpy.zeros((nocca,nvira)), numpy.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
@@ -79,15 +82,15 @@ class UCCSD(uccsd.UCCSD):
         with lib.temporary_env(self._scf, exxdiv=None):
             eris = uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
-        if mo_coeff is self._scf.mo_coeff:
-            idxa, idxb = self.get_frozen_mask()
-            mo_e_a, mo_e_b = self._scf.mo_energy
-            eris.mo_energy = (mo_e_a[idxa], mo_e_b[idxb])
-        else:
-            nocca, noccb = eris.nocc
-            madelung = tools.madelung(self._scf.cell, self._scf.kpt)
-            eris.mo_energy = (_adjust_occ(eris.mo_energy[0], nocca, -madelung),
-                              _adjust_occ(eris.mo_energy[1], noccb, -madelung))
+        #if mo_coeff is self._scf.mo_coeff:
+        #    idxa, idxb = self.get_frozen_mask()
+        #    mo_e_a, mo_e_b = self._scf.mo_energy
+        #    eris.mo_energy = (mo_e_a[idxa], mo_e_b[idxb])
+        #else:
+        nocca, noccb = eris.nocc
+        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
+        eris.mo_energy = (_adjust_occ(eris.mo_energy[0], nocca, -madelung),
+                          _adjust_occ(eris.mo_energy[1], noccb, -madelung))
         return eris
 
 class GCCSD(gccsd.GCCSD):
@@ -132,11 +135,11 @@ class GCCSD(gccsd.GCCSD):
         with lib.temporary_env(self._scf, exxdiv=None):
             eris = gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
-        if mo_coeff is self._scf.mo_coeff:
-            eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
-        else:
-            madelung = tools.madelung(self._scf.cell, self._scf.kpt)
-            eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
+        #if mo_coeff is self._scf.mo_coeff:
+        #    eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
+        #else:
+        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
+        eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris
 
 def _adjust_occ(mo_energy, nocc, shift):
@@ -144,3 +147,11 @@ def _adjust_occ(mo_energy, nocc, shift):
     mo_energy = mo_energy.copy()
     mo_energy[:nocc] += shift
     return mo_energy
+
+
+from pyscf.pbc import scf
+scf.hf.RHF.CCSD = lib.class_as_method(RCCSD)
+scf.uhf.UHF.CCSD = lib.class_as_method(UCCSD)
+scf.ghf.GHF.CCSD = lib.class_as_method(GCCSD)
+scf.rohf.ROHF.CCSD = None
+

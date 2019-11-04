@@ -33,7 +33,7 @@ from pyscf import __config__
 
 
 def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
-           with_j=True, with_k=True):
+           with_j=True, with_k=True, **kwargs):
     if cell is None: cell = mf.cell
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
     if kpts is None: kpts = mf.kpts

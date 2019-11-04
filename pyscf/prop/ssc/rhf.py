@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -355,14 +355,14 @@ class SpinSpinCoupling(lib.StreamObject):
         self.mo_e10 = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        logger.info(self, 'nuc_pair %s', self.nuc_pair)
-        logger.info(self, 'with Fermi-contact  %s', self.with_fc)
-        logger.info(self, 'with Fermi-contact + spin-dipole  %s', self.with_fcsd)
+        log.info('nuc_pair %s', self.nuc_pair)
+        log.info('with Fermi-contact  %s', self.with_fc)
+        log.info('with Fermi-contact + spin-dipole  %s', self.with_fcsd)
         if self.cphf:
             log.info('Solving MO10 eq with CPHF.')
             log.info('CPHF conv_tol = %g', self.conv_tol)
@@ -442,6 +442,9 @@ class SpinSpinCoupling(lib.StreamObject):
 
 SSC = SpinSpinCoupling
 
+from pyscf import scf
+scf.hf.RHF.SSC = scf.hf.RHF.SpinSpinCoupling = lib.class_as_method(SSC)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -459,7 +462,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = scf.RHF(mol).run()
-    ssc = SSC(mf)
+    ssc = mf.SSC()
     ssc.verbose = 4
     ssc.cphf = True
     ssc.with_fc = True

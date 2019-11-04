@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -100,6 +100,11 @@ class DFMP2(mp2.MP2):
 #        return make_rdm2(self, t2, self.verbose)
 
 MP2 = DFMP2
+
+from pyscf import scf
+scf.hf.RHF.DFMP2 = lib.class_as_method(DFMP2)
+scf.rohf.ROHF.DFMP2 = None
+scf.uhf.UHF.DFMP2 = None
 
 del(WITH_T2)
 

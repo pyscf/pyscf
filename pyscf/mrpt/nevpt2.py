@@ -288,19 +288,21 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
     dm2 = dms['2']
     dm3 = dms['3']
     #dm4 = dms['4']
+    ncore = mo_core.shape[1]
+    nvirt = mo_virt.shape[1]
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
 
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
-        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
+        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
         h2e_v = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_cas,mo_cas,mo_cas],compact=False)
-        h2e_v = h2e_v.reshape(mo_virt.shape[1],mc.ncas,mc.ncas,mc.ncas).transpose(0,2,1,3)
+        h2e_v = h2e_v.reshape(mo_virt.shape[1],ncas,ncas,ncas).transpose(0,2,1,3)
         core_dm = numpy.dot(mo_core,mo_core.T) *2
         core_vhf = mc.get_veff(mc.mol,core_dm)
         h1e_v = reduce(numpy.dot, (mo_virt.T, mc.get_hcore()+core_vhf , mo_cas))
         h1e_v -= numpy.einsum('mbbn->mn',h2e_v)
     else:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['ppaa'][nocc:,ncore:nocc].transpose(0,2,1,3)
@@ -308,9 +310,9 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
 
 
     if getattr(mc.fcisolver, 'nevpt_intermediate', None):
-        a16 = mc.fcisolver.nevpt_intermediate('A16',mc.ncas,mc.nelecas,ci)
+        a16 = mc.fcisolver.nevpt_intermediate('A16',ncas,mc.nelecas,ci)
     else:
-        a16 = make_a16(h1e,h2e, dms, ci, mc.ncas, mc.nelecas)
+        a16 = make_a16(h1e,h2e, dms, ci, ncas, mc.nelecas)
     a17 = make_a17(h1e,h2e,dm2,dm3)
     a19 = make_a19(h1e,h2e,dm1,dm2)
 
@@ -322,7 +324,7 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
         +  numpy.einsum('ipqr,rpqa,ia->i',h2e_v,dm2,h1e_v)*2.0\
         +  numpy.einsum('ip,pa,ia->i',h1e_v,dm1,h1e_v)
 
-    return _norm_to_energy(norm, ener, mc.mo_energy[mc.ncore+mc.ncas:])
+    return _norm_to_energy(norm, ener, mc.mo_energy[nocc:])
 
 def Si(mc, ci, dms, eris=None, verbose=None):
     #Subspace S_i^{(1)}
@@ -331,31 +333,32 @@ def Si(mc, ci, dms, eris=None, verbose=None):
     dm2 = dms['2']
     dm3 = dms['3']
     #dm4 = dms['4']
+    ncore = mo_core.shape[1]
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
 
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
-        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
+        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
         h2e_v = ao2mo.incore.general(mc._scf._eri,[mo_cas,mo_core,mo_cas,mo_cas],compact=False)
-        h2e_v = h2e_v.reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncas).transpose(0,2,1,3)
+        h2e_v = h2e_v.reshape(ncas,ncore,ncas,ncas).transpose(0,2,1,3)
         core_dm = numpy.dot(mo_core,mo_core.T) *2
         core_vhf = mc.get_veff(mc.mol,core_dm)
         h1e_v = reduce(numpy.dot, (mo_cas.T, mc.get_hcore()+core_vhf , mo_core))
     else:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['ppaa'][ncore:nocc,:ncore].transpose(0,2,1,3)
         h1e_v = eris['h1eff'][ncore:nocc,:ncore]
 
     if getattr(mc.fcisolver, 'nevpt_intermediate', None):
-        #mc.fcisolver.make_a22(mc.ncas, state)
-        a22 = mc.fcisolver.nevpt_intermediate('A22',mc.ncas,mc.nelecas,ci)
+        #mc.fcisolver.make_a22(ncas, state)
+        a22 = mc.fcisolver.nevpt_intermediate('A22',ncas,mc.nelecas,ci)
     else:
-        a22 = make_a22(h1e,h2e, dms, ci, mc.ncas, mc.nelecas)
+        a22 = make_a22(h1e,h2e, dms, ci, ncas, mc.nelecas)
     a23 = make_a23(h1e,h2e,dm1,dm2,dm3)
     a25 = make_a25(h1e,h2e,dm1,dm2)
-    delta = numpy.eye(mc.ncas)
+    delta = numpy.eye(ncas)
     dm3_h = numpy.einsum('abef,cd->abcdef',dm2,delta)*2\
             - dm3.transpose(0,1,3,2,4,5)
     dm2_h = numpy.einsum('ab,cd->abcd',dm1,delta)*2\
@@ -370,14 +373,15 @@ def Si(mc, ci, dms, eris=None, verbose=None):
         +  numpy.einsum('qpir,rpqa,ai->i',h2e_v,dm2_h,h1e_v)*2.0\
         +  numpy.einsum('pi,pa,ai->i',h1e_v,dm1_h,h1e_v)
 
-    return _norm_to_energy(norm, ener, -mc.mo_energy[:mc.ncore])
+    return _norm_to_energy(norm, ener, -mc.mo_energy[:ncore])
 
 
 def Sijrs(mc, eris, verbose=None):
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     ncore = mo_core.shape[1]
     nvirt = mo_virt.shape[1]
-    nocc = ncore + mc.ncas
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
     if eris is None:
         erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         feri = ao2mo.outcore.general(mc.mol, (mo_core,mo_virt,mo_core,mo_virt),
@@ -405,14 +409,15 @@ def Sijr(mc, dms, eris, verbose=None):
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
     dm2 = dms['2']
+    ncore = mo_core.shape[1]
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
-        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
+        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
         h2e_v = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_core,mo_cas,mo_core],compact=False)
-        h2e_v = h2e_v.reshape(mo_virt.shape[1],mc.ncore,mc.ncas,mc.ncore).transpose(0,2,1,3)
+        h2e_v = h2e_v.reshape(mo_virt.shape[1],ncore,ncas,ncore).transpose(0,2,1,3)
     else:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['pacv'][:ncore].transpose(3,1,2,0)
@@ -427,7 +432,7 @@ def Sijr(mc, dms, eris, verbose=None):
     h = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,a3)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,a3)
 
-    diff = mc.mo_energy[mc.ncore+mc.ncas:,None,None] - mc.mo_energy[None,:mc.ncore,None] - mc.mo_energy[None,None,:mc.ncore]
+    diff = mc.mo_energy[nocc:,None,None] - mc.mo_energy[None,:ncore,None] - mc.mo_energy[None,None,:ncore]
 
     return _norm_to_energy(norm, h, diff)
 
@@ -436,14 +441,15 @@ def Srsi(mc, dms, eris, verbose=None):
     mo_core, mo_cas, mo_virt = _extract_orbs(mc, mc.mo_coeff)
     dm1 = dms['1']
     dm2 = dms['2']
+    ncore = mo_core.shape[1]
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
-        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
+        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
         h2e_v = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_core,mo_virt,mo_cas],compact=False)
-        h2e_v = h2e_v.reshape(mo_virt.shape[1],mc.ncore,mo_virt.shape[1],mc.ncas).transpose(0,2,1,3)
+        h2e_v = h2e_v.reshape(mo_virt.shape[1],ncore,mo_virt.shape[1],ncas).transpose(0,2,1,3)
     else:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['pacv'][nocc:].transpose(3,0,2,1)
@@ -453,7 +459,7 @@ def Srsi(mc, dms, eris, verbose=None):
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,dm1)
     h = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,k27)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,k27)
-    diff = mc.mo_energy[mc.ncore+mc.ncas:,None,None] + mc.mo_energy[None,mc.ncore+mc.ncas:,None] - mc.mo_energy[None,None,:mc.ncore]
+    diff = mc.mo_energy[nocc:,None,None] + mc.mo_energy[None,nocc:,None] - mc.mo_energy[None,None,:ncore]
     return _norm_to_energy(norm, h, diff)
 
 def Srs(mc, dms, eris=None, verbose=None):
@@ -462,16 +468,17 @@ def Srs(mc, dms, eris=None, verbose=None):
     dm1 = dms['1']
     dm2 = dms['2']
     dm3 = dms['3']
+    ncore = mo_core.shape[1]
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
     if mo_virt.shape[1] ==0:
         return 0, 0
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
-        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
+        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
         h2e_v = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_cas,mo_virt,mo_cas],compact=False)
-        h2e_v = h2e_v.reshape(mo_virt.shape[1],mc.ncas,mo_virt.shape[1],mc.ncas).transpose(0,2,1,3)
+        h2e_v = h2e_v.reshape(mo_virt.shape[1],ncas,mo_virt.shape[1],ncas).transpose(0,2,1,3)
     else:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['papa'][nocc:,:,nocc:].transpose(0,2,1,3)
@@ -480,7 +487,7 @@ def Srs(mc, dms, eris=None, verbose=None):
     rm2, a7 = make_a7(h1e,h2e,dm1,dm2,dm3)
     norm = 0.5*numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
     h = 0.5*numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
-    diff = mc.mo_energy[mc.ncore+mc.ncas:,None] + mc.mo_energy[None,mc.ncore+mc.ncas:]
+    diff = mc.mo_energy[nocc:,None] + mc.mo_energy[None,nocc:]
     return _norm_to_energy(norm, h, diff)
 
 def Sij(mc, dms, eris, verbose=None):
@@ -489,16 +496,17 @@ def Sij(mc, dms, eris, verbose=None):
     dm1 = dms['1']
     dm2 = dms['2']
     dm3 = dms['3']
+    ncore = mo_core.shape[1]
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
     if mo_core.size ==0 :
         return 0.0, 0
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
-        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
+        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
         h2e_v = ao2mo.incore.general(mc._scf._eri,[mo_cas,mo_core,mo_cas,mo_core],compact=False)
-        h2e_v = h2e_v.reshape(mc.ncas,mc.ncore,mc.ncas,mc.ncore).transpose(0,2,1,3)
+        h2e_v = h2e_v.reshape(ncas,ncore,ncas,ncore).transpose(0,2,1,3)
     else:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v = eris['papa'][:ncore,:,:ncore].transpose(1,3,0,2)
@@ -520,7 +528,7 @@ def Sij(mc, dms, eris, verbose=None):
     a9 = make_a9(h1e,h2e,hdm1,hdm2,hdm3)
     norm = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,hdm2)
     h = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,a9)
-    diff = mc.mo_energy[:mc.ncore,None] + mc.mo_energy[None,:mc.ncore]
+    diff = mc.mo_energy[:ncore,None] + mc.mo_energy[None,:ncore]
     return _norm_to_energy(norm, h, -diff)
 
 
@@ -530,17 +538,18 @@ def Sir(mc, dms, eris, verbose=None):
     dm1 = dms['1']
     dm2 = dms['2']
     dm3 = dms['3']
+    ncore = mo_core.shape[1]
+    ncas = mo_cas.shape[1]
+    nocc = ncore + ncas
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
-        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), mc.ncas).transpose(0,2,1,3)
+        h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
         h2e_v1 = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_core,mo_cas,mo_cas],compact=False)
-        h2e_v1 = h2e_v1.reshape(mo_virt.shape[1],mc.ncore,mc.ncas,mc.ncas).transpose(0,2,1,3)
+        h2e_v1 = h2e_v1.reshape(mo_virt.shape[1],ncore,ncas,ncas).transpose(0,2,1,3)
         h2e_v2 = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_cas,mo_cas,mo_core],compact=False)
-        h2e_v2 = h2e_v2.reshape(mo_virt.shape[1],mc.ncas,mc.ncas,mc.ncore).transpose(0,2,1,3)
+        h2e_v2 = h2e_v2.reshape(mo_virt.shape[1],ncas,ncas,ncore).transpose(0,2,1,3)
         core_dm = numpy.dot(mo_core,mo_core.T)*2
     else:
-        ncore = mc.ncore
-        nocc = mc.ncore + mc.ncas
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
         h2e_v1 = eris['ppaa'][nocc:,:ncore].transpose(0,2,1,3)
@@ -564,7 +573,7 @@ def Sir(mc, dms, eris, verbose=None):
          - numpy.einsum('rpiq,rabi,pqab->ir',h2e_v1,h2e_v2,a12)\
          - numpy.einsum('rpqi,raib,pqab->ir',h2e_v2,h2e_v1,a12)\
          + numpy.einsum('rpqi,rabi,pqab->ir',h2e_v2,h2e_v2,a13)
-    diff = mc.mo_energy[:mc.ncore,None] - mc.mo_energy[None,mc.ncore+mc.ncas:]
+    diff = mc.mo_energy[:ncore,None] - mc.mo_energy[None,nocc:]
     return _norm_to_energy(norm, h, -diff)
 
 
@@ -587,6 +596,7 @@ class NEVPT(lib.StreamObject):
     '''
     def __init__(self, mc, root=0):
         self.__dict__.update(mc.__dict__)
+        self.ncore = mc.ncore
         self._mc = mc
         self.root = root
         self.compressed_mps = False
@@ -677,6 +687,9 @@ class NEVPT(lib.StreamObject):
         else:
             log = logger.Logger(self.stdout, self.verbose)
         time0 = (time.clock(), time.time())
+        ncore = self.ncore
+        ncas = self.ncas
+        nocc = ncore + ncas
 
         #By defaut, _mc is canonicalized for the first root.
         #For SC-NEVPT based on compressed MPS perturber functions, the _mc was already canonicalized.
@@ -685,10 +698,10 @@ class NEVPT(lib.StreamObject):
 
         if getattr(self.fcisolver, 'nevpt_intermediate', None):
             logger.info(self, 'DMRG-NEVPT')
-            dm1, dm2, dm3 = self.fcisolver._make_dm123(self.load_ci(),self.ncas,self.nelecas,None)
+            dm1, dm2, dm3 = self.fcisolver._make_dm123(self.load_ci(),ncas,self.nelecas,None)
         else:
             dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf',
-                                               self.load_ci(), self.load_ci(), self.ncas, self.nelecas)
+                                               self.load_ci(), self.load_ci(), ncas, self.nelecas)
         dm4 = None
 
         dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
@@ -698,15 +711,14 @@ class NEVPT(lib.StreamObject):
 
         eris = _ERIS(self, self.mo_coeff)
         time1 = log.timer('integral transformation', *time1)
-        nocc = self.ncore + self.ncas
 
         if not getattr(self.fcisolver, 'nevpt_intermediate', None):  # regular FCI solver
-            link_indexa = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[0])
-            link_indexb = fci.cistring.gen_linkstr_index(range(self.ncas), self.nelecas[1])
-            aaaa = eris['ppaa'][self.ncore:nocc,self.ncore:nocc].copy()
-            f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, self.load_ci(), self.ncas,
+            link_indexa = fci.cistring.gen_linkstr_index(range(ncas), self.nelecas[0])
+            link_indexb = fci.cistring.gen_linkstr_index(range(ncas), self.nelecas[1])
+            aaaa = eris['ppaa'][ncore:nocc,ncore:nocc].copy()
+            f3ca = _contract4pdm('NEVPTkern_cedf_aedf', aaaa, self.load_ci(), ncas,
                                  self.nelecas, (link_indexa,link_indexb))
-            f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, self.load_ci(), self.ncas,
+            f3ac = _contract4pdm('NEVPTkern_aedf_ecdf', aaaa, self.load_ci(), ncas,
                                  self.nelecas, (link_indexa,link_indexb))
             dms['f3ca'] = f3ca
             dms['f3ac'] = f3ac
@@ -926,7 +938,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    with h5py.File(cvcvfile.name) as f5:
+    with h5py.File(cvcvfile.name, 'r') as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
         ppaa, papa, pacv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
     time0 = logger.timer(mol, 'trans_cvcv', *time0)

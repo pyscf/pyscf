@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,8 +69,8 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
     def nelec(self, x):
         self._nelec = x
 
-    def dump_flags(self):
-        pbchf.SCF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        pbchf.SCF.dump_flags(self, verbose)
         logger.info(self, 'number of electrons per unit cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
@@ -129,19 +129,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_rohf.ROHF.get_init_guess(self, cell, key)
-        if cell.dimension < 3:
-            if isinstance(dm, np.ndarray) and dm.ndim == 2:
-                ne = np.einsum('ij,ji->', dm, self.get_ovlp(cell))
-            else:
-                ne = np.einsum('xij,ji->', dm, self.get_ovlp(cell))
-            if abs(ne - cell.nelectron).max() > 1e-7:
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to the number '
-                            'of electrons', ne)
-                dm *= cell.nelectron / ne
+        dm = pbchf.normalize_dm_(self, dm)
         return dm
 
     def init_guess_by_1e(self, cell=None):

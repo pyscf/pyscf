@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,9 +32,8 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import mp2 as mp2_grad
 
 
-def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
-    if mf_grad is None: mf_grad = mp._scf.nuc_grad_method()
-
+def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
+    mp = mp_grad.base
     log = logger.new_logger(mp, verbose)
     time0 = time.clock(), time.time()
 
@@ -43,7 +42,7 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
     time1 = log.timer_debug1('rdm1 intermediates', *time0)
     log.debug('Build ump2 rdm2 intermediates')
 
-    mol = mp.mol
+    mol = mp_grad.mol
     with_frozen = not (mp.frozen is None or mp.frozen is 0)
     moidx = mp.get_frozen_mask()
     OA_a, VA_a, OF_a, VF_a = mp2_grad._index_frozen_active(moidx[0], mp.mo_occ[0])
@@ -203,8 +202,12 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
     time1 = log.timer_debug1('response_rdm1', *time1)
 
     log.debug('h1 and JK1')
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = mp_grad.base._scf.nuc_grad_method()
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
+
     zeta = (mo_ea[:,None] + mo_ea) * .5
     zeta[nocca:,:nocca] = mo_ea[:nocca]
     zeta[:nocca,nocca:] = mo_ea[:nocca].reshape(-1,1)
@@ -247,7 +250,6 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k,0], dm1pa)
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k,1], dm1pb)
 
-    de += mf_grad.grad_nuc(mol)
     log.timer('%s gradients' % mp.__class__.__name__, *time0)
     return de
 
@@ -281,15 +283,16 @@ def _response_dm1(mp, Xvo):
 
 
 class Gradients(mp2_grad.Gradients):
-    def kernel(self, t2=None, atmlst=None, mf_grad=None, verbose=None):
-        return mp2_grad.Gradients.kernel(self, t2, atmlst, mf_grad, verbose,
-                                         _kern=kernel)
+    grad_elec = grad_elec
+
+Grad = Gradients
+
+ump2.UMP2.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf.mp import mp2
 
     mol = gto.M(
         atom = [
@@ -301,7 +304,7 @@ if __name__ == '__main__':
     )
     mf = scf.UHF(mol).run()
     mp = ump2.UMP2(mf).run()
-    g1 = Gradients(mp).kernel()
+    g1 = mp.Gradients().kernel()
 # O     0.0000000000    -0.0000000000     0.1436990190
 # H    -0.0000000000     0.1097329294    -0.0718495095
 # H    -0.0000000000    -0.1097329294    -0.0718495095

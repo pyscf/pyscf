@@ -772,3 +772,231 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
 }
         free(permute_idx);
 }
+
+/*****************************************************************************
+ *
+ * pyscf periodic ccsd(t) with k-points
+ *
+ *****************************************************************************/
+
+size_t _CCsd_t_gen_jobs_full(CacheJob *jobs, int nocc, int nvir,
+                             int *slices)
+{
+        const int a0 = slices[0];
+        const int a1 = slices[1];
+        const int b0 = slices[2];
+        const int b1 = slices[3];
+        const int c0 = slices[4];
+        const int c1 = slices[5];
+        size_t m, a, b, c;
+
+        m = 0;
+        for (a = a0; a < a1; a++) {
+        for (b = b0; b < b1; b++) {
+        for (c = c0; c < c1; c++, m++) {
+                jobs[m].a = a;
+                jobs[m].b = b;
+                jobs[m].c = c;
+        } } }
+        return m;
+}
+
+static void CCzget_wv(double complex *w, double complex *v, double complex *cache,
+                      double complex *fvohalf, double complex *vooo,
+                      double complex *vv_op, double complex *vv_op2,
+                      double complex *t1Thalf, double complex *t2T_c1,
+                      double complex *t2T_c2, double complex *t2T_c3,
+                      int nocc, int nvir, int a, int b, int c,
+                      int a0, int b0, int c0, int *idx, int bool_add_v)
+{
+        const double complex D0 = 0;
+        const double complex D1 = 1;
+        const double complex DN1 = -1;
+        const char TRANS_N = 'N';
+        const int nmo = nocc + nvir;
+        const int noo = nocc * nocc;
+        const size_t nooo = nocc * noo;
+        const size_t nvoo = nvir * noo;
+        int i, j, k, n;
+        double complex *pt2T;
+
+
+        zgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
+               &D1, t2T_c1+(c-c0)*nvoo, &noo, vv_op+nocc, &nmo,
+               &D0, cache, &noo);
+        zgemm_(&TRANS_N, &TRANS_N, &nocc, &noo, &nocc,
+               &DN1, t2T_c2+(c-c0)*nvoo+b*noo, &nocc, vooo+(a-a0)*nooo, &nocc,
+               &D1, cache, &nocc);
+
+        pt2T = t2T_c3 + (b-b0)*nvoo + a*noo;
+        for (n = 0, i = 0; i < nocc; i++) {
+        for (j = 0; j < nocc; j++) {
+        for (k = 0; k < nocc; k++, n++) {
+                w[idx[n]] += cache[n];
+                if(bool_add_v == 1){
+                    v[idx[n]] += (vv_op2[j*nmo+i] * t1Thalf[c*nocc+k]
+                                 + pt2T[i*nocc+j] * fvohalf[c*nocc+k]);
+                }
+        } } }
+}
+
+static void zcontract6_t3T(int nocc, int nvir, int a, int b, int c,
+                           int *mo_offset, double complex *t3Tw,
+                           double complex *t3Tv, double *mo_energy,
+                           double complex *t1T, double complex *fvo, int *slices,
+                           double complex **data_ptrs, double complex *cache1,
+                           int *permute_idx)
+{
+        const int a0 = slices[0];
+        const int a1 = slices[1];
+        const int b0 = slices[2];
+        const int b1 = slices[3];
+        const int c0 = slices[4];
+        const int c1 = slices[5];
+        const int da = a1 - a0;
+        const int db = b1 - b0;
+        const int dc = c1 - c0;
+        const int nooo = nocc * nocc * nocc;
+        const int nmo = nocc + nvir;
+        const int nop = nocc * nmo;
+        const int nov = nocc * nvir;
+        int *idx0 = permute_idx;
+        int *idx1 = idx0 + nooo;
+        int *idx2 = idx1 + nooo;
+        int *idx3 = idx2 + nooo;
+        int *idx4 = idx3 + nooo;
+        int *idx5 = idx4 + nooo;
+        int ki = mo_offset[0];
+        int kj = mo_offset[1];
+        int kk = mo_offset[2];
+        int ka = mo_offset[3];
+        int kb = mo_offset[4];
+        int kc = mo_offset[5];
+        double complex *t1T_a = t1T + ka * nov;
+        double complex *t1T_b = t1T + kb * nov;
+        double complex *t1T_c = t1T + kc * nov;
+        double complex *fvo_a = fvo + ka * nov;
+        double complex *fvo_b = fvo + kb * nov;
+        double complex *fvo_c = fvo + kc * nov;
+        double complex *vvop_ab = data_ptrs[0] + ((a-a0)*db+b-b0) * nop;
+        double complex *vvop_ac = data_ptrs[1] + ((a-a0)*dc+c-c0) * nop;
+        double complex *vvop_ba = data_ptrs[2] + ((b-b0)*da+a-a0) * nop;
+        double complex *vvop_bc = data_ptrs[3] + ((b-b0)*dc+c-c0) * nop;
+        double complex *vvop_ca = data_ptrs[4] + ((c-c0)*da+a-a0) * nop;
+        double complex *vvop_cb = data_ptrs[5] + ((c-c0)*db+b-b0) * nop;
+        double complex *vooo_aj = data_ptrs[6];
+        double complex *vooo_ak = data_ptrs[7];
+        double complex *vooo_bi = data_ptrs[8];
+        double complex *vooo_bk = data_ptrs[9];
+        double complex *vooo_ci = data_ptrs[10];
+        double complex *vooo_cj = data_ptrs[11];
+        double complex *t2T_cj = data_ptrs[12];
+        double complex *t2T_cb = data_ptrs[13];
+        double complex *t2T_bk = data_ptrs[14];
+        double complex *t2T_bc = data_ptrs[15];
+        double complex *t2T_ci = data_ptrs[16];
+        double complex *t2T_ca = data_ptrs[17];
+        double complex *t2T_ak = data_ptrs[18];
+        double complex *t2T_ac = data_ptrs[19];
+        double complex *t2T_bi = data_ptrs[20];
+        double complex *t2T_ba = data_ptrs[21];
+        double complex *t2T_aj = data_ptrs[22];
+        double complex *t2T_ab = data_ptrs[23];
+        double abc = mo_energy[nocc+a+ka*nmo] + mo_energy[nocc+b+kb*nmo] + mo_energy[nocc+c+kc*nmo];
+
+        double div;
+        double complex *v0 = cache1;
+        double complex *w0 = v0 + nooo;
+        double complex *z0 = w0 + nooo;
+        double complex *wtmp = z0;
+        int i, j, k, n;
+        int offset;
+
+        for (i = 0; i < nooo; i++) {
+                w0[i] = 0;
+                v0[i] = 0;
+        }
+
+/*
+ * t2T = t2.transpose(2,3,1,0)
+ * ov = vv_op[:,nocc:]
+ * oo = vv_op[:,:nocc]
+ * w = numpy.einsum('if,fjk->ijk', ov, t2T[c])
+ * w-= numpy.einsum('ijm,mk->ijk', vooo[a], t2T[c,b])
+ * v = numpy.einsum('ij,k->ijk', oo, t1T[c]*.5)
+ * v+= numpy.einsum('ij,k->ijk', t2T[b,a], fov[:,c]*.5)
+ * v+= w
+ */
+
+        CCzget_wv(w0, v0, wtmp, fvo_c, vooo_aj, vvop_ab, vvop_ba, t1T_c, t2T_cj, t2T_cb, t2T_ba,
+                  nocc, nvir, a, b, c, a0, b0, c0, idx0, (kk==kc));
+        CCzget_wv(w0, v0, wtmp, fvo_b, vooo_ak, vvop_ac, vvop_ca, t1T_b, t2T_bk, t2T_bc, t2T_ca,
+                  nocc, nvir, a, c, b, a0, c0, b0, idx1, (kj==kb));
+        CCzget_wv(w0, v0, wtmp, fvo_c, vooo_bi, vvop_ba, vvop_ab, t1T_c, t2T_ci, t2T_ca, t2T_ab,
+                  nocc, nvir, b, a, c, b0, a0, c0, idx2, (kk==kc));
+        CCzget_wv(w0, v0, wtmp, fvo_a, vooo_bk, vvop_bc, vvop_cb, t1T_a, t2T_ak, t2T_ac, t2T_cb,
+                  nocc, nvir, b, c, a, b0, c0, a0, idx3, (ka==ki));
+        CCzget_wv(w0, v0, wtmp, fvo_b, vooo_ci, vvop_ca, vvop_ac, t1T_b, t2T_bi, t2T_ba, t2T_ac,
+                  nocc, nvir, c, a, b, c0, a0, b0, idx4, (kb==kj));
+        CCzget_wv(w0, v0, wtmp, fvo_a, vooo_cj, vvop_cb, vvop_bc, t1T_a, t2T_aj, t2T_ab, t2T_bc,
+                  nocc, nvir, c, b, a, c0, b0, a0, idx5, (ka==ki));
+
+        offset = (((a-a0)*db + b-b0)*dc + c-c0)*nooo;
+        for (n = 0, i = 0; i < nocc; i++) {
+        for (j = 0; j < nocc; j++) {
+        for (k = 0; k < nocc; k++, n++) {
+            //div = 1. / (mo_energy[i+ki*nmo] + mo_energy[j+kj*nmo] + mo_energy[k+kk*nmo] - abc);
+            t3Tw[offset + n] = w0[n];
+            t3Tv[offset + n] = v0[n];
+        } } }
+
+}
+
+void CCsd_zcontract_t3T(double complex *t3Tw, double complex *t3Tv, double *mo_energy,
+                        double complex *t1T, double complex *fvo, int nocc, int nvir, int nkpts,
+                        int *mo_offset, int *slices, double complex **data_ptrs)
+{
+        const int a0 = slices[0];
+        const int a1 = slices[1];
+        const int b0 = slices[2];
+        const int b1 = slices[3];
+        const int c0 = slices[4];
+        const int c1 = slices[5];
+        int da = a1 - a0;
+        int db = b1 - b0;
+        int dc = c1 - c0;
+        CacheJob *jobs = malloc(sizeof(CacheJob) * da*db*dc);
+        size_t njobs = _CCsd_t_gen_jobs_full(jobs, nocc, nvir, slices);
+
+        int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
+        _make_permute_indices(permute_idx, nocc);
+
+#pragma omp parallel default(none) \
+        shared(njobs, nocc, nvir, nkpts, t3Tw, t3Tv, mo_offset, mo_energy, t1T, fvo, jobs, slices, \
+               data_ptrs, permute_idx)
+{
+        int a, b, c;
+        size_t k;
+        complex double *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
+        complex double *t1Thalf = malloc(sizeof(double complex) * nkpts*nvir*nocc*2);
+        complex double *fvohalf = t1Thalf + nkpts*nvir*nocc;
+        for (k = 0; k < nkpts*nvir*nocc; k++) {
+                t1Thalf[k] = t1T[k] * .5;
+                fvohalf[k] = fvo[k] * .5;
+        }
+#pragma omp for schedule (dynamic, 4)
+        for (k = 0; k < njobs; k++) {
+                a = jobs[k].a;
+                b = jobs[k].b;
+                c = jobs[k].c;
+                zcontract6_t3T(nocc, nvir, a, b, c, mo_offset, t3Tw, t3Tv, mo_energy, t1Thalf,
+                               fvohalf, slices, data_ptrs, cache1,
+                               permute_idx);
+        }
+        free(t1Thalf);
+        free(cache1);
+}
+        free(jobs);
+        free(permute_idx);
+}
+

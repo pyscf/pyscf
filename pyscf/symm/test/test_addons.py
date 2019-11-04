@@ -49,9 +49,8 @@ class KnowValues(unittest.TestCase):
         c = addons.symmetrize_orb(mol, mf.mo_coeff)
         self.assertTrue(numpy.allclose(c, mf.mo_coeff))
         numpy.random.seed(1)
-        c = addons.symmetrize_orb(mol,
-                                  numpy.random.random((mf.mo_coeff.shape)))
-        self.assertAlmostEqual(numpy.linalg.norm(c), 10.148003411042838)
+        c = addons.symmetrize_orb(mol, numpy.random.random((mf.mo_coeff.shape)))
+        self.assertAlmostEqual(numpy.linalg.norm(c), 10.163677602612152)
 
     def test_symmetrize_space(self):
         from pyscf import gto, symm, scf

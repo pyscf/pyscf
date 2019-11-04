@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (time.clock(), time.time())
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    hybrid = abs(hyb) > 1e-10
+    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
@@ -98,10 +98,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vxc += vj - vk * (hyb * .5)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk * .5
 
         if ground_state:
-            exc -= np.einsum('Kij,Kji', dm, vk).real * .5 * hyb*.5 * weight
+            exc -= np.einsum('Kij,Kji', dm, vk).real * .5 * .5 * weight
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm, vj).real * .5 * weight
@@ -123,17 +128,17 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return rho
 
 
-class KRKS(khf.KRHF):
+class KRKS(khf.KRHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3))):
         khf.KRHF.__init__(self, cell, kpts)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self)
 
-    def dump_flags(self):
-        khf.KRHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+    def dump_flags(self, verbose=None):
+        khf.KRHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
 
@@ -146,12 +151,13 @@ class KRKS(khf.KRHF):
         weight = 1./len(h1e_kpts)
         e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
         tot_e = e1 + vhf.ecoul + vhf.exc
+        self.scf_summary['e1'] = e1.real
+        self.scf_summary['coul'] = vhf.ecoul.real
+        self.scf_summary['exc'] = vhf.exc.real
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
         return tot_e.real, vhf.ecoul + vhf.exc
 
     get_rho = get_rho
-
-    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)

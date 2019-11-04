@@ -448,10 +448,7 @@ void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
                 eval_aopair = &GTO_aopair_lazy_contract;
         }
 
-#pragma omp parallel default(none) \
-        shared(intor, eval_aopair, eval_gz, fill, out, nkpts, comp, nimgs, \
-               Ls, expkL, shls_slice, ao_loc, sGv, b, sgxyz, gs, nGv,\
-               atm, natm, bas, nbas, env, blksize)
+#pragma omp parallel
 {
         int i, j, ij;
         int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);

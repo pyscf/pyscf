@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+import tempfile
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -70,6 +71,28 @@ class KnownValues(unittest.TestCase):
         e = mf1.kernel()
         self.assertAlmostEqual(e, -75.446749864901321, 9)
         mol.stdout.close()
+
+    def test_diis_restart(self):
+        mol = gto.M(
+            verbose = 7,
+            output = '/dev/null',
+            atom = '''
+        O     0    0        0
+        H     0    -1.757   1.587
+        H     0    1.757    1.587''',
+            basis = '631g',
+        )
+        tmpf = tempfile.NamedTemporaryFile()
+        mf = scf.RHF(mol)
+        mf.diis_file = tmpf.name
+        eref = mf.kernel()
+        self.assertAlmostEqual(eref, -75.44606939063496, 9)
+
+        mf = scf.RHF(mol)
+        mf.diis = scf.diis.DIIS().restore(tmpf.name)
+        mf.max_cycle = 3
+        e = mf.kernel()
+        self.assertAlmostEqual(e, eref, 9)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,7 +58,13 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     emp2 = 0
     for i in range(nocc):
-        gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
+        if isinstance(eris.ovov, numpy.ndarray) and eris.ovov.ndim == 4:
+            # When mf._eri is a custom integrals wiht the shape (n,n,n,n), the
+            # ovov integrals might be in a 4-index tensor.
+            gi = eris.ovov[i]
+        else:
+            gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
+
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
         emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
@@ -283,6 +289,11 @@ def as_scanner(mp):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            for key in ('with_df', 'with_solvent'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
@@ -337,8 +348,8 @@ class MP2(lib.StreamObject):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)
@@ -401,6 +412,10 @@ class MP2(lib.StreamObject):
         return mp2.Gradients(self)
 
 RMP2 = MP2
+
+from pyscf import scf
+scf.hf.RHF.MP2 = lib.class_as_method(MP2)
+scf.rohf.ROHF.MP2 = None
 
 
 def _mo_energy_without_core(mp, mo_energy):

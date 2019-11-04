@@ -33,7 +33,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_symm_spin0(self):
-        fs = fci.FCI(mol, m.mo_coeff)
+        fs = fci.FCI(mol, m.mo_coeff, singlet=True)
         fs.wfnsym = 'B1'
         fs.nroots = 3
         e, c = fs.kernel()

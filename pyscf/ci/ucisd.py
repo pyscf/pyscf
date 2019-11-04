@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -969,6 +969,9 @@ class UCISD(cisd.CISD):
         return ucisd.Gradients(self)
 
 CISD = UCISD
+
+from pyscf import scf
+scf.uhf.UHF.CISD = lib.class_as_method(CISD)
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

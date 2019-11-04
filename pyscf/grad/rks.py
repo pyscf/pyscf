@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -57,10 +57,10 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
+        logger.debug1(ks_grad, 'sum(grids response) %s', exc.sum(axis=0))
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
-    nao = vxc.shape[-1]
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
@@ -91,7 +91,8 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[0], mask, 'LDA')
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]
+                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                 verbose=verbose)[1]
                 vrho = vxc[0]
                 aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
                 _d1_dot_(vmat[idm], mol, ao[1:4], aow, mask, ao_loc, True)
@@ -102,7 +103,8 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[:4], mask, 'GGA')
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]
+                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                 verbose=verbose)[1]
                 wv = numint._rks_gga_wv0(rho, vxc, weight)
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
                 rho = vxc = vrho = vsigma = wv = None
@@ -169,7 +171,8 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho = make_rho(0, ao[0], mask, 'LDA')
-            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                  verbose=verbose)[:2]
             vrho = vxc[0]
 
             vtmp = numpy.zeros((3,nao,nao))
@@ -190,7 +193,8 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho = make_rho(0, ao[:4], mask, 'GGA')
-            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                  verbose=verbose)[:2]
 
             vtmp = numpy.zeros((3,nao,nao))
             wv = numint._rks_gga_wv0(rho, vxc, weight)
@@ -334,10 +338,13 @@ class Gradients(rhf_grad.Gradients):
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
+# This parameter has no effects for HF gradients. Add this attribute so that
+# the kernel function can be reused in the DFT gradients code.
+        self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
-    def dump_flags(self):
-        rhf_grad.Gradients.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rhf_grad.Gradients.dump_flags(self, verbose)
         logger.info(self, 'grid_response = %s', self.grid_response)
         #if callable(self.base.grids.prune):
         #    logger.info(self, 'Grid pruning %s may affect DFT gradients accuracy.'
@@ -347,7 +354,26 @@ class Gradients(rhf_grad.Gradients):
 
     get_veff = get_veff
 
+    def extra_force(self, atom_id, envs):
+        '''Hook for extra contributions in analytical gradients.
+
+        Contributions like the response of auxiliary basis in density fitting
+        method, the grid response in DFT numerical integration can be put in
+        this function.
+        '''
+        if self.grid_response:
+            vhf = envs['vhf']
+            log = envs['log']
+            log.debug('grids response for atom %d %s',
+                      atom_id, vhf.exc1_grid[atom_id])
+            return vhf.exc1_grid[atom_id]
+        else:
+            return 0
+
 Grad = Gradients
+
+from pyscf import dft
+dft.rks.RKS.Gradients = dft.rks_symm.RKS.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
@@ -365,7 +391,7 @@ if __name__ == '__main__':
     mf.conv_tol = 1e-14
     #mf.grids.atom_grid = (20,86)
     e0 = mf.scf()
-    g = Gradients(mf)
+    g = mf.Gradients()
     print(lib.finger(g.kernel()) - -0.049887865971659243)
 #[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
 # [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]

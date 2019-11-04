@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,8 +37,8 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dft.RKS(mol).run(xc='b3lyp', conv_tol=1e-14)
-    polar = Polarizability(mf).polarizability()
-    hpol = Polarizability(mf).hyper_polarizability()
+    polar = mf.Polarizability().polarizability()
+    hpol = mf.Polarizability().hyper_polarizability()
     print(polar)
 
     mf.verbose = 0

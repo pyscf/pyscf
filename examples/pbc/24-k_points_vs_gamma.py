@@ -30,7 +30,7 @@ cell = gto.M(
 # between periodic gaussians.
 #cell = build_cell(ase_atom, ke=50., basis=basis)
 supcell = super_cell(cell, nmp)
-mf = pbchf.RHF(supcell, exxdiv=None)
+mf = pbchf.RHF(supcell)
 mf.kernel()
 supcell_energy = mf.energy_tot() / np.prod(nmp)
 
@@ -43,7 +43,7 @@ eea, wea = mycc.eaccsd(nroots=2)
 # sure we shift the k-points to be gamma-centered.
 kpts = cell.make_kpts(nmp)
 kpts -= kpts[0]
-kmf = pbchf.KRHF(cell, kpts, exxdiv=None)#, conv_tol=1e-10)
+kmf = pbchf.KRHF(cell, kpts)
 kpoint_energy = kmf.kernel()
 
 mykcc = pbccc.KRCCSD(kmf)
@@ -53,11 +53,11 @@ ekcc = mykcc.ecc
 ekip, wkip = mykcc.ipccsd(nroots=2, kptlist=[0])
 ekea, wkea = mykcc.eaccsd(nroots=2, kptlist=[0])
 
-print 'Difference between gamma/k-point mean-field calculation = %.15g' % (
-    abs(supcell_energy-kpoint_energy))
-print 'Difference between gamma/k-point ccsd calculation = %.15g' % (
-    abs(gccsd_energy - kccsd_energy))
-print 'Difference between gamma/k-point ip-eomccsd calculation = %.15g' % (
-    np.linalg.norm(np.array(eip) - np.array(ekip)))
-print 'Difference between gamma/k-point ea-eomccsd calculation = %.15g' % (
-    np.linalg.norm(np.array(eea) - np.array(ekea)))
+print('Difference between gamma/k-point mean-field calculation = %.15g' % (
+    abs(supcell_energy-kpoint_energy)))
+print('Difference between gamma/k-point ccsd calculation = %.15g' % (
+    abs(gccsd_energy - kccsd_energy)))
+print('Difference between gamma/k-point ip-eomccsd calculation = %.15g' % (
+    np.linalg.norm(np.array(eip) - np.array(ekip))))
+print('Difference between gamma/k-point ea-eomccsd calculation = %.15g' % (
+    np.linalg.norm(np.array(eea) - np.array(ekea))))

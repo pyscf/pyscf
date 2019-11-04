@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -264,8 +264,8 @@ class NMR(lib.StreamObject):
         self.mo_e10 = None
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
@@ -327,6 +327,9 @@ class NMR(lib.StreamObject):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         return get_ovlp(mol, gauge_orig)
 
+from pyscf import scf
+scf.hf.RHF.NMR = lib.class_as_method(NMR)
+
 
 def _write(stdout, msc3x3, title):
     stdout.write('%s\n' % title)
@@ -352,7 +355,7 @@ if __name__ == '__main__':
     mol.build()
 
     rhf = scf.RHF(mol).run()
-    nmr = NMR(rhf)
+    nmr = rhf.NMR()
     nmr.cphf = True
     #nmr.gauge_orig = (0,0,0)
     msc = nmr.kernel() # _xx,_yy = 375.232839, _zz = 483.002139

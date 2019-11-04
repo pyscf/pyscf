@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,18 +28,39 @@ Simple usage::
     >>> grad.RHF(mf).kernel()
 '''
 
-from pyscf.grad import rhf
-from pyscf.grad import dhf
-from pyscf.grad import uhf
-from pyscf.grad import rohf
-from pyscf.grad import ccsd
-from pyscf.grad import cisd
-#from pyscf.grad import rks
-from pyscf.grad.rhf import Gradients as RHF
-from pyscf.grad.dhf import Gradients as DHF
-from pyscf.grad.uhf import Gradients as UHF
-from pyscf.grad.rohf import Gradients as ROHF
-#from pyscf.grad.rks import Gradients as RKS
-#CCSD = ccsd.Gradients
+from . import rhf
+from . import dhf
+from . import uhf
+from . import rohf
+from .rhf import Gradients as RHF
+from .dhf import Gradients as DHF
+from .uhf import Gradients as UHF
+from .rohf import Gradients as ROHF
 
 grad_nuc = rhf.grad_nuc
+
+try:
+    from . import casci
+    from . import casscf
+    from . import ccsd
+    #from . import ccsd_t
+    from . import cisd
+    from . import mp2
+    from . import rks
+    from . import roks
+    from . import tdrhf
+    from . import tdrks
+    from . import tduhf
+    from . import tduks
+    from . import uccsd
+    #from . import uccsd_t
+    from . import ucisd
+    from . import uks
+    from . import ump2
+
+    from .rks import Gradients as RKS
+    from .uks import Gradients as UKS
+    from .roks import Gradients as ROKS
+
+except ImportError:
+    pass

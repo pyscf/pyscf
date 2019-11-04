@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -505,7 +505,7 @@ class Grids(lib.StreamObject):
             self.non0tab = None
         super(Grids, self).__setattr__(key, val)
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
         logger.info(self, 'pruning grids: %s', self.prune)
@@ -540,6 +540,15 @@ class Grids(lib.StreamObject):
     def kernel(self, mol=None, with_non0tab=False):
         self.dump_flags()
         return self.build(mol, with_non0tab)
+
+    def reset(self, mol=None):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        if mol is not None:
+            self.mol = mol
+        self.coords = None
+        self.weights = None
+        self.non0tab = None
+        return self
 
     @lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
