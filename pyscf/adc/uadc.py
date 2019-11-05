@@ -51,7 +51,9 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     E, U = lib.linalg_helper.davidson(matvec, guess, diag, nroots=nroots, verbose=log, max_cycle=adc.max_cycle, max_space=adc.max_space)
 
-    spec_factors = adc.get_spec_factors(nroots, U)
+    T_a, T_b = adc.get_trans_moments(nroots)
+
+    spec_factors = adc.get_spec_factors(nroots, (T_a,T_b), U)
 
 #    eig = lib.davidson_nosym1
 #    if user_guess or koopmans:
@@ -73,21 +75,16 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 #                           tol=eom.conv_tol, max_cycle=eom.max_cycle,
 #                           max_space=eom.max_space, nroots=nroots, verbose=log)
 #
-#    if eom.verbose >= logger.INFO:
-#        for n, en, vn, convn in zip(range(nroots), es, vs, conv):
-#            r1, r2 = eom.vector_to_amplitudes(vn)
-#            if isinstance(r1, np.ndarray):
-#                qp_weight = np.linalg.norm(r1)**2
-#            else: # for EOM-UCCSD
-#                r1 = np.hstack([x.ravel() for x in r1])
-#                qp_weight = np.linalg.norm(r1)**2
-#            logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %.6g  conv = %s',
-#                        n, en, qp_weight, convn)
-#        log.timer('EOM-CCSD', *cput0)
+#    if adc.verbose >= logger.INFO:
+#        for n, en in zip(range(nroots), E):
+#            logger.info(adc, 'ADC root %d E = %.16g',
+#                        n, en )
+#        log.timer('ADC', *cput0)
+#
 #    if nroots == 1:
-#        return conv[0], es[0].real, vs[0]
+#        return E[0], U[0], spec_factors[0]
 #    else:
-#        return conv, es.real, vs
+#        return E, U, spec_factors
 #    return e_corr, t1, t2
 
     return E, U, spec_factors
@@ -2083,67 +2080,8 @@ def ip_adc_matvec(adc, Mij=None):
 
     return sigma_
 
-def ea_spec_factors(adc, nroots=1, U=None):
 
-    print ("\nComputing spectroscopic intensity:")
-
-    nmo_a  = adc.nmo_a
-    nmo_b  = adc.nmo_b
-
-    P = np.zeros((nroots))
-
-    U = np.array(U)
-
-    for orb in range(nmo_a):
-
-            T_a = adc.compute_trans_moments_ea(orb, spin = "alpha")
-
-            T_a = np.dot(T_a, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_a[i]))
-
-    for orb in range(nmo_b):
-
-            T_b = adc.compute_trans_moments_ea(orb, spin = "beta")
-
-            T_b = np.dot(T_b, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_b[i]))
-
-    return P
-
-
-def ip_spec_factors(adc, nroots=1, U=None):
-
-    print ("\nComputing spectroscopic intensity:")
-
-    nmo_a  = adc.nmo_a
-    nmo_b  = adc.nmo_b
-
-    P = np.zeros((nroots))
-
-    U = np.array(U)
-
-    for orb in range(nmo_a):
-
-            T_a = adc.compute_trans_moments_ip(orb, spin = "alpha")
-
-            T_a = np.dot(T_a, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_a[i]))
-
-    for orb in range(nmo_b):
-
-            T_b = adc.compute_trans_moments_ip(orb, spin = "beta")
-
-            T_b = np.dot(T_b, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_b[i]))
-
-    return P
-
-
-def compute_trans_moments_ea(adc, orb, spin=None):
+def ea_compute_trans_moments(adc, orb, spin=None):
 
     method = adc.method
 
@@ -2314,7 +2252,7 @@ def compute_trans_moments_ea(adc, orb, spin=None):
     return T
 
 
-def compute_trans_moments_ip(adc, orb, spin=None):
+def ip_compute_trans_moments(adc, orb, spin=None):
 
     method = adc.method
 
@@ -2504,8 +2442,7 @@ class UADCEA(UADC):
     get_imds = get_imds_ea
     matvec = ea_adc_matvec
     get_diag = ea_adc_diag
-    compute_trans_moments_ea = compute_trans_moments_ea
-    get_spec_factors = ea_spec_factors
+    compute_trans_moments = ea_compute_trans_moments
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2531,6 +2468,57 @@ class UADCEA(UADC):
         matvec = self.matvec(imds)
         #matvec = lambda x: self.matvec() 
         return matvec, diag
+
+    def get_trans_moments(adc, nroots=1):
+
+        nmo_a  = adc.nmo_a
+        nmo_b  = adc.nmo_b
+
+        T_a = []
+        T_b = []
+
+        for orb in range(nmo_a):
+    
+                T_aa = adc.compute_trans_moments(orb, spin = "alpha")
+                T_a.append(T_aa)
+
+        for orb in range(nmo_b):
+    
+                T_bb = adc.compute_trans_moments(orb, spin = "beta")
+                T_b.append(T_bb) 
+        
+        return (T_a, T_b)
+
+
+    def get_spec_factors(adc, nroots=1, T=(None,None), U=None):
+    
+        print ("\nComputing spectroscopic intensity:")
+    
+        nmo_a  = adc.nmo_a
+        nmo_b  = adc.nmo_b
+    
+        P = np.zeros((nroots))
+   
+        T_a = T[0]
+        T_b = T[1]    
+        U = np.array(U)
+
+        for orb in range(nmo_a):
+
+            T_aa = T_a[orb]
+            T_aa = np.dot(T_aa, U.T)
+            for i in range(nroots):
+                P[i] += np.square(np.absolute(T_aa[i]))
+   
+        for orb in range(nmo_b):
+
+            T_bb = T_b[orb]
+            T_bb = np.dot(T_bb, U.T)
+            for i in range(nroots):
+                P[i] += np.square(np.absolute(T_bb[i]))
+
+        return P
+
 
 class UADCIP(UADC):
 
@@ -2559,8 +2547,7 @@ class UADCIP(UADC):
     get_imds = get_imds_ip
     get_diag = ip_adc_diag
     matvec = ip_adc_matvec
-    compute_trans_moments_ip = compute_trans_moments_ip
-    get_spec_factors = ip_spec_factors
+    compute_trans_moments = ip_compute_trans_moments
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2586,5 +2573,55 @@ class UADCIP(UADC):
         matvec = self.matvec(imds)
         #matvec = lambda x: self.matvec() 
         return matvec, diag
+
+    def get_trans_moments(adc, nroots=1):
+
+        nmo_a  = adc.nmo_a
+        nmo_b  = adc.nmo_b
+
+        T_a = []
+        T_b = []
+
+        for orb in range(nmo_a):
+    
+                T_aa = adc.compute_trans_moments(orb, spin = "alpha")
+                T_a.append(T_aa)
+
+        for orb in range(nmo_b):
+    
+                T_bb = adc.compute_trans_moments(orb, spin = "beta")
+                T_b.append(T_bb) 
+        
+        return (T_a, T_b)
+
+
+    def get_spec_factors(adc, nroots=1, T=(None,None), U=None):
+    
+        print ("\nComputing spectroscopic intensity:")
+    
+        nmo_a  = adc.nmo_a
+        nmo_b  = adc.nmo_b
+    
+        P = np.zeros((nroots))
+   
+        T_a = T[0]
+        T_b = T[1]    
+        U = np.array(U)
+
+        for orb in range(nmo_a):
+
+            T_aa = T_a[orb]
+            T_aa = np.dot(T_aa, U.T)
+            for i in range(nroots):
+                P[i] += np.square(np.absolute(T_aa[i]))
+   
+        for orb in range(nmo_b):
+
+            T_bb = T_b[orb]
+            T_bb = np.dot(T_bb, U.T)
+            for i in range(nroots):
+                P[i] += np.square(np.absolute(T_bb[i]))
+
+        return P
 
 # TODO: add a test main section
