@@ -38,21 +38,29 @@ class tddft_iter_2ord(tddft_iter):
      or computes 
            X = (1 - K chi0 K chi0 )^{-1} vext 
     """
-    from scipy.sparse.linalg import LinearOperator
+    from scipy.sparse.linalg import LinearOperator, lgmres
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff2_op = LinearOperator((self.nprod,self.nprod), matvec=self.umkckc_mv, dtype=self.dtypeComplex)
 
-    if self.scipy_ver > 0:
-        from pyscf.nao.m_lgmres import lgmres
-        resgm,info = lgmres(veff2_op, np.require(vext, dtype=self.dtypeComplex, requirements='C'), x0=x0, 
-                tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
+    if self.res_method == "absolute":
+        tol = 0.0
+        atol = self.tddft_iter_tol
+    elif self.res_method == "relative":
+        tol = self.tddft_iter_tol
+        atol = 0.0
+    elif self.res_method == "both":
+        tol = self.tddft_iter_tol
+        atol = self.tddft_iter_tol
     else:
-        from scipy.sparse.linalg import lgmres
-        resgm,info = lgmres(veff2_op, np.require(vext, dtype=self.dtypeComplex, requirements='C'), x0=x0, 
-                tol=self.tddft_iter_tol, maxiter=self.maxiter)
+        raise ValueError("Unknow res_method")
+
+    resgm,info = lgmres(veff2_op, np.require(vext, dtype=self.dtypeComplex,
+                                             requirements='C'), x0=x0, 
+                        tol=tol, atol=atol, maxiter=self.maxiter)
     
     if info != 0:  print("LGMRES Warning: info = {0}".format(info))
+
     return resgm
 
   def polariz_upkc(self, comegas):

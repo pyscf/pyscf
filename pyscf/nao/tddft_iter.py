@@ -130,25 +130,31 @@ class tddft_iter(chi0_matvec):
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
     """ This computes an effective field (scalar potential) given the external scalar potential """
-    from scipy.sparse.linalg import LinearOperator
+    from scipy.sparse.linalg import LinearOperator, lgmres
     nsp = self.nspin*self.nprod
+
     assert len(vext)==nsp, "{} {}".format(len(vext), nsp)
     self.comega_current = comega
     veff_op = LinearOperator((nsp,nsp), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
 
-    if self.res_method == "relative" or self.res_method == "absolute":
-      from pyscf.nao.m_lgmres import lgmres
-      resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
+    if self.res_method == "absolute":
+        tol = 0.0
+        atol = self.tddft_iter_tol
+    elif self.res_method == "relative":
+        tol = self.tddft_iter_tol
+        atol = 0.0
     elif self.res_method == "both":
-      # use the non-modified lgmres scipy version
-      from scipy.sparse.linalg import lgmres
-      resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
+        tol = self.tddft_iter_tol
+        atol = self.tddft_iter_tol
     else:
-        raise ValueError("wrong input for res_method")
+        raise ValueError("Unknow res_method")
+
+    resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex,
+                                             requirements='C'), 
+                         x0=x0, tol=tol, atol=atol, maxiter=self.maxiter)
 
     if info != 0: print("LGMRES Warning: info = {0}".format(info))
+    
     return resgm
 
   def vext2veff_matvec(self, vin):
