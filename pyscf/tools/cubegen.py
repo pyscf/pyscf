@@ -237,6 +237,9 @@ class Cube(object):
     def get_ngrids(self):
         return self.nx * self.ny * self.nz
 
+    def get_volume_element(self):
+        return (self.xs[1]-self.xs[0])*(self.ys[1]-self.ys[0])*(self.zs[1]-self.zs[0])
+
     def write(self, field, fname, comment=None):
         """  Result: .cube file with the field in the file fname.  """
         assert(field.ndim == 3)
