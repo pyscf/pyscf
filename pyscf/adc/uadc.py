@@ -398,7 +398,7 @@ def compute_energy(myadc, t1, t2, eris):
         e_mp3 += np.einsum('akcj,akjc',temp_3_ab_3, v2e_voov_ab)
         e_mp3 += np.einsum('akcj,kacj',temp_3_ab_4, v2e_ovvo_ab)
     
-        e_corr = e_mp3
+        e_corr += e_mp3
 
     return e_corr
 
