@@ -18,8 +18,9 @@
 
 # TODO: Add description of the module
 '''
+===================================
 Algebraic Diagrammatic Construction
-===============
+===================================
 '''
 
 from pyscf import scf
@@ -32,8 +33,8 @@ def ADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.uhf.UHF):
         return UADC(mf, frozen, mo_coeff, mo_occ)
     else:
-# TODO: For now, convert RHF into UHF
-        raise NotImplementedError('RADC')
+        mf = scf.addons.convert_to_uhf(mf)
+        return UADC(mf, frozen, mo_coeff, mo_occ)
 
 
 def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
