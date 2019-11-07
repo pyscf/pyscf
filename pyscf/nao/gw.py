@@ -21,7 +21,7 @@ class gw(scf):
     """ Constructor G0W0 class """
     # how to exclude from the input the dtype and xc_code ?
     scf.__init__(self, **kw)
-    #print(__name__, ' dtype ', self.dtype)
+    print(__name__, ' dtype ', self.dtype)
 
     self.xc_code_scf = copy(self.xc_code)
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 15
@@ -33,11 +33,15 @@ class gw(scf):
     self.frozen_core = kw['frozen_core'] if 'frozen_core' in kw else None
     if sum(self.nelec) == 1: raise RuntimeError('Not implemented H, sorry :-) Look into scf/__init__.py for HF1e class...')
     
-    if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int((self.nelec+1)/2)])
-    elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
-    else: raise RuntimeError('nspin>2?')
+    if self.nspin==1:
+        self.nocc_0t = nocc_0t = np.array([int((self.nelec+1)/2)])
+    elif self.nspin==2:
+        self.nocc_0t = nocc_0t = self.nelec
+    else:
+        raise RuntimeError('nspin>2?')
 
-    if self.verbosity>0: print(__name__,'\t\t====> Number of occupied states = {}, states up to fermi level= {}, nspin = {}, and magnetization = {}'.format(nocc_0t,self.nfermi,self.nspin,self.spin))
+    if self.verbosity>0:
+        print(__name__,'\t\t====> Number of occupied states = {}, states up to fermi level= {}, nspin = {}, and magnetization = {}'.format(nocc_0t,self.nfermi,self.nspin,self.spin))
 
     if 'nocc' in kw:
       s2nocc = [kw['nocc']] if type(kw['nocc'])==int else kw['nocc']

@@ -22,7 +22,6 @@ Some hacky functions
 
 import os, sys
 import warnings
-import imp
 import tempfile
 import shutil
 import functools
