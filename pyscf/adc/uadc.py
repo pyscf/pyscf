@@ -57,14 +57,17 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     else:
         return E, U, spec_factors
 
-
 def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     t1, t2 = myadc.compute_amplitudes(eris)
     e_corr = myadc.compute_energy(t1, t2, eris)
+
     return e_corr, t1, t2
 
 def compute_amplitudes(myadc, eris):
+
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(myadc.method)
 
     t2_2 = (None,)
     t1_3 = (None,)
@@ -333,6 +336,9 @@ def compute_amplitudes(myadc, eris):
 
 def compute_energy(myadc, t1, t2, eris):
 
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(myadc.method)
+
     v2e_oovv_a, v2e_oovv_ab, v2e_oovv_b = eris.oovv
 
     t2_1_a, t2_1_ab, t2_1_b  = t2[0]
@@ -392,7 +398,7 @@ def compute_energy(myadc, t1, t2, eris):
         e_mp3 += np.einsum('akcj,akjc',temp_3_ab_3, v2e_voov_ab)
         e_mp3 += np.einsum('akcj,kacj',temp_3_ab_4, v2e_ovvo_ab)
     
-        e_corr = e_mp3
+        e_corr += e_mp3
 
     return e_corr
 
@@ -455,7 +461,6 @@ class UADC(lib.StreamObject):
         logger.info(self, 'max_memory %d MB (current use %d MB)',
                     self.max_memory, lib.current_memory()[0])
         return self
-    
 
     def dump_flags_gs(self, verbose=None):
         logger.info(self, '')
@@ -463,7 +468,6 @@ class UADC(lib.StreamObject):
         logger.info(self, 'max_memory %d MB (current use %d MB)',
                     self.max_memory, lib.current_memory()[0])
         return self
-
 
     def kernel(self):
         assert(self.mo_coeff is not None)
@@ -498,9 +502,10 @@ class UADC(lib.StreamObject):
     def ip_adc(self, nroots=1, guess=None):
         return UADCIP(self).kernel(nroots, guess)
 
-
-
 def get_imds_ea(adc):
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
 
     method = adc.method
 
@@ -766,6 +771,9 @@ def get_imds_ea(adc):
 
 def get_imds_ip(adc):
 
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
     method = adc.method
 
     t1 = adc.t1
@@ -1026,10 +1034,11 @@ def get_imds_ip(adc):
 
     return M_ij
 
+def ea_adc_diag(adc,M_ab=None):
 
-def ea_adc_diag(adc,Mab=None):
-   
-    M_ab = adc.get_imds()
+    if M_ab is None:
+        M_ab = adc.get_imds()
+
     M_ab_a, M_ab_b = M_ab[0], M_ab[1]
 
     nocc_a = adc.nocc_a
@@ -1113,9 +1122,11 @@ def ea_adc_diag(adc,Mab=None):
 
     return diag
 
-def ip_adc_diag(adc,Mij=None):
+def ip_adc_diag(adc,M_ij=None):
    
-    M_ij = adc.get_imds()
+    if M_ij is None:
+        M_ij = adc.get_imds()
+
     M_ij_a, M_ij_b = M_ij[0], M_ij[1]
 
     nocc_a = adc.nocc_a
@@ -1198,8 +1209,7 @@ def ip_adc_diag(adc,Mij=None):
 
     return diag
 
-
-def ea_adc_matvec(adc, Mab=None):
+def ea_adc_matvec(adc, M_ab=None):
 
     method = adc.method
 
@@ -1289,8 +1299,9 @@ def ea_adc_matvec(adc, Mab=None):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    Mab = adc.get_imds()
-    M_ab_a, M_ab_b = Mab
+    if M_ab is None:
+        M_ab = adc.get_imds()
+    M_ab_a, M_ab_b = M_ab
 
     #Calculate sigma vector
     def sigma_(r):
@@ -1649,7 +1660,7 @@ def ea_adc_matvec(adc, Mab=None):
 
     return sigma_
 
-def ip_adc_matvec(adc, Mij=None):
+def ip_adc_matvec(adc, M_ij=None):
 
     method = adc.method
 
@@ -1744,8 +1755,9 @@ def ip_adc_matvec(adc, Mij=None):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    Mij = adc.get_imds()
-    M_ij_a, M_ij_b = Mij
+    if M_ij is None:
+        M_ij = adc.get_imds()
+    M_ij_a, M_ij_b = M_ij
 
     #Calculate sigma vector
     def sigma_(r):
@@ -2069,7 +2081,6 @@ def ip_adc_matvec(adc, Mij=None):
 
     return sigma_
 
-
 def ea_compute_trans_moments(adc, orb, spin=None):
 
     method = adc.method
@@ -2239,7 +2250,6 @@ def ea_compute_trans_moments(adc, orb, spin=None):
                 T[s_b:f_b] -= 0.25*np.einsum('lkca,lkc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
                 T[s_b:f_b] -= 0.25*np.einsum('klca,klc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
     return T
-
 
 def ip_compute_trans_moments(adc, orb, spin=None):
 
@@ -2477,7 +2487,6 @@ class UADCEA(UADC):
         
         return (T_a, T_b)
 
-
     def get_spec_factors(self, nroots=1, T=(None,None), U=None):
     
         nmo_a  = self.nmo_a
@@ -2578,7 +2587,6 @@ class UADCIP(UADC):
                 T_b.append(T_bb) 
         
         return (T_a, T_b)
-
 
     def get_spec_factors(self, nroots=1, T=(None,None), U=None):
     
