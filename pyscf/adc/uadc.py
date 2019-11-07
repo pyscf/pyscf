@@ -35,7 +35,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         adc.check_sanity()
     adc.dump_flags()
 
-    # TODO: compute eris if None
     if eris is None:
         eris = uadc_ao2mo.transform_integrals(adc)
 
@@ -449,6 +448,10 @@ class UADC(lib.StreamObject):
         self.mo_energy_b = mf.mo_energy[1]
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
+
+        keys = set(('e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
+
+        self._keys = set(self.__dict__.keys()).union(keys)
     
     compute_amplitudes = compute_amplitudes
     compute_energy = compute_energy
@@ -2467,6 +2470,10 @@ class UADCEA(UADC):
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
+
+        keys = set(('e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
+
+        self._keys = set(self.__dict__.keys()).union(keys)
     
     kernel = kernel
     get_imds = get_imds_ea
@@ -2571,6 +2578,10 @@ class UADCIP(UADC):
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
+
+        keys = set(('e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
+
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     kernel = kernel
     get_imds = get_imds_ip
