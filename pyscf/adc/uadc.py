@@ -343,14 +343,12 @@ def compute_energy(myadc, t1, t2, eris):
 
     t2_1_a, t2_1_ab, t2_1_b  = t2[0]
 
-    if (myadc.method == "adc(2)" or myadc.method == "adc(2)-x"):
-
-        #Compute MP2 correlation energy
-        e_mp2 = 0.25 * np.einsum('ijab,ijab', t2_1_a, v2e_oovv_a)
-        e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oovv_ab)
-        e_mp2 += 0.25 * np.einsum('ijab,ijab', t2_1_b, v2e_oovv_b)
-        
-        e_corr = e_mp2 
+    #Compute MP2 correlation energy
+    e_mp2 = 0.25 * np.einsum('ijab,ijab', t2_1_a, v2e_oovv_a)
+    e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oovv_ab)
+    e_mp2 += 0.25 * np.einsum('ijab,ijab', t2_1_b, v2e_oovv_b)
+    
+    e_corr = e_mp2 
 
     if (myadc.method == "adc(3)"):
 
@@ -2664,7 +2662,7 @@ if __name__ == '__main__':
     myadc = adc.ADC(mf)
     myadc.method = "adc(3)"
     ecorr, t_amp1, t_amp2 = myadc.kernel()
-    print(ecorr - 0.005075193564898078)
+    print(ecorr - -0.31694173142858517)
 
     myadcip = UADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)

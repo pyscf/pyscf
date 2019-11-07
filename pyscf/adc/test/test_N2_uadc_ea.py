@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
   
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, 0.005075193564898078, 6)
+        self.assertAlmostEqual(e, -0.31694173142858517 , 6)
 
         e,v,p = myadc.ea_adc(nroots=3)
 
