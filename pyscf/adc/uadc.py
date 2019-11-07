@@ -415,11 +415,9 @@ class UADC(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        # TODO: make sure default values are reasonable
-
-        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 20)
-        self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 40)
-        self.conv_tol = getattr(__config__, 'eom_rccsd_EOM_conv_tol', 1e-6)
+        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
+        self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
+        self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
         self.scf_energy = mf.scf()
         
         self.frozen = frozen
@@ -428,6 +426,7 @@ class UADC(lib.StreamObject):
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.e_corr = None
+        self.e_tot = None
         self.t1 = None
         self.t2 = None
         self.eris = None
@@ -457,6 +456,15 @@ class UADC(lib.StreamObject):
                     self.max_memory, lib.current_memory()[0])
         return self
     
+
+    def dump_flags_gs(self, verbose=None):
+        logger.info(self, '')
+        logger.info(self, '******** %s ********', self.__class__)
+        logger.info(self, 'max_memory %d MB (current use %d MB)',
+                    self.max_memory, lib.current_memory()[0])
+        return self
+
+
     def kernel(self):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
@@ -466,21 +474,23 @@ class UADC(lib.StreamObject):
     
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        # TODO: Implement
-        #self.dump_flags()
+        self.dump_flags_gs()
     
         # TODO: ao2mo transformation if eris is None
         eris = uadc_ao2mo.transform_integrals(self)
         self.eris = uadc_ao2mo.transform_integrals(self)
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, self.eris, verbose=self.verbose)
-    
-        # TODO: Implement
-        #self._finalize()
+        self.e_tot = self.scf_energy + self.e_corr
 
-        if self.verbose >= logger.INFO:
-            logger.info(self, '%s ground state correlation energy = %.8f',
-                             self.method, self.e_corr)
+        self._finalize()
+
         return self.e_corr, self.t1, self.t2
+
+    def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
+        logger.note(self, 'E_corr = %.8f  E_tot = %.8f',
+                    self.e_corr, self.e_tot)
+        return self
     
     def ea_adc(self, nroots=1, guess=None):
         return UADCEA(self).kernel(nroots, guess)
@@ -2494,7 +2504,6 @@ class UADCEA(UADC):
                 P[i] += np.square(np.absolute(T_bb[i]))
     
         return P
-
 
 class UADCIP(UADC):
 
