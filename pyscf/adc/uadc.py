@@ -40,13 +40,13 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         eris = uadc_ao2mo.transform_integrals(adc)
 
     imds = adc.get_imds(eris)
-    matvec, diag = adc.gen_matvec(imds)
+    matvec, diag = adc.gen_matvec(imds, eris)
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
     E, U = lib.linalg_helper.davidson(matvec, guess, diag, nroots=nroots, verbose=log, max_cycle=adc.max_cycle, max_space=adc.max_space)
 
-    T_a, T_b = adc.get_trans_moments(nroots)
+    T_a, T_b = adc.get_trans_moments(nroots, eris)
 
     spec_factors = adc.get_spec_factors(nroots, (T_a,T_b), U)
 
@@ -506,8 +506,6 @@ def get_imds_ea(adc, eris=None):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
-    # TODO: compute eris if None
-
     method = adc.method
 
     t1 = adc.t1
@@ -530,6 +528,9 @@ def get_imds_ea(adc, eris=None):
     idn_occ_b = np.identity(nocc_b)
     idn_vir_a = np.identity(nvir_a)
     idn_vir_b = np.identity(nvir_b)
+
+    if eris is None:
+        eris = uadc_ao2mo.transform_integrals(adc)
 
     v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
     v2e_ooov_a,v2e_ooov_ab,v2e_ooov_b = eris.ooov
@@ -777,8 +778,6 @@ def get_imds_ip(adc, eris=None):
 
     method = adc.method
 
-    # TODO: compute eris if None
-
     t1 = adc.t1
     t2 = adc.t2
 
@@ -799,6 +798,9 @@ def get_imds_ip(adc, eris=None):
     idn_occ_b = np.identity(nocc_b)
     idn_vir_a = np.identity(nvir_a)
     idn_vir_b = np.identity(nvir_b)
+
+    if eris is None:
+        eris = uadc_ao2mo.transform_integrals(adc)
 
     v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
     v2e_vvoo_a,v2e_vvoo_ab,v2e_vvoo_b = eris.vvoo
@@ -1249,22 +1251,23 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     idn_vir_a = np.identity(nvir_a)
     idn_vir_b = np.identity(nvir_b)
 
-    # TODO: compute eris if None
+    if eris is None:
+        eris = uadc_ao2mo.transform_integrals(adc)
 
-    v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = adc.oovv
-    v2e_ooov_a,v2e_ooov_ab,v2e_ooov_b = adc.ooov
-    v2e_oooo_a,v2e_oooo_ab,v2e_oooo_b = adc.oooo
-    v2e_ovoo_a,v2e_ovoo_ab,v2e_ovoo_b = adc.ovoo
-    v2e_ovov_a,v2e_ovov_ab,v2e_ovov_b = adc.ovov
-    v2e_vvoo_a,v2e_vvoo_ab,v2e_vvoo_b = adc.vvoo
-    v2e_vvvv_a,v2e_vvvv_ab,v2e_vvvv_b = adc.vvvv
-    v2e_voov_a,v2e_voov_ab,v2e_voov_b = adc.voov
-    v2e_ovvo_a,v2e_ovvo_ab,v2e_ovvo_b = adc.ovvo
-    v2e_vovo_a,v2e_vovo_ab,v2e_vovo_b = adc.vovo
-    v2e_vvvo_a,v2e_vvvo_ab,v2e_vvvo_b = adc.vvvo
-    v2e_vovv_a,v2e_vovv_ab,v2e_vovv_b = adc.vovv
-    v2e_oovo_a,v2e_oovo_ab,v2e_oovo_b = adc.oovo
-    v2e_ovvv_a,v2e_ovvv_ab,v2e_ovvv_b = adc.ovvv
+    v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
+    v2e_ooov_a,v2e_ooov_ab,v2e_ooov_b = eris.ooov
+    v2e_oooo_a,v2e_oooo_ab,v2e_oooo_b = eris.oooo
+    v2e_ovoo_a,v2e_ovoo_ab,v2e_ovoo_b = eris.ovoo
+    v2e_ovov_a,v2e_ovov_ab,v2e_ovov_b = eris.ovov
+    v2e_vvoo_a,v2e_vvoo_ab,v2e_vvoo_b = eris.vvoo
+    v2e_vvvv_a,v2e_vvvv_ab,v2e_vvvv_b = eris.vvvv
+    v2e_voov_a,v2e_voov_ab,v2e_voov_b = eris.voov
+    v2e_ovvo_a,v2e_ovvo_ab,v2e_ovvo_b = eris.ovvo
+    v2e_vovo_a,v2e_vovo_ab,v2e_vovo_b = eris.vovo
+    v2e_vvvo_a,v2e_vvvo_ab,v2e_vvvo_b = eris.vvvo
+    v2e_vovv_a,v2e_vovv_ab,v2e_vovv_b = eris.vovv
+    v2e_oovo_a,v2e_oovo_ab,v2e_oovo_b = eris.oovo
+    v2e_ovvv_a,v2e_ovvv_ab,v2e_ovvv_b = eris.ovvv
 
     v2e_vovv_1_a = v2e_vovv_a[:][:,:,ab_ind_a[0],ab_ind_a[1]].reshape(nvir_a,-1)
     v2e_vovv_1_b = v2e_vovv_b[:][:,:,ab_ind_b[0],ab_ind_b[1]].reshape(nvir_b,-1)
@@ -1705,7 +1708,8 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     idn_vir_a = np.identity(nvir_a)
     idn_vir_b = np.identity(nvir_b)
 
-    # TODO: compute eris if None
+    if eris is None:
+        eris = uadc_ao2mo.transform_integrals(adc)
 
     v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
     v2e_vooo_a,v2e_vooo_ab,v2e_vooo_b = eris.vooo
@@ -2094,7 +2098,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
     return sigma_
 
-def ea_compute_trans_moments(adc, orb, spin=None, eris=None):
+def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -2126,7 +2130,8 @@ def ea_compute_trans_moments(adc, orb, spin=None, eris=None):
     idn_vir_a = np.identity(nvir_a)
     idn_vir_b = np.identity(nvir_b)
 
-    # TODO: compute eris if None
+    if eris is None:
+        eris = uadc_ao2mo.transform_integrals(adc)
 
     v2e_oovv_a , v2e_oovv_ab, v2e_oovv_b = eris.oovv
     v2e_vvvo_a , v2e_vvvo_ab, v2e_vvvo_b = eris.vvvo
@@ -2210,7 +2215,7 @@ def ea_compute_trans_moments(adc, orb, spin=None, eris=None):
                 T[s_a:f_a] -= 0.25*np.einsum('lkac,lkc->a',t2_1_ab, t2_2_ab[:,:,(orb-nocc_a),:],optimize = True)
 
 ######### spin = beta  ############################################
-    if spin=="beta":
+    else:
 ######## ADC(2) part  ############################################
 
 
@@ -2269,7 +2274,7 @@ def ea_compute_trans_moments(adc, orb, spin=None, eris=None):
                 T[s_b:f_b] -= 0.25*np.einsum('klca,klc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
     return T
 
-def ip_compute_trans_moments(adc, orb, spin=None, eris=None):
+def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -2301,8 +2306,9 @@ def ip_compute_trans_moments(adc, orb, spin=None, eris=None):
     idn_vir_a = np.identity(nvir_a)
     idn_vir_b = np.identity(nvir_b)
 
-    # TODO: compute eris if None
-    #
+    if eris is None:
+        eris = uadc_ao2mo.transform_integrals(adc)
+
     v2e_oovv_a , v2e_oovv_ab, v2e_oovv_b = eris.oovv
     v2e_vvvo_a , v2e_vvvo_ab, v2e_vvvo_b = eris.vvvo
     v2e_ovoo_a , v2e_ovoo_ab, v2e_ovoo_b = eris.ovoo
@@ -2381,7 +2387,7 @@ def ip_compute_trans_moments(adc, orb, spin=None, eris=None):
                 T[s_a:f_a] += t1_3_a[:,(orb-nocc_a)]
 
 ######## spin = beta  ############################################
-    if spin=="beta":
+    else: 
 ######## ADC(2) 1h part  ############################################
 
         if orb < nocc_b:
@@ -2449,10 +2455,14 @@ class UADCEA(UADC):
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
         self.method = adc.method
+        self._scf = adc._scf
+        self._nocc = adc._nocc
+        self._nvir = adc._nvir
         self.nocc_a = adc._nocc[0]
         self.nocc_b = adc._nocc[1]
         self.nvir_a = adc._nvir[0]
         self.nvir_b = adc._nvir[1]
+        self.mo_coeff = adc.mo_coeff
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
@@ -2482,14 +2492,14 @@ class UADCEA(UADC):
            guess.append(g[:,p])
        return guess
     
-    def gen_matvec(self,imds=None):
-        if imds is None: imds = self.get_imds()
+    def gen_matvec(self, imds=None, eris=None):
+        if imds is None: imds = self.get_imds(eris)
         diag = self.get_diag(imds)
-        matvec = self.matvec(imds)
+        matvec = self.matvec(imds, eris)
         #matvec = lambda x: self.matvec() 
         return matvec, diag
     
-    def get_trans_moments(self, nroots=1):
+    def get_trans_moments(self, nroots=1, eris = None):
     
         nmo_a  = self.nmo_a
         nmo_b  = self.nmo_b
@@ -2499,12 +2509,12 @@ class UADCEA(UADC):
     
         for orb in range(nmo_a):
     
-                T_aa = self.compute_trans_moments(orb, spin = "alpha")
+                T_aa = self.compute_trans_moments(orb, eris = eris, spin = "alpha")
                 T_a.append(T_aa)
     
         for orb in range(nmo_b):
     
-                T_bb = self.compute_trans_moments(orb, spin = "beta")
+                T_bb = self.compute_trans_moments(orb, eris = eris, spin = "beta")
                 T_b.append(T_bb) 
         
         return (T_a, T_b)
@@ -2549,10 +2559,14 @@ class UADCIP(UADC):
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
         self.method = adc.method
+        self._scf = adc._scf
+        self._nocc = adc._nocc
+        self._nvir = adc._nvir
         self.nocc_a = adc._nocc[0]
         self.nocc_b = adc._nocc[1]
         self.nvir_a = adc._nvir[0]
         self.nvir_b = adc._nvir[1]
+        self.mo_coeff = adc.mo_coeff
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
@@ -2582,14 +2596,14 @@ class UADCIP(UADC):
            guess.append(g[:,p])
        return guess
 
-    def gen_matvec(self,imds=None):
-        if imds is None: imds = self.make_imds()
+    def gen_matvec(self, imds=None, eris=None):
+        if imds is None: imds = self.get_imds(eris)
         diag = self.get_diag(imds)
-        matvec = self.matvec(imds)
+        matvec = self.matvec(imds, eris)
         #matvec = lambda x: self.matvec() 
         return matvec, diag
 
-    def get_trans_moments(self, nroots=1):
+    def get_trans_moments(self, nroots=1, eris=None):
 
         nmo_a  = self.nmo_a
         nmo_b  = self.nmo_b
@@ -2599,12 +2613,12 @@ class UADCIP(UADC):
 
         for orb in range(nmo_a):
     
-                T_aa = self.compute_trans_moments(orb, spin = "alpha")
+                T_aa = self.compute_trans_moments(orb, eris, spin = "alpha")
                 T_a.append(T_aa)
 
         for orb in range(nmo_b):
     
-                T_bb = self.compute_trans_moments(orb, spin = "beta")
+                T_bb = self.compute_trans_moments(orb, eris, spin = "beta")
                 T_b.append(T_bb) 
         
         return (T_a, T_b)
