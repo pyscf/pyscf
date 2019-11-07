@@ -48,8 +48,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if adc.verbose >= logger.INFO:
         for n, en, pn in zip(range(nroots), E, spec_factors):
-            logger.info(adc, '%s root %d   Energy = %.8f   Spec factors = %.8f',
-                         adc.method, n, en, pn)
+            logger.info(adc, '%s root %d   Energy (Eh) = %.8f Energy (eV) = %.8f  Spec factors = %.8f',
+                         adc.method, n, en, en*27.2114, pn)
         log.timer('ADC', *cput0)
 
     if nroots == 1:
@@ -487,6 +487,8 @@ class UADC(lib.StreamObject):
     
     def ip_adc(self, nroots=1, guess=None):
         return UADCIP(self).kernel(nroots, guess)
+
+
 
 def get_imds_ea(adc):
 
@@ -1017,7 +1019,6 @@ def get_imds_ip(adc):
 
 def ea_adc_diag(adc,Mab=None):
    
-    #M_ab = adc.get_imds_ea()
     M_ab = adc.get_imds()
     M_ab_a, M_ab_b = M_ab[0], M_ab[1]
 
@@ -2394,7 +2395,6 @@ def ip_compute_trans_moments(adc, orb, spin=None):
     return T
 
 class UADCEA(UADC):
-
     def __init__(self, adc):
         self.verbose = adc.verbose
         self.stdout = adc.stdout
@@ -2447,31 +2447,31 @@ class UADCEA(UADC):
         #matvec = lambda x: self.matvec() 
         return matvec, diag
     
-    def get_trans_moments(adc, nroots=1):
+    def get_trans_moments(self, nroots=1):
     
-        nmo_a  = adc.nmo_a
-        nmo_b  = adc.nmo_b
+        nmo_a  = self.nmo_a
+        nmo_b  = self.nmo_b
     
         T_a = []
         T_b = []
     
         for orb in range(nmo_a):
     
-                T_aa = adc.compute_trans_moments(orb, spin = "alpha")
+                T_aa = self.compute_trans_moments(orb, spin = "alpha")
                 T_a.append(T_aa)
     
         for orb in range(nmo_b):
     
-                T_bb = adc.compute_trans_moments(orb, spin = "beta")
+                T_bb = self.compute_trans_moments(orb, spin = "beta")
                 T_b.append(T_bb) 
         
         return (T_a, T_b)
 
 
-    def get_spec_factors(adc, nroots=1, T=(None,None), U=None):
+    def get_spec_factors(self, nroots=1, T=(None,None), U=None):
     
-        nmo_a  = adc.nmo_a
-        nmo_b  = adc.nmo_b
+        nmo_a  = self.nmo_a
+        nmo_b  = self.nmo_b
     
         P = np.zeros((nroots))
     
@@ -2550,31 +2550,31 @@ class UADCIP(UADC):
         #matvec = lambda x: self.matvec() 
         return matvec, diag
 
-    def get_trans_moments(adc, nroots=1):
+    def get_trans_moments(self, nroots=1):
 
-        nmo_a  = adc.nmo_a
-        nmo_b  = adc.nmo_b
+        nmo_a  = self.nmo_a
+        nmo_b  = self.nmo_b
 
         T_a = []
         T_b = []
 
         for orb in range(nmo_a):
     
-                T_aa = adc.compute_trans_moments(orb, spin = "alpha")
+                T_aa = self.compute_trans_moments(orb, spin = "alpha")
                 T_a.append(T_aa)
 
         for orb in range(nmo_b):
     
-                T_bb = adc.compute_trans_moments(orb, spin = "beta")
+                T_bb = self.compute_trans_moments(orb, spin = "beta")
                 T_b.append(T_bb) 
         
         return (T_a, T_b)
 
 
-    def get_spec_factors(adc, nroots=1, T=(None,None), U=None):
+    def get_spec_factors(self, nroots=1, T=(None,None), U=None):
     
-        nmo_a  = adc.nmo_a
-        nmo_b  = adc.nmo_b
+        nmo_a  = self.nmo_a
+        nmo_b  = self.nmo_b
     
         P = np.zeros((nroots))
    
@@ -2597,5 +2597,95 @@ class UADCIP(UADC):
                 P[i] += np.square(np.absolute(T_bb[i]))
 
         return P
-# TODO: add a test main section
 
+
+if __name__ == '__main__':
+    from pyscf import scf
+    from pyscf import gto
+    from pyscf import adc
+
+    r = 1.098
+    mol = gto.Mole()
+    mol.atom = [
+        ['N', ( 0., 0.    , -r/2   )],
+        ['N', ( 0., 0.    ,  r/2)],]
+    mol.basis = {'N':'aug-cc-pvdz'}
+    mol.verbose = 0
+    mol.build()
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-12
+    mf.kernel()
+
+    myadc = adc.ADC(mf)
+    ecorr, t_amp1, t_amp2 = myadc.kernel()
+    print(ecorr -  -0.32201692499346535)
+
+    myadcip = UADCIP(myadc)
+    e,v,p = kernel(myadcip,nroots=3)
+    print("ADC(2) IP energies")
+    print (e[0] - 0.5434389897908326) 
+    print (e[1] - 0.6601608655891251)
+    print (e[2] - 0.6601608683225605)
+
+    print("ADC(2) IP spectroscopic factors")
+    print (p[0] - 0.884404861556855)
+    print (p[1] - 0.8494517106793746)
+    print (p[2] - 0.8494517098826619)
+
+    myadcea = UADCEA(myadc)
+    e,v,p = kernel(myadcea,nroots=3)
+    print("ADC(2) EA energies")
+    print (e[0] - 0.09617819142992463)
+    print (e[1] - 0.09617819161216855)
+    print (e[2] - 0.1258326904883586)
+
+    print("ADC(2) EA spectroscopic factors")
+    print (p[0] - 0.9916427196092643)
+    print (p[1] - 0.9916427196903126)
+    print (p[2] - 0.9817184085436222)
+
+    myadc = adc.ADC(mf)
+    myadc.method = "adc(3)"
+    ecorr, t_amp1, t_amp2 = myadc.kernel()
+    print(ecorr - 0.005075193564898078)
+
+    myadcip = UADCIP(myadc)
+    e,v,p = kernel(myadcip,nroots=3)
+    print("ADC(3) IP energies")
+    print (e[0] - 0.5667526838174267) 
+    print (e[1] - 0.6903558940813408)
+    print (e[2] - 0.6903558968185094)
+
+    print("ADC(3) IP spectroscopic factors")
+    print (p[0] - 0.9086596110123968)
+    print (p[1] - 0.8206386251590797)
+    print (p[2] - 0.8206386197067562)
+
+    myadcea = UADCEA(myadc)
+    e,v,p = kernel(myadcea,nroots=3)
+    print("ADC(3) EA energies")
+    print (e[0] - 0.09836545519294707)
+    print (e[1] - 0.09836545535648182)
+    print (e[2] - 0.12957093060937017)
+
+    print("ADC(3) EA spectroscopic factors")
+    print (p[0] - 0.9920495595411523)
+    print (p[1] - 0.9920495596160825)
+    print (p[2] - 0.9819275025204279)
+
+    myadc.method = "adc(2)-x"
+    myadc.kernel()
+
+    e,v,p = myadc.ip_adc(nroots=4)
+    print("ADC(2)-x IP energies")
+    print (e[0] - 0.540525535524775) 
+    print (e[1] - 0.5405255399060406)
+    print (e[2] - 0.6465332758433648)
+    print (e[3] - 0.6465332783605325)
+
+    e,v,p = myadc.ea_adc(nroots=4)
+    print("ADC(2)-x EA energies")
+    print (e[0] - 0.0953065329249756) 
+    print (e[1] - 0.09530653311160658)
+    print (e[2] - 0.12388330778444741)
+    print (e[3] - 0.1238833087377404)
