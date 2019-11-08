@@ -27,17 +27,17 @@ myadc.kernel()
 
 #IP/EA-ADC(2)
 myadc.verbose = 4
-eip,vip,pip = myadc.ip_adc(nroots=1)
-eea,vea,pea = myadc.ea_adc(nroots=1)
+eip,vip,pip = myadc.ip_adc(nroots=4)
+eea,vea,pea = myadc.ea_adc(nroots=4)
 
 #IP/EA-ADC(2)-x
 myadc.method = "adc(2)-x"
 myadc.kernel()
-eip,vip,pip = myadc.ip_adc(nroots=1)
-eea,vea,pea = myadc.ea_adc(nroots=1)
+eip,vip,pip = myadc.ip_adc(nroots=4)
+eea,vea,pea = myadc.ea_adc(nroots=4)
 
 #IP/EA-ADC(3)
 myadc.method = "adc(3)"
 myadc.kernel()
-eip,vip,pip = myadc.ip_adc(nroots=1)
-eea,vea,pea = myadc.ea_adc(nroots=1)
+eip,vip,pip = myadc.ip_adc(nroots=4)
+eea,vea,pea = myadc.ea_adc(nroots=4)
