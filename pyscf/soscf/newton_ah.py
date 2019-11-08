@@ -603,7 +603,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                     log.debug('|g| >> keyframe, Restore previouse step')
                     break
 
-                elif (imic >= max_cycle or norm_gorb < conv_tol_grad*.5):
+                elif (imic >= max_cycle or norm_gorb < conv_tol_grad/mf.ah_grad_trust_region):
                     break
 
                 elif (ikf > 2 and # avoid frequent keyframe
