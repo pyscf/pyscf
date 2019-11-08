@@ -397,7 +397,7 @@ class GHF(hf.SCF):
         viridx = ~occidx
         g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
                                mo_coeff[:,viridx]))
-        return g.T.ravel()
+        return g.conj().T.ravel()
 
     @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
