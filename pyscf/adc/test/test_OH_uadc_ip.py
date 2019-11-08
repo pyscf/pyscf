@@ -51,13 +51,13 @@ class KnownValues(unittest.TestCase):
 
         e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.548647707577121, 6)
-        self.assertAlmostEqual(e[1], 0.5805631452816042, 6)
-        self.assertAlmostEqual(e[2], 0.6211605152474929, 6)
+        self.assertAlmostEqual(e[0], 0.4342864327917968, 6)
+        self.assertAlmostEqual(e[1], 0.47343844767816784, 6)
+        self.assertAlmostEqual(e[2], 0.5805631452815511, 6)
 
-        self.assertAlmostEqual(p[0], 0.8959919898235896, 6)
-        self.assertAlmostEqual(p[1], 0.9119655743441659, 6)
-        self.assertAlmostEqual(p[2], 0.90734152712232, 6)
+        self.assertAlmostEqual(p[0], 0.9066975034860368, 6)
+        self.assertAlmostEqual(p[1], 0.8987660491377468, 6)
+        self.assertAlmostEqual(p[2], 0.9119655964285802, 6)
 
     def test_ip_adc2x(self):
   
@@ -67,13 +67,13 @@ class KnownValues(unittest.TestCase):
 
         e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.5336491676572919, 6)
-        self.assertAlmostEqual(e[1], 0.5854392195128417, 6)
-        self.assertAlmostEqual(e[2], 0.5994171901922393, 6)
+        self.assertAlmostEqual(e[0], 0.4389083582117278, 6)
+        self.assertAlmostEqual(e[1], 0.45720829251439343, 6)
+        self.assertAlmostEqual(e[2], 0.5588942056812034, 6)
 
-        self.assertAlmostEqual(p[0], 0.7137923499030876, 6)
-        self.assertAlmostEqual(p[1], 0.9230274901915541, 6)
-        self.assertAlmostEqual(p[2], 0.6566547543204048, 6)
+        self.assertAlmostEqual(p[0], 0.9169548953028459, 6)
+        self.assertAlmostEqual(p[1], 0.6997121885268642, 6)
+        self.assertAlmostEqual(p[2], 0.212879313736106, 6)
 
     def test_ip_adc3(self):
   
@@ -83,13 +83,13 @@ class KnownValues(unittest.TestCase):
 
         e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.5655300517024375, 6)
-        self.assertAlmostEqual(e[1], 0.6199415726500781, 6)
-        self.assertAlmostEqual(e[2], 0.623405730376162, 6)
+        self.assertAlmostEqual(e[0], 0.4794423247368058, 6)
+        self.assertAlmostEqual(e[1], 0.4872370596653387, 6)
+        self.assertAlmostEqual(e[2], 0.5726961805214643, 6)
 
-        self.assertAlmostEqual(p[0], 0.3997295222107412, 6)
-        self.assertAlmostEqual(p[1], 0.5083250051440014, 6)
-        self.assertAlmostEqual(p[2], 0.931932697099881, 6)
+        self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
+        self.assertAlmostEqual(p[1], 0.5188529241094367, 6)
+        self.assertAlmostEqual(p[2], 0.40655844616580944, 6)
       
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell molecule")

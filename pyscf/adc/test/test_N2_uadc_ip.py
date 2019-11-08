@@ -48,13 +48,13 @@ class KnownValues(unittest.TestCase):
 
         e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.5434389897908326, 6)
-        self.assertAlmostEqual(e[1], 0.6601608655891251, 6)
-        self.assertAlmostEqual(e[2], 0.6601608683225605, 6)
+        self.assertAlmostEqual(e[0], 0.5434389897908212, 6)
+        self.assertAlmostEqual(e[1], 0.5434389942222756, 6)
+        self.assertAlmostEqual(e[2], 0.6240296265084732, 6)
 
-        self.assertAlmostEqual(p[0], 0.884404861556855, 6)
-        self.assertAlmostEqual(p[1], 0.8494517106793746, 6)
-        self.assertAlmostEqual(p[2], 0.8494517098826619, 6)
+        self.assertAlmostEqual(p[0], 0.884404855445607, 6)
+        self.assertAlmostEqual(p[1], 0.8844048539643351, 6)
+        self.assertAlmostEqual(p[2], 0.9096460559671828, 6)
 
     def test_ip_adc2x(self):
   
@@ -62,17 +62,15 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.ip_adc(nroots=4)
+        e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.540525535524775 , 6)
-        self.assertAlmostEqual(e[1], 0.5405255399060406, 6)
-        self.assertAlmostEqual(e[2], 0.6465332758433648, 6)
-        self.assertAlmostEqual(e[3], 0.6465332783605325, 6)
+        self.assertAlmostEqual(e[0], 0.5405255355249104, 6)
+        self.assertAlmostEqual(e[1], 0.5405255399061982, 6)
+        self.assertAlmostEqual(e[2], 0.62080267098272, 6)
 
-        self.assertAlmostEqual(p[0],0.875664254715628 , 6)
-        self.assertAlmostEqual(p[1],0.8756642844804134 , 6)
-        self.assertAlmostEqual(p[2],0.80251636483349 , 6)
-        self.assertAlmostEqual(p[3],0.8025163621283392 , 6)
+        self.assertAlmostEqual(p[0], 0.875664254715628 , 6)
+        self.assertAlmostEqual(p[1], 0.8756642844804134 , 6)
+        self.assertAlmostEqual(p[2], 0.9076434703549277, 6)
 
     def test_ip_adc3(self):
   
@@ -82,13 +80,13 @@ class KnownValues(unittest.TestCase):
 
         e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.5667526838174267, 6)
-        self.assertAlmostEqual(e[1], 0.6903558940813408, 6)
-        self.assertAlmostEqual(e[2], 0.6903558968185094, 6)
+        self.assertAlmostEqual(e[0], 0.5667526838174817, 6)
+        self.assertAlmostEqual(e[1], 0.5667526888293601, 6)
+        self.assertAlmostEqual(e[2], 0.6099995181296374, 6)
 
-        self.assertAlmostEqual(p[0], 0.9086596110123968, 6)
-        self.assertAlmostEqual(p[1], 0.8206386251590797, 6)
-        self.assertAlmostEqual(p[2], 0.8206386197067562, 6)
+        self.assertAlmostEqual(p[0], 0.9086596203469742, 6)
+        self.assertAlmostEqual(p[1], 0.9086596190173993, 6)
+        self.assertAlmostEqual(p[2], 0.9214613318791076, 6)
       
 if __name__ == "__main__":
     print("IP calculations for different ADC methods")

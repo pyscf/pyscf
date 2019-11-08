@@ -50,15 +50,16 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     spec_factors = adc.get_spec_factors(nroots, (T_a,T_b), U)
 
     if adc.verbose >= logger.INFO:
-        for n, en, pn in zip(range(nroots), E, spec_factors):
-            logger.info(adc, '%s root %d   Energy (Eh) = %.8f Energy (eV) = %.8f  Spec factors = %.8f',
-                         adc.method, n, en, en*27.2114, pn)
+        if nroots == 1:
+            logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f',
+                         adc.method, 0, E, E*27.2114, spec_factors)
+        else : 
+            for n, en, pn in zip(range(nroots), E, spec_factors):
+                logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f',
+                          adc.method, n, en, en*27.2114, pn)
         log.timer('ADC', *cput0)
 
-    if nroots == 1:
-        return E[0], U[0], spec_factors[0]
-    else:
-        return E, U, spec_factors
+    return E, U, spec_factors
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
 
@@ -1215,6 +1216,7 @@ def ip_adc_diag(adc,M_ij=None):
     diag[s_aba:f_aba] = D_aij_aba.copy()
     diag[s_bbb:f_bbb] = D_aij_b.copy()
 
+    diag = -diag
     return diag
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
@@ -2541,15 +2543,21 @@ class UADCEA(UADC):
     
             T_aa = T_a[orb]
             T_aa = np.dot(T_aa, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_aa[i]))
+            if nroots == 1:
+                P += np.square(np.absolute(T_aa))
+            else :    
+                for i in range(nroots):
+                    P[i] += np.square(np.absolute(T_aa[i]))
     
         for orb in range(nmo_b):
     
             T_bb = T_b[orb]
             T_bb = np.dot(T_bb, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_bb[i]))
+            if nroots == 1:
+                P += np.square(np.absolute(T_bb))
+            else :    
+                for i in range(nroots):
+                    P[i] += np.square(np.absolute(T_bb[i]))
     
         return P
 
@@ -2649,15 +2657,21 @@ class UADCIP(UADC):
 
             T_aa = T_a[orb]
             T_aa = np.dot(T_aa, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_aa[i]))
+            if nroots == 1:
+                P += np.square(np.absolute(T_aa))
+            else :    
+                for i in range(nroots):
+                    P[i] += np.square(np.absolute(T_aa[i]))
    
         for orb in range(nmo_b):
 
             T_bb = T_b[orb]
             T_bb = np.dot(T_bb, U.T)
-            for i in range(nroots):
-                P[i] += np.square(np.absolute(T_bb[i]))
+            if nroots == 1:
+                P += np.square(np.absolute(T_bb))
+            else :    
+                for i in range(nroots):
+                    P[i] += np.square(np.absolute(T_bb[i]))
 
         return P
 
@@ -2686,26 +2700,26 @@ if __name__ == '__main__':
     myadcip = UADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(2) IP energies")
-    print (e[0] - 0.5434389897908326) 
-    print (e[1] - 0.6601608655891251)
-    print (e[2] - 0.6601608683225605)
+    print (e[0] - 0.5434389897908212)
+    print (e[1] - 0.5434389942222756)
+    print (e[2] - 0.6240296265084732)
 
     print("ADC(2) IP spectroscopic factors")
-    print (p[0] - 0.884404861556855)
-    print (p[1] - 0.8494517106793746)
-    print (p[2] - 0.8494517098826619)
+    print (p[0] - 0.884404855445607)
+    print (p[1] - 0.8844048539643351)
+    print (p[2] - 0.9096460559671828)
 
     myadcea = UADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
     print("ADC(2) EA energies")
-    print (e[0] - 0.09617819142992463)
-    print (e[1] - 0.09617819161216855)
-    print (e[2] - 0.1258326904883586)
+    print (e[0] - 0.09617819143037348)
+    print (e[1] - 0.09617819161265123)
+    print (e[2] - 0.12583269048810924) 
 
     print("ADC(2) EA spectroscopic factors")
-    print (p[0] - 0.9916427196092643)
-    print (p[1] - 0.9916427196903126)
-    print (p[2] - 0.9817184085436222)
+    print (p[0] - 0.991642716974455)
+    print (p[1] - 0.9916427170555298)
+    print (p[2] - 0.9817184409336244)
 
     myadc = adc.ADC(mf)
     myadc.method = "adc(3)"
@@ -2715,40 +2729,41 @@ if __name__ == '__main__':
     myadcip = UADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(3) IP energies")
-    print (e[0] - 0.5667526838174267) 
-    print (e[1] - 0.6903558940813408)
-    print (e[2] - 0.6903558968185094)
+    print (e[0] - 0.5667526838174817) 
+    print (e[1] - 0.5667526888293601)
+    print (e[2] - 0.6099995181296374)
 
     print("ADC(3) IP spectroscopic factors")
-    print (p[0] - 0.9086596110123968)
-    print (p[1] - 0.8206386251590797)
-    print (p[2] - 0.8206386197067562)
+    print (p[0] - 0.9086596203469742)
+    print (p[1] - 0.9086596190173993)
+    print (p[2] - 0.9214613318791076)
 
     myadcea = UADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
+
     print("ADC(3) EA energies")
-    print (e[0] - 0.09836545519294707)
-    print (e[1] - 0.09836545535648182)
-    print (e[2] - 0.12957093060937017)
+    print (e[0] - 0.09836545519235675)
+    print (e[1] - 0.09836545535587536)
+    print (e[2] - 0.12957093060942082)
 
     print("ADC(3) EA spectroscopic factors")
-    print (p[0] - 0.9920495595411523)
-    print (p[1] - 0.9920495596160825)
-    print (p[2] - 0.9819275025204279)
+    print (p[0] - 0.9920495578633931)
+    print (p[1] - 0.992049557938337)
+    print (p[2] - 0.9819274864738444)
 
     myadc.method = "adc(2)-x"
     myadc.kernel()
 
     e,v,p = myadc.ip_adc(nroots=4)
     print("ADC(2)-x IP energies")
-    print (e[0] - 0.540525535524775) 
-    print (e[1] - 0.5405255399060406)
-    print (e[2] - 0.6465332758433648)
-    print (e[3] - 0.6465332783605325)
+    print (e[0] - 0.5405255355249104) 
+    print (e[1] - 0.5405255399061982)
+    print (e[2] - 0.62080267098272)
+    print (e[3] - 0.620802670982715)
 
     e,v,p = myadc.ea_adc(nroots=4)
     print("ADC(2)-x EA energies")
-    print (e[0] - 0.0953065329249756) 
-    print (e[1] - 0.09530653311160658)
-    print (e[2] - 0.12388330778444741)
-    print (e[3] - 0.1238833087377404)
+    print (e[0] - 0.09530653292650725) 
+    print (e[1] - 0.09530653311305577)
+    print (e[2] - 0.1238833077840878)
+    print (e[3] - 0.12388330873739162)
