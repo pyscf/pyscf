@@ -316,6 +316,14 @@ class KnownValues(unittest.TestCase):
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
 
+    def test_state_average_bad_init_guess(self):
+        mc = mcscf.CASCI(mfr, 4, 4)
+        mc.run()
+        mc.state_average_([.8, .2])
+        mscan = mc.as_scanner()
+        e = mscan(mol)
+        self.assertAlmostEqual(e, -108.866712671253, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")

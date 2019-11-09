@@ -759,17 +759,17 @@ def _state_average_mcscf_solver(casscf, fcisolver):
 
         def _finalize(self):
             mcscfbase_class._finalize(self)
-            self.e_tot = self.fcisolver.e_states
+            #self.e_tot = self.fcisolver.e_states
             logger.note(self, 'CASCI state-averaged energy = %.15g', self.e_average)
             logger.note(self, 'CASCI energy for each state')
             if has_spin_square:
                 ss = self.fcisolver.states_spin_square(self.ci, self.ncas,
                                                        self.nelecas)[0]
-                for i, ei in enumerate(self.e_tot):
+                for i, ei in enumerate(self.fcisolver.e_states):
                     logger.note(self, '  State %d weight %g  E = %.15g S^2 = %.7f',
                                 i, self.weights[i], ei, ss[i])
             else:
-                for i, ei in enumerate(self.e_tot):
+                for i, ei in enumerate(self.fcisolver.e_states):
                     logger.note(self, '  State %d weight %g  E = %.15g',
                                 i, self.weights[i], ei)
             return self
