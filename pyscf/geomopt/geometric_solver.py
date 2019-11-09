@@ -173,7 +173,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         newmol = geometric_solver.optimize(method, **conv_params)
     '''
     # MRH, 07/23/2019: name all explicit kwargs for forward compatibility
-    return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost, 
+    return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost,
             constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
 
 class GeometryOptimizer(lib.StreamObject):
