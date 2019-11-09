@@ -33,7 +33,7 @@ import pyscf.pbc.cc.kccsd_t as kccsd_t
 import pyscf.pbc.cc.kccsd
 
 from pyscf.pbc.lib import kpts_helper
-import make_test_cell
+import pyscf.pbc.tools.make_test_cell as make_test_cell
 
 
 cell = pbcgto.Cell()

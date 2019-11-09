@@ -29,7 +29,7 @@ import pyscf.pbc.tools
 
 import pyscf.pbc.cc
 
-import make_test_cell
+import pyscf.pbc.tools.make_test_cell as make_test_cell
 
 def run_cell(cell, n, nk):
     #############################################
