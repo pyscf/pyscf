@@ -278,6 +278,7 @@ class KnownValues(unittest.TestCase):
         td = rks.TDA(mf)
         td.wfnsym = 'A2'
         es = td.kernel(nstates=3)[0]
+        self.assertTrue(len(es) == 2)  # At most 2 states due to symmetry subspace size
         self.assertAlmostEqual(lib.finger(es), 2.1857694738741071, 6)
         td.analyze()
 
@@ -304,6 +305,7 @@ class KnownValues(unittest.TestCase):
         td.wfnsym = 'A2'
         td.nroots = 3
         es = td.kernel()[0]
+        self.assertTrue(len(es) == 2)  # At most 2 states due to symmetry subspace size
         self.assertAlmostEqual(lib.finger(es), 2.1856920990871753, 6)
         td.analyze()
 
