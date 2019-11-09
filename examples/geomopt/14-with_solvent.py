@@ -18,6 +18,6 @@ H        0.000000    0.9353074360871938   -1.082500
 H        0.000000   -0.9353074360871938   -1.082500
             ''',
             verbose = 4)
-mf = solvent.ddCOSMO(scf.RHF(mol)).run()
+mf = solvent.ddCOSMO(scf.RHF(mol))
 new_mol = geometric_solver.optimize(mf)
 

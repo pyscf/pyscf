@@ -172,19 +172,34 @@ class KnownValues(unittest.TestCase):
 
     def test_scf_grad(self):
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol0)).run()
+        # solvent only
         de_cosmo = ddcosmo_grad.kernel(mf.with_solvent, mf.make_rdm1())
+        self.assertAlmostEqual(lib.finger(de_cosmo), 0.000770107393352652, 6)
+        # solvent + solute
         de = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(de), -0.1920179073822721, 6)
+
         dm1 = mf.make_rdm1()
 
-        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol1)).run()
-        e1 = mf.e_tot
-        e1_cosmo = mf.with_solvent.energy(dm1)
+        mf1 = ddcosmo.ddcosmo_for_scf(scf.RHF(mol1)).run()
+        e1 = mf1.e_tot
+        e1_cosmo = mf1.with_solvent.energy(dm1)
 
-        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol2)).run()
-        e2 = mf.e_tot
-        e2_cosmo = mf.with_solvent.energy(dm1)
+        mf2 = ddcosmo.ddcosmo_for_scf(scf.RHF(mol2)).run()
+        e2 = mf2.e_tot
+        e2_cosmo = mf2.with_solvent.energy(dm1)
         self.assertAlmostEqual(abs((e2-e1)/dx - de[0,2]).max(), 0, 7)
         self.assertAlmostEqual(abs((e2_cosmo-e1_cosmo)/dx - de_cosmo[0,2]).max(), 0, 7)
+
+        sc = mf.nuc_grad_method().as_scanner()
+        e, g = sc('H 0 1 0; H 0 1 1.2; H 1. 0 0; H .5 .5 0')
+        self.assertAlmostEqual(e, -0.8317337703056022, 8)
+        self.assertAlmostEqual(lib.finger(g), 0.06804297145388238, 6)
+
+        mol3 = gto.M(atom='H 0 1 0; H 0 1 1.2; H 1. 0 0; H .5 .5 0', unit='B')
+        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol3)).run()
+        de = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(de), 0.06804297145388238, 6)
 
 
 if __name__ == "__main__":
