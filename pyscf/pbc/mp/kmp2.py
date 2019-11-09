@@ -29,18 +29,23 @@ eri of size (nkpts,nocc,nocc,nvir,nvir)
 import time
 import numpy as np
 from scipy.linalg import block_diag
+import h5py
 
 from pyscf import lib
 from pyscf.lib import logger, einsum
 from pyscf.mp import mp2
+from pyscf.pbc import df
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LARGE_DENOM
 from pyscf import __config__
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
-
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
+    cpu0 = (time.clock(), time.time())
+    log = logger.Logger(mp.stdout, mp.verbose)
+
+    mp.dump_flags()
     nmo = mp.nmo
     nocc = mp.nocc
     nvir = nmo - nocc
@@ -65,39 +70,145 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     else:
         t2 = None
 
-    for ki in range(nkpts):
-      for kj in range(nkpts):
-        for ka in range(nkpts):
-            kb = kconserv[ki,ka,kj]
-            orbo_i = mo_coeff[ki][:,:nocc]
-            orbo_j = mo_coeff[kj][:,:nocc]
-            orbv_a = mo_coeff[ka][:,nocc:]
-            orbv_b = mo_coeff[kb][:,nocc:]
-            oovv_ij[ka] = fao2mo((orbo_i,orbv_a,orbo_j,orbv_b),
-                            (mp.kpts[ki],mp.kpts[ka],mp.kpts[kj],mp.kpts[kb]),
-                            compact=False).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
-        for ka in range(nkpts):
-            kb = kconserv[ki,ka,kj]
+    if not mp.with_df or type(mp._scf.with_df) is not df.GDF:
+        for ki in range(nkpts):
+          for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = kconserv[ki,ka,kj]
+                orbo_i = mo_coeff[ki][:,:nocc]
+                orbo_j = mo_coeff[kj][:,:nocc]
+                orbv_a = mo_coeff[ka][:,nocc:]
+                orbv_b = mo_coeff[kb][:,nocc:]
+                oovv_ij[ka] = fao2mo((orbo_i,orbv_a,orbo_j,orbv_b),
+                                (mp.kpts[ki],mp.kpts[ka],mp.kpts[kj],mp.kpts[kb]),
+                                compact=False).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
+            for ka in range(nkpts):
+                kb = kconserv[ki,ka,kj]
 
-            # Remove zero/padded elements from denominator
-            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
-            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+                # Remove zero/padded elements from denominator
+                eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
+                n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+                eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
 
-            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
-            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
-            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+                ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
+                n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+                ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
 
-            eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
-            t2_ijab = np.conj(oovv_ij[ka]/eijab)
-            if with_t2:
-                t2[ki, kj, ka] = t2_ijab
-            woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
-            emp2 += np.einsum('ijab,ijab', t2_ijab, woovv).real
+                eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
+                t2_ijab = np.conj(oovv_ij[ka]/eijab)
+                if with_t2:
+                    t2[ki, kj, ka] = t2_ijab
+                woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
+                emp2 += einsum('ijab,ijab', t2_ijab, woovv).real
+    else:
+        Lov = _init_mp_df_eris(mp)
+
+        for ki in range(nkpts):
+          for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = kconserv[ki, ka, kj]
+                # (ia|jb)
+                oovv_ij[ka] = (1./nkpts) * einsum("Lia,Ljb->iajb", Lov[ki, ka], Lov[kj, kb]).transpose(0,2,1,3)
+            for ka in range(nkpts):
+                kb = kconserv[ki,ka,kj]
+
+                # Remove zero/padded elements from denominator
+                eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
+                n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+                eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+                ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
+                n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+                ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+
+                eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
+                t2_ijab = np.conj(oovv_ij[ka]/eijab)
+                if with_t2:
+                    t2[ki, kj, ka] = t2_ijab
+                woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
+                emp2 += einsum('ijab,ijab', t2_ijab, woovv).real
+
+    log.timer("KMP2", *cpu0)
 
     emp2 /= nkpts
 
     return emp2, t2
+
+
+def _init_mp_df_eris(mp):
+    """Add 3-center electron repulsion integrals, i.e. (L|pq), in `eris`,
+    where `L` denotes DF auxiliary basis functions and `p` and `q` canonical 
+    crystalline orbitals. Note that `p` and `q` contain kpt indices `kp` and `kq`, 
+    and the third kpt index `kL` is determined by the conservation of momentum.  
+    
+    Arguments:
+        mp {Kmp} -- A Kmp instance
+        eris {_mp_ERIS} -- A _mp_ERIS instance to which we want to add 3c ints
+        
+    Returns:
+        _mp_ERIS -- A _mp_ERIS instance with 3c ints
+    """
+    from pyscf.pbc.df import df
+    from pyscf.ao2mo import _ao2mo
+    from pyscf.pbc.lib.kpts_helper import gamma_point
+
+    log = logger.Logger(mp.stdout, mp.verbose)
+
+    if mp._scf.with_df._cderi is None:
+        mp._scf.with_df.build()
+
+    cell = mp._scf.cell
+    if cell.dimension == 2:
+        # 2D ERIs are not positive definite. The 3-index tensors are stored in
+        # two part. One corresponds to the positive part and one corresponds
+        # to the negative part. The negative part is not considered in the
+        # DF-driven CCSD implementation.
+        raise NotImplementedError
+
+    nocc = mp.nocc
+    nmo = mp.nmo
+    nvir = nmo - nocc
+    nao = cell.nao_nr()
+
+    mo_coeff = mp._scf.mo_coeff
+    kpts = mp.kpts
+    nkpts = len(kpts)
+    if gamma_point(kpts):
+        dtype = np.double
+    else:
+        dtype = np.complex128
+    dtype = np.result_type(dtype, *mo_coeff)
+    Lov = np.empty((nkpts, nkpts), dtype=object)
+
+    cput0 = (time.clock(), time.time())
+
+    bra_start = 0
+    bra_end = nocc
+    ket_start = nmo+nocc
+    ket_end = ket_start + nvir
+    with h5py.File(mp._scf.with_df._cderi, 'r') as f:
+        kptij_lst = f['j3c-kptij'].value 
+        tao = []
+        ao_loc = None
+        for ki, kpti in enumerate(kpts):
+            for kj, kptj in enumerate(kpts):
+                kpti_kptj = np.array((kpti, kptj))
+                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+
+                mo = np.hstack((mo_coeff[ki], mo_coeff[kj]))
+                mo = np.asarray(mo, dtype=dtype, order='F')
+                if dtype == np.double:
+                    out = _ao2mo.nr_e2(Lpq_ao, mo, (bra_start, bra_end, ket_start, ket_end), aosym='s2')
+                else:
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq_ao[0].size != nao**2:  # aosym = 's2'
+                        Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
+                    out = _ao2mo.r_e2(Lpq_ao, mo, (bra_start, bra_end, ket_start, ket_end), tao, ao_loc)
+                Lov[ki, kj] = out.reshape(-1, nocc, nvir)
+
+    log.timer_debug1("transforming DF-mp2 integrals", *cput0)
+
+    return Lov
 
 
 def _padding_k_idx(nmo, nocc, kind="split"):
@@ -513,6 +624,7 @@ class KMP2(mp2.MP2):
         self.max_memory = mf.max_memory
 
         self.frozen = frozen
+        self.with_df = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -532,6 +644,24 @@ class KMP2(mp2.MP2):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
     make_rdm1 = make_rdm1
+
+    def dump_flags(self):
+        logger.info(self, "")
+        logger.info(self, "******** %s ********", self.__class__)
+        logger.info(self, "nkpts = %d", self.nkpts)
+        logger.info(self, "nocc = %d", self.nocc)
+        logger.info(self, "nmo = %d", self.nmo)
+        logger.info(self, "with_df = %s", self.with_df)
+
+        if self.frozen is not 0:
+            logger.info(self, "frozen orbitals = %s", self.frozen)
+        logger.info(
+            self,
+            "max_memory %d MB (current use %d MB)",
+            self.max_memory,
+            lib.current_memory()[0],
+        )
+        return self
 
     def kernel(self, mo_energy=None, mo_coeff=None, with_t2=WITH_T2):
         if mo_energy is None:
