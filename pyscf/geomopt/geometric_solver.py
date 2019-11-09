@@ -164,7 +164,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         from pyscf import geometric_solver
         newmol = geometric_solver.optimize(method, **conv_params)
     '''
-    return kernel(method, assert_convergence, include_ghost, callback,
+    return kernel(method, assert_convergence, include_ghost, None, callback,
                   maxsteps, **kwargs)[1]
 
 class GeometryOptimizer(lib.StreamObject):
