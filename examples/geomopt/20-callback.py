@@ -23,7 +23,16 @@ def cb(envs):
     mf = envs['g_scanner'].base
     mf.analyze(verbose=4)
 
+#
+# Method 1: Pass callback to optimize function
+#
 geometric_solver.optimize(mf, callback=cb)
 
 berny_solver.optimize(mf, callback=cb)
 
+#
+# Method 2: Add callback to geometry optimizer
+#
+opt = mf.nuc_grad_method().as_scanner().optimizer()
+opt.callback = cb
+opt.kernel()
