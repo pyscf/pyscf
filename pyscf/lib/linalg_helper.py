@@ -553,7 +553,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         # can be generated.
         # 2. The initial guess sits in the subspace which is smaller than the
         # required number of roots.
-        raise RuntimeError('Not enough eigenvectors')
+        msg = 'Not enough eigenvectors (len(x0)=%d, nroots=%d)' % (len(x0), nroots)
+        warnings.warn(msg)
 
     return numpy.asarray(conv), e, x0
 

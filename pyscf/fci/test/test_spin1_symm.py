@@ -85,6 +85,7 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.casci_symm.CASCI(m, 4, (2, 0))
         mc.fcisolver.nroots = 2
         mc.kernel()[0]
+        self.assertTrue(len(mc.e_tot) == 1)
         ss = mc.fcisolver.spin_square(mc.ci[0], mc.ncas, mc.nelecas)
         self.assertAlmostEqual(ss[0], 2, 9)
 
