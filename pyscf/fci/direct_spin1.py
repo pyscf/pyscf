@@ -509,6 +509,12 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             ci0 = [ci0.ravel()]
         else:
             ci0 = [x.ravel() for x in ci0]
+        # Add vectors if not enough initial guess is given
+        if len(ci0) < nroots:
+            for i in range(len(ci0), nroots):
+                x = numpy.zeros(na*nb)
+                x[addr[i]] = 1
+                ci0.append(x)
 
     if tol is None: tol = fci.conv_tol
     if lindep is None: lindep = fci.lindep
