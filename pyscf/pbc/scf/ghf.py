@@ -83,6 +83,7 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
 
     get_jk = get_jk
     get_occ = mol_ghf.get_occ
+    get_grad = mol_ghf.GHF.get_grad
 
     def get_j(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
               **kwargs):

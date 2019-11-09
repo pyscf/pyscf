@@ -4,6 +4,7 @@
 Mulliken population analysis with IAO orbitals
 '''
 import numpy
+from functools import reduce
 from pyscf import gto, scf, lo
 from functools import reduce
 

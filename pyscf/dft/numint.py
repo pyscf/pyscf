@@ -719,7 +719,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         xc_code : str
             XC functional description.
             See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
-        dms : 2D array a list of 2D arrays
+        dms : 2D array or a list of 2D arrays
             Density matrix or multiple density matrices
 
     Kwargs:
@@ -754,7 +754,10 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
 
     nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
-    vmat = numpy.zeros((nset,nao,nao))
+    if isinstance(dms, numpy.ndarray):
+        vmat = numpy.zeros((nset,nao,nao), dtype=dms.dtype)
+    else:
+        vmat = numpy.zeros((nset,nao,nao), dtype=numpy.result_type(*dms))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -868,11 +871,11 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 rho = exc = vxc = vrho = vsigma = wv = None
 
     for i in range(nset):
-        vmat[i] = vmat[i] + vmat[i].T
+        vmat[i] = vmat[i] + vmat[i].conj().T
     if nset == 1:
         nelec = nelec[0]
         excsum = excsum[0]
-        vmat = vmat.reshape(nao,nao)
+        vmat = vmat[0]
     return nelec, excsum, vmat
 
 def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
@@ -932,7 +935,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
 
     nelec = numpy.zeros((2,nset))
     excsum = numpy.zeros(nset)
-    vmat = numpy.zeros((2,nset,nao,nao))
+    vmat = numpy.zeros((2,nset,nao,nao), dtype=numpy.result_type(dma, dmb))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1028,8 +1031,8 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 rho_a = rho_b = exc = vxc = vrho = vsigma = wva = wvb = None
 
     for i in range(nset):
-        vmat[0,i] = vmat[0,i] + vmat[0,i].T
-        vmat[1,i] = vmat[1,i] + vmat[1,i].T
+        vmat[0,i] = vmat[0,i] + vmat[0,i].conj().T
+        vmat[1,i] = vmat[1,i] + vmat[1,i].conj().T
     if isinstance(dma, numpy.ndarray) and dma.ndim == 2:
         vmat = vmat[:,0]
         nelec = nelec.reshape(2)
@@ -1106,7 +1109,10 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    vmat = numpy.zeros((nset,nao,nao))
+    if isinstance(dms, numpy.ndarray):
+        vmat = numpy.zeros((nset,nao,nao), dtype=dms.dtype)
+    else:
+        vmat = numpy.zeros((nset,nao,nao), dtype=numpy.result_type(*dms))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1189,7 +1195,10 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    vmat = numpy.zeros((nset,nao,nao))
+    if isinstance(dms_alpha, numpy.ndarray):
+        vmat = numpy.zeros((nset,nao,nao), dtype=dms_alpha.dtype)
+    else:
+        vmat = numpy.zeros((nset,nao,nao), dtype=numpy.result_type(*dms_alpha))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1387,7 +1396,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    vmat = numpy.zeros((2,nset,nao,nao))
+    vmat = numpy.zeros((2,nset,nao,nao), dtype=numpy.result_type(dma, dmb))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0

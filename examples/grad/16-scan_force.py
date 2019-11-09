@@ -24,7 +24,7 @@ for r in reversed(bond):
     energy.append(e_tot)
     force.append(grad[0,2])
 
-plt.plot(bond, e_hf[::-1])
+plt.plot(bond, energy[::-1])
 plt.show()
 
 plt.plot(bond, force[::-1])

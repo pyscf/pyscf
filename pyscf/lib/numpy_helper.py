@@ -27,6 +27,7 @@ import re
 import numpy
 import scipy.linalg
 from pyscf.lib import misc
+from numpy import asarray  # For backward compatibility
 
 EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
 
@@ -841,16 +842,6 @@ def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        (ctypes.c_double*2)(alpha.real, alpha.imag),
                        (ctypes.c_double*2)(beta.real, beta.imag))
     return c
-
-def asarray(a, dtype=None, order=None):
-    '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
-    numpy.asarray function.
-    '''
-    try:  # numpy.stack function is not available in numpy-1.8
-        a = numpy.stack(a)
-    except:
-        pass
-    return numpy.asarray(a, dtype, order)
 
 def frompointer(pointer, count, dtype=float):
     '''Interpret a buffer that the pointer refers to as a 1-dimensional array.

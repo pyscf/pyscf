@@ -479,9 +479,9 @@ class KnownValues(unittest.TestCase):
 
     def test_makov_payne_correction(self):
         de = pbchf.makov_payne_correction(mf)
-        self.assertAlmostEqual(de[0], -0.1490687416177664, 9)
-        self.assertAlmostEqual(de[0], de[1], 9)
-        self.assertAlmostEqual(de[0], de[2], 9)
+        self.assertAlmostEqual(de[0], -0.1490687416177664, 7)
+        self.assertAlmostEqual(de[0], de[1], 7)
+        self.assertAlmostEqual(de[0], de[2], 7)
 
     def test_init_guess_by_1e(self):
         dm = mf.get_init_guess(key='1e')
