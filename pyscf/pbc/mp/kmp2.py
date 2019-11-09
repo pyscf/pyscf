@@ -206,7 +206,7 @@ def _init_mp_df_eris(mp):
                     out = _ao2mo.r_e2(Lpq_ao, mo, (bra_start, bra_end, ket_start, ket_end), tao, ao_loc)
                 Lov[ki, kj] = out.reshape(-1, nocc, nvir)
 
-    log.timer_debug1("transforming DF-mp2 integrals", *cput0)
+    log.timer_debug1("transforming DF-MP2 integrals", *cput0)
 
     return Lov
 
@@ -624,7 +624,7 @@ class KMP2(mp2.MP2):
         self.max_memory = mf.max_memory
 
         self.frozen = frozen
-        self.with_df = False
+        self.with_df = True
 
 ##################################################
 # don't modify the following attributes, they are not input options
