@@ -5557,7 +5557,17 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const char TRANS_T = 'T';
         double common_fac = CINTcommon_fac_sp(li) *
                             CINTcommon_fac_sp(lj) * 16 * M_PI * M_PI;
-        common_fac *= .5; // s = 1/2 Pauli matrix
+        // multiplying 1/2 for the spin operator  s = 1/2 Pauli matrix
+        // The spinor integrals evaluates <i|H^{SO}|j> as shown in NWChem ECP doc
+        //   http://www.nwchem-sw.org/index.php/ECP
+        // Note that the conversion between spherical-GTO integrals and spinor
+        // integrals uses the Pauli matrices rather than the spin operators. The
+        // factor 1/2 is included in the spherical-GTO integrals. The
+        // transformation to construct spinor integrals is like
+        //      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_sph, ui.conj(), uj)
+        // See also the discussion in https://github.com/pyscf/pyscf/issues/378
+        common_fac *= .5;
+
         int atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq, jfmq;
         int i, j, n, ic, jc;
         int d2, d3;
