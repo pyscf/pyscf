@@ -5557,16 +5557,16 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const char TRANS_T = 'T';
         double common_fac = CINTcommon_fac_sp(li) *
                             CINTcommon_fac_sp(lj) * 16 * M_PI * M_PI;
-        // multiplying 1/2 for the spin operator  s = 1/2 Pauli matrix
-        // The spinor integrals evaluates <i|H^{SO}|j> as shown in NWChem ECP doc
+        // be careful with the factor 1/2 for the spin operator  s = 1/2 Pauli matrix
+        // The ECPso_cart and ECPso_sph integral code evaluates the integrals
+        // <i|H^{SO}|j> as shown in NWChem ECP doc
         //   http://www.nwchem-sw.org/index.php/ECP
-        // Note that the conversion between spherical-GTO integrals and spinor
-        // integrals uses the Pauli matrices rather than the spin operators. The
-        // factor 1/2 is included in the spherical-GTO integrals. The
-        // transformation to construct spinor integrals is like
+        // Note when calling ECPso_spinor function to evaluate the integrals in
+        // spinor basis pyscf evaluates the expression like
         //      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_sph, ui.conj(), uj)
+        // A factor of 1/2 needs to be multiplied for <H^{SO}> integrals in spinor basis.
         // See also the discussion in https://github.com/pyscf/pyscf/issues/378
-        common_fac *= .5;
+        //common_fac *= .5; // 1/2 was applied in old implementation.
 
         int atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq, jfmq;
         int i, j, n, ic, jc;
@@ -6334,9 +6334,9 @@ void ECPdel_optimizer(ECPOpt **opt)
 
 
 /*
- * <i| i/2 l U(r)|j>
- * Transforming to the integrals in spinor basis
- *      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_cart, ui.conj(), uj)
+ * <i| l U(r)|j>
+ * H^{SO} integrals in spinor basis can be evaluated
+ *      .5 * einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_cart, ui.conj(), uj)
  */
 int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
                int *bas, int nbas, double *env, ECPOpt *opt, double *cache)

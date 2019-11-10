@@ -80,6 +80,12 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int1e_ggkin"                     (.5 \| g g p dot p \| \)
             "int1e_ggnuc"                     ( \| g g nuc \| \)
             "int1e_grjxp"                     ( \| g r cross p \| \)
+            "ECPscalar"                       AREP ECP integrals, similar to int1e_nuc
+            "ECPscalar_ipnuc"                 (nabla i | ECP | ), similar to int1e_ipnuc
+            "ECPscalar_iprinv"                similar to int1e_iprinv for a specific atom
+            "ECPscalar_ignuc"                 similar to int1e_ignuc
+            "ECPscalar_iprinvip"              similar to int1e_iprinvip
+            "ECPso"                           < | Spin-orbit ECP | >
             "int1e_ovlp_spinor"               ( \| \)
             "int1e_nuc_spinor"                ( \| nuc \|\)
             "int1e_srsr_spinor"               (sigma dot r \| sigma dot r\)
@@ -162,6 +168,12 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int3c2e_ip2_spinor"              ( \, \| nabla\)
             "int3c2e_ipspsp1_spinor"          (nabla sigma dot p \, sigma dot p \| \)
             "int3c2e_spsp1ip2_spinor"         (sigma dot p \, sigma dot p \| nabla \)
+            "ECPscalar_spinor"                AREP ECP integrals, similar to int1e_nuc
+            "ECPscalar_ipnuc_spinor"          (nabla i | ECP | ), similar to int1e_ipnuc
+            "ECPscalar_iprinv_spinor"         similar to int1e_iprinv for a specific atom
+            "ECPscalar_ignuc_spinor"          similar to int1e_ignuc
+            "ECPscalar_iprinvip_spinor"       similar to int1e_iprinvip
+            "ECPso_spinor"                    < | sigam dot Spin-orbit ECP | >
             ================================  =============
 
         atm : int32 ndarray
@@ -416,7 +428,7 @@ _INTOR_FUNCTIONS = {
     'ECPscalar'                 : (1, None),
     'ECPscalar_ipnuc'           : (3, None),
     'ECPscalar_iprinv'          : (3, None),
-    'ECPscalar_igrinv'          : (3, None),
+    'ECPscalar_ignuc'           : (3, None),
     'ECPscalar_iprinvip'        : (9, None),
     'ECPso'                     : (3, 1),
 }

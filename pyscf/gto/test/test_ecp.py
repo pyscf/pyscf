@@ -268,9 +268,8 @@ Na D
 Na F
 1      0.    -3.    -3.
 ''')})
-        s = lib.PauliMatrices * .5
         u = mol.sph2spinor_coeff()
-        ref = numpy.einsum('sxy,spq,xpi,yqj->ij', s,
+        ref = numpy.einsum('sxy,spq,xpi,yqj->ij', lib.PauliMatrices,
                            mol.intor('int1e_inuc_rxp'), u.conj(), u)
 
         mat = mol.intor('ECPso_spinor')
