@@ -183,7 +183,9 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc.fcisolver = fci.solver(mol, singlet=False)
         mc.state_average_((.64,.36))
-        e = mc.kernel()[0]
+        e = mc.kernel()
+        e = mc.e_states
+        self.assertAlmostEqual(mc.e_tot, -108.83342083775061, 7)
         self.assertAlmostEqual(mc.e_average, -108.83342083775061, 7)
         self.assertAlmostEqual(e[0]*.64+e[1]*.36, -108.83342083775061, 7)
         dm1 = mc.analyze()
@@ -219,7 +221,8 @@ class KnownValues(unittest.TestCase):
         mc.fcisolver = FCI_as_DMRG(mol)
         mc.fcisolver.nroots =  fcisolver1.nroots = 2
         mc.state_average_((.64,.36))
-        e = mc.kernel()[0]
+        mc.kernel()
+        e = mc.e_states
         self.assertAlmostEqual(e[0]*.64+e[1]*.36, -108.83342083775061, 7)
         dm1 = mc.analyze()
         self.assertAlmostEqual(lib.finger(dm1[0]), 0.52396929381500434*2, 4)
@@ -233,7 +236,9 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
                                              (0.25,0.25,0.5))
-        e = mc.kernel()[0]
+        mc.kernel()
+        e = mc.e_states
+        self.assertAlmostEqual(mc.e_tot, -108.80340952016508, 7)
         self.assertAlmostEqual(mc.e_average, -108.80340952016508, 7)
         self.assertAlmostEqual(numpy.dot(e,[.25,.25,.5]), -108.80340952016508, 7)
         dm1 = mc.analyze()
@@ -275,7 +280,8 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
                                              (0.25,0.25,0.5))
-        e = mc.kernel()[0]
+        mc.kernel()
+        e = mc.e_states
         self.assertAlmostEqual(numpy.dot(e, [.25,.25,.5]), -108.80340952016508, 7)
         dm1 = mc.analyze()
         self.assertAlmostEqual(lib.finger(dm1[0]), 1.0553944556722636, 4)
@@ -322,7 +328,7 @@ class KnownValues(unittest.TestCase):
         mc.state_average_([.8, .2])
         mscan = mc.as_scanner()
         e = mscan(mol)
-        self.assertAlmostEqual(e, -108.866712671253, 9)
+        self.assertAlmostEqual(e, -108.84390277715984, 9)
 
 
 if __name__ == "__main__":
