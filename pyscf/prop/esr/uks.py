@@ -157,7 +157,7 @@ if __name__ == '__main__':
     esr_obj.gauge_orig = (0,0,0)
     esr_obj.para_soc2e = False
     esr_obj.so_eff_charge = True
-    print esr_obj.kernel()
+    print(esr_obj.kernel())
 
     mol = gto.M(atom='''
                 H 0   0   1
