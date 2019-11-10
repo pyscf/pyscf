@@ -54,6 +54,10 @@ def koseki_charge(z):
         return z * (.3 + z * .05)
     elif z <= 18:
         return z * (1.05 - z * .0125)
+    elif z <= 30:
+        return z * ( 0.385 + 0.025 * (z - 18 - 2) ) # Jia: J. Phys. Chem. A 1998, 102, 10430
+    elif z < 48:
+        return z * ( 4.680 + 0.060 * (z - 36 - 2) )
     else:
         return z
 
