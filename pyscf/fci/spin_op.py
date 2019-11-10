@@ -111,10 +111,11 @@ def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
     return ss, multip
 
 def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
+    __doc__ = spin_square_general.__doc__
+    from pyscf.fci import direct_spin1
     if mo_coeff is None:
         mo_coeff = (numpy.eye(norb),) * 2
 
-    from pyscf.fci import direct_spin1
     (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
             direct_spin1.make_rdm12s(fcivec, norb, nelec)
 

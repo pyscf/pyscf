@@ -657,15 +657,15 @@ class UCCSD(ccsd.CCSD):
         return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
 
     def spin_square(self, mo_coeff=None, s=None):
+        from pyscf.fci.spin_op import spin_square_general
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if s is None:
             s = self._scf.get_ovlp()
 
-	dma,dmb        = self.make_rdm1()
-	dmaa,dmab,dmbb = self.make_rdm2()
-	
-	from pyscf.fci.spin_op import spin_square_general
+        dma,dmb        = self.make_rdm1()
+        dmaa,dmab,dmbb = self.make_rdm2()
+
         return spin_square_general(dma,dmb,dmaa,dmab,dmbb,mo_coeff,s)
 
     def ao2mo(self, mo_coeff=None):
