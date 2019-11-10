@@ -96,7 +96,7 @@ def para(obj, mo10, mo_coeff, mo_occ, qed_fac=1):
         _write(obj, para1e, 'SOC(1e)/OZ') # Jia, different than in g tensor, not sure about consequence
 
     if obj.para_soc2e:
-        raise NotImplementedError('para_soc2e = %s' % obj.para_soc2e))
+        raise NotImplementedError('para_soc2e = %s' % obj.para_soc2e)
 
     para = para1e #+ gpara2e # Jia
     return para

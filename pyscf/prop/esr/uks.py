@@ -60,7 +60,7 @@ def para(obj, mo10, mo_coeff, mo_occ, qed_fac=1):
     #_write(obj, align(para1e)[0], 'SOC(1e)/OZ')
 
     if obj.para_soc2e:
-        raise NotImplementedError('dia_soc2e = %s' % obj.dia_soc2e))
+        raise NotImplementedError('dia_soc2e = %s' % obj.dia_soc2e)
 
     para = para1e
     return para

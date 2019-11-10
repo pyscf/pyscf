@@ -351,21 +351,18 @@ class KCIS(lib.StreamObject):
         self.voov = None
         self.ovov = None
 
-    def dump_flags(self):
-        logger.info(self, "")
-        logger.info(self, "******** %s ********", self.__class__)
-        logger.info(self, "nkpts = %d", self.nkpts)
-        logger.info(self, "CIS nocc = %d, nmo = %d", self.nocc, self.nmo)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info("")
+        log.info("******** %s ********", self.__class__)
+        log.info("nkpts = %d", self.nkpts)
+        log.info("CIS nocc = %d, nmo = %d", self.nocc, self.nmo)
         if self.frozen is not 0:
-            logger.info(self, "frozen orbitals = %s", self.frozen)
-        logger.info(
-            self,
-            "max_memory %d MB (current use %d MB)",
-            self.max_memory,
-            lib.current_memory()[0],
-        )
+            log.info("frozen orbitals = %s", self.frozen)
+        log.info("max_memory %d MB (current use %d MB)",
+                 self.max_memory, lib.current_memory()[0])
         if self.direct:
-            logger.info(self, "cis.direct = True; voov and ovov will not be computed")
+            log.info("cis.direct = True; voov and ovov will not be computed")
         return self
 
     @property
