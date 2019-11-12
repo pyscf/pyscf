@@ -11,7 +11,10 @@ from pyscf.dft.rks import _dft_common_init_
 class mf(nao):
 
   def __init__(self, **kw):
-    """ Constructor a mean field class (store result of a mean-field calc, deliver density matrix etc) """
+    """
+    Constructor a mean field class
+    store result of a mean-field calc, deliver density matrix etc
+    """
     #print(__name__, 'before construct')
     nao.__init__(self, **kw)
 
@@ -213,22 +216,30 @@ class mf(nao):
     return scf_dos(self, comegas, **kw)
 
   def pdos(self, comegas, **kw):
-    """ Partial Density of States (resolved in angular momentum of atomic orbitals) """
-    from pyscf.nao.m_dos_pdos_ldos import pdos
-    return pdos(self, comegas, **kw)
+    """
+    Partial Density of States (resolved in angular momentum of atomic orbitals)
+    """
+    import pyscf.nao.m_dos_pdos_ldos as mpdos
+    return mpdos.pdos(self, comegas, **kw)
 
   def lsoa_dos(self, comegas, **kw):
-    """ Partial Density of States (contributions from a given list of atoms) """
-    from pyscf.nao.m_dos_pdos_ldos import lsoa_dos
-    return lsoa_dos(self, comegas, **kw)
+    """
+    Partial Density of States (contributions from a given list of atoms)
+    """
+    import pyscf.nao.m_dos_pdos_ldos as mpdos
+    return mpdos.lsoa_dos(self, comegas, **kw)
 
   def gdos(self, comegas, **kw):
-    """ Some molecular orbital population analysis """
-    from pyscf.nao.m_dos_pdos_ldos import gdos
-    return gdos(self, comegas, **kw)
+    """
+    Some molecular orbital population analysis
+    """
+    import pyscf.nao.m_dos_pdos_ldos as mpdos
+    return mpdos.gdos(self, comegas, **kw)
 
   def read_wfsx(self, fname, **kw):
-    """ An occasional reading of the SIESTA's .WFSX file """
+    """
+    An occasional reading of the SIESTA's .WFSX file
+    """
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
