@@ -31,7 +31,10 @@ class gw(scf):
     self.bsize = kw['bsize'] if 'bsize' in kw else min(40, self.norbs)
     self.tdscf = kw['tdscf'] if 'tdscf' in kw else None
     self.frozen_core = kw['frozen_core'] if 'frozen_core' in kw else None
-    if sum(self.nelec) == 1: raise RuntimeError('Not implemented H, sorry :-) Look into scf/__init__.py for HF1e class...')
+    self.write_w = kw['write_w'] if 'write_w' in kw else False
+    self.restart_w = kw['restart_w'] if 'restart_w' in kw else False
+    if sum(self.nelec) == 1:
+      raise RuntimeError('Not implemented H, sorry :-) Look into scf/__init__.py for HF1e class...')
     
     if self.nspin==1:
         self.nocc_0t = nocc_0t = np.array([int((self.nelec+1)/2)])
@@ -41,7 +44,13 @@ class gw(scf):
         raise RuntimeError('nspin>2?')
 
     if self.verbosity>0:
-        print(__name__,'\t\t====> Number of occupied states = {}, states up to fermi level= {}, nspin = {}, and magnetization = {}'.format(nocc_0t,self.nfermi,self.nspin,self.spin))
+        mess = """
+====> Number of:
+    * occupied states = {},
+    * states up to fermi level= {},
+    * nspin = {}, 
+    * magnetization = {}""".format(nocc_0t,self.nfermi,self.nspin,self.spin))
+        print(__name__, mess)
 
     if 'nocc' in kw:
       s2nocc = [kw['nocc']] if type(kw['nocc'])==int else kw['nocc']
@@ -193,7 +202,7 @@ class gw(scf):
       epsilon[iw,:,:] = np.eye(self.nprod)- np.dot(self.kernel_sq, rf0[iw,:,:])
     return epsilon
 
-  def get_snmw2sf(self):
+  def get_snmw2sf(self, optimize="greedy"):
     """ 
     This computes a matrix elements of W_c: <\Psi\Psi | W_c |\Psi\Psi>.
     sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
@@ -206,15 +215,28 @@ class gw(scf):
     for s in range(self.nspin):
       nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
       #nmw2sf = zeros((len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
-      xna = self.mo_coeff[0,s,self.nn[s],:,0]                                           #n runs from s...f or states will be corrected: self.nn = [range(self.start_st[s], self.finish_st[s])
-      #xna = self.mo_coeff[0,s,self.nn,:,0]
-      xmb = self.mo_coeff[0,s,:,:,0]                                                    #m runs from 0...norbs
-      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m for each side
-      for iw,si0 in enumerate(wpq2si0):
-        nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)                #This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx 
-      snmw2sf.append(nmw2sf)
-    return snmw2sf
 
+      # n runs from s...f or states will be corrected:
+      # self.nn = [range(self.start_st[s], self.finish_st[s])
+      xna = self.mo_coeff[0,s,self.nn[s],:,0]
+      #xna = self.mo_coeff[0,s,self.nn,:,0]
+
+      # m runs from 0...norbs
+      xmb = self.mo_coeff[0,s,:,:,0]
+
+      # This calculates nmp2xvx= X^n V_mu X^m for each side
+      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb, optimize=optimize)
+      for iw,si0 in enumerate(wpq2si0):
+        # This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx 
+        nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx, optimize=optimize)
+      
+      snmw2sf.append(nmw2sf)
+
+      if self.write_w:
+        from pyscf.nao.m_restart import write_rst_h5py
+        print(write_rst_h5py(data = snmw2sf, filename= 'SCREENED_COULOMB.hdf5'))
+    
+    return snmw2sf
 
   def gw_corr_int(self, sn2w, eps=None):
     """
@@ -222,19 +244,31 @@ class gw(scf):
     -\frac{1}{2\pi}\int_{-\infty}^{+\infty } \sum_m \frac{I^{nm}(i\omega{'})}{E_n + i\omega{'}-E_m^0} d\omega{'}
     see eq (16) within DOI: 10.1021/acs.jctc.9b00436
     """
-    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
+
+    if not hasattr(self, 'snmw2sf'):
+      if self.restart_w is True:
+        from pyscf.nao.m_restart import read_rst_h5py
+        self.snmw2sf, msg = read_rst_h5py()
+        print(msg)
+      else:
+        self.snmw2sf = self.get_snmw2sf()
 
     sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
 
-    for s,ww in enumerate(sn2w):            #split into mo_energies
-      for n,w in enumerate(ww):             #split mo_energies into each spin channel
+    # split into mo_energies
+    for s,ww in enumerate(sn2w):
+      # split mo_energies into each spin channel
+      for n,w in enumerate(ww):
         #print(__name__, 's,n,w int corr', s,n,w)
-        for m in range(self.norbs):         #runs over orbitals
+        # runs over orbitals
+        for m in range(self.norbs):
           if abs(w-self.ksn2e[0,s,m])<eps : continue
-          state_corr = ((self.dw_ia*self.snmw2sf[s][n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
+          state_corr = ((self.dw_ia*self.snmw2sf[s][n,m,:] / \
+              (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
           #print(n, m, -state_corr, w-self.ksn2e[0,s,m])
           sn2int[s][n] -= state_corr
+
     return sn2int
 
   def gw_corr_res(self, sn2w):
@@ -312,11 +346,17 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    if self.verbosity>0: 
-        print('-'*48,'|  G0W0 corrections of eigenvalues  |','-'*48+'\n')
-        print('MAXIMUM number of iterations (Input file): {} and number of grid points: {}'.format(self.niter_max_ev,self.nff_ia))
-        print('Number of GW correction at energies calculated by integral part: {} and by sigma part: {}\n'.format(np.size(self.gw_corr_int(sn2eval_gw)), np.size(self.gw_corr_int(sn2eval_gw))))
-        print('GW corection for eigenvalues STARTED:\n')    
+    if self.verbosity>0:
+      mess = """
+        '='*48' G0W0 corrections of eigenvalues  '='*48
+        MAXIMUM number of iterations (Input file): {}
+        and number of grid points: {}
+        Number of GW correction at energies calculated by integral part: {}
+        and by sigma part: {}
+        GW corection for eigenvalues STARTED:
+        """.format(self.niter_max_ev, self.nff_ia, np.size(self.gw_corr_int(sn2eval_gw)),
+                   np.size(self.gw_corr_int(sn2eval_gw)))
+
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
