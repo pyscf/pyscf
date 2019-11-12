@@ -44,12 +44,11 @@ class gw(scf):
         raise RuntimeError('nspin>2?')
 
     if self.verbosity>0:
-        mess = """
-====> Number of:
+        mess = """====> Number of:
     * occupied states = {},
     * states up to fermi level= {},
     * nspin = {}, 
-    * magnetization = {}""".format(nocc_0t,self.nfermi,self.nspin,self.spin))
+    * magnetization = {}""".format(nocc_0t,self.nfermi,self.nspin,self.spin)
         print(__name__, mess)
 
     if 'nocc' in kw:
