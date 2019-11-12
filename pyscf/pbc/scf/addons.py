@@ -56,9 +56,12 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
 def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
     '''Fermi-Dirac or Gaussian smearing'''
     from pyscf.scf import uhf
+    from pyscf.scf import ghf
     from pyscf.pbc.scf import khf
     mf_class = mf.__class__
     is_uhf = isinstance(mf, uhf.UHF)
+    is_ghf = isinstance(mf, ghf.GHF)
+    is_rhf = (not is_uhf) and (not is_ghf)
     is_khf = isinstance(mf, khf.KSCF)
 
     def fermi_smearing_occ(m, mo_energy_kpts, sigma):
@@ -67,7 +70,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
         return occ
     def gaussian_smearing_occ(m, mo_energy_kpts, sigma):
-        return .5 - .5*scipy.special.erf((mo_energy_kpts-m)/sigma)
+        return 0.5 * scipy.special.erfc((mo_energy_kpts - m) / sigma)
 
     def partition_occ(mo_occ, mo_energy_kpts):
         mo_occ_kpts = []
@@ -84,7 +87,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         This is a k-point version of scf.hf.SCF.get_occ
         '''
         mo_occ_kpts = mf_class.get_occ(mf, mo_energy_kpts, mo_coeff_kpts)
-        if mf.sigma == 0 or not mf.sigma or not mf.smearing_method:
+        if (mf.sigma == 0) or (not mf.sigma) or (not mf.smearing_method):
             return mo_occ_kpts
 
         if is_khf:
@@ -96,6 +99,9 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             nocc = nelectron
             mo_es = numpy.append(numpy.hstack(mo_energy_kpts[0]),
                                  numpy.hstack(mo_energy_kpts[1]))
+        elif is_ghf:
+            nocc = nelectron
+            mo_es = numpy.hstack(mo_energy_kpts)
         else:
             nocc = nelectron // 2
             mo_es = numpy.hstack(mo_energy_kpts)
@@ -113,7 +119,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         if mu0 is None:
             def nelec_cost_fn(m):
                 mo_occ_kpts = f_occ(m, mo_es, sigma)
-                if not is_uhf:
+                if is_rhf:
                     mo_occ_kpts *= 2
                 return (mo_occ_kpts.sum() - nelectron)**2
             res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
@@ -131,7 +137,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         else:
             mf.entropy = (numpy.exp(-((mo_es-mu)/mf.sigma)**2).sum()
                           / (2*numpy.sqrt(numpy.pi)) / nkpts)
-        if not is_uhf:
+        if is_rhf:
             mo_occs *= 2
             mf.entropy *= 2
 
@@ -144,7 +150,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
                               partition_occ(mo_occs[nao_tot:], mo_energy_kpts[1]))
             else:
                 mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
-        else:
+        else: # rhf and ghf
             if is_khf:
                 mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
             else:
@@ -171,7 +177,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             return f_mo[numpy.tril_indices(nmo, -1)]
 
     def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
-        if mf.sigma == 0 or not mf.sigma or not mf.smearing_method:
+        if (mf.sigma == 0) or (not mf.sigma) or (not mf.smearing_method):
             return mf_class.get_grad(mf, mo_coeff_kpts, mo_occ_kpts, fock)
         if fock is None:
             dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
@@ -180,7 +186,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             ga = get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
             gb = get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
             return numpy.hstack((ga,gb))
-        else:
+        else: # rhf and ghf
             return get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
 
     def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
