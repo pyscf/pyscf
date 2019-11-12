@@ -3,12 +3,15 @@ import sys, numpy as np
 from copy import copy
 from pyscf.data.nist import HARTREE2EV
 from timeit import default_timer as timer
+import numpy as np
 from numpy import stack, dot, zeros, einsum, pi, log, array, require
 from pyscf.nao import scf, gw
 import time
 
 def profile(fnc):
-    """Profiles any function in following class just by adding @profile above function"""
+    """
+    Profiles any function in following class just by adding @profile above function
+    """
     import cProfile, pstats, io
     def inner (*args, **kwargs):
         pr = cProfile.Profile()
@@ -28,7 +31,9 @@ def profile(fnc):
 start_time = time.time()
 
 class gw_iter(gw):
-  """ Iterative G0W0 with integration along imaginary axis """
+  """
+  Iterative G0W0 with integration along imaginary axis
+  """
 
   def __init__(self, **kw):
     gw.__init__(self, **kw)
@@ -38,8 +43,9 @@ class gw_iter(gw):
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
 
   def si_c2(self,ww):
-    """This computes the correlation part of the screened interaction using LinearOpt and lgmres
-       lgmres method is much slower than np.linalg.solve !!
+    """
+    This computes the correlation part of the screened interaction using LinearOpt and lgmres
+    lgmres method is much slower than np.linalg.solve !!
     """
     import numpy as np
     from scipy.sparse.linalg import lgmres
@@ -55,7 +61,6 @@ class gw_iter(gw):
       if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
       #np.allclose(np.dot(k_c, si0), b, atol=1e-05) == True  #Test   
     return si0
-
 
   def si_c_check (self, tol = 1e-5):
     """
@@ -90,8 +95,12 @@ class gw_iter(gw):
      4- using dominant product basis
      5- using dominant product basis in COOrdinate format
     """
+    
     algol = algo.lower() if algo is not None else 'dp_coo'  
     xvx=[]
+
+    # we should write function for each algo
+    # this is definitively too long
 
     #1-direct multiplication with np and einsum
     if algol=='simple':
@@ -105,7 +114,7 @@ class gw_iter(gw):
             xvx.append(xvx_ref)
 
     #2-atom-centered product basis
-    if algol=='ac':
+    elif algol=='ac':
         v_pab = self.pb.get_ac_vertex_array()       
         #First step
         v_pab1= v_pab.reshape(self.nprod*self.norbs, self.norbs)  #2D shape
@@ -124,7 +133,7 @@ class gw_iter(gw):
             xvx.append(xvx1)
 
     #3-atom-centered product basis and BLAS
-    if algol=='blas':
+    elif algol=='blas':
         from pyscf.nao.m_rf0_den import calc_XVX      #uses BLAS
         v = np.einsum('pab->apb', self.pb.get_ac_vertex_array())
         for s in range(self.nspin):
@@ -133,7 +142,7 @@ class gw_iter(gw):
             xvx.append(xvx0.T)          
         
     #4-dominant product basis
-    if algol=='dp':
+    elif algol=='dp':
         size = self.cc_da.shape[0]
         v_pd  = self.pb.get_dp_vertex_array()   #dominant product basis: V_{\widetilde{\mu}}^{ab}
         c = self.pb.get_da2cc_den()             #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
@@ -157,7 +166,7 @@ class gw_iter(gw):
 
 
     #5-dominant product basis in COOrdinate-format instead of reshape
-    if algol=='dp_coo':
+    elif algol=='dp_coo':
         size = self.cc_da.shape[0]
         v_pd  = self.pb.get_dp_vertex_array() 
         c = self.pb.get_da2cc_den()
@@ -169,6 +178,7 @@ class gw_iter(gw):
         from pyscf.nao import ndcoo
         nc = ndcoo((data, (i00, i11, i22)))
         m0 = nc.tocoo_pa_b('p,a,b->ap,b')
+
         for s in range(self.nspin):
             xna = self.mo_coeff[0,s,self.nn[s],:,0]
             xmb = self.mo_coeff[0,s,:,:,0]
@@ -188,17 +198,19 @@ class gw_iter(gw):
             xvx3 = np.dot(xvx3,c)                                #XVX=xvx.c
             xvx.append(xvx3)
     
-    if algol=='check':
+    elif algol=='check':
         ref = self.gw_xvx(algo='simple')
         for s in range(self.nspin):
             print('Spin {}, atom-centered with ref: {}'.format(s+1,np.allclose(ref[s],self.gw_xvx(algo='ac')[s],atol=1e-15)))
             print('Spin {}, atom-centered (BLAS) with ref: {}'.format(s+1,np.allclose(ref[s],self.gw_xvx(algo='blas')[s],atol=1e-15)))
             print('Spin {}, dominant product with ref: {}'.format(s+1,np.allclose(ref[s],self.gw_xvx(algo='dp')[s],atol=1e-15)))
             print('Spin {}, sparse_dominant product-ndCoo with ref: {}'.format(s+1,np.allclose(ref[s], self.gw_xvx(algo='dp_coo')[s], atol=1e-15)))
+    else:
+      raise ValueError("Unknow algp {}".format(algol))
+
     return xvx
 
-
-  def get_snmw2sf_iter(self):
+  def get_snmw2sf_iter(self, optimize="greedy"):
     """ 
     This computes a matrix elements of W_c: <\Psi(r)\Psi(r) | W_c(r,r',\omega) |\Psi(r')\Psi(r')>.
     sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
@@ -207,41 +219,57 @@ class gw_iter(gw):
     2- I_nm = W XVX = (1-v\chi_0)^{-1}v\chi_0v
     3- S_nm = XVX W XVX = XVX * I_nm
     """
+
     from scipy.sparse.linalg import LinearOperator,lgmres
+    
     ww = 1j*self.ww_ia
     xvx= self.gw_xvx('blas')
     snm2i = []
-    k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
+    #convert k_c as full matrix into Operator
+    k_c_opt = LinearOperator((self.nprod,self.nprod),
+                             matvec=self.gw_vext2veffmatvec,
+                             dtype=self.dtypeComplex)
 
     for s in range(self.nspin):
-        sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtypeComplex)  
-        inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtypeComplex)                     
-        for iw,w in enumerate(ww):    #w is complex plane                                
+        sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtypeComplex)
+        inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtypeComplex)
+        
+        # w is complex plane
+        for iw,w in enumerate(ww):
             self.comega_current = w                            
             #print('k_c_opt',k_c_opt.shape)
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
-                    a = np.dot(self.kernel_sq, xvx[s][n,m,:])     #v XVX
-                    b = self.gw_chi0_mv(a, self.comega_current) #\chi_{0}v XVX by using matrix vector
-                    a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
-                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, atol=self.gw_iter_tol, maxiter=self.maxiter)
-            if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
-            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx[s], sf_aux)   #I= XVX I_aux
+                    # v XVX
+                    a = np.dot(self.kernel_sq, xvx[s][n,m,:])
+                    # \chi_{0}v XVX by using matrix vector
+                    b = self.gw_chi0_mv(a, self.comega_current)
+                    # v\chi_{0}v XVX, this should be equals to bxvx in last approach
+                    a = np.dot(self.kernel_sq, b)
+                    sf_aux[n,m,:],exitCode = lgmres(k_c_opt, a,
+                                                     atol=self.gw_iter_tol,
+                                                     maxiter=self.maxiter)
+                    if exitCode != 0:
+                      print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+            # I= XVX I_aux
+            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx[s], sf_aux, optimize=optimize)
         snm2i.append(np.real(inm))
+
+    if (self.write_w==True):
+        from pyscf.nao.m_restart import write_rst_h5py
+        print(write_rst_h5py(data = snm2i, filename= 'SCREENED_COULOMB.hdf5'))
+
     return snm2i
 
-  
   def gw_vext2veffmatvec(self,vin):
     dn0 = self.gw_chi0_mv(vin, self.comega_current)
     vcre,vcim = self.gw_applykernel_nspin1(dn0)
     return vin - (vcre + 1.0j*vcim)         #1- v\chi_0
 
-
   def gw_vext2veffmatvec2(self,vin):
     dn0 = self.gw_chi0_mv(vin, self.comega_current)
     vcre,vcim = self.gw_applykernel_nspin1(dn0)
     return 1- (vin - (vcre + 1.0j*vcim))    #1- (1-v\chi_0)
-
 
   def gw_applykernel_nspin1(self,dn):
     daux  = np.zeros(self.nprod, dtype=self.dtype)
@@ -252,11 +280,12 @@ class gw_iter(gw):
     vcim = self.spmv(self.nprod, 1.0, self.kernel, daux)
     return vcre,vcim
 
-
   def gw_chi0_mv(self,dvin, comega=1j*0.0, dnout=None):
+
     from scipy.linalg import blas
     from pyscf.nao.m_sparsetools import csr_matvec    
-    if dnout is None: 
+    
+    if dnout is None:
         dnout = np.zeros_like(dvin, dtype=self.dtypeComplex)
 
     dnout.fill(0.0)
@@ -290,7 +319,8 @@ class gw_iter(gw):
                     nm2v_re[n, m] = nm2v.real
                     nm2v_im[n, m] = nm2v.imag
 
-            for n in range(vs+1,nf): #padding m<n i.e. negative occupations' difference
+            # padding m<n i.e. negative occupations' difference
+            for n in range(vs+1,nf):
                 for m in range(n-vs):  
                     nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
 
@@ -309,59 +339,93 @@ class gw_iter(gw):
     dnout = chi0_re + 1.0j*chi0_im
     return dnout
 
-
   def gw_comp_veff(self, vext, comega=1j*0.0):
-    """ This computes an effective field (scalar potential) given the external scalar potential as follows:
-        (1-v\chi_{0})V_{eff}=V_{ext}=X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
-        returns V_{eff} as list for all n states(self.nn[s]).
     """
+    This computes an effective field (scalar potential) given the external
+    scalar potential as follows:
+        (1-v\chi_{0})V_{eff} = V_{ext} = X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * 
+                                         v\chi_{0}v * X_{a}^{n}V_{nu}^{ab}X_{b}^{m}
+    
+    returns V_{eff} as list for all n states(self.nn[s]).
+    """
+    
     from scipy.sparse.linalg import LinearOperator
     self.comega_current = comega
-    veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.gw_vext2veffmatvec, dtype=self.dtypeComplex)
+    veff_op = LinearOperator((self.nprod,self.nprod),
+                             matvec=self.gw_vext2veffmatvec,
+                             dtype=self.dtypeComplex)
 
     from scipy.sparse.linalg import lgmres
-    resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, requirements='C'), atol=self.gw_iter_tol, maxiter=self.maxiter)
-    if info != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(info))
+    resgm, info = lgmres(veff_op,
+                         np.require(vext, dtype=self.dtypeComplex, requirements='C'),
+                         atol=self.gw_iter_tol, maxiter=self.maxiter)
+    if info != 0:
+      print("LGMRES has not achieved convergence: exitCode = {}".format(info))
     return resgm
 
+  def check_veff(self, optimize="greedy"):
+    """
+    This checks the equality of effective field (scalar potential) given the external
+    scalar potential obtained from lgmres(linearopt, v_ext) and np.solve(dense matrix, vext). 
+    """
 
-  def check_veff(self):
-    """
-    This checks the equality of effective field (scalar potential) given the external scalar potential
-    obtained from lgmres(linearopt, v_ext) and np.solve(dense matrix, vext). 
-    """
-    import numpy as np
     from numpy.linalg import solve
+
     ww = 1j*self.ww_ia
     rf0 = self.rf0(ww)
-    v_pab = self.pb.get_ac_vertex_array()                   #V_{\mu}^{ab}
+    #V_{\mu}^{ab}
+    v_pab = self.pb.get_ac_vertex_array()
     for s in range(self.nspin):
       v_eff = np.zeros((len(self.nn[s]), self.nprod), dtype=self.dtype)
       v_eff_ref = np.zeros((len(self.nn[s]), self.nprod), dtype=self.dtype)
-      xna = self.mo_coeff[0,s,self.nn[s],:,0]               #X_{a}^{n}
-      xmb = self.mo_coeff[0,s,:,:,0]                        #X_{b}^{m}
-      xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)    #X_{a}^{n}V_{\mu}^{ab}X_{b}^{m}
+      # X_{a}^{n}
+      xna = self.mo_coeff[0,s,self.nn[s],:,0]
+      # X_{b}^{m}
+      xmb = self.mo_coeff[0,s,:,:,0]
+      # X_{a}^{n}V_{\mu}^{ab}X_{b}^{m}
+      xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb, optimize=optimize)
       for iw,w in enumerate(ww):     
-          k_c = np.dot(self.kernel_sq, rf0[iw,:,:])         # v\chi_{0} 
-          b = np.dot(k_c, self.kernel_sq)                   # v\chi_{0}v 
-          k_c = np.eye(self.nprod)-k_c                      #(1-v\chi_{0})
-          bxvx = np.einsum('pq,nmq->nmp', b, xvx)           #v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
-          xvxbxvx = np.einsum ('nmp,nlp->np',xvx,bxvx)      #V_{ext}=X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
+          # v\chi_{0} 
+          k_c = np.dot(self.kernel_sq, rf0[iw,:,:])
+          # v\chi_{0}v 
+          b = np.dot(k_c, self.kernel_sq)
+          #(1-v\chi_{0})
+          k_c = np.eye(self.nprod)-k_c
+          
+          #v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
+          bxvx = np.einsum('pq,nmq->nmp', b, xvx, optimize=optimize)
+          #V_{ext}=X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
+          xvxbxvx = np.einsum ('nmp,nlp->np', xvx, bxvx, optimize=optimize)
+          
           for n in range (len(self.nn[s])):
-              v_eff_ref[n,:] = self.gw_comp_veff(xvxbxvx[n,:]) #compute v_eff in tddft_iter class as referance
-              v_eff[n,:]=solve(k_c, xvxbxvx[n,:])           #linear eq. for finding V_{eff} --> (1-v\chi_{0})V_{eff}=V_{ext}
-    if np.allclose(v_eff,v_eff_ref,atol=1e-4)== True:       #compares both V_{eff}
+              # compute v_eff in tddft_iter class as referance
+              v_eff_ref[n,:] = self.gw_comp_veff(xvxbxvx[n,:])
+              # linear eq. for finding V_{eff} --> (1-v\chi_{0})V_{eff}=V_{ext}
+              v_eff[n,:]=solve(k_c, xvxbxvx[n,:])
+
+    # compares both V_{eff}
+    if np.allclose(v_eff,v_eff_ref,atol=1e-4)== True:
       return v_eff
 
-
   def gw_corr_int_iter(self, sn2w, eps=None):
-    """ This computes an integral part of the GW correction at GW class while uses get_snmw2sf_iter"""
-    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf_iter()
+    """
+    This computes an integral part of the GW correction at GW class while uses get_snmw2sf_iter
+    """
+
+    if self.restart_w is True: 
+      from pyscf.nao.m_restart import read_rst_h5py
+      self.snmw2sf, msg = read_rst_h5py()
+      print(msg)  
+    else:
+      self.snmw2sf = self.get_snmw2sf_iter()
+    
     return self.gw_corr_int(sn2w, eps=None)
 
-
   def gw_corr_res_iter(self, sn2w):
-    """This computes a residue part of the GW correction at energies in iterative procedure"""
+    """
+    This computes a residue part of the GW correction at energies in iterative procedure
+    """
+    
     from scipy.sparse.linalg import lgmres, LinearOperator
     v_pab = self.pb.get_ac_vertex_array()
     sn2res = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]   
@@ -382,12 +446,16 @@ class gw_iter(gw):
           if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
           contr = np.dot(xvx, si_xvx)
           sn2res[s][nl] += pole[2]*contr.real
+    
     return sn2res
 
-
   def g0w0_eigvals_iter(self):
-    """ This computes the G0W0 corrections to the eigenvalues """
-    sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]  #self.ksn2e = self.mo_energy
+    """
+    This computes the G0W0 corrections to the eigenvalues
+    """
+
+    #self.ksn2e = self.mo_energy
+    sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]
     sn2eval_gw_prev = copy(sn2eval_gw)
 
     self.nn_conv = []           # self.nn_conv - list of states to converge
@@ -396,7 +464,7 @@ class gw_iter(gw):
 
     # iterations to converge the qp-energies 
     if self.verbosity>0: 
-        print('-'*48,'|  G0W0 corrections of eigenvalues  |','-'*48+'\n')
+        print('='*48,'|  G0W0 corrections of eigenvalues  |','='*48+'\n')
         print('MAXIMUM number of iterations (Input file): {} and number of grid points: {}'.format(self.niter_max_ev,self.nff_ia))
         print('GW corection for eigenvalues STARTED:\n')    
 
@@ -417,20 +485,32 @@ class gw_iter(gw):
       if self.verbosity>0:
         np.set_printoptions(linewidth=1000, suppress=True, precision=5)
         print('Iteration #{}  Relative Error: {:.7f}'.format(i+1, err))
+
       if self.verbosity>1:
         #print(sn2mismatch)
         for s,n2ev in enumerate(sn2eval_gw):
-          print('Spin{}: {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))   
+          print('Spin{}: {}'.format(s+1, n2ev[:]*HARTREE2EV)) 
+      
       if err<self.tol_ev : 
-        if self.verbosity>0: print('-'*43,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*43,'\n')
+        if self.verbosity>0:
+          print('-'*43,
+                ' |  Convergence has been reached at iteration#{}  | '.format(i+1),
+                '-'*43,'\n')
         break
+
       if err>=self.tol_ev and i+1==self.niter_max_ev:
-        if self.verbosity>0: print('-'*30,' |  TAKE CARE! Convergence to tolerance {} not achieved after {}-iterations  | '.format(self.tol_ev,self.niter_max_ev),'-'*30,'\n')
+        if self.verbosity>0:
+          print('='*30,
+                ' |  TAKE CARE! Convergence to tolerance {} not achieved after {}-iterations  | '.format(self.tol_ev,self.niter_max_ev),
+                '='*30,'\n')
+    
     return sn2eval_gw
 
   #@profile  
   def make_mo_g0w0_iter(self):
-    """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
+    """
+    This creates the fields mo_energy_g0w0, and mo_coeff_g0w0
+    """
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>2: self.report_mf()
@@ -460,17 +540,14 @@ class gw_iter(gw):
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
-    if self.verbosity>1:
+    if self.verbosity>3:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
     
     return self.etot_gw()
         
+  # This line is odd !!!
   kernel_gw_iter = make_mo_g0w0_iter
-
-
-
-
 
 if __name__=='__main__':
     from pyscf import gto, scf
