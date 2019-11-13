@@ -2838,28 +2838,33 @@ def molgw_input (dirname=None):
             pos=d['position_pyscf']
             nn=sum(1 for c in d['symbols'] if c.isupper())
             output='''&molgw
- scf='HSE06'
+ scf='rsh'
+ alpha_hybrid=0.75
+ nstep=200
  read_restart='no'
- print_restart='no'
+ print_restart='yes'
+ print_bigrestart='yes'
  print_hartree='yes'
+ print_cube='yes'
  length_unit='A'
  basis='cc-pVQZ'
  auxil_basis='cc-pVQZ-RI'
- !basis_path='/scratch/scicomp/CentOS/7.3.1611/Haswell/software/MOLGW/1.H-am7-intel-2017b/basis'
- nspin=2 !open-shell
- charge=0.0 !neutral
+ basis_path='/scratch/scicomp/CentOS/7.3.1611/Haswell/software/MOLGW/1.H-am7-intel-2017b/basis'
+ nspin=2
+ charge=0.0
  postscf='gw'
  selfenergy_state_range=10
  nomega_sigma=251
  step_sigma=0.01
  print_w='yes'
  print_pdos='yes'
+ print_sigma='yes'
  magnetization ={} 
  natom={}
 /
 {}
 '''.format(m,nn,pos)
-    
+
             if not os.path.exists(dirname+'/{}'.format(k)):
                 try:
                     os.makedirs(dirname+'/{}'.format(k))
@@ -2871,7 +2876,6 @@ def molgw_input (dirname=None):
                 f.writelines(output)
                 f.close()
 #pyscf_input('/home/masoud/calculations/training/')
-
 
 
 def mol_name (in_name):
@@ -2893,4 +2897,39 @@ def mol_cas(casno):
         if (casno==d['CAS No.']):
             return mol_name(k)
     return print('Unknown species!')
-    
+
+
+def xyz2siesta (filename):
+    """
+    It coverts a standard text.xyz file from NIST to a txt file suitable for siesta input
+    Input file must be like this (reads position from 2nd line):
+    Total umber of atoms
+    BULK
+    Atom x y z 
+    """
+    import sys, re
+    from pyscf.data.elements import ELEMENTS
+    data = []
+    with open(filename) as f:
+        for line in f:
+            data.append(line.strip().split('\n'))
+    a=[]
+    for i in range (2,len(data)):
+        a.append(re.findall(r'\w+', str(data[i]))[0])
+    nosp=list(set(a))
+    with open(filename+'.txt', 'w') as f1:
+        name_prev = 'initial'
+        for i in range (2,len(data)):
+            name = re.findall(r'\w+', str(data[i]))[0]
+            if (name != name_prev): sp=1      
+            x,y,z= re.findall(r"[-+]?\d*\.\d+|\d+", str(data[i]))
+            if name in nosp:
+                txt= ' %15s  %15s  %15s %4d %4d %14s.gga'%(x,y,z,nosp.index(name)+1,sp,name)
+                sp+=1
+            name_prev = name
+            f1.write('\t'+txt+'\n')
+        for i in range(len(nosp)):
+            nosp[i]=' %4d  %4d  %14s.gga\n'%(i+1, ELEMENTS.index(nosp[i]), nosp[i])
+            f1.write(nosp[i])
+        f1.close
+
