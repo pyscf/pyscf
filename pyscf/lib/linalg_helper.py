@@ -1004,9 +1004,9 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     e, x = dgeev1(map_abop, x0, precond, type, tol, max_cycle, max_space, lindep,
                   max_memory, dot, callback, nroots, lessio, verbose)[1:]
     if nroots == 1:
-        return e[0], x0[0]
+        return e[0], x[0]
     else:
-        return e, x0
+        return e, x
 
 def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
           lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
