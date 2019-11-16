@@ -23,12 +23,16 @@ def rf0_den(self, ww):
   
   zxvx = zeros((len(ww),self.nprod,self.bsize,self.bsize), dtype=self.dtypeComplex)
 
+  print("enter rf0_den")
+  t1 = timer()
   for s in range(self.nspin):
     nn = list(range(0,self.nfermi[s],self.bsize))+[self.nfermi[s]]
     mm = list(range(self.vstart[s],self.norbs,self.bsize))+[self.norbs]
     
     for nbs,nbf in zip(nn,nn[1:]):
+      # replace this dot with a blas call to dgemv or zgemv
       vx = dot(v, self.x[s,nbs:nbf,:].T)
+      #vx = blas.dgemv(v, self.x[s,nbs:nbf,:].T)
       for mbs,mbf in zip(mm,mm[1:]):
         xvx = calc_XVX(self.x[s,mbs:mbf,:], vx)
 
@@ -37,8 +41,10 @@ def rf0_den(self, ww):
         zxvx.fill(0.0)
         for iw,comega in enumerate(ww):
           zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
-      
+
         rf0 += calc_part_rf0(xvx, zxvx[:, :, 0:mbf-mbs, 0:nbf-nbs])
+  t2 = timer()
+  print("spend time rf0_den: ", t2-t1)
 
   #rf0_ref = rf0_den_org(self, ww)
   #print("mean: ", rf0.mean(), rf0_ref.mean())
@@ -48,6 +54,29 @@ def rf0_den(self, ww):
   #sys.exit()
 
   return rf0
+
+def calc_part_rf0(xvx, zxvx):
+
+    rf0 = np.zeros((zxvx.shape[0], zxvx.shape[1], zxvx.shape[1]), dtype=np.complex128)
+
+    #time = 0.0
+    for iw in range(zxvx.shape[0]):
+        for ib in range(zxvx.shape[3]):
+          #t1 = timer()
+          rf0_iw = run_blasZGEMM(1.0, zxvx[iw, :, :, ib], xvx[:, :, ib], trans_a = 0, trans_b = 1)
+          rf0[iw, :, :] += rf0_iw
+          #t2 = timer()
+          #time += t2-t1
+
+    #print("calc_part_rf0 zgemm elapsed time: {}".format(time))
+    #print("calc_part_rf0 zgemm mean time: {}".format(time/(zxvx.shape[0]*zxvx.shape[3])))
+
+    return rf0
+
+def run_blasZGEMM(alpha, A, B, **kwargs):
+
+  return blas.zgemm(alpha, A, B, **kwargs)
+
 
 def rf0_den_einsum(self, ww):
   """
@@ -83,18 +112,6 @@ def rf0_den_einsum(self, ww):
         rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
   
   return rf0
-
-def calc_part_rf0(xvx, zxvx):
-
-    rf0 = np.zeros((zxvx.shape[0], zxvx.shape[1], zxvx.shape[1]), dtype=np.complex128)
-
-    for iw in range(zxvx.shape[0]):
-
-        for ib in range(zxvx.shape[3]):
-            rf0[iw, :, :] += blas.zgemm(1.0, zxvx[iw, :, :, ib], xvx[:, :, ib], 
-                                trans_a = 0, trans_b = 1)
-
-    return rf0
 
 def calc_XVX(X, VX):
 

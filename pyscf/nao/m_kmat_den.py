@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import print_function, division
+import numpy as np
+import scipy.linalg.blas as blas
+from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec
 
 def kmat_den(mf, dm=None, algo=None, **kw):
   """
@@ -24,7 +27,8 @@ def kmat_den(mf, dm=None, algo=None, **kw):
   import numpy as np
   from numpy import einsum, dot
 
-  pb,hk=mf.add_pb_hk(**kw)
+
+  pb, hk = mf.add_pb_hk(**kw)
   dm = mf.make_rdm1() if dm is None else dm
 
   n = mf.norbs
@@ -40,6 +44,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
   if mf.verbosity>1 and algol != 'sm0_sum' : print(__name__, "\t====> Fock exchange algorithm '{}'.\f".format(algol))
   gen_spy_png = kw['gen_spy_png'] if 'gen_spy_png' in kw else False
   
+  print(__name__, algol)
   if algol=='fci':
 
     mf.fci_den = abcd2v = mf.fci_den if hasattr(mf, 'fci_den') else pb.comp_fci_den(hk)
@@ -164,7 +169,8 @@ def kmat_den(mf, dm=None, algo=None, **kw):
   elif algol=='sm0_sum':
     """ 
     This algorithm is using two sparse representations of the product vertex V^ab_mu.
-    The algorithm was not realized before and it seems to be superior to the algorithm sm0_prd (see above).
+    The algorithm was not realized before and it seems to be superior to the algorithm
+    sm0_prd (see above).
     """
     import scipy.sparse as sparse
     from timeit import default_timer as timer
@@ -183,9 +189,9 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     #print('runtime sm0_sum_before_loop: ', t2-t1); t1=t2
     
     if len(dm.shape)==3: # if spin index is present
-      
+
       for s in range(mf.nspin):
-        for mu,a_ap2v in enumerate(dab2v):
+        for mu, a_ap2v in enumerate(dab2v):
           cc = da2cc[mu].toarray().reshape(nnp)
           q2v = dot( cc, hk )
           nu2v = da2cc * q2v
@@ -196,30 +202,47 @@ def kmat_den(mf, dm=None, algo=None, **kw):
         
     elif len(dm.shape)==2: # if spin index is absent
       # [   14.59955484   314.09553769  1113.57001527   140.44369524   687.34180544   89.05969492    28.3846701 ]
-
+      
       tt = np.zeros(8)
       ttt = np.zeros(7)
-      for mu,a_ap2v in enumerate(dab2v):
+
+      for mu, a_ap2v in enumerate(dab2v):
+        
         tt[0] = timer();
+        # 1D; dense, could be sparse ... 
         cc = da2cc[mu].toarray().reshape(nnp)
         tt[1] = timer(); 
-        q2v = dot( cc, hk )
-        tt[2] = timer(); 
-        nu2v = da2cc * q2v
+        
+        # this could be done directly
+        # 1D
+        #q2v = blas.dgemv( 1.0, hk, cc, trans=1 )
+        q2v = np.dot( cc, hk )
+        tt[2] = timer();
+        
+        # slower term ..
+        #nu2v = da2cc.dot(q2v)
+        nu2v = csr_matvec(da2cc, q2v)
         tt[3] = timer();
-        a_bp2vd = sparse.csr_matrix(a_ap2v * dm)
+
+        # a_ap2v: sparse
+        a_bp2vd = sparse.coo_matrix(a_ap2v.dot(dm)).tocsr()
         tt[4] = timer();
         #bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
-        bp_b2hv = (nu2v * dab2v_csr).reshape((n,n))
+        
+        # slower term ..
+        bp_b2hv = dab2v_csr.T.dot(nu2v).reshape((n,n))
+        #bp_b2hv = csc_matvec(dab2v_csr.T, nu2v).reshape((n,n))
         tt[5] = timer();
-        ab2vdhv = a_bp2vd * bp_b2hv
+        
+        ab2vdhv = a_bp2vd.dot(bp_b2hv)
         tt[6] = timer()
         #kmat[ab2vdhv.nonzero()] += ab2vdhv.data
+        
         kmat += ab2vdhv
         tt[7] = timer()
         ttt += tt[1:8]-tt[0:7]
         
-      #print(__name__, ttt)
+      print(__name__, ttt)
       
     else:
       print(dm.shape)
