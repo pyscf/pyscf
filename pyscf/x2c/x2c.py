@@ -35,8 +35,9 @@ class X2C(lib.StreamObject):
     approx = getattr(__config__, 'x2c_X2C_approx', '1e')  # 'atom1e'
     xuncontract = getattr(__config__, 'x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'x2c_X2C_basis', None)
-    def __init__(self, mol=None):
+    def __init__(self, mol):
         self.mol = mol
+        self.stdout = mol.stdout
         self.verbose = mol.verbose
 
     def dump_flags(self, verbose=None):

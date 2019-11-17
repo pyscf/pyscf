@@ -47,7 +47,7 @@ Print the IBOS into Gausian Cube files
 '''
 
 for i in range(ibo.shape[1]):
-    tools.cubegen.density(mol, 'benzene_ibo1_'+str(i+1)+'.cube', ibo ,moN=i+1)
+    tools.cubegen.orbital(mol, 'benzene_ibo1_'+str(i+1)+'.cube', ibo[:,i])
 
 '''
 Population Analysis with IAOS
@@ -67,8 +67,9 @@ mf.mulliken_pop(iao_mol, dm, s=numpy.eye(iao_mol.nao_nr()))
 # Method 2, using the modified Pipek-Mezey localization module.
 # Orthogonalization for IAOs is not required.
 #
+mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
 iaos = lo.iao.iao(mol, mo_occ)
 ibo = lo.ibo.PM(mol, mo_occ, iaos).kernel()
 for i in range(ibo.shape[1]):
-    tools.cubegen.density(mol, 'benzene_ibo2_'+str(i+1)+'.cube', ibo ,moN=i+1)
+    tools.cubegen.orbital(mol, 'benzene_ibo2_'+str(i+1)+'.cube', ibo[:,i])
 

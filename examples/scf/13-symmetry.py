@@ -29,6 +29,7 @@ mf = scf.RHF(mol)
 # 'E1gx': 2 electrons
 # 'E1gy': 2 electrons
 # Rest 4 electrons are put in irreps A1u, E1ux, E1uy ... based on Aufbau principle
+# The irrep names can be found in pyscf/symm/param.py
 mf.irrep_nelec = {'A1g': 4, 'E1gx': 2, 'E1gy': 2}
 e = mf.kernel()
 print('E = %.15g  ref = -74.1112374269129' % e)

@@ -48,8 +48,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     eijk = lib.direct_sum('i,j,k->ijk', e_occ, e_occ, e_occ)
 
     eris_vvov = eris.get_ovvv().conj().transpose(1,3,0,2)
-    eris_vooo = eris.ovoo.conj().transpose(1,0,3,2)
-    eris_vvoo = eris.ovov.conj().transpose(1,3,0,2)
+    eris_vooo = numpy.asarray(eris.ovoo).conj().transpose(1,0,3,2)
+    eris_vvoo = numpy.asarray(eris.ovov).conj().transpose(1,3,0,2)
     fvo = eris.fock[nocc:,:nocc]
     def get_w(a, b, c):
         w = numpy.einsum('if,fkj->ijk', eris_vvov[a,b], t2T[c,:])

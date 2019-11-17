@@ -47,7 +47,7 @@ ibo = lo.ibo.ibo(cell, mo_occ, a)
 Generates IBO files as VASP Chgcars
 '''
 for i in range(ibo.shape[1]):
-    tools.cubegen.density(cell, 'diamond_ibo'+str(i+1)+'.vasp', ibo ,moN=i+1,fileFormat="vasp")
+    tools.cubegen.orbital(cell, 'diamond_ibo'+str(i+1)+'.vasp', ibo[:,i])
     print("wrote cube "+str(i+1))
 
 '''
