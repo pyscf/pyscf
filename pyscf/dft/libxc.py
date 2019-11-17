@@ -650,7 +650,9 @@ PROBLEMATIC_XC = dict([(XC_CODES[x], x) for x in
                         'XC_MGGA_C_TPSSLOC', 'XC_HYB_MGGA_XC_TPSSH')])
 
 def xc_type(xc_code):
-    if isinstance(xc_code, str):
+    if xc_code is None:
+        return None
+    elif isinstance(xc_code, str):
         if is_nlc(xc_code):
             return 'NLC'
         hyb, fn_facs = parse_xc(xc_code)
@@ -753,7 +755,9 @@ def rsh_coeff(xc_code):
     alpha = c_LR
     beta = c_SR - c_LR = hyb - alpha
     '''
-    if isinstance(xc_code, str) and ',' in xc_code:
+    if xc_code is None:
+        return 0, 0, 0
+    elif isinstance(xc_code, str) and ',' in xc_code:
         # Parse only X part for the RSH coefficients.  This is to handle
         # exceptions for C functionals such as M11.
         xc_code = xc_code.split(',')[0] + ','
@@ -891,7 +895,9 @@ def parse_xc(description):
         see also libxc_itrf.c
     '''
     hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
-    if isinstance(description, int):
+    if description is None:
+        return hyb, []
+    elif isinstance(description, int):
         return hyb, [(description, 1.)]
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
