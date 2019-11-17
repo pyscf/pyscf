@@ -20,7 +20,6 @@ restart point.
 
 from pyscf import gto
 from pyscf import scf
-from pyscf.tools import c60struct
 
 mol = gto.Mole()
 mol.build(

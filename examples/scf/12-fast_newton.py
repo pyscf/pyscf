@@ -70,7 +70,7 @@ print('E(tot) %.15g  ref = -5668.38221757799' % mf.e_tot)
 # scf.fast_newton function can be used for specific initial guess.
 #
 # We first create an initial guess with DIIS iterations. The DIIS results are
-# saved in a check point file which can be load in another calculation.
+# saved in a checkpoint file which can be load in another calculation.
 #
 mf = scf.RHF(mol)
 mf.chkfile = 'cu3-diis.chk'

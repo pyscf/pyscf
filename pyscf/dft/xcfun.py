@@ -237,7 +237,9 @@ VV10_DAT = {
 VV10_XC = set(VV10_DAT.keys())
 
 def xc_type(xc_code):
-    if isinstance(xc_code, str):
+    if xc_code is None:
+        return None
+    elif isinstance(xc_code, str):
         if is_nlc(xc_code):
             return 'NLC'
         hyb, fn_facs = parse_xc(xc_code)
@@ -352,8 +354,10 @@ def parse_xc(description):
       contribution has been included.
     '''
     hyb = [0, 0, 0]  # hybrid, alpha, omega
-    if isinstance(description, int):
-        return 0, [(description, 1.)]
+    if description is None:
+        return hyb, []
+    elif isinstance(description, int):
+        return hyb, [(description, 1.)]
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
