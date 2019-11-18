@@ -26,6 +26,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import ghf
 from pyscf.x2c import x2c
+from pyscf.data import nist
 
 
 def sfx2c1e(mf):
@@ -90,6 +91,57 @@ def sfx2c1e(mf):
                 self.with_x2c.dump_flags(verbose)
             return self
 
+        def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                       picture_change=True, **kwargs):
+            r''' Dipole moment calculation with picture change correction
+
+            Args:
+                 mol: an instance of :class:`Mole`
+                 dm : a 2D ndarrays density matrices
+
+            Kwarg:
+                picture_chang (bool) : Whether to compute the dipole moment with
+                picture change correction.
+
+            Return:
+                A list: the dipole moment on x, y and z component
+            '''
+            if mol is None: mol = self.mol
+            if dm is None: dm =self.make_rdm1()
+            log = logger.new_logger(mol, verbose)
+
+            if 'unit_symbol' in kwargs:  # pragma: no cover
+                log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+                         'unit since PySCF-1.5.')
+                unit = kwargs['unit_symbol']
+
+            if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+                # UHF denisty matrices
+                dm = dm[0] + dm[1]
+
+            with mol.with_common_orig((0,0,0)):
+                if picture_change:
+                    xmol = self.with_x2c.get_xmol()[0]
+                    nao = xmol.nao
+                    prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,0]
+                    ao_dip = self.with_x2c.picture_change(('int1e_r', prp))
+                else:
+                    ao_dip = mol.intor_symmetric('int1e_r')
+
+            el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
+
+            charges = mol.atom_charges()
+            coords  = mol.atom_coords()
+            nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+            mol_dip = nucl_dip - el_dip
+
+            if unit.upper() == 'DEBYE':
+                mol_dip *= nist.AU2DEBYE
+                log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
+            else:
+                log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+            return mol_dip
+
     return SFX2C1E_SCF(mf)
 
 sfx2c = sfx2c1e
@@ -139,6 +191,39 @@ class SpinFreeX2C(x2c.X2C):
             h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
 
+    def picture_change(self, even_operator=(None, None), odd_operator=None):
+        '''Picture change for even_operator + odd_operator
+
+        even_operator has two terms at diagonal blocks
+        [ v  0 ]
+        [ 0  w ]
+
+        odd_operator has the term at off-diagonal blocks
+        [ 0    p ]
+        [ p^T  0 ]
+
+        v, w, and p can be strings (integral name) or matrices.
+        '''
+        mol = self.mol
+        xmol, c = self.get_xmol(mol)
+        pc_mat = self._picture_change(xmol, even_operator, odd_operator)
+
+        if self.basis is not None:
+            s22 = xmol.intor_symmetric('int1e_ovlp')
+            s21 = gto.mole.intor_cross('int1e_ovlp', xmol, mol)
+            c = lib.cho_solve(s22, s21)
+
+        elif self.xuncontract:
+            pass
+
+        else:
+            return pc_mat
+
+        if pc_mat.ndim == 2:
+            return lib.einsum('pi,pq,qj->ij', c, pc_mat, c)
+        else:
+            return lib.einsum('pi,xpq,qj->xij', c, pc_mat, c)
+
     def get_xmat(self, mol=None):
         if mol is None:
             xmol = self.get_xmol(mol)[0]
@@ -168,6 +253,17 @@ class SpinFreeX2C(x2c.X2C):
             w = xmol.intor_symmetric('int1e_pnucp')
             x = x2c._x2c1e_xmatrix(t, v, w, s, c)
         return x
+
+    def _get_rmat(self, x=None):
+        '''The matrix (in AO basis) that changes metric from NESC metric to NR metric'''
+        xmol = self.get_xmol()[0]
+        if x is None:
+            x = self.get_xmat(xmol)
+        c = lib.param.LIGHT_SPEED
+        s = xmol.intor_symmetric('int1e_ovlp')
+        t = xmol.intor_symmetric('int1e_kin')
+        s1 = s + reduce(numpy.dot, (x.conj().T, t, x)) * (.5/c**2)
+        return x2c._get_r(s, s1)
 
     def hcore_deriv_generator(self, mol=None, deriv=1):
         from pyscf.x2c import sfx2c1e_grad
