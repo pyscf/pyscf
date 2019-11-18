@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '1.6.4'
+__version__ = '1.6.5'
 
 import os
 # Avoid too many threads being created in OMP loops.
