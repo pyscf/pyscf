@@ -33,6 +33,18 @@ PySCF 1.7.0 (2019-?-?)
   - range-separation paramter omega customization in RSH functionals
 
 
+PySCF 1.6.5 (2019-11-17)
+------------------------
+* Added
+  - spin_square method for UCCSD
+* Improved
+  - Handling ".xc = None" (run DFT without exchage)
+* Fixed
+  - Unit conversion bug between eV and wavenumber in TDDFT
+  - KGHF orbital gradients
+  - Analytical gradients for implicit solvent model in geometry optimization
+
+
 PySCF 1.6.4 (2019-09-14)
 ------------------------
 * Added
