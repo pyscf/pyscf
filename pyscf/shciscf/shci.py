@@ -464,7 +464,7 @@ class SHCI(pyscf.lib.StreamObject):
                   state,
                   norb,
                   nelec,
-                  dt=numpy.dtype('Float64'),
+                  dt=numpy.float64,
                   filetype="binary",
                   link_index=None,
                   bypass=False,
@@ -552,7 +552,7 @@ class SHCI(pyscf.lib.StreamObject):
                   state,
                   norb,
                   nelec,
-                  dt=numpy.dtype('Float64'),
+                  dt=numpy.float64,
                   filetype="binary",
                   link_index=None,
                   bypass=False,
@@ -1002,7 +1002,7 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
     f.write('nroots %r\n' % SHCI.nroots)
 
     # Variational Keyword Section
-    f.write('#variational\n')
+    f.write('\n#variational\n')
     if (not Restart):
         schedStr = make_sched(SHCI)
         f.write(schedStr)
@@ -1022,7 +1022,7 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
         f.write('fullrestart\n')
 
     # Perturbative Keyword Section
-    f.write('#pt\n')
+    f.write('\n#pt\n')
     if (SHCI.stochastic == False):
         f.write('deterministic \n')
     else:
@@ -1033,8 +1033,8 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
     f.write('sampleN %i\n' % SHCI.sampleN)
 
     # Miscellaneous Keywords
-    f.write('#misc\n')
-    f.write('noio \n')
+    f.write('\n#misc\n')
+    f.write('io \n')
     if (SHCI.scratchDirectory != ""):
         if not os.path.exists(SHCI.scratchDirectory):
             os.makedirs(SHCI.scratchDirectory)
@@ -1480,12 +1480,41 @@ def writeSOCIntegrals(mc,
 
 
 def dryrun(mc, mo_coeff=None):
-    '''Generate FCIDUMP and SHCI config file'''
+    '''
+    Generate FCIDUMP and SHCI input.dat file for a give multiconfigurational 
+    object. This method DOES NOT run a single iteration using Dice it just 
+    generates all the inputs you'd need to do so.
+
+    Args:
+        mc: a CASSCF/CASCI object (or RHF object)
+
+    Kwargs: 
+        mo_coeff: `np.ndarray` of the molecular orbital coefficients. 
+            Default is None.
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> from pyscf.shciscf import shci
+    >>> mol = gto.M(atom="H 0 0 0; H 0 0 2; O 0 1 1;", symmetry=True)
+    >>> mf = scf.RHF(mol).run()
+    >>> mc = mcscf.CASCI(mf, 3, 4)
+    >>> mc.fcisolver = shci.SHCI(mol)
+    >>> shci.dryrun(mc)
+
+    '''
     if mo_coeff is None:
         mo_coeff = mc.mo_coeff
-    #bak, mc.fcisolver.onlywriteIntegral = mc.fcisolver.onlywriteIntegral, True
-    mc.casci(mo_coeff)
-    #mc.fcisolver.onlywriteIntegral = bak
+    
+    # Set orbsym b/c it's needed in `writeIntegralFile()`
+    if mc.fcisolver.orbsym is not []:
+        mc.fcisolver.orbsym = getattr(mo_coeff, "orbsym", [])
+
+    #mc.kernel(mo_coeff) # Works, but runs full CASCI/CASSCF
+    h1e, ecore = mc.get_h1eff(mo_coeff)
+    h2e = mc.get_h2eff(mo_coeff)
+    writeIntegralFile(mc.fcisolver, h1e, h2e, mc.ncas, mc.nelecas, ecore)
+    writeSHCIConfFile(mc.fcisolver, mc.nelecas, False)
 
 
 #mc is the CASSCF object

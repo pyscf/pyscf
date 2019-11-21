@@ -176,7 +176,6 @@ class KnownValues(unittest.TestCase):
         # Number of orbital and electrons
         ncas = 8
         nelecas = 12
-        dimer_atom = 'O'
 
         mc = mcscf.CASCI(mf, ncas, nelecas)
         e_casscf = mc.kernel()[0]
@@ -199,8 +198,7 @@ class KnownValues(unittest.TestCase):
         # Number of orbital and electrons
         ncas = 8
         nelecas = 12
-        dimer_atom = 'O'
-
+        
         mc = mcscf.CASSCF(mf, ncas, nelecas)
         e_casscf = mc.kernel()[0]
 
