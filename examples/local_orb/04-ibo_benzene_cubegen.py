@@ -9,7 +9,7 @@ IBO generation, cube generation, and population analysis of benzene
 
 import numpy
 from pyscf import gto, scf, lo, tools
-from scipy._lib.six import reduce
+from functools import reduce
 
 benzene = [[ 'C'  , ( 4.673795 ,   6.280948 , 0.00  ) ],
            [ 'C'  , ( 5.901190 ,   5.572311 , 0.00  ) ],

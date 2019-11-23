@@ -7,7 +7,7 @@ import numpy
 from pyscf import lo
 from pyscf.tools import chgcar
 from pyscf.pbc import gto, scf
-from scipy._lib.six import reduce
+from functools import reduce
 '''
 This Benchmark show how to use the Cubegen command to make VASP chgcars for
 visualizing periodic IBOs for example in diamond 
