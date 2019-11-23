@@ -21,6 +21,7 @@
 '''
 Gaussian cube file format.  Reference:
 http://paulbourke.net/dataformats/cube/
+https://h5cube-spec.readthedocs.io/en/latest/cubeformat.html
 http://gaussian.com/cubegen/
 
 The output cube file has the following format

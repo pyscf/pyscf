@@ -9,6 +9,7 @@ IBO generation, cube generation, and population analysis of benzene
 
 import numpy
 from pyscf import gto, scf, lo, tools
+from functools import reduce
 
 benzene = [[ 'C'  , ( 4.673795 ,   6.280948 , 0.00  ) ],
            [ 'C'  , ( 5.901190 ,   5.572311 , 0.00  ) ],
@@ -47,7 +48,7 @@ Print the IBOS into Gausian Cube files
 '''
 
 for i in range(ibo.shape[1]):
-    tools.cubegen.orbital(mol, 'benzene_ibo1_'+str(i+1)+'.cube', ibo[:,i])
+    tools.cubegen.orbital(mol, 'benzene_ibo1_{:02d}.cube'.format(i+1), ibo[:,i])
 
 '''
 Population Analysis with IAOS
@@ -71,5 +72,5 @@ mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
 iaos = lo.iao.iao(mol, mo_occ)
 ibo = lo.ibo.PM(mol, mo_occ, iaos).kernel()
 for i in range(ibo.shape[1]):
-    tools.cubegen.orbital(mol, 'benzene_ibo2_'+str(i+1)+'.cube', ibo[:,i])
+    tools.cubegen.orbital(mol, 'benzene_ibo2_{:02d}.cube'.format(i+1), ibo[:,i])
 

@@ -169,8 +169,8 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][0]
                 if auxb is not None and gto.basis.load(auxb, k):
                     auxbasis[k] = auxb
-                    logger.debug(mol, 'Default auxbasis %s is used for %s %s',
-                                 auxb, k, _basis[k])
+                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS

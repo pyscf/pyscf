@@ -419,6 +419,7 @@ class omnimethod(object):
         return functools.partial(self.func, instance)
 
 
+SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject(object):
     '''For most methods, there are three stream functions to pipe computing stream:
 
@@ -521,7 +522,8 @@ class StreamObject(object):
         return value of method set is the object itself.  This allows a series
         of functions/methods to be executed in pipe.
         '''
-        if (self.verbose > 0 and  # logger.QUIET
+        if (SANITY_CHECK and
+            self.verbose > 0 and  # logger.QUIET
             getattr(self, '_keys', None)):
             check_sanity(self, self._keys, self.stdout)
         return self
