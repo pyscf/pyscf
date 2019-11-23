@@ -2,7 +2,7 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-
+from __future__ import print_function
 import numpy
 from pyscf import gto, scf, ao2mo
 
