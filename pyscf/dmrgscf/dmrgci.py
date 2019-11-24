@@ -443,7 +443,7 @@ class DMRGCI(lib.StreamObject):
 
         return onepdm, twopdm, threepdm
 
-    def make_rdm3(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
+    def make_rdm3(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, **kwargs):
         import os
 
         if self.has_threepdm == False:
@@ -488,7 +488,7 @@ class DMRGCI(lib.StreamObject):
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE3(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
-            E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E3 = numpy.fromfile(fnameout, dtype=numpy.float64)
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
           else:
             print('Reading binary 3RDM from BLOCK')
@@ -518,7 +518,7 @@ class DMRGCI(lib.StreamObject):
         print('')
         return E3
 
-    def make_rdm4(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
+    def make_rdm4(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, **kwargs):
         import os
 
         if self.has_fourpdm == False:
@@ -567,7 +567,7 @@ class DMRGCI(lib.StreamObject):
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE4(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
-            E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E4 = numpy.fromfile(fnameout, dtype=numpy.float64)
             E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
           else:
             print('Reading binary 4RDM from BLOCK')
