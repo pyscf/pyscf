@@ -485,10 +485,11 @@ def init_guess_by_atom(mol):
     return dm
 
 def init_guess_by_huckel(mol):
-    '''Generate initial guess density matrix from a Huckel calculation based on occupancy averaged atomic RHF calculations, doi:10.1021/acs.jctc.8b01089
+    '''Generate initial guess density matrix from a Huckel calculation based
+    on occupancy averaged atomic RHF calculations, doi:10.1021/acs.jctc.8b01089
 
     Returns:
-        Density matrix, 2D ndarray
+        An 1D array for Huckel orbital energies and an 2D array for orbital coefficients
     '''
     import copy
     from pyscf.scf import atom_hf

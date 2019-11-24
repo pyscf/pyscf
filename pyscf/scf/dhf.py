@@ -152,7 +152,9 @@ def init_guess_by_atom(mol):
     dm = hf.init_guess_by_atom(mol)
     return _proj_dmll(mol, dm, mol)
 
-init_guess_by_huckel = hf.init_guess_by_huckel
+# TODO: the Huckel initital guess for DHF needs to transform the returned
+# Huckel orbitals to 4c form
+# init_guess_by_huckel = hf.init_guess_by_huckel
 
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for 4C-DHF initial guess.
@@ -413,13 +415,14 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
 
-    def init_guess_by_1e(self, mol=None):
-        if mol is None: mol = self.mol
-        return init_guess_by_1e(mol)
-
+    @lib.with_doc(hf.SCF.init_guess_by_huckel.__doc__)
     def init_guess_by_huckel(self, mol=None):
         if mol is None: mol = self.mol
-        return init_guess_by_huckel(mol)
+        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
+        mo_energy, mo_coeff = hf.init_guess_by_huckel(mol)
+        mo_occ = hf.get_occ(self, mo_energy, mo_coeff)
+        dm = hf.make_rdm1(mo_coeff, mo_occ)
+        return _proj_dmll(mol, dm, mol)
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
