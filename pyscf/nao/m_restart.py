@@ -1,6 +1,10 @@
+#An HDF5 file is a container for two kinds of objects: 
+#  * datasets (array-like collections of data)
+#  * groups (folder-like containers that hold datasets).
+# Groups work like dictionaries, and datasets work like NumPy arrays
 
-#An HDF5 file is a container for two kinds of objects: datasets (array-like collections of data), and groups (folder-like containers that hold datasets).
-#Groups work like dictionaries, and datasets work like NumPy arrays
+from __future__ import division
+import numpy as np
 
 def read_rst_h5py (filename=None):
     import h5py ,os
@@ -19,10 +23,19 @@ def read_rst_h5py (filename=None):
 
 def write_rst_h5py(data, filename = None):
     import h5py
-    if filename is None: filename= 'SCREENED_COULOMB.hdf5'
+    if filename is None: 
+      filename= 'SCREENED_COULOMB.hdf5'
+    
+
     with h5py.File(filename, 'w') as data_file:
-        data_file.create_dataset('W_c', data=data)
+        try:
+            data_file.create_dataset('W_c', data=data)
+        except:
+            print("failed writting data to SCREENED_COULOMB.hdf5")
+            print(type(data))
+
         data_file.close
+    
     msg = 'Full matrix elements of screened interactions (W_c) stored in {}'.format(filename)
     return msg
 

@@ -215,8 +215,8 @@ def kmat_den(mf, dm=None, algo=None, **kw):
         
         # this could be done directly
         # 1D
-        #q2v = blas.dgemv( 1.0, hk, cc, trans=1 )
-        q2v = np.dot( cc, hk )
+        q2v = blas.dgemv( 1.0, hk, cc, trans=1 )
+        #q2v = np.dot( cc, hk )
         tt[2] = timer();
         
         # slower term ..

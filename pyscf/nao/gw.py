@@ -9,8 +9,18 @@ from pyscf.data.nist import HARTREE2EV
 from pyscf.nao.m_valence import get_str_fin
 from timeit import default_timer as timer
 from numpy import stack, dot, zeros, einsum, pi, log, array, require
+import scipy.sparse as sparse
 from pyscf.nao import scf
 import time
+
+try:
+  import numba as nb
+  use_numba = True
+except:
+  use_numba = False
+
+def __LINE__():
+      return sys._getframe(1).f_lineno
 
 start_time = time.time()
 class gw(scf):
@@ -73,7 +83,8 @@ class gw(scf):
     else: 
         self.start_st = self.nocc_0t-self.nocc
         self.finish_st = self.nocc_0t+self.nvrt
-    if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected start from {} to {} \n'.format(self.start_st,self.finish_st))
+    if self.verbosity>0:
+      print(__name__,'\t\t====> Indices of states to be corrected start from {} to {} \n'.format(self.start_st,self.finish_st))
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
     
 
@@ -83,14 +94,20 @@ class gw(scf):
     else :
       self.nocc_conv = self.nocc
 
+    if self.verbosity>0:
+      print(__name__, __LINE__())
     if 'nvrt_conv' in kw:
       s2nvrt_conv = [kw['nvrt_conv']] if type(kw['nvrt_conv'])==int else kw['nvrt_conv']
       self.nvrt_conv = array([min(i,j) for i,j in zip(s2nvrt_conv,self.norbs-nocc_0t)])
     else :
       self.nvrt_conv = self.nvrt
     
-    if self.rescf: self.kernel_scf() # here is rescf with HF functional tacitly assumed
+    print(__name__, __LINE__())
+    
+    if self.rescf:
+      self.kernel_scf() # here is rescf with HF functional tacitly assumed
         
+    print(__name__, __LINE__())
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32    #number of grid points
     self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-10
     (wmin_def,wmax_def,tmin_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
@@ -102,6 +119,7 @@ class gw(scf):
     #print('self.tmin_ia, self.tmax_ia, self.wmax_ia')
     #print(self.tmin_ia, self.tmax_ia, self.wmax_ia)
     #print(self.ww_ia[0], self.ww_ia[-1])
+    print(__name__, __LINE__())
 
     self.dw_ia = self.ww_ia*(log(self.ww_ia[-1])-log(self.ww_ia[0]))/(len(self.ww_ia)-1)
     self.dw_excl = self.ww_ia[0]
@@ -114,6 +132,7 @@ class gw(scf):
 
     if self.perform_gw: self.kernel_gw()
     self.snmw2sf_ncalls = 0
+    print(__name__, __LINE__())
     
   def get_h0_vh_x_expval(self):
     """
@@ -168,16 +187,26 @@ class gw(scf):
     from numpy.linalg import solve
     """ 
     This computes the correlation part of the screened interaction W_c
-    by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
+    by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K 
+    or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
     rf0 = si0 = self.rf0(ww)
-    for iw,w in enumerate(ww):                   #devide ww into complex(w) which is along imaginary axis (real=0) and grid index(iw)             
-      k_c = np.dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb or hartree, rf0
-                                                 #is \chi_{0}, so here k_c=v*chi_{0}
-      b = np.dot(k_c, self.kernel_sq)               #here v\chi_{0}v or k_c*v
-      k_c = np.eye(self.nprod)-k_c               #here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
-      si0[iw,:,:] = solve(k_c, b)                # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
+    for iw,w in enumerate(ww):                     
+      # divide ww into complex(w) which is along imaginary axis (real=0) and grid index(iw)             
+
+      # kernel_sq or hkernel_den is bare coloumb or hartree, rf0
+      # is \chi_{0}, so here k_c=v*chi_{0}
+      k_c = np.dot(self.kernel_sq, rf0[iw,:,:])
+
+      # here v\chi_{0}v or k_c*v
+      b = np.dot(k_c, self.kernel_sq)
+
+      # here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
+      k_c = np.eye(self.nprod)-k_c
+
+      # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
+      si0[iw,:,:] = solve(k_c, b)
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
     return si0
 

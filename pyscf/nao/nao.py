@@ -811,6 +811,16 @@ class nao():
     atm_list = [ self.sp2symbol[sp] for sp in self.atom2sp ]
     return atm_list
 
+  def _add_suffix(self, intor, cart=None):
+    if not (intor[:4] == 'cint' or intor.endswith(('_sph', '_cart', '_spinor', '_ssc'))):
+      if cart is None:
+        cart = self.cart
+      if cart:
+        intor = intor + '_cart'
+      else:
+        intor = intor + '_sph'
+    return intor
+
 #
 # Example of reading pySCF orbitals.
 #
