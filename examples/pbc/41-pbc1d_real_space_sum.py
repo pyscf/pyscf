@@ -85,7 +85,7 @@ def pbc1d_mf(unit_cell, T0, nimgs):
     def get_veff(molN, dm, *args, **kwargs):
         vj = numpy.einsum('ijkl,ji->kl', eri, dm)
         vk = numpy.einsum('ijkl,li->kj', eri, dm)
-        vk += mad * reduce(numpy.dot, (ovlp, dm, ovlp))
+        vk += mad * ovlp.dot(dm).dot(ovlp)
         vhf = vj - vk * .5
         lib.logger.debug(unit_cell, 'h1/j/k = %s',
                          ((h1e*dm).sum(), (vj*dm).sum()*.5, (vk*dm).sum()*.5))

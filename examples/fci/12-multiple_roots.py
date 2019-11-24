@@ -18,7 +18,7 @@ norb = m.mo_coeff.shape[1]
 nelec = mol.nelec
 
 fs = fci.addons.fix_spin_(fci.FCI(mol, m.mo_coeff), .5)
-fs.nroots = 5
+fs.nroots = 3
 e, c = fs.kernel(verbose=5)
 for i, x in enumerate(c):
     print('state %d, E = %.12f  2S+1 = %.7f' %

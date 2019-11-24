@@ -30,18 +30,24 @@ class AsFCISolver(object):
         e_corr, t1, t2 = self.mycc.kernel(eris=self.eris)
         l1, l2 = self.mycc.solve_lambda(t1, t2, eris=self.eris)
         e = fake_hf.e_tot + e_corr
-        return e+ecore, [t1,t2,l1,l2]
+        return e+ecore, CCSDAmplitudesAsCIWfn(t1, t2, l1, l2)
 
     def make_rdm1(self, fake_ci, norb, nelec):
         mo = self.mycc.mo_coeff
-        t1, t2, l1, l2 = fake_ci
+        t1 = fake_ci.t1
+        t2 = fake_ci.t2
+        l1 = fake_ci.l1
+        l2 = fake_ci.l2
         dm1 = reduce(numpy.dot, (mo, self.mycc.make_rdm1(t1, t2, l1, l2), mo.T))
         return dm1
 
     def make_rdm12(self, fake_ci, norb, nelec):
         mo = self.mycc.mo_coeff
         nmo = mo.shape[1]
-        t1, t2, l1, l2 = fake_ci
+        t1 = fake_ci.t1
+        t2 = fake_ci.t2
+        l1 = fake_ci.l1
+        l2 = fake_ci.l2
         dm2 = self.mycc.make_rdm2(t1, t2, l1, l2)
         dm2 = numpy.dot(mo, dm2.reshape(nmo,-1))
         dm2 = numpy.dot(dm2.reshape(-1,nmo), mo.T)
@@ -53,6 +59,13 @@ class AsFCISolver(object):
 
     def spin_square(self, fake_ci, norb, nelec):
         return 0, 1
+
+class CCSDAmplitudesAsCIWfn:
+    def __init__(self, t1, t2, l1, l2):
+        self.t1 = t1
+        self.t2 = t2
+        self.l1 = l1
+        self.l2 = l2
 
 mol = gto.M(atom = 'H 0 0 0; F 0 0 1.2',
             basis = 'ccpvdz',
