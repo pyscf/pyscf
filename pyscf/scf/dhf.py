@@ -152,6 +152,8 @@ def init_guess_by_atom(mol):
     dm = hf.init_guess_by_atom(mol)
     return _proj_dmll(mol, dm, mol)
 
+init_guess_by_huckel = hf.init_guess_by_huckel
+
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for 4C-DHF initial guess.
 
@@ -210,7 +212,7 @@ def get_init_guess(mol, key='minao'):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
     '''
     return UHF(mol).get_init_guess(mol, key)
 
@@ -410,6 +412,14 @@ class UHF(hf.SCF):
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
+
+    def init_guess_by_1e(self, mol=None):
+        if mol is None: mol = self.mol
+        return init_guess_by_1e(mol)
+
+    def init_guess_by_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        return init_guess_by_huckel(mol)
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile

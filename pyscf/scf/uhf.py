@@ -60,6 +60,9 @@ def init_guess_by_atom(mol, breaksym=BREAKSYM):
             dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
 
+def init_guess_by_huckel(mol):
+    mo_energy, mo_c = hf.init_guess_by_huckel(mol)
+    return [mo_energy, mo_energy], [mo_c, mo_c]
 
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for UHF initial guess.
@@ -718,6 +721,19 @@ class UHF(hf.SCF):
 # For spin polarized system, there is no need to manually break spin symmetry
             breaksym = False
         return init_guess_by_atom(mol, breaksym)
+
+    def init_guess_by_huckel(self, mol=None, breaksym=BREAKSYM):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
+        mo_energy, mo_coeff = init_guess_by_huckel(mol)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
+        if mol.spin == 0 and breaksym:
+            #remove off-diagonal part of beta DM
+            dmb = numpy.zeros_like(dma)
+            for b0, b1, p0, p1 in mol.aoslice_by_atom():
+                dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
+        return numpy.array((dma,dmb))
 
     def init_guess_by_1e(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
