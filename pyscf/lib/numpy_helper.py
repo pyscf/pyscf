@@ -101,18 +101,19 @@ else:
         einsum_args.insert(0, ((a, b), idx_removed, einsum_str, indices_in))
         return operands, einsum_args
 
+_numpy_einsum = numpy.einsum
 def _contract(subscripts, *tensors, **kwargs):
     idx_str = subscripts.replace(' ','')
     indices  = idx_str.replace(',', '').replace('->', '')
     if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
-        return numpy.einsum(idx_str, *tensors)
+        return _numpy_einsum(idx_str, *tensors)
 
     A, B = tensors
     # Call numpy.asarray because A or B may be HDF5 Datasets 
     A = numpy.asarray(A, order='A')
     B = numpy.asarray(B, order='A')
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
-        return numpy.einsum(idx_str, *tensors)
+        return _numpy_einsum(idx_str, *tensors)
 
     C_dtype = numpy.result_type(A, B)
     if FOUND_TBLIS and C_dtype == numpy.double:
@@ -143,12 +144,12 @@ def _contract(subscripts, *tensors, **kwargs):
 
     # duplicated indices 'in,ijj->n'
     if len(rangeA) != A.ndim or len(rangeB) != B.ndim:
-        return numpy.einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B)
 
     # Find the shared indices being summed over
     shared_idxAB = set(idxA).intersection(idxB)
     if len(shared_idxAB) == 0: # Indices must overlap
-        return numpy.einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B)
 
     idxAt = list(idxA)
     idxBt = list(idxB)
@@ -230,7 +231,7 @@ def einsum(subscripts, *tensors, **kwargs):
 
     subscripts = subscripts.replace(' ','')
     if len(tensors) <= 1 or '...' in subscripts:
-        out = numpy.einsum(subscripts, *tensors, **kwargs)
+        out = _numpy_einsum(subscripts, *tensors, **kwargs)
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
@@ -247,7 +248,7 @@ def einsum(subscripts, *tensors, **kwargs):
             inds, idx_rm, einsum_str, remaining = contraction[:4]
             tmp_operands = [tensors.pop(x) for x in inds]
             if len(tmp_operands) > 2:
-                out = numpy.einsum(einsum_str, *tmp_operands)
+                out = _numpy_einsum(einsum_str, *tmp_operands)
             else:
                 out = contract(einsum_str, *tmp_operands)
             tensors.append(out)
@@ -879,7 +880,7 @@ if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
             axes = string.ascii_lowercase[:x.ndim]
             target = axes.replace(axes[axis], '')
             descr = '%s,%s->%s' % (axes, axes, target)
-            xx = numpy.einsum(descr, x.conj(), x)
+            xx = _numpy_einsum(descr, x.conj(), x)
             return numpy.sqrt(xx.real)
 else:
     norm = numpy.linalg.norm
@@ -990,7 +991,7 @@ def direct_sum(subscripts, *operands):
         unisymb = set(symb)
         if len(unisymb) != len(symb):
             unisymb = ''.join(unisymb)
-            op = numpy.einsum('->'.join((symb, unisymb)), op)
+            op = _numpy_einsum('->'.join((symb, unisymb)), op)
             src[i] = unisymb
         if i == 0:
             if sign[i] is '+':
@@ -1002,7 +1003,7 @@ def direct_sum(subscripts, *operands):
         else:
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
-    out = numpy.einsum('->'.join((''.join(src), dest)), out)
+    out = _numpy_einsum('->'.join((''.join(src), dest)), out)
     out.flags.writeable = True  # old numpy has this issue
     return out
 
