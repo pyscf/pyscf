@@ -498,6 +498,18 @@ def init_guess_by_huckel(mol):
     on occupancy averaged atomic RHF calculations, doi:10.1021/acs.jctc.8b01089
 
     Returns:
+        Density matrix, 2D ndarray
+    '''
+    if mol is None: mol = self.mol
+    mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol)
+    mo_occ = get_occ(SCF(mol), mo_energy, mo_coeff)
+    return make_rdm1(mo_coeff, mo_occ)
+
+def _init_guess_huckel_orbitals(mol):
+    '''Generate initial guess density matrix from a Huckel calculation based
+    on occupancy averaged atomic RHF calculations, doi:10.1021/acs.jctc.8b01089
+
+    Returns:
         An 1D array for Huckel orbital energies and an 2D array for orbital coefficients
     '''
     import copy
@@ -1536,7 +1548,7 @@ class SCF(lib.StreamObject):
     def init_guess_by_huckel(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
-        mo_energy, mo_coeff = init_guess_by_huckel(mol)
+        mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 

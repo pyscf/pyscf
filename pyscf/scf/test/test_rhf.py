@@ -108,6 +108,9 @@ class KnownValues(unittest.TestCase):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='huckel')
         self.assertAlmostEqual(lib.finger(dm), 3.539901734248542, 9)
 
+        dm = scf.ROHF(mol).init_guess_by_huckel()
+        self.assertAlmostEqual(lib.finger(dm[0]), 3.539901734248542/2, 9)
+
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)

@@ -19,6 +19,7 @@ PySCF 1.7.0 (2019-?-?)
   - Analytical nuclear gradients with density-fitting
   - Analytical nuclear hessian with density-fitting
   - Thermo-chemistry and frequency analysis
+  - Huckel HF/KS initial guess
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
