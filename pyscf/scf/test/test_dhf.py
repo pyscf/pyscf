@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,6 +59,10 @@ class KnownValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.dhf.get_init_guess(mol, key='minao')
         self.assertAlmostEqual(abs(dm).sum(), 14.859714177083553, 9)
+
+    def test_init_guess_huckel(self):
+        dm = scf.dhf.DHF(mol).get_init_guess(mol, key='huckel')
+        self.assertAlmostEqual(lib.finger(dm), (-0.24490253260877892+0.29058201896082164j), 9)
 
     def test_get_hcore(self):
         h = mf.get_hcore()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,6 +120,10 @@ class KnownValues(unittest.TestCase):
         dm = scf.ghf.init_guess_by_chkfile(mol1, mf_u.chkfile)
         self.assertEqual(dm.shape, (26,26))
         self.assertAlmostEqual(lib.finger(dm), -3.742519160521582, 9)
+
+    def test_init_guess_huckel(self):
+        dm = scf.GHF(mol).get_init_guess(mol, key='huckel')
+        self.assertAlmostEqual(lib.finger(dm), 1.9968268762398327, 9)
 
     def test_ghf_complex(self):
         mf1 = scf.GHF(mol)

@@ -493,6 +493,85 @@ def init_guess_by_atom(mol):
         logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
     return dm
 
+def init_guess_by_huckel(mol):
+    '''Generate initial guess density matrix from a Huckel calculation based
+    on occupancy averaged atomic RHF calculations, doi:10.1021/acs.jctc.8b01089
+
+    Returns:
+        An 1D array for Huckel orbital energies and an 2D array for orbital coefficients
+    '''
+    import copy
+    from pyscf.scf import atom_hf
+    from pyscf.scf import addons
+    atm_scf = atom_hf.get_atm_nrhf(mol)
+
+    # GWH parameter value
+    Kgwh = 1.75
+
+    # Run atomic SCF calculations to get orbital energies, coefficients and occupations
+    at_e = []
+    at_c = []
+    at_occ = []
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        if symb in atm_scf:
+            e_hf, e, c, occ = atm_scf[symb]
+        else:
+            symb = mol.atom_pure_symbol(ia)
+            e_hf, e, c, occ = atm_scf[symb]
+        at_c.append(c)
+        at_e.append(e)
+        at_occ.append(occ)
+
+    # Count number of occupied orbitals
+    nocc = 0
+    for ia in range(mol.natm):
+        for iorb in range(len(at_occ[ia])):
+            if(at_occ[ia][iorb]>0.0):
+                nocc=nocc+1
+
+    # Number of basis functions
+    nbf = mol.nao_nr()
+    # Collect AO coefficients and energies
+    orb_E = numpy.zeros(nocc)
+    orb_C = numpy.zeros((nbf,nocc))
+
+    # Atomic basis info
+    aoslice = mol.aoslice_by_atom()
+
+    iocc = 0
+    for ia in range(mol.natm):
+        # First and last bf index
+        abeg = aoslice[ia, 2]
+        aend = aoslice[ia, 3]
+        for iorb in range(len(at_occ[ia])):
+            if(at_occ[ia][iorb]>0.0):
+                orb_C[abeg:aend,iocc] = at_c[ia][:,iorb]
+                orb_E[iocc] = at_e[ia][iorb]
+                iocc=iocc+1
+
+    # Overlap matrix
+    S = get_ovlp(mol)
+    # Atomic orbital overlap
+    orb_S = orb_C.transpose().dot(S).dot(orb_C)
+
+    # Build Huckel matrix
+    orb_H = numpy.zeros((nocc,nocc))
+    for io in range(nocc):
+        # Diagonal is just the orbital energies
+        orb_H[io,io] = orb_E[io]
+        for jo in range(io-1):
+            # Off-diagonal is given by GWH approximation
+            orb_H[io,jo] = 0.5*Kgwh*orb_S[io,jo]*(orb_E[io]+orb_E[jo])
+            orb_H[jo,io] = orb_H[io,jo]
+
+    # Energies and coefficients in the minimal orbital basis
+    mo_E, atmo_C = eig(orb_H, orb_S)
+    # and in the AO basis
+    mo_C = orb_C.dot(atmo_C)
+
+    return mo_E, mo_C
+
 
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read the HF results from checkpoint file, then project it to the
@@ -511,7 +590,7 @@ def get_init_guess(mol, key='minao'):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
     '''
     return RHF(mol).get_init_guess(mol, key)
 
@@ -1246,7 +1325,7 @@ class SCF(lib.StreamObject):
         max_cycle : int
             max number of iterations.  Default is 50
         init_guess : str
-            initial guess method.  It can be one of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
+            initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
             Default is 'minao'
         DIIS : DIIS class
             The class to generate diis object.  It can be one of
@@ -1450,8 +1529,16 @@ class SCF(lib.StreamObject):
     @lib.with_doc(init_guess_by_atom.__doc__)
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
-        logger.info(self, 'Initial guess from superpostion of atomic densties.')
+        logger.info(self, 'Initial guess from superposition of atomic densities.')
         return init_guess_by_atom(mol)
+
+    @lib.with_doc(init_guess_by_huckel.__doc__)
+    def init_guess_by_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
+        mo_energy, mo_coeff = init_guess_by_huckel(mol)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        return self.make_rdm1(mo_coeff, mo_occ)
 
     @lib.with_doc(init_guess_by_1e.__doc__)
     def init_guess_by_1e(self, mol=None):
@@ -1481,6 +1568,8 @@ class SCF(lib.StreamObject):
             mol = self.mol
         if key == '1e' or key == 'hcore':
             dm = self.init_guess_by_1e(mol)
+        elif key == 'huckel':
+            dm = self.init_guess_by_huckel(mol)
         elif getattr(mol, 'natm', 0) == 0:
             logger.info(self, 'No atom found in mol. Use 1e initial guess')
             dm = self.init_guess_by_1e(mol)
