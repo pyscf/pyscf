@@ -2,7 +2,8 @@ from __future__ import print_function, division
 import sys, numpy as np
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
-from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
+from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp
+from pyscf.nao.m_rf0_den import rf0_cmplx_vertex_ac, si_correlation
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
@@ -191,24 +192,9 @@ class gw(scf):
     or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
+
     rf0 = si0 = self.rf0(ww)
-    for iw,w in enumerate(ww):                     
-      # divide ww into complex(w) which is along imaginary axis (real=0) and grid index(iw)             
-
-      # kernel_sq or hkernel_den is bare coloumb or hartree, rf0
-      # is \chi_{0}, so here k_c=v*chi_{0}
-      k_c = np.dot(self.kernel_sq, rf0[iw,:,:])
-
-      # here v\chi_{0}v or k_c*v
-      b = np.dot(k_c, self.kernel_sq)
-
-      # here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
-      k_c = np.eye(self.nprod)-k_c
-
-      # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
-      si0[iw,:,:] = solve(k_c, b)
-      #np.allclose(np.dot(k_c, si0), b) == True  #Test 
-    return si0
+    return si_correlation(rf0, si0, ww, self.kernel_sq, self.nprod)
 
   def si_c_via_diagrpa(self, ww):
     """ 
