@@ -2,7 +2,7 @@ from __future__ import print_function, division
 import sys, numpy as np
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
-from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp
+from pyscf.nao.m_rf0_den import rf0_den, rf0_den_numba, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp
 from pyscf.nao.m_rf0_den import rf0_cmplx_vertex_ac, si_correlation
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
@@ -193,8 +193,12 @@ class gw(scf):
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
 
-    rf0 = si0 = self.rf0(ww)
-    return si_correlation(rf0, si0, ww, self.kernel_sq, self.nprod)
+    if not hasattr(self, 'pab2v_den'):
+      self.pab2v_den = einsum('pab->apb', self.pb.get_ac_vertex_array())
+
+    return si_correlation(ww, self.x, self.kernel_sq, self.ksn2f, self.ksn2e,
+                          self.pab2v_den, self.nprod, self.norbs, self.bsize,
+                          self.nspin, self.nfermi, self.vstart)
 
   def si_c_via_diagrpa(self, ww):
     """ 
