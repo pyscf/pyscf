@@ -8,6 +8,10 @@ import scipy.linalg.blas as blas
 from pyscf.nao.m_libnao import libnao
 from ctypes import c_double, c_int64, c_int, POINTER
 
+import time
+ts = time.time()
+te = time.time()
+
 try:
   import numba as nb
   use_numba = True
@@ -41,8 +45,8 @@ if use_numba:
         return c
 
     @nb.jit(nopython=True, parallel=False)
-    def rf0_den_numba(comega, X, ksn2f, ksn2e, pab2v_den, nprod, norbs, bsize, nspin,
-                      nfermi, vstart):
+    def rf0_den_numba(rf0, comega, X, ksn2f, ksn2e, pab2v_den, nprod, norbs, bsize, nspin,
+                      nfermi, vstart, dtype=np.complex128):
       """
       Full matrix response in the basis of atom-centered product functions for
       parallel spins.
@@ -51,9 +55,6 @@ if use_numba:
       spped up of 7.237 compared to einsum version for C20 system
       """
       
-      rf0 = np.zeros((nprod, nprod), dtype=np.complex128)
-      zxvx = np.zeros((nprod, bsize, bsize), dtype=np.complex128)
-
       for s in range(nspin):
         nn = list(range(0, nfermi[s], bsize)) + [nfermi[s]]
         mm = list(range(vstart[s], norbs, bsize)) + [norbs]
@@ -70,11 +71,11 @@ if use_numba:
 
             fmn = add_outer(-ksn2f[0,s,mbs:mbf],  ksn2f[0,s,nbs:nbf])
             emn = add_outer( ksn2e[0,s,mbs:mbf], -ksn2e[0,s,nbs:nbf])
-            zxvx.fill(0.0)
-            zxvx[:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
+            
+            #zxvx = np.zeros((nprod, mbf-mbs, nbf-nbs), dtype=rf0.dtype)
+            zxvx = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
 
-            rf0_nb = calc_part_rf0_numba(xvx, zxvx[:, 0:mbf-mbs, 0:nbf-nbs].real,
-                                         zxvx[:, 0:mbf-mbs, 0:nbf-nbs].imag)
+            rf0_nb = calc_part_rf0_numba(xvx, zxvx.real, zxvx.imag)
 
             rf0 += rf0_nb
       return rf0
@@ -92,8 +93,8 @@ if use_numba:
 
 
     @nb.jit(nopython=True, parallel=True)
-    def si_correlation(ww, X, kernel_sq, ksn2f, ksn2e, pab2v_den, nprod,
-                       norbs, bsize, nspin, nfermi, vstart):
+    def si_correlation_numba(si0, ww, X, kernel_sq, ksn2f, ksn2e, pab2v_den, nprod,
+                             norbs, bsize, nspin, nfermi, vstart):
         """
         This computes the correlation part of the screened interaction W_c
         by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K
@@ -101,22 +102,20 @@ if use_numba:
         scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod
         """
 
-        si0 = np.zeros((ww.size, nprod, nprod), dtype=np.complex128)
-        
         for iw in nb.prange(ww.size):
         #for iw in range(ww.size):
             
-            rf0 = rf0_den_numba(ww[iw], X, ksn2f, ksn2e, pab2v_den,
-                                nprod, norbs, bsize, nspin,
-                                nfermi, vstart)
+            rf0_den_numba(si0[iw, :, :], ww[iw], X, ksn2f, ksn2e, pab2v_den,
+                          nprod, norbs, bsize, nspin,
+                          nfermi, vstart)
 
             # divide ww into complex(w) which is along imaginary
             # axis (real=0) and grid index(iw)
 
             #  kernel_sq or hkernel_den is bare coloumb or hartree, rf0
             # is \chi_{0}, so here k_c=v*chi_{0}
-            k_c = np.dot(kernel_sq, rf0.real) + \
-                complex(0.0, 1.0)*np.dot(kernel_sq, rf0.imag)
+            k_c = np.dot(kernel_sq, si0[iw, :, :].real) + \
+                complex(0.0, 1.0)*np.dot(kernel_sq, si0[iw, :, :].imag)
 
             # here v\chi_{0}v or k_c*v
             b = np.dot(k_c.real, kernel_sq) + complex(0.0, 1.0)*\
@@ -130,35 +129,31 @@ if use_numba:
 
         return si0
 
-else:
-
-    def si_correlation(rf0, si0, ww, kernel_sq, nprod):
-        """
-        This computes the correlation part of the screened interaction W_c
-        by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K
-        or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
-        scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod
-        """
+def si_correlation(rf0, si0, ww, kernel_sq, nprod):
+    """
+    This computes the correlation part of the screened interaction W_c
+    by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K
+    or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
+    scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod
+    """
+    
+    for iw, w in enumerate(ww):
         
-        for iw, w in enumerate(ww):
-            
-            # divide ww into complex(w) which is along imaginary
-            # axis (real=0) and grid index(iw)
+        # divide ww into complex(w) which is along imaginary
+        # axis (real=0) and grid index(iw)
 
-            #  kernel_sq or hkernel_den is bare coloumb or hartree, rf0
-            # is \chi_{0}, so here k_c=v*chi_{0}
-            k_c = np.dot(kernel_sq, rf0[iw,:,:])
+        #  kernel_sq or hkernel_den is bare coloumb or hartree, rf0
+        # is \chi_{0}, so here k_c=v*chi_{0}
+        k_c = np.dot(kernel_sq, rf0[iw,:,:])
 
-            # here v\chi_{0}v or k_c*v
-            b = np.dot(k_c, kernel_sq)
+        # here v\chi_{0}v or k_c*v
+        b = np.dot(k_c, kernel_sq)
 
-            # here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod)
-            k_c = np.eye(nprod) - k_c
+        # here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod)
+        k_c = np.eye(nprod) - k_c
 
-            # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
-            si0[iw,:,:] = np.linalg.solve(k_c, b)
-
-        return si0
+        # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
+        si0[iw,:,:] = np.linalg.solve(k_c, b)
 
 def calc_part_rf0(xvx, zxvx_re, zxvx_im):
 

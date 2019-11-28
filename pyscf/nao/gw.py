@@ -3,7 +3,7 @@ import sys, numpy as np
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 from pyscf.nao.m_rf0_den import rf0_den, rf0_den_numba, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp
-from pyscf.nao.m_rf0_den import rf0_cmplx_vertex_ac, si_correlation
+from pyscf.nao.m_rf0_den import rf0_cmplx_vertex_ac, si_correlation, si_correlation_numba
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
@@ -196,9 +196,14 @@ class gw(scf):
     if not hasattr(self, 'pab2v_den'):
       self.pab2v_den = einsum('pab->apb', self.pb.get_ac_vertex_array())
 
-    return si_correlation(ww, self.x, self.kernel_sq, self.ksn2f, self.ksn2e,
-                          self.pab2v_den, self.nprod, self.norbs, self.bsize,
-                          self.nspin, self.nfermi, self.vstart)
+    si0 = np.zeros((ww.size, self.nprod, self.nprod), dtype=self.dtypeComplex)
+    if use_numba:
+        si_correlation_numba(si0, ww, self.x, self.kernel_sq, self.ksn2f, self.ksn2e,
+                             self.pab2v_den, self.nprod, self.norbs, self.bsize,
+                             self.nspin, self.nfermi, self.vstart)
+    else:
+        si_correlation(rf0(self, ww), si0, ww, self.kernel_sq, self.nprod)
+    return si0
 
   def si_c_via_diagrpa(self, ww):
     """ 
@@ -290,22 +295,29 @@ class gw(scf):
     return sn2int
 
   def gw_corr_res(self, sn2w):
-    """This computes a residue part of the GW correction at energies sn2w[spin,len(self.nn)]"""
+    """
+    This computes a residue part of the GW correction at energies sn2w[spin,len(self.nn)]
+    """
     v_pab = self.pb.get_ac_vertex_array()
     sn2res = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
+    
     for s,ww in enumerate(sn2w):    #split into spin and energies
       x = self.mo_coeff[0,s,:,:,0]
-      for nl,(n,w) in enumerate(zip(self.nn[s],ww)):   #split into nl=counter, n=number of energy level and relevant w=mo_energy inside gw.nn 
+        
+      # split into nl=counter, n=number of energy level and relevant w=mo_energy inside gw.nn 
+      for nl,(n,w) in enumerate(zip(self.nn[s], ww)):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)  #gives G's poles in n level with w energy
         zww = array([pole[0] for pole in lsos]) #pole[0]=energies pole[1]=state in gw.nn and pole[2]=occupation number
         #print(__name__, s,n,w, 'len lsos', len(lsos))
         si_ww = self.si_c(ww=zww) #send pole's frequency to calculate W
         xv = np.dot(v_pab,x[n])
+        
         for pole,si in zip(lsos, si_ww.real):
           xvx = np.dot(xv, x[pole[1]]) #XVX for x=n v= ac produvt and x=states of poles
           contr = np.dot(xvx, np.dot(si, xvx))
           #print(pole[0], pole[2], contr)
           sn2res[s][nl] += pole[2]*contr
+    
     return sn2res
 
   def lsofs_inside_contour(self, ee, w, eps):
