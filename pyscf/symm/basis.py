@@ -65,7 +65,7 @@ def symm_adapted_basis(mol, gpname, eql_atom_ids=None):
 # Using ops to generate other atoms from atom_ids[0]
         coords0 = atom_coords[atom_ids]
         natm = len(atom_ids)
-        dc = abs(op_coords.reshape(-1,1,3) - coords0).sum(axis=2)
+        dc = abs(op_coords.reshape(-1,1,3) - coords0).max(axis=2)
         op_relate_idx = numpy.argwhere(dc < geom.TOLERANCE)[:,1]
         ao_loc = numpy.array([aoslice[atom_ids[i],2] for i in op_relate_idx])
 

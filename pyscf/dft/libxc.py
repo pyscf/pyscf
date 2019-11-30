@@ -521,8 +521,6 @@ XC = XC_CODES = {
 'VWNRPA'        : 8,
 'VWN5'          : 7,
 'B88'           : 106,
-'BLYP'          : 'B88,LYP',
-'BP86'          : 'B88,P86',
 'PBE0'          : 406,
 'PBE1PBE'       : 406,
 'OPTXCORR'      : '0.7344536875999693*SLATER - 0.6984752285760186*OPTX,',
@@ -1083,8 +1081,8 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     * The given functional xc_code must be a one-line string.
     * The functional xc_code is case-insensitive.
     * The functional xc_code string has two parts, separated by ",".  The
-      first part describes the exchange functional, the second is the correlation
-      functional.
+      first part describes the exchange functional, the second part sets the
+      correlation functional.
 
       - If "," not appeared in string, the entire string is treated as the
         name of a compound functional (containing both the exchange and
