@@ -239,6 +239,7 @@ from pyscf import df
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.symm import sph
+from functools import reduce
 
 def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
     '''Patch ddCOSMO to SCF (HF and DFT) method.

@@ -592,8 +592,6 @@ XC_CODES.update({
 'VWNRPA'        : 8,
 'VWN5'          : 7,
 'B88'           : 106,
-'BLYP'          : 'B88,LYP',
-'BP86'          : 'B88,P86',
 'PBE0'          : 406,
 'PBE1PBE'       : 406,
 'OPTXCORR'      : '0.7344536875999693*SLATER - 0.6984752285760186*OPTX,',
@@ -1143,21 +1141,50 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
     * The given functional xc_code must be a one-line string.
     * The functional xc_code is case-insensitive.
     * The functional xc_code string has two parts, separated by ",".  The
-      first part describes the exchange functional, the second is the correlation
-      functional.
+      first part describes the exchange functional, the second part sets the
+      correlation functional.
 
-      - If "," not appeared in string, the entire string is considered as X functional.
-      - To neglect X functional (just apply C functional), leave blank in the
-        first part, eg description=',vwn' for pure VWN functional
+      - If "," not appeared in string, the entire string is treated as the
+        name of a compound functional (containing both the exchange and
+        the correlation functional) which was declared in the functional
+        aliases list. The full list of functional aliases can be obtained by
+        calling the function pyscf.dft.xcfun.XC_ALIAS.keys() .
 
-    * The functional name can be placed in arbitrary order.  Two name needs to
+        If the string was not found in the aliased functional list, it is
+        treated as X functional.
+
+      - To input only X functional (without C functional), leave the second
+        part blank. E.g. description='slater,' means a functional with LDA
+        contribution only.
+
+      - To neglect the contribution of X functional (just apply C functional),
+        leave blank in the first part, e.g. description=',vwn' means a
+        functional with VWN only.
+
+      - If compound XC functional is specified, no matter whether it is in the
+        X part (the string in front of comma) or the C part (the string behind
+        comma), both X and C functionals of the compound XC functional will be
+        used.
+
+    * The functional name can be placed in arbitrary order.  Two names need to
       be separated by operators "+" or "-".  Blank spaces are ignored.
-      NOTE the parser only reads operators "+" "-" "*".  / is not in support.
-    * A functional name is associated with one factor.  If the factor is not
-      given, it is assumed equaling 1.
-    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-      put in C functional part.
-    * Be careful with the libxc convention on GGA functional, in which the LDA
+      NOTE the parser only reads operators "+" "-" "*".  / is not supported.
+
+    * A functional name can have at most one factor.  If the factor is not
+      given, it is set to 1.  Compound functional can be scaled as a unit. For
+      example '0.5*b3lyp' is equivalent to
+      'HF*0.1 + .04*LDA + .36*B88, .405*LYP + .095*VWN'
+
+    * String "HF" stands for exact exchange (HF K matrix).  "HF" can be put in
+      the correlation functional part (after comma). Putting "HF" in the
+      correlation part is the same to putting "HF" in the exchange part.
+
+    * String "RSH" means range-separated operator. Its format is
+      RSH(alpha; beta; omega).  Another way to input RSH is to use keywords
+      SR_HF and LR_HF: "SR_HF(0.1) * alpha_plus_beta" and "LR_HF(0.1) *
+      alpha" where the number in parenthesis is the value of omega.
+
+    * Be careful with the libxc convention of GGA functional, in which the LDA
       contribution is included.
 
     Args:
