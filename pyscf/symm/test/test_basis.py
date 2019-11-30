@@ -26,10 +26,7 @@ def get_so(atoms, basis, cart=False):
     gpname, origin, axes = symm.detect_symm(atoms)
     gpname, axes = symm.subgroup(gpname, axes)
     atoms = gto.mole.format_atom(atoms, origin, axes, 'Bohr')
-    try:
-        mol = gto.M(atom=atoms, basis=basis, unit='Bohr')
-    except RuntimeError:
-        mol = gto.M(atom=atoms, basis=basis, spin=1, unit='Bohr')
+    mol = gto.M(atom=atoms, basis=basis, unit='Bohr', spin=None)
     mol.cart = cart
     so = symm.basis.symm_adapted_basis(mol, gpname)[0]
     n = 0
