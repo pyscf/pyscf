@@ -117,7 +117,7 @@ def hcore_generator(mf, mol=None):
         h1 = mf.get_hcore(mol)
         def hcore_deriv(atm_id):
             shl0, shl1, p0, p1 = aoslices[atm_id]
-            with mol.with_rinv_as_nucleus(atm_id):
+            with mol.with_rinv_at_nucleus(atm_id):
                 vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
                 vrinv *= -mol.atom_charge(atm_id)
                 if with_ecp and atm_id in ecp_atoms:

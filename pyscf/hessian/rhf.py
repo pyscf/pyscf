@@ -472,7 +472,7 @@ class Hessian(lib.StreamObject):
             zi = mol.atom_charge(iatm)
             zj = mol.atom_charge(jatm)
             if iatm == jatm:
-                with mol.with_rinv_as_nucleus(iatm):
+                with mol.with_rinv_at_nucleus(iatm):
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9)
                     rinv2aa *= zi
@@ -493,7 +493,7 @@ class Hessian(lib.StreamObject):
             else:
                 hcore = numpy.zeros((3,3,nao,nao))
                 hcore[:,:,i0:i1,j0:j1] += h1ab[:,:,i0:i1,j0:j1]
-                with mol.with_rinv_as_nucleus(iatm):
+                with mol.with_rinv_at_nucleus(iatm):
                     shls_slice = (jsh0, jsh1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
@@ -505,7 +505,7 @@ class Hessian(lib.StreamObject):
                     hcore[:,:,j0:j1] += rinv2aa.reshape(3,3,j1-j0,nao)
                     hcore[:,:,j0:j1] += rinv2ab.reshape(3,3,j1-j0,nao).transpose(1,0,2,3)
 
-                with mol.with_rinv_as_nucleus(jatm):
+                with mol.with_rinv_at_nucleus(jatm):
                     shls_slice = (ish0, ish1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)

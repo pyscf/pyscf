@@ -605,12 +605,12 @@ O    SP
 
     def test_with_MoleContext(self):
         mol1 = mol0.copy()
-        with mol1.with_rinv_as_nucleus(1):
+        with mol1.with_rinv_at_nucleus(1):
             self.assertTrue(mol1._env[gto.PTR_RINV_ZETA] != 0)
             self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 0.46288647587915266, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ZETA], 0, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
-        with mol1.with_rinv_as_nucleus(0):
+        with mol1.with_rinv_at_nucleus(0):
             self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 1.8515459035166109, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
 
@@ -832,6 +832,24 @@ O    SP
         s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
         self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
         mol0.cart = False
+
+    def test_frac_particles(self):
+        mol = gto.M(atom=[['h', (0.,1.,1.)],
+                          ['O', (0.,0.,0.)],
+                          ['h', (1.,1.,0.)],],
+                     basis='sto3g')
+        mol._atm[1, gto.NUC_MOD_OF] = gto.NUC_FRAC_CHARGE
+        mol._env[mol._atm[1, gto.PTR_FRAC_CHARGE]] = 2.5
+        self.assertAlmostEqual(mol.atom_charges().sum(), 4.5, 12)
+        self.assertAlmostEqual(mol.atom_charge(1), 2.5, 12)
+
+        # Add test after updating cint
+        ref = 0
+        for ia in range(mol.natm):
+            with mol.with_rinv_origin(mol.atom_coord(ia)):
+                ref -= mol.intor('int1e_rinv') * mol.atom_charge(ia)
+        v = mol.intor('int1e_nuc')
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 12)
 
 
 if __name__ == "__main__":

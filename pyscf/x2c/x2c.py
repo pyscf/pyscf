@@ -90,7 +90,7 @@ class X2C(lib.StreamObject):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
                 t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
@@ -234,7 +234,7 @@ class X2C(lib.StreamObject):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
                 t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)

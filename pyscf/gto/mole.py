@@ -51,7 +51,7 @@ if sys.version_info >= (3,):
 CHARGE_OF  = 0
 PTR_COORD  = 1
 NUC_MOD_OF = 2
-PTR_ZETA   = 3
+PTR_ZETA   = PTR_FRAC_CHARGE = 3
 ATM_SLOTS  = 6
 ATOM_OF    = 0
 ANG_OF     = 1
@@ -76,6 +76,9 @@ PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
 NUC_GAUSS = 2
+# nucleus with fractional charges. It can be used to mimic MM particles
+NUC_FRAC_CHARGE = 3
+NUC_ECP = 4  # atoms with pseudo potential
 
 BASE = getattr(__config__, 'BASE', 0)
 
@@ -872,6 +875,7 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
                 ecp0 = None
             if ecp0 is not None:
                 _atm[ia,CHARGE_OF ] = charge(symb) - ecp0[0]
+                _atm[ia,NUC_MOD_OF] = NUC_ECP
                 b = ecp0[1].copy().reshape(-1,BAS_SLOTS)
                 b[:,ATOM_OF] = ia
                 _ecpbas.append(b)
@@ -902,7 +906,12 @@ def tot_electrons(mol):
     else:
         nelectron = sum(charge(a[0]) for a in format_atom(mol.atom))
     nelectron -= mol.charge
-    return int(nelectron)
+    nelectron_int = int(round(nelectron))
+
+    if abs(nelectron - nelectron_int) > 1e-4:
+        logger.warn(mol, 'Found fractional number of electrons %f. Round it to %d',
+                   nelectron, nelectron_int)
+    return nelectron_int
 
 def copy(mol):
     '''Deepcopy of the given :class:`Mole` object
@@ -2484,14 +2493,14 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         zeta0 = self._env[PTR_RINV_ZETA].copy()
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
-    def with_rinv_as_nucleus(self, atm_id):
+    def with_rinv_at_nucleus(self, atm_id):
         '''Retuen a temporary mol context in which the rinv operator (1/r) is
         treated like the Coulomb potential of a Gaussian charge distribution
         rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
         Examples:
 
-        >>> with mol.with_rinv_as_nucleus(3):
+        >>> with mol.with_rinv_at_nucleus(3):
         ...     mol.intor('int1e_rinv')
         '''
         zeta = self._env[self._atm[atm_id,PTR_ZETA]]
@@ -2507,6 +2516,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
                 self._env[PTR_RINV_ZETA] = z
                 self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
             return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
+    with_rinv_as_nucleus = with_rinv_at_nucleus  # For backward compatibility
 
     def set_geom_(self, atoms_or_coords, unit=None, symmetry=None,
                   inplace=True):
@@ -2622,11 +2632,24 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         >>> mol.atom_charge(1)
         17
         '''
-        return self._atm[atm_id,CHARGE_OF]
+        if self._atm[atm_id,NUC_MOD_OF] != NUC_FRAC_CHARGE:
+            # regular QM atoms
+            return self._atm[atm_id,CHARGE_OF]
+        else:
+            # MM atoms with fractional charges
+            return self._env[self._atm[atm_id,PTR_FRAC_CHARGE]]
 
     def atom_charges(self):
         '''np.asarray([mol.atom_charge(i) for i in range(mol.natm)])'''
-        return self._atm[:,CHARGE_OF]
+        z = self._atm[:,CHARGE_OF]
+        if numpy.any(self._atm[:,NUC_MOD_OF] == NUC_FRAC_CHARGE):
+            # Create the integer nuclear charges first then replace the MM
+            # particles with the MM charges that saved in _env[PTR_FRAC_CHARGE]
+            z = numpy.array(z, dtype=float)
+            idx = self._atm[:,NUC_MOD_OF] == NUC_FRAC_CHARGE
+            # MM fractional charges can be positive or negative
+            z[idx] = self._env[self._atm[idx,PTR_FRAC_CHARGE]]
+        return z
 
     def atom_nelec_core(self, atm_id):
         '''Number of core electrons for pseudo potential.

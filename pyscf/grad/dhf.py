@@ -148,7 +148,7 @@ class Gradients(rhf_grad.Gradients):
         c = lib.param.LIGHT_SPEED
         def hcore_deriv(atm_id):
             shl0, shl1, p0, p1 = aoslices[atm_id]
-            with mol.with_rinv_as_nucleus(atm_id):
+            with mol.with_rinv_at_nucleus(atm_id):
                 z = -mol.atom_charge(atm_id)
                 vn = z * mol.intor('int1e_iprinv_spinor', comp=3)
                 wn = z * mol.intor('int1e_ipsprinvsp_spinor', comp=3)
