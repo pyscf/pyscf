@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+
+
+'''
+PiOS example according to
+"Constructing molecular pi-orbital active spaces for multireference calculations of conjugated systems"
+E. R. Sayfutyarova and S. Hammes-Schiffer, J. Chem. Theory Comput., 15, 1679 (2019).
+'''
+
 import numpy
 from pyscf import gto
 from pyscf.gto import mole
@@ -37,6 +46,11 @@ mol.basis = 'aug-cc-pvtz'
 mol.verbose=5
 mol.spin =0
 mol.build()
+
+# Rotate the molecule so that it's not parallel to xy-plane
+numpy.random.seed(1)
+u = numpy.linalg.svd(numpy.random.random((3,3)))[0]
+mol.set_geom_(mol.atom_coords().dot(u), unit='Bohr')
 
 
 mf=scf.RHF(mol)
