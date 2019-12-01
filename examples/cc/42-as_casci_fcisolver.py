@@ -30,14 +30,11 @@ class AsFCISolver(object):
         e_corr, t1, t2 = self.mycc.kernel(eris=self.eris)
         l1, l2 = self.mycc.solve_lambda(t1, t2, eris=self.eris)
         e = fake_hf.e_tot + e_corr
-        return e+ecore, CCSDAmplitudesAsCIWfn(t1, t2, l1, l2)
+        return e+ecore, CCSDAmplitudesAsCIWfn([t1, t2, l1, l2])
 
     def make_rdm1(self, fake_ci, norb, nelec):
         mo = self.mycc.mo_coeff
-        t1 = fake_ci.t1
-        t2 = fake_ci.t2
-        l1 = fake_ci.l1
-        l2 = fake_ci.l2
+        t1, t2, l1, l2 = fake_ci.cc_amplitues
         dm1 = reduce(numpy.dot, (mo, self.mycc.make_rdm1(t1, t2, l1, l2), mo.T))
         return dm1
 
@@ -61,11 +58,8 @@ class AsFCISolver(object):
         return 0, 1
 
 class CCSDAmplitudesAsCIWfn:
-    def __init__(self, t1, t2, l1, l2):
-        self.t1 = t1
-        self.t2 = t2
-        self.l1 = l1
-        self.l2 = l2
+    def __init__(self, cc_amplitues):
+        self.cc_amplitues = cc_amplitues
 
 mol = gto.M(atom = 'H 0 0 0; F 0 0 1.2',
             basis = 'ccpvdz',

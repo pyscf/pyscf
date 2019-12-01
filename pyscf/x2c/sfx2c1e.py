@@ -173,7 +173,7 @@ class SpinFreeX2C(x2c.X2C):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
                 s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z * xmol.intor('int1e_rinv', shls_slice=shls_slice)
                     w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)
@@ -241,7 +241,7 @@ class SpinFreeX2C(x2c.X2C):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
                 s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z * xmol.intor('int1e_rinv', shls_slice=shls_slice)
                     w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)

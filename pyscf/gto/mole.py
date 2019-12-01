@@ -16,6 +16,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Mole class and helper functions to handle paramters and attributes for GTO
+integrals. This module serves the interface to the integral library libcint.
+'''
+
 import os, sys
 import types
 import re
@@ -51,7 +56,7 @@ if sys.version_info >= (3,):
 CHARGE_OF  = 0
 PTR_COORD  = 1
 NUC_MOD_OF = 2
-PTR_ZETA   = 3
+PTR_ZETA   = PTR_FRAC_CHARGE = 3
 ATM_SLOTS  = 6
 ATOM_OF    = 0
 ANG_OF     = 1
@@ -78,6 +83,9 @@ PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
 NUC_GAUSS = 2
+# nucleus with fractional charges. It can be used to mimic MM particles
+NUC_FRAC_CHARGE = 3
+NUC_ECP = 4  # atoms with pseudo potential
 
 BASE = getattr(__config__, 'BASE', 0)
 
@@ -603,7 +611,18 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
 def conc_mol(mol1, mol2):
     '''Concatenate two Mole objects.
     '''
+    if not mol1._built:
+        logger.warn(mol1, 'Warning: object %s not initialized. Initializing %s',
+                    mol1, mol1)
+        mol1.build()
+    if not mol2._built:
+        logger.warn(mol2, 'Warning: object %s not initialized. Initializing %s',
+                    mol2, mol2)
+        mol2.build()
+
     mol3 = Mole()
+    mol3._built = True
+
     mol3._atm, mol3._bas, mol3._env = \
             conc_env(mol1._atm, mol1._bas, mol1._env,
                      mol2._atm, mol2._bas, mol2._env)
@@ -625,28 +644,26 @@ def conc_mol(mol1, mol2):
     mol3.output = mol1.output
     mol3.max_memory = mol1.max_memory
     mol3.charge = mol1.charge + mol2.charge
-    mol3.spin = mol1.spin + mol2.spin
+    mol3.spin = abs(mol1.spin - mol2.spin)
     mol3.symmetry = False
     mol3.symmetry_subgroup = None
     mol3.cart = mol1.cart and mol2.cart
-    mol3._atom = mol1._atom + mol2._atom
-    mol3.unit = mol1.unit
-    mol3._basis = dict(mol2._basis)
-    mol3._basis.update(mol1._basis)
 
-    mol3._pseudo.update(mol1._pseudo)
+    mol3._atom = mol1._atom + mol2._atom
+    mol3.atom = mol3._atom
+    mol3.unit = 'Bohr'
+
+    mol3._basis.update(mol2._basis)
+    mol3._basis.update(mol1._basis)
     mol3._pseudo.update(mol2._pseudo)
-    mol3._ecp.update(mol1._ecp)
+    mol3._pseudo.update(mol1._pseudo)
     mol3._ecp.update(mol2._ecp)
+    mol3._ecp.update(mol1._ecp)
+    mol3.basis = mol3._basis
+    mol3.ecp = mol3._ecp
 
     mol3.nucprop.update(mol1.nucprop)
     mol3.nucprop.update(mol2.nucprop)
-
-    if not mol1._built:
-        logger.warn(mol1, 'Warning: intor envs of %s not initialized.', mol1)
-    if not mol2._built:
-        logger.warn(mol2, 'Warning: intor envs of %s not initialized.', mol2)
-    mol3._built = mol1._built or mol2._built
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
@@ -895,6 +912,7 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
                 ecp0 = None
             if ecp0 is not None:
                 _atm[ia,CHARGE_OF ] = charge(symb) - ecp0[0]
+                _atm[ia,NUC_MOD_OF] = NUC_ECP
                 b = ecp0[1].copy().reshape(-1,BAS_SLOTS)
                 b[:,ATOM_OF] = ia
                 _ecpbas.append(b)
@@ -925,7 +943,12 @@ def tot_electrons(mol):
     else:
         nelectron = sum(charge(a[0]) for a in format_atom(mol.atom))
     nelectron -= mol.charge
-    return int(nelectron)
+    nelectron_int = int(round(nelectron))
+
+    if abs(nelectron - nelectron_int) > 1e-4:
+        logger.warn(mol, 'Found fractional number of electrons %f. Round it to %d',
+                   nelectron, nelectron_int)
+    return nelectron_int
 
 def copy(mol):
     '''Deepcopy of the given :class:`Mole` object
@@ -2639,14 +2662,14 @@ class Mole(lib.StreamObject):
         zeta0 = self._env[PTR_RINV_ZETA].copy()
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
-    def with_rinv_as_nucleus(self, atm_id):
+    def with_rinv_at_nucleus(self, atm_id):
         '''Retuen a temporary mol context in which the rinv operator (1/r) is
         treated like the Coulomb potential of a Gaussian charge distribution
         rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
         Examples:
 
-        >>> with mol.with_rinv_as_nucleus(3):
+        >>> with mol.with_rinv_at_nucleus(3):
         ...     mol.intor('int1e_rinv')
         '''
         zeta = self._env[self._atm[atm_id,PTR_ZETA]]
@@ -2662,6 +2685,7 @@ class Mole(lib.StreamObject):
                 self._env[PTR_RINV_ZETA] = z
                 self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
             return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
+    with_rinv_as_nucleus = with_rinv_at_nucleus  # For backward compatibility
 
     def set_geom_(self, atoms_or_coords, unit=None, symmetry=None,
                   inplace=True):
@@ -2777,11 +2801,24 @@ class Mole(lib.StreamObject):
         >>> mol.atom_charge(1)
         17
         '''
-        return self._atm[atm_id,CHARGE_OF]
+        if self._atm[atm_id,NUC_MOD_OF] != NUC_FRAC_CHARGE:
+            # regular QM atoms
+            return self._atm[atm_id,CHARGE_OF]
+        else:
+            # MM atoms with fractional charges
+            return self._env[self._atm[atm_id,PTR_FRAC_CHARGE]]
 
     def atom_charges(self):
         '''np.asarray([mol.atom_charge(i) for i in range(mol.natm)])'''
-        return self._atm[:,CHARGE_OF]
+        z = self._atm[:,CHARGE_OF]
+        if numpy.any(self._atm[:,NUC_MOD_OF] == NUC_FRAC_CHARGE):
+            # Create the integer nuclear charges first then replace the MM
+            # particles with the MM charges that saved in _env[PTR_FRAC_CHARGE]
+            z = numpy.array(z, dtype=numpy.double)
+            idx = self._atm[:,NUC_MOD_OF] == NUC_FRAC_CHARGE
+            # MM fractional charges can be positive or negative
+            z[idx] = self._env[self._atm[idx,PTR_FRAC_CHARGE]]
+        return z
 
     def atom_nelec_core(self, atm_id):
         '''Number of core electrons for pseudo potential.
