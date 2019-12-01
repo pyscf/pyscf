@@ -20,6 +20,7 @@
 
 import numpy
 from pyscf.data import radii
+from pyscf.data.elements import ELEMENTS_PROTON
 
 BRAGG_RADII = radii.BRAGG
 COVALENT_RADII = radii.COVALENT
@@ -120,8 +121,7 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-
-    charges = mol.atom_charges()
+    charges = [ELEMENTS_PROTON[x] for x in mol.elements]
     rad = atomic_radii[charges] + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
@@ -142,7 +142,7 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    charges = mol.atom_charges()
+    charges = [ELEMENTS_PROTON[x] for x in mol.elements]
     rad = numpy.sqrt(atomic_radii[charges]) + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)

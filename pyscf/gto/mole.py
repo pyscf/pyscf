@@ -16,6 +16,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Mole class and helper functions to handle paramters and attributes for GTO
+integrals. This module serves the interface to the integral library libcint.
+'''
+
 import os, sys
 import types
 import re
@@ -590,7 +595,18 @@ def conc_env(atm1, bas1, env1, atm2, bas2, env2):
 def conc_mol(mol1, mol2):
     '''Concatenate two Mole objects.
     '''
+    if not mol1._built:
+        logger.warn(mol1, 'Warning: object %s not initialized. Initializing %s',
+                    mol1, mol1)
+        mol1.build()
+    if not mol2._built:
+        logger.warn(mol2, 'Warning: object %s not initialized. Initializing %s',
+                    mol2, mol2)
+        mol2.build()
+
     mol3 = Mole()
+    mol3._built = True
+
     mol3._atm, mol3._bas, mol3._env = \
             conc_env(mol1._atm, mol1._bas, mol1._env,
                      mol2._atm, mol2._bas, mol2._env)
@@ -612,28 +628,26 @@ def conc_mol(mol1, mol2):
     mol3.output = mol1.output
     mol3.max_memory = mol1.max_memory
     mol3.charge = mol1.charge + mol2.charge
-    mol3.spin = mol1.spin + mol2.spin
+    mol3.spin = abs(mol1.spin - mol2.spin)
     mol3.symmetry = False
     mol3.symmetry_subgroup = None
     mol3.cart = mol1.cart and mol2.cart
-    mol3._atom = mol1._atom + mol2._atom
-    mol3.unit = mol1.unit
-    mol3._basis = dict(mol2._basis)
-    mol3._basis.update(mol1._basis)
 
-    mol3._pseudo.update(mol1._pseudo)
+    mol3._atom = mol1._atom + mol2._atom
+    mol3.atom = mol3._atom
+    mol3.unit = 'Bohr'
+
+    mol3._basis.update(mol2._basis)
+    mol3._basis.update(mol1._basis)
     mol3._pseudo.update(mol2._pseudo)
-    mol3._ecp.update(mol1._ecp)
+    mol3._pseudo.update(mol1._pseudo)
     mol3._ecp.update(mol2._ecp)
+    mol3._ecp.update(mol1._ecp)
+    mol3.basis = mol3._basis
+    mol3.ecp = mol3._ecp
 
     mol3.nucprop.update(mol1.nucprop)
     mol3.nucprop.update(mol2.nucprop)
-
-    if not mol1._built:
-        logger.warn(mol1, 'Warning: intor envs of %s not initialized.', mol1)
-    if not mol2._built:
-        logger.warn(mol2, 'Warning: intor envs of %s not initialized.', mol2)
-    mol3._built = mol1._built or mol2._built
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
@@ -2645,7 +2659,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         if numpy.any(self._atm[:,NUC_MOD_OF] == NUC_FRAC_CHARGE):
             # Create the integer nuclear charges first then replace the MM
             # particles with the MM charges that saved in _env[PTR_FRAC_CHARGE]
-            z = numpy.array(z, dtype=float)
+            z = numpy.array(z, dtype=numpy.double)
             idx = self._atm[:,NUC_MOD_OF] == NUC_FRAC_CHARGE
             # MM fractional charges can be positive or negative
             z[idx] = self._env[self._atm[idx,PTR_FRAC_CHARGE]]
