@@ -20,6 +20,7 @@ PySCF 1.7.0 (2019-?-?)
   - Analytical nuclear hessian with density-fitting
   - Thermo-chemistry and frequency analysis
   - Huckel HF/KS initial guess
+  - QM/MM with implicit solvent
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
@@ -86,8 +87,8 @@ PySCF 1.6.2 (2019-6-17)
 * Improved
   - DFHF class structure and method hooks
   - Sanity checks when saving and loading FCIDUMP file
-  - Integration performance for solvent model
-  - Integration performance for QM/MM interface
+  - Integral performance for solvent model
+  - Integral performance for QM/MM interface
   - GCC 9 compatibility
 * Bugfix
   - Cartesian GTOs was not handled in RSH integrals
