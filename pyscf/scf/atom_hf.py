@@ -116,6 +116,7 @@ class AtomSphericAverageRHF(hf.RHF):
 
     def scf(self, *args, **kwargs):
         self.build()
+        self.init_guess = '1e'
         return hf.kernel(self, *args, dump_chk=False, **kwargs)
 
 def frac_occ(symb, l):
