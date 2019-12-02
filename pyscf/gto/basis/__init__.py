@@ -314,8 +314,7 @@ def _parse_pople_basis(basis, symb):
     # 6-31G, 6-311G etc.
     basename = mbas[0] + '-' + mbas[1:].upper()
     basename = basename.replace('+', '').replace('*', '')
-    pathtmp = join('pople-basis',
-                            basename + '-polarization-%s.dat')
+    pathtmp = join('pople-basis', basename + '-polarization-%s.dat')
     def convert(s):
         if len(s) == 0:
             return []
