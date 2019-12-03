@@ -92,7 +92,11 @@ if use_numba:
         return XVX
 
 
-    @nb.jit(nopython=True, parallel=True)
+    #@nb.jit(nopython=True, parallel=True)
+    # use numba here leads to the following issue in test_0087_o2_gw.py
+    # m_rf0_den.py:122: NumbaPerformanceWarning: np.dot() is faster
+    # on contiguous arrays, called on (array(float64, 2d, A), array(float64, 2d, C))
+    # np.dot(k_c.imag, kernel_sq)
     def si_correlation_numba(si0, ww, X, kernel_sq, ksn2f, ksn2e, pab2v_den, nprod,
                              norbs, bsize, nspin, nfermi, vstart):
         """
@@ -102,7 +106,7 @@ if use_numba:
         scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod
         """
 
-        for iw in nb.prange(ww.size):
+        for iw in range(ww.size):
         #for iw in range(ww.size):
             
             rf0_den_numba(si0[iw, :, :], ww[iw], X, ksn2f, ksn2e, pab2v_den,
@@ -190,8 +194,6 @@ def rf0_den(self, ww):
   
   zxvx = zeros((len(ww),self.nprod,self.bsize,self.bsize), dtype=self.dtypeComplex)
 
-  print("enter rf0_den")
-  t1 = timer()
   for s in range(self.nspin):
     nn = list(range(0,self.nfermi[s],self.bsize))+[self.nfermi[s]]
     mm = list(range(self.vstart[s],self.norbs,self.bsize))+[self.norbs]
@@ -209,15 +211,10 @@ def rf0_den(self, ww):
         for iw, comega in enumerate(ww):
           zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
 
-        t3 = timer()
         rf0_nb = calc_part_rf0(xvx, zxvx[:, :, 0:mbf-mbs, 0:nbf-nbs].real,
                                zxvx[:, :, 0:mbf-mbs, 0:nbf-nbs].imag)
-        t4 = timer()
-        print("end calc_part_rf0_numba: ", t4-t3)
 
         rf0 += rf0_nb
-  t2 = timer()
-  print("spend time rf0_den: ", t2-t1)
 
   return rf0
 

@@ -184,7 +184,7 @@ class gw(scf):
   rf_pyscf = rf_den_pyscf                       #Full matrix interacting response from tdscf class
 
 
-  def si_c(self, ww):
+  def si_c(self, ww, use_numba_impl=False):
     from numpy.linalg import solve
     """ 
     This computes the correlation part of the screened interaction W_c
@@ -197,12 +197,16 @@ class gw(scf):
       self.pab2v_den = einsum('pab->apb', self.pb.get_ac_vertex_array())
 
     si0 = np.zeros((ww.size, self.nprod, self.nprod), dtype=self.dtypeComplex)
-    if use_numba:
+    if use_numba and use_numba_impl:
+
+        # numba implementation suffer from some continuous array issue
+        # for example in test test_0087_o2_gw.py
+        # use only for expeimental test
         si_correlation_numba(si0, ww, self.x, self.kernel_sq, self.ksn2f, self.ksn2e,
                              self.pab2v_den, self.nprod, self.norbs, self.bsize,
                              self.nspin, self.nfermi, self.vstart)
     else:
-        si_correlation(rf0(self, ww), si0, ww, self.kernel_sq, self.nprod)
+        si_correlation(rf0_den(self, ww), si0, ww, self.kernel_sq, self.nprod)
     return si0
 
   def si_c_via_diagrpa(self, ww):
