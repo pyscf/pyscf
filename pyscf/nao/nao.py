@@ -108,8 +108,10 @@ class nao():
     self.pseudo = hasattr(self, 'sp2ion') 
     self._keys = set(self.__dict__.keys())
 
-    #print(kw)
-    #print(dir(kw))
+    # new pyscf keys
+    self.elements = []
+    for sp in self.atom2sp:
+        self.elements.append(self.sp2symbol[sp])
 
   #
   #
