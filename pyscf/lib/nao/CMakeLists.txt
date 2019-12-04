@@ -28,7 +28,6 @@ find_package(CUDA)
 if(CUDA_FOUND)
   INCLUDE(FindCUDA)
 
-  set(CUDA_HELPER "${PROJECT_SOURCE_DIR}/nao/nao_gpu/cuda_samples/inc")
   set(CUDA_LIBRARIES "-L${CUDA_TOOLKIT_ROOT_DIR}/lib64 -lcuda -lcudart -lcublas -lcudadevrt -lstdc++")
   set(CUDA_HOST_COMPILER "${HOST_COMPILER}")
   set(CUDA_PROPAGATE_HOST_FLAGS OFF)
@@ -36,8 +35,6 @@ if(CUDA_FOUND)
 
   message("CUDA FLAGS: ${CUDA_NVCC_FLAGS}")
   message("CUDA LIB: ${CUDA_LIBRARIES}")
-  include_directories(${CUDA_HELPER})
-  message("CUDA Helper: ${CUDA_HELPER}")
 
   add_subdirectory(nao_gpu)
 endif()
