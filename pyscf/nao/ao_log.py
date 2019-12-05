@@ -164,8 +164,10 @@ class ao_log(log_mesh):
         self.sp2vna = [None]*len(sp2ion)     # Interpolate a Neutral-Atom potential V_NA(r) for each specie
         self.sp2rcut_vna = np.zeros(len(sp2ion))
         for isp, ion in enumerate(sp2ion):
-            if ion["vna"] is None:
-                continue
+            
+            if "vna" not in ion.keys(): continue
+            if ion["vna"] is None: continue
+
             self.sp2rcut_vna[isp] = ion["vna"]["cutoff"]
             h,dat = ion["vna"]["delta"][0], ion["vna"]["data"][0][:,1]
             d2 = spline_diff2(h, dat, 0.0, 1.0e301)
@@ -174,8 +176,10 @@ class ao_log(log_mesh):
         self.sp2chlocal = [None]*len(sp2ion)     # Interpolate the atomic charges for each specie 
         self.sp2rcut_chlocal = np.zeros(len(sp2ion))
         for isp, ion in enumerate(sp2ion):
-            if ion["chlocal"] is None:
-                continue
+            
+            if "chlocal" not in ion.keys(): continue
+            if ion["chlocal"] is None: continue
+
             self.sp2rcut_chlocal[isp] = ion["chlocal"]["cutoff"]
             h,dat = ion["chlocal"]["delta"][0], ion["chlocal"]["data"][0][:,1]
             d2 = spline_diff2(h, dat, 0.0, 1.0e301)
