@@ -45,7 +45,7 @@ class bse_iter(gw):
     if xc in ['LDA', 'GGA']:
       for q,m in enumerate(self.comp_fxc_pack(**kw)): self.q2hk[q] += pack2den_u(m)
     elif xc in ['GW']:
-      self.q2xk[0]=pack2den_u(self.kernel)+self.si_c([0.0])[0].real
+      self.q2xk[0]=pack2den_u(self.kernel) + self.si_c(np.array([0.0]))[0].real
 
     # Allocation of the four-point kernel(s) which is to be used when RAM available
     n, v_dab, cc_da = self.norbs, self.v_dab, self.cc_da
