@@ -739,9 +739,15 @@ class nao():
     return vnuc
 
   def vna(self, coords, **kw):
-      """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
-        The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
-      (sp2v,sp2rcut) = (kw['sp2v'],kw['sp2rcut']) if 'sp2v' in kw else (self.ao_log.sp2vna,self.ao_log.sp2rcut_vna)
+      """
+      Compute the neutral-atom potential V_NA(coords) for a set of Cartesian
+      coordinates coords.
+      The subroutine could be also used for computing the non-linear core
+      corrections or some other atom-centered fields.
+      """
+
+      sp2v = kw['sp2v'] if 'sp2v' in kw else self.ao_log.sp2vna
+      sp2rcut = kw['sp2rcut'] if 'sp2rcut' in kw else self.ao_log.sp2rcut_vna
       atom2coord = kw['atom2coord'] if 'atom2coord' in kw else self.atom2coord
 
       nc = coords.shape[0]
