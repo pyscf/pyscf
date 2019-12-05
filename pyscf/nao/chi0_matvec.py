@@ -57,10 +57,16 @@ class chi0_matvec(mf):
     else:
       ksn2f = self.ksn2f = self.mo_occ
     
-    self.nfermi = array([argmax(ksn2f[0,s]<self.nfermi_tol) for s in range(self.nspin)], dtype=int)
-    self.vstart = array([argmax(1.0-ksn2f[0,s]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
-    self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
-    self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
+    self.nfermi = array([argmax(ksn2f[0,s]<self.nfermi_tol)\
+                        for s in range(self.nspin)], dtype=int)
+    self.vstart = array([argmax(1.0-ksn2f[0,s]>=self.nfermi_tol)\
+                        for s in range(self.nspin)], dtype=int)
+    
+    # should not be this list arrays ??
+    self.xocc = [self.mo_coeff[0,s,:nfermi,:,0]\
+                         for s,nfermi in enumerate(self.nfermi)]
+    self.xvrt = [self.mo_coeff[0,s,vstart:,:,0]\
+                         for s,vstart in enumerate(self.vstart)]
  
     if self.verbosity>4 :
       #print(__name__, '\t====> self.dtype ', self.dtype)
