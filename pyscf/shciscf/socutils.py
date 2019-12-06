@@ -169,8 +169,6 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
     shl_size = []
     shl_slice = [0]
     ao_loc = [0]
-    print(nb, nbas)
-    print(ao_loc_orig)
     if nb > max_basis:
         for i in range(0, nbas - 1):
             if (ao_loc_orig[i + 1] - ao_loc[-1] > max_basis and ao_loc_orig[i] - ao_loc[-1]):
@@ -181,57 +179,42 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
         ao_loc.append(ao_loc_orig[-1])
         shl_size.append(ao_loc[-1] - ao_loc[-2])
         shl_slice.append(nbas)
-    print(ao_loc, shl_size, shl_slice)
+    #print(ao_loc, shl_size, shl_slice)
     nbas = len(shl_size)
 
     for i in range(0, nbas):
         for j in range(0, nbas):
             for k in range(0, nbas):
                 for l in range(0, nbas):
-                    #start = time.clock()
-                    ddint = mol.intor('int2e_ip1ip2_sph', comp=9,
-                                      shls_slice=[shl_slice[i], shl_slice[i+1],
-                                                  shl_slice[j], shl_slice[j+1],
-                                                  shl_slice[k], shl_slice[k+1],
-                                                  shl_slice[l], shl_slice[l+1]]).reshape(3, 3, -1)
-                    kint = numpy.zeros(
-                        3 * shl_size[i] * shl_size[j] * shl_size[k] * shl_size[l]).reshape(
-                            3, shl_size[i], shl_size[j], shl_size[k], shl_size[l])
-                    kint[0] = (ddint[1, 2] - ddint[2, 1]).reshape(shl_size[i],
-                                                                  shl_size[j], shl_size[k], shl_size[l])
-                    kint[1] = (ddint[2, 0] - ddint[0, 2]).reshape(shl_size[i],
-                                                                  shl_size[j], shl_size[k], shl_size[l])
-                    kint[2] = (ddint[0, 1] - ddint[1, 0]).reshape(shl_size[i],
-                                                                  shl_size[j], shl_size[k], shl_size[l])
-                    #end = time.clock()
-                    # print("Time elapsed for integral calculation:",
-                    #      end - start, i, j, k, l, nbas)
+                    ddint = mol.intor('int2e_ip1ip2_sph', comp=9, shls_slice=[shl_slice[i], shl_slice[i+1], shl_slice[j], shl_slice[j+1], shl_slice[k], shl_slice[k+1], shl_slice[l], shl_slice[l+1]]).reshape(3, 3, -1)
+                    kint = numpy.zeros(3 * shl_size[i] * shl_size[j] * shl_size[k] * shl_size[l]).reshape(
+                        3, shl_size[i], shl_size[j], shl_size[k], shl_size[l])
+                    kint[0] = (ddint[1, 2] - ddint[2, 1]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
+                    kint[1] = (ddint[2, 0] - ddint[0, 2]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
+                    kint[2] = (ddint[0, 1] - ddint[1, 0]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
+                    #print("Time elapsed for integral calculation:", end - start, i, j, k, l, nbas)
 
-                    #start = time.clock()
                     gsoLL[:, ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]] \
-                        += -2.0*numpy.einsum('ilmkn,lk->imn', kint,
-                                             pSS[ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]])
+                      +=-2.0*numpy.einsum('ilmkn,lk->imn', kint, \
+                        pSS[ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]])
                     gsoLS[:, ao_loc[i]:ao_loc[i+1], ao_loc[l]:ao_loc[l+1]] \
-                        += -1.0*numpy.einsum('imlkn,lk->imn', kint,
-                                             pLS[ao_loc[j]:ao_loc[j+1], ao_loc[k]:ao_loc[k+1]])
+                      +=-1.0*numpy.einsum('imlkn,lk->imn', kint, \
+                        pLS[ao_loc[j]:ao_loc[j+1], ao_loc[k]:ao_loc[k+1]])
                     gsoLS[:, ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]] \
-                        += -1.0*numpy.einsum('ilmkn,lk->imn', kint,
-                                             pLS[ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]])
+                      +=-1.0*numpy.einsum('ilmkn,lk->imn', kint, \
+                        pLS[ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]])
                     gsoSS[:, ao_loc[i]:ao_loc[i+1], ao_loc[j]:ao_loc[j+1]] \
-                        += -2.0*numpy.einsum('imnkl,lk->imn', kint,
-                                             pLL[ao_loc[l]:ao_loc[l+1], ao_loc[k]:ao_loc[k+1]])\
-                        - 2.0*numpy.einsum('imnlk,lk->imn', kint,
-                                           pLL[ao_loc[k]:ao_loc[k+1], ao_loc[l]:ao_loc[l+1]])
+                      +=-2.0*numpy.einsum('imnkl,lk->imn', kint, \
+                        pLL[ao_loc[l]:ao_loc[l+1], ao_loc[k]:ao_loc[k+1]])\
+                        -2.0*numpy.einsum('imnlk,lk->imn', kint, \
+                        pLL[ao_loc[k]:ao_loc[k+1], ao_loc[l]:ao_loc[l+1]])
                     gsoSS[:, ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]] \
-                        += 2.0*numpy.einsum('imlnk,lk->imn', kint,
-                                            pLL[ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]])
+                      += 2.0*numpy.einsum('imlnk,lk->imn', kint, \
+                        pLL[ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]])
                     #print(" Time elapsed for einsum:", time.clock() - start)
 
     for comp in range(0, 3):
-        fso2e[comp] = gsoLL[comp]
-        + gsoLS[comp].dot(x)
-        + x.T.dot(-gsoLS[comp].T)
-        + x.T.dot(gsoSS[comp].dot(x))
+        fso2e[comp] = gsoLL[comp] + gsoLS[comp].dot(x) + x.T.dot(-gsoLS[comp].T) + x.T.dot(gsoSS[comp].dot(x))
         fso2e[comp] = reduce(numpy.dot, (rp.T, fso2e[comp], rp))
 
     return fso2e
@@ -476,6 +459,9 @@ def writeSOCIntegrals(mc,
         hso1e += -factor * get_fso2e_bp(xmol, dm)
     elif (pictureChange2e == "bp1c"):
         hso1e += -factor * get_fso2e_bp1c(xmol, dm, atomlist)
+    elif (pictureChange2e == "x2c_old"):
+        pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
+        hso1e += -factor * get_fso2e_x2c_original(xmol, x, rp, pLL, pLS, pSS)
     elif (pictureChange2e == "x2c"):
         pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
         hso1e += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)
