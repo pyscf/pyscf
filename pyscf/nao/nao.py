@@ -97,6 +97,7 @@ class nao():
       self.init_gpaw(**kw)
       self.init_libnao_orbs()
     elif 'openmx' in kw:
+      raise ValueError("Oenmx not anymore supported")
       self.init_openmx(**kw)
       #self.init_libnao_orbs()
     elif 'fireball' in kw:
@@ -626,7 +627,10 @@ class nao():
     return ((sop*vkb_dia)*sop.T).tocoo()
 
   def get_vkb(self): 
-    """ Compose the vector of Kleinman-Bylander energies v^p = v^KB_ln, where p is a global projector index """
+    """
+    Compose the vector of Kleinman-Bylander energies v^p = v^KB_ln,
+    where p is a global projector index
+    """
     atom2s, kb = np.zeros((self.natm+1), dtype=int), self.kb_log
     for atom,sp in enumerate(self.atom2sp): 
         atom2s[atom+1]=atom2s[atom]+kb.sp2norbs[sp]
