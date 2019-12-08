@@ -129,7 +129,7 @@ def livvo(mol, orbocc, orbvirt, locmethod='IBO', iaos=None, s=None, exponent=4, 
     vvos = vvo(mol, orbocc, orbvirt, iaos=iaos, s=s)
     locmethod = locmethod.strip().upper()
     if locmethod == 'PM':
-        EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', 4)
+        EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', exponent)
         livvos = ibo.PipekMezey(mol, vvos, iaos, s, exponent=EXPONENT)
         del(EXPONENT)
     else:

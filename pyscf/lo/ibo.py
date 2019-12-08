@@ -74,7 +74,7 @@ def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e
 
     locmethod = locmethod.strip().upper()
     if locmethod == 'PM':
-        EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', 4)
+        EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', exponent)
         ibos = PipekMezey(mol, orbocc, iaos, s, exponent=EXPONENT)
         del(EXPONENT)
     else:
