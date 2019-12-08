@@ -19,7 +19,7 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
-from pyscf.lo import iao, ibo, orth, pipek
+from pyscf.lo import iao, ibo, orth, pipek, vvo
 
 mol = gto.Mole()
 mol.atom = '''
@@ -32,37 +32,49 @@ mol.output = '/dev/null'
 mol.build()
 
 class KnownValues(unittest.TestCase):
-    def test_ibo(self):
+    def test_vvo(self):
         mf = scf.RHF(mol).run()
-        b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=4)
+        nocc = numpy.sum(mf.mo_occ>0)
+        b = vvo.vvo(mol, mf.mo_coeff[:,0:nocc], mf.mo_coeff[:,nocc:])
         s_b = reduce(numpy.dot, (b.T, mf.get_ovlp(), b))
         self.assertTrue(abs(s_b.diagonal() - 1).max() < 1e-9)
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0661421502005437, 5)
+        self.assertAlmostEqual(z, 0.6695907625196215, 5)
 
-        b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2)
+    def test_livvo(self):
+        mf = scf.RHF(mol).run()
+        nocc = numpy.sum(mf.mo_occ>0)
+        b = vvo.livvo(mol, mf.mo_coeff[:,0:nocc], mf.mo_coeff[:,nocc:], exponent=4)
         s_b = reduce(numpy.dot, (b.T, mf.get_ovlp(), b))
         self.assertTrue(abs(s_b.diagonal() - 1).max() < 1e-9)
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0661421502005437, 5)
+        self.assertAlmostEqual(z, 1.073138251815934, 5)
 
-    def test_ibo_PM(self):
+        b = vvo.livvo(mol, mf.mo_coeff[:,0:nocc], mf.mo_coeff[:,nocc:], exponent=2)
+        s_b = reduce(numpy.dot, (b.T, mf.get_ovlp(), b))
+        self.assertTrue(abs(s_b.diagonal() - 1).max() < 1e-9)
+        pop = pipek.atomic_pops(mol, b)
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 1.073138251815934, 5)
+
+    def test_livvo_PM(self):
         mf = scf.RHF(mol).run()
-        b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], locmethod='PM', exponent=4).kernel()
+        nocc = numpy.sum(mf.mo_occ>0)
+        b = vvo.livvo(mol, mf.mo_coeff[:,0:nocc], mf.mo_coeff[:,nocc:], locmethod='PM', exponent=4).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 3.9201797890974261, 5)
+        self.assertAlmostEqual(z, 0.6695907625196215, 5)
 
-        b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], locmethod='PM', exponent=2).kernel()
+        b = vvo.livvo(mol, mf.mo_coeff[:,0:nocc], mf.mo_coeff[:,nocc:], locmethod='PM', exponent=2).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 3.9201797890974261, 5)
+        self.assertAlmostEqual(z, 0.6695907625196215, 5)
 
 
 if __name__ == "__main__":
-    print("Full tests for ibo")
+    print("Full tests for vvo")
     unittest.main()
 
 
