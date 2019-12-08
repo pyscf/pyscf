@@ -8,6 +8,7 @@ def fireball_import(self, **kw):
   """ Calls  """
   from pyscf.nao.ao_log import ao_log
   from pyscf.nao.m_fireball_get_cdcoeffs_dat import fireball_get_ucell_cdcoeffs_dat
+
   #label, cd
   self.label = label = kw['fireball'] if 'fireball' in kw else 'out'
   self.cd = cd = kw['cd'] if 'cd' in kw else '.'
@@ -32,11 +33,15 @@ def fireball_import(self, **kw):
   ssll = [i for i,l in enumerate(s) if "Information for this species" in l] # starting lines in stdout
   self.nspecies  = len(ssll)
   self.sp2ion = []
+  self.sp2symbol = []
   for sl in ssll:
     ion = {}
     scut = s[sl:sl+20]
-    for iline,line in enumerate(scut):
-      if "- Element" in line: ion["symbol"]=line.split()[0]
+    
+    for iline, line in enumerate(scut):
+      if "- Element" in line:
+          ion["symbol"] = line.split()[0]
+          self.sp2symbol.append(ion["symbol"])
       elif "- Atomic energy" in line: ion["atomic_energy"]=float(line.split()[0])
       elif "- Nuclear Z" in line: ion["z"]=int(line.split()[0])
       elif "- Atomic Mass" in line: ion["mass"]=float(line.split()[0])

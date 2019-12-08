@@ -97,6 +97,7 @@ class nao():
       self.init_gpaw(**kw)
       self.init_libnao_orbs()
     elif 'openmx' in kw:
+      raise ValueError("Oenmx not anymore supported")
       self.init_openmx(**kw)
       #self.init_libnao_orbs()
     elif 'fireball' in kw:
@@ -108,8 +109,10 @@ class nao():
     self.pseudo = hasattr(self, 'sp2ion') 
     self._keys = set(self.__dict__.keys())
 
-    #print(kw)
-    #print(dir(kw))
+    # new pyscf keys
+    self.elements = []
+    for sp in self.atom2sp:
+        self.elements.append(self.sp2symbol[sp])
 
   #
   #
@@ -624,7 +627,10 @@ class nao():
     return ((sop*vkb_dia)*sop.T).tocoo()
 
   def get_vkb(self): 
-    """ Compose the vector of Kleinman-Bylander energies v^p = v^KB_ln, where p is a global projector index """
+    """
+    Compose the vector of Kleinman-Bylander energies v^p = v^KB_ln,
+    where p is a global projector index
+    """
     atom2s, kb = np.zeros((self.natm+1), dtype=int), self.kb_log
     for atom,sp in enumerate(self.atom2sp): 
         atom2s[atom+1]=atom2s[atom]+kb.sp2norbs[sp]
@@ -737,9 +743,15 @@ class nao():
     return vnuc
 
   def vna(self, coords, **kw):
-      """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
-        The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
-      (sp2v,sp2rcut) = (kw['sp2v'],kw['sp2rcut']) if 'sp2v' in kw else (self.ao_log.sp2vna,self.ao_log.sp2rcut_vna)
+      """
+      Compute the neutral-atom potential V_NA(coords) for a set of Cartesian
+      coordinates coords.
+      The subroutine could be also used for computing the non-linear core
+      corrections or some other atom-centered fields.
+      """
+
+      sp2v = kw['sp2v'] if 'sp2v' in kw else self.ao_log.sp2vna
+      sp2rcut = kw['sp2rcut'] if 'sp2rcut' in kw else self.ao_log.sp2rcut_vna
       atom2coord = kw['atom2coord'] if 'atom2coord' in kw else self.atom2coord
 
       nc = coords.shape[0]

@@ -90,8 +90,8 @@ def funct_log_mesh(nr, rmin, rmax, kmax=None):
   kmax = 1.0/rmin/np.pi if kmax is None else kmax
   kapmin=np.log(kmax)-rhomax+rhomin
   
-  rr=np.array(np.exp( np.linspace(rhomin, rhomax, nr)) )
-  pp=np.array(rr*(np.exp(kapmin)/rr[0]))
+  rr = np.array(np.exp( np.linspace(rhomin, rhomax, nr)) )
+  pp = np.array(rr*(np.exp(kapmin)/rr[0]))
 
   return rr, pp
 

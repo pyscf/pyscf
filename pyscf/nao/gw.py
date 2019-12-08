@@ -116,7 +116,7 @@ class gw(scf):
     self.wmax_ia = kw['wmax_ia'] if 'wmax_ia' in kw else wmax_def
     self.tmin_ia = kw['tmin_ia'] if 'tmin_ia' in kw else tmin_def
     self.tmax_ia = kw['tmax_ia'] if 'tmax_ia' in kw else tmax_def
-    self.tt_ia,self.ww_ia = funct_log_mesh(self.nff_ia, self.tmin_ia, self.tmax_ia, self.wmax_ia)
+    self.tt_ia, self.ww_ia = funct_log_mesh(self.nff_ia, self.tmin_ia, self.tmax_ia, self.wmax_ia)
     #print('self.tmin_ia, self.tmax_ia, self.wmax_ia')
     #print(self.tmin_ia, self.tmax_ia, self.wmax_ia)
     #print(self.ww_ia[0], self.ww_ia[-1])

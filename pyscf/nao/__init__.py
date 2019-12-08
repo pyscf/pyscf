@@ -14,7 +14,7 @@
 #
 # Authors: Peter Koval
 #          Marc Barbry
-#
+#          Masoud Mansouri
 
 '''
 Numerical Atomic Orbitals
@@ -38,3 +38,5 @@ from .bse_iter import bse_iter
 from .m_polariz_inter_ave import polariz_inter_ave, polariz_nonin_ave, polariz_freq_osc_strength
 from .ndcoo import ndcoo
 from .gw_iter import gw_iter
+
+__version__ = "0.1.0"
