@@ -348,6 +348,7 @@ def compute_energy(myadc, t1, t2, eris):
     t2_1_a, t2_1_ab, t2_1_b  = t2[0]
 
     #Compute MP2 correlation energy
+
     e_mp2 = 0.25 * np.einsum('ijab,ijab', t2_1_a, v2e_oovv_a)
     e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oovv_ab)
     e_mp2 += 0.25 * np.einsum('ijab,ijab', t2_1_b, v2e_oovv_b)
@@ -405,7 +406,31 @@ def compute_energy(myadc, t1, t2, eris):
     return e_corr
 
 class UADC(lib.StreamObject):
+    '''Ground state calculations
 
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
+        method : string
+            nth-order ADC method. Default is ADC(2). 
+
+            >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
+            >>> mf = scf.RHF(mol).run()
+            >>> myadc = adc.UADC(mf).run()
+
+    Saved results
+
+        e_corr : float
+            MPn correlation correction
+        e_tot : float
+            Total energy (HF + correlation)
+        t1, t2 :
+            T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
+    '''
     incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
     
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -554,6 +579,7 @@ def get_imds_ea(adc, eris=None):
 
     # a-b block
     # Zeroth-order terms
+
     M_ab_a = np.einsum('ab,a->ab', idn_vir_a, e_vir_a)
     M_ab_b = np.einsum('ab,a->ab', idn_vir_b, e_vir_b)
 
@@ -602,6 +628,7 @@ def get_imds_ea(adc, eris=None):
 
     M_ab_b -= 0.5 *  np.einsum('lmbd,lmad->ab',t2_1_b, v2e_oovv_b)
     M_ab_b -=        np.einsum('mldb,mlda->ab',t2_1_ab, v2e_oovv_ab)
+
 
     #Third-order terms
 
@@ -1349,6 +1376,12 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s_b:f_b] += np.einsum('ap,p->a', v2e_vovv_1_b, r_bbb, optimize = True)
         s[s_b:f_b] += np.einsum('iacb,ibc->a', v2e_ovvv_ab, r_aba, optimize = True)
 
+        #s[s_a:f_a] += lib.einsum('ap,p->a',v2e_vovv_1_a, r_aaa, optimize = True)
+        #s[s_a:f_a] += lib.einsum('aibc,ibc->a', v2e_vovv_ab, r_bab, optimize = True)
+
+        #s[s_b:f_b] += lib.einsum('ap,p->a', v2e_vovv_1_b, r_bbb, optimize = True)
+        #s[s_b:f_b] += lib.einsum('iacb,ibc->a', v2e_ovvv_ab, r_aba, optimize = True)
+
 ############### ADC(2) ibc - a block ############################
 
         s[s_aaa:f_aaa] += np.einsum('aip,a->ip', v2e_vovv_2_a, r_a, optimize = True).reshape(-1)
@@ -1356,7 +1389,13 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s_aba:f_aba] += np.einsum('iacb,a->ibc', v2e_ovvv_ab, r_b, optimize = True).reshape(-1)
         s[s_bbb:f_bbb] += np.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize = True).reshape(-1)
 
+        #s[s_aaa:f_aaa] += lib.einsum('aip,a->ip', v2e_vovv_2_a, r_a, optimize =  True).reshape(-1)
+        #s[s_bab:f_bab] += lib.einsum('aibc,a->ibc', v2e_vovv_ab, r_a, optimize = True).reshape(-1)
+        #s[s_aba:f_aba] += lib.einsum('iacb,a->ibc', v2e_ovvv_ab, r_b, optimize = True).reshape(-1)
+        #s[s_bbb:f_bbb] += lib.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize =  True).reshape(-1)
+
 ################ ADC(2) iab - jcd block ############################
+
         s[s_aaa:f_aaa] += D_iab_a * r_aaa
         s[s_bab:f_bab] += D_iab_bab * r_bab.reshape(-1)
         s[s_aba:f_aba] += D_iab_aba * r_aba.reshape(-1)
@@ -2449,6 +2488,40 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
     return T
 
 class UADCEA(UADC):
+    '''unrestricted ADC for EA energies and spectroscopic amplitudes
+
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
+        method : string
+            nth-order ADC method. Default is ADC(2). 
+        conv_tol : float
+            converge threshold for Davidson iterations.  Default is 1e-12.
+        max_cycle : int
+            number of Davidson iterations.  Default is 50.
+        max_space : int
+            space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
+
+    Kwargs:
+	nroots : int
+	    Number of roots (eigenvalues) requested.
+
+            >>> myadc = adc.UADC(mf).run()
+            >>> myadcea = adc.UADC(myadc).run()
+
+    Saved results
+
+        e_ea : float
+            EA energy. Eigenvalue. By default it’s one float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+        v_ip : array
+            Electron-attached state. Eigenvector.
+        p_ea : float
+            EA spectroscopic amplitudes.
+    '''
     def __init__(self, adc):
         self.verbose = adc.verbose
         self.stdout = adc.stdout
@@ -2562,7 +2635,40 @@ class UADCEA(UADC):
         return P
 
 class UADCIP(UADC):
+    '''unrestricted ADC for IP energies and spectroscopic amplitudes
 
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
+        method : string
+            nth-order ADC method. Default is ADC(2). 
+        conv_tol : float
+            converge threshold for Davidson iterations.  Default is 1e-12.
+        max_cycle : int
+            number of Davidson iterations.  Default is 50.
+        max_space : int
+            space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
+
+    Kwargs:
+	nroots : int
+	    Number of roots (eigenvalues) requested.
+
+            >>> myadc = adc.UADC(mf).run()
+            >>> myadcip = adc.UADC(myadc).run()
+
+    Saved results
+
+        e_ip : float or list of floats
+            IP energy. Eigenvalue. By default it’s one float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+        v_ip : array
+            Ionized state. Eigenvector.
+        p_ip : float
+            IP spectroscopic amplitudes.
+    '''
     def __init__(self, adc):
         self.verbose = adc.verbose
         self.stdout = adc.stdout
