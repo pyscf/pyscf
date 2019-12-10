@@ -6,7 +6,7 @@
 from __future__ import division
 import numpy as np
 
-def read_rst_h5py (filename=None):
+def read_rst_h5py (filename="SCREENED_COULOMB.hdf5"):
     import h5py ,os
     if filename is None: 
         path = os.getcwd()
