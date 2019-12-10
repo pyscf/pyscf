@@ -489,6 +489,19 @@ class KnownValues(unittest.TestCase):
         eri_mo1 = odf.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
         self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-7, rtol=1e-7))
 
+    def test_init_aft_1d(self):
+        cell = pgto.Cell()
+        cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
+        cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
+        cell.a = np.eye(3) * 2.5
+        cell.dimension = 1
+        cell.mesh = [3, 3, 3]
+        cell.build()
+        f = aft.AFTDF(cell)
+        np.random.seed(1)
+        f.kpts = np.random.random((4,3))
+        f.check_sanity()
+
 
 if __name__ == '__main__':
     print("Full Tests for aft")

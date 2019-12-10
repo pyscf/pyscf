@@ -280,7 +280,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(f), 0.16147450863004867, 7)
         f = td_hf.oscillator_strength(gauge='velocity', order=2)
         self.assertAlmostEqual(lib.finger(f), 0.19750347627735745, 6)
-        td_hf.analyze()
+
+        note_args = []
+        def temp_logger_note(rec, msg, *args):
+            note_args.append(args)
+        with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
+            td_hf.analyze()
+        ref = [(),
+               (1, 2.057393343331977, 602.6275818634069, 0.1605980834206071),
+               (2, 2.280659766638949, 543.6330282886508, 0.0016221163442707552),
+               (3, 6.37244518162562, 194.5629880048233, 9.923201744400984e-31)]
+
+        self.assertAlmostEqual(abs(numpy.hstack(ref) -
+                                   numpy.hstack(note_args)).max(), 0, 7)
 
     def test_init(self):
         hf = scf.UHF(mol)
@@ -330,7 +342,22 @@ class KnownValues(unittest.TestCase):
         td.nroots = 3
         es = td.kernel()[0]
         self.assertAlmostEqual(lib.finger(es), 0.11306948533259675, 6)
-        td.analyze()
+
+        note_args = []
+        def temp_logger_note(rec, msg, *args):
+            note_args.append(args)
+        with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
+            td.analyze()
+        ref = [(),
+               (1, 'B1', 2.0573933276026657, 602.6275864706528, 0.1605980714821934),
+               (2, 'B1', 14.851066559488304, 83.4850460381169, 0.001928664835262468),
+               (3, 'B1', 16.832235179166293, 73.65878400799706, 0.17021505486468672)]
+        self.assertEqual(note_args[1][1], 'B1')
+        self.assertEqual(note_args[2][1], 'B1')
+        self.assertEqual(note_args[3][1], 'B1')
+        self.assertAlmostEqual(abs(numpy.hstack((ref[1][2:], ref[2][2:], ref[3][2:])) -
+                                   numpy.hstack((note_args[1][2:], note_args[2][2:], note_args[3][2:]))).max(),
+                               0, 7)
 
     def test_tddft_with_wfnsym(self):
         pmol = mol.copy()
