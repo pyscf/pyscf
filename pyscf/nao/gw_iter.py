@@ -239,6 +239,7 @@ class gw_iter(gw):
             self.comega_current = w
 
             print("freq: ", iw, "nn = {}; norbs = {}".format(len(self.nn[s]), self.norbs))
+            t1 = timer()
             #print('k_c_opt',k_c_opt.shape)
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
@@ -254,6 +255,8 @@ class gw_iter(gw):
                     if exitCode != 0:
                       print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
             # I= XVX I_aux
+            t2 = timer()
+            print("time for lgmres loop: ", t2-t1)
             inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx[s], sf_aux, optimize=optimize)
         snm2i.append(np.real(inm))
 
