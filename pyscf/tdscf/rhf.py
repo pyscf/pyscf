@@ -365,7 +365,7 @@ def analyze(tdobj, verbose=None):
 
     if mol.symmetry:
         orbsym = hf_symm.get_orbsym(mol, mo_coeff) % 10
-        x_sym = (orbsym[mo_occ==0,None] ^ orbsym[mo_occ==2]).ravel()
+        x_sym = (orbsym[mo_occ==2,None] ^ orbsym[mo_occ==0]).ravel()
     else:
         x_sym = None
 
