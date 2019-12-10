@@ -388,8 +388,15 @@ class Grids(lib.StreamObject):
     '''DFT mesh grids
 
     Attributes for Grids:
-        level : int (0 - 9)
-            big number for large mesh grids, default is 3
+        level : int
+            To control the number of radial and angular grids. Large number
+            leads to large mesh grids. The default level 3 corresponds to
+            (50,302) for H, He;
+            (75,302) for second row;
+            (80~105,434) for rest.
+
+            Grids settings at other levels can be found in
+            pyscf.dft.gen_grid.RAD_GRIDS and pyscf.dft.gen_grid.ANG_ORDER
 
         atomic_radii : 1D array
             | radi.BRAGG_RADII  (default)
@@ -428,13 +435,6 @@ class Grids(lib.StreamObject):
             Set (radial, angular) grids for particular atoms.
             Eg, grids.atom_grid = {'H': (20,110)} will generate 20 radial
             grids and 110 angular grids for H atom.
-
-        level : int
-            To control the number of radial and angular grids.  The default
-            level 3 corresponds to
-            (50,302) for H, He;
-            (75,302) for second row;
-            (80~105,434) for rest.
 
         Examples:
 
@@ -567,44 +567,40 @@ class Grids(lib.StreamObject):
         return make_mask(mol, coords, relativity, shls_slice, verbose)
 
 
-_default_rad = getattr(__config__, 'dft_gen_grid_Grids_default_rad', None)
-if _default_rad is None:
-    def _default_rad(nuc, level=3):
-        '''Number of radial grids '''
-        tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
-        #           Period    1   2   3   4   5   6   7         # level
-        grids = numpy.array((( 10, 15, 20, 30, 35, 40, 50),     # 0
-                             ( 30, 40, 50, 60, 65, 70, 75),     # 1
-                             ( 40, 60, 65, 75, 80, 85, 90),     # 2
-                             ( 50, 75, 80, 90, 95,100,105),     # 3
-                             ( 60, 90, 95,105,110,115,120),     # 4
-                             ( 70,105,110,120,125,130,135),     # 5
-                             ( 80,120,125,135,140,145,150),     # 6
-                             ( 90,135,140,150,155,160,165),     # 7
-                             (100,150,155,165,170,175,180),     # 8
-                             (200,200,200,200,200,200,200),))   # 9
-        period = (nuc > tab).sum()
-        return grids[level,period]
+def _default_rad(nuc, level=3):
+    '''Number of radial grids '''
+    tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
+    period = (nuc > tab).sum()
+    return RAD_GRIDS[level,period]
+#                Period    1   2   3   4   5   6   7        # level
+RAD_GRIDS = numpy.array((( 10, 15, 20, 30, 35, 40, 50),     # 0
+                         ( 30, 40, 50, 60, 65, 70, 75),     # 1
+                         ( 40, 60, 65, 75, 80, 85, 90),     # 2
+                         ( 50, 75, 80, 90, 95,100,105),     # 3
+                         ( 60, 90, 95,105,110,115,120),     # 4
+                         ( 70,105,110,120,125,130,135),     # 5
+                         ( 80,120,125,135,140,145,150),     # 6
+                         ( 90,135,140,150,155,160,165),     # 7
+                         (100,150,155,165,170,175,180),     # 8
+                         (200,200,200,200,200,200,200),))   # 9
 
-_default_ang = getattr(__config__, 'dft_gen_grid_Grids_default_ang', None)
-if _default_ang is None:
-    def _default_ang(nuc, level=3):
-        '''Order of angular grids. See LEBEDEV_ORDER for the mapping of
-        the order and the number of angular grids'''
-        tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
-        #           Period    1   2   3   4   5   6   7         # level
-        order = numpy.array(((11, 15, 17, 17, 17, 17, 17 ),     # 0
-                             (17, 23, 23, 23, 23, 23, 23 ),     # 1
-                             (23, 29, 29, 29, 29, 29, 29 ),     # 2
-                             (29, 29, 35, 35, 35, 35, 35 ),     # 3
-                             (35, 41, 41, 41, 41, 41, 41 ),     # 4
-                             (41, 47, 47, 47, 47, 47, 47 ),     # 5
-                             (47, 53, 53, 53, 53, 53, 53 ),     # 6
-                             (53, 59, 59, 59, 59, 59, 59 ),     # 7
-                             (59, 59, 59, 59, 59, 59, 59 ),     # 8
-                             (65, 65, 65, 65, 65, 65, 65 ),))   # 9
-        period = (nuc > tab).sum()
-        return LEBEDEV_ORDER[order[level,period]]
+def _default_ang(nuc, level=3):
+    '''Order of angular grids. See LEBEDEV_ORDER for the mapping of
+    the order and the number of angular grids'''
+    tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
+    period = (nuc > tab).sum()
+    return LEBEDEV_ORDER[ANG_ORDER[level,period]]
+#               Period    1   2   3   4   5   6   7         # level
+ANG_ORDER = numpy.array(((11, 15, 17, 17, 17, 17, 17 ),     # 0
+                         (17, 23, 23, 23, 23, 23, 23 ),     # 1
+                         (23, 29, 29, 29, 29, 29, 29 ),     # 2
+                         (29, 29, 35, 35, 35, 35, 35 ),     # 3
+                         (35, 41, 41, 41, 41, 41, 41 ),     # 4
+                         (41, 47, 47, 47, 47, 47, 47 ),     # 5
+                         (47, 53, 53, 53, 53, 53, 53 ),     # 6
+                         (53, 59, 59, 59, 59, 59, 59 ),     # 7
+                         (59, 59, 59, 59, 59, 59, 59 ),     # 8
+                         (65, 65, 65, 65, 65, 65, 65 ),))   # 9
 
 def prange(start, end, step):
     for i in range(start, end, step):
