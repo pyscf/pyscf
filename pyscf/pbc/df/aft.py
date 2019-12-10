@@ -316,7 +316,7 @@ class AFTDF(lib.StreamObject):
                             'Coulomb integral error is ~ %.2g Eh.\n'
                             'Recommended mesh is %s.',
                             self.mesh, cell.precision, cell.dimension, err, mesh_guess)
-            if (cell.mesh[cell.dimension:]/(1.*meshz) > 1.1).any():
+            if any(x/meshz > 1.1 for x in cell.mesh[cell.dimension:]):
                 meshz = pbcgto.cell._mesh_inf_vaccum(cell)
                 logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
                             '(=%s) can result in an unnecessarily slow calculation.\n'
