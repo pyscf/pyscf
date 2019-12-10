@@ -240,7 +240,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(f), -0.13908774016795605, 7)
         f = td_hf.oscillator_strength(gauge='velocity', order=2)
         self.assertAlmostEqual(lib.finger(f), -0.096991134490587522, 7)
-        td_hf.analyze()
+
+        note_args = []
+        def temp_logger_note(rec, msg, *args):
+            note_args.append(args)
+        with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
+            td_hf.analyze()
+        ref = [(),
+               (1, 11.834865910142547, 104.76181013351982, 0.01075359074556743),
+               (2, 11.834865910142618, 104.76181013351919, 0.010753590745567499),
+               (3, 16.66308427853695, 74.40651170629978, 0.3740302871966713)]
+        self.assertAlmostEqual(abs(numpy.hstack(ref) -
+                                   numpy.hstack(note_args)).max(), 0, 7)
+
         self.assertEqual(td_hf.nroots, td_hf.nstates)
         self.assertAlmostEqual(lib.finger(td_hf.e_tot-mf.e_tot), 0.41508325757603637, 6)
 
@@ -280,7 +292,20 @@ class KnownValues(unittest.TestCase):
         es = td.kernel(nstates=3)[0]
         self.assertTrue(len(es) == 2)  # At most 2 states due to symmetry subspace size
         self.assertAlmostEqual(lib.finger(es), 2.1857694738741071, 6)
-        td.analyze()
+
+        note_args = []
+        def temp_logger_note(rec, msg, *args):
+            note_args.append(args)
+        with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
+            td.analyze()
+        ref = [(),
+               (1, 'A2', 38.42106241429979, 32.26985141807447, 0.0),
+               (2, 'A2', 38.972172173478356, 31.813519911465608, 0.0)]
+        self.assertEqual(note_args[1][1], 'A2')
+        self.assertEqual(note_args[2][1], 'A2')
+        self.assertAlmostEqual(abs(numpy.append(ref[1][2:], ref[2][2:]) -
+                                   numpy.append(note_args[1][2:], note_args[2][2:])).max(),
+                               0, 7)
 
     def test_tdhf_with_wfnsym(self):
         pmol = mol.copy()
