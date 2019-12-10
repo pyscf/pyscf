@@ -7,16 +7,24 @@ from __future__ import division
 import numpy as np
 
 def read_rst_h5py (filename="SCREENED_COULOMB.hdf5"):
+
     import h5py ,os
     if filename is None: 
         path = os.getcwd()
         filename =find('*.hdf5', path)
     #filename= 'SCREENED_COULOMB.hdf5'
-    with h5py.File(filename, 'r') as f:
-        #print("Keys: %s" % f.keys())
-        a_group_key = list(f.keys())[0]
-        # Get the data
-        data = list(f[a_group_key])
+    
+    try:
+        fl = h5py.File(filename, 'r')
+    except:
+        msg = "could not open file {}".format(filename)
+        return None, msg
+
+    #print("Keys: %s" % f.keys())
+    a_group_key = list(fl.keys())[0]
+    # Get the data
+    data = list(fl[a_group_key])
+    
     msg = 'RESTART: Full matrix elements of screened interactions (W_c) was read from {}'.format(filename)
     return data, msg
 
