@@ -29,6 +29,10 @@ from pyscf import __config__
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
+    adc.method = adc.method.lower()
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+       raise NotImplementedError(adc.method)
+
     cput0 = (time.clock(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
     if adc.verbose >= logger.WARN:
@@ -348,6 +352,7 @@ def compute_energy(myadc, t1, t2, eris):
     t2_1_a, t2_1_ab, t2_1_b  = t2[0]
 
     #Compute MP2 correlation energy
+
     e_mp2 = 0.25 * np.einsum('ijab,ijab', t2_1_a, v2e_oovv_a)
     e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oovv_ab)
     e_mp2 += 0.25 * np.einsum('ijab,ijab', t2_1_b, v2e_oovv_b)
@@ -405,7 +410,31 @@ def compute_energy(myadc, t1, t2, eris):
     return e_corr
 
 class UADC(lib.StreamObject):
+    '''Ground state calculations
 
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
+        method : string
+            nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2). 
+
+            >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
+            >>> mf = scf.RHF(mol).run()
+            >>> myadc = adc.UADC(mf).run()
+
+    Saved results
+
+        e_corr : float
+            MPn correlation correction
+        e_tot : float
+            Total energy (HF + correlation)
+        t1, t2 :
+            T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
+    '''
     incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
     
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -478,6 +507,7 @@ class UADC(lib.StreamObject):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
     
+        self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
     
@@ -554,6 +584,7 @@ def get_imds_ea(adc, eris=None):
 
     # a-b block
     # Zeroth-order terms
+
     M_ab_a = np.einsum('ab,a->ab', idn_vir_a, e_vir_a)
     M_ab_b = np.einsum('ab,a->ab', idn_vir_b, e_vir_b)
 
@@ -602,6 +633,7 @@ def get_imds_ea(adc, eris=None):
 
     M_ab_b -= 0.5 *  np.einsum('lmbd,lmad->ab',t2_1_b, v2e_oovv_b)
     M_ab_b -=        np.einsum('mldb,mlda->ab',t2_1_ab, v2e_oovv_ab)
+
 
     #Third-order terms
 
@@ -1357,6 +1389,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s_bbb:f_bbb] += np.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize = True).reshape(-1)
 
 ################ ADC(2) iab - jcd block ############################
+
         s[s_aaa:f_aaa] += D_iab_a * r_aaa
         s[s_bab:f_bab] += D_iab_bab * r_bab.reshape(-1)
         s[s_aba:f_aba] += D_iab_aba * r_aba.reshape(-1)
@@ -2449,6 +2482,40 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
     return T
 
 class UADCEA(UADC):
+    '''unrestricted ADC for EA energies and spectroscopic amplitudes
+
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
+        method : string
+            nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2). 
+        conv_tol : float
+            Convergence threshold for Davidson iterations.  Default is 1e-12.
+        max_cycle : int
+            Number of Davidson iterations.  Default is 50.
+        max_space : int
+            Space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
+
+    Kwargs:
+	nroots : int
+	    Number of roots (eigenvalues) requested. Default value is 1.
+
+            >>> myadc = adc.UADC(mf).run()
+            >>> myadcea = adc.UADC(myadc).run()
+
+    Saved results
+
+        e_ea : float or list of floats
+            EA energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+        v_ip : array
+            Eigenvectors for each EA transition.
+        p_ea : float
+            Spectroscopic amplitudes for each EA transition.
+    '''
     def __init__(self, adc):
         self.verbose = adc.verbose
         self.stdout = adc.stdout
@@ -2562,7 +2629,40 @@ class UADCEA(UADC):
         return P
 
 class UADCIP(UADC):
+    '''unrestricted ADC for IP energies and spectroscopic amplitudes
 
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
+        method : string
+            nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2). 
+        conv_tol : float
+            Convergence threshold for Davidson iterations.  Default is 1e-12.
+        max_cycle : int
+            Number of Davidson iterations.  Default is 50.
+        max_space : int
+            Space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
+
+    Kwargs:
+	nroots : int
+	    Number of roots (eigenvalues) requested. Default value is 1.
+
+            >>> myadc = adc.UADC(mf).run()
+            >>> myadcip = adc.UADC(myadc).run()
+
+    Saved results
+
+        e_ip : float or list of floats
+            IP energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+        v_ip : array
+            Eigenvectors for each IP transition.
+        p_ip : float
+            Spectroscopic amplitudes for each IP transition.
+    '''
     def __init__(self, adc):
         self.verbose = adc.verbose
         self.stdout = adc.stdout

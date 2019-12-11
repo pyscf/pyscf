@@ -52,4 +52,3 @@ def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-UADC')
     else:
         return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
-
