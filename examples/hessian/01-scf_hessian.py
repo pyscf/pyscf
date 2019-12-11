@@ -17,7 +17,7 @@ mol = gto.M(
     basis = '631g')
 
 mf = mol.RHF().run()
-# The stucture of h is
+# The structure of h is
 # h[Atom_1, Atom_2, Atom_1_XYZ, Atom_1_XYZ]
 h = mf.Hessian().kernel()
 print(h.shape)

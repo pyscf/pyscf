@@ -25,7 +25,7 @@ cell = gto.M(
     verbose = 4,
 )
 
-nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total
+nk = [4,4,4]  # 4 k-points for each axis, 4^3=64 kpts in total
 kpts = cell.make_kpts(nk)
 
 kmf = scf.KRHF(cell, kpts)

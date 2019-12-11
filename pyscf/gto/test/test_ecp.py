@@ -167,7 +167,7 @@ class KnownValues(unittest.TestCase):
                 shls1 = (shls[0] + mol.nbas, shls[1])
                 ref = (mol1.intor_by_shell('ECPscalar_cart', shls1) -
                        mol2.intor_by_shell('ECPscalar_cart', shls1)) / 0.0002 * lib.param.BOHR
-                with mol.with_rinv_as_nucleus(0):
+                with mol.with_rinv_at_nucleus(0):
                     dat = mol.intor_by_shell('ECPscalar_iprinv_cart', shls, comp=3)
                 self.assertAlmostEqual(abs(-dat[2]-ref).max(), 0, 4)
 
@@ -268,9 +268,8 @@ Na D
 Na F
 1      0.    -3.    -3.
 ''')})
-        s = lib.PauliMatrices * .5
         u = mol.sph2spinor_coeff()
-        ref = numpy.einsum('sxy,spq,xpi,yqj->ij', s,
+        ref = numpy.einsum('sxy,spq,xpi,yqj->ij', lib.PauliMatrices,
                            mol.intor('int1e_inuc_rxp'), u.conj(), u)
 
         mat = mol.intor('ECPso_spinor')

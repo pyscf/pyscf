@@ -68,7 +68,7 @@ def gen_sf_hfw(mol, approx='1E'):
             shls_slice = (ish0, ish1, ish0, ish1)
             t1 = mol.intor('int1e_kin', shls_slice=shls_slice)
             s1 = mol.intor('int1e_ovlp', shls_slice=shls_slice)
-            with mol.with_rinv_as_nucleus(ia):
+            with mol.with_rinv_at_nucleus(ia):
                 z = -mol.atom_charge(ia)
                 v1 = z * mol.intor('int1e_rinv', shls_slice=shls_slice)
                 w1 = z * mol.intor('int1e_prinvp', shls_slice=shls_slice)
@@ -155,7 +155,7 @@ def gen_sf_hfw(mol, approx='1E'):
             w2cc[:,:,i0:i1,j0:j1] = w2ab[:,:,i0:i1,j0:j1]
             zi = mol.atom_charge(ia)
             zj = mol.atom_charge(ja)
-            with mol.with_rinv_as_nucleus(ia):
+            with mol.with_rinv_at_nucleus(ia):
                 shls_slice = (jsh0, jsh1, 0, mol.nbas)
                 rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                 rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
@@ -170,7 +170,7 @@ def gen_sf_hfw(mol, approx='1E'):
                 w2cc[:,:,j0:j1] += prinvp2aa
                 w2cc[:,:,j0:j1] += prinvp2ab.transpose(1,0,2,3)
 
-            with mol.with_rinv_as_nucleus(ja):
+            with mol.with_rinv_at_nucleus(ja):
                 shls_slice = (ish0, ish1, 0, mol.nbas)
                 rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                 rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)

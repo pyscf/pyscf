@@ -210,8 +210,8 @@ class SGX(lib.StreamObject):
             self._auxbasis = x
             self.auxmol = None
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('******** %s ********', self.__class__)
         log.info('max_memory = %s', self.max_memory)
         log.info('grids_level_i = %s', self.grids_level_i)

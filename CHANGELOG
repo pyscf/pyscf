@@ -19,6 +19,8 @@ PySCF 1.7.0 (2019-?-?)
   - Analytical nuclear gradients with density-fitting
   - Analytical nuclear hessian with density-fitting
   - Thermo-chemistry and frequency analysis
+  - Huckel HF/KS initial guess
+  - QM/MM with implicit solvent
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
@@ -31,6 +33,18 @@ PySCF 1.7.0 (2019-?-?)
   - state-averge CASSCF analytical nuclear gradietns
   - ddCOSMO self-consistency (as fast solvent) for post-SCF methods
   - range-separation paramter omega customization in RSH functionals
+
+
+PySCF 1.6.5 (2019-11-17)
+------------------------
+* Added
+  - spin_square method for UCCSD
+* Improved
+  - Handling ".xc = None" (run DFT without exchage)
+* Fixed
+  - Unit conversion bug between eV and wavenumber in TDDFT
+  - KGHF orbital gradients
+  - Analytical gradients for implicit solvent model in geometry optimization
 
 
 PySCF 1.6.4 (2019-09-14)
@@ -73,8 +87,8 @@ PySCF 1.6.2 (2019-6-17)
 * Improved
   - DFHF class structure and method hooks
   - Sanity checks when saving and loading FCIDUMP file
-  - Integration performance for solvent model
-  - Integration performance for QM/MM interface
+  - Integral performance for solvent model
+  - Integral performance for QM/MM interface
   - GCC 9 compatibility
 * Bugfix
   - Cartesian GTOs was not handled in RSH integrals

@@ -725,11 +725,11 @@ _ELEMENTS_UPPER['GHOST'] = 'Ghost'
 
 def charge(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
-        a = symb_or_chg.upper()
-        if ('GHOST' in a or ('X' in a and 'XE' not in a)):
+        a = str(symb_or_chg.strip().upper())
+        if (a[:5] == 'GHOST' or (a[0] == 'X' and a[:2] != 'XE')):
             return 0
         else:
-            return ELEMENTS_PROTON[str(_rm_digit(a))]
+            return ELEMENTS_PROTON[_rm_digit(a)]
     else:
         return symb_or_chg
 
@@ -741,12 +741,13 @@ def _symbol(symb_or_chg):
 
 def _std_symbol(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
-        rawsymb = str(_rm_digit(symb_or_chg)).upper()
-        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
-            rawsymb = rawsymb[1:]
+        symb_or_chg = str(symb_or_chg.upper())
+        rawsymb = _rm_digit(symb_or_chg)
+        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2] != 'XE':
+            rawsymb = rawsymb[1:]  # Remove the prefix X
             return 'X-' + _ELEMENTS_UPPER[rawsymb]
         elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
-            rawsymb = rawsymb[5:]
+            rawsymb = rawsymb[5:]  # Remove the prefix GHOST
             return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
         else:
             return _ELEMENTS_UPPER[rawsymb]
@@ -754,20 +755,20 @@ def _std_symbol(symb_or_chg):
         return ELEMENTS[symb_or_chg]
 
 def _atom_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, (int, numpy.integer)):
-        symb = ELEMENTS[symb_or_chg]
-    else:
-        a = str(symb_or_chg.strip())
+    if isinstance(symb_or_chg, (str, unicode)):
+        a = str(symb_or_chg.strip().upper())
         if a.isdigit():
             symb = ELEMENTS[int(a)]
         else:
             rawsymb = _rm_digit(a)
-            if len(rawsymb) > 1 and a[0] == 'X' and a[:2].upper() != 'XE':
-                rawsymb = rawsymb[1:]
-            elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
-                rawsymb = rawsymb[5:]
-            stdsymb = _ELEMENTS_UPPER[rawsymb.upper()]
+            if len(rawsymb) > 1 and a[0] == 'X' and a[:2] != 'XE':
+                rawsymb = rawsymb[1:]  # Remove the prefix X
+            elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+                rawsymb = rawsymb[5:]  # Remove the prefix GHOST
+            stdsymb = _ELEMENTS_UPPER[rawsymb]
             symb = a.replace(rawsymb, stdsymb)
+    else:
+        symb = ELEMENTS[symb_or_chg]
     return symb
 
 def is_ghost_atom(symb_or_chg):

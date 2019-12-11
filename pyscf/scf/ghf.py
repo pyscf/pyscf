@@ -398,7 +398,7 @@ class GHF(hf.SCF):
         viridx = ~occidx
         g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
                                mo_coeff[:,viridx]))
-        return g.T.ravel()
+        return g.conj().T.ravel()
 
     @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
@@ -407,6 +407,12 @@ class GHF(hf.SCF):
     @lib.with_doc(hf.SCF.init_guess_by_atom.__doc__)
     def init_guess_by_atom(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
+
+    @lib.with_doc(hf.SCF.init_guess_by_huckel.__doc__)
+    def init_guess_by_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
+        return _from_rhf_init_dm(hf.init_guess_by_huckel(mol))
 
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):

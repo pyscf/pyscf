@@ -35,8 +35,9 @@ class X2C(lib.StreamObject):
     approx = getattr(__config__, 'x2c_X2C_approx', '1e')  # 'atom1e'
     xuncontract = getattr(__config__, 'x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'x2c_X2C_basis', None)
-    def __init__(self, mol=None):
+    def __init__(self, mol):
         self.mol = mol
+        self.stdout = mol.stdout
         self.verbose = mol.verbose
 
     def dump_flags(self, verbose=None):
@@ -89,7 +90,7 @@ class X2C(lib.StreamObject):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
                 t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
@@ -111,6 +112,111 @@ class X2C(lib.StreamObject):
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
         return h1
 
+    def _picture_change(self, xmol, even_operator=(None, None), odd_operator=None):
+        '''Picture change for even_operator + odd_operator
+
+        even_operator has two terms at diagonal blocks
+        [ v  0 ]
+        [ 0  w ]
+
+        odd_operator has the term at off-diagonal blocks
+        [ 0    p ]
+        [ p^T  0 ]
+
+        v, w, and p can be strings (integral name) or matrices.
+        '''
+        c = lib.param.LIGHT_SPEED
+        v_op, w_op = even_operator
+        if isinstance(v_op, str):
+            v_op = xmol.intor(v_op)
+        if isinstance(w_op, str):
+            w_op = xmol.intor(w_op)
+            w_op *= (.5/c)**2
+        if isinstance(odd_operator, str):
+            odd_operator = xmol.intor(odd_operator) * (.5/c)
+
+        if v_op is not None:
+            shape = v_op.shape
+        elif w_op is not None:
+            shape = w_op.shape
+        elif odd_operator is not None:
+            shape = odd_operator.shape
+        else:
+            raise RuntimeError('No operators provided')
+
+        x = self.get_xmat()
+        r = self._get_rmat(x)
+        def transform(mat):
+            nao = mat.shape[-1] // 2
+            xv = mat[:nao] + x.conj().T.dot(mat[nao:])
+            h = xv[:,:nao] + xv[:,nao:].dot(x)
+            return reduce(numpy.dot, (r.T.conj(), h, r))
+
+        nao = shape[-1]
+        dtype = numpy.result_type(v_op, w_op, odd_operator)
+
+        if len(shape) == 2:
+            mat = numpy.zeros((nao*2,nao*2), dtype)
+            if v_op is not None:
+                mat[:nao,:nao] = v_op
+            if w_op is not None:
+                mat[nao:,nao:] = w_op
+            if odd_operator is not None:
+                mat[:nao,nao:] = odd_operator
+                mat[nao:,:nao] = odd_operator.conj().T
+            pc_mat = transform(mat)
+
+        else:
+            assert len(shape) == 3
+            mat = numpy.zeros((shape[0],nao*2,nao*2), dtype)
+            if v_op is not None:
+                mat[:,:nao,:nao] = v_op
+            if w_op is not None:
+                mat[:,nao:,nao:] = w_op
+            if odd_operator is not None:
+                mat[:,:nao,nao:] = odd_operator
+                mat[:,nao:,:nao] = odd_operator.conj().transpose(0,2,1)
+            pc_mat = numpy.asarray([transform(m) for m in mat])
+
+        return pc_mat
+
+    def picture_change(self, even_operator=(None, None), odd_operator=None):
+        '''Picture change for even_operator + odd_operator
+
+        even_operator has two terms at diagonal blocks
+        [ v  0 ]
+        [ 0  w ]
+
+        odd_operator has the term at off-diagonal blocks
+        [ 0    p ]
+        [ p^T  0 ]
+
+        v, w, and p can be strings (integral name) or matrices.
+        '''
+        mol = self.mol
+        xmol, contr_coeff_nr = self.get_xmol(mol)
+        pc_mat = self._picture_change(xmol, even_operator, odd_operator)
+
+        if self.basis is not None:
+            s22 = xmol.intor_symmetric('int1e_ovlp_spinor')
+            s21 = mole.intor_cross('int1e_ovlp_spinor', xmol, mol)
+            c = lib.cho_solve(s22, s21)
+
+        elif self.xuncontract:
+            np, nc = contr_coeff_nr.shape
+            c = numpy.zeros((np*2,nc*2))
+            c[0::2,0::2] = contr_coeff_nr
+            c[1::2,1::2] = contr_coeff_nr
+
+        else:
+            return pc_mat
+
+        if pc_mat.ndim == 2:
+            return lib.einsum('pi,pq,qj->ij', c.conj(), pc_mat, c)
+        else:
+            return lib.einsum('pi,xpq,qj->xij', c.conj(), pc_mat, c)
+
+
     def get_xmat(self, mol=None):
         if mol is None:
             xmol = self.get_xmol(mol)[0]
@@ -128,7 +234,7 @@ class X2C(lib.StreamObject):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
                 t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
@@ -140,6 +246,17 @@ class X2C(lib.StreamObject):
             w = xmol.intor_symmetric('int1e_spnucsp_spinor')
             x = _x2c1e_xmatrix(t, v, w, s, c)
         return x
+
+    def _get_rmat(self, x=None):
+        '''The matrix (in AO basis) that changes metric from NESC metric to NR metric'''
+        xmol = self.get_xmol()[0]
+        if x is None:
+            x = self.get_xmat(xmol)
+        c = lib.param.LIGHT_SPEED
+        s = xmol.intor_symmetric('int1e_ovlp_spinor')
+        t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
+        s1 = s + reduce(numpy.dot, (x.conj().T, t, x)) * (.5/c**2)
+        return _get_r(s, s1)
 
     def reset(self, mol):
         '''Reset mol and clean up relevant attributes for scanner mode'''
@@ -305,6 +422,56 @@ class X2C_UHF(hf.SCF):
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose
         return dhf.analyze(self, verbose)
+
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   picture_change=True, **kwargs):
+        r''' Dipole moment calculation with picture change correction
+
+        Args:
+             mol: an instance of :class:`Mole`
+             dm : a 2D ndarrays density matrices
+
+        Kwarg:
+            picture_change (bool) : Whether to compute the dipole moment with
+            picture change correction.
+
+        Return:
+            A list: the dipole moment on x, y and z component
+        '''
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        log = logger.new_logger(mol, verbose)
+
+        if 'unit_symbol' in kwargs:  # pragma: no cover
+            log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+                     'unit since PySCF-1.5.')
+            unit = kwargs['unit_symbol']
+
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            # UHF denisty matrices
+            dm = dm[0] + dm[1]
+
+        with mol.with_common_orig((0,0,0)):
+            if picture_change:
+                ao_dip = self.with_x2c.picture_change(('int1e_r_spinor',
+                                                       'int1e_sprsp_spinor'))
+            else:
+                ao_dip = mol.intor_symmetric('int1e_r_spinor')
+
+        el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
+
+        charges = mol.atom_charges()
+        coords  = mol.atom_coords()
+        nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+        mol_dip = nucl_dip - el_dip
+
+        if unit.upper() == 'DEBYE':
+            mol_dip *= nist.AU2DEBYE
+            log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
+        else:
+            log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+        return mol_dip
+
 UHF = X2C_UHF
 
 try:

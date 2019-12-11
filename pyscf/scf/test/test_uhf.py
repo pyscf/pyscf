@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,6 +88,10 @@ class KnownValues(unittest.TestCase):
         dm2 = scf.uhf.get_init_guess(mol, key='atom')
         self.assertAlmostEqual(lib.finger(dm2), 0.053542055104367631, 9)
         self.assertAlmostEqual(abs(dm1[1]-dm2[1]).max(), 0, 9)
+
+    def test_init_guess_huckel(self):
+        dm = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
+        self.assertAlmostEqual(lib.finger(dm), 0.640409942511017, 9)
 
     def test_1e(self):
         mf = scf.UHF(gto.M(atom='H', spin=1))

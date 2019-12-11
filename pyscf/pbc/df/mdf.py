@@ -37,7 +37,7 @@ from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
-from pyscf.pbc.df.df import fuse_auxcell
+from pyscf.pbc.df.df import fuse_auxcell, _round_off_to_odd_mesh
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
@@ -313,7 +313,7 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
     mesh = numpy.min((mesh, cell.mesh), axis=0)
     if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
         mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-    return mesh
+    return _round_off_to_odd_mesh(mesh)
 del(VALENCE_EXP)
 
 

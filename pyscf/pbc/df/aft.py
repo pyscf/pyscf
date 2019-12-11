@@ -44,8 +44,9 @@ def estimate_eta(cell, cutoff=CUTOFF):
     '''The exponent of the smooth gaussian model density, requiring that at
     boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
     '''
-    # r^5 to guarantee at least up to f shell converging at boundary
-    lmax = min(numpy.max(cell._bas[:,gto.ANG_OF]), 3)
+    lmax = min(numpy.max(cell._bas[:,gto.ANG_OF]), 4)
+    # If lmax=3 (r^5 for radial part), this expression guarantees at least up
+    # to f shell the convergence at boundary
     eta = max(numpy.log(4*numpy.pi*cell.rcut**(lmax+2)/cutoff)/cell.rcut**2*2,
               ETA_MIN)
     return eta
@@ -249,7 +250,7 @@ class AFTDF(lib.StreamObject):
         self.max_memory = cell.max_memory
         self.mesh = cell.mesh
 # For nuclear attraction integrals using Ewald-like technique.
-# Set to 0 to swith off Ewald tech and use the regular reciprocal space
+# Set to 0 to switch off Ewald tech and use the regular reciprocal space
 # method (solving Poisson equation of nuclear charges in reciprocal space).
         if cell.dimension == 0:
             self.eta = 0.2
@@ -322,7 +323,7 @@ class AFTDF(lib.StreamObject):
                             'Coulomb integral error is ~ %.2g Eh.\n'
                             'Recommended mesh is %s.',
                             self.mesh, cell.precision, cell.dimension, err, mesh_guess)
-            if (cell.mesh[cell.dimension:]/(1.*meshz) > 1.1).any():
+            if any(x/meshz > 1.1 for x in cell.mesh[cell.dimension:]):
                 meshz = pbcgto.cell._mesh_inf_vaccum(cell)
                 logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
                             '(=%s) can result in an unnecessarily slow calculation.\n'

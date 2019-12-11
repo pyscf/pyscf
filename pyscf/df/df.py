@@ -207,15 +207,15 @@ class DF(lib.StreamObject):
                     def load(b0, b1, prefetch):
                         prefetch[0] = numpy.asarray(feri[b0:b1])
 
+                dat = [None]
+                prefetch = [None]
                 with lib.call_in_background(load) as bload:
-                    prefetch = [None]
-                    load(0, min(blksize, naoaux), prefetch)
+                    bload(0, min(blksize, naoaux), prefetch)
                     for b0, b1 in self.prange(blksize, naoaux, blksize):
-                        dat = prefetch[0]
+                        dat, prefetch = prefetch, dat
                         bload(b0, b1, prefetch)
-                        yield dat
-                    dat = prefetch[0]
-                    yield dat
+                        yield dat[0]
+                yield prefetch[0]
 
     def prange(self, start, end, step):
         for i in range(start, end, step):

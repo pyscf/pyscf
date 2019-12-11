@@ -65,7 +65,7 @@ def gen_sf_hfw(mol, approx='1E'):
             shls_slice = (ish0, ish1, ish0, ish1)
             t1 = mol.intor('int1e_kin', shls_slice=shls_slice)
             s1 = mol.intor('int1e_ovlp', shls_slice=shls_slice)
-            with mol.with_rinv_as_nucleus(ia):
+            with mol.with_rinv_at_nucleus(ia):
                 z = -mol.atom_charge(ia)
                 v1 = z * mol.intor('int1e_rinv', shls_slice=shls_slice)
                 w1 = z * mol.intor('int1e_prinvp', shls_slice=shls_slice)

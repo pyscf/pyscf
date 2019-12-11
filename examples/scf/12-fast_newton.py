@@ -3,11 +3,13 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, scf
+'''
+scf.fast_newton is an entry for second order SCF method with optimized
+configures. It can perform 3 times faster than the default second order SCF
+settings in many systems.
+'''
 
-'''
-Simple way to call second order (Newton-Raphson) SCF
-'''
+from pyscf import gto, scf
 
 mol = gto.M(atom='''
 N 5.254640 8.787990 1.967400
@@ -63,3 +65,22 @@ H 9.239940 8.492427 3.423290
 
 mf = scf.fast_newton(scf.RHF(mol))
 print('E(tot) %.15g  ref = -5668.38221757799' % mf.e_tot)
+
+#
+# scf.fast_newton function can be used for specific initial guess.
+#
+# We first create an initial guess with DIIS iterations. The DIIS results are
+# saved in a checkpoint file which can be load in another calculation.
+#
+mf = scf.RHF(mol)
+mf.chkfile = 'cu3-diis.chk'
+mf.max_cycle = 2
+mf.kernel()
+
+#
+# Load the DIIS results then use it as initial guess for function
+# scf.fast_newton
+#
+mf = scf.RHF(mol)
+mf.__dict__.update(scf.chkfile.load('cu3-diis.chk', 'scf'))
+scf.fast_newton(mf)

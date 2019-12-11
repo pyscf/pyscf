@@ -32,7 +32,7 @@ from pyscf.dft import rks
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional for GKS.
     '''
-    if mol is None: mol = self.mol
+    if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
     t0 = (time.clock(), time.time())
 

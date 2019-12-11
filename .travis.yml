@@ -54,7 +54,7 @@ script:
   - cd $TRAVIS_BUILD_DIR/pyscf &&
     echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
   - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
-    nosetests -v
+    nosetests -v --with-timer
     --exclude-dir=geomopt --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
     --exclude-dir=cornell_shci

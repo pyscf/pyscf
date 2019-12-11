@@ -73,6 +73,64 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
 
 
 class PipekMezey(boys.Boys):
+    '''
+    The Pipek-Mezey localization optimizer that maximizes the orbital
+    population
+
+    Args:
+        mol : Mole object
+
+    Kwargs:
+        mo_coeff : size (N,N) np.array
+            The orbital space to localize for PM localization.
+            When initializing the localization optimizer ``bopt = PM(mo_coeff)``,
+
+            Note these orbitals ``mo_coeff`` may or may not be used as initial
+            guess, depending on the attribute ``.init_guess`` . If ``.init_guess``
+            is set to None, the ``mo_coeff`` will be used as initial guess. If
+            ``.init_guess`` is 'atomic', a few atomic orbitals will be
+            constructed inside the space of the input orbitals and the atomic
+            orbitals will be used as initial guess.
+
+            Note when calling .kernel(orb) method with a set of orbitals as
+            argument, the orbitals will be used as initial guess regardless of
+            the value of the attributes .mo_coeff and .init_guess.
+
+    Attributes for PM class:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`.
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`.
+        conv_tol : float
+            Converge threshold.  Default 1e-6
+        conv_tol_grad : float
+            Converge threshold for orbital rotation gradients.  Default 1e-3
+        max_cycle : int
+            The max. number of macro iterations. Default 100
+        max_iters : int
+            The max. number of iterations in each macro iteration. Default 20
+        max_stepsize : float
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            Default 0.03.
+        init_guess : str or None
+            Initial guess for optimization. If set to None, orbitals defined
+            by the attribute .mo_coeff will be used as initial guess. If set
+            to 'atomic', atomic orbitals will be used as initial guess.
+            Default 'atomic'
+        pop_method : str
+            How the orbital population is calculated. By default, meta-lowdin
+            population (JCTC, 10, 3784) is used. It can be set to 'mulliken',
+            or 'lowdin' for other population definition
+        exponent : int
+            The power to define norm. It can be 2 or 4. Default 2.
+
+    Saved results
+
+        mo_coeff : ndarray
+            Localized orbitals
+
+    '''
+
 
     pop_method = getattr(__config__, 'lo_pipek_PM_pop_method', 'meta_lowdin')
     conv_tol = getattr(__config__, 'lo_pipek_PM_conv_tol', 1e-6)

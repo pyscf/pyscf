@@ -83,7 +83,7 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v3.0.18
+    GIT_TAG v3.0.19
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
@@ -147,9 +147,9 @@ if(APPLE)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
+    URL http://www.tddft.org/programs/libxc/down.php?file=4.3.4/libxc-4.3.4.tar.gz
     #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
-    URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
+    #URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1

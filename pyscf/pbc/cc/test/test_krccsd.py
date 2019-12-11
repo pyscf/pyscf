@@ -28,7 +28,7 @@ from pyscf.pbc import dft as pbcdft
 from pyscf.pbc import df as pbc_df
 
 import pyscf.pbc.cc as pbcc
-import make_test_cell
+import pyscf.pbc.tools.make_test_cell as make_test_cell
 from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
