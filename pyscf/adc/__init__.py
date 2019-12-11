@@ -48,9 +48,7 @@ def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
 
-    #if getattr(mf, 'with_df', None):
-    #    raise NotImplementedError('DF-UADC')
-    #else:
-    #    return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
-    return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
-
+    if getattr(mf, 'with_df', None):
+        raise NotImplementedError('DF-UADC')
+    else:
+        return uadc.UADC(mf, frozen, mo_coeff, mo_occ)

@@ -29,6 +29,10 @@ from pyscf import __config__
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
+    adc.method = adc.method.lower()
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+       raise NotImplementedError(adc.method)
+
     cput0 = (time.clock(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
     if adc.verbose >= logger.WARN:
@@ -416,7 +420,7 @@ class UADC(lib.StreamObject):
         incore_complete : bool
             Avoid all I/O. Default is False.
         method : string
-            nth-order ADC method. Default is ADC(2). 
+            nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2). 
 
             >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
             >>> mf = scf.RHF(mol).run()
@@ -503,6 +507,7 @@ class UADC(lib.StreamObject):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
     
+        self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
     
@@ -1376,23 +1381,12 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s_b:f_b] += np.einsum('ap,p->a', v2e_vovv_1_b, r_bbb, optimize = True)
         s[s_b:f_b] += np.einsum('iacb,ibc->a', v2e_ovvv_ab, r_aba, optimize = True)
 
-        #s[s_a:f_a] += lib.einsum('ap,p->a',v2e_vovv_1_a, r_aaa, optimize = True)
-        #s[s_a:f_a] += lib.einsum('aibc,ibc->a', v2e_vovv_ab, r_bab, optimize = True)
-
-        #s[s_b:f_b] += lib.einsum('ap,p->a', v2e_vovv_1_b, r_bbb, optimize = True)
-        #s[s_b:f_b] += lib.einsum('iacb,ibc->a', v2e_ovvv_ab, r_aba, optimize = True)
-
 ############### ADC(2) ibc - a block ############################
 
         s[s_aaa:f_aaa] += np.einsum('aip,a->ip', v2e_vovv_2_a, r_a, optimize = True).reshape(-1)
         s[s_bab:f_bab] += np.einsum('aibc,a->ibc', v2e_vovv_ab, r_a, optimize = True).reshape(-1)
         s[s_aba:f_aba] += np.einsum('iacb,a->ibc', v2e_ovvv_ab, r_b, optimize = True).reshape(-1)
         s[s_bbb:f_bbb] += np.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize = True).reshape(-1)
-
-        #s[s_aaa:f_aaa] += lib.einsum('aip,a->ip', v2e_vovv_2_a, r_a, optimize =  True).reshape(-1)
-        #s[s_bab:f_bab] += lib.einsum('aibc,a->ibc', v2e_vovv_ab, r_a, optimize = True).reshape(-1)
-        #s[s_aba:f_aba] += lib.einsum('iacb,a->ibc', v2e_ovvv_ab, r_b, optimize = True).reshape(-1)
-        #s[s_bbb:f_bbb] += lib.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize =  True).reshape(-1)
 
 ################ ADC(2) iab - jcd block ############################
 
@@ -2498,29 +2492,29 @@ class UADCEA(UADC):
         incore_complete : bool
             Avoid all I/O. Default is False.
         method : string
-            nth-order ADC method. Default is ADC(2). 
+            nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2). 
         conv_tol : float
-            converge threshold for Davidson iterations.  Default is 1e-12.
+            Convergence threshold for Davidson iterations.  Default is 1e-12.
         max_cycle : int
-            number of Davidson iterations.  Default is 50.
+            Number of Davidson iterations.  Default is 50.
         max_space : int
-            space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
+            Space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
 
     Kwargs:
 	nroots : int
-	    Number of roots (eigenvalues) requested.
+	    Number of roots (eigenvalues) requested. Default value is 1.
 
             >>> myadc = adc.UADC(mf).run()
             >>> myadcea = adc.UADC(myadc).run()
 
     Saved results
 
-        e_ea : float
-            EA energy. Eigenvalue. By default it’s one float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+        e_ea : float or list of floats
+            EA energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
         v_ip : array
-            Electron-attached state. Eigenvector.
+            Eigenvectors for each EA transition.
         p_ea : float
-            EA spectroscopic amplitudes.
+            Spectroscopic amplitudes for each EA transition.
     '''
     def __init__(self, adc):
         self.verbose = adc.verbose
@@ -2645,17 +2639,17 @@ class UADCIP(UADC):
         incore_complete : bool
             Avoid all I/O. Default is False.
         method : string
-            nth-order ADC method. Default is ADC(2). 
+            nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2). 
         conv_tol : float
-            converge threshold for Davidson iterations.  Default is 1e-12.
+            Convergence threshold for Davidson iterations.  Default is 1e-12.
         max_cycle : int
-            number of Davidson iterations.  Default is 50.
+            Number of Davidson iterations.  Default is 50.
         max_space : int
-            space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
+            Space size to hold trial vectors for Davidson iterative diagonalization.  Default is 12.
 
     Kwargs:
 	nroots : int
-	    Number of roots (eigenvalues) requested.
+	    Number of roots (eigenvalues) requested. Default value is 1.
 
             >>> myadc = adc.UADC(mf).run()
             >>> myadcip = adc.UADC(myadc).run()
@@ -2663,11 +2657,11 @@ class UADCIP(UADC):
     Saved results
 
         e_ip : float or list of floats
-            IP energy. Eigenvalue. By default it’s one float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+            IP energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
         v_ip : array
-            Ionized state. Eigenvector.
+            Eigenvectors for each IP transition.
         p_ip : float
-            IP spectroscopic amplitudes.
+            Spectroscopic amplitudes for each IP transition.
     '''
     def __init__(self, adc):
         self.verbose = adc.verbose
