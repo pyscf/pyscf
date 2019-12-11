@@ -52,25 +52,44 @@ def estimate_eta(cell, cutoff=CUTOFF):
     return eta
 
 def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
-    '''Given ke_cutoff, the upper limit of eta to guarantee the required
-    precision in Coulomb integrals.
+    '''Given ke_cutoff, the upper bound of eta to produce the required
+    precision in AFTDF Coulomb integrals.
     '''
+    # search eta for interaction between GTO(eta) and point charge at the same
+    # location so that
+    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k) < precision
+    # GTO(eta, k) = Fourier transform of Gaussian e^{-eta r^2}
+
     lmax = numpy.max(cell._bas[:,gto.ANG_OF])
     kmax = (ke_cutoff*2)**.5
-    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax*2-1)))
+    # The interaction between two s-type density distributions should be
+    # enough for the error estimation.  Put lmax here to increate Ecut for
+    # slightly better accuracy
+    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax-1)))
     log_eta = -1
     eta = kmax**2/4 / (-log_eta - log_rest)
     return eta
 
 def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
-    '''Given eta, the lower limit of ke_cutoff to guarantee the required
-    precision in Coulomb integrals.
+    '''Given eta, the lower bound of ke_cutoff to produce the required
+    precision in AFTDF Coulomb integrals.
     '''
+    # estimate ke_cutoff for interaction between GTO(eta) and point charge at
+    # the same location so that
+    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k) < precision
+    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k)
+    # ~ \int_kmax^infty 4*pi/k^2 GTO(eta,k) dk^3
+    # = (4*pi)^2 *2*eta/kmax^{n-1} e^{-kmax^2/4eta} + ... < precision
+
+    # The magic number 0.2 comes from AFTDF.__init__ and GDF.__init__
     eta = max(eta, 0.2)
-    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
-    log_k0 = 5 + numpy.log(eta) / 2
+    log_k0 = 3 + numpy.log(eta) / 2
     log_rest = numpy.log(precision / (32*numpy.pi**2*eta))
-    Ecut = 2*eta * (log_k0*(lmax*2-1) - log_rest)
+    # The interaction between two s-type density distributions should be
+    # enough for the error estimation.  Put lmax here to increate Ecut for
+    # slightly better accuracy
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    Ecut = 2*eta * (log_k0*(lmax-1) - log_rest)
     Ecut = max(Ecut, .5)
     return Ecut
 
