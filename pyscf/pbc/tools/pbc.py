@@ -555,9 +555,9 @@ def _cubic2nonorth_factor(a):
     '''
     # Using ke_cutoff to set up a sphere, the sphere needs to be completely
     # inside the box defined by Gv vectors
-    abase = a / numpy.linalg.norm(a, axis=1)[:,None]
+    abase = a / np.linalg.norm(a, axis=1)[:,None]
     bbase = np.linalg.inv(abase.T)
-    overlap = numpy.einsum('ix,ix->i', abase, bbase)
+    overlap = np.einsum('ix,ix->i', abase, bbase)
     return 1./overlap**2
 
 def cutoff_to_gs(a, cutoff):
