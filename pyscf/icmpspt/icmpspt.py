@@ -901,9 +901,10 @@ def writeAAAConfFile(neleca, nelecb, ncor, ncas, norb,\
     f.write('schedule\n')
     if (maxM <= DMRGCI.maxM):
         maxM = DMRGCI.maxM+1
+    step = max(1000, (maxM-DMRGCI.maxM)//4)
 
     iter = 0
-    for M in range(DMRGCI.maxM, maxM, 1000):
+    for M in range(DMRGCI.maxM, maxM, step):
         f.write('%6i  %6i  %8.4e  %8.4e \n' %(iter*4, M, 1e-6, 1.0e-5))
         iter += 1
 
@@ -924,7 +925,7 @@ def writeAAAConfFile(neleca, nelecb, ncor, ncas, norb,\
         integralFile = "FCIDUMP_aaac"
     f.write('orbitals %s\n' % integralFile)
 
-    f.write('maxiter %i\n'%(4*iter+4))
+    f.write('maxiter %i\n'%(4*iter+8))
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
 
     f.write('outputlevel %s\n'%DMRGCI.outputlevel)
