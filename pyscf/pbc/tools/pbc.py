@@ -550,6 +550,7 @@ def cutoff_to_mesh(a, cutoff):
         mesh : (3,) array
     '''
     b = 2 * np.pi * np.linalg.inv(a.T)
+    cutoff = cutoff * _cubic2nonorth_factor(a)
     mesh = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1) * 2).astype(int)
     return mesh
 
@@ -559,7 +560,23 @@ def mesh_to_cutoff(a, mesh):
     '''
     b = 2 * np.pi * np.linalg.inv(a.T)
     Gmax = lib.norm(b, axis=1) * np.asarray(mesh) * .5
-    return Gmax**2/2
+    ke_cutoff = Gmax**2/2
+    # scale down Gmax to get the real energy cutoff for non-orthogonal lattice
+    return ke_cutoff / _cubic2nonorth_factor(a)
+
+def _cubic2nonorth_factor(a):
+    '''The factors to transform the energy cutoff from cubic lattice to
+    non-orthogonal lattice. Energy cutoff is estimated based on cubic lattice.
+    It needs to be rescaled for the non-orthogonal lattice to ensure that the
+    minimal Gv vector in the reciprocal space is larger than the required
+    energy cutoff.
+    '''
+    # Using ke_cutoff to set up a sphere, the sphere needs to be completely
+    # inside the box defined by Gv vectors
+    abase = a / np.linalg.norm(a, axis=1)[:,None]
+    bbase = np.linalg.inv(abase.T)
+    overlap = np.einsum('ix,ix->i', abase, bbase)
+    return 1./overlap**2
 
 def cutoff_to_gs(a, cutoff):
     '''Deprecated.  Replaced by function cutoff_to_mesh.'''

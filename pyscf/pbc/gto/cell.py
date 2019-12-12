@@ -465,7 +465,7 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     return rcut.max()
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
-    '''Energy cutoff estimation'''
+    '''Energy cutoff estimation based on cubic lattice'''
     # This function estimates the energy cutoff for (ii|ii) type of electron
     # repulsion integrals. The energy cutoff for nuclear attraction is larger
     # than the energy cutoff for ERIs.  The estimated error is roughly
