@@ -40,7 +40,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     adc.dump_flags()
 
     if eris is None:
-        eris = uadc_ao2mo.transform_integrals(adc)
+        eris = uadc_ao2mo.transform_integrals_incore(adc)
 
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
@@ -515,7 +515,7 @@ class UADC(lib.StreamObject):
             self.check_sanity()
         self.dump_flags_gs()
     
-        eris = uadc_ao2mo.transform_integrals(self)
+        eris = uadc_ao2mo.transform_integrals_incore(self)
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
@@ -564,7 +564,7 @@ def get_imds_ea(adc, eris=None):
     idn_vir_b = np.identity(nvir_b)
 
     if eris is None:
-        eris = uadc_ao2mo.transform_integrals(adc)
+        eris = uadc_ao2mo.transform_integrals_incore(adc)
 
     v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
     v2e_ooov_a,v2e_ooov_ab,v2e_ooov_b = eris.ooov
@@ -836,7 +836,7 @@ def get_imds_ip(adc, eris=None):
     idn_vir_b = np.identity(nvir_b)
 
     if eris is None:
-        eris = uadc_ao2mo.transform_integrals(adc)
+        eris = uadc_ao2mo.transform_integrals_incore(adc)
 
     v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
     v2e_vvoo_a,v2e_vvoo_ab,v2e_vvoo_b = eris.vvoo
@@ -1289,7 +1289,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     idn_vir_b = np.identity(nvir_b)
 
     if eris is None:
-        eris = uadc_ao2mo.transform_integrals(adc)
+        eris = uadc_ao2mo.transform_integrals_incore(adc)
 
     v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
     v2e_ooov_a,v2e_ooov_ab,v2e_ooov_b = eris.ooov
@@ -1747,7 +1747,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     idn_vir_b = np.identity(nvir_b)
 
     if eris is None:
-        eris = uadc_ao2mo.transform_integrals(adc)
+        eris = uadc_ao2mo.transform_integrals_incore(adc)
 
     v2e_oovv_a,v2e_oovv_ab,v2e_oovv_b = eris.oovv
     v2e_vooo_a,v2e_vooo_ab,v2e_vooo_b = eris.vooo
@@ -2169,7 +2169,7 @@ def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
     idn_vir_b = np.identity(nvir_b)
 
     if eris is None:
-        eris = uadc_ao2mo.transform_integrals(adc)
+        eris = uadc_ao2mo.transform_integrals_incore(adc)
 
     v2e_oovv_a , v2e_oovv_ab, v2e_oovv_b = eris.oovv
     v2e_vvvo_a , v2e_vvvo_ab, v2e_vvvo_b = eris.vvvo
@@ -2345,7 +2345,7 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
     idn_vir_b = np.identity(nvir_b)
 
     if eris is None:
-        eris = uadc_ao2mo.transform_integrals(adc)
+        eris = uadc_ao2mo.transform_integrals_incore(adc)
 
     v2e_oovv_a , v2e_oovv_ab, v2e_oovv_b = eris.oovv
     v2e_vvvo_a , v2e_vvvo_ab, v2e_vvvo_b = eris.vvvo

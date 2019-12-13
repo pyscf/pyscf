@@ -17,91 +17,133 @@
 #
 
 import numpy as np
-import pyscf.ao2mo
+import pyscf.ao2mo as ao2mo
 
-### Integral transformation ###
-def transform_integrals(myadc):
+### Integral transformation for integrals in Chemists' notation###
+def transform_integrals_incore(myadc):
+
     occ_a = myadc.mo_coeff[0][:,:myadc._nocc[0]]
     occ_b = myadc.mo_coeff[1][:,:myadc._nocc[1]]
     vir_a = myadc.mo_coeff[0][:,myadc._nocc[0]:]
     vir_b = myadc.mo_coeff[1][:,myadc._nocc[1]:]
 
-
-    occ = occ_a, occ_b
-    vir = vir_a, vir_b
+    nocc_a = occ_a.shape[1]
+    nocc_b = occ_b.shape[1]
+    nvir_a = vir_a.shape[1]
+    nvir_b = vir_b.shape[1]
+    n_oo = nocc_a * (nocc_a + 1) // 2
+    n_OO = nocc_b * (nocc_b + 1) // 2
+    n_vv = nvir_a * (nvir_a + 1) // 2
+    n_VV = nvir_b * (nvir_b + 1) // 2
+    ind_oo = np.tril_indices(nocc_a)
+    ind_vv = np.tril_indices(nvir_a)
+    ind_OO = np.tril_indices(nocc_b)
+    ind_VV = np.tril_indices(nvir_b)
 
     eris = lambda:None
 
-    eris.oovv = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,occ,vir,vir))
-    eris.vvvv = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,vir,vir))
-    eris.oooo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,occ,occ,occ))
-    eris.voov = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,occ,vir))
-    eris.ooov = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,occ,occ,vir))
-    eris.vovv = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,vir,vir))
-    eris.vvoo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,occ,occ))
-    eris.vvvo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,vir,occ))
-    eris.ovoo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,occ,occ))
-    eris.ovov = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,occ,vir))
-    eris.vooo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,occ,occ))
-    eris.oovo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,occ,vir,occ))
-    eris.vovo = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,occ,vir,occ))
-    eris.vvov = transform_antisymmetrize_integrals(myadc._scf._eri, (vir,vir,occ,vir))
-    eris.ovvo = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,vir,occ))
-    eris.ovvv = transform_antisymmetrize_integrals(myadc._scf._eri, (occ,vir,vir,vir))
+    # TODO: check if myadc._scf._eri is not None
+    eris.oooo = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, occ_a, occ_a), compact=False).reshape(nocc_a, nocc_a, nocc_a, nocc_a).copy()
+    eris.ovoo = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, occ_a, occ_a), compact=False).reshape(nocc_a, nvir_a, nocc_a, nocc_a).copy()
+    eris.ovov = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, occ_a, vir_a), compact=False).reshape(nocc_a, nvir_a, nocc_a, nvir_a).copy()
+    eris.ovvo = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_a, occ_a), compact=False).reshape(nocc_a, nvir_a, nvir_a, nocc_a).copy()
+    eris.oovv = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, vir_a, vir_a), compact=False).reshape(nocc_a, nocc_a, nvir_a, nvir_a).copy()
+    eris.ovvv = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_a, vir_a), compact=True).reshape(nocc_a, nvir_a, -1).copy()
+    eris.vvvv = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=True)
+
+    eris.OOOO = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, occ_b, occ_b), compact=False).reshape(nocc_b, nocc_b, nocc_b, nocc_b).copy()
+    eris.OVOO = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, occ_b, occ_b), compact=False).reshape(nocc_b, nvir_b, nocc_b, nocc_b).copy()
+    eris.OVOV = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, occ_b, vir_b), compact=False).reshape(nocc_b, nvir_b, nocc_b, nvir_b).copy()
+    eris.OOVV = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, vir_b, vir_b), compact=False).reshape(nocc_b, nocc_b, nvir_b, nvir_b).copy()
+    eris.OVVO = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_b, occ_b), compact=False).reshape(nocc_b, nvir_b, nvir_b, nocc_b).copy()
+    eris.OVVV = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_b, vir_b), compact=True).reshape(nocc_b, nvir_b, -1).copy()
+    eris.VVVV = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=True)
+
+    eris.ooOO = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, occ_b, occ_b), compact=False).reshape(nocc_a, nocc_a, nocc_b, nocc_b).copy()
+    eris.ovOO = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, occ_b, occ_b), compact=False).reshape(nocc_a, nvir_a, nocc_b, nocc_b).copy()
+    eris.ovOV = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, occ_b, vir_b), compact=False).reshape(nocc_a, nvir_a, nocc_b, nvir_b).copy()
+    eris.ooVV = ao2mo.general(myadc._scf._eri, (occ_a, occ_a, vir_b, vir_b), compact=False).reshape(nocc_a, nocc_a, nvir_b, nvir_b).copy()
+    eris.ovVO = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_b, occ_b), compact=False).reshape(nocc_a, nvir_a, nvir_b, nocc_b).copy()
+    eris.ovVV = ao2mo.general(myadc._scf._eri, (occ_a, vir_a, vir_b, vir_b), compact=True).reshape(nocc_a, nvir_a, -1).copy()
+    eris.vvVV = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=True)
+
+    eris.OVoo = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, occ_a, occ_a), compact=False).reshape(nocc_b, nvir_b, nocc_a, nocc_a).copy()
+    eris.OOvv = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, vir_a, vir_a), compact=False).reshape(nocc_b, nocc_b, nvir_a, nvir_a).copy()
+    eris.OVov = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, occ_a, vir_a), compact=False).reshape(nocc_b, nvir_b, nocc_a, nvir_a).copy()
+    eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()
 
     return eris
 
-# TODO: disk flag
-def transform_antisymmetrize_integrals(v2e_ao, mo, disk = False):
 
-    mo_1, mo_2, mo_3, mo_4 = mo
+def unpack_eri_1(eri, norb):
 
-    mo_1_a, mo_1_b = mo_1
-    mo_2_a, mo_2_b = mo_2
-    mo_3_a, mo_3_b = mo_3
-    mo_4_a, mo_4_b = mo_4
+    n_oo = norb * (norb + 1) // 2
+    ind_oo = np.tril_indices(norb)
 
-    v2e_a = None
-    v2e_a = pyscf.ao2mo.general(v2e_ao, (mo_1_a, mo_3_a, mo_2_a, mo_4_a), compact=False)
-    v2e_a = v2e_a.reshape(mo_1_a.shape[1], mo_3_a.shape[1], mo_2_a.shape[1], mo_4_a.shape[1])
-    v2e_a = v2e_a.transpose(0,2,1,3).copy()
+    eri_ = None
 
-    if (mo_1_a is mo_2_a):
-        v2e_a -= v2e_a.transpose(1,0,2,3).copy()
-    elif (mo_3_a is mo_4_a):
-        v2e_a -= v2e_a.transpose(0,1,3,2).copy()
-    else:
-        v2e_temp = None
-        v2e_temp = pyscf.ao2mo.general(v2e_ao, (mo_1_a, mo_4_a, mo_2_a, mo_3_a), compact=False)
-        v2e_temp = v2e_temp.reshape(mo_1_a.shape[1], mo_4_a.shape[1], mo_2_a.shape[1], mo_3_a.shape[1])
-        v2e_a -= v2e_temp.transpose(0,2,3,1).copy()
-        del v2e_temp
+    if len(eri.shape) == 3:
+        if (eri.shape[0] == n_oo):
+            eri_ = np.zeros((norb, norb, eri.shape[1], eri.shape[2]))
+            eri_[ind_oo[0], ind_oo[1]] = eri
+            eri_[ind_oo[1], ind_oo[0]] = eri
 
-    v2e_a = disk_helper.dataset(v2e_a) if disk else v2e_a
+        elif (eri.shape[2] == n_oo):
+            eri_ = np.zeros((eri.shape[0], eri.shape[1], norb, norb))
+            eri_[:, :, ind_oo[0], ind_oo[1]] = eri
+            eri_[:, :, ind_oo[1], ind_oo[0]] = eri
+        else:
+            raise TypeError("ERI dimensions don't match")
 
-    v2e_b = None
-    v2e_b = pyscf.ao2mo.general(v2e_ao, (mo_1_b, mo_3_b, mo_2_b, mo_4_b), compact=False)
-    v2e_b = v2e_b.reshape(mo_1_b.shape[1], mo_3_b.shape[1], mo_2_b.shape[1], mo_4_b.shape[1])
-    v2e_b = v2e_b.transpose(0,2,1,3).copy()
+    else: 
+            raise RuntimeError("ERI does not have a correct dimension")
 
-    if (mo_1_b is mo_2_b):
-        v2e_b -= v2e_b.transpose(1,0,2,3).copy()
-    elif (mo_3_b is mo_4_b):
-        v2e_b -= v2e_b.transpose(0,1,3,2).copy()
-    else:
-        v2e_temp = None
-        v2e_temp = pyscf.ao2mo.general(v2e_ao, (mo_1_b, mo_4_b, mo_2_b, mo_3_b), compact=False)
-        v2e_temp = v2e_temp.reshape(mo_1_b.shape[1], mo_4_b.shape[1], mo_2_b.shape[1], mo_3_b.shape[1])
-        v2e_b -= v2e_temp.transpose(0,2,3,1).copy()
-        del v2e_temp
+    return eri_
 
-    v2e_b = disk_helper.dataset(v2e_b) if disk else v2e_b
 
-    v2e_ab = None
-    v2e_ab = pyscf.ao2mo.general(v2e_ao, (mo_1_a, mo_3_a, mo_2_b, mo_4_b), compact=False)
-    v2e_ab = v2e_ab.reshape(mo_1_a.shape[1], mo_3_a.shape[1], mo_2_b.shape[1], mo_4_b.shape[1])
-    v2e_ab = v2e_ab.transpose(0,2,1,3).copy()
+def unpack_eri_2s(eri, norb):
 
-    v2e_ab = disk_helper.dataset(v2e_ab) if disk else v2e_ab
+    n_oo = norb * (norb + 1) // 2
+    ind_oo = np.tril_indices(norb)
 
-    return (v2e_a, v2e_ab, v2e_b)
+    eri_ = None
+
+    if len(eri.shape) == 2:
+        if (eri.shape[0] != n_oo or eri.shape[1] != n_oo):
+            raise TypeError("ERI dimensions don't match")
+
+        temp = np.zeros((n_oo, norb, norb))
+        temp[:, ind_oo[0], ind_oo[1]] = eri
+        temp[:, ind_oo[1], ind_oo[0]] = eri
+        eri_ = np.zeros((norb, norb, norb, norb))
+        eri_[ind_oo[0], ind_oo[1]] = temp
+        eri_[ind_oo[1], ind_oo[0]] = temp
+    else: 
+            raise RuntimeError("ERI does not have a correct dimension")
+
+    return eri_
+
+
+def unpack_eri_2(eri, norb1, norb2):
+
+    n_oo1 = norb1 * (norb1 + 1) // 2
+    ind_oo1 = np.tril_indices(norb1)
+    n_oo2 = norb2 * (norb2 + 1) // 2
+    ind_oo2 = np.tril_indices(norb2)
+
+    eri_ = None
+
+    if len(eri.shape) == 2:
+        if (eri.shape[0] != n_oo1 or eri.shape[1] != n_oo2):
+            raise TypeError("ERI dimensions don't match")
+
+        temp = np.zeros((n_oo1, norb2, norb2))
+        temp[:, ind_oo2[0], ind_oo2[1]] = eri
+        temp[:, ind_oo2[1], ind_oo2[0]] = eri
+        eri_ = np.zeros((norb1, norb1, norb2, norb2))
+        eri_[ind_oo1[0], ind_oo1[1]] = temp
+        eri_[ind_oo1[1], ind_oo1[0]] = temp
+    else: 
+            raise RuntimeError("ERI does not have a correct dimension")
+
+    return eri_
