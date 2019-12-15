@@ -30,7 +30,7 @@ def init_dm_libnao(dm):
     POINTER(c_int64)) # alloc_stat
   
   alloc_stat = c_int64(-999)
-
+  
   libnao.init_dm_libnao(d.ctypes.data_as(POINTER(c_double)),
     c_int64(d.shape[-1]), 
     c_int64(d.shape[-2]),

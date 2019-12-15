@@ -7,7 +7,7 @@ class KnowValues(unittest.TestCase):
 
   def test_tddft_upkc(self):
     """ This is a comparison of two equivalent ways of computing the polarizability for water molecule """
-    td = tddft_iter_2ord(label='water', cd=dirname(abspath(__file__)), jcutoff=7, xc_code='RPA')
+    td = tddft_iter_2ord(label='water', cd=dirname(abspath(__file__)),jcutoff=7,xc_code='RPA',verbosity=0)
     omegas = np.arange(0.0,1.0,0.005)+1j*0.01
 
     pxx1 = -td.comp_polariz_nonin_xx(omegas).imag

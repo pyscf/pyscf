@@ -1,0 +1,28 @@
+SystemName          Lithium Atom
+SystemLabel         li
+
+PAO.SplitNorm       0.2
+
+%block ChemicalSpeciesLabel
+1  3  Li.li
+%endblock ChemicalSpeciesLabel
+
+AtomicCoordinatesFormat  Ang
+AtomCoorFormatOut Ang
+
+NumberOfAtoms       1
+NumberOfSpecies     1
+
+%block AtomicCoordinatesAndAtomicSpecies
+0.0   0.0   0.0    1       1  Li
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+### Molecular dynamics 
+ElectronicTemperature      300 K
+MD.TypeOfRun               CG
+MD.NumCGsteps              0
+MaxSCFIterations           100
+
+COOP.Write     .true.
+WriteDenchar   .true.
+xml.write      .true.

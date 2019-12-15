@@ -82,7 +82,7 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   real(8), allocatable :: fmm_mem(:)
   integer(blas_int), allocatable :: ipiv(:)
   integer(blas_int) :: info
-  
+
   iv = iv_in - 1
   
   natoms = get_natoms(a%sv)
@@ -276,9 +276,9 @@ subroutine make_vrtx_cc(a, nbp, bp2info, dp_a, pb, iv_in)
   _dealloc(roverlap)
   _dealloc(f1f2_mom)
   _dealloc(bessel_pp)
-  _dealloc(sp2rcut)
     !write(6,'(a,i7,a6,9g10.2)') __FILE__, __LINE__
   !$OMP END PARALLEL
+  _dealloc(sp2rcut)
 
   pb%irr_trans_inv_sym = 1
   pb%nfunct_irr = -999

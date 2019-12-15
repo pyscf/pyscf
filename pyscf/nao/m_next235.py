@@ -13,7 +13,7 @@
 # limitations under the License.
 
 def next235(base):
-  assert(type(base)==float)
+  #assert(type(base)==float)
   next235 = 2 * int(base/2.0+.9999)
   if (next235<=0) : next235 = 2
   while 100000:

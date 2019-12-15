@@ -30,15 +30,18 @@ def csr_matvec(csr, x):
     nrow, ncol = csr.shape
     nnz = csr.data.shape[0]
     if x.size != ncol:
-        raise ValueError("wrong dimension!")
+      print(x.size, ncol)
+      raise ValueError("wrong dimension!")
 
+    xx = np.require(x, requirements=["A", "O"])
+    
     if csr.dtype == np.float32:
         y = np.zeros((nrow), dtype=np.float32)
         libsparsetools.scsr_matvec(c_int(nrow), c_int(ncol), c_int(nnz), 
                 csr.indptr.ctypes.data_as(POINTER(c_int)),
                 csr.indices.ctypes.data_as(POINTER(c_int)), 
                 csr.data.ctypes.data_as(POINTER(c_float)),
-                x.ctypes.data_as(POINTER(c_float)), 
+                xx.ctypes.data_as(POINTER(c_float)), 
                 y.ctypes.data_as(POINTER(c_float)))
 
     elif csr.dtype == np.float64:
@@ -47,7 +50,7 @@ def csr_matvec(csr, x):
                 csr.indptr.ctypes.data_as(POINTER(c_int)),
                 csr.indices.ctypes.data_as(POINTER(c_int)), 
                 csr.data.ctypes.data_as(POINTER(c_double)),
-                x.ctypes.data_as(POINTER(c_double)), 
+                xx.ctypes.data_as(POINTER(c_double)), 
                 y.ctypes.data_as(POINTER(c_double)))
     else:
         raise ValueError("Not implemented")
@@ -67,7 +70,10 @@ def csc_matvec(csc, x):
     nrow, ncol = csc.shape
     nnz = csc.data.shape[0]
     if x.size != ncol:
-        raise ValueError("wrong dimension!")
+      print(x.size, ncol)
+      raise ValueError("wrong dimension!")
+
+    xx = np.require(x, requirements="C")
 
     if csc.dtype == np.float32:
         y = np.zeros((nrow), dtype=np.float32)
@@ -75,7 +81,7 @@ def csc_matvec(csc, x):
                 csc.indptr.ctypes.data_as(POINTER(c_int)),
                 csc.indices.ctypes.data_as(POINTER(c_int)), 
                 csc.data.ctypes.data_as(POINTER(c_float)),
-                x.ctypes.data_as(POINTER(c_float)), 
+                xx.ctypes.data_as(POINTER(c_float)), 
                 y.ctypes.data_as(POINTER(c_float)))
 
     elif csc.dtype == np.float64:
@@ -84,7 +90,7 @@ def csc_matvec(csc, x):
                 csc.indptr.ctypes.data_as(POINTER(c_int)),
                 csc.indices.ctypes.data_as(POINTER(c_int)), 
                 csc.data.ctypes.data_as(POINTER(c_double)),
-                x.ctypes.data_as(POINTER(c_double)), 
+                xx.ctypes.data_as(POINTER(c_double)), 
                 y.ctypes.data_as(POINTER(c_double)))
     else:
         raise ValueError("Not implemented")

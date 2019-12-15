@@ -15,7 +15,7 @@
 from __future__ import print_function, division
 import unittest
 from pyscf import gto
-from pyscf.nao import log_mesh_c
+from pyscf.nao.log_mesh import log_mesh
 
 mol = gto.M(
     verbose = 1,
@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
 
   def test_log_mesh_gto(self):
     """ Test construction  of log mesh for GTOs"""
-    lm = log_mesh_c().init_log_mesh_gto(gto=mol, rmin=1e-6)
+    lm = log_mesh(gto=mol, rmin=1e-6)
     self.assertEqual(lm.nr, 1024)
     self.assertAlmostEqual(lm.rr[0], 1e-6)
     self.assertAlmostEqual(lm.rr[-1], 11.494152344675497)
@@ -44,7 +44,7 @@ class KnowValues(unittest.TestCase):
     sp2ion = []
     sp2ion.append(siesta_ion_xml(dname+'/O.ion.xml'))
     sp2ion.append(siesta_ion_xml(dname+'/H.ion.xml'))
-    lm = log_mesh_c().init_log_mesh_ion(sp2ion)
+    lm = log_mesh(sp2ion=sp2ion)
     self.assertEqual(lm.nr, 1024)
     self.assertAlmostEqual(lm.rr[0], 0.0050308261951499981)
     self.assertAlmostEqual(lm.rr[-1], 11.105004591662)
@@ -53,9 +53,9 @@ class KnowValues(unittest.TestCase):
     
   def test_log_mesh(self):
     """ Test construction of log mesh with predefined grids"""
-    from pyscf.nao.m_log_mesh import log_mesh
-    rr,pp=log_mesh(1024, 1e-3, 15.0)
-    lm = log_mesh_c().init_log_mesh(rr,pp)
+    from pyscf.nao.log_mesh import funct_log_mesh
+    rr,pp=funct_log_mesh(1024, 1e-3, 15.0)
+    lm = log_mesh(rr=rr,pp=pp)
     self.assertEqual(lm.nr, 1024)
     self.assertAlmostEqual(lm.rr[0], 1e-3)
     self.assertAlmostEqual(lm.rr[-1], 15.0)

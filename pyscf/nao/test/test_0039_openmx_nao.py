@@ -21,8 +21,9 @@ class KnowValues(unittest.TestCase):
   def test_openmx(self):
     """ Computing of the atomic orbitals """
    
-    sv = nao(openmx='water', cd=os.path.dirname(os.path.abspath(__file__)))
-    self.assertEqual(sv.natoms, 3)
-    self.assertEqual(sv.norbs, 23)
+    print("openmx not anymore supported, skip ...")
+    #sv = nao(openmx='water', cd=os.path.dirname(os.path.abspath(__file__)))
+    #self.assertEqual(sv.natoms, 3)
+    #self.assertEqual(sv.norbs, 23)
     
 if __name__ == "__main__": unittest.main()

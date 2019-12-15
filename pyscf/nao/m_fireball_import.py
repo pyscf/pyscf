@@ -6,8 +6,9 @@ import numpy as np
 #
 def fireball_import(self, **kw):
   """ Calls  """
-  from pyscf.nao.m_ao_log import ao_log_c
+  from pyscf.nao.ao_log import ao_log
   from pyscf.nao.m_fireball_get_cdcoeffs_dat import fireball_get_ucell_cdcoeffs_dat
+
   #label, cd
   self.label = label = kw['fireball'] if 'fireball' in kw else 'out'
   self.cd = cd = kw['cd'] if 'cd' in kw else '.'
@@ -32,11 +33,15 @@ def fireball_import(self, **kw):
   ssll = [i for i,l in enumerate(s) if "Information for this species" in l] # starting lines in stdout
   self.nspecies  = len(ssll)
   self.sp2ion = []
+  self.sp2symbol = []
   for sl in ssll:
     ion = {}
     scut = s[sl:sl+20]
-    for iline,line in enumerate(scut):
-      if "- Element" in line: ion["symbol"]=line.split()[0]
+    
+    for iline, line in enumerate(scut):
+      if "- Element" in line:
+          ion["symbol"] = line.split()[0]
+          self.sp2symbol.append(ion["symbol"])
       elif "- Atomic energy" in line: ion["atomic_energy"]=float(line.split()[0])
       elif "- Nuclear Z" in line: ion["z"]=int(line.split()[0])
       elif "- Atomic Mass" in line: ion["mass"]=float(line.split()[0])
@@ -98,16 +103,15 @@ def fireball_import(self, **kw):
       ff = [ff[0]/np.sqrt(norm)]+[f/r/np.sqrt(norm) for f,r in zip(ff, rr) if r>0]
       data.append(np.array([rr, ff]).T)
       norm = (np.array(ff)**2*rr**2).sum()*(rr[1]-rr[0])
-      print(__name__, 'norm', norm)
+      #print(__name__, 'norm', norm)
     
     paos = {"npaos": ion["npao"], "delta": ion["pao2delta"], "cutoff": ion["pao2rcut"], "npts": ion["pao2npts"], "data": data, 
     "orbital": [ {"l": j, "population": occ} for occ,j in zip(ion["pao2occ"],ion["pao2j"])] }
     ioncompat["paos"] = paos
-    ioncompat["vna"] = None
     ioncompat["valence"] = sum(ion["pao2occ"])
     self.sp2ion[sp] = ioncompat
 
-  self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
+  self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
   self.sp_mu2j = [mu2j for mu2j in self.ao_log.sp_mu2j ]
   
   #self.ao_log.view()

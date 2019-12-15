@@ -17,10 +17,10 @@ class KnowValues(unittest.TestCase):
     #print('gto_mf.mo_energy:', gto_mf.mo_energy)
     b = gw(mf=gto_mf, gto=mol, verbosity=0, nvrt=4)
     ww = np.arange(0.0, 1.0, 0.1)+1j*0.2
-    rf0 = b.rf0_den(ww)
+    rf0 = b.rf0(ww)
     rf0_ref = b.rf0_cmplx_ref(ww)
-    print(__name__, '|diff|', abs(rf0_ref-rf0).sum()/rf0.size)
-    self.assertTrue(abs(rf0_ref-rf0).sum()/rf0.size<1e-12)
+    #print(__name__, '|diff|', abs(rf0_ref-rf0).sum()/rf0.size)
+    self.assertTrue(abs(rf0_ref-rf0).sum()/rf0.size<1e-11)
     
         
 if __name__ == "__main__": unittest.main()
