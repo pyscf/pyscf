@@ -23,8 +23,10 @@ class chi0_matvec(mf):
 
     if self.dtype == np.float32:
       self.gemm = blas.sgemm
+      self.gemv = blas.sgemv
     elif self.dtype == np.float64:
       self.gemm = blas.dgemm
+      self.gemv = blas.dgemv
     else:
       raise ValueError("dtype can be only float32 or float64")
 
