@@ -122,7 +122,7 @@ cell.build(unit = 'B',
            verbose = 0,
            basis='sto3g')
 
-mf = pbchf.KRHF(cell.copy().set(low_dim_ft_type='analytic_2d_1'))
+mf = pbchf.KRHF(cell.copy())
 mf.kpts = cell.make_kpts([4,4,1])
 e.append(mf.kernel())
 

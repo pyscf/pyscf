@@ -112,7 +112,6 @@ class KnownValues(unittest.TestCase):
         cell.basis = {'He': [[0, (1.0, 1.0)]]}
         cell.rcut = 6.78614042442
         cell.dimension = 2
-        cell.low_dim_ft_type = 'analytic_2d_1'
         cell.build()
         grids = gen_grid.BeckeGrids(cell)
         grids.level = 3
