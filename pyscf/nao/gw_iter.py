@@ -42,6 +42,10 @@ class gw_iter(gw):
     self.gw_iter_tol = kw['gw_iter_tol'] if 'gw_iter_tol' in kw else 1e-4
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
 
+    self.ncall_gw_chi0_mv = 0
+    self.gw_chi0_mv_time = np.zeros((17), dtype=np.float64)
+    self.gw_chi0_mv_time_all = np.zeros((17), dtype=np.float64)
+
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
 
   def si_c2(self,ww):
@@ -260,29 +264,49 @@ class gw_iter(gw):
             
             self.comega_current = w
 
+            self.ncall_gw_chi0_mv = 0
+            ncalls = 0
+            niterations = len(self.nn[s])*self.norbs
+            self.gw_chi0_mv_time.fill(0.0)
+
             print("freq: ", iw, "nn = {}; norbs = {}".format(len(self.nn[s]), self.norbs))
             t1 = timer()
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
                     
                     # v XVX
-                    a = np.dot(self.kernel_sq, xvx[s][n,m,:])
+                    a = self.kernel_sq.dot(xvx[s][n,m,:])
                     
                     # \chi_{0}v XVX by using matrix vector
                     b = self.gw_chi0_mv(a, self.comega_current)
                     
                     # v\chi_{0}v XVX, this should be equals to bxvx in last approach
-                    a = np.dot(self.kernel_sq, b)
+                    a = self.kernel_sq.dot(b)
+
+                    ncall_bef = self.ncall_gw_chi0_mv
                     sf_aux[n,m,:],exitCode = lgmres(k_c_opt, a,
                                                      atol=self.gw_iter_tol,
                                                      maxiter=self.maxiter)
+                    ncalls += self.ncall_gw_chi0_mv - ncall_bef
+
                     if exitCode != 0:
                       print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
             # I= XVX I_aux
             t2 = timer()
-            if self.verbosity>0: 
+
+            if self.verbosity > 0: 
                 print("time for lgmres loop: ", t2-t1)
-            inm[:, :, iw] = np.einsum('nmp,nmp->nm',xvx[s], sf_aux, optimize=optimize)
+                print("ncalls iterations: ", ncalls, "total calls: ", self.ncall_gw_chi0_mv)
+                print("Average lgmres iteration for convergence: ", ncalls/niterations)
+                print("detailed time gw_chi0_mv:")
+
+                for it, chi0_time in enumerate(self.gw_chi0_mv_time):
+                    print(it, chi0_time)
+
+                    self.gw_chi0_mv_time_all[it] += chi0_time
+
+            inm[:, :, iw] = np.einsum('nmp,nmp->nm',xvx[s], sf_aux,
+                                      optimize=optimize)
         snm2i.append(np.real(inm))
 
     if (self.write_w==True):
@@ -323,30 +347,62 @@ class gw_iter(gw):
     from pyscf.nao.m_sparsetools import csr_matvec    
     
     # real part
-    vdp = csr_matvec(self.cc_da, dvin.real)
-    sab_real = (vdp*self.v_dab).reshape((self.norbs,self.norbs))
+    t1 = timer()
+    vdp = csr_matvec(self.cc_da_csr, dvin.real)
+    t2 = timer()
+    self.gw_chi0_mv_time[0] += t2 - t1
+
+    t1 = timer()
+    sab_real = csr_matvec(self.v_dab_trans, vdp).reshape((self.norbs, self.norbs))
+    t2 = timer()
+    self.gw_chi0_mv_time[1] += t2 - t1
 
     # imaginary
-    vdp = csr_matvec(self.cc_da, dvin.imag)
-    sab_imag = (vdp*self.v_dab).reshape((self.norbs, self.norbs))
+    t1 = timer()
+    vdp = csr_matvec(self.cc_da_csr, dvin.imag)
+    t2 = timer()
+    self.gw_chi0_mv_time[2] += t2 - t1
+    
+    t1 = timer()
+    sab_imag = csr_matvec(self.v_dab_trans, vdp).reshape((self.norbs, self.norbs))
+    t2 = timer()
+    self.gw_chi0_mv_time[3] += t2 - t1
 
     ab2v_re = np.zeros((self.norbs, self.norbs), dtype=self.dtype)
     ab2v_im = np.zeros((self.norbs, self.norbs), dtype=self.dtype)
 
     for s in range(self.nspin):
+        
+        t1 = timer()
         nb2v = self.gemm(1.0, self.xocc[s], sab_real)
-        nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s].T)
+        t2 = timer()
+        self.gw_chi0_mv_time[4] += t2 - t1
+        
+        t1 = timer()
+        nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s], trans_b=1)
+        t2 = timer()
+        self.gw_chi0_mv_time[5] += t2 - t1
     
+        t1 = timer()
         nb2v = self.gemm(1.0, self.xocc[s], sab_imag)
-        nm2v_im = self.gemm(1.0, nb2v, self.xvrt[s].T)
+        t2 = timer()
+        self.gw_chi0_mv_time[6] += t2 - t1
+        
+        t1 = timer()
+        nm2v_im = self.gemm(1.0, nb2v, self.xvrt[s], trans_b=1)
+        t2 = timer()
+        self.gw_chi0_mv_time[7] += t2 - t1
 
+        t1 = timer()
         vs, nf = self.vstart[s], self.nfermi[s]
     
         if self.use_numba:
-            self.div_numba(self.ksn2e[0,s], self.ksn2f[0,s], nf, vs, comega, nm2v_re, nm2v_im)
+            self.div_numba(self.ksn2e[0, s], self.ksn2f[0,s], nf, vs, comega,
+                           nm2v_re, nm2v_im)
         else:
             for n,(en,fn) in enumerate(zip(self.ksn2e[0,s,:nf], self.ksn2f[0,s,:nf])):
                 for m,(em,fm) in enumerate(zip(self.ksn2e[0,s,vs:],self.ksn2f[0,s,vs:])):
+                    
                     nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
                     nm2v = nm2v * (fn - fm) * \
                     ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
@@ -358,17 +414,50 @@ class gw_iter(gw):
                 for m in range(n-vs):  
                     nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
 
-        nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s]) # real part
-        ab2v_re = self.gemm(1.0, self.xocc[s].T, nb2v, 1.0, ab2v_re)
+        t2 = timer()
+        self.gw_chi0_mv_time[8] += t2 - t1
 
-        nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s]) # imag part
-        ab2v_im = self.gemm(1.0, self.xocc[s].T, nb2v, 1.0, ab2v_im)
+        # real part
+        t1 = timer()
+        nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s])
+        t2 = timer()
+        self.gw_chi0_mv_time[9] += t2 - t1
+
+        t1 = timer()
+        ab2v_re = self.gemm(1.0, self.xocc[s], nb2v, 1.0, ab2v_re, trans_a=1)
+        t2 = timer()
+        self.gw_chi0_mv_time[10] += t2 - t1
+
+        # imag part
+        t1 = timer()
+        nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s])
+        t2 = timer()
+        self.gw_chi0_mv_time[11] += t2 - t1
     
-    vdp = csr_matvec(self.v_dab, ab2v_re.reshape(self.norbs*self.norbs))
-    chi0_re = vdp*self.cc_da
+        t1 = timer()
+        ab2v_im = self.gemm(1.0, self.xocc[s], nb2v, 1.0, ab2v_im, trans_a=1)
+        t2 = timer()
+        self.gw_chi0_mv_time[12] += t2 - t1
+    
+    t1 = timer()
+    vdp = csr_matvec(self.v_dab_csr, ab2v_re.reshape(self.norbs*self.norbs))
+    t2 = timer()
+    self.gw_chi0_mv_time[13] += t2 - t1
+    
+    t1 = timer()
+    chi0_re = csr_matvec(self.cc_da_trans, vdp)
+    t2 = timer()
+    self.gw_chi0_mv_time[14] += t2 - t1
 
-    vdp = csr_matvec(self.v_dab, ab2v_im.reshape(self.norbs*self.norbs))    
-    chi0_im = vdp*self.cc_da
+    t1 = timer()
+    vdp = csr_matvec(self.v_dab_csr, ab2v_im.reshape(self.norbs*self.norbs))    
+    t2 = timer()
+    self.gw_chi0_mv_time[15] += t2 - t1
+    
+    t1 = timer()
+    chi0_im = csr_matvec(self.cc_da_trans, vdp)
+    t2 = timer()
+    self.gw_chi0_mv_time[16] += t2 - t1
 
     return chi0_re + 1.0j*chi0_im
 
@@ -481,8 +570,8 @@ class gw_iter(gw):
       for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
         
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
-        zww = array([pole[0] for pole in lsos])
-        xv = np.dot(v_pab,x[n])
+        zww = np.array([pole[0] for pole in lsos])
+        xv = v_pab.dot(x[n])
         
         for pole, z_real in zip(lsos, zww):
           

@@ -344,7 +344,7 @@ def rf0_cmplx_vertex_dp(self, ww):
     vx = dot(v_arr, self.xocc[0][n,:])
     for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
       if (fn - fm)<0 : break
-      vxx_a = dot(vx, self.xvrt[0][m,:]) * self.cc_da
+      vxx_a = dot(vx, self.xvrt[0][m,:]) * self.cc_da_csr
       for iw,comega in enumerate(ww):
         zvxx_a[iw,:] = vxx_a * (fn - fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
       rf0 = rf0 + einsum('wa,b->wab', zvxx_a, vxx_a)

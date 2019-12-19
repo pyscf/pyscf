@@ -14,20 +14,24 @@ def chi0_mv(self, dvin, comega=1j*0.0, dnout=None):
             sp2v : vector describing the effective perturbation [spin*product] --> value
             comega: complex frequency
     """
-    if dnout is None: dnout = np.zeros_like(dvin, dtype=self.dtypeComplex)
+    if dnout is None:
+        dnout = np.zeros_like(dvin, dtype=self.dtypeComplex)
 
     sp2v  = dvin.reshape((self.nspin,self.nprod))
     sp2dn = dnout.reshape((self.nspin,self.nprod))
     
     for s in range(self.nspin):
-      vdp = csr_matvec(self.cc_da, sp2v[s].real)  # real part
-      sab = (vdp*self.v_dab).reshape((self.norbs,self.norbs))
+      
+      # real part
+      vdp = csr_matvec(self.cc_da_csr, sp2v[s].real)
+      sab = csr_matvec(self.v_dab_trans, vdp).reshape((self.norbs,self.norbs))
     
       nb2v = self.gemm(1.0, self.xocc[s], sab)
       nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s].T)
     
-      vdp = csr_matvec(self.cc_da, sp2v[s].imag)  # imaginary
-      sab = (vdp*self.v_dab).reshape((self.norbs, self.norbs))
+      # imaginary
+      vdp = csr_matvec(self.cc_da_csr, sp2v[s].imag)
+      sab = csr_matvec(self.v_dab_trans, vdp).reshape((self.norbs, self.norbs))
       
       nb2v = self.gemm(1.0, self.xocc[s], sab)
       nm2v_im = self.gemm(1.0, nb2v, self.xvrt[s].T)
@@ -48,15 +52,17 @@ def chi0_mv(self, dvin, comega=1j*0.0, dnout=None):
         for n in range(vs+1,nf): #padding m<n i.e. negative occupations' difference
           for m in range(n-vs):  nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
 
-      nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s]) # real part
+      # real part
+      nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s])
       ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
       vdp = csr_matvec(self.v_dab, ab2v)
-      chi0_re = vdp*self.cc_da
+      chi0_re = csr_matvec(self.cc_da_trans, vdp)
 
-      nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s]) # imag part
+      # imag part
+      nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s])
       ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
       vdp = csr_matvec(self.v_dab, ab2v)    
-      chi0_im = vdp*self.cc_da
+      chi0_im = csr_matvec(self.cc_da_trans, vdp)
       
       sp2dn[s] = chi0_re + 1.0j*chi0_im
       

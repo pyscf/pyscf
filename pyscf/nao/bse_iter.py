@@ -48,7 +48,7 @@ class bse_iter(gw):
       self.q2xk[0]=pack2den_u(self.kernel) + self.si_c(np.array([0.0]))[0].real
 
     # Allocation of the four-point kernel(s) which is to be used when RAM available
-    n, v_dab, cc_da = self.norbs, self.v_dab, self.cc_da
+    n, v_dab, cc_da = self.norbs, self.v_dab, self.cc_da_csr
     if xc in ['LDA','GGA']:
       self.q2k_4p = zeros((2*ns-1,n*n,n*n),dtype=dtype)
     elif xc in ['HF', 'CIS', 'GW']: # 1 or 2? Examples of UHF+TD of H2O and H2B(spin=3): 158, 159

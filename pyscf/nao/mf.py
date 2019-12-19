@@ -50,8 +50,23 @@ class mf(nao):
     self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
     if self.gen_pb:
       self.pb = pb = prod_basis(nao=self, **kw)
-      self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype).tocsr()
-      self.cc_da = cc = pb.get_da2cc_sparse(dtype=self.dtype).tocsr()
+
+      # use COO as basis
+      self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype)
+      self.cc_da = cc = pb.get_da2cc_sparse(dtype=self.dtype)
+
+      # CSR for matvec operations
+      # Hopefully, the csr and csc matrix should just be pointers to the COO
+      # must be checked ...
+      self.v_dab_csr = self.v_dab.tocsr()
+      self.cc_da_csr = self.cc_da.tocsr()
+
+      # CSC for transpose matvec operations
+      # transpose of a CSC gives a CSR matrix
+      # Thus we can use optimized CSR_matvec routine
+      self.v_dab_trans = self.v_dab.tocsc().T
+      self.cc_da_trans = self.cc_da.tocsc().T
+
       self.nprod = self.cc_da.shape[1]
       if self.verbosity>0: print(__name__,'\t\t====> Number of dominant and atom-centered products {}'.format(cc.shape))
 
