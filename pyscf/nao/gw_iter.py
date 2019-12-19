@@ -648,7 +648,7 @@ class gw_iter(gw):
                 ' |  TAKE CARE! Convergence to tolerance {} not achieved after {}-iterations  | '.format(self.tol_ev,self.niter_max_ev),
                 '='*30,'\n')
     
-    with open("gw_chi0_mv_timing.txt", "r") as fl_chi0:
+    with open("gw_chi0_mv_timing.txt", "w") as fl_chi0:
         
         for step, time in enumerate(self.gw_chi0_mv_time_all):
             fl_chi0.write("{}: {}\n".format(step, time))
