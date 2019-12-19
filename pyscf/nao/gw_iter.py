@@ -642,12 +642,17 @@ class gw_iter(gw):
                 '-'*43,'\n')
         break
 
-      if err>=self.tol_ev and i+1==self.niter_max_ev:
+      if err >= self.tol_ev and i+1 == self.niter_max_ev:
         if self.verbosity>0:
           print('='*30,
                 ' |  TAKE CARE! Convergence to tolerance {} not achieved after {}-iterations  | '.format(self.tol_ev,self.niter_max_ev),
                 '='*30,'\n')
     
+    with open("gw_chi0_mv_timing.txt", "r") as fl_chi0:
+        
+        for step, time in enumerate(self.gw_chi0_mv_time_all):
+            fl_chi0.write("{}: {}\n".format(step, time))
+
     return sn2eval_gw
 
   #@profile  

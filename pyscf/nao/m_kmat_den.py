@@ -181,8 +181,8 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     else:
       mf.dab2v = dab2v =  pb.get_dp_vertex_doubly_sparse(axis=0)
 
-    dab2v_csr = mf.v_dab
-    da2cc = mf.cc_da
+    dab2v_csr = mf.v_dab_csr
+    da2cc = mf.cc_da_csr
     kmat  = np.zeros_like(dm)
     (nnd,nnp),n = da2cc.shape,dm.shape[-1]
     #t2 = timer(); 
