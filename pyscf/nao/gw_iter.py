@@ -235,8 +235,11 @@ class gw_iter(gw):
         inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtypeComplex)
         
         # w is complex plane
-        for iw,w in enumerate(ww):
-            self.comega_current = w                            
+        for iw, w in enumerate(ww):
+            self.comega_current = w
+
+            print("freq: ", iw, "nn = {}; norbs = {}".format(len(self.nn[s]), self.norbs))
+            t1 = timer()
             #print('k_c_opt',k_c_opt.shape)
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
@@ -252,6 +255,8 @@ class gw_iter(gw):
                     if exitCode != 0:
                       print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
             # I= XVX I_aux
+            t2 = timer()
+            print("time for lgmres loop: ", t2-t1)
             inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx[s], sf_aux, optimize=optimize)
         snm2i.append(np.real(inm))
 
@@ -416,6 +421,10 @@ class gw_iter(gw):
       from pyscf.nao.m_restart import read_rst_h5py
       self.snmw2sf, msg = read_rst_h5py()
       print(msg)  
+
+      if self.snmw2sf is None:
+          self.snmw2sf = self.get_snmw2sf_iter()
+
     else:
       self.snmw2sf = self.get_snmw2sf_iter()
     
