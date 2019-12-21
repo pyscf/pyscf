@@ -371,23 +371,20 @@ def compute_energy(myadc, t1, t2, eris):
     eris_ovov = eris.ovov
     eris_OVOV = eris.OVOV
     eris_ovOV = eris.ovOV
-    eris_OVov = eris.OVov
-
-    v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
-    v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
-    v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
 
     t2_1_a, t2_1_ab, t2_1_b  = t2[0]
 
     #Compute MP2 correlation energy
 
     #e_mp2 = 0.25 * np.einsum('ijab,ijab', t2_1_a, v2e_oovv_a)
-    #e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oovv_ab)
+    ##e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oovv_ab)
     #e_mp2 += 0.25 * np.einsum('ijab,ijab', t2_1_b, v2e_oovv_b)
     
-    e_mp2 = 0.25 * np.einsum('ijab,ijab', t2_1_a, v2e_oovv)
-    e_mp2 += np.einsum('ijab,ijab', t2_1_ab, v2e_oOvV)
-    e_mp2 += 0.25 * np.einsum('ijab,ijab', t2_1_b, v2e_OOVV)
+    e_mp2 = 0.25 * np.einsum('ijab,iajb', t2_1_a, eris_ovov)
+    e_mp2 -= 0.25 * np.einsum('ijab,ibja', t2_1_a, eris_ovov)
+    e_mp2 += np.einsum('ijab,iajb', t2_1_ab, eris_ovOV)
+    e_mp2 += 0.25 * np.einsum('ijab,iajb', t2_1_b, eris_OVOV)
+    e_mp2 -= 0.25 * np.einsum('ijab,ibja', t2_1_b, eris_OVOV)
 
     e_corr = e_mp2
 
@@ -680,18 +677,23 @@ def get_imds_ea(adc, eris=None):
 
     #M_ab_b -= 0.5 *  np.einsum('lmbd,lmad->ab',t2_1_b, v2e_oovv_b)
     #M_ab_b -=        np.einsum('mldb,mlda->ab',t2_1_ab, v2e_oovv_ab)
+############################################################################
 
-    M_ab_a -= 0.5 *  np.einsum('lmad,lmbd->ab',t2_1_a, v2e_oovv)
-    M_ab_a -=        np.einsum('lmad,lmbd->ab',t2_1_ab, v2e_oOvV)
+    M_ab_a -= 0.5 *  np.einsum('lmad,lbmd->ab',t2_1_a, eris_ovov)
+    M_ab_a += 0.5 *  np.einsum('lmad,ldmb->ab',t2_1_a, eris_ovov)
+    M_ab_a -=        np.einsum('lmad,lbmd->ab',t2_1_ab, eris_ovOV)
 
-    M_ab_b -= 0.5 *  np.einsum('lmad,lmbd->ab',t2_1_b, v2e_OOVV)
-    M_ab_b -=        np.einsum('mlda,mldb->ab',t2_1_ab, v2e_oOvV)
+    M_ab_b -= 0.5 *  np.einsum('lmad,lbmd->ab',t2_1_b, eris_OVOV)
+    M_ab_b += 0.5 *  np.einsum('lmad,ldmb->ab',t2_1_b, eris_OVOV)
+    M_ab_b -=        np.einsum('mlda,mdlb->ab',t2_1_ab, eris_ovOV)
 
-    M_ab_a -= 0.5 *  np.einsum('lmbd,lmad->ab',t2_1_a, v2e_oovv)
-    M_ab_a -=        np.einsum('lmbd,lmad->ab',t2_1_ab, v2e_oOvV)
+    M_ab_a -= 0.5 *  np.einsum('lmbd,lamd->ab',t2_1_a,eris_ovov)
+    M_ab_a += 0.5 *  np.einsum('lmbd,ldma->ab',t2_1_a, eris_ovov)
+    M_ab_a -=        np.einsum('lmbd,lamd->ab',t2_1_ab, eris_ovOV)
 
-    M_ab_b -= 0.5 *  np.einsum('lmbd,lmad->ab',t2_1_b, v2e_OOVV)
-    M_ab_b -=        np.einsum('mldb,mlda->ab',t2_1_ab, v2e_oOvV)
+    M_ab_b -= 0.5 *  np.einsum('lmbd,lamd->ab',t2_1_b, eris_OVOV)
+    M_ab_b += 0.5 *  np.einsum('lmbd,ldma->ab',t2_1_b, eris_OVOV)
+    M_ab_b -=        np.einsum('mldb,mdla->ab',t2_1_ab, eris_ovOV)
 
     #Third-order terms
 
