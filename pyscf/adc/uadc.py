@@ -619,9 +619,9 @@ def get_imds_ea(adc, eris=None):
     eris_ovOV = eris.ovOV
     eris_OVov = eris.OVov
 
-    v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
-    v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
-    v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
+    #v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
+    #v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
+    #v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
 
 ###################################################################
 
@@ -1381,11 +1381,9 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     eris_ovOV = eris.ovOV
     eris_OVov = eris.OVov
 
-    v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
-    v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
-    v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
-
-
+    #v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
+    #v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
+    #v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
 
 
     #v2e_vovv_1_a = v2e_vovv_a[:][:,:,ab_ind_a[0],ab_ind_a[1]].reshape(nvir_a,-1)
@@ -1447,6 +1445,14 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         r_aba = r[s_aba:f_aba]
         r_bbb = r[s_bbb:f_bbb]
 
+        
+        r_aaa_ = np.zeros((nocc_a, nvir_a, nvir_a))
+        r_aaa_[:, ab_ind_a[0], ab_ind_a[1]] = r_aaa.reshape(nocc_a, -1) 
+        r_aaa_[:, ab_ind_a[1], ab_ind_a[0]] = r_aaa.reshape(nocc_a, -1) 
+        r_bbb_ = np.zeros((nocc_b, nvir_b, nvir_b))
+        r_bbb_[:, ab_ind_b[0], ab_ind_b[1]] = r_bbb.reshape(nocc_b, -1) 
+        r_bbb_[:, ab_ind_b[1], ab_ind_b[0]] = r_bbb.reshape(nocc_b, -1) 
+     
         r_aba = r_aba.reshape(nocc_a,nvir_b,nvir_a)
         r_bab = r_bab.reshape(nocc_b,nvir_a,nvir_b)
 
@@ -1462,13 +1468,40 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 #
 #        s[s_b:f_b] += np.einsum('ap,p->a', v2e_vovv_1_b, r_bbb, optimize = True)
 #        s[s_b:f_b] += np.einsum('iacb,ibc->a', v2e_ovvv_ab, r_aba, optimize = True)
-#
+
+        eris_ovvv = eris.ovvv
+        eris_ovvv = uadc_ao2mo.unpack_eri_1(eris_ovvv, nvir_a)
+        eris_OVVV = eris.OVVV
+        eris_OVVV = uadc_ao2mo.unpack_eri_1(eris_OVVV, nvir_b)
+        eris_OVvv = eris.OVvv
+        eris_OVvv = uadc_ao2mo.unpack_eri_1(eris_OVvv, nvir_a)
+        eris_ovVV = eris.ovVV
+        eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
+        
+
+        s[s_a:f_a] += np.einsum('icab,ibc->a',eris_ovvv, r_aaa_, optimize = True)
+        s[s_a:f_a] -= np.einsum('ibac,ibc->a',eris_ovvv, r_aaa_, optimize = True)
+        #s[s_a:f_a] += np.einsum('icab,ibc->a', eris_OVvv, r_bab, optimize = True)
+
+        s[s_b:f_b] += np.einsum('icab,ibc->a',eris_OVVV, r_bbb_, optimize = True)
+        s[s_b:f_b] -= np.einsum('ibac,ibc->a',eris_OVVV, r_bbb_, optimize = True)
+        #s[s_b:f_b] += np.einsum('icab,ibc->a', eris_ovVV, r_aba, optimize = True)
+
 ################ ADC(2) ibc - a block ############################
-#
-#        s[s_aaa:f_aaa] += np.einsum('aip,a->ip', v2e_vovv_2_a, r_a, optimize = True).reshape(-1)
-#        s[s_bab:f_bab] += np.einsum('aibc,a->ibc', v2e_vovv_ab, r_a, optimize = True).reshape(-1)
-#        s[s_aba:f_aba] += np.einsum('iacb,a->ibc', v2e_ovvv_ab, r_b, optimize = True).reshape(-1)
-#        s[s_bbb:f_bbb] += np.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize = True).reshape(-1)
+
+        #s[s_aaa:f_aaa] += np.einsum('aip,a->ip', v2e_vovv_2_a, r_a, optimize = True).reshape(-1)
+        #s[s_bab:f_bab] += np.einsum('aibc,a->ibc', v2e_vovv_ab, r_a, optimize = True).reshape(-1)
+        #s[s_aba:f_aba] += np.einsum('iacb,a->ibc', v2e_ovvv_ab, r_b, optimize = True).reshape(-1)
+        #s[s_bbb:f_bbb] += np.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize = True).reshape(-1)
+
+        temp = np.einsum('icab,a->ibc', eris_ovvv, r_a, optimize = True)
+        temp -= np.einsum('ibac,a->ibc', eris_ovvv, r_a, optimize = True)
+        s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
+        #s[s_bab:f_bab] += np.einsum('icab,a->ibc', eris_OVvv, r_a, optimize = True).reshape(-1)
+        #s[s_aba:f_aba] += np.einsum('icab,a->ibc', eris_ovVV, r_b, optimize = True).reshape(-1)
+        temp = np.einsum('icab,a->ibc', eris_OVVV, r_b, optimize = True)
+        temp -= np.einsum('ibac,a->ibc', eris_OVVV, r_b, optimize = True)
+        s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
 
 ################ ADC(2) iab - jcd block ############################
 
