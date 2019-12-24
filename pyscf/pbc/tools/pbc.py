@@ -266,6 +266,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
         coulG[absG2==0] = 4*np.pi*0.5*Rc**2
 
+        if cell.dimension < 3:
+            raise NotImplementedError
+
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert(cell.dimension == 3)
         if not getattr(mf, '_ws_exx', None):
@@ -290,7 +293,13 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         coulG = coulG.astype(np.complex128)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
+        if cell.dimension < 3:
+            raise NotImplementedError
+
     else:
+        # Ewald probe charge method to get the leading term of the finite size
+        # error in exchange integrals
+
         G0_idx = np.where(absG2==0)[0]
         if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
@@ -331,6 +340,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
 
+        # The divergent part of periodic summation of (ii|ii) integrals in
+        # Coulomb integrals were cancelled out by electron-nucleus
+        # interaction. The periodic part of (ii|ii) in exchange cannot be
+        # cancelled out by Coulomb integrals. Its leading term is calculated
+        # using Ewald probe charge (the function madelung below)
         if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
