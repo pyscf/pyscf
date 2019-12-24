@@ -1477,7 +1477,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         eris_OVvv = uadc_ao2mo.unpack_eri_1(eris_OVvv, nvir_a)
         eris_ovVV = eris.ovVV
         eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
-        
 
         s[s_a:f_a] += np.einsum('icab,ibc->a',eris_ovvv, r_aaa_, optimize = True)
         s[s_a:f_a] -= np.einsum('ibac,ibc->a',eris_ovvv, r_aaa_, optimize = True)
