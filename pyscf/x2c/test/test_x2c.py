@@ -43,11 +43,11 @@ class KnownValues(unittest.TestCase):
 
         myx2c.with_x2c.xuncontract = True
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.07542985181684, 9)
+        self.assertAlmostEqual(e, -76.075429077955874, 9)
 
         myx2c.with_x2c.approx = 'ATOM1E'
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.07543044882513, 9)
+        self.assertAlmostEqual(e, -76.075429682026396, 9)
 
     def test_sfx2c1e_cart(self):
         pmol = mol.copy()
@@ -65,11 +65,11 @@ class KnownValues(unittest.TestCase):
 
         myx2c.with_x2c.xuncontract = True
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.07543200029053, 9)
+        self.assertAlmostEqual(e, -76.075431226329414, 9)
 
         myx2c.with_x2c.approx = 'ATOM1E'
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.0754326009603, 9)
+        self.assertAlmostEqual(e, -76.07543183416206, 9)
 
     def test_picture_change(self):
         c = lib.param.LIGHT_SPEED
@@ -174,9 +174,9 @@ C     F
     0.761000000E+00    0.100000000E+01
 ''')
         xmol, c = x2c.X2C(mol).get_xmol(mol)
-        self.assertEqual(xmol.nbas, 11)
-        self.assertEqual(xmol.nao, 38)
-        self.assertAlmostEqual(lib.finger(c), -2.4537045693167103, 12)
+        self.assertEqual(xmol.nbas, 18)
+        self.assertEqual(xmol.nao, 42)
+        self.assertAlmostEqual(lib.finger(c), -5.480689638416739, 12)
 
 
 if __name__ == "__main__":

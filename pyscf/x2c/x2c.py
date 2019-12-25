@@ -27,11 +27,12 @@ from pyscf.scf import dhf
 from pyscf.scf import _vhf
 from pyscf import __config__
 
+LINEAR_DEP_THRESHOLD = 1e-9
+
 class X2C(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
-    exp_drop = getattr(__config__, 'x2c_X2C_exp_drop', 0.2)
     approx = getattr(__config__, 'x2c_X2C_approx', '1e')  # 'atom1e'
     xuncontract = getattr(__config__, 'x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'x2c_X2C_basis', None)
@@ -44,7 +45,6 @@ class X2C(lib.StreamObject):
         log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
-        log.info('exp_drop = %g', self.exp_drop)
         log.info('approx = %s',    self.approx)
         log.info('xuncontract = %d', self.xuncontract)
         if self.basis is not None:
@@ -60,8 +60,7 @@ class X2C(lib.StreamObject):
             xmol.build(False, False, basis=self.basis)
             return xmol, None
         elif self.xuncontract:
-            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract,
-                                                self.exp_drop)
+            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
             return xmol, contr_coeff
         else:
             return mol, None
@@ -512,26 +511,6 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
             cs_new[j] += cs[i]
         return es[::-1], cs_new[::-1]
 
-    def _uncontract_basis(exps, b_coeff, atm_id, l, ptr):
-        np = exps.size
-        # Uncontract all basis. Use pGTO basis for X
-        bs = numpy.zeros((np, mole.BAS_SLOTS), dtype=numpy.int32)
-        bs[:,mole.ATOM_OF] = atm_id
-        bs[:,mole.ANG_OF ] = l
-        bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
-        norm = mole.gto_norm(l, exps)
-        _env.append(exps)
-        _env.append(norm)
-        bs[:,mole.PTR_EXP] = numpy.arange(ptr, ptr+np)
-        bs[:,mole.PTR_COEFF] = numpy.arange(ptr+np, ptr+np*2)
-        _bas.append(bs)
-        ptr += np * 2
-
-        c = b_coeff * 1/norm[:,None]
-        c = scipy.linalg.block_diag(*([c,] * degen))
-        c = c.reshape((degen, np, degen, nc))
-        return ptr, c.transpose(1,0,3,2).reshape(np*degen, nc*degen)
-
     aoslices = mol.aoslice_by_atom()
     for ia, (ib0, ib1) in enumerate(aoslices[:,:2]):
         if isinstance(xuncontract, str):
@@ -560,66 +539,33 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
 
 # Some input basis may be the segmented basis from a general contracted set.
 # This may lead to duplicated pGTOs. First contract all basis to remove
-# duplicated functions.
+# duplicated primitive functions.
             mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
 
             if mol.cart:
                 degen = (l + 1) * (l + 2) // 2
             else:
                 degen = l * 2 + 1
-
             np, nc = b_coeff.shape
-            nkept = (mol_exps > exp_drop).sum()
 
-# Build the partially uncontracted basis instead of the fully uncontracted
-# basis. Partial uncontraction binds smooth basis (exponet part < exp_drop) to
-# the steep basis functions. This is to avoid lindep caused by smooth
-# functions in all kinds of overlap matrices when building X.
-            if nkept <= nc:
-                # The basis set size for X is smaller than the contracted
-                # basis. Keep all basis from mol
-                for ib in bas_idx:
-                    _bas.append(mol._bas[ib])
-                    contr_coeff.append(numpy.eye(degen*mol.bas_nctr(ib)))
+            # Uncontract all basis. Use pGTO basis for X
+            bs = numpy.zeros((np, mole.BAS_SLOTS), dtype=numpy.int32)
+            bs[:,mole.ATOM_OF] = ia
+            bs[:,mole.ANG_OF ] = l
+            bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
+            norm = mole.gto_norm(l, mol_exps)
+            _env.append(mol_exps)
+            _env.append(norm)
+            bs[:,mole.PTR_EXP] = numpy.arange(ptr, ptr+np)
+            bs[:,mole.PTR_COEFF] = numpy.arange(ptr+np, ptr+np*2)
+            _bas.append(bs)
+            ptr += np * 2
 
-            elif nkept == np:
-                ptr, c = _uncontract_basis(mol_exps, b_coeff, ia, l, ptr)
-                contr_coeff.append(c)
-
-            else:
-                np_x = nkept - nc
-# part1: pGTOs that are associated with small coefficients
-                ptr, part1 = _uncontract_basis(mol_exps[:np_x], b_coeff[:np_x], ia, l, ptr)
-
-# part2: binding the most smooth pGTOs to the relatively compacted pGTOs then
-# forming a new set of contracted basis for X
-                b = numpy.zeros(mole.BAS_SLOTS, dtype=numpy.int32)
-                b[mole.ATOM_OF] = ia
-                b[mole.ANG_OF ] = l
-                b[mole.NPRIM_OF] = np - np_x
-                b[mole.NCTR_OF ] = nc
-                exps = mol_exps[np_x:]
-                cs = b_coeff[np_x:]
-                ee = mole.gaussian_int(l*2+2, exps[:,None] + exps)
-                s1 = numpy.einsum('pi,pq,qi->i', cs, ee, cs)
-                s1 = numpy.sqrt(s1)
-                cs = numpy.einsum('pi,i->pi', cs, 1/s1)
-                _env.append(exps)
-                _env.append(cs.T.ravel())
-                b[mole.PTR_EXP] = ptr
-                b[mole.PTR_COEFF] = ptr + exps.size
-                ptr += exps.size + cs.size
-                _bas.append(b)
-                part2 = numpy.repeat(s1[:,None], degen, axis=1)
-                part2 = numpy.diag(part2.ravel())
-
-                # contr_coeff ~
-                # [1    ]
-                # [ 1   ]
-                # [  1  ]
-                # [   xx]
-                # [   xx]
-                contr_coeff.append(numpy.vstack((part1, part2)))
+            c = b_coeff * 1/norm[:,None]
+            c = scipy.linalg.block_diag(*([c,] * degen))
+            c = c.reshape((degen, np, degen, nc))
+            c = c.transpose(1,0,3,2).reshape(np*degen, nc*degen)
+            contr_coeff.append(c)
 
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
     pmol._env = numpy.hstack([mol._env,] + _env)
@@ -681,10 +627,23 @@ def _x2c1e_xmatrix(t, v, w, s, c):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:nao,nao:]
-    cs = a[nao:,nao:]
-    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    try:
+        e, a = scipy.linalg.eigh(h, m)
+        cl = a[:nao,nao:]
+        cs = a[nao:,nao:]
+        x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    except scipy.linalg.LinAlgError:
+        d, t = numpy.linalg.eigh(m)
+        idx = d>LINEAR_DEP_THRESHOLD
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = reduce(numpy.dot, (t.T.conj(), h, t))
+        e, a = numpy.linalg.eigh(tht)
+        a = numpy.dot(t, a)
+        idx = e > -c**2
+        cl = a[:nao,idx]
+        cs = a[nao:,idx]
+        # X = B A^{-1} = B A^T S
+        x = cs.dot(cl.conj().T).dot(m)
     return x
 
 def _x2c1e_get_hcore(t, v, w, s, c):
@@ -699,9 +658,23 @@ def _x2c1e_get_hcore(t, v, w, s, c):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:nao,nao:]
-    cs = a[nao:,nao:]
+    try:
+        e, a = scipy.linalg.eigh(h, m)
+        cl = a[:nao,nao:]
+        cs = a[nao:,nao:]
+        e = e[nao:]
+    except scipy.linalg.LinAlgError:
+        d, t = numpy.linalg.eigh(m)
+        idx = d>LINEAR_DEP_THRESHOLD
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = reduce(numpy.dot, (t.T.conj(), h, t))
+        e, a = numpy.linalg.eigh(tht)
+        a = numpy.dot(t, a)
+        idx = e > -c**2
+        cl = a[:nao,idx]
+        cs = a[nao:,idx]
+        e = e[idx]
+
 # The so obtaied X seems not numerically stable.  We changed to the
 # transformed matrix
 # [1 1] [ V T ] [1 0]
@@ -736,7 +709,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))
-    h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))
+    h1 = reduce(numpy.dot, (r.T.conj()*e, r))
     return h1
 
 
