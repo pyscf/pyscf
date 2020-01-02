@@ -73,7 +73,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
-    if exxdiv != 'ewald' or exxdiv is not None:
+    if exxdiv is not None and exxdiv != 'ewald':
         logger.warn(mydf, 'MDF does not support exxdiv %s. '
                     'exxdiv needs to be "ewald" or None', exxdiv)
         raise RuntimeError('GDF does not support exxdiv %s' % exxdiv)
