@@ -1,0 +1,30 @@
+SystemName          Oxygen_atom
+SystemLabel         oxygen
+
+%block ChemicalSpeciesLabel
+ 1  8  O.oxygen
+%endblock ChemicalSpeciesLabel
+
+AtomicCoordinatesFormat  Ang
+AtomCoorFormatOut Ang
+
+NumberOfAtoms       1
+NumberOfSpecies     1
+
+%block AtomicCoordinatesAndAtomicSpecies
+    0.00   0.00    0.00   1       1  O
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+### Molecular dynamics 
+ElectronicTemperature      300 K
+MD.TypeOfRun               CG
+MD.NumCGsteps              0
+DM.MixingWeight            0.1
+
+MaxSCFIterations           100
+MeshCutOff     250   Ry
+DM.NumberPulay     4
+
+COOP.Write     .true.
+WriteDenchar   .true.
+xml.write      .true.

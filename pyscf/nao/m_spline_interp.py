@@ -46,7 +46,9 @@ def spline_interp(h,yy,yy_diff2,x) :
 !  dydx=(ya(nhi)-ya(nlo))/delt + (-((3*(a**2)-1._dp)*y2a(nlo))+ (3*(b**2)-1._dp)*y2a(nhi))*delt/6._dp
 end subroutine ! splint
   """
-  assert(type(yy)==numpy.ndarray)
+  assert type(yy)==numpy.ndarray
+  #print(__name__, type(h))
+  assert type(h)!=numpy.ndarray
   
   n=yy.shape[0]
   nlo=max(int(x/h),0)
@@ -55,4 +57,4 @@ end subroutine ! splint
   a=nhi-x/h # This is checked... different to Fortran version due to 0-based arrays
   b=1.0-a
   y=a*yy[nlo]+b*yy[nhi]+((a**3-a)*yy_diff2[nlo]+(b**3-b)*yy_diff2[nhi])*(h**2)/6.0
-  return(y)
+  return y

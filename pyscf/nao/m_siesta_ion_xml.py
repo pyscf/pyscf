@@ -254,8 +254,7 @@ def extract_projector(pro_xml):
 #
 if __name__=="__main__":
   import sys 
-  fname = sys.argv[1]
+  fname = sys.argv[1]   #has an error out of range!!
   ionxml = siesta_ion_xml(fname)
   print(dir(ionxml))
   
-

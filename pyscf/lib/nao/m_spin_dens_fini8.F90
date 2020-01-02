@@ -65,9 +65,10 @@ subroutine spin_dens(sda, br, dens)
     enddo; ! mu
   enddo; ! atom
   inz2vo(0,1:2) = nnzo
-  
+
+  ! write(6,*) __FILE__, __LINE__, sum(inz2vo)  
   call spin_dens_orb_sprs(inz2vo, sda%nspin, sda%DM, dens, dm_f2)
-  
+  !if (sum(abs(br))<0.3d0) write(6,*) __FILE__, __LINE__, sum(br), sum(dens)
 end subroutine ! spin_dens
 
 !

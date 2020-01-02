@@ -35,8 +35,53 @@ from pyscf.lo import iao
 from pyscf.lo import orth, pipek
 from pyscf import __config__
 
+def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e-8, max_iter=200, verbose=logger.NOTE):
+    '''Intrinsic Bonding Orbitals
+    
+    This function serves as a wrapper to the underlying localization functions
+    ibo_loc and PipekMezey to create IBOs.
 
-def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
+    Args:
+        mol : the molecule or cell object
+
+        orbocc : occupied molecular orbital coefficients
+
+    Kwargs:
+        locmethod : string
+            the localization method 'PM' for Pipek Mezey localization or 'IBO' for the IBO localization
+
+        iaos : 2D array
+            the array of IAOs
+
+        s : 2D array
+            the overlap array in the ao basis
+
+    Returns:
+        IBOs in the basis defined in mol object.
+    '''
+    
+    if s is None:
+        if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
+            if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
+                s = mol.pbc_intor('int1e_ovlp', hermi=1)
+            else:
+                raise NotImplementedError('k-points crystal orbitals')
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
+
+    if iaos is None:
+        iaos = iao.iao(mol, orbocc)
+
+    locmethod = locmethod.strip().upper()
+    if locmethod == 'PM':
+        EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', exponent)
+        ibos = PipekMezey(mol, orbocc, iaos, s, exponent=EXPONENT)
+        del(EXPONENT)
+    else:
+        ibos = ibo_loc(mol, orbocc, iaos, s, exponent=exponent, grad_tol=grad_tol, max_iter=max_iter, verbose=verbose)
+    return ibos
+
+def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
         verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals. [Ref. JCTC, 9, 4834]
 
@@ -68,20 +113,9 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     log = logger.new_logger(mol, verbose)
     assert(exponent in (2, 4))
 
-    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
-        if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
-            ovlpS = mol.pbc_intor('int1e_ovlp', hermi=1)
-        else:
-            raise NotImplementedError('k-points crystal orbitals')
-    else:
-        ovlpS = mol.intor_symmetric('int1e_ovlp')
-
-    if iaos is None:
-        iaos = iao.iao(mol, orbocc)
-
     # Symmetrically orthogonalization of the IAO orbitals as Knizia's
     # implementation.  The IAO returned by iao.iao function is not orthogonal.
-    iaos = orth.vec_lowdin(iaos, ovlpS)
+    iaos = orth.vec_lowdin(iaos, s)
 
     #static variables
     StartTime = time()
@@ -100,7 +134,7 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     AtomOffsets = MakeAtomIbOffsets(Atoms)[0]
     iAtSl = [slice(AtomOffsets[A],AtomOffsets[A+1]) for A in range(nAtoms)]
     #converts the occupied MOs to the IAO basis
-    CIb = reduce(numpy.dot, (iaos.T, ovlpS , orbocc))
+    CIb = reduce(numpy.dot, (iaos.T, s , orbocc))
     numOccOrbitals = CIb.shape[1]
 
     log.debug("   {0:^5s} {1:^14s} {2:^11s} {3:^8s}"
@@ -175,9 +209,7 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     return numpy.dot(iaos, (orth.vec_lowdin(CIb)))
 
 
-EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', 4)
-
-def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
+def PipekMezey(mol, orbocc, iaos, s, exponent):
     '''
     Note this localization is slightly different to Knizia's implementation.
     The localization here reserves orthogonormality during optimization.
@@ -196,20 +228,6 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
     >>> pm = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0])
     >>> loc_orb = pm.kernel()
     '''
-    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
-        if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
-            s = mol.pbc_intor('int1e_ovlp', hermi=1)
-        else:
-            raise NotImplementedError('k-points crystal orbitals')
-    else:
-        s = mol.intor_symmetric('int1e_ovlp')
-
-    if iaos is None:
-        iaos = iao.iao(mol, orbocc)
-
-    # Different to Knizia's code, the reference IAOs are not neccessary
-    # orthogonal.
-    #iaos = orth.vec_lowdin(iaos, s)
 
     cs = numpy.dot(iaos.T.conj(), s)
     s_iao = numpy.dot(cs, iaos)
@@ -231,9 +249,6 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
     pm.exponent = exponent
     return pm
 PM = Pipek = PipekMezey
-
-del(EXPONENT)
-
 
 '''
 These are parameters for selecting the valence space correctly.

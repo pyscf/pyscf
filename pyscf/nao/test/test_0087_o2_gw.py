@@ -3,32 +3,58 @@ import unittest, numpy as np
 from pyscf import gto, scf
 from pyscf.nao import gw as gw_c
 
-mol = gto.M( verbose = 1, atom = '''O 0 0 0; O 0 0 2.0''', basis = 'cc-pvdz', spin = 2, )
+mol = gto.M( verbose = 1, atom = '''O 0.0 0.0 -0.622978; O 0.0 0.0 0.622978''', basis = 'cc-pvdz', spin = 2, )
 gto_mf_uhf = scf.UHF(mol)
 e_tot = gto_mf_uhf.kernel()
-jg,kg = gto_mf_uhf.get_jk()
+#jg,kg = gto_mf_uhf.get_jk()
 
 class KnowValues(unittest.TestCase):
 
   def test_o2_gw_0087(self):
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    from io import StringIO
     """ Spin-resolved case GW procedure. """
     #print(__name__, dir(gto_mf_uhf))
-    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=0, niter_max_ev=6)
-    print(__name__, 'nfermi =', gw.nfermi)
-    print(__name__, 'e_tot =', e_tot)
+    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=0, niter_max_ev=6, jcutoff=12)
+    #print(__name__, 'nfermi =', gw.nfermi)
+    #print(__name__, 'e_tot =', e_tot)
     self.assertEqual(gw.nspin, 2)
-    
     gw.kernel_gw()
-    print(gw.mo_energy)
-    print(gw.mo_energy_gw)
-    print(gw.ksn2f)
-    #print(__name__, gw.nspin)
-    
-    #print(__name__)
-    #print(gw.mo_occ)
-    #print(gw.nelec)
-    #print(gw.nelectron)
-    #print(gw.mo_occ.sum())
-    
+    #gw.report()
+    np.savetxt('eigvals_g0w0_pyscf_rescf_o2_0087.txt', gw.mo_energy_gw[0,:,:].T)
+
+    reflines = u"""-2.066794262507180235e+01 -2.059606842160618001e+01 
+-2.066739073401323168e+01 -2.026688493419162995e+01
+-1.597844973588707695e+00 -1.404839916644314624e+00
+-1.065759004553683331e+00 -9.223326834974986399e-01
+-7.216185233670470156e-01 -6.604156965786966982e-01
+-7.216185233670456833e-01 -5.819504613421641048e-01
+-7.162888896288145402e-01 -5.819504613421628836e-01
+-4.863444705681586600e-01 6.572791437724267993e-02
+-4.863444705681552738e-01 6.572791437724459507e-02
+3.374986529927169188e-01 3.989268256149947622e-01
+9.723803394644109366e-01 9.945702181997964075e-01
+1.012560504993975208e+00 1.085328723165654985e+00
+1.012560504993977428e+00 1.085328723165656539e+00
+1.097687223995805983e+00 1.116946344532482316e+00
+1.110895503965524833e+00 1.221318278807398849e+00
+1.120550633372836780e+00 1.221318278807399516e+00
+1.274502871852798203e+00 1.289100602949988517e+00
+1.871514450003718633e+00 1.907845159479740982e+00
+2.323558750328121203e+00 2.380030399530845386e+00
+2.323558750328121203e+00 2.380030399530846719e+00
+2.594057749622432407e+00 2.699072541242792500e+00
+2.594057749622432407e+00 2.699072541242792944e+00
+2.863151521343340722e+00 2.996390061519241144e+00
+2.863151521343342942e+00 2.996390061519242476e+00
+2.986289867696291900e+00 3.043597277843169024e+00
+3.519722767487217574e+00 3.582380444764414751e+00
+3.519722767487221127e+00 3.582380444764418304e+00
+4.112903441748526845e+00 4.146312536608574462e+00
+    """ #u unicodes the string in python 2.7
+    eeref = np.loadtxt(StringIO(reflines)).T
+    for e1r,e2r, e1,e2 in zip(eeref[0], eeref[1], gw.mo_energy_gw[0,0,:], gw.mo_energy_gw[0,1,:]):
+      #print(e1r,e1,e2r,e2)
+      self.assertAlmostEqual(float(e1r), e1)
+      self.assertAlmostEqual(float(e2r), e2)
+          
 if __name__ == "__main__": unittest.main()

@@ -1,0 +1,66 @@
+
+SystemName          S2 
+SystemLabel         S2
+
+AtomicCoordinatesFormat  Ang
+
+NumberOfAtoms       2
+NumberOfSpecies     1
+
+
+%block ChemicalSpeciesLabel
+1	16	S.gga
+
+%endblock ChemicalSpeciesLabel
+
+LatticeConstant     20 Ang
+
+%block LatticeVectors             
+  1.000  0.000  0.000
+  0.000  1.000  0.000
+  0.000  0.000  1.000
+%endblock LatticeVectors
+
+
+
+%block AtomicCoordinatesAndAtomicSpecies
+	0.0  0.0  0.960113	1			1	S.gga
+	0.0  0.0  -0.960113	1			2	S.gga
+
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+###basis
+PAO.BasisSize       DZP             
+PAO.EnergyShift     10 meV         
+PAO.SplitNorm       0.15            
+#PAO.EnergyCutoff   250.0 Ry
+
+MeshCutoff          250.0 Ry
+
+###pseudopotentian, XC and Spin
+XC.functional        GGA           
+XC.authors           PBE           
+SpinPolarized       .true.
+
+###convergency
+SCFMustConverge     .true.
+DM.Tolerance         1.d-5 
+#DM.MixingWeight     0.01
+#DM.NumberPulay      5         
+
+OccupationFunction 'FD'
+
+### Molecular dynamics 
+ElectronicTemperature      10 K
+MD.TypeOfRun               CG
+MD.NumCGsteps              0
+MaxSCFIterations           200
+
+WriteEigenvalues    .true.
+WriteKbands         .true.
+WriteBands          .true.
+WriteWaveFunctions  .true.
+WriteDenchar        .true.
+COOP.Write          .true.
+xml.write           .true.
+

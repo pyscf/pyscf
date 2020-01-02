@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
     for iw,omega in enumerate(omegas):
       for ixyz in range(1):
         vab = bse.apply_l0(bse.dip_ab[ixyz], omega)
-        pxx[iw] = pxx[iw] - (vab.imag*bse.dip_ab[ixyz]).sum()
+        pxx[iw] = pxx[iw] - (vab.imag*bse.dip_ab[ixyz].reshape(-1)).sum()
         
     data = np.array([omegas.real*27.2114, pxx])
     np.savetxt('water.bse_iter_rpa.omega.nonin.pxx.txt', data.T, fmt=['%f','%f'])

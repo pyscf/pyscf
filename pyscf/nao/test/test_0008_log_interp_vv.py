@@ -1,14 +1,14 @@
 from __future__ import print_function, division
 import unittest, numpy as np
 
-from pyscf.nao.m_log_mesh import log_mesh
+from pyscf.nao.log_mesh import funct_log_mesh
 from pyscf.nao.m_log_interp import log_interp_c
 
 class KnowValues(unittest.TestCase):
 
   def test_log_interp_vv(self):
     """ Test the interpolation facility for an array arguments from the class log_interp_c """
-    rr,pp = log_mesh(256, 0.01, 20.0)
+    rr,pp = funct_log_mesh(256, 0.01, 20.0)
     lgi = log_interp_c(rr)
     gcs = np.array([1.2030, 3.2030, 0.7, 10.0])
     ff = np.array([[np.exp(-gc*r**2) for r in rr] for gc in gcs])
@@ -26,7 +26,7 @@ class KnowValues(unittest.TestCase):
 
   def test_log_interp_coeffs_vec(self):
     """ Test the interpolation facility for an array arguments from the class log_interp_c """
-    rr,pp = log_mesh(1024, 0.01, 20.0)
+    rr,pp = funct_log_mesh(1024, 0.01, 20.0)
     lgi = log_interp_c(rr)
     rvecs = np.linspace(0.00, 25.0, 20)    
     kk1,cc1 = np.zeros(len(rvecs), dtype=np.int32), np.zeros((6,len(rvecs)))
@@ -39,7 +39,7 @@ class KnowValues(unittest.TestCase):
   
   def test_log_interp_vv_call(self):
     """ Test the interpolation facility for an array arguments from the class log_interp_c """
-    rr,pp = log_mesh(256, 0.01, 20.0)
+    rr,pp = funct_log_mesh(256, 0.01, 20.0)
     lgi = log_interp_c(rr)
     gcs = np.array([1.2030, 3.2030, 0.7, 10.0])
     ff = np.array([[np.exp(-gc*r**2) for r in rr] for gc in gcs])
@@ -56,7 +56,7 @@ class KnowValues(unittest.TestCase):
 
   def test_log_interp_sv_call(self):
     """ Test the interpolation facility for an array arguments from the class log_interp_c """
-    rr,pp = log_mesh(256, 0.01, 20.0)
+    rr,pp = funct_log_mesh(256, 0.01, 20.0)
     lgi = log_interp_c(rr)
     gc = 1.2030
     ff = np.array([np.exp(-gc*r**2) for r in rr])

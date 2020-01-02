@@ -33,8 +33,9 @@ class KnowValues(unittest.TestCase):
 3.912773887375614823e+00 """
 
     dname = os.path.dirname(os.path.abspath(__file__))
-    gw = gw_c(label='water', cd=dname, verbosity=0, nocc_conv=4, nvrt_conv=4, perform_scf=True, perform_gw=True, tol_ia=1e-6)
-    np.savetxt('eigvals_g0w0_water_0080.txt', gw.mo_energy_gw.T)
+    gw = gw_c(label='water', cd=dname, verbosity=0, nocc_conv=4, nvrt_conv=4, perform_scf=True, tol_ia=1e-6)
+    gw.kernel_gw()
+    np.savetxt('eigvals_g0w0_water_0080.txt', gw.mo_energy_gw[0].T)
       
     for e,eref_str in zip(gw.mo_energy_gw[0,0,:],fc.splitlines()):
       self.assertAlmostEqual(e,float(eref_str))

@@ -5,7 +5,23 @@
 from __future__ import division
 import numpy as np
 
+def read_xyz(fname):
+  """ Reads xyz files """
+  a2s  = np.loadtxt(fname, skiprows=2, usecols=[0], dtype=str)
+  a2xyz = np.loadtxt(fname, skiprows=2, usecols=[1,2,3])
+  assert len(a2s)==len(a2xyz)
+  return a2s,a2xyz
 
+  
+def write_xyz(fname, s, ccc):
+  """ Writes xyz files """
+  assert len(s) == len(ccc)
+  f = open(fname, "w")
+  print(len(s), file=f)
+  print(fname, file=f)
+  for sym,xyz in zip(s,ccc): print("%2s %18.10f %18.10f %18.10f"%(sym, xyz[0],xyz[1],xyz[2]), file=f)
+  f.close()
+  return
 
 def xyz2rtp( x,y,z):
      r=np.sqrt( x**2+y**2+z**2)
