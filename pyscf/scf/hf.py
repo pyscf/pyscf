@@ -784,7 +784,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
 
     if omega is None:
         vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
-                             vhfopt, 0, mol.cart, with_j, with_k)
+                             vhfopt, hermi, mol.cart, with_j, with_k)
     else:
 # The vhfopt of standard Coulomb operator can be used here as an approximate
 # integral prescreening conditioner since long-range part Coulomb is always
@@ -792,7 +792,7 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
 # integral estimation from standard Coulomb.
         with mol.with_range_coulomb(omega):
             vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
-                                 vhfopt, 0, mol.cart, with_j, with_k)
+                                 vhfopt, hermi, mol.cart, with_j, with_k)
 
     if dm_dtype == numpy.complex128:
         if with_j:

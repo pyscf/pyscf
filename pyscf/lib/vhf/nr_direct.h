@@ -22,18 +22,9 @@
 #define NOVALUE 0xffffffff
 
 typedef struct {
-        int v_bra_sh0;
-        int v_bra_sh1;
-        int v_ket_sh0;
-        int v_ket_sh1;
         int v_ket_nsh;  /* v_ket_sh1 - v_ket_sh0 */
         int offset0_outptr;  /* v_bra_sh0 * v_ket_nsh + v_ket_sh0 */
-        int dm_bra_sh0;
-        int dm_bra_sh1;
-        int dm_ket_sh0;
-        int dm_ket_sh1;
         int dm_dims[2];
-        int v_dims[2];
         int *outptr;   /* Offset array to index the data which are stored in stack */
         double *data;  /* Stack to store data */
         int stack_size;  /* How many data have been used */
@@ -41,8 +32,10 @@ typedef struct {
 } JKArray;
 
 typedef struct {
-        JKArray *(*allocate)(int *shls_slice, int *ao_loc, int ncomp);
-        void (*deallocate)(JKArray *);
+        int ibra_shl0;  // = 0, 2, 4, 6. The index in shls_slice
+        int iket_shl0;
+        int obra_shl0;
+        int oket_shl0;
         void (*contract)(double *eri, double *dm, JKArray *vjk, int *shls,
                          int i0, int i1, int j0, int j1,
                          int k0, int k1, int l0, int l1);

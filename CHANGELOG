@@ -27,6 +27,7 @@ PySCF 1.7.0 (2019-?-?)
   - Davidson diagonalization for multi-roots
   - memory usage in CCSD
   - Molecular orientation does not need to be changed when symmetry is enabled
+  - Performance of JK-build function
 * Bugfix
   - Carbon ANO data
   - Initial guess for EOM-KCCSD
