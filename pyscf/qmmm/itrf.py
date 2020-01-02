@@ -141,6 +141,10 @@ def qmmm_for_scf(scf_method, mm_mol):
                 nao = mol.nao
                 max_memory = self.max_memory - lib.current_memory()[0]
                 blksize = int(min(max_memory*1e6/8/nao**2, 200))
+                if max_memory <= 0:
+                    blksize = 1
+                    logger.warn(self, 'Memory estimate for reading point charges is negative. '
+                                'Trying to read point charges one by one.')
                 cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
                                                      mol._env, intor)
                 v = 0
