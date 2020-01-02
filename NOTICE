@@ -1,25 +1,25 @@
 Copyright 2014-2018 The PySCF Developers.
 PySCF (www.pyscf.org) was developed by:
 
-Qiming Sun (Caltech; Tencent America LLC)
+Qiming Sun (Princeton University; Caltech; Tencent America LLC)
 Sandeep Sharma (University of Colorado Boulder)
-Alexander Sokolov (Ohio State University)
+Alexander Sokolov (Caltech; Ohio State University)
 George H. Booth (Cambridge University)
 Wirawan Purwanto (William & Mary)
 Sheng Guo (Caltech)
 Sebastian Wouters (Ghent University)
-Zhendong Li (Caltech)
+Zhendong Li (Princeton University; Caltech)
 Carlos Jimenez-Hoyos (Wesleyan University)
 Junzi Liu (John Hopkins)
-Garnet Chan (Caltech)
-Timothy Berkelbach (University of Chicago)
-James D. McClain (Caltech)
+Garnet Chan (Princeton University; Caltech)
+Timothy Berkelbach (Princeton University; University of Chicago; CCQ)
+James D. McClain (Princeton University; Caltech)
 Nick Blunt (LBNL)
-Elvira Sayfutyarova (Princeton University)
+Elvira Sayfutyarova (Princeton University; Yale University)
 Jan Hermann (MPI)
 Peter Koval (Donostia International Physics Center)
-Marc Barbry (CFM Materials Physics Center)
-Susi Lehtola (LBNL)
+Marc Barbry (CFM Materials Physics Center; Simbeyond)
+Susi Lehtola (LBNL; University of Helsinki)
 Paul J. Robinson (UCLA)
 Narbe Mardirossian (Caltech)
 Lucas Wagner (University of Illinois)
@@ -47,8 +47,16 @@ Henry Schurkus (Caltech)
 Jia Chen (University of Florida)
 Henrik Larsson (Caltech)
 Shiv Upadhyay (University of Pittsburgh)
+Samragni Banerjee (Ohio University)
+Xing Zhang (Caltech)
+Tianyu Zhu (Caltech)
+Lee-Ping Wang (UC Davis)
+Kevin Gasperich (University of Pittsburgh)
+Jesse Gorzinski (IBM)
 
 Developers who contribute debug/test code which are removed or not included in
 the source code
 
 Jun Yang (Hong Kong University)
+
+
