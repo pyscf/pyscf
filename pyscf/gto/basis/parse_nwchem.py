@@ -321,9 +321,13 @@ def to_general_contraction(basis):
         es = numpy.hstack([ec[:,0] for ec in basdic[key]])
         cs = scipy.linalg.block_diag(*[ec[:,1:] for ec in basdic[key]])
 
-        idx = numpy.unique(es.round(9), return_index=True)[1]
-        idx = idx[::-1]  # sort the exponents from large to small
-        ec = numpy.hstack((es[idx,None], cs[idx,:]))
+        es, e_idx, rev_idx = numpy.unique(es.round(9), True, True)
+        es = es[::-1]  # sort the exponents from large to small
+        bcoeff = numpy.zeros((e_idx.size, cs.shape[1]))
+        for i, j in enumerate(rev_idx):
+            bcoeff[j] += cs[i]
+        bcoeff = bcoeff[::-1]
+        ec = numpy.hstack((es[:,None], bcoeff))
 
         basis.append(l_kappa + ec.tolist())
 

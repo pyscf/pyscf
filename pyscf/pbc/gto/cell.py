@@ -1014,7 +1014,13 @@ class Cell(mole.Mole):
             If set, defines a spherical cutoff of planewaves, with .5 * G**2 < ke_cutoff
             The default value is estimated based on :attr:`precision`
         dimension : int
-            Default is 3
+            Periodic dimensions. Default is 3
+        low_dim_ft_type : str
+            For semi-empirical periodic systems, whether to calculate
+            integrals at the non-PBC dimension using the sampled mesh grids in
+            infinity vacuum (inf_vacuum) or truncated Coulomb potential
+            (analytic_2d_1). Unless explicitly specified, analytic_2d_1 is
+            used for 2D system and inf_vacuum is assumed for 1D and 0D.
 
         ** Following attributes (for experts) are automatically generated. **
 
@@ -1180,8 +1186,36 @@ class Cell(mole.Mole):
                 a lattice vector.
             mesh : (3,) ndarray of ints
                 The number of *positive* G-vectors along each direction.
+            ke_cutoff : float
+                If set, defines a spherical cutoff of planewaves, with .5 * G**2 < ke_cutoff
+                The default value is estimated based on :attr:`precision`
+            precision : float
+                To control Ewald sums and lattice sums accuracy
+            nimgs : (3,) ndarray of ints
+                Number of repeated images in lattice summation to produce
+                periodicity. This value can be estimated based on the required
+                precision.  It's recommended NOT making changes to this value.
+            rcut : float
+                Cutoff radius (unit Bohr) in lattice summation to produce
+                periodicity. The value can be estimated based on the required
+                precision.  It's recommended NOT making changes to this value.
+            ew_eta, ew_cut : float
+                Parameters eta and cut to converge Ewald summation.
+                See :func:`get_ewald_params`
             pseudo : dict or str
-                To define pseudopotential.  If given, overwrite :attr:`Cell.pseudo`
+                To define pseudopotential.
+            ecp : dict or str
+                To define ECP type pseudopotential.
+            h : (3,3) ndarray
+                a.T. Deprecated
+            dimension : int
+                Default is 3
+            low_dim_ft_type : str
+                For semi-empirical periodic systems, whether to calculate
+                integrals at the non-PBC dimension using the sampled mesh grids in
+                infinity vacuum (inf_vacuum) or truncated Coulomb potential
+                (analytic_2d_1). Unless explicitly specified, analytic_2d_1 is
+                used for 2D system and inf_vacuum is assumed for 1D and 0D.
         '''
         if h is not None: self.h = h
         if a is not None: self.a = a

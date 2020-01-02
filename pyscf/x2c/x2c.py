@@ -27,11 +27,12 @@ from pyscf.scf import dhf
 from pyscf.scf import _vhf
 from pyscf import __config__
 
+LINEAR_DEP_THRESHOLD = 1e-9
+
 class X2C(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
-    exp_drop = getattr(__config__, 'x2c_X2C_exp_drop', 0.2)
     approx = getattr(__config__, 'x2c_X2C_approx', '1e')  # 'atom1e'
     xuncontract = getattr(__config__, 'x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'x2c_X2C_basis', None)
@@ -44,7 +45,6 @@ class X2C(lib.StreamObject):
         log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
-        log.info('exp_drop = %g', self.exp_drop)
         log.info('approx = %s',    self.approx)
         log.info('xuncontract = %d', self.xuncontract)
         if self.basis is not None:
@@ -60,8 +60,7 @@ class X2C(lib.StreamObject):
             xmol.build(False, False, basis=self.basis)
             return xmol, None
         elif self.xuncontract:
-            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract,
-                                                self.exp_drop)
+            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
             return xmol, contr_coeff
         else:
             return mol, None
@@ -504,85 +503,79 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
     _env = []
     ptr = len(pmol._env)
     contr_coeff = []
-    for ib in range(mol.nbas):
+
+    def _to_full_contraction(mol, bas_idx):
+        es = numpy.hstack([mol.bas_exp(ib) for ib in bas_idx])
+        cs = scipy.linalg.block_diag(*[mol._libcint_ctr_coeff(ib) for ib in bas_idx])
+
+        es, e_idx, rev_idx = numpy.unique(es.round(9), True, True)
+        cs_new = numpy.zeros((es.size, cs.shape[1]))
+        for i, j in enumerate(rev_idx):
+            cs_new[j] += cs[i]
+        return es[::-1], cs_new[::-1]
+
+    aoslices = mol.aoslice_by_atom()
+    for ia, (ib0, ib1) in enumerate(aoslices[:,:2]):
         if isinstance(xuncontract, str):
-            ia = mol.bas_atom(ib)
             uncontract_me = ((xuncontract == mol.atom_pure_symbol(ia)) or
                              (xuncontract == mol.atom_symbol(ia)))
         elif isinstance(xuncontract, (tuple, list)):
-            ia = mol.bas_atom(ib)
             uncontract_me = ((mol.atom_pure_symbol(ia) in xuncontract) or
                              (mol.atom_symbol(ia) in xuncontract) or
                              (ia in xuncontract))
         else:
             uncontract_me = xuncontract
 
-        nc = mol._bas[ib,mole.NCTR_OF]
-        l = mol._bas[ib,mole.ANG_OF]
-        if mol.cart:
-            degen = (l + 1) * (l + 2) // 2
-        else:
-            degen = l * 2 + 1
-        if uncontract_me:
-            np = mol._bas[ib,mole.NPRIM_OF]
-            pexp = mol._bas[ib,mole.PTR_EXP]
-# Modfied partially uncontraction to avoid potentially lindep in the
-# segment-contracted basis
-            nkept = (pmol._env[pexp:pexp+np] > exp_drop).sum()
-            if nkept > nc:
-                b_coeff = mol.bas_ctr_coeff(ib)
-                importance = numpy.einsum('ij->i', abs(b_coeff))
-                idx = numpy.argsort(importance[:nkept])
-                contracted = numpy.sort(idx[nkept-nc:])
-                primitive  = numpy.sort(idx[:nkept-nc])
+        if not uncontract_me:
+            p0, p1 = aoslices[ia]
+            _bas.append(mol._bas[ib0:ib1])
+            contr_coeff.append(numpy.eye(p1-p0))
+            continue
 
-# part1: pGTOs that are associated with small coefficients
-                bs = numpy.empty((nkept-nc,mol._bas.shape[1]), dtype=numpy.int32)
-                bs[:] = mol._bas[ib]
-                bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
-                for k, i in enumerate(primitive):
-                    norm = mole.gto_norm(l, mol._env[pexp+i])
-                    _env.append(mol._env[pexp+i])
-                    _env.append(norm)
-                    bs[k,mole.PTR_EXP] = ptr
-                    bs[k,mole.PTR_COEFF] = ptr + 1
-                    ptr += 2
-                _bas.append(bs)
-                part1 = numpy.zeros((degen*(nkept-nc),degen*nc))
-                c = b_coeff[primitive]
-                for i in range(degen):
-                    part1[i::degen,i::degen] = c
+        lmax = mol._bas[ib0:ib1,mole.ANG_OF].max()
+        assert(all(mol._bas[ib0:ib1, mole.KAPPA_OF] == 0))
+        # TODO: loop based on kappa
+        for l in range(lmax+1):
+            bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,mole.ANG_OF] == l)[0]
+            if len(bas_idx) == 0:
+                continue
 
-# part2: binding the pGTOs of small exps to the pGTOs of large coefficients
-                bs = mol._bas[ib].copy()
-                bs[mole.NPRIM_OF] = np - nkept + nc
-                idx = numpy.hstack((contracted, numpy.arange(nkept,np)))
-                exps = mol._env[pexp:pexp+np][idx]
-                cs = mol._libcint_ctr_coeff(ib)[idx]
-                ee = mole.gaussian_int(l*2+2, exps[:,None] + exps)
-                s1 = numpy.einsum('pi,pq,qi->i', cs, ee, cs)
-                s1 = numpy.sqrt(s1)
-                cs = numpy.einsum('pi,i->pi', cs, 1/s1)
-                _env.extend(exps)
-                _env.extend(cs.T.reshape(-1))
-                bs[mole.PTR_EXP] = ptr
-                bs[mole.PTR_COEFF] = ptr + exps.size
-                ptr += exps.size + cs.size
-                _bas.append(bs)
+# Some input basis may be the segmented basis from a general contracted set.
+# This may lead to duplicated pGTOs. First contract all basis to remove
+# duplicated primitive functions.
+            mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
 
-                part2 = numpy.eye(degen*nc)
-                for i in range(nc):
-                    part2[i*degen:(i+1)*degen,i*degen:(i+1)*degen] *= s1[i]
-                contr_coeff.append(numpy.vstack((part1, part2)))
+            if mol.cart:
+                degen = (l + 1) * (l + 2) // 2
             else:
-                _bas.append(mol._bas[ib])
-                contr_coeff.append(numpy.eye(degen*nc))
-        else:
-            _bas.append(mol._bas[ib])
-            contr_coeff.append(numpy.eye(degen*nc))
+                degen = l * 2 + 1
+            np, nc = b_coeff.shape
+
+            # Uncontract all basis. Use pGTO basis for X
+            bs = numpy.zeros((np, mole.BAS_SLOTS), dtype=numpy.int32)
+            bs[:,mole.ATOM_OF] = ia
+            bs[:,mole.ANG_OF ] = l
+            bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
+            norm = mole.gto_norm(l, mol_exps)
+            _env.append(mol_exps)
+            _env.append(norm)
+            bs[:,mole.PTR_EXP] = numpy.arange(ptr, ptr+np)
+            bs[:,mole.PTR_COEFF] = numpy.arange(ptr+np, ptr+np*2)
+            _bas.append(bs)
+            ptr += np * 2
+
+            c = b_coeff * 1/norm[:,None]
+            c = scipy.linalg.block_diag(*([c,] * degen))
+            c = c.reshape((degen, np, degen, nc))
+            c = c.transpose(1,0,3,2).reshape(np*degen, nc*degen)
+            contr_coeff.append(c)
+
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
-    pmol._env = numpy.hstack((mol._env, _env))
-    return pmol, scipy.linalg.block_diag(*contr_coeff)
+    pmol._env = numpy.hstack([mol._env,] + _env)
+    contr_coeff = scipy.linalg.block_diag(*contr_coeff)
+
+    return pmol, contr_coeff
+
 
 def _sqrt(a, tol=1e-14):
     e, v = numpy.linalg.eigh(a)
@@ -637,10 +630,23 @@ def _x2c1e_xmatrix(t, v, w, s, c):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:nao,nao:]
-    cs = a[nao:,nao:]
-    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    try:
+        e, a = scipy.linalg.eigh(h, m)
+        cl = a[:nao,nao:]
+        cs = a[nao:,nao:]
+        x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    except scipy.linalg.LinAlgError:
+        d, t = numpy.linalg.eigh(m)
+        idx = d>LINEAR_DEP_THRESHOLD
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = reduce(numpy.dot, (t.T.conj(), h, t))
+        e, a = numpy.linalg.eigh(tht)
+        a = numpy.dot(t, a)
+        idx = e > -c**2
+        cl = a[:nao,idx]
+        cs = a[nao:,idx]
+        # X = B A^{-1} = B A^T S
+        x = cs.dot(cl.conj().T).dot(m)
     return x
 
 def _x2c1e_get_hcore(t, v, w, s, c):
@@ -655,9 +661,23 @@ def _x2c1e_get_hcore(t, v, w, s, c):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:nao,nao:]
-    cs = a[nao:,nao:]
+    try:
+        e, a = scipy.linalg.eigh(h, m)
+        cl = a[:nao,nao:]
+        cs = a[nao:,nao:]
+        e = e[nao:]
+    except scipy.linalg.LinAlgError:
+        d, t = numpy.linalg.eigh(m)
+        idx = d>LINEAR_DEP_THRESHOLD
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = reduce(numpy.dot, (t.T.conj(), h, t))
+        e, a = numpy.linalg.eigh(tht)
+        a = numpy.dot(t, a)
+        idx = e > -c**2
+        cl = a[:nao,idx]
+        cs = a[nao:,idx]
+        e = e[idx]
+
 # The so obtaied X seems not numerically stable.  We changed to the
 # transformed matrix
 # [1 1] [ V T ] [1 0]
@@ -692,7 +712,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))
-    h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))
+    h1 = reduce(numpy.dot, (r.T.conj()*e, r))
     return h1
 
 
