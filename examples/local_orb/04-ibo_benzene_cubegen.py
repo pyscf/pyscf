@@ -41,7 +41,7 @@ a = lo.vec_lowdin(a, mf.get_ovlp())
 Generate IBOS from orthogonal IAOs
 '''
 
-ibo = lo.ibo.ibo(mol, mo_occ, a)
+ibo = lo.ibo.ibo(mol, mo_occ, iaos=a)
 
 '''
 Print the IBOS into Gausian Cube files
@@ -70,7 +70,7 @@ mf.mulliken_pop(iao_mol, dm, s=numpy.eye(iao_mol.nao_nr()))
 #
 mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
 iaos = lo.iao.iao(mol, mo_occ)
-ibo = lo.ibo.PM(mol, mo_occ, iaos).kernel()
+ibo = lo.ibo.ibo(mol, mo_occ, locmethod='PM', iaos=iaos).kernel()
 for i in range(ibo.shape[1]):
     tools.cubegen.orbital(mol, 'benzene_ibo2_{:02d}.cube'.format(i+1), ibo[:,i])
 
