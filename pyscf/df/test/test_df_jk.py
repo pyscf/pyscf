@@ -178,8 +178,6 @@ class KnownValues(unittest.TestCase):
         mf = mf.density_fit()
         self.assertTrue(mf.with_df is not None)
 
-        self.assertRaises(RuntimeError, mf.density_fit, 'sto3g')
-
         mf = mf.newton().density_fit(auxbasis='sto3g')
         self.assertEqual(mf.with_df.auxbasis, 'sto3g')
 
