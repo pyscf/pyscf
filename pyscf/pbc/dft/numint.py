@@ -157,6 +157,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
             dm = (dm + dm.conj().T) * .5
 
         def dot_bra(bra, aodm):
+            # rho = numpy.einsum('pi,pi->p', bra.conj(), aodm).real
             #:rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
             #:rho += numpy.einsum('pi,pi->p', bra.imag, aodm.imag)
             #:return rho

@@ -39,6 +39,17 @@ class KnownValues(unittest.TestCase):
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
         self.assertAlmostEqual(lib.finger(coulG), 1.3245365170998518+0j, 9)
 
+    def test_unconventional_ws_cell(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'He'
+        cell.basis = [[0, (1, 1)]]
+        cell.a = '''4.3, 0.7, 1.2
+                    0.4, 2.0, 0.1
+                    0.5, 0  , 1.8'''
+        cell.build()
+        kpts = cell.make_kpts([1,1,1])
+        self.assertRaises(RuntimeError, tools.precompute_exx, cell, kpts)
+
     def test_coulG(self):
         numpy.random.seed(19)
         kpt = numpy.random.random(3)
@@ -106,8 +117,9 @@ class KnownValues(unittest.TestCase):
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
-        self.assertAlmostEqual(lib.finger(cl2.atom_coords()), 465.86333525744129, 9)
+        self.assertTrue(numpy.all(cl1.nimgs == numpy.array([7,14,10])))
+        cl2 = tools.cell_plus_imgs(cl1, [3,4,5])
+        self.assertAlmostEqual(lib.finger(cl2.atom_coords()), 4.791699273649499, 9)
 
     def test_madelung(self):
         cell = pbcgto.Cell()

@@ -290,7 +290,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
         maxqv = abs(exx_q).max(axis=0)
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
-        coulG = coulG.astype(np.complex128)
+        coulG = coulG.astype(exx_vq.dtype)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
         if cell.dimension < 3:
@@ -373,16 +373,16 @@ def precompute_exx(cell, kpts):
     # ASE:
     alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
     log.info("WS alpha = %s", alpha)
-    kcell.mesh = np.array([4*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
+    kcell.mesh = np.array([4*int(L*alpha*3.0) for L in Lc])  # ~ [120,120,120]
     # QE:
     #alpha = 3./Rin * np.sqrt(0.5)
     #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
     log.debug("# kcell.mesh FFT = %s", kcell.mesh)
-    kcell.build(False,False)
     rs = gen_grid.gen_uniform_grids(kcell)
     kngs = len(rs)
     log.debug("# kcell kngs = %d", kngs)
-    corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell.a)
+    corners_coord = lib.cartesian_prod(([0, 1], [0, 1], [0, 1]))
+    corners = np.dot(corners_coord, kcell.a)
     #vR = np.empty(kngs)
     #for i, rv in enumerate(rs):
     #    # Minimum image convention to corners of kcell parallelepiped
@@ -395,10 +395,20 @@ def precompute_exx(cell, kpts):
     vR = scipy.special.erf(alpha*r) / (r+1e-200)
     vR[r<1e-9] = 2*alpha / np.sqrt(np.pi)
     vG = (kcell.vol/kngs) * fft(vR, kcell.mesh)
+
+    if abs(vG.imag).max() > 1e-6:
+        # vG should be real in regular lattice. If imaginary part is observed,
+        # this probably means a ws cell was built from a unconventional
+        # lattice. The SR potential erfc(alpha*r) for the charge in the center
+        # of ws cell decays to the region out of ws cell. The Ewald-sum based
+        # on the minimum image convention cannot be used to build the kernel
+        # Eq (12) of PRB 87, 165122
+        raise RuntimeError('Unconventional lattice was found')
+
     ws_exx = {'alpha': alpha,
               'kcell': kcell,
               'q'    : kcell.Gv,
-              'vq'   : vG}
+              'vq'   : vG.real.copy()}
     log.debug("# Finished precomputing")
     return ws_exx
 
