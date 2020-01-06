@@ -1279,7 +1279,7 @@ def energy_nuc(mol, charges=None, coords=None):
         float
     '''
     if charges is None: charges = mol.atom_charges()
-    if len(charges) == 0:
+    if len(charges) <= 1:
         return 0
     #e = 0
     #for j in range(len(mol._atm)):
