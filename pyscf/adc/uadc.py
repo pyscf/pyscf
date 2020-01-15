@@ -155,6 +155,8 @@ def compute_amplitudes(myadc, eris):
     eris_OVvv = uadc_ao2mo.unpack_eri_1(eris_OVvv, nvir_a)
     eris_ovVV = eris.ovVV
     eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
+    eris_ovoo = eris.ovoo
+    eris_OVoo = eris.OVoo
 
     t2_1_a = v2e_oovv/D2_a
     t2_1_b = v2e_OOVV/D2_b
@@ -177,9 +179,10 @@ def compute_amplitudes(myadc, eris):
 #
     t1_2_a = 0.5*np.einsum('kdac,ikcd->ia',eris_ovvv,t2_1_a)
     t1_2_a -= 0.5*np.einsum('kcad,ikcd->ia',eris_ovvv,t2_1_a)
-#    t1_2_a -= 0.5*np.einsum('klic,klac->ia',v2e_ooov_a,t2_1_a)
-#    t1_2_a += np.einsum('akcd,ikcd->ia',v2e_vovv_ab,t2_1_ab)
-#    t1_2_a -= np.einsum('klic,klac->ia',v2e_ooov_ab,t2_1_ab)
+    t1_2_a -= 0.5*np.einsum('lcki,klac->ia',eris_ovoo,t2_1_a)
+    t1_2_a += 0.5*np.einsum('kcli,klac->ia',eris_ovoo,t2_1_a)
+    t1_2_a += np.einsum('kdac,ikcd->ia',eris_OVvv,t2_1_ab)
+    t1_2_a -= np.einsum('lcki,klac->ia',eris_OVoo,t2_1_ab)
 #
 #    t1_2_b = 0.5*np.einsum('akcd,ikcd->ia',v2e_vovv_b,t2_1_b)
 #    t1_2_b -= 0.5*np.einsum('klic,klac->ia',v2e_ooov_b,t2_1_b)
