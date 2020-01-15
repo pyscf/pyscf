@@ -258,11 +258,13 @@ def compute_amplitudes(myadc, eris):
  
         t2_2_ab += np.einsum('kilj,klab->ijab',eris_ooOO,t2_1_ab,optimize=True)
         t2_2_ab += np.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_a,optimize=True)
-        t2_2_ab += np.einsum('kcbj,ikac->ijab',eris_OVvo,t2_1_ab,optimize=True)
-        #t2_2_ab -= np.einsum('kbic,kjac->ijab',v2e_ovov_ab,t2_1_ab,optimize=True)
-        #t2_2_ab -= np.einsum('akcj,ikcb->ijab',v2e_vovo_ab,t2_1_ab,optimize=True)
-        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_ab,t2_1_b,optimize=True)
-        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_a,t2_1_ab,optimize=True)
+        t2_2_ab += np.einsum('kcbj,ikac->ijab',eris_OVVO,t2_1_ab,optimize=True)
+        t2_2_ab -= np.einsum('kjbc,ikac->ijab',eris_OOVV,t2_1_ab,optimize=True)
+        t2_2_ab -= np.einsum('kibc,kjac->ijab',eris_ooVV,t2_1_ab,optimize=True)
+        t2_2_ab -= np.einsum('kjac,ikcb->ijab',eris_OOvv,t2_1_ab,optimize=True)
+        t2_2_ab += np.einsum('kcai,kjcb->ijab',eris_OVvo,t2_1_b,optimize=True)
+        t2_2_ab += np.einsum('kcai,kjcb->ijab',eris_ovvo,t2_1_ab,optimize=True)
+        t2_2_ab -= np.einsum('kiac,kjcb->ijab',eris_oovv,t2_1_ab,optimize=True)
 
         print (np.linalg.norm(t2_2_ab))
         exit()
