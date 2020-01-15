@@ -192,10 +192,12 @@ def compute_amplitudes(myadc, eris):
         #t2_2_a += 0.5*np.einsum('klij,klab->ijab',v2e_oooo_a,t2_1_a,optimize=True)
  
         temp = t2_1_a.reshape(nocc_a*nocc_a,nvir_a*nvir_a)
+        eris_vvvv = eris_vvvv.transpose(0,2,1,3) - eris_vvvv.transpose(0,2,3,1)
         temp_1 = eris_vvvv[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)
         t2_2_a = 0.5*np.dot(temp,temp_1.T).reshape(nocc_a,nocc_a,nvir_a,nvir_a)
         del temp_1
         del eris_vvvv
+        eris_oooo = eris_oooo.transpose(0,2,1,3) - eris_oooo.transpose(0,2,3,1)
         t2_2_a += 0.5*np.einsum('klij,klab->ijab', eris_oooo, t2_1_a,optimize=True)
 
         #temp = np.einsum('bkjc,kica->ijab',v2e_voov_a,t2_1_a,optimize=True)
@@ -215,10 +217,12 @@ def compute_amplitudes(myadc, eris):
         #t2_2_b += 0.5*np.einsum('klij,klab->ijab',v2e_oooo_b,t2_1_b,optimize=True)
  
         temp = t2_1_b.reshape(nocc_b*nocc_b,nvir_b*nvir_b)
+        eris_VVVV = eris_VVVV.transpose(0,2,1,3) - eris_VVVV.transpose(0,2,3,1)
         temp_1 = eris_VVVV[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)
         t2_2_b = 0.5*np.dot(temp,temp_1.T).reshape(nocc_b,nocc_b,nvir_b,nvir_b)
         del temp_1
         del eris_VVVV
+        eris_OOOO = eris_OOOO.transpose(0,2,1,3) - eris_OOOO.transpose(0,2,3,1)
         t2_2_b += 0.5*np.einsum('klij,klab->ijab',eris_OOOO,t2_1_b,optimize=True)
 
         #temp = np.einsum('bkjc,kica->ijab',v2e_voov_b,t2_1_b,optimize=True)
