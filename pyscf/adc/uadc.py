@@ -192,6 +192,31 @@ def compute_amplitudes(myadc, eris):
         #del temp_1
         #t2_2_a += 0.5*np.einsum('klij,klab->ijab',v2e_oooo_a,t2_1_a,optimize=True)
  
+        #temp = np.einsum('bkjc,kica->ijab',v2e_voov_a,t2_1_a,optimize=True)
+        #temp_1 = np.einsum('bkjc,ikac->ijab',v2e_voov_ab,t2_1_ab,optimize=True)
+
+        #temp = t2_1_b.reshape(nocc_b*nocc_b,nvir_b*nvir_b)
+        #temp_1 = v2e_vvvv_b[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)
+        #t2_2_b = 0.5*np.dot(temp,temp_1.T).reshape(nocc_b,nocc_b,nvir_b,nvir_b)
+        #del temp_1
+        #t2_2_b += 0.5*np.einsum('klij,klab->ijab',v2e_oooo_b,t2_1_b,optimize=True)
+ 
+        #temp = np.einsum('bkjc,kica->ijab',v2e_voov_b,t2_1_b,optimize=True)
+        #temp_1 = np.einsum('kbcj,kica->ijab',v2e_ovvo_ab,t2_1_ab,optimize=True)
+ 
+        #temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
+        #temp_1 = v2e_vvvv_ab[:].reshape(nvir_a*nvir_b,nvir_a*nvir_b)
+        #t2_2_ab = np.dot(temp,temp_1.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
+        #del temp_1
+  
+        #t2_2_ab += np.einsum('klij,klab->ijab',v2e_oooo_ab,t2_1_ab,optimize=True)
+        #t2_2_ab += np.einsum('kbcj,kica->ijab',v2e_ovvo_ab,t2_1_a,optimize=True)
+        #t2_2_ab += np.einsum('bkjc,ikac->ijab',v2e_voov_b,t2_1_ab,optimize=True)
+        #t2_2_ab -= np.einsum('kbic,kjac->ijab',v2e_ovov_ab,t2_1_ab,optimize=True)
+        #t2_2_ab -= np.einsum('akcj,ikcb->ijab',v2e_vovo_ab,t2_1_ab,optimize=True)
+        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_ab,t2_1_b,optimize=True)
+        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_a,t2_1_ab,optimize=True)
+ 
         temp = t2_1_a.reshape(nocc_a*nocc_a,nvir_a*nvir_a)
         eris_vvvv = eris_vvvv.transpose(0,2,1,3) - eris_vvvv.transpose(0,2,3,1)
         temp_1 = eris_vvvv[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)
@@ -200,9 +225,6 @@ def compute_amplitudes(myadc, eris):
         del eris_vvvv
         eris_oooo = eris_oooo.transpose(0,2,1,3) - eris_oooo.transpose(0,2,3,1)
         t2_2_a += 0.5*np.einsum('klij,klab->ijab', eris_oooo, t2_1_a,optimize=True)
-
-        #temp = np.einsum('bkjc,kica->ijab',v2e_voov_a,t2_1_a,optimize=True)
-        #temp_1 = np.einsum('bkjc,ikac->ijab',v2e_voov_ab,t2_1_ab,optimize=True)
  
         temp = np.einsum('kcbj,kica->ijab',eris_ovvo,t2_1_a,optimize=True)
         temp -= np.einsum('kjbc,kica->ijab',eris_oovv,t2_1_a,optimize=True)
@@ -210,12 +232,6 @@ def compute_amplitudes(myadc, eris):
 
         t2_2_a += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
         t2_2_a += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
- 
-        #temp = t2_1_b.reshape(nocc_b*nocc_b,nvir_b*nvir_b)
-        #temp_1 = v2e_vvvv_b[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)
-        #t2_2_b = 0.5*np.dot(temp,temp_1.T).reshape(nocc_b,nocc_b,nvir_b,nvir_b)
-        #del temp_1
-        #t2_2_b += 0.5*np.einsum('klij,klab->ijab',v2e_oooo_b,t2_1_b,optimize=True)
  
         temp = t2_1_b.reshape(nocc_b*nocc_b,nvir_b*nvir_b)
         eris_VVVV = eris_VVVV.transpose(0,2,1,3) - eris_VVVV.transpose(0,2,3,1)
@@ -226,9 +242,6 @@ def compute_amplitudes(myadc, eris):
         eris_OOOO = eris_OOOO.transpose(0,2,1,3) - eris_OOOO.transpose(0,2,3,1)
         t2_2_b += 0.5*np.einsum('klij,klab->ijab',eris_OOOO,t2_1_b,optimize=True)
 
-        #temp = np.einsum('bkjc,kica->ijab',v2e_voov_b,t2_1_b,optimize=True)
-        #temp_1 = np.einsum('kbcj,kica->ijab',v2e_ovvo_ab,t2_1_ab,optimize=True)
- 
         temp = np.einsum('kcbj,kica->ijab',eris_OVVO,t2_1_b,optimize=True)
         temp -= np.einsum('kjbc,kica->ijab',eris_OOVV,t2_1_b,optimize=True)
         temp_1 = np.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_ab,optimize=True)
@@ -236,11 +249,6 @@ def compute_amplitudes(myadc, eris):
         t2_2_b += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
         t2_2_b += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
  
-        #temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
-        #temp_1 = v2e_vvvv_ab[:].reshape(nvir_a*nvir_b,nvir_a*nvir_b)
-        #t2_2_ab = np.dot(temp,temp_1.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
-        #del temp_1
-  
         temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
         eris_vvVV = eris_vvVV.transpose(0,2,1,3).copy()
         temp_1 = eris_vvVV[:].reshape(nvir_a*nvir_b,nvir_a*nvir_b)
@@ -248,14 +256,6 @@ def compute_amplitudes(myadc, eris):
         del temp_1
         del eris_vvVV
 
-        #t2_2_ab += np.einsum('klij,klab->ijab',v2e_oooo_ab,t2_1_ab,optimize=True)
-        #t2_2_ab += np.einsum('kbcj,kica->ijab',v2e_ovvo_ab,t2_1_a,optimize=True)
-        #t2_2_ab += np.einsum('bkjc,ikac->ijab',v2e_voov_b,t2_1_ab,optimize=True)
-        #t2_2_ab -= np.einsum('kbic,kjac->ijab',v2e_ovov_ab,t2_1_ab,optimize=True)
-        #t2_2_ab -= np.einsum('akcj,ikcb->ijab',v2e_vovo_ab,t2_1_ab,optimize=True)
-        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_ab,t2_1_b,optimize=True)
-        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_a,t2_1_ab,optimize=True)
- 
         t2_2_ab += np.einsum('kilj,klab->ijab',eris_ooOO,t2_1_ab,optimize=True)
         t2_2_ab += np.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_a,optimize=True)
         t2_2_ab += np.einsum('kcbj,ikac->ijab',eris_OVVO,t2_1_ab,optimize=True)
@@ -266,9 +266,6 @@ def compute_amplitudes(myadc, eris):
         t2_2_ab += np.einsum('kcai,kjcb->ijab',eris_ovvo,t2_1_ab,optimize=True)
         t2_2_ab -= np.einsum('kiac,kjcb->ijab',eris_oovv,t2_1_ab,optimize=True)
 
-        print (np.linalg.norm(t2_2_ab))
-        exit()
-
         t2_2_a = t2_2_a/D2_a
         t2_2_b = t2_2_b/D2_b
         t2_2_ab = t2_2_ab/D2_ab
@@ -278,143 +275,145 @@ def compute_amplitudes(myadc, eris):
     if (myadc.method == "adc(3)"):
     # Compute third-order singles (tij)
 
-        t1_3_a = np.einsum('d,ilad,ld->ia',e_a[nocc_a:],t2_1_a,t1_2_a,optimize=True)
-        t1_3_a += np.einsum('d,ilad,ld->ia',e_b[nocc_b:],t2_1_ab,t1_2_b,optimize=True)
- 
-        t1_3_b  = np.einsum('d,ilad,ld->ia',e_b[nocc_b:],t2_1_b, t1_2_b,optimize=True)
-        t1_3_b += np.einsum('d,lida,ld->ia',e_a[nocc_a:],t2_1_ab,t1_2_a,optimize=True)
- 
-        t1_3_a -= np.einsum('l,ilad,ld->ia',e_a[:nocc_a],t2_1_a, t1_2_a,optimize=True)
-        t1_3_a -= np.einsum('l,ilad,ld->ia',e_b[:nocc_b],t2_1_ab,t1_2_b,optimize=True)
- 
-        t1_3_b -= np.einsum('l,ilad,ld->ia',e_b[:nocc_b],t2_1_b, t1_2_b,optimize=True)
-        t1_3_b -= np.einsum('l,lida,ld->ia',e_a[:nocc_a],t2_1_ab,t1_2_a,optimize=True)
- 
-        t1_3_a += 0.5*np.einsum('a,ilad,ld->ia',e_a[nocc_a:],t2_1_a, t1_2_a,optimize=True)
-        t1_3_a += 0.5*np.einsum('a,ilad,ld->ia',e_a[nocc_a:],t2_1_ab,t1_2_b,optimize=True)
- 
-        t1_3_b += 0.5*np.einsum('a,ilad,ld->ia',e_b[nocc_b:],t2_1_b, t1_2_b,optimize=True)
-        t1_3_b += 0.5*np.einsum('a,lida,ld->ia',e_b[nocc_b:],t2_1_ab,t1_2_a,optimize=True)
- 
-        t1_3_a -= 0.5*np.einsum('i,ilad,ld->ia',e_a[:nocc_a],t2_1_a, t1_2_a,optimize=True)
-        t1_3_a -= 0.5*np.einsum('i,ilad,ld->ia',e_a[:nocc_a],t2_1_ab,t1_2_b,optimize=True)
- 
-        t1_3_b -= 0.5*np.einsum('i,ilad,ld->ia',e_b[:nocc_b],t2_1_b, t1_2_b,optimize=True)
-        t1_3_b -= 0.5*np.einsum('i,lida,ld->ia',e_b[:nocc_b],t2_1_ab,t1_2_a,optimize=True)
- 
-        t1_3_a += np.einsum('ld,adil->ia',t1_2_a,v2e_vvoo_a ,optimize=True)
-        t1_3_a += np.einsum('ld,adil->ia',t1_2_b,v2e_vvoo_ab,optimize=True)
- 
-        t1_3_b += np.einsum('ld,adil->ia',t1_2_b,v2e_vvoo_b ,optimize=True)
-        t1_3_b += np.einsum('ld,dali->ia',t1_2_a,v2e_vvoo_ab,optimize=True)
- 
-        t1_3_a += np.einsum('ld,alid->ia',t1_2_a,v2e_voov_a ,optimize=True)
-        t1_3_a += np.einsum('ld,alid->ia',t1_2_b,v2e_voov_ab,optimize=True)
- 
-        t1_3_b += np.einsum('ld,alid->ia',t1_2_b,v2e_voov_b ,optimize=True)
-        t1_3_b += np.einsum('ld,ladi->ia',t1_2_a,v2e_ovvo_ab,optimize=True)
- 
-        t1_3_a -= 0.5*np.einsum('lmad,lmid->ia',t2_2_a,v2e_ooov_a,optimize=True)
-        t1_3_a -=     np.einsum('lmad,lmid->ia',t2_2_ab,v2e_ooov_ab,optimize=True)
- 
-        t1_3_b -= 0.5*np.einsum('lmad,lmid->ia',t2_2_b,v2e_ooov_b,optimize=True)
-        t1_3_b -=     np.einsum('mlda,mldi->ia',t2_2_ab,v2e_oovo_ab,optimize=True)
- 
-        t1_3_a += 0.5*np.einsum('ilde,alde->ia',t2_2_a,v2e_vovv_a,optimize=True)
-        t1_3_a += np.einsum('ilde,alde->ia',t2_2_ab,v2e_vovv_ab,optimize=True)
- 
-        t1_3_b += 0.5*np.einsum('ilde,alde->ia',t2_2_b,v2e_vovv_b,optimize=True)
-        t1_3_b += np.einsum('lied,laed->ia',t2_2_ab,v2e_ovvv_ab,optimize=True)
- 
-        t1_3_a -= np.einsum('ildf,aefm,lmde->ia',t2_1_a,v2e_vvvo_a,  t2_1_a ,optimize=True)
-        t1_3_a += np.einsum('ilfd,aefm,mled->ia',t2_1_ab,v2e_vvvo_a, t2_1_ab,optimize=True)
-        t1_3_a -= np.einsum('ildf,aefm,lmde->ia',t2_1_a,v2e_vvvo_ab, t2_1_ab,optimize=True)
-        t1_3_a += np.einsum('ilfd,aefm,lmde->ia',t2_1_ab,v2e_vvvo_ab,t2_1_b ,optimize=True)
-        t1_3_a -= np.einsum('ildf,aemf,mlde->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
- 
-        t1_3_b -= np.einsum('ildf,aefm,lmde->ia',t2_1_b,v2e_vvvo_b,t2_1_b,optimize=True)
-        t1_3_b += np.einsum('lidf,aefm,lmde->ia',t2_1_ab,v2e_vvvo_b,t2_1_ab,optimize=True)
-        t1_3_b -= np.einsum('ildf,eamf,mled->ia',t2_1_b,v2e_vvov_ab,t2_1_ab,optimize=True)
-        t1_3_b += np.einsum('lidf,eamf,lmde->ia',t2_1_ab,v2e_vvov_ab,t2_1_a,optimize=True)
-        t1_3_b -= np.einsum('lifd,eafm,lmed->ia',t2_1_ab,v2e_vvvo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_a += 0.5*np.einsum('ilaf,defm,lmde->ia',t2_1_a,v2e_vvvo_a,t2_1_a,optimize=True)
-        t1_3_a += 0.5*np.einsum('ilaf,defm,lmde->ia',t2_1_ab,v2e_vvvo_b,t2_1_b,optimize=True)
-        t1_3_a += np.einsum('ilaf,edmf,mled->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
-        t1_3_a += np.einsum('ilaf,defm,lmde->ia',t2_1_a,v2e_vvvo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_b += 0.5*np.einsum('ilaf,defm,lmde->ia',t2_1_b,v2e_vvvo_b,t2_1_b,optimize=True)
-        t1_3_b += 0.5*np.einsum('lifa,defm,lmde->ia',t2_1_ab,v2e_vvvo_a,t2_1_a,optimize=True)
-        t1_3_b += np.einsum('lifa,defm,lmde->ia',t2_1_ab,v2e_vvvo_ab,t2_1_ab,optimize=True)
-        t1_3_b += np.einsum('ilaf,edmf,mled->ia',t2_1_b,v2e_vvov_ab,t2_1_ab,optimize=True)
- 
-        t1_3_a += 0.25*np.einsum('inde,anlm,lmde->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
-        t1_3_a += np.einsum('inde,anlm,lmde->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_b += 0.25*np.einsum('inde,anlm,lmde->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
-        t1_3_b += np.einsum('nied,naml,mled->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_a += 0.5*np.einsum('inad,enlm,lmde->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
-        t1_3_a -= 0.5 * np.einsum('inad,neml,mlde->ia',t2_1_a,v2e_ovoo_ab,t2_1_ab,optimize=True)
-        t1_3_a -= 0.5 * np.einsum('inad,nelm,lmde->ia',t2_1_a,v2e_ovoo_ab,t2_1_ab,optimize=True)
-        t1_3_a -= 0.5 *np.einsum('inad,enlm,lmed->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
-        t1_3_a -= 0.5*np.einsum('inad,enml,mled->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
-        t1_3_a += 0.5*np.einsum('inad,enlm,lmde->ia',t2_1_ab,v2e_vooo_b,t2_1_b,optimize=True)
- 
-        t1_3_b += 0.5*np.einsum('inad,enlm,lmde->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
-        t1_3_b -= 0.5 * np.einsum('inad,enml,mled->ia',t2_1_b,v2e_vooo_ab,t2_1_ab,optimize=True)
-        t1_3_b -= 0.5 * np.einsum('inad,enlm,lmed->ia',t2_1_b,v2e_vooo_ab,t2_1_ab,optimize=True)
-        t1_3_b -= 0.5 *np.einsum('nida,nelm,lmde->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
-        t1_3_b -= 0.5*np.einsum('nida,neml,mlde->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
-        t1_3_b += 0.5*np.einsum('nida,enlm,lmde->ia',t2_1_ab,v2e_vooo_a,t2_1_a,optimize=True)
- 
-        t1_3_a -= 0.5*np.einsum('lnde,amin,lmde->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
-        t1_3_a -= np.einsum('nled,amin,mled->ia',t2_1_ab,v2e_vooo_a,t2_1_ab,optimize=True)
-        t1_3_a -= 0.5*np.einsum('lnde,amin,lmde->ia',t2_1_b,v2e_vooo_ab,t2_1_b,optimize=True)
-        t1_3_a -= np.einsum('lnde,amin,lmde->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_b -= 0.5*np.einsum('lnde,amin,lmde->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
-        t1_3_b -= np.einsum('lnde,amin,lmde->ia',t2_1_ab,v2e_vooo_b,t2_1_ab,optimize=True)
-        t1_3_b -= 0.5*np.einsum('lnde,mani,lmde->ia',t2_1_a,v2e_ovoo_ab,t2_1_a,optimize=True)
-        t1_3_b -= np.einsum('nled,mani,mled->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_a += 0.5*np.einsum('lmdf,afie,lmde->ia',t2_1_a,v2e_vvov_a,t2_1_a,optimize=True)
-        t1_3_a += np.einsum('mlfd,afie,mled->ia',t2_1_ab,v2e_vvov_a,t2_1_ab,optimize=True)
-        t1_3_a += 0.5*np.einsum('lmdf,afie,lmde->ia',t2_1_b,v2e_vvov_ab,t2_1_b,optimize=True)
-        t1_3_a += np.einsum('lmdf,afie,lmde->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
- 
-        t1_3_b += 0.5*np.einsum('lmdf,afie,lmde->ia',t2_1_b,v2e_vvov_b,t2_1_b,optimize=True)
-        t1_3_b += np.einsum('lmdf,afie,lmde->ia',t2_1_ab,v2e_vvov_b,t2_1_ab,optimize=True)
-        t1_3_b += 0.5*np.einsum('lmdf,faei,lmde->ia',t2_1_a,v2e_vvvo_ab,t2_1_a,optimize=True)
-        t1_3_b += np.einsum('mlfd,faei,mled->ia',t2_1_ab,v2e_vvvo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_a -= np.einsum('lnde,emin,lmad->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
-        t1_3_a += np.einsum('lnde,mein,lmad->ia',t2_1_ab,v2e_ovoo_ab,t2_1_a,optimize=True)
-        t1_3_a += np.einsum('nled,emin,mlad->ia',t2_1_ab,v2e_vooo_a,t2_1_ab,optimize=True)
-        t1_3_a += np.einsum('lned,emin,lmad->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
-        t1_3_a -= np.einsum('lnde,mein,mlad->ia',t2_1_b,v2e_ovoo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_b -= np.einsum('lnde,emin,lmad->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
-        t1_3_b += np.einsum('nled,emni,lmad->ia',t2_1_ab,v2e_vooo_ab,t2_1_b,optimize=True)
-        t1_3_b += np.einsum('lnde,emin,lmda->ia',t2_1_ab,v2e_vooo_b,t2_1_ab,optimize=True)
-        t1_3_b += np.einsum('nlde,meni,mlda->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
-        t1_3_b -= np.einsum('lnde,emni,lmda->ia',t2_1_a,v2e_vooo_ab,t2_1_ab,optimize=True)
- 
-        t1_3_a -= 0.25*np.einsum('lmef,efid,lmad->ia',t2_1_a,v2e_vvov_a,t2_1_a,optimize=True)
-        t1_3_a -= np.einsum('lmef,efid,lmad->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
- 
-        t1_3_b -= 0.25*np.einsum('lmef,efid,lmad->ia',t2_1_b,v2e_vvov_b,t2_1_b,optimize=True)
-        temp = t2_1_ab.reshape(nocc_a*nocc_b,-1)
-        temp_1 = v2e_vvvo_ab[:].reshape(nvir_a*nvir_b,-1)
-        temp_2 = t2_1_ab.reshape(nocc_a*nocc_b*nvir_a,-1)
-        int_1 = np.dot(temp,temp_1).reshape(nocc_a*nocc_b*nvir_a,-1)
-        t1_3_b -= np.dot(int_1.T,temp_2).reshape(nocc_b,nvir_b)
-        del temp_1
-        t1_3_a = t1_3_a/D1_a
-        t1_3_b = t1_3_b/D1_b
- 
-        t1_3 = (t1_3_a, t1_3_b)
+        t1_3 = (None,)
 
+#        t1_3_a = np.einsum('d,ilad,ld->ia',e_a[nocc_a:],t2_1_a,t1_2_a,optimize=True)
+#        t1_3_a += np.einsum('d,ilad,ld->ia',e_b[nocc_b:],t2_1_ab,t1_2_b,optimize=True)
+# 
+#        t1_3_b  = np.einsum('d,ilad,ld->ia',e_b[nocc_b:],t2_1_b, t1_2_b,optimize=True)
+#        t1_3_b += np.einsum('d,lida,ld->ia',e_a[nocc_a:],t2_1_ab,t1_2_a,optimize=True)
+# 
+#        t1_3_a -= np.einsum('l,ilad,ld->ia',e_a[:nocc_a],t2_1_a, t1_2_a,optimize=True)
+#        t1_3_a -= np.einsum('l,ilad,ld->ia',e_b[:nocc_b],t2_1_ab,t1_2_b,optimize=True)
+# 
+#        t1_3_b -= np.einsum('l,ilad,ld->ia',e_b[:nocc_b],t2_1_b, t1_2_b,optimize=True)
+#        t1_3_b -= np.einsum('l,lida,ld->ia',e_a[:nocc_a],t2_1_ab,t1_2_a,optimize=True)
+# 
+#        t1_3_a += 0.5*np.einsum('a,ilad,ld->ia',e_a[nocc_a:],t2_1_a, t1_2_a,optimize=True)
+#        t1_3_a += 0.5*np.einsum('a,ilad,ld->ia',e_a[nocc_a:],t2_1_ab,t1_2_b,optimize=True)
+# 
+#        t1_3_b += 0.5*np.einsum('a,ilad,ld->ia',e_b[nocc_b:],t2_1_b, t1_2_b,optimize=True)
+#        t1_3_b += 0.5*np.einsum('a,lida,ld->ia',e_b[nocc_b:],t2_1_ab,t1_2_a,optimize=True)
+# 
+#        t1_3_a -= 0.5*np.einsum('i,ilad,ld->ia',e_a[:nocc_a],t2_1_a, t1_2_a,optimize=True)
+#        t1_3_a -= 0.5*np.einsum('i,ilad,ld->ia',e_a[:nocc_a],t2_1_ab,t1_2_b,optimize=True)
+# 
+#        t1_3_b -= 0.5*np.einsum('i,ilad,ld->ia',e_b[:nocc_b],t2_1_b, t1_2_b,optimize=True)
+#        t1_3_b -= 0.5*np.einsum('i,lida,ld->ia',e_b[:nocc_b],t2_1_ab,t1_2_a,optimize=True)
+# 
+#        t1_3_a += np.einsum('ld,adil->ia',t1_2_a,v2e_vvoo_a ,optimize=True)
+#        t1_3_a += np.einsum('ld,adil->ia',t1_2_b,v2e_vvoo_ab,optimize=True)
+# 
+#        t1_3_b += np.einsum('ld,adil->ia',t1_2_b,v2e_vvoo_b ,optimize=True)
+#        t1_3_b += np.einsum('ld,dali->ia',t1_2_a,v2e_vvoo_ab,optimize=True)
+# 
+#        t1_3_a += np.einsum('ld,alid->ia',t1_2_a,v2e_voov_a ,optimize=True)
+#        t1_3_a += np.einsum('ld,alid->ia',t1_2_b,v2e_voov_ab,optimize=True)
+# 
+#        t1_3_b += np.einsum('ld,alid->ia',t1_2_b,v2e_voov_b ,optimize=True)
+#        t1_3_b += np.einsum('ld,ladi->ia',t1_2_a,v2e_ovvo_ab,optimize=True)
+# 
+#        t1_3_a -= 0.5*np.einsum('lmad,lmid->ia',t2_2_a,v2e_ooov_a,optimize=True)
+#        t1_3_a -=     np.einsum('lmad,lmid->ia',t2_2_ab,v2e_ooov_ab,optimize=True)
+# 
+#        t1_3_b -= 0.5*np.einsum('lmad,lmid->ia',t2_2_b,v2e_ooov_b,optimize=True)
+#        t1_3_b -=     np.einsum('mlda,mldi->ia',t2_2_ab,v2e_oovo_ab,optimize=True)
+# 
+#        t1_3_a += 0.5*np.einsum('ilde,alde->ia',t2_2_a,v2e_vovv_a,optimize=True)
+#        t1_3_a += np.einsum('ilde,alde->ia',t2_2_ab,v2e_vovv_ab,optimize=True)
+# 
+#        t1_3_b += 0.5*np.einsum('ilde,alde->ia',t2_2_b,v2e_vovv_b,optimize=True)
+#        t1_3_b += np.einsum('lied,laed->ia',t2_2_ab,v2e_ovvv_ab,optimize=True)
+# 
+#        t1_3_a -= np.einsum('ildf,aefm,lmde->ia',t2_1_a,v2e_vvvo_a,  t2_1_a ,optimize=True)
+#        t1_3_a += np.einsum('ilfd,aefm,mled->ia',t2_1_ab,v2e_vvvo_a, t2_1_ab,optimize=True)
+#        t1_3_a -= np.einsum('ildf,aefm,lmde->ia',t2_1_a,v2e_vvvo_ab, t2_1_ab,optimize=True)
+#        t1_3_a += np.einsum('ilfd,aefm,lmde->ia',t2_1_ab,v2e_vvvo_ab,t2_1_b ,optimize=True)
+#        t1_3_a -= np.einsum('ildf,aemf,mlde->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_b -= np.einsum('ildf,aefm,lmde->ia',t2_1_b,v2e_vvvo_b,t2_1_b,optimize=True)
+#        t1_3_b += np.einsum('lidf,aefm,lmde->ia',t2_1_ab,v2e_vvvo_b,t2_1_ab,optimize=True)
+#        t1_3_b -= np.einsum('ildf,eamf,mled->ia',t2_1_b,v2e_vvov_ab,t2_1_ab,optimize=True)
+#        t1_3_b += np.einsum('lidf,eamf,lmde->ia',t2_1_ab,v2e_vvov_ab,t2_1_a,optimize=True)
+#        t1_3_b -= np.einsum('lifd,eafm,lmed->ia',t2_1_ab,v2e_vvvo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_a += 0.5*np.einsum('ilaf,defm,lmde->ia',t2_1_a,v2e_vvvo_a,t2_1_a,optimize=True)
+#        t1_3_a += 0.5*np.einsum('ilaf,defm,lmde->ia',t2_1_ab,v2e_vvvo_b,t2_1_b,optimize=True)
+#        t1_3_a += np.einsum('ilaf,edmf,mled->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
+#        t1_3_a += np.einsum('ilaf,defm,lmde->ia',t2_1_a,v2e_vvvo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_b += 0.5*np.einsum('ilaf,defm,lmde->ia',t2_1_b,v2e_vvvo_b,t2_1_b,optimize=True)
+#        t1_3_b += 0.5*np.einsum('lifa,defm,lmde->ia',t2_1_ab,v2e_vvvo_a,t2_1_a,optimize=True)
+#        t1_3_b += np.einsum('lifa,defm,lmde->ia',t2_1_ab,v2e_vvvo_ab,t2_1_ab,optimize=True)
+#        t1_3_b += np.einsum('ilaf,edmf,mled->ia',t2_1_b,v2e_vvov_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_a += 0.25*np.einsum('inde,anlm,lmde->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
+#        t1_3_a += np.einsum('inde,anlm,lmde->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_b += 0.25*np.einsum('inde,anlm,lmde->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
+#        t1_3_b += np.einsum('nied,naml,mled->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_a += 0.5*np.einsum('inad,enlm,lmde->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
+#        t1_3_a -= 0.5 * np.einsum('inad,neml,mlde->ia',t2_1_a,v2e_ovoo_ab,t2_1_ab,optimize=True)
+#        t1_3_a -= 0.5 * np.einsum('inad,nelm,lmde->ia',t2_1_a,v2e_ovoo_ab,t2_1_ab,optimize=True)
+#        t1_3_a -= 0.5 *np.einsum('inad,enlm,lmed->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
+#        t1_3_a -= 0.5*np.einsum('inad,enml,mled->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
+#        t1_3_a += 0.5*np.einsum('inad,enlm,lmde->ia',t2_1_ab,v2e_vooo_b,t2_1_b,optimize=True)
+# 
+#        t1_3_b += 0.5*np.einsum('inad,enlm,lmde->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
+#        t1_3_b -= 0.5 * np.einsum('inad,enml,mled->ia',t2_1_b,v2e_vooo_ab,t2_1_ab,optimize=True)
+#        t1_3_b -= 0.5 * np.einsum('inad,enlm,lmed->ia',t2_1_b,v2e_vooo_ab,t2_1_ab,optimize=True)
+#        t1_3_b -= 0.5 *np.einsum('nida,nelm,lmde->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
+#        t1_3_b -= 0.5*np.einsum('nida,neml,mlde->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
+#        t1_3_b += 0.5*np.einsum('nida,enlm,lmde->ia',t2_1_ab,v2e_vooo_a,t2_1_a,optimize=True)
+# 
+#        t1_3_a -= 0.5*np.einsum('lnde,amin,lmde->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
+#        t1_3_a -= np.einsum('nled,amin,mled->ia',t2_1_ab,v2e_vooo_a,t2_1_ab,optimize=True)
+#        t1_3_a -= 0.5*np.einsum('lnde,amin,lmde->ia',t2_1_b,v2e_vooo_ab,t2_1_b,optimize=True)
+#        t1_3_a -= np.einsum('lnde,amin,lmde->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_b -= 0.5*np.einsum('lnde,amin,lmde->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
+#        t1_3_b -= np.einsum('lnde,amin,lmde->ia',t2_1_ab,v2e_vooo_b,t2_1_ab,optimize=True)
+#        t1_3_b -= 0.5*np.einsum('lnde,mani,lmde->ia',t2_1_a,v2e_ovoo_ab,t2_1_a,optimize=True)
+#        t1_3_b -= np.einsum('nled,mani,mled->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_a += 0.5*np.einsum('lmdf,afie,lmde->ia',t2_1_a,v2e_vvov_a,t2_1_a,optimize=True)
+#        t1_3_a += np.einsum('mlfd,afie,mled->ia',t2_1_ab,v2e_vvov_a,t2_1_ab,optimize=True)
+#        t1_3_a += 0.5*np.einsum('lmdf,afie,lmde->ia',t2_1_b,v2e_vvov_ab,t2_1_b,optimize=True)
+#        t1_3_a += np.einsum('lmdf,afie,lmde->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_b += 0.5*np.einsum('lmdf,afie,lmde->ia',t2_1_b,v2e_vvov_b,t2_1_b,optimize=True)
+#        t1_3_b += np.einsum('lmdf,afie,lmde->ia',t2_1_ab,v2e_vvov_b,t2_1_ab,optimize=True)
+#        t1_3_b += 0.5*np.einsum('lmdf,faei,lmde->ia',t2_1_a,v2e_vvvo_ab,t2_1_a,optimize=True)
+#        t1_3_b += np.einsum('mlfd,faei,mled->ia',t2_1_ab,v2e_vvvo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_a -= np.einsum('lnde,emin,lmad->ia',t2_1_a,v2e_vooo_a,t2_1_a,optimize=True)
+#        t1_3_a += np.einsum('lnde,mein,lmad->ia',t2_1_ab,v2e_ovoo_ab,t2_1_a,optimize=True)
+#        t1_3_a += np.einsum('nled,emin,mlad->ia',t2_1_ab,v2e_vooo_a,t2_1_ab,optimize=True)
+#        t1_3_a += np.einsum('lned,emin,lmad->ia',t2_1_ab,v2e_vooo_ab,t2_1_ab,optimize=True)
+#        t1_3_a -= np.einsum('lnde,mein,mlad->ia',t2_1_b,v2e_ovoo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_b -= np.einsum('lnde,emin,lmad->ia',t2_1_b,v2e_vooo_b,t2_1_b,optimize=True)
+#        t1_3_b += np.einsum('nled,emni,lmad->ia',t2_1_ab,v2e_vooo_ab,t2_1_b,optimize=True)
+#        t1_3_b += np.einsum('lnde,emin,lmda->ia',t2_1_ab,v2e_vooo_b,t2_1_ab,optimize=True)
+#        t1_3_b += np.einsum('nlde,meni,mlda->ia',t2_1_ab,v2e_ovoo_ab,t2_1_ab,optimize=True)
+#        t1_3_b -= np.einsum('lnde,emni,lmda->ia',t2_1_a,v2e_vooo_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_a -= 0.25*np.einsum('lmef,efid,lmad->ia',t2_1_a,v2e_vvov_a,t2_1_a,optimize=True)
+#        t1_3_a -= np.einsum('lmef,efid,lmad->ia',t2_1_ab,v2e_vvov_ab,t2_1_ab,optimize=True)
+# 
+#        t1_3_b -= 0.25*np.einsum('lmef,efid,lmad->ia',t2_1_b,v2e_vvov_b,t2_1_b,optimize=True)
+#        temp = t2_1_ab.reshape(nocc_a*nocc_b,-1)
+#        temp_1 = v2e_vvvo_ab[:].reshape(nvir_a*nvir_b,-1)
+#        temp_2 = t2_1_ab.reshape(nocc_a*nocc_b*nvir_a,-1)
+#        int_1 = np.dot(temp,temp_1).reshape(nocc_a*nocc_b*nvir_a,-1)
+#        t1_3_b -= np.dot(int_1.T,temp_2).reshape(nocc_b,nvir_b)
+#        del temp_1
+#        t1_3_a = t1_3_a/D1_a
+#        t1_3_b = t1_3_b/D1_b
+# 
+#        t1_3 = (t1_3_a, t1_3_b)
+#
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
 
@@ -446,53 +445,53 @@ def compute_energy(myadc, t1, t2, eris):
 
     e_corr = e_mp2
 
-    if (myadc.method == "adc(3)"):
-
-        #Compute MP3 correlation energy
-
-        v2e_oooo_a, v2e_oooo_ab, v2e_oooo_b = eris.oooo
-        v2e_vvvv_a, v2e_vvvv_ab, v2e_vvvv_b = eris.vvvv
-        v2e_voov_a, v2e_voov_ab, v2e_voov_b = eris.voov
-        v2e_ovvo_a, v2e_ovvo_ab, v2e_ovvo_b = eris.ovvo
-        v2e_ovov_a, v2e_ovov_ab, v2e_ovov_b = eris.ovov
-        v2e_vovo_a, v2e_vovo_ab, v2e_vovo_b = eris.vovo
-
-        temp_1_a =  np.einsum('ijab,ijcd', t2_1_a, t2_1_a)
-        temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
-        temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
-
-        temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
-        temp_2_b =  np.einsum('ijab,klab', t2_1_b, t2_1_b)
-        temp_2_ab_1 =  np.einsum('ijab,klab', t2_1_ab, t2_1_ab)
-
-        temp_3_a = np.einsum('ijab,ikcb->akcj', t2_1_a, t2_1_a)
-        temp_3_a += np.einsum('jiab,kicb->akcj', t2_1_ab, t2_1_ab)
-        temp_3_b = np.einsum('ijab,ikcb->akcj', t2_1_b, t2_1_b)
-        temp_3_b += np.einsum('ijba,ikbc->akcj', t2_1_ab, t2_1_ab)
-
-        temp_3_ab_1 = np.einsum('ijab,ikcb->akcj', t2_1_ab, t2_1_ab)
-        temp_3_ab_2 = np.einsum('jiba,kibc->akcj', t2_1_ab, t2_1_ab)
-        temp_3_ab_3 = -np.einsum('ijab,ikbc->akcj', t2_1_a, t2_1_ab)
-        temp_3_ab_3 -= np.einsum('jiab,ikcb->akcj', t2_1_ab, t2_1_b)
-        temp_3_ab_4 = -np.einsum('ijba,ikcb->akcj', t2_1_ab, t2_1_a)
-        temp_3_ab_4 -= np.einsum('ijab,kicb->akcj', t2_1_b, t2_1_ab)
-
-        e_mp3 = 0.125 * np.einsum('abcd,abcd',temp_1_a, v2e_vvvv_a)
-        e_mp3 += 0.125 * np.einsum('abcd,abcd',temp_1_b, v2e_vvvv_b)
-        e_mp3 +=  np.einsum('abcd,abcd',temp_1_ab_1, v2e_vvvv_ab)
-
-        e_mp3 += 0.125 * np.einsum('ijkl,ijkl',temp_2_a, v2e_oooo_a)
-        e_mp3 += 0.125 * np.einsum('ijkl,ijkl',temp_2_b, v2e_oooo_b)
-        e_mp3 +=  np.einsum('ijkl,ijkl',temp_2_ab_1, v2e_oooo_ab)
-
-        e_mp3 -= np.einsum('akcj,akcj',temp_3_a, v2e_vovo_a)
-        e_mp3 -= np.einsum('akcj,akcj',temp_3_b, v2e_vovo_b)
-        e_mp3 -= np.einsum('akcj,akcj',temp_3_ab_1, v2e_vovo_ab)
-        e_mp3 -= np.einsum('akcj,kajc',temp_3_ab_2, v2e_ovov_ab)
-        e_mp3 += np.einsum('akcj,akjc',temp_3_ab_3, v2e_voov_ab)
-        e_mp3 += np.einsum('akcj,kacj',temp_3_ab_4, v2e_ovvo_ab)
-    
-        e_corr += e_mp3
+#    if (myadc.method == "adc(3)"):
+#
+#        #Compute MP3 correlation energy
+#
+#        v2e_oooo_a, v2e_oooo_ab, v2e_oooo_b = eris.oooo
+#        v2e_vvvv_a, v2e_vvvv_ab, v2e_vvvv_b = eris.vvvv
+#        v2e_voov_a, v2e_voov_ab, v2e_voov_b = eris.voov
+#        v2e_ovvo_a, v2e_ovvo_ab, v2e_ovvo_b = eris.ovvo
+#        v2e_ovov_a, v2e_ovov_ab, v2e_ovov_b = eris.ovov
+#        v2e_vovo_a, v2e_vovo_ab, v2e_vovo_b = eris.vovo
+#
+#        temp_1_a =  np.einsum('ijab,ijcd', t2_1_a, t2_1_a)
+#        temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
+#        temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
+#
+#        temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
+#        temp_2_b =  np.einsum('ijab,klab', t2_1_b, t2_1_b)
+#        temp_2_ab_1 =  np.einsum('ijab,klab', t2_1_ab, t2_1_ab)
+#
+#        temp_3_a = np.einsum('ijab,ikcb->akcj', t2_1_a, t2_1_a)
+#        temp_3_a += np.einsum('jiab,kicb->akcj', t2_1_ab, t2_1_ab)
+#        temp_3_b = np.einsum('ijab,ikcb->akcj', t2_1_b, t2_1_b)
+#        temp_3_b += np.einsum('ijba,ikbc->akcj', t2_1_ab, t2_1_ab)
+#
+#        temp_3_ab_1 = np.einsum('ijab,ikcb->akcj', t2_1_ab, t2_1_ab)
+#        temp_3_ab_2 = np.einsum('jiba,kibc->akcj', t2_1_ab, t2_1_ab)
+#        temp_3_ab_3 = -np.einsum('ijab,ikbc->akcj', t2_1_a, t2_1_ab)
+#        temp_3_ab_3 -= np.einsum('jiab,ikcb->akcj', t2_1_ab, t2_1_b)
+#        temp_3_ab_4 = -np.einsum('ijba,ikcb->akcj', t2_1_ab, t2_1_a)
+#        temp_3_ab_4 -= np.einsum('ijab,kicb->akcj', t2_1_b, t2_1_ab)
+#
+#        e_mp3 = 0.125 * np.einsum('abcd,abcd',temp_1_a, v2e_vvvv_a)
+#        e_mp3 += 0.125 * np.einsum('abcd,abcd',temp_1_b, v2e_vvvv_b)
+#        e_mp3 +=  np.einsum('abcd,abcd',temp_1_ab_1, v2e_vvvv_ab)
+#
+#        e_mp3 += 0.125 * np.einsum('ijkl,ijkl',temp_2_a, v2e_oooo_a)
+#        e_mp3 += 0.125 * np.einsum('ijkl,ijkl',temp_2_b, v2e_oooo_b)
+#        e_mp3 +=  np.einsum('ijkl,ijkl',temp_2_ab_1, v2e_oooo_ab)
+#
+#        e_mp3 -= np.einsum('akcj,akcj',temp_3_a, v2e_vovo_a)
+#        e_mp3 -= np.einsum('akcj,akcj',temp_3_b, v2e_vovo_b)
+#        e_mp3 -= np.einsum('akcj,akcj',temp_3_ab_1, v2e_vovo_ab)
+#        e_mp3 -= np.einsum('akcj,kajc',temp_3_ab_2, v2e_ovov_ab)
+#        e_mp3 += np.einsum('akcj,akjc',temp_3_ab_3, v2e_voov_ab)
+#        e_mp3 += np.einsum('akcj,kacj',temp_3_ab_4, v2e_ovvo_ab)
+#    
+#        e_corr += e_mp3
 
     return e_corr
 
@@ -760,17 +759,17 @@ def get_imds_ea(adc, eris=None):
 
         t2_2_a, t2_2_ab, t2_2_b = t2[1]
 
-        M_ab_a +=  np.einsum('ld,albd->ab',t1_2_a, v2e_vovv_a)
-        M_ab_a +=  np.einsum('ld,albd->ab',t1_2_b, v2e_vovv_ab)
-
-        M_ab_b +=  np.einsum('ld,albd->ab',t1_2_b, v2e_vovv_b)
-        M_ab_b +=  np.einsum('ld,ladb->ab',t1_2_a, v2e_ovvv_ab)
-
-        M_ab_a += np.einsum('ld,adbl->ab',t1_2_a, v2e_vvvo_a)
-        M_ab_a += np.einsum('ld,adbl->ab',t1_2_b, v2e_vvvo_ab)
-
-        M_ab_b += np.einsum('ld,adbl->ab',t1_2_b, v2e_vvvo_b)
-        M_ab_b += np.einsum('ld,dalb->ab',t1_2_a, v2e_vvov_ab)
+#        M_ab_a +=  np.einsum('ld,albd->ab',t1_2_a, v2e_vovv_a)
+#        M_ab_a +=  np.einsum('ld,albd->ab',t1_2_b, v2e_vovv_ab)
+#
+#        M_ab_b +=  np.einsum('ld,albd->ab',t1_2_b, v2e_vovv_b)
+#        M_ab_b +=  np.einsum('ld,ladb->ab',t1_2_a, v2e_ovvv_ab)
+#
+#        M_ab_a += np.einsum('ld,adbl->ab',t1_2_a, v2e_vvvo_a)
+#        M_ab_a += np.einsum('ld,adbl->ab',t1_2_b, v2e_vvvo_ab)
+#
+#        M_ab_b += np.einsum('ld,adbl->ab',t1_2_b, v2e_vvvo_b)
+#        M_ab_b += np.einsum('ld,dalb->ab',t1_2_a, v2e_vvov_ab)
 
 #################################################################
 
@@ -867,6 +866,10 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.25*np.einsum('b,lmad,lmbd->ab',e_vir_b, t2_1_b, t2_2_b, optimize=True)
         M_ab_b -= 0.25*np.einsum('b,mlda,mldb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
         M_ab_b -= 0.25*np.einsum('b,lmda,lmdb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
+
+        print (np.linalg.norm(M_ab_a))
+        print (np.linalg.norm(M_ab_b))
+        exit()
 
         #M_ab_a -= np.einsum('lned,mlbd,anem->ab',t2_1_a, t2_1_a, v2e_vovo_a, optimize=True)
         #M_ab_a += np.einsum('nled,mlbd,anem->ab',t2_1_ab, t2_1_ab, v2e_vovo_a, optimize=True)
@@ -1565,22 +1568,22 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 #        s[s_b:f_b] += np.einsum('ap,p->a', v2e_vovv_1_b, r_bbb, optimize = True)
 #        s[s_b:f_b] += np.einsum('iacb,ibc->a', v2e_ovvv_ab, r_aba, optimize = True)
 
-        eris_ovvv = eris.ovvv
-        eris_ovvv = uadc_ao2mo.unpack_eri_1(eris_ovvv, nvir_a)
-        eris_OVVV = eris.OVVV
-        eris_OVVV = uadc_ao2mo.unpack_eri_1(eris_OVVV, nvir_b)
-        eris_OVvv = eris.OVvv
-        eris_OVvv = uadc_ao2mo.unpack_eri_1(eris_OVvv, nvir_a)
-        eris_ovVV = eris.ovVV
-        eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
-
-        s[s_a:f_a] += np.einsum('icab,ibc->a',eris_ovvv, r_aaa_, optimize = True)
-        s[s_a:f_a] -= np.einsum('ibac,ibc->a',eris_ovvv, r_aaa_, optimize = True)
-        s[s_a:f_a] += np.einsum('icab,ibc->a', eris_OVvv, r_bab, optimize = True)
-
-        s[s_b:f_b] += np.einsum('icab,ibc->a',eris_OVVV, r_bbb_, optimize = True)
-        s[s_b:f_b] -= np.einsum('ibac,ibc->a',eris_OVVV, r_bbb_, optimize = True)
-        s[s_b:f_b] += np.einsum('icab,ibc->a', eris_ovVV, r_aba, optimize = True)
+#        eris_ovvv = eris.ovvv
+#        eris_ovvv = uadc_ao2mo.unpack_eri_1(eris_ovvv, nvir_a)
+#        eris_OVVV = eris.OVVV
+#        eris_OVVV = uadc_ao2mo.unpack_eri_1(eris_OVVV, nvir_b)
+#        eris_OVvv = eris.OVvv
+#        eris_OVvv = uadc_ao2mo.unpack_eri_1(eris_OVvv, nvir_a)
+#        eris_ovVV = eris.ovVV
+#        eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
+#
+#        s[s_a:f_a] += np.einsum('icab,ibc->a',eris_ovvv, r_aaa_, optimize = True)
+#        s[s_a:f_a] -= np.einsum('ibac,ibc->a',eris_ovvv, r_aaa_, optimize = True)
+#        s[s_a:f_a] += np.einsum('icab,ibc->a', eris_OVvv, r_bab, optimize = True)
+#
+#        s[s_b:f_b] += np.einsum('icab,ibc->a',eris_OVVV, r_bbb_, optimize = True)
+#        s[s_b:f_b] -= np.einsum('ibac,ibc->a',eris_OVVV, r_bbb_, optimize = True)
+#        s[s_b:f_b] += np.einsum('icab,ibc->a', eris_ovVV, r_aba, optimize = True)
 
 ################ ADC(2) ibc - a block ############################
 
@@ -1589,14 +1592,14 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         #s[s_aba:f_aba] += np.einsum('iacb,a->ibc', v2e_ovvv_ab, r_b, optimize = True).reshape(-1)
         #s[s_bbb:f_bbb] += np.einsum('aip,a->ip', v2e_vovv_2_b, r_b, optimize = True).reshape(-1)
 
-        temp = np.einsum('icab,a->ibc', eris_ovvv, r_a, optimize = True)
-        temp -= np.einsum('ibac,a->ibc', eris_ovvv, r_a, optimize = True)
-        s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
-        s[s_bab:f_bab] += np.einsum('icab,a->ibc', eris_OVvv, r_a, optimize = True).reshape(-1)
-        s[s_aba:f_aba] += np.einsum('icab,a->ibc', eris_ovVV, r_b, optimize = True).reshape(-1)
-        temp = np.einsum('icab,a->ibc', eris_OVVV, r_b, optimize = True)
-        temp -= np.einsum('ibac,a->ibc', eris_OVVV, r_b, optimize = True)
-        s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
+#        temp = np.einsum('icab,a->ibc', eris_ovvv, r_a, optimize = True)
+#        temp -= np.einsum('ibac,a->ibc', eris_ovvv, r_a, optimize = True)
+#        s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
+#        s[s_bab:f_bab] += np.einsum('icab,a->ibc', eris_OVvv, r_a, optimize = True).reshape(-1)
+#        s[s_aba:f_aba] += np.einsum('icab,a->ibc', eris_ovVV, r_b, optimize = True).reshape(-1)
+#        temp = np.einsum('icab,a->ibc', eris_OVVV, r_b, optimize = True)
+#        temp -= np.einsum('ibac,a->ibc', eris_OVVV, r_b, optimize = True)
+#        s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
 
 ################ ADC(2) iab - jcd block ############################
 
