@@ -147,6 +147,15 @@ def compute_amplitudes(myadc, eris):
     v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
     v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
 
+    eris_ovvv = eris.ovvv
+    eris_ovvv = uadc_ao2mo.unpack_eri_1(eris_ovvv, nvir_a)
+    eris_OVVV = eris.OVVV
+    eris_OVVV = uadc_ao2mo.unpack_eri_1(eris_OVVV, nvir_b)
+    eris_OVvv = eris.OVvv
+    eris_OVvv = uadc_ao2mo.unpack_eri_1(eris_OVvv, nvir_a)
+    eris_ovVV = eris.ovVV
+    eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
+
     t2_1_a = v2e_oovv/D2_a
     t2_1_b = v2e_OOVV/D2_b
     t2_1_ab = v2e_oOvV/D2_ab
@@ -154,8 +163,8 @@ def compute_amplitudes(myadc, eris):
     t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
     t1_2 = (None,)
 
-#    # Compute second-order singles t1 (tij) 
-#
+    # Compute second-order singles t1 (tij) 
+
 #    t1_2_a = 0.5*np.einsum('akcd,ikcd->ia',v2e_vovv_a,t2_1_a)
 #    t1_2_a -= 0.5*np.einsum('klic,klac->ia',v2e_ooov_a,t2_1_a)
 #    t1_2_a += np.einsum('akcd,ikcd->ia',v2e_vovv_ab,t2_1_ab)
@@ -166,6 +175,20 @@ def compute_amplitudes(myadc, eris):
 #    t1_2_b += np.einsum('kadc,kidc->ia',v2e_ovvv_ab,t2_1_ab)
 #    t1_2_b -= np.einsum('lkci,lkca->ia',v2e_oovo_ab,t2_1_ab)
 #
+    t1_2_a = 0.5*np.einsum('kdac,ikcd->ia',eris_ovvv,t2_1_a)
+    t1_2_a -= 0.5*np.einsum('kcad,ikcd->ia',eris_ovvv,t2_1_a)
+#    t1_2_a -= 0.5*np.einsum('klic,klac->ia',v2e_ooov_a,t2_1_a)
+#    t1_2_a += np.einsum('akcd,ikcd->ia',v2e_vovv_ab,t2_1_ab)
+#    t1_2_a -= np.einsum('klic,klac->ia',v2e_ooov_ab,t2_1_ab)
+#
+#    t1_2_b = 0.5*np.einsum('akcd,ikcd->ia',v2e_vovv_b,t2_1_b)
+#    t1_2_b -= 0.5*np.einsum('klic,klac->ia',v2e_ooov_b,t2_1_b)
+#    t1_2_b += np.einsum('kadc,kidc->ia',v2e_ovvv_ab,t2_1_ab)
+#    t1_2_b -= np.einsum('lkci,lkca->ia',v2e_oovo_ab,t2_1_ab)
+
+    print (np.linalg.norm(t1_2_a))
+    exit()
+
 #    t1_2_a = t1_2_a/D1_a
 #    t1_2_b = t1_2_b/D1_b
 #
