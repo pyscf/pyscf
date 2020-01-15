@@ -177,6 +177,7 @@ def compute_amplitudes(myadc, eris):
 
         eris_oooo = eris.oooo
         eris_OOOO = eris.OOOO
+        eris_ooOO = eris.ooOO
         eris_ovvo = eris.ovvo
         eris_OVVO = eris.OVVO
         eris_OVvo = eris.OVvo
@@ -240,13 +241,8 @@ def compute_amplitudes(myadc, eris):
         #t2_2_ab = np.dot(temp,temp_1.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
         #del temp_1
   
-        print (np.linalg.norm(t2_2_a))
-        print (np.linalg.norm(t2_2_b))
-        exit()
-
-
         temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
-        #eris_vvVV = eris_vvVV.transpose(0,2,1,3).copy()
+        eris_vvVV = eris_vvVV.transpose(0,2,1,3).copy()
         temp_1 = eris_vvVV[:].reshape(nvir_a*nvir_b,nvir_a*nvir_b)
         t2_2_ab = np.dot(temp,temp_1.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
         del temp_1
@@ -260,13 +256,16 @@ def compute_amplitudes(myadc, eris):
         #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_ab,t2_1_b,optimize=True)
         #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_a,t2_1_ab,optimize=True)
  
-        t2_2_ab += np.einsum('klij,klab->ijab',v2e_oooo_ab,t2_1_ab,optimize=True)
-        t2_2_ab += np.einsum('kbcj,kica->ijab',v2e_ovvo_ab,t2_1_a,optimize=True)
-        t2_2_ab += np.einsum('bkjc,ikac->ijab',v2e_voov_b,t2_1_ab,optimize=True)
-        t2_2_ab -= np.einsum('kbic,kjac->ijab',v2e_ovov_ab,t2_1_ab,optimize=True)
-        t2_2_ab -= np.einsum('akcj,ikcb->ijab',v2e_vovo_ab,t2_1_ab,optimize=True)
-        t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_ab,t2_1_b,optimize=True)
-        t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_a,t2_1_ab,optimize=True)
+        t2_2_ab += np.einsum('kilj,klab->ijab',eris_ooOO,t2_1_ab,optimize=True)
+        t2_2_ab += np.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_a,optimize=True)
+        t2_2_ab += np.einsum('kcbj,ikac->ijab',eris_OVvo,t2_1_ab,optimize=True)
+        #t2_2_ab -= np.einsum('kbic,kjac->ijab',v2e_ovov_ab,t2_1_ab,optimize=True)
+        #t2_2_ab -= np.einsum('akcj,ikcb->ijab',v2e_vovo_ab,t2_1_ab,optimize=True)
+        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_ab,t2_1_b,optimize=True)
+        #t2_2_ab += np.einsum('akic,kjcb->ijab',v2e_voov_a,t2_1_ab,optimize=True)
+
+        print (np.linalg.norm(t2_2_ab))
+        exit()
 
         t2_2_a = t2_2_a/D2_a
         t2_2_b = t2_2_b/D2_b
