@@ -157,6 +157,8 @@ def compute_amplitudes(myadc, eris):
     eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
     eris_ovoo = eris.ovoo
     eris_OVoo = eris.OVoo
+    eris_ovOO = eris.ovOO
+    eris_OVOO = eris.OVOO
 
     t2_1_a = v2e_oovv/D2_a
     t2_1_b = v2e_OOVV/D2_b
@@ -183,19 +185,24 @@ def compute_amplitudes(myadc, eris):
     t1_2_a += 0.5*np.einsum('kcli,klac->ia',eris_ovoo,t2_1_a)
     t1_2_a += np.einsum('kdac,ikcd->ia',eris_OVvv,t2_1_ab)
     t1_2_a -= np.einsum('lcki,klac->ia',eris_OVoo,t2_1_ab)
-#
-#    t1_2_b = 0.5*np.einsum('akcd,ikcd->ia',v2e_vovv_b,t2_1_b)
-#    t1_2_b -= 0.5*np.einsum('klic,klac->ia',v2e_ooov_b,t2_1_b)
-#    t1_2_b += np.einsum('kadc,kidc->ia',v2e_ovvv_ab,t2_1_ab)
-#    t1_2_b -= np.einsum('lkci,lkca->ia',v2e_oovo_ab,t2_1_ab)
 
-    print (np.linalg.norm(t1_2_a))
-    exit()
+    del eris_ovvv
+    del eris_OVvv
 
-#    t1_2_a = t1_2_a/D1_a
-#    t1_2_b = t1_2_b/D1_b
-#
-#    t1_2 = (t1_2_a , t1_2_b)
+    t1_2_b = 0.5*np.einsum('kdac,ikcd->ia',eris_OVVV,t2_1_b)
+    t1_2_b -= 0.5*np.einsum('kcad,ikcd->ia',eris_OVVV,t2_1_b)
+    t1_2_b -= 0.5*np.einsum('lcki,klac->ia',eris_OVOO,t2_1_b)
+    t1_2_b += 0.5*np.einsum('kcli,klac->ia',eris_OVOO,t2_1_b)
+    t1_2_b += np.einsum('kdac,ikcd->ia',eris_ovVV,t2_1_ab)
+    t1_2_b -= np.einsum('lcki,klac->ia',eris_ovOO,t2_1_ab)
+
+    del eris_OVVV
+    del eris_ovVV
+
+    t1_2_a = t1_2_a/D1_a
+    t1_2_b = t1_2_b/D1_b
+
+    t1_2 = (t1_2_a , t1_2_b)
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
 
