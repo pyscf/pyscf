@@ -165,7 +165,6 @@ def compute_amplitudes(myadc, eris):
     t2_1_ab = v2e_oOvV/D2_ab
 
     t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
-    t1_2 = (None,)
 
     # Compute second-order singles t1 (tij) 
 
