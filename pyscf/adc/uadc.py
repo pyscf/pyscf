@@ -1558,21 +1558,11 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     eris_ovOV = eris.ovOV
     eris_OVov = eris.OVov
 
-    eris_ovvv = eris.ovvv
-    eris_ovvv = uadc_ao2mo.unpack_eri_1(eris_ovvv, nvir_a)
-    eris_OVVV = eris.OVVV
-    eris_OVVV = uadc_ao2mo.unpack_eri_1(eris_OVVV, nvir_b)
-    eris_OVvv = eris.OVvv
-    eris_OVvv = uadc_ao2mo.unpack_eri_1(eris_OVvv, nvir_a)
-    eris_ovVV = eris.ovVV
-    eris_ovVV = uadc_ao2mo.unpack_eri_1(eris_ovVV, nvir_b)
+    eris_ovvv = uadc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
+    eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
+    eris_OVvv = uadc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
+    eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
     
-    #v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
-    #v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
-    #v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
-
-
-     
     #v2e_vovv_1_a = v2e_vovv_a[:][:,:,ab_ind_a[0],ab_ind_a[1]].reshape(nvir_a,-1)
     #v2e_vovv_1_b = v2e_vovv_b[:][:,:,ab_ind_b[0],ab_ind_b[1]].reshape(nvir_b,-1)
 
