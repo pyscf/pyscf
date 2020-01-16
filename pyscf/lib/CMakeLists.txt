@@ -211,7 +211,7 @@ option(ENABLE_TBLIS "Using tblis tensor contraction library" OFF)
 if(ENABLE_TBLIS)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/libtblis.so")
   ExternalProject_Add(tblis
-    GIT_REPOSITORY https://github.com/sunqm/tblis
+    GIT_REPOSITORY https://github.com/devinamatthews/tblis.git
     GIT_TAG python
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}
