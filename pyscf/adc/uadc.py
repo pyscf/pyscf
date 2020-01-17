@@ -792,6 +792,10 @@ def get_imds_ea(adc, eris=None):
         eris_OVVO = eris.OVVO
         eris_OVvo = eris.OVvo
         eris_ovVO = eris.ovVO
+        eris_oooo = eris.oooo
+        eris_OOOO = eris.OOOO
+        eris_ooOO = eris.ooOO
+        
 #################################################################
 #        M_ab_a +=  np.einsum('ld,albd->ab',t1_2_a, v2e_vovv_a)
 #        M_ab_a +=  np.einsum('ld,albd->ab',t1_2_b, v2e_vovv_ab)
@@ -1027,16 +1031,14 @@ def get_imds_ea(adc, eris=None):
         M_ab_b += 0.5*np.einsum('lned,mled,nmab->ab',t2_1_a, t2_1_a, eris_ooVV, optimize=True)
         M_ab_b -= np.einsum('nled,mled,nmab->ab',t2_1_ab, t2_1_ab, eris_ooVV, optimize=True)
 
-#        M_ab_a -= 0.25*np.einsum('mlbd,noad,noml->ab',t2_1_a, t2_1_a, eris_oooo, optimize=True)
-#        M_ab_a -= np.einsum('mlbd,noad,noml->ab',t2_1_ab, t2_1_ab, eris_ooOO, optimize=True)
-#
-#        M_ab_b -= 0.25*np.einsum('mlbd,noad,noml->ab',t2_1_b, t2_1_b, eris_OOOO, optimize=True)
-#        M_ab_b -= np.einsum('lmdb,onda,onlm->ab',t2_1_ab, t2_1_ab, eris_ooOO, optimize=True)
+        M_ab_a -= 0.25*np.einsum('mlbd,noad,nmol->ab',t2_1_a, t2_1_a, eris_oooo, optimize=True)
+        M_ab_a += 0.25*np.einsum('mlbd,noad,nlom->ab',t2_1_a, t2_1_a, eris_oooo, optimize=True)
+        M_ab_a -= np.einsum('mlbd,noad,nmol->ab',t2_1_ab, t2_1_ab, eris_ooOO, optimize=True)
 
-        print (np.linalg.norm(M_ab_a))
-        print (np.linalg.norm(M_ab_b))
-        exit()
-#####################################################################################################
+        M_ab_b -= 0.25*np.einsum('mlbd,noad,nmol->ab',t2_1_b, t2_1_b, eris_OOOO, optimize=True)
+        M_ab_b += 0.25*np.einsum('mlbd,noad,nlom->ab',t2_1_b, t2_1_b, eris_OOOO, optimize=True)
+        M_ab_b -= np.einsum('lmdb,onda,olnm->ab',t2_1_ab, t2_1_ab, eris_ooOO, optimize=True)
+
 #        M_ab_a -= 0.25*np.einsum('mlef,mlbd,adef->ab',t2_1_a, t2_1_a, v2e_vvvv_a, optimize=True)
 #        M_ab_a -= np.einsum('mlef,mlbd,adef->ab',t2_1_ab, t2_1_ab, v2e_vvvv_ab, optimize=True)
 #
@@ -1059,6 +1061,46 @@ def get_imds_ea(adc, eris=None):
 #        M_ab_b += np.einsum('mlfd,mled,eafb->ab',t2_1_ab, t2_1_ab, v2e_vvvv_ab, optimize=True)
 #        M_ab_b += np.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, v2e_vvvv_b, optimize=True)
 
+#####################################################################################################
+
+        eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
+        M_ab_a -= 0.25*np.einsum('mlef,mlbd,aedf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab_a += 0.25*np.einsum('mlef,mlbd,afde->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab_a -= 0.25*np.einsum('mled,mlaf,ebdf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab_a += 0.25*np.einsum('mled,mlaf,efdb->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab_a -= 0.5*np.einsum('mldf,mled,abef->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab_a += 0.5*np.einsum('mldf,mled,afeb->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab_a += np.einsum('mlfd,mled,abef->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
+        M_ab_a -= np.einsum('mlfd,mled,afeb->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
+        del eris_vvvv
+
+        eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
+        M_ab_b -= 0.25*np.einsum('mlef,mlbd,aedf->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
+        M_ab_b += 0.25*np.einsum('mlef,mlbd,afde->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
+        M_ab_b -= 0.25*np.einsum('mled,mlaf,ebdf->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
+        M_ab_b += 0.25*np.einsum('mled,mlaf,efdb->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
+        M_ab_b -= 0.5*np.einsum('mldf,mled,abef->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
+        M_ab_b += 0.5*np.einsum('mldf,mled,afeb->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
+        M_ab_b += np.einsum('mldf,mlde,abef->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
+        M_ab_b -= np.einsum('mldf,mlde,afeb->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
+        del eris_VVVV
+
+        eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
+        M_ab_a -= np.einsum('mlef,mlbd,aedf->ab',t2_1_ab, t2_1_ab,   eris_vvVV, optimize=True)
+        M_ab_a -= np.einsum('mled,mlaf,ebdf->ab',t2_1_ab, t2_1_ab,   eris_vvVV, optimize=True)
+        M_ab_a -= 0.5*np.einsum('mldf,mled,abef->ab',t2_1_b, t2_1_b, eris_vvVV, optimize=True)
+        M_ab_a += np.einsum('mldf,mlde,abef->ab',t2_1_ab, t2_1_ab,   eris_vvVV, optimize=True)
+
+        M_ab_b -= np.einsum('mlef,mldb,deaf->ab',t2_1_ab, t2_1_ab,   eris_vvVV, optimize=True)
+        M_ab_b -= np.einsum('mled,mlfa,efdb->ab',t2_1_ab, t2_1_ab,   eris_vvVV, optimize=True)
+        M_ab_b -= 0.5*np.einsum('mldf,mled,efab->ab',t2_1_a, t2_1_a, eris_vvVV, optimize=True)
+        M_ab_b += np.einsum('mlfd,mled,efab->ab',t2_1_ab, t2_1_ab,   eris_vvVV, optimize=True)
+        del eris_vvVV
+
+        print (np.linalg.norm(M_ab_a))
+        print (np.linalg.norm(M_ab_b))
+        exit()
+#####################################################################################################
     M_ab = (M_ab_a, M_ab_b)
 
     return M_ab
