@@ -1564,56 +1564,15 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_1 = temp_1[:,ab_ind_b[0],ab_ind_b[1]]
                s[s_bbb:f_bbb] += 0.5*temp_1.reshape(-1)
 
-               #temp = v2e_vvvv_b[ab_ind_b[0],ab_ind_b[1],:,:]
-               #temp = temp.reshape(-1,nvir_b*nvir_b)
-               #r_bbb_t = r_bbb_u.reshape(nocc_b,-1)
-               #s[s_bbb:f_bbb] += 0.5*np.dot(r_bbb_t,temp.T).reshape(-1)
-
-               #temp = 0.5*np.einsum('yxwz,izw->ixy',v2e_vvvv_b,r_bbb_u,optimize = True)
-               ########temp = -0.5*np.einsum('yxzw,izw->ixy',v2e_vvvv_b,r_bbb_u)
-               #s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
-
-               #s[s_bab:f_bab] += np.einsum('xyzw,izw->ixy',v2e_vvvv_ab,r_bab,optimize = True).reshape(-1)
-               #s[s_bab:f_bab] += np.einsum('xyzw,izw->ixy',v2e_vvvv_ab,r_bab).reshape(-1)
-
-
-
-               eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
-               eris_vvVV = eris_vvVV.transpose(0,2,1,3)
-               eris_vvVV = eris_vvVV.copy()[:].reshape(nvir_a*nvir_b,nvir_a*nvir_b)      
                r_bab_t = r_bab.reshape(nocc_b,-1)
-               s[s_bab:f_bab] += np.dot(r_bab_t,eris_vvVV.T).reshape(-1)
-               del eris_vvVV
-
-               #s[s_aba:f_aba] += np.einsum('yxwz,izw->ixy',v2e_vvvv_ab,r_aba,optimize = True).reshape(-1)
-               #temp = v2e_vvvv_ab.transpose(3,2,1,0)
-               #temp = temp.reshape(nvir_a*nvir_b,nvir_a*nvir_b)
-               #r_aba_t = r_aba.reshape(nocc_a,-1)
-               #s[s_aba:f_aba] += np.dot(r_aba_t,temp).reshape(-1)
-
+               r_aba_t = r_aba.transpose(0,2,1).reshape(nocc_a,-1)
                eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
                eris_vvVV = eris_vvVV.transpose(0,2,1,3)
                eris_vvVV = eris_vvVV.copy()[:].reshape(nvir_a*nvir_b,nvir_a*nvir_b)      
-               r_aba_t = r_aba.transpose(0,2,1).reshape(nocc_a,-1)
+               s[s_bab:f_bab] += np.dot(r_bab_t,eris_vvVV.T).reshape(-1)
                temp_1 = np.dot(r_aba_t,eris_vvVV.T).reshape(nocc_a, nvir_a,nvir_b)
                del eris_vvVV
                s[s_aba:f_aba] += temp_1.transpose(0,2,1).copy().reshape(-1)
-#################################################################################################################
-
-               #####temp = 0.5*np.einsum('yjzi,jzx->ixy',v2e_vovo_a,r_aaa_u,optimize = True)
-               #####temp +=0.5*np.einsum('yjiz,jxz->ixy',v2e_voov_ab,r_bab,optimize = True)
-               #####s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
-
-               #####s[s_bab:f_bab] -= 0.5*np.einsum('jyzi,jzx->ixy',v2e_ovvo_ab,r_aaa_u,optimize = True).reshape(-1)
-               #####s[s_bab:f_bab] -= 0.5*np.einsum('yjzi,jxz->ixy',v2e_vovo_b,r_bab,optimize = True).reshape(-1)
-
-               #####temp = 0.5*np.einsum('yjzi,jzx->ixy',v2e_vovo_b,r_bbb_u,optimize = True)
-               #####temp +=0.5* np.einsum('jyzi,jxz->ixy',v2e_ovvo_ab,r_aba,optimize = True)
-               #####s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
-
-               ####s[s_aba:f_aba] -= 0.5*np.einsum('yjzi,jxz->ixy',v2e_vovo_a,r_aba,optimize = True).reshape(-1)
-               ####s[s_aba:f_aba] -= 0.5*np.einsum('yjiz,jzx->ixy',v2e_voov_ab,r_bbb_u,optimize = True).reshape(-1)
-
 
                temp = 0.5*np.einsum('jiyz,jzx->ixy',eris_oovv,r_aaa_u,optimize = True)
                temp -= 0.5*np.einsum('jzyi,jzx->ixy',eris_ovvo,r_aaa_u,optimize = True)
@@ -1633,20 +1592,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                s[s_aba:f_aba] += 0.5*np.einsum('jzyi,jxz->ixy',eris_ovvo,r_aba,optimize = True).reshape(-1)
                s[s_aba:f_aba] -= 0.5*np.einsum('jzyi,jzx->ixy',eris_OVvo,r_bbb_u,optimize = True).reshape(-1)
 
-
-#################################################################################################################
-               ####temp = -0.5*np.einsum('xjzi,jzy->ixy',v2e_vovo_a,r_aaa_u,optimize = True)
-               ####temp -= 0.5*np.einsum('xjiz,jyz->ixy',v2e_voov_ab,r_bab,optimize = True)
-               ####s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
-
-               ####s[s_bab:f_bab] -=  0.5*np.einsum('xjzi,jzy->ixy',v2e_vovo_ab,r_bab,optimize = True).reshape(-1)
-
-               ####temp = -0.5*np.einsum('xjzi,jzy->ixy',v2e_vovo_b,r_bbb_u,optimize = True)
-               ####temp -= 0.5*np.einsum('jxzi,jyz->ixy',v2e_ovvo_ab,r_aba,optimize = True)
-               ####s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
-
-               ####s[s_aba:f_aba] -= 0.5*np.einsum('jxiz,jzy->ixy',v2e_ovov_ab,r_aba,optimize = True).reshape(-1)
-
                temp = -0.5*np.einsum('jixz,jzy->ixy',eris_oovv,r_aaa_u,optimize = True)
                temp += 0.5*np.einsum('jzxi,jzy->ixy',eris_ovvo,r_aaa_u,optimize = True)
                temp -= 0.5*np.einsum('jzxi,jyz->ixy',eris_OVvo,r_bab,optimize = True)
@@ -1660,20 +1605,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
 
                s[s_aba:f_aba] -= 0.5*np.einsum('jixz,jzy->ixy',eris_ooVV,r_aba,optimize = True).reshape(-1)
-
-#################################################################################################################
-               ####temp = 0.5*np.einsum('xjwi,jyw->ixy',v2e_vovo_a,r_aaa_u,optimize = True)
-               ####temp -= 0.5*np.einsum('xjiw,jyw->ixy',v2e_voov_ab,r_bab,optimize = True)
-
-               ####s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
-
-               ####s[s_bab:f_bab] -= 0.5*np.einsum('xjwi,jwy->ixy',v2e_vovo_ab,r_bab,optimize = True).reshape(-1)
-
-               ####temp = 0.5*np.einsum('xjwi,jyw->ixy',v2e_vovo_b,r_bbb_u,optimize = True)
-               ####temp -= 0.5*np.einsum('jxwi,jyw->ixy',v2e_ovvo_ab,r_aba,optimize = True)
-               ####s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
-
-               ####s[s_aba:f_aba] -= 0.5*np.einsum('jxiw,jwy->ixy',v2e_ovov_ab,r_aba,optimize = True).reshape(-1)
 
                temp = 0.5*np.einsum('jixw,jyw->ixy',eris_oovv,r_aaa_u,optimize = True)
                temp -= 0.5*np.einsum('jwxi,jyw->ixy',eris_ovvo,r_aaa_u,optimize = True)
@@ -1690,23 +1621,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                s[s_aba:f_aba] -= 0.5*np.einsum('jixw,jwy->ixy',eris_ooVV,r_aba,optimize = True).reshape(-1)
 
-#################################################################################################################
-
-               ####temp = -0.5*np.einsum('yjwi,jxw->ixy',v2e_vovo_a,r_aaa_u,optimize = True)
-               ####temp += 0.5*np.einsum('yjiw,jxw->ixy',v2e_voov_ab,r_bab,optimize = True)
-
-               ####s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
-
-               ####s[s_bab:f_bab] -= 0.5*np.einsum('yjwi,jxw->ixy',v2e_vovo_b,r_bab,optimize = True).reshape(-1)
-               ####s[s_bab:f_bab] += 0.5*np.einsum('jywi,jxw->ixy',v2e_ovvo_ab,r_aaa_u,optimize = True).reshape(-1)
-
-               ####s[s_aba:f_aba] -= 0.5*np.einsum('yjwi,jxw->ixy',v2e_vovo_a,r_aba,optimize = True).reshape(-1)
-               ####s[s_aba:f_aba] += 0.5*np.einsum('yjiw,jxw->ixy',v2e_voov_ab,r_bbb_u,optimize = True).reshape(-1)
-
-               ####temp = -0.5*np.einsum('yjwi,jxw->ixy',v2e_vovo_b,r_bbb_u,optimize = True)
-               ####temp += 0.5*np.einsum('jywi,jxw->ixy',v2e_ovvo_ab,r_aba,optimize = True)
-               ####s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
-#
                temp = -0.5*np.einsum('jiyw,jxw->ixy',eris_oovv,r_aaa_u,optimize = True)
                temp += 0.5*np.einsum('jwyi,jxw->ixy',eris_ovvo,r_aaa_u,optimize = True)
                temp += 0.5*np.einsum('jwyi,jxw->ixy',eris_OVvo,r_bab,optimize = True)
