@@ -1006,9 +1006,9 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                         ypows[0] = 1;
                                         zpows[0] = 1;
                                         for (lx = 1; lx <= l; lx++) {
-                                                xpows[lx] = xpows[lx-1] *gridx[i];
-                                                ypows[lx] = ypows[lx-1] *gridy[i];
-                                                zpows[lx] = zpows[lx-1] *gridz[i];
+                                                xpows[lx+1] = xpows[lx] *gridx[i];
+                                                ypows[lx+1] = ypows[lx] *gridy[i];
+                                                zpows[lx+1] = zpows[lx] *gridz[i];
                                         }
                                         for (lx = l, n = 0; lx >= 0; lx--) {
                                         for (ly = l - lx; ly >= 0; ly--, n++) {
@@ -1018,9 +1018,9 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                                 gtox[n*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridx[i] * tmp;
                                                 gtoy[n*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridy[i] * tmp;
                                                 gtoz[n*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridz[i] * tmp;
-                                                gtox[n*ngrids+i] += exps[k*BLKSIZE+i] * lx * xpows[lx-1] * ypows[ly] * zpows[lz];
-                                                gtoy[n*ngrids+i] += exps[k*BLKSIZE+i] * ly * xpows[lx] * ypows[ly-1] * zpows[lz];
-                                                gtoz[n*ngrids+i] += exps[k*BLKSIZE+i] * lz * xpows[lx] * ypows[ly] * zpows[lz-1];
+                                                gtox[n*ngrids+i] += exps[k*BLKSIZE+i] * lx * xpows_1less_in_power[lx] * ypows[ly] * zpows[lz];
+                                                gtoy[n*ngrids+i] += exps[k*BLKSIZE+i] * ly * xpows[lx] * ypows_1less_in_power[ly] * zpows[lz];
+                                                gtoz[n*ngrids+i] += exps[k*BLKSIZE+i] * lz * xpows[lx] * ypows[ly] * zpows_1less_in_power[lz];
                                         } }
                                 } else {
                                         for (n = 0; n < degen; n++) {
