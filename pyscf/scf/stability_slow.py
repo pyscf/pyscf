@@ -70,7 +70,7 @@ def rhf_internal(mf, verbose=None):
     if e[0] < -1e-5:
         log.log('RHF wavefunction has an internal instablity')
     else:
-        log.log('RHF wavefunction is stable in the intenral stablity analysis')
+        log.log('RHF wavefunction is stable in the internal stablity analysis')
 
 def rhf_external(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -160,7 +160,7 @@ def uhf_internal(mf, verbose=None):
         log.log('UHF wavefunction has an internal instablity. '
                  'It maybe corresponds to (spatial) symmetry broken wfn.')
     else:
-        log.log('UHF wavefunction is stable in the intenral stablity analysis')
+        log.log('UHF wavefunction is stable in the internal stablity analysis')
 
 def uhf_external(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
