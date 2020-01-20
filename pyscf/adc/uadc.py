@@ -1005,40 +1005,58 @@ def get_imds_ip(adc, eris=None):
     M_ij_b -= 0.5 *  np.einsum('jlde,ldie->ij',t2_1_b, eris_OVOV)
     M_ij_b += np.einsum('ljed,leid->ij',t2_1_ab, eris_ovOV)
 
-    print (np.linalg.norm(M_ij_a))
-    print (np.linalg.norm(M_ij_b))
-
-    exit()
-
     # Third-order terms
 
     if (method == "adc(3)"):
 
         t2_2_a, t2_2_ab, t2_2_b = t2[1]
+        eris_oovv = eris.oovv
+        eris_OOVV = eris.OOVV
+        eris_ooVV = eris.ooVV
+        eris_OOvv = eris.OOvv
+        eris_ovvo = eris.ovvo
+        eris_OVVO = eris.OVVO
+        eris_ovVO = eris.ovVO
+        eris_OVvo = eris.OVvo
+        eris_ovoo = eris.ovoo
+        eris_OVOO = eris.OVOO
+        eris_ovOO = eris.ovOO
+        eris_OVoo = eris.OVoo
+        eris_oooo = eris.oooo
+        eris_OOOO = eris.OOOO
+        eris_ooOO = eris.ooOO
 
-        M_ij_a += np.einsum('ld,jlid->ij',t1_2_a, v2e_ooov_a)
-        M_ij_a += np.einsum('ld,jlid->ij',t1_2_b, v2e_ooov_ab)
+        M_ij_a += np.einsum('ld,ldji->ij',t1_2_a, eris_ovoo)
+        M_ij_a -= np.einsum('ld,jdli->ij',t1_2_a, eris_ovoo)
+        M_ij_a += np.einsum('ld,ldji->ij',t1_2_b, eris_OVoo)
 
-        M_ij_b += np.einsum('ld,jlid->ij',t1_2_b, v2e_ooov_b)
-        M_ij_b += np.einsum('ld,ljdi->ij',t1_2_a, v2e_oovo_ab)
+        M_ij_b += np.einsum('ld,ldji->ij',t1_2_b, eris_OVOO)
+        M_ij_b -= np.einsum('ld,jdli->ij',t1_2_b, eris_OVOO)
+        M_ij_b += np.einsum('ld,ldji->ij',t1_2_a, eris_ovOO)
 
-        M_ij_a += np.einsum('ld,jdil->ij',t1_2_a, v2e_ovoo_a)
-        M_ij_a += np.einsum('ld,jdil->ij',t1_2_b, v2e_ovoo_ab)
+        M_ij_a += np.einsum('ld,ldij->ij',t1_2_a, eris_ovoo)
+        M_ij_a -= np.einsum('ld,idlj->ij',t1_2_a, eris_ovoo)
+        M_ij_a += np.einsum('ld,ldij->ij',t1_2_b, eris_OVoo)
 
-        M_ij_b += np.einsum('ld,jdil->ij',t1_2_b, v2e_ovoo_b)
-        M_ij_b += np.einsum('ld,djli->ij',t1_2_a, v2e_vooo_ab)
+        M_ij_b += np.einsum('ld,ldij->ij',t1_2_b, eris_OVOO)
+        M_ij_b -= np.einsum('ld,idlj->ij',t1_2_b, eris_OVOO)
+        M_ij_b += np.einsum('ld,ldij->ij',t1_2_a, eris_ovOO)
 
-        M_ij_a += 0.5* np.einsum('ilde,jlde->ij',t2_2_a, v2e_oovv_a)
-        M_ij_a += np.einsum('ilde,jlde->ij',t2_2_ab, v2e_oovv_ab)
+        M_ij_a += 0.5* np.einsum('ilde,jdle->ij',t2_2_a, eris_ovov)
+        M_ij_a -= 0.5* np.einsum('ilde,jeld->ij',t2_2_a, eris_ovov)
+        M_ij_a += np.einsum('ilde,jdle->ij',t2_2_ab, eris_ovOV)
 
-        M_ij_b += 0.5* np.einsum('ilde,jlde->ij',t2_2_b, v2e_oovv_b)
-        M_ij_b += np.einsum('lied,ljed->ij',t2_2_ab, v2e_oovv_ab)
+        M_ij_b += 0.5* np.einsum('ilde,jdle->ij',t2_2_b, eris_OVOV)
+        M_ij_b -= 0.5* np.einsum('ilde,jeld->ij',t2_2_b, eris_OVOV)
+        M_ij_b += np.einsum('lied,lejd->ij',t2_2_ab, eris_ovOV)
 
-        M_ij_a += 0.5* np.einsum('jlde,deil->ij',t2_2_a, v2e_vvoo_a)
-        M_ij_a += np.einsum('jlde,deil->ij',t2_2_ab, v2e_vvoo_ab)
+        M_ij_a += 0.5* np.einsum('jlde,leid->ij',t2_2_a, eris_ovov)
+        M_ij_a -= 0.5* np.einsum('jlde,ield->ij',t2_2_a, eris_ovov)
+        M_ij_a += np.einsum('jlde,leid->ij',t2_2_ab, eris_OVov)
 
-        M_ij_b += 0.5* np.einsum('jlde,deil->ij',t2_2_b, v2e_vvoo_b)
-        M_ij_b += np.einsum('ljed,edli->ij',t2_2_ab, v2e_vvoo_ab)
+        M_ij_b += 0.5* np.einsum('jlde,leid->ij',t2_2_b, eris_OVOV)
+        M_ij_b -= 0.5* np.einsum('jlde,ield->ij',t2_2_b, eris_OVOV)
+        M_ij_b += np.einsum('ljed,leid->ij',t2_2_ab, eris_ovOV)
 
         M_ij_a +=  np.einsum('d,ilde,jlde->ij',e_vir_a,t2_1_a, t2_2_a,optimize=True)
         M_ij_a +=  np.einsum('d,ilde,jlde->ij',e_vir_a,t2_1_ab, t2_2_ab,optimize=True)
@@ -1104,79 +1122,112 @@ def get_imds_ip(adc, eris=None):
         M_ij_b -= 0.25 *  np.einsum('j,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
         M_ij_b -= 0.25 *  np.einsum('j,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
 
-        M_ij_a -= np.einsum('lmde,jldf,fmie->ij',t2_1_a, t2_1_a, v2e_voov_a ,optimize = True)
-        M_ij_a += np.einsum('mled,jlfd,fmie->ij',t2_1_ab, t2_1_ab, v2e_voov_a ,optimize = True)
-        M_ij_a -= np.einsum('lmde,jldf,fmie->ij',t2_1_ab, t2_1_a, v2e_voov_ab,optimize = True)
-        M_ij_a -= np.einsum('mlde,jldf,mfie->ij',t2_1_ab, t2_1_ab, v2e_ovov_ab ,optimize = True)
-        M_ij_a += np.einsum('lmde,jlfd,fmie->ij',t2_1_b, t2_1_ab, v2e_voov_ab ,optimize = True)
+        M_ij_a -= np.einsum('lmde,jldf,mefi->ij',t2_1_a, t2_1_a, eris_ovvo,optimize = True)
+        M_ij_a += np.einsum('lmde,jldf,mife->ij',t2_1_a, t2_1_a, eris_oovv,optimize = True)
+        M_ij_a += np.einsum('mled,jlfd,mefi->ij',t2_1_ab, t2_1_ab, eris_ovvo ,optimize = True)
+        M_ij_a -= np.einsum('mled,jlfd,mife->ij',t2_1_ab, t2_1_ab, eris_oovv ,optimize = True)
+        M_ij_a -= np.einsum('lmde,jldf,mefi->ij',t2_1_ab, t2_1_a, eris_OVvo,optimize = True)
+        M_ij_a -= np.einsum('mlde,jldf,mife->ij',t2_1_ab, t2_1_ab, eris_ooVV ,optimize = True)
+        M_ij_a += np.einsum('lmde,jlfd,mefi->ij',t2_1_b, t2_1_ab, eris_OVvo ,optimize = True)
 
-        M_ij_b -= np.einsum('lmde,jldf,fmie->ij',t2_1_b, t2_1_b, v2e_voov_b ,optimize = True)
-        M_ij_b += np.einsum('lmde,ljdf,fmie->ij',t2_1_ab, t2_1_ab, v2e_voov_b ,optimize = True)
-        M_ij_b -= np.einsum('mled,jldf,mfei->ij',t2_1_ab, t2_1_b, v2e_ovvo_ab,optimize = True)
-        M_ij_b -= np.einsum('lmed,ljfd,fmei->ij',t2_1_ab, t2_1_ab, v2e_vovo_ab ,optimize = True)
-        M_ij_b += np.einsum('lmde,ljdf,mfei->ij',t2_1_a, t2_1_ab, v2e_ovvo_ab ,optimize = True)
+        M_ij_b -= np.einsum('lmde,jldf,mefi->ij',t2_1_b, t2_1_b, eris_OVVO,optimize = True)
+        M_ij_b += np.einsum('lmde,jldf,mife->ij',t2_1_b, t2_1_b, eris_OOVV,optimize = True)
+        M_ij_b += np.einsum('lmde,ljdf,mefi->ij',t2_1_ab, t2_1_ab, eris_OVVO,optimize = True)
+        M_ij_b -= np.einsum('lmde,ljdf,mife->ij',t2_1_ab, t2_1_ab, eris_OOVV,optimize = True)
+        M_ij_b -= np.einsum('mled,jldf,mefi->ij',t2_1_ab, t2_1_b, eris_ovVO,optimize = True)
+        M_ij_b -= np.einsum('lmed,ljfd,mife->ij',t2_1_ab, t2_1_ab, eris_OOvv ,optimize = True)
+        M_ij_b += np.einsum('lmde,ljdf,mefi->ij',t2_1_a, t2_1_ab, eris_ovVO ,optimize = True)
 
-        M_ij_a -= np.einsum('lmde,ildf,fmje->ij',t2_1_a, t2_1_a, v2e_voov_a ,optimize = True)
-        M_ij_a += np.einsum('mled,ilfd,fmje->ij',t2_1_ab, t2_1_ab, v2e_voov_a ,optimize = True)
-        M_ij_a -= np.einsum('lmde,ildf,fmje->ij',t2_1_ab, t2_1_a, v2e_voov_ab,optimize = True)
-        M_ij_a -= np.einsum('mlde,ildf,mfje->ij',t2_1_ab, t2_1_ab, v2e_ovov_ab ,optimize = True)
-        M_ij_a += np.einsum('lmde,ilfd,fmje->ij',t2_1_b, t2_1_ab, v2e_voov_ab ,optimize = True)
+        M_ij_a -= np.einsum('lmde,ildf,mefj->ij',t2_1_a, t2_1_a, eris_ovvo ,optimize = True)
+        M_ij_a += np.einsum('lmde,ildf,mjfe->ij',t2_1_a, t2_1_a, eris_oovv ,optimize = True)
+        M_ij_a += np.einsum('mled,ilfd,mefj->ij',t2_1_ab, t2_1_ab, eris_ovvo ,optimize = True)
+        M_ij_a -= np.einsum('mled,ilfd,mjfe->ij',t2_1_ab, t2_1_ab, eris_oovv ,optimize = True)
+        M_ij_a -= np.einsum('lmde,ildf,mefj->ij',t2_1_ab, t2_1_a, eris_OVvo,optimize = True)
+        M_ij_a -= np.einsum('mlde,ildf,mjfe->ij',t2_1_ab, t2_1_ab, eris_ooVV ,optimize = True)
+        M_ij_a += np.einsum('lmde,ilfd,mefj->ij',t2_1_b, t2_1_ab, eris_OVvo ,optimize = True)
 
-        M_ij_b -= np.einsum('lmde,ildf,fmje->ij',t2_1_b, t2_1_b, v2e_voov_b ,optimize = True)
-        M_ij_b += np.einsum('lmde,lidf,fmje->ij',t2_1_ab, t2_1_ab, v2e_voov_b ,optimize = True)
-        M_ij_b -= np.einsum('mled,ildf,mfej->ij',t2_1_ab, t2_1_b, v2e_ovvo_ab,optimize = True)
-        M_ij_b -= np.einsum('lmed,lifd,fmej->ij',t2_1_ab, t2_1_ab, v2e_vovo_ab ,optimize = True)
-        M_ij_b += np.einsum('lmde,lidf,mfej->ij',t2_1_a, t2_1_ab, v2e_ovvo_ab ,optimize = True)
+        M_ij_b -= np.einsum('lmde,ildf,mefj->ij',t2_1_b, t2_1_b, eris_OVVO ,optimize = True)
+        M_ij_b += np.einsum('lmde,ildf,mjfe->ij',t2_1_b, t2_1_b, eris_OOVV ,optimize = True)
+        M_ij_b += np.einsum('lmde,lidf,mefj->ij',t2_1_ab, t2_1_ab, eris_OVVO ,optimize = True)
+        M_ij_b -= np.einsum('lmde,lidf,mjfe->ij',t2_1_ab, t2_1_ab, eris_OOVV ,optimize = True)
+        M_ij_b -= np.einsum('mled,ildf,mefj->ij',t2_1_ab, t2_1_b, eris_ovVO,optimize = True)
+        M_ij_b -= np.einsum('lmed,lifd,mjfe->ij',t2_1_ab, t2_1_ab, eris_OOvv ,optimize = True)
+        M_ij_b += np.einsum('lmde,lidf,mefj->ij',t2_1_a, t2_1_ab, eris_ovVO ,optimize = True)
 
-        M_ij_a += 0.25*np.einsum('lmde,jnde,lmin->ij',t2_1_a, t2_1_a,v2e_oooo_a, optimize = True)
-        M_ij_a += np.einsum('lmde,jnde,lmin->ij',t2_1_ab ,t2_1_ab,v2e_oooo_ab, optimize = True)
+        M_ij_a += 0.25*np.einsum('lmde,jnde,limn->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
+        M_ij_a -= 0.25*np.einsum('lmde,jnde,lnmi->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
+        M_ij_a += np.einsum('lmde,jnde,limn->ij',t2_1_ab ,t2_1_ab,eris_ooOO, optimize = True)
 
-        M_ij_b += 0.25*np.einsum('lmde,jnde,lmin->ij',t2_1_b, t2_1_b,v2e_oooo_b, optimize = True)
-        M_ij_b += np.einsum('mled,njed,mlni->ij',t2_1_ab ,t2_1_ab,v2e_oooo_ab, optimize = True)
+        M_ij_b += 0.25*np.einsum('lmde,jnde,limn->ij',t2_1_b, t2_1_b,eris_OOOO, optimize = True)
+        M_ij_b -= 0.25*np.einsum('lmde,jnde,lnmi->ij',t2_1_b, t2_1_b,eris_OOOO, optimize = True)
+        M_ij_b += np.einsum('mled,njed,mnli->ij',t2_1_ab ,t2_1_ab,eris_ooOO, optimize = True)
 
-        M_ij_a += 0.25*np.einsum('ilde,jlgf,gfde->ij',t2_1_a, t2_1_a,v2e_vvvv_a, optimize = True)
-        M_ij_a +=np.einsum('ilde,jlgf,gfde->ij',t2_1_ab, t2_1_ab,v2e_vvvv_ab, optimize = True)
+        eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
+        M_ij_a += 0.25*np.einsum('ilde,jlgf,gdfe->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
+        M_ij_a -= 0.25*np.einsum('ilde,jlgf,gefd->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
+        del eris_vvvv
 
-        M_ij_b += 0.25*np.einsum('ilde,jlgf,gfde->ij',t2_1_b, t2_1_b,v2e_vvvv_b, optimize = True)
-        M_ij_b +=np.einsum('lied,ljfg,fged->ij',t2_1_ab, t2_1_ab,v2e_vvvv_ab, optimize = True)
+        eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
+        M_ij_b += 0.25*np.einsum('ilde,jlgf,gdfe->ij',t2_1_b, t2_1_b, eris_VVVV, optimize = True)
+        M_ij_b -= 0.25*np.einsum('ilde,jlgf,gefd->ij',t2_1_b, t2_1_b, eris_VVVV, optimize = True)
+        del eris_VVVV
 
-        M_ij_a += 0.25*np.einsum('inde,lmde,jnlm->ij',t2_1_a, t2_1_a,v2e_oooo_a, optimize = True)
-        M_ij_a +=np.einsum('inde,lmde,jnlm->ij',t2_1_ab, t2_1_ab,v2e_oooo_ab, optimize = True)
+        eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
+        M_ij_a +=np.einsum('ilde,jlgf,gdfe->ij',t2_1_ab, t2_1_ab,eris_vvVV, optimize = True)
+        M_ij_b +=np.einsum('lied,ljfg,fegd->ij',t2_1_ab, t2_1_ab,eris_vvVV, optimize = True)
+        del eris_vvVV
 
-        M_ij_b += 0.25*np.einsum('inde,lmde,jnlm->ij',t2_1_b, t2_1_b,v2e_oooo_b, optimize = True)
-        M_ij_b +=np.einsum('nied,mled,njml->ij',t2_1_ab, t2_1_ab,v2e_oooo_ab, optimize = True)
+        M_ij_a += 0.25*np.einsum('inde,lmde,jlnm->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
+        M_ij_a -= 0.25*np.einsum('inde,lmde,jmnl->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
+        M_ij_a +=np.einsum('inde,lmde,jlnm->ij',t2_1_ab, t2_1_ab,eris_ooOO, optimize = True)
 
-        M_ij_a += 0.5*np.einsum('lmdf,lmde,jeif->ij',t2_1_a, t2_1_a, v2e_ovov_a , optimize = True)
-        M_ij_a +=np.einsum('mlfd,mled,jeif->ij',t2_1_ab, t2_1_ab, v2e_ovov_a , optimize = True)
-        M_ij_a +=np.einsum('lmdf,lmde,jeif->ij',t2_1_ab, t2_1_ab, v2e_ovov_ab , optimize = True)
-        M_ij_a +=0.5*np.einsum('lmdf,lmde,jeif->ij',t2_1_b, t2_1_b, v2e_ovov_ab , optimize = True)
+        M_ij_b += 0.25*np.einsum('inde,lmde,jlnm->ij',t2_1_b, t2_1_b,eris_OOOO, optimize = True)
+        M_ij_b -= 0.25*np.einsum('inde,lmde,jmnl->ij',t2_1_b, t2_1_b,eris_OOOO, optimize = True)
+        M_ij_b +=np.einsum('nied,mled,nmjl->ij',t2_1_ab, t2_1_ab,eris_ooOO, optimize = True)
 
-        M_ij_b += 0.5*np.einsum('lmdf,lmde,jeif->ij',t2_1_b, t2_1_b, v2e_ovov_b , optimize = True)
-        M_ij_b +=np.einsum('lmdf,lmde,jeif->ij',t2_1_ab, t2_1_ab, v2e_ovov_b , optimize = True)
-        M_ij_b +=np.einsum('lmfd,lmed,ejfi->ij',t2_1_ab, t2_1_ab, v2e_vovo_ab , optimize = True)
-        M_ij_b +=0.5*np.einsum('lmdf,lmde,ejfi->ij',t2_1_a, t2_1_a, v2e_vovo_ab , optimize = True)
+        M_ij_a += 0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_a, t2_1_a, eris_oovv, optimize = True)
+        M_ij_a -= 0.5*np.einsum('lmdf,lmde,jfei->ij',t2_1_a, t2_1_a, eris_ovvo, optimize = True)
+        M_ij_a +=np.einsum('mlfd,mled,jief->ij',t2_1_ab, t2_1_ab, eris_oovv , optimize = True)
+        M_ij_a -=np.einsum('mlfd,mled,jfei->ij',t2_1_ab, t2_1_ab, eris_ovvo , optimize = True)
+        M_ij_a +=np.einsum('lmdf,lmde,jief->ij',t2_1_ab, t2_1_ab, eris_ooVV , optimize = True)
+        M_ij_a +=0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_b, t2_1_b, eris_ooVV , optimize = True)
 
-        M_ij_a -= np.einsum('ilde,jmdf,flem->ij',t2_1_a, t2_1_a, v2e_vovo_a, optimize = True)
-        M_ij_a += np.einsum('ilde,jmdf,lfem->ij',t2_1_a, t2_1_ab, v2e_ovvo_ab, optimize = True)
-        M_ij_a += np.einsum('ilde,jmdf,flme->ij',t2_1_ab, t2_1_a, v2e_voov_ab, optimize = True)
-        M_ij_a -= np.einsum('ilde,jmdf,flem->ij',t2_1_ab, t2_1_ab, v2e_vovo_b, optimize = True)
-        M_ij_a -= np.einsum('iled,jmfd,flem->ij',t2_1_ab, t2_1_ab, v2e_vovo_ab, optimize = True)
+        M_ij_b += 0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_b, t2_1_b, eris_oovv , optimize = True)
+        M_ij_b -= 0.5*np.einsum('lmdf,lmde,jfei->ij',t2_1_b, t2_1_b, eris_ovvo , optimize = True)
+        M_ij_b +=np.einsum('lmdf,lmde,jief->ij',t2_1_ab, t2_1_ab, eris_oovv , optimize = True)
+        M_ij_b -=np.einsum('lmdf,lmde,jfei->ij',t2_1_ab, t2_1_ab, eris_ovvo , optimize = True)
+        M_ij_b +=np.einsum('lmfd,lmed,jief->ij',t2_1_ab, t2_1_ab, eris_OOvv , optimize = True)
+        M_ij_b +=0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_a, t2_1_a, eris_OOvv , optimize = True)
 
-        M_ij_b -= np.einsum('ilde,jmdf,flem->ij',t2_1_b, t2_1_b, v2e_vovo_b, optimize = True)
-        M_ij_b += np.einsum('ilde,mjfd,flme->ij',t2_1_b, t2_1_ab, v2e_voov_ab, optimize = True)
-        M_ij_b += np.einsum('lied,jmdf,lfem->ij',t2_1_ab, t2_1_b, v2e_ovvo_ab, optimize = True)
-        M_ij_b -= np.einsum('lied,mjfd,flem->ij',t2_1_ab, t2_1_ab, v2e_vovo_a, optimize = True)
-        M_ij_b -= np.einsum('lide,mjdf,lfme->ij',t2_1_ab, t2_1_ab, v2e_ovov_ab, optimize = True)
+        M_ij_a -= np.einsum('ilde,jmdf,lmfe->ij',t2_1_a, t2_1_a, eris_oovv, optimize = True)
+        M_ij_a += np.einsum('ilde,jmdf,lefm->ij',t2_1_a, t2_1_a, eris_ovvo, optimize = True)
+        M_ij_a += np.einsum('ilde,jmdf,lefm->ij',t2_1_a, t2_1_ab, eris_ovVO, optimize = True)
+        M_ij_a += np.einsum('ilde,jmdf,lefm->ij',t2_1_ab, t2_1_a, eris_OVvo, optimize = True)
+        M_ij_a -= np.einsum('ilde,jmdf,lmfe->ij',t2_1_ab, t2_1_ab, eris_OOVV, optimize = True)
+        M_ij_a += np.einsum('ilde,jmdf,lefm->ij',t2_1_ab, t2_1_ab, eris_OVVO, optimize = True)
+        M_ij_a -= np.einsum('iled,jmfd,lmfe->ij',t2_1_ab, t2_1_ab, eris_OOvv, optimize = True)
 
-        M_ij_a -= 0.5*np.einsum('lnde,lmde,jnim->ij',t2_1_a, t2_1_a, v2e_oooo_a, optimize = True)
-        M_ij_a -= np.einsum('nled,mled,jnim->ij',t2_1_ab, t2_1_ab, v2e_oooo_a, optimize = True)
-        M_ij_a -= np.einsum('lnde,lmde,jnim->ij',t2_1_ab, t2_1_ab, v2e_oooo_ab, optimize = True)
-        M_ij_a -= 0.5 * np.einsum('lnde,lmde,jnim->ij',t2_1_b, t2_1_b, v2e_oooo_ab, optimize = True)
+        M_ij_b -= np.einsum('ilde,jmdf,lmfe->ij',t2_1_b, t2_1_b, eris_OOVV, optimize = True)
+        M_ij_b += np.einsum('ilde,jmdf,lefm->ij',t2_1_b, t2_1_b, eris_OVVO, optimize = True)
+        M_ij_b += np.einsum('ilde,mjfd,lefm->ij',t2_1_b, t2_1_ab, eris_OVvo, optimize = True)
+        M_ij_b += np.einsum('lied,jmdf,lefm->ij',t2_1_ab, t2_1_b, eris_ovVO, optimize = True)
+        M_ij_b -= np.einsum('lied,mjfd,lmfe->ij',t2_1_ab, t2_1_ab, eris_oovv, optimize = True)
+        M_ij_b += np.einsum('lied,mjfd,lefm->ij',t2_1_ab, t2_1_ab, eris_ovvo, optimize = True)
+        M_ij_b -= np.einsum('lide,mjdf,lmfe->ij',t2_1_ab, t2_1_ab, eris_ooVV, optimize = True)
 
-        M_ij_b -= 0.5*np.einsum('lnde,lmde,jnim->ij',t2_1_b, t2_1_b, v2e_oooo_b, optimize = True)
-        M_ij_b -= np.einsum('lnde,lmde,jnim->ij',t2_1_ab, t2_1_ab, v2e_oooo_b, optimize = True)
-        M_ij_b -= np.einsum('nled,mled,njmi->ij',t2_1_ab, t2_1_ab, v2e_oooo_ab, optimize = True)
-        M_ij_b -= 0.5 * np.einsum('lnde,lmde,njmi->ij',t2_1_a, t2_1_a, v2e_oooo_ab, optimize = True)
+        M_ij_a -= 0.5*np.einsum('lnde,lmde,jinm->ij',t2_1_a, t2_1_a, eris_oooo, optimize = True)
+        M_ij_a += 0.5*np.einsum('lnde,lmde,jmni->ij',t2_1_a, t2_1_a, eris_oooo, optimize = True)
+        M_ij_a -= np.einsum('nled,mled,jinm->ij',t2_1_ab, t2_1_ab, eris_oooo, optimize = True)
+        M_ij_a += np.einsum('nled,mled,jmni->ij',t2_1_ab, t2_1_ab, eris_oooo, optimize = True)
+        M_ij_a -= np.einsum('lnde,lmde,jinm->ij',t2_1_ab, t2_1_ab, eris_ooOO, optimize = True)
+        M_ij_a -= 0.5 * np.einsum('lnde,lmde,jinm->ij',t2_1_b, t2_1_b, eris_ooOO, optimize = True)
+
+        M_ij_b -= 0.5*np.einsum('lnde,lmde,jinm->ij',t2_1_b, t2_1_b, eris_OOOO, optimize = True)
+        M_ij_b += 0.5*np.einsum('lnde,lmde,jmni->ij',t2_1_b, t2_1_b, eris_OOOO, optimize = True)
+        M_ij_b -= np.einsum('lnde,lmde,jinm->ij',t2_1_ab, t2_1_ab, eris_OOOO, optimize = True)
+        M_ij_b += np.einsum('lnde,lmde,jmni->ij',t2_1_ab, t2_1_ab, eris_OOOO, optimize = True)
+        M_ij_b -= np.einsum('nled,mled,nmji->ij',t2_1_ab, t2_1_ab, eris_ooOO, optimize = True)
+        M_ij_b -= 0.5 * np.einsum('lnde,lmde,nmji->ij',t2_1_a, t2_1_a, eris_ooOO, optimize = True)
 
     M_ij = (M_ij_a, M_ij_b)
 
