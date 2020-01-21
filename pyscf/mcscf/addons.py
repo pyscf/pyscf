@@ -669,8 +669,12 @@ def state_average(casscf, weights=(0.5,0.5)):
             return numpy.einsum('i,i->', e, self.weights), c
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
-                                        nroots=self.nroots, **kwargs)
+            try:
+                e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec, ci0,
+                                                   nroots=self.nroots, **kwargs)
+            except AttributeError:
+                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                            nroots=self.nroots, **kwargs)
             return numpy.einsum('i,i->', e, self.weights), c
 
         def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
@@ -833,8 +837,12 @@ def state_specific_(casscf, state=1):
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
                 ci0 = self._civec
-            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
-                                        nroots=self.nroots, **kwargs)
+            try:
+                e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec, ci0,
+                                            nroots=self.nroots, **kwargs)
+            except AttributeError:
+                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                            nroots=self.nroots, **kwargs)
             if state == 0:
                 self._civec = [c]
                 return e, c
@@ -931,8 +939,12 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
-                e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
-                                     orbsym=self.orbsym, **kwargs)
+                try:
+                    e, c = solver.approx_kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+                                                orbsym=self.orbsym, **kwargs)
+                except AttributeError:
+                    e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+                                         orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
                     cs.append(c)

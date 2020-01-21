@@ -1,14 +1,14 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
-omit = gto/basis/*
-    *test*
-    dmrgscf/*
+include = */pyscf/*
+omit = dmrgscf/*
     fciqmcscf/*
     shciscf/*
     xianci/*
     icmpspt/*
     gen_*_param.py
+disable_warnings = include-ignored
 
 [report]
 # Regexes for lines to exclude from consideration
@@ -31,6 +31,7 @@ exclude_lines =
     if DEBUG:
     except ImportError:
 
+omit = xianci/* 
 ignore_errors = True
 
 [html]

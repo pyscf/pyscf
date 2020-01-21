@@ -71,7 +71,7 @@ def rhf_internal(mf, verbose=None):
         log.log('KRHF/KRKS wavefunction has an internal instablity')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.log('KRHF/KRKS wavefunction is stable in the intenral stability analysis')
+        log.log('KRHF/KRKS wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -182,7 +182,7 @@ def uhf_internal(mf, verbose=None):
         mo = (_rotate_mo(mf.mo_coeff[0], mf.mo_occ[0], v[:tot_x_a]),
               _rotate_mo(mf.mo_coeff[1], mf.mo_occ[1], v[tot_x_a:]))
     else:
-        log.log('KUHF/KUKS wavefunction is stable in the intenral stability analysis')
+        log.log('KUHF/KUKS wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
     return mo
 

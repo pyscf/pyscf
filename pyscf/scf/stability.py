@@ -132,7 +132,7 @@ def ghf_stability(mf, verbose=None):
         log.note('GHF wavefunction has an internal instablity')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.note('GHF wavefunction is stable in the intenral stability analysis')
+        log.note('GHF wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -162,7 +162,7 @@ def rhf_internal(mf, with_symmetry=True, verbose=None):
         log.note('RHF/RKS wavefunction has an internal instablity')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.note('RHF/RKS wavefunction is stable in the intenral stability analysis')
+        log.note('RHF/RKS wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -291,7 +291,7 @@ def rohf_internal(mf, with_symmetry=True, verbose=None):
         log.note('ROHF wavefunction has an internal instablity.')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.note('ROHF wavefunction is stable in the intenral stability analysis')
+        log.note('ROHF wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -322,7 +322,7 @@ def uhf_internal(mf, with_symmetry=True, verbose=None):
         mo = (_rotate_mo(mf.mo_coeff[0], mf.mo_occ[0], v[:nocca*nvira]),
               _rotate_mo(mf.mo_coeff[1], mf.mo_occ[1], v[nocca*nvira:]))
     else:
-        log.note('UHF/UKS wavefunction is stable in the intenral stability analysis')
+        log.note('UHF/UKS wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
     return mo
 

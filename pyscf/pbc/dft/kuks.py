@@ -129,9 +129,9 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
 class KUKS(kuhf.KUHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3))):
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN'):
         kuhf.KUHF.__init__(self, cell, kpts)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         kuhf.KUHF.dump_flags(self, verbose)

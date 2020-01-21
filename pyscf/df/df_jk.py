@@ -80,7 +80,9 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     mf_class = mf.__class__
 
     if isinstance(mf, _DFHF):
-        if getattr(mf.with_df, 'auxbasis', None) != auxbasis:
+        if mf.with_df is None:
+            mf.with_df = with_df
+        elif getattr(mf.with_df, 'auxbasis', None) != auxbasis:
             #logger.warn(mf, 'DF might have been initialized twice.')
             mf = copy.copy(mf)
             mf.with_df = with_df

@@ -121,9 +121,9 @@ energy_elec = rks.energy_elec
 
 
 class UKS(dhf.UHF, rks.KohnShamDFT):
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         dhf.UHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
         self._numint = r_numint.RNumInt()
 
     def dump_flags(self, verbose=None):

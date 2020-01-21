@@ -887,8 +887,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             raise RuntimeError('CCSD Warning: The first argument mf is a DFT object. '
                                'CCSD calculation should be initialized with HF object.\n'
                                'DFT object can be converted to HF object with '
-                               'the code below:\n'
-                               '    mf_hf = scf.RHF(mol)\n'
+                               'the code:\n'
+                               '    mf_hf = mol.HF()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff

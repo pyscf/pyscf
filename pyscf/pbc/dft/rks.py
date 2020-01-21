@@ -155,8 +155,8 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rho
 
 
-def _dft_common_init_(mf):
-    mf.xc = 'LDA,VWN'
+def _dft_common_init_(mf, xc='LDA,VWN'):
+    mf.xc = xc
     mf.grids = gen_grid.UniformGrids(mf.cell)
     # Use rho to filter grids
     mf.small_rho_cutoff = getattr(__config__,
@@ -195,9 +195,9 @@ class RKS(pbchf.RHF, KohnShamDFT):
     This is a literal duplication of the molecular RKS class with some `mol`
     variables replaced by `cell`.
     '''
-    def __init__(self, cell, kpt=numpy.zeros(3)):
+    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN'):
         pbchf.RHF.__init__(self, cell, kpt)
-        KohnShamDFT.__init__(self)
+        KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         pbchf.RHF.dump_flags(self, verbose)

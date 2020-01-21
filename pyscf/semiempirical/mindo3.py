@@ -216,7 +216,7 @@ class RMINDO3(scf.hf.RHF):
     x2c = x2c1e = sfx2c1e = None
 
     def nuc_grad_method(self):
-        import rmindo3_grad
+        from . import rmindo3_grad
         return rmindo3_grad.Gradients(self)
 
 
@@ -279,7 +279,7 @@ class UMINDO3(scf.uhf.UHF):
     x2c = x2c1e = sfx2c1e = None
 
     def nuc_grad_method(self):
-        import umindo3_grad
+        from . import umindo3_grad
         return umindo3_grad.Gradients(self)
 
 
