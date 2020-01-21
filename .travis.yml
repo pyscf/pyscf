@@ -30,7 +30,7 @@ python:
 
 before_install:
   - sudo apt-get -qq install gcc libblas-dev cmake curl
-  - pip install numpy scipy h5py nose nose-exclude nose-timer
+  - pip install numpy scipy h5py nose nose-exclude nose-timer codecov
 
 install:
   # openblas from numpy may be slightly faster than the default libblas library
@@ -54,7 +54,7 @@ script:
   - cd $TRAVIS_BUILD_DIR/pyscf &&
     echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
   - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
-    nosetests -v --with-timer
+    nosetests -v --with-timer --with-coverage
     --exclude-dir=geomopt --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
     --exclude-dir=cornell_shci
@@ -85,3 +85,6 @@ script:
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_hf.DiamondTestSupercell3
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_ks.DiamondTestSupercell3
     -I .*_slow.*py -I .*_kproxy_.*py -I test_proxy.py # tdscf/*_slow.py gw/*_slow.py do not compatible with python3.[456] and old numpy
+
+after_success:
+  - codecov
