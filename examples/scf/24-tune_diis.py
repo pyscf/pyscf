@@ -30,12 +30,12 @@ mf.kernel()
 # the given diis object.
 #
 my_diis_obj = scf.ADIIS()
-my_diis_obj.diis_space = 12
+my_diis_obj.space = 12
 mf.diis = my_diis_obj
 mf.kernel()
 
 my_diis_obj = scf.EDIIS()
-my_diis_obj.diis_space = 12
+my_diis_obj.space = 12
 mf.diis = my_diis_obj
 mf.kernel()
 
