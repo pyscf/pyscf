@@ -221,8 +221,8 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return ks
 
 
-def _dft_common_init_(mf):
-    mf.xc = 'LDA,VWN'
+def _dft_common_init_(mf, xc='LDA,VWN'):
+    mf.xc = xc
     mf.nlc = ''
     mf.grids = gen_grid.Grids(mf.mol)
     mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
@@ -321,9 +321,9 @@ class KohnShamDFT(object):
 class RKS(hf.RHF, KohnShamDFT):
     __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + KohnShamDFT.__doc__
 
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         hf.RHF.__init__(self, mol)
-        KohnShamDFT.__init__(self)
+        KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         hf.RHF.dump_flags(self, verbose)

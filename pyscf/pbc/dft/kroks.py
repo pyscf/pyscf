@@ -43,9 +43,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 class KROKS(krohf.KROHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3))):
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN'):
         krohf.KROHF.__init__(self, cell, kpts)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         krohf.KROHF.dump_flags(self, verbose)

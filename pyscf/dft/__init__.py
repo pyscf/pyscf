@@ -53,45 +53,45 @@ from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
         treutler_atomic_radii_adjust, becke_atomic_radii_adjust
 
 
-def KS(mol, *args):
+def KS(mol, xc='LDA,VWN'):
     __doc__ = '''This is a wrap function to decide which DFT class to use, RKS or UKS\n
     ''' + rks.RKS.__doc__
     if mol.spin == 0:
-        return RKS(mol, *args)
+        return RKS(mol, xc)
     else:
-        return UKS(mol, *args)
+        return UKS(mol, xc)
 DFT = KS
 
-def RKS(mol, *args):
+def RKS(mol, xc='LDA,VWN'):
     if mol.nelectron == 1:
         return uks.UKS(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
-            return roks.ROKS(mol, *args)
+            return roks.ROKS(mol, xc)
         else:
-            return rks.RKS(mol, *args)
+            return rks.RKS(mol, xc)
     else:
         if mol.spin > 0:
-            return rks_symm.ROKS(mol, *args)
+            return rks_symm.ROKS(mol, xc)
         else:
-            return rks_symm.RKS(mol, *args)
+            return rks_symm.RKS(mol, xc)
 
-def ROKS(mol, *args):
+def ROKS(mol, xc='LDA,VWN'):
     if mol.nelectron == 1:
         return uks.UKS(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
-        return roks.ROKS(mol, *args)
+        return roks.ROKS(mol, xc)
     else:
-        return rks_symm.ROKS(mol, *args)
+        return rks_symm.ROKS(mol, xc)
 
-def UKS(mol, *args):
+def UKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname is 'C1':
-        return uks.UKS(mol, *args)
+        return uks.UKS(mol, xc)
     else:
-        return uks_symm.UKS(mol, *args)
+        return uks_symm.UKS(mol, xc)
 
-def GKS(mol, *args):
+def GKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname is 'C1':
-        return gks.GKS(mol, *args)
+        return gks.GKS(mol, xc)
     else:
-        return gks_symm.GKS(mol, *args)
+        return gks_symm.GKS(mol, xc)
