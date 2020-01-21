@@ -398,6 +398,11 @@ def compute_energy(myadc, t1, t2, eris):
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
+    nocc_a = myadc._nocc[0]
+    nocc_b = myadc._nocc[1]  
+    nvir_a = myadc._nvir[0] 
+    nvir_b = myadc._nvir[1]
+
     eris_ovov = eris.ovov
     eris_OVOV = eris.OVOV
     eris_ovOV = eris.ovOV
@@ -414,53 +419,69 @@ def compute_energy(myadc, t1, t2, eris):
 
     e_corr = e_mp2
 
-#    if (myadc.method == "adc(3)"):
-#
-#        #Compute MP3 correlation energy
-#
-#        v2e_oooo_a, v2e_oooo_ab, v2e_oooo_b = eris.oooo
-#        v2e_vvvv_a, v2e_vvvv_ab, v2e_vvvv_b = eris.vvvv
-#        v2e_voov_a, v2e_voov_ab, v2e_voov_b = eris.voov
-#        v2e_ovvo_a, v2e_ovvo_ab, v2e_ovvo_b = eris.ovvo
-#        v2e_ovov_a, v2e_ovov_ab, v2e_ovov_b = eris.ovov
-#        v2e_vovo_a, v2e_vovo_ab, v2e_vovo_b = eris.vovo
-#
-#        temp_1_a =  np.einsum('ijab,ijcd', t2_1_a, t2_1_a)
-#        temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
-#        temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
-#
-#        temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
-#        temp_2_b =  np.einsum('ijab,klab', t2_1_b, t2_1_b)
-#        temp_2_ab_1 =  np.einsum('ijab,klab', t2_1_ab, t2_1_ab)
-#
-#        temp_3_a = np.einsum('ijab,ikcb->akcj', t2_1_a, t2_1_a)
-#        temp_3_a += np.einsum('jiab,kicb->akcj', t2_1_ab, t2_1_ab)
-#        temp_3_b = np.einsum('ijab,ikcb->akcj', t2_1_b, t2_1_b)
-#        temp_3_b += np.einsum('ijba,ikbc->akcj', t2_1_ab, t2_1_ab)
-#
-#        temp_3_ab_1 = np.einsum('ijab,ikcb->akcj', t2_1_ab, t2_1_ab)
-#        temp_3_ab_2 = np.einsum('jiba,kibc->akcj', t2_1_ab, t2_1_ab)
-#        temp_3_ab_3 = -np.einsum('ijab,ikbc->akcj', t2_1_a, t2_1_ab)
-#        temp_3_ab_3 -= np.einsum('jiab,ikcb->akcj', t2_1_ab, t2_1_b)
-#        temp_3_ab_4 = -np.einsum('ijba,ikcb->akcj', t2_1_ab, t2_1_a)
-#        temp_3_ab_4 -= np.einsum('ijab,kicb->akcj', t2_1_b, t2_1_ab)
-#
-#        e_mp3 = 0.125 * np.einsum('abcd,abcd',temp_1_a, v2e_vvvv_a)
-#        e_mp3 += 0.125 * np.einsum('abcd,abcd',temp_1_b, v2e_vvvv_b)
-#        e_mp3 +=  np.einsum('abcd,abcd',temp_1_ab_1, v2e_vvvv_ab)
-#
-#        e_mp3 += 0.125 * np.einsum('ijkl,ijkl',temp_2_a, v2e_oooo_a)
-#        e_mp3 += 0.125 * np.einsum('ijkl,ijkl',temp_2_b, v2e_oooo_b)
-#        e_mp3 +=  np.einsum('ijkl,ijkl',temp_2_ab_1, v2e_oooo_ab)
-#
-#        e_mp3 -= np.einsum('akcj,akcj',temp_3_a, v2e_vovo_a)
-#        e_mp3 -= np.einsum('akcj,akcj',temp_3_b, v2e_vovo_b)
-#        e_mp3 -= np.einsum('akcj,akcj',temp_3_ab_1, v2e_vovo_ab)
-#        e_mp3 -= np.einsum('akcj,kajc',temp_3_ab_2, v2e_ovov_ab)
-#        e_mp3 += np.einsum('akcj,akjc',temp_3_ab_3, v2e_voov_ab)
-#        e_mp3 += np.einsum('akcj,kacj',temp_3_ab_4, v2e_ovvo_ab)
-#    
-#        e_corr += e_mp3
+    if (myadc.method == "adc(3)"):
+
+        #Compute MP3 correlation energy
+        eris_oovv = eris.oovv
+        eris_OOVV = eris.OOVV
+        eris_OOvv = eris.OOvv
+        eris_ooVV = eris.ooVV
+        eris_ovvo = eris.ovvo
+        eris_OVVO = eris.OVVO
+        eris_OVvo = eris.OVvo
+        eris_ovVO = eris.ovVO
+        eris_oooo = eris.oooo
+        eris_OOOO = eris.OOOO
+        eris_ooOO = eris.ooOO
+
+        temp_1_a =  np.einsum('ijab,ijcd', t2_1_a, t2_1_a)
+        temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
+        temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
+
+        temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
+        temp_2_b =  np.einsum('ijab,klab', t2_1_b, t2_1_b)
+        temp_2_ab_1 =  np.einsum('ijab,klab', t2_1_ab, t2_1_ab)
+
+        temp_3_a = np.einsum('ijab,ikcb->akcj', t2_1_a, t2_1_a)
+        temp_3_a += np.einsum('jiab,kicb->akcj', t2_1_ab, t2_1_ab)
+        temp_3_b = np.einsum('ijab,ikcb->akcj', t2_1_b, t2_1_b)
+        temp_3_b += np.einsum('ijba,ikbc->akcj', t2_1_ab, t2_1_ab)
+
+        temp_3_ab_1 = np.einsum('ijab,ikcb->akcj', t2_1_ab, t2_1_ab)
+        temp_3_ab_2 = np.einsum('jiba,kibc->akcj', t2_1_ab, t2_1_ab)
+        temp_3_ab_3 = -np.einsum('ijab,ikbc->akcj', t2_1_a, t2_1_ab)
+        temp_3_ab_3 -= np.einsum('jiab,ikcb->akcj', t2_1_ab, t2_1_b)
+        temp_3_ab_4 = -np.einsum('ijba,ikcb->akcj', t2_1_ab, t2_1_a)
+        temp_3_ab_4 -= np.einsum('ijab,kicb->akcj', t2_1_b, t2_1_ab)
+
+        eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
+        e_mp3 = 0.125 * np.einsum('abcd,acbd',temp_1_a, eris_vvvv)
+        e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_a, eris_vvvv)
+        del eris_vvvv
+        eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
+        e_mp3 += 0.125 * np.einsum('abcd,acbd',temp_1_b, eris_VVVV)
+        e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_b, eris_VVVV)
+        del eris_VVVV
+        eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
+        e_mp3 +=  np.einsum('abcd,acbd',temp_1_ab_1, eris_vvVV)
+        del eris_vvVV
+
+        e_mp3 += 0.125 * np.einsum('ijkl,ikjl',temp_2_a, eris_oooo)
+        e_mp3 -= 0.125 * np.einsum('ijkl,iljk',temp_2_a, eris_oooo)
+        e_mp3 += 0.125 * np.einsum('ijkl,ikjl',temp_2_b, eris_OOOO)
+        e_mp3 -= 0.125 * np.einsum('ijkl,iljk',temp_2_b, eris_OOOO)
+        e_mp3 +=  np.einsum('ijkl,ikjl',temp_2_ab_1, eris_ooOO)
+
+        e_mp3 -= np.einsum('akcj,kjac',temp_3_a, eris_oovv)
+        e_mp3 += np.einsum('akcj,kcaj',temp_3_a, eris_ovvo)
+        e_mp3 -= np.einsum('akcj,kjac',temp_3_b, eris_OOVV)
+        e_mp3 += np.einsum('akcj,kcaj',temp_3_b, eris_OVVO)
+        e_mp3 -= np.einsum('akcj,kjac',temp_3_ab_1, eris_OOvv)
+        e_mp3 -= np.einsum('akcj,kjac',temp_3_ab_2, eris_ooVV)
+        e_mp3 += np.einsum('akcj,kcaj',temp_3_ab_3, eris_OVvo)
+        e_mp3 += np.einsum('akcj,kcaj',temp_3_ab_4, eris_ovVO)
+    
+        e_corr += e_mp3
 
     return e_corr
 
