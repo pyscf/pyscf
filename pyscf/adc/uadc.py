@@ -2055,8 +2055,8 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
         #r_bab = r_bab.reshape(nvir_b,nocc_a,nocc_b)
 
-        r_aba = r_aba.reshape(nvir_a,nocc_b,nocc_a)
-        r_bab = r_bab.reshape(nvir_b,nocc_a,nocc_b)
+        r_aba = r_aba.reshape(nvir_a,nocc_a,nocc_b)
+        r_bab = r_bab.reshape(nvir_b,nocc_b,nocc_a)
 
         eris_ovoo = eris.ovoo
         eris_OVOO = eris.OVOO
@@ -2072,19 +2072,19 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
         s[s_a:f_a] += 0.5*np.einsum('jaki,ajk->i', eris_ovoo, r_aaa_u, optimize = True)
         s[s_a:f_a] -= 0.5*np.einsum('kaji,ajk->i', eris_ovoo, r_aaa_u, optimize = True)
-        s[s_a:f_a] -= np.einsum('jaki,ajk->i', eris_OVoo, r_bab, optimize = True)
+        s[s_a:f_a] += np.einsum('jaki,ajk->i', eris_OVoo, r_bab, optimize = True)
 
         s[s_b:f_b] += 0.5*np.einsum('jaki,ajk->i', eris_OVOO, r_bbb_u, optimize = True)
         s[s_b:f_b] -= 0.5*np.einsum('kaji,ajk->i', eris_OVOO, r_bbb_u, optimize = True)
-        s[s_b:f_b] -= np.einsum('jaki,ajk->i', eris_ovOO, r_aba, optimize = True)
+        s[s_b:f_b] += np.einsum('jaki,ajk->i', eris_ovOO, r_aba, optimize = True)
 
 ################ ADC(2) ajk - i block ############################
 
         temp = np.einsum('jaki,i->ajk', eris_ovoo, r_a, optimize = True)
         temp -= np.einsum('kaji,i->ajk', eris_ovoo, r_a, optimize = True)
         s[s_aaa:f_aaa] += temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
-        s[s_bab:f_bab] -= np.einsum('jaik,i->ajk', eris_OVoo, r_a, optimize = True).reshape(-1)
-        s[s_aba:f_aba] -= np.einsum('jaki,i->ajk', eris_ovOO, r_b, optimize = True).reshape(-1)
+        s[s_bab:f_bab] += np.einsum('jaik,i->ajk', eris_OVoo, r_a, optimize = True).reshape(-1)
+        s[s_aba:f_aba] += np.einsum('jaki,i->ajk', eris_ovOO, r_b, optimize = True).reshape(-1)
         temp = np.einsum('jaki,i->ajk', eris_OVOO, r_b, optimize = True)
         temp -= np.einsum('kaji,i->ajk', eris_OVOO, r_b, optimize = True)
         s[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
