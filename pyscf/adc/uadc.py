@@ -1213,10 +1213,10 @@ def get_imds_ip(adc, eris=None):
         M_ij_a +=np.einsum('lmdf,lmde,jief->ij',t2_1_ab, t2_1_ab, eris_ooVV , optimize = True)
         M_ij_a +=0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_b, t2_1_b, eris_ooVV , optimize = True)
 
-        M_ij_b += 0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_b, t2_1_b, eris_oovv , optimize = True)
-        M_ij_b -= 0.5*np.einsum('lmdf,lmde,jfei->ij',t2_1_b, t2_1_b, eris_ovvo , optimize = True)
-        M_ij_b +=np.einsum('lmdf,lmde,jief->ij',t2_1_ab, t2_1_ab, eris_oovv , optimize = True)
-        M_ij_b -=np.einsum('lmdf,lmde,jfei->ij',t2_1_ab, t2_1_ab, eris_ovvo , optimize = True)
+        M_ij_b += 0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_b, t2_1_b, eris_OOVV , optimize = True)
+        M_ij_b -= 0.5*np.einsum('lmdf,lmde,jfei->ij',t2_1_b, t2_1_b, eris_OVVO , optimize = True)
+        M_ij_b +=np.einsum('lmdf,lmde,jief->ij',t2_1_ab, t2_1_ab, eris_OOVV , optimize = True)
+        M_ij_b -=np.einsum('lmdf,lmde,jfei->ij',t2_1_ab, t2_1_ab, eris_OVVO , optimize = True)
         M_ij_b +=np.einsum('lmfd,lmed,jief->ij',t2_1_ab, t2_1_ab, eris_OOvv , optimize = True)
         M_ij_b +=0.5*np.einsum('lmdf,lmde,jief->ij',t2_1_a, t2_1_a, eris_OOvv , optimize = True)
 
@@ -2152,7 +2152,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                
                s[s_aaa:f_aaa] += temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
                
-               s[s_bab:f_bab] += 0.5*np.einsum('klba,bjl->ajk',eris_oovv,r_bab,optimize = True).reshape(-1)
+               s[s_bab:f_bab] += 0.5*np.einsum('klba,bjl->ajk',eris_ooVV,r_bab,optimize = True).reshape(-1)
                
                temp_1 = 0.5*np.einsum('klba,bjl->ajk',eris_OOVV,r_bbb_u,optimize = True)
                temp_1 -= 0.5*np.einsum('kabl,bjl->ajk',eris_OVVO,r_bbb_u,optimize = True)
