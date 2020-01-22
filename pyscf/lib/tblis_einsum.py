@@ -23,7 +23,7 @@ import ctypes
 import numpy
 from pyscf.lib import misc
 
-libtblis = misc.load_library('libtblis')
+libtblis = misc.load_library('libtblis_einsum')
 
 libtblis.as_einsum.restype = None
 libtblis.as_einsum.argtypes = (
