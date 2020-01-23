@@ -71,7 +71,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
     e_corr = myadc.compute_energy(t1, t2, eris)
 
     return e_corr, t1, t2
-
+@profile
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -361,7 +361,6 @@ def compute_amplitudes(myadc, eris):
         temp = t2_1_ab.reshape(nocc_a*nocc_b,-1)
         eris_OVvv = eris_OVvv.transpose(3,1,2,0)
         eris_OVvv = eris_OVvv.copy()[:].reshape(nvir_a*nvir_b,-1)
-        #temp_1 = eris_OVvv[:].reshape(nvir_a*nvir_b,-1)
         temp_2 = t2_1_ab.reshape(nocc_a*nocc_b*nvir_a,-1)
         int_1 = np.dot(temp,eris_OVvv).reshape(nocc_a*nocc_b*nvir_a,-1)
         t1_3_b -= np.dot(int_1.T,temp_2).reshape(nocc_b,nvir_b)
@@ -474,22 +473,42 @@ def compute_energy(myadc, t1, t2, eris):
         eris_OOOO = eris.OOOO
         eris_ooOO = eris.ooOO
 
-        temp_1_a =  np.einsum('ijab,ijcd', t2_1_a, t2_1_a)
+        #temp_1_a =  np.einsum('ijab,ijcd', t2_1_a, t2_1_a)
+        #eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
+        #e_mp3 = 0.125 * np.einsum('abcd,acbd',temp_1_a, eris_vvvv)
+        #e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_a, eris_vvvv)
+        #del temp_1_a, eris_vvvv
+
+        #temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
+        #eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
+        #e_mp3 += 0.125 * np.einsum('abcd,acbd',temp_1_b, eris_VVVV)
+        #e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_b, eris_VVVV)
+        #del temp_1_b, eris_VVVV
+
+        #temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
+        #eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
+        #e_mp3 +=  np.einsum('abcd,acbd',temp_1_ab_1, eris_vvVV)
+        #del temp_1_ab_1, eris_vvVV
+
         eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
-        e_mp3 = 0.125 * np.einsum('abcd,acbd',temp_1_a, eris_vvvv)
-        e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_a, eris_vvvv)
-        del temp_1_a, eris_vvvv
+        temp_1_a = np.einsum('ijab,acbd->ijcd',t2_1_a, eris_vvvv)
+        temp_1_a -= np.einsum('ijab,adbc->ijcd',t2_1_a, eris_vvvv)
+        del eris_vvvv
+        e_mp3 = 0.125 * np.einsum('ijcd,ijcd',temp_1_a, t2_1_a)
+        del temp_1_a
 
-        temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
         eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
-        e_mp3 += 0.125 * np.einsum('abcd,acbd',temp_1_b, eris_VVVV)
-        e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_b, eris_VVVV)
-        del temp_1_b, eris_VVVV
+        temp_1_b =  np.einsum('ijab,acbd->ijcd', t2_1_b, eris_VVVV)
+        temp_1_b -=  np.einsum('ijab,adbc->ijcd', t2_1_b, eris_VVVV)
+        del eris_VVVV
+        e_mp3 += 0.125 * np.einsum('ijcd,ijcd',temp_1_b, t2_1_b)
+        del temp_1_b
 
-        temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
         eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
-        e_mp3 +=  np.einsum('abcd,acbd',temp_1_ab_1, eris_vvVV)
-        del temp_1_ab_1, eris_vvVV
+        temp_1_ab_1 =  np.einsum('ijab,acbd->ijcd', t2_1_ab, eris_vvVV)
+        del eris_vvVV
+        e_mp3 +=  np.einsum('ijcd,ijcd',temp_1_ab_1, t2_1_ab)
+        del temp_1_ab_1
 
         temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
         e_mp3 += 0.125 * np.einsum('ijkl,ikjl',temp_2_a, eris_oooo)
@@ -1568,6 +1587,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         M_ab = adc.get_imds()
     M_ab_a, M_ab_b = M_ab
 
+    @profile
     #Calculate sigma vector
     def sigma_(r):
 
@@ -2071,7 +2091,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         M_ij = adc.get_imds()
     M_ij_a, M_ij_b = M_ij
 
-    
     #Calculate sigma vector
     def sigma_(r):
 
