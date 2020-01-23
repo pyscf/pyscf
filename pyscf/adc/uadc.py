@@ -88,7 +88,6 @@ def compute_amplitudes(myadc, eris):
     eris_OOVV = eris.OOVV
     eris_ooVV = eris.ooVV
     eris_OOvv = eris.OOvv
-
     eris_ovov = eris.ovov
     eris_OVOV = eris.OVOV
     eris_ovOV = eris.ovOV
@@ -122,17 +121,13 @@ def compute_amplitudes(myadc, eris):
     D1_a = D1_a.reshape((nocc_a,nvir_a))
     D1_b = D1_b.reshape((nocc_b,nvir_b))
 
-
     # Compute first-order doubles t2 (tijab) 
 
-    #t2_1_a = v2e_oovv_a/D2_a
-    #t2_1_b = v2e_oovv_b/D2_b
-    #t2_1_ab = v2e_oovv_ab/D2_ab
-
-    v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
-    v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
-    v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
-
+    v2e_oovv = eris_ovov.transpose(0,2,1,3).copy()
+    v2e_oovv -= eris_ovov.transpose(0,2,3,1).copy()
+    v2e_OOVV = eris_OVOV.transpose(0,2,1,3).copy()
+    v2e_OOVV -= eris_OVOV.transpose(0,2,3,1).copy()
+    v2e_oOvV = eris_ovOV.transpose(0,2,1,3).copy()
 
     t2_1_a = v2e_oovv/D2_a
     t2_1_b = v2e_OOVV/D2_b
@@ -437,7 +432,7 @@ def compute_amplitudes(myadc, eris):
     t2 = (t2_1, t2_2)
 
     return t1, t2
-
+@profile
 def compute_energy(myadc, t1, t2, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -480,51 +475,65 @@ def compute_energy(myadc, t1, t2, eris):
         eris_ooOO = eris.ooOO
 
         temp_1_a =  np.einsum('ijab,ijcd', t2_1_a, t2_1_a)
-        temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
-        temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
-
-        temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
-        temp_2_b =  np.einsum('ijab,klab', t2_1_b, t2_1_b)
-        temp_2_ab_1 =  np.einsum('ijab,klab', t2_1_ab, t2_1_ab)
-
-        temp_3_a = np.einsum('ijab,ikcb->akcj', t2_1_a, t2_1_a)
-        temp_3_a += np.einsum('jiab,kicb->akcj', t2_1_ab, t2_1_ab)
-        temp_3_b = np.einsum('ijab,ikcb->akcj', t2_1_b, t2_1_b)
-        temp_3_b += np.einsum('ijba,ikbc->akcj', t2_1_ab, t2_1_ab)
-
-        temp_3_ab_1 = np.einsum('ijab,ikcb->akcj', t2_1_ab, t2_1_ab)
-        temp_3_ab_2 = np.einsum('jiba,kibc->akcj', t2_1_ab, t2_1_ab)
-        temp_3_ab_3 = -np.einsum('ijab,ikbc->akcj', t2_1_a, t2_1_ab)
-        temp_3_ab_3 -= np.einsum('jiab,ikcb->akcj', t2_1_ab, t2_1_b)
-        temp_3_ab_4 = -np.einsum('ijba,ikcb->akcj', t2_1_ab, t2_1_a)
-        temp_3_ab_4 -= np.einsum('ijab,kicb->akcj', t2_1_b, t2_1_ab)
-
         eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
         e_mp3 = 0.125 * np.einsum('abcd,acbd',temp_1_a, eris_vvvv)
         e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_a, eris_vvvv)
-        del eris_vvvv
+        del temp_1_a, eris_vvvv
+
+        temp_1_b =  np.einsum('ijab,ijcd', t2_1_b, t2_1_b)
         eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
         e_mp3 += 0.125 * np.einsum('abcd,acbd',temp_1_b, eris_VVVV)
         e_mp3 -= 0.125 * np.einsum('abcd,adbc',temp_1_b, eris_VVVV)
-        del eris_VVVV
+        del temp_1_b, eris_VVVV
+
+        temp_1_ab_1 =  np.einsum('ijab,ijcd', t2_1_ab, t2_1_ab)
         eris_vvVV = uadc_ao2mo.unpack_eri_2(eris.vvVV, nvir_a, nvir_b)
         e_mp3 +=  np.einsum('abcd,acbd',temp_1_ab_1, eris_vvVV)
-        del eris_vvVV
+        del temp_1_ab_1, eris_vvVV
 
+        temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
         e_mp3 += 0.125 * np.einsum('ijkl,ikjl',temp_2_a, eris_oooo)
         e_mp3 -= 0.125 * np.einsum('ijkl,iljk',temp_2_a, eris_oooo)
+        del temp_2_a
+
+        temp_2_b =  np.einsum('ijab,klab', t2_1_b, t2_1_b)
         e_mp3 += 0.125 * np.einsum('ijkl,ikjl',temp_2_b, eris_OOOO)
         e_mp3 -= 0.125 * np.einsum('ijkl,iljk',temp_2_b, eris_OOOO)
-        e_mp3 +=  np.einsum('ijkl,ikjl',temp_2_ab_1, eris_ooOO)
+        del temp_2_b
 
+        temp_2_ab_1 =  np.einsum('ijab,klab', t2_1_ab, t2_1_ab)
+        e_mp3 +=  np.einsum('ijkl,ikjl',temp_2_ab_1, eris_ooOO)
+        del temp_2_ab_1
+
+        temp_3_a = np.einsum('ijab,ikcb->akcj', t2_1_a, t2_1_a)
+        temp_3_a += np.einsum('jiab,kicb->akcj', t2_1_ab, t2_1_ab)
         e_mp3 -= np.einsum('akcj,kjac',temp_3_a, eris_oovv)
         e_mp3 += np.einsum('akcj,kcaj',temp_3_a, eris_ovvo)
+        del temp_3_a
+
+        temp_3_b = np.einsum('ijab,ikcb->akcj', t2_1_b, t2_1_b)
+        temp_3_b += np.einsum('ijba,ikbc->akcj', t2_1_ab, t2_1_ab)
         e_mp3 -= np.einsum('akcj,kjac',temp_3_b, eris_OOVV)
         e_mp3 += np.einsum('akcj,kcaj',temp_3_b, eris_OVVO)
+        del temp_3_b
+
+        temp_3_ab_1 = np.einsum('ijab,ikcb->akcj', t2_1_ab, t2_1_ab)
         e_mp3 -= np.einsum('akcj,kjac',temp_3_ab_1, eris_OOvv)
+        del temp_3_ab_1
+   
+        temp_3_ab_2 = np.einsum('jiba,kibc->akcj', t2_1_ab, t2_1_ab)
         e_mp3 -= np.einsum('akcj,kjac',temp_3_ab_2, eris_ooVV)
+        del temp_3_ab_2
+
+        temp_3_ab_3 = -np.einsum('ijab,ikbc->akcj', t2_1_a, t2_1_ab)
+        temp_3_ab_3 -= np.einsum('jiab,ikcb->akcj', t2_1_ab, t2_1_b)
         e_mp3 += np.einsum('akcj,kcaj',temp_3_ab_3, eris_OVvo)
+        del temp_3_ab_3 
+
+        temp_3_ab_4 = -np.einsum('ijba,ikcb->akcj', t2_1_ab, t2_1_a)
+        temp_3_ab_4 -= np.einsum('ijab,kicb->akcj', t2_1_b, t2_1_ab)
         e_mp3 += np.einsum('akcj,kcaj',temp_3_ab_4, eris_ovVO)
+        del temp_3_ab_4 
     
         e_corr += e_mp3
 
@@ -2517,14 +2526,6 @@ def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
     if eris is None:
         eris = uadc_ao2mo.transform_integrals_incore(adc)
 
-    #v2e_oovv_a , v2e_oovv_ab, v2e_oovv_b = eris.oovv
-    #v2e_vvvo_a , v2e_vvvo_ab, v2e_vvvo_b = eris.vvvo
-    #v2e_ovoo_a , v2e_ovoo_ab, v2e_ovoo_b = eris.ovoo
-    #v2e_voov_a , v2e_voov_ab, v2e_voov_b = eris.voov
-    #v2e_ovov_a , v2e_ovov_ab, v2e_ovov_b = eris.ovov
-    #v2e_vovv_a , v2e_vovv_ab, v2e_vovv_b = eris.vovv
-    #v2e_ooov_a , v2e_ooov_ab, v2e_ooov_b = eris.ooov
-
     s_a = 0
     f_a = n_singles_a
     s_b = f_a
@@ -2546,7 +2547,7 @@ def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
 
         if orb < nocc_a:
 
-#            T[s_a:f_a] = -t1_2_a[orb,:]
+            T[s_a:f_a] = -t1_2_a[orb,:]
 
             t2_1_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]].copy()
             t2_1_ab_t = -t2_1_ab.transpose(1,0,2,3).copy()
@@ -2575,28 +2576,28 @@ def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
                 T[s_aaa:f_aaa] += t2_2_t[:,orb,:].reshape(-1)
                 T[s_bab:f_bab] += t2_2_ab_t[:,orb,:,:].reshape(-1)
 
-########## ADC(3) 1p part  ############################################
-#
-#        if(method=='adc(3)'):
-#
-#            t1_3_a, t1_3_b = adc.t1[1]
-#
-#            if orb < nocc_a:
-#
-#                T[s_a:f_a] += 0.5*np.einsum('kac,ck->a',t2_1_a[:,orb,:,:], t1_2_a.T,optimize = True)
-#                T[s_a:f_a] -= 0.5*np.einsum('kac,ck->a',t2_1_ab[orb,:,:,:], t1_2_b.T,optimize = True)
-#
-#                T[s_a:f_a] -= t1_3_a[orb,:]
-#
-#            else:
-#
-#                T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_a[:,:,(orb-nocc_a),:], t2_2_a, optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_2_ab, optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_2_ab, optimize = True)
-#
-#                T[s_a:f_a] -= 0.25*np.einsum('klac,klc->a',t2_1_a, t2_2_a[:,:,(orb-nocc_a),:],optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('klac,klc->a',t2_1_ab, t2_2_ab[:,:,(orb-nocc_a),:],optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('lkac,lkc->a',t2_1_ab, t2_2_ab[:,:,(orb-nocc_a),:],optimize = True)
+######### ADC(3) 1p part  ############################################
+
+        if(method=='adc(3)'):
+
+            t1_3_a, t1_3_b = adc.t1[1]
+
+            if orb < nocc_a:
+
+                T[s_a:f_a] += 0.5*np.einsum('kac,ck->a',t2_1_a[:,orb,:,:], t1_2_a.T,optimize = True)
+                T[s_a:f_a] -= 0.5*np.einsum('kac,ck->a',t2_1_ab[orb,:,:,:], t1_2_b.T,optimize = True)
+
+                T[s_a:f_a] -= t1_3_a[orb,:]
+
+            else:
+
+                T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_a[:,:,(orb-nocc_a),:], t2_2_a, optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_2_ab, optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_2_ab, optimize = True)
+
+                T[s_a:f_a] -= 0.25*np.einsum('klac,klc->a',t2_1_a, t2_2_a[:,:,(orb-nocc_a),:],optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('klac,klc->a',t2_1_ab, t2_2_ab[:,:,(orb-nocc_a),:],optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('lkac,lkc->a',t2_1_ab, t2_2_ab[:,:,(orb-nocc_a),:],optimize = True)
 
 ######### spin = beta  ############################################
     else:
@@ -2605,7 +2606,7 @@ def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
 
         if orb < nocc_b:
 
-#            T[s_b:f_b] = -t1_2_b[orb,:]
+            T[s_b:f_b] = -t1_2_b[orb,:]
 
             t2_1_t = t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]].copy()
             t2_1_ab_t = -t2_1_ab.transpose(0,1,3,2).copy()
@@ -2636,26 +2637,26 @@ def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
 
 ######### ADC(2) 1p part  ############################################
 
-#        if(method=='adc(3)'):
-#
-#            t1_3_a, t1_3_b = adc.t1[1]
-#
-#            if orb < nocc_b:
-#
-#                T[s_b:f_b] += 0.5*np.einsum('kac,ck->a',t2_1_b[:,orb,:,:], t1_2_b.T,optimize = True)
-#                T[s_b:f_b] -= 0.5*np.einsum('kca,ck->a',t2_1_ab[:,orb,:,:], t1_2_a.T,optimize = True)
-#
-#                T[s_b:f_b] -= t1_3_b[orb,:]
-#
-#            else:
-#
-#                T[s_b:f_b] -= 0.25*np.einsum('klc,klac->a',t2_1_b[:,:,(orb-nocc_b),:], t2_2_b, optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_2_ab, optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_2_ab, optimize = True)
-#
-#                T[s_b:f_b] -= 0.25*np.einsum('klac,klc->a',t2_1_b, t2_2_b[:,:,(orb-nocc_b),:],optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('lkca,lkc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('klca,klc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
+        if(method=='adc(3)'):
+
+            t1_3_a, t1_3_b = adc.t1[1]
+
+            if orb < nocc_b:
+
+                T[s_b:f_b] += 0.5*np.einsum('kac,ck->a',t2_1_b[:,orb,:,:], t1_2_b.T,optimize = True)
+                T[s_b:f_b] -= 0.5*np.einsum('kca,ck->a',t2_1_ab[:,orb,:,:], t1_2_a.T,optimize = True)
+
+                T[s_b:f_b] -= t1_3_b[orb,:]
+
+            else:
+
+                T[s_b:f_b] -= 0.25*np.einsum('klc,klac->a',t2_1_b[:,:,(orb-nocc_b),:], t2_2_b, optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_2_ab, optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('lkc,lkca->a',t2_1_ab[:,:,:,(orb-nocc_b)], t2_2_ab, optimize = True)
+
+                T[s_b:f_b] -= 0.25*np.einsum('klac,klc->a',t2_1_b, t2_2_b[:,:,(orb-nocc_b),:],optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('lkca,lkc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('klca,klc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
     return T
 
 def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
@@ -2693,23 +2694,6 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
     if eris is None:
         eris = uadc_ao2mo.transform_integrals_incore(adc)
 
-    #v2e_oovv_a , v2e_oovv_ab, v2e_oovv_b = eris.oovv
-    #v2e_vvvo_a , v2e_vvvo_ab, v2e_vvvo_b = eris.vvvo
-    #v2e_ovoo_a , v2e_ovoo_ab, v2e_ovoo_b = eris.ovoo
-    #v2e_voov_a , v2e_voov_ab, v2e_voov_b = eris.voov
-    #v2e_ovov_a , v2e_ovov_ab, v2e_ovov_b = eris.ovov
-    #v2e_vovv_a , v2e_vovv_ab, v2e_vovv_b = eris.vovv
-    #v2e_ooov_a , v2e_ooov_ab, v2e_ooov_b = eris.ooov
-
-    eris_ovov = eris.ovov
-    eris_OVOV = eris.OVOV
-    eris_ovOV = eris.ovOV
-    eris_OVov = eris.OVov
-
-    v2e_oovv = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
-    v2e_OOVV = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
-    v2e_oOvV = eris_ovOV.transpose(0,2,1,3)
-
     s_a = 0
     f_a = n_singles_a
     s_b = f_a
@@ -2735,7 +2719,7 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
             T[s_a:f_a] -= 0.25*np.einsum('kdc,ikdc->i',t2_1_ab[orb,:,:,:], t2_1_ab, optimize = True)
             T[s_a:f_a] -= 0.25*np.einsum('kcd,ikcd->i',t2_1_ab[orb,:,:,:], t2_1_ab, optimize = True)
         else :
-#            T[s_a:f_a] += t1_2_a[:,(orb-nocc_a)]
+            T[s_a:f_a] += t1_2_a[:,(orb-nocc_a)]
 
 ######## ADC(2) 2h-1p  part  ############################################
 
@@ -2762,22 +2746,22 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
 
 ######## ADC(3) 1h part  ############################################
 
-#        if(method=='adc(3)'):
-#
-#            t1_3_a, t1_3_b = adc.t1[1]
-#
-#            if orb < nocc_a:
-#                T[s_a:f_a] += 0.25*np.einsum('kdc,ikdc->i',t2_1_a[:,orb,:,:], t2_2_a, optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('kdc,ikdc->i',t2_1_ab[orb,:,:,:], t2_2_ab, optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('kcd,ikcd->i',t2_1_ab[orb,:,:,:], t2_2_ab, optimize = True)
-#
-#                T[s_a:f_a] += 0.25*np.einsum('ikdc,kdc->i',t2_1_a, t2_2_a[:,orb,:,:],optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('ikcd,kcd->i',t2_1_ab, t2_2_ab[orb,:,:,:],optimize = True)
-#                T[s_a:f_a] -= 0.25*np.einsum('ikdc,kdc->i',t2_1_ab, t2_2_ab[orb,:,:,:],optimize = True)
-#            else:
-#                T[s_a:f_a] += 0.5*np.einsum('ikc,kc->i',t2_1_a[:,:,(orb-nocc_a),:], t1_2_a,optimize = True)
-#                T[s_a:f_a] += 0.5*np.einsum('ikc,kc->i',t2_1_ab[:,:,(orb-nocc_a),:], t1_2_b,optimize = True)
-#                T[s_a:f_a] += t1_3_a[:,(orb-nocc_a)]
+        if(method=='adc(3)'):
+
+            t1_3_a, t1_3_b = adc.t1[1]
+
+            if orb < nocc_a:
+                T[s_a:f_a] += 0.25*np.einsum('kdc,ikdc->i',t2_1_a[:,orb,:,:], t2_2_a, optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('kdc,ikdc->i',t2_1_ab[orb,:,:,:], t2_2_ab, optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('kcd,ikcd->i',t2_1_ab[orb,:,:,:], t2_2_ab, optimize = True)
+
+                T[s_a:f_a] += 0.25*np.einsum('ikdc,kdc->i',t2_1_a, t2_2_a[:,orb,:,:],optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('ikcd,kcd->i',t2_1_ab, t2_2_ab[orb,:,:,:],optimize = True)
+                T[s_a:f_a] -= 0.25*np.einsum('ikdc,kdc->i',t2_1_ab, t2_2_ab[orb,:,:,:],optimize = True)
+            else:
+                T[s_a:f_a] += 0.5*np.einsum('ikc,kc->i',t2_1_a[:,:,(orb-nocc_a),:], t1_2_a,optimize = True)
+                T[s_a:f_a] += 0.5*np.einsum('ikc,kc->i',t2_1_ab[:,:,(orb-nocc_a),:], t1_2_b,optimize = True)
+                T[s_a:f_a] += t1_3_a[:,(orb-nocc_a)]
 
 ######## spin = beta  ############################################
     else: 
@@ -2789,7 +2773,7 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
             T[s_b:f_b]-= 0.25*np.einsum('kdc,kidc->i',t2_1_ab[:,orb,:,:], t2_1_ab, optimize = True)
             T[s_b:f_b]-= 0.25*np.einsum('kcd,kicd->i',t2_1_ab[:,orb,:,:], t2_1_ab, optimize = True)
         else :
-#            T[s_b:f_b] += t1_2_b[:,(orb-nocc_b)]
+            T[s_b:f_b] += t1_2_b[:,(orb-nocc_b)]
 
 ######## ADC(2) 2h-1p part  ############################################
 
@@ -2817,22 +2801,22 @@ def ip_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
 
 ######## ADC(3) 1h part  ############################################
 
-#        if(method=='adc(3)'):
-#
-#            t1_3_a, t1_3_b = adc.t1[1]
-#
-#            if orb < nocc_b:
-#                T[s_b:f_b] += 0.25*np.einsum('kdc,ikdc->i',t2_1_b[:,orb,:,:], t2_2_b, optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('kdc,kidc->i',t2_1_ab[:,orb,:,:], t2_2_ab, optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('kcd,kicd->i',t2_1_ab[:,orb,:,:], t2_2_ab, optimize = True)
-#
-#                T[s_b:f_b] += 0.25*np.einsum('ikdc,kdc->i',t2_1_b, t2_2_b[:,orb,:,:],optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('kicd,kcd->i',t2_1_ab, t2_2_ab[:,orb,:,:],optimize = True)
-#                T[s_b:f_b] -= 0.25*np.einsum('kidc,kdc->i',t2_1_ab, t2_2_ab[:,orb,:,:],optimize = True)
-#            else:
-#                T[s_b:f_b] += 0.5*np.einsum('ikc,kc->i',t2_1_b[:,:,(orb-nocc_b),:], t1_2_b,optimize = True)
-#                T[s_b:f_b] += 0.5*np.einsum('kic,kc->i',t2_1_ab[:,:,:,(orb-nocc_b)], t1_2_a,optimize = True)
-#                T[s_b:f_b] += t1_3_b[:,(orb-nocc_b)]
+        if(method=='adc(3)'):
+
+            t1_3_a, t1_3_b = adc.t1[1]
+
+            if orb < nocc_b:
+                T[s_b:f_b] += 0.25*np.einsum('kdc,ikdc->i',t2_1_b[:,orb,:,:], t2_2_b, optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('kdc,kidc->i',t2_1_ab[:,orb,:,:], t2_2_ab, optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('kcd,kicd->i',t2_1_ab[:,orb,:,:], t2_2_ab, optimize = True)
+
+                T[s_b:f_b] += 0.25*np.einsum('ikdc,kdc->i',t2_1_b, t2_2_b[:,orb,:,:],optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('kicd,kcd->i',t2_1_ab, t2_2_ab[:,orb,:,:],optimize = True)
+                T[s_b:f_b] -= 0.25*np.einsum('kidc,kdc->i',t2_1_ab, t2_2_ab[:,orb,:,:],optimize = True)
+            else:
+                T[s_b:f_b] += 0.5*np.einsum('ikc,kc->i',t2_1_b[:,:,(orb-nocc_b),:], t1_2_b,optimize = True)
+                T[s_b:f_b] += 0.5*np.einsum('kic,kc->i',t2_1_ab[:,:,:,(orb-nocc_b)], t1_2_a,optimize = True)
+                T[s_b:f_b] += t1_3_b[:,(orb-nocc_b)]
 
     return T
 
