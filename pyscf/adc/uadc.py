@@ -432,7 +432,7 @@ def compute_amplitudes(myadc, eris):
     t2 = (t2_1, t2_2)
 
     return t1, t2
-@profile
+
 def compute_energy(myadc, t1, t2, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -1683,6 +1683,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                eris_VVVV = eris_VVVV.transpose(0,2,3,1)      
                eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
                temp_1 -= np.dot(r_bbb_t,eris_VVVV.T).reshape(nocc_b,nvir_b,nvir_b)
+               del eris_VVVV
                temp_1 = temp_1[:,ab_ind_b[0],ab_ind_b[1]]
                s[s_bbb:f_bbb] += 0.5*temp_1.reshape(-1)
 
@@ -2032,18 +2033,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     if eris is None:
         eris = uadc_ao2mo.transform_integrals_incore(adc)
 
-
-    #v2e_vooo_1_a = v2e_vooo_a[:,:,ij_ind_a[0],ij_ind_a[1]].transpose(1,0,2).reshape(nocc_a,-1)
-    #v2e_vooo_1_b = v2e_vooo_b[:,:,ij_ind_b[0],ij_ind_b[1]].transpose(1,0,2).reshape(nocc_b,-1)
-
-    #v2e_vooo_1_ab_a = -v2e_ovoo_ab.transpose(0,1,3,2).reshape(nocc_a, -1)
-    #v2e_vooo_1_ab_b = -v2e_vooo_ab.transpose(1,0,2,3).reshape(nocc_b, -1)
-
-    #v2e_oovo_1_a = v2e_oovo_a[ij_ind_a[0],ij_ind_a[1],:,:].transpose(1,0,2)
-    #v2e_oovo_1_b = v2e_oovo_b[ij_ind_b[0],ij_ind_b[1],:,:].transpose(1,0,2)
-    #v2e_oovo_1_ab = -v2e_ovoo_ab.transpose(1,3,2,0)
-    #v2e_oovo_2_ab = -v2e_vooo_ab.transpose(0,2,3,1)
-
     d_ij_a = e_occ_a[:,None] + e_occ_a
     d_a_a = e_vir_a[:,None]
     D_n_a = -d_a_a + d_ij_a.reshape(-1)
@@ -2082,6 +2071,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         M_ij = adc.get_imds()
     M_ij_a, M_ij_b = M_ij
 
+    
     #Calculate sigma vector
     def sigma_(r):
 
@@ -2499,7 +2489,7 @@ def ea_compute_trans_moments(adc, orb, eris=None, spin="alpha"):
     method = adc.method
 
     t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
-    #t1_2_a, t1_2_b = adc.t1[0]
+    t1_2_a, t1_2_b = adc.t1[0]
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
