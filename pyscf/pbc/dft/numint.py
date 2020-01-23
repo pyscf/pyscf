@@ -1011,13 +1011,15 @@ class NumInt(numint.NumInt):
     def _fxc_mat(self, cell, ao, wv, non0tab, xctype, ao_loc):
         return _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc)
 
-    def block_loop(self, cell, grids, nao, deriv=0, kpt=numpy.zeros(3),
+    def block_loop(self, cell, grids, nao=None, deriv=0, kpt=numpy.zeros(3),
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
 # For UniformGrids, grids.coords does not indicate whehter grids are initialized
         if grids.non0tab is None:
             grids.build(with_non0tab=True)
+        if nao is None:
+            nao = mol.nao
         grids_coords = grids.coords
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]
@@ -1175,12 +1177,14 @@ class KNumInt(numint.NumInt):
             mat[k] = _fxc_mat(cell, ao_kpts[k], wv, non0tab, xctype, ao_loc)
         return mat
 
-    def block_loop(self, cell, grids, nao, deriv=0, kpts=numpy.zeros((1,3)),
+    def block_loop(self, cell, grids, nao=None, deriv=0, kpts=numpy.zeros((1,3)),
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
+        if nao is None:
+            nao = cell.nao
         grids_coords = grids.coords
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]

@@ -1849,8 +1849,9 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
 
 
 class NumInt(object):
+    libxc = libxc
+
     def __init__(self):
-        self.libxc = libxc
         self.omega = None  # RSH paramter
 
     @lib.with_doc(nr_vxc.__doc__)
@@ -1899,12 +1900,14 @@ class NumInt(object):
     def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         return eval_rho(mol, ao, dm, non0tab, xctype, hermi, verbose)
 
-    def block_loop(self, mol, grids, nao, deriv=0, max_memory=2000,
+    def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None):
         '''Define this macro to loop over grids by blocks.
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
+        if nao is None:
+            nao = mol.nao
         ngrids = grids.coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE

@@ -329,7 +329,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
-                        if abs(omega) > 1e-10:  # For range separated Coulomb
+                        if omega > 1e-10:  # For range separated Coulomb
                             vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
@@ -352,7 +352,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
-                        if abs(omega) > 1e-10:  # For range separated Coulomb
+                        if omega > 1e-10:  # For range separated Coulomb
                             vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
@@ -373,7 +373,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hybrid:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
-                    if abs(omega) > 1e-10:  # For range separated Coulomb
+                    if omega > 1e-10:  # For range separated Coulomb
                         vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 += -.5 * vk
                 return v1
@@ -437,13 +437,13 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                 if with_j:
                     vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                     vk *= hyb
-                    if abs(omega) > 1e-10:  # For range separated Coulomb
+                    if omega > 1e-10:  # For range separated Coulomb
                         vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 += vj[0] + vj[1] - vk
                 else:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
-                    if abs(omega) > 1e-10:  # For range separated Coulomb
+                    if omega > 1e-10:  # For range separated Coulomb
                         vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
                     v1 -= vk
             return v1
