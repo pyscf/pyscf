@@ -135,6 +135,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     if isinstance(mf.diis, lib.diis.DIIS):
         mf_diis = mf.diis
     elif mf.diis:
+        assert issubclass(mf.DIIS, lib.diis.DIIS)
         mf_diis = mf.DIIS(mf, mf.diis_file)
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
@@ -1616,7 +1617,7 @@ class SCF(lib.StreamObject):
     energy_elec = energy_elec
     energy_tot = energy_tot
 
-    def energy_nuc(self):            
+    def energy_nuc(self):
         return gto.mole.energy_nuc(self.mol)
 
     # A hook for overloading convergence criteria in SCF iterations. Assigning
