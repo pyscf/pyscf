@@ -49,6 +49,7 @@ from pyscf.grad import rks as rks_grad
 # order calculation for all gradients class. Then this function can be
 # extended and used as the general interface to initialize solvent gradients.
 def ddcosmo_grad(grad_method, pcmobj=None):
+    '''For grad_method in vacuum, add nuclear gradients of solvent pcmobj'''
     grad_method_class = grad_method.__class__
     class WithSolventGrad(grad_method_class):
         def __init__(self, grad_method, pcmobj):

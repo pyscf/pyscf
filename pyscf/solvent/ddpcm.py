@@ -35,25 +35,40 @@ from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
 
+from pyscf.solvent import attach_solvent
+
+@lib.with_doc(attach_solvent._for_scf.__doc__)
 def ddpcm_for_scf(mf, solvent_obj=None, dm=None):
     if solvent_obj is None:
         solvent_obj = DDPCM(mf.mol)
-    return ddcosmo.ddcosmo_for_scf(mf, solvent_obj, dm)
+    return attach_solvent._for_scf(mf, solvent_obj, dm)
 
-def ddpcm_for_casscf(mc, solvent_obj, dm=None):
+@lib.with_doc(attach_solvent._for_casscf.__doc__)
+def ddpcm_for_casscf(mc, solvent_obj=None, dm=None):
     if solvent_obj is None:
-        solvent_obj = DDPCM(mc.mol)
-    return ddcosmo.ddcosmo_for_casscf(mc, solvent_obj, dm)
+        if isinstance(getattr(mc._scf, 'with_solvent', None), DDPCM):
+            solvent_obj = mc._scf.with_solvent
+        else:
+            solvent_obj = DDPCM(mc.mol)
+    return attach_solvent._for_casscf(mc, solvent_obj, dm)
 
-def ddpcm_for_casci(mc, solvent_obj, dm=None):
+@lib.with_doc(attach_solvent._for_casci.__doc__)
+def ddpcm_for_casci(mc, solvent_obj=None, dm=None):
     if solvent_obj is None:
-        solvent_obj = DDPCM(mc.mol)
-    return ddcosmo.ddcosmo_for_casci(mc, solvent_obj, dm)
+        if isinstance(getattr(mc._scf, 'with_solvent', None), DDPCM):
+            solvent_obj = mc._scf.with_solvent
+        else:
+            solvent_obj = DDPCM(mc.mol)
+    return attach_solvent._for_casci(mc, solvent_obj, dm)
 
-def ddpcm_for_post_scf(method, solvent_obj, dm=None):
+@lib.with_doc(attach_solvent._for_post_scf.__doc__)
+def ddpcm_for_post_scf(method, solvent_obj=None, dm=None):
     if solvent_obj is None:
-        solvent_obj = DDPCM(method.mol)
-    return ddcosmo.ddcosmo_for_post_scf(method, solvent_obj, dm)
+        if isinstance(getattr(method._scf, 'with_solvent', None), DDPCM):
+            solvent_obj = method._scf.with_solvent
+        else:
+            solvent_obj = DDPCM(method.mol)
+    return attach_solvent._for_post_scf(method, solvent_obj, dm)
 
 
 # Inject DDPCM to other methods
