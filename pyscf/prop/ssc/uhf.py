@@ -29,9 +29,9 @@ from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
 from pyscf.scf import ucphf
+from pyscf.scf import _response_functions
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
@@ -153,7 +153,7 @@ def solve_mo1_fc(sscobj, h1):
     noccb = orbob.shape[1]
     nvirb = orbvb.shape[1]
     nao = mol.nao
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=1)
+    vresp = mf.gen_response(with_j=False, hermi=1)
 
     if ZZ_ONLY:
         # To make UHF/UKS and RHF/RKS code consistent, only z-component is
@@ -363,7 +363,7 @@ def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential associated with h1_PSO'''
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp = mf.gen_response(with_j=False, hermi=0)
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0
     orboa = mo_coeff[0][:, occidxa]

@@ -26,8 +26,8 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
+from pyscf.scf import _response_functions
 from pyscf.data import nist
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
@@ -85,7 +85,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(zs):
         nz = len(zs)
@@ -761,7 +761,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(xys):
         nz = len(xys)

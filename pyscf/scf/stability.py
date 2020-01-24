@@ -31,8 +31,8 @@ from functools import reduce
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf, hf_symm, uhf_symm
+from pyscf.scf import _response_functions
 from pyscf.soscf import newton_ah
-from pyscf.soscf.newton_ah import _gen_rhf_response, _gen_uhf_response
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     '''
@@ -198,7 +198,7 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
 
-    vrespz = _gen_rhf_response(mf, singlet=None, hermi=2)
+    vrespz = mf.gen_response(singlet=None, hermi=2)
     def hop_real2complex(x1):
         x1 = x1.reshape(nvir,nocc)
         if with_symmetry and mol.symmetry:
@@ -216,7 +216,7 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
             x2[sym_forbid] = 0
         return x2.ravel()
 
-    vresp1 = _gen_rhf_response(mf, singlet=False, hermi=1)
+    vresp1 = mf.gen_response(singlet=False, hermi=1)
     def hop_rhf2uhf(x1):
         from pyscf.dft import numint
         # See also rhf.TDA triplet excitation
@@ -369,7 +369,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-    vrespz = _gen_uhf_response(mf, with_j=False, hermi=2)
+    vrespz = mf.gen_response(with_j=False, hermi=2)
     def hop_real2complex(x1):
         if with_symmetry and mol.symmetry:
             x1 = x1.copy()
@@ -404,7 +404,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     if with_symmetry and mol.symmetry:
         hdiag2[sym_forbid2] = 0
 
-    vresp1 = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp1 = mf.gen_response(with_j=False, hermi=0)
     # Spin flip GHF solution is not considered
     def hop_uhf2ghf(x1):
         if with_symmetry and mol.symmetry:

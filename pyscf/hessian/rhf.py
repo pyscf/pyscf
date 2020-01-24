@@ -29,7 +29,7 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
-from pyscf.soscf.newton_ah import _gen_rhf_response
+from pyscf.scf import _response_functions
 
 
 # import pyscf.grad.rhf to activate nuc_grad_method method
@@ -370,7 +370,7 @@ def gen_vind(mf, mo_coeff, mo_occ):
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     nocc = mocc.shape[1]
-    vresp = _gen_rhf_response(mf, mo_coeff, mo_occ, hermi=1)
+    vresp = mf.gen_response(mo_coeff, mo_occ, hermi=1)
     def fx(mo1):
         mo1 = mo1.reshape(-1,nmo,nocc)
         nset = len(mo1)

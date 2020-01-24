@@ -239,40 +239,40 @@ from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.symm import sph
 
-from pyscf.solvent import attach_solvent
+from pyscf.solvent import _attach_solvent
 
-@lib.with_doc(attach_solvent._for_scf.__doc__)
+@lib.with_doc(_attach_solvent._for_scf.__doc__)
 def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
     if solvent_obj is None:
         solvent_obj = DDCOSMO(mf.mol)
-    return attach_solvent._for_scf(mf, solvent_obj, dm)
+    return _attach_solvent._for_scf(mf, solvent_obj, dm)
 
-@lib.with_doc(attach_solvent._for_casscf.__doc__)
+@lib.with_doc(_attach_solvent._for_casscf.__doc__)
 def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)
-    return attach_solvent._for_casscf(mc, solvent_obj, dm)
+    return _attach_solvent._for_casscf(mc, solvent_obj, dm)
 
-@lib.with_doc(attach_solvent._for_casci.__doc__)
+@lib.with_doc(_attach_solvent._for_casci.__doc__)
 def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)
-    return attach_solvent._for_casci(mc, solvent_obj, dm)
+    return _attach_solvent._for_casci(mc, solvent_obj, dm)
 
-@lib.with_doc(attach_solvent._for_post_scf.__doc__)
+@lib.with_doc(_attach_solvent._for_post_scf.__doc__)
 def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
     if solvent_obj is None:
         if isinstance(getattr(method._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = method._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(method.mol)
-    return attach_solvent._for_post_scf(method, solvent_obj, dm)
+    return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
 
 # Inject DDCOSMO into other methods

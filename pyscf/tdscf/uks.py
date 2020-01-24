@@ -24,9 +24,9 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
+from pyscf.scf import _response_functions
 from pyscf.data import nist
 from pyscf.ao2mo import _ao2mo
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf import __config__
 
 # Low excitation filter to avoid numerical instability
@@ -92,7 +92,7 @@ class TDDFTNoHybrid(TDA):
         ed_ia = e_ia.ravel() * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
+        vresp = mf.gen_response(mo_coeff, mo_occ, hermi=1)
 
         def vind(zs):
             nz = len(zs)

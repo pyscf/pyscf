@@ -28,9 +28,9 @@ from pyscf import symm
 from pyscf.dft import numint
 from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
+from pyscf.scf import _response_functions
 from pyscf.ao2mo import _ao2mo
 from pyscf.data import nist
-from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf import __config__
 
 # Low excitation filter to avoid numerical instability
@@ -83,7 +83,7 @@ class TDDFTNoHybrid(TDA):
         ed_ia = e_ia.ravel() * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=1)
+        vresp = mf.gen_response(singlet=singlet, hermi=1)
 
         def vind(zs):
             nz = len(zs)

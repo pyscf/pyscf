@@ -32,8 +32,8 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.scf import hf_symm
+from pyscf.scf import _response_functions
 from pyscf.data import nist
-from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
@@ -87,7 +87,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     hdiag = hdiag.ravel()
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0)
+    vresp = mf.gen_response(singlet=singlet, hermi=0)
 
     def vind(zs):
         nz = len(zs)
@@ -848,7 +848,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0)
+    vresp = mf.gen_response(singlet=singlet, hermi=0)
 
     def vind(xys):
         nz = len(xys)
