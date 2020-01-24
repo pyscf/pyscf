@@ -321,7 +321,6 @@ def gen_ddcosmo_solver(pcmobj, verbose=None):
     cached_pol = cache_fake_multipoles(pcmobj.grids, r_vdw, lmax)
 
     def gen_vind(dm):
-        pcmobj._dm = dm
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
             # spin-traced DM for UHF or ROHF
             dm = dm[0] + dm[1]
@@ -335,9 +334,9 @@ def gen_ddcosmo_solver(pcmobj, verbose=None):
             f_epsilon = (dielectric-1.)/dielectric
         else:
             f_epsilon = 1
-        pcmobj.epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
-        pcmobj.vpcm = .5 * f_epsilon * vmat
-        return pcmobj.epcm, pcmobj.vpcm
+        epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
+        vpcm = .5 * f_epsilon * vmat
+        return epcm, vpcm
     return gen_vind
 
 def energy(pcmobj, dm):
@@ -658,10 +657,10 @@ class DDCOSMO(lib.StreamObject):
         self.vpcm = None
         self._dm = None
 
-        # _solver_ is a cached function returned by self.as_solver() to reduce
+        # _solver is a cached function returned by self.as_solver() to reduce
         # the overhead of initialization. It should be cleared whenever the
         # solvent parameters or the integration grids were changed.
-        self._solver_ = None
+        self._solver = None
 
         self._keys = set(self.__dict__.keys())
 
@@ -685,7 +684,7 @@ class DDCOSMO(lib.StreamObject):
     def __setattr__(self, key, val):
         if key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
                    'eta', 'eps', 'grids'):
-            self._solver_ = None
+            self._solver = None
         super(DDCOSMO, self).__setattr__(key, val)
 
     def dump_flags(self, verbose=None):
@@ -704,21 +703,23 @@ class DDCOSMO(lib.StreamObject):
     def kernel(self, dm):
         '''A single shot solvent effects for given density matrix.
         '''
-        if (self._solver_ is None or
+        if (self._solver is None or
 # If self.grids.coords is None, it is very likely caused by the updates of the
 # "grids" parameters. The COSMO solver should be updated to adapt the new
 # integral grids.
             self.grids.coords is None):
-            self._solver_ = self.as_solver()
+            import weakref
+            self._solver = weakref.ref(self.as_solver())
 
-        epcm, vpcm = self._solver_(dm)
-        return epcm, vpcm
+        self._dm = dm
+        self.epcm, self.vpcm = self._solver()(dm)
+        return self.epcm, self.vpcm
 
     def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self._solver_ = None
+        self._solver = None
         self.grids.reset(mol)
         return self
 

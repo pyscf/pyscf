@@ -125,7 +125,8 @@ def gen_ddpcm_solver(pcmobj, verbose=None):
         dielectric = pcmobj.eps
         f_epsilon = (dielectric-1.)/dielectric
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
-        return epcm, .5 * f_epsilon * vmat
+        vpcm = .5 * f_epsilon * vmat
+        return epcm, vpcm
     return gen_vind
 
 def energy(pcmobj, dm):
