@@ -627,14 +627,14 @@ class UADC(lib.StreamObject):
         logger.info(self, 'max_memory %d MB (current use %d MB)',
                     self.max_memory, lib.current_memory()[0])
         return self
-
+    
     def dump_flags_gs(self, verbose=None):
         logger.info(self, '')
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'max_memory %d MB (current use %d MB)',
                     self.max_memory, lib.current_memory()[0])
         return self
-
+    
     def kernel(self):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
@@ -1569,7 +1569,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     if M_ab is None:
         M_ab = adc.get_imds()
     M_ab_a, M_ab_b = M_ab
-
+    
     #Calculate sigma vector
     def sigma_(r):
 
@@ -3022,22 +3022,21 @@ class UADCIP(UADC):
     compute_trans_moments = ip_compute_trans_moments
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
-       if diag is None :
-           diag = self.ea_adc_diag()
-       idx = None
-       if ascending:
-           idx = np.argsort(diag)
-       else:
-           idx = np.argsort(diag)[::-1]
-       guess = np.zeros((diag.shape[0], nroots))
-       min_shape = min(diag.shape[0], nroots)
-       guess[:min_shape,:min_shape] = np.identity(min_shape)
-       g = np.zeros((diag.shape[0], nroots))
-       g[idx] = guess.copy()
-       guess = []
-       for p in range(g.shape[1]):
-           guess.append(g[:,p])
-       return guess
+        diag = self.ea_adc_diag()
+        idx = None
+        if ascending:
+            idx = np.argsort(diag)
+        else:
+            idx = np.argsort(diag)[::-1]
+        guess = np.zeros((diag.shape[0], nroots))
+        min_shape = min(diag.shape[0], nroots)
+        guess[:min_shape,:min_shape] = np.identity(min_shape)
+        g = np.zeros((diag.shape[0], nroots))
+        g[idx] = guess.copy()
+        guess = []
+        for p in range(g.shape[1]):
+            guess.append(g[:,p])
+        return guess
 
     def gen_matvec(self, imds=None, eris=None):
         if imds is None: imds = self.get_imds(eris)
