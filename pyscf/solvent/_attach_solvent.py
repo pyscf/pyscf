@@ -27,7 +27,7 @@ from pyscf.lib import logger
 from functools import reduce
 
 def _for_scf(mf, solvent_obj, dm=None):
-    '''Patch ddCOSMO to SCF (HF and DFT) method.
+    '''Add solvent model to SCF (HF and DFT) method.
 
     Kwargs:
         dm : if given, solvent does not respond to the change of density
@@ -99,11 +99,31 @@ def _for_scf(mf, solvent_obj, dm=None):
 
         Gradients = nuc_grad_method
 
+        def gen_response(self, *args, **kwargs):
+            vind = oldMF.gen_response(self, *args, **kwargs)
+            def vind_with_solvent(dm1):
+                v = vind(dm1)
+                if self.with_solvent.equilibrium_solvation:
+                    v += self.with_solvent._B_dot_x(dm1)
+                return v
+            return vind_with_solvent
+
+        def stability(self, *args, **kwargs):
+            # When computing orbital hessian, the second order derivatives of
+            # solvent energy needs to be computed. It is enabled by
+            # the attribute equilibrium_solvation in gen_response method.
+            # If solvent was frozen, its contribution is treated as the
+            # external potential. The response of solvent does not need to
+            # be considered in stability analysis.
+            with lib.temporary_env(self.with_solvent,
+                                   equilibrium_solvation=not self.with_solvent.frozen):
+                return oldMF.stability(self, *args, **kwargs)
+
     mf1 = SCFWithSolvent(mf, solvent_obj)
     return mf1
 
 def _for_casscf(mc, solvent_obj, dm=None):
-    '''Patch ddCOSMO to CASSCF method.
+    '''Add solvent model to CASSCF method.
 
     Kwargs:
         dm : if given, solvent does not respond to the change of density
@@ -211,7 +231,7 @@ def _for_casscf(mc, solvent_obj, dm=None):
 
 
 def _for_casci(mc, solvent_obj, dm=None):
-    '''Patch ddCOSMO to CASCI method.
+    '''Add solvent model to CASCI method.
 
     Kwargs:
         dm : if given, solvent does not respond to the change of density
@@ -329,7 +349,7 @@ def _for_casci(mc, solvent_obj, dm=None):
 
 
 def _for_post_scf(method, solvent_obj, dm=None):
-    '''solvent wrapper for post-SCF methods (CC, CI, MP, TDDFT etc.)
+    '''A wrapper of solvent model for post-SCF methods (CC, CI, MP etc.)
 
     NOTE: this implementation often causes (macro iteration) convergence issue
 
@@ -344,9 +364,9 @@ def _for_post_scf(method, solvent_obj, dm=None):
 
     old_method = method.__class__
 
+    # Ensure that the underlying _scf object has solvent model enabled
     if getattr(method._scf, 'with_solvent', None):
         scf_with_solvent = method._scf
-        scf_with_solvent.with_solvent = solvent_obj
     else:
         scf_with_solvent = _for_scf(method._scf, solvent_obj, dm)
         if dm is None:
@@ -441,3 +461,71 @@ def _for_post_scf(method, solvent_obj, dm=None):
 
     return PostSCFWithSolvent(method)
 
+
+def _for_tdscf(method, solvent_obj, dm=None):
+    '''Add solvent model in TDDFT calculations.
+
+    Kwargs:
+        dm : if given, solvent does not respond to the change of density
+            matrix. A frozen ddCOSMO potential is added to the results.
+    '''
+    if getattr(method, 'with_solvent', None):
+        method.with_solvent = solvent_obj
+        method._scf.with_solvent = solvent_obj
+        return method
+
+    old_method = method.__class__
+
+    # Ensure that the underlying _scf object has solvent model enabled
+    if getattr(method._scf, 'with_solvent', None):
+        scf_with_solvent = method._scf
+    else:
+        scf_with_solvent = _for_scf(method._scf, solvent_obj, dm).run()
+
+    if dm is not None:
+        solvent_obj = scf_with_solvent.with_solvent
+        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
+        solvent_obj.frozen = True
+
+    class TDSCFWithSolvent(old_method):
+        def __init__(self, method):
+            self.__dict__.update(method.__dict__)
+            self._scf = scf_with_solvent
+            self.with_solvent = self._scf.with_solvent
+            self._keys.update(['with_solvent'])
+
+        @property
+        def equilibrium_solvation(self):
+            '''Whether to allow the solvent rapidly responds to the changes of
+            electronic structure or geometry of solute.
+            '''
+            return self.with_solvent.equilibrium_solvation
+        @equilibrium_solvation.setter
+        def equilibrium_solvation(self, val):
+            if val and self.with_solvent.frozen:
+                logger.warn(self, 'Solvent model was set to be frozen in the '
+                            'ground state SCF calculation. It may conflict to '
+                            'the assumption of equilibrium solvation.\n'
+                            'You may set _scf.with_solvent.frozen = False and '
+                            'rerun the ground state calculation _scf.run().')
+            self.with_solvent.equilibrium_solvation = val
+
+        def dump_flags(self, verbose=None):
+            old_method.dump_flags(self, verbose)
+            self.with_solvent.check_sanity()
+            self.with_solvent.dump_flags(verbose)
+            return self
+
+        def get_ab(self, mf=None):
+            if mf is None: mf = self._scf
+            a, b = get_ab(mf)
+            if self.equilibrium_solvation:
+                raise NotImplementedError
+
+        def nuc_grad_method(self):
+            if self.equilibrium_solvation:
+                raise NotImplementedError
+            return old_method.nuc_grad_method(self)
+
+    mf1 = TDSCFWithSolvent(method)
+    return mf1

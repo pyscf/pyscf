@@ -230,6 +230,7 @@ z-1,2-DiChloroEthene                   9.2
 '''
 
 import ctypes
+import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -274,77 +275,42 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             solvent_obj = DDCOSMO(method.mol)
     return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
+@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
+def ddcosmo_for_tdscf(method, solvent_obj=None, dm=None):
+    scf_solvent = getattr(method._scf, 'with_solvent', None)
+    assert scf_solvent is None or isinstance(scf_solvent, DDCOSMO)
 
-# Inject DDCOSMO into other methods
+    if solvent_obj is None:
+        solvent_obj = DDCOSMO(method.mol)
+    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
+
+
+# Inject ddCOSMO into other methods
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import mp, ci, cc
-scf.hf.SCF.DDCOSMO = ddcosmo_for_scf
-mcscf.casci.DDCOSMO = ddcosmo_for_casci
-mcscf.mc1step.DDCOSMO = ddcosmo_for_casscf
-mp.mp2.MP2.DDCOSMO = ddcosmo_for_post_scf
-ci.cisd.CISD.DDCOSMO = ddcosmo_for_post_scf
-cc.ccsd.CCSD.DDCOSMO = ddcosmo_for_post_scf
+from pyscf import tdscf
+scf.hf.SCF.ddCOSMO    = scf.hf.SCF.DDCOSMO    = ddcosmo_for_scf
+mcscf.casci.ddCOSMO   = mcscf.casci.DDCOSMO   = ddcosmo_for_casci
+mcscf.mc1step.ddCOSMO = mcscf.mc1step.DDCOSMO = ddcosmo_for_casscf
+mp.mp2.MP2.ddCOSMO    = mp.mp2.MP2.DDCOSMO    = ddcosmo_for_post_scf
+ci.cisd.CISD.ddCOSMO  = ci.cisd.CISD.DDCOSMO  = ddcosmo_for_post_scf
+cc.ccsd.CCSD.ddCOSMO  = cc.ccsd.CCSD.DDCOSMO  = ddcosmo_for_post_scf
+tdscf.rhf.TDA.ddCOSMO = tdscf.rhf.TDA.DDCOSMO = ddcosmo_for_tdscf
 
 
-# TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
-# psi are tested against ddPCM implementation on github. Psi needs to be
-# computed by the host program. It requires the numerical integration code. 
+# Keep gen_ddcosmo_solver for backward compatibility
 def gen_ddcosmo_solver(pcmobj, verbose=None):
     '''Generate ddcosmo function to compute energy and potential matrix
     '''
-    mol = pcmobj.mol
-    if pcmobj.grids.coords is None:
-        pcmobj.grids.build(with_non0tab=True)
-
-    natm = mol.natm
-    lmax = pcmobj.lmax
-
-    r_vdw = pcmobj.get_atomic_radii()
-    coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
-    ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, lmax, True))
-
-    fi = make_fi(pcmobj, r_vdw)
-    ui = 1 - fi
-    ui[ui<0] = 0
-    nexposed = numpy.count_nonzero(ui==1)
-    nbury = numpy.count_nonzero(ui==0)
-    on_shell = numpy.count_nonzero(ui>0) - nexposed
-    logger.debug(pcmobj, 'Num points exposed %d', nexposed)
-    logger.debug(pcmobj, 'Num points buried %d', nbury)
-    logger.debug(pcmobj, 'Num points on shell %d', on_shell)
-
-    nlm = (lmax+1)**2
-    Lmat = make_L(pcmobj, r_vdw, ylm_1sph, fi)
-    Lmat = Lmat.reshape(natm*nlm,-1)
-
-    cached_pol = cache_fake_multipoles(pcmobj.grids, r_vdw, lmax)
-
-    def gen_vind(dm):
-        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            # spin-traced DM for UHF or ROHF
-            dm = dm[0] + dm[1]
-
-        phi = make_phi(pcmobj, dm, r_vdw, ui)
-        L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
-        psi, vmat = make_psi_vmat(pcmobj, dm, r_vdw, ui, pcmobj.grids, ylm_1sph,
-                                  cached_pol, L_X, Lmat)[:2]
-        dielectric = pcmobj.eps
-        if dielectric > 0:
-            f_epsilon = (dielectric-1.)/dielectric
-        else:
-            f_epsilon = 1
-        epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
-        vpcm = .5 * f_epsilon * vmat
-        return epcm, vpcm
-    return gen_vind
+    return pcmobj._get_vind
 
 def energy(pcmobj, dm):
     '''
     ddCOSMO energy
     Es = 1/2 f(eps) \int rho(r) W(r) dr
     '''
-    epcm = gen_ddcosmo_solver(pcmobj, pcmobj.verbose)(dm)[0]
+    epcm = pcmobj._get_vind(dm)[0]
     return epcm
 
 def get_atomic_radii(pcmobj):
@@ -448,19 +414,29 @@ def make_fi(pcmobj, r_vdw):
     fi[fi < 1e-20] = 0
     return fi
 
-def make_phi(pcmobj, dm, r_vdw, ui):
+def make_phi(pcmobj, dm, r_vdw, ui, with_nuc=True):
+    '''
+    Induced potential of ddCOSMO model
+
+    Kwargs:
+        with_nuc (bool): Mute the contribution of nuclear charges when
+            computing the second order derivatives of energy
+    '''
     mol = pcmobj.mol
     natm = mol.natm
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
     ngrid_1sph = coords_1sph.shape[0]
 
-    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        dm = dm[0] + dm[1]
-    tril_dm = lib.pack_tril(dm+dm.T)
-    nao = dm.shape[0]
+    dms = numpy.asarray(dm)
+    is_single_dm = dms.ndim == 2
+
+    nao = dms.shape[-1]
+    dms = dms.reshape(-1,nao,nao)
+    n_dm = dms.shape[0]
     diagidx = numpy.arange(nao)
     diagidx = diagidx*(diagidx+1)//2 + diagidx
-    tril_dm[diagidx] *= .5
+    tril_dm = lib.pack_tril(dms+dms.transpose(0,2,1))
+    tril_dm[:,diagidx] *= .5
 
     atom_coords = mol.atom_coords()
     atom_charges = mol.atom_charges()
@@ -469,18 +445,20 @@ def make_phi(pcmobj, dm, r_vdw, ui):
     cav_coords = (atom_coords.reshape(natm,1,3)
                   + numpy.einsum('r,gx->rgx', r_vdw, coords_1sph))
 
-    v_phi = numpy.empty((natm,ngrid_1sph))
-    for ia in range(natm):
+    v_phi = numpy.zeros((n_dm, natm, ngrid_1sph))
+
+    if with_nuc:
+        for ia in range(natm):
 # Note (-) sign is not applied to atom_charges, because (-) is explicitly
 # included in rhs and L matrix
-        d_rs = atom_coords.reshape(-1,1,3) - cav_coords[ia]
-        v_phi[ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
+            d_rs = atom_coords.reshape(-1,1,3) - cav_coords[ia]
+            v_phi[:,ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*1e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
 
     cav_coords = cav_coords[extern_point_idx]
-    v_phi_e = numpy.empty(cav_coords.shape[0])
+    v_phi_e = numpy.empty((n_dm, cav_coords.shape[0]))
     int3c2e = mol._add_suffix('int3c2e')
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
                                          mol._env, int3c2e)
@@ -488,21 +466,40 @@ def make_phi(pcmobj, dm, r_vdw, ui):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij',
                                 cintopt=cintopt)
-        v_phi_e[i0:i1] = numpy.einsum('x,xk->k', tril_dm, v_nj)
-    v_phi[extern_point_idx] -= v_phi_e
+        v_phi_e[:,i0:i1] = numpy.einsum('nx,xk->nk', tril_dm, v_nj)
+    v_phi[:,extern_point_idx] -= v_phi_e
 
     ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcmobj.lmax, True))
-    phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph, ui, v_phi)
+    phi = -numpy.einsum('n,xn,jn,ijn->ijx', weights_1sph, ylm_1sph, ui, v_phi)
+    if is_single_dm:
+        phi = phi[0]
     return phi
 
-def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
+def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, Xvec, L,
+                  with_nuc=True):
+    '''
+    The first order derivative of E_ddCOSMO wrt density matrix
+
+    Kwargs:
+        with_nuc (bool): Mute the contribution of nuclear charges when
+            computing the second order derivatives of energy.
+    '''
     mol = pcmobj.mol
     natm = mol.natm
     lmax = pcmobj.lmax
     nlm = (lmax+1)**2
 
+    dms = numpy.asarray(dm)
+    is_single_dm = dms.ndim == 2
+
+    ni = numint.NumInt()
+    max_memory = pcmobj.max_memory - lib.current_memory()[0]
+    make_rho, n_dm, nao = ni._gen_rho_evaluator(mol, dm)
+    dms = dms.reshape(n_dm, nao, nao)
+    Xvec = Xvec.reshape(n_dm, natm, nlm)
+
     i1 = 0
-    scaled_weights = numpy.empty(grids.weights.size)
+    scaled_weights = numpy.empty((n_dm, grids.weights.size))
     for ia in range(natm):
         fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
         i0, i1 = i1, i1 + fak_pol[0].shape[1]
@@ -511,69 +508,74 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
         for l in range(lmax+1):
             fac = 4*numpy.pi/(l*2+1)
             p0, p1 = p1, p1 + (l*2+1)
-            eta_nj += fac * numpy.einsum('mn,m->n', fak_pol[l], L_X[ia,p0:p1])
-        scaled_weights[i0:i1] = eta_nj * grids.weights[i0:i1]
+            eta_nj += fac * numpy.einsum('mn,im->in', fak_pol[l], Xvec[:,ia,p0:p1])
+        scaled_weights[:,i0:i1] = eta_nj
+    scaled_weights *= grids.weights
 
-    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        dm = dm[0] + dm[1]
-    ni = numint.NumInt()
-    max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
-    den = numpy.empty(grids.weights.size)
-    vmat = numpy.zeros((nao,nao))
+    den = numpy.empty((n_dm, grids.weights.size))
+    vmat = numpy.zeros((n_dm, nao, nao))
     p1 = 0
     aow = None
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, max_memory):
         p0, p1 = p1, p1 + weight.size
-        den[p0:p1] = weight * make_rho(0, ao, mask, 'LDA')
-        aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
-        aow = numpy.einsum('pi,p->pi', ao, scaled_weights[p0:p1], out=aow)
-        vmat -= numint._dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
+        for i in range(n_dm):
+            den[i,p0:p1] = make_rho(i, ao, mask, 'LDA')
+            aow = numint._scale_ao(ao, scaled_weights[i,p0:p1], out=aow)
+            vmat[i] -= numint._dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
+    den *= grids.weights
     ao = aow = scaled_weights = None
 
     nelec_leak = 0
-    psi = numpy.empty((natm,nlm))
+    psi = numpy.zeros((n_dm, natm, nlm))
     i1 = 0
     for ia in range(natm):
         fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
         i0, i1 = i1, i1 + fak_pol[0].shape[1]
-        nelec_leak += den[i0:i1][leak_idx].sum()
+        nelec_leak += den[:,i0:i1][:,leak_idx].sum(axis=1)
         p1 = 0
         for l in range(lmax+1):
             fac = 4*numpy.pi/(l*2+1)
             p0, p1 = p1, p1 + (l*2+1)
-            psi[ia,p0:p1] = -fac * numpy.einsum('n,mn->m', den[i0:i1], fak_pol[l])
-# Contribution of nuclear charge to the total density
+            psi[:,ia,p0:p1] = -fac * numpy.einsum('in,mn->im', den[:,i0:i1], fak_pol[l])
+    logger.debug(pcmobj, 'electron leaks %s', nelec_leak)
+
+# Contribution of nuclear charges to the total density
 # The factor numpy.sqrt(4*numpy.pi) is due to the product of 4*pi * Y_0^0
-        psi[ia,0] += numpy.sqrt(4*numpy.pi)/r_vdw[ia] * mol.atom_charge(ia)
-    logger.debug(pcmobj, 'electron leak %f', nelec_leak)
+    if with_nuc:
+        for ia in range(natm):
+            psi[:,ia,0] += numpy.sqrt(4*numpy.pi)/r_vdw[ia] * mol.atom_charge(ia)
 
     # <Psi, L^{-1}g> -> Psi = SL the adjoint equation to LX = g
-    L_S = numpy.linalg.solve(L.T.reshape(natm*nlm,-1), psi.ravel()).reshape(natm,-1)
+    L_S = numpy.linalg.solve(L.reshape(natm*nlm,-1).T, psi.reshape(n_dm,-1).T)
+    L_S = L_S.reshape(natm,nlm,n_dm).transpose(2,0,1)
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
     # JCP, 141, 184108, Eq (39)
-    xi_jn = numpy.einsum('n,jn,xn,jx->jn', weights_1sph, ui, ylm_1sph, L_S)
+    xi_jn = numpy.einsum('n,jn,xn,ijx->ijn', weights_1sph, ui, ylm_1sph, L_S)
     extern_point_idx = ui > 0
     cav_coords = (mol.atom_coords().reshape(natm,1,3)
                   + numpy.einsum('r,gx->rgx', r_vdw, coords_1sph))
     cav_coords = cav_coords[extern_point_idx]
-    xi_jn = xi_jn[extern_point_idx]
+    xi_jn = xi_jn[:,extern_point_idx]
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*1e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
 
-    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
-                                         mol._env, 'int3c2e')
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     vmat_tril = 0
     for i0, i1 in lib.prange(0, xi_jn.size, blksize):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
         v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij',
                                 cintopt=cintopt)
-        vmat_tril += numpy.einsum('xn,n->x', v_nj, xi_jn[i0:i1])
+        vmat_tril += numpy.einsum('xn,in->ix', v_nj, xi_jn[:,i0:i1])
     vmat += lib.unpack_tril(vmat_tril)
+
+    if is_single_dm:
+        psi = psi[0]
+        vmat = vmat[0]
+        L_S = L_S[0]
     return psi, vmat, L_S
 
 def cache_fake_multipoles(grids, r_vdw, lmax):
@@ -649,6 +651,18 @@ class DDCOSMO(lib.StreamObject):
         # generate the potential.
         self.frozen = False
 
+        # In the rapid process (such as vertical excitation), solvent does not
+        # follow the fast change of electronic structure of solutes. A
+        # calculation of non-equilibrium solvation should be used. For slow
+        # process (like geometry optimization), solvent has enough time to
+        # respond to the changes in electronic structure or geometry of
+        # solutes. Equilibrium solvation should be enabled in the calculation.
+        # See for example JPCA, 104, 5631 (2000)
+        #
+        # Note this attribute has no effects if .frozen is enabled.
+        #
+        self.equilibrium_solvation = False
+
 ##################################################
 # don't modify the following attributes, they are not input options
         # epcm (the dielectric correction) and vpcm (the additional
@@ -657,11 +671,7 @@ class DDCOSMO(lib.StreamObject):
         self.vpcm = None
         self._dm = None
 
-        # _solver is a cached function returned by self.as_solver() to reduce
-        # the overhead of initialization. It should be cleared whenever the
-        # solvent parameters or the integration grids were changed.
-        self._solver = None
-
+        self._intermediates = None
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -684,7 +694,7 @@ class DDCOSMO(lib.StreamObject):
     def __setattr__(self, key, val):
         if key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
                    'eta', 'eps', 'grids'):
-            self._solver = None
+            self.reset()
         super(DDCOSMO, self).__setattr__(key, val)
 
     def dump_flags(self, verbose=None):
@@ -694,34 +704,130 @@ class DDCOSMO(lib.StreamObject):
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
         logger.info(self, 'eps = %s'          , self.eps)
+        logger.info(self, 'frozen = %s'       , self.frozen)
+        logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
         self.grids.dump_flags(verbose)
         return self
 
+# TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
+# psi are tested against ddPCM implementation on github. Psi needs to be
+# computed by the host program. It requires the numerical integration code. 
+    def build(self):
+        if self.grids.coords is None:
+            self.grids.build(with_non0tab=True)
+
+        mol = self.mol
+        natm = mol.natm
+        lmax = self.lmax
+
+        r_vdw = self.get_atomic_radii()
+        coords_1sph, weights_1sph = make_grids_one_sphere(self.lebedev_order)
+        ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, lmax, True))
+
+        fi = make_fi(self, r_vdw)
+        ui = 1 - fi
+        ui[ui<0] = 0
+        nexposed = numpy.count_nonzero(ui==1)
+        nbury = numpy.count_nonzero(ui==0)
+        on_shell = numpy.count_nonzero(ui>0) - nexposed
+        logger.debug(self, 'Num points exposed %d', nexposed)
+        logger.debug(self, 'Num points buried %d', nbury)
+        logger.debug(self, 'Num points on shell %d', on_shell)
+
+        nlm = (lmax+1)**2
+        Lmat = make_L(self, r_vdw, ylm_1sph, fi)
+        Lmat = Lmat.reshape(natm*nlm,-1)
+
+        cached_pol = cache_fake_multipoles(self.grids, r_vdw, lmax)
+
+        self._intermediates = {
+            'r_vdw': r_vdw,
+            'ylm_1sph': ylm_1sph,
+            'ui': ui,
+            'Lmat': Lmat,
+            'cached_pol': cached_pol,
+        }
+
     def kernel(self, dm):
         '''A single shot solvent effects for given density matrix.
         '''
-        if (self._solver is None or
-# If self.grids.coords is None, it is very likely caused by the updates of the
-# "grids" parameters. The COSMO solver should be updated to adapt the new
-# integral grids.
-            self.grids.coords is None):
-            import weakref
-            self._solver = weakref.ref(self.as_solver())
-
         self._dm = dm
-        self.epcm, self.vpcm = self._solver()(dm)
+        self.epcm, self.vpcm = self._get_vind(dm)
         return self.epcm, self.vpcm
 
     def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self._solver = None
-        self.grids.reset(mol)
+            self.grids.reset(mol)
+        self._intermediates = None
         return self
+
+    def _get_vind(self, dm):
+        '''A single shot solvent effects for given density matrix.
+        '''
+        if not self._intermediates or self.grids.coords is None:
+            self.build()
+
+        mol = self.mol
+        r_vdw      = self._intermediates['r_vdw'     ]
+        ylm_1sph   = self._intermediates['ylm_1sph'  ]
+        ui         = self._intermediates['ui'        ]
+        Lmat       = self._intermediates['Lmat'      ]
+        cached_pol = self._intermediates['cached_pol']
+
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            # spin-traced DM for UHF or ROHF
+            dm = dm[0] + dm[1]
+
+        phi = make_phi(self, dm, r_vdw, ui)
+        Xvec = numpy.linalg.solve(Lmat, phi.ravel()).reshape(mol.natm,-1)
+        psi, vmat = make_psi_vmat(self, dm, r_vdw, ui, self.grids, ylm_1sph,
+                                  cached_pol, Xvec, Lmat)[:2]
+        dielectric = self.eps
+        if dielectric > 0:
+            f_epsilon = (dielectric-1.)/dielectric
+        else:
+            f_epsilon = 1
+        epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, Xvec)
+        vpcm = .5 * f_epsilon * vmat
+        return epcm, vpcm
+
+    def _B_dot_x(self, dm):
+        '''
+        Compute the matrix-vector product B * x. The B matrix, as defined in
+        the paper R. Cammi, JPCA, 104, 5631 (2000), is the second order
+        derivatives of E_solvation wrt density matrices.
+
+        Note: In ddCOSMO, strictly, B is not symmetric. To make it compatible
+        with the CIS framework, it is symmetrized in current implementation.
+        '''
+        if not self._intermediates or self.grids.coords is None:
+            self.build()
+
+        mol = self.mol
+        r_vdw      = self._intermediates['r_vdw'     ]
+        ylm_1sph   = self._intermediates['ylm_1sph'  ]
+        ui         = self._intermediates['ui'        ]
+        Lmat       = self._intermediates['Lmat'      ]
+        cached_pol = self._intermediates['cached_pol']
+        natm = mol.natm
+        nlm = (self.lmax+1)**2
+
+        phi = make_phi(self, dm, r_vdw, ui, with_nuc=False)
+        Xvec = numpy.linalg.solve(Lmat, phi.reshape(-1,natm*nlm).T)
+        Xvec = Xvec.reshape(natm,nlm,-1).transpose(2,0,1)
+        vmat = make_psi_vmat(self, dm, r_vdw, ui, self.grids, ylm_1sph,
+                             cached_pol, Xvec, Lmat, with_nuc=False)[1]
+        dielectric = self.eps
+        if dielectric > 0:
+            f_epsilon = (dielectric-1.)/dielectric
+        else:
+            f_epsilon = 1
+        return .5 * f_epsilon * vmat
 
     energy = energy
     gen_solver = as_solver = gen_ddcosmo_solver

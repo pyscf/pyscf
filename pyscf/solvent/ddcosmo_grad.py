@@ -43,6 +43,7 @@ from pyscf.symm import sph
 from pyscf.solvent import ddcosmo
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
+from pyscf.grad import tdrhf as tdrhf_grad
 
 
 # TODO: Define attribute grad_method.base to point to the class of the 0th
@@ -82,6 +83,14 @@ def ddcosmo_grad(grad_method, pcmobj=None):
             # disable _finalize. It is called in grad_method.kernel method
             # where self.de was not yet initialized.
             pass
+
+        #FIXME: Modify get_jk for TDDFT gradients?
+        if issubclass(grad_method_class, tdrhf_grad.Gradients):
+            def get_jk(self, mol=None, dm=None, hermi=0):
+                if self.with_solvent.equilibrium_solvation:
+                    raise NotImplementedError
+                else:
+                    return grad_method_class.get_jk(self, mol, dm, hermi)
 
     if pcmobj is None:
         pcmobj = ddcosmo.DDCOSMO(mf.mol)

@@ -281,11 +281,13 @@ class KnownValues(unittest.TestCase):
     def test_psi_vmat(self):
         pcm = ddcosmo.DDCOSMO(mol)
         pcm.lmax = 2
+        pcm.eps = 0
         r_vdw = ddcosmo.get_atomic_radii(pcm)
         fi = ddcosmo.make_fi(pcm, r_vdw)
         ui = 1 - fi
         ui[ui<0] = 0
         grids = dft.gen_grid.Grids(mol).build()
+        pcm.grids = grids
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
         ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
         cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)
@@ -304,10 +306,28 @@ class KnownValues(unittest.TestCase):
         psi_ref = make_psi(pcm.mol, dm, r_vdw, pcm.lmax)
         self.assertAlmostEqual(abs(psi_ref - psi).max(), 0, 12)
 
-        LS = numpy.linalg.solve(L.T.reshape(natm*nlm,-1),
+        LS = numpy.linalg.solve(L.reshape(natm*nlm,-1).T,
                                 psi_ref.ravel()).reshape(natm,nlm)
         vmat_ref = make_vmat(pcm, r_vdw, pcm.lebedev_order, pcm.lmax, LX, LS)
         self.assertAlmostEqual(abs(vmat_ref - vmat).max(), 0, 12)
+
+        numpy.random.seed(19)
+        dm = numpy.random.random((2,nao,nao))
+        phi = ddcosmo.make_phi(pcm, dm, r_vdw, ui, with_nuc=False)
+        Xvec = numpy.linalg.solve(L.reshape(natm*nlm,-1), phi.reshape(-1,natm*nlm).T)
+        Xvec = Xvec.reshape(natm,nlm,-1).transpose(2,0,1)
+        psi, vref, LS = ddcosmo.make_psi_vmat(pcm, dm, r_vdw, ui, grids, ylm_1sph,
+                                              cached_pol, Xvec, L, with_nuc=False)
+        e1 = numpy.einsum('nij,nij->n', psi, Xvec)
+        e2 = numpy.einsum('nij,nij->n', phi, LS)
+        e3 = numpy.einsum('nij,nij->n', dm, vref) * .5
+        self.assertAlmostEqual(abs(e1-e2).max(), 0, 12)
+        self.assertAlmostEqual(abs(e1-e3).max(), 0, 12)
+
+        vmat = pcm._B_dot_x(dm)
+        self.assertEqual(vmat.shape, (2,nao,nao))
+        self.assertAlmostEqual(abs(vmat-vref*.5).max(), 0, 12)
+        self.assertAlmostEqual(lib.fp(vmat), -17.383639424755152, 12)
 
     def test_vmat(self):
         mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', verbose=0)
@@ -352,7 +372,6 @@ class KnownValues(unittest.TestCase):
                    output='/dev/null')
         mf_h2 = ddcosmo.ddcosmo_for_scf(scf.RHF(h2)).run()
         self.assertAlmostEqual(mf_h2.e_tot, mf_scanner.e_tot, 9)
-
 
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 
