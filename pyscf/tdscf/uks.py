@@ -26,7 +26,6 @@ from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import _response_functions
 from pyscf.data import nist
-from pyscf.ao2mo import _ao2mo
 from pyscf import __config__
 
 # Low excitation filter to avoid numerical instability
@@ -96,26 +95,26 @@ class TDDFTNoHybrid(TDA):
 
         def vind(zs):
             nz = len(zs)
+            zs = numpy.asarray(zs).reshape(nz,-1)
             if wfnsym is not None and mol.symmetry:
                 zs = numpy.copy(zs)
                 zs[:,sym_forbid] = 0
-            dmov = numpy.empty((2,nz,nao,nao))
-            for i in range(nz):
-                z = d_ia * zs[i]
-                za = z[:nocca*nvira].reshape(nocca,nvira)
-                zb = z[nocca*nvira:].reshape(noccb,nvirb)
-                dm = reduce(numpy.dot, (orboa, za, orbva.T))
-                dmov[0,i] = dm + dm.T
-                dm = reduce(numpy.dot, (orbob, zb, orbvb.T))
-                dmov[1,i] = dm + dm.T
 
-            v1ao = vresp(dmov)
-            v1a = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (0,nocca,nocca,nmo))
-            v1b = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (0,noccb,noccb,nmo))
+            dmsa = (zs[:,:nocca*nvira] * d_ia[:nocca*nvira]).reshape(nz,nocca,nvira)
+            dmsb = (zs[:,nocca*nvira:] * d_ia[nocca*nvira:]).reshape(nz,noccb,nvirb)
+            dmsa = lib.einsum('xov,po,qv->xpq', dmsa, orboa, orbva.conj())
+            dmsb = lib.einsum('xov,po,qv->xpq', dmsb, orbob, orbvb.conj())
+            dmsa = dmsa + dmsa.conj().transpose(0,2,1)
+            dmsb = dmsb + dmsb.conj().transpose(0,2,1)
+
+            v1ao = vresp(numpy.asarray((dmsa,dmsb)))
+
+            v1a = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
+            v1b = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+
             hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
-            for i, z in enumerate(zs):
-                hx[i] += ed_ia * z
-                hx[i] *= d_ia
+            hx += ed_ia * zs
+            hx *= d_ia
             return hx
 
         return vind, hdiag

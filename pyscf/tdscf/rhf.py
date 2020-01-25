@@ -29,7 +29,6 @@ from pyscf import gto
 from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
-from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.scf import hf_symm
 from pyscf.scf import _response_functions
@@ -90,23 +89,20 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     vresp = mf.gen_response(singlet=singlet, hermi=0)
 
     def vind(zs):
-        nz = len(zs)
+        zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
         if wfnsym is not None and mol.symmetry:
-            zs = numpy.copy(zs).reshape(-1,nocc,nvir)
+            zs = numpy.copy(zs)
             zs[:,sym_forbid] = 0
-        dmov = numpy.empty((nz,nao,nao))
-        for i, z in enumerate(zs):
-            # *2 for double occupancy
-            dmov[i] = reduce(numpy.dot, (orbo, z.reshape(nocc,nvir)*2, orbv.conj().T))
+
+        # *2 for double occupancy
+        dmov = lib.einsum('xov,po,qv->xpq', zs*2, orbo, orbv.conj())
         v1ao = vresp(dmov)
-        #v1ov = numpy.asarray([reduce(numpy.dot, (orbo.T, v, orbv)) for v in v1ao])
-        v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc,nvir)
-        for i, z in enumerate(zs):
-            v1ov[i]+= numpy.einsum('sp,qs->qp', fvv, z.reshape(nocc,nvir))
-            v1ov[i]-= numpy.einsum('sp,pr->sr', foo, z.reshape(nocc,nvir))
+        v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+        v1ov += lib.einsum('xqs,sp->xqp', zs, fvv)
+        v1ov -= lib.einsum('xpr,sp->xsr', zs, foo)
         if wfnsym is not None and mol.symmetry:
             v1ov[:,sym_forbid] = 0
-        return v1ov.reshape(nz,-1)
+        return v1ov.reshape(v1ov.shape[0],-1)
 
     return vind, hdiag
 gen_tda_hop = gen_tda_operation
@@ -700,6 +696,11 @@ class TDA(lib.StreamObject):
             log.warn('Ground state SCF is not converged')
         log.info('\n')
 
+    def check_sanity(self):
+        if self._scf.mo_coeff is None:
+            raise RuntimeError('SCF object is not initialized')
+        lib.StreamObject.check_sanity(self)
+
     def gen_vind(self, mf):
         '''Compute Ax'''
         return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym)
@@ -851,35 +852,34 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     vresp = mf.gen_response(singlet=singlet, hermi=0)
 
     def vind(xys):
-        nz = len(xys)
+        xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
         if wfnsym is not None and mol.symmetry:
             # shape(nz,2,nocc,nvir): 2 ~ X,Y
-            xys = numpy.copy(xys).reshape(nz,2,nocc,nvir)
+            xys = numpy.copy(xys)
             xys[:,:,sym_forbid] = 0
-        dms = numpy.empty((nz,nao,nao))
-        for i in range(nz):
-            x, y = xys[i].reshape(2,nocc,nvir)
-            # *2 for double occupancy
-            dmx = reduce(numpy.dot, (orbo, x*2, orbv.T))
-            dmy = reduce(numpy.dot, (orbv, y.T*2, orbo.T))
-            dms[i] = dmx + dmy  # AX + BY
+
+        xs, ys = xys.transpose(1,0,2,3)
+        # dms = AX + BY
+        # *2 for double occupancy
+        dms  = lib.einsum('xov,po,qv->xpq', xs*2, orbo, orbv.conj())
+        dms += lib.einsum('xov,pv,qo->xpq', ys*2, orbv, orbo.conj())
 
         v1ao = vresp(dms)
-        v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc,nvir)
-        v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir,nocc)
-        hx = numpy.empty((nz,2,nocc,nvir), dtype=v1ov.dtype)
-        for i in range(nz):
-            x, y = xys[i].reshape(2,nocc,nvir)
-            hx[i,0] = v1ov[i]
-            hx[i,0]+= numpy.einsum('sp,qs->qp', fvv, x)  # AX
-            hx[i,0]-= numpy.einsum('sp,pr->sr', foo, x)  # AX
-            hx[i,1] =-v1vo[i].T
-            hx[i,1]-= numpy.einsum('sp,qs->qp', fvv, y)  #-AY
-            hx[i,1]+= numpy.einsum('sp,pr->sr', foo, y)  #-AY
+        v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+        v1vo = lib.einsum('xpq,pv,qo->xov', v1ao, orbv.conj(), orbo)
+        v1ov += lib.einsum('xqs,sp->xqp', xs, fvv)  # AX
+        v1ov -= lib.einsum('xpr,sp->xsr', xs, foo)  # AX
+        v1vo += lib.einsum('xqs,sp->xqp', ys, fvv)  # AY
+        v1vo -= lib.einsum('xpr,sp->xsr', ys, foo)  # AY
 
         if wfnsym is not None and mol.symmetry:
-            hx[:,:,sym_forbid] = 0
-        return hx.reshape(nz,-1)
+            v1ov[:,sym_forbid] = 0
+            v1vo[:,sym_forbid] = 0
+
+        # (AX, -AY)
+        nz = xys.shape[0]
+        hx = numpy.hstack((v1ov.reshape(nz,-1), -v1vo.reshape(nz,-1)))
+        return hx
 
     return vind, hdiag
 
