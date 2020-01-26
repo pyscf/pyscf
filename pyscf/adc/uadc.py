@@ -238,7 +238,7 @@ def compute_amplitudes(myadc, eris):
         t2_2_a = t2_2_a/D2_a
         t2_2_b = t2_2_b/D2_b
         t2_2_ab = t2_2_ab/D2_ab
- 
+
         t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
 
     if (myadc.method == "adc(3)"):
@@ -989,7 +989,7 @@ def get_imds_ea(adc, eris=None):
     M_ab = (M_ab_a, M_ab_b)
 
     return M_ab
-
+     
 def get_imds_ip(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -1662,7 +1662,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                r_bbb_u[:,ab_ind_b[1],ab_ind_b[0]]= -r_bbb.copy()
 
                eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
-               eris_vvvv = eris_vvvv.transpose(0,2,1,3)      
+               eris_vvvv = eris_vvvv.transpose(0,2,1,3) 
                eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
                r_aaa_t = r_aaa_u.reshape(nocc_a,-1)
                temp_1 = np.dot(r_aaa_t,eris_vvvv.T).reshape(nocc_a,nvir_a,nvir_a)
