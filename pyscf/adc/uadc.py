@@ -144,7 +144,6 @@ def compute_amplitudes(myadc, eris):
     t1_2_a += np.einsum('kdac,ikcd->ia',eris_OVvv,t2_1_ab)
     del eris_OVvv
     t1_2_a -= np.einsum('lcki,klac->ia',eris_OVoo,t2_1_ab)
-
     eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
     t1_2_b = 0.5*np.einsum('kdac,ikcd->ia',eris_OVVV,t2_1_b)
     t1_2_b -= 0.5*np.einsum('kcad,ikcd->ia',eris_OVVV,t2_1_b)
@@ -160,6 +159,8 @@ def compute_amplitudes(myadc, eris):
     t1_2_b = t1_2_b/D1_b
 
     t1_2 = (t1_2_a , t1_2_b)
+    t2_2 = (None,)
+    t1_3 = (None,)
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
 
@@ -1655,20 +1656,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                r_bbb_u[:,ab_ind_b[0],ab_ind_b[1]]= r_bbb.copy()
                r_bbb_u[:,ab_ind_b[1],ab_ind_b[0]]= -r_bbb.copy()
 
-               #eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
-               #eris_vvvv = eris_vvvv.transpose(0,2,1,3) 
-               #eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
-               #r_aaa_t = r_aaa_u.reshape(nocc_a,-1)
-               #temp_1 = np.dot(r_aaa_t,eris_vvvv.T).reshape(nocc_a,nvir_a,nvir_a)
-               #del eris_vvvv
-               #eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
-               #eris_vvvv = eris_vvvv.transpose(0,2,3,1)      
-               #eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
-               #temp_1 -= np.dot(r_aaa_t,eris_vvvv.T).reshape(nocc_a,nvir_a,nvir_a)
-               #del eris_vvvv
-               #temp_1 = temp_1[:,ab_ind_a[0],ab_ind_a[1]]
-               #s[s_aaa:f_aaa] += 0.5*temp_1.reshape(-1)
-
                eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
                eris_vvvv = eris_vvvv.transpose(0,2,1,3) 
                eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
@@ -1681,20 +1668,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                del eris_vvvv
                temp_1 = temp_1[:,ab_ind_a[0],ab_ind_a[1]]
                s[s_aaa:f_aaa] += 0.5*temp_1.reshape(-1)
-
-               #eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
-               #eris_VVVV = eris_VVVV.transpose(0,2,1,3)      
-               #eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
-               #r_bbb_t = r_bbb_u.reshape(nocc_b,-1)
-               #temp_1 = np.dot(r_bbb_t,eris_VVVV.T).reshape(nocc_b,nvir_b,nvir_b)
-               #del eris_VVVV
-               #eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
-               #eris_VVVV = eris_VVVV.transpose(0,2,3,1)      
-               #eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
-               #temp_1 -= np.dot(r_bbb_t,eris_VVVV.T).reshape(nocc_b,nvir_b,nvir_b)
-               #del eris_VVVV
-               #temp_1 = temp_1[:,ab_ind_b[0],ab_ind_b[1]]
-               #s[s_bbb:f_bbb] += 0.5*temp_1.reshape(-1)
 
                eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
                eris_VVVV = eris_VVVV.transpose(0,2,1,3)      
@@ -1919,15 +1892,11 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                eris_ovVV = eris_ovVV.transpose(0,2,1,3)
                eris_ovVV = eris_ovVV.copy()[:].reshape(nocc_a*nvir_b*nvir_a,-1)
                s[s_b:f_b] += 0.5*np.dot(temp_a,eris_ovVV)
-               #del eris_ovVV
-               #eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
 
                temp_1 = np.zeros_like(r_bab)
                temp_1 = -np.einsum('ljdz,jwz->lwd',t2_1_ab,r_bbb_u,optimize=True)
                temp_1 += -np.einsum('jlzd,jwz->lwd',t2_1_a,r_aba,optimize=True)
                temp_a = temp_1.reshape(-1)
-               #eris_ovVV = eris_ovVV.transpose(0,2,1,3) 
-               #eris_ovVV = eris_ovVV.copy()[:].reshape(nocc_a*nvir_b*nvir_a,-1)
                s[s_b:f_b] -= 0.5*np.dot(temp_a,eris_ovVV)
 
                eris_ovVV = eris_ovVV[:].reshape(nocc_a, nvir_b, nvir_a, nvir_b)
@@ -1943,32 +1912,18 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
 ######################################################################################
 
-               #t2_1_a_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]
-               #temp = np.einsum('lmp,lmbi->bip',t2_1_a_t,v2e_oovo_a)
-               #s[s_aaa:f_aaa] += 0.5*np.einsum('bip,b->ip',temp, r_a, optimize=True).reshape(-1)
-
                t2_1_a_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]
                temp = np.einsum('b,lbmi->lmi',r_a,eris_ovoo)
                temp -= np.einsum('b,mbli->lmi',r_a,eris_ovoo)
                s[s_aaa:f_aaa] += 0.5*np.einsum('lmi,lmp->ip',temp, t2_1_a_t, optimize=True).reshape(-1)
 
-               #temp_1 = np.einsum('lmxy,lmbi->bixy',t2_1_ab,v2e_oovo_ab)
-               #s[s_bab:f_bab] += np.einsum('bixy,b->ixy',temp_1, r_a, optimize=True).reshape(-1)
-
                temp_1 = np.einsum('b,lbmi->lmi',r_a,eris_ovOO)
                s[s_bab:f_bab] += np.einsum('lmi,lmxy->ixy',temp_1, t2_1_ab, optimize=True).reshape(-1)
-
-               #t2_1_b_t = t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]]
-               #temp = np.einsum('lmp,lmbi->bip',t2_1_b_t,v2e_oovo_b)
-               #s[s_bbb:f_bbb] += 0.5*np.einsum('bip,b->ip',temp, r_b, optimize=True).reshape(-1)
 
                t2_1_b_t = t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]]
                temp = np.einsum('b,lbmi->lmi',r_b,eris_OVOO)
                temp -= np.einsum('b,mbli->lmi',r_b,eris_OVOO)
                s[s_bbb:f_bbb] += 0.5*np.einsum('lmi,lmp->ip',temp, t2_1_b_t, optimize=True).reshape(-1)
-
-               #temp_1 = np.einsum('mlyx,mlib->bixy',t2_1_ab,v2e_ooov_ab)
-               #s[s_aba:f_aba] += np.einsum('bixy,b->ixy',temp_1, r_b, optimize=True).reshape(-1)
 
                temp_1 = np.einsum('b,lbmi->mli',r_b,eris_OVoo)
                s[s_aba:f_aba] += np.einsum('mli,mlyx->ixy',temp_1, t2_1_ab, optimize=True).reshape(-1)
@@ -3028,7 +2983,8 @@ class UADCIP(UADC):
     compute_trans_moments = ip_compute_trans_moments
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
-        diag = self.ea_adc_diag()
+        if diag is None :
+            diag = self.ip_adc_diag()
         idx = None
         if ascending:
             idx = np.argsort(diag)
@@ -3103,7 +3059,6 @@ class UADCIP(UADC):
                     P[i] += np.square(np.absolute(T_bb[i]))
 
         return P
-
 
 if __name__ == '__main__':
     from pyscf import scf
