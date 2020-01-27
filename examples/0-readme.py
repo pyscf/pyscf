@@ -26,25 +26,23 @@ mol = pyscf.M(
 # Eg, to do Hartree-Fock, (1) create HF object, (2) call kernel function
 #
 mf = mol.RHF()
-print('E=%.15g' % mf.kernel())
-
+print('E(HF)=%.15g' % mf.kernel())
 
 
 #
-# The above code can be simplified using stream operations.
-# There are three stream functions ".set", ".run", ".apply" to pipe computing
-# streams.  Stream operations allows writing multiple computing tasks in one
-# line.
+# A post-HF method can be applied.
 #
-mf = pyscf.M(
-    atom = '''
-      O     0    0       0
-      h     0    -.757   .587
-     1      0    .757    .587''',
-    basis = '6-31g'
-).RHF().run()
-print('E=%.15g' % mf.e_tot)
 
+mp2 = mf.MP2().run()
+print('E(MP2)=%.15g' % mp2.e_tot)
 
-mp2 = mol.RHF().run().MP2().run()
-print('E=%.15g' % mp2.e_tot)
+cc = mf.CCSD().run()
+print('E(CCSD)=%.15g' % cc.e_tot)
+
+# More examples of pyscf input can be found in
+# gto/00-input_mole.py
+# gto/01-input_geometry.py
+# gto/04-input_basis.py
+# gto/05-input_ecp.py
+# gto/06-load_mol_from_chkfile.py
+# 1-advanced/002-input_script.py
