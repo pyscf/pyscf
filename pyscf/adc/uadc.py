@@ -19,7 +19,6 @@
 '''
 Unrestricted algebraic diagrammatic construction
 '''
-
 import time
 import numpy as np
 from pyscf import lib
@@ -77,8 +76,6 @@ def compute_amplitudes(myadc, eris):
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
-    t2_2 = (None,)
-    t1_3 = (None,)
     nocc_a = myadc._nocc[0]
     nocc_b = myadc._nocc[1]  
     nvir_a = myadc._nvir[0] 
@@ -181,9 +178,8 @@ def compute_amplitudes(myadc, eris):
         eris_vvvv = eris_vvvv.transpose(0,2,1,3)      
         eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
         t2_2_a = 0.5*np.dot(temp,eris_vvvv.T).reshape(nocc_a,nocc_a,nvir_a,nvir_a)
-        del eris_vvvv 
-        eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
-        eris_vvvv = eris_vvvv.transpose(0,2,3,1)      
+        eris_vvvv = eris_vvvv[:].reshape(nvir_a,nvir_a,nvir_a,nvir_a)
+        eris_vvvv = eris_vvvv.transpose(0,1,3,2)      
         eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
         t2_2_a -= 0.5*np.dot(temp,eris_vvvv.T).reshape(nocc_a,nocc_a,nvir_a,nvir_a)
         del eris_vvvv
@@ -202,9 +198,8 @@ def compute_amplitudes(myadc, eris):
         eris_VVVV = eris_VVVV.transpose(0,2,1,3)      
         eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
         t2_2_b = 0.5*np.dot(temp,eris_VVVV.T).reshape(nocc_b,nocc_b,nvir_b,nvir_b)
-        del eris_VVVV 
-        eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
-        eris_VVVV = eris_VVVV.transpose(0,2,3,1)      
+        eris_VVVV = eris_VVVV[:].reshape(nvir_b,nvir_b,nvir_b,nvir_b)
+        eris_VVVV = eris_VVVV.transpose(0,1,3,2)      
         eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
         t2_2_b -= 0.5*np.dot(temp,eris_VVVV.T).reshape(nocc_b,nocc_b,nvir_b,nvir_b)
         del eris_VVVV
@@ -694,7 +689,6 @@ def get_imds_ea(adc, eris=None):
     idn_occ_b = np.identity(nocc_b)
     idn_vir_a = np.identity(nvir_a)
     idn_vir_b = np.identity(nvir_b)
-
 
     if eris is None:
         eris = uadc_ao2mo.transform_integrals_incore(adc)
@@ -1599,33 +1593,33 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s_a:f_a] = np.einsum('ab,b->a',M_ab_a,r_a)
         s[s_b:f_b] = np.einsum('ab,b->a',M_ab_b,r_b)
 
-############# ADC(2) a - ibc block #########################
+############# ADC(2) a - ibc and ibc - a coupling blocks #########################
 
         eris_ovvv = uadc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
-        eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
-        eris_OVvv = uadc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
-        eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
-
         s[s_a:f_a] += 0.5*np.einsum('icab,ibc->a',eris_ovvv, r_aaa_, optimize = True)
         s[s_a:f_a] -= 0.5*np.einsum('ibac,ibc->a',eris_ovvv, r_aaa_, optimize = True)
-        s[s_a:f_a] += np.einsum('icab,ibc->a', eris_OVvv, r_bab, optimize = True)
-
-        s[s_b:f_b] += 0.5*np.einsum('icab,ibc->a',eris_OVVV, r_bbb_, optimize = True)
-        s[s_b:f_b] -= 0.5*np.einsum('ibac,ibc->a',eris_OVVV, r_bbb_, optimize = True)
-        s[s_b:f_b] += np.einsum('icab,ibc->a', eris_ovVV, r_aba, optimize = True)
-
-################ ADC(2) ibc - a block ############################
-
         temp = np.einsum('icab,a->ibc', eris_ovvv, r_a, optimize = True)
         temp -= np.einsum('ibac,a->ibc', eris_ovvv, r_a, optimize = True)
         s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
+        del eris_ovvv
+
+        eris_OVvv = uadc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
+        s[s_a:f_a] += np.einsum('icab,ibc->a', eris_OVvv, r_bab, optimize = True)
         s[s_bab:f_bab] += np.einsum('icab,a->ibc', eris_OVvv, r_a, optimize = True).reshape(-1)
-        s[s_aba:f_aba] += np.einsum('icab,a->ibc', eris_ovVV, r_b, optimize = True).reshape(-1)
+        del eris_OVvv
+
+        eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
+        s[s_b:f_b] += 0.5*np.einsum('icab,ibc->a',eris_OVVV, r_bbb_, optimize = True)
+        s[s_b:f_b] -= 0.5*np.einsum('ibac,ibc->a',eris_OVVV, r_bbb_, optimize = True)
         temp = np.einsum('icab,a->ibc', eris_OVVV, r_b, optimize = True)
         temp -= np.einsum('ibac,a->ibc', eris_OVVV, r_b, optimize = True)
         s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
-
-        del eris_ovvv, eris_OVVV, eris_ovVV, eris_OVvv
+        del eris_OVVV
+        
+        eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
+        s[s_b:f_b] += np.einsum('icab,ibc->a', eris_ovVV, r_aba, optimize = True)
+        s[s_aba:f_aba] += np.einsum('icab,a->ibc', eris_ovVV, r_b, optimize = True).reshape(-1)
+        del eris_ovVV
 
 ################ ADC(2) iab - jcd block ############################
 
@@ -1661,28 +1655,54 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                r_bbb_u[:,ab_ind_b[0],ab_ind_b[1]]= r_bbb.copy()
                r_bbb_u[:,ab_ind_b[1],ab_ind_b[0]]= -r_bbb.copy()
 
+               #eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
+               #eris_vvvv = eris_vvvv.transpose(0,2,1,3) 
+               #eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
+               #r_aaa_t = r_aaa_u.reshape(nocc_a,-1)
+               #temp_1 = np.dot(r_aaa_t,eris_vvvv.T).reshape(nocc_a,nvir_a,nvir_a)
+               #del eris_vvvv
+               #eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
+               #eris_vvvv = eris_vvvv.transpose(0,2,3,1)      
+               #eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
+               #temp_1 -= np.dot(r_aaa_t,eris_vvvv.T).reshape(nocc_a,nvir_a,nvir_a)
+               #del eris_vvvv
+               #temp_1 = temp_1[:,ab_ind_a[0],ab_ind_a[1]]
+               #s[s_aaa:f_aaa] += 0.5*temp_1.reshape(-1)
+
                eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
                eris_vvvv = eris_vvvv.transpose(0,2,1,3) 
                eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
                r_aaa_t = r_aaa_u.reshape(nocc_a,-1)
                temp_1 = np.dot(r_aaa_t,eris_vvvv.T).reshape(nocc_a,nvir_a,nvir_a)
-               del eris_vvvv
-               eris_vvvv = uadc_ao2mo.unpack_eri_2s(eris.vvvv, nvir_a)
-               eris_vvvv = eris_vvvv.transpose(0,2,3,1)      
+               eris_vvvv = eris_vvvv[:].reshape(nvir_a,nvir_a,nvir_a,nvir_a)
+               eris_vvvv = eris_vvvv.transpose(0,1,3,2)      
                eris_vvvv = eris_vvvv.copy()[:].reshape(nvir_a*nvir_a,nvir_a*nvir_a)      
                temp_1 -= np.dot(r_aaa_t,eris_vvvv.T).reshape(nocc_a,nvir_a,nvir_a)
                del eris_vvvv
                temp_1 = temp_1[:,ab_ind_a[0],ab_ind_a[1]]
                s[s_aaa:f_aaa] += 0.5*temp_1.reshape(-1)
 
+               #eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
+               #eris_VVVV = eris_VVVV.transpose(0,2,1,3)      
+               #eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
+               #r_bbb_t = r_bbb_u.reshape(nocc_b,-1)
+               #temp_1 = np.dot(r_bbb_t,eris_VVVV.T).reshape(nocc_b,nvir_b,nvir_b)
+               #del eris_VVVV
+               #eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
+               #eris_VVVV = eris_VVVV.transpose(0,2,3,1)      
+               #eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
+               #temp_1 -= np.dot(r_bbb_t,eris_VVVV.T).reshape(nocc_b,nvir_b,nvir_b)
+               #del eris_VVVV
+               #temp_1 = temp_1[:,ab_ind_b[0],ab_ind_b[1]]
+               #s[s_bbb:f_bbb] += 0.5*temp_1.reshape(-1)
+
                eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
                eris_VVVV = eris_VVVV.transpose(0,2,1,3)      
                eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
                r_bbb_t = r_bbb_u.reshape(nocc_b,-1)
                temp_1 = np.dot(r_bbb_t,eris_VVVV.T).reshape(nocc_b,nvir_b,nvir_b)
-               del eris_VVVV
-               eris_VVVV = uadc_ao2mo.unpack_eri_2s(eris.VVVV, nvir_b)
-               eris_VVVV = eris_VVVV.transpose(0,2,3,1)      
+               eris_VVVV = eris_VVVV[:].reshape(nvir_b,nvir_b,nvir_b,nvir_b)
+               eris_VVVV = eris_VVVV.transpose(0,1,3,2)      
                eris_VVVV = eris_VVVV.copy()[:].reshape(nvir_b*nvir_b,nvir_b*nvir_b)      
                temp_1 -= np.dot(r_bbb_t,eris_VVVV.T).reshape(nocc_b,nvir_b,nvir_b)
                del eris_VVVV
@@ -1764,7 +1784,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp += 0.5*np.einsum('jwyi,jxw->ixy',eris_ovVO,r_aba,optimize = True)
                s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
 
-
         if (method == "adc(3)"):
 
             #print("Calculating additional terms for adc(3)")
@@ -1774,7 +1793,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                eris_ovOO = eris.ovOO
                eris_OVoo = eris.OVoo
 
-############### ADC(3) a - ibc block ############################
+############### ADC(3) a - ibc block and ibc-a coupling blocks ########################
 
                #temp = -0.5*np.einsum('lmwz,lmaj->ajzw',t2_1_a,v2e_oovo_a)
                #temp = temp[:,:,ab_ind_a[0],ab_ind_a[1]]
@@ -1824,15 +1843,17 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_s_a_1 += -np.einsum('ljdz,jwz->lwd',t2_1_ab,r_bab,optimize=True)
 
                eris_ovvv = uadc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
-                
                s[s_a:f_a] += 0.5*np.einsum('lzd,ldza->a',temp_s_a,eris_ovvv,optimize=True)
                s[s_a:f_a] -= 0.5*np.einsum('lzd,lazd->a',temp_s_a,eris_ovvv,optimize=True)
                s[s_a:f_a] -= 0.5*np.einsum('lwd,ldwa->a',temp_s_a_1,eris_ovvv,optimize=True)
                s[s_a:f_a] += 0.5*np.einsum('lwd,lawd->a',temp_s_a_1,eris_ovvv,optimize=True)
 
-               del eris_ovvv
+               temp_1_1 = np.einsum('ldxb,b->lxd', eris_ovvv,r_a,optimize=True)
+               temp_1_1 -= np.einsum('lbxd,b->lxd', eris_ovvv,r_a,optimize=True)
 
-               eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
+               temp_1_2 = np.einsum('ldyb,b->lyd', eris_ovvv,r_a,optimize=True)
+               temp_1_2 -= np.einsum('lbyd,b->lyd', eris_ovvv,r_a,optimize=True)
+               del eris_ovvv
 
                temp_s_b = np.zeros_like(r_aba)
                temp_s_b = np.einsum('jlwd,jzw->lzd',t2_1_b,r_bbb_u,optimize=True)
@@ -1842,15 +1863,20 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_s_b_1 = -np.einsum('jlzd,jwz->lwd',t2_1_b,r_bbb_u,optimize=True)
                temp_s_b_1 += -np.einsum('jlzd,jwz->lwd',t2_1_ab,r_aba,optimize=True)
 
+               eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
                s[s_b:f_b] += 0.5*np.einsum('lzd,ldza->a',temp_s_b,eris_OVVV,optimize=True)
                s[s_b:f_b] -= 0.5*np.einsum('lzd,lazd->a',temp_s_b,eris_OVVV,optimize=True)
                s[s_b:f_b] -= 0.5*np.einsum('lwd,ldwa->a',temp_s_b_1,eris_OVVV,optimize=True)
                s[s_b:f_b] += 0.5*np.einsum('lwd,lawd->a',temp_s_b_1,eris_OVVV,optimize=True)
 
+               temp_1_3 = np.einsum('ldxb,b->lxd', eris_OVVV,r_b,optimize=True)
+               temp_1_3 -= np.einsum('lbxd,b->lxd', eris_OVVV,r_b,optimize=True)
+
+               temp_1_4 = np.einsum('ldyb,b->lyd', eris_OVVV,r_b,optimize=True)
+               temp_1_4 -= np.einsum('lbyd,b->lyd', eris_OVVV,r_b,optimize=True)
                del eris_OVVV
 
                eris_OVvv = uadc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
-    
                temp_1 = np.zeros_like(r_bab)
                temp_1 = np.einsum('jlwd,jzw->lzd',t2_1_ab,r_aaa_u,optimize=True)
                temp_1 += np.einsum('jlwd,jzw->lzd',t2_1_b,r_bab,optimize=True)
@@ -1867,10 +1893,15 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_2 = -np.einsum('jldz,jzw->lwd',t2_1_ab,r_aba,optimize=True)
                s[s_b:f_b] += 0.5*np.einsum('lwd,lawd->a',temp_2,eris_OVvv,optimize=True)
 
+               temp_2_1 = np.einsum('ldxb,b->lxd', eris_OVvv,r_a,optimize=True)
+               temp_2_2 = np.einsum('ldyb,b->lyd', eris_OVvv,r_a,optimize=True)
+
+               temp  = -np.einsum('lbyd,b->lyd',eris_OVvv,r_b,optimize=True)
+               temp_1= -np.einsum('lyd,ildx->ixy',temp,t2_1_ab,optimize=True)
+               s[s_aba:f_aba] -= temp_1.reshape(-1)
                del eris_OVvv
 
                eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
-
                temp_a = t2_1_ab.transpose(0,3,1,2).copy()
                temp_b = temp_a.reshape(nocc_a*nvir_b,nocc_b*nvir_a)
                r_bab_t = r_bab.reshape(nocc_b*nvir_a,-1)
@@ -1888,20 +1919,29 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                eris_ovVV = eris_ovVV.transpose(0,2,1,3)
                eris_ovVV = eris_ovVV.copy()[:].reshape(nocc_a*nvir_b*nvir_a,-1)
                s[s_b:f_b] += 0.5*np.dot(temp_a,eris_ovVV)
-               del eris_ovVV
-
-               eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
+               #del eris_ovVV
+               #eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
 
                temp_1 = np.zeros_like(r_bab)
                temp_1 = -np.einsum('ljdz,jwz->lwd',t2_1_ab,r_bbb_u,optimize=True)
                temp_1 += -np.einsum('jlzd,jwz->lwd',t2_1_a,r_aba,optimize=True)
                temp_a = temp_1.reshape(-1)
-               eris_ovVV = eris_ovVV.transpose(0,2,1,3) 
-               eris_ovVV = eris_ovVV.copy()[:].reshape(nocc_a*nvir_b*nvir_a,-1)
+               #eris_ovVV = eris_ovVV.transpose(0,2,1,3) 
+               #eris_ovVV = eris_ovVV.copy()[:].reshape(nocc_a*nvir_b*nvir_a,-1)
                s[s_b:f_b] -= 0.5*np.dot(temp_a,eris_ovVV)
+
+               eris_ovVV = eris_ovVV[:].reshape(nocc_a, nvir_b, nvir_a, nvir_b)
+               eris_ovVV = eris_ovVV.transpose(0,2,1,3).copy()
+
+               temp_2_3 = np.einsum('ldxb,b->lxd', eris_ovVV,r_b,optimize=True)
+               temp_2_4 = np.einsum('ldyb,b->lyd', eris_ovVV,r_b,optimize=True)
+
+               temp  = -np.einsum('lbyd,b->lyd',eris_ovVV,r_a,optimize=True)
+               temp_1= -np.einsum('lyd,lixd->ixy',temp,t2_1_ab,optimize=True)
+               s[s_bab:f_bab] -= temp_1.reshape(-1)
                del eris_ovVV
 
-################ ADC(3) ibc - a block ############################
+######################################################################################
 
                #t2_1_a_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]
                #temp = np.einsum('lmp,lmbi->bip',t2_1_a_t,v2e_oovo_a)
@@ -1933,23 +1973,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_1 = np.einsum('b,lbmi->mli',r_b,eris_OVoo)
                s[s_aba:f_aba] += np.einsum('mli,mlyx->ixy',temp_1, t2_1_ab, optimize=True).reshape(-1)
 
-               eris_ovvv = uadc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
-               temp_1_1 = np.einsum('ldxb,b->lxd', eris_ovvv,r_a,optimize=True)
-               temp_1_1 -= np.einsum('lbxd,b->lxd', eris_ovvv,r_a,optimize=True)
-
-               temp_1_2 = np.einsum('ldyb,b->lyd', eris_ovvv,r_a,optimize=True)
-               temp_1_2 -= np.einsum('lbyd,b->lyd', eris_ovvv,r_a,optimize=True)
-               del eris_ovvv
-
-               eris_OVvv = uadc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
-               temp_2_1 = np.einsum('ldxb,b->lxd', eris_OVvv,r_a,optimize=True)
-               temp_2_2 = np.einsum('ldyb,b->lyd', eris_OVvv,r_a,optimize=True)
-
-               temp  = -np.einsum('lbyd,b->lyd',eris_OVvv,r_b,optimize=True)
-               temp_1= -np.einsum('lyd,ildx->ixy',temp,t2_1_ab,optimize=True)
-               s[s_aba:f_aba] -= temp_1.reshape(-1)
-               del eris_OVvv
-
                temp  = np.einsum('lxd,ilyd->ixy',temp_1_1,t2_1_a,optimize=True)
                temp += np.einsum('lxd,ilyd->ixy',temp_2_1,t2_1_ab,optimize=True)
                s[s_aaa:f_aaa] += temp[:,ab_ind_a[0],ab_ind_a[1] ].reshape(-1)
@@ -1961,23 +1984,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp  = np.einsum('lxd,lidy->ixy',temp_1_1,t2_1_ab,optimize=True)
                temp  += np.einsum('lxd,ilyd->ixy',temp_2_1,t2_1_b,optimize=True)
                s[s_bab:f_bab] += temp.reshape(-1)
-
-               eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
-               temp_1_3 = np.einsum('ldxb,b->lxd', eris_OVVV,r_b,optimize=True)
-               temp_1_3 -= np.einsum('lbxd,b->lxd', eris_OVVV,r_b,optimize=True)
-
-               temp_1_4 = np.einsum('ldyb,b->lyd', eris_OVVV,r_b,optimize=True)
-               temp_1_4 -= np.einsum('lbyd,b->lyd', eris_OVVV,r_b,optimize=True)
-               del eris_OVVV
- 
-               eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
-               temp_2_3 = np.einsum('ldxb,b->lxd', eris_ovVV,r_b,optimize=True)
-               temp_2_4 = np.einsum('ldyb,b->lyd', eris_ovVV,r_b,optimize=True)
-
-               temp  = -np.einsum('lbyd,b->lyd',eris_ovVV,r_a,optimize=True)
-               temp_1= -np.einsum('lyd,lixd->ixy',temp,t2_1_ab,optimize=True)
-               s[s_bab:f_bab] -= temp_1.reshape(-1)
-               del eris_ovVV
 
                temp  = np.einsum('lxd,ilyd->ixy',temp_1_3,t2_1_b,optimize=True)
                temp += np.einsum('lxd,lidy->ixy',temp_2_3,t2_1_ab,optimize=True)
