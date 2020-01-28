@@ -640,11 +640,6 @@ class UADC(lib.StreamObject):
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
         self.mo_energy_a = mf.mo_energy[0]
         self.mo_energy_b = mf.mo_energy[1]
-        self._nocc = mf.nelec
-        self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
-        self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
-        self.mo_energy_a = mf.mo_energy[0]
-        self.mo_energy_b = mf.mo_energy[1]
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
 
@@ -2849,8 +2844,8 @@ def get_spec_factors(adc, T, U, nroots=1):
     T_a = T[0]
     T_b = T[1]
 
-    X_a = np.dot(T_a, U.T)
-    X_b = np.dot(T_b, U.T)
+    X_a = np.dot(T_a, U.T).reshape(-1,nroots)
+    X_b = np.dot(T_b, U.T).reshape(-1,nroots)
 
     P = np.einsum("pi,pi->i", X_a, X_a)
     P += np.einsum("pi,pi->i", X_b, X_b)
