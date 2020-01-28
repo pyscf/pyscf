@@ -229,6 +229,7 @@ def PipekMezey(mol, orbocc, iaos, s, exponent):
     >>> loc_orb = pm.kernel()
     '''
 
+    MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
     cs = numpy.dot(iaos.T.conj(), s)
     s_iao = numpy.dot(cs, iaos)
     iao_inv = numpy.linalg.solve(s_iao, cs)
