@@ -66,12 +66,14 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     return E, U, spec_factors
 
+
 def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     t1, t2 = myadc.compute_amplitudes(eris)
     e_corr = myadc.compute_energy(t1, t2, eris)
 
     return e_corr, t1, t2
+
 
 def compute_amplitudes(myadc, eris):
 
@@ -430,6 +432,7 @@ def compute_amplitudes(myadc, eris):
 
     return t1, t2
 
+
 def compute_energy(myadc, t1, t2, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -574,6 +577,7 @@ def compute_energy(myadc, t1, t2, eris):
 
     return e_corr
 
+
 class UADC(lib.StreamObject):
     '''Ground state calculations
 
@@ -699,6 +703,7 @@ class UADC(lib.StreamObject):
     
     def ip_adc(self, nroots=1, guess=None):
         return UADCIP(self).kernel(nroots, guess)
+
 
 def get_imds_ea(adc, eris=None):
 
@@ -1021,7 +1026,8 @@ def get_imds_ea(adc, eris=None):
     M_ab = (M_ab_a, M_ab_b)
 
     return M_ab
-     
+
+
 def get_imds_ip(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -1342,6 +1348,7 @@ def get_imds_ip(adc, eris=None):
 
     return M_ij
 
+
 def ea_adc_diag(adc,M_ab=None):
 
     if M_ab is None:
@@ -1430,6 +1437,7 @@ def ea_adc_diag(adc,M_ab=None):
 
     return diag
 
+
 def ip_adc_diag(adc,M_ij=None):
    
     if M_ij is None:
@@ -1517,6 +1525,7 @@ def ip_adc_diag(adc,M_ij=None):
 
     diag = -diag
     return diag
+
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
 
@@ -1992,6 +2001,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         return s
 
     return sigma_
+
 
 def ip_adc_matvec(adc, M_ij=None, eris=None):
 
@@ -2480,6 +2490,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
     return sigma_
 
+
 def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -2644,6 +2655,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
                 T[s_b:f_b] -= 0.25*np.einsum('lkca,lkc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
                 T[s_b:f_b] -= 0.25*np.einsum('klca,klc->a',t2_1_ab, t2_2_ab[:,:,:,(orb-nocc_b)],optimize = True)
     return T
+
 
 def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
@@ -2941,7 +2953,8 @@ class UADCEA(UADC):
         matvec = self.matvec(imds, eris)
         #matvec = lambda x: self.matvec()
         return matvec, diag
-    
+
+
 class UADCIP(UADC):
     '''unrestricted ADC for IP energies and spectroscopic amplitudes
 
