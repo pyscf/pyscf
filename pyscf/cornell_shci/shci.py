@@ -116,12 +116,12 @@ def cleanup(shciobj, remove_wf=False):
              ]
     if remove_wf:
         wfn_files = glob.glob(os.path.join(shciobj.runtimedir, 'wf_*'))
-        files.extend(wfn_files)
-
+        for f in wfn_files:
+            os.remove(f)
+    
     for f in files:
         if os.path.isfile(os.path.join(shciobj.runtimedir, f)):
             os.remove(os.path.join(shciobj.runtimedir, f))
-
 
 class SHCI(lib.StreamObject):
     r'''SHCI program interface and object to hold SHCI program input
@@ -246,7 +246,7 @@ class SHCI(lib.StreamObject):
         if restart is None:
             restart = self.restart
         state_id = min(self.config['eps_vars'])
-
+        
         if restart or ci0 is not None:
             if self.verbose >= logger.DEBUG1:
                 logger.debug1(self, 'restart was set. wf is read from wf_eps* file.')
@@ -360,7 +360,20 @@ class SHCI(lib.StreamObject):
 
     cleanup = cleanup
 
-
+class NpEncoder(json.JSONEncoder):
+    """
+    Used for dump numpy objects in python3.
+    """
+    def default(self, obj):
+        if isinstance(obj, numpy.integer):
+            return int(obj)
+        elif isinstance(obj, numpy.floating):
+            return float(obj)
+        elif isinstance(obj, numpy.ndarray):
+            return obj.tolist()
+        else:
+            return super(NpEncoder, self).default(obj)
+    
 def write_config(shciobj, nelec, config):
     conf = shciobj.config.copy()
 
@@ -385,10 +398,9 @@ def write_config(shciobj, nelec, config):
 
     if config.get('tol', None) is not None:
         conf['target_error'] = config['tol'] * 5000
-
+    
     with open(os.path.join(shciobj.runtimedir, shciobj.configfile), 'w') as f:
-        json.dump(conf, f, indent=2)
-
+        json.dump(conf, f, indent=2, cls=NpEncoder)
 
 def writeIntegralFile(shciobj, h1eff, eri_cas, ncas, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):

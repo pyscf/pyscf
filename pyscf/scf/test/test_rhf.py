@@ -670,7 +670,7 @@ H     0    0.757    0.587'''
         mf1.opt.prescreen = 'CVHFnoscreen'
         self.assertEqual(mf1.opt.prescreen, scf._vhf._fpointer('CVHFnoscreen').value)
 
-    def test_get_vk(self):
+    def test_get_vk_direct_scf(self):
         numpy.random.seed(1)
         nao = mol.nao
         dm = numpy.random.random((nao,nao))
@@ -678,7 +678,7 @@ H     0    0.757    0.587'''
 
         mf1 = scf.RHF(mol)
         mf1.max_memory = 0
-        vk2 = mf1.get_k(mol, dm)
+        vk2 = mf1.get_k(mol, dm, hermi=0)
         self.assertAlmostEqual(abs(vk1 - vk2).max(), 0, 12)
         self.assertAlmostEqual(lib.finger(vk1), -12.365527167710301, 12)
 

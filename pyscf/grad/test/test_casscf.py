@@ -175,7 +175,7 @@ class KnownValues(unittest.TestCase):
             mc = mcscf.CASSCF(mf.x2c(), 4, 4).run()
             gscan = mc.nuc_grad_method().as_scanner()
             g1 = gscan(mol)[1]
-            self.assertAlmostEqual(lib.finger(g1), -0.070281684620797591, 7)
+            self.assertAlmostEqual(lib.finger(g1), -0.07027493570511917, 7)
 
             mcs = mcscf.CASSCF(mf, 4, 4).as_scanner().x2c()
             e1 = mcs('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')

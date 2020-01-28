@@ -1,0 +1,6 @@
+ precision of variables (internal):
+                           blas_int      4
+                          fftw_real      8
+                            mpi_int      4
+                         siesta_int      4
+                        fortran_int      4

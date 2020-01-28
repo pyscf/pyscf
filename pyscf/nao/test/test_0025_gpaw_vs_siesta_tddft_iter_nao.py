@@ -76,7 +76,7 @@ def run_tddft_iter(calculator, label, freq):
 class KnowValues(unittest.TestCase):
 
   def test_gpaw_vs_siesta_tddft_iter(self):
-    """ init ao_log_c with it radial orbitals from GPAW """
+    """ init ao_log with it radial orbitals from GPAW """
 
     print('00025   :  just do nothing...')
     return 

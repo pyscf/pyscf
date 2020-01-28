@@ -5,98 +5,77 @@ from scipy.linalg import blas
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import math
   
-def chi0_mv(self, v, comega=1j*0.0):
+def chi0_mv(self, dvin, comega=1j*0.0, dnout=None):
     """
         Apply the non-interacting response function to a vector
         Input Parameters:
         -----------------
             self : tddft_iter or tddft_tem class
-            v: vector describing the pertiurbation ??
+            sp2v : vector describing the effective perturbation [spin*product] --> value
             comega: complex frequency
     """
+    if dnout is None: dnout = np.zeros_like(dvin, dtype=self.dtypeComplex)
 
-    vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
-    vext[:, 0] = v.real
-    vext[:, 1] = v.imag
+    sp2v  = dvin.reshape((self.nspin,self.nprod))
+    sp2dn = dnout.reshape((self.nspin,self.nprod))
+    
+    for s in range(self.nspin):
+      vdp = csr_matvec(self.cc_da, sp2v[s].real)  # real part
+      sab = (vdp*self.v_dab).reshape((self.norbs,self.norbs))
+    
+      nb2v = self.gemm(1.0, self.xocc[s], sab)
+      nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s].T)
+    
+      vdp = csr_matvec(self.cc_da, sp2v[s].imag)  # imaginary
+      sab = (vdp*self.v_dab).reshape((self.norbs, self.norbs))
+      
+      nb2v = self.gemm(1.0, self.xocc[s], sab)
+      nm2v_im = self.gemm(1.0, nb2v, self.xvrt[s].T)
 
-    # real part
-    vdp = csr_matvec(self.cc_da, vext[:, 0])
-    sab = (vdp*self.v_dab).reshape([self.norbs,self.norbs])
+      vs,nf = self.vstart[s],self.nfermi[s]
     
-    nb2v = self.gemm(1.0, self.xocc[0], sab)
-    #nb2v_bak = np.copy(nb2v)
-    nm2v_re = self.gemm(1.0, nb2v, self.xvrt[0].T)
-    #nm2v_re_bak = np.copy(nm2v_re)
-    
-    # imaginary part
-    vdp = csr_matvec(self.cc_da, vext[:, 1])
-    sab = (vdp*self.v_dab).reshape([self.norbs, self.norbs])
-
-    nb2v = self.gemm(1.0, self.xocc[0], sab)
-    nm2v_im = self.gemm(1.0, nb2v, self.xvrt[0].T)
-    
-    if self.use_numba:
-      self.div_eigenenergy_numba(self.ksn2e[0,0], self.ksn2f[0,0], self.nfermi[0], self.vstart[0], comega, 
-        nm2v_re, nm2v_im)
-    else:
-      #print('looping over n,m')
-      for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
-        for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-          #print(n,m,fn-fm)
-          nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
-          nm2v = nm2v * (fn - fm) * \
+      if self.use_numba:
+        self.div_numba(self.ksn2e[0,s], self.ksn2f[0,s], nf, vs, comega, nm2v_re, nm2v_im)
+      else:
+        for n,(en,fn) in enumerate(zip(self.ksn2e[0,s,:nf], self.ksn2f[0,s,:nf])):
+          for m,(em,fm) in enumerate(zip(self.ksn2e[0,s,vs:],self.ksn2f[0,s,vs:])):
+            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+            nm2v = nm2v * (fn - fm) * \
               ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-          nm2v_re[n, m] = nm2v.real
-          nm2v_im[n, m] = nm2v.imag
+            nm2v_re[n, m] = nm2v.real
+            nm2v_im[n, m] = nm2v.imag
 
-      #print('padding m<n, which can be also detected as negative occupation difference ')
-      for n in range(self.vstart+1, self.nfermi):
-        for m in range(n-self.vstart):
-          nm2v_re[n, m] = 0.0
-          nm2v_im[n, m] = 0.0
+        for n in range(vs+1,nf): #padding m<n i.e. negative occupations' difference
+          for m in range(n-vs):  nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
 
-    # real part
-    nb2v = self.gemm(1.0, nm2v_re, self.xvrt[0])
-    ab2v = self.gemm(1.0, self.xocc[0].T, nb2v).reshape(self.norbs*self.norbs)
+      nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s]) # real part
+      ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
+      vdp = csr_matvec(self.v_dab, ab2v)
+      chi0_re = vdp*self.cc_da
 
-#    ssum = ab2v.sum()
-#    if math.isnan(ssum):
-#      print(__name__, 'ssum', ssum)
-#      print('self.xocc[0]', self.xocc[0].sum(), self.xocc[0].dtype, self.xocc[0].shape)
-#      print('nb2v.sum()', nb2v.sum(), nb2v.dtype, nb2v.shape)
-#      print('ab2v.sum()', ab2v.sum(), ab2v.dtype, ab2v.shape)
-#      print('comega ', comega)
-#      print('self.ksn2e')
-#      print(self.ksn2e)
-#      print('nm2v_re_bak.sum()', nm2v_re_bak.sum())
-#      print('nb2v_bak.sum()', nb2v_bak.sum())
-#      print('self.cc_da.sum()', self.cc_da.sum())      
-#      print('vext.sum()', vext.sum())
-#      print(v.shape, v.dtype)
-#      raise RuntimeError('ssum == np.nan')
+      nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s]) # imag part
+      ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
+      vdp = csr_matvec(self.v_dab, ab2v)    
+      chi0_im = vdp*self.cc_da
+      
+      sp2dn[s] = chi0_re + 1.0j*chi0_im
+      
+    return dnout
 
-    vdp = csr_matvec(self.v_dab, ab2v)
-    
-    chi0_re = vdp*self.cc_da
-
-
-    # imag part
-    nb2v = self.gemm(1.0, nm2v_im, self.xvrt[0])
-    ab2v = self.gemm(1.0, self.xocc[0].T, nb2v).reshape(self.norbs*self.norbs)
-    vdp = csr_matvec(self.v_dab, ab2v)
-    
-    chi0_im = vdp*self.cc_da
-
-    return chi0_re + 1.0j*chi0_im
+#
+#
+#
 
 def chi0_mv_gpu(self, v, comega=1j*0.0):
 #        tddft_iter_gpu, v, cc_da, v_dab, no,
 #        comega=1j*0.0, dtype=np.float32, cdtype=np.complex64):
+# check with nspin=2
     """
         Apply the non-interacting response function to a vector using gpu for
         matrix-matrix multiplication
     """
-
+    assert self.nspin==1
+    
     if self.dtype != np.float32:
         print(self.dtype)
         raise ValueError("GPU version only with single precision")

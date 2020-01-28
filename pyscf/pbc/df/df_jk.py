@@ -149,6 +149,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
+
+    if exxdiv is not None and exxdiv != 'ewald':
+        log.warn('GDF does not support exxdiv %s. '
+                 'exxdiv needs to be "ewald" or None', exxdiv)
+        raise RuntimeError('GDF does not support exxdiv %s' % exxdiv)
+
     t1 = (time.clock(), time.time())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:

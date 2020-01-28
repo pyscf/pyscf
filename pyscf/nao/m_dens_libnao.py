@@ -32,7 +32,7 @@ def dens_libnao(crds, nspin):
   nc = crds.shape[0]
   crds_cp = require(crds, dtype=c_double, requirements='C')
   dens = require( zeros((nc, nspin)), dtype=c_double, requirements='CW')
-  
+
   libnao.dens_libnao(
     crds_cp.ctypes.data_as(POINTER(c_double)),
     c_int64(nc),

@@ -15,10 +15,10 @@
 from __future__ import division, print_function
 import numpy as np
 try:
-    import numba
-    use_numba = True
+  import numba
+  use_numba = True
 except:
-    use_numba = False
+  use_numba = False
 
 """
 well described here  http://www.netlib.org/lapack/lug/node123.html
@@ -67,27 +67,37 @@ def size2dim(pack_size):
 def ij2pack_u(i,j):
   ma = max(i,j)
   return ma*(ma+1)//2+min(i,j)
-
+  
 
 def ij2pack_l(i,j,dim):
   mi = min(i,j)
   return max(i,j)+((2*dim-mi-1)*mi)//2
 
-#
-#
-#
-def triu_indices(dim):
-    ind = np.zeros((dim, dim), dtype=np.int)
-    ind.fill(-1)
 
-    if use_numba:
-        from pyscf.nao.m_numba_utils import triu_indices_numba
-        triu_indices_numba(ind, dim)
-    else:
-        count = 0
-        for i in range(dim):
-            for j in range(i, dim):
-                ind[i, j] = count
-                count += 1
-
-    return ind
+if use_numba:
+  @numba.jit(nopython=True)
+  def cp_block_pack_u(bmat, s1, f1, s2, f2, gmat, add=False):
+    if add:
+      for i in range(s1,f1):
+        for j in range(s2,f2):
+          if j>i: continue
+          ma = max(i,j)
+          gmat[ma*(ma+1)//2+min(i,j)] += bmat[i-s1, j-s2]
+    else:  
+      for i in range(s1,f1):
+        for j in range(s2,f2):
+          ma = max(i,j)
+          gmat[ma*(ma+1)//2+min(i,j)] = bmat[i-s1, j-s2]  
+else:
+  def cp_block_pack_u(bmat, s1, f1, s2, f2, gmat, add=False):
+    if add:
+      for i in range(s1,f1):
+        for j in range(s2,f2):
+          if j>i: continue
+          ma = max(i,j)
+          gmat[ma*(ma+1)//2+min(i,j)] += bmat[i-s1, j-s2]
+    else:  
+      for i in range(s1,f1):
+        for j in range(s2,f2):
+          ma = max(i,j)
+          gmat[ma*(ma+1)//2+min(i,j)] = bmat[i-s1, j-s2]  

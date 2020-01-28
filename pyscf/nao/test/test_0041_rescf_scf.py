@@ -8,8 +8,9 @@ class KnowValues(unittest.TestCase):
     """ reSCF """
     
     dname = os.path.dirname(os.path.abspath(__file__))
-    myhf = scf(label='water', cd=dname)
+    myhf = scf(label='water', cd=dname, verbosity=0, kmat_timing=0.0, kmat_algo='ac_vertex_fm')
     myhf.kernel_scf()
+    #print('myhf.kmat_timing ', myhf.kmat_timing)
     #self.assertAlmostEqual(myhf.mo_energy[0,0,0], -1.3274696934511327)
     #self.assertAlmostEqual(myhf.mo_energy[0,0,22], 3.9299990077335423)
 

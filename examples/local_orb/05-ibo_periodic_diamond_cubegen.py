@@ -42,7 +42,7 @@ a = lo.iao.iao(cell, mo_occ)
 # Orthogonalize IAO
 a = lo.vec_lowdin(a, mf.get_ovlp())
 #ibo must take the orthonormalized IAOs
-ibo = lo.ibo.ibo(cell, mo_occ, a)
+ibo = lo.ibo.ibo(cell, mo_occ, iaos=a)
 
 
 '''

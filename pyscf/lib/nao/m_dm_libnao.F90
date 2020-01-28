@@ -53,7 +53,6 @@ subroutine init_dm_libnao(cbask2dm_in, nreim, no, ns, nkp, alloc_stat) bind(c, n
   allocate(cbask2dm(nreim,no,no,ns,nkp), stat=alloc_stat)
   nsize = nreim*no*no*ns*nkp
   if(alloc_stat==0) call dcopy(nsize, cbask2dm_in,1, cbask2dm,1)
-
 end subroutine ! init_dm_libnao
 
 

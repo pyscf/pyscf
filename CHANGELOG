@@ -1,4 +1,4 @@
-PySCF 1.7.0 (2019-?-?)
+PySCF 1.7.0 (2020-1-1)
 ----------------------
 * Added
   - k-CCSD density matrix
@@ -13,26 +13,47 @@ PySCF 1.7.0 (2019-?-?)
   - KCCSD function spatial2spin that transforms amplitudes in spatial orbital
     representation to that in spin-orbital representation
   - DOCI solver, DOCI-CASCI, and DOCI-CASSCf
-  - Support of RSH functionals in DF and sgX methods
+  - Support of RSH functionals in methods DF and sgX
   - Add RSH functionals for all PBC DFT methods
-  - Semiempirical method MINDO/3
+  - Semi-empirical method MINDO/3
   - Analytical nuclear gradients with density-fitting
   - Analytical nuclear hessian with density-fitting
   - Thermo-chemistry and frequency analysis
   - Huckel HF/KS initial guess
   - QM/MM with implicit solvent
+  - Spin-Orbit ECP integrals
+  - Geometry optimization for state-average MCSCF method
+  - cube file parser
+  - Orbital localization methods VVO and LIVVO
 * Improved
   - Optimized regular get_j and density-fitting get_j
   - Faster k-CCSD(T)
   - Davidson diagonalization for multi-roots
   - memory usage in CCSD
   - Molecular orientation does not need to be changed when symmetry is enabled
+  - Performance of density fitting initialization
+  - Performance of JK-build function
+  - Using direct_spin1 as the default FCI solver
+  - Performance of SOSCF method (by using the direct-SCF technique)
+  - Performance of semi-incore AO-MO integral transformation
 * Bugfix
   - Carbon ANO data
   - Initial guess for EOM-KCCSD
-  - state-averge CASSCF analytical nuclear gradietns
+  - state-average CASSCF analytical nuclear gradients
   - ddCOSMO self-consistency (as fast solvent) for post-SCF methods
-  - range-separation paramter omega customization in RSH functionals
+  - range-separation parameter omega customization in RSH functionals
+
+
+PySCF 1.6.6 (2020-1-1)
+----------------------
+* Improved
+  - Sanity check for Wigner-Seitz cell exchange kernel
+  - The linear dependency treatment for X2C uncontracted basis
+  - Energy cutoff estimation for non-orthogonal lattice
+  - Tolerance in geometry when detecting point group symmetry
+* Fixed
+  - TDDFT symmetry representation
+  - cube file when containing ECP
 
 
 PySCF 1.6.5 (2019-11-17)
@@ -40,7 +61,7 @@ PySCF 1.6.5 (2019-11-17)
 * Added
   - spin_square method for UCCSD
 * Improved
-  - Handling ".xc = None" (run DFT without exchage)
+  - Handling ".xc = None" (run DFT without exchange)
 * Fixed
   - Unit conversion bug between eV and wavenumber in TDDFT
   - KGHF orbital gradients
@@ -126,7 +147,7 @@ PySCF 1.6.1 (2019-03-15)
   - SCF summary in the output message
 * Bugfix
   - Solvent object initialization in SCF scanner function
-  - GHF bug fix
+  - GHF get_jk function
   - QM/MM object initialization in SCF scanner function
   - Missing virtual orbitals in MCSCF project_init_guess function
   - MINAO basis data

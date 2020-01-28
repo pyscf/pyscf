@@ -39,5 +39,14 @@ class KnowValues(unittest.TestCase):
     np.savetxt('vna_lih_0004.txt', np.row_stack((sgrid, vna)).T)
     ref = np.loadtxt(dname+'/vna_lih_0004.txt-ref')
     for r,d in zip(ref[:,1],vna): self.assertAlmostEqual(r,d)
+
+  def test_water_vkb(self):
+    """ This  """
+    from numpy import einsum, array
+    import os
+    dname = os.path.dirname(os.path.abspath(__file__))
+    sv = nao(label='water', cd=dname)
+
+
     
 if __name__ == "__main__": unittest.main()

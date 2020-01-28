@@ -8,8 +8,6 @@
 #include <cuda_runtime.h>
 #include <cuComplex.h>
 #include <cublas_v2.h>
-#include <helper_functions.h>
-#include <helper_cuda.h>
 
 #include <cuda_profiler_api.h>
 
@@ -53,7 +51,7 @@ float sum_array_gpu(float *dev, int N1, int N2)
 {
   float *temp;
   temp = (float*) malloc(sizeof(float)*N1*N2);
-  checkCudaErrors(cudaMemcpy( temp, dev, sizeof(float) * N1*N2, cudaMemcpyDeviceToHost));
+  cudaMemcpy( temp, dev, sizeof(float) * N1*N2, cudaMemcpyDeviceToHost);
   
   float sum = sum_float_vec(temp, N1*N2);
   free(temp);
@@ -67,7 +65,7 @@ void print_mat_gpu(float *dev, int N1, int N2)
   int i, j;
 
   temp = (float*) malloc(sizeof(float)*N1*N2);
-  checkCudaErrors(cudaMemcpy( temp, dev, sizeof(float) * N1*N2, cudaMemcpyDeviceToHost));
+  cudaMemcpy( temp, dev, sizeof(float) * N1*N2, cudaMemcpyDeviceToHost);
   
   printf("mat = \n");
   for (i = 0; i< N1; i++)
@@ -197,50 +195,50 @@ extern "C" void init_tddft_iter_gpu(float *X4, int norbs_in, float *ksn2e,
 
   // For pascal GPU, the cudaMallocManaged() could probably allow to run larger systems.
   // Need to look for more informations about this!!
-  checkCudaErrors(cublasCreate(&handle_cublas_real));
-  checkCudaErrors(cublasCreate(&handle_cublas_imag));
+  cublasCreate(&handle_cublas_real);
+  cublasCreate(&handle_cublas_imag);
 
-  checkCudaErrors(cudaStreamCreate(&stream_mem));
-  checkCudaErrors(cudaStreamCreate(&stream_real));
-  checkCudaErrors(cudaStreamCreate(&stream_imag));
+  cudaStreamCreate(&stream_mem);
+  cudaStreamCreate(&stream_real);
+  cudaStreamCreate(&stream_imag);
 
-  checkCudaErrors(cublasSetStream(handle_cublas_real, stream_real));
-  checkCudaErrors(cublasSetStream(handle_cublas_imag, stream_imag));
+  cublasSetStream(handle_cublas_real, stream_real);
+  cublasSetStream(handle_cublas_imag, stream_imag);
 
-  checkCudaErrors(cudaMalloc( (void **)&ksn2e_d, sizeof(float) * norbs));
-  checkCudaErrors(cudaMalloc( (void **)&ksn2f_d, sizeof(float) * norbs));
-  checkCudaErrors(cudaMalloc( (void **)&X4_d, sizeof(float) * norbs*norbs));
+  cudaMalloc( (void **)&ksn2e_d, sizeof(float) * norbs);
+  cudaMalloc( (void **)&ksn2f_d, sizeof(float) * norbs);
+  cudaMalloc( (void **)&X4_d, sizeof(float) * norbs*norbs);
   
-  checkCudaErrors(cudaMalloc( (void **)&sab_d, sizeof(float) * norbs*norbs));
+  cudaMalloc( (void **)&sab_d, sizeof(float) * norbs*norbs);
 
-  checkCudaErrors(cudaMalloc( (void **)&nb2v_d, sizeof(float) * nfermi*norbs));
-  checkCudaErrors(cudaMalloc( (void **)&nm2v_re_d, sizeof(float) * nfermi*nvirt));
-  checkCudaErrors(cudaMalloc( (void **)&nm2v_im_d, sizeof(float) * nfermi*nvirt));
+  cudaMalloc( (void **)&nb2v_d, sizeof(float) * nfermi*norbs);
+  cudaMalloc( (void **)&nm2v_re_d, sizeof(float) * nfermi*nvirt);
+  cudaMalloc( (void **)&nm2v_im_d, sizeof(float) * nfermi*nvirt);
 
-  checkCudaErrors(cudaMemcpy( X4_d, X4, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice));
+  cudaMemcpy( X4_d, X4, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice);
   //checkCudaErrors(cublasSetMatrix(norbs, norbs, sizeof(float), X4, norbs, X4_d, norbs));
-  checkCudaErrors(cudaMemcpy( ksn2e_d, ksn2e, sizeof(float) * norbs, cudaMemcpyHostToDevice));
-  checkCudaErrors(cudaMemcpy( ksn2f_d, ksn2f, sizeof(float) * norbs, cudaMemcpyHostToDevice));
+  cudaMemcpy( ksn2e_d, ksn2e, sizeof(float) * norbs, cudaMemcpyHostToDevice);
+  cudaMemcpy( ksn2f_d, ksn2f, sizeof(float) * norbs, cudaMemcpyHostToDevice);
 
 }
 
 extern "C" void free_device()
 {
 
-  checkCudaErrors(cudaFree(X4_d));
-  checkCudaErrors(cudaFree(ksn2e_d));
-  checkCudaErrors(cudaFree(ksn2f_d));
+  cudaFree(X4_d);
+  cudaFree(ksn2e_d);
+  cudaFree(ksn2f_d);
 
-  checkCudaErrors(cudaFree(sab_d));
-  checkCudaErrors(cudaFree(nb2v_d));
-  checkCudaErrors(cudaFree(nm2v_re_d));
-  checkCudaErrors(cudaFree(nm2v_im_d));
+  cudaFree(sab_d);
+  cudaFree(nb2v_d);
+  cudaFree(nm2v_re_d);
+  cudaFree(nm2v_im_d);
 
-  checkCudaErrors(cublasDestroy(handle_cublas_real));
-  checkCudaErrors(cublasDestroy(handle_cublas_imag));
-  checkCudaErrors(cudaStreamDestroy(stream_mem));
-  checkCudaErrors(cudaStreamDestroy(stream_real));
-  checkCudaErrors(cudaStreamDestroy(stream_imag));
+  cublasDestroy(handle_cublas_real);
+  cublasDestroy(handle_cublas_imag);
+  cudaStreamDestroy(stream_mem);
+  cudaStreamDestroy(stream_real);
+  cudaStreamDestroy(stream_imag);
   cudaProfilerStop();
 }
 
@@ -253,40 +251,40 @@ extern "C" void apply_rf0_device(float *sab_real, float *sab_imag,
   dim3 dimGrid(grid_size[0], grid_size[1]);
   
   // real part first
-  checkCudaErrors(cudaMemcpy( sab_d, sab_real, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice));
+  cudaMemcpy( sab_d, sab_real, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice);
 
-  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
-        X4_d, norbs, &beta, nb2v_d, norbs));
-  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
-       norbs, &beta, nm2v_re_d, nvirt));
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+        X4_d, norbs, &beta, nb2v_d, norbs);
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+       norbs, &beta, nm2v_re_d, nvirt);
 
   // imaginary part
-  checkCudaErrors(cudaMemcpy( sab_d, sab_imag, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice));
+  cudaMemcpy( sab_d, sab_imag, sizeof(float) * norbs*norbs, cudaMemcpyHostToDevice);
   
-  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
-        X4_d, norbs, &beta, nb2v_d, norbs));
-  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
-        norbs, &beta, nm2v_im_d, nvirt));
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
+        X4_d, norbs, &beta, nb2v_d, norbs);
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_T, CUBLAS_OP_N, nvirt, nfermi, norbs, &alpha, &X4_d[vstart*norbs], norbs, nb2v_d,
+        norbs, &beta, nm2v_im_d, nvirt);
 
   // Normalization!!
   normalize_energy_gpu<<<dimGrid, dimBlock>>>(ksn2e_d, ksn2f_d, omega_re, omega_im, 
       nm2v_re_d, nm2v_im_d, nfermi, norbs, nvirt, vstart);
 
   // Going back: real part first
-  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_re_d,
-        nvirt, &beta, nb2v_d, norbs));
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, &X4_d[vstart*norbs], norbs, nm2v_re_d,
+        nvirt, &beta, nb2v_d, norbs);
 
   cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, nb2v_d, norbs, X4_d,
         norbs, &beta, sab_d, norbs);
-  checkCudaErrors(cudaMemcpy( sab_real, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
+  cudaMemcpy( sab_real, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost);
 
   //imaginary part
-  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, 
-        &X4_d[vstart*norbs], norbs, nm2v_im_d, nvirt, &beta, nb2v_d, norbs));
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, nvirt, &alpha, 
+        &X4_d[vstart*norbs], norbs, nm2v_im_d, nvirt, &beta, nb2v_d, norbs);
 
-  checkCudaErrors(cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, 
-        nb2v_d, norbs, X4_d, norbs, &beta, sab_d, norbs));
-  checkCudaErrors(cudaMemcpy( sab_imag, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost));
+  cublasSgemm(handle_cublas_real, CUBLAS_OP_N, CUBLAS_OP_T, norbs, norbs, nfermi, &alpha, 
+        nb2v_d, norbs, X4_d, norbs, &beta, sab_d, norbs);
+  cudaMemcpy( sab_imag, sab_d, sizeof(float) * norbs*norbs, cudaMemcpyDeviceToHost);
 
 }
 

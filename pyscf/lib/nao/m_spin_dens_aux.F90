@@ -165,7 +165,12 @@ subroutine comp_coeff(sda, coeff, k, rho)
   ! interpolation
   real(8) :: logr, dy, dy2, dym3;
 
-  logr= log(rho);
+  if (rho<=0.0D0) then
+    logr=log(1d-3) ! this depends on the radial grid! Need to use phi / r^l !
+  else
+    logr=log(rho)
+  endif
+
   k=int((logr-sda%rho_min_jt)*sda%one_over_dr_jt+1)
   k=max(k,3)
   k=min(k,sda%nr-3);
