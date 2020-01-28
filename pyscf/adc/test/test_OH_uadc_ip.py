@@ -91,6 +91,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.5188529241094367, 6)
         self.assertAlmostEqual(p[2], 0.40655844616580944, 6)
       
+    def test_ip_adc3_oneroot(self):
+  
+        myadc.method = "adc(3)"
+        e, t_amp1, t_amp2 = myadc.kernel()
+        self.assertAlmostEqual(e, -0.17616203329072194, 6)
+
+        e,v,p = myadc.ip_adc(nroots=1)
+
+        self.assertAlmostEqual(e, 0.4794423247368058, 6)
+
+        self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
+
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell molecule")
     unittest.main()
