@@ -80,10 +80,8 @@ def compute_amplitudes(myadc, eris):
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
-    nocc_a = myadc._nocc
-    nocc_b = myadc._nocc
-    nvir_a = myadc._nvir
-    nvir_b = myadc._nvir
+    nocc = myadc._nocc
+    nvir = myadc._nvir
 
     eris_oooo = eris.oooo
     eris_ovoo = eris.ovoo
@@ -92,73 +90,44 @@ def compute_amplitudes(myadc, eris):
     eris_ovvo = eris.ovvo
     eris_ovvv = eris.ovvv
 
-    e_a = myadc.mo_energy_a
-    e_b = myadc.mo_energy_b
+    e = myadc.mo_energy
 
-    d_ij_a = e_a[:nocc_a][:,None] + e_a[:nocc_a]
-    d_ij_b = e_b[:nocc_b][:,None] + e_b[:nocc_b]
-    d_ij_ab = e_a[:nocc_a][:,None] + e_b[:nocc_b]
+    d_ij = e[:nocc][:,None] + e[:nocc]
 
-    d_ab_a = e_a[nocc_a:][:,None] + e_a[nocc_a:]
-    d_ab_b = e_b[nocc_b:][:,None] + e_b[nocc_b:]
-    d_ab_ab = e_a[nocc_a:][:,None] + e_b[nocc_b:]
+    d_ab = e[nocc:][:,None] + e[nocc:]
 
-    D2_a = d_ij_a.reshape(-1,1) - d_ab_a.reshape(-1)
-    D2_b = d_ij_b.reshape(-1,1) - d_ab_b.reshape(-1)
-    D2_ab = d_ij_ab.reshape(-1,1) - d_ab_ab.reshape(-1)
+    D2 = d_ij.reshape(-1,1) - d_ab.reshape(-1)
 
-    D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
-    D2_b = D2_b.reshape((nocc_b,nocc_b,nvir_b,nvir_b))
-    D2_ab = D2_ab.reshape((nocc_a,nocc_b,nvir_a,nvir_b))
+    D2 = D2.reshape((nocc,nocc,nvir,nvir))
 
-    D1_a = e_a[:nocc_a][:None].reshape(-1,1) - e_a[nocc_a:].reshape(-1)
-    D1_b = e_b[:nocc_b][:None].reshape(-1,1) - e_b[nocc_b:].reshape(-1)
-    D1_a = D1_a.reshape((nocc_a,nvir_a))
-    D1_b = D1_b.reshape((nocc_b,nvir_b))
+    D1 = e[:nocc][:None].reshape(-1,1) - e[nocc:].reshape(-1)
+    D1 = D1.reshape((nocc,nvir))
 
     # Compute first-order doubles t2 (tijab)
 
     v2e_oovv = eris_ovov.transpose(0,2,1,3).copy()
-    v2e_oovv -= eris_ovov.transpose(0,2,3,1).copy()
-    v2e_OOVV = eris_OVOV.transpose(0,2,1,3).copy()
-    v2e_OOVV -= eris_OVOV.transpose(0,2,3,1).copy()
-    v2e_oOvV = eris_ovOV.transpose(0,2,1,3).copy()
 
-    t2_1_a = v2e_oovv/D2_a
-    t2_1_b = v2e_OOVV/D2_b
-    t2_1_ab = v2e_oOvV/D2_ab
-
-    t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
+    t2_1 = v2e_oovv/D2
 
     # Compute second-order singles t1 (tij)
 
-    eris_ovvv = uadc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
-    t1_2_a = 0.5*np.einsum('kdac,ikcd->ia',eris_ovvv,t2_1_a)
-    t1_2_a -= 0.5*np.einsum('kcad,ikcd->ia',eris_ovvv,t2_1_a)
+    eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
+    t1_2 = 0.5*np.einsum('kdac,ikcd->ia',eris_ovvv,t2_1)
+    t1_2 -= 0.5*np.einsum('kdac,kicd->ia',eris_ovvv,t2_1)
+    t1_2 -= 0.5*np.einsum('kcad,ikcd->ia',eris_ovvv,t2_1)
+    t1_2 += 0.5*np.einsum('kcad,kicd->ia',eris_ovvv,t2_1)
+    t1_2 += np.einsum('kdac,ikcd->ia',eris_ovvv,t2_1)
     del eris_ovvv
-    t1_2_a -= 0.5*np.einsum('lcki,klac->ia',eris_ovoo,t2_1_a)
-    t1_2_a += 0.5*np.einsum('kcli,klac->ia',eris_ovoo,t2_1_a)
-    eris_OVvv = uadc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
-    t1_2_a += np.einsum('kdac,ikcd->ia',eris_OVvv,t2_1_ab)
-    del eris_OVvv
-    t1_2_a -= np.einsum('lcki,klac->ia',eris_OVoo,t2_1_ab)
-    eris_OVVV = uadc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
-    t1_2_b = 0.5*np.einsum('kdac,ikcd->ia',eris_OVVV,t2_1_b)
-    t1_2_b -= 0.5*np.einsum('kcad,ikcd->ia',eris_OVVV,t2_1_b)
-    del eris_OVVV
-    t1_2_b -= 0.5*np.einsum('lcki,klac->ia',eris_OVOO,t2_1_b)
-    t1_2_b += 0.5*np.einsum('kcli,klac->ia',eris_OVOO,t2_1_b)
-    eris_ovVV = uadc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
-    t1_2_b += np.einsum('kdac,kidc->ia',eris_ovVV,t2_1_ab)
-    del eris_ovVV
-    t1_2_b -= np.einsum('lcki,lkca->ia',eris_ovOO,t2_1_ab)
+    t1_2 -= 0.5*np.einsum('lcki,klac->ia',eris_ovoo,t2_1)
+    t1_2 += 0.5*np.einsum('lcki,lkac->ia',eris_ovoo,t2_1)
+    t1_2 += 0.5*np.einsum('kcli,klac->ia',eris_ovoo,t2_1)
+    t1_2 -= 0.5*np.einsum('kcli,lkac->ia',eris_ovoo,t2_1)
+    t1_2 -= np.einsum('lcki,klac->ia',eris_ovoo,t2_1)
+    
+    t1_2 = t1_2/D1
 
-    t1_2_a = t1_2_a/D1_a
-    t1_2_b = t1_2_b/D1_b
-
-    t1_2 = (t1_2_a , t1_2_b)
-    t2_2 = (None,)
-    t1_3 = (None,)
+    #t2_2 = (None,)
+    #t1_3 = (None,)
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
 
@@ -2840,8 +2809,8 @@ def get_spec_factors(adc, T, U, nroots=1):
     X_a = np.dot(T_a, U.T)
     X_b = np.dot(T_b, U.T)
 
-    P = np.einsum("pi,pi->i", X_a, X_a)
-    P += np.einsum("pi,pi->i", X_b, X_b)
+    P = np.einsum("pi,pi->i", X_a, X_a).reshape(-1,nroots)
+    P += np.einsum("pi,pi->i", X_b, X_b).reshape(-1,nroots)
 
     return P
 
