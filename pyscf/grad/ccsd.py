@@ -223,13 +223,6 @@ def as_scanner(grad_cc):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
 
-            # cache eris. It is used multiple times when calculating gradients
-            g_ao2mo = g.base.__class__.ao2mo
-            def _save_eris(self, *args, **kwargs):
-                self._eris = g_ao2mo(self, *args, **kwargs)
-                return self._eris
-            self.base.__class__.ao2mo = _save_eris
-
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
@@ -238,15 +231,26 @@ def as_scanner(grad_cc):
             self.mol = mol
 
             cc = self.base
+            cc._eris = None
+            # Save eris in cc when calling cc(mol). See the _save_eris
+            # function defined below
             cc(mol)
-            cc.solve_lambda(cc.t1, cc.t2, eris=cc._eris)
-            de = self.kernel(cc.t1, cc.t2, eris=cc._eris, **kwargs)
-            cc._eris = None  # release the resources occupied by .eris
+            de = self.kernel(t1=cc.t1, t2=cc.t2, eris=cc._eris, **kwargs)
+            cc._eris = None  # release eris
             return cc.e_tot, de
         @property
         def converged(self):
             cc = self.base
             return all((cc._scf.converged, cc.converged, cc.converged_lambda))
+
+    # cache eris object in CCSD base class. eris object is used many times
+    # when calculating gradients
+    g_ao2mo = grad_cc.base.__class__.ao2mo
+    def _save_eris(self, *args, **kwargs):
+        self._eris = g_ao2mo(self, *args, **kwargs)
+        return self._eris
+    grad_cc.base.__class__.ao2mo = _save_eris
+
     return CCSD_GradScanner(grad_cc)
 
 def _response_dm1(mycc, Xvo, eris=None):

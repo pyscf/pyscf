@@ -25,6 +25,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from functools import reduce
+from pyscf import scf
 
 def _for_scf(mf, solvent_obj, dm=None):
     '''Add solvent model to SCF (HF and DFT) method.
@@ -33,7 +34,7 @@ def _for_scf(mf, solvent_obj, dm=None):
         dm : if given, solvent does not respond to the change of density
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
-    if getattr(mf, 'with_solvent', None):
+    if isinstance(mf, _Solvation):
         mf.with_solvent = solvent_obj
         return mf
 
@@ -43,7 +44,7 @@ def _for_scf(mf, solvent_obj, dm=None):
         solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
-    class SCFWithSolvent(oldMF):
+    class SCFWithSolvent(_Solvation, oldMF):
         def __init__(self, mf, solvent):
             self.__dict__.update(mf.__dict__)
             self.with_solvent = solvent
@@ -101,10 +102,18 @@ def _for_scf(mf, solvent_obj, dm=None):
 
         def gen_response(self, *args, **kwargs):
             vind = oldMF.gen_response(self, *args, **kwargs)
+            is_uhf = isinstance(self, scf.uhf.UHF)
+            # singlet=None is orbital hessian or CPHF type response function
+            singlet = kwargs.get('singlet', True)
+            singlet = singlet or singlet is None
             def vind_with_solvent(dm1):
                 v = vind(dm1)
                 if self.with_solvent.equilibrium_solvation:
-                    v += self.with_solvent._B_dot_x(dm1)
+                    if is_uhf:
+                        vpcm = self.with_solvent._B_dot_x(dm1)
+                        v += vpcm[0] + vpcm[1]
+                    elif singlet:
+                        v += self.with_solvent._B_dot_x(dm1)
                 return v
             return vind_with_solvent
 
@@ -129,7 +138,7 @@ def _for_casscf(mc, solvent_obj, dm=None):
         dm : if given, solvent does not respond to the change of density
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
-    if getattr(mc, 'with_solvent', None):
+    if isinstance(mc, _Solvation):
         mc.with_solvent = solvent_obj
         return mc
 
@@ -139,7 +148,7 @@ def _for_casscf(mc, solvent_obj, dm=None):
         solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
-    class CASSCFWithSolvent(oldCAS):
+    class CASSCFWithSolvent(_Solvation, oldCAS):
         def __init__(self, mc, solvent):
             self.__dict__.update(mc.__dict__)
             self.with_solvent = solvent
@@ -153,6 +162,17 @@ def _for_casscf(mc, solvent_obj, dm=None):
             if self.conv_tol < 1e-7:
                 logger.warn(self, 'CASSCF+ddCOSMO may not be able to '
                             'converge to conv_tol=%g', self.conv_tol)
+
+            if (getattr(self._scf, 'with_solvent', None) and
+                not getattr(self, 'with_solvent', None)):
+                log.warn('''Solvent model %s was found in SCF object.
+COSMO is not applied to the CASCI object. The CASSCF result is not affected by the SCF solvent model.
+To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs to be called
+        from pyscf import solvent
+        mc = mcscf.CASSCF(...)
+        mc = solvent.ddCOSMO(mc)
+''',
+                         self._scf.with_solvent.__class__)
             return self
 
         def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
@@ -163,7 +183,7 @@ def _for_casscf(mc, solvent_obj, dm=None):
 # It will be added to hcore in casci function. Strictly speaking, this density
 # is not the same to the CASSCF density (which was used to measure
 # convergence) in the macro iterations.  When CASSCF is converged, it
-# should be almost the same to the CASSCF density of the macro iterations.
+# should be almost the same to the CASSCF density of the last macro iteration.
             with_solvent = self.with_solvent
             if not with_solvent.frozen:
                 # Code to mimic dm = self.make_rdm1(ci=fcivec)
@@ -222,6 +242,13 @@ def _for_casscf(mc, solvent_obj, dm=None):
             return e_tot, e_cas, fcivec
 
         def nuc_grad_method(self):
+            logger.warn(self, '''
+The code for CASSCF gradients was based on variational CASSCF wavefunction.
+However, the ddCOSMO-CASSCF energy was not computed variationally.
+Approximate gradients are evaluated here. A small error may be expected in the
+gradients which corresponds to the contribution of
+  MCSCF_DM * Vpcm[d/dX MCSCF_DM] + Vpcm[MCSCF_DM] * d/dX MCSCF_DM
+''')
             grad_method = oldCAS.nuc_grad_method(self)
             return self.with_solvent.nuc_grad_method(grad_method)
 
@@ -237,7 +264,7 @@ def _for_casci(mc, solvent_obj, dm=None):
         dm : if given, solvent does not respond to the change of density
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
-    if getattr(mc, 'with_solvent', None):
+    if isinstance(mc, _Solvation):
         mc.with_solvent = solvent_obj
         return mc
 
@@ -247,7 +274,7 @@ def _for_casci(mc, solvent_obj, dm=None):
         solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
-    class CASCIWithSolvent(oldCAS):
+    class CASCIWithSolvent(_Solvation, oldCAS):
         def __init__(self, mc, solvent):
             self.__dict__.update(mc.__dict__)
             self.with_solvent = solvent
@@ -340,6 +367,13 @@ def _for_casci(mc, solvent_obj, dm=None):
             return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
         def nuc_grad_method(self):
+            logger.warn(self, '''
+The code for CASCI gradients was based on variational CASCI wavefunction.
+However, the ddCOSMO-CASCI energy was not computed variationally.
+Approximate gradients are evaluated here. A small error may be expected in the
+gradients which corresponds to the contribution of
+  MCSCF_DM * Vpcm[d/dX MCSCF_DM] + Vpcm[MCSCF_DM] * d/dX MCSCF_DM
+''')
             grad_method = oldCAS.nuc_grad_method(self)
             return self.with_solvent.nuc_grad_method(grad_method)
 
@@ -357,7 +391,7 @@ def _for_post_scf(method, solvent_obj, dm=None):
         dm : if given, solvent does not respond to the change of density
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
-    if getattr(method, 'with_solvent', None):
+    if isinstance(method, _Solvation):
         method.with_solvent = solvent_obj
         method._scf.with_solvent = solvent_obj
         return method
@@ -384,7 +418,7 @@ def _for_post_scf(method, solvent_obj, dm=None):
         solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
-    class PostSCFWithSolvent(old_method):
+    class PostSCFWithSolvent(_Solvation, old_method):
         def __init__(self, method):
             self.__dict__.update(method.__dict__)
             self._scf = scf_with_solvent
@@ -454,6 +488,11 @@ def _for_post_scf(method, solvent_obj, dm=None):
             return self.e_corr, None
 
         def nuc_grad_method(self):
+            logger.warn(self, '''
+Approximate gradients are evaluated here. A small error may be expected in the
+gradients which corresponds to the contribution of
+  DM * Vpcm[d/dX DM] + Vpcm[DM] * d/dX DM
+''')
             grad_method = old_method.nuc_grad_method(self)
             return self.with_solvent.nuc_grad_method(grad_method)
 
@@ -469,7 +508,7 @@ def _for_tdscf(method, solvent_obj, dm=None):
         dm : if given, solvent does not respond to the change of density
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
-    if getattr(method, 'with_solvent', None):
+    if isinstance(method, _Solvation):
         method.with_solvent = solvent_obj
         method._scf.with_solvent = solvent_obj
         return method
@@ -487,7 +526,7 @@ def _for_tdscf(method, solvent_obj, dm=None):
         solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
-    class TDSCFWithSolvent(old_method):
+    class TDSCFWithSolvent(_Solvation, old_method):
         def __init__(self, method):
             self.__dict__.update(method.__dict__)
             self._scf = scf_with_solvent
@@ -523,9 +562,13 @@ def _for_tdscf(method, solvent_obj, dm=None):
                 raise NotImplementedError
 
         def nuc_grad_method(self):
-            if self.equilibrium_solvation:
-                raise NotImplementedError
-            return old_method.nuc_grad_method(self)
+            from pyscf.solvent._ddcosmo_tdscf_grad import make_grad_object
+            grad_method = old_method.nuc_grad_method(self)
+            return make_grad_object(grad_method, self.with_solvent)
 
     mf1 = TDSCFWithSolvent(method)
     return mf1
+
+# 1. A tag to label the derived SCF class
+class _Solvation(object):
+    pass

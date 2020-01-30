@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -233,6 +233,8 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
     part (Y) is ignored.
 
     Args:
+        tdobj : TDA, or TDHF, or TDDFT object
+
         state : int
             Excited state ID.  state = 1 means the first excited state.
             If state < 0, state ID is counted from the last excited state.

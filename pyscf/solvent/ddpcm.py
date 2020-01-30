@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -332,6 +332,9 @@ class DDPCM(ddcosmo.DDCOSMO):
     def regularize_xt(self, t, eta, scale=1):
         return regularize_xt(t, eta, scale)
 
+    def nuc_grad_method(self, grad_method):
+        raise NotImplementedError
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -344,7 +347,7 @@ if __name__ == '__main__':
     #dm = scf.RHF(mol).run().make_rdm1()
     e, vmat = DDPCM(mol).kernel(dm)
     print(e + 1.2446306643473923)
-    print(lib.finger(vmat) - 0.77873361914445294)
+    print(lib.fp(vmat) - 0.77873361914445294)
 
     mol = gto.Mole()
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188

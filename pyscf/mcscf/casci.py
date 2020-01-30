@@ -754,11 +754,11 @@ class CASCI(lib.StreamObject):
 
         if (getattr(self._scf, 'with_solvent', None) and
             not getattr(self, 'with_solvent', None)):
-            log.warn('''Solvent model %s was found in SCF object.
-It is not applied to the CASSCF object. The CASSCF result is not affected by the SCF solvent model.
-To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs be called
+            log.warn('''Solvent model %s was found at SCF level but not applied to the CASCI object.
+The SCF solvent model will not be applied to the current CASCI calculation.
+To enable the solvent model for CASCI, the following code needs to be called
         from pyscf import solvent
-        mc = mcscf.CASSCF(...)
+        mc = mcscf.CASCI(...)
         mc = solvent.ddCOSMO(mc)
 ''',
                      self._scf.with_solvent.__class__)

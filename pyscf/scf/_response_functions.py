@@ -29,6 +29,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                       singlet=None, hermi=0, max_memory=None):
     '''Generate a function to compute the product of RHF response function and
     RHF density matrices.
+
+    Kwargs:
+        singlet (None or boolean) : If singlet is None, response function for
+            orbital hessian or CPHF will be generated. If singlet is boolean,
+            it is used in TDDFT response kernel.
     '''
     assert(not isinstance(mf, (uhf.UHF, rohf.ROHF)))
 
@@ -54,7 +59,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             dm0 = mf.make_rdm1(mo_coeff, mo_occ)
             return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
-        if singlet is None:  # for newton solver
+        if singlet is None:
+            # for ground state orbital hessian
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                                 mo_coeff, mo_occ, 0)
         else:
@@ -66,7 +72,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-        if singlet is None:  # Without specify singlet, general case
+        if singlet is None:
+            # Without specify singlet, used in ground state orbital hessian
             def vind(dm1):
                 # The singlet hessian
                 if hermi == 2:

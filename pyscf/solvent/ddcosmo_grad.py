@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ J. Chem. Phys., 141, 184108 (2014)
 http://dx.doi.org/10.1063/1.4901304
 '''
 
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -49,7 +48,7 @@ from pyscf.grad import tdrhf as tdrhf_grad
 # TODO: Define attribute grad_method.base to point to the class of the 0th
 # order calculation for all gradients class. Then this function can be
 # extended and used as the general interface to initialize solvent gradients.
-def ddcosmo_grad(grad_method, pcmobj=None):
+def make_grad_object(grad_method, pcmobj=None):
     '''For grad_method in vacuum, add nuclear gradients of solvent pcmobj'''
     grad_method_class = grad_method.__class__
     class WithSolventGrad(grad_method_class):
@@ -60,19 +59,19 @@ def ddcosmo_grad(grad_method, pcmobj=None):
             self.de_solute = None
             self._keys = self._keys.union(['with_solvent', 'de_solvent', 'de_solute'])
 
-        def kernel(self, dm=None, atmlst=None):
+        # TODO: if moving to python3, change signature to
+        # def kernel(self, *args, dm=None, atmlst=None, **kwargs):
+        def kernel(self, *args, **kwargs):
+            dm = kwargs.pop('dm', None)
             if dm is None:
                 dm = self.base.make_rdm1(ao_repr=True)
 
-            # de_solvent needs to be called first because _finalize method
-            # is called in the grad_method.kernel function.  de_solvent is
-            # required by the _finalize method.
             self.de_solvent = kernel(self.with_solvent, dm)
-            self.de_solute = grad_method_class.kernel(self, atmlst=atmlst)
+            self.de_solute = grad_method_class.kernel(self, *args, **kwargs)
             self.de = self.de_solute + self.de_solvent
 
             if self.verbose >= logger.NOTE:
-                logger.note(self, '--------------- %s (%s) gradients ---------------',
+                logger.note(self, '--------------- %s (+%s) gradients ---------------',
                             self.base.__class__.__name__,
                             self.with_solvent.__class__.__name__)
                 rhf_grad._write(self, self.mol, self.de, self.atmlst)
@@ -84,29 +83,9 @@ def ddcosmo_grad(grad_method, pcmobj=None):
             # where self.de was not yet initialized.
             pass
 
-        #FIXME: Modify get_jk for TDDFT gradients?
-        if issubclass(grad_method_class, tdrhf_grad.Gradients):
-            def get_jk(self, mol=None, dm=None, hermi=0):
-                if self.with_solvent.equilibrium_solvation:
-                    raise NotImplementedError
-                else:
-                    return grad_method_class.get_jk(self, mol, dm, hermi)
-
     if pcmobj is None:
         pcmobj = ddcosmo.DDCOSMO(mf.mol)
     return WithSolventGrad(grad_method, pcmobj)
-
-
-## Inject DDCOSMO gradients into other modules
-# Since gradients are computed based on Hellmann-Feynman theorem, it does not
-# make too much sense to add solvent gradients contribution if the underlying
-# single point calculation is not converged with solvent.
-#from pyscf import grad
-#for mod in dir(grad):
-#    mod = getattr(grad, mod)
-#    if hasattr(mod, 'Gradients'):
-#        mod.Gradients.DDCOSMO = ddcosmo_grad
-#del(mod, grad)
 
 
 def kernel(pcmobj, dm, verbose=None):
@@ -135,13 +114,13 @@ def kernel(pcmobj, dm, verbose=None):
     L0 = L0.reshape(natm*nlm,-1)
     L1 = make_L1(pcmobj, r_vdw, ylm_1sph, fi)
 
-    phi0 = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui)
-    phi1 = make_phi1(pcmobj, dm, r_vdw, ui)
+    phi0 = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph)
+    phi1 = make_phi1(pcmobj, dm, r_vdw, ui, ylm_1sph)
     L0_X = numpy.linalg.solve(L0, phi0.ravel()).reshape(natm,-1)
     psi0, vmat, L0_S = \
-            ddcosmo.make_psi_vmat(pcmobj, dm, r_vdw, ui, pcmobj.grids, ylm_1sph,
+            ddcosmo.make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph,
                                   cached_pol, L0_X, L0)
-    e_psi1 = make_e_psi1(pcmobj, dm, r_vdw, ui, pcmobj.grids, ylm_1sph,
+    e_psi1 = make_e_psi1(pcmobj, dm, r_vdw, ui, ylm_1sph,
                          cached_pol, L0_X, L0)
     dielectric = pcmobj.eps
     if dielectric > 0:
@@ -270,7 +249,7 @@ def make_fi1(pcmobj, r_vdw):
     fi1[:,:,fi<1e-20] = 0
     return fi1
 
-def make_phi1(pcmobj, dm, r_vdw, ui):
+def make_phi1(pcmobj, dm, r_vdw, ui, ylm_1sph):
     mol = pcmobj.mol
     natm = mol.natm
     nlm = (pcmobj.lmax+1)**2
@@ -287,7 +266,6 @@ def make_phi1(pcmobj, dm, r_vdw, ui):
     atom_charges = mol.atom_charges()
 
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)
-    ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcmobj.lmax, True))
     extern_point_idx = ui > 0
 
     fi1 = make_fi1(pcmobj, pcmobj.get_atomic_radii())
@@ -324,8 +302,8 @@ def make_phi1(pcmobj, dm, r_vdw, ui):
         phi1[:,:,ia] += numpy.einsum('n,ln,azn,n->azl', weights_1sph, ylm_1sph, ui1[:,:,ia], v_phi)
 
         v_e1_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, comp=3, aosym='s1')
-        v_e2_nj = v_e1_nj + v_e1_nj.transpose(0,2,1,3)
-        phi1_e2_nj = numpy.einsum('ji,xijr->xr', dm, v_e2_nj)
+        phi1_e2_nj  = numpy.einsum('ij,xijr->xr', dm, v_e1_nj)
+        phi1_e2_nj += numpy.einsum('ji,xijr->xr', dm, v_e1_nj)
         phi1[ia,:,ia] += numpy.einsum('n,ln,n,xn->xl', weights_1sph, ylm_1sph, ui[ia], phi1_e2_nj)
 
         for ja in range(natm):
@@ -335,11 +313,12 @@ def make_phi1(pcmobj, dm, r_vdw, ui):
             phi1[ja,:,ia] -= numpy.einsum('n,ln,n,xn->xl', weights_1sph, ylm_1sph, ui[ia], phi1_nj)
     return phi1
 
-def make_e_psi1(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
+def make_e_psi1(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L):
     mol = pcmobj.mol
     natm = mol.natm
     lmax = pcmobj.lmax
     nlm = (lmax+1)**2
+    grids = pcmobj.grids
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
         dm = dm[0] + dm[1]
@@ -364,7 +343,7 @@ def make_e_psi1(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
         for l in range(lmax+1):
             fac = 4*numpy.pi/(l*2+1)
             p0, p1 = p1, p1 + (l*2+1)
-            eta_nj += fac * numpy.einsum('mn,m->n', fak_pol[l], L_X[ia,p0:p1])
+            eta_nj += fac * numpy.einsum('mn,m->n', fak_pol[l], Xvec[ia,p0:p1])
         psi1 -= numpy.einsum('n,n,zxn->zx', den[0,i0:i1], eta_nj, weight1)
         psi1[ia] -= numpy.einsum('xn,n,n->x', den[1:4,i0:i1], eta_nj, weight)
 

@@ -36,7 +36,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional
 
     .. note::
-        This function will change the ks object.
+        This function will modify the input ks object.
 
     Args:
         ks : an instance of :class:`RKS`
