@@ -184,7 +184,7 @@ def from_fcivec(ci0, nelec, orbspin, frozen=0):
         frozen_mask[:frozen] = True
     else:
         frozen_mask[frozen] = True
-    if frozen is not 0:
+    if frozen != 0:
         raise NotImplementedError
     #frozen = (numpy.where(frozen_mask[orbspin == 0])[0],
     #          numpy.where(frozen_mask[orbspin == 1])[0])
@@ -297,7 +297,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     norm = numpy.dot(cibra, ciket)
     dm1[numpy.diag_indices(nocc)] += norm
 
-    if not (myci.frozen is 0 or myci.frozen is None):
+    if not (myci.frozen == 0 or myci.frozen is None):
         nmo = myci.mo_occ.size
         nocc = numpy.count_nonzero(myci.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)

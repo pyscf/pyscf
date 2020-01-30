@@ -55,7 +55,7 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
                            dft.roks.ROKS    , dft.uks.UKS,
                            dft.rks_symm.RKS , dft.uks_symm.UKS,
                            dft.rks_symm.ROKS, dft.uks_symm.UKS)))
-    assert(gw.frozen is 0 or gw.frozen is None)
+    assert(gw.frozen == 0 or gw.frozen is None)
 
     if eris is None:
         eris = gw.ao2mo(mo_coeff)
@@ -180,7 +180,7 @@ class GW(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not 0:
+        if self.frozen != 0:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self

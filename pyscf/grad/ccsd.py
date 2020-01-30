@@ -69,7 +69,7 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     mo_energy = mycc._scf.mo_energy
     nao, nmo = mo_coeff.shape
     nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    with_frozen = not (mycc.frozen is None or mycc.frozen == 0)
     OA, VA, OF, VF = _index_frozen_active(mycc.get_frozen_mask(), mycc.mo_occ)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
@@ -252,7 +252,7 @@ def as_scanner(grad_cc):
 def _response_dm1(mycc, Xvo, eris=None):
     nvir, nocc = Xvo.shape
     nmo = nocc + nvir
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    with_frozen = not (mycc.frozen is None or mycc.frozen == 0)
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
         mo_occ = mycc.mo_occ

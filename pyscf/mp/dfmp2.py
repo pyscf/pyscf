@@ -38,7 +38,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     else:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen is 0 or mp.frozen is None)
+        assert(mp.frozen == 0 or mp.frozen is None)
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc

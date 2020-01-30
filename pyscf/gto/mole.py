@@ -2219,7 +2219,7 @@ class Mole(lib.StreamObject):
         if nucmod is not None: self.nucmod = nucmod
         if ecp is not None: self.ecp = ecp
         if charge is not None: self.charge = charge
-        if spin is not 0: self.spin = spin
+        if spin != 0: self.spin = spin
         if symmetry is not None: self.symmetry = symmetry
         if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
         if cart is not None: self.cart = cart

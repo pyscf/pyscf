@@ -457,7 +457,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
 
 def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
-    if frozen is not 0:
+    if frozen != 0:
         raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -831,7 +831,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     dm1b[noccb:,noccb:] = dvvb
     dm1b[numpy.diag_indices(noccb)] += norm
 
-    if not (myci.frozen is 0 or myci.frozen is None):
+    if not (myci.frozen == 0 or myci.frozen is None):
         nmoa = myci.mo_occ[0].size
         nmob = myci.mo_occ[1].size
         nocca = numpy.count_nonzero(myci.mo_occ[0] > 0)

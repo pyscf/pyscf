@@ -958,7 +958,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
         log.info('CCSD nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen != 0:
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)

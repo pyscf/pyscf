@@ -41,7 +41,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     else:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen is 0 or mp.frozen is None)
+        assert(mp.frozen == 0 or mp.frozen is None)
 
     if eris is None: eris = mp.ao2mo(mo_coeff)
 
@@ -240,7 +240,7 @@ def make_rdm2(mp, t2=None):
     nocca, noccb = nocca0, noccb0 = mp.nocc
     t2aa, t2ab, t2bb = t2
 
-    if not (mp.frozen is 0 or mp.frozen is None):
+    if not (mp.frozen == 0 or mp.frozen is None):
         nmoa0 = mp.mo_occ[0].size
         nmob0 = mp.mo_occ[1].size
         nocca0 = numpy.count_nonzero(mp.mo_occ[0] > 0)

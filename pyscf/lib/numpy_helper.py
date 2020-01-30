@@ -994,7 +994,7 @@ def direct_sum(subscripts, *operands):
             op = _numpy_einsum('->'.join((symb, unisymb)), op)
             src[i] = unisymb
         if i == 0:
-            if sign[i] is '+':
+            if sign[i] == '+':
                 out = op
             else:
                 out = -op

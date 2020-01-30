@@ -299,7 +299,7 @@ def excitation_level(string, nelec=None):
     return tn
 
 def find1(s):
-    return [i for i,x in enumerate(bin(s)[2:][::-1]) if x is '1']
+    return [i for i,x in enumerate(bin(s)[2:][::-1]) if x == '1']
 
 def toggle_bit(s, place):
     nset = len(s)

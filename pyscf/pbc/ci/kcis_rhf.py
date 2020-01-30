@@ -357,7 +357,7 @@ class KCIS(lib.StreamObject):
         log.info("******** %s ********", self.__class__)
         log.info("nkpts = %d", self.nkpts)
         log.info("CIS nocc = %d, nmo = %d", self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen != 0:
             log.info("frozen orbitals = %s", self.frozen)
         log.info("max_memory %d MB (current use %d MB)",
                  self.max_memory, lib.current_memory()[0])
