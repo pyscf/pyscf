@@ -319,7 +319,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
 
 def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
-    if frozen is not 0:
+    if frozen != 0:
         raise NotImplementedError
 
     if isinstance(nelec, (int, numpy.number)):
@@ -674,7 +674,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     norm = dot(cibra, ciket, nmo, nocc)
     dm1[numpy.diag_indices(nocc)] += 2 * norm
 
-    if not (myci.frozen is 0 or myci.frozen is None):
+    if not (myci.frozen == 0 or myci.frozen is None):
         nmo = myci.mo_occ.size
         nocc = numpy.count_nonzero(myci.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
@@ -832,7 +832,7 @@ class CISD(lib.StreamObject):
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen != 0:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)

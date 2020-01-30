@@ -36,7 +36,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen is 0 or mp.frozen is None)
+        assert(mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:
         eris = mp.ao2mo(mo_coeff)
@@ -215,7 +215,7 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
         mo_energy = eris.mo_energy
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
-    if not (mp.frozen is 0 or mp.frozen is None):
+    if not (mp.frozen == 0 or mp.frozen is None):
         nmo0 = mp.mo_occ.size
         nocc0 = numpy.count_nonzero(mp.mo_occ > 0)
         moidx = get_frozen_mask(mp)
@@ -477,7 +477,7 @@ class MP2(lib.StreamObject):
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen != 0:
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
