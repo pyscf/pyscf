@@ -914,6 +914,10 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.25*np.einsum('b,mlda,mldb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
         M_ab_b -= 0.25*np.einsum('b,lmda,lmdb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
 
+        print (np.linalg.norm(M_ab_a))
+        print (np.linalg.norm(M_ab_b))
+        exit()
+
         M_ab_a -= np.einsum('lned,mlbd,nmae->ab',t2_1_a, t2_1_a, eris_oovv, optimize=True)
         M_ab_a += np.einsum('lned,mlbd,mane->ab',t2_1_a, t2_1_a, eris_ovov, optimize=True)
         M_ab_a += np.einsum('nled,mlbd,nmae->ab',t2_1_ab, t2_1_ab, eris_oovv, optimize=True)
@@ -1635,7 +1639,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s_a:f_a] = np.einsum('ab,b->a',M_ab_a,r_a)
         s[s_b:f_b] = np.einsum('ab,b->a',M_ab_b,r_b)
 
-############# ADC(2) a - ibc and ibc - a coupling blocks #########################
+############ ADC(2) a - ibc and ibc - a coupling blocks #########################
 
         eris_ovvv = uadc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
         s[s_a:f_a] += 0.5*np.einsum('icab,ibc->a',eris_ovvv, r_aaa_, optimize = True)
@@ -1663,7 +1667,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s_aba:f_aba] += np.einsum('icab,a->ibc', eris_ovVV, r_b, optimize = True).reshape(-1)
         del eris_ovVV
 
-################ ADC(2) iab - jcd block ############################
+############### ADC(2) iab - jcd block ############################
 
         s[s_aaa:f_aaa] += D_iab_a * r_aaa
         s[s_bab:f_bab] += D_iab_bab * r_bab.reshape(-1)

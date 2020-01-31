@@ -31,13 +31,17 @@ def ADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if (frozen != 0):
         raise NotImplementedError
 
-    if isinstance(mf, scf.uhf.UHF):
-        return UADC(mf, frozen, mo_coeff, mo_occ)
     if isinstance(mf, scf.rhf.RHF):
         return RADC(mf, frozen, mo_coeff, mo_occ)
-    else:
+    elif isinstance(mf, scf.uhf.UHF):
+        return UADC(mf, frozen, mo_coeff, mo_occ)
+    elif isinstance(mf, scf.rhf.ROHF):
+        lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
+                        'is converted to UHF object and UADC method is called.')
         mf = scf.addons.convert_to_uhf(mf)
         return UADC(mf, frozen, mo_coeff, mo_occ)
+    else :
+        raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
 
 def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = uadc.UADC.__doc__
