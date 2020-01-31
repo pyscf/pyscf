@@ -1017,7 +1017,7 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.5*np.einsum('mldf,mled,efab->ab',t2_1_a, t2_1_a, eris_vvVV, optimize=True)
         M_ab_b += np.einsum('mlfd,mled,efab->ab',t2_1_ab, t2_1_ab,   eris_vvVV, optimize=True)
         del eris_vvVV
-
+    
     M_ab = (M_ab_a, M_ab_b)
 
     return M_ab

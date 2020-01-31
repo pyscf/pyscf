@@ -73,7 +73,7 @@ def unpack_eri_1(eri, norb):
 
     return eri_
 
-def unpack_eri_2s(eri, norb):
+def unpack_eri_2(eri, norb):
 
     n_oo = norb * (norb + 1) // 2
     ind_oo = np.tril_indices(norb)
