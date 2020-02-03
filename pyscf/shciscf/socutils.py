@@ -140,12 +140,12 @@ def get_fso2e_x2c_original(mol, x, rp, pLL, pLS, pSS):
         i_z = xyz[i_x - 1]
         ddint[0, 0] = ddint[i_y, i_z] - ddint[i_z, i_y]  # x = yz - zy etc
         kint = ddint[0, 0].reshape(nb, nb, nb, nb)
-        gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
-        gsoLS = -1.0 * numpy.einsum('mlkn,lk->mn', kint, pLS) \
-                - 1.0 * numpy.einsum('lmkn,lk->mn', kint, pLS)
-        gsoSS = -2.0 * numpy.einsum('mnkl,lk', kint, pLL) \
-                - 2.0 * numpy.einsum('mnlk,lk', kint, pLL) \
-            + 2.0 * numpy.einsum('mlnk,lk', kint, pLL)
+        gsoLL = -2.0 * lib.einsum('lmkn,lk->mn', kint, pSS)
+        gsoLS = -1.0 * lib.einsum('mlkn,lk->mn', kint, pLS) \
+                - 1.0 * lib.einsum('lmkn,lk->mn', kint, pLS)
+        gsoSS = -2.0 * lib.einsum('mnkl,lk', kint, pLL) \
+                - 2.0 * lib.einsum('mnlk,lk', kint, pLL) \
+            + 2.0 * lib.einsum('mlnk,lk', kint, pLL)
         fso2e[i_x] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
             + x.T.dot(gsoSS.dot(x))
         fso2e[i_x] = reduce(numpy.dot, (rp.T, fso2e[i_x], rp))
@@ -179,7 +179,7 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
         ao_loc.append(ao_loc_orig[-1])
         shl_size.append(ao_loc[-1] - ao_loc[-2])
         shl_slice.append(nbas)
-    #print(ao_loc, shl_size, shl_slice)
+    print(ao_loc, shl_size, shl_slice)
     nbas = len(shl_size)
 
     for i in range(0, nbas):
@@ -195,21 +195,21 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
                     #print("Time elapsed for integral calculation:", end - start, i, j, k, l, nbas)
 
                     gsoLL[:, ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]] \
-                      +=-2.0*numpy.einsum('ilmkn,lk->imn', kint, \
+                      +=-2.0*lib.einsum('ilmkn,lk->imn', kint, \
                         pSS[ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]])
                     gsoLS[:, ao_loc[i]:ao_loc[i+1], ao_loc[l]:ao_loc[l+1]] \
-                      +=-1.0*numpy.einsum('imlkn,lk->imn', kint, \
+                      +=-1.0*lib.einsum('imlkn,lk->imn', kint, \
                         pLS[ao_loc[j]:ao_loc[j+1], ao_loc[k]:ao_loc[k+1]])
                     gsoLS[:, ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]] \
-                      +=-1.0*numpy.einsum('ilmkn,lk->imn', kint, \
+                      +=-1.0*lib.einsum('ilmkn,lk->imn', kint, \
                         pLS[ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]])
                     gsoSS[:, ao_loc[i]:ao_loc[i+1], ao_loc[j]:ao_loc[j+1]] \
-                      +=-2.0*numpy.einsum('imnkl,lk->imn', kint, \
+                      +=-2.0*lib.einsum('imnkl,lk->imn', kint, \
                         pLL[ao_loc[l]:ao_loc[l+1], ao_loc[k]:ao_loc[k+1]])\
-                        -2.0*numpy.einsum('imnlk,lk->imn', kint, \
+                        -2.0*lib.einsum('imnlk,lk->imn', kint, \
                         pLL[ao_loc[k]:ao_loc[k+1], ao_loc[l]:ao_loc[l+1]])
                     gsoSS[:, ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]] \
-                      += 2.0*numpy.einsum('imlnk,lk->imn', kint, \
+                      += 2.0*lib.einsum('imlnk,lk->imn', kint, \
                         pLL[ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]])
                     #print(" Time elapsed for einsum:", time.clock() - start)
 
@@ -262,21 +262,21 @@ def get_fso2e_x2c1c(mol, x, rp, pLL, pLS, pSS):
                                                       shl_size[iatom])
         #start = time.clock()
         gsoLL[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-            += -2.0*numpy.einsum('ilmkn,lk->imn', kint,
+            += -2.0*lib.einsum('ilmkn,lk->imn', kint,
                                  pSS[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
         gsoLS[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-            += -1.0*numpy.einsum('imlkn,lk->imn', kint,
+            += -1.0*lib.einsum('imlkn,lk->imn', kint,
                                  pLS[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
         gsoLS[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-            += -1.0*numpy.einsum('ilmkn,lk->imn', kint,
+            += -1.0*lib.einsum('ilmkn,lk->imn', kint,
                                  pLS[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
         gsoSS[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-            += -2.0*numpy.einsum('imnkl,lk->imn', kint,
+            += -2.0*lib.einsum('imnkl,lk->imn', kint,
                                  pLL[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])\
-            - 2.0*numpy.einsum('imnlk,lk->imn', kint,
+            - 2.0*lib.einsum('imnlk,lk->imn', kint,
                                pLL[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
         gsoSS[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-            += 2.0*numpy.einsum('imlnk,lk->imn', kint,
+            += 2.0*lib.einsum('imlnk,lk->imn', kint,
                                 pLL[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
         #print(" Time elapsed for einsum:", time.clock() - start)
     for comp in range(0, 3):
@@ -324,13 +324,13 @@ def get_fso2e_bp(mol, dm):
                                                  shl_slice[l], shl_slice[l+1]]).reshape(
                         3, shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     hso1e[:, ao_loc[i]:ao_loc[i+1], ao_loc[j]:ao_loc[j+1]] \
-                        += 1.0*numpy.einsum('ijklm, lm->ijk', h2ao,
+                        += 1.0*lib.einsum('ijklm, lm->ijk', h2ao,
                                             dm[ao_loc[k]:ao_loc[k+1], ao_loc[l]:ao_loc[l+1]])
                     hso1e[:, ao_loc[i]:ao_loc[i+1], ao_loc[l]:ao_loc[l+1]] \
-                        += -1.5*numpy.einsum('ijklm, kl->ijm', h2ao,
+                        += -1.5*lib.einsum('ijklm, kl->ijm', h2ao,
                                              dm[ao_loc[j]:ao_loc[j+1], ao_loc[k]:ao_loc[k+1]])
                     hso1e[:, ao_loc[k]:ao_loc[k+1], ao_loc[j]:ao_loc[j+1]] \
-                        += -1.5*numpy.einsum('ijklm, mj->ilk', h2ao,
+                        += -1.5*lib.einsum('ijklm, mj->ilk', h2ao,
                                              dm[ao_loc[l]:ao_loc[l+1], ao_loc[i]:ao_loc[i+1]])
     return hso1e
 
@@ -365,13 +365,13 @@ def get_fso2e_bp1c(mol, dm, atomlist):
             # print("Time elapsed for integral calculation:",
             #      end - start, iatom, nbas)
             hso1e[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-                += 1.0*numpy.einsum('ijklm, lm->ijk', h2ao,
+                += 1.0*lib.einsum('ijklm, lm->ijk', h2ao,
                                     dm[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
             hso1e[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-                += -1.5*numpy.einsum('ijklm, kl->ijm', h2ao,
+                += -1.5*lib.einsum('ijklm, kl->ijm', h2ao,
                                      dm[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
             hso1e[:, ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]] \
-                += -1.5*numpy.einsum('ijklm, mj->ilk', h2ao,
+                += -1.5*lib.einsum('ijklm, mj->ilk', h2ao,
                                      dm[ao_loc[iatom]:ao_loc[iatom+1], ao_loc[iatom]:ao_loc[iatom+1]])
     return hso1e
 
@@ -398,7 +398,7 @@ def writeGTensorIntegrals(mc, atomlist=None):
                 h1ao[:, iao_start: iao_end, jao_start: jao_end]\
                     += mol.intor('cint1e_cg_irxp_sph', 3, shls_slice=[ishl_start, ishl_end, jshl_start, jshl_end]).reshape(3, iao_end-iao_start, jao_end-jao_start)
 
-    h1 = numpy.einsum('xpq, pi, qj->xij', h1ao, mc.mo_coeff, mc.mo_coeff)
+    h1 = lib.einsum('xpq, pi, qj->xij', h1ao, mc.mo_coeff, mc.mo_coeff)
     print1Int(h1[:, ncore:ncore + ncas, ncore:ncore + ncas], 'GTensor')
 
 
@@ -498,7 +498,7 @@ def writeSOCIntegrals(mc,
     if (ncasorbs is not None):
         ncas = ncasorbs
     mo_coeff = mc.mo_coeff
-    h1 = numpy.einsum('xpq,pi,qj->xij', h1ao, mo_coeff,
+    h1 = lib.einsum('xpq,pi,qj->xij', h1ao, mo_coeff,
                       mo_coeff)[:, ncore:ncore + ncas, ncore:ncore + ncas]
     print1Int(h1, 'SOC')
 
