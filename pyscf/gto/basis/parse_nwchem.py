@@ -367,7 +367,8 @@ def _parse_ecp(raw_ecp):
                 ecp_add.append([-1])
             else:
                 ecp_add.append([MAPSPDF[key]])
-            by_ang = [[], [], [], []]
+            # up to r^6
+            by_ang = [[] for i in range(7)]
             ecp_add[-1].append(by_ang)
         else:
             line = dat.replace('D','e').split()
