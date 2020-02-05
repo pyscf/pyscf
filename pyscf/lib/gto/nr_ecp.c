@@ -4909,7 +4909,7 @@ int ECPrad_part(double *ur, double *rs, int rs_off, int nrs, int inc,
         double r2[nrs];
         double *ak, *ck, *u_ecp;
         int npk;
-        int ish, i, kp;
+        int ish, i, kp, n;
         int nrs_now;
         int nrs_max = 0;
 
@@ -4962,6 +4962,12 @@ int ECPrad_part(double *ur, double *rs, int rs_off, int nrs, int inc,
                         for (i = 0; i < nrs_now; i++) {
                                 ubuf[i] *= r2[i] * rs[i*inc];
                         }
+                        break;
+                default:
+                        for (i = 0; i < nrs_now; i++) {
+                        for (n = 0; n < ecpbas[ish*BAS_SLOTS+RADI_POWER]; n++) {
+                                ubuf[i] *= rs[i*inc];
+                        } }
                         break;
                 }
 
