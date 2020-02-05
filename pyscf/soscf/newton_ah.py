@@ -549,7 +549,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 
         if callable(mf.check_convergence):
             scf_conv = mf.check_convergence(locals())
-        elif abs((e_tot-last_hf_e)/e_tot)*1e3 < conv_tol and norm_gorb < conv_tol_grad:
+        elif abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad:
             scf_conv = True
 
         if dump_chk:
