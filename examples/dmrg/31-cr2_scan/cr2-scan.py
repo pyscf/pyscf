@@ -101,7 +101,7 @@ def run(b, dm_guess, mo_guess, ci=None):
 #    mc1.sorting_mo_energy = True
 #    mc1.natorb = True
 
-    mc1.kernel()
+    mc1.kernel(mc.mo_coeff)
 
 # Passing the results as an initial guess to the next point.
     return mf.make_rdm1(), mc.mo_coeff, mc.ci
