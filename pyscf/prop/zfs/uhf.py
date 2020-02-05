@@ -33,7 +33,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.ao2mo import _ao2mo
-from pyscf.soscf.newton_ah import _gen_uhf_response
+from pyscf.scf import _response_functions
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.data import nist
@@ -237,7 +237,7 @@ def solve_mo1(sscobj, h1):
                         mo1[2].reshape(nset,-1),
                         mo1[3].reshape(nset,-1)))
 
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp = mf.gen_response(with_j=False, hermi=0)
     mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
     mo_va_ob = numpy.asarray(numpy.hstack((orbva,orbob)), order='F')
     mo_vb_oa = numpy.asarray(numpy.hstack((orbvb,orboa)), order='F')

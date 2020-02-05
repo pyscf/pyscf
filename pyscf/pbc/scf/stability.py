@@ -31,7 +31,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import newton_ah
-from pyscf.pbc.scf.newton_ah import _gen_rhf_response, _gen_uhf_response
+from pyscf.pbc.scf import _response_functions
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     mo_i = mo_e = None
@@ -118,7 +118,7 @@ def _gen_hop_rhf_external(mf, verbose=None):
              for k in range(nkpts)]
     hdiag = numpy.hstack([x.ravel() for x in hdiag])
 
-    vresp1 = _gen_rhf_response(mf, singlet=False, hermi=1)
+    vresp1 = mf.gen_response(singlet=False, hermi=1)
     def hop_rhf2uhf(x1):
         x1 = _unpack(x1, mo_occ)
         dmvo = []
@@ -222,7 +222,7 @@ def _gen_hop_uhf_external(mf, verbose=None):
     hdiagba = [fvvb[k].diagonal().real[:,None] - fooa[k].diagonal().real for k in range(nkpts)]
     hdiag2 = numpy.hstack([x.ravel() for x in (hdiagab + hdiagba)])
 
-    vresp1 = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp1 = mf.gen_response(with_j=False, hermi=0)
     def hop_uhf2ghf(x1):
         x1ab = []
         x1ba = []

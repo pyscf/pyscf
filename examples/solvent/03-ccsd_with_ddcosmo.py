@@ -32,7 +32,8 @@ mycc.run()
 #
 # Freeze solvent effects in the CASSCF optimization
 #
-# Solvent is fully relaxed in the HF calculation.
+# In this case, we need to decide which HF reference to use in the ddCOSMO-CC
+# calculation. The fully relaxed solvent at HF level is preferred.
 #
 mf = solvent.ddCOSMO(scf.RHF(mol)).run()
 # By passing density to solvent model, the solvent potential is frozen at the

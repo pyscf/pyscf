@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 
+'''
+There is a list of methods of the SCF object one can modify to control the SCF
+calculations. You can find these methods in function pyscf.scf.hf.kernel.
+This example shows how to remove basis linear dependency by modifying the SCF
+eig method.
+
+The pyscf.scf.addons module provides a fucntion remove_linear_dep_ to remove
+basis linear dependency in a similar manner.
+'''
+
+
 import numpy
 import numpy.linalg
 from pyscf import gto, scf, mcscf

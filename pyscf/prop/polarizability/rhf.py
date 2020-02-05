@@ -27,7 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import cphf
-from pyscf.soscf.newton_ah import _gen_rhf_response
+from pyscf.scf import _response_functions
 
 
 def dipole(mf):
@@ -107,7 +107,7 @@ def hyper_polarizability(polobj, with_cphf=True):
 
     dm1 = lib.einsum('xpi,qi->xpq', mo1, orbo) * 2
     dm1 = dm1 + dm1.transpose(0,2,1)
-    vresp = _gen_rhf_response(mf, hermi=1)
+    vresp = mf.gen_response(hermi=1)
     h1ao = int_r + vresp(dm1)
     # *2 for double occupancy
     e3  = lib.einsum('xpq,ypi,zqi->xyz', h1ao, mo1, mo1) * 2
@@ -151,7 +151,7 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
                            -h1/diag[1]), axis=1)
     mo1base = mo1base.reshape(ncomp,nocc*nvir*2)
 
-    vresp = _gen_rhf_response(mf, hermi=0)
+    vresp = mf.gen_response(hermi=0)
     def vind(xys):
         nz = len(xys)
         dms = numpy.empty((nz,nao,nao))
@@ -243,7 +243,7 @@ class Polarizability(lib.StreamObject):
 
     def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
-        vresp = _gen_rhf_response(mf, hermi=1)
+        vresp = mf.gen_response(hermi=1)
         occidx = mo_occ > 0
         orbo = mo_coeff[:, occidx]
         nocc = orbo.shape[1]

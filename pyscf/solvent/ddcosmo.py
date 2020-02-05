@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -239,517 +239,78 @@ from pyscf import df
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.symm import sph
-from functools import reduce
 
+from pyscf.solvent import _attach_solvent
+
+@lib.with_doc(_attach_solvent._for_scf.__doc__)
 def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
-    '''Patch ddCOSMO to SCF (HF and DFT) method.
-    
-    Kwargs:
-        dm : if given, solvent does not response to the change of density
-            matrix. A frozen ddCOSMO potential is added to the results.
-    '''
-    if getattr(mf, 'with_solvent', None):
-        if solvent_obj is not None:
-            mf.with_solvent = solvent_obj
-        return mf
-
-    oldMF = mf.__class__
     if solvent_obj is None:
         solvent_obj = DDCOSMO(mf.mol)
+    return _attach_solvent._for_scf(mf, solvent_obj, dm)
 
-    if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
-        solvent_obj.frozen = True
-
-    class SCFWithSolvent(oldMF):
-        def __init__(self, mf, solvent):
-            self.__dict__.update(mf.__dict__)
-            self.with_solvent = solvent
-            self._keys.update(['with_solvent'])
-
-        def dump_flags(self, verbose=None):
-            oldMF.dump_flags(self, verbose)
-            self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags(verbose)
-            return self
-
-        # Note vpcm should not be added to get_hcore for scf methods.
-        # get_hcore is overloaded by many post-HF methods. Modifying
-        # SCF.get_hcore may lead error.
-
-        def get_veff(self, mol=None, dm=None, *args, **kwargs):
-            vhf = oldMF.get_veff(self, mol, dm, *args, **kwargs)
-            with_solvent = self.with_solvent
-            if not with_solvent.frozen:
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
-            epcm, vpcm = with_solvent.epcm, with_solvent.vpcm
-
-            # NOTE: vpcm should not be added to vhf in this place. This is
-            # because vhf is used as the reference for direct_scf in the next
-            # iteration. If vpcm is added here, it may break direct SCF.
-            return lib.tag_array(vhf, epcm=epcm, vpcm=vpcm)
-
-        def get_fock(self, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1,
-                     diis=None, diis_start_cycle=None,
-                     level_shift_factor=None, damp_factor=None):
-            # DIIS was called inside oldMF.get_fock. vpcm, as a function of
-            # dm, should be extrapolated as well. To enable it, vpcm has to be
-            # added to the fock matrix before DIIS was called.
-            if getattr(vhf, 'vpcm', None) is None:
-                vhf = self.get_veff(self.mol, dm)
-            return oldMF.get_fock(self, h1e, s1e, vhf+vhf.vpcm, dm, cycle, diis,
-                                  diis_start_cycle, level_shift_factor, damp_factor)
-
-        def energy_elec(self, dm=None, h1e=None, vhf=None):
-            if dm is None:
-                dm = self.make_rdm1()
-            if getattr(vhf, 'epcm', None) is None:
-                vhf = self.get_veff(self.mol, dm)
-            e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf)
-            e_tot += vhf.epcm
-            self.scf_summary['epcm'] = vhf.epcm.real
-            logger.debug(self, '  E_diel = %.15g', vhf.epcm)
-            return e_tot, e_coul
-
-        def nuc_grad_method(self):
-            from pyscf.solvent import ddcosmo_grad
-            grad_method = oldMF.nuc_grad_method(self)
-            return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
-
-        Gradients = nuc_grad_method
-
-    mf1 = SCFWithSolvent(mf, solvent_obj)
-    return mf1
-
+@lib.with_doc(_attach_solvent._for_casscf.__doc__)
 def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
-    '''Patch ddCOSMO to CASSCF method.
-    
-    Kwargs:
-        dm : if given, solvent does not response to the change of density
-            matrix. A frozen ddCOSMO potential is added to the results.
-    '''
-    if getattr(mc, 'with_solvent', None):
-        if solvent_obj is not None:
-            mc.with_solvent = solvent_obj
-        return mc
-
-    oldCAS = mc.__class__
     if solvent_obj is None:
-        if getattr(mc._scf, 'with_solvent', None):
+        if isinstance(getattr(mc._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)
+    return _attach_solvent._for_casscf(mc, solvent_obj, dm)
 
-    if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
-        solvent_obj.frozen = True
-
-    class CASSCFWithSolvent(oldCAS):
-        def __init__(self, mc, solvent):
-            self.__dict__.update(mc.__dict__)
-            self.with_solvent = solvent
-            self._e_tot_without_solvent = 0
-            self._keys.update(['with_solvent'])
-
-        def dump_flags(self, verbose=None):
-            oldCAS.dump_flags(self, verbose)
-            self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags(verbose)
-            if self.conv_tol < 1e-7:
-                logger.warn(self, 'CASSCF+ddCOSMO may not be able to '
-                            'converge to conv_tol=%g', self.conv_tol)
-            return self
-
-        def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
-            casdm1, casdm2, gci, fcivec = \
-                    oldCAS.update_casdm(self, mo, u, fcivec, e_ci, eris, envs)
-
-# The potential is generated based on the density of current micro iteration.
-# It will be added to hcore in casci function. Strictly speaking, this density
-# is not the same to the CASSCF density (which was used to measure
-# convergence) in the macro iterations.  When CASSCF is converged, it
-# should be almost the same to the CASSCF density of the macro iterations.
-            with_solvent = self.with_solvent
-            if not with_solvent.frozen:
-                # Code to mimic dm = self.make_rdm1(ci=fcivec)
-                mocore = mo[:,:self.ncore]
-                mocas = mo[:,self.ncore:self.ncore+self.ncas]
-                dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
-                dm += numpy.dot(mocore, mocore.T) * 2
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
-
-            return casdm1, casdm2, gci, fcivec
-
-# ddCOSMO Potential should be added to the effective potential. However, there
-# is no hook to modify the effective potential in CASSCF. The workaround
-# here is to modify hcore. It can affect the 1-electron operator in many CASSCF
-# functions: gen_h_op, update_casdm, casci.  Note hcore is used to compute the
-# energy for core density (Ecore).  The resultant total energy from casci
-# function will include the contribution from ddCOSMO potential. The
-# duplicated energy contribution from solvent needs to be removed.
-        def get_hcore(self, mol=None):
-            hcore = self._scf.get_hcore(mol)
-            if self.with_solvent.vpcm is not None:
-                hcore += self.with_solvent.vpcm
-            return hcore
-
-        def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
-            log = logger.new_logger(self, verbose)
-            log.debug('Running CASCI with solvent. Note the total energy '
-                      'has duplicated contributions from solvent.')
-
-            # In oldCAS.casci function, dE was computed based on the total
-            # energy without removing the duplicated solvent contributions.
-            # However, envs['elast'] is the last total energy with correct
-            # solvent effects. Hack envs['elast'] to make oldCAS.casci print
-            # the correct energy difference.
-            envs['elast'] = self._e_tot_without_solvent
-            e_tot, e_cas, fcivec = oldCAS.casci(self, mo_coeff, ci0, eris,
-                                                verbose, envs)
-            self._e_tot_without_solvent = e_tot
-
-            log.debug('Computing corrections to the total energy.')
-            dm = self.make_rdm1(ci=fcivec, ao_repr=True)
-
-            with_solvent = self.with_solvent
-            if with_solvent.epcm is not None:
-                edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                ediel = with_solvent.epcm
-                e_tot = e_tot - edup + ediel
-                log.info('Removing duplication %.15g, '
-                         'adding E_diel = %.15g to total energy:\n'
-                         '    E(CASSCF+solvent) = %.15g', edup, ediel, e_tot)
-
-            # Update solvent effects for next iteration if needed
-            if not with_solvent.frozen:
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
-
-            return e_tot, e_cas, fcivec
-
-        def nuc_grad_method(self):
-            from pyscf.solvent import ddcosmo_grad
-            grad_method = oldCAS.nuc_grad_method(self)
-            return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
-
-        Gradients = nuc_grad_method
-
-    return CASSCFWithSolvent(mc, solvent_obj)
-
-
+@lib.with_doc(_attach_solvent._for_casci.__doc__)
 def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
-    '''Patch ddCOSMO to CASCI method.
-    
-    Kwargs:
-        dm : if given, solvent does not response to the change of density
-            matrix. A frozen ddCOSMO potential is added to the results.
-    '''
-    if getattr(mc, 'with_solvent', None):
-        if solvent_obj is not None:
-            mc.with_solvent = solvent_obj
-        return mc
-
-    oldCAS = mc.__class__
     if solvent_obj is None:
-        if getattr(mc._scf, 'with_solvent', None):
+        if isinstance(getattr(mc._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)
+    return _attach_solvent._for_casci(mc, solvent_obj, dm)
 
-    if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
-        solvent_obj.frozen = True
-
-    class CASCIWithSolvent(oldCAS):
-        def __init__(self, mc, solvent):
-            self.__dict__.update(mc.__dict__)
-            self.with_solvent = solvent
-            self._keys.update(['with_solvent'])
-
-        def dump_flags(self, verbose=None):
-            oldCAS.dump_flags(self, verbose)
-            self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags(verbose)
-            return self
-
-        def get_hcore(self, mol=None):
-            hcore = self._scf.get_hcore(mol)
-            if self.with_solvent.vpcm is not None:
-                # NOTE: get_hcore was called by CASCI to generate core
-                # potential.  vpcm is added in this place to take accounts the
-                # effects of solvent. Its contribution is duplicated and it
-                # should be removed from the total energy.
-                hcore += self.with_solvent.vpcm
-            return hcore
-
-        def kernel(self, mo_coeff=None, ci0=None, verbose=None):
-            with_solvent = self.with_solvent
-
-            log = logger.new_logger(self)
-            log.info('\n** Self-consistently update the solvent effects for %s **',
-                     oldCAS)
-            log1 = copy.copy(log)
-            log1.verbose -= 1  # Suppress a few output messages
-
-            def casci_iter_(ci0, log):
-                # self.e_tot, self.e_cas, and self.ci are updated in the call
-                # to oldCAS.kernel
-                e_tot, e_cas, ci0 = oldCAS.kernel(self, mo_coeff, ci0, log)[:3]
-
-                if isinstance(self.e_cas, (float, numpy.number)):
-                    dm = self.make_rdm1(ci=ci0)
-                else:
-                    log.debug('Computing solvent responses to DM of state %d',
-                              with_solvent.state_id)
-                    dm = self.make_rdm1(ci=ci0[with_solvent.state_id])
-
-                if with_solvent.epcm is not None:
-                    edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                    self.e_tot += with_solvent.epcm - edup
-
-                if not with_solvent.frozen:
-                    with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
-                log.debug('  E_diel = %.15g', with_solvent.epcm)
-                return self.e_tot, e_cas, ci0
-
-            if with_solvent.frozen:
-                with lib.temporary_env(self, _finalize=lambda:None):
-                    casci_iter_(ci0, log)
-                log.note('Total energy with solvent effects')
-                self._finalize()
-                return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
-
-            self.converged = False
-            with lib.temporary_env(self, canonicalization=False):
-                e_tot = e_last = 0
-                for cycle in range(self.with_solvent.max_cycle):
-                    log.info('\n** Solvent self-consistent cycle %d:', cycle)
-                    e_tot, e_cas, ci0 = casci_iter_(ci0, log1)
-
-                    de = e_tot - e_last
-                    if isinstance(e_cas, (float, numpy.number)):
-                        log.info('Sovlent cycle %d  E(CASCI+solvent) = %.15g  '
-                                 'dE = %g', cycle, e_tot, de)
-                    else:
-                        for i, e in enumerate(e_tot):
-                            log.info('Solvent cycle %d  CASCI root %d  '
-                                     'E(CASCI+solvent) = %.15g  dE = %g',
-                                     cycle, i, e, de[i])
-
-                    if abs(e_tot-e_last).max() < with_solvent.conv_tol:
-                        self.converged = True
-                        break
-                    e_last = e_tot
-
-            # An extra cycle to canonicalize CASCI orbitals
-            with lib.temporary_env(self, _finalize=lambda:None):
-                casci_iter_(ci0, log)
-            if self.converged:
-                log.info('self-consistent CASCI+solvent converged')
-            else:
-                log.info('self-consistent CASCI+solvent not converged')
-            log.note('Total energy with solvent effects')
-            self._finalize()
-            return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
-
-        def nuc_grad_method(self):
-            from pyscf.solvent import ddcosmo_grad
-            grad_method = oldCAS.nuc_grad_method(self)
-            return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
-
-        Gradients = nuc_grad_method
-
-    return CASCIWithSolvent(mc, solvent_obj)
-
-
+@lib.with_doc(_attach_solvent._for_post_scf.__doc__)
 def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
-    '''Default wrapper to patch ddCOSMO to post-SCF methods (CC, CI, MP,
-    TDDFT etc.)
+    if solvent_obj is None:
+        if isinstance(getattr(method._scf, 'with_solvent', None), DDCOSMO):
+            solvent_obj = method._scf.with_solvent
+        else:
+            solvent_obj = DDCOSMO(method.mol)
+    return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
-    NOTE: this implementation often causes (macro iteration) convergence issue
-    
-    Kwargs:
-        dm : if given, solvent does not response to the change of density
-            matrix. A frozen ddCOSMO potential is added to the results.
-    '''
-    if getattr(method, 'with_solvent', None):
-        if solvent_obj is not None:
-            method.with_solvent = solvent_obj
-            method._scf.with_solvent = solvent_obj
-        return method
+@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
+def ddcosmo_for_tdscf(method, solvent_obj=None, dm=None):
+    scf_solvent = getattr(method._scf, 'with_solvent', None)
+    assert scf_solvent is None or isinstance(scf_solvent, DDCOSMO)
 
-    old_method = method.__class__
-
-    if getattr(method._scf, 'with_solvent', None):
-        scf_with_solvent = method._scf
-        if solvent_obj is not None:
-            scf_with_solvent.with_solvent = solvent_obj
-    else:
-        scf_with_solvent = ddcosmo_for_scf(method._scf, solvent_obj, dm)
-        if dm is None:
-            solvent_obj = scf_with_solvent.with_solvent
-            solvent_obj.epcm, solvent_obj.vpcm = \
-                    solvent_obj.kernel(scf_with_solvent.make_rdm1())
-
-    # Post-HF objects access the solvent effects indirectly through the
-    # underlying ._scf object.
-    basic_scanner = method.as_scanner()
-    basic_scanner._scf = scf_with_solvent.as_scanner()
-
-    if dm is not None:
-        solvent_obj = scf_with_solvent.with_solvent
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
-        solvent_obj.frozen = True
-
-    class PostSCFWithSolvent(old_method):
-        def __init__(self, method):
-            self.__dict__.update(method.__dict__)
-            self._scf = scf_with_solvent
-
-        @property
-        def with_solvent(self):
-            return self._scf.with_solvent
-
-        def dump_flags(self, verbose=None):
-            old_method.dump_flags(self, verbose)
-            self.with_solvent.check_sanity()
-            self.with_solvent.dump_flags(verbose)
-            return self
-
-        def kernel(self, *args, **kwargs):
-            with_solvent = self.with_solvent
-            # The underlying ._scf object is decorated with solvent effects.
-            # The resultant Fock matrix and orbital energies both include the
-            # effects from solvent. It means that solvent effects for post-HF
-            # methods are automatically counted if solvent is enabled at scf
-            # level.
-            if with_solvent.frozen:
-                return old_method.kernel(self, *args, **kwargs)
-
-            log = logger.new_logger(self)
-            log.info('\n** Self-consistently update the solvent effects for %s **',
-                     old_method)
-            ##TODO: Suppress a few output messages
-            #log1 = copy.copy(log)
-            #log1.note, log1.info = log1.info, log1.debug
-
-            e_last = 0
-            #diis = lib.diis.DIIS()
-            for cycle in range(self.with_solvent.max_cycle):
-                log.info('\n** Solvent self-consistent cycle %d:', cycle)
-                # Solvent effects are applied when accessing the
-                # underlying ._scf objects. The flag frozen=True ensures that
-                # the generated potential with_solvent.vpcm is passed to the
-                # the post-HF object, without being updated in the implicit
-                # call to the _scf iterations.
-                with lib.temporary_env(with_solvent, frozen=True):
-                    e_tot = basic_scanner(self.mol)
-                    dm = basic_scanner.make_rdm1(ao_repr=True)
-                    #dm = diis.update(dm)
-
-                # To generate the solvent potential for ._scf object. Since
-                # frozen is set when calling basic_scanner, the solvent
-                # effects are frozen during the scf iterations.
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
-
-                de = e_tot - e_last
-                log.info('Sovlent cycle %d  E_tot = %.15g  dE = %g',
-                         cycle, e_tot, de)
-
-                if abs(e_tot-e_last).max() < with_solvent.conv_tol:
-                    break
-                e_last = e_tot
-
-            # An extra cycle to compute the total energy
-            log.info('\n** Extra cycle for solvent effects')
-            with lib.temporary_env(with_solvent, frozen=True):
-                #Update everything except the _scf object and _keys
-                basic_scanner(self.mol)
-                self.__dict__.update(basic_scanner.__dict__)
-                self._scf.__dict__.update(basic_scanner._scf.__dict__)
-            self._finalize()
-            return self.e_corr, None
-
-        def nuc_grad_method(self):
-            from pyscf.solvent import ddcosmo_grad
-            grad_method = old_method.nuc_grad_method(self)
-            return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
-
-        Gradients = nuc_grad_method
-
-    return PostSCFWithSolvent(method)
+    if solvent_obj is None:
+        solvent_obj = DDCOSMO(method.mol)
+    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
 
 
-# Inject DDCOSMO into other methods
+# Inject ddCOSMO into other methods
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import mp, ci, cc
-scf.hf.SCF.DDCOSMO = ddcosmo_for_scf
-mcscf.casci.DDCOSMO = ddcosmo_for_casci
-mcscf.mc1step.DDCOSMO = ddcosmo_for_casscf
-mp.mp2.MP2.DDCOSMO = ddcosmo_for_post_scf
-ci.cisd.CISD.DDCOSMO = ddcosmo_for_post_scf
-cc.ccsd.CCSD.DDCOSMO = ddcosmo_for_post_scf
+from pyscf import tdscf
+scf.hf.SCF.ddCOSMO    = scf.hf.SCF.DDCOSMO    = ddcosmo_for_scf
+mcscf.casci.ddCOSMO   = mcscf.casci.DDCOSMO   = ddcosmo_for_casci
+mcscf.mc1step.ddCOSMO = mcscf.mc1step.DDCOSMO = ddcosmo_for_casscf
+mp.mp2.MP2.ddCOSMO    = mp.mp2.MP2.DDCOSMO    = ddcosmo_for_post_scf
+ci.cisd.CISD.ddCOSMO  = ci.cisd.CISD.DDCOSMO  = ddcosmo_for_post_scf
+cc.ccsd.CCSD.ddCOSMO  = cc.ccsd.CCSD.DDCOSMO  = ddcosmo_for_post_scf
+tdscf.rhf.TDA.ddCOSMO = tdscf.rhf.TDA.DDCOSMO = ddcosmo_for_tdscf
 
 
-# TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
-# psi are tested against ddPCM implementation on github. Psi needs to be
-# computed by the host program. It requires the numerical integration code. 
+# Keep gen_ddcosmo_solver for backward compatibility
 def gen_ddcosmo_solver(pcmobj, verbose=None):
     '''Generate ddcosmo function to compute energy and potential matrix
     '''
-    mol = pcmobj.mol
-    if pcmobj.grids.coords is None:
-        pcmobj.grids.build(with_non0tab=True)
-
-    natm = mol.natm
-    lmax = pcmobj.lmax
-
-    r_vdw = pcmobj.get_atomic_radii()
-    coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
-    ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, lmax, True))
-
-    fi = make_fi(pcmobj, r_vdw)
-    ui = 1 - fi
-    ui[ui<0] = 0
-    nexposed = numpy.count_nonzero(ui==1)
-    nbury = numpy.count_nonzero(ui==0)
-    on_shell = numpy.count_nonzero(ui>0) - nexposed
-    logger.debug(pcmobj, 'Num points exposed %d', nexposed)
-    logger.debug(pcmobj, 'Num points buried %d', nbury)
-    logger.debug(pcmobj, 'Num points on shell %d', on_shell)
-
-    nlm = (lmax+1)**2
-    Lmat = make_L(pcmobj, r_vdw, ylm_1sph, fi)
-    Lmat = Lmat.reshape(natm*nlm,-1)
-
-    cached_pol = cache_fake_multipoles(pcmobj.grids, r_vdw, lmax)
-
-    def gen_vind(dm):
-        pcmobj._dm = dm
-        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            # spin-traced DM for UHF or ROHF
-            dm = dm[0] + dm[1]
-
-        phi = make_phi(pcmobj, dm, r_vdw, ui)
-        L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
-        psi, vmat = make_psi_vmat(pcmobj, dm, r_vdw, ui, pcmobj.grids, ylm_1sph,
-                                  cached_pol, L_X, Lmat)[:2]
-        dielectric = pcmobj.eps
-        if dielectric > 0:
-            f_epsilon = (dielectric-1.)/dielectric
-        else:
-            f_epsilon = 1
-        pcmobj.epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
-        pcmobj.vpcm = .5 * f_epsilon * vmat
-        return pcmobj.epcm, pcmobj.vpcm
-    return gen_vind
+    return pcmobj._get_vind
 
 def energy(pcmobj, dm):
     '''
     ddCOSMO energy
     Es = 1/2 f(eps) \int rho(r) W(r) dr
     '''
-    epcm = gen_ddcosmo_solver(pcmobj, pcmobj.verbose)(dm)[0]
+    epcm = pcmobj._get_vind(dm)[0]
     return epcm
 
 def get_atomic_radii(pcmobj):
@@ -853,19 +414,29 @@ def make_fi(pcmobj, r_vdw):
     fi[fi < 1e-20] = 0
     return fi
 
-def make_phi(pcmobj, dm, r_vdw, ui):
+def make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph, with_nuc=True):
+    '''
+    Induced potential of ddCOSMO model
+
+    Kwargs:
+        with_nuc (bool): Mute the contribution of nuclear charges when
+            computing the second order derivatives of energy
+    '''
     mol = pcmobj.mol
     natm = mol.natm
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
     ngrid_1sph = coords_1sph.shape[0]
 
-    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        dm = dm[0] + dm[1]
-    tril_dm = lib.pack_tril(dm+dm.T)
-    nao = dm.shape[0]
+    dms = numpy.asarray(dm)
+    is_single_dm = dms.ndim == 2
+
+    nao = dms.shape[-1]
+    dms = dms.reshape(-1,nao,nao)
+    n_dm = dms.shape[0]
     diagidx = numpy.arange(nao)
     diagidx = diagidx*(diagidx+1)//2 + diagidx
-    tril_dm[diagidx] *= .5
+    tril_dm = lib.pack_tril(dms+dms.transpose(0,2,1))
+    tril_dm[:,diagidx] *= .5
 
     atom_coords = mol.atom_coords()
     atom_charges = mol.atom_charges()
@@ -874,111 +445,127 @@ def make_phi(pcmobj, dm, r_vdw, ui):
     cav_coords = (atom_coords.reshape(natm,1,3)
                   + numpy.einsum('r,gx->rgx', r_vdw, coords_1sph))
 
-    v_phi = numpy.empty((natm,ngrid_1sph))
-    for ia in range(natm):
+    v_phi = numpy.zeros((n_dm, natm, ngrid_1sph))
+
+    if with_nuc:
+        for ia in range(natm):
 # Note (-) sign is not applied to atom_charges, because (-) is explicitly
 # included in rhs and L matrix
-        d_rs = atom_coords.reshape(-1,1,3) - cav_coords[ia]
-        v_phi[ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
+            d_rs = atom_coords.reshape(-1,1,3) - cav_coords[ia]
+            v_phi[:,ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*1e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
 
     cav_coords = cav_coords[extern_point_idx]
-    v_phi_e = numpy.empty(cav_coords.shape[0])
+    v_phi_e = numpy.empty((n_dm, cav_coords.shape[0]))
     int3c2e = mol._add_suffix('int3c2e')
-    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
-                                         mol._env, int3c2e)
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e)
     for i0, i1 in lib.prange(0, cav_coords.shape[0], blksize):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
-        v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij',
-                                cintopt=cintopt)
-        v_phi_e[i0:i1] = numpy.einsum('x,xk->k', tril_dm, v_nj)
-    v_phi[extern_point_idx] -= v_phi_e
+        v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij', cintopt=cintopt)
+        v_phi_e[:,i0:i1] = numpy.einsum('nx,xk->nk', tril_dm, v_nj)
+    v_phi[:,extern_point_idx] -= v_phi_e
 
-    ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcmobj.lmax, True))
-    phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph, ui, v_phi)
+    phi = -numpy.einsum('n,xn,jn,ijn->ijx', weights_1sph, ylm_1sph, ui, v_phi)
+    if is_single_dm:
+        phi = phi[0]
     return phi
 
-def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
+def make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L,
+                  with_nuc=True):
+    '''
+    The first order derivative of E_ddCOSMO wrt density matrix
+
+    Kwargs:
+        with_nuc (bool): Mute the contribution of nuclear charges when
+            computing the second order derivatives of energy.
+    '''
     mol = pcmobj.mol
     natm = mol.natm
     lmax = pcmobj.lmax
     nlm = (lmax+1)**2
 
-    i1 = 0
-    scaled_weights = numpy.empty(grids.weights.size)
-    for ia in range(natm):
-        fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
-        i0, i1 = i1, i1 + fak_pol[0].shape[1]
-        eta_nj = 0
-        p1 = 0
-        for l in range(lmax+1):
-            fac = 4*numpy.pi/(l*2+1)
-            p0, p1 = p1, p1 + (l*2+1)
-            eta_nj += fac * numpy.einsum('mn,m->n', fak_pol[l], L_X[ia,p0:p1])
-        scaled_weights[i0:i1] = eta_nj * grids.weights[i0:i1]
+    dms = numpy.asarray(dm)
+    is_single_dm = dms.ndim == 2
+    grids = pcmobj.grids
 
-    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        dm = dm[0] + dm[1]
     ni = numint.NumInt()
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm)
+    make_rho, n_dm, nao = ni._gen_rho_evaluator(mol, dms)
+    dms = dms.reshape(n_dm,nao,nao)
+    Xvec = Xvec.reshape(n_dm, natm, nlm)
+
+    i1 = 0
+    scaled_weights = numpy.empty((n_dm, grids.weights.size))
+    for ia in range(natm):
+        fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
+        fac_pol = _vstack_factor_fak_pol(fak_pol, lmax)
+        i0, i1 = i1, i1 + fac_pol.shape[1]
+        scaled_weights[:,i0:i1] = numpy.einsum('mn,im->in', fac_pol, Xvec[:,ia])
+    scaled_weights *= grids.weights
+
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
-    den = numpy.empty(grids.weights.size)
-    vmat = numpy.zeros((nao,nao))
+    den = numpy.empty((n_dm, grids.weights.size))
+    vmat = numpy.zeros((n_dm, nao, nao))
     p1 = 0
     aow = None
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, max_memory):
         p0, p1 = p1, p1 + weight.size
-        den[p0:p1] = weight * make_rho(0, ao, mask, 'LDA')
-        aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
-        aow = numpy.einsum('pi,p->pi', ao, scaled_weights[p0:p1], out=aow)
-        vmat -= numint._dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
+        for i in range(n_dm):
+            den[i,p0:p1] = make_rho(i, ao, mask, 'LDA')
+            aow = numint._scale_ao(ao, scaled_weights[i,p0:p1], out=aow)
+            vmat[i] -= numint._dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
+    den *= grids.weights
     ao = aow = scaled_weights = None
 
     nelec_leak = 0
-    psi = numpy.empty((natm,nlm))
+    psi = numpy.zeros((n_dm, natm, nlm))
     i1 = 0
     for ia in range(natm):
         fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
-        i0, i1 = i1, i1 + fak_pol[0].shape[1]
-        nelec_leak += den[i0:i1][leak_idx].sum()
-        p1 = 0
-        for l in range(lmax+1):
-            fac = 4*numpy.pi/(l*2+1)
-            p0, p1 = p1, p1 + (l*2+1)
-            psi[ia,p0:p1] = -fac * numpy.einsum('n,mn->m', den[i0:i1], fak_pol[l])
-# Contribution of nuclear charge to the total density
+        fac_pol = _vstack_factor_fak_pol(fak_pol, lmax)
+        i0, i1 = i1, i1 + fac_pol.shape[1]
+        nelec_leak += den[:,i0:i1][:,leak_idx].sum(axis=1)
+        psi[:,ia] = -numpy.einsum('in,mn->im', den[:,i0:i1], fac_pol)
+    logger.debug(pcmobj, 'electron leaks %s', nelec_leak)
+
+# Contribution of nuclear charges to the total density
 # The factor numpy.sqrt(4*numpy.pi) is due to the product of 4*pi * Y_0^0
-        psi[ia,0] += numpy.sqrt(4*numpy.pi)/r_vdw[ia] * mol.atom_charge(ia)
-    logger.debug(pcmobj, 'electron leak %f', nelec_leak)
+    if with_nuc:
+        for ia in range(natm):
+            psi[:,ia,0] += numpy.sqrt(4*numpy.pi)/r_vdw[ia] * mol.atom_charge(ia)
 
     # <Psi, L^{-1}g> -> Psi = SL the adjoint equation to LX = g
-    L_S = numpy.linalg.solve(L.T.reshape(natm*nlm,-1), psi.ravel()).reshape(natm,-1)
+    L_S = numpy.linalg.solve(L.reshape(natm*nlm,-1).T, psi.reshape(n_dm,-1).T)
+    L_S = L_S.reshape(natm,nlm,n_dm).transpose(2,0,1)
     coords_1sph, weights_1sph = make_grids_one_sphere(pcmobj.lebedev_order)
     # JCP, 141, 184108, Eq (39)
-    xi_jn = numpy.einsum('n,jn,xn,jx->jn', weights_1sph, ui, ylm_1sph, L_S)
+    xi_jn = numpy.einsum('n,jn,xn,ijx->ijn', weights_1sph, ui, ylm_1sph, L_S)
     extern_point_idx = ui > 0
     cav_coords = (mol.atom_coords().reshape(natm,1,3)
                   + numpy.einsum('r,gx->rgx', r_vdw, coords_1sph))
     cav_coords = cav_coords[extern_point_idx]
-    xi_jn = xi_jn[extern_point_idx]
+    xi_jn = xi_jn[:,extern_point_idx]
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*1e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
 
-    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
-                                         mol._env, 'int3c2e')
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     vmat_tril = 0
-    for i0, i1 in lib.prange(0, xi_jn.size, blksize):
+    for i0, i1 in lib.prange(0, cav_coords.shape[0], blksize):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
         v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij',
                                 cintopt=cintopt)
-        vmat_tril += numpy.einsum('xn,n->x', v_nj, xi_jn[i0:i1])
+        vmat_tril += numpy.einsum('xn,in->ix', v_nj, xi_jn[:,i0:i1])
     vmat += lib.unpack_tril(vmat_tril)
+
+    if is_single_dm:
+        psi = psi[0]
+        L_S = L_S[0]
+        vmat = vmat[0]
     return psi, vmat, L_S
 
 def cache_fake_multipoles(grids, r_vdw, lmax):
@@ -1018,6 +605,13 @@ def cache_fake_multipoles(grids, r_vdw, lmax):
         cached_pol[symb] = (fak_pol, leak_idx)
     return cached_pol
 
+def _vstack_factor_fak_pol(fak_pol, lmax):
+    fac_pol = []
+    for l in range(lmax+1):
+        fac = 4*numpy.pi/(l*2+1)
+        fac_pol.append(fac * fak_pol[l])
+    return numpy.vstack(fac_pol)
+
 def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
     atm_dist = atom_coords - atom_coords[atm_id]
     atm_dist = numpy.einsum('pi,pi->p', atm_dist, atm_dist)
@@ -1054,6 +648,18 @@ class DDCOSMO(lib.StreamObject):
         # generate the potential.
         self.frozen = False
 
+        # In the rapid process (such as vertical excitation), solvent does not
+        # follow the fast change of electronic structure of solutes. A
+        # calculation of non-equilibrium solvation should be used. For slow
+        # process (like geometry optimization), solvent has enough time to
+        # respond to the changes in electronic structure or geometry of
+        # solutes. Equilibrium solvation should be enabled in the calculation.
+        # See for example JPCA, 104, 5631 (2000)
+        #
+        # Note this attribute has no effects if .frozen is enabled.
+        #
+        self.equilibrium_solvation = False
+
 ##################################################
 # don't modify the following attributes, they are not input options
         # epcm (the dielectric correction) and vpcm (the additional
@@ -1062,11 +668,7 @@ class DDCOSMO(lib.StreamObject):
         self.vpcm = None
         self._dm = None
 
-        # _solver_ is a cached function returned by self.as_solver() to reduce
-        # the overhead of initialization. It should be cleared whenever the
-        # solvent parameters or the integration grids were changed.
-        self._solver_ = None
-
+        self._intermediates = None
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -1077,7 +679,7 @@ class DDCOSMO(lib.StreamObject):
     def dm(self, dm):
         '''Set dm to enable/disable the frozen ddCOSMO solvent potential.
         Setting dm to None will disable the frozen potental, i.e. the
-        potential will be response to the change of the density during SCF
+        potential will respond to the change of the density during SCF
         iterations.
         '''
         if isinstance(dm, numpy.ndarray):
@@ -1089,7 +691,7 @@ class DDCOSMO(lib.StreamObject):
     def __setattr__(self, key, val):
         if key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
                    'eta', 'eps', 'grids'):
-            self._solver_ = None
+            self.reset()
         super(DDCOSMO, self).__setattr__(key, val)
 
     def dump_flags(self, verbose=None):
@@ -1099,32 +701,135 @@ class DDCOSMO(lib.StreamObject):
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
         logger.info(self, 'eps = %s'          , self.eps)
+        logger.info(self, 'frozen = %s'       , self.frozen)
+        logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
         self.grids.dump_flags(verbose)
         return self
 
+# TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
+# psi are tested against ddPCM implementation on github. Psi needs to be
+# computed by the host program. It requires the numerical integration code. 
+    def build(self):
+        if self.grids.coords is None:
+            self.grids.build(with_non0tab=True)
+
+        mol = self.mol
+        natm = mol.natm
+        lmax = self.lmax
+
+        r_vdw = self.get_atomic_radii()
+        coords_1sph, weights_1sph = make_grids_one_sphere(self.lebedev_order)
+        ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, lmax, True))
+
+        fi = make_fi(self, r_vdw)
+        ui = 1 - fi
+        ui[ui<0] = 0
+        nexposed = numpy.count_nonzero(ui==1)
+        nbury = numpy.count_nonzero(ui==0)
+        on_shell = numpy.count_nonzero(ui>0) - nexposed
+        logger.debug(self, 'Num points exposed %d', nexposed)
+        logger.debug(self, 'Num points buried %d', nbury)
+        logger.debug(self, 'Num points on shell %d', on_shell)
+
+        nlm = (lmax+1)**2
+        Lmat = make_L(self, r_vdw, ylm_1sph, fi)
+        Lmat = Lmat.reshape(natm*nlm,-1)
+
+        cached_pol = cache_fake_multipoles(self.grids, r_vdw, lmax)
+
+        self._intermediates = {
+            'r_vdw': r_vdw,
+            'ylm_1sph': ylm_1sph,
+            'ui': ui,
+            'Lmat': Lmat,
+            'cached_pol': cached_pol,
+        }
+
     def kernel(self, dm):
         '''A single shot solvent effects for given density matrix.
         '''
-        if (self._solver_ is None or
-# If self.grids.coords is None, it is very likely caused by the updates of the
-# "grids" parameters. The COSMO solver should be updated to adapt the new
-# integral grids.
-            self.grids.coords is None):
-            self._solver_ = self.as_solver()
-
-        epcm, vpcm = self._solver_(dm)
-        return epcm, vpcm
+        self._dm = dm
+        self.epcm, self.vpcm = self._get_vind(dm)
+        return self.epcm, self.vpcm
 
     def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self._solver_ = None
-        self.grids.reset(mol)
+            self.grids.reset(mol)
+        self._intermediates = None
         return self
+
+    def _get_vind(self, dm):
+        '''A single shot solvent effects for given density matrix.
+        '''
+        if not self._intermediates or self.grids.coords is None:
+            self.build()
+
+        mol = self.mol
+        r_vdw      = self._intermediates['r_vdw'     ]
+        ylm_1sph   = self._intermediates['ylm_1sph'  ]
+        ui         = self._intermediates['ui'        ]
+        Lmat       = self._intermediates['Lmat'      ]
+        cached_pol = self._intermediates['cached_pol']
+
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            # spin-traced DM for UHF or ROHF
+            dm = dm[0] + dm[1]
+
+        phi = make_phi(self, dm, r_vdw, ui, ylm_1sph)
+        Xvec = numpy.linalg.solve(Lmat, phi.ravel()).reshape(mol.natm,-1)
+        psi, vmat = make_psi_vmat(self, dm, r_vdw, ui, ylm_1sph,
+                                  cached_pol, Xvec, Lmat)[:2]
+        dielectric = self.eps
+        if dielectric > 0:
+            f_epsilon = (dielectric-1.)/dielectric
+        else:
+            f_epsilon = 1
+        epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, Xvec)
+        vpcm = .5 * f_epsilon * vmat
+        return epcm, vpcm
+
+    def _B_dot_x(self, dm):
+        '''
+        Compute the matrix-vector product B * x. The B matrix, as defined in
+        the paper R. Cammi, JPCA, 104, 5631 (2000), is the second order
+        derivatives of E_solvation wrt density matrices.
+
+        Note: In ddCOSMO, strictly, B is not symmetric. To make it compatible
+        with the CIS framework, it is symmetrized in current implementation.
+        '''
+        if not self._intermediates or self.grids.coords is None:
+            self.build()
+
+        mol = self.mol
+        r_vdw      = self._intermediates['r_vdw'     ]
+        ylm_1sph   = self._intermediates['ylm_1sph'  ]
+        ui         = self._intermediates['ui'        ]
+        Lmat       = self._intermediates['Lmat'      ]
+        cached_pol = self._intermediates['cached_pol']
+        natm = mol.natm
+        nlm = (self.lmax+1)**2
+
+        dms = numpy.asarray(dm)
+        dm_shape = dms.shape
+        nao = dm_shape[-1]
+        dms = dms.reshape(-1,nao,nao)
+
+        phi = make_phi(self, dms, r_vdw, ui, ylm_1sph, with_nuc=False)
+        Xvec = numpy.linalg.solve(Lmat, phi.reshape(-1,natm*nlm).T)
+        Xvec = Xvec.reshape(natm,nlm,-1).transpose(2,0,1)
+        vmat = make_psi_vmat(self, dms, r_vdw, ui, ylm_1sph,
+                             cached_pol, Xvec, Lmat, with_nuc=False)[1]
+        dielectric = self.eps
+        if dielectric > 0:
+            f_epsilon = (dielectric-1.)/dielectric
+        else:
+            f_epsilon = 1
+        return .5 * f_epsilon * vmat.reshape(dm_shape)
 
     energy = energy
     gen_solver = as_solver = gen_ddcosmo_solver
@@ -1133,6 +838,15 @@ class DDCOSMO(lib.StreamObject):
     def regularize_xt(self, t, eta, scale=1):
         # scale = eta*scale, is it correct?
         return regularize_xt(t, eta*scale)
+
+    def nuc_grad_method(self, grad_method):
+        '''For grad_method in vacuum, add nuclear gradients of solvent
+        '''
+        from pyscf.solvent import ddcosmo_grad
+        if self.frozen:
+            raise RuntimeError('Frozen solvent model is not supported for '
+                               'energy gradients')
+        return ddcosmo_grad.make_grad_object(grad_method, self)
 
 
 if __name__ == '__main__':
@@ -1154,7 +868,7 @@ if __name__ == '__main__':
     fi = make_fi(pcmobj, r_vdw)
     ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcmobj.lmax, True))
     L = make_L(pcmobj, r_vdw, ylm_1sph, fi)
-    print(lib.finger(L) - 6.2823493771037473)
+    print(lib.fp(L) - 6.2823493771037473)
 
     mol = gto.Mole()
     mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188

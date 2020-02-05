@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,9 +28,8 @@ from pyscf import symm
 from pyscf.dft import numint
 from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
-from pyscf.ao2mo import _ao2mo
+from pyscf.scf import _response_functions
 from pyscf.data import nist
-from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf import __config__
 
 # Low excitation filter to avoid numerical instability
@@ -79,26 +78,26 @@ class TDDFTNoHybrid(TDA):
         e_ia = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
         if wfnsym is not None and mol.symmetry:
             e_ia[sym_forbid] = 0
-        d_ia = numpy.sqrt(e_ia).ravel()
-        ed_ia = e_ia.ravel() * d_ia
+        d_ia = numpy.sqrt(e_ia)
+        ed_ia = e_ia * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=1)
+        vresp = mf.gen_response(singlet=singlet, hermi=1)
 
         def vind(zs):
-            nz = len(zs)
-            dmov = numpy.empty((nz,nao,nao))
-            for i, z in enumerate(zs):
-                # *2 for double occupancy
-                dm = reduce(numpy.dot, (orbo, (d_ia*z).reshape(nocc,nvir)*2, orbv.T))
-                dmov[i] = dm + dm.T # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
+            zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
+            # *2 for double occupancy
+            dmov = lib.einsum('xov,ov,po,qv->xpq', zs, d_ia*2, orbo, orbv.conj())
+            # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
+            dmov = dmov + dmov.conj().transpose(0,2,1)
+
             v1ao = vresp(dmov)
-            v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc*nvir)
-            for i, z in enumerate(zs):
-                # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1ov)
-                v1ov[i] += ed_ia*z
-                v1ov[i] *= d_ia
-            return v1ov.reshape(nz,-1)
+            v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+
+            # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1ov)
+            v1ov += numpy.einsum('xov,ov->xov', zs, ed_ia)
+            v1ov *= d_ia
+            return v1ov.reshape(v1ov.shape[0],-1)
 
         return vind, hdiag
 

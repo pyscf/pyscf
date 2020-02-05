@@ -42,7 +42,7 @@ MO_BASE = getattr(__config__, 'MO_BASE', 1)
 TIGHT_GRAD_CONV_TOL = getattr(__config__, 'scf_hf_kernel_tight_grad_conv_tol', True)
 MUTE_CHKFILE = getattr(__config__, 'scf_hf_SCF_mute_chkfile', False)
 
-# For code compatiblity in python-2 and python-3
+# For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
 
@@ -1852,20 +1852,20 @@ class SCF(lib.StreamObject):
             raise TypeError('First argument of .apply method must be a '
                             'function/class or a name (string) of a method.')
 
-    def to_rhf(self, mf):
+    def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
         from pyscf.scf import addons
-        return addons.convert_to_rhf(mf)
+        return addons.convert_to_rhf(self)
 
-    def to_uhf(self, mf):
+    def to_uhf(self):
         '''Convert the input mean-field object to a UHF/UKS object'''
         from pyscf.scf import addons
-        return addons.convert_to_uhf(mf)
+        return addons.convert_to_uhf(self)
 
-    def to_ghf(self, mf):
+    def to_ghf(self):
         '''Convert the input mean-field object to a GHF/GKS object'''
         from pyscf.scf import addons
-        return addons.convert_to_ghf(mf)
+        return addons.convert_to_ghf(self)
 
 
 ############

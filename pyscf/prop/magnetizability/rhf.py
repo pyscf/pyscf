@@ -34,8 +34,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import jk
 from pyscf.scf import cphf
+from pyscf.scf import _response_functions
 from pyscf.prop.nmr import rhf as rhf_nmr
-from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 
 

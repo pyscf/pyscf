@@ -24,7 +24,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.pbc.tdscf.krhf import _get_e_ia
-from pyscf.pbc.scf.newton_ah import _gen_uhf_response
+from pyscf.pbc.scf import _response_functions
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
@@ -70,7 +70,7 @@ class TDA(uhf.TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+        vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
@@ -178,7 +178,7 @@ class TDHF(TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+        vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)
