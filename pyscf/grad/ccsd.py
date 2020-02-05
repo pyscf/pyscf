@@ -231,6 +231,7 @@ def as_scanner(grad_cc):
             self.mol = mol
 
             cc = self.base
+            cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
             cc._eris = None
             # Save eris in cc when calling cc(mol). See the _save_eris
             # function defined below

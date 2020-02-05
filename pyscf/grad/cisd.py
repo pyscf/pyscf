@@ -80,6 +80,7 @@ def as_scanner(grad_ci, state=0):
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
             ci_scanner = self.base
+            ci_scanner.civec = None
             ci_scanner._eris = None
             if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
                 raise ValueError('State ID greater than the number of CISD roots')
