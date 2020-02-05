@@ -529,6 +529,8 @@ def _object_without_soscf(mf, known_class, remove_df=False):
             remove_df = remove_df or (not getattr(mf._scf, 'with_df', None))
         elif 'SFX2C1E' in cls.__name__:
             obj = obj.sfx2c1e()
+        elif 'WithSolvent' in cls.__name__:
+            obj = obj.ddCOSMO(mf.with_solvent)
     return _update_mf_without_soscf(mf, obj, remove_df)
 
 def _update_mf_without_soscf(mf, out, remove_df=False):

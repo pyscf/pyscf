@@ -31,7 +31,11 @@ from pyscf import __config__
 
 
 def get_veff(ks_grad, mol=None, dm=None):
-    '''Coulomb + XC functional
+    '''
+    First order derivative of DFT effective potential matrix (wrt electron coordinates)
+
+    Args:
+        ks_grad : grad.uhf.Gradients or grad.uks.Gradients object
     '''
     if mol is None: mol = ks_grad.mol
     if dm is None: dm = ks_grad.base.make_rdm1()

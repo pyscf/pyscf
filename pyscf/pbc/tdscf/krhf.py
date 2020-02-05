@@ -27,7 +27,7 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.pbc.dft import numint
-from pyscf.pbc.scf.newton_ah import _gen_rhf_response
+from pyscf.pbc.scf import _response_functions
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
@@ -71,8 +71,7 @@ class TDA(rhf.TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
-                                  max_memory=max_memory)
+        vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
@@ -162,8 +161,7 @@ class TDHF(TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
-                                  max_memory=max_memory)
+        vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)

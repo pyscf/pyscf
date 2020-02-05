@@ -344,18 +344,19 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     ncore = casscf.ncore
     ncas = casscf.ncas
     nocc = ncore + ncas
-    #TODO: lazy evaluate eris, to leave enough memory for FCI solver
+
     eris = casscf.ao2mo(mo)
     e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if ncas == nmo and not casscf.internal_rotation:
-        if casscf.canonicalization:
-            log.debug('CASSCF canonicalization')
-            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
-                                                        casscf.sorting_mo_energy,
-                                                        casscf.natorb, verbose=log)
-        else:
-            mo_energy = None
-        return True, e_tot, e_cas, fcivec, mo, mo_energy
+# macro iterations are needed when added solvent model
+#    if ncas == nmo and not casscf.internal_rotation:
+#        if casscf.canonicalization:
+#            log.debug('CASSCF canonicalization')
+#            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
+#                                                        casscf.sorting_mo_energy,
+#                                                        casscf.natorb, verbose=log)
+#        else:
+#            mo_energy = None
+#        return True, e_tot, e_cas, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
@@ -766,9 +767,9 @@ class CASSCF(casci.CASCI):
 
         if (getattr(self._scf, 'with_solvent', None) and
             not getattr(self, 'with_solvent', None)):
-            log.warn('''Solvent model %s was found in SCF object.
-It is not applied to the CASSCF object. The CASSCF result is not affected by the SCF solvent model.
-To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs be called
+            log.warn('''Solvent model %s was found at SCF level but not applied to the CASSCF object.
+The SCF solvent model will not be applied to the current CASSCF calculation.
+To enable the solvent model for CASSCF, the following code needs to be called
         from pyscf import solvent
         mc = mcscf.CASSCF(...)
         mc = solvent.ddCOSMO(mc)

@@ -26,7 +26,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ucphf
-from pyscf.soscf.newton_ah import _gen_uhf_response
+from pyscf.scf import _response_functions
 from pyscf.hessian import rhf as rhf_hess
 _get_jk = rhf_hess._get_jk
 _make_vhfopt = rhf_hess._make_vhfopt
@@ -344,7 +344,7 @@ def gen_vind(mf, mo_coeff, mo_occ):
     nocca = mocca.shape[1]
     noccb = moccb.shape[1]
 
-    vresp = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
+    vresp = mf.gen_response(mo_coeff, mo_occ, hermi=1)
     def fx(mo1):
         mo1 = mo1.reshape(-1,nmoa*nocca+nmob*noccb)
         nset = len(mo1)

@@ -32,7 +32,7 @@ mm_mol = qmmm.create_mm_mol(mm_atoms, charges)
 qmmm_mol = mol + mm_mol
 
 # The solvent model is based on the giant system
-sol = solvent.DDCOSMO(qmmm_mol)
+sol = solvent.ddCOSMO(qmmm_mol)
 
 # According to Lipparini's suggestion in issue #446
 sol.radii_table = radii.VDW
@@ -44,13 +44,13 @@ sol.radii_table = radii.VDW
 #
 mf = mol.RHF()
 mf = mf.QMMM(coords, charges)
-mf = mf.DDCOSMO(sol)
+mf = mf.ddCOSMO(sol)
 mf.run()
 
 #
 # QMMM-ddCOSMO-SCF
 #
 mf = mol.RHF()
-mf = mf.DDCOSMO(sol)
+mf = mf.ddCOSMO(sol)
 mf = mf.QMMM(coords, charges)
 mf.run()
