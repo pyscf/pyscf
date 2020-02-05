@@ -138,7 +138,7 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # arrays and modifications to DM arrays may be ignored.
-    return numpy.array((dm_a,dm_b))
+    return numpy.array((dm_a, dm_b))
 
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     r'''Unrestricted Hartree-Fock potential matrix of alpha and beta spins,
@@ -889,7 +889,7 @@ class HF1e(UHF):
         s1e = self.get_ovlp(self.mol)
         self.mo_energy, self.mo_coeff = self.eig([h1e]*2, s1e)
         self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[0][self.mo_occ[0]>0][0] + self.mol.energy_nuc()
+        self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
         self._finalize()
         return self.e_tot
 

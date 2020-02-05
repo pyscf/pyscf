@@ -144,9 +144,11 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         nelec = mf.mol.nelec
     else:
         nelec = mf.nelec
-    ncore = nelec[1]
-    nocc  = nelec[0]
-    nopen = abs(nocc - ncore)
+    if nelec[0] > nelec[1]:
+        nocc, ncore = nelec
+    else:
+        ncore, nocc = nelec
+    nopen = nocc - ncore
     mo_occ = _fill_rohf_occ(mo_energy, mo_ea, mo_eb, ncore, nopen)
 
     if mf.verbose >= logger.INFO and nocc < nmo and ncore > 0:
@@ -223,10 +225,13 @@ def get_grad(mo_coeff, mo_occ, fock):
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle densit matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
     '''
-    mo_a = mo_coeff[:,mo_occ>0]
-    mo_b = mo_coeff[:,mo_occ==2]
-    dm_a = numpy.dot(mo_a, mo_a.conj().T)
-    dm_b = numpy.dot(mo_b, mo_b.conj().T)
+    if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
+        mo_occa = mo_occ > 0
+        mo_occb = mo_occ == 2
+    else:
+        mo_occa, mo_occb = mo_occ
+    dm_a = numpy.dot(mo_coeff*mo_occa, mo_coeff.conj().T)
+    dm_b = numpy.dot(mo_coeff*mo_occb, mo_coeff.conj().T)
     return numpy.array((dm_a, dm_b))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
@@ -391,6 +396,9 @@ class ROHF(hf.RHF):
     def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
+        if self.mol.spin < 0:
+            # Flip occupancies of alpha and beta orbitals
+            mo_occ = (mo_occ == 2), (mo_occ > 0)
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
