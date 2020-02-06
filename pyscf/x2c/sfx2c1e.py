@@ -65,7 +65,7 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
-    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
+    class SFX2C1E_SCF(x2c._X2C_SCF, mf_class):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:

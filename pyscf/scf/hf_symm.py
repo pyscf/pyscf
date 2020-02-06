@@ -236,6 +236,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
     float_irname = []
     fix_na = 0
     fix_nb = 0
+    free_irrep_norbs = []
     for i, irname in enumerate(mol.irrep_name):
         if irname in irrep_nelec:
             if isinstance(irrep_nelec[irname], (int, numpy.integer)):
@@ -253,12 +254,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
             fix_nb += nelecb
         else:
             float_irname.append(irname)
-    if fix_na < fix_nb:
-        raise ValueError('alpha electrons %d < beta electrons %d\n'
-                         'irrep_nelec %s' % (fix_na, fix_nb, irrep_nelec))
-    if mol.spin < fix_na-fix_nb:
-        raise ValueError('alpha electrons %d - beta electrons %d > mol.spin %d\n'
-                         'irrep_nelec %s' % (fix_na, fix_nb, mol.spin, irrep_nelec))
+            free_irrep_norbs.append(mol.symm_orb[i].shape[1])
 
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec // 2
@@ -266,6 +262,9 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
     else:
         neleca, nelecb = nelec
     fix_ne = fix_na + fix_nb
+    float_neleca = neleca - fix_na
+    float_nelecb = nelecb - fix_nb
+    free_norb = sum(free_irrep_norbs)
     if ((fix_na > neleca) or (fix_nb > nelecb) or
         (fix_na+nelecb > mol.nelectron) or
         (fix_nb+neleca > mol.nelectron)):
@@ -282,6 +281,10 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
               'mol.nelectron = %d  irrep_nelec = %s' %
               (mol.nelectron, irrep_nelec))
         raise ValueError(msg)
+    elif float_neleca > free_norb or float_nelecb > free_norb:
+        raise ValueError('Not enough orbitals for (%d, %d) electrons in irreps %s '
+                         '(irrep_norb: %s)' %
+                         (float_neleca, float_nelecb, ' '.join(float_irname), free_norb))
     else:
         logger.info(mol, '    %d free electrons in irreps %s',
                     mol.nelectron-fix_ne, ' '.join(float_irname))
@@ -537,17 +540,20 @@ class SymAdaptedROHF(rohf.ROHF):
                 if irname not in self.mol.irrep_name:
                     logger.warn(self, 'No irrep %s', irname)
 
-            check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
-
+            fix_na, fix_nb = check_irrep_nelec(mol, self.irrep_nelec, self.nelec)[:2]
             alpha_open = beta_open = False
             for ne in self.irrep_nelec.values():
                 if not isinstance(ne, (int, numpy.integer)):
-                    alpha_open = ne[0] > ne[1]
-                    beta_open = ne[0] < ne[1]
-                if alpha_open and beta_open:
-                    raise ValueError('A low-spin configuration was found in '
-                                     'the irrep_nelec input. ROHF does not '
-                                     'support low-spin systems.')
+                    alpha_open |= ne[0] > ne[1]
+                    beta_open  |= ne[0] < ne[1]
+
+            frozen_spin = fix_na - fix_nb
+            if ((alpha_open and beta_open) or
+                (0 < mol.spin < frozen_spin) or (frozen_spin < 0 < mol.spin) or
+                (frozen_spin < mol.spin < 0) or (mol.spin < 0 < frozen_spin)):
+                raise ValueError('Low-spin configuration was found in '
+                                 'the irrep_nelec input. ROHF does not '
+                                 'support low-spin configuration.')
         return hf.RHF.build(self, mol)
 
     @lib.with_doc(eig.__doc__)
@@ -603,9 +609,13 @@ class SymAdaptedROHF(rohf.ROHF):
                     neleca = self.irrep_nelec[irname] - nelecb
                 else:
                     neleca, nelecb = self.irrep_nelec[irname]
+                if neleca > nelecb:
+                    ncore, nopen = nelecb, neleca - nelecb
+                else:
+                    ncore, nopen = neleca, nelecb - neleca
                 mo_occ[ir_idx] = rohf._fill_rohf_occ(mo_energy[ir_idx],
                                                      mo_ea[ir_idx], mo_eb[ir_idx],
-                                                     nelecb, neleca-nelecb)
+                                                     ncore, nopen)
                 neleca_fix += neleca
                 nelecb_fix += nelecb
                 rest_idx[ir_idx] = False
@@ -614,7 +624,7 @@ class SymAdaptedROHF(rohf.ROHF):
         assert(nelec_float >= 0)
         if len(rest_idx) > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            nopen = mol.spin - (neleca_fix - nelecb_fix)
+            nopen = abs(mol.spin - (neleca_fix - nelecb_fix))
             ncore = (nelec_float - nopen)//2
             mo_occ[rest_idx] = rohf._fill_rohf_occ(mo_energy[rest_idx],
                                                    mo_ea[rest_idx], mo_eb[rest_idx],

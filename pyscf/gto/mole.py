@@ -312,7 +312,8 @@ def format_atom(atoms, origin=0, axes=None,
             try:
                 atoms = fromfile(atoms)
             except ValueError:
-                pass
+                sys.stderr.write('\nFailed to parse geometry file  %s\n\n' % atoms)
+                raise
 
         atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
         fmt_atoms = []
@@ -2136,7 +2137,9 @@ class Mole(lib.StreamObject):
         if method is None:
             raise AttributeError('Mole object has no attribute %s' % key)
 
-        mf.run()
+        # Initialize SCF object for post-SCF methods if applicable
+        if self.nelectron != 0:
+            mf.run()
         return method
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but

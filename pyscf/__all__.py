@@ -13,7 +13,7 @@ from . import sgx
 from . import solvent
 from . import tools
 
-#from . import geomopt
+from . import geomopt
 
 #try:
 #    from . import dftd3
