@@ -210,6 +210,32 @@ class KnownValues(unittest.TestCase):
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
+    def test_scf_negative_spin(self):
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.ROHF(mol).run(conv_tol=1e-10)
+        self.assertAlmostEqual(mf.mo_occ[4], 1, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.723654936331599, 9)
+
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            symmetry = 1,
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.ROHF(mol).set(conv_tol=1e-10)
+        mf.irrep_nelec = {'A1': (2, 3)}
+        mf.run()
+        self.assertAlmostEqual(mf.mo_occ[4], 1, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.561433366671935, 9)
+
     def test_nr_rhf_cart(self):
         pmol = mol.copy()
         pmol.cart = True
@@ -460,6 +486,21 @@ H     0    0.757    0.587'''
         mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
         self.assertRaises(ValueError, mf.build)
 
+        mf.irrep_nelec = {'A1g':(4,2), 'A1u': (2, 4)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(4,2), 'A1u': (3, 2)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(4,6)}
+        self.assertRaises(ValueError, mf.build)
+
+        pmol.spin = -2
+        mf.irrep_nelec = {'A1g':(4,2), 'A1u': (2, 4)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(2,4), 'A1u': (2, 3)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(6,4)}
+        self.assertRaises(ValueError, mf.build)
+
     def test_rhf_dip_moment(self):
         dip = mf.dip_moment(unit='au')
         self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
@@ -511,10 +552,10 @@ H     0    0.757    0.587'''
         mf1 = scf.RHF(mol)
         mf1.chkfile = None
         mf1.newton().kernel()
-        mf1.apply('CISD').run()
-        mf1.apply('CCSD').run()
+        #mf1.apply('CISD').run()
+        #mf1.apply('CCSD').run()
         mf1.apply('TDHF').run()
-        mf1.apply('CASSCF', 2, 2).run()
+        #mf1.apply('CASSCF', 2, 2).run()
         mf1.nuc_grad_method().run()
 
     def test_as_scanner(self):
@@ -632,7 +673,7 @@ H     0    0.757    0.587'''
         n2_rohf.irrep_nelec['E2ux'] = 0
         n2_rohf.irrep_nelec['E2uy'] = 0
         self.assertRaises(ValueError, n2_rohf.build)
-        n2_rohf.irrep_nelec['A1g'] = (4,2)
+        n2_rohf.irrep_nelec['A1g'] = (2,0)
         self.assertRaises(ValueError, n2_rohf.build)
         n2_rohf.irrep_nelec['A1g'] = (0,2)
         self.assertRaises(ValueError, n2_rohf.build)
@@ -709,4 +750,3 @@ H     0    0.757    0.587'''
 if __name__ == "__main__":
     print("Full Tests for rhf")
     unittest.main()
-
