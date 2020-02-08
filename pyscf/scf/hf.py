@@ -573,7 +573,7 @@ def _init_guess_huckel_orbitals(mol):
     for io in range(nocc):
         # Diagonal is just the orbital energies
         orb_H[io,io] = orb_E[io]
-        for jo in range(io-1):
+        for jo in range(io):
             # Off-diagonal is given by GWH approximation
             orb_H[io,jo] = 0.5*Kgwh*orb_S[io,jo]*(orb_E[io]+orb_E[jo])
             orb_H[jo,io] = orb_H[io,jo]
