@@ -60,7 +60,10 @@ h2e = ao2mo.restore(1, h2e, norb).transpose(0,2,1,3)
 dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
                                          mc.ci, mc.ci, norb, nelec)
 hdm1 = 2.0*numpy.eye(dm1.shape[0])-dm1.T
-eris = nevpt2._ERIS(mc, mc.mo_coeff)
+# Test integral transformation incore algorithm
+eris = nevpt2._ERIS(mc, mc.mo_coeff, method='incore')
+# Test integral transformation outcore algorithm
+eris = nevpt2._ERIS(mc, mc.mo_coeff, method='outcore')
 dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4}
 
 class KnowValues(unittest.TestCase):
