@@ -40,7 +40,7 @@ energy_elec = mol_rohf.energy_elec
 dip_moment = pbcuhf.dip_moment
 get_rho = pbcuhf.get_rho
 
-class ROHF(mol_rohf.ROHF, pbchf.RHF):
+class ROHF(pbchf.RHF, mol_rohf.ROHF):
     '''ROHF class for PBCs.
     '''
 
@@ -75,18 +75,15 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    build = pbchf.SCF.build
-    check_sanity = pbchf.SCF.check_sanity
-    get_hcore = pbchf.SCF.get_hcore
-    get_ovlp = pbchf.SCF.get_ovlp
-    get_jk = pbchf.SCF.get_jk
-    get_j = pbchf.SCF.get_j
-    get_k = pbchf.SCF.get_k
-    get_jk_incore = pbchf.SCF.get_jk_incore
-    energy_tot = pbchf.SCF.energy_tot
-    _finalize = pbchf.SCF._finalize
+    get_rho = get_rho
 
-    get_rho = pbchf.SCF.get_rho
+    eig = mol_rohf.ROHF.eig
+
+    get_fock = get_fock
+    get_occ = get_occ
+    get_grad = get_grad
+    make_rdm1 = make_rdm1
+    energy_elec = energy_elec
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
@@ -144,21 +141,18 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         if kpt is None: kpt = self.kpt
         return pbcuhf.init_guess_by_chkfile(self.cell, chk, project, kpt)
 
-    dump_chk = pbchf.SCF.dump_chk
-    _is_mem_enough = pbchf.SCF._is_mem_enough
+    init_guess_by_minao  = mol_rohf.ROHF.init_guess_by_minao
+    init_guess_by_atom   = mol_rohf.ROHF.init_guess_by_atom
+    init_guess_by_huckel = mol_rohf.ROHF.init_guess_by_huckel
 
-    density_fit = pbchf.SCF.density_fit
-    # mix_density_fit inherits from hf.SCF.mix_density_fit
-
-    x2c = x2c1e = sfx2c1e = pbchf.SCF.sfx2c1e
+    analyze = mol_rohf.ROHF.analyze
+    canonicalize = mol_rohf.ROHF.canonicalize
+    spin_square = mol_rohf.ROHF.spin_square
+    stability = mol_rohf.ROHF.stability
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''
         from pyscf.pbc.scf import addons
         addons.convert_to_rhf(mf, self)
         return self
-
-    stability = mol_rohf.ROHF.stability
-
-    nuc_grad_method = None
 

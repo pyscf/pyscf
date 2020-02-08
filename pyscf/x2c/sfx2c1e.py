@@ -91,6 +91,10 @@ def sfx2c1e(mf):
                 self.with_x2c.dump_flags(verbose)
             return self
 
+        def reset(self, mol):
+            self.with_x2c.reset(mol)
+            return mf_class.reset(self, mol)
+
         def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
                        picture_change=True, **kwargs):
             r''' Dipole moment calculation with picture change correction

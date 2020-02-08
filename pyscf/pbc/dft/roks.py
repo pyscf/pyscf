@@ -41,7 +41,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return uks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpt, kpts_band)
 
 
-class ROKS(rohf.ROHF, rks.KohnShamDFT):
+class ROKS(rks.KohnShamDFT, rohf.ROHF):
     '''UKS class adapted for PBCs.
 
     This is a literal duplication of the molecular UKS class with some `mol`

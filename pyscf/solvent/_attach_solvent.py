@@ -56,6 +56,10 @@ def _for_scf(mf, solvent_obj, dm=None):
             self.with_solvent.dump_flags(verbose)
             return self
 
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return oldMF.reset(self, mol)
+
         # Note vpcm should not be added to get_hcore for scf methods.
         # get_hcore is overloaded by many post-HF methods. Modifying
         # SCF.get_hcore may lead error.
@@ -95,8 +99,9 @@ def _for_scf(mf, solvent_obj, dm=None):
             return e_tot, e_coul
 
         def nuc_grad_method(self):
+            from pyscf.solvent.ddcosmo_grad import make_grad_object
             grad_method = oldMF.nuc_grad_method(self)
-            return self.with_solvent.nuc_grad_method(grad_method)
+            return make_grad_object(grad_method)
 
         Gradients = nuc_grad_method
 
@@ -175,6 +180,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
                          self._scf.with_solvent.__class__)
             return self
 
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return oldCAS.reset(self, mol)
+
         def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
             casdm1, casdm2, gci, fcivec = \
                     oldCAS.update_casdm(self, mo, u, fcivec, e_ci, eris, envs)
@@ -249,8 +258,9 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
   MCSCF_DM * Vpcm[d/dX MCSCF_DM] + Vpcm[MCSCF_DM] * d/dX MCSCF_DM
 ''')
+            from pyscf.solvent.ddcosmo_grad import make_grad_object
             grad_method = oldCAS.nuc_grad_method(self)
-            return self.with_solvent.nuc_grad_method(grad_method)
+            return make_grad_object(grad_method)
 
         Gradients = nuc_grad_method
 
@@ -285,6 +295,10 @@ def _for_casci(mc, solvent_obj, dm=None):
             self.with_solvent.check_sanity()
             self.with_solvent.dump_flags(verbose)
             return self
+
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return oldCAS.reset(self, mol)
 
         def get_hcore(self, mol=None):
             hcore = self._scf.get_hcore(mol)
@@ -374,8 +388,9 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
   MCSCF_DM * Vpcm[d/dX MCSCF_DM] + Vpcm[MCSCF_DM] * d/dX MCSCF_DM
 ''')
+            from pyscf.solvent.ddcosmo_grad import make_grad_object
             grad_method = oldCAS.nuc_grad_method(self)
-            return self.with_solvent.nuc_grad_method(grad_method)
+            return make_grad_object(grad_method)
 
         Gradients = nuc_grad_method
 
@@ -432,6 +447,10 @@ def _for_post_scf(method, solvent_obj, dm=None):
             self.with_solvent.check_sanity()
             self.with_solvent.dump_flags(verbose)
             return self
+
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return old_method.reset(self, mol)
 
         def kernel(self, *args, **kwargs):
             with_solvent = self.with_solvent
@@ -493,8 +512,9 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
   DM * Vpcm[d/dX DM] + Vpcm[DM] * d/dX DM
 ''')
+            from pyscf.solvent.ddcosmo_grad import make_grad_object
             grad_method = old_method.nuc_grad_method(self)
-            return self.with_solvent.nuc_grad_method(grad_method)
+            return make_grad_object(grad_method)
 
         Gradients = nuc_grad_method
 
@@ -555,6 +575,10 @@ def _for_tdscf(method, solvent_obj, dm=None):
             self.with_solvent.dump_flags(verbose)
             return self
 
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return old_method.reset(self, mol)
+
         def get_ab(self, mf=None):
             if mf is None: mf = self._scf
             a, b = get_ab(mf)
@@ -564,11 +588,11 @@ def _for_tdscf(method, solvent_obj, dm=None):
         def nuc_grad_method(self):
             from pyscf.solvent._ddcosmo_tdscf_grad import make_grad_object
             grad_method = old_method.nuc_grad_method(self)
-            return make_grad_object(grad_method, self.with_solvent)
+            return make_grad_object(grad_method)
 
     mf1 = TDSCFWithSolvent(method)
     return mf1
 
-# 1. A tag to label the derived SCF class
+# 1. A tag to label the derived method class
 class _Solvation(object):
     pass

@@ -764,6 +764,12 @@ To enable the solvent model for CASCI, the following code needs to be called
                      self._scf.with_solvent.__class__)
         return self
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
+
     def energy_nuc(self):
         return self._scf.energy_nuc()
 

@@ -126,7 +126,7 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
-class KUKS(kuhf.KUHF, rks.KohnShamDFT):
+class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN'):

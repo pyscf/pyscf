@@ -317,8 +317,14 @@ class KohnShamDFT(object):
 
     define_xc_ = define_xc_
 
+    def reset(self, mol=None):
+        hf.SCF.reset(self, mol)
+        self.grids.reset(mol)
+        self.nlcgrids.reset(mol)
+        return self
 
-class RKS(hf.RHF, KohnShamDFT):
+
+class RKS(KohnShamDFT, hf.RHF):
     __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + KohnShamDFT.__doc__
 
     def __init__(self, mol, xc='LDA,VWN'):
@@ -327,8 +333,7 @@ class RKS(hf.RHF, KohnShamDFT):
 
     def dump_flags(self, verbose=None):
         hf.RHF.dump_flags(self, verbose)
-        KohnShamDFT.dump_flags(self, verbose)
-        return self
+        return KohnShamDFT.dump_flags(self, verbose)
 
     get_veff = get_veff
     energy_elec = energy_elec

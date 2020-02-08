@@ -599,7 +599,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 
 
 # A tag to label the derived SCF class
-class _CIAH_SOSCF(hf.SCF):
+class _CIAH_SOSCF(object):
     '''
     Attributes for Newton solver:
         max_cycle_inner : int
@@ -671,6 +671,11 @@ class _CIAH_SOSCF(hf.SCF):
         self.opt = None
         self._eri = None
         return self
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = oml
+        return self._scf.reset(mol)
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (time.clock(), time.time())
@@ -767,12 +772,8 @@ def newton(mf):
     else:
         mf_doc = mf.__doc__
 
-    class SecondOrderRHF(mf.__class__, _CIAH_SOSCF):
+    class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
         __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-        __init__ = _CIAH_SOSCF.__init__
-        dump_flags = _CIAH_SOSCF.dump_flags
-        build = _CIAH_SOSCF.build
-        kernel = _CIAH_SOSCF.kernel
 
         gen_g_hop = gen_g_hop_rhf
 
@@ -794,11 +795,8 @@ def newton(mf):
         return SecondOrderROHF(mf)
 
     elif isinstance(mf, uhf.UHF):
-        class SecondOrderUHF(mf.__class__, _CIAH_SOSCF):
+        class SecondOrderUHF(_CIAH_SOSCF, mf.__class__):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            __init__ = _CIAH_SOSCF.__init__
-            dump_flags = _CIAH_SOSCF.dump_flags
-            build = _CIAH_SOSCF.build
 
             gen_g_hop = gen_g_hop_uhf
 
@@ -855,12 +853,8 @@ def newton(mf):
         return SecondOrderUHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
-        class SecondOrderGHF(mf.__class__, _CIAH_SOSCF):
+        class SecondOrderGHF(_CIAH_SOSCF, mf.__class__):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            __init__ = _CIAH_SOSCF.__init__
-            dump_flags = _CIAH_SOSCF.dump_flags
-            build = _CIAH_SOSCF.build
-            kernel = _CIAH_SOSCF.kernel
 
             gen_g_hop = gen_g_hop_ghf
 

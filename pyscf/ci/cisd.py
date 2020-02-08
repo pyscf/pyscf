@@ -881,6 +881,12 @@ class CISD(lib.StreamObject):
         nvir = self.nmo - nocc
         return 1 + nocc*nvir + (nocc*nvir)**2
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
+
     get_nocc = ccsd.get_nocc
     get_nmo = ccsd.get_nmo
     get_frozen_mask = ccsd.get_frozen_mask

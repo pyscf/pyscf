@@ -1704,6 +1704,11 @@ class MultiGridFFTDF(fft.FFTDF):
 
     def build(self):
         self.tasks = multi_grids_tasks(self.cell, self.mesh, self.verbose)
+        return self
+
+    def reset(self, cell=None):
+        self.tasks = None
+        return fft.FFTDF.reset(cell)
 
     get_pp = get_pp
     get_nuc = get_nuc

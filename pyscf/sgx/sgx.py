@@ -110,6 +110,10 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
                 self.with_df.build(self.with_df.grids_level_i)
             return mf_class.build(self, mol, **kwargs)
 
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return mf_class.reset(self, mol)
+
         def pre_kernel(self, envs):
             self._in_scf = True
 

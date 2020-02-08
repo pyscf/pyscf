@@ -703,6 +703,12 @@ class TDA(lib.StreamObject):
             raise RuntimeError('SCF object is not initialized')
         lib.StreamObject.check_sanity(self)
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
+
     def gen_vind(self, mf):
         '''Compute Ax'''
         return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym)

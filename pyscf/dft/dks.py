@@ -120,7 +120,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 energy_elec = rks.energy_elec
 
 
-class UKS(dhf.UHF, rks.KohnShamDFT):
+class UKS(rks.KohnShamDFT, dhf.UHF):
     def __init__(self, mol, xc='LDA,VWN'):
         dhf.UHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)

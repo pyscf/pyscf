@@ -228,7 +228,6 @@ class Gradients(rhf_grad.GradientsBasics):
         self.stdout = td.stdout
         self.mol = td.mol
         self.base = td
-        self._scf = td._scf  # needed by hcore_generator
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
         self.state = 1  # of which the gradients to be computed.

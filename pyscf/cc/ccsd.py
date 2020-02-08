@@ -948,6 +948,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def nmo(self, n):
         self._nmo = n
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
+
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask

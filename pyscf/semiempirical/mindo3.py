@@ -168,6 +168,12 @@ class RMINDO3(scf.hf.RHF):
         self._mindo_mol = _make_mindo_mol(mol)
         self._keys.update(['e_heat_formation'])
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+            self._mindo_mol = _make_mindo_mol(mol)
+        return self
+
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
