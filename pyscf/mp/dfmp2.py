@@ -70,6 +70,10 @@ class DFMP2(mp2.MP2):
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
         self._keys.update(['with_df'])
 
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return mp2.MP2.reset(self, mol)
+
     @lib.with_doc(mp2.MP2.kernel.__doc__)
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)

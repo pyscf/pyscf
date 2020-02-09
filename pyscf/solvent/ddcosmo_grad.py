@@ -72,7 +72,7 @@ def make_grad_object(grad_method):
             if dm is None:
                 dm = self.base.make_rdm1(ao_repr=True)
 
-            self.de_solvent = kernel(self.self.base.with_solvent, dm)
+            self.de_solvent = kernel(self.base.with_solvent, dm)
             self.de_solute = grad_method_class.kernel(self, *args, **kwargs)
             self.de = self.de_solute + self.de_solvent
 

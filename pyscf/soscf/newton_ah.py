@@ -674,7 +674,7 @@ class _CIAH_SOSCF(object):
 
     def reset(self, mol=None):
         if mol is not None:
-            self.mol = oml
+            self.mol = mol
         return self._scf.reset(mol)
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
@@ -747,6 +747,15 @@ class _CIAH_SOSCF(object):
         if self._scf.mol.symmetry:
             orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
             mo = lib.tag_array(mo, orbsym=orbsym)
+
+        if isinstance(log, logger.Logger) and log.verbose >= logger.DEBUG:
+            idx = self.mo_occ > 0
+            s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
+                                   self.mo_coeff[:,idx]))
+            log.debug('Overlap to initial guess, SVD = %s',
+                      _effective_svd(s, 1e-5))
+            log.debug('Overlap to last step, SVD = %s',
+                      _effective_svd(u[idx][:,idx], 1e-5))
         return mo
 
 
@@ -772,25 +781,9 @@ def newton(mf):
     else:
         mf_doc = mf.__doc__
 
-    class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
-        __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-
-        gen_g_hop = gen_g_hop_rhf
-
-        def rotate_mo(self, mo_coeff, u, log=None):
-            mo = _CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
-            if log is not None and log.verbose >= logger.DEBUG:
-                idx = self.mo_occ > 0
-                s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
-                                       self.mo_coeff[:,idx]))
-                log.debug('Overlap to initial guess, SVD = %s',
-                          _effective_svd(s, 1e-5))
-                log.debug('Overlap to last step, SVD = %s',
-                          _effective_svd(u[idx][:,idx], 1e-5))
-            return mo
-
     if isinstance(mf, rohf.ROHF):
-        class SecondOrderROHF(SecondOrderRHF):
+        class SecondOrderROHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             gen_g_hop = gen_g_hop_rohf
         return SecondOrderROHF(mf)
 
@@ -880,6 +873,9 @@ def newton(mf):
         raise RuntimeError('Not support Dirac-HF')
 
     else:
+        class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+            gen_g_hop = gen_g_hop_rhf
         return SecondOrderRHF(mf)
 
 SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)

@@ -607,9 +607,10 @@ def as_scanner(td):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            self.reset(mol)
+
             mf_scanner = self._scf
             mf_e = mf_scanner(mol)
-            self.mol = mol
             self.kernel(**kwargs)
             return mf_e + self.e
     return TD_Scanner(td)

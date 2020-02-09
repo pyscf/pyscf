@@ -722,14 +722,10 @@ def as_scanner(ci):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            for key in ('with_df', 'with_solvent'):
-                sub_mod = getattr(self, key, None)
-                if sub_mod:
-                    sub_mod.reset(mol)
+            self.reset(mol)
 
             mf_scanner = self._scf
             mf_scanner(mol)
-            self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
             if getattr(self.ci, 'size', 0) != self.vector_size():

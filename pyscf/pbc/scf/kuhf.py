@@ -514,6 +514,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
+    init_guess_by_1e     = pbcuhf.UHF.init_guess_by_1e
     init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao
     init_guess_by_atom   = pbcuhf.UHF.init_guess_by_atom
     init_guess_by_huckel = pbcuhf.UHF.init_guess_by_huckel

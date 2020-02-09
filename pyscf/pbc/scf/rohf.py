@@ -79,11 +79,11 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
 
     eig = mol_rohf.ROHF.eig
 
-    get_fock = get_fock
-    get_occ = get_occ
-    get_grad = get_grad
-    make_rdm1 = make_rdm1
-    energy_elec = energy_elec
+    get_fock = mol_rohf.ROHF.get_fock
+    get_occ = mol_rohf.ROHF.get_occ
+    get_grad = mol_rohf.ROHF.get_grad
+    make_rdm1 = mol_rohf.ROHF.make_rdm1
+    energy_elec = mol_rohf.ROHF.energy_elec
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):

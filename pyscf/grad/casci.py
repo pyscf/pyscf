@@ -243,7 +243,7 @@ def as_scanner(mcscf_grad, state=None):
                 # in self.kernel
                 ci = ci[state]
 
-            self.mol = mol
+            self.rest(mol)
             de = self.kernel(ci=ci, state=state, **kwargs)
             return e_tot, de
     return CASCI_GradScanner(mcscf_grad)
