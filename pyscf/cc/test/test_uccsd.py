@@ -655,7 +655,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(mycc.t2[2].size, 0)
 
     def test_reset(self):
-        mycc = cc.ccsd(scf.UHF(mol).newton())
+        mycc = cc.CCSD(scf.UHF(mol).newton())
         mycc.reset(mol_s2)
         self.assertTrue(mycc.mol is mol_s2)
         self.assertTrue(mycc._scf.mol is mol_s2)

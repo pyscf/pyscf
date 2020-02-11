@@ -392,7 +392,7 @@ class KnownValues(unittest.TestCase):
     def test_reset(self):
         mol = gto.M(atom='He')
         mol1 = gto.M(atom='C')
-        myci = ci.cisd(scf.UHF(mol).newton())
+        myci = ci.CISD(scf.UHF(mol).newton())
         myci.reset(mol1)
         self.assertTrue(myci.mol is mol1)
         self.assertTrue(myci._scf.mol is mol1)

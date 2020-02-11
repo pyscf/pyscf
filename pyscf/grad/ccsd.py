@@ -231,10 +231,11 @@ def as_scanner(grad_cc):
 
             cc = self.base
             if cc.t2 is not None:
-                last_size = self.vector_size()
+                last_size = cc.vector_size()
             else:
                 last_size = 0
 
+            cc.reset(mol)
             mf_scanner = cc._scf
             mf_scanner(mol)
             cc.mo_coeff = mf_scanner.mo_coeff

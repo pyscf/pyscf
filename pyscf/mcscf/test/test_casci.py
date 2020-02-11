@@ -220,7 +220,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs((civec[3]*mc.ci[3]).sum()), 1, 9)
 
     def test_reset(self):
-        myci = mcscf.CASCI(scf.RHF(molsym)).density_fit()
+        myci = mcscf.CASCI(scf.RHF(molsym), 4, 4).density_fit()
         myci.reset(mol)
         self.assertTrue(myci.mol is mol)
         self.assertTrue(myci._scf.mol is mol)
