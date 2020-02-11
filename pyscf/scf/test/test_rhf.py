@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -746,6 +746,16 @@ H     0    0.757    0.587'''
         vk2 = mf1.get_k(mol, dm, hermi=0, omega=1.5)
         self.assertAlmostEqual(abs(vk1 - vk2).max(), 0, 12)
         self.assertAlmostEqual(lib.finger(vk1), -11.399103957754445, 12)
+
+    def test_reset(self):
+        mf = scf.RHF(mol).density_fit().x2c().newton()
+        mf.reset(n2sym)
+        self.assertTrue(mf.mol is n2sym)
+        self.assertTrue(mf._scf.mol is n2sym)
+        self.assertTrue(mf.with_df.mol is n2sym)
+        self.assertTrue(mf.with_x2c.mol is n2sym)
+        self.assertTrue(mf._scf.with_df.mol is n2sym)
+        self.assertTrue(mf._scf.with_x2c.mol is n2sym)
 
 if __name__ == "__main__":
     print("Full Tests for rhf")

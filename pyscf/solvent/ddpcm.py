@@ -280,12 +280,12 @@ class DDPCM(ddcosmo.DDCOSMO):
             # spin-traced DM for UHF or ROHF
             dm = dm[0] + dm[1]
 
-        phi = ddcosmo.make_phi(self, dm, r_vdw, ui)
+        phi = ddcosmo.make_phi(self, dm, r_vdw, ui, ylm_1sph)
         phi = numpy.linalg.solve(A_diele, A_inf.dot(phi.ravel()))
 
         Xvec = numpy.linalg.solve(Lmat, phi.ravel()).reshape(mol.natm,-1)
-        psi, vmat = ddcosmo.make_psi_vmat(self, dm, r_vdw, ui, self.grids,
-                                          ylm_1sph, cached_pol, Xvec, Lmat)[:2]
+        psi, vmat = ddcosmo.make_psi_vmat(self, dm, r_vdw, ui, ylm_1sph,
+                                          cached_pol, Xvec, Lmat)[:2]
         dielectric = self.eps
         f_epsilon = (dielectric-1.)/dielectric
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, Xvec)
@@ -315,14 +315,13 @@ class DDPCM(ddcosmo.DDCOSMO):
         natm = mol.natm
         nlm = (self.lmax+1)**2
 
-        phi = ddcosmo.make_phi(self, dm, r_vdw, ui, with_nuc=False)
+        phi = ddcosmo.make_phi(self, dm, r_vdw, ui, ylm_1sph, with_nuc=False)
         phi = numpy.linalg.solve(A_diele, A_inf.dot(phi.reshape(-1,natm*nlm).T))
 
         Xvec = numpy.linalg.solve(Lmat, phi)
         Xvec = Xvec.reshape(natm,nlm,-1).transpose(2,0,1)
-        vmat = ddcosmo.make_psi_vmat(self, dm, r_vdw, ui, self.grids,
-                                     ylm_1sph, cached_pol, Xvec, Lmat,
-                                     with_nuc=False)[1]
+        vmat = ddcosmo.make_psi_vmat(self, dm, r_vdw, ui, ylm_1sph,
+                                     cached_pol, Xvec, Lmat, with_nuc=False)[1]
         dielectric = self.eps
         f_epsilon = (dielectric-1.)/dielectric
         return .5 * f_epsilon * vmat

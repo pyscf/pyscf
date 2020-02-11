@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -490,6 +490,13 @@ class KnownValues(unittest.TestCase):
         mf2.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         mf2.kernel()
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
+
+    def test_reset(self):
+        mf = dft.RKS(h2o).newton()
+        mf.reset(h2osym)
+        self.assertTrue(mf.mol is h2osym)
+        self.assertTrue(mf.grids.mol is h2osym)
+        self.assertTrue(mf.nlcgrids.mol is h2osym)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -229,12 +229,12 @@ def as_scanner(grad_cc):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            if self.t2 is not None:
+            cc = self.base
+            if cc.t2 is not None:
                 last_size = self.vector_size()
             else:
                 last_size = 0
 
-            cc = self.base
             mf_scanner = cc._scf
             mf_scanner(mol)
             cc.mo_coeff = mf_scanner.mo_coeff
@@ -242,7 +242,7 @@ def as_scanner(grad_cc):
             if last_size != cc.vector_size():
                 cc.t1 = cc.t2 = None
 
-            eris = cc.ao2mo(self.mo_coeff)
+            eris = cc.ao2mo(cc.mo_coeff)
             cc.kernel(cc.t1, cc.t2, eris=eris)
 
             self.mol = mol

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -388,6 +388,15 @@ class KnownValues(unittest.TestCase):
         s0 = fci.addons.overlap(fcibra, fciket, nmo, nocc*2, s_mo)
         s1 = cisd.overlap(cibra, ciket, nmo, nocc, s_mo)
         self.assertAlmostEqual(s1, s0, 9)
+
+    def test_reset(self):
+        mol = gto.M(atom='He')
+        mol1 = gto.M(atom='C')
+        myci = ci.cisd(scf.UHF(mol).newton())
+        myci.reset(mol1)
+        self.assertTrue(myci.mol is mol1)
+        self.assertTrue(myci._scf.mol is mol1)
+        self.assertTrue(myci._scf._scf.mol is mol1)
 
 
 def t1_strs_ref(norb, nelec):

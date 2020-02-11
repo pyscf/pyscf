@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -653,6 +653,13 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(mycc.t1[1].size, 0)
         self.assertEqual(mycc.t2[1].size, 0)
         self.assertEqual(mycc.t2[2].size, 0)
+
+    def test_reset(self):
+        mycc = cc.ccsd(scf.UHF(mol).newton())
+        mycc.reset(mol_s2)
+        self.assertTrue(mycc.mol is mol_s2)
+        self.assertTrue(mycc._scf.mol is mol_s2)
+        self.assertTrue(mycc._scf._scf.mol is mol_s2)
 
 
 if __name__ == "__main__":
