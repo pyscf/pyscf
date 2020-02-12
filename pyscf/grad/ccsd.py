@@ -241,13 +241,16 @@ def as_scanner(grad_cc):
             cc.mo_coeff = mf_scanner.mo_coeff
             cc.mo_occ = mf_scanner.mo_occ
             if last_size != cc.vector_size():
-                cc.t1 = cc.t2 = None
-
-            eris = cc.ao2mo(cc.mo_coeff)
-            cc.kernel(cc.t1, cc.t2, eris=eris)
+                cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
 
             self.mol = mol
-            de = self.kernel(t1=cc.t1, t2=cc.t2, eris=eris, **kwargs)
+            eris = cc.ao2mo(cc.mo_coeff)
+            # Update cc.t1 and cc.t2
+            cc.kernel(t1=cc.t1, t2=cc.t2, eris=eris)
+            # Update cc.l1 and cc.l2
+            cc.solve_lambda(l1=cc.l1, l2=cc.l2, eris=eris)
+
+            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, **kwargs)
             return cc.e_tot, de
         @property
         def converged(self):

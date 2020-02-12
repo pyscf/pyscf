@@ -396,7 +396,6 @@ class KnownValues(unittest.TestCase):
         myci.reset(mol1)
         self.assertTrue(myci.mol is mol1)
         self.assertTrue(myci._scf.mol is mol1)
-        self.assertTrue(myci._scf._scf.mol is mol1)
 
 
 def t1_strs_ref(norb, nelec):

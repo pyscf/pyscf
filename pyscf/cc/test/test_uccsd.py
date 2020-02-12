@@ -659,7 +659,6 @@ class KnownValues(unittest.TestCase):
         mycc.reset(mol_s2)
         self.assertTrue(mycc.mol is mol_s2)
         self.assertTrue(mycc._scf.mol is mol_s2)
-        self.assertTrue(mycc._scf._scf.mol is mol_s2)
 
 
 if __name__ == "__main__":
