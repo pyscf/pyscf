@@ -195,6 +195,20 @@ class KnownValues(unittest.TestCase):
 
         self.assertTrue(isinstance(cc.CCSD(mf, mo_coeff=mf.mo_coeff*1j), rccsd.RCCSD))
 
+
+    # May be related to issue #509
+    def test_race_condition_skip(self):
+        current_nthreads = lib.num_threads()
+        lib.num_threads(32)
+
+        mycc = cc.ccsd.CCSD(mf)
+        mycc.max_memory = 1
+        mycc.conv_tol = 1e-10
+        ecc = mycc.kernel()
+        self.assertAlmostEqual(ecc, -0.2133432312951, 8)
+
+        lib.num_threads(current_nthreads)
+
 if __name__ == "__main__":
     print("Full Tests for H2O")
     unittest.main()

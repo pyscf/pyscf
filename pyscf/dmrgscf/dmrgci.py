@@ -443,14 +443,17 @@ class DMRGCI(lib.StreamObject):
 
         return onepdm, twopdm, threepdm
 
-    def make_rdm3(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, **kwargs):
+    def make_rdm3(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, restart=False, **kwargs):
         import os
 
         if self.has_threepdm == False:
             self.twopdm = False
-            self.extraline.append('threepdm\n')
+            if restart == True:
+                self.extraline.append('restart_threepdm')
+            else:
+                self.extraline.append('threepdm')
+            writeDMRGConfFile(self, nelec, restart)
 
-            writeDMRGConfFile(self, nelec, False)
             if self.verbose >= logger.DEBUG1:
                 inFile = self.configFile
                 #inFile = os.path.join(self.scratchDirectory,self.configFile)
@@ -518,16 +521,21 @@ class DMRGCI(lib.StreamObject):
         print('')
         return E3
 
-    def make_rdm4(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, **kwargs):
+    def make_rdm4(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, restart=False, **kwargs):
         import os
 
         if self.has_fourpdm == False:
             self.twopdm = False
             self.threepdm = False
-            self.extraline.append('threepdm')
-            self.extraline.append('fourpdm')
+            self.twopdm = False
+            if restart == True:
+                self.extraline.append('restart_threepdm')
+                self.extraline.append('restart_fourpdm')
+            else:
+                self.extraline.append('threepdm')
+                self.extraline.append('fourpdm')
+            writeDMRGConfFile(self, nelec, restart)
 
-            writeDMRGConfFile(self, nelec, False)
             if self.verbose >= logger.DEBUG1:
               inFile = self.configFile
               #inFile = os.path.join(self.scratchDirectory,self.configFile)

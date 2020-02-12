@@ -106,22 +106,22 @@ class PDMRG(DMRGCI):
                       fout.write(line)
               fout.write('fullrestart')
 
-    import os
-    block_path = os.path.dirname(self.executable)
-    check_call(["%s %s/OH oh.conf wavenum > oh.out"%(self.mpiprefix,block_path)], shell=True)
-    with open('oh.out','r') as f:
+      import os
+      block_path = os.path.dirname(self.executable)
+      check_call(["%s %s/OH oh.conf wavenum > oh.out"%(self.mpiprefix,block_path)], shell=True)
+      with open('oh.out','r') as f:
         H0 = float(f.readlines()[-4])
-    H0 -=self.core_energy
-    E0  = self.E_dmrg*self.H0factor + H0*(1.0-self.H0factor)
+      H0 -=self.core_energy
+      E0  = self.E_dmrg*self.H0factor + H0*(1.0-self.H0factor)
 
-    check_call(["head -n -1 %s > tmpfile"%self.H0_file], shell=True)
-    check_call(["cp tmpfile %s"%self.H0_file], shell=True)
-    with open('%s'%self.H0_file,'a') as f:
+      check_call(["head -n -1 %s > tmpfile"%self.H0_file], shell=True)
+      check_call(["cp tmpfile %s"%self.H0_file], shell=True)
+      with open('%s'%self.H0_file,'a') as f:
         f.write('%s 0 0 0 0\n'%(-E0))
 
-    check_call(["head -n -1 %s > tmpfile"%self.H1_file], shell=True)
-    check_call(["cp tmpfile %s"%self.H1_file], shell=True)
-    with open('%s'%self.H1_file,'a') as f:
+      check_call(["head -n -1 %s > tmpfile"%self.H1_file], shell=True)
+      check_call(["cp tmpfile %s"%self.H1_file], shell=True)
+      with open('%s'%self.H1_file,'a') as f:
         f.write('%s 0 0 0 0\n'%(-self.E_dmrg))
 
   def compress(self):
