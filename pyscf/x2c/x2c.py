@@ -330,6 +330,7 @@ class X2C_UHF(hf.SCF):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.opt = None
+        return self
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)

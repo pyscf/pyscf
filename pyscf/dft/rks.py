@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -388,8 +388,14 @@ class KohnShamDFT(object):
             mf.xc = xc
         return mf
 
+    def reset(self, mol=None):
+        hf.SCF.reset(self, mol)
+        self.grids.reset(mol)
+        self.nlcgrids.reset(mol)
+        return self
 
-class RKS(hf.RHF, KohnShamDFT):
+
+class RKS(KohnShamDFT, hf.RHF):
     __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + KohnShamDFT.__doc__
 
     def __init__(self, mol, xc='LDA,VWN'):
@@ -398,8 +404,7 @@ class RKS(hf.RHF, KohnShamDFT):
 
     def dump_flags(self, verbose=None):
         hf.RHF.dump_flags(self, verbose)
-        KohnShamDFT.dump_flags(self, verbose)
-        return self
+        return KohnShamDFT.dump_flags(self, verbose)
 
     get_veff = get_veff
     energy_elec = energy_elec

@@ -129,6 +129,10 @@ class EOM(lib.StreamObject):
                     self.max_memory, lib.current_memory()[0])
         return self
 
+    def reset(self, mol=None):
+        self._cc.reset(mol)
+        return self
+
 
 def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
                                  left_converged, left_evals, left_evecs, tol=1e-6):

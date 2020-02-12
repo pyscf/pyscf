@@ -39,7 +39,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return uks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
 
-class ROKS(rohf.ROHF, rks.KohnShamDFT):
+class ROKS(rks.KohnShamDFT, rohf.ROHF):
     '''Restricted open-shell Kohn-Sham
     See pyscf/dft/rks.py RKS class for the usage of the attributes'''
     def __init__(self, mol, xc='LDA,VWN'):

@@ -607,9 +607,10 @@ def as_scanner(td):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            self.reset(mol)
+
             mf_scanner = self._scf
             mf_e = mf_scanner(mol)
-            self.mol = mol
             self.kernel(**kwargs)
             return mf_e + self.e
     return TD_Scanner(td)
@@ -702,6 +703,12 @@ class TDA(lib.StreamObject):
         if self._scf.mo_coeff is None:
             raise RuntimeError('SCF object is not initialized')
         lib.StreamObject.check_sanity(self)
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
 
     def gen_vind(self, mf):
         '''Compute Ax'''

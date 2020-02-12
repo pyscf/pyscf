@@ -469,6 +469,16 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(mf, scf.uhf.UHF))
         self.assertTrue(isinstance(mf, _attach_solvent._Solvation))
 
+    def test_reset(self):
+        mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
+        mf = scf.RHF(mol).density_fit().ddCOSMO().newton()
+        mf.reset(mol1)
+        self.assertTrue(mf.mol is mol1)
+        self.assertTrue(mf.with_df.mol is mol1)
+        self.assertTrue(mf.with_solvent.mol is mol1)
+        self.assertTrue(mf._scf.with_df.mol is mol1)
+        self.assertTrue(mf._scf.with_solvent.mol is mol1)
+
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 
 

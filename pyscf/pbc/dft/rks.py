@@ -34,7 +34,7 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
-from pyscf.dft.rks import define_xc_
+from pyscf.dft import rks as mol_ks
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
@@ -170,15 +170,8 @@ def _dft_common_init_(mf, xc='LDA,VWN'):
         mf._numint = numint.NumInt()
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
-class KohnShamDFT(object):
+class KohnShamDFT(mol_ks.KohnShamDFT):
     __init__ = _dft_common_init_
-
-    @property
-    def omega(self):
-        return self._numint.omega
-    @omega.setter
-    def omega(self, v):
-        self._numint.omega = float(v)
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'XC functionals = %s', self.xc)
@@ -186,10 +179,13 @@ class KohnShamDFT(object):
         self.grids.dump_flags(verbose)
         return self
 
-    define_xc_ = define_xc_
+    def reset(self, mol=None):
+        pbchf.SCF.reset(self, mol)
+        self.grids.reset(mol)
+        return self
 
 
-class RKS(pbchf.RHF, KohnShamDFT):
+class RKS(KohnShamDFT, pbchf.RHF):
     '''RKS class adapted for PBCs.
 
     This is a literal duplication of the molecular RKS class with some `mol`

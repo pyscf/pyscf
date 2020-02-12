@@ -256,6 +256,12 @@ def as_scanner(mf_grad):
             mf_scanner = self.base
             e_tot = mf_scanner(mol)
             self.mol = mol
+
+            # If second integration grids are created for RKS and UKS
+            # gradients
+            if getattr(self, 'grids', None):
+                self.grids.reset(mol)
+
             de = self.kernel(**kwargs)
             return e_tot, de
     return SCF_GradScanner(mf_grad)

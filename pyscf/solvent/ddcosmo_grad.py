@@ -40,6 +40,7 @@ from pyscf import df
 from pyscf.dft import gen_grid, numint
 from pyscf.symm import sph
 from pyscf.solvent import ddcosmo
+from pyscf.solvent._attach_solvent import _Solvation
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import tdrhf as tdrhf_grad
@@ -48,16 +49,21 @@ from pyscf.grad import tdrhf as tdrhf_grad
 # TODO: Define attribute grad_method.base to point to the class of the 0th
 # order calculation for all gradients class. Then this function can be
 # extended and used as the general interface to initialize solvent gradients.
-def make_grad_object(grad_method, pcmobj=None):
+def make_grad_object(grad_method):
     '''For grad_method in vacuum, add nuclear gradients of solvent pcmobj'''
+
+    # Zeroth order method object must be a solvation-enabled method
+    assert isinstance(grad_method.base, _Solvation)
+    if grad_method.base.with_solvent.frozen:
+        raise RuntimeError('Frozen solvent model is not avialbe for energy gradients')
+
     grad_method_class = grad_method.__class__
     class WithSolventGrad(grad_method_class):
-        def __init__(self, grad_method, pcmobj):
+        def __init__(self, grad_method):
             self.__dict__.update(grad_method.__dict__)
-            self.with_solvent = pcmobj
             self.de_solvent = None
             self.de_solute = None
-            self._keys = self._keys.union(['with_solvent', 'de_solvent', 'de_solute'])
+            self._keys = self._keys.union(['de_solvent', 'de_solute'])
 
         # TODO: if moving to python3, change signature to
         # def kernel(self, *args, dm=None, atmlst=None, **kwargs):
@@ -66,14 +72,14 @@ def make_grad_object(grad_method, pcmobj=None):
             if dm is None:
                 dm = self.base.make_rdm1(ao_repr=True)
 
-            self.de_solvent = kernel(self.with_solvent, dm)
+            self.de_solvent = kernel(self.base.with_solvent, dm)
             self.de_solute = grad_method_class.kernel(self, *args, **kwargs)
             self.de = self.de_solute + self.de_solvent
 
             if self.verbose >= logger.NOTE:
                 logger.note(self, '--------------- %s (+%s) gradients ---------------',
                             self.base.__class__.__name__,
-                            self.with_solvent.__class__.__name__)
+                            self.base.with_solvent.__class__.__name__)
                 rhf_grad._write(self, self.mol, self.de, self.atmlst)
                 logger.note(self, '----------------------------------------------')
             return self.de
@@ -83,9 +89,7 @@ def make_grad_object(grad_method, pcmobj=None):
             # where self.de was not yet initialized.
             pass
 
-    if pcmobj is None:
-        pcmobj = ddcosmo.DDCOSMO(mf.mol)
-    return WithSolventGrad(grad_method, pcmobj)
+    return WithSolventGrad(grad_method)
 
 
 def kernel(pcmobj, dm, verbose=None):

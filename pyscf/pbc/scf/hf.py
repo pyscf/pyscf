@@ -523,6 +523,13 @@ class SCF(mol_hf.SCF):
             self.check_sanity()
         return self
 
+    def reset(self, cell=None):
+        '''Reset cell and relevant attributes associated to the old cell object'''
+        if cell is not None:
+            self.cell = cell
+        self.with_df.reset(cell)
+        return self
+
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '******** PBC SCF flags ********')
@@ -746,19 +753,18 @@ class SCF(mol_hf.SCF):
         '''Convert the input mean-field object to a GHF/GKS object'''
         return addons.convert_to_ghf(mf)
 
+    def nuc_grad_method(self, *args, **kwargs):
+        raise NotImplementedError
+
 
 class RHF(SCF, mol_hf.RHF):
 
-    check_sanity = mol_hf.RHF.check_sanity
     stability = mol_hf.RHF.stability
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF'''
         addons.convert_to_rhf(mf, self)
         return self
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
 
 
 def _format_jks(vj, dm, kpts_band):
