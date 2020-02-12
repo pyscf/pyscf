@@ -54,7 +54,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     cput1 = cput0 = (time.clock(), time.time())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
-    log.info('Init E(CCSD) = %.15g', eccsd)
+    log.info('Init E_corr(CCSD) = %.15g', eccsd)
 
     if isinstance(mycc.diis, lib.diis.DIIS):
         adiis = mycc.diis
@@ -80,7 +80,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
-        log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
+        log.info('cycle = %d  E_corr(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
@@ -911,6 +911,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.converged = False
         self.converged_lambda = False
         self.emp2 = None
+        self.e_hf = None
         self.e_corr = None
         self.t1 = None
         self.t2 = None
@@ -932,7 +933,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     @property
     def e_tot(self):
-        return self.e_corr + self._scf.e_tot
+        return (self.e_hf or self._scf.e_tot) + self.e_corr
 
     @property
     def nocc(self):
@@ -1002,7 +1003,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             emp2 -=     numpy.einsum('jiab,iajb', t2[:,:,p0:p1], eris_ovov)
         self.emp2 = emp2.real
 
-        logger.info(self, 'Init t2, MP2 energy = %.15g', emp2.real)
+        e_hf = self.e_hf or eris.e_hf
+
+        logger.info(self, 'Init t2, MP2 energy = %.15g  E_corr(MP2) %.15g',
+                    e_hf + self.emp2, self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -1015,9 +1019,14 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def ccsd(self, t1=None, t2=None, eris=None):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
+
+        self.e_hf = getattr(eris, 'e_hf', None)
+        if self.e_hf is None:
+            self.e_hf = self._scf.e_tot
 
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
@@ -1244,6 +1253,7 @@ class _ChemistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
+        self.e_hf = None
 
         self.oooo = None
         self.ovoo = None
@@ -1257,10 +1267,13 @@ class _ChemistsERIs:
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
         self.mo_coeff = mo_coeff = _mo_without_core(mycc, mo_coeff)
-# Note: Recomputed fock matrix since SCF may not be fully converged.
+
+# Note: Recomputed fock matrix and HF energy since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 

@@ -609,7 +609,6 @@ class UCCSD(ccsd.CCSD):
             self.t1 = (np.zeros((nocca,nvira)), np.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
 
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
@@ -618,6 +617,7 @@ class UCCSD(ccsd.CCSD):
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.build(eris)
         self.converged_lambda, self.l1, self.l2 = \
                 uccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                     max_cycle=self.max_cycle,
