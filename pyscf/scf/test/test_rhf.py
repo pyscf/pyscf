@@ -81,6 +81,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 13.4787347477, 7)
         mol1.stdout.close()
 
+        mol.atom = [["O" , (0. , 0.     , 0.)],
+                    ['ghost-H'   , (0. , -0.757, 0.587)],
+                    [1   , (0. , 0.757 , 0.587)] ]
+        mol.spin = 1
+        mol.build(0, 0)
+        dm = scf.hf.get_init_guess(mol, key='minao')
+        self.assertAlmostEqual(lib.finger(dm), 2.9572305128956238, 9)
+
     def test_init_guess_atom(self):
         mol = gto.M(
             verbose = 7,
@@ -97,6 +105,14 @@ class KnownValues(unittest.TestCase):
         dm = scf.ROHF(mol).init_guess_by_atom()
         self.assertAlmostEqual(lib.finger(dm[0]), 2.7458577873928842/2, 9)
 
+        mol.atom = [["O" , (0. , 0.     , 0.)],
+                    ['ghost-H'   , (0. , -0.757, 0.587)],
+                    [1   , (0. , 0.757 , 0.587)] ]
+        mol.spin = 1
+        mol.build(0, 0)
+        dm = scf.hf.get_init_guess(mol, key='atom')
+        self.assertAlmostEqual(lib.finger(dm), 3.0664740316337697, 9)
+
     def test_init_guess_chk(self):
         dm = scf.hf.SCF(mol).get_init_guess(mol, key='chkfile')
         self.assertAlmostEqual(lib.finger(dm), 2.5912875957299684, 9)
@@ -110,6 +126,12 @@ class KnownValues(unittest.TestCase):
 
         dm = scf.ROHF(mol).init_guess_by_huckel()
         self.assertAlmostEqual(lib.finger(dm[0]), 3.7771917062525509/2, 9)
+
+        mol1 = gto.M(atom='Mo', basis='lanl2dz', ecp='lanl2dz',
+                     verbose=7, output='/dev/null')
+        dm = scf.hf.get_init_guess(mol1, key='huckel')
+        self.assertAlmostEqual(lib.finger(dm), 2.1268388538999723, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 14, 9)
 
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
