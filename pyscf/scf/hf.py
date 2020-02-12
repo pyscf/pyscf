@@ -448,7 +448,7 @@ def init_guess_by_atom(mol):
     import copy
     from pyscf.scf import atom_hf
     from pyscf.scf import addons
-    atm_scf = atom_hf.get_atm_nrhf(mol, elements.CONFIGURATION)
+    atm_scf = atom_hf.get_atm_nrhf(mol)
     atm_dms = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
@@ -489,7 +489,7 @@ def _init_guess_huckel_orbitals(mol):
     import copy
     from pyscf.scf import atom_hf
     from pyscf.scf import addons
-    atm_scf = atom_hf.get_atm_nrhf(mol, elements.NRSRHF_CONFIGURATION)
+    atm_scf = atom_hf.get_atm_nrhf(mol)
 
     # GWH parameter value
     Kgwh = 1.75

@@ -24,7 +24,7 @@ from pyscf.data import elements
 from pyscf.scf import hf
 
 
-def get_atm_nrhf(mol, atomic_configuration=elements.CONFIGURATION):
+def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     atm_scf_result = {}
     for a, b in mol._basis.items():
         atm = gto.Mole()
@@ -47,9 +47,11 @@ def get_atm_nrhf(mol, atomic_configuration=elements.CONFIGURATION):
             atm_scf_result[a] = (0, mo_energy, mo_coeff, mo_occ)
         else:
             atm_hf = AtomSphericAverageRHF(atm)
-            atm_hf._atomic_configuration = atomic_configuration
+            atm_hf.atomic_configuration = atomic_configuration
             atm_hf.verbose = 0
-            atm_scf_result[a] = atm_hf.scf()[1:]
+            atm_hf.run()
+            atm_scf_result[a] = (atm_hf.e_tot, atm_hf.mo_energy,
+                                 atm_hf.mo_coeff, atm_hf.mo_occ)
             atm_hf._eri = None
     mol.stdout.flush()
     return atm_scf_result
@@ -57,8 +59,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.CONFIGURATION):
 class AtomSphericAverageRHF(hf.RHF):
     def __init__(self, mol):
         self._eri = None
-        self._occ = None
-        self._atomic_configuration = elements.CONFIGURATION
+        self.atomic_configuration = elements.NRSRHF_CONFIGURATION
         hf.SCF.__init__(self, mol)
 
     def dump_flags(self, verbose=None):
@@ -110,7 +111,7 @@ class AtomSphericAverageRHF(hf.RHF):
 
         occ = []
         for l in range(param.L_MAX):
-            n2occ, frac = frac_occ(symb, l, self._atomic_configuration)
+            n2occ, frac = frac_occ(symb, l, self.atomic_configuration)
             degen = 2 * l + 1
             idx = mol._bas[:,gto.ANG_OF] == l
             nbas_l = mol._bas[idx,gto.NCTR_OF].sum()
@@ -132,11 +133,10 @@ class AtomSphericAverageRHF(hf.RHF):
         return 0
 
     def scf(self, *args, **kwargs):
-        self.build()
-        #self.init_guess = '1e'
-        return hf.kernel(self, *args, dump_chk=False, **kwargs)
+        kwargs['dump_chk'] = False
+        return hf.RHF.scf(self, *args, **kwargs)
 
-def frac_occ(symb, l, atomic_configuration=elements.CONFIGURATION):
+def frac_occ(symb, l, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     nuc = gto.charge(symb)
     if l < 4 and atomic_configuration[nuc][l] > 0:
         ne = atomic_configuration[nuc][l]
