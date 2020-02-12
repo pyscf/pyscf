@@ -521,16 +521,23 @@ def _object_without_soscf(mf, known_class, remove_df=False):
 
 # Mimic the initialization procedure to restore the Hamiltonian
     for cls in reversed(sub_classes):
-        if (not remove_df) and 'DFHF' in cls.__name__:
+        class_name = cls.__name__
+        if (not remove_df) and 'DFHF' in class_name:
             obj = obj.density_fit()
-        elif 'SecondOrder' in cls.__name__:
+        elif 'SecondOrder' in class_name:
 # SOSCF is not a necessary part
             # obj = obj.newton()
             remove_df = remove_df or (not getattr(mf._scf, 'with_df', None))
-        elif 'SFX2C1E' in cls.__name__:
+        elif 'SFX2C1E' in class_name:
             obj = obj.sfx2c1e()
-        elif 'WithSolvent' in cls.__name__:
+        elif 'WithSolvent' in class_name:
             obj = obj.ddCOSMO(mf.with_solvent)
+        elif 'QMMM' in class_name and getattr(mf, 'mm_mol', None):
+            from pyscf.qmmm.itrf import qmmm_for_scf
+            obj = qmmm_for_scf(obj, mf.mm_mol)
+        elif 'DFTD3' in class_name:
+            from pyscf.dftd3.itrf import dftd3
+            obj = dftd3(obj)
     return _update_mf_without_soscf(mf, obj, remove_df)
 
 def _update_mf_without_soscf(mf, out, remove_df=False):

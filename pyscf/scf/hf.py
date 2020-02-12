@@ -1853,19 +1853,40 @@ class SCF(lib.StreamObject):
                             'function/class or a name (string) of a method.')
 
     def to_rhf(self):
-        '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
+        '''Convert the input mean-field object to a RHF/ROHF object'''
         from pyscf.scf import addons
         return addons.convert_to_rhf(self)
 
     def to_uhf(self):
-        '''Convert the input mean-field object to a UHF/UKS object'''
+        '''Convert the input mean-field object to a UHF object'''
         from pyscf.scf import addons
         return addons.convert_to_uhf(self)
 
     def to_ghf(self):
-        '''Convert the input mean-field object to a GHF/GKS object'''
+        '''Convert the input mean-field object to a GHF object'''
         from pyscf.scf import addons
         return addons.convert_to_ghf(self)
+
+    def to_rks(self):
+        '''Convert the input mean-field object to a RKS/ROKS object'''
+        from pyscf import dft
+        mf = dft.RKS(self.mol, xc='HF')
+        mf.__dict__.update(self.to_rhf().__dict__)
+        return mf
+
+    def to_uks(self):
+        '''Convert the input mean-field object to a UKS object'''
+        from pyscf import dft
+        mf = dft.UKS(self.mol, xc='HF')
+        mf.__dict__.update(self.to_uhf().__dict__)
+        return mf
+
+    def to_gks(self):
+        '''Convert the input mean-field object to a GKS object'''
+        from pyscf import dft
+        mf = dft.GKS(self.mol, xc='HF')
+        mf.__dict__.update(self.to_ghf().__dict__)
+        return mf
 
 
 ############

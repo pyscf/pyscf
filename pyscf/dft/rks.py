@@ -24,9 +24,11 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import scf
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import jk
+from pyscf.scf import addons
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf import __config__
@@ -316,6 +318,36 @@ class KohnShamDFT(object):
         return self
 
     define_xc_ = define_xc_
+
+    def to_rhf(self):
+        '''Convert the input mean-field object to a RHF/ROHF object'''
+        mf = scf.RHF(self.mol)
+        mf.__dict__.update(self.to_rks().__dict__)
+        return mf
+
+    def to_uhf(self):
+        '''Convert the input mean-field object to a UHF object'''
+        mf = scf.UHF(self.mol)
+        mf.__dict__.update(self.to_uks().__dict__)
+        return mf
+
+    def to_ghf(self):
+        '''Convert the input mean-field object to a GHF object'''
+        mf = scf.GHF(self.mol)
+        mf.__dict__.update(self.to_gks().__dict__)
+        return mf
+
+    def to_rks(self):
+        '''Convert the input mean-field object to a RKS/ROKS object'''
+        return scf.addons.convert_to_rhf(self)
+
+    def to_uks(self):
+        '''Convert the input mean-field object to a UKS object'''
+        return scf.addons.convert_to_uhf(self)
+
+    def to_gks(self):
+        '''Convert the input mean-field object to a GKS object'''
+        return scf.addons.convert_to_ghf(self)
 
 
 class RKS(hf.RHF, KohnShamDFT):
