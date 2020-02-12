@@ -288,20 +288,26 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     wooVV = numpy.zeros((nocc,nocc*nvir_pair))
 
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2*2.5 + nocc**2*nvir + 2
+    unit = nocc*nvir**2*3 + nocc**2*nvir + 2
     blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-    def load_ovvv(p0, p1):
-        if p0 < p1:
+
+    def load_ovvv(buf, p0):
+        if p0 < nvir:
+            p1 = min(nvir, p0+blksize)
             buf[:p1-p0] = eris.ovvv[:,p0:p1].transpose(1,0,2)
 
-    buf = numpy.empty((blksize,nocc,nvir_pair))
     with lib.call_in_background(load_ovvv, sync=not mycc.async_io) as prefetch:
-        load_ovvv(0, blksize)
+        buf = numpy.empty((blksize,nocc,nvir_pair))
+        buf_prefetch = numpy.empty((blksize,nocc,nvir_pair))
+
+        load_ovvv(buf_prefetch, 0)
         for p0, p1 in lib.prange(0, nvir, blksize):
-            eris_vovv, buf = buf[:p1-p0], numpy.empty_like(buf)
-            prefetch(p1, min(nvir, p1+blksize))
+            buf, buf_prefetch = buf_prefetch, buf
+            prefetch(buf_prefetch, p1)
+
+            eris_vovv = buf[:p1-p0]
 
             #:wooVV -= numpy.einsum('jc,ciba->jiba', t1[:,p0:p1], eris_vovv)
             lib.ddot(numpy.asarray(t1[:,p0:p1], order='C'),
@@ -561,6 +567,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
         def block_contract(i0, i1):
             off0 = i0*(i0+1)//2
             off1 = i1*(i1+1)//2
+            # TODO: prefetch vvvv
             wwbuf = numpy.asarray(vvvv[off0:off1], order='C')
             for j0, j1 in lib.prange(0, i1, blksize):
                 eri = wwbuf[tril2sq[i0:i1,j0:j1]-off0]
@@ -572,8 +579,6 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
                 contract_blk_(tmp, i0, i1, j0, j1)
 
         with lib.call_in_background(block_contract, sync=not mycc.async_io) as bcontract:
-            readbuf = numpy.empty((blksize,nvira,nvir_pair))
-            readbuf1 = numpy.empty_like(readbuf)
             for p0, p1 in lib.prange(0, nvira, blksize):
                 bcontract(p0, p1)
                 time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
@@ -1416,28 +1421,30 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     fload = ao2mo.outcore._load_from_h5g
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
-    def prefetch(p0, p1, rowmax):
-        p0, p1 = p1, min(rowmax, p1+blksize)
-        if p0 < p1:
+    def load(buf_prefetch, p0, rowmax):
+        if p0 < rowmax:
+            p1 = min(rowmax, p0+blksize)
             fload(fswap['0'], p0*nocc, p1*nocc, buf_prefetch)
 
     outbuf = numpy.empty((blksize*nocc,nmo**2))
-    with lib.call_in_background(prefetch, sync=not mycc.async_io) as bprefetch:
-        fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
+    with lib.call_in_background(load, sync=not mycc.async_io) as prefetch:
+        prefetch(buf_prefetch, 0, nocc)
         for p0, p1 in lib.prange(0, nocc, blksize):
-            nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(p0, p1, nocc)
+            prefetch(buf_prefetch, p1, nocc)
+
+            nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_occ_frac(p0, p1, dat)
         cput2 = log.timer_debug1('transforming oopp', *cput2)
 
-        fload(fswap['0'], nocc**2, min(nmo,nocc+blksize)*nocc, buf_prefetch)
+        prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
-            nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(nocc+p0, nocc+p1, nmo)
+            prefetch(buf_prefetch, nocc+p0, nmo)
+
+            nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
