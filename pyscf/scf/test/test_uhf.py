@@ -91,7 +91,7 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_huckel(self):
         dm = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.finger(dm), 0.640409942511017, 9)
+        self.assertAlmostEqual(lib.finger(dm), 0.90742674256790956, 9)
 
     def test_1e(self):
         mf = scf.UHF(gto.M(atom='H', spin=-1))

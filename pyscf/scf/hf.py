@@ -33,7 +33,7 @@ from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
-from pyscf.data import nist
+from pyscf.data import nist, elements
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
@@ -340,60 +340,46 @@ def init_guess_by_minao(mol):
     from pyscf.scf import addons
 
     def minao_basis(symb, nelec_ecp):
-        stdsymb = gto.mole._std_symbol(symb)
-        basis_add = gto.basis.load('ano', stdsymb)
         occ = []
         basis_ano = []
+        if gto.is_ghost_atom(symb):
+            return occ, basis_ano
+
+        stdsymb = gto.mole._std_symbol(symb)
+        basis_add = gto.basis.load('ano', stdsymb)
 # coreshl defines the core shells to be removed in the initial guess
         coreshl = gto.ecp.core_configuration(nelec_ecp)
         #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
             ndocc, frac = atom_hf.frac_occ(stdsymb, l)
-            if coreshl[l] > 0:
-                occ.extend([0]*coreshl[l]*(2*l+1))
-            if ndocc > coreshl[l]:
-                occ.extend([2]*(ndocc-coreshl[l])*(2*l+1))
-            if frac > 1e-15:
-                occ.extend([frac]*(2*l+1))
-                ndocc += 1
-            if ndocc > 0:
-                basis_ano.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
+            assert ndocc >= coreshl[l]
+            degen = l * 2 + 1
+            occ_l = [0,]*coreshl[l] + [2,]*(ndocc-coreshl[l]) + [frac,]
+            occ.append(numpy.repeat(occ_l, degen))
+            basis_ano.append([l] + [b[:ndocc+2] for b in basis_add[l][1:]])
+        occ = numpy.hstack(occ)
 
         if nelec_ecp > 0:
+            nsh_basis4ecp = [0] * 4
+            for bas in mol._basis[symb]:
+                l = bas[0]
+                nshell = len(bas[1]) - 1
+                nsh_basis4ecp[l] += nshell
+            if gto.mole.charge(stdsymb) - nelec_ecp > 2*sum([i*2+1 for i in nsh_basis4ecp]):
+                raise RuntimeError('Failed to assign occupancy for ' + symb)
+
             occ4ecp = []
             basis4ecp = []
-            nelec_valence_left = gto.mole.charge(stdsymb) - nelec_ecp
             for l in range(4):
-                if nelec_valence_left <= 0:
-                    break
                 ndocc, frac = atom_hf.frac_occ(stdsymb, l)
-                assert(ndocc >= coreshl[l])
-
-                n_valenc_shell = ndocc - coreshl[l]
-                l_occ = [2] * (n_valenc_shell*(2*l+1))
-                if frac > 1e-15:
-                    l_occ.extend([frac] * (2*l+1))
-                    n_valenc_shell += 1
-
-                shell_found = 0
-                for bas in mol._basis[symb]:
-                    if shell_found >= n_valenc_shell:
-                        break
-                    if bas[0] == l:
-                        off = n_valenc_shell - shell_found
-                        # b[:off+1] because the first column of bas[1] is exp
-                        basis4ecp.append([l] + [b[:off+1] for b in bas[1:]])
-                        shell_found += len(bas[1]) - 1
-
-                nelec_valence_left -= int(sum(l_occ[:shell_found*(2*l+1)]))
-                occ4ecp.extend(l_occ)
-
-            if nelec_valence_left > 0:
-                logger.debug(mol, 'Characters of %d valence electrons are '
-                             'not identified in the minao initial guess.\n'
-                             'Electron density of valence ANO for %s will '
-                             'be used.', nelec_valence_left, symb)
-                return occ, basis_ano
+                ndocc -= coreshl[l]
+                occ_l = numpy.zeros(nsh_basis4ecp[l])
+                occ_l[:ndocc] = 2
+                if frac > 0:
+                    occ_l[ndocc] = frac
+                occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
+            occ4ecp = numpy.hstack(occ4ecp)
+            basis4ecp = mol._basis[symb]
 
 # Compared to ANO valence basis, to check whether the ECP basis set has
 # reasonable AO-character contraction.  The ANO valence AO should have
@@ -405,30 +391,24 @@ def init_guess_by_minao(mol):
             atm2._atm, atm2._bas, atm2._env = atm2.make_env(atom, {symb:basis_ano}, [])
             atm1._built = True
             atm2._built = True
-            s12 = gto.intor_cross('int1e_ovlp', atm1, atm2)[:,numpy.array(occ)>0]
-            if abs(numpy.linalg.det(s12)) > .1:
+            s12 = gto.intor_cross('int1e_ovlp', atm1, atm2)
+            if abs(numpy.linalg.det(s12[occ4ecp>0][:,occ>0])) > .1:
                 occ, basis_ano = occ4ecp, basis4ecp
             else:
                 logger.debug(mol, 'Density of valence part of ANO basis '
                              'will be used as initial guess for %s', symb)
         return occ, basis_ano
 
-    atmlst = set([mol.atom_symbol(ia) for ia in range(mol.natm)])
-
-    nelec_ecp_dic = {}
-    for ia in range(mol.natm):
-        symb = mol.atom_symbol(ia)
-        if symb not in nelec_ecp_dic:
-            nelec_ecp_dic[symb] = mol.atom_nelec_core(ia)
+    nelec_ecp_dic = dict([(mol.atom_symbol(ia), mol.atom_nelec_core(ia))
+                          for ia in range(mol.natm)])
 
     basis = {}
     occdic = {}
-    for symb in atmlst:
-        if not gto.is_ghost_atom(symb):
-            nelec_ecp = nelec_ecp_dic[symb]
-            occ_add, basis_add = minao_basis(symb, nelec_ecp)
-            occdic[symb] = occ_add
-            basis[symb] = basis_add
+    for symb, nelec_ecp in nelec_ecp_dic.items():
+        occ_add, basis_add = minao_basis(symb, nelec_ecp)
+        occdic[symb] = occ_add
+        basis[symb] = basis_add
+
     occ = []
     new_atom = []
     for ia in range(mol.natm):
@@ -441,9 +421,7 @@ def init_guess_by_minao(mol):
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
     pmol._built = True
-    c = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao_nr()), mol)
-
-    dm = numpy.dot(c*occ, c.conj().T)
+    dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
 # normalize eletron number
 #    s = mol.intor_symmetric('int1e_ovlp')
 #    dm *= mol.nelectron / (dm*s).sum()
@@ -470,20 +448,20 @@ def init_guess_by_atom(mol):
     import copy
     from pyscf.scf import atom_hf
     from pyscf.scf import addons
-    nbf = mol.nao_nr()
     atm_scf = atom_hf.get_atm_nrhf(mol)
-    dm = numpy.zeros((nbf,nbf))
-    aoslice = mol.aoslice_by_atom()
+    atm_dms = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if symb in atm_scf:
-            e_hf, e, c, occ = atm_scf[symb]
-        else:
+        if symb not in atm_scf:
             symb = mol.atom_pure_symbol(ia)
-            e_hf, e, c, occ = atm_scf[symb]
-        abeg = aoslice[ia, 2]
-        aend = aoslice[ia, 3]
-        dm[abeg:aend,abeg:aend] = numpy.dot(c*occ, c.conj().T)
+        e_hf, e, c, occ = atm_scf[symb]
+        atm_dms.append(numpy.dot(c*occ, c.conj().T))
+
+    dm = scipy.linalg.block_diag(*atm_dms)
+
+    if mol.cart:
+        cart2sph = mol.cart2sph_coeff(normalized='sp')
+        dm = reduce(numpy.dot, (cart2sph, dm, cart2sph.T))
 
     for k, v in atm_scf.items():
         logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
@@ -522,11 +500,9 @@ def _init_guess_huckel_orbitals(mol):
     at_occ = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if symb in atm_scf:
-            e_hf, e, c, occ = atm_scf[symb]
-        else:
+        if symb not in atm_scf:
             symb = mol.atom_pure_symbol(ia)
-            e_hf, e, c, occ = atm_scf[symb]
+        e_hf, e, c, occ = atm_scf[symb]
         at_c.append(c)
         at_e.append(e)
         at_occ.append(occ)
