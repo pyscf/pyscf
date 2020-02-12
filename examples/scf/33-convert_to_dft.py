@@ -4,7 +4,8 @@
 #
 
 '''
-Converion between HF object and DFT (KS) object.
+Converion between HF object and DFT (KS) object. The SCF energy and SCF
+wavefunction are not changed during conversion.
 '''
 
 from pyscf import gto
@@ -20,9 +21,7 @@ H 0   .757  .587''',
 # Convet an HF object to a DFT object
 # 
 mf = mol.HF().run()
-
-mf_dft = mol.KS(xc='b88,lyp')
-mf_dft.__dict__.update(mf.__dict__)
+mf_dft = mf.to_rks(xc='b88,lyp')
 print('Convert %s to %s', mf, mf_dft)
 
 
@@ -30,8 +29,6 @@ print('Convert %s to %s', mf, mf_dft)
 # Convet a DFT object to an HF object
 #
 mf = mol.KS(xc='b88,lyp').run()
-
-mf_hf = mol.HF()
-mf_hf.__dict__.update(mf.__dict__)
+mf_hf = mol.to_rhf()
 print('Convert %s to %s', mf, mf_hf)
 

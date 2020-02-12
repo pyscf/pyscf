@@ -865,6 +865,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     fockb = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[1][k], mo))
              for k, mo in enumerate(mo_b)]
     eris.fock = (np.asarray(focka), np.asarray(fockb))
+    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     madelung = tools.madelung(cell, kpts)
     mo_ea = [focka[k].diagonal().real for k in range(nkpts)]

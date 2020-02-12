@@ -320,34 +320,73 @@ class KohnShamDFT(object):
     define_xc_ = define_xc_
 
     def to_rhf(self):
-        '''Convert the input mean-field object to a RHF/ROHF object'''
+        '''Convert the input mean-field object to a RHF/ROHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
         mf = scf.RHF(self.mol)
         mf.__dict__.update(self.to_rks().__dict__)
         return mf
 
     def to_uhf(self):
-        '''Convert the input mean-field object to a UHF object'''
+        '''Convert the input mean-field object to a UHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
         mf = scf.UHF(self.mol)
         mf.__dict__.update(self.to_uks().__dict__)
         return mf
 
     def to_ghf(self):
-        '''Convert the input mean-field object to a GHF object'''
+        '''Convert the input mean-field object to a GHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
         mf = scf.GHF(self.mol)
         mf.__dict__.update(self.to_gks().__dict__)
         return mf
 
-    def to_rks(self):
-        '''Convert the input mean-field object to a RKS/ROKS object'''
-        return scf.addons.convert_to_rhf(self)
+    def to_rks(self, xc=None):
+        '''Convert the input mean-field object to a RKS/ROKS object.
 
-    def to_uks(self):
-        '''Convert the input mean-field object to a UKS object'''
-        return scf.addons.convert_to_uhf(self)
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.addons.convert_to_rhf(self)
+        if xc is not None:
+            mf.xc = xc
+        return mf
 
-    def to_gks(self):
-        '''Convert the input mean-field object to a GKS object'''
-        return scf.addons.convert_to_ghf(self)
+    def to_uks(self, xc=None):
+        '''Convert the input mean-field object to a UKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.addons.convert_to_uhf(self)
+        if xc is not None:
+            mf.xc = xc
+        return mf
+
+    def to_gks(self, xc=None):
+        '''Convert the input mean-field object to a GKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.addons.convert_to_ghf(self)
+        if xc is not None:
+            mf.xc = xc
+        return mf
 
 
 class RKS(hf.RHF, KohnShamDFT):
