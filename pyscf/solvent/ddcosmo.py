@@ -839,14 +839,8 @@ class DDCOSMO(lib.StreamObject):
         # scale = eta*scale, is it correct?
         return regularize_xt(t, eta*scale)
 
-    def nuc_grad_method(self, grad_method):
-        '''For grad_method in vacuum, add nuclear gradients of solvent
-        '''
-        from pyscf.solvent import ddcosmo_grad
-        if self.frozen:
-            raise RuntimeError('Frozen solvent model is not supported for '
-                               'energy gradients')
-        return ddcosmo_grad.make_grad_object(grad_method, self)
+    def nuc_grad_method(self):
+        raise NotImplementedError
 
 
 if __name__ == '__main__':

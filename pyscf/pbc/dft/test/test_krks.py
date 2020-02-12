@@ -123,6 +123,9 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.399571378419408, 7)
 
+# TODO: test the reset method of pbcdft.KRKS, pbcdft.RKS whether the reset
+# methods of all subsequent objects are called
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.krks")

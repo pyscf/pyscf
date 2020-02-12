@@ -90,13 +90,16 @@ def qmmm_for_scf(scf_method, mm_mol):
     assert(isinstance(scf_method, (scf.hf.SCF, mcscf.casci.CASCI)))
 
     if isinstance(scf_method, scf.hf.SCF):
+        # Avoid to initialize _QMMM twice
         if isinstance(scf_method, _QMMM):
+            scf_method.mm_mol = mm_mol
             return scf_method
 
         method_class = scf_method.__class__
 
     else:
         if isinstance(scf_method._scf, _QMMM):
+            scf_method._scf.mm_mol = mm_mol
             return scf_method
 
         method_class = scf_method._scf.__class__
@@ -229,6 +232,10 @@ def qmmm_grad_for_scf(scf_grad):
     '''
     if getattr(scf_grad.base, 'with_x2c', None):
         raise NotImplementedError('X2C with QM/MM charges')
+
+    # Avoid to initialize _QMMMGrad twice
+    if isinstance(scf_grad, _QMMMGrad):
+        return scf_grad
 
     assert(isinstance(scf_grad.base, scf.hf.SCF) and
            isinstance(scf_grad.base, _QMMM))

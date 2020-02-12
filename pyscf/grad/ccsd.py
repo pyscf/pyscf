@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -228,29 +228,34 @@ def as_scanner(grad_cc):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-            self.mol = mol
 
             cc = self.base
-            cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
-            cc._eris = None
-            # Save eris in cc when calling cc(mol). See the _save_eris
-            # function defined below
-            cc(mol)
-            de = self.kernel(t1=cc.t1, t2=cc.t2, eris=cc._eris, **kwargs)
-            cc._eris = None  # release eris
+            if cc.t2 is not None:
+                last_size = cc.vector_size()
+            else:
+                last_size = 0
+
+            cc.reset(mol)
+            mf_scanner = cc._scf
+            mf_scanner(mol)
+            cc.mo_coeff = mf_scanner.mo_coeff
+            cc.mo_occ = mf_scanner.mo_occ
+            if last_size != cc.vector_size():
+                cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
+
+            self.mol = mol
+            eris = cc.ao2mo(cc.mo_coeff)
+            # Update cc.t1 and cc.t2
+            cc.kernel(t1=cc.t1, t2=cc.t2, eris=eris)
+            # Update cc.l1 and cc.l2
+            cc.solve_lambda(l1=cc.l1, l2=cc.l2, eris=eris)
+
+            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, **kwargs)
             return cc.e_tot, de
         @property
         def converged(self):
             cc = self.base
             return all((cc._scf.converged, cc.converged, cc.converged_lambda))
-
-    # cache eris object in CCSD base class. eris object is used many times
-    # when calculating gradients
-    g_ao2mo = grad_cc.base.__class__.ao2mo
-    def _save_eris(self, *args, **kwargs):
-        self._eris = g_ao2mo(self, *args, **kwargs)
-        return self._eris
-    grad_cc.base.__class__.ao2mo = _save_eris
 
     return CCSD_GradScanner(grad_cc)
 

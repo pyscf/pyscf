@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -762,6 +762,13 @@ To enable the solvent model for CASCI, the following code needs to be called
         mc = solvent.ddCOSMO(mc)
 ''',
                      self._scf.with_solvent.__class__)
+        return self
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+            self.fcisolver.mol = mol
+        self._scf.reset(mol)
         return self
 
     def energy_nuc(self):

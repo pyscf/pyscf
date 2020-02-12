@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -787,19 +787,15 @@ def as_scanner(cc):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            for key in ('with_df', 'with_solvent'):
-                sub_mod = getattr(self, key, None)
-                if sub_mod:
-                    sub_mod.reset(mol)
-
             if self.t2 is not None:
                 last_size = self.vector_size()
             else:
                 last_size = 0
 
+            self.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
-            self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
             if last_size != self.vector_size():
@@ -952,6 +948,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
 
     get_nocc = get_nocc
     get_nmo = get_nmo

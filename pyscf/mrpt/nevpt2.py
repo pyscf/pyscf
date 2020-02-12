@@ -609,6 +609,12 @@ class NEVPT(lib.StreamObject):
         self.onerdm = numpy.zeros((nao,nao))
         self._keys = set(self.__dict__.keys())
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._mc.reset(mol)
+        return self
+
     def get_hcore(self):
         return self._mc.get_hcore()
 

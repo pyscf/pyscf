@@ -1242,19 +1242,8 @@ def as_scanner(mf):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            mf_obj = self
-            mf_objs = []
-            while (mf_obj is not None and
-                   # avoid endless loop caused by circular reference
-                   mf_obj not in mf_objs):
-                mf_objs.append(mf_obj)
-                mf_obj.reset(mol)
-                for key in ('with_df', 'with_x2c', 'grids', 'nlcgrids',
-                            'with_solvent', 'with_dftd3'):
-                    sub_mod = getattr(mf_obj, key, None)
-                    if sub_mod:
-                        sub_mod.reset(mol)
-                mf_obj = getattr(mf_obj, '_scf', None)
+            # Cleanup intermediates associated to the pervious mol object
+            self.reset(mol)
 
             if 'dm0' in kwargs:
                 dm0 = kwargs.pop('dm0')
@@ -1764,7 +1753,7 @@ class SCF(lib.StreamObject):
     as_scanner = as_scanner
 
     def reset(self, mol=None):
-        '''Reset mol and clean up relevant attributes for scanner mode'''
+        '''Reset mol and relevant attributes associated to the old mol object'''
         if mol is not None:
             self.mol = mol
         self.opt = None

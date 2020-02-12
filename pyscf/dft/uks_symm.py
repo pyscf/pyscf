@@ -40,6 +40,8 @@ class SymAdaptedUKS(uhf_symm.UHF, rks.KohnShamDFT):
     get_veff = uks.get_veff
     energy_elec = uks.energy_elec
 
+    reset = rks.KohnShamDFT.reset
+
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)

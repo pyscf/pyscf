@@ -191,6 +191,7 @@ class FFTDF(lib.StreamObject):
     def reset(self, cell=None):
         if cell is not None:
             self.cell = cell
+        self.grids.reset(cell)
         self._rsh_df = {}
         return self
 

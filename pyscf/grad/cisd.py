@@ -80,14 +80,18 @@ def as_scanner(grad_ci, state=0):
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
             ci_scanner = self.base
-            ci_scanner.civec = None
-            ci_scanner._eris = None
             if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
                 raise ValueError('State ID greater than the number of CISD roots')
 
-            # Save eris in cc when calling ci_scanner(mol). See the _save_eris
-            # function defined below
-            ci_scanner(mol)
+            mf_scanner = ci_scanner._scf
+            mf_scanner(mol)
+            ci_scanner.mo_coeff = mf_scanner.mo_coeff
+            ci_scanner.mo_occ = mf_scanner.mo_occ
+
+            if getattr(ci_scanner.ci, 'size', 0) != ci_scanner.vector_size():
+                ci_scanner.ci = None
+            eris = ci_scanner.ao2mo(ci_scanner.mo_coeff)
+            ci_scanner.kernel(ci0=ci_scanner.ci, eris=eris)
 
 # TODO: Check root flip
             if ci_scanner.nroots > 1:
@@ -98,8 +102,7 @@ def as_scanner(grad_ci, state=0):
                 civec = ci_scanner.ci
 
             self.mol = mol
-            de = self.kernel(civec, eris=ci_scanner._eris, **kwargs)
-            ci_scanner._eris = None
+            de = self.kernel(civec, eris=eris, **kwargs)
             return e_tot, de
         @property
         def converged(self):

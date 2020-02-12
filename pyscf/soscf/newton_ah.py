@@ -599,7 +599,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 
 
 # A tag to label the derived SCF class
-class _CIAH_SOSCF(hf.SCF):
+class _CIAH_SOSCF(object):
     '''
     Attributes for Newton solver:
         max_cycle_inner : int
@@ -672,6 +672,11 @@ class _CIAH_SOSCF(hf.SCF):
         self._eri = None
         return self
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        return self._scf.reset(mol)
+
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (time.clock(), time.time())
         if dm0 is not None:
@@ -742,6 +747,15 @@ class _CIAH_SOSCF(hf.SCF):
         if self._scf.mol.symmetry:
             orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
             mo = lib.tag_array(mo, orbsym=orbsym)
+
+        if isinstance(log, logger.Logger) and log.verbose >= logger.DEBUG:
+            idx = self.mo_occ > 0
+            s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
+                                   self.mo_coeff[:,idx]))
+            log.debug('Overlap to initial guess, SVD = %s',
+                      _effective_svd(s, 1e-5))
+            log.debug('Overlap to last step, SVD = %s',
+                      _effective_svd(u[idx][:,idx], 1e-5))
         return mo
 
 
@@ -767,38 +781,15 @@ def newton(mf):
     else:
         mf_doc = mf.__doc__
 
-    class SecondOrderRHF(mf.__class__, _CIAH_SOSCF):
-        __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-        __init__ = _CIAH_SOSCF.__init__
-        dump_flags = _CIAH_SOSCF.dump_flags
-        build = _CIAH_SOSCF.build
-        kernel = _CIAH_SOSCF.kernel
-
-        gen_g_hop = gen_g_hop_rhf
-
-        def rotate_mo(self, mo_coeff, u, log=None):
-            mo = _CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
-            if log is not None and log.verbose >= logger.DEBUG:
-                idx = self.mo_occ > 0
-                s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
-                                       self.mo_coeff[:,idx]))
-                log.debug('Overlap to initial guess, SVD = %s',
-                          _effective_svd(s, 1e-5))
-                log.debug('Overlap to last step, SVD = %s',
-                          _effective_svd(u[idx][:,idx], 1e-5))
-            return mo
-
     if isinstance(mf, rohf.ROHF):
-        class SecondOrderROHF(SecondOrderRHF):
+        class SecondOrderROHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             gen_g_hop = gen_g_hop_rohf
         return SecondOrderROHF(mf)
 
     elif isinstance(mf, uhf.UHF):
-        class SecondOrderUHF(mf.__class__, _CIAH_SOSCF):
+        class SecondOrderUHF(_CIAH_SOSCF, mf.__class__):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            __init__ = _CIAH_SOSCF.__init__
-            dump_flags = _CIAH_SOSCF.dump_flags
-            build = _CIAH_SOSCF.build
 
             gen_g_hop = gen_g_hop_uhf
 
@@ -855,12 +846,8 @@ def newton(mf):
         return SecondOrderUHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
-        class SecondOrderGHF(mf.__class__, _CIAH_SOSCF):
+        class SecondOrderGHF(_CIAH_SOSCF, mf.__class__):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            __init__ = _CIAH_SOSCF.__init__
-            dump_flags = _CIAH_SOSCF.dump_flags
-            build = _CIAH_SOSCF.build
-            kernel = _CIAH_SOSCF.kernel
 
             gen_g_hop = gen_g_hop_ghf
 
@@ -886,6 +873,9 @@ def newton(mf):
         raise RuntimeError('Not support Dirac-HF')
 
     else:
+        class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+            gen_g_hop = gen_g_hop_rhf
         return SecondOrderRHF(mf)
 
 SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)

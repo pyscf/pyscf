@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -218,6 +218,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 9)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 9)
         self.assertAlmostEqual(abs((civec[3]*mc.ci[3]).sum()), 1, 9)
+
+    def test_reset(self):
+        myci = mcscf.CASCI(scf.RHF(molsym), 4, 4).density_fit()
+        myci.reset(mol)
+        self.assertTrue(myci.mol is mol)
+        self.assertTrue(myci._scf.mol is mol)
+        self.assertTrue(myci.fcisolver.mol is mol)
+        self.assertTrue(myci.with_df.mol is mol)
 
 
 if __name__ == "__main__":

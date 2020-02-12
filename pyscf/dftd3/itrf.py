@@ -149,8 +149,16 @@ def dftd3(scf_method):
     assert(isinstance(scf_method, hf.SCF) or
            isinstance(scf_method, casci.CASCI))
 
-    # DFT-D3 has been initialized
-    if getattr(scf_method, 'with_dftd3', None):
+    # Create the object of dftd3 interface wrapper
+    with_dftd3 = DFTD3(scf_method.mol)
+    if isinstance(scf_method, casci.CASCI):
+        with_dftd3.xc = 'hf'
+    else:
+        with_dftd3.xc = getattr(scf_method, 'xc', 'HF').upper().replace(' ', '')
+
+    # DFT-D3 has been initialized, avoid to create the derived classes twice.
+    if isinstance(scf_method, _DFTD3):
+        scf_method.with_dftd3 = with_dftd3
         return scf_method
 
     method_class = scf_method.__class__
@@ -159,7 +167,12 @@ def dftd3(scf_method):
     # based on the dynamic class. If DFT-D3 correction was applied by patching
     # the functions of object scf_method, these patches may not be realized by
     # other extensions.
-    class DFTD3(method_class, _DFTD3):
+    class DFTD3(_DFTD3, method_class):
+        def __init__(self, method, with_dftd3):
+            self.__dict__.update(method.__dict__)
+            self.with_dftd3 = with_dftd3
+            self._keys.update(['with_dftd3'])
+
         def dump_flags(self, verbose=None):
             method_class.dump_flags(self, verbose)
             if self.with_dftd3:
@@ -175,22 +188,16 @@ def dftd3(scf_method):
                 enuc += self.with_dftd3.kernel()[0]
             return enuc
 
+        def reset(self, mol=None):
+            self.with_dftd3.reset(mol)
+            return method_class.reset(self, mol)
+
         def nuc_grad_method(self):
             scf_grad = method_class.nuc_grad_method(self)
             return grad(scf_grad)
         Gradients = lib.alias(nuc_grad_method, alias_name='Gradients')
 
-    mf = DFTD3.__new__(DFTD3)
-    mf.__dict__.update(scf_method.__dict__)
-
-    with_dftd3 = _DFTD3(mf.mol)
-    if isinstance(scf_method, casci.CASCI):
-        with_dftd3.xc = 'hf'
-    else:
-        with_dftd3.xc = getattr(scf_method, 'xc', 'HF').upper().replace(' ', '')
-    mf.with_dftd3 = with_dftd3
-    mf._keys.update(['with_dftd3'])
-    return mf
+    return DFTD3(mf, with_dftd3)
 
 def grad(scf_grad):
     '''Apply DFT-D3 corrections to SCF or MCSCF nuclear gradients methods
@@ -218,11 +225,12 @@ def grad(scf_grad):
     from pyscf.grad import rhf as rhf_grad
     assert(isinstance(scf_grad, rhf_grad.Gradients))
 
+    # Ensure that the zeroth order results include DFTD3 corrections
     if not getattr(scf_grad.base, 'with_dftd3', None):
         scf_grad.base = dftd3(scf_grad.base)
 
     grad_class = scf_grad.__class__
-    class DFTD3Grad(grad_class, _DFTD3Grad):
+    class DFTD3Grad(_DFTD3Grad, grad_class):
         def grad_nuc(self, mol=None, atmlst=None):
             nuc_g = grad_class.grad_nuc(self, mol, atmlst)
             with_dftd3 = getattr(self.base, 'with_dftd3', None)
@@ -237,7 +245,7 @@ def grad(scf_grad):
     return mfgrad
 
 
-class _DFTD3(object):
+class DFTD3Dispersion(object):
     def __init__(self, mol):
         self.mol = mol
         self.verbose = mol.verbose
@@ -294,6 +302,9 @@ class _DFTD3(object):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         self.mol = mol
         return self
+
+class _DFTD3:
+    pass
 
 class _DFTD3Grad:
     pass

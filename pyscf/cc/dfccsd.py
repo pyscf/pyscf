@@ -36,6 +36,10 @@ class RCCSD(ccsd.CCSD):
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
         self._keys.update(['with_df'])
 
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return ccsd.CCSD.reset(self, mol)
+
     def ao2mo(self, mo_coeff=None):
         return _make_df_eris(self, mo_coeff)
 
