@@ -431,9 +431,10 @@ remove_linear_dep = remove_linear_dep_
 def convert_to_uhf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the unrestricted HF/KS object
 
-    Note if mf is an second order SCF object, the second order object will not
-    be converted (in other words, only the underlying SCF object will be
-    converted)
+    Note this conversion only changes the class of the mean-field object.
+    The total energy and wave-function are the same as them in the input
+    mf object. If mf is an second order SCF (SOSCF) object, the SOSCF layer
+    will be discarded. Its underlying SCF object mf._scf will be converted.
 
     Args:
         mf : SCF object
@@ -504,6 +505,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     return update_mo_(mf, out)
 
 def _object_without_soscf(mf, known_class, remove_df=False):
+    from pyscf.soscf import newton_ah
     sub_classes = []
     obj = None
     for i, cls in enumerate(mf.__class__.__mro__):
@@ -519,35 +521,37 @@ def _object_without_soscf(mf, known_class, remove_df=False):
             "`known_class` type.\n\nmf = '%s'\n\nknown_class = '%s'" %
             (mf.__class__.__mro__, known_class))
 
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        remove_df = (remove_df or
+                     # The main SCF object is not a DFHF object
+                     not getattr(mf._scf, 'with_df', None))
+
 # Mimic the initialization procedure to restore the Hamiltonian
     for cls in reversed(sub_classes):
         class_name = cls.__name__
-        if (not remove_df) and 'DFHF' in class_name:
-            obj = obj.density_fit()
-        elif 'SecondOrder' in class_name:
-# SOSCF is not a necessary part
-            # obj = obj.newton()
-            remove_df = remove_df or (not getattr(mf._scf, 'with_df', None))
-        elif 'SFX2C1E' in class_name:
-            obj = obj.sfx2c1e()
+        if '_DFHF' in class_name:
+            if not remove_df:
+                obj = obj.density_fit()
+        elif '_SGXHF' in class_name:
+            if not remove_df:
+                obj = obj.COSX()
+        elif '_X2C_SCF' in class_name:
+            obj = obj.x2c()
         elif 'WithSolvent' in class_name:
             obj = obj.ddCOSMO(mf.with_solvent)
         elif 'QMMM' in class_name and getattr(mf, 'mm_mol', None):
             from pyscf.qmmm.itrf import qmmm_for_scf
             obj = qmmm_for_scf(obj, mf.mm_mol)
-        elif 'DFTD3' in class_name:
+        elif '_DFTD3' in class_name:
             from pyscf.dftd3.itrf import dftd3
             obj = dftd3(obj)
     return _update_mf_without_soscf(mf, obj, remove_df)
 
 def _update_mf_without_soscf(mf, out, remove_df=False):
-    mf_dic = dict(mf.__dict__)
-
     # For SOSCF, avoid the old _scf to be copied to the new object
-    if '_scf' in mf_dic:
-        mf_dic.pop('_scf')
-        mf_dic.pop('with_df', None)
-
+    mf_dic = dict(mf.__dict__)
+    mf_dic.pop('_scf', None)
+    mf_dic.pop('with_df', None)
     out.__dict__.update(mf_dic)
 
     if remove_df and getattr(out, 'with_df', None):
@@ -557,9 +561,10 @@ def _update_mf_without_soscf(mf, out, remove_df=False):
 def convert_to_rhf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the restricted HF/KS object
 
-    Note if mf is an second order SCF object, the second order object will not
-    be converted (in other words, only the underlying SCF object will be
-    converted)
+    Note this conversion only changes the class of the mean-field object.
+    The total energy and wave-function are the same as them in the input
+    mf object. If mf is an second order SCF (SOSCF) object, the SOSCF layer
+    will be discarded. Its underlying SCF object mf._scf will be converted.
 
     Args:
         mf : SCF object
@@ -638,9 +643,10 @@ def convert_to_rhf(mf, out=None, remove_df=False):
 def convert_to_ghf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the generalized HF/KS object
 
-    Note if mf is an second order SCF object, the second order object will not
-    be converted (in other words, only the underlying SCF object will be
-    converted)
+    Note this conversion only changes the class of the mean-field object.
+    The total energy and wave-function are the same as them in the input
+    mf object. If mf is an second order SCF (SOSCF) object, the SOSCF layer
+    will be discarded. Its underlying SCF object mf._scf will be converted.
 
     Args:
         mf : SCF object
