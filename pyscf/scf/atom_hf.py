@@ -103,8 +103,7 @@ class AtomSphericAverageRHF(hf.RHF):
                     self._occ[idx[:n2occ]] = 2
                     if frac > 1e-15:
                         self._occ[idx[n2occ]] = frac
-                    for i,i1 in enumerate(idx):
-                        mo_c[idx,i1] = c[:,i]
+                    mo_c[idx[:,None],idx] = c
                     idx += 1
         return mo_e, mo_c
 
@@ -116,13 +115,13 @@ class AtomSphericAverageRHF(hf.RHF):
 
     def scf(self, *args, **kwargs):
         self.build()
-        self.init_guess = '1e'
+        #self.init_guess = '1e'
         return hf.kernel(self, *args, dump_chk=False, **kwargs)
 
 def frac_occ(symb, l):
     nuc = gto.charge(symb)
-    if l < 4 and elements.NRSRHF_CONFIGURATION[nuc][l] > 0:
-        ne = elements.NRSRHF_CONFIGURATION[nuc][l]
+    if l < 4 and elements.CONFIGURATION[nuc][l] > 0:
+        ne = elements.CONFIGURATION[nuc][l]
         nd = (l * 2 + 1) * 2
         ndocc = ne.__floordiv__(nd)
         frac = (float(ne) / nd - ndocc) * 2
