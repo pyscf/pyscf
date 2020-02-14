@@ -1094,6 +1094,21 @@ def tag_array(a, **kwargs):
     t.__dict__.update(kwargs)
     return t
 
+def split_reshape(a, shapes):
+    '''
+    Split a vector into multiple tensors. shapes is a list of tuples.
+    The entries of shapes indicate the shape of each tensor.
+
+    Returns:
+        tensors : a list of tensors 
+    '''
+    tensors = []
+    p1 = 0
+    for shape in shapes:
+        p0, p1 = p1, p1 + numpy.prod(shape)
+        tensors.append(a[p0:p1].reshape(shape))
+    return tensors
+
 if __name__ == '__main__':
     a = numpy.random.random((30,40,5,10))
     b = numpy.random.random((10,30,5,20))

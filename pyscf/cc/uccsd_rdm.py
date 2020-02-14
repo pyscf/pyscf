@@ -359,7 +359,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
 
 # spin-orbital rdm2 in Chemist's notation
-def make_rdm2(mycc, t1, t2, l1, l2):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     r'''
     Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
 
@@ -383,7 +383,8 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+                      ao_repr=ao_repr)
 
 def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     doo, dOO = d1[0]
@@ -610,7 +611,18 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2aa = dm2aa.transpose(1,0,3,2)
     dm2ab = dm2ab.transpose(1,0,3,2)
     dm2bb = dm2bb.transpose(1,0,3,2)
+
+    if ao_repr:
+        from pyscf.cc import ccsd_rdm
+        dm2aa = ccsd_rdm._rdm2_mo2ao(dm2aa, mycc.mo_coeff[0])
+        dm2bb = ccsd_rdm._rdm2_mo2ao(dm2bb, mycc.mo_coeff[1])
+        dm2ab = _dm2ab_mo2ao(dm2ab, mycc.mo_coeff[0], mycc.mo_coeff[1])
     return dm2aa, dm2ab, dm2bb
+
+
+def _dm2ab_mo2ao(dm2, mo_a, mo_b):
+    return lib.einsum('ijkl,pi,qj,rk,sl->pqrs', dm2, mo_a, mo_a.conj(),
+                      mo_b, mo_b.conj())
 
 
 if __name__ == '__main__':

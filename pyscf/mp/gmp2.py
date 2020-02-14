@@ -29,17 +29,17 @@ from pyscf import __config__
 WITH_T2 = getattr(__config__, 'mp_gmp2_with_t2', True)
 
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
-           verbose=logger.NOTE):
-    if mo_energy is None or mo_coeff is None:
-        mo_coeff = None
-        mo_energy = mp.mo_energy[mp.get_frozen_mask()]
-    else:
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
+    if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
         assert(mp.frozen is 0 or mp.frozen is None)
 
-    if eris is None: eris = mp.ao2mo(mo_coeff)
+    if eris is None:
+        eris = mp.ao2mo(mo_coeff)
+
+    if mo_energy is None:
+        mo_energy = eris.mo_energy
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
@@ -60,6 +60,34 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
             t2[i] = t2i
 
     return emp2.real, t2
+
+def energy(mp, t2, eris):
+    '''MP2 energy'''
+    eris_oovv = numpy.array(eris.oovv)
+    e = 0.25*numpy.einsum('ijab,ijab', t2, eris_oovv)
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part found in GMP2 energy %s', e)
+    return e.real
+
+def update_amps(mp, t2, eris):
+    '''Update non-canonical MP2 amplitudes'''
+    #assert(isinstance(eris, _PhysicistsERIs))
+    nocc, nvir = t2.shape[1:3]
+    fock = eris.fock
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:] + mp.level_shift
+
+    foo = fock[:nocc,:nocc] - numpy.diag(mo_e_o)
+    fvv = fock[nocc:,nocc:] - numpy.diag(mo_e_v)
+    t2new  = lib.einsum('ijac,bc->ijab', t2, fvv)
+    t2new -= lib.einsum('ki,kjab->ijab', foo, t2)
+    t2new = t2new + t2new.transpose(1,0,3,2)
+    t2new += numpy.asarray(eris.oovv).conj()
+
+    eia = mo_e_o[:,None] - mo_e_v
+    t2new /= lib.direct_sum('ia,jb->ijab', eia, eia)
+    return t2new
+
 
 def make_rdm1(mp, t2=None, ao_repr=False):
     r'''
@@ -87,7 +115,7 @@ def _gamma1_intermediates(mp, t2):
     return doo, dvv
 
 # spin-orbital rdm2 in Chemist's notation
-def make_rdm2(mp, t2=None):
+def make_rdm2(mp, t2=None, ao_repr=False):
     r'''
     Two-particle density matrix in the molecular spin-orbital representation
 
@@ -140,6 +168,9 @@ def make_rdm2(mp, t2=None):
             dm2[i,i,j,j] += 1
             dm2[i,j,j,i] -= 1
 
+    if ao_repr:
+        from pyscf.cc import ccsd_rdm
+        dm2 = ccsd_rdm._rdm2_mo2ao(dm2, mp.mo_coeff)
     return dm2
 
 
@@ -147,10 +178,6 @@ class GMP2(mp2.MP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.ghf.GHF))
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
-
-    @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
-        return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -170,29 +197,56 @@ class GMP2(mp2.MP2):
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    # For non-canonical MP2
+    energy = energy
+    update_amps = update_amps
+    def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
+        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
+
 MP2 = GMP2
 
 from pyscf import scf
 scf.ghf.GHF.MP2 = lib.class_as_method(MP2)
 
 
+#TODO: Merge this _PhysicistsERIs class with gccsd._PhysicistsERIs class
 class _PhysicistsERIs:
     def __init__(self, mp, mo_coeff=None):
-        self.orbspin = None
-
         if mo_coeff is None:
             mo_coeff = mp.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
+                               'You may need to call mf.kernel() to generate them.')
+
+        self.mol = mp.mol
+        self.orbspin = None
+
         mo_idx = mp.get_frozen_mask()
         if getattr(mo_coeff, 'orbspin', None) is not None:
             self.orbspin = mo_coeff.orbspin[mo_idx]
             mo_coeff = lib.tag_array(mo_coeff[:,mo_idx], orbspin=self.orbspin)
-            self.mo_coeff = mo_coeff
         else:
             orbspin = scf.ghf.guess_orbspin(mo_coeff)
-            self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
+            mo_coeff = mo_coeff[:,mo_idx]
             if not numpy.any(orbspin == -1):
                 self.orbspin = orbspin[mo_idx]
-                self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
+                mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
+        self.mo_coeff = mo_coeff
+
+        if mp._scf.converged:
+            self.mo_energy = mp._scf.mo_energy[mo_idx]
+            self.fock = numpy.diag(self.mo_energy)
+            self.e_hf = mp._scf.e_tot
+        else:
+            dm = mp._scf.make_rdm1(mp.mo_coeff, mp.mo_occ)
+            vhf = mp._scf.get_veff(mp.mol, dm)
+            fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
+            self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
+            self.mo_energy = self.fock.diagonal().real
 
 def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     eris = _PhysicistsERIs(mp, mo_coeff)
@@ -338,3 +392,8 @@ if __name__ == '__main__':
     e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
     e1+= mol.energy_nuc()
     print(e1 - pt.e_tot)
+
+    mf = scf.UHF(mol).run(max_cycle=1)
+    mf = scf.addons.convert_to_ghf(mf)
+    pt = GMP2(mf)
+    print(pt.kernel()[0] - -0.371240143556976)

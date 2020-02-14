@@ -512,7 +512,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -527,7 +527,8 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     f = lib.H5TmpFile()
     d2 = _gamma2_outcore(myci, civec, nmo, nocc, f, False)
-    return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)

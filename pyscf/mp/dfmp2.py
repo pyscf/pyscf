@@ -103,6 +103,13 @@ class DFMP2(mp2.MP2):
 #        if t2 is None: t2 = self.t2
 #        return make_rdm2(self, t2, self.verbose)
 
+    # For non-canonical MP2
+    def update_amps(self, t2, eris):
+        raise NotImplementedError
+
+    def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
+        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
+
 MP2 = DFMP2
 
 from pyscf import scf
