@@ -328,6 +328,7 @@ class KohnShamDFT(object):
         '''
         mf = scf.RHF(self.mol)
         mf.__dict__.update(self.to_rks().__dict__)
+        mf.converged = False
         return mf
 
     def to_uhf(self):
@@ -339,6 +340,7 @@ class KohnShamDFT(object):
         '''
         mf = scf.UHF(self.mol)
         mf.__dict__.update(self.to_uks().__dict__)
+        mf.converged = False
         return mf
 
     def to_ghf(self):
@@ -350,6 +352,7 @@ class KohnShamDFT(object):
         '''
         mf = scf.GHF(self.mol)
         mf.__dict__.update(self.to_gks().__dict__)
+        mf.converged = False
         return mf
 
     def to_rks(self, xc=None):

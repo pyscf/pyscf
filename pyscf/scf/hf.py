@@ -1868,6 +1868,7 @@ class SCF(lib.StreamObject):
         from pyscf import dft
         mf = dft.RKS(self.mol, xc=xc)
         mf.__dict__.update(self.to_rhf().__dict__)
+        mf.converged = False
         return mf
 
     def to_uks(self, xc='HF'):
@@ -1880,6 +1881,7 @@ class SCF(lib.StreamObject):
         from pyscf import dft
         mf = dft.UKS(self.mol, xc=xc)
         mf.__dict__.update(self.to_uhf().__dict__)
+        mf.converged = False
         return mf
 
     def to_gks(self, xc='HF'):
@@ -1892,6 +1894,7 @@ class SCF(lib.StreamObject):
         from pyscf import dft
         mf = dft.GKS(self.mol, xc=xc)
         mf.__dict__.update(self.to_ghf().__dict__)
+        mf.converged = False
         return mf
 
 
