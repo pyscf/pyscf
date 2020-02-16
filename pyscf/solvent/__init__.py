@@ -15,6 +15,14 @@
 from pyscf.solvent import ddcosmo
 from pyscf.solvent import ddpcm
 
+try:
+    from pyscf.solvent import pol_embed
+
+    def PE(method, pe_state):
+        return pol_embed.pe_scf(method, pe_state)
+except Exception:
+    pass
+
 def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddCOSMO model.
 
