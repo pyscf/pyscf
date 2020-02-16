@@ -489,7 +489,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
-            return mf
+            return copy.copy(mf)
 
     else:
         known_cls = {scf.hf.RHF        : scf.uhf.UHF,
@@ -623,7 +623,7 @@ def convert_to_rhf(mf, out=None, remove_df=False):
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
-            return mf
+            return copy.copy(mf)
 
     else:
         if nelec[0] == nelec[1]:
@@ -723,7 +723,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
-            return mf
+            return copy.copy(mf)
 
     else:
         known_cls = {scf.hf.RHF        : scf.ghf.GHF,

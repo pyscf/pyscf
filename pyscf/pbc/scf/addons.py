@@ -18,6 +18,7 @@
 #
 
 import sys
+import copy
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -267,7 +268,7 @@ def convert_to_uhf(mf, out=None):
 
     if out is None:
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
-            return mf
+            return copy.copy(mf)
         else:
             unknown_cls = [scf.kghf.KGHF]
             for i, cls in enumerate(mf.__class__.__mro__):
@@ -320,13 +321,13 @@ def convert_to_rhf(mf, out=None):
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
         if getattr(mf, '_scf', None):
-            return mol_addons._update_mf_without_soscf(mf, mf._scf, remove_df=False)
+            return mol_addons._update_mf_without_soscf(mf, copy.copy(mf._scf), False)
         else:
-            return mf
+            return copy.copy(mf)
 
     else:
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
-            return mf
+            return copy.copy(mf)
         else:
             unknown_cls = [scf.kghf.KGHF]
             for i, cls in enumerate(mf.__class__.__mro__):
@@ -378,7 +379,7 @@ def convert_to_ghf(mf, out=None):
 
     if isinstance(mf, scf.ghf.GHF):
         if out is None:
-            return mf
+            return copy.copy(mf)
         else:
             out.__dict__.update(mf.__dict__)
             return out

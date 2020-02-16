@@ -345,6 +345,7 @@ class _PhysicistsERIs:
                 self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
 
         # Note: Recomputed fock matrix since SCF may not be fully converged.
+        dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
