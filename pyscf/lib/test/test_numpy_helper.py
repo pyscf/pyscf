@@ -193,6 +193,20 @@ class KnownValues(unittest.TestCase):
         a = lib.frompointer(ptr, count=2, dtype=numpy.int32)
         self.assertTrue(numpy.array_equal(a, [65537, 65537]))
 
+    def test_split_reshape(self):
+        numpy.random.seed(3)
+        shapes = (numpy.random.random((5,4)) * 5).astype(int)
+        ref = [numpy.random.random([x for x in shape if x > 1]) for shape in shapes]
+        shapes = [x.shape for x in ref]
+        a = numpy.hstack([x.ravel() for x in ref])
+        a = lib.split_reshape(a, shapes)
+        for x, y in zip(a, ref):
+            self.assertAlmostEqual(abs(x-y).max(), 0, 12)
+
+        b = lib.split_reshape(numpy.arange(17), ((2,3), (1,), ((2,2), (1,1))))
+
+        self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), ((2,2),))
+        self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), (2,2))
 
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")

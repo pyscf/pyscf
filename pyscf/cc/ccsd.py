@@ -1129,7 +1129,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -1141,7 +1141,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:
@@ -1345,6 +1345,10 @@ def _make_eris_incore(mycc, mo_coeff=None):
     #:ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
     #:eris.ovvv = lib.pack_tril(ovvv.reshape(-1,nvir,nvir)).reshape(nocc,nvir,-1)
     #:eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+
+    if eri1.ndim == 4:
+        eri1 = ao2mo.restore(4, eri1, nmo)
+
     nvir_pair = nvir * (nvir+1) // 2
     eris.oooo = numpy.empty((nocc,nocc,nocc,nocc))
     eris.ovoo = numpy.empty((nocc,nvir,nocc,nocc))
