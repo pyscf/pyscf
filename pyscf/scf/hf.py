@@ -124,8 +124,18 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         dm = dm0
 
     h1e = mf.get_hcore(mol)
-    s1e = mf.get_ovlp(mol)
+    vhf = mf.get_veff(mol, dm)
+    e_tot = mf.energy_tot(dm, h1e, vhf)
+    logger.info(mf, 'init E= %.15g', e_tot)
 
+    scf_conv = False
+    mo_energy = mo_coeff = mo_occ = None
+
+    # Skip SCF iterations. Compute only the total energy of the initial density
+    if mf.max_cycle <= 0:
+        return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
+
+    s1e = mf.get_ovlp(mol)
     cond = lib.cond(s1e)
     logger.debug(mf, 'cond(S) = %s', cond)
     if numpy.max(cond)*1e-17 > conv_tol:
@@ -142,10 +152,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     else:
         mf_diis = None
 
-    vhf = mf.get_veff(mol, dm)
-    e_tot = mf.energy_tot(dm, h1e, vhf)
-    logger.info(mf, 'init E= %.15g', e_tot)
-
     if dump_chk and mf.chkfile:
         # Explicit overwrite the mol object in chkfile
         # Note in pbc.scf, mf.mol == mf.cell, cell is saved under key "mol"
@@ -154,10 +160,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     # A preprocessing hook before the SCF iteration
     mf.pre_kernel(locals())
 
-    scf_conv = False
-    cycle = 0
     cput1 = logger.timer(mf, 'initialize scf', *cput0)
-    while not scf_conv and cycle < max(1, mf.max_cycle):
+    for cycle in range(mf.max_cycle):
         dm_last = dm
         last_hf_e = e_tot
 
@@ -193,7 +197,9 @@ Keyword argument "init_dm" is replaced by "dm0"''')
             callback(locals())
 
         cput1 = logger.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
-        cycle += 1
+
+        if scf_conv:
+            break
 
     if scf_conv and conv_check:
         # An extra diagonalization, to remove level shift
@@ -1296,7 +1302,9 @@ class SCF(lib.StreamObject):
         conv_tol_grad : float
             gradients converge threshold.  Default is sqrt(conv_tol)
         max_cycle : int
-            max number of iterations.  Default is 50
+            max number of iterations.  If max_cycle <= 0, SCF iteration will
+            be skiped and the kernel function will compute only the total
+            energy based on the intial guess. Default value is 50.
         init_guess : str
             initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
             Default is 'minao'
@@ -1608,11 +1616,19 @@ class SCF(lib.StreamObject):
 
         self.dump_flags()
         self.build(self.mol)
-        self.converged, self.e_tot, \
-                self.mo_energy, self.mo_coeff, self.mo_occ = \
-                kernel(self, self.conv_tol, self.conv_tol_grad,
-                       dm0=dm0, callback=self.callback,
-                       conv_check=self.conv_check, **kwargs)
+
+        if self.max_cycle <= 0:
+            # Avoid to update SCF orbitals in the non-SCF initialization
+            # (issue #495)
+            self.e_tot = kernel(self, self.conv_tol, self.conv_tol_grad,
+                                dm0=dm0, callback=self.callback,
+                                conv_check=self.conv_check, **kwargs)[1]
+        else:
+            self.converged, self.e_tot, \
+                    self.mo_energy, self.mo_coeff, self.mo_occ = \
+                    kernel(self, self.conv_tol, self.conv_tol_grad,
+                           dm0=dm0, callback=self.callback,
+                           conv_check=self.conv_check, **kwargs)
 
         logger.timer(self, 'SCF', *cput0)
         self._finalize()
@@ -1813,19 +1829,76 @@ class SCF(lib.StreamObject):
                             'function/class or a name (string) of a method.')
 
     def to_rhf(self):
-        '''Convert the input mean-field object to a RHF/ROHF/RKS/ROKS object'''
+        '''Convert the input mean-field object to a RHF/ROHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
         from pyscf.scf import addons
-        return addons.convert_to_rhf(self)
+        mf = addons.convert_to_rhf(self)
+        if not isinstance(self, RHF):
+            mf.converged = False
+        return mf
 
     def to_uhf(self):
-        '''Convert the input mean-field object to a UHF/UKS object'''
+        '''Convert the input mean-field object to a UHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
         from pyscf.scf import addons
         return addons.convert_to_uhf(self)
 
     def to_ghf(self):
-        '''Convert the input mean-field object to a GHF/GKS object'''
+        '''Convert the input mean-field object to a GHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
         from pyscf.scf import addons
         return addons.convert_to_ghf(self)
+
+    def to_rks(self, xc='HF'):
+        '''Convert the input mean-field object to a RKS/ROKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf import dft
+        mf = dft.RKS(self.mol, xc=xc)
+        mf.__dict__.update(self.to_rhf().__dict__)
+        mf.converged = False
+        return mf
+
+    def to_uks(self, xc='HF'):
+        '''Convert the input mean-field object to a UKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf import dft
+        mf = dft.UKS(self.mol, xc=xc)
+        mf.__dict__.update(self.to_uhf().__dict__)
+        mf.converged = False
+        return mf
+
+    def to_gks(self, xc='HF'):
+        '''Convert the input mean-field object to a GKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf import dft
+        mf = dft.GKS(self.mol, xc=xc)
+        mf.__dict__.update(self.to_ghf().__dict__)
+        mf.converged = False
+        return mf
 
 
 ############

@@ -281,6 +281,10 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(tdscf.dTDA(kshf), tdscf.rks.dTDA))
         self.assertTrue(isinstance(tdscf.dTDA(ks), tdscf.rks.dTDA))
 
+        kshf.xc = ''
+        self.assertTrue(isinstance(tdscf.dTDA(kshf), tdscf.rks.dTDA))
+        self.assertTrue(isinstance(tdscf.dRPA(kshf), tdscf.rks.dRPA))
+
     def test_tda_with_wfnsym(self):
         pmol = mol.copy()
         pmol.symmetry = True

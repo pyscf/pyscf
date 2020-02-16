@@ -35,7 +35,7 @@ from . import incore
 from . import outcore
 from . import addons
 from .addons import load, aug_etb, DEFAULT_AUXBASIS, make_auxbasis, make_auxmol
-from .df import DF, DF4C
+from .df import DF, GDF, DF4C, GDF4C
 
 from . import r_incore
 

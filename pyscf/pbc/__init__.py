@@ -17,3 +17,5 @@ from pyscf.pbc import scf
 #from pyscf.pbc import tools
 
 DEBUG = False
+
+M = gto.M
