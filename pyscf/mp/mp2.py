@@ -491,8 +491,7 @@ class MP2(lib.StreamObject):
     def e_tot(self):
         return (self.e_hf or self._scf.e_tot) + self.e_corr
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
-               _kern=kernel):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         '''
         Args:
             with_t2 : bool

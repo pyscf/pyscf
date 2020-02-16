@@ -435,7 +435,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
         dm1b = lib.einsum('pi,ij,qj->pq', mo_b, dm1b, mo_b)
     return dm1a, dm1b
 
-def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
     dovov, dovOV, dOVov, dOVOV = d2[0]
     dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
     doooo, dooOO, dOOoo, dOOOO = d2[2]

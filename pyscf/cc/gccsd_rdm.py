@@ -174,7 +174,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
         dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
     return dm1
 
-def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
     r'''
     dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
 
