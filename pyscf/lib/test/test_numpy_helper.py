@@ -203,6 +203,10 @@ class KnownValues(unittest.TestCase):
         for x, y in zip(a, ref):
             self.assertAlmostEqual(abs(x-y).max(), 0, 12)
 
+        b = lib.split_reshape(numpy.arange(17), ((2,3), (1,), ((2,2), (1,1))))
+
+        self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), ((2,2),))
+        self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), (2,2))
 
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")

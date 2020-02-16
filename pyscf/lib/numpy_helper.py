@@ -943,8 +943,8 @@ def direct_sum(subscripts, *operands):
 
     Examples:
 
-    >>> a = numpy.random((6,5))
-    >>> b = numpy.random((4,3,2))
+    >>> a = numpy.random.random((6,5))
+    >>> b = numpy.random.random((4,3,2))
     >>> direct_sum('ij,klm->ijklm', a, b).shape
     (6, 5, 4, 3, 2)
     >>> direct_sum('ij,klm', a, b).shape
@@ -1094,6 +1094,7 @@ def tag_array(a, **kwargs):
     t.__dict__.update(kwargs)
     return t
 
+#TODO: merge with function pbc.cc.kccsd_rhf.vector_to_nested
 def split_reshape(a, shapes):
     '''
     Split a vector into multiple tensors. shapes is a list of tuples.
@@ -1101,13 +1102,35 @@ def split_reshape(a, shapes):
 
     Returns:
         tensors : a list of tensors 
+
+    Examples:
+
+    >>> a = numpy.arange(12)
+    >>> split_reshape(a, ((2,3), (1,), ((2,2), (1,1))))
+    [array([[0, 1, 2],
+            [3, 4, 5]]),
+     array([6]),
+     [array([[ 7,  8],
+             [ 9, 10]]),
+      array([[11]])]]
     '''
-    tensors = []
-    p1 = 0
-    for shape in shapes:
-        p0, p1 = p1, p1 + numpy.prod(shape)
-        tensors.append(a[p0:p1].reshape(shape))
-    return tensors
+    if isinstance(shapes[0], (int, numpy.integer)):
+        return a.reshape(shapes)
+
+    def sub_split(a, shapes):
+        tensors = []
+        p1 = 0
+        for shape in shapes:
+            if isinstance(shape[0], (int, numpy.integer)):
+                p0, p1 = p1, p1 + numpy.prod(shape)
+                tensors.append(a[p0:p1].reshape(shape))
+            else:
+                subtensors, size = sub_split(a[p1:], shape)
+                p1 += size
+                tensors.append(subtensors)
+        size = p1
+        return tensors, size
+    return sub_split(a, shapes)[0]
 
 if __name__ == '__main__':
     a = numpy.random.random((30,40,5,10))
