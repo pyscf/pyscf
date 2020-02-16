@@ -21,7 +21,6 @@ from functools import reduce
 import numpy
 from pyscf import symm
 from pyscf import lib
-from pyscf.dft import numint
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import _response_functions
@@ -203,22 +202,24 @@ class TDDFTNoHybrid(TDA):
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
-        if not getattr(mf, 'xc', None):
-            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         from pyscf import scf
+        from pyscf.dft.rks import KohnShamDFT
+        if not isinstance(mf, KohnShamDFT):
+            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         mf = scf.addons.convert_to_uhf(mf)
-        mf.xc = '0.0*LDA'
+        mf.xc = ''
         TDDFTNoHybrid.__init__(self, mf)
 
 TDH = dRPA
 
 class dTDA(TDA):
     def __init__(self, mf):
-        if not getattr(mf, 'xc', None):
-            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         from pyscf import scf
+        from pyscf.dft.rks import KohnShamDFT
+        if not isinstance(mf, KohnShamDFT):
+            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         mf = scf.addons.convert_to_uhf(mf)
-        mf.xc = '0.0*LDA'
+        mf.xc = ''
         TDA.__init__(self, mf)
 
 

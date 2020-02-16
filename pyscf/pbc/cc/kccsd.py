@@ -544,9 +544,11 @@ def _make_eris_incore(cc, mo_coeff=None):
     with lib.temporary_env(cc._scf, exxdiv=None):
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+        vhf = cc._scf.get_veff(cell, dm)
+    fockao = cc._scf.get_hcore() + vhf
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
                                for k, mo in enumerate(eris.mo_coeff)])
+    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     eris.mo_energy = [eris.fock[k].diagonal().real for k in range(nkpts)]
     # Add HFX correction in the eris.mo_energy to improve convergence in
