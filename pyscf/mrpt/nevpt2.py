@@ -787,7 +787,6 @@ class NEVPT(lib.StreamObject):
         return nevpt_e
 
 
-
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
@@ -804,6 +803,10 @@ def sc_nevpt(mc, ci=None, verbose=None):
                           'Use mrpt.NEVPT(mc,root=?) for excited state.')
     return NEVPT(mc).kernel()
 
+
+# register NEVPT2 in MCSCF
+from pyscf.mcscf import casci
+casci.CASCI.NEVPT2 = NEVPT
 
 
 

@@ -278,6 +278,8 @@ class DF(lib.StreamObject):
         return mo_eri
     get_mo_eri = ao2mo
 
+GDF = DF
+
 
 class DF4C(DF):
     '''Relativistic 4-component'''
@@ -332,3 +334,4 @@ class DF4C(DF):
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError
 
+GDF4C = DF4C

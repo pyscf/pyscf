@@ -609,7 +609,6 @@ class UCCSD(ccsd.CCSD):
             self.t1 = (np.zeros((nocca,nvira)), np.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
 
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
@@ -805,10 +804,12 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
                 (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
         self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         nocca, noccb = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
