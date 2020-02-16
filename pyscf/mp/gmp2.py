@@ -214,15 +214,24 @@ scf.ghf.GHF.MP2 = lib.class_as_method(MP2)
 
 #TODO: Merge this _PhysicistsERIs class with gccsd._PhysicistsERIs class
 class _PhysicistsERIs:
-    def __init__(self, mp, mo_coeff=None):
+    def __init__(self, mol=None):
+        self.mol = mol
+        self.mo_coeff = None
+        self.nocc = None
+        self.fock = None
+        self.e_hf = None
+        self.orbspin = None
+        self.oovv = None
+
+    def _common_init_(self, mp, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = mp.mo_coeff
         if mo_coeff is None:
             raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
                                'You may need to call mf.kernel() to generate them.')
+        mp_mo_coeff = mo_coeff
 
         self.mol = mp.mol
-        self.orbspin = None
 
         mo_idx = mp.get_frozen_mask()
         if getattr(mo_coeff, 'orbspin', None) is not None:
@@ -236,20 +245,21 @@ class _PhysicistsERIs:
                 mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
         self.mo_coeff = mo_coeff
 
-        if mp._scf.converged:
+        if mp_mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
             self.mo_energy = mp._scf.mo_energy[mo_idx]
             self.fock = numpy.diag(self.mo_energy)
             self.e_hf = mp._scf.e_tot
         else:
-            dm = mp._scf.make_rdm1(mp.mo_coeff, mp.mo_occ)
+            dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
-            self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+            self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
             self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
 
 def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
-    eris = _PhysicistsERIs(mp, mo_coeff)
+    eris = _PhysicistsERIs()
+    eris._common_init_(mp, mo_coeff)
 
     nocc = mp.nocc
     nao, nmo = eris.mo_coeff.shape
@@ -287,7 +297,8 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
 def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(mp.stdout, mp.verbose)
-    eris = _PhysicistsERIs(mp, mo_coeff)
+    eris = _PhysicistsERIs()
+    eris._common_init_(mp, mo_coeff)
 
     nocc = mp.nocc
     nao, nmo = eris.mo_coeff.shape

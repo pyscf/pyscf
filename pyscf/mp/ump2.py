@@ -409,7 +409,12 @@ scf.uhf.UHF.MP2 = lib.class_as_method(MP2)
 
 #TODO: Merge this _ChemistsERIs class with uccsd._ChemistsERIs class
 class _ChemistsERIs(mp2._ChemistsERIs):
-    def __init__(self, mp, mo_coeff=None):
+    def __init__(self, mol=None):
+        mp2._ChemistsERIs.__init__(self, mol)
+        self.OVOV = None
+        self.ovOV = None
+
+    def _common_init_(self, mp, mo_coeff=None):
         self.mol = mp.mol
         if mo_coeff is None:
             mo_coeff = mp.mo_coeff
@@ -418,30 +423,33 @@ class _ChemistsERIs(mp2._ChemistsERIs):
                                'You may need to call mf.kernel() to generate them.')
 
         mo_idx = mp.get_frozen_mask()
-        self.mo_coeff = mo_coeff = \
-                (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
+        mo_a = mo_coeff[0][:,mo_idx[0]]
+        mo_b = mo_coeff[1][:,mo_idx[1]]
+        self.mo_coeff = (mo_a, mo_b)
 
-        if mp._scf.converged:
+        if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
             self.mo_energy = (mp._scf.mo_energy[0][mo_idx[0]],
                               mp._scf.mo_energy[1][mo_idx[1]])
             self.fock = (numpy.diag(self.mo_energy[0]),
                          numpy.diag(self.mo_energy[1]))
             self.e_hf = mp._scf.e_tot
         else:
-            dm = mp._scf.make_rdm1(mp.mo_coeff, mp.mo_occ)
+            dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
-            focka = mo_coeff[0].conj().T.dot(fockao[0]).dot(mo_coeff[0])
-            fockb = mo_coeff[1].conj().T.dot(fockao[1]).dot(mo_coeff[1])
+            focka = mo_a.conj().T.dot(fockao[0]).dot(mo_a)
+            fockb = mo_b.conj().T.dot(fockao[1]).dot(mo_b)
             self.fock = (focka, fockb)
             self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             nocca, noccb = self.nocc = mp.nocc
             self.mo_energy = (focka.diagonal().real, fockb.diagonal().real)
+        return self
 
 def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)
     time0 = (time.clock(), time.time())
-    eris = _ChemistsERIs(mp, mo_coeff)
+    eris = _ChemistsERIs()
+    eris._common_init_(mp, mo_coeff)
 
     nocca, noccb = mp.get_nocc()
     nmoa, nmob = mp.get_nmo()

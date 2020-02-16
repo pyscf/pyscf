@@ -171,8 +171,9 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
     nocc = mp.nocc
     nvir = nmo - nocc
     if t2 is None:
-        if eris is None: eris = mp.ao2mo()
-        mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
+        if eris is None:
+            eris = mp.ao2mo()
+        mo_energy = eris.mo_energy
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
         dtype = eris.ovov.dtype
     else:
@@ -209,8 +210,9 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
     nocc = nocc0 = mp.nocc
     nvir = nmo - nocc
     if t2 is None:
-        if eris is None: eris = mp.ao2mo()
-        mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
+        if eris is None:
+            eris = mp.ao2mo()
+        mo_energy = eris.mo_energy
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     if not (mp.frozen is 0 or mp.frozen is None):
@@ -363,7 +365,6 @@ def as_scanner(mp):
 
             mf_scanner = self._scf
             mf_scanner(mol)
-            self.mo_energy = mf_scanner.mo_energy
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
             self.kernel(**kwargs)
@@ -438,7 +439,6 @@ class MP2(lib.StreamObject):
 
 ##################################################
 # don't modify the following attributes, they are not input options
-        self.mo_energy = mf.mo_energy
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self._nocc = None
@@ -573,32 +573,45 @@ def _mem_usage(nocc, nvir):
 
 #TODO: Merge this _ChemistsERIs class with ccsd._ChemistsERIs class
 class _ChemistsERIs:
-    def __init__(self, mp, mo_coeff=None):
+    def __init__(self, mol=None):
+        self.mol = mol
+        self.mo_coeff = None
+        self.nocc = None
+        self.fock = None
+        self.e_hf = None
+        self.orbspin = None
+        self.ovov = None
+
+    def _common_init_(self, mp, mo_coeff=None):
         if mo_coeff is None:
             mo_coeff = mp.mo_coeff
         if mo_coeff is None:
             raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
                                'You may need to call mf.kernel() to generate them.')
 
-        self.mo_coeff = mo_coeff = _mo_without_core(mp, mo_coeff)
+        self.mo_coeff = _mo_without_core(mp, mo_coeff)
         self.mol = mp.mol
 
-        if mp._scf.converged:
+        if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+            # The canonical MP2 from a converged SCF result. Rebuilding fock
+            # and e_hf can be skipped
             self.mo_energy = _mo_energy_without_core(mp, mp._scf.mo_energy)
             self.fock = numpy.diag(self.mo_energy)
             self.e_hf = mp._scf.e_tot
         else:
-            dm = mp._scf.make_rdm1(mp.mo_coeff, mp.mo_occ)
+            dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
-            self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+            self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
             self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
+        return self
 
 def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)
     time0 = (time.clock(), time.time())
-    eris = _ChemistsERIs(mp, mo_coeff)
+    eris = _ChemistsERIs()
+    eris._common_init_(mp, mo_coeff)
     mo_coeff = eris.mo_coeff
 
     nocc = mp.nocc
