@@ -365,6 +365,8 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_rhf(self)
         if xc is not None:
             mf.xc = xc
+        if xc != self.xc or not isinstance(self, RKS):
+            mf.converged = False
         return mf
 
     def to_uks(self, xc=None):
@@ -377,6 +379,8 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_uhf(self)
         if xc is not None:
             mf.xc = xc
+        if xc != self.xc:
+            mf.converged = False
         return mf
 
     def to_gks(self, xc=None):
@@ -389,6 +393,8 @@ class KohnShamDFT(object):
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
+        if xc != self.xc:
+            mf.converged = False
         return mf
 
     def reset(self, mol=None):

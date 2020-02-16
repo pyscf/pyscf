@@ -489,7 +489,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
-            return copy.copy(mf)
+            return mf
 
     else:
         known_cls = {scf.hf.RHF        : scf.uhf.UHF,
@@ -548,10 +548,14 @@ def _object_without_soscf(mf, known_class, remove_df=False):
     return _update_mf_without_soscf(mf, obj, remove_df)
 
 def _update_mf_without_soscf(mf, out, remove_df=False):
-    # For SOSCF, avoid the old _scf to be copied to the new object
+    from pyscf.soscf import newton_ah
     mf_dic = dict(mf.__dict__)
-    mf_dic.pop('_scf', None)
-    mf_dic.pop('with_df', None)
+
+    # if mf is SOSCF object, avoid to overwrite the with_df method
+    # FIXME: it causes bug when converting pbc-SOSCF.
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        mf_dic.pop('with_df', None)
+
     out.__dict__.update(mf_dic)
 
     if remove_df and getattr(out, 'with_df', None):
@@ -619,7 +623,7 @@ def convert_to_rhf(mf, out=None, remove_df=False):
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
-            return copy.copy(mf)
+            return mf
 
     else:
         if nelec[0] == nelec[1]:
@@ -719,7 +723,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
-            return copy.copy(mf)
+            return mf
 
     else:
         known_cls = {scf.hf.RHF        : scf.ghf.GHF,

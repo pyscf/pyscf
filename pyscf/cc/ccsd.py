@@ -1031,6 +1031,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self.check_sanity()
         self.dump_flags()
 
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
+
         self.e_hf = getattr(eris, 'e_hf', None)
         if self.e_hf is None:
             self.e_hf = self._scf.e_tot

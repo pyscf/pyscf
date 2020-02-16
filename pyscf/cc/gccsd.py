@@ -160,7 +160,6 @@ class GCCSD(ccsd.CCSD):
             orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
             if not np.any(orbspin == -1):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
 
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
         if getattr(eris, 'orbspin', None) is not None:
@@ -319,6 +318,7 @@ class _PhysicistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
+        self.e_hf = None
         self.orbspin = None
 
         self.oooo = None
@@ -345,10 +345,12 @@ class _PhysicistsERIs:
                 self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
 
         # Note: Recomputed fock matrix since SCF may not be fully converged.
-        dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         self.nocc = mycc.nocc
+        self.mol = mycc.mol
 
         mo_e = self.mo_energy = self.fock.diagonal().real
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()

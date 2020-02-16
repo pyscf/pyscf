@@ -232,7 +232,10 @@ class KnownValues(unittest.TestCase):
         mf1 = pscf.khf.KRHF(cell1)
         cell2 = cell1.copy()
         cell2.spin = 2
-        self.assertTrue (isinstance(mf1.convert_from_(kmf_u), pscf.khf.KRHF))
+        mf2 = mf1.convert_from_(kmf_u)
+        self.assertEqual(kmf_u.kpts.shape, (2, 3))
+        self.assertEqual(mf2.kpts.shape, (2, 3))
+        self.assertTrue (isinstance(mf2, pscf.khf.KRHF))
         self.assertTrue (isinstance(mf1.convert_from_(pscf.KUHF(cell2)), pscf.khf.KRHF))
         self.assertFalse(isinstance(mf1.convert_from_(pscf.KUHF(cell2)), pscf.krohf.KROHF))
         self.assertFalse(isinstance(mf1.convert_from_(kmf_u.newton()), newton_ah._CIAH_SOSCF))
@@ -272,6 +275,16 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(isinstance(mf1.convert_from_(kmf_u.newton()), newton_ah._CIAH_SOSCF))
         self.assertTrue (isinstance(mf1.convert_from_(kmf_u.density_fit()).with_df, df.df.GDF))
         self.assertTrue (isinstance(mf1.convert_from_(kmf_u.mix_density_fit()).with_df, df.mdf.MDF))
+
+    def test_convert_to_khf(self):
+        mf1 = pscf.GHF(cell)
+        self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.kghf.KGHF))
+        mf1 = pscf.RHF(cell)
+        self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.krhf.KRHF))
+        mf1 = pscf.UHF(cell)
+        self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.kuhf.KUHF))
+        mf1 = pscf.ROHF(cell)
+        self.assertTrue(isinstance(pscf.addons.convert_to_khf(mf1), pscf.krohf.KROHF))
 
     def test_canonical_occ(self):
         kpts = numpy.random.rand(2,3)

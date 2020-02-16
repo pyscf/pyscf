@@ -1836,7 +1836,10 @@ class SCF(lib.StreamObject):
         mean-field object.
         '''
         from pyscf.scf import addons
-        return addons.convert_to_rhf(self)
+        mf = addons.convert_to_rhf(self)
+        if not isinstance(self, RHF):
+            mf.converged = False
+        return mf
 
     def to_uhf(self):
         '''Convert the input mean-field object to a UHF object.
