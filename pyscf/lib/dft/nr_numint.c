@@ -241,3 +241,39 @@ void VXC_dcontract_rho(double *rho, double *bra, double *ket,
         }
 }
 }
+
+void VXC_vv10nlc(double *Fvec, double *Uvec, double *Wvec,
+                 double *vvcoords, double *coords,
+                 double *W0p, double *W0, double *K, double *Kp, double *RpW,
+                 int vvngrids, int ngrids)
+{
+#pragma omp parallel
+{
+        double DX, DY, DZ, R2;
+        double gp, g, gt, T, F, U, W;
+        int i, j;
+#pragma omp for schedule(static)
+        for (i = 0; i < ngrids; i++) {
+                F = 0;
+                U = 0;
+                W = 0;
+                for (j = 0; j < vvngrids; j++) {
+                        DX = vvcoords[j*3+0] - coords[i*3+0];
+                        DY = vvcoords[j*3+1] - coords[i*3+1];
+                        DZ = vvcoords[j*3+2] - coords[i*3+2];
+                        R2 = DX*DX + DY*DY + DZ*DZ;
+                        gp = R2*W0p[j] + Kp[j];
+                        g  = R2*W0[i] + K[i];
+                        gt = g + gp;
+                        T = RpW[j] / (g*gp*gt);
+                        F += T;
+                        T *= 1./g + 1./gt;
+                        U += T;
+                        W += T * R2;
+                }
+                Fvec[i] = F * -1.5;
+                Uvec[i] = U;
+                Wvec[i] = W;
+        }
+}
+}
