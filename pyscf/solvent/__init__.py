@@ -18,7 +18,7 @@ from pyscf.solvent import ddpcm
 def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddCOSMO model.
 
-    Examples::
+    Examples:
 
     >>> mf = ddCOSMO(scf.RHF(mol))
     >>> mf.kernel()
@@ -48,7 +48,7 @@ DDCOSMO = ddCOSMO
 def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddPCM model.
 
-    Examples::
+    Examples:
 
     >>> mf = ddPCM(scf.RHF(mol))
     >>> mf.kernel()
@@ -74,3 +74,42 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     else:
         return ddpcm.ddpcm_for_post_scf(method_or_mol, solvent_obj, dm)
 DDPCM = ddPCM
+
+def PE(method_or_mol, solvent_obj, dm=None):
+    '''Initialize polarizable embedding model.
+
+    Args:
+        method_or_mol (pyscf method object or gto.Mole object)
+            If method_or_mol is gto.Mole object, this function returns a
+            PolEmbed object constructed with this Mole object.
+        solvent_obj (PolEmbed object or cppe.PeOptions object or str)
+            If solvent_obj is an object of PolEmbed class, the PE-enabled
+            method will be created using solvent_obj.
+            If solvent_obj is cppe.PeOptions or str, an PolEmbed object will
+            be created first with the solvent_obj, on top of which PE-enabled
+            method will be created.
+
+    Examples:
+
+    >>> pe_options = cppe.PeOptions()
+    >>> pe_options.potfile = "pyframe.pot"
+    >>> mf = PE(scf.RHF(mol), pe_options)
+    >>> mf.kernel()
+    '''
+    from pyscf.solvent import pol_embed
+    from pyscf import gto, scf
+    from pyscf import tdscf
+
+    if isinstance(method_or_mol, gto.mole.Mole):
+        return pol_embed.PolEmbed(method_or_mol, solvent_obj)
+
+    elif isinstance(method_or_mol, scf.hf.SCF):
+        return pol_embed.pe_for_scf(method_or_mol, solvent_obj, dm)
+    elif isinstance(method_or_mol, mcscf.mc1step.CASSCF):
+        return pol_embed.pe_for_casscf(method_or_mol, solvent_obj, dm)
+    elif isinstance(method_or_mol, mcscf.casci.CASCI):
+        return pol_embed.pe_for_casci(method_or_mol, solvent_obj, dm)
+    elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
+        return pol_embed.pe_for_tdscf(method_or_mol, solvent_obj, dm)
+    else:
+        return pol_embed.pe_for_post_scf(method_or_mol, solvent_obj, dm)

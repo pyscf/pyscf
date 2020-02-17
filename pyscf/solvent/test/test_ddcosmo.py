@@ -219,6 +219,11 @@ mol.verbose = 5
 mol.output = '/dev/null'
 mol.build()
 
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
+
 class KnownValues(unittest.TestCase):
     def test_ddcosmo_scf(self):
         mol = gto.M(atom=''' H 0 0 0 ''', charge=1, basis='sto3g', verbose=7,
