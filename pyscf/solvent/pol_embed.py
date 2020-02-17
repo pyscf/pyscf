@@ -1,100 +1,166 @@
+#!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
+'''
+This interface requires the cppe library
+
+https://github.com/maxscheurer/cppe
+arXiv:1804.03598
+
+The CPPE library needs to be built from sources (according to the CPPE document):
+
+mkdir build && cd build && cmake -DENABLE_PYTHON_INTERFACE=ON .. && make
+
+If successfully built, find the directory where the file cppe.*.so locates
+then put the directory in PYTHONPATH.
+
+The potential file required by CPPE library needs to be generated from the
+PyFraME library  https://gitlab.com/FraME-projects/PyFraME
+'''
+
+import sys
 import numpy
+
+try:
+    import cppe
+except:
+    sys.stderr.write('cppe library was not found\n')
+    sys.stderr.write(__doc__)
+    raise
 
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import gto
+from pyscf import df
+from pyscf.solvent import _attach_solvent
 
-import cppe
+@lib.with_doc(_attach_solvent._for_scf.__doc__)
+def pe_for_scf(mf, solvent_obj, dm=None):
+    if not isinstance(solvent_obj, PolEmbed):
+        solvent_obj = PolEmbed(mf.mol, solvent_obj)
+    return _attach_solvent._for_scf(mf, solvent_obj, dm)
 
+@lib.with_doc(_attach_solvent._for_casscf.__doc__)
+def pe_for_casscf(mc, solvent_obj, dm=None):
+    if not isinstance(solvent_obj, PolEmbed):
+        solvent_obj = PolEmbed(mc.mol, solvent_obj)
+    return _attach_solvent._for_casscf(mc, solvent_obj, dm)
 
-def pe_scf(mf, pe_state):
-    oldMF = mf.__class__
+@lib.with_doc(_attach_solvent._for_casci.__doc__)
+def pe_for_casci(mc, solvent_obj, dm=None):
+    if not isinstance(solvent_obj, PolEmbed):
+        solvent_obj = PolEmbed(mc.mol, solvent_obj)
+    return _attach_solvent._for_casci(mc, solvent_obj, dm)
 
-    class SCFWithPE(oldMF):
-        def __init__(self, pe_state):
-            if not isinstance(pe_state, PolEmbed):
-                raise TypeError("Invalid type for pe_state.")
-            self._pol_embed = pe_state
-            self._pe_energy = 0.0
-            self._lock = False  # hack to avoid solving for the induced moments twice in DFT calculations
+@lib.with_doc(_attach_solvent._for_post_scf.__doc__)
+def pe_for_post_scf(method, solvent_obj, dm=None):
+    if not isinstance(solvent_obj, PolEmbed):
+        solvent_obj = PolEmbed(method.mol, solvent_obj)
+    return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
-        def dump_flags(self):
-            oldMF.dump_flags(self)
-            self._pol_embed.check_sanity()
-            self._pol_embed.dump_flags()
-            return self
-
-        def get_veff(self, mol, dm, *args, **kwargs):
-            vhf = oldMF.get_veff(self, mol, dm)
-            if not self._lock:
-                epe, vpe = self._pol_embed.kernel(dm)
-                self._pe_energy = epe
-                vhf += vpe
-                self._lock = True
-                return lib.tag_array(vhf, epe=epe, vpe=vpe)
-            else:
-                return lib.tag_array(vhf)
-
-        def energy_elec(self, dm=None, h1e=None, vhf=None):
-            if dm is None:
-                dm = self.make_rdm1()
-            if getattr(vhf, 'epe', None) is None:
-                vhf = self.get_veff(self.mol, dm)
-            e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf-vhf.vpe)
-            e_tot += vhf.epe
-            logger.info(self._pol_embed, '  PE Energy = %.15g', vhf.epe)
-            self._lock = False
-            return e_tot, e_coul
-
-        def nuc_grad_method(self):
-            raise NotImplementedError("Nuclear gradients not implemented for PE.")
-
-    mf1 = SCFWithPE(pe_state)
-    mf1.__dict__.update(mf.__dict__)
-    return mf1
+@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
+def pe_for_tdscf(method, solvent_obj, dm=None):
+    if not isinstance(solvent_obj, PolEmbed):
+        solvent_obj = PolEmbed(method.mol, solvent_obj)
+    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
 
 
 class PolEmbed(lib.StreamObject):
-    def __init__(self, mol, options):
+    def __init__(self, mol, options_or_potfile):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
 
+        self.frozen = False
+        # FIXME: Should the solvent in PE model by default has the character
+        # of rapid process?
+        self.equilibrium_solvation = False
+
+##################################################
+# don't modify the following attributes, they are not input options
+        if isinstance(options_or_potfile, str):
+            options = cppe.PeOptions()
+            options.potfile = options_or_potfile
+        else:
+            options = options_or_potfile
+
         if not isinstance(options, cppe.PeOptions):
             raise TypeError("Invalid type for options.")
 
         self.options = options
-        mol = cppe.Molecule()
-        for z, coord in zip(self.mol.atom_charges(), self.mol.atom_coords()):
-            mol.append(cppe.Atom(z, *coord))
-
-        def callback(output):
-            logger.info(self, output)
-        self.cppe_state = cppe.CppeState(self.options, mol, callback)
-        self.cppe_state.calculate_static_energies_and_fields()
+        self.cppe_state = self._create_cppe_state(mol)
         self.potentials = self.cppe_state.potentials
         self.V_es = None
 
-##################################################
-# don't modify the following attributes, they are not input options
+        # e (the dielectric correction) and v (the additional potential) are
+        # updated during the SCF iterations
+        self.e = None
+        self.v = None
+        self._dm = None
+
         self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self):
+    def dump_flags(self, verbose=None):
         logger.info(self, '******** %s flags ********', self.__class__)
-        # logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
-        #             self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
-        # logger.info(self, 'lmax = %s'         , self.lmax)
-        # logger.info(self, 'eta = %s'          , self.eta)
-        # logger.info(self, 'eps = %s'          , self.eps)
-        # logger.debug2(self, 'radii_table %s', self.radii_table)
+        options = self.options
+        logger.info(self, 'frozen = %s'       , self.frozen)
+        logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
+        logger.info(self, "cppe.potfile                  = %s", options.potfile)
+        logger.info(self, "cppe.iso_pol                  = %s", options.iso_pol)
+        logger.info(self, "cppe.induced_thresh           = %s", options.induced_thresh)
+        logger.info(self, "cppe.do_diis                  = %s", options.do_diis)
+        logger.info(self, "cppe.diis_start_norm          = %s", options.diis_start_norm)
+        logger.info(self, "cppe.maxiter                  = %s", options.maxiter)
+        logger.info(self, "cppe.damp_induced             = %s", options.damp_induced)
+        logger.info(self, "cppe.damping_factor_induced   = %s", options.damping_factor_induced)
+        logger.info(self, "cppe.damp_multipole           = %s", options.damp_multipole)
+        logger.info(self, "cppe.damping_factor_multipole = %s", options.damping_factor_multipole)
+        logger.info(self, "cppe.pe_border                = %s", options.pe_border)
+        return self
+
+    def _create_cppe_state(self, mol):
+        cppe_mol = cppe.Molecule()
+        for z, coord in zip(mol.atom_charges(), mol.atom_coords()):
+            cppe_mol.append(cppe.Atom(z, *coord))
+
+        def callback(output):
+            logger.info(self, output)
+        cppe_state = cppe.CppeState(self.options, cppe_mol, callback)
+        cppe_state.calculate_static_energies_and_fields()
+        return cppe_state
+
+    def reset(self, mol=None):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        if mol is not None:
+            self.mol = mol
+        self.cppe_state = self._create_cppe_state(mol)
+        self.potentials = self.cppe_state.potentials
+        self.V_es = None
         return self
 
     def kernel(self, dm, elec_only=False):
         '''
         '''
-        if dm.ndim == 3:
-            # UHF
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            # spin-traced DM for UHF or ROHF
             dm = dm[0] + dm[1]
+
         if self.V_es is None:
             V_es = numpy.zeros((self.mol.nao, self.mol.nao),
                                dtype=numpy.float64)
@@ -141,6 +207,10 @@ class PolEmbed(lib.StreamObject):
         else:
             vmat = V_ind
             e = self.cppe_state.energies["Polarization"]["Electronic"]
+        logger.info(self, 'Polarizable embedding energy = %.15g', e)
+
+        self.e = e
+        self.v = vmat
         return e, vmat
 
     def _compute_multipole_potential_integrals(self, site, order, moments):
@@ -187,4 +257,60 @@ class PolEmbed(lib.StreamObject):
         self.mol.set_rinv_orig(site)
         integral = self.mol.intor("int1e_iprinv") + self.mol.intor("int1e_iprinv").transpose(0, 2, 1)
         return numpy.einsum('ij,aij->a', D, integral)
-        
+
+    def _B_dot_x(self, dm):
+        dms = numpy.asarray(dm)
+        dm_shape = dms.shape
+        nao = dm_shape[-1]
+        dms = dms.reshape(-1,nao,nao)
+        v_pe_ao = [self.kernel(x, elec_only=True)[1] for x in dms]
+        return numpy.asarray(v_pe_ov).reshape(dm_shape)
+
+    def nuc_grad_method(self, grad_method):
+        raise NotImplementedError("Nuclear gradients not implemented for PE.")
+
+if __name__ == '__main__':
+    import tempfile
+    from pyscf import gto
+    from pyscf.solvent import PE
+    from pyscf.solvent import pol_embed
+    mol = gto.M(atom='''
+           6        0.000000    0.000000   -0.542500
+           8        0.000000    0.000000    0.677500
+           1        0.000000    0.935307   -1.082500
+           1        0.000000   -0.935307   -1.082500
+                ''', basis='sto3g')
+    mf = mol.RHF()
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(b'''!
+@COORDINATES
+3
+AA
+O     3.53300000    2.99600000    0.88700000      1
+H     4.11100000    3.13200000    1.63800000      2
+H     4.10500000    2.64200000    0.20600000      3
+@MULTIPOLES
+ORDER 0
+3
+1     -0.67444000
+2      0.33722000
+3      0.33722000
+@POLARIZABILITIES
+ORDER 1 1
+3
+1      5.73935000     0.00000000     0.00000000     5.73935000     0.00000000     5.73935000
+2      2.30839000     0.00000000     0.00000000     2.30839000     0.00000000     2.30839000
+3      2.30839000     0.00000000     0.00000000     2.30839000     0.00000000     2.30839000
+EXCLISTS
+3 3
+1   2  3
+2   1  3
+3   1  2''')
+        f.flush()
+        pe_options = cppe.PeOptions()
+        pe_options.potfile = f.name
+        #pe = pol_embed.PolEmbed(mol, pe_options)
+        #mf = PE(mf, pe).run()
+        mf = PE(mf, pe_options).run()
+        print(mf.e_tot - -112.35232445743728)
+        print(mf.with_solvent.e - 0.00020182314249546455)
