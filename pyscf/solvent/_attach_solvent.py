@@ -60,7 +60,7 @@ def _for_scf(mf, solvent_obj, dm=None):
             self.with_solvent.reset(mol)
             return oldMF.reset(self, mol)
 
-        # Note v should not be added to get_hcore for scf methods.
+        # Note v_solvent should not be added to get_hcore for scf methods.
         # get_hcore is overloaded by many post-HF methods. Modifying
         # SCF.get_hcore may lead error.
 
@@ -69,33 +69,33 @@ def _for_scf(mf, solvent_obj, dm=None):
             with_solvent = self.with_solvent
             if not with_solvent.frozen:
                 with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
-            e, v = with_solvent.e, with_solvent.v
+            e_solvent, v_solvent = with_solvent.e, with_solvent.v
 
-            # NOTE: v should not be added to vhf in this place. This is
+            # NOTE: v_solvent should not be added to vhf in this place. This is
             # because vhf is used as the reference for direct_scf in the next
-            # iteration. If v is added here, it may break direct SCF.
-            return lib.tag_array(vhf, e=e, v=v)
+            # iteration. If v_solvent is added here, it may break direct SCF.
+            return lib.tag_array(vhf, e_solvent=e_solvent, v_solvent=v_solvent)
 
         def get_fock(self, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1,
                      diis=None, diis_start_cycle=None,
                      level_shift_factor=None, damp_factor=None):
-            # DIIS was called inside oldMF.get_fock. v, as a function of
-            # dm, should be extrapolated as well. To enable it, v has to be
+            # DIIS was called inside oldMF.get_fock. v_solvent, as a function of
+            # dm, should be extrapolated as well. To enable it, v_solvent has to be
             # added to the fock matrix before DIIS was called.
-            if getattr(vhf, 'v', None) is None:
+            if getattr(vhf, 'v_solvent', None) is None:
                 vhf = self.get_veff(self.mol, dm)
-            return oldMF.get_fock(self, h1e, s1e, vhf+vhf.v, dm, cycle, diis,
+            return oldMF.get_fock(self, h1e, s1e, vhf+vhf.v_solvent, dm, cycle, diis,
                                   diis_start_cycle, level_shift_factor, damp_factor)
 
         def energy_elec(self, dm=None, h1e=None, vhf=None):
             if dm is None:
                 dm = self.make_rdm1()
-            if getattr(vhf, 'e', None) is None:
+            if getattr(vhf, 'e_solvent', None) is None:
                 vhf = self.get_veff(self.mol, dm)
             e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf)
-            e_tot += vhf.e
-            self.scf_summary['e'] = vhf.e.real
-            logger.debug(self, 'Solvent Energy = %.15g', vhf.e)
+            e_tot += vhf.e_solvent
+            self.scf_summary['e_solvent'] = vhf.e_solvent.real
+            logger.debug(self, 'Solvent Energy = %.15g', vhf.e_solvent)
             return e_tot, e_coul
 
         def nuc_grad_method(self):
@@ -114,8 +114,8 @@ def _for_scf(mf, solvent_obj, dm=None):
                 v = vind(dm1)
                 if self.with_solvent.equilibrium_solvation:
                     if is_uhf:
-                        v = self.with_solvent._B_dot_x(dm1)
-                        v += v[0] + v[1]
+                        v_solvent = self.with_solvent._B_dot_x(dm1)
+                        v += v_solvent[0] + v_solvent[1]
                     elif singlet:
                         v += self.with_solvent._B_dot_x(dm1)
                 return v
@@ -237,11 +237,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             with_solvent = self.with_solvent
             if with_solvent.e is not None:
                 edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
-                e_solvent = with_solvent.e
-                e_tot = e_tot - edup + e_solvent
+                e_tot = e_tot - edup + with_solvent.e
                 log.info('Removing duplication %.15g, '
                          'adding E(solvent) = %.15g to total energy:\n'
-                         '    E(CASSCF+solvent) = %.15g', edup, e_solvent, e_tot)
+                         '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
 
             # Update solvent effects for next iteration if needed
             if not with_solvent.frozen:
@@ -255,7 +254,7 @@ The code for CASSCF gradients was based on variational CASSCF wavefunction.
 However, the ddCOSMO-CASSCF energy was not computed variationally.
 Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
-  MCSCF_DM * Vpcm[d/dX MCSCF_DM] + Vpcm[MCSCF_DM] * d/dX MCSCF_DM
+  MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
             grad_method = oldCAS.nuc_grad_method(self)
             return self.with_solvent.nuc_grad_method(grad_method)
@@ -302,7 +301,7 @@ def _for_casci(mc, solvent_obj, dm=None):
             hcore = self._scf.get_hcore(mol)
             if self.with_solvent.v is not None:
                 # NOTE: get_hcore was called by CASCI to generate core
-                # potential.  v is added in this place to take accounts the
+                # potential.  v_solvent is added in this place to take accounts the
                 # effects of solvent. Its contribution is duplicated and it
                 # should be removed from the total energy.
                 hcore += self.with_solvent.v
@@ -383,7 +382,7 @@ The code for CASCI gradients was based on variational CASCI wavefunction.
 However, the ddCOSMO-CASCI energy was not computed variationally.
 Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
-  MCSCF_DM * Vpcm[d/dX MCSCF_DM] + Vpcm[MCSCF_DM] * d/dX MCSCF_DM
+  MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
             grad_method = oldCAS.nuc_grad_method(self)
             return self.with_solvent.nuc_grad_method(grad_method)
@@ -506,7 +505,7 @@ def _for_post_scf(method, solvent_obj, dm=None):
             logger.warn(self, '''
 Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
-  DM * Vpcm[d/dX DM] + Vpcm[DM] * d/dX DM
+  DM * V_solvent[d/dX DM] + V_solvent[DM] * d/dX DM
 ''')
             grad_method = old_method.nuc_grad_method(self)
             return self.with_solvent.nuc_grad_method(grad_method)

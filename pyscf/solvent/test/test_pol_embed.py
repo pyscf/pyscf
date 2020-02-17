@@ -26,7 +26,7 @@ try:
     import pyscf.solvent as solvent
     from pyscf.solvent import pol_embed
     have_pe = True
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     pass
 
 
