@@ -1,3 +1,34 @@
+PySCF 1.7.1 (2020-2-??)
+-----------------------
+* Added
+  - Equilibrium solvation for TDDFT
+  - ddcosmo TDDFT gradients to support TDDFT geometry optimization with solvent
+  - Non-canonical MP2
+* Improved
+  - Atomic configuration in SCF initial guess
+  - IBO valence space configurations
+  - For icmpspt restart option and default settings
+  - TBLIS interface and compilation configurations
+  - DFT-KS initialization factory functions
+  - reset methods in many modules for scanner mode
+  - HF/KS conversion functions
+  - APIs for HF/KS response functions (used by TDDFT and other methods)
+  - transform_ci function to allow projection between FCI wavefunction in
+    different sizes
+  - The fractional-occupancy atomic HF method in SCF initial guess
+  - Performance of non-local XC functional
+  - FCI Performance
+* Bugfix
+  - Contributions of MM point charges in icmpspt energy
+  - ROHF and UHF orbital occupancy for negative mol.spin
+  - Four-component Dirac HF EFG tensor
+  - Avoid twice initialization in modules GDF, SGX etc.
+  - nuclear repulsion energy for single atom case
+  - MINDO gradients unit (from Hartree/Angstrom to Hartree/Bohr)
+  - Data prefetching bug in CCSD
+  - Total energy of CCSD and CISD with non-canonical HF reference
+
+
 PySCF 1.7.0 (2020-1-1)
 ----------------------
 * Added
