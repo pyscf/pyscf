@@ -427,7 +427,7 @@ class KCIS(lib.StreamObject):
         return guess
 
     def get_kconserv_r(self, kshift):
-        """Get the momentum conservation array for a set of k-points.
+        r"""Get the momentum conservation array for a set of k-points.
 
         Given k-point index m the array kconserv_r1[m] returns the index n that
         satisfies momentum conservation,

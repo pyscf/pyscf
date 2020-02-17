@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,6 +75,9 @@ def pe_for_post_scf(method, solvent_obj, dm=None):
 
 @lib.with_doc(_attach_solvent._for_tdscf.__doc__)
 def pe_for_tdscf(method, solvent_obj, dm=None):
+    scf_solvent = getattr(method._scf, 'with_solvent', None)
+    assert scf_solvent is None or isinstance(scf_solvent, PolEmbed)
+
     if not isinstance(solvent_obj, PolEmbed):
         solvent_obj = PolEmbed(method.mol, solvent_obj)
     return _attach_solvent._for_tdscf(method, solvent_obj, dm)
@@ -161,110 +164,146 @@ class PolEmbed(lib.StreamObject):
             # spin-traced DM for UHF or ROHF
             dm = dm[0] + dm[1]
 
-        if self.V_es is None:
-            V_es = numpy.zeros((self.mol.nao, self.mol.nao),
-                               dtype=numpy.float64)
-            for p in self.potentials:
-                moments = []
-                for m in p.multipoles:
-                    m.remove_trace()
-                    moments.append(m.values)
-                V_es += self._compute_multipole_potential_integrals(p.position,
-                                                                    m.k,
-                                                                    moments)
-            self.V_es = V_es
-
-        self.cppe_state.energies["Electrostatic"]["Electronic"] = (
-            numpy.einsum('ij,ij->', self.V_es, dm)
-        )
-
-        n_sitecoords = 3 * self.cppe_state.get_polarizable_site_number()
-        V_ind = numpy.zeros((self.mol.nao, self.mol.nao),
-                            dtype=numpy.float64)
-        if n_sitecoords:
-            # TODO: use list comprehensions
-            current_polsite = 0
-            elec_fields = numpy.zeros(n_sitecoords, dtype=numpy.float64)
-            for p in self.potentials:
-                if not p.is_polarizable:
-                    continue
-                elec_fields_s = self._compute_field(p.position, dm)
-                elec_fields[3*current_polsite:3*current_polsite + 3] = elec_fields_s
-                current_polsite += 1
-            self.cppe_state.update_induced_moments(elec_fields, elec_only)
-            induced_moments = numpy.array(self.cppe_state.get_induced_moments())
-            current_polsite = 0
-            for p in self.potentials:
-                if not p.is_polarizable:
-                    continue
-                site = p.position
-                V_ind += self._compute_field_integrals(site=site,
-                                                       moment=induced_moments[3*current_polsite:3*current_polsite + 3])
-                current_polsite += 1
-        e = self.cppe_state.total_energy
-        if not elec_only:
-            vmat = self.V_es + V_ind
-        else:
-            vmat = V_ind
-            e = self.cppe_state.energies["Polarization"]["Electronic"]
+        e, v = self._exec_cppe(dm, elec_only)
         logger.info(self, 'Polarizable embedding energy = %.15g', e)
 
         self.e = e
-        self.v = vmat
+        self.v = v
+        return e, v
+
+    def _exec_cppe(self, dm, elec_only=False):
+        dms = numpy.asarray(dm)
+        is_single_dm = dms.ndim == 2
+
+        nao = dms.shape[-1]
+        dms = dms.reshape(-1,nao,nao)
+        n_dm = dms.shape[0]
+
+        if self.V_es is None:
+            positions = numpy.array([p.position for p in self.potentials])
+            moments = []
+            orders = []
+            for p in self.potentials:
+                p_moments = []
+                for m in p.multipoles:
+                    m.remove_trace()
+                    p_moments.append(m.values)
+                orders.append(m.k)
+                moments.append(p_moments)
+            self.V_es = self._compute_multipole_potential_integrals(positions, orders, moments)
+
+        e_static = numpy.einsum('ij,xij->x', self.V_es, dms)
+        self.cppe_state.energies["Electrostatic"]["Electronic"] = (
+            e_static[0]
+        )
+
+        positions = numpy.array([p.position for p in self.potentials
+                                 if p.is_polarizable])
+        n_sites = positions.shape[0]
+        V_ind = numpy.zeros((n_dm, nao, nao))
+
+        e_tot = []
+        e_pol = []
+        if n_sites > 0:
+            #:elec_fields = self._compute_field(positions, dms)
+            fakemol = gto.fakemol_for_charges(positions)
+            j3c = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
+            elec_fields = (numpy.einsum('aijg,nij->nga', j3c, dms) +
+                           numpy.einsum('aijg,nji->nga', j3c, dms))
+
+            induced_moments = numpy.empty((n_dm, n_sites * 3))
+            for i_dm in range(n_dm):
+                self.cppe_state.update_induced_moments(elec_fields[i_dm].ravel(), elec_only)
+                induced_moments[i_dm] = numpy.array(self.cppe_state.get_induced_moments())
+
+                e_tot.append(self.cppe_state.total_energy)
+                e_pol.append(self.cppe_state.energies["Polarization"]["Electronic"])
+
+            induced_moments = induced_moments.reshape(n_dm, n_sites, 3)
+            #:V_ind = self._compute_field_integrals(positions, induced_moments)
+            V_ind = numpy.einsum('aijg,nga->nij', j3c, -induced_moments)
+            V_ind = V_ind + V_ind.transpose(0, 2, 1)
+
+        if not elec_only:
+            vmat = self.V_es + V_ind
+            e = numpy.array(e_tot)
+        else:
+            vmat = V_ind
+            e = numpy.array(e_pol)
+
+        if is_single_dm:
+            e = e[0]
+            vmat = vmat[0]
         return e, vmat
 
-    def _compute_multipole_potential_integrals(self, site, order, moments):
-        if order > 2:
+    def _compute_multipole_potential_integrals(self, sites, orders, moments):
+        orders = numpy.asarray(orders)
+        if numpy.any(orders > 2):
             raise NotImplementedError("""Multipole potential integrals not
                                       implemented for order > 2.""")
-        self.mol.set_rinv_orig(site)
-        # TODO: only calculate up to requested order!
-        integral0 = self.mol.intor("int1e_rinv")
-        integral1 = self.mol.intor("int1e_iprinv") + self.mol.intor("int1e_iprinv").transpose(0, 2, 1)
-        integral2 = self.mol.intor("int1e_ipiprinv") + self.mol.intor("int1e_ipiprinv").transpose(0, 2, 1) + 2.0 * self.mol.intor("int1e_iprinvip")
 
-        # k = 2: 0,1,2,4,5,8 = XX, XY, XZ, YY, YZ, ZZ
-        # add the lower triangle to the upper triangle, i.e.,
-        # XY += YX : 1 + 3
-        # XZ += ZX : 2 + 6
-        # YZ += ZY : 5 + 7
-        # and divide by 2
-        integral2[1] += integral2[3]
-        integral2[2] += integral2[6]
-        integral2[5] += integral2[7]
-        integral2[1] *= 0.5
-        integral2[2] *= 0.5
-        integral2[5] *= 0.5
+        # order 0
+        fakemol = gto.fakemol_for_charges(sites)
+        integral0 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e')
+        moments_0 = numpy.array([m[0] for m in moments])
+        op = numpy.einsum('ijg,ga->ij', integral0, moments_0 * cppe.prefactors(0))
 
-        op = integral0 * moments[0] * cppe.prefactors(0)
-        if order > 0:
-            op += numpy.einsum('aij,a->ij', integral1,
-                               moments[1] * cppe.prefactors(1))
-        if order > 1:
-            op += numpy.einsum('aij,a->ij',
-                               integral2[[0, 1, 2, 4, 5, 8], :, :],
-                               moments[2] * cppe.prefactors(2))
+        # order 1
+        if numpy.any(orders >= 1):
+            idx = numpy.where(orders >= 1)[0]
+            fakemol = gto.fakemol_for_charges(sites[idx])
+            integral1 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
+            moments_1 = numpy.array([moments[i][1] for i in idx])
+            v = numpy.einsum('aijg,ga,a->ij', integral1, moments_1, cppe.prefactors(1))
+            op += v + v.T
+
+        if numpy.any(orders >= 2):
+            idx = numpy.where(orders >= 2)[0]
+            fakemol = gto.fakemol_for_charges(sites[idx])
+            n_sites = idx.size
+            # moments_2 is the lower triangler of
+            # [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]] i.e.
+            # XX, XY, XZ, YY, YZ, ZZ = 0,1,2,4,5,8
+            # symmetrize it to the upper triangler part
+            # XX, YX, ZX, YY, ZY, ZZ = 0,3,6,4,7,8
+            m2 = numpy.einsum('ga,a->ga', [moments[i][2] for i in idx],
+                              cppe.prefactors(2))
+            moments_2 = numpy.zeros((n_sites, 9))
+            moments_2[:, [0, 1, 2, 4, 5, 8]]  = m2
+            moments_2[:, [0, 3, 6, 4, 7, 8]] += m2
+            moments_2 *= .5
+
+            integral2 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ipip1')
+            v = numpy.einsum('aijg,ga->ij', integral2, moments_2)
+            op += v + v.T
+            integral2 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ipvip1')
+            op += numpy.einsum('aijg,ga->ij', integral2, moments_2) * 2
 
         return op
 
-    def _compute_field_integrals(self, site, moment):
-        self.mol.set_rinv_orig(site)
-        integral = self.mol.intor("int1e_iprinv") + self.mol.intor("int1e_iprinv").transpose(0, 2, 1)
-        op = numpy.einsum('aij,a->ij', integral, -1.0*moment)
+    def _compute_field_integrals(self, sites, moments):
+        mol = self.mol
+        fakemol = gto.fakemol_for_charges(sites)
+        j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1')
+        op = numpy.einsum('aijg,nga->nij', j3c, -moments)
+        op = op + op.transpose(0, 2, 1)
         return op
 
-    def _compute_field(self, site, D):
-        self.mol.set_rinv_orig(site)
-        integral = self.mol.intor("int1e_iprinv") + self.mol.intor("int1e_iprinv").transpose(0, 2, 1)
-        return numpy.einsum('ij,aij->a', D, integral)
+    def _compute_field(self, sites, Ds):
+        mol = self.mol
+        fakemol = gto.fakemol_for_charges(sites)
+        j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1')
+        field = (numpy.einsum('aijg,nij->nga', j3c, Ds) +
+                 numpy.einsum('aijg,nji->nga', j3c, Ds))
+        return field
 
     def _B_dot_x(self, dm):
         dms = numpy.asarray(dm)
         dm_shape = dms.shape
         nao = dm_shape[-1]
         dms = dms.reshape(-1,nao,nao)
-        v_pe_ao = [self.kernel(x, elec_only=True)[1] for x in dms]
-        return numpy.asarray(v_pe_ov).reshape(dm_shape)
+        v_pe_ao = [self._exec_cppe(x, elec_only=True)[1] for x in dms]
+        return numpy.asarray(v_pe_ao).reshape(dm_shape)
 
     def nuc_grad_method(self, grad_method):
         raise NotImplementedError("Nuclear gradients not implemented for PE.")

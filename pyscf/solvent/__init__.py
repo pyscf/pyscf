@@ -97,8 +97,7 @@ def PE(method_or_mol, solvent_obj, dm=None):
     >>> mf.kernel()
     '''
     from pyscf.solvent import pol_embed
-    from pyscf import gto, scf
-    from pyscf import tdscf
+    from pyscf import gto, scf, mcscf, tdscf
 
     if isinstance(method_or_mol, gto.mole.Mole):
         return pol_embed.PolEmbed(method_or_mol, solvent_obj)

@@ -1812,7 +1812,7 @@ class EOMEE(eom_rccsd.EOM):
         return amplitudes_to_vector_ee(r1, r2, kshift, kconserv)
 
     def get_kconserv_ee_r1(self, kshift=0):
-        '''Get the momentum conservation array for a set of k-points.
+        r'''Get the momentum conservation array for a set of k-points.
 
         Given k-point index m the array kconserv_r1[m] returns the index n that
         satisfies momentum conservation,
