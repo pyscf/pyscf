@@ -213,7 +213,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return gccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     Two-particle density matrix in the molecular spin-orbital representation
 
@@ -229,7 +229,8 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
-    return gccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return gccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)

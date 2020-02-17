@@ -27,6 +27,7 @@ import scipy.optimize
 from pyscf import lib
 from pyscf.pbc import gto as pbcgto
 from pyscf.lib import logger
+from pyscf.scf import addons as mol_addons
 from pyscf import __config__
 
 SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
@@ -262,7 +263,6 @@ def convert_to_uhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding unrestricted
     HF/KS object
     '''
-    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
     from pyscf.pbc import dft
 
@@ -284,7 +284,9 @@ def convert_to_uhf(mf, out=None):
                          dft.roks.ROKS  : dft.uks.UKS  ,
                          scf.hf.RHF     : scf.uhf.UHF  ,
                          scf.rohf.ROHF  : scf.uhf.UHF  ,}
-            out = mol_addons._object_without_soscf(mf, known_cls, False)
+            # .with_df should never be removed or changed during the conversion.
+            # It is needed to compute JK matrix in all pbc SCF objects
+            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
     else:
         assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
         if isinstance(mf, scf.khf.KSCF):
@@ -292,13 +294,16 @@ def convert_to_uhf(mf, out=None):
         else:
             assert(not isinstance(out, scf.khf.KSCF))
 
-    return mol_addons.convert_to_uhf(mf, out, False)
+    out = mol_addons.convert_to_uhf(mf, out, False)
+    # Manually update .with_df because this attribute may not be passed to the
+    # output object correctly in molecular convert function
+    out.with_df = mf.with_df
+    return out
 
 def convert_to_rhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding restricted
     HF/KS object
     '''
-    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
     from pyscf.pbc import dft
 
@@ -344,9 +349,15 @@ def convert_to_rhf(mf, out=None):
                              scf.kuhf.KUHF : scf.khf.KROHF ,
                              dft.uks.UKS   : dft.rks.ROKS  ,
                              scf.uhf.UHF   : scf.hf.ROHF   }
-            out = mol_addons._object_without_soscf(mf, known_cls, False)
+            # .with_df should never be removed or changed during the conversion.
+            # It is needed to compute JK matrix in all pbc SCF objects
+            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
 
-    return mol_addons.convert_to_rhf(mf, out, False)
+    out = mol_addons.convert_to_rhf(mf, out, False)
+    # Manually update .with_df because this attribute may not be passed to the
+    # output object correctly in molecular convert function
+    out.with_df = mf.with_df
+    return out
 
 def convert_to_ghf(mf, out=None):
     '''Convert the given mean-field object to the generalized HF/KS object
@@ -357,7 +368,6 @@ def convert_to_ghf(mf, out=None):
     Returns:
         An generalized SCF object
     '''
-    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
 
     if out is not None:
@@ -429,12 +439,35 @@ def convert_to_ghf(mf, out=None):
     else:
         if out is None:
             out = scf.ghf.GHF(mf.cell)
-        return mol_addons.convert_to_ghf(mf, out, False)
+        out = mol_addons.convert_to_ghf(mf, out, remove_df=False)
+        # Manually update .with_df because this attribute may not be passed to the
+        # output object correctly in molecular convert function
+        out.with_df = mf.with_df
+        return out
 
 def convert_to_khf(mf, out=None):
     '''Convert gamma point SCF object to k-point SCF object
     '''
-    raise NotImplementedError
+    from pyscf.pbc import scf, dft
+    if not isinstance(mf, scf.khf.KSCF):
+        known_cls = {dft.uks.UKS   : dft.kuks.KUKS,
+                     scf.uhf.UHF   : scf.kuhf.KUHF,
+                     dft.rks.RKS   : dft.krks.KRKS,
+                     scf.hf.RHF    : scf.khf.KRHF,
+                     dft.roks.ROKS : dft.kroks.KROKS,
+                     scf.rohf.ROHF : scf.krohf.KROHF,
+                     #TODO: dft.gks.GKS   : dft.kgks.KGKS,
+                     scf.ghf.GHF   : scf.kghf.KGHF}
+        # Keep the attribute with_df
+        with_df = mf.with_df
+        mf = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
+        mf.with_df = with_df
+
+    if out is None:
+        return mf
+    else:
+        out.__dict__.update(mf.__dict__)
+        return out
 
 del(SMEARING_METHOD)
 
