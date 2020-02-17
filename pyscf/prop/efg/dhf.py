@@ -33,6 +33,7 @@ def kernel(method, efg_nuc=None):
     if efg_nuc is None:
         efg_nuc = range(mol.natm)
 
+    c = lib.param.LIGHT_SPEED
     dm = method.make_rdm1()
 
     log.info('\nElectric Field Gradient Tensor Results')
@@ -68,18 +69,18 @@ def kernel(method, efg_nuc=None):
         fcSS+= numpy.einsum('p,q->pq', aoSb[atm_id].conj(), aoSb[atm_id])
 
         fcsd = numpy.einsum('xyij,ji->xy', h1LL, dm[:n2c,:n2c])
-        fcsd+= numpy.einsum('xyij,ji->xy', h1SS, dm[n2c:,n2c:])
+        fcsd+= numpy.einsum('xyij,ji->xy', h1SS, dm[n2c:,n2c:]) * (.5/c)**2
         fc = numpy.einsum('ij,ji->', fcLL, dm[:n2c,:n2c])
-        fc+= numpy.einsum('ij,ji->', fcSS, dm[n2c:,n2c:])
+        fc+= numpy.einsum('ij,ji->', fcSS, dm[n2c:,n2c:]) * (.5/c)**2
         efg_e = fcsd - 8*numpy.pi/3 * numpy.eye(3) * fc
 
         efg_nuc = rhf_efg._get_quad_nuc(mol, atm_id)
         v = efg_nuc - efg_e
         efg.append(v)
 
-        rhf_efg._analyze(mol, atm_id, v, log)
+        rhf_efg._analyze(mol, atm_id, v.real, log)
 
-    return numpy.asarray(efg)
+    return numpy.asarray(efg).real
 
 EFG = kernel
 
