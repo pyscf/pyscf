@@ -59,6 +59,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.9953781149964537, 6)
         self.assertAlmostEqual(p[2], 0.9956169835481459, 6)
 
+    def test_ea_adc2_oneroot(self):
+  
+        e, t_amp1, t_amp2 = myadc.kernel()
+        self.assertAlmostEqual(e, -0.16402828164387806, 6)
+
+        e,v,p = myadc.ea_adc(nroots=1)
+
+        self.assertAlmostEqual(e, 0.030845983085818485, 6)
+
+        self.assertAlmostEqual(p[0], 0.9953781149964537, 6)
+
     def test_ea_adc2x(self):
   
         myadc.method = "adc(2)-x"
