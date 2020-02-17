@@ -21,9 +21,13 @@ DFT-D3 interface.
 
 This interface is based on the open source project
 https://github.com/cuanto/libdftd3
+
+After compiling the libdftd3 library, you need to update the settings.py or
+environment variable DFTD3PATH to point to the directory where the shared
+object file libdftd3.so locates.
 '''
 
-import sys
+import os, sys
 import ctypes
 import numpy
 from pyscf import lib
@@ -36,6 +40,8 @@ try:
 except ImportError:
     settings = lambda: None
     settings.DFTD3PATH = getattr(__config__, 'dftd3_DFTD3PATH', None)
+    if settings.DFTD3PATH is None:
+        settings.DFTD3PATH = os.environ.get('DFTD3PATH')
 
 try:
     libdftd3 = numpy.ctypeslib.load_library('libdftd3.so', settings.DFTD3PATH)
