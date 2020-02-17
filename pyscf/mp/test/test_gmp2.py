@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -166,10 +166,11 @@ class KnownValues(unittest.TestCase):
         hcore = numpy.diag(mo_energy) - vhf
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)
-        mf.mo_energy = mo_energy
+        eris.mo_energy = mf.mo_energy = mo_energy
         mf.mo_coeff = numpy.eye(nmo)
         mf.mo_occ = mo_occ
         mf.e_tot = numpy.einsum('ij,ji', hcore, dm) + numpy.einsum('ij,ji', vhf, dm) *.5
+        mf.converged = True
         pt = mp.GMP2(mf)
         pt.ao2mo = lambda *args, **kwargs: eris
         pt.kernel(eris=eris)
@@ -186,6 +187,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2+dm2.transpose(2,1,0,3)       ).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2+dm2.transpose(0,3,2,1)       ).max(), 0, 9)
 
+    def test_non_canonical_mp2(self):
+        mf = scf.GHF(mol).run(max_cycle=1)
+        pt = mp.MP2(mf)
+        self.assertAlmostEqual(pt.kernel()[0], -0.12714840392411947, 7)
 
 
 if __name__ == "__main__":

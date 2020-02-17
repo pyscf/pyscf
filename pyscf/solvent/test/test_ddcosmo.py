@@ -219,6 +219,11 @@ mol.verbose = 5
 mol.output = '/dev/null'
 mol.build()
 
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
+
 class KnownValues(unittest.TestCase):
     def test_ddcosmo_scf(self):
         mol = gto.M(atom=''' H 0 0 0 ''', charge=1, basis='sto3g', verbose=7,
@@ -468,6 +473,29 @@ class KnownValues(unittest.TestCase):
         mf = mf.to_uhf()
         self.assertTrue(isinstance(mf, scf.uhf.UHF))
         self.assertTrue(isinstance(mf, _attach_solvent._Solvation))
+
+    def test_reset(self):
+        mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
+        mf = scf.RHF(mol).density_fit().ddCOSMO().newton()
+        mf.reset(mol1)
+        self.assertTrue(mf.mol is mol1)
+        self.assertTrue(mf.with_df.mol is mol1)
+        self.assertTrue(mf.with_solvent.mol is mol1)
+        self.assertTrue(mf._scf.with_df.mol is mol1)
+        self.assertTrue(mf._scf.with_solvent.mol is mol1)
+
+    def test_rhf_tda(self):
+        # TDA with equilibrium_solvation
+        mf = mol.RHF().ddCOSMO().run()
+        td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
+        ref = numpy.array([0.3014315117408341, 0.358844688787903, 0.3951664712235241])
+        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 8)
+
+        # TDA without equilibrium_solvation
+        mf = mol.RHF().ddCOSMO().run()
+        td = mf.TDA().ddCOSMO().run()
+        ref = numpy.array([0.3016104587222408, 0.358896882513815, 0.4004977667270891])
+        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 8)
 
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,12 +43,14 @@ def KGCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.cc import kccsd_rhf
-    mf = scf.addons.convert_to_rhf(mf)
+    if not isinstance(mf, scf.khf.KRHF):
+        mf = scf.addons.convert_to_rhf(mf)
     return kccsd_rhf.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
 KCCSD = KRCCSD
 
 def KUCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.cc import kccsd_uhf
-    mf = scf.addons.convert_to_uhf(mf)
+    if not isinstance(mf, scf.kuhf.KUHF):
+        mf = scf.addons.convert_to_uhf(mf)
     return kccsd_uhf.UCCSD(mf, frozen, mo_coeff, mo_occ)

@@ -81,7 +81,7 @@ def load(pseudo_name, symb):
     p = parse_cp2k.load(os.path.join(os.path.dirname(__file__), pseudomod), symb, suffix)
     return p
 
-SUFFIX_PATTERN = re.compile('q\d+$')
+SUFFIX_PATTERN = re.compile(r'q\d+$')
 def _format_pseudo_name(pseudo_name):
     name_suffix = pseudo_name.lower().replace('-', '').replace('_', '').replace(' ', '')
     match = re.search(SUFFIX_PATTERN, name_suffix)

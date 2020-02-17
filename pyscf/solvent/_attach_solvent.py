@@ -41,7 +41,7 @@ def _for_scf(mf, solvent_obj, dm=None):
     oldMF = mf.__class__
 
     if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
+        solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class SCFWithSolvent(_Solvation, oldMF):
@@ -56,7 +56,11 @@ def _for_scf(mf, solvent_obj, dm=None):
             self.with_solvent.dump_flags(verbose)
             return self
 
-        # Note vpcm should not be added to get_hcore for scf methods.
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return oldMF.reset(self, mol)
+
+        # Note v should not be added to get_hcore for scf methods.
         # get_hcore is overloaded by many post-HF methods. Modifying
         # SCF.get_hcore may lead error.
 
@@ -64,34 +68,34 @@ def _for_scf(mf, solvent_obj, dm=None):
             vhf = oldMF.get_veff(self, mol, dm, *args, **kwargs)
             with_solvent = self.with_solvent
             if not with_solvent.frozen:
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
-            epcm, vpcm = with_solvent.epcm, with_solvent.vpcm
+                with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
+            e, v = with_solvent.e, with_solvent.v
 
-            # NOTE: vpcm should not be added to vhf in this place. This is
+            # NOTE: v should not be added to vhf in this place. This is
             # because vhf is used as the reference for direct_scf in the next
-            # iteration. If vpcm is added here, it may break direct SCF.
-            return lib.tag_array(vhf, epcm=epcm, vpcm=vpcm)
+            # iteration. If v is added here, it may break direct SCF.
+            return lib.tag_array(vhf, e=e, v=v)
 
         def get_fock(self, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1,
                      diis=None, diis_start_cycle=None,
                      level_shift_factor=None, damp_factor=None):
-            # DIIS was called inside oldMF.get_fock. vpcm, as a function of
-            # dm, should be extrapolated as well. To enable it, vpcm has to be
+            # DIIS was called inside oldMF.get_fock. v, as a function of
+            # dm, should be extrapolated as well. To enable it, v has to be
             # added to the fock matrix before DIIS was called.
-            if getattr(vhf, 'vpcm', None) is None:
+            if getattr(vhf, 'v', None) is None:
                 vhf = self.get_veff(self.mol, dm)
-            return oldMF.get_fock(self, h1e, s1e, vhf+vhf.vpcm, dm, cycle, diis,
+            return oldMF.get_fock(self, h1e, s1e, vhf+vhf.v, dm, cycle, diis,
                                   diis_start_cycle, level_shift_factor, damp_factor)
 
         def energy_elec(self, dm=None, h1e=None, vhf=None):
             if dm is None:
                 dm = self.make_rdm1()
-            if getattr(vhf, 'epcm', None) is None:
+            if getattr(vhf, 'e', None) is None:
                 vhf = self.get_veff(self.mol, dm)
             e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf)
-            e_tot += vhf.epcm
-            self.scf_summary['epcm'] = vhf.epcm.real
-            logger.debug(self, '  E_diel = %.15g', vhf.epcm)
+            e_tot += vhf.e
+            self.scf_summary['e'] = vhf.e.real
+            logger.debug(self, 'Solvent Energy = %.15g', vhf.e)
             return e_tot, e_coul
 
         def nuc_grad_method(self):
@@ -110,8 +114,8 @@ def _for_scf(mf, solvent_obj, dm=None):
                 v = vind(dm1)
                 if self.with_solvent.equilibrium_solvation:
                     if is_uhf:
-                        vpcm = self.with_solvent._B_dot_x(dm1)
-                        v += vpcm[0] + vpcm[1]
+                        v = self.with_solvent._B_dot_x(dm1)
+                        v += v[0] + v[1]
                     elif singlet:
                         v += self.with_solvent._B_dot_x(dm1)
                 return v
@@ -145,7 +149,7 @@ def _for_casscf(mc, solvent_obj, dm=None):
     oldCAS = mc.__class__
 
     if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
+        solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class CASSCFWithSolvent(_Solvation, oldCAS):
@@ -175,6 +179,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
                          self._scf.with_solvent.__class__)
             return self
 
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return oldCAS.reset(self, mol)
+
         def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
             casdm1, casdm2, gci, fcivec = \
                     oldCAS.update_casdm(self, mo, u, fcivec, e_ci, eris, envs)
@@ -191,7 +199,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
                 mocas = mo[:,self.ncore:self.ncore+self.ncas]
                 dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
                 dm += numpy.dot(mocore, mocore.T) * 2
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
+                with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
 
             return casdm1, casdm2, gci, fcivec
 
@@ -204,8 +212,8 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 # duplicated energy contribution from solvent needs to be removed.
         def get_hcore(self, mol=None):
             hcore = self._scf.get_hcore(mol)
-            if self.with_solvent.vpcm is not None:
-                hcore += self.with_solvent.vpcm
+            if self.with_solvent.v is not None:
+                hcore += self.with_solvent.v
             return hcore
 
         def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
@@ -227,17 +235,17 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             dm = self.make_rdm1(ci=fcivec, ao_repr=True)
 
             with_solvent = self.with_solvent
-            if with_solvent.epcm is not None:
-                edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                ediel = with_solvent.epcm
-                e_tot = e_tot - edup + ediel
+            if with_solvent.e is not None:
+                edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
+                e_solvent = with_solvent.e
+                e_tot = e_tot - edup + e_solvent
                 log.info('Removing duplication %.15g, '
-                         'adding E_diel = %.15g to total energy:\n'
-                         '    E(CASSCF+solvent) = %.15g', edup, ediel, e_tot)
+                         'adding E(solvent) = %.15g to total energy:\n'
+                         '    E(CASSCF+solvent) = %.15g', edup, e_solvent, e_tot)
 
             # Update solvent effects for next iteration if needed
             if not with_solvent.frozen:
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
+                with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
 
             return e_tot, e_cas, fcivec
 
@@ -271,7 +279,7 @@ def _for_casci(mc, solvent_obj, dm=None):
     oldCAS = mc.__class__
 
     if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
+        solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class CASCIWithSolvent(_Solvation, oldCAS):
@@ -286,14 +294,18 @@ def _for_casci(mc, solvent_obj, dm=None):
             self.with_solvent.dump_flags(verbose)
             return self
 
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return oldCAS.reset(self, mol)
+
         def get_hcore(self, mol=None):
             hcore = self._scf.get_hcore(mol)
-            if self.with_solvent.vpcm is not None:
+            if self.with_solvent.v is not None:
                 # NOTE: get_hcore was called by CASCI to generate core
-                # potential.  vpcm is added in this place to take accounts the
+                # potential.  v is added in this place to take accounts the
                 # effects of solvent. Its contribution is duplicated and it
                 # should be removed from the total energy.
-                hcore += self.with_solvent.vpcm
+                hcore += self.with_solvent.v
             return hcore
 
         def kernel(self, mo_coeff=None, ci0=None, verbose=None):
@@ -317,13 +329,12 @@ def _for_casci(mc, solvent_obj, dm=None):
                               with_solvent.state_id)
                     dm = self.make_rdm1(ci=ci0[with_solvent.state_id])
 
-                if with_solvent.epcm is not None:
-                    edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                    self.e_tot += with_solvent.epcm - edup
+                if with_solvent.e is not None:
+                    edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
+                    self.e_tot += with_solvent.e - edup
 
                 if not with_solvent.frozen:
-                    with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
-                log.debug('  E_diel = %.15g', with_solvent.epcm)
+                    with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
                 return self.e_tot, e_cas, ci0
 
             if with_solvent.frozen:
@@ -405,7 +416,7 @@ def _for_post_scf(method, solvent_obj, dm=None):
         scf_with_solvent = _for_scf(method._scf, solvent_obj, dm)
         if dm is None:
             solvent_obj = scf_with_solvent.with_solvent
-            solvent_obj.epcm, solvent_obj.vpcm = \
+            solvent_obj.e, solvent_obj.v = \
                     solvent_obj.kernel(scf_with_solvent.make_rdm1())
 
     # Post-HF objects access the solvent effects indirectly through the
@@ -415,7 +426,7 @@ def _for_post_scf(method, solvent_obj, dm=None):
 
     if dm is not None:
         solvent_obj = scf_with_solvent.with_solvent
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
+        solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class PostSCFWithSolvent(_Solvation, old_method):
@@ -432,6 +443,10 @@ def _for_post_scf(method, solvent_obj, dm=None):
             self.with_solvent.check_sanity()
             self.with_solvent.dump_flags(verbose)
             return self
+
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return old_method.reset(self, mol)
 
         def kernel(self, *args, **kwargs):
             with_solvent = self.with_solvent
@@ -456,7 +471,7 @@ def _for_post_scf(method, solvent_obj, dm=None):
                 log.info('\n** Solvent self-consistent cycle %d:', cycle)
                 # Solvent effects are applied when accessing the
                 # underlying ._scf objects. The flag frozen=True ensures that
-                # the generated potential with_solvent.vpcm is passed to the
+                # the generated potential with_solvent.v is passed to the
                 # the post-HF object, without being updated in the implicit
                 # call to the _scf iterations.
                 with lib.temporary_env(with_solvent, frozen=True):
@@ -467,7 +482,7 @@ def _for_post_scf(method, solvent_obj, dm=None):
                 # To generate the solvent potential for ._scf object. Since
                 # frozen is set when calling basic_scanner, the solvent
                 # effects are frozen during the scf iterations.
-                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
+                with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
 
                 de = e_tot - e_last
                 log.info('Sovlent cycle %d  E_tot = %.15g  dE = %g',
@@ -523,7 +538,7 @@ def _for_tdscf(method, solvent_obj, dm=None):
 
     if dm is not None:
         solvent_obj = scf_with_solvent.with_solvent
-        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
+        solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class TDSCFWithSolvent(_Solvation, old_method):
@@ -555,6 +570,10 @@ def _for_tdscf(method, solvent_obj, dm=None):
             self.with_solvent.dump_flags(verbose)
             return self
 
+        def reset(self, mol=None):
+            self.with_solvent.reset(mol)
+            return old_method.reset(self, mol)
+
         def get_ab(self, mf=None):
             if mf is None: mf = self._scf
             a, b = get_ab(mf)
@@ -562,13 +581,12 @@ def _for_tdscf(method, solvent_obj, dm=None):
                 raise NotImplementedError
 
         def nuc_grad_method(self):
-            from pyscf.solvent._ddcosmo_tdscf_grad import make_grad_object
             grad_method = old_method.nuc_grad_method(self)
-            return make_grad_object(grad_method, self.with_solvent)
+            return self.with_solvent.nuc_grad_method(grad_method)
 
     mf1 = TDSCFWithSolvent(method)
     return mf1
 
-# 1. A tag to label the derived SCF class
+# 1. A tag to label the derived method class
 class _Solvation(object):
     pass

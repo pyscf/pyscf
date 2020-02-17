@@ -65,7 +65,7 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
-    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
+    class SFX2C1E_SCF(x2c._X2C_SCF, mf_class):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
@@ -90,6 +90,10 @@ def sfx2c1e(mf):
             if self.with_x2c:
                 self.with_x2c.dump_flags(verbose)
             return self
+
+        def reset(self, mol):
+            self.with_x2c.reset(mol)
+            return mf_class.reset(self, mol)
 
         def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
                        picture_change=True, **kwargs):

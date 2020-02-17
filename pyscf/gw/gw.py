@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -232,6 +232,13 @@ class GW(lib.StreamObject):
 
         logger.timer(self, 'GW', *cput0)
         return self.mo_energy
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        self._tdscf.reset(mol)
+        return self
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo

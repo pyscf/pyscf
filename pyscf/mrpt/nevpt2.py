@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -609,6 +609,12 @@ class NEVPT(lib.StreamObject):
         self.onerdm = numpy.zeros((nao,nao))
         self._keys = set(self.__dict__.keys())
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._mc.reset(mol)
+        return self
+
     def get_hcore(self):
         return self._mc.get_hcore()
 
@@ -781,7 +787,6 @@ class NEVPT(lib.StreamObject):
         return nevpt_e
 
 
-
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
@@ -798,6 +803,10 @@ def sc_nevpt(mc, ci=None, verbose=None):
                           'Use mrpt.NEVPT(mc,root=?) for excited state.')
     return NEVPT(mc).kernel()
 
+
+# register NEVPT2 in MCSCF
+from pyscf.mcscf import casci
+casci.CASCI.NEVPT2 = NEVPT
 
 
 
@@ -938,7 +947,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    with h5py.File(cvcvfile.name, 'r') as f5:
+    with h5py.File(cvcvfile.name, 'w') as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
         ppaa, papa, pacv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
     time0 = logger.timer(mol, 'trans_cvcv', *time0)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -230,7 +230,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(mycc, t1, t2, l1, l2):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -242,7 +242,8 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     f = lib.H5TmpFile()
     d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+                      ao_repr=ao_repr)
 
 def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     '''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
@@ -277,7 +278,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
 
 # Note vvvv part of 2pdm have been symmetrized.  It does not correspond to
 # vvvv part of CI 2pdm
-def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
     r'''
     dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
 
@@ -368,7 +369,16 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     # above. Transposing it so that it be contracted with ERIs (in Chemist's
     # notation):
     #   E = einsum('pqrs,pqrs', eri, rdm2)
-    return dm2.transpose(1,0,3,2)
+    dm2 = dm2.transpose(1,0,3,2)
+
+    if ao_repr:
+        dm2 = _rdm2_mo2ao(dm2.transpose(1,0,3,2), mycc.mo_coeff)
+    return dm2
+
+
+def _rdm2_mo2ao(dm2, mo):
+    mo_C = mo.conj()
+    return lib.einsum('ijkl,pi,qj,rk,sl->pqrs', dm2, mo, mo_C, mo, mo_C)
 
 
 if __name__ == '__main__':

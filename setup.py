@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ MAINTAINER_EMAIL = 'osirpt.sun@gmail.com'
 DESCRIPTION      = 'PySCF: Python-based Simulations of Chemistry Framework'
 #LONG_DESCRIPTION = ''
 URL              = 'http://www.pyscf.org'
-DOWNLOAD_URL     = 'http://github.com/sunqm/pyscf'
+DOWNLOAD_URL     = 'http://github.com/pyscf/pyscf'
 LICENSE          = 'Apache License 2.0'
 AUTHOR           = 'Qiming Sun'
 AUTHOR_EMAIL     = 'osirpt.sun@gmail.com'

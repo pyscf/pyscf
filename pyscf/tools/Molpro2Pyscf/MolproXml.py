@@ -30,6 +30,7 @@
 #  This file is adapted with permission from the wmme program of Gerald Knizia.
 #  See http://sites.psu.edu/knizia/software/
 #====================================================
+from __future__ import print_function
 
 
 
@@ -209,7 +210,7 @@ def _ReadOrbitals(OrbitalsNode, Atoms, OrbBasis, SkipVirtual):
    nBf = OrbBasis.nFn
    Orbitals = []
    count =0         #ELVIRA
-   print "# orb       iSym    iOrbInSym"      #ELVIRA 
+   print("# orb       iSym    iOrbInSym")      #ELVIRA 
 
    nOrbInSym = np.array(8*[0])
    for OrbNode in OrbitalsNode.findall("orbital"):
@@ -225,7 +226,7 @@ def _ReadOrbitals(OrbitalsNode, Atoms, OrbBasis, SkipVirtual):
          #raise Exception("Number of orbital coefficients differs from number of basis functions.")
       Orbitals.append(FOrbitalInfo(Coeffs, fEnergy, fOcc, iSym, iOrbInSym, OrbBasis))
       if fOcc != 0.0:
-       print count , "       ", iSym, "          ", iOrbInSym      #ELVIRA 
+       print(count , "       ", iSym, "          ", iOrbInSym)      #ELVIRA 
       count +=1  #ElVIRA
    return Orbitals
 
@@ -484,7 +485,7 @@ def _main():
    FileName = "benzene.xml"
    #FileName = "/home/cgk/dev/xml-molpro/test1.xml"
    XmlData = ReadMolproXml(FileName,SkipVirtual=True)
-   print "Atoms from file [a.u.]:\n%s" % XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)
+   print("Atoms from file [a.u.]:\n{}".format(XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)))
    OrbBasis = XmlData.OrbBasis
    #BasisLibs = ["def2-nzvpp-jkfit.libmol"]
 
@@ -494,14 +495,14 @@ def _main():
    from wmme import mdot
    C = XmlData.Orbs
    S = ic.MakeOverlap()
-   print "Orbital matrix shape: %s (loaded from '%s')" % (C.shape, FileName)
-   print "Overlap matrix shape: %s (made via WMME)" % (S.shape,)
+   print("Orbital matrix shape: {} (loaded from '{}')".format(C.shape, FileName))
+   print("Overlap matrix shape: {} (made via WMME)".format(S.shape))
    np.set_printoptions(precision=4,linewidth=10000,edgeitems=3,suppress=False)
    SMo = mdot(C.T, S, C)
-   print "Read orbitals:"
+   print("Read orbitals:")
    for OrbInfo in XmlData.Orbitals:
-      print "%30s" % OrbInfo.Desc
-   print "MO deviation from orthogonality: %.2e" % rmsd(SMo - np.eye(SMo.shape[0]))
+      print("{:30s}".format(OrbInfo.Desc))
+   print("MO deviation from orthogonality: {:.2e}".format(rmsd(SMo - np.eye(SMo.shape[0]))))
 
    pass
 

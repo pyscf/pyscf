@@ -254,7 +254,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
 init_guess_by_chkfile = kuhf.init_guess_by_chkfile
 
 
-class KROHF(pbcrohf.ROHF, khf.KRHF):
+class KROHF(khf.KRHF, pbcrohf.ROHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
@@ -290,9 +290,6 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         logger.info(self, 'number of electrons per unit cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
-
-    build = khf.KSCF.build
-    check_sanity = khf.KSCF.check_sanity
 
 #?    def get_init_guess(self, cell=None, key='minao'):
 #?        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
@@ -343,16 +340,15 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             dm_kpts *= nelec / ne
         return dm_kpts
 
-    get_hcore = khf.KSCF.get_hcore
-    get_ovlp = khf.KSCF.get_ovlp
-    get_jk = khf.KSCF.get_jk
-    get_j = khf.KSCF.get_j
-    get_k = khf.KSCF.get_k
+    init_guess_by_minao  = pbcrohf.ROHF.init_guess_by_minao
+    init_guess_by_atom   = pbcrohf.ROHF.init_guess_by_atom
+    init_guess_by_huckel = pbcrohf.ROHF.init_guess_by_huckel
+
+    get_rho = get_rho
+
     get_fock = get_fock
     get_occ = get_occ
     energy_elec = energy_elec
-
-    get_rho = khf.KSCF.get_rho
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
@@ -434,17 +430,7 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
 
     spin_square = pbcrohf.ROHF.spin_square
 
-    get_bands = khf.KSCF.get_bands
-
     canonicalize = canonicalize
-
-    dump_chk = khf.KSCF.dump_chk
-
-    density_fit = khf.KSCF.density_fit
-    # mix_density_fit inherits from khf.KSCF.mix_density_fit
-
-    newton = khf.KSCF.newton
-    x2c = x2c1e = sfx2c1e = khf.KSCF.sfx2c1e
 
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),

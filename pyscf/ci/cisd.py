@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -512,7 +512,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -527,7 +527,8 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     f = lib.H5TmpFile()
     d2 = _gamma2_outcore(myci, civec, nmo, nocc, f, False)
-    return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
@@ -722,14 +723,10 @@ def as_scanner(ci):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            for key in ('with_df', 'with_solvent'):
-                sub_mod = getattr(self, key, None)
-                if sub_mod:
-                    sub_mod.reset(mol)
+            self.reset(mol)
 
             mf_scanner = self._scf
             mf_scanner(mol)
-            self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
             if getattr(self.ci, 'size', 0) != self.vector_size():
@@ -880,6 +877,12 @@ class CISD(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         return 1 + nocc*nvir + (nocc*nvir)**2
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
 
     get_nocc = ccsd.get_nocc
     get_nmo = ccsd.get_nmo

@@ -25,7 +25,6 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import symm
-from pyscf.dft import numint
 from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
 from pyscf.scf import _response_functions
@@ -168,9 +167,10 @@ class TDDFTNoHybrid(TDA):
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
-        if not getattr(mf, 'xc', None):
-            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         from pyscf import scf
+        from pyscf.dft.rks import KohnShamDFT
+        if not isinstance(mf, KohnShamDFT):
+            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         mf = scf.addons.convert_to_rhf(mf)
         # commit fc8d1967995b7e033b60d4428ddcca87aac78e4f handles xc='' .
         # xc='0*LDA' is equivalent to xc=''
@@ -182,9 +182,10 @@ TDH = dRPA
 
 class dTDA(TDA):
     def __init__(self, mf):
-        if not getattr(mf, 'xc', None):
-            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         from pyscf import scf
+        from pyscf.dft.rks import KohnShamDFT
+        if not isinstance(mf, KohnShamDFT):
+            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         mf = scf.addons.convert_to_rhf(mf)
         # commit fc8d1967995b7e033b60d4428ddcca87aac78e4f handles xc='' .
         # xc='0*LDA' is equivalent to xc=''

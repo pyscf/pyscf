@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf import df
 from pyscf.mp import mp2
-#from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
+from pyscf.mp.mp2 import make_rdm1, make_rdm2
 from pyscf import __config__
 
 WITH_T2 = getattr(__config__, 'mp_dfmp2_with_t2', True)
@@ -32,13 +32,14 @@ WITH_T2 = getattr(__config__, 'mp_dfmp2_with_t2', True)
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
-    if mo_energy is None or mo_coeff is None:
-        mo_coeff = mp2._mo_without_core(mp, mp.mo_coeff)
-        mo_energy = mp2._mo_energy_without_core(mp, mp.mo_energy)
-    else:
+    if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
         assert(mp.frozen is 0 or mp.frozen is None)
+
+    if eris is None:      eris = mp.ao2mo(mo_coeff)
+    if mo_energy is None: mo_energy = eris.mo_energy
+    if mo_coeff is None:  mo_coeff = eris.mo_coeff
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
@@ -70,9 +71,9 @@ class DFMP2(mp2.MP2):
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
         self._keys.update(['with_df'])
 
-    @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
-        return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return mp2.MP2.reset(self, mol)
 
     def loop_ao2mo(self, mo_coeff, nocc):
         mo = numpy.asarray(mo_coeff, order='F')
@@ -91,13 +92,33 @@ class DFMP2(mp2.MP2):
             Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
             yield Lov
 
-#    def make_rdm1(self, t2=None, ao_repr=False):
-#        if t2 is None: t2 = self.t2
-#        return make_rdm1(self, t2, self.verbose)
-#
-#    def make_rdm2(self, t2=None):
-#        if t2 is None: t2 = self.t2
-#        return make_rdm2(self, t2, self.verbose)
+    def ao2mo(self, mo_coeff=None):
+        eris = mp2._ChemistsERIs()
+        # Initialize only the mo_coeff and 
+        eris._common_init_(self, mo_coeff)
+        return eris
+
+    def make_rdm1(self, t2=None, ao_repr=False):
+        if t2 is None:
+            t2 = self.t2
+        assert t2 is not None
+        return make_rdm1(self, t2, ao_repr=ao_repr)
+
+    def make_rdm2(self, t2=None, ao_repr=False):
+        if t2 is None:
+            t2 = self.t2
+        assert t2 is not None
+        return make_rdm2(self, t2, ao_repr=ao_repr)
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    # For non-canonical MP2
+    def update_amps(self, t2, eris):
+        raise NotImplementedError
+
+    def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
+        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
 MP2 = DFMP2
 

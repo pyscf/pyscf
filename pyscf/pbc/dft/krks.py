@@ -128,7 +128,7 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return rho
 
 
-class KRKS(khf.KRHF, rks.KohnShamDFT):
+class KRKS(rks.KohnShamDFT, khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN'):

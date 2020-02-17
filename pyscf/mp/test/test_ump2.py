@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -232,13 +232,14 @@ class KnownValues(unittest.TestCase):
                  numpy.diag(mo_energy[1]) - vhf[1])
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)
-        mf.mo_energy = mo_energy
+        eris.mo_energy = mf.mo_energy = mo_energy
         mf.mo_coeff = [numpy.eye(nmo)]*2
         mf.mo_occ = mo_occ
         mf.e_tot = numpy.einsum('ij,ji', hcore[0], dm[0])
         mf.e_tot+= numpy.einsum('ij,ji', hcore[1], dm[1])
         mf.e_tot+= numpy.einsum('ij,ji', vhf[0], dm[0]) * .5
         mf.e_tot+= numpy.einsum('ij,ji', vhf[1], dm[1]) * .5
+        mf.converged = True
         pt = mp.MP2(mf)
         pt.ao2mo = lambda *args, **kwargs: eris
         pt.kernel(eris=eris)
@@ -257,6 +258,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2[1]-dm2[1].transpose(1,0,3,2).conj()).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(1,0,3,2).conj()).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(2,3,0,1)       ).max(), 0, 9)
+
+    def test_non_canonical_mp2(self):
+        mf = scf.UHF(mol).run(max_cycle=1)
+        pt = mp.MP2(mf)
+        self.assertAlmostEqual(pt.kernel()[0], -0.044255887860725873, 7)
 
 
 

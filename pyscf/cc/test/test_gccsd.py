@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -191,7 +191,6 @@ class KnownValues(unittest.TestCase):
         mf.mo_coeff = numpy.eye(nmo)
         mf.mo_occ = numpy.zeros(nmo)
         mf.mo_occ[:nocc] = 1
-        mf.e_tot = mf.energy_elec()[0]
         mycc = gccsd.GCCSD(mf)
         ecc, t1, t2 = mycc.kernel()
         l1, l2 = mycc.solve_lambda()
@@ -209,6 +208,7 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mf.mo_coeff.T.conj(), hcore, mf.mo_coeff))
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
+        e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
@@ -251,7 +251,6 @@ class KnownValues(unittest.TestCase):
         mf.mo_coeff = lib.tag_array(numpy.eye(nmo) + 0j, orbspin=orbspin)
         mf.mo_occ = numpy.zeros(nmo)
         mf.mo_occ[:nocc] = 1
-        mf.e_tot = mf.energy_elec(mf.make_rdm1(), hcore)[0]
 
         mycc = cc.GCCSD(mf)
         eris = gccsd._make_eris_incore(mycc, mf.mo_coeff, ao2mofn)

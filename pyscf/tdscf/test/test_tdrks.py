@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -281,6 +281,10 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(tdscf.dTDA(kshf), tdscf.rks.dTDA))
         self.assertTrue(isinstance(tdscf.dTDA(ks), tdscf.rks.dTDA))
 
+        kshf.xc = ''
+        self.assertTrue(isinstance(tdscf.dTDA(kshf), tdscf.rks.dTDA))
+        self.assertTrue(isinstance(tdscf.dRPA(kshf), tdscf.rks.dRPA))
+
     def test_tda_with_wfnsym(self):
         pmol = mol.copy()
         pmol.symmetry = True
@@ -363,6 +367,14 @@ class KnownValues(unittest.TestCase):
         td = rks.dTDA(mf_lda)
         es = td.kernel(nstates=3)[0]
         self.assertAlmostEqual(lib.fp(es), 0.3237948650800024, 6)
+
+    def test_reset(self):
+        mol1 = gto.M(atom='C')
+        td = scf.RHF(mol).newton().TDHF()
+        td.reset(mol1)
+        self.assertTrue(td.mol is mol1)
+        self.assertTrue(td._scf.mol is mol1)
+        self.assertTrue(td._scf._scf.mol is mol1)
 
 
 if __name__ == "__main__":

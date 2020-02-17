@@ -147,7 +147,8 @@ def cart2sph(l, c_tensor=None, normalized=None):
     Kwargs:
         normalized :
             How the Cartesian GTOs are normalized.  'sp' means the s and p
-            functions are normalized.
+            functions are normalized (this is the convention used by libcint
+            library).
     '''
     nf = (l+1)*(l+2)//2
     if c_tensor is None:
@@ -177,7 +178,8 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
     Kwargs:
         normalized :
             How the Cartesian GTOs are normalized.  'sp' means the s and p
-            functions are normalized.
+            functions are normalized (this is the convention used by libcint
+            library).
     '''
     if kappa < 0:
         l = -kappa - 1
@@ -210,7 +212,14 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
 cart2j_kappa = cart2spinor_kappa
 
 def cart2spinor_l(l, normalized=None):
-    '''Cartesian to spinor transformation matrix for angular moment l'''
+    '''Cartesian to spinor transformation matrix for angular moment l
+
+    Kwargs:
+        normalized :
+            How the Cartesian GTOs are normalized.  'sp' means the s and p
+            functions are normalized (this is the convention used by libcint
+            library).
+    '''
     return cart2spinor_kappa(0, l, normalized)
 cart2j_l = cart2spinor_l
 
@@ -312,7 +321,8 @@ def format_atom(atoms, origin=0, axes=None,
             try:
                 atoms = fromfile(atoms)
             except ValueError:
-                pass
+                sys.stderr.write('\nFailed to parse geometry file  %s\n\n' % atoms)
+                raise
 
         atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
         fmt_atoms = []
@@ -2136,7 +2146,9 @@ class Mole(lib.StreamObject):
         if method is None:
             raise AttributeError('Mole object has no attribute %s' % key)
 
-        mf.run()
+        # Initialize SCF object for post-SCF methods if applicable
+        if self.nelectron != 0:
+            mf.run()
         return method
 
 # need "deepcopy" here because in shallow copy, _env may get new elements but
@@ -3245,6 +3257,7 @@ class Mole(lib.StreamObject):
                 argument can be one of 'sp', 'all', None.  'sp' means the Cartesian s
                 and p basis are normalized.  'all' means all Cartesian functions are
                 normalized.  None means none of the Cartesian functions are normalized.
+                The default value 'sp' is the convention used by libcint library.
 
         Examples:
 

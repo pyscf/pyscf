@@ -439,7 +439,7 @@ def _add_padding(mp, mo_coeff, mo_energy):
 
 
 def make_rdm1(mp, t2=None, kind="compact"):
-    """
+    r"""
     Spin-traced one-particle density matrix in the MO basis representation.
     The occupied-virtual orbital response is not included.
 

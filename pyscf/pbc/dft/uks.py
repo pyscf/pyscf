@@ -113,7 +113,7 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rks.get_rho(mf, dm[0]+dm[1], grids, kpt)
 
 
-class UKS(pbcuhf.UHF, rks.KohnShamDFT):
+class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     '''UKS class adapted for PBCs.
 
     This is a literal duplication of the molecular UKS class with some `mol`

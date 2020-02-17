@@ -91,10 +91,10 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_huckel(self):
         dm = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.finger(dm), 0.640409942511017, 9)
+        self.assertAlmostEqual(lib.finger(dm), 0.90742674256790956, 9)
 
     def test_1e(self):
-        mf = scf.UHF(gto.M(atom='H', spin=1))
+        mf = scf.UHF(gto.M(atom='H', spin=-1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
         mf = scf.UHF(gto.M(atom='H', spin=1, symmetry=1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
@@ -123,6 +123,32 @@ class KnownValues(unittest.TestCase):
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+    def test_scf_negative_spin(self):
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.UHF(mol).run(conv_tol=1e-10)
+        self.assertAlmostEqual(mf.mo_occ[1].sum(), 6, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.726396909036637, 9)
+
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            symmetry = 1,
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.UHF(mol).set(conv_tol=1e-10)
+        mf.irrep_nelec = {'B1': (1, 2), 'B2': (1, 0)}
+        mf.run()
+        self.assertAlmostEqual(mf.mo_occ[1].sum(), 6, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.224503772055755, 9)
 
     def test_nr_uhf_cart(self):
         pmol = mol.copy()
@@ -392,13 +418,17 @@ H     0    0.757    0.587'''
         n2_uhf.irrep_nelec['E2ux'] = 0
         n2_uhf.irrep_nelec['E2uy'] = 0
         self.assertRaises(ValueError, n2_uhf.build)
-        n2_uhf.irrep_nelec['A1g'] = (4,2)
+        n2_uhf.irrep_nelec['A1g'] = (2,0)
         self.assertRaises(ValueError, n2_uhf.build)
-        n2_uhf.irrep_nelec['A1g'] = (0,2)
+        n2_uhf.irrep_nelec['A1g'] = (0,1)
         self.assertRaises(ValueError, n2_uhf.build)
+
+        n2_uhf.irrep_nelec.pop('E2ux')
+        n2_uhf.irrep_nelec['A1g'] = (0,0)
+        self.assertRaises(ValueError, n2_uhf.build)
+
 
 
 if __name__ == "__main__":
     print("Full Tests for uhf")
     unittest.main()
-
