@@ -562,7 +562,7 @@ class CASSCF(casci.CASCI):
             Default is 1e-4
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
-            Default is 0.03.
+            Default is 0.05
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
         max_cycle_micro : int
@@ -649,7 +649,8 @@ class CASSCF(casci.CASCI):
     '''
 
 # the max orbital rotation and CI increment, prefer small step size
-    max_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_max_stepsize', .02)
+    max_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_max_stepsize', 5e-2)
+    min_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_min_stepsize', 5e-4)
     max_cycle_macro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_macro', 50)
     max_cycle_micro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_micro', 4)
     conv_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_conv_tol', 1e-7)
@@ -1215,9 +1216,14 @@ To enable the solvent model for CASSCF, the following code needs to be called
 
         if self._max_stepsize is None:
             self._max_stepsize = self.max_stepsize
-        if envs['de'] > -self.conv_tol:  # Avoid total energy increasing
+        if envs['de'] > 0:  # Avoid total energy increasing
             self._max_stepsize *= .3
-            logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
+            logger.debug(self, 'decrease max_stepsize to %g', self._max_stepsize)
+        elif (abs(envs['de']) < self.conv_tol or  # Help to converge
+              ('norm_gorb0' in envs and
+               envs['norm_gorb0'] < envs['conv_tol_grad'])):
+            self._max_stepsize = (self._max_stepsize * self.min_stepsize)**.5
+            logger.info(self, 'align max_stepsize to %g', self._max_stepsize)
         else:
             self._max_stepsize = (self.max_stepsize*self._max_stepsize)**.5
         return self._max_stepsize
