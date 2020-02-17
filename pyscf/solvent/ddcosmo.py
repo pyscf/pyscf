@@ -662,10 +662,10 @@ class DDCOSMO(lib.StreamObject):
 
 ##################################################
 # don't modify the following attributes, they are not input options
-        # epcm (the dielectric correction) and vpcm (the additional
-        # potential) are updated during the SCF iterations
-        self.epcm = None
-        self.vpcm = None
+        # e (the dielectric correction) and v (the additional potential) are
+        # updated during the SCF iterations
+        self.e = None
+        self.v = None
         self._dm = None
 
         self._intermediates = None
@@ -684,9 +684,24 @@ class DDCOSMO(lib.StreamObject):
         '''
         if isinstance(dm, numpy.ndarray):
             self._dm = dm
-            self.epcm, self.vpcm = self.kernel(dm)
+            self.e, self.v = self.kernel(dm)
         else:
-            self.epcm = self.vpcm = self._dm = None
+            self.e = self.v = self._dm = None
+
+    # define epcm and vpcm for backward compatibility
+    @property
+    def epcm(self):
+        return self.e_solvent
+    @epcm.setter
+    def epcm(self, val):
+        self.e_solvent = val
+
+    @property
+    def vpcm(self):
+        return self.v_solvent
+    @vpcm.setter
+    def vpcm(self, val):
+        self.v_solvent = val
 
     def __setattr__(self, key, val):
         if key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
@@ -752,8 +767,9 @@ class DDCOSMO(lib.StreamObject):
         '''A single shot solvent effects for given density matrix.
         '''
         self._dm = dm
-        self.epcm, self.vpcm = self._get_vind(dm)
-        return self.epcm, self.vpcm
+        self.e, self.v = self._get_vind(dm)
+        logger.info(self, '%s E_diel = %.15g', self.__class__, self.e)
+        return self.e, self.v
 
     def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
@@ -839,8 +855,18 @@ class DDCOSMO(lib.StreamObject):
         # scale = eta*scale, is it correct?
         return regularize_xt(t, eta*scale)
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+    def nuc_grad_method(self, grad_method):
+        '''For grad_method in vacuum, add nuclear gradients of solvent
+        '''
+        from pyscf import tdscf
+        from pyscf.solvent import ddcosmo_grad, _ddcosmo_tdscf_grad
+        if self.frozen:
+            raise RuntimeError('Frozen solvent model is not supported for '
+                               'energy gradients')
+        if isinstance(grad_method.base, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
+            return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
+        else:
+            return ddcosmo_grad.make_grad_object(grad_method)
 
 
 if __name__ == '__main__':
