@@ -18,8 +18,8 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import tdscf
 from pyscf.prop.polarizability import rhf
-from pyscf.tdscf.rhf import get_ab
 
 class KnowValues(unittest.TestCase):
     def test_polarizability_with_freq(self):
@@ -46,7 +46,7 @@ class KnowValues(unittest.TestCase):
         v1 = h1[:,nocc:].transpose(2,1,0).reshape(nov,-1)
         v = numpy.vstack((v1,v1))
 
-        a, b = get_ab(mf)
+        a, b = tdscf.rhf.get_ab(mf)
         a = a.reshape(nov,nov)
         b = b.reshape(nov,nov)
         mat = numpy.bmat(((a,b),(b,a)))
@@ -59,7 +59,7 @@ class KnowValues(unittest.TestCase):
         ref = numpy.einsum('px,py->xy', v, u1)*2
         val = rhf.Polarizability(mf).polarizability_with_freq(freq)
         # errors mainly due to krylov solver
-        self.assertAlmostEqual(abs(ref-val).max(), 0, 2)
+        self.assertAlmostEqual(abs(ref-val).max(), 0, 7)
 
         # static property
         ref = numpy.einsum('px,py->xy', v1, numpy.linalg.solve(a+b, v1))*4
@@ -68,8 +68,35 @@ class KnowValues(unittest.TestCase):
 
         val = rhf.Polarizability(mf).polarizability_with_freq(freq=0)
         # errors mainly due to krylov solver
-        self.assertAlmostEqual(abs(ref-val).max(), 0, 3)
+        self.assertAlmostEqual(abs(ref-val).max(), 0, 7)
 
+
+    def test_polarizability_with_freq_against_tdhf(self):
+        # modified based on https://github.com/pyscf/pyscf/issues/507
+        mol = gto.M(atom='''
+                O  0.0  0.0  0.0
+                O  0.0  0.0  1.5
+                H  1.0  0.0  0.0
+                H  0.0  0.7  1.0''')
+        nmo, nocc = mol.nao, mol.nelec[0]
+        nvir = nmo - nocc
+        mf = scf.RHF(mol).run()
+        mf_td = tdscf.TDHF(mf)
+        mf_td.nstates = nocc * nvir
+        mf_td.run()
+        td_transdip = mf_td.transition_dipole()
+        td_eig = mf_td.e
+
+        freq_to_res = lambda omega: numpy.einsum("nt, n, ns -> ts", td_transdip, 1 / (td_eig - omega), td_transdip)
+        freq_to_nonres = lambda omega: numpy.einsum("nt, n, ns -> ts", td_transdip, 1 / (td_eig + omega), td_transdip)
+        freq_to_alpha = lambda omega: freq_to_res(omega) + freq_to_nonres(omega)
+
+        ref = freq_to_alpha( 0. )
+        val = rhf.Polarizability(mf).polarizability_with_freq(freq= 0. )
+        self.assertAlmostEqual(abs(ref - val).max(), 0, 8)
+        ref = freq_to_alpha( 0.1)
+        val = rhf.Polarizability(mf).polarizability_with_freq(freq= 0.1)
+        self.assertAlmostEqual(abs(ref - val).max(), 0, 8)
 
 if __name__ == "__main__":
     print("Tests for polarizability")
