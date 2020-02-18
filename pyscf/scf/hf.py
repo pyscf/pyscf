@@ -360,32 +360,34 @@ def init_guess_by_minao(mol):
             ndocc, frac = atom_hf.frac_occ(stdsymb, l)
             assert ndocc >= coreshl[l]
             degen = l * 2 + 1
-            occ_l = [0,]*coreshl[l] + [2,]*(ndocc-coreshl[l]) + [frac,]
+            occ_l = [2,]*(ndocc-coreshl[l]) + [frac,]
             occ.append(numpy.repeat(occ_l, degen))
-            basis_ano.append([l] + [b[:ndocc+2] for b in basis_add[l][1:]])
+            basis_ano.append([l] + [b[:1] + b[1+coreshl[l]:ndocc+2]
+                                    for b in basis_add[l][1:]])
         occ = numpy.hstack(occ)
 
         if nelec_ecp > 0:
-            nsh_basis4ecp = [0] * 4
+            basis4ecp = [[] for i in range(4)]
             for bas in mol._basis[symb]:
                 l = bas[0]
-                nshell = len(bas[1]) - 1
-                nsh_basis4ecp[l] += nshell
-            if gto.mole.charge(stdsymb) - nelec_ecp > 2*sum([i*2+1 for i in nsh_basis4ecp]):
-                raise RuntimeError('Failed to assign occupancy for ' + symb)
+                if l < 4:
+                    basis4ecp[l].append(bas)
 
             occ4ecp = []
-            basis4ecp = []
             for l in range(4):
+                nbas_l = sum((len(bas[1]) - 1) for bas in basis4ecp[l])
                 ndocc, frac = atom_hf.frac_occ(stdsymb, l)
                 ndocc -= coreshl[l]
-                occ_l = numpy.zeros(nsh_basis4ecp[l])
+                assert ndocc <= nbas_l
+
+                occ_l = numpy.zeros(nbas_l)
                 occ_l[:ndocc] = 2
                 if frac > 0:
                     occ_l[ndocc] = frac
                 occ4ecp.append(numpy.repeat(occ_l, l * 2 + 1))
+
             occ4ecp = numpy.hstack(occ4ecp)
-            basis4ecp = mol._basis[symb]
+            basis4ecp = lib.flatten(basis4ecp)
 
 # Compared to ANO valence basis, to check whether the ECP basis set has
 # reasonable AO-character contraction.  The ANO valence AO should have
