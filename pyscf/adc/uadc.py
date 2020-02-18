@@ -2899,6 +2899,7 @@ class UADCEA(UADC):
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
         self.method = adc.method
+        self.mol = adc.mol
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
