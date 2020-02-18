@@ -117,6 +117,8 @@ class AtomSphericAverageRHF(hf.RHF):
             nbas_l = mol._bas[idx,gto.NCTR_OF].sum()
             if l < 4:
                 n2occ -= coreshl[l]
+                assert n2occ <= nbas_l
+
                 logger.debug1(self, 'l = %d  occ = %d + %.4g', l, n2occ, frac)
 
                 occ_l = numpy.zeros(nbas_l)
