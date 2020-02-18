@@ -111,7 +111,7 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-   def test_init_guess_minao(self):
+    def test_init_guess_minao(self):
         mol = gto.M(
             verbose = 7,
             output = '/dev/null',
@@ -122,20 +122,20 @@ class KnownValues(unittest.TestCase):
             basis = 'ccpvdz',
         )
         dm = scf.hf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 2.5912875957299684, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 9)
 
         mol1 = gto.M(atom='Mo', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
+        s = mol1.intor('int1e_ovlp')
         dm = scf.hf.get_init_guess(mol1, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 2.0674886928183507, 9)
-        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 14, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.0674886928183507, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 14, 9)
 
         mol1.basis = 'sto3g'
         mol1.build(0, 0)
         dm = scf.hf.get_init_guess(mol1, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 1.3085066548762425, 9)
-        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm,
-                                            mol1.intor('int1e_ovlp')), 13.60436071945, 7)
+        self.assertAlmostEqual(lib.fp(dm), 1.3085066548762425, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 13.60436071945, 7)
         mol1.stdout.close()
 
         mol.atom = [["O" , (0. , 0.     , 0.)],
@@ -144,16 +144,16 @@ class KnownValues(unittest.TestCase):
         mol.spin = 1
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 2.9572305128956238, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.9572305128956238, 9)
 
     def test_init_guess_minao_with_ecp(self):
         s = re_ecp1.intor('int1e_ovlp')
         dm = scf.hf.get_init_guess(re_ecp1, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -8.0310571101329202, 9)
+        self.assertAlmostEqual(lib.fp(dm), -8.0310571101329202, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 15, 9)
 
         dm = scf.hf.get_init_guess(re_ecp2, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -9.0532680910696772, 9)
+        self.assertAlmostEqual(lib.fp(dm), -9.0532680910696772, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 31.804465975542513, 9)
 
     def test_init_guess_atom(self):
@@ -167,10 +167,10 @@ class KnownValues(unittest.TestCase):
             basis = 'ccpvdz',
         )
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.finger(dm), 2.7458577873928842, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.7458577873928842, 9)
 
         dm = scf.ROHF(mol).init_guess_by_atom()
-        self.assertAlmostEqual(lib.finger(dm[0]), 2.7458577873928842/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 2.7458577873928842/2, 9)
 
         mol.atom = [["O" , (0. , 0.     , 0.)],
                     ['ghost-H'   , (0. , -0.757, 0.587)],
@@ -178,36 +178,36 @@ class KnownValues(unittest.TestCase):
         mol.spin = 1
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.finger(dm), 3.0664740316337697, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.0664740316337697, 9)
 
     def test_init_guess_atom_with_ecp(self):
         s = re_ecp1.intor('int1e_ovlp')
         dm = scf.hf.get_init_guess(re_ecp1, key='atom')
-        self.assertAlmostEqual(lib.finger(dm), -4.822111004225718, 9)
+        self.assertAlmostEqual(lib.fp(dm), -4.822111004225718, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 15, 9)
 
         dm = scf.hf.get_init_guess(re_ecp2, key='atom')
-        self.assertAlmostEqual(lib.finger(dm), -14.083500177270547, 9)
+        self.assertAlmostEqual(lib.fp(dm), -14.083500177270547, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 57, 9)
 
     def test_init_guess_chk(self):
         dm = scf.hf.SCF(mol).get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.finger(dm), 2.5912875957299684, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 9)
 
         dm = mf.get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.finger(dm), 3.2111753674560535, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.2111753674560535, 9)
 
     def test_init_guess_huckel(self):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.finger(dm), 3.7771917062525509, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.7771917062525509, 9)
 
         dm = scf.ROHF(mol).init_guess_by_huckel()
-        self.assertAlmostEqual(lib.finger(dm[0]), 3.7771917062525509/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 3.7771917062525509/2, 9)
 
         mol1 = gto.M(atom='Mo', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
         dm = scf.hf.get_init_guess(mol1, key='huckel')
-        self.assertAlmostEqual(lib.finger(dm), 2.1268388150553035, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.1268388150553035, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 14, 9)
 
 
@@ -400,7 +400,7 @@ H     0    0.757    0.587'''
 
         vhf4 = mf1.get_veff(pmol, dm, hermi=0)
         self.assertEqual(vhf4.ndim, 4)
-        self.assertAlmostEqual(lib.finger(vhf4), 4.9026999849223287, 12)
+        self.assertAlmostEqual(lib.fp(vhf4), 4.9026999849223287, 12)
         self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
 
     def test_hf_symm(self):
@@ -688,7 +688,7 @@ H     0    0.757    0.587'''
         for i in range(3):
             mf._eri[i,i,i,i] = .2
         dm = mf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 2., 9)
+        self.assertAlmostEqual(lib.fp(dm), 2., 9)
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, 0.2, 9)
 
@@ -821,7 +821,7 @@ H     0    0.757    0.587'''
         mf1.max_memory = 0
         vk2 = mf1.get_k(mol, dm, hermi=0)
         self.assertAlmostEqual(abs(vk1 - vk2).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vk1), -12.365527167710301, 12)
+        self.assertAlmostEqual(lib.fp(vk1), -12.365527167710301, 12)
 
     def test_get_vj_lr(self):
         numpy.random.seed(1)
@@ -833,7 +833,7 @@ H     0    0.757    0.587'''
         mf1.max_memory = 0
         vj2 = mf1.get_j(mol, dm, omega=1.5)
         self.assertAlmostEqual(abs(vj1 - vj2).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vj1), -10.015956161068031, 12)
+        self.assertAlmostEqual(lib.fp(vj1), -10.015956161068031, 12)
 
     def test_get_vk_lr(self):
         numpy.random.seed(1)
@@ -845,7 +845,7 @@ H     0    0.757    0.587'''
         mf1.max_memory = 0
         vk2 = mf1.get_k(mol, dm, hermi=0, omega=1.5)
         self.assertAlmostEqual(abs(vk1 - vk2).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vk1), -11.399103957754445, 12)
+        self.assertAlmostEqual(lib.fp(vk1), -11.399103957754445, 12)
 
     def test_reset(self):
         mf = scf.RHF(mol).density_fit().x2c().newton()
