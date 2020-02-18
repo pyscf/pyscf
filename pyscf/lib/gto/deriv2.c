@@ -1005,7 +1005,7 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                         xpows[0] = 1;
                                         ypows[0] = 1;
                                         zpows[0] = 1;
-                                        for (lx = 1; lx <= l; lx++) {
+                                        for (lx = 0; lx < l; lx++) {
                                                 xpows[lx+1] = xpows[lx] *gridx[i];
                                                 ypows[lx+1] = ypows[lx] *gridy[i];
                                                 zpows[lx+1] = zpows[lx] *gridz[i];
