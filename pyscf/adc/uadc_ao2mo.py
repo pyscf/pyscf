@@ -77,7 +77,6 @@ def transform_integrals_incore(myadc):
 
     return eris
 
-
 def unpack_eri_1(eri, norb):
 
     n_oo = norb * (norb + 1) // 2

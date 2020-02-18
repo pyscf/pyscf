@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-    ://sunqm.github.io/pyscf/pbc/cc.html#pbc-cc-pbc-coupled-cluster xit()
 
 import numpy
 import pyscf.lib
