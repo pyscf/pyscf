@@ -390,6 +390,21 @@ class KnownValues(unittest.TestCase):
         v = mf.get_veff(h2o, dm)
         self.assertAlmostEqual(finger(v), 30.543789621782576-0.23207622637751305j, 9)
 
+    def test_rsh_omega(self):
+        rho0 = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        ni = dft.numint.NumInt()
+        ni.omega = 0.4
+        omega = 0.2
+        exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, 0, 0, 1, omega)
+        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+
+        exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, 0, 0, 1)
+        self.assertAlmostEqual(float(exc), -0.5406095865415561, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.772123720263471, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.00301639097170439, 7)
+
 
 if __name__ == "__main__":
     print("Test numint")

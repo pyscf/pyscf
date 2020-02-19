@@ -256,6 +256,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
         self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
 
+    def test_ityh(self):
+        rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('ityh,', rho, 0, deriv=1)
+        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+        self.assertEqual(dft.libxc.rsh_coeff('ityh,'), [0.2, 0.0, 0.0])
+
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))
         self.assertTrue(not dft.libxc.test_deriv_order('m05', 2, raise_error=False))

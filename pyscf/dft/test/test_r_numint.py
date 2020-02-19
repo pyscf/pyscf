@@ -64,6 +64,28 @@ class KnownValues(unittest.TestCase):
         mat1 = r_numint.eval_mat(mol, (aoLa[0], aoLb[0]), weight, (rho, m), vxc, xctype='LDA')
         self.assertTrue(numpy.allclose(mat0, mat1))
 
+    def test_rsh_omega(self):
+        rho0 = numpy.array([[1., 1., 0.1, 0.1],
+                            [.1, .1, 0.01, .01]]).reshape(2, 4, 1)
+        ni = r_numint.RNumInt()
+        ni.omega = 0.4
+        omega = 0.2
+        exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, deriv=1, omega=omega)
+        self.assertAlmostEqual(float(exc), -0.6394181669577297, 7)
+        self.assertAlmostEqual(float(vxc[0][0,0]), -0.8688965017309331, 7)
+        self.assertAlmostEqual(float(vxc[0][0,1]), -0.04641346660681983, 7)
+        # vsigma of GGA may be problematic?
+        #?self.assertAlmostEqual(float(vxc[1][0,0]), 0, 7)
+        #?self.assertAlmostEqual(float(vxc[1][0,1]), 0, 7)
+
+        exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, deriv=1)
+        self.assertAlmostEqual(float(exc), -0.5439673757289064, 7)
+        self.assertAlmostEqual(float(vxc[0][0,0]), -0.7699824959456474, 7)
+        self.assertAlmostEqual(float(vxc[0][0,1]), -0.04529004028228567, 7)
+        # vsigma of GGA may be problematic?
+        #?self.assertAlmostEqual(float(vxc[1][0,0]), 0, 7)
+        #?self.assertAlmostEqual(float(vxc[1][0,1]), 0, 7)
+
 #    def test_vxc(self):
 #    def test_fxc(self):
 
