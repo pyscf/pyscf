@@ -127,7 +127,11 @@ def _vxc2x2_to_mat(mol, ao, weight, rho, vrho, non0tab, shls_slice, ao_loc):
 #    mat-= _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
 
     s = lib.norm(m, axis=0)
-    ws = vm * weight / (s+1e-300)
+    idx = s < 1e-20
+    with numpy.errstate(divide='ignore',invalid='ignore'):
+        ws = vm * weight / s
+    ws[idx] = 0
+
     aow = numpy.einsum('pi,p->pi', aoa, ws*m[0], out=aow)  # Mx
     tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
     mat = tmp + tmp.T.conj()
@@ -297,15 +301,19 @@ class RNumInt(numint.NumInt):
                 return self.eval_rho(mol, ao, dms[idm], non0tab, xctype)
         return make_rho, ndms, nao
 
-    def eval_xc(self, xc_code, rho, spin=1, relativity=0, deriv=1, verbose=None):
+    def eval_xc(self, xc_code, rho, spin=1, relativity=0, deriv=1, omega=None,
+                verbose=None):
+        if omega is None: omega = self.omega
         # JTCC, 2, 257
         r, m = rho[:2]
         s = lib.norm(m, axis=0)
         rhou = (r + s) * .5
         rhod = (r - s) * .5
         rho = (rhou, rhod)
-        xc = self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv, verbose)
+        xc = self.libxc.eval_xc(xc_code, rho, 1, relativity, deriv,
+                                omega, verbose)
         exc, vxc = xc[:2]
+        # update vxc[0] inplace
         vrho = vxc[0]
         vr, vm = (vrho[:,0]+vrho[:,1])*.5, (vrho[:,0]-vrho[:,1])*.5
         vrho[:,0] = vr
