@@ -359,7 +359,7 @@ Note TBLIS library was implemented with C++11 standard. You need at least GCC
 
 Pyberny
 -------
-The geometry optimizer `Pyberny <https://github.com/azag0/pyberny>`_ provides an
+The geometry optimizer `Pyberny <https://github.com/jhrmnn/pyberny>`_ provides an
 independent implementation that supports various geometry optimization
 techniques (comprising redundant internal coordinates, iterative Hessian
 estimate, trust region, line search, and coordinate weighing etc.).  It can take
