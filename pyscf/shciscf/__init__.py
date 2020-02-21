@@ -16,3 +16,6 @@
 # Author: Sandeep Sharma <sanshar@gmail.com>
 #         James Smith <james.smith9113@gmail.com>
 #
+
+from . import shci
+from . import socutils
