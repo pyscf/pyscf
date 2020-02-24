@@ -228,6 +228,27 @@ class SpinFreeX2C(x2c.X2C):
         else:
             return lib.einsum('pi,xpq,qj->xij', c, pc_mat, c)
 
+    #by default h is returned in the contracted basis
+    #x and r in the uncontracted basis
+    def get_hxr(self, mol=None, uncontract = True):
+        if mol is None: mol = self.mol
+        if (uncontract):
+            xmol, contr_coeff = self.get_xmol(mol)
+        else:
+            xmol, contr_coeff = mol, None
+
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+        t = xmol.intor_symmetric('int1e_kin')
+        v = xmol.intor_symmetric('int1e_nuc')
+        s = xmol.intor_symmetric('int1e_ovlp')
+        w = xmol.intor_symmetric('int1e_pnucp')
+
+        h1, x, r = x2c._x2c1e_hxrmat(t, v, w, s, c)
+        if (uncontract):
+            h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
+        return h1, x, r
+
     def get_xmat(self, mol=None):
         if mol is None:
             xmol = self.get_xmol(mol)[0]

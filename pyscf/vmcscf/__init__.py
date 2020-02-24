@@ -13,17 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Qiming Sun <osirpt.sun@gmail.com>
+# Author: Sandeep Sharma <sanshar@gmail.com>
+#         James Smith <james.smith9113@gmail.com>
 #
-
-from pyscf.gto import mole
-from pyscf.gto import basis
-from pyscf.gto.basis import parse, load, parse_ecp, load_ecp
-from pyscf.gto.mole import *
-from pyscf.gto.moleintor import getints, getints_by_shell
-from pyscf.gto.eval_gto import eval_gto
-from pyscf.gto.write_gto import write_gto
-from pyscf.gto import ecp
-
-parse = basis.parse
-#import pyscf.gto.mole.cmd_args
