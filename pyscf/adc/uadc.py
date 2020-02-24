@@ -2553,7 +2553,6 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_a[:,:,(orb-nocc_a),:], t2_1_a, optimize = True)
             T[s_a:f_a] -= 0.25*np.einsum('klc,klac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
             T[s_a:f_a] -= 0.25*np.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
-
 ######## ADC(3) 2p-1h  part  ############################################
 
         if(method=='adc(2)-x'or method=='adc(3)'):
@@ -2841,8 +2840,27 @@ def get_spec_factors(adc, T, U, nroots=1):
     nmo_a  = adc.nmo_a
     nmo_b  = adc.nmo_b
 
+########## Debugging ################
+
+    #nvir_a = adc.nvir_a
+    #nvir_b = adc.nvir_b
+
     T_a = T[0]
     T_b = T[1]
+
+    #print ((U[:,:nvir_a]))
+    #exit()
+
+    #X_a = np.dot(T_a[:,:nvir_a], U[:,:nvir_a].T).reshape(-1,nroots)
+    #Y_a = np.dot(T_a[:,nvir_a:], U[:,nvir_a:].T).reshape(-1,nroots)
+
+    #P = np.einsum("pi,pi->i", X_a, X_a)
+    #Q = np.einsum("pi,pi->i", Y_a, Y_a)
+    #print (P)
+    #print (Q)
+    #exit()
+
+######################################################
 
     X_a = np.dot(T_a, U.T).reshape(-1,nroots)
     X_b = np.dot(T_b, U.T).reshape(-1,nroots)
