@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
         self.assertEqual(fn_facs, [(106, 1), (1, -0.5)])
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.25*B3LYP')
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP\n+0.25*B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
         hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
         self.assertAlmostEqual(hyb, .15, 12)
