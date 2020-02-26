@@ -38,6 +38,7 @@ def transform_integrals_incore(myadc):
 
     eris.oooo = ao2mo.general(myadc._scf._eri, (occ, occ, occ, occ), compact=False).reshape(nocc, nocc, nocc, nocc).copy()
     eris.ovoo = ao2mo.general(myadc._scf._eri, (occ, vir, occ, occ), compact=False).reshape(nocc, nvir, nocc, nocc).copy()
+    eris.oovo = ao2mo.general(myadc._scf._eri, (occ, occ, vir, occ), compact=False).reshape(nocc, nocc, nvir, nocc).copy()
     eris.ovov = ao2mo.general(myadc._scf._eri, (occ, vir, occ, vir), compact=False).reshape(nocc, nvir, nocc, nvir).copy()
     eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()
     eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()

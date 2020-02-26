@@ -1609,7 +1609,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     #Calculate sigma vector
     def sigma_(r):
 
-        s = None
         s = np.zeros((dim))
 
         r_a = r[s_a:f_a]
@@ -2137,7 +2136,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         temp -= np.einsum('kaji,i->ajk', eris_OVOO, r_b, optimize = True)
         s[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
 
-################ ADC(2) ajk - bil block ############################
+############### ADC(2) ajk - bil block ############################
 
         r_aaa = r_aaa.reshape(-1)
         r_bbb = r_bbb.reshape(-1)
@@ -2842,22 +2841,84 @@ def get_spec_factors(adc, T, U, nroots=1):
 
 ########## Debugging ################
 
-    #nvir_a = adc.nvir_a
-    #nvir_b = adc.nvir_b
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+
+########## dimensions_EA #####################
+
+    n_singles_a = nvir_a
+    n_singles_b = nvir_b
+    n_doubles_aaa = nvir_a* (nvir_a - 1) * nocc_a // 2
+    n_doubles_bab = nocc_b * nvir_a* nvir_b
+    n_doubles_aba = nocc_a * nvir_b* nvir_a
+    n_doubles_bbb = nvir_b* (nvir_b - 1) * nocc_b // 2
+
+    dim = n_singles_a + n_singles_b + n_doubles_aaa + n_doubles_bab + n_doubles_aba + n_doubles_bbb
+
+    s_a = 0
+    f_a = n_singles_a
+    s_b = f_a
+    f_b = s_b + n_singles_b
+    s_aaa = f_b
+    f_aaa = s_aaa + n_doubles_aaa
+    s_bab = f_aaa
+    f_bab = s_bab + n_doubles_bab
+    s_aba = f_bab
+    f_aba = s_aba + n_doubles_aba
+    s_bbb = f_aba
+    f_bbb = s_bbb + n_doubles_bbb
+
+########### dimensions_IP #####################
+#
+#    n_singles_a = nocc_a
+#    n_singles_b = nocc_b
+#    n_doubles_aaa = nocc_a* (nocc_a - 1) * nvir_a // 2
+#    n_doubles_bab = nvir_b * nocc_a* nocc_b
+#    n_doubles_aba = nvir_a * nocc_b* nocc_a
+#    n_doubles_bbb = nocc_b* (nocc_b - 1) * nvir_b // 2
+#
+#    dim = n_singles_a + n_singles_b + n_doubles_aaa + n_doubles_bab + n_doubles_aba + n_doubles_bbb
+#
+#    idn_occ_a = np.identity(nocc_a)
+#    idn_occ_b = np.identity(nocc_b)
+#    idn_vir_a = np.identity(nvir_a)
+#    idn_vir_b = np.identity(nvir_b)
+#
+#    s_a = 0
+#    f_a = n_singles_a
+#    s_b = f_a
+#    f_b = s_b + n_singles_b
+#    s_aaa = f_b
+#    f_aaa = s_aaa + n_doubles_aaa
+#    s_bab = f_aaa
+#    f_bab = s_bab + n_doubles_bab
+#    s_aba = f_bab
+#    f_aba = s_aba + n_doubles_aba
+#    s_bbb = f_aba
+#    f_bbb = s_bbb + n_doubles_bbb
+#
+###################################################
 
     T_a = T[0]
     T_b = T[1]
 
-    #print ((U[:,:nvir_a]))
+    #print (U[:,:n_singles_a])
+    #print (U[:,s_aaa:f_aaa])
+    #print (U[:,s_bab:f_bab])
     #exit()
 
     #X_a = np.dot(T_a[:,:nvir_a], U[:,:nvir_a].T).reshape(-1,nroots)
     #Y_a = np.dot(T_a[:,nvir_a:], U[:,nvir_a:].T).reshape(-1,nroots)
 
-    #P = np.einsum("pi,pi->i", X_a, X_a)
-    #Q = np.einsum("pi,pi->i", Y_a, Y_a)
-    #print (P)
-    #print (Q)
+    X_a = np.dot(T_a[:,:n_singles_a], U[:,:n_singles_a].T).reshape(-1,nroots)
+    Y = np.dot(T_a[:,n_singles_a:], U[:,n_singles_a:].T).reshape(-1,nroots)
+
+    P = np.einsum("pi,pi->i", X_a, X_a)
+    Q = np.einsum("pi,pi->i", Y, Y)
+    print (P)
+    print (Q)
     #exit()
 
 ######################################################
