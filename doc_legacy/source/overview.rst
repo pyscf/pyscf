@@ -57,7 +57,7 @@ Features
 
 * Interface to Heat-bath Selected CI program `Dice <https://sanshar.github.io/Dice/>`_
 
-* Interface to geometry optimizer `Pyberny <https://github.com/azag0/pyberny>`_
+* Interface to geometry optimizer `Pyberny <https://github.com/jhrmnn/pyberny>`_
 
 .. * Interface to `pyWannier90 <https://github.com/hungpham2017/pyWannier90>`_
 

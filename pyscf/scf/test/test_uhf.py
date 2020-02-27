@@ -77,21 +77,21 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_1e(self):
         dm1 = scf.uhf.init_guess_by_1e(mol, breaksym=False)
-        self.assertAlmostEqual(lib.finger(dm1), -0.17065579929349839, 9)
+        self.assertAlmostEqual(lib.fp(dm1), -0.17065579929349839, 9)
         dm2 = scf.uhf.get_init_guess(mol, key='hcore')
-        self.assertAlmostEqual(lib.finger(dm2), 0.69685247431623965, 9)
+        self.assertAlmostEqual(lib.fp(dm2), 0.69685247431623965, 9)
         self.assertAlmostEqual(abs(dm1[0]-dm2[0]).max(), 0, 9)
 
     def test_init_guess_atom(self):
         dm1 = mf.init_guess_by_atom(mol, breaksym=False)
-        self.assertAlmostEqual(lib.finger(dm1), 0.049712575204034937, 9)
+        self.assertAlmostEqual(lib.fp(dm1), 0.049712575204034937, 9)
         dm2 = scf.uhf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.finger(dm2), 0.053542055104367631, 9)
+        self.assertAlmostEqual(lib.fp(dm2), 0.053542055104367631, 9)
         self.assertAlmostEqual(abs(dm1[1]-dm2[1]).max(), 0, 9)
 
     def test_init_guess_huckel(self):
         dm = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.finger(dm), 0.90742674256790956, 9)
+        self.assertAlmostEqual(lib.fp(dm), 0.90742674256790956, 9)
 
     def test_1e(self):
         mf = scf.UHF(gto.M(atom='H', spin=-1))
@@ -338,7 +338,7 @@ H     0    0.757    0.587'''
         vhf4 = mf1.get_veff(pmol, dm, hermi=0)
         self.assertEqual(vhf4.ndim, 4)
         self.assertAlmostEqual(abs(vhf4-vhf3).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vhf4), -9.9614575705134953, 12)
+        self.assertAlmostEqual(lib.fp(vhf4), -9.9614575705134953, 12)
 
     def test_natm_eq_0(self):
         mol = gto.M()
@@ -427,6 +427,16 @@ H     0    0.757    0.587'''
         n2_uhf.irrep_nelec['A1g'] = (0,0)
         self.assertRaises(ValueError, n2_uhf.build)
 
+    def test_max_cycle0(self):
+        mf = scf.UHF(mol)
+        mf.max_cycle = 0
+        dm = mf.get_init_guess()
+        mf.kernel(dm)
+        self.assertAlmostEqual(mf.e_tot, -75.799022820714526, 9)
+
+        dm = mf.make_rdm1()
+        mf.kernel(dm)
+        self.assertAlmostEqual(mf.e_tot, -75.983602246415373, 9)
 
 
 if __name__ == "__main__":

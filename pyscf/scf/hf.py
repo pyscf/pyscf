@@ -131,16 +131,19 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     scf_conv = False
     mo_energy = mo_coeff = mo_occ = None
 
-    # Skip SCF iterations. Compute only the total energy of the initial density
-    if mf.max_cycle <= 0:
-        return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
-
     s1e = mf.get_ovlp(mol)
     cond = lib.cond(s1e)
     logger.debug(mf, 'cond(S) = %s', cond)
     if numpy.max(cond)*1e-17 > conv_tol:
         logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                     'SCF may be inaccurate and hard to converge.', numpy.max(cond))
+
+    # Skip SCF iterations. Compute only the total energy of the initial density
+    if mf.max_cycle <= 0:
+        fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+        return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
     if isinstance(mf.diis, lib.diis.DIIS):
         mf_diis = mf.diis
@@ -1619,18 +1622,19 @@ class SCF(lib.StreamObject):
         self.dump_flags()
         self.build(self.mol)
 
-        if self.max_cycle <= 0:
-            # Avoid to update SCF orbitals in the non-SCF initialization
-            # (issue #495)
-            self.e_tot = kernel(self, self.conv_tol, self.conv_tol_grad,
-                                dm0=dm0, callback=self.callback,
-                                conv_check=self.conv_check, **kwargs)[1]
-        else:
+        if self.max_cycle > 0 or self.mo_coeff is None:
             self.converged, self.e_tot, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \
                     kernel(self, self.conv_tol, self.conv_tol_grad,
                            dm0=dm0, callback=self.callback,
                            conv_check=self.conv_check, **kwargs)
+        else:
+            # Avoid to update SCF orbitals in the non-SCF initialization
+            # (issue #495).  But run regular SCF for initial guess if SCF was
+            # not initialized.
+            self.e_tot = kernel(self, self.conv_tol, self.conv_tol_grad,
+                                dm0=dm0, callback=self.callback,
+                                conv_check=self.conv_check, **kwargs)[1]
 
         logger.timer(self, 'SCF', *cput0)
         self._finalize()

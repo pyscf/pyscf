@@ -33,7 +33,7 @@ def format_xc_code(description):
     '''Format the description (removing white space) then convert the
     RSH(omega, alpha, beta) notation to the internal notation RSH(alpha; beta; omega)
     '''
-    description = description.replace(' ','').upper()
+    description = description.replace(' ', '').replace('\n', '').upper()
     if 'RSH' not in description:
         return description
 
