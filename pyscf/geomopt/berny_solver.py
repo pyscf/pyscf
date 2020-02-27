@@ -176,10 +176,10 @@ def optimize(method, assert_convergence=ASSERT_CONV,
 
     .. code-block:: python
         conv_params = {  # They are default settings
-            'gradientmax': 0.45e-3,  # Eh/Angstrom
-            'gradientrms': 0.15e-3,  # Eh/Angstrom
-            'stepmax': 1.8e-3,       # Angstrom
-            'steprms': 1.2e-3,       # Angstrom
+            'gradientmax': 0.45e-3,  # Eh/[Bohr|rad]
+            'gradientrms': 0.15e-3,  # Eh/[Bohr|rad]
+            'stepmax': 1.8e-3,       # [Bohr|rad]
+            'steprms': 1.2e-3,       # [Bohr|rad]
         }
         from pyscf.geomopt import berny_solver
         newmol = berny_solver.optimize(method, **conv_params)
@@ -237,10 +237,10 @@ H       -0.0227 1.1812  -0.8852
 
     mf = scf.RHF(mol)
     conv_params = {
-        'gradientmax': 6e-3,  # Eh/AA
-        'gradientrms': 2e-3,  # Eh/AA
-        'stepmax': 2e-2,      # AA
-        'steprms': 1.5e-2,    # AA
+        'gradientmax': 6e-3,  # Eh/Bohr
+        'gradientrms': 2e-3,  # Eh/Bohr
+        'stepmax': 2e-2,      # Bohr
+        'steprms': 1.5e-2,    # Bohr
     }
     mol1 = optimize(mf, **conv_params)
     print(mf.kernel() - -153.219208484874)

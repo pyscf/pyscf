@@ -40,6 +40,7 @@ install:
   #  echo 'set(BLAS_LIBRARIES "-L${PROJECT_SOURCE_DIR} -l'${blaslib}'")' > cmake.arch.inc
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7-deps.tar.gz | tar xzf -
+  - pip install pyberny geometric
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     mkdir build &&
     cd build &&
@@ -55,7 +56,7 @@ script:
     echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
   - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
     nosetests -v --with-timer --with-coverage
-    --exclude-dir=geomopt --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
+    --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
     --exclude-dir=cornell_shci
     -e test_bz

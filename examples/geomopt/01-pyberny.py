@@ -28,10 +28,10 @@ from pyscf import mcscf
 mf = scf.RHF(mol)
 mc = mcscf.CASSCF(mf, 4, 4)
 conv_params = {
-    'gradientmax': 6e-3,  # Eh/AA
-    'gradientrms': 2e-3,  # Eh/AA
-    'stepmax': 2e-2,      # AA
-    'steprms': 1.5e-2,    # AA
+    'gradientmax': 6e-3,  # Eh/Bohr
+    'gradientrms': 2e-3,  # Eh/Bohr
+    'stepmax': 2e-2,      # Bohr
+    'steprms': 1.5e-2,    # Bohr
 }
 # method 1
 mol_eq = optimize(mc, **conv_params)
