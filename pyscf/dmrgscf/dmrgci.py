@@ -842,6 +842,8 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         f.write('end\n')
         f.write('fullrestart\n')
         f.write('onedot \n')
+        if maxIter is None:
+            maxIter = 8
 
     if DMRGCI.groupname is not None:
         f.write('sym %s\n' % dmrg_sym.d2h_subgroup(DMRGCI.groupname).lower())
