@@ -412,7 +412,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     dm1b *= .5
     dm1b[numpy.diag_indices(noccb)] += 1
 
-    if with_frozen and not (mycc.frozen == 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         nmoa = mycc.mo_occ[0].size
         nmob = mycc.mo_occ[1].size
         nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
@@ -554,7 +554,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
     dm2ab[nocca:,:nocca,:noccb,:noccb] = dOOov.transpose(3,2,1,0).conj()
     dooOV = None
 
-    if with_frozen and not (mycc.frozen == 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         nmoa0 = dm2aa.shape[0]
         nmob0 = dm2bb.shape[0]
         nmoa = mycc.mo_occ[0].size

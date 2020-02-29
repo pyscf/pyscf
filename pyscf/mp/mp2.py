@@ -215,7 +215,7 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
         mo_energy = eris.mo_energy
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
-    if not (mp.frozen == 0 or mp.frozen is None):
+    if mp.frozen is not None:
         nmo0 = mp.mo_occ.size
         nocc0 = numpy.count_nonzero(mp.mo_occ > 0)
         moidx = get_frozen_mask(mp)
@@ -421,7 +421,7 @@ class MP2(lib.StreamObject):
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
         if mo_occ    is None: mo_occ    = mf.mo_occ
@@ -477,7 +477,7 @@ class MP2(lib.StreamObject):
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen != 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])

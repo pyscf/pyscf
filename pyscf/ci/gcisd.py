@@ -156,12 +156,14 @@ def to_ucisdvec(civec, nmo, nocc, orbspin):
                       'norm(UCISD) = %s' % unorm)
     return ucisdvec
 
-def to_fcivec(cisdvec, nelec, orbspin, frozen=0):
+def to_fcivec(cisdvec, nelec, orbspin, frozen=None):
     assert(numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
     norb = len(orbspin)
     frozen_mask = numpy.zeros(norb, dtype=bool)
-    if isinstance(frozen, (int, numpy.integer)):
+    if frozen is None:
+        pass
+    elif isinstance(frozen, (int, numpy.integer)):
         frozen_mask[:frozen] = True
     else:
         frozen_mask[frozen] = True
@@ -175,17 +177,20 @@ def to_fcivec(cisdvec, nelec, orbspin, frozen=0):
     ucisdvec = to_ucisdvec(cisdvec, nmo, nocc, orbspin)
     return ucisd.to_fcivec(ucisdvec, norb//2, nelec, frozen)
 
-def from_fcivec(ci0, nelec, orbspin, frozen=0):
+def from_fcivec(ci0, nelec, orbspin, frozen=None):
+    if not (frozen is None or frozen == 0):
+        raise NotImplementedError
+
     assert(numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
     norb = len(orbspin)
     frozen_mask = numpy.zeros(norb, dtype=bool)
-    if isinstance(frozen, (int, numpy.integer)):
+    if frozen is None:
+        pass
+    elif isinstance(frozen, (int, numpy.integer)):
         frozen_mask[:frozen] = True
     else:
         frozen_mask[frozen] = True
-    if frozen != 0:
-        raise NotImplementedError
     #frozen = (numpy.where(frozen_mask[orbspin == 0])[0],
     #          numpy.where(frozen_mask[orbspin == 1])[0])
     nelec = (numpy.count_nonzero(orbspin[:nelec] == 0),
@@ -298,7 +303,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     norm = numpy.dot(cibra, ciket)
     dm1[numpy.diag_indices(nocc)] += norm
 
-    if not (myci.frozen == 0 or myci.frozen is None):
+    if myci.frozen is not None:
         nmo = myci.mo_occ.size
         nocc = numpy.count_nonzero(myci.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
@@ -373,10 +378,10 @@ class GCISD(cisd.CISD):
     make_diagonal = make_diagonal
     _dot = None
 
-    def to_fcivec(self, cisdvec, nelec, orbspin, frozen=0):
+    def to_fcivec(self, cisdvec, nelec, orbspin, frozen=None):
         return to_fcivec(cisdvec, nelec, orbspin, frozen)
 
-    def from_fcivec(self, fcivec, nelec, orbspin, frozen=0):
+    def from_fcivec(self, fcivec, nelec, orbspin, frozen=None):
         return from_fcivec(fcivec, nelec, orbspin, frozen)
 
     make_rdm1 = make_rdm1

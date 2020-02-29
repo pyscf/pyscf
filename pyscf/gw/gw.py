@@ -149,7 +149,7 @@ class GW(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    def __init__(self, mf, tdmf, frozen=0):
+    def __init__(self, mf, tdmf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self._tdscf = tdmf
@@ -157,9 +157,7 @@ class GW(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        #TODO: implement frozen orbs
-        #self.frozen = frozen
-        self.frozen = 0
+        self.frozen = frozen
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -180,7 +178,7 @@ class GW(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen != 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self

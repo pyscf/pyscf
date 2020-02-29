@@ -73,7 +73,9 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
     nvira = nmoa - nocca
     nvirb = nmob - noccb
-    with_frozen = not (mycc.frozen is None or mycc.frozen == 0)
+    with_frozen = not ((mycc.frozen is None)
+                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
+                       or (len(mycc.frozen) == 0))
     moidx = mycc.get_frozen_mask()
     OA_a, VA_a, OF_a, VF_a = ccsd_grad._index_frozen_active(moidx[0], mycc.mo_occ[0])
     OA_b, VA_b, OF_b, VF_b = ccsd_grad._index_frozen_active(moidx[1], mycc.mo_occ[1])
@@ -248,7 +250,9 @@ def _response_dm1(mycc, Xvo, eris=None):
     nmoa = nocca + nvira
     nmob = noccb + nvirb
     nova = nocca * nvira
-    with_frozen = not (mycc.frozen is None or mycc.frozen == 0)
+    with_frozen = not ((mycc.frozen is None)
+                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
+                       or (len(mycc.frozen) == 0))
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
         mo_occ = mycc.mo_occ

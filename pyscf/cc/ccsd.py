@@ -876,7 +876,7 @@ class CCSD(lib.StreamObject):
     incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf import gto
         if isinstance(mf, gto.Mole):
             raise RuntimeError('''
@@ -966,7 +966,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
         log.info('CCSD nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen != 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)
@@ -1210,9 +1210,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if not self.chkfile:
             return self
         if t1_t2 is None: t1_t2 = self.t1, self.t2
-        if frozen is None: frozen = self.frozen
-
         t1, t2 = t1_t2
+
+        if frozen is None: frozen = self.frozen
+        # "None" cannot be serialized by the chkfile module
+        if frozen is None:
+            frozen = 0
+
         cc_chk = {'e_corr': self.e_corr,
                   't1': t1,
                   't2': t2,

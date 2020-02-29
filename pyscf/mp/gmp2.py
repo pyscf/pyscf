@@ -130,7 +130,13 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     nmo = nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
 
-    if not (mp.frozen == 0 or mp.frozen is None):
+    if mp.frozen is None:
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist's notation
+        #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3) * .5 - t2.transpose(0,3,1,2) * .5
+        # using t2.transpose(0,2,1,3) == -t2.transpose(0,3,1,2)
+        dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3)
+        dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2).conj()
+    else:
         nmo0 = mp.mo_occ.size
         nocc0 = numpy.count_nonzero(mp.mo_occ > 0)
         moidx = mp.get_frozen_mask()
@@ -142,12 +148,6 @@ def make_rdm2(mp, t2=None, ao_repr=False):
                 t2.transpose(0,2,1,3)
         dm2[nocc0:,:nocc0,nocc0:,:nocc0] = \
                 dm2[:nocc0,nocc0:,:nocc0,nocc0:].transpose(1,0,3,2).conj()
-    else:
-        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist's notation
-        #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3) * .5 - t2.transpose(0,3,1,2) * .5
-        # using t2.transpose(0,2,1,3) == -t2.transpose(0,3,1,2)
-        dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3)
-        dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2).conj()
 
     dm1 = make_rdm1(mp, t2)
     dm1[numpy.diag_indices(nocc0)] -= 1
@@ -175,7 +175,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
 
 
 class GMP2(mp2.MP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.ghf.GHF))
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 

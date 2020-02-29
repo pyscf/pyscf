@@ -278,7 +278,7 @@ class KnownValues(unittest.TestCase):
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
-        mycc = pbcc.KGCCSD(kmf, frozen=0)
+        mycc = pbcc.KGCCSD(kmf, frozen=None)
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle

@@ -296,7 +296,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     nocca, noccb = nocca0, noccb0 = mp.nocc
     t2aa, t2ab, t2bb = t2
 
-    if not (mp.frozen == 0 or mp.frozen is None):
+    if mp.frozen is not None:
         nmoa0 = mp.mo_occ[0].size
         nmob0 = mp.mo_occ[1].size
         nocca0 = numpy.count_nonzero(mp.mo_occ[0] > 0)

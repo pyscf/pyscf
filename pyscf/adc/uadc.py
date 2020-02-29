@@ -606,7 +606,7 @@ class UADC(lib.StreamObject):
     '''
     incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
     
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf import gto
         
         if 'dft' in str(mf.__module__):

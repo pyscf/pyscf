@@ -76,7 +76,7 @@ from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_gccsd
 from pyscf import scf
 
-def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
     if isinstance(mf, scf.uhf.UHF):
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
@@ -88,7 +88,7 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 scf.hf.SCF.CCSD = CCSD
 
 
-def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def RCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
     import numpy
     from pyscf import lib
@@ -116,7 +116,7 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
 
 
-def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def UCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = uccsd.UCCSD.__doc__
     from pyscf.soscf import newton_ah
 
@@ -129,7 +129,7 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
 
 
-def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = gccsd.GCCSD.__doc__
     from pyscf.soscf import newton_ah
 
