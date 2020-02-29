@@ -963,6 +963,12 @@ class _ChemistsERIs:
         self.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
         self.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
 
+    def get_ovvv(self, *slices):
+        '''To access a subblock of ovvv tensor'''
+        if slices:
+            return self.ovvv[slices]
+        else:
+            return self.ovvv
 
 class _IMDS:
     def __init__(self, cc):
