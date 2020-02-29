@@ -293,7 +293,7 @@ class DFTD3Dispersion(object):
         drv(ctypes.c_int(mol.natm),
             coords.ctypes.data_as(ctypes.c_void_p),
             nuc_types.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_char_p(func),
+            ctypes.c_char_p(func.encode('utf-8')),
             ctypes.c_int(self.version),
             ctypes.c_int(tz),
             ctypes.byref(edisp),
