@@ -18,40 +18,39 @@ from pyscf import lib
 from pyscf import gto, scf
 
 try:
-    from pyscf.geomopt import berny_solver
+    from pyscf.dftd3 import dftd3
 except ImportError:
-    berny_solver = False
+    dftd3 = False
 
 mol = gto.M(atom='''
     O  0.   0.       0.
     H  0.   -0.757   0.587
     H  0.   0.757    0.587
-            ''', symmetry=True, verbose=0)
+            ''', symmetry=True)
 
 def tearDownModule():
     global mol
     del mol
 
-@unittest.skipIf(not berny_solver, "pyberny library not found.")
+@unittest.skipIf(not dftd3, "library dftd3 not found.")
 class KnownValues(unittest.TestCase):
-    def test_as_pyscf_method(self):
-        gs = scf.RHF(mol).nuc_grad_method().as_scanner()
-        f = lambda mol: gs(mol)
-        m = berny_solver.as_pyscf_method(mol, f)
-        mol1 = berny_solver.optimize(m)
-        self.assertAlmostEqual(lib.fp(mol1.atom_coords()), 2.20003359484436, 4)
-        self.assertEqual(mol1.symmetry, 'C2v')
+    def test_dftd3_scf(self):
+        mf = dftd3(scf.RHF(mol))
+        self.assertAlmostEqual(mf.kernel(), -74.96757204541478, 0)
 
-    def test_optimize(self):
-        conv_params = {
-            'gradientmax': 0.1e-3,
-            'gradientrms': 0.1e-3,
-        }
-        mf = scf.RHF(mol)
-        mol_eq = mf.Gradients().optimizer(solver='berny').kernel(params=conv_params)
-        self.assertAlmostEqual(lib.fp(mol_eq.atom_coords()), 2.19943732625887, 4)
+    def test_dftd3_scf_grad(self):
+        mf = dftd3(scf.RHF(mol)).run()
+        mfs = mf.as_scanner()
+        e1 = mfs(''' O  0.   0.  0.0001; H  0.   -0.757   0.587; H  0.   0.757    0.587 ''')
+        e2 = mfs(''' O  0.   0. -0.0001; H  0.   -0.757   0.587; H  0.   0.757    0.587 ''')
+        ref = (e1 - e2)/0.0002 * lib.param.BOHR
+        g = mf.nuc_grad_method().kernel()
+        # DFTD3 does not show high agreement between analytical gradients and
+        # numerical gradients. not sure whether libdftd3 analytical gradients
+        # have bug
+        self.assertAlmostEqual(ref, g[0,2], 5)
 
 if __name__ == "__main__":
-    print("Tests for berny_solver")
+    print("Tests for dftd3")
     unittest.main()
 

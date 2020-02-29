@@ -17,6 +17,7 @@
 Interface to geomeTRIC library https://github.com/leeping/geomeTRIC
 '''
 
+import os
 import tempfile
 import numpy
 import geometric
@@ -141,6 +142,11 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     # detection code in Mole.build function).
     if engine.mol.symmetry:
         engine.mol.symmetry = engine.mol.topgroup
+
+    # geomeTRIC library on pypi requires to provide config file log.ini.
+    if not os.path.exists(os.path.abspath(
+            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))):
+        kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
 
     engine.assert_convergence = assert_convergence
     try:

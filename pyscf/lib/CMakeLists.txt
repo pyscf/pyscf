@@ -226,6 +226,7 @@ set_target_properties(tblis_einsum PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMPILE_FLAGS "-std=c++11")
 target_link_libraries(tblis_einsum tblis)
+add_dependencies(tblis_einsum libtblis)
 endif() # ENABLE_TBLIS
 
 

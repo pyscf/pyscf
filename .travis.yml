@@ -29,7 +29,7 @@ python:
 #    system_site_packages: true
 
 before_install:
-  - sudo apt-get -qq install gcc libblas-dev cmake curl
+  - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
   - pip install numpy scipy h5py nose nose-exclude nose-timer codecov
 
 install:
@@ -40,6 +40,7 @@ install:
   #  echo 'set(BLAS_LIBRARIES "-L${PROJECT_SOURCE_DIR} -l'${blaslib}'")' > cmake.arch.inc
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7-deps.tar.gz | tar xzf -
+  - pip install pyberny geometric
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     mkdir build &&
     cd build &&
@@ -52,10 +53,11 @@ before_script:
 
 script:
   - cd $TRAVIS_BUILD_DIR/pyscf &&
-    echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
+    echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py &&
+    echo "dftd3_DFTD3PATH = '$TRAVIS_BUILD_DIR/pyscf/lib/deps/lib'" >> pyscf_config.py
   - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
     nosetests -v --with-timer --with-coverage
-    --exclude-dir=geomopt --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
+    --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
     --exclude-dir=cornell_shci
     -e test_bz
