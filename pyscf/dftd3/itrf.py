@@ -39,14 +39,12 @@ try:
     from pyscf.dftd3 import settings
 except ImportError:
     settings = lambda: None
-    settings.DFTD3PATH = getattr(__config__, 'dftd3_DFTD3PATH', None)
-    if settings.DFTD3PATH is None:
-        settings.DFTD3PATH = os.environ.get('DFTD3PATH')
+    settings.DFTD3PATH = getattr(__config__, 'dftd3_DFTD3PATH', os.environ.get('DFTD3PATH'))
 
-try:
+if settings.DFTD3PATH:
     libdftd3 = numpy.ctypeslib.load_library('libdftd3.so', settings.DFTD3PATH)
-except:
-    libdftd3 = None
+else:
+    raise ImportError('library libdftd3.so not found')
 
 
 # For code compatibility in python-2 and python-3
@@ -156,7 +154,7 @@ def dftd3(scf_method):
            isinstance(scf_method, casci.CASCI))
 
     # Create the object of dftd3 interface wrapper
-    with_dftd3 = DFTD3(scf_method.mol)
+    with_dftd3 = DFTD3Dispersion(scf_method.mol)
     if isinstance(scf_method, casci.CASCI):
         with_dftd3.xc = 'hf'
     else:
@@ -203,7 +201,7 @@ def dftd3(scf_method):
             return grad(scf_grad)
         Gradients = lib.alias(nuc_grad_method, alias_name='Gradients')
 
-    return DFTD3(mf, with_dftd3)
+    return DFTD3(scf_method, with_dftd3)
 
 def grad(scf_grad):
     '''Apply DFT-D3 corrections to SCF or MCSCF nuclear gradients methods
@@ -356,15 +354,15 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dftd3(scf.RHF(mol))
-    print(mf.kernel()) # -75.99396273778923
+    print(mf.kernel() - -75.99396273778923)
 
     mfs = mf.as_scanner()
-    e1 = mfs(''' O                  0.00100000    0.00000000   -0.11081188
+    e1 = mfs(''' O                  0.00000000    0.00000000   -0.10981188
              H                 -0.00000000   -0.84695236    0.59109389
              H                 -0.00000000    0.89830571    0.52404783 ''')
-    e2 = mfs(''' O                 -0.00100000    0.00000000   -0.11081188
+    e2 = mfs(''' O                 -0.00000000    0.00000000   -0.11181188
              H                 -0.00000000   -0.84695236    0.59109389
              H                 -0.00000000    0.89830571    0.52404783 ''')
-    print((e1 - e2)/0.002 * lib.param.BOHR)
-    mf.nuc_grad_method().kernel()
+    g = mf.nuc_grad_method().kernel()
+    print((e1 - e2)/0.002 * lib.param.BOHR - g[0, 2])
 
