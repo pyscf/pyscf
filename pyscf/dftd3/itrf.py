@@ -156,7 +156,7 @@ def dftd3(scf_method):
            isinstance(scf_method, casci.CASCI))
 
     # Create the object of dftd3 interface wrapper
-    with_dftd3 = DFTD3(scf_method.mol)
+    with_dftd3 = DFTD3Dispersion(scf_method.mol)
     if isinstance(scf_method, casci.CASCI):
         with_dftd3.xc = 'hf'
     else:
@@ -203,7 +203,7 @@ def dftd3(scf_method):
             return grad(scf_grad)
         Gradients = lib.alias(nuc_grad_method, alias_name='Gradients')
 
-    return DFTD3(mf, with_dftd3)
+    return DFTD3(scf_method, with_dftd3)
 
 def grad(scf_grad):
     '''Apply DFT-D3 corrections to SCF or MCSCF nuclear gradients methods
@@ -295,7 +295,7 @@ class DFTD3Dispersion(object):
         drv(ctypes.c_int(mol.natm),
             coords.ctypes.data_as(ctypes.c_void_p),
             nuc_types.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_char_p(func),
+            ctypes.c_char_p(func.encode('utf-8')),
             ctypes.c_int(self.version),
             ctypes.c_int(tz),
             ctypes.byref(edisp),
