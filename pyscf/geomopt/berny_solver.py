@@ -26,7 +26,7 @@ except pkg_resources.DistributionNotFound:
 if dist is None or [int(x) for x in dist.version.split('.')] < [0, 6, 2]:
     msg = ('Geometry optimizer Pyberny not found or outdated. Install or update '
            'with:\n\n\tpip install -U pyberny')
-    raise RuntimeError(msg)
+    raise ImportError(msg)
 
 import time
 import numpy
