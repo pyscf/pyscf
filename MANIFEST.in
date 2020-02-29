@@ -13,6 +13,7 @@ recursive-include pyscf/lib/deps *.so*
 recursive-include pyscf/lib/deps *.dylib*
 include pyscf/lib/*.so*
 include pyscf/lib/*.dylib*
+include pyscf/geomopt/log.ini
 
 recursive-exclude pyscf/lib *.c *.h
 recursive-exclude pyscf/lib *.cl
