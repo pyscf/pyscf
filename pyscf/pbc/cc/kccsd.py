@@ -332,7 +332,7 @@ def spin2spatial(tx, orbspin, kconserv):
 
 
 class GCCSD(gccsd.GCCSD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         if not isinstance(mf, scf.kghf.KGHF):
             mf = scf.addons.convert_to_ghf(mf)

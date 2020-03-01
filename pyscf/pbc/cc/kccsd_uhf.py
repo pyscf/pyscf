@@ -640,7 +640,7 @@ class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.khf.KSCF))
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
@@ -840,7 +840,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
     #if not (cc.frozen is None or cc.frozen == 0):
-    #    raise NotImplementedError('cc.frozen = %s' % cc.frozen)
+    #    raise NotImplementedError('cc.frozen = %s' % str(cc.frozen))
 
     cput0 = (time.clock(), time.time())
     log = logger.new_logger(cc)

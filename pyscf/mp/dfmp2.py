@@ -35,7 +35,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen is 0 or mp.frozen is None)
+        assert(mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:      eris = mp.ao2mo(mo_coeff)
     if mo_energy is None: mo_energy = eris.mo_energy
@@ -62,7 +62,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
 
 class DFMP2(mp2.MP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
         if getattr(mf, 'with_df', None):
             self.with_df = mf.with_df

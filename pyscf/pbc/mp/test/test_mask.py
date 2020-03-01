@@ -19,7 +19,7 @@ class fake_mp:
 
 class KnownValues(unittest.TestCase):
     def test_no_frozen(self):
-        mp = fake_mp(frozen=0, mo_occ=[np.array([2, 2, 2, 0, 0]),], nkpts=1)
+        mp = fake_mp(frozen=None, mo_occ=[np.array([2, 2, 2, 0, 0]),], nkpts=1)
         nocc = get_nocc(mp)
         nmo = get_nmo(mp)
         self.assertAlmostEqual(nocc, 3)

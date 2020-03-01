@@ -28,7 +28,7 @@ class KnownValues(unittest.TestCase):
     def test_no_frozen(self):
         mo_occ = [[np.array([1,1,0,0,0]),],
                   [np.array([1,1,1,0,0]),]]
-        mp = fake_ump(frozen=0, mo_occ=mo_occ, nkpts=1)
+        mp = fake_ump(frozen=None, mo_occ=mo_occ, nkpts=1)
         nocc = get_nocc(mp)
         nmo = get_nmo(mp)
         self.assertAlmostEqual(nocc, (2,3))

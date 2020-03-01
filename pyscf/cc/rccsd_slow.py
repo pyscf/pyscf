@@ -149,7 +149,7 @@ def energy(cc, t1, t2, eris):
 
 class RCCSD(ccsd.CCSD):
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.max_space = 20
         self._keys = self._keys.union(['max_space'])

@@ -297,7 +297,9 @@ def get_nocc(mp, per_kpoint=False):
                                "this".format(i, moocc))
     if mp._nocc is not None:
         return mp._nocc
-    if isinstance(mp.frozen, (int, np.integer)):
+    elif mp.frozen is None:
+        nocc = [np.count_nonzero(mp.mo_occ[ikpt]) for ikpt in range(mp.nkpts)]
+    elif isinstance(mp.frozen, (int, np.integer)):
         nocc = [(np.count_nonzero(mp.mo_occ[ikpt]) - mp.frozen) for ikpt in range(mp.nkpts)]
     elif isinstance(mp.frozen[0], (int, np.integer)):
         [_frozen_sanity_check(mp.frozen, mp.mo_occ[ikpt], ikpt) for ikpt in range(mp.nkpts)]
@@ -355,7 +357,9 @@ def get_nmo(mp, per_kpoint=False):
     if mp._nmo is not None:
         return mp._nmo
 
-    if isinstance(mp.frozen, (int, np.integer)):
+    if mp.frozen is None:
+        nmo = [len(mp.mo_occ[ikpt]) for ikpt in range(mp.nkpts)]
+    elif isinstance(mp.frozen, (int, np.integer)):
         nmo = [len(mp.mo_occ[ikpt]) - mp.frozen for ikpt in range(mp.nkpts)]
     elif isinstance(mp.frozen[0], (int, np.integer)):
         [_frozen_sanity_check(mp.frozen, mp.mo_occ[ikpt], ikpt) for ikpt in range(mp.nkpts)]
@@ -399,7 +403,9 @@ def get_frozen_mask(mp):
 
     '''
     moidx = [np.ones(x.size, dtype=np.bool) for x in mp.mo_occ]
-    if isinstance(mp.frozen, (int, np.integer)):
+    if mp.frozen is None:
+        pass
+    elif isinstance(mp.frozen, (int, np.integer)):
         for idx in moidx:
             idx[:mp.frozen] = False
     elif isinstance(mp.frozen[0], (int, np.integer)):
@@ -501,7 +507,7 @@ def _gamma1_intermediates(mp, t2=None):
 
 
 class KMP2(mp2.MP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
         if mo_occ    is None: mo_occ    = mf.mo_occ

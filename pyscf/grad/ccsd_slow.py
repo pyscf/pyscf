@@ -44,7 +44,9 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     nvir = nmo - nocc
     mo_e_o = mo_energy[:nocc]
     mo_e_v = mo_energy[nocc:]
-    with_frozen = not (cc.frozen is None or cc.frozen is 0)
+    with_frozen = not ((cc.frozen is None)
+                       or (isinstance(cc.frozen, (int, numpy.integer)) and cc.frozen == 0)
+                       or (len(cc.frozen) == 0))
 
     d1 = _gamma1_intermediates(cc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(cc, t1, t2, l1, l2)
@@ -186,7 +188,7 @@ def index_frozen_active(cc):
 
 def _gamma1_intermediates(cc, t1, t2, l1, l2):
     d1 = ccsd_rdm._gamma1_intermediates(cc, t1, t2, l1, l2)
-    if cc.frozen is None or cc.frozen is 0:
+    if cc.frozen is None:
         return d1
     nocc = numpy.count_nonzero(cc.mo_occ>0)
     nvir = cc.mo_occ.size - nocc
@@ -204,7 +206,7 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
 def _gamma2_intermediates(cc, t1, t2, l1, l2):
     d2 = ccsd_rdm._gamma2_intermediates(cc, t1, t2, l1, l2)
     nocc, nvir = t1.shape
-    if cc.frozen is None or cc.frozen is 0:
+    if cc.frozen is None:
         dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
         dvvov = dovvv.transpose(2,3,0,1)
         dvvvv = ao2mo.restore(1, d2[1], nvir)

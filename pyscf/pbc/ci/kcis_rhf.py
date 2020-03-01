@@ -318,7 +318,7 @@ def cis_diag(cis, kshift, eris=None):
 
 
 class KCIS(lib.StreamObject):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert isinstance(mf, scf.khf.KSCF)
 
         if mo_coeff is None:
@@ -357,7 +357,7 @@ class KCIS(lib.StreamObject):
         log.info("******** %s ********", self.__class__)
         log.info("nkpts = %d", self.nkpts)
         log.info("CIS nocc = %d, nmo = %d", self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info("frozen orbitals = %s", self.frozen)
         log.info("max_memory %d MB (current use %d MB)",
                  self.max_memory, lib.current_memory()[0])

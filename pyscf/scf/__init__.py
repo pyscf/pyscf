@@ -136,7 +136,7 @@ def RHF(mol, *args):
             return rhf_symm.HF1e(mol)
         else:
             return rohf.HF1e(mol)
-    elif not mol.symmetry or mol.groupname is 'C1':
+    elif not mol.symmetry or mol.groupname == 'C1':
         if mol.spin > 0:
             return rohf.ROHF(mol, *args)
         else:
@@ -150,7 +150,7 @@ def RHF(mol, *args):
 def ROHF(mol, *args):
     __doc__ = '''This is a wrap function to decide which ROHF class to use.\n
     ''' + rohf.ROHF.__doc__
-    if not mol.symmetry or mol.groupname is 'C1':
+    if not mol.symmetry or mol.groupname == 'C1':
         return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)
@@ -159,11 +159,11 @@ def UHF(mol, *args):
     __doc__ = '''This is a wrap function to decide which UHF class to use.\n
     ''' + uhf.UHF.__doc__
     if mol.nelectron == 1:
-        if not mol.symmetry or mol.groupname is 'C1':
+        if not mol.symmetry or mol.groupname == 'C1':
             return uhf.HF1e(mol, *args)
         else:
             return uhf_symm.HF1e(mol, *args)
-    elif not mol.symmetry or mol.groupname is 'C1':
+    elif not mol.symmetry or mol.groupname == 'C1':
         return uhf.UHF(mol, *args)
     else:
         return uhf_symm.UHF(mol, *args)
@@ -171,7 +171,7 @@ def UHF(mol, *args):
 def GHF(mol, *args):
     __doc__ = '''Non-relativistic generalized Hartree-Fock class.\n
     ''' + ghf.GHF.__doc__
-    if not mol.symmetry or mol.groupname is 'C1':
+    if not mol.symmetry or mol.groupname == 'C1':
         return ghf.GHF(mol, *args)
     else:
         return ghf_symm.GHF(mol, *args)

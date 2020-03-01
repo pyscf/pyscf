@@ -27,7 +27,7 @@ from pyscf import __config__
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 class RCCSD(ccsd.CCSD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         if getattr(mf, 'with_df', None):
             self.with_df = mf.with_df

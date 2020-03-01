@@ -17,21 +17,21 @@ from pyscf.pbc import scf
 from pyscf.pbc.mp import mp2
 from pyscf.pbc.mp import kmp2
 
-def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_rhf(mf)
     return mp2.RMP2(mf, frozen, mo_coeff, mo_occ)
 
 MP2 = RMP2
 
-def UMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_uhf(mf)
     return mp2.UMP2(mf, frozen, mo_coeff, mo_occ)
 
-def GMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_ghf(mf)
     return mp2.GMP2(mf, frozen, mo_coeff, mo_occ)
 
-def KRMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def KRMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     return kmp2.KRMP2(mf, frozen, mo_coeff, mo_occ)
 
 KMP2 = KRMP2

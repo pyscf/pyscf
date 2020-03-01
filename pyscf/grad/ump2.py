@@ -43,7 +43,9 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     log.debug('Build ump2 rdm2 intermediates')
 
     mol = mp_grad.mol
-    with_frozen = not (mp.frozen is None or mp.frozen is 0)
+    with_frozen = not ((mp.frozen is None)
+                       or (isinstance(mp.frozen, (int, numpy.integer)) and mp.frozen == 0)
+                       or (len(mp.frozen) == 0))
     moidx = mp.get_frozen_mask()
     OA_a, VA_a, OF_a, VF_a = mp2_grad._index_frozen_active(moidx[0], mp.mo_occ[0])
     OA_b, VA_b, OF_b, VF_b = mp2_grad._index_frozen_active(moidx[1], mp.mo_occ[1])
