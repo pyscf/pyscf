@@ -41,6 +41,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
     time_0pass = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
+    if '_spinor' not in intor:
+        log.warn('r_ao2mo requires spinor integrals.\n'
+                 'Suffix _spinor is added to %s', intor)
+        intor = intor + '_spinor'
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
     klsame = iden_coeffs(mo_coeffs[2], mo_coeffs[3])
 
