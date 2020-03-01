@@ -1,9 +1,11 @@
-PySCF 1.7.1 (2020-2-??)
+PySCF 1.7.1 (2020-2-29)
 -----------------------
 * Added
   - Equilibrium solvation for TDDFT
   - ddcosmo TDDFT gradients to support TDDFT geometry optimization with solvent
+  - Polarizable embedding solvent model
   - Non-canonical MP2
+  - Algebraic diagrammatic construction method
 * Improved
   - Atomic configuration in SCF initial guess
   - IBO valence space configurations
@@ -18,6 +20,8 @@ PySCF 1.7.1 (2020-2-??)
   - The fractional-occupancy atomic HF method in SCF initial guess
   - Performance of non-local XC functional
   - FCI Performance
+  - stability of linear equation solver in dynamic polarizability
+  - cubegen for PBC systems
 * Bugfix
   - Contributions of MM point charges in icmpspt energy
   - ROHF and UHF orbital occupancy for negative mol.spin
