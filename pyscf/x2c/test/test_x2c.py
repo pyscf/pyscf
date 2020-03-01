@@ -178,6 +178,19 @@ C     F
         self.assertEqual(xmol.nao, 42)
         self.assertAlmostEqual(lib.finger(c), -5.480689638416739, 12)
 
+    def test_get_hcore(self):
+        myx2c = scf.RHF(mol).sfx2c1e()
+        myx2c.with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao, xmol.nao))
+        h1 = myx2c.with_x2c.get_hcore()
+        ref = mol.intor('int1e_nuc')
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+
+        with_x2c = x2c.X2C(mol)
+        with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao_2c(), xmol.nao_2c()))
+        h1 = with_x2c.get_hcore()
+        ref = mol.intor('int1e_nuc_spinor')
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+
 
 if __name__ == "__main__":
     print("Full Tests for x2c")
