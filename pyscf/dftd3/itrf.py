@@ -249,7 +249,7 @@ def grad(scf_grad):
     return mfgrad
 
 
-class DFTD3Dispersion(object):
+class DFTD3Dispersion(lib.StreamObject):
     def __init__(self, mol):
         self.mol = mol
         self.verbose = mol.verbose
