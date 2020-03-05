@@ -1020,7 +1020,8 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
 
     # Miscellaneous Keywords
     f.write('#misc\n')
-    f.write('noio \n')
+    if Restart is True:
+        f.write('noio \n')
     if (SHCI.scratchDirectory != ""):
         if not os.path.exists(SHCI.scratchDirectory):
             os.makedirs(SHCI.scratchDirectory)

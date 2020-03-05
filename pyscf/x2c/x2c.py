@@ -252,7 +252,12 @@ class X2C_UHF(hf.SCF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[:mol.nelectron] = 1
+        if mol.nelectron%2 is 0:
+            mo_occ[:mol.nelectron] = 1
+        else:
+            mo_occ[:mol.nelectron-1]=1
+            mo_occ[mol.nelectron-1]=0.5
+            mo_occ[mol.nelectron]=0.5
         if mol.nelectron < len(mo_energy):
             logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g', \
                         mol.nelectron, mo_energy[mol.nelectron-1],

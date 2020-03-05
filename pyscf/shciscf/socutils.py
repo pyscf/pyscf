@@ -8,7 +8,7 @@ from pyscf import gto, lib
 from pyscf.lib.parameters import LIGHT_SPEED
 from pyscf.shciscf import shci
 from pyscf.x2c import x2c
-
+from pyscf.lib import logger
 
 def print1Int(h1, name):
     xyz = ["X", "Y", "Z"]
@@ -160,7 +160,6 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
     gsoLL = numpy.zeros((3, nb, nb))
     gsoLS = numpy.zeros((3, nb, nb))
     gsoSS = numpy.zeros((3, nb, nb))
-
     from pyscf.gto import moleintor
     nbas = mol.nbas
     max_double = mol.max_memory / 8.0 * 1.0e6
@@ -179,20 +178,20 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
         ao_loc.append(ao_loc_orig[-1])
         shl_size.append(ao_loc[-1] - ao_loc[-2])
         shl_slice.append(nbas)
-    print(ao_loc, shl_size, shl_slice)
     nbas = len(shl_size)
 
     for i in range(0, nbas):
         for j in range(0, nbas):
             for k in range(0, nbas):
                 for l in range(0, nbas):
+                    start = time.clock()
                     ddint = mol.intor('int2e_ip1ip2_sph', comp=9, shls_slice=[shl_slice[i], shl_slice[i+1], shl_slice[j], shl_slice[j+1], shl_slice[k], shl_slice[k+1], shl_slice[l], shl_slice[l+1]]).reshape(3, 3, -1)
                     kint = numpy.zeros(3 * shl_size[i] * shl_size[j] * shl_size[k] * shl_size[l]).reshape(
                         3, shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[0] = (ddint[1, 2] - ddint[2, 1]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[1] = (ddint[2, 0] - ddint[0, 2]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[2] = (ddint[0, 1] - ddint[1, 0]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
-                    #print("Time elapsed for integral calculation:", end - start, i, j, k, l, nbas)
+                    logger.info(mol, "Time elapsed for integral calculation: %g, %d slice of total %d slice.", time.clock() - start, i*nbas**3+j*nbas**2+k*nbas+l+1, nbas**4)
 
                     gsoLL[:, ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]] \
                       +=-2.0*lib.einsum('ilmkn,lk->imn', kint, \
@@ -211,12 +210,13 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
                     gsoSS[:, ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]] \
                       += 2.0*lib.einsum('imlnk,lk->imn', kint, \
                         pLL[ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]])
-                    #print(" Time elapsed for einsum:", time.clock() - start)
+                    logger.info(mol, 'Time elapsed for integral contraction: %g, %d slice of total %d slice', time.clock() - start, i*nbas**3+j*nbas**2+k*nbas+l+1, nbas**4)
 
     for comp in range(0, 3):
         fso2e[comp] = gsoLL[comp] + gsoLS[comp].dot(x) + x.T.dot(-gsoLS[comp].T) + x.T.dot(gsoSS[comp].dot(x))
         fso2e[comp] = reduce(numpy.dot, (rp.T, fso2e[comp], rp))
 
+    logger.info(mol, 'Two electron part of SOC integral is done')
     return fso2e
 
 
