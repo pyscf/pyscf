@@ -2058,6 +2058,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     d_a_a = e_vir_a[:,None]
     D_n_aba = -d_a_a + d_ij_ab.reshape(-1)
     D_aij_aba = D_n_aba.reshape(-1)
+
     s_a = 0
     f_a = n_singles_a
     s_b = f_a
@@ -2115,7 +2116,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         s[s_a:f_a] = np.einsum('ij,j->i',M_ij_a,r_a)
         s[s_b:f_b] = np.einsum('ij,j->i',M_ij_b,r_b)
 
-############ ADC(2) i - kja block #########################
+############# ADC(2) i - kja block #########################
 
         s[s_a:f_a] += 0.5*np.einsum('jaki,ajk->i', eris_ovoo, r_aaa_u, optimize = True)
         s[s_a:f_a] -= 0.5*np.einsum('kaji,ajk->i', eris_ovoo, r_aaa_u, optimize = True)
@@ -2125,7 +2126,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         s[s_b:f_b] -= 0.5*np.einsum('kaji,ajk->i', eris_OVOO, r_bbb_u, optimize = True)
         s[s_b:f_b] += np.einsum('jaki,ajk->i', eris_ovOO, r_aba, optimize = True)
 
-################ ADC(2) ajk - i block ############################
+############## ADC(2) ajk - i block ############################
 
         temp = np.einsum('jaki,i->ajk', eris_ovoo, r_a, optimize = True)
         temp -= np.einsum('kaji,i->ajk', eris_ovoo, r_a, optimize = True)
@@ -2136,7 +2137,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         temp -= np.einsum('kaji,i->ajk', eris_OVOO, r_b, optimize = True)
         s[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
 
-############### ADC(2) ajk - bil block ############################
+############ ADC(2) ajk - bil block ############################
 
         r_aaa = r_aaa.reshape(-1)
         r_bbb = r_bbb.reshape(-1)
@@ -2839,6 +2840,8 @@ def get_spec_factors(adc, T, U, nroots=1):
     nmo_a  = adc.nmo_a
     nmo_b  = adc.nmo_b
 
+    T_a = T[0]
+    T_b = T[1]
 ########## Debugging ################
 
     nocc_a = adc.nocc_a
@@ -2869,59 +2872,6 @@ def get_spec_factors(adc, T, U, nroots=1):
     f_aba = s_aba + n_doubles_aba
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
-
-########### dimensions_IP #####################
-#
-#    n_singles_a = nocc_a
-#    n_singles_b = nocc_b
-#    n_doubles_aaa = nocc_a* (nocc_a - 1) * nvir_a // 2
-#    n_doubles_bab = nvir_b * nocc_a* nocc_b
-#    n_doubles_aba = nvir_a * nocc_b* nocc_a
-#    n_doubles_bbb = nocc_b* (nocc_b - 1) * nvir_b // 2
-#
-#    dim = n_singles_a + n_singles_b + n_doubles_aaa + n_doubles_bab + n_doubles_aba + n_doubles_bbb
-#
-#    idn_occ_a = np.identity(nocc_a)
-#    idn_occ_b = np.identity(nocc_b)
-#    idn_vir_a = np.identity(nvir_a)
-#    idn_vir_b = np.identity(nvir_b)
-#
-#    s_a = 0
-#    f_a = n_singles_a
-#    s_b = f_a
-#    f_b = s_b + n_singles_b
-#    s_aaa = f_b
-#    f_aaa = s_aaa + n_doubles_aaa
-#    s_bab = f_aaa
-#    f_bab = s_bab + n_doubles_bab
-#    s_aba = f_bab
-#    f_aba = s_aba + n_doubles_aba
-#    s_bbb = f_aba
-#    f_bbb = s_bbb + n_doubles_bbb
-#
-###################################################
-
-    T_a = T[0]
-    T_b = T[1]
-
-    #print (U[:,:n_singles_a])
-    #print (U[:,s_aaa:f_aaa])
-    #print (U[:,s_bab:f_bab])
-    #exit()
-
-    #X_a = np.dot(T_a[:,:nvir_a], U[:,:nvir_a].T).reshape(-1,nroots)
-    #Y_a = np.dot(T_a[:,nvir_a:], U[:,nvir_a:].T).reshape(-1,nroots)
-
-    X_a = np.dot(T_a[:,:n_singles_a], U[:,:n_singles_a].T).reshape(-1,nroots)
-    Y = np.dot(T_a[:,n_singles_a:], U[:,n_singles_a:].T).reshape(-1,nroots)
-
-    P = np.einsum("pi,pi->i", X_a, X_a)
-    Q = np.einsum("pi,pi->i", Y, Y)
-    print (P)
-    print (Q)
-    #exit()
-
-######################################################
 
     X_a = np.dot(T_a, U.T).reshape(-1,nroots)
     X_b = np.dot(T_b, U.T).reshape(-1,nroots)
