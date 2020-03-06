@@ -15,7 +15,7 @@
 #
 # Authors: Qiming Sun <osirpt.sun@gmail.com>
 #          Junzi Liu <latrix1247@gmail.com>
-#
+#          Susi Lehtola <susi.lehtola@gmail.com>
 
 import copy
 from functools import reduce
@@ -28,6 +28,7 @@ from pyscf.scf import hf
 from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
+CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
 def frac_occ_(mf, tol=1e-3):
@@ -400,9 +401,62 @@ def project_dm_r2r(mol1, dm1, mol2):
     else:
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
+def canonical_orth_(S, thr=1e-7):
+    '''Löwdin's canonical orthogonalization'''
+    # Ensure the basis functions are normalized (symmetry-adapted ones are not!)
+    normlz = numpy.power(numpy.diag(S), -0.5)
+    Snorm = numpy.dot(numpy.diag(normlz), numpy.dot(S, numpy.diag(normlz)))
+    # Form vectors for normalized overlap matrix
+    Sval, Svec = numpy.linalg.eigh(Snorm)
+    X = Svec[:,Sval>=thr] / numpy.sqrt(Sval[Sval>=thr])
+    # Plug normalization back in
+    X = numpy.dot(numpy.diag(normlz), X)
+    return X
+
+def partial_cholesky_orth_(S, cholthr=1e-9, canthr=1e-7):
+    '''Partial Cholesky orthogonalization for curing overcompleteness.
+
+    References:
+
+    Susi Lehtola, Curing basis set overcompleteness with pivoted
+    Cholesky decompositions, J. Chem. Phys. 151, 241102 (2019),
+    doi:10.1063/1.5139948.
+
+    Susi Lehtola, Accurate reproduction of strongly repulsive
+    interatomic potentials, Phys. Rev. A 101, 032504 (2020),
+    doi:10.1103/PhysRevA.101.032504.
+    '''
+    # Ensure the basis functions are normalized
+    normlz = numpy.power(numpy.diag(S), -0.5)
+    Snorm = numpy.dot(numpy.diag(normlz), numpy.dot(S, numpy.diag(normlz)))
+
+    # Sort the basis functions according to the Gershgorin circle
+    # theorem so that the Cholesky routine is well-initialized
+    odS = numpy.abs(Snorm)
+    numpy.fill_diagonal(odS, 0.0)
+    odSs = numpy.sum(odS, axis=0)
+    sortidx = numpy.argsort(odSs)
+
+    # Run the pivoted Cholesky decomposition
+    Ssort = Snorm[numpy.ix_(sortidx, sortidx)].copy()
+    pstrf = scipy.linalg.lapack.get_lapack_funcs('pstrf')
+    c, piv, r_c, info = pstrf(Ssort, tol=cholthr)
+    # The functions we're going to use are given by the pivot as
+    idx = sortidx[piv[:r_c]-1]
+
+    # Get the (un-normalized) sub-basis
+    Ssub = S[numpy.ix_(idx, idx)].copy()
+    # Orthogonalize sub-basis
+    Xsub = canonical_orth_(Ssub, thr=canthr)
+
+    # Full X
+    X = numpy.zeros((S.shape[0], Xsub.shape[1]))
+    X[idx,:] = Xsub
+
+    return X
 
 def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
-                       lindep=LINEAR_DEP_TRIGGER):
+                       lindep=LINEAR_DEP_TRIGGER, cholesky_threshold=CHOLESKY_THRESHOLD):
     '''
     Args:
         threshold : float
@@ -417,16 +471,26 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     if cond < 1./lindep:
         return mf
 
-    logger.info(mf, 'Applying remove_linear_dep_ on SCF obejct.')
+    logger.info(mf, 'Applying remove_linear_dep_ on SCF object.')
     logger.debug(mf, 'Overlap condition number %g', cond)
-    def eigh(h, s):
-        d, t = numpy.linalg.eigh(s)
-        x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
-        xhx = reduce(numpy.dot, (x.T.conj(), h, x))
-        e, c = numpy.linalg.eigh(xhx)
-        c = numpy.dot(x, c)
-        return e, c
-    mf._eigh = eigh
+    if(cond < 1./numpy.finfo(s.dtype).eps):
+        logger.info(mf, 'Using canonical orthogonalization')
+        def eigh(h, s):
+            x = canonical_orth_(s, threshold)
+            xhx = reduce(numpy.dot, (x.T.conj(), h, x))
+            e, c = numpy.linalg.eigh(xhx)
+            c = numpy.dot(x, c)
+            return e, c
+        mf._eigh = eigh
+    else:
+        logger.info(mf, 'Using partial Cholesky orthogonalization (doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
+        def eigh(h, s):
+            x = partial_cholesky_orth_(s, threshold, cholesky_threshold)
+            xhx = reduce(numpy.dot, (x.T.conj(), h, x))
+            e, c = numpy.linalg.eigh(xhx)
+            c = numpy.dot(x, c)
+            return e, c
+        mf._eigh = eigh
     return mf
 remove_linear_dep = remove_linear_dep_
 
