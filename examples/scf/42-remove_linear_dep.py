@@ -6,7 +6,7 @@ calculations. You can find these methods in function pyscf.scf.hf.kernel.
 This example shows how to remove basis linear dependency by modifying the SCF
 eig method.
 
-The pyscf.scf.addons module provides a fucntion remove_linear_dep_ to remove
+The pyscf.scf.addons module provides a function remove_linear_dep_ to remove
 basis linear dependency in a similar manner.
 '''
 

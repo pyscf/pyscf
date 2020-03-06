@@ -98,7 +98,7 @@ def gauss_chebyshev(n, *args, **kwargs):
 
 def treutler_ahlrichs(n, *args, **kwargs):
     '''
-    Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids
+    Treutler-Ahlrichs [JCP 102, 346 (1995)] (M4) radial grids
     '''
     r = numpy.empty(n)
     dr = numpy.empty(n)
@@ -137,8 +137,8 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
     return fadjust
 
 def treutler_atomic_radii_adjust(mol, atomic_radii):
-    '''Treutler atomic radii adjust function: JCP, 102, 346'''
-# JCP, 102, 346
+    '''Treutler atomic radii adjust function: [JCP 102, 346 (1995)]'''
+# JCP 102, 346 (1995)
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
