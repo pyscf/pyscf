@@ -870,7 +870,7 @@ class UHF(hf.SCF):
         Returns:
             New orbitals that are more close to the stable condition.  The return
             value includes two set of orbitals.  The first corresponds to the
-            internal stablity and the second corresponds to the external stability.
+            internal stability and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)

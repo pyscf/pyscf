@@ -114,7 +114,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #            j2ctag = 'CD'
 #        except scipy.linalg.LinAlgError as e:
 #
-# Abandon CD treatment for better numerical stablity
+# Abandon CD treatment for better numerical stability
         w, v = scipy.linalg.eigh(j2c)
         log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
                   uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
