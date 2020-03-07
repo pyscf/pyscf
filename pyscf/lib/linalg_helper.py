@@ -21,6 +21,7 @@ Extension to scipy.linalg module
 '''
 
 import sys
+import inspect
 import warnings
 import tempfile
 from functools import reduce
@@ -1449,10 +1450,23 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     return xtrial
 
 
-def cho_solve(a, b):
-    '''Solve ax = b, where a is hermitian matrix
+def cho_solve(a, b, strict_sym_pos=True):
+    '''Solve ax = b, where a is a postive definite hermitian matrix
+
+    Kwargs:
+        strict_sym_pos (bool) : Whether to impose the strict positive definition
+            on matrix a
     '''
-    return scipy.linalg.solve(a, b, sym_pos=True)
+    try:
+        return scipy.linalg.solve(a, b, sym_pos=True)
+    except numpy.linalg.LinAlgError:
+        if strict_sym_pos:
+            raise
+        else:
+            fname, lineno = inspect.stack()[1][1:3]
+            warnings.warn('%s:%s: matrix a is not strictly postive definite' %
+                          (fname, lineno))
+            return scipy.linalg.solve(a, b)
 
 
 def _qr(xs, dot, lindep=1e-14):
