@@ -905,9 +905,9 @@ def _atom_symbol(symb_or_chg):
                 elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
                     rawsymb = rawsymb[5:]  # Remove the prefix GHOST
                     # put hyphen between Ghost prefix and the atomic symbol
-                    if a[6].isalpha():
+                    if a[5].isalpha():
                         a = a[:5] + '-' + a[5:]
-                    elif a[6] != '-':
+                    elif a[5] != '-':
                         a = a[:5] + '-' + a[6:]
                 else:
                     raise RuntimeError('Unsupported atom symbol %s' % a)
