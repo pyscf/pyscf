@@ -1610,8 +1610,29 @@ def aoslice_by_atom(mol, ao_loc=None):
     aorange = numpy.empty((mol.natm,4), dtype=int)
     bas_atom = mol._bas[:,ATOM_OF]
     delimiter = numpy.where(bas_atom[0:-1] != bas_atom[1:])[0] + 1
-    aorange[:,0] = shell_start = numpy.append(0, delimiter)
-    aorange[:,1] = shell_end = numpy.append(delimiter, mol.nbas)
+
+    if mol.natm == len(delimiter) + 1:
+        aorange[:,0] = shell_start = numpy.append(0, delimiter)
+        aorange[:,1] = shell_end = numpy.append(delimiter, mol.nbas)
+
+    else:  # Some atoms miss basis
+        shell_start = numpy.empty(mol.natm, dtype=int)
+        shell_start[:] = -1
+        shell_start[0] = 0
+        shell_start[bas_atom[0]] = 0
+        shell_start[bas_atom[delimiter]] = delimiter
+
+        shell_end = numpy.empty(mol.natm, dtype=int)
+        shell_end[0] = 0
+        shell_end[bas_atom[delimiter-1]] = delimiter
+        shell_end[bas_atom[-1]] = mol.nbas
+
+        for i in range(1, mol.natm):
+            if shell_start[i] == -1:
+                shell_start[i] = shell_end[i] = shell_end[i-1]
+
+    aorange[:,0] = shell_start
+    aorange[:,1] = shell_end
     aorange[:,2] = ao_loc[shell_start]
     aorange[:,3] = ao_loc[shell_end]
     return aorange
