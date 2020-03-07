@@ -460,13 +460,21 @@ def init_guess_by_atom(mol):
     from pyscf.scf import atom_hf
     from pyscf.scf import addons
     atm_scf = atom_hf.get_atm_nrhf(mol)
+    aoslice = mol.aoslice_by_atom()
     atm_dms = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb not in atm_scf:
             symb = mol.atom_pure_symbol(ia)
-        e_hf, e, c, occ = atm_scf[symb]
-        atm_dms.append(numpy.dot(c*occ, c.conj().T))
+
+        if symb in atm_scf:
+            e_hf, e, c, occ = atm_scf[symb]
+            dm = numpy.dot(c*occ, c.conj().T)
+        else:  # symb's basis is not specified in the input
+            nao_atm = aoslice[ia,3] - aoslice[ia,2]
+            dm = numpy.zeros((nao_atm, nao_atm))
+
+        atm_dms.append(dm)
 
     dm = scipy.linalg.block_diag(*atm_dms)
 
