@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 # Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -454,7 +455,8 @@ def partial_cholesky_orth_(S, cholthr=1e-9, canthr=1e-7):
     return X
 
 def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
-                       lindep=LINEAR_DEP_TRIGGER, cholesky_threshold=CHOLESKY_THRESHOLD):
+                       lindep=LINEAR_DEP_TRIGGER,
+                       cholesky_threshold=CHOLESKY_THRESHOLD):
     '''
     Args:
         threshold : float
@@ -481,7 +483,8 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
             return e, c
         mf._eigh = eigh
     else:
-        logger.info(mf, 'Using partial Cholesky orthogonalization (doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
+        logger.info(mf, 'Using partial Cholesky orthogonalization '
+                    '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
         def eigh(h, s):
             x = partial_cholesky_orth_(s, threshold, cholesky_threshold)
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
