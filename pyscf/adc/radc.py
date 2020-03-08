@@ -1475,6 +1475,23 @@ def get_trans_moments(adc):
 
 def get_spec_factors(adc, T, U, nroots=1):
 
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+
+    T_aaa = T[:,n_singles:].reshape(-1,nvir,nocc,nocc).copy()
+    T_aaa = T_aaa - T_aaa.transpose(0,1,3,2)
+    T[:,n_singles:] += T_aaa.reshape(T.shape[0], -1)
+
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+        UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        U1 /= np.sqrt(UdotU)
+        U2 /= np.sqrt(UdotU)
+        print (np.linalg.norm(U1))
 
     X = np.dot(T, U.T).reshape(-1, nroots)
 
