@@ -2873,6 +2873,9 @@ def get_spec_factors(adc, T, U, nroots=1):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
+    for I in range(U.shape[0]):
+        print (np.linalg.norm(U[I,:(n_singles_a+n_singles_b)]))
+
     X_a = np.dot(T_a, U.T).reshape(-1,nroots)
     X_b = np.dot(T_b, U.T).reshape(-1,nroots)
 
