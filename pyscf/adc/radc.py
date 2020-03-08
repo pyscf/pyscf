@@ -818,8 +818,10 @@ def ea_adc_diag(adc,M_ab=None):
 
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
+    n_doubles_aaa = nocc * nvir * (nvir-1)//2
 
-    dim = n_singles + n_doubles
+    dim = n_singles + n_doubles + n_doubles_aaa
+    #dim = n_singles + n_doubles 
 
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
@@ -833,11 +835,16 @@ def ea_adc_diag(adc,M_ab=None):
     f1 = n_singles
     s2 = f1
     f2 = s2 + n_doubles
+    s2_aaa = f2
+    f2_aaa = s2_aaa + n_doubles_aaa
 
     d_ab = e_vir[:,None] + e_vir
     d_i = e_occ[:,None]
     D_n = -d_i + d_ab.reshape(-1)
     D_iab = D_n.reshape(-1)
+
+    D_n = D_n.reshape(nocc, nvir, nvir)
+    D_iab_aaa = D_n[:,ab_ind[0],ab_ind[1]]
 
     diag = np.zeros(dim)
 
@@ -850,6 +857,8 @@ def ea_adc_diag(adc,M_ab=None):
     # Compute precond in 2p1h-2p1h block
 
     diag[s2:f2] = D_iab
+
+    diag[s2_aaa:f2_aaa] = D_iab_aaa.reshape(-1)
 
     return diag
 
@@ -915,8 +924,10 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
+    n_doubles_aaa = nocc * nvir * (nvir-1)//2
 
-    dim = n_singles + n_doubles
+    dim = n_singles + n_doubles + n_doubles_aaa
+    #dim = n_singles + n_doubles 
 
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
@@ -933,6 +944,8 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     f1 = n_singles
     s2 = f1
     f2 = s2 + n_doubles
+    s2_aaa = f2
+    f2_aaa = s2_aaa + n_doubles_aaa
 
     d_ab = e_vir[:,None] + e_vir
     d_i = e_occ[:,None]
@@ -1071,6 +1084,10 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp  += np.einsum('lxd,ilyd->ixy',temp_2_1,t2_1_a,optimize=True)
                s[s2:f2] += temp.reshape(-1)
 
+        temp = s[s2:f2].reshape(nocc,nvir,nvir)
+        temp_1 = temp - temp.transpose(0,2,1)
+        s[s2_aaa:f2_aaa] = temp_1[:,ab_ind[0],ab_ind[1]].reshape(-1)
+
         return s
 
     return sigma_
@@ -1146,7 +1163,8 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
 ############## ADC(2) ajk - i block ############################
 
-        temp = np.einsum('jaik,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
+        #temp = np.einsum('jaik,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
+        temp = np.einsum('jaki,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
         s[s2:f2] += temp.reshape(-1)
 
 ################ ADC(2) ajk - bil block ############################
@@ -1274,8 +1292,10 @@ def ea_compute_trans_moments(adc, orb):
 
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
+    n_doubles_aaa = nocc * nvir * (nvir-1)//2
 
-    dim = n_singles + n_doubles
+    dim = n_singles + n_doubles + n_doubles_aaa
+    #dim = n_singles + n_doubles 
 
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
@@ -1287,6 +1307,8 @@ def ea_compute_trans_moments(adc, orb):
     f1 = n_singles
     s2 = f1
     f2 = s2 + n_doubles
+    s2_aaa = f2
+    f2_aaa = s2_aaa + n_doubles_aaa
 
     T = np.zeros((dim))
 
@@ -1343,13 +1365,11 @@ def ea_compute_trans_moments(adc, orb):
                 T[s1:f1] -= 0.25*np.einsum('klac,klc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize = True)
                 T[s1:f1] -= 0.25*np.einsum('lkac,lkc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize = True)
 
-#    T_bab = T[s2:f2].reshape(nocc, nvir, nvir)
-#    T_aaa = T_bab - T_bab.transpose(0,2,1)
-#    T[s2:f2] += 0.5 * T_aaa.reshape(-1)
-#   
-#    print (np.linalg.norm(0.5*T_aaa.reshape(-1)))
-#    exit()
-
+    T_bab = T[s2:f2].reshape(nocc, nvir, nvir)
+    T_aaa = T_bab - T_bab.transpose(0,2,1)
+    T_aaa = T_aaa[:,ab_ind[0],ab_ind[1]]
+    T[s2_aaa:f2_aaa] += T_aaa.reshape(-1)
+   
     return T
 
 
@@ -1459,6 +1479,32 @@ def get_spec_factors(adc, T, U, nroots=1):
     X = np.dot(T, U.T).reshape(-1, nroots)
 
     P = np.einsum("pi,pi->i", X, X)
+
+    return P
+
+def get_spec_factors_ip(adc, T, U, nroots=1):
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+
+    U1 = U[:n_singles]
+    U2 = U[n_singles:].reshape(nvir,nocc,nocc)
+    UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+    U1 /= np.sqrt(UdotU)
+    U2 /= np.sqrt(UdotU)
+
+    X = np.dot(T[:,:n_singles], U1.T).reshape(-1, nroots)
+
+    #X = np.dot(T, U.T).reshape(-1, nroots)
+
+    P = np.einsum("pi,pi->i", X, X)
+
+    print (U1)
+    print (P)
+    exit()
 
     return P
 
@@ -1617,7 +1663,7 @@ class RADCIP(RADC):
     matvec = ip_adc_matvec
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
-    get_spec_factors = get_spec_factors
+    get_spec_factors = get_spec_factors_ip
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :

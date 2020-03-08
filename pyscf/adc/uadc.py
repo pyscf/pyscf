@@ -2842,36 +2842,58 @@ def get_spec_factors(adc, T, U, nroots=1):
 
     T_a = T[0]
     T_b = T[1]
-########## Debugging ################
 
-    nocc_a = adc.nocc_a
-    nocc_b = adc.nocc_b
-    nvir_a = adc.nvir_a
-    nvir_b = adc.nvir_b
-
-########## dimensions_EA #####################
-
-    n_singles_a = nvir_a
-    n_singles_b = nvir_b
-    n_doubles_aaa = nvir_a* (nvir_a - 1) * nocc_a // 2
-    n_doubles_bab = nocc_b * nvir_a* nvir_b
-    n_doubles_aba = nocc_a * nvir_b* nvir_a
-    n_doubles_bbb = nvir_b* (nvir_b - 1) * nocc_b // 2
-
-    dim = n_singles_a + n_singles_b + n_doubles_aaa + n_doubles_bab + n_doubles_aba + n_doubles_bbb
-
-    s_a = 0
-    f_a = n_singles_a
-    s_b = f_a
-    f_b = s_b + n_singles_b
-    s_aaa = f_b
-    f_aaa = s_aaa + n_doubles_aaa
-    s_bab = f_aaa
-    f_bab = s_bab + n_doubles_bab
-    s_aba = f_bab
-    f_aba = s_aba + n_doubles_aba
-    s_bbb = f_aba
-    f_bbb = s_bbb + n_doubles_bbb
+########### Debugging ################
+#
+#    nocc_a = adc.nocc_a
+#    nocc_b = adc.nocc_b
+#    nvir_a = adc.nvir_a
+#    nvir_b = adc.nvir_b
+#
+##    n_singles_a = nocc_a
+##    n_singles_b = nocc_b
+##    n_doubles_aaa = nocc_a* (nocc_a - 1) * nvir_a // 2
+##    n_doubles_bab = nvir_b * nocc_a* nocc_b
+##    n_doubles_aba = nvir_a * nocc_b* nocc_a
+##    n_doubles_bbb = nocc_b* (nocc_b - 1) * nvir_b // 2
+#
+#    n_singles_a = nvir_a
+#    n_singles_b = nvir_b
+#    n_doubles_aaa = nvir_a* (nvir_a - 1) * nocc_a // 2
+#    n_doubles_bab = nocc_b * nvir_a* nvir_b
+#    n_doubles_aba = nocc_a * nvir_b* nvir_a
+#    n_doubles_bbb = nvir_b* (nvir_b - 1) * nocc_b // 2
+#
+#    s_a = 0
+#    f_a = n_singles_a
+#    s_b = f_a
+#    f_b = s_b + n_singles_b
+#    s_aaa = f_b
+#    f_aaa = s_aaa + n_doubles_aaa
+#    s_bab = f_aaa
+#    f_bab = s_bab + n_doubles_bab
+#    s_aba = f_bab
+#    f_aba = s_aba + n_doubles_aba
+#    s_bbb = f_aba
+#    f_bbb = s_bbb + n_doubles_bbb
+#
+#    r1a = U[s_a:f_a]
+#    r1b = U[s_b:f_b]
+#    r2aaa = U[s_aaa:f_aaa]
+#    r2abb = U[s_bab:f_bab]
+#    r2baa = U[s_aba:f_aba]
+#    r2bbb = U[s_bbb:f_bbb]
+# 
+#
+#####################################################
+##    print (U[:n_singles_a])
+##    print (T_a[:,:n_singles_a])
+#
+#
+#    X_a = np.dot(T_a[:,:n_singles_a], U[:n_singles_a].T).reshape(-1,nroots)
+#    X_b = np.dot(T_b[:,:n_singles_b], U[:n_singles_b].T).reshape(-1,nroots)
+##
+##################################################################
 
     X_a = np.dot(T_a, U.T).reshape(-1,nroots)
     X_b = np.dot(T_b, U.T).reshape(-1,nroots)
