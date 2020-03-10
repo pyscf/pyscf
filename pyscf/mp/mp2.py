@@ -196,6 +196,42 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
     return -dm1occ, dm1vir
 
 
+def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None):
+    r'''
+    Frozen natural orbitals
+
+    Returns:
+        frozen : list or ndarray
+            List of orbitals to freeze
+        no_coeff : ndarray
+            Semicanonical NO coefficients in the AO basis
+    '''
+    mf = mp._scf
+    dm = mp.make_rdm1(t2=t2)
+
+    nmo = mp.nmo
+    nocc = mp.nocc
+    n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
+    idx = numpy.argsort(n)[::-1]
+    n,v = n[idx], v[:,idx]
+
+    if pct_occ is None:
+        nvir_act = numpy.count_nonzero(n>thresh)
+    else:
+        print(numpy.cumsum(n/numpy.sum(n)))
+        nvir_act = numpy.count_nonzero(numpy.cumsum(n/numpy.sum(n))<pct_occ)
+
+    fvv = numpy.diag(mf.mo_energy[nocc:])
+    fvv_no = numpy.dot(v.T, numpy.dot(fvv, v))
+    _, v_canon = numpy.linalg.eigh(fvv_no[:nvir_act,:nvir_act])
+
+    no_coeff_1 = numpy.dot(mf.mo_coeff[:,nocc:], numpy.dot(v[:,:nvir_act], v_canon))
+    no_coeff_2 = numpy.dot(mf.mo_coeff[:,nocc:], v[:,nvir_act:])
+    no_coeff = numpy.concatenate((mf.mo_coeff[:,:nocc], no_coeff_1, no_coeff_2), axis=1)
+
+    return numpy.arange(nocc+nvir_act,nmo), no_coeff
+
+
 def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
@@ -526,6 +562,7 @@ class MP2(lib.StreamObject):
         return _make_eris(self, mo_coeff, verbose=self.verbose)
 
     make_rdm1 = make_rdm1
+    make_fno = make_fno
     make_rdm2 = make_rdm2
 
     as_scanner = as_scanner
