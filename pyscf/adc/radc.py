@@ -819,7 +819,7 @@ def ea_adc_diag(adc,M_ab=None):
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
 
-    dim = n_singles + n_doubles 
+    dim = n_singles + n_doubles
 
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
@@ -914,7 +914,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
 
-    dim = n_singles + n_doubles 
+    dim = n_singles + n_doubles
 
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
@@ -924,8 +924,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
     if eris is None:
         eris = radc_ao2mo.transform_integrals_incore(adc)
-
-    eris_ovov = eris.ovov
 
     s1 = 0
     f1 = n_singles
@@ -949,7 +947,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         r2 = r[s2:f2]
 
         r2 = r2.reshape(nocc,nvir,nvir)
-        r2_a = r2 - r2.transpose(0,2,1).copy()
 
 ############ ADC(2) ab block ############################
 
@@ -968,13 +965,13 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
 ################ ADC(2) iab - jcd block ############################
 
-        r2 = r2.reshape(-1)
         s[s2:f2] +=  D_iab * r2.reshape(-1)
 
 ############### ADC(3) iab - jcd block ############################
 
         if (method == "adc(2)-x" or method == "adc(3)"):
 
+               r2_a = r2 - r2.transpose(0,2,1).copy()
                t2_2 = adc.t2[1]
 
                eris_oovv = eris.oovv
@@ -1103,8 +1100,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     if eris is None:
         eris = radc_ao2mo.transform_integrals_incore(adc)
 
-    eris_ovov = eris.ovov
-
     s1 = 0
     f1 = n_singles
     s2 = f1
@@ -1127,7 +1122,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         r2 = r[s2:f2]
 
         r2 = r2.reshape(nvir,nocc,nocc)
-        r2_a = r2 - r2.transpose(0,2,1).copy()
 
         eris_ovoo = eris.ovoo
 
@@ -1147,20 +1141,18 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
 ################ ADC(2) ajk - bil block ############################
 
-        r2 = r2.reshape(-1)
-        s[s2:f2] += D_aij * r2
+        s[s2:f2] += D_aij * r2.reshape(-1)
 
 ############### ADC(3) ajk - bil block ############################
 
         if (method == "adc(2)-x" or method == "adc(3)"):
-
+        
+               r2_a = r2 - r2.transpose(0,2,1).copy()
                t2_2 = adc.t2[1]
 
                eris_oooo = eris.oooo
                eris_oovv = eris.oovv
                eris_ovvo = eris.ovvo
-               
-               r2 = r2.reshape(nvir, nocc, nocc)
                
                s[s2:f2] -= 0.5*np.einsum('kijl,ali->ajk',eris_oooo, r2, optimize = True).reshape(-1)
                s[s2:f2] -= 0.5*np.einsum('klji,ail->ajk',eris_oooo ,r2, optimize = True).reshape(-1)
@@ -1266,12 +1258,10 @@ def ea_compute_trans_moments(adc, orb):
     nocc = adc._nocc
     nvir = adc._nvir
 
-    ab_ind = np.tril_indices(nvir, k=-1)
-
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
 
-    dim = n_singles + n_doubles 
+    dim = n_singles + n_doubles
 
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
@@ -1359,8 +1349,6 @@ def ip_compute_trans_moments(adc, orb):
 
     nocc = adc._nocc
     nvir = adc._nvir
-
-    ij_ind = np.tril_indices(nocc, k=-1)
 
     n_singles = nocc
     n_doubles = nvir * nocc * nocc
@@ -1463,12 +1451,11 @@ def get_spec_factors_ea(adc, T, U, nroots=1):
         U1 = U[I, :n_singles]
         U2 = U[I, n_singles:].reshape(nocc,nvir,nvir)
         UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-        U1 /= np.sqrt(UdotU)
-        U2 /= np.sqrt(UdotU)
+        U[I,:] /= np.sqrt(UdotU)
 
     X = np.dot(T, U.T).reshape(-1, nroots)
 
-    P = np.einsum("pi,pi->i", X, X)
+    P = 2.0*np.einsum("pi,pi->i", X, X)
 
     return P
 
@@ -1486,12 +1473,11 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
         U1 = U[I, :n_singles]
         U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
         UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-        U1 /= np.sqrt(UdotU)
-        U2 /= np.sqrt(UdotU)
+        U[I,:] /= np.sqrt(UdotU)
 
     X = np.dot(T, U.T).reshape(-1, nroots)
 
-    P = np.einsum("pi,pi->i", X, X)
+    P = 2.0*np.einsum("pi,pi->i", X, X)
 
     return P
 
@@ -1579,6 +1565,7 @@ class RADCEA(RADC):
            guess.append(g[:,p])
        return guess
     
+
     def gen_matvec(self, imds=None, eris=None):
         if imds is None: imds = self.get_imds(eris)
         diag = self.get_diag(imds)
@@ -1690,81 +1677,81 @@ if __name__ == '__main__':
     mol.basis = {'N':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.build()
-    mf = scf.UHF(mol)
+    mf = scf.RHF(mol)
     mf.conv_tol = 1e-12
     mf.kernel()
 
     myadc = adc.ADC(mf)
     ecorr, t_amp1, t_amp2 = myadc.kernel()
-    print(ecorr -  -0.32201692499346535)
+    print(ecorr -  -0.3220169236051954)
 
-    myadcip = UADCIP(myadc)
+    myadcip = RADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(2) IP energies")
-    print (e[0] - 0.5434389897908212)
-    print (e[1] - 0.5434389942222756)
-    print (e[2] - 0.6240296265084732)
+    print (e[0] - 0.5434389910483670)
+    print (e[1] - 0.6240296243595950)
+    print (e[2] - 0.6240296243595956)
 
     print("ADC(2) IP spectroscopic factors")
-    print (p[0] - 0.884404855445607)
-    print (p[1] - 0.8844048539643351)
-    print (p[2] - 0.9096460559671828)
+    print (p[0] - 1.7688097076459075)
+    print (p[1] - 1.8192921131700284)
+    print (p[2] - 1.8192921131700293)
 
-    myadcea = UADCEA(myadc)
+    myadcea = RADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
     print("ADC(2) EA energies")
-    print (e[0] - 0.09617819143037348)
-    print (e[1] - 0.09617819161265123)
-    print (e[2] - 0.12583269048810924)
+    print (e[0] - 0.0961781923822576)
+    print (e[1] - 0.1258326916409743)
+    print (e[2] - 0.1380779405750178)
 
     print("ADC(2) EA spectroscopic factors")
-    print (p[0] - 0.991642716974455)
-    print (p[1] - 0.9916427170555298)
-    print (p[2] - 0.9817184409336244)
+    print (p[0] - 1.9832854445007961)
+    print (p[1] - 1.9634368668786559)
+    print (p[2] - 1.9783719593912672)
 
     myadc = adc.ADC(mf)
     myadc.method = "adc(3)"
     ecorr, t_amp1, t_amp2 = myadc.kernel()
     print(ecorr - -0.31694173142858517)
 
-    myadcip = UADCIP(myadc)
+    myadcip = RADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(3) IP energies")
-    print (e[0] - 0.5667526838174817)
-    print (e[1] - 0.5667526888293601)
-    print (e[2] - 0.6099995181296374)
+    print (e[0] - 0.5667526829981027)
+    print (e[1] - 0.6099995170092525)
+    print (e[2] - 0.6099995170092529)
 
     print("ADC(3) IP spectroscopic factors")
-    print (p[0] - 0.9086596203469742)
-    print (p[1] - 0.9086596190173993)
-    print (p[2] - 0.9214613318791076)
+    print (p[0] - 1.8173191958988848)
+    print (p[1] - 1.8429224413853840)
+    print (p[2] - 1.8429224413853851)
 
-    myadcea = UADCEA(myadc)
+    myadcea = RADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
 
     print("ADC(3) EA energies")
-    print (e[0] - 0.09836545519235675)
-    print (e[1] - 0.09836545535587536)
-    print (e[2] - 0.12957093060942082)
+    print (e[0] - 0.0936790850738445)
+    print (e[1] - 0.0983654552141278)
+    print (e[2] - 0.1295709313652367)
 
     print("ADC(3) EA spectroscopic factors")
-    print (p[0] - 0.9920495578633931)
-    print (p[1] - 0.992049557938337)
-    print (p[2] - 0.9819274864738444)
+    print (p[0] - 1.8324175318668088)
+    print (p[1] - 1.9840991060607487)
+    print (p[2] - 1.9638550014980212)
 
     myadc.method = "adc(2)-x"
     myadc.kernel()
 
     e,v,p = myadc.ip_adc(nroots=4)
     print("ADC(2)-x IP energies")
-    print (e[0] - 0.5405255355249104)
-    print (e[1] - 0.5405255399061982)
-    print (e[2] - 0.62080267098272)
-    print (e[3] - 0.620802670982715)
+    print (e[0] - 0.5405255360673724)
+    print (e[1] - 0.6208026698756577)
+    print (e[2] - 0.6208026698756582)
+    print (e[3] - 0.6465332771967947)
 
     e,v,p = myadc.ea_adc(nroots=4)
     print("ADC(2)-x EA energies")
-    print (e[0] - 0.09530653292650725)
-    print (e[1] - 0.09530653311305577)
-    print (e[2] - 0.1238833077840878)
-    print (e[3] - 0.12388330873739162)
+    print (e[0] - 0.0953065329985665)
+    print (e[1] - 0.1238833070823509)
+    print (e[2] - 0.1365693811939308)
+    print (e[3] - 0.1365693811939316)

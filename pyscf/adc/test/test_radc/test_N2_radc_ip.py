@@ -30,7 +30,7 @@ mol.atom = [
 mol.basis = {'N':'aug-cc-pvdz'}
 mol.verbose = 0
 mol.build()
-mf = scf.UHF(mol)
+mf = scf.RHF(mol)
 mf.conv_tol = 1e-12
 mf.kernel()
 myadc = adc.ADC(mf)
@@ -41,66 +41,64 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_ea_adc2(self):
+    def test_ip_adc2(self):
   
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.ea_adc(nroots=3)
+        e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.09617819142992463, 6)
-        self.assertAlmostEqual(e[1], 0.09617819161216855, 6)
-        self.assertAlmostEqual(e[2], 0.1258326904883586, 6)
+        self.assertAlmostEqual(e[0], 0.5434389910483670, 6)
+        self.assertAlmostEqual(e[1], 0.6240296243595950, 6)
+        self.assertAlmostEqual(e[2], 0.6240296243595956, 6)
 
-        self.assertAlmostEqual(p[0], 0.9916427196092643, 6)
-        self.assertAlmostEqual(p[1], 0.9916427196903126, 6)
-        self.assertAlmostEqual(p[2], 0.9817184085436222, 6)
+        self.assertAlmostEqual(p[0], 1.7688097076459075, 6)
+        self.assertAlmostEqual(p[1], 1.8192921131700284, 6)
+        self.assertAlmostEqual(p[2], 1.8192921131700293, 6)
 
-    def test_ea_adc2_oneroot(self):
+    def test_ip_adc2_oneroot(self):
   
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.ea_adc()
+        e,v,p = myadc.ip_adc()
 
-        self.assertAlmostEqual(e, 0.09617819142992463, 6)
+        self.assertAlmostEqual(e, 0.5434389910483670, 6)
 
-        self.assertAlmostEqual(p[0], 0.9916427196092643, 6)
+        self.assertAlmostEqual(p[0], 1.7688097076459075, 6)
 
-    def test_ea_adc2x(self):
+    def test_ip_adc2x(self):
   
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.ea_adc(nroots=4)
+        e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.0953065329249756, 6)
-        self.assertAlmostEqual(e[1], 0.09530653311160658, 6)
-        self.assertAlmostEqual(e[2], 0.12388330778444741, 6)
-        self.assertAlmostEqual(e[3], 0.1238833087377404, 6)
+        self.assertAlmostEqual(e[0], 0.5405255360673243, 6)
+        self.assertAlmostEqual(e[1], 0.6208026698756092, 6)
+        self.assertAlmostEqual(e[2], 0.6208026698756107, 6)
 
-        self.assertAlmostEqual(p[0], 0.9890885390419444 , 6)
-        self.assertAlmostEqual(p[1],0.9890885391436558 , 6)
-        self.assertAlmostEqual(p[2],0.9757598335805556 , 6)
-        self.assertAlmostEqual(p[3],0.9757598335315953 , 6)
+        self.assertAlmostEqual(p[0], 1.7513284912002309, 6)
+        self.assertAlmostEqual(p[1], 1.8152869633769022, 6)
+        self.assertAlmostEqual(p[2], 1.8152869633769015, 6)
 
-    def test_ea_adc3(self):
+    def test_ip_adc3(self):
   
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.31694173142858517 , 6)
 
-        e,v,p = myadc.ea_adc(nroots=3)
+        e,v,p = myadc.ip_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.09836545519294707, 6)
-        self.assertAlmostEqual(e[1], 0.09836545535648182, 6)
-        self.assertAlmostEqual(e[2], 0.12957093060937017, 6)
+        self.assertAlmostEqual(e[0], 0.5667526829981027, 6)
+        self.assertAlmostEqual(e[1], 0.6099995170092525, 6)
+        self.assertAlmostEqual(e[2], 0.6099995170092529, 6)
 
-        self.assertAlmostEqual(p[0], 0.9920495595411523, 6)
-        self.assertAlmostEqual(p[1], 0.9920495596160825, 6)
-        self.assertAlmostEqual(p[2], 0.9819275025204279, 6)
+        self.assertAlmostEqual(p[0], 1.8173191958988848, 6)
+        self.assertAlmostEqual(p[1], 1.8429224413853840, 6)
+        self.assertAlmostEqual(p[2], 1.8429224413853851, 6)
       
 if __name__ == "__main__":
-    print("EA calculations for different ADC methods")
+    print("IP calculations for different RADC methods for nitrogen molecule")
     unittest.main()

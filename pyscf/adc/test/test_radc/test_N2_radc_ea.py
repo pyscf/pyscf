@@ -30,7 +30,7 @@ mol.atom = [
 mol.basis = {'N':'aug-cc-pvdz'}
 mol.verbose = 0
 mol.build()
-mf = scf.UHF(mol)
+mf = scf.RHF(mol)
 mf.conv_tol = 1e-12
 mf.kernel()
 myadc = adc.ADC(mf)
@@ -41,64 +41,66 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_ip_adc2(self):
+    def test_ea_adc2(self):
   
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.ip_adc(nroots=3)
+        e,v,p = myadc.ea_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.5434389897908212, 6)
-        self.assertAlmostEqual(e[1], 0.5434389942222756, 6)
-        self.assertAlmostEqual(e[2], 0.6240296265084732, 6)
+        self.assertAlmostEqual(e[0], 0.0961781923822576, 6)
+        self.assertAlmostEqual(e[1], 0.1258326916409743, 6)
+        self.assertAlmostEqual(e[2], 0.1380779405750178, 6)
 
-        self.assertAlmostEqual(p[0], 0.884404855445607, 6)
-        self.assertAlmostEqual(p[1], 0.8844048539643351, 6)
-        self.assertAlmostEqual(p[2], 0.9096460559671828, 6)
+        self.assertAlmostEqual(p[0], 1.9832854445007961, 6)
+        self.assertAlmostEqual(p[1], 1.9634368668786559, 6)
+        self.assertAlmostEqual(p[2], 1.9783719593912672, 6)
 
-    def test_ip_adc2_oneroot(self):
+    def test_ea_adc2_oneroot(self):
   
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.ip_adc()
+        e,v,p = myadc.ea_adc()
 
-        self.assertAlmostEqual(e, 0.5434389897908212, 6)
+        self.assertAlmostEqual(e, 0.0961781923822576, 6)
 
-        self.assertAlmostEqual(p[0], 0.884404855445607, 6)
+        self.assertAlmostEqual(p[0], 1.9832854445007961, 6)
 
-    def test_ip_adc2x(self):
+    def test_ea_adc2x(self):
   
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.ip_adc(nroots=3)
+        e,v,p = myadc.ea_adc(nroots=4)
 
-        self.assertAlmostEqual(e[0], 0.5405255355249104, 6)
-        self.assertAlmostEqual(e[1], 0.5405255399061982, 6)
-        self.assertAlmostEqual(e[2], 0.62080267098272, 6)
+        self.assertAlmostEqual(e[0], 0.0953065329895602, 6)
+        self.assertAlmostEqual(e[1], 0.1238833071439568, 6)
+        self.assertAlmostEqual(e[2], 0.1365693813556231, 6)
+        self.assertAlmostEqual(e[3], 0.1365693813556253, 6)
 
-        self.assertAlmostEqual(p[0], 0.875664254715628 , 6)
-        self.assertAlmostEqual(p[1], 0.8756642844804134 , 6)
-        self.assertAlmostEqual(p[2], 0.9076434703549277, 6)
+        self.assertAlmostEqual(p[0],1.9781770712894666, 6)
+        self.assertAlmostEqual(p[1],1.9515196916710356, 6)
+        self.assertAlmostEqual(p[2],1.9689940350592570, 6)
+        self.assertAlmostEqual(p[3],1.9689940350592559, 6)
 
-    def test_ip_adc3(self):
+    def test_ea_adc3(self):
   
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel()
         self.assertAlmostEqual(e, -0.31694173142858517 , 6)
 
-        e,v,p = myadc.ip_adc(nroots=3)
+        e,v,p = myadc.ea_adc(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.5667526838174817, 6)
-        self.assertAlmostEqual(e[1], 0.5667526888293601, 6)
-        self.assertAlmostEqual(e[2], 0.6099995181296374, 6)
+        self.assertAlmostEqual(e[0], 0.0936790850738445, 6)
+        self.assertAlmostEqual(e[1], 0.0983654552141278, 6)
+        self.assertAlmostEqual(e[2], 0.1295709313652367, 6)
 
-        self.assertAlmostEqual(p[0], 0.9086596203469742, 6)
-        self.assertAlmostEqual(p[1], 0.9086596190173993, 6)
-        self.assertAlmostEqual(p[2], 0.9214613318791076, 6)
+        self.assertAlmostEqual(p[0], 1.8324175318668088, 6)
+        self.assertAlmostEqual(p[1], 1.9840991060607487, 6)
+        self.assertAlmostEqual(p[2], 1.9638550014980212, 6)
       
 if __name__ == "__main__":
-    print("IP calculations for different ADC methods")
+    print("EA calculations for different RADC methods for nitrogen molecule")
     unittest.main()
