@@ -66,7 +66,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     return E, U, spec_factors
 
-
 def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     t1, t2 = myadc.compute_amplitudes(eris)
@@ -287,23 +286,20 @@ def compute_energy(myadc, t1, t2, eris):
         eris_vvvv = eris_vvvv.transpose(0,2,1,3)
         eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
         temp_1_a = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
+    
+        temp_2 = t2_1.reshape(nocc*nocc,nvir*nvir)
+        temp_1_ab = np.dot(temp_2,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
+        e_mp3 =  np.einsum('ijcd,ijcd',temp_1_ab, t2_1)
+        del temp_1_ab
+
         eris_vvvv = eris_vvvv[:].reshape(nvir,nvir,nvir,nvir)
         eris_vvvv = eris_vvvv.transpose(0,1,3,2)
         eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
         temp_1_a -= np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
         del eris_vvvv
-        e_mp3 = 0.25 * np.einsum('ijcd,ijcd',temp_1_a, t2_1_a)
+        e_mp3 += 0.25 * np.einsum('ijcd,ijcd',temp_1_a, t2_1_a)
         del temp_1_a
         
-        temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-        eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv, nvir)
-        eris_vvvv = eris_vvvv.transpose(0,2,1,3)
-        eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
-        temp_1_ab = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-        del eris_vvvv
-        e_mp3 +=  np.einsum('ijcd,ijcd',temp_1_ab, t2_1)
-        del temp_1_ab
-
         temp_2_a =  np.einsum('ijab,klab', t2_1_a, t2_1_a)
         e_mp3 += 0.25 * np.einsum('ijkl,ikjl',temp_2_a, eris_oooo)
         e_mp3 -= 0.25 * np.einsum('ijkl,iljk',temp_2_a, eris_oooo)
@@ -937,6 +933,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
     if M_ab is None:
         M_ab = adc.get_imds()
+    
     
     #Calculate sigma vector
     def sigma_(r):
