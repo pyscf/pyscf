@@ -455,6 +455,13 @@ def partial_cholesky_orth_(S, cholthr=1e-9, canthr=1e-7):
 
     return X
 
+def mo_orth_error_(s, x, ord='fro'):
+    ''' Computes the deviation from orthonormal orbitals '''
+    smo = numpy.dot(x.T, numpy.dot(s, x))
+    for i in range(smo.shape[0]):
+        smo[i,i] -= 1.0
+    return numpy.linalg.norm(smo, ord)
+
 def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
                        lindep=LINEAR_DEP_TRIGGER, cholesky_threshold=CHOLESKY_THRESHOLD):
     '''
@@ -475,8 +482,9 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     logger.debug(mf, 'Overlap condition number %g', cond)
     if(cond < 1./numpy.finfo(s.dtype).eps):
         logger.info(mf, 'Using canonical orthogonalization')
+        logger.debug(mf, 'Orbital orthonormality error %e', mo_orth_error_(s, canonical_orth_(s, thr=threshold)))
         def eigh(h, s):
-            x = canonical_orth_(s, threshold)
+            x = canonical_orth_(s, thr=threshold)
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
@@ -484,8 +492,9 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
         mf._eigh = eigh
     else:
         logger.info(mf, 'Using partial Cholesky orthogonalization (doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
+        logger.debug(mf, 'Orbital orthonormality error %e', mo_orth_error_(s, partial_cholesky_orth_(s, cholthr=cholesky_threshold, canthr=threshold)))
         def eigh(h, s):
-            x = partial_cholesky_orth_(s, threshold, cholesky_threshold)
+            x = partial_cholesky_orth_(s, cholthr=cholesky_threshold, canthr=threshold)
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
