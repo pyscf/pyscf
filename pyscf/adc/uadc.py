@@ -46,7 +46,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
-    E, U = lib.linalg_helper.davidson(matvec, guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space)
+    conv, E, U = lib.linalg_helper.davidson1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space)
 
     U = np.array(U)
 
@@ -56,12 +56,12 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if adc.verbose >= logger.INFO:
         if nroots == 1:
-            logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f',
-                         adc.method, 0, E, E*27.2114, spec_factors)
+            logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+                         adc.method, 0, E, E*27.2114, spec_factors, conv)
         else :
-            for n, en, pn in zip(range(nroots), E, spec_factors):
-                logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f',
-                          adc.method, n, en, en*27.2114, pn)
+            for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
+                logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+                          adc.method, n, en, en*27.2114, pn, convn)
         log.timer('ADC', *cput0)
 
     return E, U, spec_factors

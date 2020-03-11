@@ -60,7 +60,7 @@ def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
         return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
 
 def RADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    #__doc__ = radc.RADC.__doc__
+    __doc__ = radc.RADC.__doc__
 
     if (frozen != 0):
         raise NotImplementedError

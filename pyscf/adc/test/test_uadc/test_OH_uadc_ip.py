@@ -99,7 +99,7 @@ class KnownValues(unittest.TestCase):
 
         e,v,p = myadc.ip_adc(nroots=1)
 
-        self.assertAlmostEqual(e, 0.4794423247368058, 6)
+        self.assertAlmostEqual(e[0], 0.4794423247368058, 6)
 
         self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
 
