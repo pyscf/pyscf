@@ -47,12 +47,19 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
     conv, E, U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space)
+
     U = np.array(U)
 
     T = adc.get_trans_moments()
 
     spec_factors = adc.get_spec_factors(T, U, nroots)
    
+    nfalse = np.shape(conv)[0] - np.sum(conv)
+    if nfalse >= 1:
+        print ("*************************************************************")
+        print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
+        print ("*************************************************************")
+
     if adc.verbose >= logger.INFO:
         if nroots == 1:
             logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
@@ -134,7 +141,7 @@ def compute_amplitudes(myadc, eris):
         eris_ovvo = eris.ovvo
  
         temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-        eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv, nvir)
+        eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
         eris_vvvv = eris_vvvv.transpose(0,2,1,3)
         eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
         t2_2 = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
@@ -282,7 +289,7 @@ def compute_energy(myadc, t1, t2, eris):
         eris_oooo = eris.oooo
 
         temp = t2_1_a.reshape(nocc*nocc,nvir*nvir)
-        eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv, nvir)
+        eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
         eris_vvvv = eris_vvvv.transpose(0,2,1,3)
         eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
         temp_1_a = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
@@ -611,7 +618,7 @@ def get_imds_ea(adc, eris=None):
         M_ab += 0.25*np.einsum('mlbd,noad,nlom->ab',t2_1_a, t2_1_a, eris_oooo, optimize=True)
         M_ab -= np.einsum('mlbd,noad,nmol->ab',t2_1, t2_1, eris_oooo, optimize=True)
 
-        eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv, nvir)
+        eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
         M_ab -= 0.25*np.einsum('mlef,mlbd,aedf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
         M_ab += 0.25*np.einsum('mlef,mlbd,afde->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
         M_ab -= 0.25*np.einsum('mled,mlaf,ebdf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
@@ -769,7 +776,7 @@ def get_imds_ip(adc, eris=None):
         M_ij -= 0.25*np.einsum('lmde,jnde,lnmi->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
         M_ij += np.einsum('lmde,jnde,limn->ij',t2_1 ,t2_1, eris_oooo, optimize = True)
 
-        eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv, nvir)
+        eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
         M_ij += 0.25*np.einsum('ilde,jlgf,gdfe->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
         M_ij -= 0.25*np.einsum('ilde,jlgf,gefd->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
         M_ij +=np.einsum('ilde,jlgf,gdfe->ij',t2_1, t2_1, eris_vvvv, optimize = True)
@@ -976,7 +983,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                r2 = r2.reshape(nocc, nvir, nvir)
 
                r_bab_t = r2.reshape(nocc,-1)
-               eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv, nvir)
+               eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
                eris_vvvv = eris_vvvv.transpose(0,2,1,3)
                eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
                s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
