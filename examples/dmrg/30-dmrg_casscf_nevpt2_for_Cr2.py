@@ -48,11 +48,12 @@ mo = mc.sort_mo_by_irrep(cas_occ)
 mc.kernel(mo)
 
 #
-# DMRG-NEVPT2
+# DMRG-NEVPT2 (slow version)
+# not available since StackBlock 1.5.3
 #
-mrpt.NEVPT(mc).kernel()
+# mrpt.NEVPT(mc).kernel()
 
 #
 # The compressed-MPS-perturber DMRG-NEVPT2 is more efficient.
 #
-mrpt.NEVPT(mc).compress_approx()
+mrpt.NEVPT(mc).compress_approx().kernel()
