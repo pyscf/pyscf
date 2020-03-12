@@ -196,7 +196,7 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
     return -dm1occ, dm1vir
 
 
-def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None):
+def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     r'''
     Frozen natural orbitals
 
@@ -215,11 +215,12 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None):
     idx = numpy.argsort(n)[::-1]
     n,v = n[idx], v[:,idx]
 
-    if pct_occ is None:
-        nvir_act = numpy.count_nonzero(n>thresh)
-    else:
-        print(numpy.cumsum(n/numpy.sum(n)))
-        nvir_act = numpy.count_nonzero(numpy.cumsum(n/numpy.sum(n))<pct_occ)
+    if nvir_act is None:
+        if pct_occ is None:
+            nvir_act = numpy.count_nonzero(n>thresh)
+        else:
+            print(numpy.cumsum(n/numpy.sum(n)))
+            nvir_act = numpy.count_nonzero(numpy.cumsum(n/numpy.sum(n))<pct_occ)
 
     fvv = numpy.diag(mf.mo_energy[nocc:])
     fvv_no = numpy.dot(v.T, numpy.dot(fvv, v))
