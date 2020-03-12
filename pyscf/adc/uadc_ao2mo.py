@@ -39,6 +39,8 @@ def transform_integrals_incore(myadc):
     ind_vv = np.tril_indices(nvir_a)
     ind_OO = np.tril_indices(nocc_b)
     ind_VV = np.tril_indices(nvir_b)
+    ind_vv_g = np.tril_indices(nvir_a, k=-1)
+    ind_VV_g = np.tril_indices(nvir_b, k=-1)
    
     eris = lambda:None
 
@@ -74,5 +76,20 @@ def transform_integrals_incore(myadc):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=True)
         eris.VVVV = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=True)
         eris.vvVV = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=True)
+
+#        eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=False)
+#        eris.vvvv_p = eris.vvvv_asym.transpose(0,2,1,3)
+#        eris.vvvv_p -= eris.vvvv_asym.transpose(0,1,3,2)
+#        eris.vvvv_p = eris.vvvv_asym[:, :, ind_vv_g[0], ind_vv_g[1]]
+#        eris.vvvv_p = eris.vvvv_asym[ind_vv_g[0], ind_vv_g[1]].copy()
+#
+#        eris.VVVV_p = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=False)
+#        eris.VVVV_p = eris.VVVV_asym.transpose(0,2,1,3)
+#        eris.VVVV_p -= eris.VVVV_asym.transpose(0,1,3,2)
+#        eris.VVVV_p = eris.VVVV_asym[:, :, ind_VV_g[0], ind_VV_g[1]]
+#        eris.VVVV_p = eris.VVVV_asym[ind_VV_g[0], ind_VV_g[1]].copy()
+#
+#        eris.vVvV_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=False)
+#        eris.vVvV_p = np.ascontiguousarray(eris.vVvV_asym.transpose(0,2,1,3)) # verify if this is contiguous
 
     return eris
