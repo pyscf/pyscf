@@ -27,11 +27,15 @@ def transform_integrals_incore(myadc):
 
     nocc = occ.shape[1]
     nvir = vir.shape[1]
-    n_oo = nocc * (nocc + 1) // 2
-    n_vv = nvir * (nvir + 1) // 2
-    ind_oo = np.tril_indices(nocc)
-    ind_vv = np.tril_indices(nvir)
+    #n_oo = nocc * (nocc + 1) // 2
+    #n_vv = nvir * (nvir + 1) // 2
+    #ind_oo = np.tril_indices(nocc)
+    #ind_vv = np.tril_indices(nvir)
    
+    n_oo = nocc * (nocc - 1) // 2
+    n_vv = nvir * (nvir - 1) // 2
+    ind_oo = np.tril_indices(nocc,k=-1)
+    ind_vv = np.tril_indices(nvir,k=-1)
     eris = lambda:None
 
     # TODO: check if myadc._scf._eri is not None
@@ -96,13 +100,42 @@ def unpack_eri_2s(eri, norb):
 
     return eri_
 
+
+def unpack_eri_2sn(eri, norb):
+
+    #n_oo = norb * (norb + 1) // 2
+    #ind_oo = np.tril_indices(norb)
+    n_oo = norb * (norb - 1) // 2
+    ind_oo = np.tril_indices(norb,k=-1)
+
+    eri_ = None
+
+    if len(eri.shape) == 2:
+        if (eri.shape[0] != n_oo or eri.shape[1] != n_oo):
+            raise TypeError("ERI dimensions don't match")
+
+        temp = np.zeros((n_oo, norb, norb))
+        temp[:, ind_oo[0], ind_oo[1]] = eri
+        temp[:, ind_oo[1], ind_oo[0]] = -eri
+        eri_ = np.zeros((norb, norb, norb, norb))
+        eri_[ind_oo[0], ind_oo[1]] = temp
+        eri_[ind_oo[1], ind_oo[0]] = -temp
+    else: 
+            raise RuntimeError("ERI does not have a correct dimension")
+
+    return eri_
+
 def unpack_eri_2(eri, norb1, norb2):
 
-    n_oo1 = norb1 * (norb1 + 1) // 2
-    ind_oo1 = np.tril_indices(norb1)
-    n_oo2 = norb2 * (norb2 + 1) // 2
-    ind_oo2 = np.tril_indices(norb2)
+    #n_oo1 = norb1 * (norb1 + 1) // 2
+    #ind_oo1 = np.tril_indices(norb1)
+    #n_oo2 = norb2 * (norb2 + 1) // 2
+    #ind_oo2 = np.tril_indices(norb2)
 
+    n_oo1 = norb1 * (norb1 - 1) // 2
+    ind_oo1 = np.tril_indices(norb1,k=-1)
+    n_oo2 = norb2 * (norb2 - 1) // 2
+    ind_oo2 = np.tril_indices(norb2,k=-1)
     eri_ = None
 
     if len(eri.shape) == 2:
@@ -111,10 +144,10 @@ def unpack_eri_2(eri, norb1, norb2):
 
         temp = np.zeros((n_oo1, norb2, norb2))
         temp[:, ind_oo2[0], ind_oo2[1]] = eri
-        temp[:, ind_oo2[1], ind_oo2[0]] = eri
+        temp[:, ind_oo2[1], ind_oo2[0]] = -eri
         eri_ = np.zeros((norb1, norb1, norb2, norb2))
         eri_[ind_oo1[0], ind_oo1[1]] = temp
-        eri_[ind_oo1[1], ind_oo1[0]] = temp
+        eri_[ind_oo1[1], ind_oo1[0]] = -temp
     else: 
             raise RuntimeError("ERI does not have a correct dimension")
 

@@ -73,23 +73,23 @@ def transform_integrals_incore(myadc):
     eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-        eris.vvvv = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=True)
-        eris.VVVV = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=True)
-        eris.vvVV = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=True)
+#        eris.vvvv = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=True)
+#        eris.VVVV = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=True)
+#        eris.vvVV = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=True)
 
-#        eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=False)
-#        eris.vvvv_p = eris.vvvv_asym.transpose(0,2,1,3)
-#        eris.vvvv_p -= eris.vvvv_asym.transpose(0,1,3,2)
-#        eris.vvvv_p = eris.vvvv_asym[:, :, ind_vv_g[0], ind_vv_g[1]]
-#        eris.vvvv_p = eris.vvvv_asym[ind_vv_g[0], ind_vv_g[1]].copy()
-#
-#        eris.VVVV_p = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=False)
-#        eris.VVVV_p = eris.VVVV_asym.transpose(0,2,1,3)
-#        eris.VVVV_p -= eris.VVVV_asym.transpose(0,1,3,2)
-#        eris.VVVV_p = eris.VVVV_asym[:, :, ind_VV_g[0], ind_VV_g[1]]
-#        eris.VVVV_p = eris.VVVV_asym[ind_VV_g[0], ind_VV_g[1]].copy()
-#
-#        eris.vVvV_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=False)
-#        eris.vVvV_p = np.ascontiguousarray(eris.vVvV_asym.transpose(0,2,1,3)) # verify if this is contiguous
+        eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=False).reshape(nvir_a, nvir_a, nvir_a, nvir_a)
+        eris.vvvv_p = eris.vvvv_p.transpose(0,2,1,3)
+        eris.vvvv_p -= eris.vvvv_p.transpose(0,1,3,2)
+        eris.vvvv_p = eris.vvvv_p[:, :, ind_vv_g[0], ind_vv_g[1]]
+        eris.vvvv_p = eris.vvvv_p[ind_vv_g[0], ind_vv_g[1]].copy()
+
+        eris.VVVV_p = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=False).reshape(nvir_b, nvir_b, nvir_b, nvir_b)
+        eris.VVVV_p = eris.VVVV_p.transpose(0,2,1,3)
+        eris.VVVV_p -= eris.VVVV_p.transpose(0,1,3,2)
+        eris.VVVV_p = eris.VVVV_p[:, :, ind_VV_g[0], ind_VV_g[1]]
+        eris.VVVV_p = eris.VVVV_p[ind_VV_g[0], ind_VV_g[1]].copy()
+
+        eris.vVvV_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=False).reshape(nvir_a, nvir_a, nvir_b, nvir_b)
+        eris.vVvV_p = np.ascontiguousarray(eris.vVvV_p.transpose(0,2,1,3)) # verify if this is contiguous
 
     return eris
