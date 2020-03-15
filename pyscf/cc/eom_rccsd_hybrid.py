@@ -13,9 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#         James D. McClain
-#         Timothy Berkelbach <tim.berkelbach@gmail.com>
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
 import time
@@ -55,7 +53,7 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     fock = imds.eris.fock
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
-    FVV_DIAG = False 
+    FVV_DIAG = False
     if FVV_DIAG:
         Hr2 = lib.einsum('bb,ijb->ijb', fvv, r2)
     else:
@@ -66,12 +64,12 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     # then zero out the internal amplitudes, to start over
     Hr2[ija_act] = 0.
     # now do a full update of internal amplitudes
-    SYM = True 
+    SYM = True
     if SYM:
         r2_in = np.zeros_like(r2)
         r2_in[ija_act] = np.copy(r2)[ija_act]
     else:
-        r2_in = np.copy(r2) 
+        r2_in = np.copy(r2)
     Hr2[ija_act] += lib.einsum('bd,ijd->ijb', imds.Lvv, r2_in)[ija_act]
     Hr2[ija_act] += -lib.einsum('ki,kjb->ijb', imds.Loo, r2_in)[ija_act]
     Hr2[ija_act] += -lib.einsum('lj,ilb->ijb', imds.Loo, r2_in)[ija_act]
@@ -125,7 +123,7 @@ def ipccsd_diag(eom, imds=None):
 
 
 class HybridEOMIP(EOMIP):
-    
+
     def __init__(self, cc, nvir_act=0):
         EOMIP.__init__(self, cc)
         self.nvir_act = nvir_act
@@ -165,7 +163,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     fock = imds.eris.fock
     foo = fock[:nocc,:nocc]
     fvv = fock[nocc:,nocc:]
-    FVV_DIAG = False 
+    FVV_DIAG = False
     if FVV_DIAG:
         Hr2 =  lib.einsum('aa,jab->jab', fvv, r2)
         Hr2 +=  lib.einsum('bb,jab->jab', fvv, r2)
@@ -176,12 +174,12 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     # then zero out the internal amplitudes, to start over
     Hr2[iab_act] = 0.
     # now do a full update of internal amplitudes
-    SYM = True 
+    SYM = True
     if SYM:
         r2_in = np.zeros_like(r2)
         r2_in[iab_act] = np.copy(r2)[iab_act]
     else:
-        r2_in = np.copy(r2) 
+        r2_in = np.copy(r2)
     Hr2[iab_act] +=  lib.einsum('ac,jcb->jab', imds.Lvv, r2_in)[iab_act]
     Hr2[iab_act] +=  lib.einsum('bd,jad->jab', imds.Lvv, r2_in)[iab_act]
     Hr2[iab_act] += -lib.einsum('lj,lab->jab', imds.Loo, r2_in)[iab_act]
@@ -273,8 +271,6 @@ if __name__ == '__main__':
     print(e[0] - 0.43356041409195489)
     print(e[1] - 0.51876598058509493)
     print(e[2] - 0.6782879569941862 )
-
-    xxx
 
     myeom = HybridEOMEA(mycc)
     print("EA energies... (right eigenvector)")
