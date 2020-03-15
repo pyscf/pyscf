@@ -393,7 +393,7 @@ def _guess_wfnsym(ci, strsa, strsb, orbsym):
         idx = numpy.argmax(abs(ci))
     else:
         assert(ci[0].size == na*nb)
-        idx = ci[0].argmax()
+        idx = abs(ci[0]).argmax()
     stra = strsa[idx // nb]
     strb = strsb[idx % nb ]
 
