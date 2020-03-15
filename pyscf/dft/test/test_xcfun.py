@@ -173,6 +173,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(rho[0],f[1]), -3391.2428894571085, 6)
         self.assertAlmostEqual(numpy.dot(rho[0],f[2]), 0, 9)
 
+    #def test_tpss(self):
+    #    #FIXME: raised numerical error
+    #    rho_a = numpy.array([[3.67808547e-08,-2.02358682e-08, 2.16729780e-07, 2.27036045e-07,-1.47795869e-07,-1.45668997e-09]]).T
+    #    e, v = dft.xcfun.eval_xc('tpss,', rho_a, spin=0, deriv=1)[:2]
+    #    rho_b = numpy.array([[4.53272893e-06, 4.18968775e-06,-2.83034672e-06, 2.61832978e-06, 5.63360737e-06, 8.97541777e-07]]).T
+    #    e, v = dft.xcfun.eval_xc('tpss,', (rho_a, rho_b), spin=1, deriv=1)[:2]
+
     def test_beckex(self):
         rho =(numpy.array([1.    , 1., 0., 0.]).reshape(-1,1),
               numpy.array([    .8, 1., 0., 0.]).reshape(-1,1))

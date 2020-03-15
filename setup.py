@@ -401,7 +401,7 @@ if 1:
     libxc_lib_path = search_lib_path('libxc'+so_ext, [pyscf_lib_dir,
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
-                                     version='4.0.0')
+                                     version='5')
     libxc_inc_path = search_inc_path('xc.h', [pyscf_lib_dir,
                                               os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libxc_lib_path and libxc_inc_path:
@@ -417,7 +417,7 @@ if 1:
     else:
         print("****************************************************************")
         print("*** WARNING: libxc library not found.")
-        print("* You can download libxc library from http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz")
+        print("* You can download libxc library from http://www.tddft.org/programs/libxc/down.php?file=4.3.4/libxc-4.3.4.tar.gz")
         print("* libxc library needs to be compiled with the flag --enable-shared")
         print("* May need to set PYSCF_INC_DIR if libxc library was not installed in the")
         print("* system standard install path (/usr, /usr/local, etc). Eg")
