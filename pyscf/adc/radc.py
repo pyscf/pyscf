@@ -80,7 +80,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
-##@profile
+@profile
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -141,11 +141,8 @@ def compute_amplitudes(myadc, eris):
         eris_ovvo = eris.ovvo
  
         temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-        eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
-        eris_vvvv = eris_vvvv.transpose(0,2,1,3)
-        eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
+        eris_vvvv = eris.vvvv
         t2_2 = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-        del eris_vvvv
 
         t2_2 += np.einsum('kilj,klab->ijab',eris_oooo,t2_1,optimize=True)
         t2_2 += np.einsum('kcbj,kica->ijab',eris_ovvo,t2_1_a,optimize=True)
@@ -257,7 +254,7 @@ def compute_amplitudes(myadc, eris):
     return t1, t2
 
 
-##@profile
+@profile
 def compute_energy(myadc, t1, t2, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -289,10 +286,8 @@ def compute_energy(myadc, t1, t2, eris):
         eris_ovvo = eris.ovvo
         eris_oooo = eris.oooo
 
+        eris_vvvv = eris.vvvv
         temp = t2_1_a.reshape(nocc*nocc,nvir*nvir)
-        eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
-        eris_vvvv = eris_vvvv.transpose(0,2,1,3)
-        eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
         temp_1_a = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
     
         temp_2 = t2_1.reshape(nocc*nocc,nvir*nvir)
@@ -300,11 +295,11 @@ def compute_energy(myadc, t1, t2, eris):
         e_mp3 =  np.einsum('ijcd,ijcd',temp_1_ab, t2_1)
         del temp_1_ab
 
-        eris_vvvv = eris_vvvv[:].reshape(nvir,nvir,nvir,nvir)
-        eris_vvvv = eris_vvvv.transpose(0,1,3,2)
-        eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
-        temp_1_a -= np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-        del eris_vvvv
+        eris_vvvv_t = eris_vvvv.copy().reshape(nvir,nvir,nvir,nvir)
+        eris_vvvv_t = np.ascontiguousarray(eris_vvvv_t.transpose(0,1,3,2))
+        eris_vvvv_t = eris_vvvv_t.reshape(nvir*nvir,nvir*nvir)
+        temp_1_a -= np.dot(temp,eris_vvvv_t.T).reshape(nocc,nocc,nvir,nvir)
+        del eris_vvvv_t
         e_mp3 += 0.25 * np.einsum('ijcd,ijcd',temp_1_a, t2_1_a)
         del temp_1_a
         
@@ -466,7 +461,7 @@ class RADC(lib.StreamObject):
     def ip_adc(self, nroots=1, guess=None):
         return RADCIP(self).kernel(nroots, guess)
 
-#@profile
+@profile
 def get_imds_ea(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -619,20 +614,21 @@ def get_imds_ea(adc, eris=None):
         M_ab += 0.25*np.einsum('mlbd,noad,nlom->ab',t2_1_a, t2_1_a, eris_oooo, optimize=True)
         M_ab -= np.einsum('mlbd,noad,nmol->ab',t2_1, t2_1, eris_oooo, optimize=True)
 
-        eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
-        M_ab -= 0.25*np.einsum('mlef,mlbd,aedf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        M_ab += 0.25*np.einsum('mlef,mlbd,afde->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        M_ab -= 0.25*np.einsum('mled,mlaf,ebdf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        M_ab += 0.25*np.einsum('mled,mlaf,efdb->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        M_ab -= 0.5*np.einsum('mldf,mled,abef->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        M_ab += 0.5*np.einsum('mldf,mled,afeb->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        M_ab += np.einsum('mlfd,mled,abef->ab',t2_1, t2_1, eris_vvvv, optimize=True)
-        M_ab -= np.einsum('mlfd,mled,afeb->ab',t2_1, t2_1, eris_vvvv, optimize=True)
-        M_ab -= np.einsum('mlef,mlbd,aedf->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
-        M_ab -= np.einsum('mled,mlaf,ebdf->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
-        M_ab -= 0.5*np.einsum('mldf,mled,abef->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        M_ab += np.einsum('mldf,mlde,abef->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
-        del eris_vvvv
+        eris_vvvv = eris.vvvv
+        eris_vvvv = eris_vvvv.reshape(nvir,nvir,nvir,nvir)
+        M_ab -= 0.25*np.einsum('mlef,mlbd,adef->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab += 0.25*np.einsum('mlef,mlbd,adfe->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab -= 0.25*np.einsum('mled,mlaf,edbf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab += 0.25*np.einsum('mled,mlaf,edfb->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab -= 0.5*np.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab += 0.5*np.einsum('mldf,mled,aefb->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab += np.einsum('mlfd,mled,aebf->ab',t2_1, t2_1, eris_vvvv, optimize=True)
+        M_ab -= np.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, eris_vvvv, optimize=True)
+        M_ab -= np.einsum('mlef,mlbd,adef->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
+        M_ab -= np.einsum('mled,mlaf,edbf->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
+        M_ab -= 0.5*np.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
+        M_ab += np.einsum('mldf,mlde,aebf->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
+        eris_vvvv = eris_vvvv.reshape(nvir*nvir,nvir*nvir)
 
         #eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
         #M_ab -= 0.25*lib.einsum('mlef,mlbd,aedf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
@@ -649,13 +645,10 @@ def get_imds_ea(adc, eris=None):
         #M_ab += lib.einsum('mldf,mlde,abef->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
         #del eris_vvvv
 
-    print (np.linalg.norm(M_ab))
-    exit()
-
     return M_ab
 
 
-##@profile
+###@profile
 def get_imds_ip(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -828,9 +821,6 @@ def get_imds_ip(adc, eris=None):
         M_ij -= np.einsum('lnde,lmde,jinm->ij',t2_1, t2_1, eris_oooo, optimize = True)
         M_ij -= 0.5 * np.einsum('lnde,lmde,jinm->ij',t2_1_a, t2_1_a, eris_oooo, optimize = True)
 
-    print (np.linalg.norm(M_ij))
-    exit()
-
     return M_ij
 
 
@@ -878,7 +868,7 @@ def ea_adc_diag(adc,M_ab=None):
     return diag
 
 
-##@profile
+###@profile
 def ip_adc_diag(adc,M_ij=None):
    
     if M_ij is None:
@@ -966,6 +956,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         M_ab = adc.get_imds()
     
     #Calculate sigma vector
+    @profile 
     def sigma_(r):
 
         s = np.zeros((dim))
@@ -1007,11 +998,8 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                r2 = r2.reshape(nocc, nvir, nvir)
 
                r_bab_t = r2.reshape(nocc,-1)
-               eris_vvvv = radc_ao2mo.unpack_eri_2s(eris.vvvv, nvir)
-               eris_vvvv = eris_vvvv.transpose(0,2,1,3)
-               eris_vvvv = eris_vvvv.copy()[:].reshape(nvir*nvir,nvir*nvir)
+               eris_vvvv = eris.vvvv
                s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
-               del eris_vvvv
 
                s[s2:f2] -= 0.5*np.einsum('jzyi,jzx->ixy',eris_ovvo,r2_a,optimize = True).reshape(-1)
                s[s2:f2] -= 0.5*np.einsum('jiyz,jxz->ixy',eris_oovv,r2,optimize = True).reshape(-1)
@@ -1141,7 +1129,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         M_ij = adc.get_imds()
 
     #Calculate sigma vector
-    ##@profile
+    ###@profile
     def sigma_(r):
 
         s = np.zeros((dim))
@@ -1364,7 +1352,7 @@ def ea_compute_trans_moments(adc, orb):
     return T
 
 
-##@profile
+###@profile
 def ip_compute_trans_moments(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -1451,7 +1439,7 @@ def ip_compute_trans_moments(adc, orb):
     return T
 
 
-##@profile
+@profile
 def get_trans_moments(adc):
 
     nmo  = adc.nmo
@@ -1489,7 +1477,7 @@ def get_spec_factors_ea(adc, T, U, nroots=1):
 
     return P
 
-##@profile
+###@profile
 def get_spec_factors_ip(adc, T, U, nroots=1):
 
     nocc = adc._nocc

@@ -49,7 +49,10 @@ def transform_integrals_incore(myadc):
     eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-        eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=True)
+        #eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=True)
+        eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=False).reshape(nvir, nvir, nvir, nvir)
+        eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3)) 
+        eris.vvvv = eris.vvvv.reshape(nvir*nvir, nvir*nvir)
 
     return eris
 

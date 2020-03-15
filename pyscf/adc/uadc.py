@@ -225,7 +225,6 @@ def compute_amplitudes(myadc, eris):
         temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
         eris_vVvV = eris.vVvV_p
         t2_2_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
-        del eris_vVvV
 
         t2_2_ab += np.einsum('kilj,klab->ijab',eris_ooOO,t2_1_ab,optimize=True)
         t2_2_ab += np.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_a,optimize=True)
@@ -496,7 +495,6 @@ def compute_energy(myadc, t1, t2, eris):
         temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
         eris_vVvV = eris.vVvV_p
         temp_1_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
-        del eris_vVvV
         e_mp3 +=  np.einsum('ijcd,ijcd',temp_1_ab, t2_1_ab)
         del temp_1_ab
 
@@ -969,7 +967,8 @@ def get_imds_ea(adc, eris=None):
         M_ab_b += np.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
         del eris_VVVV
 
-        eris_vVvV = eris.vVvV_p.reshape(nvir_a,nvir_b,nvir_a,nvir_b)
+        eris_vVvV = eris.vVvV_p
+        eris_vVvV = eris_vVvV.reshape(nvir_a,nvir_b,nvir_a,nvir_b)
         M_ab_a -= np.einsum('mlef,mlbd,adef->ab',t2_1_ab, t2_1_ab,   eris_vVvV, optimize=True)
         M_ab_a -= np.einsum('mled,mlaf,edbf->ab',t2_1_ab, t2_1_ab,   eris_vVvV, optimize=True)
         M_ab_a -= 0.5*np.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b, eris_vVvV, optimize=True)
@@ -979,7 +978,7 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= np.einsum('mled,mlfa,edfb->ab',t2_1_ab, t2_1_ab,   eris_vVvV, optimize=True)
         M_ab_b -= 0.5*np.einsum('mldf,mled,eafb->ab',t2_1_a, t2_1_a, eris_vVvV, optimize=True)
         M_ab_b += np.einsum('mlfd,mled,eafb->ab',t2_1_ab, t2_1_ab,   eris_vVvV, optimize=True)
-        del eris_vVvV
+        eris_vVvV = eris_vVvV.reshape(nvir_a*nvir_b,nvir_a*nvir_b)
 
     M_ab = (M_ab_a, M_ab_b)
 
@@ -1243,10 +1242,10 @@ def get_imds_ip(adc, eris=None):
         M_ij_b += 0.25 * np.einsum('ilde,jlgf,gfde->ij',t2_1_b, t2_1_b, eris_VVVV, optimize = True)
         del eris_VVVV
 
-        eris_vVvV = eris.vVvV_p.reshape(nvir_a,nvir_b,nvir_a,nvir_b)
+        eris_vVvV = eris_vVvV.reshape(nvir_a,nvir_b,nvir_a,nvir_b)
         M_ij_a +=np.einsum('ilde,jlgf,gfde->ij',t2_1_ab, t2_1_ab,eris_vVvV, optimize = True)
         M_ij_b +=np.einsum('lied,ljfg,fged->ij',t2_1_ab, t2_1_ab,eris_vVvV, optimize = True)
-        del eris_vVvV
+        eris_vVvV = eris_vVvV.reshape(nvir_a*nvir_b,nvir_a*nvir_b)
 
         M_ij_a += 0.25*np.einsum('inde,lmde,jlnm->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
         M_ij_a -= 0.25*np.einsum('inde,lmde,jmnl->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
@@ -1304,7 +1303,7 @@ def get_imds_ip(adc, eris=None):
 
     return M_ij
 
-##@profile
+
 def ea_adc_diag(adc,M_ab=None):
 
     if M_ab is None:
@@ -1393,7 +1392,7 @@ def ea_adc_diag(adc,M_ab=None):
 
     return diag
 
-#@profile
+
 def ip_adc_diag(adc,M_ij=None):
    
     if M_ij is None:
@@ -1568,7 +1567,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     M_ab_a, M_ab_b = M_ab
     
     #Calculate sigma vector
-    ##@profile
     def sigma_(r):
 
         s = np.zeros((dim))
@@ -1673,7 +1671,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                eris_vVvV = eris.vVvV_p
                s[s_bab:f_bab] += np.dot(r_bab_t,eris_vVvV.T).reshape(-1)
                temp_1 = np.dot(r_aba_t,eris_vVvV.T).reshape(nocc_a, nvir_a,nvir_b)
-               del eris_vVvV
                s[s_aba:f_aba] += temp_1.transpose(0,2,1).copy().reshape(-1)
 
                temp = 0.5*np.einsum('jiyz,jzx->ixy',eris_oovv,r_aaa_u,optimize = True)
@@ -1930,7 +1927,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
     return sigma_
 
-#@profile
+
 def ip_adc_matvec(adc, M_ij=None, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -2011,7 +2008,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     M_ij_a, M_ij_b = M_ij
 
     #Calculate sigma vector
-    #@profile
     def sigma_(r):
 
         s = np.zeros((dim))
@@ -2712,7 +2708,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
     return T
 
-#@profile
+
 def get_trans_moments(adc):
 
     nmo_a  = adc.nmo_a
