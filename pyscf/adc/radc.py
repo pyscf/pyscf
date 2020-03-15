@@ -828,6 +828,9 @@ def get_imds_ip(adc, eris=None):
         M_ij -= np.einsum('lnde,lmde,jinm->ij',t2_1, t2_1, eris_oooo, optimize = True)
         M_ij -= 0.5 * np.einsum('lnde,lmde,jinm->ij',t2_1_a, t2_1_a, eris_oooo, optimize = True)
 
+    print (np.linalg.norm(M_ij))
+    exit()
+
     return M_ij
 
 

@@ -90,6 +90,7 @@ def transform_integrals_incore(myadc):
         eris.VVVV_p = eris.VVVV_p[ind_VV_g[0], ind_VV_g[1]].copy()
 
         eris.vVvV_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=False).reshape(nvir_a, nvir_a, nvir_b, nvir_b)
-        eris.vVvV_p = np.ascontiguousarray(eris.vVvV_p.transpose(0,2,1,3)) # verify if this is contiguous
+        eris.vVvV_p = np.ascontiguousarray(eris.vVvV_p.transpose(0,2,1,3)) 
+        eris.vVvV_p = eris.vVvV_p.reshape(nvir_a*nvir_b, nvir_a*nvir_b) 
 
     return eris
