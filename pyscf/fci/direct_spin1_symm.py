@@ -331,6 +331,8 @@ class FCISolver(direct_spin1.FCISolver):
         given, the symmetry of fcivec is used.  Otherwise the symmetry is
         based on the HF determinant.
         '''
+        if wfnsym is not None:
+            return wfnsym
         if orbsym is None:
             orbsym = self.orbsym
         nelec = _unpack_nelec(nelec, self.spin)
@@ -357,7 +359,8 @@ class FCISolver(direct_spin1.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
-        wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
+        if wfnsym is None:
+            wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                            tol, lindep, max_cycle, max_space,
