@@ -410,6 +410,12 @@ def init_guess_by_minao(mol):
                              'will be used as initial guess for %s', symb)
         return occ, basis_ano
 
+    # Issue 548
+    if any(gto.charge(mol.atom_symbol(ia)) > 96 for ia in range(mol.natm)):
+        logger.info(mol, 'MINAO initial guess is not available for super-heavy '
+                    'elements. "atom" initial guess is used.')
+        return init_guess_by_atom(mol)
+
     nelec_ecp_dic = dict([(mol.atom_symbol(ia), mol.atom_nelec_core(ia))
                           for ia in range(mol.natm)])
 
