@@ -498,7 +498,7 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
     return ovlp
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
-    '''
+    r'''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
 
@@ -640,7 +640,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
 def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
-    '''
+    r'''
     Spin-traced one-particle transition density matrix in MO basis.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>

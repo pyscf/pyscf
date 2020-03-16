@@ -306,7 +306,7 @@ def gen_ddcosmo_solver(pcmobj, verbose=None):
     return pcmobj._get_vind
 
 def energy(pcmobj, dm):
-    '''
+    r'''
     ddCOSMO energy
     Es = 1/2 f(eps) \int rho(r) W(r) dr
     '''

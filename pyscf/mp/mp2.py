@@ -142,7 +142,7 @@ def update_amps(mp, t2, eris):
 
 
 def make_rdm1(mp, t2=None, eris=None, ao_repr=False):
-    '''Spin-traced one-particle density matrix.
+    r'''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
