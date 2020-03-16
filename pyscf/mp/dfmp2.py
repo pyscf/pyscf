@@ -43,20 +43,27 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
+    naux = mp.with_df.get_naoaux()
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
+
+    Lov = numpy.empty((naux, nocc*nvir))
+    p1 = 0
+    for istep, qov in enumerate(mp.loop_ao2mo(mo_coeff, nocc)):
+        logger.debug(mp, 'Load cderi step %d', istep)
+        p0, p1 = p1, p1 + qov.shape[0]
+        Lov[p0:p1] = qov
 
     t2 = None
     emp2 = 0
-    for istep, qov in enumerate(mp.loop_ao2mo(mo_coeff, nocc)):
-        logger.debug(mp, 'Load cderi step %d', istep)
-        for i in range(nocc):
-            buf = numpy.dot(qov[:,i*nvir:(i+1)*nvir].T,
-                            qov).reshape(nvir,nocc,nvir)
-            gi = numpy.array(buf, copy=False)
-            gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-            t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
-            emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
-            emp2 -= numpy.einsum('jab,jba', t2i, gi)
+
+    for i in range(nocc):
+        buf = numpy.dot(Lov[:,i*nvir:(i+1)*nvir].T,
+                        Lov).reshape(nvir,nocc,nvir)
+        gi = numpy.array(buf, copy=False)
+        gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
+        t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
+        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
+        emp2 -= numpy.einsum('jab,jba', t2i, gi)
 
     return emp2, t2
 
