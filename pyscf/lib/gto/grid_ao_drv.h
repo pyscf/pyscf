@@ -27,7 +27,7 @@
 #define NPRIMAX         40
 #define BLKSIZE         128
 #define EXPCUTOFF       50  // 1e-22
-#define NOTZERO(e)      ((e)>1e-18 || (e)<-1e-18)
+#define NOTZERO(e)      (fabs(e)>1e-18)
 
 #ifndef HAVE_NONZERO_EXP
 #define HAVE_NONZERO_EXP

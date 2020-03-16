@@ -35,7 +35,8 @@ from pyscf.dft import radi
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
-from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, charge
+from pyscf.gto.mole import (_symbol, _rm_digit, _atom_symbol, _std_symbol,
+                            _std_symbol_without_ghost, charge, is_ghost_atom)
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
@@ -104,16 +105,14 @@ def format_pseudo(pseudo_tab):
         0.2, 2, [-9.1120234, 1.69836797], 0]}
     '''
     fmt_pseudo = {}
-    for atom in pseudo_tab:
+    for atom, atom_pp in pseudo_tab.items():
         symb = _symbol(atom)
-        rawsymb = _rm_digit(symb)
-        stdsymb = _std_symbol(rawsymb)
-        symb = symb.replace(rawsymb, stdsymb)
 
-        if isinstance(pseudo_tab[atom], (str, unicode)):
-            fmt_pseudo[symb] = pseudo.load(str(pseudo_tab[atom]), stdsymb)
+        if isinstance(atom_pp, (str, unicode)):
+            stdsymb = _std_symbol_without_ghost(symb)
+            fmt_pseudo[symb] = pseudo.load(str(atom_pp), stdsymb)
         else:
-            fmt_pseudo[symb] = pseudo_tab[atom]
+            fmt_pseudo[symb] = atom_pp
     return fmt_pseudo
 
 def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
@@ -152,15 +151,13 @@ def format_basis(basis_tab):
             return basis.load(basis_name, symb)
 
     fmt_basis = {}
-    for atom in basis_tab.keys():
+    for atom, atom_basis in basis_tab.items():
         symb = _atom_symbol(atom)
-        stdsymb = _std_symbol(symb)
-        if stdsymb.startswith('GHOST-'):
-            stdsymb = stdsymb[6:]
-        atom_basis = basis_tab[atom]
+        stdsymb = _std_symbol_without_ghost(symb)
+
         if isinstance(atom_basis, (str, unicode)):
             if 'gth' in atom_basis:
-                bset = convert(str(atom_basis), symb)
+                bset = convert(str(atom_basis), stdsymb)
             else:
                 bset = atom_basis
         else:
@@ -1064,6 +1061,7 @@ class Cell(mole.Mole):
 # don't modify the following variables, they are not input arguments
         keys = ('precision', 'exp_to_discard')
         self._keys = self._keys.union(self.__dict__).union(keys)
+        self.__dict__.update(kwargs)
 
     @property
     def mesh(self):
@@ -1248,7 +1246,8 @@ class Cell(mole.Mole):
         self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
         if self.pseudo is not None:
             _atom = self.format_atom(self.atom)
-            uniq_atoms = set([a[0] for a in _atom])
+            # Unless explicitly input, ECP should not be assigned to ghost atoms
+            uniq_atoms = set([a[0] for a in _atom if not is_ghost_atom(a[0])])
             if isinstance(self.pseudo, (str, unicode)):
                 # specify global pseudo for whole molecule
                 _pseudo = dict([(a, str(self.pseudo)) for a in uniq_atoms])

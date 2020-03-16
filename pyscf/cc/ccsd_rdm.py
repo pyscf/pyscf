@@ -217,7 +217,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
 def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
-    '''
+    r'''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
 
@@ -246,7 +246,7 @@ def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
                       ao_repr=ao_repr)
 
 def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
-    '''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+    r'''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     The contraction between 1-particle Hamiltonian and rdm1 is

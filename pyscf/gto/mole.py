@@ -45,7 +45,8 @@ from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
 
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
-        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
+        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom, \
+        _std_symbol_without_ghost
 
 # For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
@@ -412,14 +413,10 @@ def format_basis(basis_tab):
             return basis.load(basis_name, symb)
 
     fmt_basis = {}
-    for atom in basis_tab:
+    for atom, atom_basis in basis_tab.items():
         symb = _atom_symbol(atom)
-        stdsymb = _std_symbol(symb)
-        if stdsymb[:2] == 'X-':
-            stdsymb = stdsymb[2:]
-        if stdsymb[:6] == 'GHOST-':
-            stdsymb = stdsymb[6:]
-        atom_basis = basis_tab[atom]
+        stdsymb = _std_symbol_without_ghost(symb)
+
         if isinstance(atom_basis, (str, unicode)):
             bset = convert(str(atom_basis), stdsymb)
         elif (any(isinstance(x, (str, unicode)) for x in atom_basis)
@@ -528,19 +525,20 @@ def format_ecp(ecp_tab):
        ...}
     '''
     fmt_ecp = {}
-    for atom in ecp_tab.keys():
+    for atom, atom_ecp in ecp_tab.items():
         symb = _atom_symbol(atom)
-        stdsymb = _std_symbol(symb)
-        if isinstance(ecp_tab[atom], (str, unicode)):
-            ecp_dat = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
+
+        if isinstance(atom_ecp, (str, unicode)):
+            stdsymb = _std_symbol_without_ghost(symb)
+            ecp_dat = basis.load_ecp(str(atom_ecp), stdsymb)
             if ecp_dat is None or len(ecp_dat) == 0:
                 #raise RuntimeError('ECP not found for  %s' % symb)
                 sys.stderr.write('ECP %s not found for  %s\n' %
-                                 (ecp_tab[atom], symb))
+                                 (atom_ecp, symb))
             else:
                 fmt_ecp[symb] = ecp_dat
         else:
-            fmt_ecp[symb] = ecp_tab[atom]
+            fmt_ecp[symb] = atom_ecp
     return fmt_ecp
 
 # transform etb to basis format
@@ -2296,11 +2294,14 @@ class Mole(lib.StreamObject):
 
 # TODO: Consider ECP info in point group symmetry initialization
         if self.ecp:
+            # Unless explicitly input, ECP should not be assigned to ghost atoms
             if isinstance(self.ecp, (str, unicode)):
-                _ecp = dict([(a, str(self.ecp)) for a in uniq_atoms])
+                _ecp = dict([(a, str(self.ecp))
+                             for a in uniq_atoms if not is_ghost_atom(a)])
             elif 'default' in self.ecp:
                 default_ecp = self.ecp['default']
-                _ecp = dict(((a, default_ecp) for a in uniq_atoms))
+                _ecp = dict(((a, default_ecp)
+                             for a in uniq_atoms if not is_ghost_atom(a)))
                 _ecp.update(self.ecp)
                 del(_ecp['default'])
             else:

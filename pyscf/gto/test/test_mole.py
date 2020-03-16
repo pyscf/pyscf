@@ -427,6 +427,14 @@ O    SP
                 basis={'H': '3-21g', 'o': '3-21g', 'ghost-O': 'sto3g'})
         self.assertEqual(mol.nao_nr(), 18) # 5 + 2 + 2 + 9
 
+        mol = gto.M(atom='Zn 0 0 0; ghost-Fe 0 0 1',
+                    basis='lanl2dz', ecp='lanl2dz')
+        self.assertTrue(len(mol._ecp) == 1)  # only Zn ecp
+
+        mol = gto.M(atom='Zn 0 0 0; ghost-Fe 0 0 1',
+                    basis='lanl2dz', ecp={'Zn': 'lanl2dz', 'ghost-Fe': 'lanl2dz'})
+        self.assertTrue(len(mol._ecp) == 2)  # Zn and ghost-Fe in ecp
+
     def test_nucmod(self):
         gto.filatov_nuc_mod(80)
         self.assertEqual(gto.mole._parse_nuc_mod(1), gto.NUC_GAUSS)
@@ -731,9 +739,9 @@ O    SP
         mol1.build()
 
         s0 = mol.intor('int1e_ovlp')
-        s0 = [c.T.dot(s0).dot(c) for c in mol.symm_orb]
+        s0 = [abs(c.T.dot(s0).dot(c)) for c in mol.symm_orb]
         s1 = mol1.intor('int1e_ovlp')
-        s1 = [c.T.dot(s1).dot(c) for c in mol1.symm_orb]
+        s1 = [abs(c.T.dot(s1).dot(c)) for c in mol1.symm_orb]
         self.assertTrue(all(abs(s0[i]-s1[i]).max()<1e-12 for i in range(len(mol.symm_orb))))
 
         mol.cart = True
@@ -744,9 +752,9 @@ O    SP
         mol1.build()
 
         s0 = mol.intor('int1e_ovlp')
-        s0 = [c.T.dot(s0).dot(c) for c in mol.symm_orb]
+        s0 = [abs(c.T.dot(s0).dot(c)) for c in mol.symm_orb]
         s1 = mol1.intor('int1e_ovlp')
-        s1 = [c.T.dot(s1).dot(c) for c in mol1.symm_orb]
+        s1 = [abs(c.T.dot(s1).dot(c)) for c in mol1.symm_orb]
         self.assertTrue(all(abs(s0[i]-s1[i]).max()<1e-12 for i in range(len(mol.symm_orb))))
 
     def test_search_ao_label(self):

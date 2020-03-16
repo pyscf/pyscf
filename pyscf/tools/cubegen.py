@@ -212,7 +212,24 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
 
 
 class Cube(object):
-    '''  Read-write of the Gaussian CUBE files  '''
+    '''  Read-write of the Gaussian CUBE files
+
+    Attributes:
+        nx : int
+            Number of grid point divisions in x direction.
+            Note this is function of the molecule's size; a larger molecule
+            will have a coarser representation than a smaller one for the
+            same value. Conflicts to keyword resolution.
+        ny : int
+            Number of grid point divisions in y direction.
+        nz : int
+            Number of grid point divisions in z direction.
+        resolution: float
+            Resolution of the mesh grid in the cube box. If resolution is
+            given in the input, the input nx/ny/nz have no effects.  The value
+            of nx/ny/nz will be determined by the resolution and the cube box
+            size. The unit is Bohr.
+    '''
     def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
                  margin=BOX_MARGIN, origin=ORIGIN, extent=EXTENT):
         from pyscf.pbc.gto import Cell

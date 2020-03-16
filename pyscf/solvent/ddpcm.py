@@ -141,7 +141,7 @@ def gen_ddpcm_solver(pcmobj, verbose=None):
     return gen_vind
 
 def energy(pcmobj, dm):
-    '''
+    r'''
     ddPCM energy
     Es = 1/2 f(eps) \int rho(r) W(r) dr
     '''
