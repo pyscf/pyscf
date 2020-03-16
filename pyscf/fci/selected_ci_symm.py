@@ -190,6 +190,8 @@ class SelectedCI(selected_ci.SelectedCI):
             for i, ir in enumerate(orbsym):
                 airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
                 birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
+
+            wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, wfnsym)
             mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
 
             if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:

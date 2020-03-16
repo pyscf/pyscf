@@ -480,13 +480,15 @@ class KnownValues(unittest.TestCase):
         strsb = strs[mask]
         ci_strs = (strsa, strsb)
         ci0 = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
-        cis = selected_ci_symm.SelectedCI()
+        fake_mol = gto.M()
+        fake_mol.groupname = 'C2v'
+        cis = selected_ci_symm.SelectedCI(fake_mol)
         cis.orbsym = orbsym = (numpy.random.random(norb) * 4).astype(int)
 
         self.assertEqual(cis.guess_wfnsym(norb, nelec), 0)
         self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0), 3)
         self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym=0), 0)
-        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym=3), 3)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym='B2'), 3)
         ci0[:] = 0
         self.assertRaises(RuntimeError, cis.guess_wfnsym, norb, nelec, ci0, wfnsym=1)
 

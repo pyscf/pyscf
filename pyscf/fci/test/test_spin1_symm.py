@@ -99,7 +99,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cis.guess_wfnsym(norb, nelec), 0)
         self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0), 2)
         self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym=0), 0)
-        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym=3), 3)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym='B2'), 3)
         self.assertRaises(RuntimeError, cis.guess_wfnsym, norb, nelec, numpy.zeros_like(ci0), wfnsym=1)
 
 

@@ -360,6 +360,8 @@ class FCISolver(direct_spin1.FCISolver):
             for i, ir in enumerate(orbsym):
                 airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
                 birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
+
+            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
             mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
 
             if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
