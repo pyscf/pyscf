@@ -269,6 +269,45 @@ class FFTDF(lib.StreamObject):
     # post-HF code, get_jk was often called with an incomplete DM (e.g. the
     # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
     # post-HF methods.
+    def get_jk_e1(self, dm, kpts=None, kpts_band=None, exxdiv=None):
+        from pyscf.pbc.df import fft_jk
+        if kpts is None:
+            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
+                kpts = numpy.zeros(3)
+            else:
+                kpts = self.kpts
+        else:
+            kpts = numpy.asarray(kpts)
+
+        vj = fft_jk.get_j_e1_kpts(self, dm, kpts, kpts_band)
+        vk = fft_jk.get_k_e1_kpts(self, dm, kpts, kpts_band, exxdiv)
+        return vj, vk
+
+    def get_j_e1(self, dm, kpts=None, kpts_band=None):
+        from pyscf.pbc.df import fft_jk
+        if kpts is None:
+            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
+                kpts = numpy.zeros(3)
+            else:
+                kpts = self.kpts
+        else:
+            kpts = numpy.asarray(kpts)
+
+        vj = fft_jk.get_j_e1_kpts(self, dm, kpts, kpts_band)
+        return vj
+
+    def get_k_e1(self, dm, kpts=None, kpts_band=None, exxdiv=None):
+        from pyscf.pbc.df import fft_jk
+        if kpts is None:
+            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
+                kpts = numpy.zeros(3)
+            else:
+                kpts = self.kpts
+        else:
+            kpts = numpy.asarray(kpts)
+
+        vk = fft_jk.get_k_e1_kpts(self, dm, kpts, kpts_band, exxdiv)
+        return vk
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
@@ -353,4 +392,3 @@ if __name__ == '__main__':
     print(lib.finger(v1) - (1.8428463642697195-0.10478381725330854j))
     v1 = get_nuc(df, k)
     print(lib.finger(v1) - (2.3454744614944714-0.12528407127454744j))
-
