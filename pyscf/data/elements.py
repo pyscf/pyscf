@@ -884,6 +884,26 @@ def _std_symbol(symb_or_chg):
     else:
         return ELEMENTS[symb_or_chg]
 
+def _std_symbol_without_ghost(symb_or_chg):
+    '''For a given atom symbol (lower case or upper case) or charge, return the
+    standardized atom symbol
+    '''
+    if isinstance(symb_or_chg, (str, unicode)):
+        symb_or_chg = str(symb_or_chg.upper())
+        rawsymb = _rm_digit(symb_or_chg)
+        if rawsymb in _ELEMENTS_UPPER:
+            return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2] != 'XE':
+            rawsymb = rawsymb[1:]  # Remove the prefix X
+            return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+            rawsymb = rawsymb[5:]  # Remove the prefix GHOST
+            return _ELEMENTS_UPPER[rawsymb]
+        else:
+            raise RuntimeError('Unsupported atom symbol %s' % a)
+    else:
+        return ELEMENTS[symb_or_chg]
+
 def _atom_symbol(symb_or_chg):
     '''For a given atom symbol (lower case or upper case) or charge, return the
     standardized atom symbol (with the numeric prefix or suffix)

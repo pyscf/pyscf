@@ -433,7 +433,7 @@ O    SP
 
         mol = gto.M(atom='Zn 0 0 0; ghost-Fe 0 0 1',
                     basis='lanl2dz', ecp={'Zn': 'lanl2dz', 'ghost-Fe': 'lanl2dz'})
-        self.assertTrue(len(mol._ecp) == 2)  # only Zn ecp
+        self.assertTrue(len(mol._ecp) == 2)  # Zn and ghost-Fe in ecp
 
     def test_nucmod(self):
         gto.filatov_nuc_mod(80)

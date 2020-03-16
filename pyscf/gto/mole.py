@@ -45,7 +45,8 @@ from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
 
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
-        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
+        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom, \
+        _std_symbol_without_ghost
 
 # For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
@@ -414,11 +415,7 @@ def format_basis(basis_tab):
     fmt_basis = {}
     for atom, atom_basis in basis_tab.items():
         symb = _atom_symbol(atom)
-        stdsymb = _std_symbol(symb)
-        if stdsymb[:2] == 'X-':
-            stdsymb = stdsymb[2:]
-        elif stdsymb[:6] == 'GHOST-':
-            stdsymb = stdsymb[6:]
+        stdsymb = _std_symbol_without_ghost(symb)
 
         if isinstance(atom_basis, (str, unicode)):
             bset = convert(str(atom_basis), stdsymb)
@@ -532,12 +529,7 @@ def format_ecp(ecp_tab):
         symb = _atom_symbol(atom)
 
         if isinstance(atom_ecp, (str, unicode)):
-            stdsymb = _std_symbol(symb)
-            if stdsymb[:2] == 'X-':
-                stdsymb = stdsymb[2:]
-            elif stdsymb[:6] == 'GHOST-':
-                stdsymb = stdsymb[6:]
-
+            stdsymb = _std_symbol_without_ghost(symb)
             ecp_dat = basis.load_ecp(str(atom_ecp), stdsymb)
             if ecp_dat is None or len(ecp_dat) == 0:
                 #raise RuntimeError('ECP not found for  %s' % symb)
