@@ -1169,7 +1169,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
                eris_ovoo = eris.ovoo
 
-################ ADC(3) i - kja block ############################
+################ ADC(3) i - kja block and ajk - i ############################
 
                eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
                t2_1_a = t2_1 - t2_1.transpose(1,0,2,3).copy()
@@ -1180,6 +1180,9 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                s[s1:f1] -= np.einsum('abc,ibac->i',temp, eris_ovvv, optimize=True)
                temp_1 = np.einsum('kjcb,ajk->abc',t2_1,r2, optimize=True)
                s[s1:f1] += np.einsum('abc,icab->i',temp_1, eris_ovvv, optimize=True)
+
+               temp_1 = np.einsum('i,icab->cba',r1,eris_ovvv,optimize=True)
+               s[s2:f2] += np.einsum('cba,kjcb->ajk',temp_1, t2_1, optimize=True).reshape(-1)
                del eris_ovvv
 
                r2_a = r2_a.reshape(nvir,nocc,nocc)
@@ -1214,12 +1217,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                s[s1:f1] -= 0.5*np.einsum('blj,lbij->i',temp_1,eris_ovoo,optimize=True)
                s[s1:f1] += 0.5*np.einsum('blj,iblj->i',temp_2,eris_ovoo,optimize=True)
 
-############### ADC(3) ajk - i block ############################
-
-               eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
-               temp_1 = np.einsum('i,icab->cba',r1,eris_ovvv,optimize=True)
-               s[s2:f2] += np.einsum('cba,kjcb->ajk',temp_1, t2_1, optimize=True).reshape(-1)
-               del eris_ovvv
+####################################################################################
 
                temp_1  = np.einsum('i,lbik->kbl',r1,eris_ovoo)
                temp_1  -= np.einsum('i,iblk->kbl',r1,eris_ovoo)

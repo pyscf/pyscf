@@ -953,14 +953,14 @@ def get_imds_ea(adc, eris=None):
         M_ab_b += 0.25*np.einsum('mlbd,noad,nlom->ab',t2_1_b, t2_1_b, eris_OOOO, optimize=True)
         M_ab_b -= np.einsum('lmdb,onda,olnm->ab',t2_1_ab, t2_1_ab, eris_ooOO, optimize=True)
 
-        eris_vvvv = radc_ao2mo.unpack_eri_2sn(eris.vvvv_p, nvir_a)
+        eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv_p, nvir_a)
         M_ab_a -= 0.25*np.einsum('mlef,mlbd,adef->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
         M_ab_a -= 0.25*np.einsum('mled,mlaf,edbf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
         M_ab_a -= 0.5*np.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
         M_ab_a += np.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
         del eris_vvvv
 
-        eris_VVVV = radc_ao2mo.unpack_eri_2sn(eris.VVVV_p, nvir_b)
+        eris_VVVV = radc_ao2mo.unpack_eri_2(eris.VVVV_p, nvir_b)
         M_ab_b -= 0.25*np.einsum('mlef,mlbd,adef->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
         M_ab_b -= 0.25*np.einsum('mled,mlaf,edbf->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
         M_ab_b -= 0.5*np.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b, eris_VVVV, optimize=True)
@@ -1234,11 +1234,11 @@ def get_imds_ip(adc, eris=None):
         M_ij_b -= 0.25*np.einsum('lmde,jnde,lnmi->ij',t2_1_b, t2_1_b,eris_OOOO, optimize = True)
         M_ij_b += np.einsum('mled,njed,mnli->ij',t2_1_ab ,t2_1_ab,eris_ooOO, optimize = True)
 
-        eris_vvvv = radc_ao2mo.unpack_eri_2sn(eris.vvvv_p, nvir_a)
+        eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv_p, nvir_a)
         M_ij_a += 0.25 * np.einsum('ilde,jlgf,gfde->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
         del eris_vvvv
 
-        eris_VVVV = radc_ao2mo.unpack_eri_2sn(eris.VVVV_p, nvir_b)
+        eris_VVVV = radc_ao2mo.unpack_eri_2(eris.VVVV_p, nvir_b)
         M_ij_b += 0.25 * np.einsum('ilde,jlgf,gfde->ij',t2_1_b, t2_1_b, eris_VVVV, optimize = True)
         del eris_VVVV
 

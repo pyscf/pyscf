@@ -31,14 +31,6 @@ def transform_integrals_incore(myadc):
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
     nvir_b = vir_b.shape[1]
-    n_oo = nocc_a * (nocc_a + 1) // 2
-    n_OO = nocc_b * (nocc_b + 1) // 2
-    n_vv = nvir_a * (nvir_a + 1) // 2
-    n_VV = nvir_b * (nvir_b + 1) // 2
-    ind_oo = np.tril_indices(nocc_a)
-    ind_vv = np.tril_indices(nvir_a)
-    ind_OO = np.tril_indices(nocc_b)
-    ind_VV = np.tril_indices(nvir_b)
     ind_vv_g = np.tril_indices(nvir_a, k=-1)
     ind_VV_g = np.tril_indices(nvir_b, k=-1)
    
@@ -73,9 +65,6 @@ def transform_integrals_incore(myadc):
     eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-#        eris.vvvv = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=True)
-#        eris.VVVV = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=True)
-#        eris.vvVV = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=True)
 
         eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=False).reshape(nvir_a, nvir_a, nvir_a, nvir_a)
         eris.vvvv_p = eris.vvvv_p.transpose(0,2,1,3)
