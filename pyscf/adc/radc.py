@@ -272,7 +272,7 @@ def compute_energy(myadc, t1, t2, eris):
     e_mp2 -= 0.5 * np.einsum('ijab,ibja', t2_1, eris_ovov,optimize=True)
     e_mp2 -= 0.5 * np.einsum('jiab,iajb', t2_1, eris_ovov,optimize=True)
     e_mp2 += 0.5 * np.einsum('jiab,ibja', t2_1, eris_ovov,optimize=True)
-    e_mp2 += np.einsum('ijab,iajb', t2_1, eris_ovov)
+    e_mp2 += np.einsum('ijab,iajb', t2_1, eris_ovov,optimize=True)
 
     e_corr = e_mp2
 
@@ -458,7 +458,6 @@ class RADC(lib.StreamObject):
     
     def ip_adc(self, nroots=1, guess=None):
         return RADCIP(self).kernel(nroots, guess)
-
 
 def get_imds_ea(adc, eris=None):
 
