@@ -407,8 +407,10 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     # can only be used with AFTDF/GDF/MDF method.  In the FFTDF method, 1D, 2D
     # and 3D should use the ewald probe charge correction.
     if exxdiv == 'ewald':
+        raise NotImplementedError("Ewald Correction")
         if cell.omega == 0:
             _ewald_exxdiv_e1_for_G0(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
+            #FIXME exxdiv for ewald
         else:
             raise NotImplementedError("Range Separated Coulomb")
             # when cell.omega !=0: madelung constant will have a non-zero derivative
@@ -418,30 +420,37 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
 def _ewald_exxdiv_e1_for_G0(cell, kpts, dms, vk, kpts_band=None):
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     s1e = cell.pbc_intor('int1e_ipovlp', kpts=kpts)
+    s2e = -np.asarray(s1e).transpose(0,1,3,2).conj()
 
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:
         for i,dm in enumerate(dms):
             ovdm = np.dot(dm, s)
             vk[:,i] += madelung * np.einsum('apq,qr->apr', s1e, ovdm)
+            #vk[:,i] += madelung * np.einsum('apq,qr->apr', s2e, ovdm)
 
     elif np.shape(kpts) == (3,):
         if kpts_band is None or is_zero(kpts_band-kpts):
             for i,dm in enumerate(dms):
                 ovdm = np.dot(dm, s)
                 vk[:,i] += madelung * np.einsum('apq,qr->apr', s1e, ovdm)
+                #vk[:,i] += madelung * np.einsum('apq,qr->apr', s2e, ovdm)
 
     elif kpts_band is None or np.array_equal(kpts, kpts_band):
         for k in range(len(kpts)):
             for i,dm in enumerate(dms):
                 ovdm = np.dot(dm[k], s[k])
                 vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s1e[k], ovdm)
+                #vk[:,i,k] += madelung * np.einsum('qp,aqr->apr', ovdm.conj(), s1e[k])
+                #print("ehlo")
+                #vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s2e[k], ovdm)
     else:
         for k, kpt in enumerate(kpts):
             for kp in member(kpt, kpts_band.reshape(-1,3)):
                 for i,dm in enumerate(dms):
                     ovdm = np.dot(dm[k], s[k])
                     vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s1e[k], ovdm)
+                    #vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s2e[k], ovdm)
     return None
 
 

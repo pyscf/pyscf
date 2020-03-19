@@ -580,6 +580,10 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         addons.convert_to_uhf(mf, self)
         return self
 
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import kuhf
+        return kuhf.Gradients(self)
+
 del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
@@ -598,4 +602,3 @@ if __name__ == '__main__':
     mf = KUHF(cell, [2,1,1])
     mf.kernel()
     mf.analyze()
-

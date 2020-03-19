@@ -162,6 +162,10 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
     density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
 
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import krks
+        return krks.Gradients(self)
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
