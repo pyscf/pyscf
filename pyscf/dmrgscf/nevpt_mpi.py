@@ -168,6 +168,11 @@ def default_nevpt_schedule(fcisolver, maxM=500, tol=1e-7):
         nevptsolver.mpiprefix = fcisolver.mpiprefix
         nevptsolver.spin = fcisolver.spin
         nevptsolver.groupname = fcisolver.groupname
+        nevptsolver.num_thrds = fcisolver.num_thrds
+        # runtimeDir is only used to generate the common part of the input
+        nevptsolver.runtimeDir = nevptsolver.scratchDirectory
+        if not os.path.exists(nevptsolver.scratchDirectory):
+            os.makedirs(nevptsolver.scratchDirectory)
 
     nevptsolver.scheduleSweeps = [0, 4]
     nevptsolver.scheduleMaxMs  = [maxM, maxM]
@@ -278,7 +283,7 @@ def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
 
     mc_chkfile = os.path.abspath(mc_chkfile)
     dmrg_scratch = os.path.abspath(dmrg_scratch)
-    nevpt_scratch = os.path.abspath(os.path.join(nevpt_scratch, str(rank)))
+    nevpt_scratch = os.path.abspath(os.path.join(nevpt_scratch, "nevpt2_"+str(rank)))
 
     nevpt_inp = os.path.join(nevpt_scratch, 'dmrg.conf')
     nevpt_out = os.path.join(nevpt_scratch, 'dmrg.out')
