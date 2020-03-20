@@ -75,7 +75,9 @@ def write_chk(mc,root,chkfile):
     fh5 = h5py.File(chkfile,'w')
 
     if mc.fcisolver.nroots > 1:
-        mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=root)
+        logger.info(mc, "Canonicalize orbitals for root "+str(root))
+        mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff, ci=root,
+                                                      cas_natorb=False)
 
 
     fh5['mol']        =       mc.mol.dumps()
