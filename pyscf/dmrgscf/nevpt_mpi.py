@@ -208,8 +208,8 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     nevptsolver.nroots = nroots
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
     if nevptsolver.executable == getattr(mc.fcisolver, 'executable', None):
-        logger.warn(mc, 'DMRG executable file for nevptsolver %s is the same '
-                    'to the executable file for DMRG solver %s. If they are '
+        logger.warn(mc, 'DMRG executable file for nevptsolver is the same '
+                    'to the executable file for DMRG solver. If they are '
                     'both compiled by MPI compilers, they may cause error or '
                     'random results in DMRG-NEVPT calculation.')
 
