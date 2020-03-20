@@ -190,12 +190,12 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         mol = chkfile.load_mol(nevpt_integral_file)
 
         fh5 = h5py.File(nevpt_integral_file, 'r')
-        ncas = fh5['mc/ncas'].value
-        ncore = fh5['mc/ncore'].value
-        nvirt = fh5['mc/nvirt'].value
-        nelecas = fh5['mc/nelecas'].value
-        nroots = fh5['mc/nroots'].value
-        wfnsym = fh5['mc/wfnsym'].value
+        ncas = fh5['mc/ncas'][()]
+        ncore = fh5['mc/ncore'][()]
+        nvirt = fh5['mc/nvirt'][()]
+        nelecas = fh5['mc/nelecas'][()]
+        nroots = fh5['mc/nroots'][()]
+        wfnsym = fh5['mc/wfnsym'][()]
         fh5.close()
     else :
         mol = mc.mol
@@ -265,8 +265,8 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
 
     perturb_file = os.path.join(nevpt_scratch, '0', 'Perturbation_%d'%root)
     fh5 = h5py.File(perturb_file, 'r')
-    Vi_e  =  fh5['Vi/energy'].value
-    Vr_e  =  fh5['Vr/energy'].value
+    Vi_e  =  fh5['Vi/energy'][()]
+    Vr_e  =  fh5['Vr/energy'][()]
     fh5.close()
     logger.note(nevptsolver,'Nevpt Energy:')
     logger.note(nevptsolver,'Sr Subspace:  E = %.14f'%( Vr_e))
@@ -349,7 +349,7 @@ def _load(chkfile, key, comm):
     rank = comm.Get_rank()
     if rank == 0:
         with h5py.File(chkfile, 'r') as fh5:
-            return comm.bcast(fh5[key].value)
+            return comm.bcast(fh5[key][()])
     else:
         return comm.bcast(None)
 
@@ -361,7 +361,7 @@ def _write_integral_file(mc_chkfile, nevpt_scratch, comm):
         fh5 = h5py.File(mc_chkfile, 'r')
         def load(key):
             if key in fh5:
-                return comm.bcast(fh5[key].value)
+                return comm.bcast(fh5[key][()])
             else:
                 return comm.bcast([])
     else:

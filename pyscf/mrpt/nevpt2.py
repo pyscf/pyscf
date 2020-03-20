@@ -742,13 +742,13 @@ class NEVPT(lib.StreamObject):
                                                    nevptsolver=self.nevptsolver,
                                                    tol=self.tol)
             fh5 = h5py.File(perturb_file, 'r')
-            e_Si     =   fh5['Vi/energy'].value
+            e_Si     =   fh5['Vi/energy'][()]
             #The definition of norm changed.
             #However, there is no need to print out it.
             #Only perturbation energy is wanted.
-            norm_Si  =   fh5['Vi/norm'].value
-            e_Sr     =   fh5['Vr/energy'].value
-            norm_Sr  =   fh5['Vr/norm'].value
+            norm_Si  =   fh5['Vi/norm'][()]
+            e_Sr     =   fh5['Vr/energy'][()]
+            norm_Sr  =   fh5['Vr/norm'][()]
             fh5.close()
             logger.note(self, "Sr    (-1)',   E = %.14f",  e_Sr  )
             logger.note(self, "Si    (+1)',   E = %.14f",  e_Si  )
