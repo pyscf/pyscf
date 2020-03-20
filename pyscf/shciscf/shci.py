@@ -1000,6 +1000,10 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
     f.write("orbitals {}\n".format(os.path.join(SHCI.runtimeDir, SHCI.integralFile)))
 
     f.write('nroots %r\n' % SHCI.nroots)
+    if SHCI.mol.symmetry and SHCI.mol.groupname:
+        f.write(f"pointGroup {SHCI.mol.groupname.lower()}\n")
+    if hasattr(SHCI, "wfnsym"):
+        f.write(f"irrep {SHCI.wfnsym}\n")
 
     # Variational Keyword Section
     f.write('\n#variational\n')
