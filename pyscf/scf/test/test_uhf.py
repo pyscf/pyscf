@@ -121,6 +121,13 @@ class KnownValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
         self.assertAlmostEqual(numpy.linalg.norm(pop), 12.322626374896178, 9)
 
+    def test_mulliken_spin_pop(self):
+        Ms_true = [0.990027, 0.504987, 0.504987]
+        _, Ms = mf2.mulliken_spin_pop()
+        self.assertAlmostEqual(Ms[0], Ms_true[0],5)
+        self.assertAlmostEqual(Ms[1], Ms_true[1],5)
+        self.assertAlmostEqual(Ms[2], Ms_true[2],5)
+
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 

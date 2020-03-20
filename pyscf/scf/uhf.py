@@ -436,7 +436,8 @@ def spin_square(mo, s=1):
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
-    print orbital coefficients; Mulliken population analysis; Dipole moment
+    print orbital coefficients; Mulliken population analysis; Dipole moment;
+    Spin density for AOs and atoms;
     '''
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
@@ -512,6 +513,53 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
                  ia, symb, chg[ia], nelec_a[ia], nelec_b[ia])
     return (pop_a,pop_b), chg
 
+def mulliken_spin_pop(mol, dm, s=None, verbose=logger.DEBUG):
+    r'''Mulliken spin density analysis
+
+    See Eq. 80 in https://arxiv.org/pdf/1206.2234.pdf and the surrounding
+    text for more details.
+
+    .. math:: M_{ij} = (D^a_{ij} - D^b_{ij}) S_{ji}
+
+    Mulliken charges
+
+    .. math:: \delta_i = \sum_j M_{ij}
+
+    Returns:
+        A list : spin_pop, Ms
+
+        spin_pop : nparray
+            Mulliken spin density on each atomic orbitals
+        Ms : nparray
+            Mulliken spin density on each atom
+    '''
+    if s is None: s = get_ovlp(mol)
+
+    dma = dm[0]
+    dmb = dm[1]
+
+    M = dma - dmb # Spin density
+
+    log = logger.new_logger(mol, verbose)
+
+    spin_pop = numpy.einsum('ij,ji->i', M, s).real
+
+    log.info(' ** Mulliken Spin Density (per AO)  **')
+    for i, s in enumerate(mol.ao_labels()):
+        log.info('spin_pop of  %s %10.5f', s, spin_pop[i])
+
+    log.note(' ** Mulliken Spin Density (per atom)  **')
+    Ms = numpy.zeros(mol.natm) # Spin density per atom
+    for i, s in enumerate(mol.ao_labels(fmt=None)):
+        Ms[s[0]] += spin_pop[i]
+
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        log.note('spin density of  %d %s =   %10.5f',
+                 ia, symb, Ms[ia])
+
+    return spin_pop, Ms
+
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
@@ -530,6 +578,26 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 mulliken_pop_meta_lowdin_ao = mulliken_meta
+
+def mulliken_meta_spin(mol, dm_ao, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
+    '''Mulliken spin population analysis, based on meta-Lowdin AOs.
+    '''
+    from pyscf.lo import orth
+    if s is None: s = hf.get_ovlp(mol)
+    log = logger.new_logger(mol, verbose)
+    if isinstance(dm_ao, numpy.ndarray) and dm_ao.ndim == 2:
+        dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
+    c = orth.restore_ao_character(mol, pre_orth_method)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    c_inv = numpy.dot(orth_coeff.conj().T, s)
+    dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.conj().T))
+    dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.conj().T))
+
+    log.note(' ** Mulliken spin pop alpha/beta on meta-lowdin orthogonal AOs **')
+    return mulliken_spin_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
+mulliken_spin_pop_meta_lowdin_ao = mulliken_meta_spin
+
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
@@ -802,12 +870,26 @@ class UHF(hf.SCF):
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
+    def mulliken_spin_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return mulliken_spin_pop(mol, dm, s=s, verbose=verbose)
+
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
+                             pre_orth_method=pre_orth_method)
+
+    def mulliken_meta_spin(self, mol=None, dm=None, verbose=logger.DEBUG,
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return mulliken_meta_spin(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
     @lib.with_doc(spin_square.__doc__)
