@@ -656,6 +656,12 @@ class NEVPT(lib.StreamObject):
         >>> mc = dmrgscf.DMRGSCF(mf, 4, 4).run()
         >>> NEVPT(mc, root=0).compress_approx(maxM=100).kernel()
         -0.14058324991532101
+
+        References:
+
+        J. Chem. Theory Comput. 12, 1583 (2016), doi:10.1021/acs.jctc.5b01225
+
+        J. Chem. Phys. 146, 244102 (2017), doi:10.1063/1.4986975
         '''
         #TODO
         #Some preprocess for compressed perturber
