@@ -357,7 +357,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, casdm1=None, verbose=logger.NOTE,
-                 with_meta_lowdin=WITH_META_LOWDIN):
+                 with_meta_lowdin=WITH_META_LOWDIN, stav_dm1=False):
     '''Canonicalized CASCI/CASSCF orbitals of effecitive Fock matrix and
     update CI coefficients accordingly.
 
@@ -400,6 +400,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             canonicalized orbitals of state-average effective Fock matrix.
             To canonicalize the orbitals for one particular state, you can
             assign the density matrix of that state to the kwarg casdm1.
+        stav_dm1 (bool): Use state-average 1-particle density matrix for
+            computing Fock matrices and natural orbitals
 
     Returns:
         A tuple, (natural orbitals, CI coefficients, orbital energies)
@@ -412,10 +414,20 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if ci is None: ci = mc.ci
     if casdm1 is None:
         if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
-            not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
-            log.warn('Mulitple states found in CASCI solver. First state is '
-                     'used to compute the natural orbitals in active space.')
-            casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
+            if stav_dm1:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'Use state-average 1RDM  to compute the Fock matrix'
+                         ' and natural orbitals in the active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                for root in range(1, len(ci)):
+                    casdm1 += mc.fcisolver.make_rdm1(ci[root], mc.ncas,
+                                                     mc.nelecas)
+            else:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'First state is used to compute the Fock matrix'
+                         ' and natural orbitals in active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
 
