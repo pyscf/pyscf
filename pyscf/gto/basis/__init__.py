@@ -162,6 +162,8 @@ ALIAS = {
     'def2qzvpjkfit'  : 'def2-universal-jkfit.dat',
     'def2qzvppjfit'  : 'def2-universal-jfit.dat',
     'def2qzvppjkfit' : 'def2-universal-jkfit.dat',
+    'def2universaljfit'  : 'def2-universal-jfit.dat',
+    'def2universaljkfit' : 'def2-universal-jkfit.dat',
     'def2svpri'      : 'def2-svp-ri.dat'     ,
     'def2svpdri'     : 'def2-svpd-ri.dat'    ,
     'def2tzvpri'     : 'def2-tzvp-ri.dat'    ,

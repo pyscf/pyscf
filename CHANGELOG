@@ -1,3 +1,9 @@
+PySCF 1.7.2 (2020-?-??)
+-----------------------
+* Improved
+  - Redundant def2-*-jkfit basis sets were replaced by the def2-universal-jkfit basis
+
+
 PySCF 1.7.1 (2020-2-29)
 -----------------------
 * Added
