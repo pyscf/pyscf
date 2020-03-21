@@ -293,6 +293,30 @@ ALIAS = {
     'pobtzvp'       :  'pob-tzvp.dat',
     'pobtzvpp'      :  'pob-tzvpp.dat',
     'crystalccpvdz' :  'crystal-cc-pvdz.dat',
+# ccECP 
+    'ccecp'         : join('ccecp-basis', 'ccECP', 'ccECP.dat'   ),
+    'ccecpccpvdz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVDZ.dat'),
+    'ccecpccpvtz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVTZ.dat'),
+    'ccecpccpvqz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVQZ.dat'),
+    'ccecpccpv5z'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pV5Z.dat'),
+    'ccecpccpv6z'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pV6Z.dat'),
+    'ccecpaugccpvdz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVDZ.dat'),
+    'ccecpaugccpvtz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVTZ.dat'),
+    'ccecpaugccpvqz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVQZ.dat'),
+    'ccecpaugccpv5z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV5Z.dat'),
+    'ccecpaugccpv6z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV6Z.dat'),
+# ccECP_He_core 
+    'ccecphe'         : join('ccecp-basis', 'ccECP_He_core', 'ccECP.dat'   ),
+    'ccecpheccpvdz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVDZ.dat'),
+    'ccecpheccpvtz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVTZ.dat'),
+    'ccecpheccpvqz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVQZ.dat'),
+    'ccecpheccpv5z'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pV5Z.dat'),
+    'ccecpheccpv6z'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pV6Z.dat'),
+    'ccecpheaugccpvdz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVDZ.dat'),
+    'ccecpheaugccpvtz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVTZ.dat'),
+    'ccecpheaugccpvqz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVQZ.dat'),
+    'ccecpheaugccpv5z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV5Z.dat'),
+    'ccecpheaugccpv6z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV6Z.dat'),
 }
 
 def _is_pople_basis(basis):
