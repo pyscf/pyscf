@@ -68,7 +68,7 @@ def load(chkfile, key):
                 return dict([(k.replace('__from_list__', ''),
                               load_as_dic(k, val)) for k in val])
         else:
-            return val.value
+            return val[()]
 
     with h5py.File(chkfile, 'r') as fh5:
         return load_as_dic(key, fh5)
@@ -162,14 +162,14 @@ def load_mol(chkfile):
     from pyscf import gto
     try:
         with h5py.File(chkfile, 'r') as fh5:
-            mol = gto.loads(fh5['mol'].value)
+            mol = gto.loads(fh5['mol'][()])
     except:
 # Compatibility to the old serialization format
 # TODO: remove it in future release
         with h5py.File(chkfile, 'r') as fh5:
             mol = gto.Mole()
             mol.output = '/dev/null'
-            moldic = eval(fh5['mol'].value)
+            moldic = eval(fh5['mol'][()])
             for key in ('mass', 'grids', 'light_speed'):
                 if key in moldic:
                     del(moldic[key])

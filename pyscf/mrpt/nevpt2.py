@@ -656,6 +656,12 @@ class NEVPT(lib.StreamObject):
         >>> mc = dmrgscf.DMRGSCF(mf, 4, 4).run()
         >>> NEVPT(mc, root=0).compress_approx(maxM=100).kernel()
         -0.14058324991532101
+
+        References:
+
+        J. Chem. Theory Comput. 12, 1583 (2016), doi:10.1021/acs.jctc.5b01225
+
+        J. Chem. Phys. 146, 244102 (2017), doi:10.1063/1.4986975
         '''
         #TODO
         #Some preprocess for compressed perturber
@@ -742,13 +748,13 @@ class NEVPT(lib.StreamObject):
                                                    nevptsolver=self.nevptsolver,
                                                    tol=self.tol)
             fh5 = h5py.File(perturb_file, 'r')
-            e_Si     =   fh5['Vi/energy'].value
+            e_Si     =   fh5['Vi/energy'][()]
             #The definition of norm changed.
             #However, there is no need to print out it.
             #Only perturbation energy is wanted.
-            norm_Si  =   fh5['Vi/norm'].value
-            e_Sr     =   fh5['Vr/energy'].value
-            norm_Sr  =   fh5['Vr/norm'].value
+            norm_Si  =   fh5['Vi/norm'][()]
+            e_Sr     =   fh5['Vr/energy'][()]
+            norm_Sr  =   fh5['Vr/norm'][()]
             fh5.close()
             logger.note(self, "Sr    (-1)',   E = %.14f",  e_Sr  )
             logger.note(self, "Si    (+1)',   E = %.14f",  e_Si  )
