@@ -20,8 +20,8 @@
 Lambda equation of GHF-CCSD(T) with spin-orbital integrals
 
 Ref:
-JCP, 98, 8718
-JCP, 147, 044104
+JCP 98, 8718 (1993); DOI:10.1063/1.464480
+JCP 147, 044104 (2017); DOI:10.1063/1.4994918
 '''
 
 import numpy

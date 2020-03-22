@@ -103,7 +103,7 @@ def make_fc(sscobj, nuc_pair=None):
         # explicitly considered as below. However, it is inconsistent to RHF
         # results for closed shell systems. To make UHF and RHF code
         # consistent, only z-component is considered.
-        # (See Eq. (19) of JCP, 113, 3530)
+        # [See Eq. (19) of JCP 113, 3530 (2000); DOI:10.1063/1.1286806]
         if ZZ_ONLY:
             ez  = numpy.einsum('ij,ij', h1aa[at1], mo1aa[at2]) * 2  # *2 for +c.c.
             ez += numpy.einsum('ij,ij', h1bb[at1], mo1bb[at2]) * 2

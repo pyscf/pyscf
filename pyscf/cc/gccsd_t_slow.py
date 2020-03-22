@@ -26,7 +26,7 @@ from pyscf.lib import logger
 from pyscf.cc import gccsd
 
 # spin-orbital formula
-# JCP, 98, 8718
+# JCP 98, 8718 (1993); DOI:10.1063/1.464480
 def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     assert(isinstance(eris, gccsd._PhysicistsERIs))
     if t1 is None or t2 is None:

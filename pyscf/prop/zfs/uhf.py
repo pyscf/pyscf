@@ -21,9 +21,9 @@ Non-relativistic unrestricted Hartree-Fock zero-field splitting
 (In testing)
 
 Refs:
-    JCP, 134, 194113
-    PRB, 60, 9566
-    JCP, 127, 164112
+    JCP 134, 194113 (2011); DOI:10.1063/1.3590362
+    PRB 60, 9566 (1999); DOI:10.1103/PhysRevB.60.9566
+    JCP 127, 164112 (2007); 10.1063/1.2772857
 '''
 
 import time

@@ -20,7 +20,7 @@ from pyscf import gto
 from pyscf import dft
 from pyscf.prop.ssc import rhf as rhf_ssc
 
-# Test numerical integration scheme JCP, 73, 5718
+# Test numerical integration scheme JCP 73, 5718 (1980); DOI:10.1063/1.440051
 # Test field gradients integrals
 
 n_gauss = 30

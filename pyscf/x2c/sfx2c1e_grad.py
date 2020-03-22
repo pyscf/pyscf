@@ -17,7 +17,7 @@
 Analytical nuclear gradients for 1-electron spin-free x2c method
 
 Ref.
-JCP 135 084114
+JCP 135, 084114 (2011); DOI:10.1063/1.3624397
 '''
 
 from functools import reduce
@@ -216,7 +216,7 @@ def _gen_first_order_quantities(mol, e0, c0, x0, approx='1E'):
     return get_first_order
 
 def _get_r1(s0_roots, s_nesc0, s1, s_nesc1, r0_roots):
-# See JCP 135 084114, Eq (34)
+# See JCP 135, 084114 (2011); DOI:10.1063/1.3624397, Eq (34)
     w_sqrt, v_s = s0_roots
     w_invsqrt = 1. / w_sqrt
     wr0_sqrt, vr0 = r0_roots

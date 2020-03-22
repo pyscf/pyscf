@@ -30,7 +30,7 @@ from pyscf.cc import _ccsd
 
 # t3 as ijkabc
 
-# JCP, 94, 442.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
+# JCP 94, 442 (1991); DOI:10.1063/1.460359.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = cpu0 = (time.clock(), time.time())
     log = logger.new_logger(mycc, verbose)

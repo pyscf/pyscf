@@ -21,7 +21,7 @@ from pyscf.dft import radi
 from pyscf.grad import rks
 
 def grids_response(grids):
-    # JCP, 98, 5612
+    # JCP 98, 5612 (1993); DOI:10.1063/1.464906
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
                                             grids.radi_method,
@@ -90,7 +90,7 @@ def grids_response(grids):
 
 # * When grid is on atom ia/ib, ua/ub == 0, d_uba/d_uab may have huge error
 #   How to remove this error?
-# * JCP, 98, 5612 (B8) (B10) miss many terms
+# * JCP 98, 5612 (1993); (B8) (B10) miss many terms
                     uab = atm_coords[ia] - atm_coords[ib]
                     if ia == atom_id:  # dA PA: dA~ib, PA~ia
                         ua = atm_coords[ib] - coords

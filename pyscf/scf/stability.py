@@ -19,8 +19,8 @@
 '''Wave Function Stability Analysis
 
 Ref.
-JCP, 66, 3045
-JCP, 104, 9047
+JCP 66, 3045 (1977); DOI:10.1063/1.434318
+JCP 104, 9047 (1996); DOI:10.1063/1.471637
 
 See also tddft/rhf.py and scf/newton_ah.py
 '''

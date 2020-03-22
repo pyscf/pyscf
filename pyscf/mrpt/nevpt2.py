@@ -33,7 +33,7 @@ from pyscf.ao2mo import _ao2mo
 libmc = lib.load_library('libmcscf')
 
 NUMERICAL_ZERO = 1e-14
-# Ref JCP, 117, 9138
+# Ref JCP 117, 9138 (2002); DOI:10.1063/1.1515317
 
 # h1e is the CAS space effective 1e hamiltonian
 # h2e is the CAS space 2e integrals in  notation # a' -> p # b' -> q # c' -> r
