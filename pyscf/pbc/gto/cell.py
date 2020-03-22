@@ -453,7 +453,7 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     r'''Estimate the largest distance between the function and its image to
     reach the precision in overlap
 
-    precision ~ \int g(r-0) g(r-R)
+    precision ~ \int g(r-0) g(r-Rcut)
     '''
     l = cell.bas_angular(bas_id)
     es = cell.bas_exp(bas_id)
