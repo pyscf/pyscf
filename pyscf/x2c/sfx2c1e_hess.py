@@ -17,8 +17,8 @@
 Analytical nuclear hessian for 1-electron spin-free x2c method
 
 Ref.
-JCP 135 244104
-JCTC 8 2617
+JCP 135, 244104 (2011); DOI:10.1063/1.3667202
+JCTC 8, 2617 (2012); DOI:10.1021/ct300127e
 '''
 
 import time

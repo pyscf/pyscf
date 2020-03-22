@@ -20,9 +20,9 @@
 Non-relativistic RHF spin-spin coupling (SSC) constants
 
 Ref.
-Chem. Rev., 99, 293
-JCP, 113, 3530
-JCP, 113, 9402
+Chem. Rev. 99, 293 (1999); DOI:10.1021/cr960017t
+JCP 113, 3530 (2000); DOI:10.1063/1.1286806 
+JCP 113, 9402 (2000); DOI:10.1063/1.1321296
 '''
 
 

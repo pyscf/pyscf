@@ -19,7 +19,7 @@
 '''
 RCCSD
 
-Ref: JCP, 90, 1752
+Ref: JCP 90, 1752 (1989); DOI:10.1063/1.456069
 '''
 
 from functools import reduce

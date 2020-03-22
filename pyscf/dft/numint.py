@@ -514,8 +514,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
         aow = _scale_ao(ao[:4], wv)
         mat = _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
 
-# JCP, 138, 244108
-# JCP, 112, 7002
+# JCP 138, 244108 (2013); DOI:10.1063/1.4811270
+# JCP 112, 7002 (2000); DOI:10.1063/1.481298
     if xctype == 'MGGA':
         vlapl, vtau = vxc[2:]
 

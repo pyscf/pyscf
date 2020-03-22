@@ -19,7 +19,7 @@
 '''
 Dirac Hartree-Fock hyperfine coupling tensor (In testing)
 
-Refs: JCP, 134, 044111
+Refs: JCP 134, 044111 (2011); DOI:10.1063/1.3526263
 '''
 
 from functools import reduce

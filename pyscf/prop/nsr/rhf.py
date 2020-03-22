@@ -20,7 +20,7 @@
 Non-relativistic nuclear spin-rotation tensors for RHF
 
 Refs:
-[1] J. Gauss, K. Ruud, T. Helgaker, J. Chem. Phys., 105, 2804 (1996)
+[1] J. Gauss, K. Ruud, T. Helgaker, J. Chem. Phys. 105, 2804 (1996); DOI:10.1063/1.472143
 '''
 
 

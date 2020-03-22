@@ -129,7 +129,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
         s^{ b}_{ij}, i.e. the (jb) indices are coupled.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
     cpu1 = cpu0 = (time.clock(), time.time())
@@ -361,7 +361,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
         See `ipccsd_star_contract` for description of arguments.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
     cpu1 = cpu0 = (time.clock(), time.time())

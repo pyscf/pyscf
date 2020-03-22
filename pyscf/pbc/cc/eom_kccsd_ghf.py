@@ -497,7 +497,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
         the (ia) indices are coupled.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
     cpu1 = cpu0 = (time.clock(), time.time())
@@ -1064,7 +1064,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
         before running the perturbative correction.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
     cpu1 = cpu0 = (time.clock(), time.time())

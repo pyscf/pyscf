@@ -20,8 +20,8 @@
 Non-relativistic rotational g-tensor for RHF
 
 Refs:
-[1] J. Gauss, K. Ruud, T. Helgaker, J. Chem. Phys., 105, 2804 (1996)
-[2] S. Sauer et al., Mol. Phys., 76, 445 (1991)
+[1] J. Gauss, K. Ruud, T. Helgaker, J. Chem. Phys. 105, 2804 (1996); DOI:10.1063/1.472143
+[2] S. Sauer et al., Mol. Phys. 76, 445 (1992); DOI:10.1080/00268979200101451
 '''
 
 

@@ -20,8 +20,8 @@
 Non-relativistic unrestricted Hartree-Fock hyperfine coupling tensor
 
 Refs:
-    JCP, 120, 2127
-    JCP, 118, 3939
+    JCP 120, 2127 (2004); DOI:10.1063/1.1636720
+    JCP 118, 3939 (2002); DOI:10.1063/1.1540619
 '''
 
 import time

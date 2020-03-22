@@ -36,7 +36,7 @@ from pyscf.grad.mp2 import _shell_prange, _index_frozen_active
 
 #
 # Note: only works with canonical orbitals
-# Non-canonical formula refers to JCP, 95, 2639
+# Non-canonical formula refers to JCP 95, 2639 (1991); DOI:10.1063/1.460916
 #
 def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
               d1=None, d2=None, verbose=logger.INFO):

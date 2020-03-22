@@ -20,7 +20,7 @@
 Spin-free lambda equation of RHF-CCSD(T)
 
 Ref:
-JCP, 147, 044104
+JCP 147, 044104 (2017); DOI:10.1063/1.4994918
 '''
 
 import time

@@ -24,8 +24,8 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd
 
 #
-# JCP, 95, 2623
-# JCP, 95, 2639
+# JCP 95, 2623 (1991); DOI:10.1063/1.460915
+# JCP 95, 2639 (1991); DOI:10.1063/1.460916
 #
 
 def _gamma1_intermediates(mycc, t1, t2, l1, l2):

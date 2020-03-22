@@ -17,8 +17,8 @@
 MP2-F12 (In testing)
 
 Refs:
-* JCC 32  2492
-* JCP 139 084112
+* JCC 32, 2492 (2011); DOI:10.1002/jcc.21825
+* JCP 139, 084112 (2013); DOI:10.1063/1.4818753
 
 With strong orthogonalization ansatz 2
 '''
