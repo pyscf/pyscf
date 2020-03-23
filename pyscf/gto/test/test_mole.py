@@ -220,7 +220,7 @@ C    SP
         mol1.output = '/dev/null'
         mol1.build(False, False)
         self.assertAlmostEqual(lib.fp(gto.inertia_moment(mol1)),
-                               2.139593709454326, 9)
+                               5.340587366981696, 9)
 
         mass = mol0.atom_mass_list(isotope_avg=True)
         self.assertAlmostEqual(lib.fp(gto.inertia_moment(mol1, mass)),
