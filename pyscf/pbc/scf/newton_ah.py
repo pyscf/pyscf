@@ -23,8 +23,6 @@ Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.soscf import newton_ah
-from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import _response_functions  # noqa
 
 def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
@@ -197,6 +195,8 @@ def _unpack(vo, mo_occ):
 
 
 def newton(mf):
+    from pyscf.soscf import newton_ah
+    from pyscf.pbc import scf as pscf
     if not isinstance(mf, pscf.khf.KSCF):
 # Note for single k-point other than gamma point (mf.kpt != 0) mf object,
 # orbital hessian is approximated by gamma point hessian.
@@ -298,6 +298,7 @@ def newton(mf):
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pbcgto
+    import pyscf.pbc.scf as pscf
     cell = pbcgto.Cell()
     cell.atom = '''
     He 0 0 1
