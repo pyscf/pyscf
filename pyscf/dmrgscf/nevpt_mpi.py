@@ -261,9 +261,9 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         raise err
 
     if nevptsolver.verbose >= logger.DEBUG1:
-        logger.debug1(nevptsolver, open(os.path.join(nevpt_scratch, '0', 'dmrg.out')).read())
+        logger.debug1(nevptsolver, open(os.path.join(nevpt_scratch, 'nevpt2_0', 'dmrg.out')).read())
 
-    perturb_file = os.path.join(nevpt_scratch, '0', 'Perturbation_%d'%root)
+    perturb_file = os.path.join(nevpt_scratch, 'Perturbation_%d'%root)
     fh5 = h5py.File(perturb_file, 'r')
     Vi_e  =  fh5['Vi/energy'][()]
     Vr_e  =  fh5['Vr/energy'][()]
@@ -283,21 +283,21 @@ def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
 
     mc_chkfile = os.path.abspath(mc_chkfile)
     dmrg_scratch = os.path.abspath(dmrg_scratch)
-    nevpt_scratch = os.path.abspath(os.path.join(nevpt_scratch, "nevpt2_"+str(rank)))
+    nevpt_scratch_mpi = os.path.abspath(os.path.join(nevpt_scratch, "nevpt2_"+str(rank)))
 
-    nevpt_inp = os.path.join(nevpt_scratch, 'dmrg.conf')
-    nevpt_out = os.path.join(nevpt_scratch, 'dmrg.out')
-    if not os.path.exists(nevpt_scratch):
-        os.makedirs(os.path.join(nevpt_scratch, 'node0'))
+    nevpt_inp = os.path.join(nevpt_scratch_mpi, 'dmrg.conf')
+    nevpt_out = os.path.join(nevpt_scratch_mpi, 'dmrg.out')
+    if not os.path.exists(nevpt_scratch_mpi):
+        os.makedirs(os.path.join(nevpt_scratch_mpi, 'node0'))
 
-    ncas, partial_core, partial_virt = _write_integral_file(mc_chkfile, nevpt_scratch, comm)
+    ncas, partial_core, partial_virt = _write_integral_file(mc_chkfile, nevpt_scratch_mpi, comm)
 
     nevpt_conf = _load(mc_chkfile, 'dmrg.conf', comm)
     with open(nevpt_inp, 'w') as f:
         f.write(nevpt_conf)
         f.write('restart_mps_nevpt %d %d %d \n'%(ncas, partial_core, partial_virt))
 
-    _distribute_dmrg_files(dmrg_scratch, nevpt_scratch, comm)
+    _distribute_dmrg_files(dmrg_scratch, nevpt_scratch_mpi, comm)
 
     root = _load(mc_chkfile, 'mc/root', comm)
 
@@ -308,15 +308,15 @@ def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
             del(env[k])
 
     p = subprocess.Popen(['%s %s > %s'%(blockfile,nevpt_inp,nevpt_out)],
-                         env=env, shell=True, cwd=nevpt_scratch)
+                         env=env, shell=True, cwd=nevpt_scratch_mpi)
     p.wait()
 
-    f = open(os.path.join(nevpt_scratch, 'node0', 'Va_%d'%root), 'r')
+    f = open(os.path.join(nevpt_scratch_mpi, 'node0', 'Va_%d'%root), 'r')
     Vr_energy = float(f.readline())
     Vr_norm = float(f.readline())
     f.close()
 
-    f = open(os.path.join(nevpt_scratch, 'node0', 'Vi_%d'%root), 'r')
+    f = open(os.path.join(nevpt_scratch_mpi, 'node0', 'Vi_%d'%root), 'r')
     Vi_energy = float(f.readline())
     Vi_norm = float(f.readline())
     f.close()
