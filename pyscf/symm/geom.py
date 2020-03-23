@@ -216,7 +216,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                     gpname = 'D%dd' % n
                 else:
                     gpname = 'D%d' % n
-                yaxis = numpy.cross(axes[2], c2x)
+                # yaxis = numpy.cross(axes[2], c2x)
                 axes = _make_axes(axes[2], c2x)
             elif mirrorx is not None:
                 gpname = 'C%dv' % n
@@ -415,10 +415,10 @@ def symm_identical_atoms(gpname, atoms):
         eql_atom_ids = [[i] for i,a in enumerate(atoms)]
         return eql_atom_ids
 
-    charges = numpy.array([gto.charge(a[0]) for a in atoms])
     coords = numpy.array([a[1] for a in atoms])
-    center = numpy.einsum('z,zr->r', charges, coords)/charges.sum()
 
+#    charges = numpy.array([gto.charge(a[0]) for a in atoms])
+#    center = numpy.einsum('z,zr->r', charges, coords)/charges.sum()
 #    if not numpy.allclose(center, 0, atol=TOLERANCE):
 #        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
 #                        % center)

@@ -28,7 +28,6 @@ from pyscf import scf
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import jk
-from pyscf.scf import addons
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf import __config__

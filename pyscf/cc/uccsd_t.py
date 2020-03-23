@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -340,7 +340,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
                 bufopv[:,nocca:,:] = ovvv[:,j-j0].conj()
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
-            ovvo = ovvv = None
+            ovov = ovvv = None
             cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
     return eris_vvop, eris_VVOP, eris_vVoP, eris_VvOp
 

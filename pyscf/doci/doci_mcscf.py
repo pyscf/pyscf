@@ -16,11 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import numpy
-from pyscf import lib
-from pyscf import ao2mo
 from pyscf.doci import doci_slow
-from pyscf.fci import direct_spin1, cistring
 from pyscf.mcscf import casci, mc1step
 
 
@@ -39,7 +35,7 @@ class CASSCF(mc1step.CASSCF):
         self.internal_rotation = True
 
 if __name__ == '__main__':
-    from pyscf import gto, scf, mcscf
+    from pyscf import gto, scf
     mol = gto.Mole()
     mol.verbose = 4
     mol.output = None

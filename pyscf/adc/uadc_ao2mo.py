@@ -39,7 +39,7 @@ def transform_integrals_incore(myadc):
     ind_vv = np.tril_indices(nvir_a)
     ind_OO = np.tril_indices(nocc_b)
     ind_VV = np.tril_indices(nvir_b)
-   
+
     eris = lambda:None
 
     # TODO: check if myadc._scf._eri is not None
@@ -97,7 +97,7 @@ def unpack_eri_1(eri, norb):
         else:
             raise TypeError("ERI dimensions don't match")
 
-    else: 
+    else:
             raise RuntimeError("ERI does not have a correct dimension")
 
     return eri_
@@ -119,7 +119,7 @@ def unpack_eri_2s(eri, norb):
         eri_ = np.zeros((norb, norb, norb, norb))
         eri_[ind_oo[0], ind_oo[1]] = temp
         eri_[ind_oo[1], ind_oo[0]] = temp
-    else: 
+    else:
             raise RuntimeError("ERI does not have a correct dimension")
 
     return eri_
@@ -143,7 +143,7 @@ def unpack_eri_2(eri, norb1, norb2):
         eri_ = np.zeros((norb1, norb1, norb2, norb2))
         eri_[ind_oo1[0], ind_oo1[1]] = temp
         eri_[ind_oo1[1], ind_oo1[0]] = temp
-    else: 
+    else:
             raise RuntimeError("ERI does not have a correct dimension")
 
     return eri_

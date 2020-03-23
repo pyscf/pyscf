@@ -310,9 +310,7 @@ class PolEmbed(lib.StreamObject):
 
 if __name__ == '__main__':
     import tempfile
-    from pyscf import gto
     from pyscf.solvent import PE
-    from pyscf.solvent import pol_embed
     mol = gto.M(atom='''
            6        0.000000    0.000000   -0.542500
            8        0.000000    0.000000    0.677500

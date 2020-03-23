@@ -21,11 +21,11 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 1-step optimization algorithm
 '''
 
+import sys
 import time
 import copy
 from functools import reduce
 import numpy
-import scipy.linalg
 import pyscf.gto
 import pyscf.scf
 from pyscf.lib import logger
@@ -638,7 +638,6 @@ class UCASSCF(ucasci.UCASCI):
 
     def approx_cas_integral(self, mo, u, eris):
         ncas = self.ncas
-        nelecas = self.nelecas
         ncore = self.ncore
         nocc = (ncas + ncore[0], ncas + ncore[1])
         nmo = mo[0].shape[1]
@@ -706,7 +705,6 @@ class UCASSCF(ucasci.UCASCI):
         ncas = self.ncas
         nelecas = self.nelecas
         ncore = self.ncore
-        nocc = (ncas + ncore[0], ncas + ncore[1])
         if getattr(self.fcisolver, 'approx_kernel', None):
             ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]
             return ci1, None

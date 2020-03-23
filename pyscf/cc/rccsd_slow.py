@@ -159,7 +159,6 @@ class RCCSD(ccsd.CCSD):
 
     def init_amps(self, eris):
         nocc = self.nocc
-        nvir = self.nmo - nocc
         mo_e = eris.fock.diagonal().real
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
@@ -472,7 +471,7 @@ class RCCSD(ccsd.CCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
 
-        fov = fock[:nocc,nocc:]
+        #fov = fock[:nocc,nocc:]
         foo = fock[:nocc,:nocc]
         fvv = fock[nocc:,nocc:]
 
@@ -771,7 +770,7 @@ class RCCSD(ccsd.CCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
 
-        fov = fock[:nocc,nocc:]
+        #fov = fock[:nocc,nocc:]
         foo = fock[:nocc,:nocc]
         fvv = fock[nocc:,nocc:]
 
@@ -781,7 +780,7 @@ class RCCSD(ccsd.CCSD):
         ooov = _cp(eris.ooov)
         vooo = ooov.conj().transpose(3,2,1,0)
         oovv = _cp(eris.oovv)
-        oooo = _cp(eris.oooo)
+        #oooo = _cp(eris.oooo)
         vvvv = _cp(eris.vvvv)
         ovvo = _cp(eris.ovvo)
 
@@ -941,7 +940,6 @@ class RCCSD(ccsd.CCSD):
 class _ChemistsERIs:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
-        cput0 = (time.clock(), time.time())
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = ccsd._mo_without_core(cc, cc.mo_coeff)
         else:

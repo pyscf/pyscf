@@ -31,10 +31,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.gto import mole
 from pyscf.ao2mo import _ao2mo
-from pyscf.scf import _response_functions
-from pyscf.prop.nmr import uhf as uhf_nmr
+from pyscf.scf import _response_functions  # noqa
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.data import nist
 
@@ -63,7 +61,6 @@ def koseki_charge(z):
 
 
 def direct_spin_spin(zfsobj, mol, dm0, verbose=None):
-    log = logger.new_logger(zfsobj, verbose)
     if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2: # RHF DM
         return numpy.zeros((3,3))
 
@@ -194,7 +191,7 @@ def make_soc2e(zfsobj, mo_coeff, mo_occ):
 def solve_mo1(sscobj, h1):
     cput1 = (time.clock(), time.time())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
-    mol = sscobj.mol
+
     mo_energy = sscobj._scf.mo_energy
     mo_coeff = sscobj._scf.mo_coeff
     mo_occ = sscobj._scf.mo_occ

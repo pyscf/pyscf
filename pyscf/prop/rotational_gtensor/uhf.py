@@ -21,7 +21,6 @@ Non-relativistic rotational g-tensor for UHF
 '''
 
 
-import time
 import numpy
 from pyscf import lib
 from pyscf.prop.nmr import uhf as uhf_nmr

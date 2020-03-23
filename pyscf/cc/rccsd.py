@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import _ccsd
 from pyscf.cc import rintermediates as imd
 from pyscf.mp import mp2
 from pyscf import __config__
@@ -252,7 +251,6 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
-    nvir = nmo - nocc
 
     if callable(ao2mofn):
         eri1 = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
@@ -280,9 +278,6 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
-    orbo = mo_coeff[:,:nocc]
-    orbv = mo_coeff[:,nocc:]
-    nvpair = nvir * (nvir+1) // 2
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))

@@ -230,7 +230,6 @@ z-1,2-DiChloroEthene                   9.2
 '''
 
 import ctypes
-import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger

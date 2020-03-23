@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -880,7 +880,7 @@ def _std_symbol(symb_or_chg):
             rawsymb = rawsymb[5:]  # Remove the prefix GHOST
             return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
         else:
-            raise RuntimeError('Unsupported atom symbol %s' % a)
+            raise RuntimeError('Unsupported atom symbol %s' % symb_or_chg)
     else:
         return ELEMENTS[symb_or_chg]
 
@@ -900,7 +900,7 @@ def _std_symbol_without_ghost(symb_or_chg):
             rawsymb = rawsymb[5:]  # Remove the prefix GHOST
             return _ELEMENTS_UPPER[rawsymb]
         else:
-            raise RuntimeError('Unsupported atom symbol %s' % a)
+            raise RuntimeError('Unsupported atom symbol %s' % symb_or_chg)
     else:
         return ELEMENTS[symb_or_chg]
 

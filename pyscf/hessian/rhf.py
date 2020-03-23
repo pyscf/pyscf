@@ -29,11 +29,11 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
-from pyscf.scf import _response_functions
 
-
+# import _response_functions to load gen_response methods in SCF class
+from pyscf.scf import _response_functions  # noqa
 # import pyscf.grad.rhf to activate nuc_grad_method method
-from pyscf.grad import rhf
+from pyscf.grad import rhf  # noqa
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -117,7 +117,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
-    nocc = mocc.shape[1]
     dm0 = numpy.dot(mocc, mocc.T) * 2
     # Energy weighted density matrix
     dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[mo_occ>0]) * 2
@@ -159,11 +158,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         vj1 = vj1.reshape(3,3,nao,nao)
         vk1 = vk1.reshape(3,3,nao,nao)
         t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
-
-        s1ao = numpy.zeros((3,nao,nao))
-        s1ao[:,p0:p1] += s1a[:,p0:p1]
-        s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
-        s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
         ej[i0,i0] += numpy.einsum('xypq,pq->xy', vj1_diag[:,:,p0:p1], dm0[p0:p1])*2
         ek[i0,i0] += numpy.einsum('xypq,pq->xy', vk1_diag[:,:,p0:p1], dm0[p0:p1])
@@ -216,7 +210,6 @@ def _make_vhfopt(mol, dms, key, vhf_intor):
 
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
-    time0 = t1 = (time.clock(), time.time())
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -573,7 +566,6 @@ class Hessian(lib.StreamObject):
         return hess_nuc(mol, atmlst)
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        cput0 = (time.clock(), time.time())
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ
@@ -595,7 +587,6 @@ scf.hf.RHF.Hessian = lib.class_as_method(Hessian)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
 
     mol = gto.Mole()

@@ -4,7 +4,6 @@
 #
 """Module for running k-point ccsd(t)"""
 
-import itertools
 import numpy as np
 import pyscf.pbc.cc.kccsd
 
@@ -13,12 +12,11 @@ from pyscf.lib import logger
 from pyscf.lib.misc import tril_product
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.misc import flatten
 from pyscf.lib.numpy_helper import cartesian_prod
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -69,12 +67,10 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     nkpts, nocc, nvir = t1.shape
 
-    mo_energy = [eris.mo_energy[ki] for ki in range(nkpts)]
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
     fov = eris.fock[:, :nocc, nocc:]
 
-    mo_e = mo_energy
     mo_e_o = mo_energy_occ
     mo_e_v = mo_energy_vir
 
@@ -281,7 +277,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
-    from pyscf.pbc import scf
     from pyscf.pbc import cc
 
     cell = gto.Cell()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import itertools
 from collections import OrderedDict
 from numbers import Number
 import numpy as np
-import scipy.linalg
 from pyscf import lib
 from pyscf import __config__
 
@@ -86,25 +85,6 @@ def get_kconserv(cell, kpts):
     return kconserv
 
 
-    if kconserv is None:
-        kconserv = get_kconserv(cell, kpts)
-
-    arr_offset = []
-    arr_size = []
-    offset = 0
-    for kk, kl, km in loop_kkk(nkpts):
-        kn = kconserv[kk, kl, km]
-
-        # Get array size for these k-points and add offset
-        size = np.prod([norb_per_kpt[x] for x in [kk, kl, km, kn]])
-
-        arr_size.append(size)
-        arr_offset.append(offset)
-
-        offset += size
-    return arr_offset, arr_size, (arr_size[-1] + arr_offset[-1])
-
-
 def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     '''Checks antipermutational symmetry for k-point array.
 
@@ -159,7 +139,7 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     orb_idx2 = (2 * nparticles - 1) + idx2
 
     # Sign of permutation
-    sign = (-1)**(abs(idx1 - idx2) + 1)
+    # sign = (-1)**(abs(idx1 - idx2) + 1)
     out_array_indices = np.arange(array_shape_len)
 
     out_array_indices[kpt_idx1], out_array_indices[kpt_idx2] = \
@@ -181,7 +161,6 @@ def get_kconserv3(cell, kpts, kijkab):
 
     where these kpoints are stored in kijkab[ki, kj, kk, ka, kb].
     '''
-    nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2*np.pi)
 
     kpts_i, kpts_j, kpts_k, kpts_a, kpts_b = \

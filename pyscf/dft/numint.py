@@ -19,9 +19,7 @@
 import warnings
 import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):
@@ -29,7 +27,6 @@ except (ImportError, OSError):
         from pyscf.dft import xcfun
         libxc = xcfun
     except (ImportError, OSError):
-        import warnings
         warnings.warn('XC functional libraries (libxc or XCfun) are not available.')
         from pyscf.dft import xc
         libxc = xc
@@ -342,10 +339,6 @@ def _vv10nlc(rho,coords,vvrho,vvweight,vvcoords,nlc_pars):
     Gy=rho[2,:][threshind]
     Gz=rho[3,:][threshind]
     G=Gx**2.+Gy**2.+Gz**2.
-
-    #threshed output
-    excthresh=numpy.zeros(R.size)
-    vxcthresh=numpy.zeros([2,R.size])
 
     #inner grid needs threshing
     innerthreshind=vvrho[0,:]>=thresh
@@ -858,7 +851,6 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'MGGA')
@@ -881,7 +873,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], mask, shls_slice, ao_loc)
                 vmat[idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], mask, shls_slice, ao_loc)
 
-                rho = exc = vxc = vrho = vsigma = wv = None
+                rho = exc = vxc = vrho = wv = None
 
     for i in range(nset):
         vmat[i] = vmat[i] + vmat[i].conj().T
@@ -1008,7 +1000,6 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
@@ -1041,7 +1032,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[1,idm] += _dot_ao_ao(mol, ao[1], wv*ao[1], mask, shls_slice, ao_loc)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], mask, shls_slice, ao_loc)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], mask, shls_slice, ao_loc)
-                rho_a = rho_b = exc = vxc = vrho = vsigma = wva = wvb = None
+                rho_a = rho_b = exc = vxc = vrho = wva = wvb = None
 
     for i in range(nset):
         vmat[0,i] = vmat[0,i] + vmat[0,i].conj().T
@@ -1175,7 +1166,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 aow = _scale_ao(ao, wv, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                rho1 = sigma1 = None
+                rho1 = None
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()
@@ -1233,10 +1224,6 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
                 ip += ngrid
             if singlet:
                 frho = u_u + u_d
-                if 0:
-                    rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'LDA')
-                    fxc_test = ni.eval_xc(xc_code, rho, 0, deriv=2)[2]
-                    assert(numpy.linalg.norm(fxc_test[0]*2-frho) < 1e-4)
             else:
                 frho = u_u - u_d
 
@@ -1294,7 +1281,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
                 #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 aow = _scale_ao(ao, wv, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                rho1 = sigma1 = None
+                rho1 = None
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()

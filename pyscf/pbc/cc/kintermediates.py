@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
 import numpy
-from pyscf.lib.parameters import LARGE_DENOM
+from pyscf.lib.parameters import LARGE_DENOM  # noqa
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 
@@ -185,8 +185,6 @@ def cc_Wovvo(cc,t1,t2,eris,kconserv):
 
 def cc_Wovvo_jk(cc, t1, t2, eris, kconserv):
     nkpts, nocc, nvir = t1.shape
-    eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc),dtype=t2.dtype)
-    eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc),dtype=t2.dtype)
     Wmbej = eris.ovvo.copy()
     for km in range(nkpts):
         for kb in range(nkpts):
@@ -372,9 +370,9 @@ def get_full_t3p2(mycc, t1, t2, eris):
         return ret
 
     fock = eris.fock
-    fov = fock[:, :nocc, nocc:]
-    foo = numpy.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
-    fvv = numpy.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    #fov = fock[:, :nocc, nocc:]
+    #foo = numpy.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    #fvv = numpy.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
     mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
@@ -455,8 +453,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     kconserv = cc.khelper.kconserv
 
     fov = [fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)]
-    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
-    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    #foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    #fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
     mo_energy_occ = numpy.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = numpy.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 

@@ -528,7 +528,6 @@ del(PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 3
     mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'

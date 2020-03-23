@@ -266,10 +266,10 @@ class KnownValues(unittest.TestCase):
         s, x = mf.det_ovlp(mf.mo_coeff, mf.mo_coeff, mf.mo_occ, mf.mo_occ)
         self.assertAlmostEqual(s, 1.000000000, 9)
 
-    def test_spin_square(self):
+    def test_spin_square1(self):
         self.assertAlmostEqual(mf.spin_square()[0], 0, 9)
 
-    def test_get_veff(self):
+    def test_get_veff1(self):
         pmol = gto.Mole()
         pmol.atom = '''
 O     0    0        0

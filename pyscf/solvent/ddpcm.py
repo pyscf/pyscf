@@ -24,13 +24,11 @@ JCP, 144, 054101
 JCP, 144, 160901
 '''
 
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
-from pyscf import df
-from pyscf.dft import gen_grid, numint
+from pyscf.dft import gen_grid
 from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.symm import sph

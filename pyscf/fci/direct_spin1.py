@@ -880,7 +880,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

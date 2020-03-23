@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #
 
 import time
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -34,7 +33,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
 
 # l2, t2 as ijab
 def make_intermediates(mycc, t1, t2, eris):
-    log = logger.Logger(mycc.stdout, mycc.verbose)
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, nvira = t1a.shape
@@ -296,7 +294,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
 # update L1, L2
 def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
-    time1 = time0 = time.clock(), time.time()
+    time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
     t1a, t1b = t1

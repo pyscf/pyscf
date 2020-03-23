@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -131,7 +131,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -108.8896744464714, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 0, 7)
 
-    def test_casci_from_uhf(self):
+    def test_casci_from_uhf1(self):
         mf = scf.UHF(mol)
         mf.scf()
         mc = mcscf.CASSCF(mf, 4, 4)

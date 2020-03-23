@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,8 +31,10 @@ import pyscf
 from pyscf import lib
 from pyscf import gto
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc.dft import numint, gen_grid
 from pyscf.tools import cubegen
+
+if sys.version_info >= (3,):
+    unicode = str
 
 RESOLUTION = cubegen.RESOLUTION
 BOX_MARGIN = cubegen.BOX_MARGIN
@@ -241,7 +243,7 @@ class CHGCAR(cubegen.Cube):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf
+    from pyscf.pbc import scf
     from pyscf.tools import chgcar
     cell = gto.M(atom='H 0 0 0; H 0 0 1', a=numpy.eye(3)*3)
     mf = scf.RHF(cell).run()

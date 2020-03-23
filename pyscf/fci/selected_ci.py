@@ -920,7 +920,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
     from pyscf.fci import spin_op
     from pyscf.fci import addons
 

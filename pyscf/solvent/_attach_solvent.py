@@ -169,14 +169,14 @@ def _for_casscf(mc, solvent_obj, dm=None):
 
             if (getattr(self._scf, 'with_solvent', None) and
                 not getattr(self, 'with_solvent', None)):
-                log.warn('''Solvent model %s was found in SCF object.
+                logger.warn(self, '''Solvent model %s was found in SCF object.
 COSMO is not applied to the CASCI object. The CASSCF result is not affected by the SCF solvent model.
 To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs to be called
         from pyscf import solvent
         mc = mcscf.CASSCF(...)
         mc = solvent.ddCOSMO(mc)
 ''',
-                         self._scf.with_solvent.__class__)
+                            self._scf.with_solvent.__class__)
             return self
 
         def reset(self, mol=None):
@@ -574,8 +574,8 @@ def _for_tdscf(method, solvent_obj, dm=None):
             return old_method.reset(self, mol)
 
         def get_ab(self, mf=None):
-            if mf is None: mf = self._scf
-            a, b = get_ab(mf)
+            #if mf is None: mf = self._scf
+            #a, b = get_ab(mf)
             if self.equilibrium_solvation:
                 raise NotImplementedError
 

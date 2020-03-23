@@ -23,9 +23,7 @@ Extension to numpy and scipy
 import string
 import ctypes
 import math
-import re
 import numpy
-import scipy.linalg
 from pyscf.lib import misc
 from numpy import asarray  # For backward compatibility
 
@@ -972,7 +970,7 @@ def direct_sum(subscripts, *operands):
         sign = [x for x in subscript if x in '+-']
 
         symbs = subscript[1:].replace('-', '+').split('+')
-        s = ''.join(symbs)
+        #s = ''.join(symbs)
         #assert(len(set(s)) == len(s))  # make sure no duplicated symbols
         return sign, symbs
 

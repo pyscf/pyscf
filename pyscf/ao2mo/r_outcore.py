@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     fswap = h5py.File(swapfile, 'w')
     for icomp in range(comp):
-        g = fswap.create_group(str(icomp))  # for h5py old version
+        fswap.create_group(str(icomp))  # for h5py old version
 
     tao = numpy.asarray(mol.tmap(), dtype=numpy.int32)
 
@@ -310,7 +310,6 @@ del(MAX_MEMORY)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = 'out_outcore'

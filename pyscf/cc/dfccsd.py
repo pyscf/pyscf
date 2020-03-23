@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,13 +120,11 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(cc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
     nvir = nmo - nocc
-    nocc_pair = nocc*(nocc+1)//2
     nvir_pair = nvir*(nvir+1)//2
     with_df = cc.with_df
     naux = eris.naux = with_df.get_naoaux()
@@ -143,7 +141,6 @@ def _make_df_eris(cc, mo_coeff=None):
 
     Loo = numpy.empty((naux,nocc,nocc))
     Lov = numpy.empty((naux,nocc,nvir))
-    fswap = lib.H5TmpFile()
     mo = numpy.asarray(eris.mo_coeff, order='F')
     ijslice = (0, nmo, 0, nmo)
     p1 = 0
@@ -158,7 +155,7 @@ def _make_df_eris(cc, mo_coeff=None):
         eris.vvL[:,p0:p1] = Lvv.T
     Lpq = Lvv = None
     Loo = Loo.reshape(naux,nocc**2)
-    Lvo = Lov.transpose(0,2,1).reshape(naux,nvir*nocc)
+    #Lvo = Lov.transpose(0,2,1).reshape(naux,nvir*nocc)
     Lov = Lov.reshape(naux,nocc*nvir)
     eris.oooo[:] = lib.ddot(Loo.T, Loo).reshape(nocc,nocc,nocc,nocc)
     eris.ovoo[:] = lib.ddot(Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)

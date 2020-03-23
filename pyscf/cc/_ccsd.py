@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ctypes
 import numpy
 from pyscf import lib
 
-libcc = lib.load_library('libcc')
+#import ctypes
+#libcc = lib.load_library('libcc')
 
 # t2 + numpy.einsum('ia,jb->ijab', t1a, t1b)
 def make_tau(t2, t1a, t1b, fac=1, out=None):

@@ -62,7 +62,6 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = uks_grad.get_vxc(
                 ni, mol, grids, mf.xc, dm,
                 max_memory=max_memory, verbose=ks_grad.verbose)
-    nao = vxc.shape[-1]
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
     if abs(hyb) < 1e-10:

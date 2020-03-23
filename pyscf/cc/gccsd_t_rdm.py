@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.cc import gccsd_rdm
 
 def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
@@ -168,7 +167,6 @@ if __name__ == '__main__':
     mf0 = mf = scf.UHF(mol).run(conv_tol=1)
     mf = scf.addons.convert_to_ghf(mf)
 
-    from pyscf.cc import uccsd_t_slow
     from pyscf.cc import uccsd_t_lambda
     from pyscf.cc import uccsd_t_rdm
     mycc0 = cc.UCCSD(mf0)

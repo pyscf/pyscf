@@ -25,10 +25,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.scf import ucphf
-from pyscf.scf import _response_functions
-from pyscf.ao2mo import _ao2mo
+from pyscf.scf import _response_functions  # noqa
 from pyscf.prop.nmr import rhf as rhf_nmr
 
 
@@ -192,7 +190,6 @@ def gen_vind(mf, mo_coeff, mo_occ):
     nocca = orboa.shape[1]
     noccb = orbob.shape[1]
     nao, nmo = mo_coeff[0].shape
-    nvira = nmo - nocca
     def vind(mo1):
         mo1a = mo1.reshape(3,-1)[:,:nocca*nmo].reshape(3,nmo,nocca)
         mo1b = mo1.reshape(3,-1)[:,nocca*nmo:].reshape(3,nmo,noccb)

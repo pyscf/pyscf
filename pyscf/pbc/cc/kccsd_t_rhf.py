@@ -6,7 +6,6 @@
 
 import ctypes
 import h5py
-import itertools
 import numpy as np
 import pyscf.pbc.cc.kccsd_rhf
 import time
@@ -15,16 +14,10 @@ from itertools import product
 from pyscf import lib
 from pyscf.cc import _ccsd
 from pyscf.lib import logger
-from pyscf.lib.misc import tril_product
-from pyscf.lib.misc import flatten
-from pyscf.lib.numpy_helper import cartesian_prod
-from pyscf.lib.numpy_helper import pack_tril
 from pyscf.lib.parameters import LARGE_DENOM
-from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
-from pyscf import __config__
+                               padded_mo_coeff, padding_k_idx)  # noqa
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -151,8 +144,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     def get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
         '''Vijkabc intermediate as described in Scuseria paper'''
-        km = kconserv[ki,ka,kj]
-        kf = kconserv[ki,ka,kj]
+        #km = kconserv[ki,ka,kj]
+        #kf = kconserv[ki,ka,kj]
         out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
         if kk == kc:
             out = out + einsum('ck,baji->abcijk', 0.5*t1T[kk,c0:c1,:], eris_vvop[kb,ka,kj,b0:b1,a0:a1,:,:nocc])
@@ -171,7 +164,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     def get_permuted_v(ki, kj, kk, ka, kb, kc, orb_indices):
         '''Pijkabc operating on Vijkabc intermediate as described in Scuseria paper'''
         a0, a1, b0, b1, c0, c1 = orb_indices
-        tmp = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
         ret = get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1)
         ret = ret + get_v(kj, kk, ki, kb, kc, ka, b0, b1, c0, c1, a0, a1).transpose(2,0,1,5,3,4)
         ret = ret + get_v(kk, ki, kj, kc, ka, kb, c0, c1, a0, a1, b0, b1).transpose(1,2,0,4,5,3)

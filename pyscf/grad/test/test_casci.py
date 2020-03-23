@@ -12,6 +12,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import ao2mo
+from pyscf.scf import cphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casci as casci_grad
 from pyscf.grad import ccsd as ccsd_grad

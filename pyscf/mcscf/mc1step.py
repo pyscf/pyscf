@@ -30,7 +30,6 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import gto
-from pyscf import fci
 from pyscf.soscf import ciah
 from pyscf import __config__
 
@@ -212,7 +211,6 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
     u = 1
     g_orb, gorb_update, h_op, h_diag = \
             casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
-    ngorb = g_orb.size
     g_kf = g_orb
     norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
     log.debug('    |g|=%5.3g', norm_gorb)
@@ -1040,8 +1038,6 @@ To enable the solvent model for CASSCF, the following code needs to be called
         '''
         ncas = self.ncas
         nelecas = self.nelecas
-        ncore = self.ncore
-        nocc = ncore + ncas
         if 'norm_gorb' in envs:
             tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:

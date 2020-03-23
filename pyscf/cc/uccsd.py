@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#         Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
@@ -28,7 +29,6 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import rccsd
 from pyscf.ao2mo import _ao2mo
 from pyscf.mp import ump2
 from pyscf import scf
@@ -158,7 +158,7 @@ def update_amps(cc, t1, t2, eris):
     woVvO += 0.5*lib.einsum('nJfB,menf->mBeJ', t2ab, ovov)
     tmpaa = lib.einsum('jf,menf->mnej', t1a, ovov)
     wovvo -= lib.einsum('nb,mnej->mbej', t1a, tmpaa)
-    eirs_ovov = ovov = tmpaa = tilaa = None
+    eris_ovov = ovov = tmpaa = tilaa = None
 
     eris_OVOV = np.asarray(eris.OVOV)
     eris_OVOO = np.asarray(eris.OVOO)
@@ -269,7 +269,7 @@ def update_amps(cc, t1, t2, eris):
     tmp1ab = lib.einsum('ie,meBJ->mBiJ', t1a, eris_ovVO)
     tmp1ab+= lib.einsum('IE,mjBE->mBjI', t1b, eris_ooVV)
     u2ab -= lib.einsum('ma,mBiJ->iJaB', t1a, tmp1ab)
-    eris_ooVV = eris_ovVo = tmp1ab = None
+    eris_ooVV = eris_ovVO = tmp1ab = None
 
     eris_OOvv = np.asarray(eris.OOvv)
     eris_OVvo = np.asarray(eris.OVvo)
@@ -279,7 +279,7 @@ def update_amps(cc, t1, t2, eris):
     tmp1ba = lib.einsum('IE,MEbj->MbIj', t1b, eris_OVvo)
     tmp1ba+= lib.einsum('ie,MJbe->MbJi', t1a, eris_OOvv)
     u2ab -= lib.einsum('MA,MbIj->jIbA', t1b, tmp1ba)
-    eris_OOvv = eris_OVvO = tmp1ba = None
+    eris_OOvv = eris_OVvo = tmp1ba = None
 
     u2aa += 2*lib.einsum('imae,mbej->ijab', t2aa, wovvo)
     u2aa += 2*lib.einsum('iMaE,MbEj->ijab', t2ab, wOvVo)
@@ -875,7 +875,6 @@ def _get_ovvv_base(ovvv, *slices):
         return ovvv
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
-    cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
@@ -955,7 +954,6 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
@@ -1228,8 +1226,6 @@ def _fp(nocc, nmo):
 
 
 if __name__ == '__main__':
-    import copy
-    from pyscf import scf
     from pyscf import gto
 
     mol = gto.Mole()

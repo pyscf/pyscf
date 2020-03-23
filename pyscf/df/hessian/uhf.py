@@ -125,8 +125,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             vk1a_diag += lib.einsum('xijp,plj->xil', int3c_ipip1, tmp).reshape(3,3,nao,nao)
             tmp = lib.einsum('Plj,Jj->PlJ', rhok0b_Pl_[p0:p1], moccb)
             vk1b_diag += lib.einsum('xijp,plj->xil', int3c_ipip1, tmp).reshape(3,3,nao,nao)
-    vhfa_diag = vj1_diag-vk1a_diag
-    vhfb_diag = vj1_diag-vk1b_diag
+
     t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
     int3c_ipip1 = get_int3c_ipip1 = tmp = None
 
@@ -230,12 +229,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             vk1b += lib.einsum('xijp,pki->xjk', int3c_ipvip1, tmp).reshape(3,3,nao,nao)
         t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
         int3c_ipvip1 = tmp = None
-
-        s1ao = numpy.zeros((3,nao,nao))
-        s1ao[:,p0:p1] += s1a[:,p0:p1]
-        s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
-        s1ooa = numpy.einsum('xpq,pi,qj->xij', s1ao, mocca, mocca)
-        s1oob = numpy.einsum('xpq,pi,qj->xij', s1ao, moccb, moccb)
 
         e1[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
         ej[i0,i0] += numpy.einsum('xypq,pq->xy', vj1_diag[:,:,p0:p1], dm0[p0:p1])*2
@@ -391,19 +384,10 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return e1, ej, ek
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
-    time0 = t1 = (time.clock(), time.time())
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
 
-    nao, nmo = mo_coeff[0].shape
-    mocca = mo_coeff[0][:,mo_occ[0]>0]
-    moccb = mo_coeff[1][:,mo_occ[1]>0]
-    dm0a = numpy.dot(mocca, mocca.T)
-    dm0b = numpy.dot(moccb, moccb.T)
-    hcore_deriv = hessobj.base.nuc_grad_method().hcore_generator(mol)
-
-    aoslices = mol.aoslice_by_atom()
     h1aoa = [None] * mol.natm
     h1aob = [None] * mol.natm
     for ia, h1, vj1, vk1a, vk1b in _gen_jk(hessobj, mo_coeff, mo_occ, chkfile,
@@ -424,7 +408,6 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
 
 def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
             verbose=None, with_k=True):
-    time0 = t1 = (time.clock(), time.time())
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)

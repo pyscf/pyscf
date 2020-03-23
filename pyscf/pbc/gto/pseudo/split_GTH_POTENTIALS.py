@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import os
-import re
-import sys
 
 def main():
 
@@ -39,7 +35,7 @@ def main():
                 banner_count = 1
                 is_header = False
                 is_footer = False
-            else: 
+            else:
                 if is_header:
                     header.append(line)
                 else:

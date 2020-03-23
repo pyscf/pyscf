@@ -34,7 +34,7 @@ from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
 from pyscf.scf import cphf
-from pyscf.scf import _response_functions
+from pyscf.scf import _response_functions  # noqa
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.data import nist
@@ -145,7 +145,6 @@ def make_fc(sscobj, nuc_pair=None):
 def solve_mo1_fc(sscobj, h1):
     cput1 = (time.clock(), time.time())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
-    mol = sscobj.mol
     mo_energy = sscobj._scf.mo_energy
     mo_coeff = sscobj._scf.mo_coeff
     mo_occ = sscobj._scf.mo_occ
@@ -407,7 +406,7 @@ class SpinSpinCoupling(lib.StreamObject):
             for k, (i, j) in enumerate(self.nuc_pair):
                 ktensor[i,j] = ktensor[j,i] = iso_ssc[k]
                 if self.verbose >= logger.DEBUG:
-                    _write(self.stdout, ssc_dia[k]+ssc_para[k],
+                    _write(self.stdout, e11[k],
                            '\nSSC E11 between %d %s and %d %s' \
                            % (i, self.mol.atom_symbol(i),
                               j, self.mol.atom_symbol(j)))
@@ -431,11 +430,11 @@ class SpinSpinCoupling(lib.StreamObject):
 
     def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
              nuc_pair=None):
-        ssc_para = self.make_pso(mol, mo1, mo_coeff, mo_occ)
+        ssc_para = self.make_pso(mol, mo10, mo_coeff, mo_occ)
         if self.with_fcsd:
-            ssc_para += self.make_fcsd(mol, mo1, mo_coeff, mo_occ)
+            ssc_para += self.make_fcsd(mol, mo10, mo_coeff, mo_occ)
         elif self.with_fc:
-            ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
+            ssc_para += self.make_fc(mol, mo10, mo_coeff, mo_occ)
         return ssc_para
 
     solve_mo1 = solve_mo1
@@ -447,8 +446,6 @@ scf.hf.RHF.SSC = scf.hf.RHF.SpinSpinCoupling = lib.class_as_method(SSC)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None

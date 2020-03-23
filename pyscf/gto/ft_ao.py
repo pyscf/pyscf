@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -165,8 +165,6 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-
     mol = gto.Mole()
     mol.atom = '''C    1.3    .2       .3
                   C     .1    .1      1.1

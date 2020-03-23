@@ -20,11 +20,12 @@
 Pseudo-spectral methods (COSX, PS, SN-K)
 '''
 
-import time
 import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
+from pyscf import scf
+from pyscf import mcscf
 from pyscf.scf import _vhf
 from pyscf.lib import logger
 from pyscf.sgx import sgx_jk
@@ -61,9 +62,6 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
     >>> mf.scf()
     -100.00978770951018
     '''
-    from pyscf import scf
-    from pyscf import df
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
@@ -157,8 +155,6 @@ class _SGXHF(object):
     CASCI = method_not_implemented
     CASSCF = method_not_implemented
 
-from pyscf import scf
-from pyscf import mcscf
 scf.hf.SCF.COSX = sgx_fit
 mcscf.casci.CASCI.COSX = sgx_fit
 
@@ -294,7 +290,6 @@ class SGX(lib.StreamObject):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
     mol.build(

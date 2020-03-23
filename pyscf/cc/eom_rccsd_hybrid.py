@@ -16,17 +16,13 @@
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
 import numpy as np
 
 from pyscf import lib
-from pyscf import ao2mo
-from pyscf.lib import logger
-from pyscf.cc import ccsd
-from pyscf.cc import rintermediates as imd
-from pyscf import __config__
-
-from pyscf.cc.eom_rccsd import EOMIP, EOMEA, amplitudes_to_vector_ip, vector_to_amplitudes_ip, amplitudes_to_vector_ea, vector_to_amplitudes_ea
+from pyscf.cc.eom_rccsd import (EOMIP, EOMEA, amplitudes_to_vector_ip,
+                                vector_to_amplitudes_ip,
+                                amplitudes_to_vector_ea,
+                                vector_to_amplitudes_ea)
 
 def ipccsd_matvec(eom, vector, imds=None, diag=None):
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
@@ -37,7 +33,6 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
 
     occ_act = np.arange(nocc)
     vir_act = np.arange(eom.nvir_act)
-    i_act = np.ix_(occ_act)
     ija_act = np.ix_(occ_act,occ_act,vir_act)
 
     # 1h-1h block
@@ -142,12 +137,10 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    nvir = nmo - nocc
     r1, r2 = vector_to_amplitudes_ea(vector, nmo, nocc)
 
     occ_act = np.arange(nocc)
     vir_act = np.arange(eom.nvir_act)
-    a_act = np.ix_(vir_act)
     iab_act = np.ix_(occ_act,vir_act,vir_act)
     ib_act = np.ix_(occ_act,vir_act)
 

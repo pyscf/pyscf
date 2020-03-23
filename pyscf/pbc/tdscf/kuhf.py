@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,12 +19,11 @@
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
-from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import uhf
-from pyscf.scf import uhf_symm
+from pyscf.pbc import scf
 from pyscf.pbc.tdscf.krhf import _get_e_ia
-from pyscf.pbc.scf import _response_functions
+from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
@@ -35,19 +34,14 @@ class TDA(uhf.TDA):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def __init__(self, mf):
-        from pyscf.pbc import scf
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         assert(isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         uhf.TDA.__init__(self, mf)
-        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
 
     def gen_vind(self, mf):
         '''Compute Ax'''
-        singlet = self.singlet
-        cell = mf.cell
-        kpts = mf.kpts
-
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
@@ -65,8 +59,6 @@ class TDA(uhf.TDA):
         e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0])
         e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1])
         hdiag = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
-        tot_x_a = sum(x.size for x in e_ia_a)
-        tot_x_b = sum(x.size for x in e_ia_b)
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
@@ -139,7 +131,6 @@ class TDA(uhf.TDA):
                               verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ
-        tot_x_a = sum((occ>0).sum()*(occ==0).sum() for occ in mo_occ[0])
         self.xy = [(_unpack(xi, mo_occ),  # (X_alpha, X_beta)
                     (0, 0))  # (Y_alpha, Y_beta)
                    for xi in x1]
@@ -150,10 +141,6 @@ CIS = KTDA = TDA
 
 class TDHF(TDA):
     def gen_vind(self, mf):
-        singlet = self.singlet
-        cell = mf.cell
-        kpts = mf.kpts
-
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ

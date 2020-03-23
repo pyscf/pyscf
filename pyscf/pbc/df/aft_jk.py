@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -71,8 +71,6 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    dmsR = dms.real.reshape(nset,nkpts,nao**2)
-    dmsI = dms.imag.reshape(nset,nkpts,nao**2)
     kpt_allow = numpy.zeros(3)
     mesh = mydf.mesh
     coulG = mydf.weighted_coulG(kpt_allow, False, mesh)
@@ -276,7 +274,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     # rho_rs(-G+k_rs) is computed as conj(rho_{rs^*}(G-k_rs))
     #                 == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
-    blksize = max(int(max_memory*.25e6/16/nao**2), 16)
+    #blksize = max(int(max_memory*.25e6/16/nao**2), 16)
     pLqR = pLqI = None
     for pqkR, pqkI, p0, p1 in mydf.pw_loop(mesh, kptii, max_memory=max_memory):
         t2 = log.timer_debug1('%d:%d ft_aopair'%(p0,p1), *t2)
@@ -324,9 +322,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i], vkI[i])
             #t2 = log.timer_debug1('        with_k', *t2)
-        pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
+        pqkR = pqkI = pLqR = pLqI = iLkR = iLkI = None
         #t2 = log.timer_debug1('%d:%d'%(p0,p1), *t2)
-    bufR = bufI = None
     t1 = log.timer_debug1('aft_jk.get_jk', *t1)
 
     if with_j:

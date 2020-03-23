@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -151,6 +151,7 @@ _SEC_RE = re.compile(r'\[[^]]+\]')
 
 def _read_one_section(molden_fp):
     sec = [None]
+    last_pos = 0
     while True:
         line = molden_fp.readline()
         if not line:
@@ -235,7 +236,6 @@ def _parse_gto(lines, envs):
 
 def _parse_mo(lines, envs):
     mol = envs['mol']
-    atoms = envs['atoms']
     if not mol._built:
         try:
             mol.build(0, 0)
@@ -247,7 +247,6 @@ def _parse_mo(lines, envs):
     spins = []
     mo_occ = []
     mo_coeff = []
-    norb_alpha = -1
     for line in lines[1:]:
         line = line.upper()
         if 'SYM' in line:
@@ -279,8 +278,6 @@ def _parse_mo(lines, envs):
 def _parse_core(lines, envs):
     mol = envs['mol']
     atoms = envs['atoms']
-    line_id = 1
-    max_lines = len(lines)
     for line in lines[1:]:
         dat = line.split(':')
         if dat[0].strip().isdigit():

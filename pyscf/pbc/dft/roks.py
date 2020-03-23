@@ -20,7 +20,6 @@
 Restricted open-shell Kohn-Sham for periodic systems at a single k-point
 '''
 
-import time
 import numpy
 import pyscf.dft
 from pyscf import lib

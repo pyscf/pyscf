@@ -56,7 +56,6 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, compress_vvvv=False):
 def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc * nvir
     nvir_pair = nvir * (nvir+1) //2
     dtype = numpy.result_type(t1, t2, l1, l2).char
     if compress_vvvv:
@@ -101,7 +100,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     gooov = gooov.conj()
     gooov -= lib.einsum('jkba,ib->jkia', l2, t1)
     h5fobj['dooov'] = gooov.transpose(0,2,1,3)*2 - gooov.transpose(1,2,0,3)
-    tau = goovo = None
+    tau = None
     time1 = log.timer_debug1('rdm intermediates pass1', *time1)
 
     goovv = numpy.einsum('ia,jb->ijab', mia.conj(), t1.conj())
@@ -151,7 +150,6 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3,
                nvir**3*2+nocc*nvir**2*2+nocc**2*nvir*2)
     blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
-    iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
@@ -208,7 +206,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
         gvovv += lib.einsum('ja,jibc->aibc', t1[:,p0:p1], l2)
 
         dovvv[:,:,p0:p1] = gvovv.transpose(1,3,0,2)*2 - gvovv.transpose(1,2,0,3)
-        gvvov = None
+        gvovv = None
         time1 = log.timer_debug1('rdm intermediates pass3 [%d:%d]'%(p0, p1), *time1)
 
     fswap = None
@@ -385,8 +383,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf.cc import ccsd
-    from pyscf import ao2mo
 
     mol = gto.M()
     mf = scf.RHF(mol)

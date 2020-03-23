@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ from pyscf.ci import ucisd
 from pyscf.ci import gcisd
 
 def CISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    __doc__ = cisd.CISD.__doc__
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, scf.uhf.UHF):
@@ -31,9 +30,9 @@ def CISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         return UCISD(mf, frozen, mo_coeff, mo_occ)
     else:
         return RCISD(mf, frozen, mo_coeff, mo_occ)
+CISD.__doc__ = cisd.CISD.__doc__
 
 def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    __doc__ = cisd.RCISD.__doc__
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
@@ -43,9 +42,9 @@ def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-RCISD')
     else:
         return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
+RCISD.__doc__ = cisd.RCISD.__doc__
 
 def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    __doc__ = ucisd.UCISD.__doc__
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
@@ -55,10 +54,10 @@ def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-UCISD')
     else:
         return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
+UCISD.__doc__ = ucisd.UCISD.__doc__
 
 
 def GCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    __doc__ = gcisd.GCISD.__doc__
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
@@ -68,3 +67,4 @@ def GCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-GCISD')
     else:
         return gcisd.GCISD(mf, frozen, mo_coeff, mo_occ)
+GCISD.__doc__ = gcisd.GCISD.__doc__

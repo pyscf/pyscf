@@ -73,7 +73,6 @@ class AtomSphericAverageRHF(hf.RHF):
 
     def eig(self, f, s):
         mol = self.mol
-        symb = mol.atom_symbol(0)
         ao_ang = _angular_momentum_for_each_ao(mol)
 
         nao = mol.nao

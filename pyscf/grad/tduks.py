@@ -24,13 +24,10 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import dft
-from pyscf.dft import rks
 from pyscf.dft import numint
 from pyscf.grad import tdrhf as tdrhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.scf import ucphf
-from pyscf import __config__
 
 
 #
@@ -429,7 +426,6 @@ tdscf.uks.TDA.Gradients = tdscf.uks.TDDFT.Gradients = lib.class_as_method(Gradie
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     from pyscf import dft
     from pyscf import tddft
     mol = gto.Mole()

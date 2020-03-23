@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1049,7 +1049,8 @@ def dumps(mol):
 def loads(molstr):
     '''Deserialize a str containing a JSON document to a Mole object.
     '''
-    from numpy import array  # for eval function
+    # the numpy function array is used by eval function
+    from numpy import array  # noqa
     moldic = json.loads(molstr)
     if sys.version_info < (3,):
 # Convert to utf8 because JSON loads fucntion returns unicode.
@@ -1771,7 +1772,7 @@ def atom_mass_list(mol, isotope_avg=False):
             else:
                 prop = nucprop.get(stdsymb, {})
 
-            mass.append(nucprop.get('mass', mass_table[z]))
+            mass.append(prop.get('mass', mass_table[z]))
     else:
         mass = [mass_table[z] for z in mol.atom_charges()]
 
@@ -1872,7 +1873,7 @@ def fromstring(string, format='xyz'):
         natm = int(dat[0])
         return '\n'.join(dat[2:natm+2])
     elif format == 'sdf':
-        raw = raw.splitlines()
+        raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
         atoms = []
         for line in raw[4:4+int(natoms)]:
@@ -2142,7 +2143,7 @@ class Mole(lib.StreamObject):
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
-        from pyscf import __all__
+        from pyscf import __all__  # noqa
         from pyscf import scf, dft
         for mod in (scf, dft):
             method = getattr(mod, key, None)
@@ -2513,9 +2514,9 @@ class Mole(lib.StreamObject):
             self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
             self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
                               'expnt,             c_1 c_2 ...\n')
-            for atom, basis in self._basis.items():
+            for atom, basis_set in self._basis.items():
                 self.stdout.write('[INPUT] %s\n' % atom)
-                for b in basis:
+                for b in basis_set:
                     if isinstance(b[1], int):
                         kappa = b[1]
                         b_coeff = b[2:]
@@ -3092,8 +3093,8 @@ class Mole(lib.StreamObject):
     def fromstring(self, string, format='xyz'):
         '''Update the Mole object based on the input geometry string'''
         self.atom = string
-        self._atom = mol.format_atom(fromstring(string, format))
-        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        self._atom = self.format_atom(fromstring(string, format))
+        self.set_geom_(self, self._atom, unit='Angstrom', inplace=True)
         if format == 'sdf' and 'M  CHG' in string:
             raise NotImplementedError
             #FIXME self.charge = 0
@@ -3102,8 +3103,8 @@ class Mole(lib.StreamObject):
     def fromfile(self, filename, format=None):
         '''Update the Mole object based on the input geometry file'''
         self.atom = filename
-        self._atom = mol.format_atom(fromfile(filename, format))
-        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        self._atom = self.format_atom(fromfile(filename, format))
+        self.set_geom_(self, self._atom, unit='Angstrom', inplace=True)
         return self
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,

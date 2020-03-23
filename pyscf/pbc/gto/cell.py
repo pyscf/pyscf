@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ try:
   from scipy.special import factorial2
 except:
   from scipy.misc import factorial2
-from scipy.special import erf, erfc, erfcx
+from scipy.special import erf, erfc
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
@@ -36,7 +36,7 @@ from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
 from pyscf.gto.mole import (_symbol, _rm_digit, _atom_symbol, _std_symbol,
-                            _std_symbol_without_ghost, charge, is_ghost_atom)
+                            _std_symbol_without_ghost, charge, is_ghost_atom) # noqa
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
@@ -246,7 +246,7 @@ def dumps(cell):
 def loads(cellstr):
     '''Deserialize a str containing a JSON document to a Cell object.
     '''
-    from numpy import array  # for eval function
+    from numpy import array  # noqa
     celldic = json.loads(cellstr)
     if sys.version_info < (3,):
 # Convert to utf8 because JSON loads fucntion returns unicode.
@@ -501,7 +501,6 @@ def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
     return Ecut_max
 
 def error_for_ke_cutoff(cell, ke_cutoff):
-    b = cell.reciprocal_vectors()
     kmax = np.sqrt(ke_cutoff*2)
     errmax = 0
     for i in range(cell.nbas):
@@ -1124,7 +1123,7 @@ class Cell(mole.Mole):
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
-        from pyscf.pbc import __all__
+        from pyscf.pbc import __all__  # noqa
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
         for mod in (scf, dft):

@@ -29,8 +29,6 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.dft import numint
-from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge

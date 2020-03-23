@@ -40,7 +40,7 @@ if __name__ == '__main__':
     import numpy
     from pyscf import lib
     from pyscf import gto
-    from pyscf import scf, dft
+    from pyscf import dft
 
     mol = gto.Mole()
     mol.verbose = 0

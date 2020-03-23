@@ -17,7 +17,6 @@
 #          Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import ctypes
 import time
 import tempfile
@@ -548,7 +547,6 @@ def Sir(mc, dms, eris, verbose=None):
         h2e_v1 = h2e_v1.reshape(mo_virt.shape[1],ncore,ncas,ncas).transpose(0,2,1,3)
         h2e_v2 = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_cas,mo_cas,mo_core],compact=False)
         h2e_v2 = h2e_v2.reshape(mo_virt.shape[1],ncas,ncas,ncore).transpose(0,2,1,3)
-        core_dm = numpy.dot(mo_core,mo_core.T)*2
     else:
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)

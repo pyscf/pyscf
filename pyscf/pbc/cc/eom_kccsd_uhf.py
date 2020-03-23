@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,25 +21,18 @@
 #
 
 import time
-from functools import reduce
 import itertools
 import numpy as np
-import h5py
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.pbc import scf
-from pyscf.cc import uccsd
-from pyscf.cc import eom_uccsd
 from pyscf.pbc.cc import eom_kccsd_ghf as eom_kgccsd
 from pyscf.pbc.cc import kccsd
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-from pyscf.pbc.lib.kpts_helper import member, gamma_point
-from pyscf import __config__
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
-                                padded_mo_coeff, padding_k_idx)
+                                padded_mo_coeff, padding_k_idx)  # noqa
 
 einsum = lib.einsum
 
@@ -337,7 +330,7 @@ def ipccsd_diag(eom, kshift, imds=None):
         #fVV = eris.fock[1][:,:nvir_b,:nvir_b]
         for ki in range(nkpts):
             for kj in range(nkpts):
-                kb = kconserv[ki,kshift,kj]
+                ka = kconserv[ki,kshift,kj]
                 Hr2aaa[ki,kj]  = imds.Fvv[ka].diagonal()
                 Hr2aaa[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
                 Hr2aaa[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
@@ -402,8 +395,6 @@ def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
     nkpts = eom.nkpts
     nocca, noccb = eom.nocc
     nmoa, nmob = eom.nmo
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
     kconserv = eom.kconserv
 
     r1, r2 = eom.vector_to_amplitudes(vector, kshift, nkpts, (nmoa, nmob), (nocca, noccb), kconserv)
@@ -911,8 +902,6 @@ def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
     nkpts = eom.nkpts
     nocca, noccb = eom.nocc
     nmoa, nmob = eom.nmo
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
     kconserv = eom.kconserv
 
     r1, r2 = eom.vector_to_amplitudes(vector, kshift, nkpts, (nmoa, nmob), (nocca, noccb), kconserv)
@@ -1061,7 +1050,6 @@ class _IMDS:
     def _make_shared(self):
         cput0 = (time.clock(), time.time())
 
-        kconserv = self.kconserv
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Foo, self.FOO = kintermediates_uhf.Foo(self._cc, t1, t2, eris)
         self.Fvv, self.FVV = kintermediates_uhf.Fvv(self._cc, t1, t2, eris)
@@ -1132,7 +1120,8 @@ class _IMDS:
             return self.Wvvvv[ka,kc,kb], self.WvvVV[ka,kc,kb], self.WVVVV[ka,kc,kb]
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto
+    from pyscf.pbc import scf
     from pyscf import lo
 
     cell = gto.Cell()

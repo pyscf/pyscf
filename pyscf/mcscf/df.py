@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import sys
 import time
 import ctypes
 from functools import reduce
@@ -349,7 +348,6 @@ class _ERIS(object):
         t0 = log.timer('density fitting ao2mo', *t0)
 
 def _mem_usage(ncore, ncas, nmo):
-    nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
     return incore, outcore, basic

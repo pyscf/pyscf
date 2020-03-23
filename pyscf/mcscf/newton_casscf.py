@@ -20,21 +20,16 @@
 Second order CASSCF
 '''
 
-import sys
 import time
 import copy
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import casci, mc1step, addons
 from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
-from pyscf.mcscf import chkfile
-from pyscf import ao2mo
 from pyscf import scf
 from pyscf.soscf import ciah
-from pyscf import fci
 
 
 # gradients, hessian operator and hessian diagonal
@@ -557,6 +552,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
                                     casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
+            ncas = casscf.ncas
+            ncore = casscf.ncore
+            nocc = ncas + ncore
             occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = -occ
 
@@ -789,9 +787,7 @@ class CASSCF(mc1step.CASSCF):
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     import pyscf.fci
-    from pyscf.mcscf import addons
 
     mol = gto.Mole()
     mol.verbose = 0

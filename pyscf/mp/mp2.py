@@ -19,7 +19,6 @@ RMP2
 '''
 
 import time
-from functools import reduce
 import copy
 import numpy
 from pyscf import gto
@@ -793,7 +792,6 @@ del(WITH_T2)
 
 if __name__ == '__main__':
     from pyscf import scf
-    from pyscf import gto
     mol = gto.Mole()
     mol.atom = [
         [8 , (0. , 0.     , 0.)],

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ from functools import reduce
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf, hf_symm, uhf_symm
-from pyscf.scf import _response_functions
+from pyscf.scf import _response_functions  # noqa
 from pyscf.soscf import newton_ah
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
@@ -218,7 +218,6 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
 
     vresp1 = mf.gen_response(singlet=False, hermi=1)
     def hop_rhf2uhf(x1):
-        from pyscf.dft import numint
         # See also rhf.TDA triplet excitation
         x1 = x1.reshape(nvir,nocc)
         if with_symmetry and mol.symmetry:
@@ -329,7 +328,6 @@ def uhf_internal(mf, with_symmetry=True, verbose=None):
 def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     occidxa = numpy.where(mo_occ[0]>0)[0]
     occidxb = numpy.where(mo_occ[1]>0)[0]
@@ -365,9 +363,6 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     hdiag1 = numpy.hstack((h_diaga.reshape(-1), h_diagb.reshape(-1)))
     if with_symmetry and mol.symmetry:
         hdiag1[sym_forbid1] = 0
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mf.max_memory*.8-mem_now)
 
     vrespz = mf.gen_response(with_j=False, hermi=2)
     def hop_real2complex(x1):

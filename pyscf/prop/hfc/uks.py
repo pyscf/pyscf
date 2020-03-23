@@ -25,7 +25,6 @@ Refs:
     JCP, 118, 3939
 '''
 
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.scf import _vhf
@@ -64,7 +63,7 @@ class HyperfineCoupling(uhf_hfc.HyperfineCoupling):
     make_h1_soc2e = make_h1_soc2e
 
     def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
+        log = lib.logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)

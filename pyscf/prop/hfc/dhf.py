@@ -25,7 +25,6 @@ Refs: JCP, 134, 044111
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.prop.ssc import dhf as dhf_ssc
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 
@@ -108,7 +107,7 @@ class HyperfineCoupling(lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
+        log = lib.logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)

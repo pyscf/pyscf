@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -642,8 +642,6 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             A modified FCI object based on fciobj.
     '''
     import types
-    from pyscf.fci import spin_op
-    from pyscf.fci import direct_spin0
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
                          'It was replaced by "ss"\n')

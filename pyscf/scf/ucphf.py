@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -99,8 +99,6 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     nocca = numpy.count_nonzero(occidxa)
     noccb = numpy.count_nonzero(occidxb)
     nmoa, nmob = mo_occ[0].size, mo_occ[1].size
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
     eai_a = mo_energy[0][viridxa,None] - mo_energy[0][occidxa]
     eai_b = mo_energy[1][viridxb,None] - mo_energy[1][occidxb]
     s1_a = s1[0].reshape(-1,nmoa,nocca)

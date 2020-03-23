@@ -27,7 +27,7 @@ from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
 from pyscf.pbc.df.aft import _sub_df_jk_
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)

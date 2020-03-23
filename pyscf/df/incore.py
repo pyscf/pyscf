@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import addons
+from pyscf.gto.moleintor import getints
 from pyscf import __config__
 
 
@@ -45,7 +46,6 @@ def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None,
 
             cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     '''
-    from pyscf.gto.moleintor import getints, make_cintopt
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
 
     # Extract the call of the two lines below

@@ -19,9 +19,7 @@
 '''Non-relativistic RKS analytical nuclear gradients'''
 
 import time
-import copy
 import numpy
-import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -85,7 +83,6 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
-    shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((nset,3,nao,nao))
@@ -111,7 +108,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                                  verbose=verbose)[1]
                 wv = numint._rks_gga_wv0(rho, vxc, weight)
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
-                rho = vxc = vrho = vsigma = wv = None
+                rho = vxc = vrho = wv = None
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
     else:
@@ -193,7 +190,6 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'GGA':
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
-            ngrids = weight.size
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho = make_rho(0, ao[:4], mask, 'GGA')
@@ -209,7 +205,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = vsigma = wv = mat = None
+            rho = vxc = vrho = wv = None
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
@@ -381,7 +377,6 @@ dft.rks.RKS.Gradients = dft.rks_symm.RKS.Gradients = lib.class_as_method(Gradien
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import dft
 
     mol = gto.Mole()

@@ -25,6 +25,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
+from pyscf.data import nist
 from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = 1e-9

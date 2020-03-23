@@ -23,13 +23,10 @@ Ref: JCP, 90, 1752
 '''
 
 from functools import reduce
-import time
 import numpy
 import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.grad import ccsd as ccsd_grad
 
@@ -41,7 +38,6 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     mo_energy = cc._scf.mo_energy
     nao, nmo = mo_coeff.shape
     nocc = numpy.count_nonzero(cc.mo_occ > 0)
-    nvir = nmo - nocc
     mo_e_o = mo_energy[:nocc]
     mo_e_v = mo_energy[nocc:]
     with_frozen = not ((cc.frozen is None)
@@ -75,7 +71,7 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     h1 =-(mol.intor('int1e_ipkin', comp=3)
          +mol.intor('int1e_ipnuc', comp=3))
     s1 =-mol.intor('int1e_ipovlp', comp=3)
-    zeta = lib.direct_sum('i-j->ij', mo_energy, mo_energy)
+    #zeta = lib.direct_sum('i-j->ij', mo_energy, mo_energy)
     eri1 = mol.intor('int2e_ip1', comp=3).reshape(3,nao,nao,nao,nao)
     eri1 = numpy.einsum('xipkl,pj->xijkl', eri1, mo_coeff)
     eri1 = numpy.einsum('xijpl,pk->xijkl', eri1, mo_coeff)

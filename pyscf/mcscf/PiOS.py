@@ -412,7 +412,7 @@ def GetNumPiElec(iAt, Elements,Coords):
 
     # find number of bonded partners
     iBonded = []
-    for (jAt, AtJ) in len(Atoms):
+    for (jAt, AtJ) in enumerate(Elements):
         if iAt == jAt:
             continue
         rij = np.sum((Coords[At] - Coords[AtJ])**2)**.5

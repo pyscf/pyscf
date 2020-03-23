@@ -1,5 +1,5 @@
 # TODO: By PySCF-1.5 release
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -428,7 +428,7 @@ class FIntegralContext(object):
       (ValuesOnGrid,) = self._InvokeBfint(Args, Outputs, Inputs)
       nComp = [1,4,10][DerivativeOrder]
       if nComp != 1:
-         ValuesOnGrid = Values.reshape((Grid.shape[1], nComp, Orbitals.shape[1]))
+         ValuesOnGrid = ValuesOnGrid.reshape((Grid.shape[1], nComp, Orbitals.shape[1]))
       return ValuesOnGrid
 
    def MakeRaw2eIntegrals(self, Smh=True, Kernel2e="coulomb"):

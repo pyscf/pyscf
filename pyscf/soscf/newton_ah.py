@@ -22,19 +22,18 @@ Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 
 import sys
 import time
-import copy
 from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm, ghf_symm
 from pyscf.scf import hf, rohf, uhf
-from pyscf.scf import _response_functions
+# import _response_functions to load gen_response methods in SCF class
+from pyscf.scf import _response_functions  # noqa
 from pyscf.soscf import ciah
 from pyscf import __config__
 
@@ -326,7 +325,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
         return x
 
     t3m = (time.clock(), time.time())
-    u = g_kf = g_orb = kfcount = jkcount = None
+    u = g_kf = g_orb = norm_gorb = dxi = kfcount = jkcount = None
     dm0 = vhf0 = None
     g_op = lambda: g_orb
     while True:
@@ -681,8 +680,8 @@ class _CIAH_SOSCF(object):
         cput0 = (time.clock(), time.time())
         if dm0 is not None:
             if isinstance(dm0, str):
-                sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
-                dm0 = mf.from_chk(dm0)
+                sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm0)
+                dm0 = self.from_chk(dm0)
 
         elif mo_coeff is not None and mo_occ is None:
             logger.warn(self, 'Newton solver expects mo_coeff with '

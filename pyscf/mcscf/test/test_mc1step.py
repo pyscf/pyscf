@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -271,7 +271,7 @@ class KnownValues(unittest.TestCase):
         mcdic = lib.chkfile.load(mc0.chkfile, 'mcscf')
         mcscf.chkfile.dump_mcscf(mc0, **mcdic)
 
-    def test_state_average(self):
+    def test_state_average1(self):
         mc = mcscf.CASSCF(m, 4, 4)
         mc.state_average_([0.5, 0.25, 0.25])
         mc.fcisolver.spin = 2
