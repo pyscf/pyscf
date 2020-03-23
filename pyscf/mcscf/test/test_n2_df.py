@@ -117,16 +117,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_casci_4o4e(self):
-        mc = mcscf.CASCI(m.density_fit(), 4, 4)
+        mc = mcscf.CASCI(m.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -108.8896744464714, 7)
+        self.assertAlmostEqual(emc, -108.88669369639578, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.6910276344981119, 4)
 
     def test_casci_symm_4o4e(self):
-        mc = mcscf.CASCI(msym.density_fit(), 4, 4)
+        mc = mcscf.CASCI(msym.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -108.8896744464714, 7)
+        self.assertAlmostEqual(emc, -108.88669369639578, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.6910276344981119, 4)
 
@@ -141,12 +141,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -108.88669369639578, 7)
 
     def test_casci_from_uhf(self):
-        mf = scf.UHF(mol)
-        mf.scf()
-        mc = mcscf.CASCI(mf, 4, 4)
+        mf = scf.UHF(mol).run()
+        mc = mcscf.CASCI(mf.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -108.8896744464714, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 0, 7)
+        self.assertAlmostEqual(emc, -108.88669369639578, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.6910275883606078, 4)
 
     def test_casci_from_uhf1(self):
         mf = scf.UHF(mol)

@@ -1082,8 +1082,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
             e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ecore=ecore,
                                            ci0=ci0, tol=tol, max_memory=max_memory)
         else:
-            nd = min(max(self.ci_response_space, 2), ci0.size)
-            logger.debug(self, 'CI step by %dD subspace response', nd)
+            nd = self.ci_response_space
             xs = [ci0.ravel()]
             ax = [hc]
             heff = numpy.empty((nd,nd))
@@ -1091,14 +1090,18 @@ To enable the solvent model for CASSCF, the following code needs to be called
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
             for i in range(1, nd):
-                xs.append(ax[i-1] - xs[i-1] * e_cas)
+                dx = ax[i-1] - xs[i-1] * e_cas
+                if numpy.linalg.norm(dx) < 1e-3:
+                    break
+                xs.append(dx)
                 ax.append(contract_2e(xs[i]))
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-            e, v = lib.safe_eigh(heff, seff)[:2]
+            nd = len(xs)
+            e, v = lib.safe_eigh(heff[:nd,:nd], seff[:nd,:nd])[:2]
             ci1 = xs[0] * v[0,0]
-            for i in range(1,nd):
+            for i in range(1, nd):
                 ci1 += xs[i] * v[i,0]
         return ci1, g
 

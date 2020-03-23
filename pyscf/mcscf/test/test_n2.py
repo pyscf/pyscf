@@ -128,8 +128,9 @@ class KnownValues(unittest.TestCase):
         mf.scf()
         mc = mcscf.CASCI(mf, 4, 4)
         emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -108.8896744464714, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 0, 7)
+        self.assertAlmostEqual(emc, -108.8896744464714, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.6910275883606078, 4)
 
     def test_casci_from_uhf1(self):
         mf = scf.UHF(mol)

@@ -126,7 +126,7 @@ def _symmetrize(mat, orbsym, groupname):
     mat1[allowed] = mat[allowed]
 
     if groupname in ('Dooh', 'Coov'):
-        newton_ah._force_Ex_Ey_degeneracy_(mat1, orbsym)
+        _force_Ex_Ey_degeneracy_(mat1, orbsym)
     return mat1
 
 
