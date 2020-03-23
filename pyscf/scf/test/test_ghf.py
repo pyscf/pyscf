@@ -25,6 +25,7 @@ from functools import reduce
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
+from pyscf import ao2mo
 
 mol = gto.M(
     verbose = 5,
@@ -138,11 +139,21 @@ class KnownValues(unittest.TestCase):
     def test_get_veff(self):
         nao = mol.nao_nr()*2
         numpy.random.seed(1)
-        d1 = numpy.random.random((nao,nao))
-        d2 = numpy.random.random((nao,nao))
-        d = (d1+d1.T, d2+d2.T)
+        d1 = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao)) * 1j
+        d2 = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao)) * 1j
+        d = numpy.array((d1+d1.conj().T, d2+d2.conj().T))
+        eri = numpy.zeros((nao, nao, nao, nao))
+        n = nao // 2
+        eri[:n,:n,:n,:n] = \
+        eri[n:,n:,n:,n:] = \
+        eri[:n,:n,n:,n:] = \
+        eri[n:,n:,:n,:n] = ao2mo.restore(1, mf._eri, n)
+        vj = numpy.einsum('ijkl,xji->xkl', eri, d)
+        vk = numpy.einsum('ijkl,xjk->xil', eri, d)
+        ref = vj - vk
         v = mf.get_veff(mol, d)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 556.53059717681901, 9)
+        self.assertAlmostEqual(abs(ref - v).max(), 0, 12)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 560.3785699368684, 9)
 
     def test_get_jk(self):
         nao = mol.nao_nr()*2

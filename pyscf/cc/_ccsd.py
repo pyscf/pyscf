@@ -16,8 +16,7 @@
 import numpy
 from pyscf import lib
 
-#import ctypes
-#libcc = lib.load_library('libcc')
+libcc = lib.load_library('libcc')  # noqa
 
 # t2 + numpy.einsum('ia,jb->ijab', t1a, t1b)
 def make_tau(t2, t1a, t1b, fac=1, out=None):

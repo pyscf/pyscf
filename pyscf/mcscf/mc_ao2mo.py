@@ -279,8 +279,6 @@ class _ERIS(object):
             self.j_pc, self.k_pc, self.ppaa, self.papa = \
                     trans_e1_incore(eri, mo, ncore, ncas)
         else:
-            import gc
-            gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
             self.feri = lib.H5TmpFile()
             max_memory = max(3000, casscf.max_memory*.9-mem_now)

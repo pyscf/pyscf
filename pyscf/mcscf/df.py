@@ -251,8 +251,6 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
 
 class _ERIS(object):
     def __init__(self, casscf, mo, with_df):
-        import gc
-        gc.collect()
         log = logger.Logger(casscf.stdout, casscf.verbose)
 
         mol = casscf.mol

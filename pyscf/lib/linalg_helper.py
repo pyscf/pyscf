@@ -385,9 +385,11 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
             if len(xt) != x0len:
-                log.warn('QR decomposition removed %d vectors.  The davidson may fail.'
-                         'Check to see if `pick` function :%s: is providing linear dependent '
-                         'vectors' % (x0len - len(xt), pick.__name__))
+                log.warn('QR decomposition removed %d vectors.  The davidson may fail.',
+                         x0len - len(xt))
+                if callable(pick):
+                    log.warn('Check to see if `pick` function %s is providing '
+                             'linear dependent vectors', pick.__name__)
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots

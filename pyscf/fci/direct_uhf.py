@@ -195,7 +195,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
             addr = numpy.argpartition(hdiag, np-1)[:np]
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
-    nb = hdiag.size
+    nb = cistring.num_strings(norb, nelecb)
     addra = addr // nb
     addrb = addr % nb
     stra = cistring.addrs2str(norb, neleca, addra)

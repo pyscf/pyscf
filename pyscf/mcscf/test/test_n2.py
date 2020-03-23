@@ -169,6 +169,14 @@ class KnownValues(unittest.TestCase):
         emc = mc.kernel()[0]
         self.assertAlmostEqual(emc, -108.80789718975041, 7)
 
+    def test_newton_casscf(self):
+        mc = mcscf.newton(mcscf.CASSCF(m, 4, 4)).run()
+        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
+
+    def test_newton_casscf_symm(self):
+        mc = mcscf.newton(mcscf.CASSCF(msym, 4, 4)).run()
+        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
+
 if __name__ == "__main__":
     print("Full Tests for N2")
     unittest.main()

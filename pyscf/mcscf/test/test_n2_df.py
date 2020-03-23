@@ -186,16 +186,6 @@ class KnownValues(unittest.TestCase):
         mc.kernel()
         self.assertAlmostEqual(mc.e_tot, -108.98010545803884, 7)
 
-    def test_newton_casscf(self):
-        mc = mcscf.newton(mcscf.CASSCF(m, 4, 4))
-        mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
-
-    def test_newton_casscf_symm(self):
-        mc = mcscf.newton(mcscf.CASSCF(msym, 4, 4))
-        mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
-
     def test_init(self):
         from pyscf.mcscf import df
         mf = scf.RHF(mol)
