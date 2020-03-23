@@ -281,7 +281,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
-        self.assertAlmostEqual(lib.lib.fp(rho), 7.2089907050590334, 9)
+        self.assertAlmostEqual(lib.fp(rho), 7.2089907050590334, 9)
 
     def test_1d_rho(self):
         cell = pbcgto.Cell()
@@ -302,7 +302,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
-        self.assertAlmostEqual(lib.lib.fp(rho), 1.1624587519868457, 9)
+        self.assertAlmostEqual(lib.fp(rho), 1.1624587519868457, 9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")

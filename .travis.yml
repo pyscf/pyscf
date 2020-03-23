@@ -25,8 +25,9 @@ python:
   - 3.6
   - 3.7
 
-#virtualenv:  affect python 3.5 3.6?
-#    system_site_packages: true
+cache:
+  apt: true
+  pip: true
 
 before_install:
   - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl

@@ -1091,7 +1091,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
             seff[0,0] = 1
             for i in range(1, nd):
                 dx = ax[i-1] - xs[i-1] * e_cas
-                if numpy.linalg.norm(dx) < 1e-3:
+                if numpy.linalg.norm(dx) < 1e-6:
                     break
                 xs.append(dx)
                 ax.append(contract_2e(xs[i]))

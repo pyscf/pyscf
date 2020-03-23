@@ -16,6 +16,7 @@
 import numpy as np
 from pyscf import lib
 from pyscf import ao2mo
+from pyscf.cc.rintermediates import _get_vvvv  # noqa
 from pyscf.cc.ccsd import BLKMIN
 
 # Ref: Gauss and Stanton, J. Chem. Phys. 103, 3561 (1995) Table III
