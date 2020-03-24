@@ -56,7 +56,8 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
 
-    # Necessary kludge because gfock isn't occ-virt space in sacasscf
+    # Necessary kludge because gfock isn't zero in occ-virt space in SA-CASSCf
+    # Among many other potential applications!
     if hasattr (mc, '_tag_gfock_ov_nonzero'):
         if mc._tag_gfock_ov_nonzero:
             nocc = nmo
