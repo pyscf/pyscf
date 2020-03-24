@@ -43,6 +43,7 @@ def init_guess_by_atom(mol):
     return numpy.array((dm*.5, dm*.5))
 
 init_guess_by_huckel = uhf.init_guess_by_huckel
+init_guess_by_sapfit = uhf.init_guess_by_sapfit
 init_guess_by_chkfile = uhf.init_guess_by_chkfile
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
@@ -354,6 +355,11 @@ class ROHF(hf.RHF):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from the superpostion of atomic densties.')
         return init_guess_by_atom(mol)
+
+    def init_guess_by_sapfit(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from fitted SAP guess (arXiv:2002.02587, doi:10.1021/acs.jctc.8b01089).')
+        return init_guess_by_sapfit(mol)
 
     def init_guess_by_huckel(self, mol=None):
         if mol is None: mol = self.mol

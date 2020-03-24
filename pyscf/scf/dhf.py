@@ -149,6 +149,11 @@ def init_guess_by_1e(mol):
     '''Initial guess from one electron system.'''
     return UHF(mol).init_guess_by_1e(mol)
 
+def init_guess_by_sapfit(mol):
+    '''Initial guess from superposition of fitted atomic potentials.'''
+    dm = hf.init_guess_by_sapfit(mol)
+    return _proj_dmll(mol, dm, mol)
+
 def init_guess_by_atom(mol):
     '''Initial guess from atom calculation.'''
     dm = hf.init_guess_by_atom(mol)
@@ -418,6 +423,11 @@ class UHF(hf.SCF):
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
         return init_guess_by_atom(mol)
+
+    def init_guess_by_sapfit(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from fitted SAP guess (arXiv:2002.02587, doi:10.1021/acs.jctc.8b01089).')
+        return init_guess_by_sapfit(mol)
 
     @lib.with_doc(hf.SCF.init_guess_by_huckel.__doc__)
     def init_guess_by_huckel(self, mol=None):
