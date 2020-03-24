@@ -296,6 +296,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     ''' MRH, 04/08/2019: This is a thin wrapper around the original gen_g_hop to weight and average the derivatives
         in the second-order algorithm for a SA-CASSCF calculation. '''
+    # TODO: make compatible with state_average_mix
     ngorb = numpy.count_nonzero (casscf.uniq_var_indices (mo.shape[1], casscf.ncore, casscf.ncas, casscf.frozen))
     nroots = casscf.fcisolver.nroots
     fcasscf = casscf._base_class (casscf._scf, casscf.ncas, casscf.nelecas)
