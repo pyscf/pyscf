@@ -478,9 +478,13 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
+        log.note("\nTo work with the spin densities directly, `use mulliken_meta_spin()` only printing them here.\n")
+        mulliken_meta_spin(mf.mol, dm, s=ovlp_ao, verbose=log)
         return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
                 mf.dip_moment(mf.mol, dm, verbose=log))
     else:
+        log.note("\nTo work with the spin densities directly, `use mulliken_spin_pop()` only printing them here.\n")
+        mulliken_spin_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
         return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
                 mf.dip_moment(mf.mol, dm, verbose=log))
 
