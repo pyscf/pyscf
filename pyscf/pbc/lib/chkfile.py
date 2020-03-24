@@ -44,10 +44,10 @@ def load_cell(chkfile):
     '''
     with h5py.File(chkfile, 'r') as fh5:
         try:
-            cell = pyscf.pbc.gto.loads(fh5['mol'].value)
+            cell = pyscf.pbc.gto.loads(fh5['mol'][()])
         except:
             from numpy import array  # for eval() function
-            celldic = eval(fh5['mol'].value)
+            celldic = eval(fh5['mol'][()])
             cell = pyscf.pbc.gto.cell.unpack(celldic)
             cell.build(False, False)
     return cell
