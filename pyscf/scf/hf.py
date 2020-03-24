@@ -33,6 +33,7 @@ from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
+from pyscf.scf.sapfit import sapfit_guess
 from pyscf.data import nist, elements
 from pyscf import __config__
 
@@ -593,13 +594,21 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     dm = uhf.init_guess_by_chkfile(mol, chkfile_name, project)
     return dm[0] + dm[1]
 
+def init_guess_by_sapfit(mol):
+    '''Generate initial guess density matrix from superposition of atomic potentials
+
+    Returns:
+        Density matrix, 2D ndarray
+    '''
+    mf = RHF(mol)
+    return mf.init_guess_by_sapfit(mol)
 
 def get_init_guess(mol, key='minao'):
     '''Generate density matrix for initial guess
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'sapfit', 'chkfile'.
     '''
     return RHF(mol).get_init_guess(mol, key)
 
@@ -1550,6 +1559,18 @@ class SCF(lib.StreamObject):
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         return self.make_rdm1(mo_coeff, mo_occ)
 
+    @lib.with_doc(init_guess_by_sapfit.__doc__)
+    def init_guess_by_sapfit(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from fitted SAP guess (arXiv:2002.02587, doi:10.1021/acs.jctc.8b01089).')
+
+        t = mol.intor_symmetric('int1e_kin')
+        vsap = sapfit_guess(mol)
+        s1e = self.get_ovlp(mol)
+        mo_energy, mo_coeff = self.eig(t + vsap, s1e)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        return self.make_rdm1(mo_coeff, mo_occ)
+
     @lib.with_doc(init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if isinstance(chkfile, gto.Mole):
@@ -1575,6 +1596,8 @@ class SCF(lib.StreamObject):
             dm = self.init_guess_by_1e(mol)
         elif key == 'atom':
             dm = self.init_guess_by_atom(mol)
+        elif key == 'sapfit':
+            dm = self.init_guess_by_sapfit(mol)
         elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()

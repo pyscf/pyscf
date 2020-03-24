@@ -50,6 +50,9 @@ def init_guess_by_minao(mol, breaksym=BREAKSYM):
 def init_guess_by_1e(mol, breaksym=BREAKSYM):
     return UHF(mol).init_guess_by_1e(mol, breaksym)
 
+def init_guess_by_sapfit(mol, breaksym=BREAKSYM):
+    return UHF(mol).init_guess_by_sapfit(mol, breaksym)
+
 def init_guess_by_atom(mol, breaksym=BREAKSYM):
     dm = hf.init_guess_by_atom(mol)
     dma = dmb = dm*.5
@@ -743,6 +746,24 @@ class UHF(hf.SCF):
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
         mo_energy, mo_coeff = self.eig((h1e,h1e), s1e)
+        mo_occ = self.get_occ(mo_energy, mo_coeff)
+        dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
+        if mol.spin == 0 and breaksym:
+            #remove off-diagonal part of beta DM
+            dmb = numpy.zeros_like(dma)
+            for b0, b1, p0, p1 in mol.aoslice_by_atom():
+                dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
+        return numpy.array((dma,dmb))
+
+    def init_guess_by_sapfit(self, mol=None, breaksym=BREAKSYM):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from fitted SAP guess (arXiv:2002.02587, doi:10.1021/acs.jctc.8b01089).')
+
+        t = mol.intor_symmetric('int1e_kin')
+        vsap = sapfit_guess(mol)
+        s1e = self.get_ovlp(mol)
+        mo_energy, mo_coeff = self.eig(t + vsap, s1e)
+
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
         if mol.spin == 0 and breaksym:

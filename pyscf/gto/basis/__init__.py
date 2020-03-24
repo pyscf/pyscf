@@ -274,6 +274,11 @@ ALIAS = {
     'bfdv5z'     : 'bfd_v5z.dat',
     'bfd'        : 'bfd_pp.dat',
     'bfdpp'      : 'bfd_pp.dat',
+# Atomic potential
+    'graspsmall'  : 'grasp_small.dat',
+    'grasplarge'  : 'grasp_large.dat',
+    'helfemsmall' : 'helfem_small.dat',
+    'helfemlarge' : 'helfem_large.dat',
 #
     'ccpcvdzf12optri': os.path.join('f12-basis', 'cc-pCVDZ-F12-OptRI.dat'),
     'ccpcvtzf12optri': os.path.join('f12-basis', 'cc-pCVTZ-F12-OptRI.dat'),
@@ -297,7 +302,7 @@ ALIAS = {
     'pobtzvp'       :  'pob-tzvp.dat',
     'pobtzvpp'      :  'pob-tzvpp.dat',
     'crystalccpvdz' :  'crystal-cc-pvdz.dat',
-# ccECP 
+# ccECP
     'ccecp'         : join('ccecp-basis', 'ccECP', 'ccECP.dat'   ),
     'ccecpccpvdz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVDZ.dat'),
     'ccecpccpvtz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVTZ.dat'),
@@ -309,7 +314,7 @@ ALIAS = {
     'ccecpaugccpvqz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpaugccpv5z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV5Z.dat'),
     'ccecpaugccpv6z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV6Z.dat'),
-# ccECP_He_core 
+# ccECP_He_core
     'ccecphe'         : join('ccecp-basis', 'ccECP_He_core', 'ccECP.dat'   ),
     'ccecpheccpvdz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVDZ.dat'),
     'ccecpheccpvtz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVTZ.dat'),
