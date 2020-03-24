@@ -61,7 +61,7 @@ class Gradients (rhf_grad.GradientsBasics):
         self.conv_tol = default_conv_tol
         self.max_cycle = default_max_cycle
         self.lindep = default_lindep
-        super().__init__(method)
+        rhf_grad.GradientsBasics.__init__(self, method)
 
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, **kwargs):
         lib.logger.debug (self, "{} gradient Lagrange factor debugging not enabled".format (self.base.__class__.__name__))

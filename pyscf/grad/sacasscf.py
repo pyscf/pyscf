@@ -45,8 +45,8 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     mo_cas = mo_coeff[:,ncore:nocc]
 
     # MRH: new 'effective' MO coefficients including contraction from the Lagrange multipliers
-    moL_coeff = mo_coeff @ Lorb
-    s0_inv = mo_coeff @ mo_coeff.T
+    moL_coeff = np.dot (mo_coeff, Lorb)
+    s0_inv = np.dot (mo_coeff,  mo_coeff.T)
     moL_core = moL_coeff[:,:ncore]
     moL_cas = moL_coeff[:,ncore:nocc]
 
@@ -87,15 +87,15 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     vhfL_c = vjL[0] - vkL[0] * .5
     vhfL_a = vjL[1] - vkL[1] * .5
     # MRH: I rewrote this Feff calculation completely, double-check it
-    gfock  = h1 @ dm1L # h1e
-    gfock += (vhf_c + vhf_a) @ dmL_core # core-core and active-core, 2nd 1RDM linked
-    gfock += (vhfL_c + vhfL_a) @ dm_core # core-core and active-core, 1st 1RDM linked
-    gfock += vhfL_c @ dm_cas # core-active, 1st 1RDM linked
-    gfock += vhf_c @ dmL_cas # core-active, 2nd 1RDM linked
-    gfock = s0_inv @ gfock # Definition of quantity is in MO's; going (AO->MO->AO) incurs an inverse ovlp
-    gfock += mo_coeff @ np.einsum('uviw,uvtw->it', aapaL, casdm2) @ mo_cas.T # active-active
+    gfock  = np.dot (h1, dm1L) # h1e
+    gfock += np.dot ((vhf_c + vhf_a), dmL_core) # core-core and active-core, 2nd 1RDM linked
+    gfock += np.dot ((vhfL_c + vhfL_a), dm_core) # core-core and active-core, 1st 1RDM linked
+    gfock += np.dot (vhfL_c, dm_cas) # core-active, 1st 1RDM linked
+    gfock += np.dot (vhf_c, dmL_cas) # core-active, 2nd 1RDM linked
+    gfock  = np.dot (s0_inv, gfock) # Definition of quantity is in MO's; going (AO->MO->AO) incurs an inverse ovlp
+    gfock += reduce (np.dot, (mo_coeff, np.einsum('uviw,uvtw->it', aapaL, casdm2), mo_cas.T)) # active-active
     # MRH: I have to contract this external 2RDM index explicitly on the 2RDM but fortunately I can do so here
-    gfock += mo_coeff @ np.einsum('uviw,vuwt->it', aapa, casdm2) @ moL_cas.T 
+    gfock += reduce (np.dot, (mo_coeff, np.einsum('uviw,vuwt->it', aapa, casdm2), moL_cas.T))
     # MRH: As of 04/18/2019, the two-body part of this is including aapaL is definitely, unambiguously correct
     dme0 = (gfock+gfock.T)/2 # This transpose is for the overlap matrix later on
     aapa = vj = vk = vhf_c = vhf_a = None
@@ -430,7 +430,7 @@ class Gradients (lagrange.Gradients):
             except AttributeError as e:
                 e_states = self.e_states = np.asarray (self.base.e_tot)
         if level_shift is None: level_shift=self.level_shift
-        return super().kernel (state=state, atmlst=atmlst, verbose=verbose, mo=mo, ci=ci, eris=eris, mf_grad=mf_grad, e_states=e_states, level_shift=level_shift, **kwargs)
+        return lagrange.Gradients.kernel (self, state=state, atmlst=atmlst, verbose=verbose, mo=mo, ci=ci, eris=eris, mf_grad=mf_grad, e_states=e_states, level_shift=level_shift, **kwargs)
 
     def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None, **kwargs):
         if state is None: state = self.state
@@ -684,8 +684,8 @@ class Gradients (lagrange.Gradients):
             Ax = Aop (x)
             Ax_ci = Ax[self.ngorb:].reshape (self.nroots, -1)
             ci_arr = np.asarray (ci).reshape (self.nroots, -1)
-            ovlp = ci_arr.conjugate () @ Ax_ci.T
-            Ax_ci -= ovlp.T @ ci_arr
+            ovlp = np.dot (ci_arr.conjugate (), Ax_ci.T)
+            Ax_ci -= np.dot (ovlp.T, ci_arr)
             Ax[self.ngorb:] = Ax_ci.ravel ()
             return Ax
         return my_Aop
@@ -744,7 +744,7 @@ class SACASLagPrec (lagrange.LagPrec):
         # Indices: I, det, K
         self.Rci_sa = np.zeros_like (Rci_cross)
         for iroot in range (self.nroots):
-            self.Rci_sa[iroot] = Rci_cross[iroot] @ linalg.inv (Sci[iroot]) 
+            self.Rci_sa[iroot] = np.dot (Rci_cross[iroot], linalg.inv (Sci[iroot]))
 
     def __call__(self, x):
         xorb = self.orb_prec (x)
@@ -759,7 +759,7 @@ class SACASLagPrec (lagrange.LagPrec):
         # R_I|H I> (indices: I, det)
         Rx = self.Rci * xci
         # <J|R_I|H I> (indices: J, I)
-        sa_ovlp = self.ci.conjugate () @ Rx.T 
+        sa_ovlp = np.dot (self.ci.conjugate (), Rx.T) 
         # R_I|J> S(I)_JK^-1 <K|R_I|H I> (indices: I, det)
         Rx_sub = np.zeros_like (Rx)
         for iroot in range (self.nroots): 
