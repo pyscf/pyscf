@@ -36,9 +36,6 @@ def run_mfs(mf, cells_a, cells_b):
     for i in range(nconfigs):
         mf1 = copy_mf(mf, cells_a[i])
         mf2 = copy_mf(mf, cells_b[i])
-        if hasattr(mf, 'xc'):
-            mf1.grids.build()
-            mf2.grids.build()
         mf1.kernel(dm0=dm0)
         mf2.kernel(dm0=dm0)
         if not (mf1.converged):
@@ -95,7 +92,6 @@ def get_v_bra(mf, mf1):
     fused_cell.basis = cell.basis
     fused_cell.verbose = 0
     fused_cell.build()
-    fused_cell = cell.set_geom_(cell._atom+atoms, inplace=False)
 
     nao = cell.nao_nr()
     dm0 = mf.make_rdm1()
@@ -109,15 +105,8 @@ def get_v_bra(mf, mf1):
         dm = np.zeros([2,nkpts,2*nao,2*nao])
         dm[:,:,:nao,:nao] = dm0
 
-    mf0 = copy.copy(mf)
-    mf0.cell = fused_cell
-    if isinstance(mf0.with_df, df.FFTDF):
-        mf0.with_df = df.FFTDF(fused_cell, mf.kpts)
-    elif isinstance(mf0.with_df, df.GDF):
-        mf0.with_df = df.GDF(fused_cell, mf.kpts)
-    else:
-        raise NotImplementedError
-
+    mf0 = copy_mf(mf, fused_cell)
+    mf0.with_df.mesh = mf.with_df.mesh
 
     veff = mf0.get_veff(fused_cell, dm) #<u*|Vxc(0)|v*> here p* includes both u0 and v+, Vxc is at equilibrium geometry because only the u0 block of the dm is filled
     vnu = mf0.get_hcore(fused_cell) - fused_cell.pbc_intor('int1e_kin', kpts=mf.kpts)
@@ -134,14 +123,8 @@ def get_v_bra(mf, mf1):
 
 def get_vmat(mf, mfset, disp):
     RESTRICTED = (mf.__class__.__name__[1] == 'R')
-    if RESTRICTED:
-        subscript = 'kup,kuv,kvq->kpq'
-    else:
-        subscript = 'skup,skuv,skvq->skpq'
     nconfigs = len(mfset)
     vmat=[]
-    vfulllst=[]
-    vbralst = []
     for i in range(nconfigs):
         mf1, mf2 = mfset[i]
         vfull1 = mf1.get_veff() + mf1.get_hcore() - mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts)  # <u+|V+|v+>
@@ -152,11 +135,11 @@ def get_vmat(mf, mfset, disp):
         vbra = (vbra1-vbra2)/disp
         vtot = vfull - vbra   #<p0|dV0|q0> = d<p|V|q> - <dp|V0|q> - <p|V0|dq>
         vmat.append(vtot)
-        vfulllst.append(vfull)
-        vbralst.append(vbra)
-        print("%i config"%i,np.linalg.norm(vfull), np.linalg.norm(vbra))
-    #print("Vfull", np.linalg.norm(vfulllst), "Vbra", np.linalg.norm(vbralst))
-    return np.asarray(vmat)
+    vmat= np.asarray(vmat)
+    if vmat.ndim == 4:
+        return vmat[:,0]
+    elif vmat.ndim==5:
+        return vmat[:,:,0]
 
 def run_hess(mfset, disp):
     natoms = len(mfset[0][0].cell.atom_mass_list())
@@ -175,8 +158,8 @@ def run_hess(mfset, disp):
 def kernel(mf, disp=1e-5, mo_rep=False):
     if hasattr(mf, 'xc'): mf.grids.build(with_non0tab=True)
     if not mf.converged: mf.kernel()
-
-    RESTRICTED = (mf.__class__.__name__[1] == "R")
+    mo_coeff = np.asarray(mf.mo_coeff)
+    RESTRICTED= (mo_coeff.ndim==3)
     cell = mf.cell
     cells_a, cells_b = gen_cells(cell, disp/2.0) # generate a bunch of cellcules with disp/2 on each cartesion coord
     mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cellcules
@@ -193,9 +176,9 @@ def kernel(mf, disp=1e-5, mo_rep=False):
     vec = vec.reshape(3*natoms,nmodes)
     if mo_rep:
         if RESTRICTED:
-            vmat = np.einsum('xuv,up,vq->xpq', vmat, mf.mo_coeff.conj(), mf.mo_coeff)
+            vmat = np.einsum('xuv,up,vq->xpq', vmat, mo_coeff[0].conj(), mo_coeff[0])
         else:
-            vmat = np.einsum('xsuv,sup,svq->xspq', vmat, mf.mo_coeff.conj(), mf.mo_coeff)
+            vmat = np.einsum('xsuv,sup,svq->xspq', vmat, mo_coeff[:,0].conj(), mo_coeff[:,0])
 
     if vmat.ndim == 3:
         mat = np.einsum('xJ,xpq->Jpq', vec, vmat)
@@ -216,16 +199,13 @@ if __name__ == '__main__':
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
-    #cell.mesh = [15,15,15]
-    cell.precision=1e-9
-    cell.verbose = 0
+    #cell.precision=1e-9
+    cell.verbose = 4
     cell.build()
 
     kpts = cell.make_kpts([1,1,1])
     mf = dft.KRKS(cell, kpts)
-    mf.xc = 'b3lyp'
-    mf.exxdiv =  None
     mf.kernel()
 
-    mat, omega = kernel(mf, disp=1e-4)
+    mat, omega = kernel(mf, disp=1e-4, mo_rep=True)
     print("|Mat|_{max}",abs(mat).max())
