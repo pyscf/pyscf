@@ -401,58 +401,13 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
                 vk_kpts[:,i,k1] -= weight * np.einsum('aig,jg->aij', vR_dm[:,i], ao1T[0])
         t1 = lib.logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
-    # Function _ewald_exxdiv_for_G0 to add back in the G=0 component to vk_kpts
-    # Note in the _ewald_exxdiv_for_G0 implementation, the G=0 treatments are
-    # different for 1D/2D and 3D systems.  The special treatments for 1D and 2D
-    # can only be used with AFTDF/GDF/MDF method.  In the FFTDF method, 1D, 2D
-    # and 3D should use the ewald probe charge correction.
-    if exxdiv == 'ewald':
-        raise NotImplementedError("Ewald Correction")
-        if cell.omega == 0:
-            _ewald_exxdiv_e1_for_G0(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
-            #FIXME exxdiv for ewald
-        else:
-            raise NotImplementedError("Range Separated Coulomb")
-            # when cell.omega !=0: madelung constant will have a non-zero derivative
+    # Ewald correction has no contribution to nuclear gradient unless range separted Coulomb is used
+    # The gradient correction part is not added in the vk matrix
+    if exxdiv == 'ewald' and cell.omega!=0:
+        raise NotImplementedError("Range Separated Coulomb")
+        # when cell.omega !=0: madelung constant will have a non-zero derivative
     vk_kpts = np.asarray([_format_jks(vk, dm_kpts, input_band, kpts) for vk in vk_kpts])
     return vk_kpts
-
-def _ewald_exxdiv_e1_for_G0(cell, kpts, dms, vk, kpts_band=None):
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
-    s1e = cell.pbc_intor('int1e_ipovlp', kpts=kpts)
-    s2e = -np.asarray(s1e).transpose(0,1,3,2).conj()
-
-    madelung = tools.pbc.madelung(cell, kpts)
-    if kpts is None:
-        for i,dm in enumerate(dms):
-            ovdm = np.dot(dm, s)
-            vk[:,i] += madelung * np.einsum('apq,qr->apr', s1e, ovdm)
-            #vk[:,i] += madelung * np.einsum('apq,qr->apr', s2e, ovdm)
-
-    elif np.shape(kpts) == (3,):
-        if kpts_band is None or is_zero(kpts_band-kpts):
-            for i,dm in enumerate(dms):
-                ovdm = np.dot(dm, s)
-                vk[:,i] += madelung * np.einsum('apq,qr->apr', s1e, ovdm)
-                #vk[:,i] += madelung * np.einsum('apq,qr->apr', s2e, ovdm)
-
-    elif kpts_band is None or np.array_equal(kpts, kpts_band):
-        for k in range(len(kpts)):
-            for i,dm in enumerate(dms):
-                ovdm = np.dot(dm[k], s[k])
-                vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s1e[k], ovdm)
-                #vk[:,i,k] += madelung * np.einsum('qp,aqr->apr', ovdm.conj(), s1e[k])
-                #print("ehlo")
-                #vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s2e[k], ovdm)
-    else:
-        for k, kpt in enumerate(kpts):
-            for kp in member(kpt, kpts_band.reshape(-1,3)):
-                for i,dm in enumerate(dms):
-                    ovdm = np.dot(dm[k], s[k])
-                    vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s1e[k], ovdm)
-                    #vk[:,i,k] += madelung * np.einsum('apq,qr->apr', s2e[k], ovdm)
-    return None
-
 
 def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None,
            with_j=True, with_k=True, exxdiv=None):
