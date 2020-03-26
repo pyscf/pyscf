@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -215,6 +215,10 @@ del(INCLUDE_GHOST, ASSERT_CONV)
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, grad
     cell = gto.Cell()
+    cell.atom = '''
+    C 0.000000000000 0.000000000000 0.000000000000
+    C 1.685068664391 1.685068664391 1.685068664391
+    '''
     cell.atom= [['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391]]]
     cell.a = '''
     0.000000000, 3.370137329, 3.370137329
@@ -228,6 +232,8 @@ if __name__ == '__main__':
 
     kpts = cell.make_kpts([1,1,3])
     mf = scf.KRHF(cell, kpts, exxdiv=None)
+    mf.conv_tol = 1e-14
+    mf.conv_tol_grad = 1e-8
     conv_params = {
         'convergence_energy': 1e-4,  # Eh
         'convergence_grms': 1e-5,    # Eh/Bohr
@@ -236,33 +242,5 @@ if __name__ == '__main__':
         'convergence_dmax': 1.8e-2,  # Angstrom
     }
     opt = GeometryOptimizer(mf).set(params=conv_params)#.run()
-    #opt.max_cycle=1
     opt.run()
     cell = opt.cell
-    e0 = mf.kernel()
-    print("OLD?",e0)
-    mf = scf.KRHF(cell, kpts, exxdiv=None)
-    e1 = mf.kernel()
-    print("e1", e1)
-    #mygrad = grad.KRHF(mf)
-    #force = mygrad.kernel()
-    #print(force)
-
-
-
-    '''
-    mol1 = opt.mol
-    print(mf.kernel() - -153.219208484874)
-    print(scf.RHF(mol1).kernel() - -153.222680852335)
-
-    mf = dft.RKS(mol)
-    mf.xc = 'pbe,'
-    mf.conv_tol = 1e-7
-    mol1 = optimize(mf)
-
-    mymp2 = mp.MP2(scf.RHF(mol))
-    mol1 = optimize(mymp2)
-
-    mycc = cc.CCSD(scf.RHF(mol))
-    mol1 = optimize(mycc)
-    '''

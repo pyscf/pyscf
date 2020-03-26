@@ -1,12 +1,29 @@
+#!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 from pyscf.pbc import scf, dft, gto, grad, df
 from pyscf.eph.rhf import solve_hmat
+from pyscf.eph.eph_fd import gen_moles
 import numpy as np
 import scipy
 from pyscf.lib import logger
 import copy
 
 '''Hacky implementation of Electron-Phonon matrix from finite difference'''
-# Note, the code can break down when orbital degeneracy is present
+# Note, the code can only support single-kpoint mesh
+# cell relaxation needs to be performed before computing eph matrix
 
 AU_TO_CM = 2.19475 * 1e5
 CUTOFF_FREQUENCY = 80
@@ -161,7 +178,7 @@ def kernel(mf, disp=1e-5, mo_rep=False):
     mo_coeff = np.asarray(mf.mo_coeff)
     RESTRICTED= (mo_coeff.ndim==3)
     cell = mf.cell
-    cells_a, cells_b = gen_cells(cell, disp/2.0) # generate a bunch of cellcules with disp/2 on each cartesion coord
+    cells_a, cells_b = gen_moles(cell, disp/2.0) # generate a bunch of cellcules with disp/2 on each cartesion coord
     mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cellcules
     vmat = get_vmat(mf, mfset, disp) # extracting <u|dV|v>/dR
     hmat = run_hess(mfset, disp)
@@ -199,7 +216,6 @@ if __name__ == '__main__':
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
-    #cell.precision=1e-9
     cell.verbose = 4
     cell.build()
 

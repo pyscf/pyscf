@@ -14,7 +14,9 @@
 # limitations under the License.
 #
 # Author: Yang Gao <younggao1994@gmail.com>
-
+'''
+Non-relativistic analytical nuclear gradients for unrestricted Kohn Sham with kpoints sampling
+'''
 #
 
 import numpy as np

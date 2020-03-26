@@ -1,3 +1,24 @@
+#!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Yang Gao <younggao1994@gmail.com>
+
+#
+'''
+Analytical electron-phonon matrix for unrestricted hartree fock
+'''
 import numpy as np
 from pyscf.eph import rhf as rhf_eph
 from pyscf.hessian import uhf as uhf_hess
@@ -35,7 +56,6 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         mo1b = mo1['1']
         mo1a = dict([(int(k), mo1a[k]) for k in mo1a])
         mo1b = dict([(int(k), mo1b[k]) for k in mo1b])
-
 
     mol = ephobj.mol
     mf = ephobj.base
@@ -124,10 +144,10 @@ if __name__ == '__main__':
     print("Force on the atoms/au:")
     print(grad)
 
-    epha, ephb = myeph.kernel()
-    print(np.linalg.norm(epha-ephb))
+    ephmat, omega = myeph.kernel()
+    print(np.linalg.norm(ephmat[0]-ephmat[1]))
 
-    from eph.rhf import EPH as REPH
+    from pyscf.eph.rhf import EPH as REPH
 
     mf1 = scf.RHF(mol)
     mf1.verbose=0
@@ -137,6 +157,6 @@ if __name__ == '__main__':
     mf1.kernel()
 
     myeph1 = REPH(mf1)
-    rmat = myeph1.kernel()
+    rmat, omega = myeph1.kernel()
     for i in range(len(rmat)):
-        print(min(np.linalg.norm(epha[i]-rmat[i]), np.linalg.norm(epha[i]+rmat[i])))
+        print(min(np.linalg.norm(ephmat[0,i]-rmat[i]), np.linalg.norm(ephmat[0,i]+rmat[i])))

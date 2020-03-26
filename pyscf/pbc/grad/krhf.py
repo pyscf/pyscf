@@ -17,7 +17,7 @@
 
 #
 '''
-Non-relativistic Hartree-Fock analytical nuclear gradients for PBC
+Non-relativistic analytical nuclear gradients for restricted Hartree Fock with kpoints sampling
 '''
 import numpy as np
 from pyscf import lib
@@ -437,47 +437,20 @@ class Gradients(GradientsBasics):
 if __name__=='__main__':
     from pyscf.pbc import scf
     cell = gto.Cell()
-    cell.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2]]]
+    cell.atom = '''
+    He 0.0 0.0 0.0
+    He 1.0 1.1 1.2
+    '''
     cell.basis = 'gth-dzv'
     cell.a = np.eye(3) * 3
     cell.unit='bohr'
     cell.pseudo='gth-pade'
-    cell.verbose=0
+    cell.verbose=4
     cell.build()
 
-    nmp = [1,1,4]
+    nmp = [1,1,3]
     kpts = cell.make_kpts(nmp)
     kmf = scf.KRHF(cell, kpts, exxdiv=None)
     kmf.kernel()
-    kmf.verbose=5
     mygrad = Gradients(kmf)
-    ana = mygrad.kernel()
-
-    disp = 1e-5
-    cell1 = gto.Cell()
-    cell1.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2 + disp/2.0]]]
-    cell1.basis = 'gth-dzv'
-    cell1.a = np.eye(3) * 3
-    cell1.unit='bohr'
-    cell1.pseudo='gth-pade'
-    cell1.verbose=0
-    cell1.build()
-
-    cell2 = gto.Cell()
-    cell2.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2 - disp/2.0]]]
-    cell2.basis = 'gth-dzv'
-    cell2.a = np.eye(3) * 3
-    cell2.unit='bohr'
-    cell2.pseudo='gth-pade'
-    cell2.verbose=0
-    cell2.build()
-
-
-    kmf1 = scf.KRHF(cell1, kpts, exxdiv=None)
-    e1 = kmf1.kernel()
-
-    kmf2 = scf.KRHF(cell2, kpts, exxdiv=None)
-    e2 = kmf2.kernel()
-
-    fin = (e1-e2)/disp
-    print(fin, ana)
+    grad = mygrad.kernel()

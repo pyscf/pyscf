@@ -16,6 +16,9 @@
 # Author: Yang Gao <younggao1994@gmail.com>
 
 #
+'''
+Non-relativistic analytical nuclear gradients for unrestricted Hartree Fock with kpoints sampling
+'''
 
 import numpy as np
 from pyscf.lib import logger
@@ -100,22 +103,16 @@ if __name__=='__main__':
     from pyscf.pbc import scf
     cell = gto.Cell()
     cell.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2]]]
-    cell.basis = 'gth-dzvp'
+    cell.basis = 'gth-dzv'
     cell.a = np.eye(3) * 3
-    #cell.mesh = [19,19,19]
     cell.unit='bohr'
     cell.pseudo='gth-pade'
-    cell.verbose=5
+    cell.verbose=4
     cell.build()
 
-    nmp = [2,2,2]
+    nmp = [1,1,3]
     kpts = cell.make_kpts(nmp)
     kmf = scf.KUHF(cell, kpts, exxdiv=None)
-    kmf.chkfile = 'he_0_uhf_dzvp.chk'
     kmf.kernel()
-    #kmf.__dict__.update(scf.chkfile.load('he_0_uhf_dzvp.chk', 'scf'))
-    #kmf.verbose=5
-    #kmf.kernel()
-    #kmf.verbose=5
     mygrad = Gradients(kmf)
     mygrad.kernel()

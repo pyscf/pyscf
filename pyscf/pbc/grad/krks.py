@@ -17,7 +17,7 @@
 
 #
 '''
-Non-relativistic Kohn-Sham analytical nuclear gradients for PBC
+Non-relativistic analytical nuclear gradients for restricted Kohn Sham with kpoints sampling
 '''
 
 from pyscf.pbc.grad import krhf as rhf_grad
