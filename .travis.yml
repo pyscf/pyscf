@@ -87,16 +87,12 @@ script:
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_hf.DiamondTestSupercell3
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_ks.DiamondTestSupercell3
     -I .*_slow.*py -I .*_kproxy_.*py -I test_proxy.py # tdscf/*_slow.py gw/*_slow.py do not compatible with python3.[456] and old numpy
-
     --exclude-test=eph/test/test_uks.KnownValues
     --exclude-test=eph/test/test_rks.KnownValues # dft eph tests takes too long
     --exclude-test=pbc/grad/test/test_kuks.KnownValues # pbc.grad takes long time
     --exclude-test=pbc/grad/test/test_krks.KnownValues
     --exclude-test=pbc/grad/test/test_krhf.KnownValues
     --exclude-test=pbc/grad/test/test_kuhf.KnownValues
-
-
-
 
 after_success:
   - codecov
