@@ -30,7 +30,7 @@ mol.verbose=4
 mol.build() # this is a pre-computed relaxed geometry
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_rhf_eph(self):
+    def test_finite_diff_uks_eph(self):
         mf = dft.UKS(mol)
         mf.grids.level=6
         mf.grids.build()
@@ -47,7 +47,7 @@ class KnownValues(unittest.TestCase):
         myeph = uks.EPH(mf)
         eph, _ = myeph.kernel()
         ephmo, _ = myeph.kernel(mo_rep=True)
-        
+
         for i in range(len(omega)):
             self.assertTrue(min(np.linalg.norm(eph[:,i]-mat[:,i]),np.linalg.norm(eph[:,i]+mat[:,i]))<1e-5)
             self.assertTrue(min(abs(eph[:,i]-mat[:,i]).max(), abs(eph[:,i]+mat[:,i]).max())<1e-5)

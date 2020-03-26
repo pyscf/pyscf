@@ -30,7 +30,7 @@ mol.verbose=4
 mol.build() # this is a pre-computed relaxed geometry
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_rhf_eph(self):
+    def test_finite_diff_uhf_eph(self):
         mf = scf.UHF(mol)
         mf.conv_tol = 1e-16
         mf.conv_tol_grad = 1e-10
