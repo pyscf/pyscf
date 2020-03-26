@@ -52,12 +52,10 @@ before_script:
   - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
 
 script:
-  - |
-    cd $TRAVIS_BUILD_DIR/pyscf &&
+  - cd $TRAVIS_BUILD_DIR/pyscf &&
     echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py &&
     echo "dftd3_DFTD3PATH = '$TRAVIS_BUILD_DIR/pyscf/lib/deps/lib'" >> pyscf_config.py
-  - |
-    OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
+  - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
     nosetests -v --with-timer --with-coverage
     --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
@@ -79,6 +77,12 @@ script:
     -I test_h_.*\.py
     -I test_P_uadc_ea.py
     -I test_P_uadc_ip.py
+    --exclude-test=eph/test/test_uks.KnownValues
+    --exclude-test=eph/test/test_rks.KnownValues
+    --exclude-test=pbc/grad/test/test_kuks.KnownValues
+    --exclude-test=pbc/grad/test/test_krks.KnownValues
+    --exclude-test=pbc/grad/test/test_krhf.KnownValues
+    --exclude-test=pbc/grad/test/test_kuhf.KnownValues
     --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondTestSupercell3
     --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondKSTestSupercell3
     --exclude-test=pbc/gw/test/test_kgw_slow.DiamondTestSupercell3
@@ -89,12 +93,6 @@ script:
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_hf.DiamondTestSupercell3
     --exclude-test=pbc/tdscf/test/test_kproxy_supercell_ks.DiamondTestSupercell3
     -I .*_slow.*py -I .*_kproxy_.*py -I test_proxy.py # tdscf/*_slow.py gw/*_slow.py do not compatible with python3.[456] and old numpy
-    --exclude-test=eph/test/test_uks.KnownValues
-    --exclude-test=eph/test/test_rks.KnownValues 
-    --exclude-test=pbc/grad/test/test_kuks.KnownValues 
-    --exclude-test=pbc/grad/test/test_krks.KnownValues
-    --exclude-test=pbc/grad/test/test_krhf.KnownValues
-    --exclude-test=pbc/grad/test/test_kuhf.KnownValues
 
 after_success:
   - codecov
