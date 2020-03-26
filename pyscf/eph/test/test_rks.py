@@ -30,7 +30,7 @@ mol.verbose=4
 mol.build() # this is a pre-computed relaxed geometry
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_rhf_eph(self):
+    def test_finite_diff_rks_eph(self):
         mf = dft.RKS(mol)
         mf.grids.level=6
         mf.grids.build()
@@ -52,7 +52,7 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(min(abs(eph[i]-mat[i]).max(), abs(eph[i]+mat[i]).max())<1e-5)
             self.assertTrue(min(np.linalg.norm(ephmo[i]-matmo[i]),np.linalg.norm(ephmo[i]+matmo[i]))<1e-5)
             self.assertTrue(min(abs(ephmo[i]-matmo[i]).max(), abs(ephmo[i]+matmo[i]).max())<1e-5)
-        
+
 if __name__ == '__main__':
     print("Full Tests for RKS")
     unittest.main()
