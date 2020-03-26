@@ -59,7 +59,7 @@ script:
     nosetests -v --with-timer --with-coverage
     --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
-    --exclude-dir=cornell_shci
+    --exclude-dir=cornell_shci --exclude-dir=pbc/grad
     -e test_bz
     -e h2o_vdz
     -e test_mc2step_4o4e
@@ -72,17 +72,13 @@ script:
     -e skip
     -e call_in_background
     -e libxc_cam_beta_bug
+    -e test_finite_diff_rks_eph
+    -e test_finite_diff_uks_eph
     -I test_kuccsd_supercell_vs_kpts\.py
     -I test_kccsd_ghf\.py
     -I test_h_.*\.py
     -I test_P_uadc_ea.py
     -I test_P_uadc_ip.py
-    --exclude-test=eph/test/test_uks.KnownValues
-    --exclude-test=eph/test/test_rks.KnownValues
-    --exclude-test=pbc/grad/test/test_kuks.KnownValues
-    --exclude-test=pbc/grad/test/test_krks.KnownValues
-    --exclude-test=pbc/grad/test/test_krhf.KnownValues
-    --exclude-test=pbc/grad/test/test_kuhf.KnownValues
     --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondTestSupercell3
     --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondKSTestSupercell3
     --exclude-test=pbc/gw/test/test_kgw_slow.DiamondTestSupercell3
