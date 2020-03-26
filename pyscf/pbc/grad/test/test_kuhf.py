@@ -37,7 +37,7 @@ disp = 1e-5
 
 
 class KnownValues(unittest.TestCase):
-    def test_uhf_grad(self):
+    def test_kuhf_grad(self):
         g_scan = scf.KUHF(cell, kpts, exxdiv=None).nuc_grad_method().as_scanner()
         g = g_scan(cell)[1]
         self.assertAlmostEqual(finger(g), 0.11476575559553441, 6)

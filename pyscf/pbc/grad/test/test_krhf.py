@@ -38,7 +38,7 @@ disp = 1e-5
 
 
 class KnownValues(unittest.TestCase):
-    def test_rhf_grad(self):
+    def test_krhf_grad(self):
         g_scan = scf.KRHF(cell, kpts, exxdiv=None).nuc_grad_method().as_scanner()
         g = g_scan(cell)[1]
         self.assertAlmostEqual(finger(g), 0.11476575559553441, 6)
