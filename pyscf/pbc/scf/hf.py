@@ -527,6 +527,7 @@ class SCF(mol_hf.SCF):
         '''Reset cell and relevant attributes associated to the old cell object'''
         if cell is not None:
             self.cell = cell
+            self.mol = cell # used by hf kernel
         self.with_df.reset(cell)
         return self
 
