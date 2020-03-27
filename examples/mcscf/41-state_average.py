@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 '''
-State average over different spin states
+State average over states of different spins and/or spatial symmetry
 
 The mcscf.state_average_ function maybe not generate the right spin or spatial
-symmetry as one needs.  One can modify the mc.fcisolver to handle arbitary
-states.  The following code is based on pyscf/mcscf/addons.py state_average_
-function
+symmetry as one needs.  This example shows how to put states with different
+spins and spatial symmetry in a state-average solver using the method
+state_average_mix_.
 '''
 
 import numpy as np
