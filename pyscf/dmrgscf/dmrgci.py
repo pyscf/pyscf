@@ -137,7 +137,7 @@ class DMRGCI(lib.StreamObject):
         if tol is None:
             self.tol = 1e-8
         else:
-            self.tol = tol/10
+            self.tol = tol
         if maxM is None:
             self.maxM = 1000
         else:
@@ -211,29 +211,28 @@ class DMRGCI(lib.StreamObject):
             if self.restart or self._restart :
                 Tol = self.tol / 10.0
             else:
-                Tol = 1.0e-5
-            Noise = Tol
+                Tol = 1.0e-4
             while startM < int(self.maxM):
                 self.scheduleSweeps.append(N_sweep)
                 N_sweep += 4
                 self.scheduleMaxMs.append(startM)
                 startM *= 2
                 self.scheduleTols.append(Tol)
-                self.scheduleNoises.append(Noise)
+                self.scheduleNoises.append(Tol)  # Noise=Tol
             while Tol > float(self.tol):
                 self.scheduleSweeps.append(N_sweep)
                 N_sweep += 2
                 self.scheduleMaxMs.append(self.maxM)
                 self.scheduleTols.append(Tol)
+                self.scheduleNoises.append(Tol)  # Noise=Tol
                 Tol /= 10.0
-                self.scheduleNoises.append(5.0e-5)
             self.scheduleSweeps.append(N_sweep)
             N_sweep += 2
             self.scheduleMaxMs.append(self.maxM)
-            self.scheduleTols.append(self.tol)
+            self.scheduleTols.append(self.tol / 10.0)
             self.scheduleNoises.append(0.0)
             self.twodot_to_onedot = N_sweep + 2
-            self.maxIter = self.twodot_to_onedot + 12
+            self.maxIter = self.twodot_to_onedot + 8
         return self
 
     def dump_flags(self, verbose=None):
@@ -766,6 +765,7 @@ class DMRGCI(lib.StreamObject):
             if (envs['norm_gorb'] < self.dmrg_switch_tol or
                 ('norm_ddm' in envs and envs['norm_ddm'] < self.dmrg_switch_tol*10)):
                 self._restart = True
+                logger.info(self, "Restart DMRG from previous iteration")
             else :
                 self._restart = False
         return callback
