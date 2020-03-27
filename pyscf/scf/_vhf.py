@@ -102,7 +102,10 @@ class VHFOpt(object):
                    c_env.ctypes.data_as(ctypes.c_void_p))
 
     def __del__(self):
-        libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
+        try:
+            libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
+        except AttributeError:
+            pass
 
 class _CVHFOpt(ctypes.Structure):
     _fields_ = [('nbas', ctypes.c_int),

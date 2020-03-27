@@ -795,10 +795,16 @@ def make_cintopt(atm, bas, env, intor):
         return ctypes.cast(cintopt, _cintoptHandler)
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
-        libcgto.CINTdel_optimizer(ctypes.byref(self))
+        try:
+            libcgto.CINTdel_optimizer(ctypes.byref(self))
+        except AttributeError:
+            pass
 class _ecpoptHandler(ctypes.c_void_p):
     def __del__(self):
-        libcgto.ECPdel_optimizer(ctypes.byref(self))
+        try:
+            libcgto.ECPdel_optimizer(ctypes.byref(self))
+        except AttributeError:
+            pass
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):

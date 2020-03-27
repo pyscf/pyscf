@@ -152,6 +152,10 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
 
     return mo_coeff_with_orbsym
 
+from pyscf import scf
+scf.hf_symm.RHF.CASCI = scf.hf_symm.ROHF.CASCI = lib.class_as_method(SymAdaptedCASCI)
+scf.uhf_symm.UHF.CASCI = None
+
 
 if __name__ == '__main__':
     from pyscf import gto

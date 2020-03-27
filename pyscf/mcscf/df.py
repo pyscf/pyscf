@@ -140,6 +140,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 # A tag to label the derived MCSCF class
 class _DFCASSCF:
     pass
+_DFCASCI = _DFCASSCF
 
 
 def approx_hessian(casscf, auxbasis=None, with_df=None):

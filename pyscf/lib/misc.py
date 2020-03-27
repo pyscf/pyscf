@@ -867,8 +867,8 @@ class H5TmpFile(h5py.File):
     def __del__(self):
         try:
             self.close()
-        except:
-        #except ValueError:  # if close() is called twice
+        except (AttributeError, ValueError):
+            #except ValueError:  # if close() is called twice
             pass
 
 def fingerprint(a):

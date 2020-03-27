@@ -129,6 +129,10 @@ def _symmetrize(mat, orbsym, groupname):
         _force_Ex_Ey_degeneracy_(mat1, orbsym)
     return mat1
 
+from pyscf import scf
+scf.hf_symm.RHF.CASSCF = scf.hf_symm.ROHF.CASSCF = lib.class_as_method(SymAdaptedCASSCF)
+scf.uhf_symm.UHF.CASSCF = None
+
 
 if __name__ == '__main__':
     from pyscf import gto
