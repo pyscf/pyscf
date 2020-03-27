@@ -21,26 +21,23 @@ Valence Virtual Orbitals
 ref. 10.1021/acs.jctc.7b00493
 '''
 
-from time import time
-from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf.lib import logger
 from pyscf.lo import iao
-from pyscf.lo import orth, pipek
+from pyscf.lo import orth
 from pyscf.lo import ibo
 from pyscf import __config__
 
 
-def vvo(mol, orbocc, orbvirt, iaos=None, s=None, verbose=logger.NOTE):
+def vvo(mol, orbocc, orbvirt, iaos=None, s=None, verbose=None):
     '''Valence Virtual Orbitals ref. 10.1021/acs.jctc.7b00493
 
-    Valence virtual orbitals can be formed from the singular value 
+    Valence virtual orbitals can be formed from the singular value
     decomposition of the overlap between the canonical molecular orbitals
     and an accurate underlying atomic basis set. This implementation uses
-    the intrinsic atomic orbital as this underlying set. VVOs can also be 
-    formed from the null space of the overlap of the canonical molecular 
-    orbitals and the underlying atomic basis sets (IAOs). This is not 
+    the intrinsic atomic orbital as this underlying set. VVOs can also be
+    formed from the null space of the overlap of the canonical molecular
+    orbitals and the underlying atomic basis sets (IAOs). This is not
     implemented here.
 
     Args:
@@ -60,7 +57,7 @@ def vvo(mol, orbocc, orbvirt, iaos=None, s=None, verbose=logger.NOTE):
     Returns:
         VVOs in the basis defined in mol object.
     '''
-    log = logger.new_logger(mol, verbose)
+
     if s is None:
         if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
             if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
@@ -72,7 +69,7 @@ def vvo(mol, orbocc, orbvirt, iaos=None, s=None, verbose=logger.NOTE):
 
     if iaos is None:
         iaos = iao.iao(mol, orbocc)
-    
+
     nvvo = iaos.shape[1] - orbocc.shape[1]
 
     # Symmetrically orthogonalization of the IAO orbitals as Knizia's
@@ -80,13 +77,14 @@ def vvo(mol, orbocc, orbvirt, iaos=None, s=None, verbose=logger.NOTE):
     iaos = orth.vec_lowdin(iaos, s)
 
     #S = reduce(np.dot, (orbvirt.T, s, iaos))
-    S = numpy.einsum('ji,jk,kl->il', orbvirt, s, iaos, optimize=True)
+    S = numpy.einsum('ji,jk,kl->il', orbvirt.conj(), s, iaos, optimize=True)
     U, sigma, Vh = scipy.linalg.svd(S)
     U = U[:, 0:nvvo]
     vvo = numpy.einsum('ik,ji->jk', U, orbvirt, optimize=True)
     return vvo
 
-def livvo(mol, orbocc, orbvirt, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e-8, max_iter=200, verbose=logger.NOTE):
+def livvo(mol, orbocc, orbvirt, locmethod='IBO', iaos=None, s=None,
+          exponent=4, grad_tol=1e-8, max_iter=200, verbose=None):
     '''Localized Intrinsic Valence Virtual Orbitals ref. 10.1021/acs.jctc.7b00493
 
     Localized Intrinsic valence virtual orbitals are formed when the valence
@@ -103,7 +101,8 @@ def livvo(mol, orbocc, orbvirt, locmethod='IBO', iaos=None, s=None, exponent=4, 
 
     Kwargs:
         locmethod : string
-            the localization method 'PM' for Pipek Mezey localization or 'IBO' for the IBO localization
+            the localization method 'PM' for Pipek Mezey localization or 'IBO'
+            for the IBO localization
 
         iaos : 2D array
             the array of IAOs
@@ -133,5 +132,7 @@ def livvo(mol, orbocc, orbvirt, locmethod='IBO', iaos=None, s=None, exponent=4, 
         livvos = ibo.PipekMezey(mol, vvos, iaos, s, exponent=EXPONENT)
         del(EXPONENT)
     else:
-        livvos = ibo.ibo_loc(mol, vvos, iaos, s, exponent=exponent, grad_tol=grad_tol, max_iter=max_iter, verbose=verbose)
+        livvos = ibo.ibo_loc(mol, vvos, iaos, s, exponent=exponent,
+                             grad_tol=grad_tol, max_iter=max_iter,
+                             verbose=verbose)
     return livvos

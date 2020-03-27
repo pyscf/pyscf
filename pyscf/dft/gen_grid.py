@@ -617,7 +617,6 @@ def prange(start, end, step):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None#"out_h2o"
@@ -626,10 +625,7 @@ if __name__ == '__main__':
         ['H' , (0. , -0.757 , 0.587)],
         ['H' , (0. , 0.757  , 0.587)] ]
     h2o.build()
-    import time
-    t0 = time.clock()
     g = Grids(h2o)
     g.build()
     print(g.coords.shape)
-    print(time.clock() - t0)
 

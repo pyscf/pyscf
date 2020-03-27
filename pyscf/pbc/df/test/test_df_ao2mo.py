@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,11 +32,6 @@ cell.basis = 'ccpvdz'
 cell.verbose = 0
 cell.build(0,0)
 nao = cell.nao_nr()
-
-
-def finger(a):
-    w = np.cos(np.arange(a.size))
-    return np.dot(w, a.ravel())
 
 class KnownValues(unittest.TestCase):
     def test_eri1111(self):

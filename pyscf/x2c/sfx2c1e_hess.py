@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,13 +21,11 @@ JCP 135 244104
 JCTC 8 2617
 '''
 
-import time
 from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf.lib import logger
 from pyscf.x2c import x2c
 from pyscf.x2c import sfx2c1e_grad
 
@@ -264,9 +262,6 @@ def _get_r2(s0_roots, sa0, s1i, sa1i, s1j, sa1j, s2, sa2, r0_roots):
     wr0_sqrt, vr0 = r0_roots
     wr0_invsqrt = 1. / wr0_sqrt
 
-    s0_sqrt = numpy.diag(w_sqrt)
-    s0_invsqrt = numpy.diag(1./w_sqrt)
-    s0 = numpy.diag(w_sqrt**2)
     sa0  = lib.einsum('pi,pq,qj->ij', v_s, sa0 , v_s)
     s1i  = lib.einsum('pi,pq,qj->ij', v_s, s1i , v_s)
     s1j  = lib.einsum('pi,pq,qj->ij', v_s, s1j , v_s)

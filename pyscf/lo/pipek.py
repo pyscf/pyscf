@@ -20,9 +20,7 @@
 Pipek-Mezey localization
 '''
 
-import time
 import numpy
-import scipy.linalg
 from functools import reduce
 
 from pyscf import lib

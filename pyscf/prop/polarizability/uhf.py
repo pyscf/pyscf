@@ -28,8 +28,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ucphf
-from pyscf.scf import _response_functions
-from pyscf.prop.polarizability import rhf as rhf_polarizability
+from pyscf.scf import _response_functions  # noqa
 
 
 def dipole(mf):
@@ -50,9 +49,9 @@ def polarizability(polobj, with_cphf=True):
     occidxb = mo_occ[1] > 0
     mo0a, mo0b = mo_coeff
     orboa = mo0a[:, occidxa]
-    orbva = mo0a[:,~occidxa]
     orbob = mo0b[:, occidxb]
-    orbvb = mo0b[:,~occidxb]
+    #orbva = mo0a[:,~occidxa]
+    #orbvb = mo0b[:,~occidxb]
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -98,9 +97,9 @@ def hyper_polarizability(polobj, with_cphf=True):
     occidxb = mo_occ[1] > 0
     mo0a, mo0b = mo_coeff
     orboa = mo0a[:, occidxa]
-    orbva = mo0a[:,~occidxa]
     orbob = mo0b[:, occidxb]
-    orbvb = mo0b[:,~occidxb]
+    #orbva = mo0a[:,~occidxa]
+    #orbvb = mo0b[:,~occidxb]
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -170,7 +169,6 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
 
     mo0a, mo0b = mf.mo_coeff
     nao, nmoa = mo0a.shape
-    nmob = mo0b.shape
     orbva = mo0a[:,viridxa]
     orbvb = mo0b[:,viridxb]
     orboa = mo0a[:,occidxa]
@@ -253,7 +251,6 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
 
 
 def polarizability_with_freq(polobj, freq=None):
-    from pyscf.prop.nmr import rhf as rhf_nmr
     log = logger.new_logger(polobj)
     mf = polobj._scf
     mol = mf.mol

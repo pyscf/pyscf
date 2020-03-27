@@ -27,7 +27,6 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.mcscf import addons
-from pyscf import symm
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
@@ -404,8 +403,6 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         A tuple, (natural orbitals, CI coefficients, orbital energies)
         The orbital energies are the diagonal terms of effective Fock matrix.
     '''
-    from pyscf.lo import orth
-    from pyscf.tools import dump_mat
     from pyscf.mcscf import addons
     log = logger.new_logger(mc, verbose)
 

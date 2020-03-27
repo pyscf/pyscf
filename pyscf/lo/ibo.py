@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ Ref: JCTC, 2013, 9, 4834-4843
 from time import time
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lo import iao
 from pyscf.lo import orth, pipek

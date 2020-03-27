@@ -364,7 +364,7 @@ H     0    0.757    0.587'''
         e, c = n2_uhf.canonicalize(n2mf.mo_coeff, n2mf.mo_occ)
         self.assertAlmostEqual(abs(e - n2mf.mo_energy).max(), 0, 6)
 
-    def test_energy_tot(self):
+    def test_energy_tot1(self):
         e = n2mf.energy_tot(n2mf.make_rdm1())
         self.assertAlmostEqual(e, n2mf.e_tot, 9)
 

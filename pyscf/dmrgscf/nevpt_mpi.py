@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,14 +26,12 @@ import subprocess
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib
 from pyscf.lib import logger
 from pyscf.lib import chkfile
 from pyscf.dmrgscf import dmrg_sym
 from pyscf.dmrgscf import dmrgci
 from pyscf import ao2mo
 from pyscf import gto
-from pyscf.mcscf import casci
 from pyscf.tools import fcidump
 from pyscf.dmrgscf import settings
 
@@ -187,21 +185,12 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
 
     if isinstance(nevpt_integral, str) and h5py.is_hdf5(nevpt_integral):
         nevpt_integral_file = os.path.abspath(nevpt_integral)
-        mol = chkfile.load_mol(nevpt_integral_file)
-
         fh5 = h5py.File(nevpt_integral_file, 'r')
-        ncas = fh5['mc/ncas'][()]
-        ncore = fh5['mc/ncore'][()]
-        nvirt = fh5['mc/nvirt'][()]
         nelecas = fh5['mc/nelecas'][()]
         nroots = fh5['mc/nroots'][()]
         wfnsym = fh5['mc/wfnsym'][()]
         fh5.close()
     else :
-        mol = mc.mol
-        ncas = mc.ncas
-        ncore = mc.ncore
-        nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
         nelecas = mc.nelecas
         nroots = mc.fcisolver.nroots
         wfnsym = mc.fcisolver.wfnsym
@@ -255,7 +244,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     logger.debug(nevptsolver, 'DMRG_COMPRESS_NEVPT cmd %s', cmd)
 
     try:
-        output = subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
     except subprocess.CalledProcessError as err:
         logger.error(nevptsolver, cmd)
         raise err

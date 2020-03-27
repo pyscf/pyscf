@@ -35,7 +35,6 @@ import numpy
 import pyscf.tools
 import pyscf.lib
 from pyscf.lib import logger
-from pyscf.lib import chkfile
 from pyscf import mcscf
 ndpointer = numpy.ctypeslib.ndpointer
 
@@ -50,7 +49,6 @@ except ImportError:
     settings.SHCIRUNTIMEDIR = getattr(__config__, 'shci_SHCIRUNTIMEDIR', None)
     settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
     if (settings.SHCIEXE is None or settings.SHCISCRATCHDIR is None):
-        import sys
         sys.stderr.write('settings.py not found for module shciscf.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
@@ -352,7 +350,7 @@ class SHCI(pyscf.lib.StreamObject):
         # and stored here as E2[i1,k1,j2,l2] (for PySCF purposes)
         # This is NOT done with SQA in mind.
         twopdm = numpy.zeros((norb, norb, norb, norb))
-        file2pdm = "spatialRDM.%d.%d.txt" % (root, root)
+        file2pdm = "spatialRDM.%d.%d.txt" % (statebra, stateket)
         r2RDM(twopdm, norb,
               os.path.join(self.scratchDirectory, file2pdm).endcode())
 
@@ -1436,7 +1434,7 @@ def writeSOCIntegrals(mc,
     elif (pictureChange2e == "none"):
         hso1e *= 0.0
     else:
-        print(pictureChane2e, "not a valid option")
+        print(pictureChange2e, "not a valid option")
         exit(0)
 
     #MF 1 electron term
@@ -1459,7 +1457,7 @@ def writeSOCIntegrals(mc,
                 if (abs(h1e_2c[2 * i, 2 * j].imag) > 1.e-8):
                     hso1e[2][i, j] -= h1e_2c[2 * i, 2 * j].imag * 2.
     else:
-        print(pictureChane1e, "not a valid option")
+        print(pictureChange1e, "not a valid option")
         exit(0)
 
     h1ao = numpy.zeros((3, nc, nc))
@@ -1567,8 +1565,6 @@ def doSOC(mc, gtensor=False, pictureChange="bp"):
     dryrun(mc)
     if (gtensor or True):
         ncore, ncas = mc.ncore, mc.ncas
-        charge_center = numpy.einsum('z,zx->x', mc.mol.atom_charges(),
-                                     mc.mol.atom_coords())
         h1ao = mc.mol.intor('cint1e_cg_irxp_sph', comp=3)
         h1 = numpy.einsum(
             'xpq,pi,qj->xij', h1ao, mc.mo_coeff,
@@ -1579,7 +1575,7 @@ def doSOC(mc, gtensor=False, pictureChange="bp"):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, scf, mcscf, dmrgscf
+    from pyscf import gto, scf
     from pyscf.shciscf import shci
 
     # Initialize N2 molecule

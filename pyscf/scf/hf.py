@@ -33,7 +33,7 @@ from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
-from pyscf.data import nist, elements
+from pyscf.data import nist
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
@@ -462,9 +462,7 @@ def init_guess_by_atom(mol):
     Returns:
         Density matrix, 2D ndarray
     '''
-    import copy
     from pyscf.scf import atom_hf
-    from pyscf.scf import addons
     atm_scf = atom_hf.get_atm_nrhf(mol)
     aoslice = mol.aoslice_by_atom()
     atm_dms = []
@@ -499,7 +497,6 @@ def init_guess_by_huckel(mol):
     Returns:
         Density matrix, 2D ndarray
     '''
-    if mol is None: mol = self.mol
     mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol)
     mo_occ = get_occ(SCF(mol), mo_energy, mo_coeff)
     return make_rdm1(mo_coeff, mo_occ)
@@ -511,9 +508,7 @@ def _init_guess_huckel_orbitals(mol):
     Returns:
         An 1D array for Huckel orbital energies and an 2D array for orbital coefficients
     '''
-    import copy
     from pyscf.scf import atom_hf
-    from pyscf.scf import addons
     atm_scf = atom_hf.get_atm_nrhf(mol)
 
     # GWH parameter value
@@ -894,7 +889,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if damp_factor is None:
         damp_factor = mf.damp
     if s1e is None: s1e = mf.get_ovlp()
-    if dm is None: dm = self.make_rdm1()
+    if dm is None: dm = mf.make_rdm1()
 
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
@@ -1251,7 +1246,6 @@ def as_scanner(mf):
     >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     -98.414750424294368
     '''
-    import copy
     if isinstance(mf, lib.SinglePointScanner):
         return mf
 

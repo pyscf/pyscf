@@ -314,8 +314,6 @@ scf.dhf.UHF.SSC = scf.dhf.UHF.SpinSpinCoupling = lib.class_as_method(SSC)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 3
     mol.output = None

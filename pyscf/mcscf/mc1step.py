@@ -30,7 +30,6 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import gto
-from pyscf import fci
 from pyscf.soscf import ciah
 from pyscf import __config__
 
@@ -212,7 +211,6 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
     u = 1
     g_orb, gorb_update, h_op, h_diag = \
             casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
-    ngorb = g_orb.size
     g_kf = g_orb
     norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
     log.debug('    |g|=%5.3g', norm_gorb)
@@ -1040,8 +1038,6 @@ To enable the solvent model for CASSCF, the following code needs to be called
         '''
         ncas = self.ncas
         nelecas = self.nelecas
-        ncore = self.ncore
-        nocc = ncore + ncas
         if 'norm_gorb' in envs:
             tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:
@@ -1086,8 +1082,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
             e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ecore=ecore,
                                            ci0=ci0, tol=tol, max_memory=max_memory)
         else:
-            nd = min(max(self.ci_response_space, 2), ci0.size)
-            logger.debug(self, 'CI step by %dD subspace response', nd)
+            nd = self.ci_response_space
             xs = [ci0.ravel()]
             ax = [hc]
             heff = numpy.empty((nd,nd))
@@ -1095,14 +1090,18 @@ To enable the solvent model for CASSCF, the following code needs to be called
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
             for i in range(1, nd):
-                xs.append(ax[i-1] - xs[i-1] * e_cas)
+                dx = ax[i-1] - xs[i-1] * e_cas
+                if numpy.linalg.norm(dx) < 1e-6:
+                    break
+                xs.append(dx)
                 ax.append(contract_2e(xs[i]))
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-            e, v = lib.safe_eigh(heff, seff)[:2]
+            nd = len(xs)
+            e, v = lib.safe_eigh(heff[:nd,:nd], seff[:nd,:nd])[:2]
             ci1 = xs[0] * v[0,0]
-            for i in range(1,nd):
+            for i in range(1, nd):
                 ci1 += xs[i] * v[i,0]
         return ci1, g
 

@@ -26,9 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import dhf
 from pyscf.dft import rks
-from pyscf.dft import gen_grid
 from pyscf.dft import r_numint
-from pyscf import __config__
 
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ t2 and eris are never stored in full, only a partial
 eri of size (nkpts,nocc,nocc,nvir,nvir)
 '''
 
-import time
 import numpy as np
 from scipy.linalg import block_diag
 
@@ -262,7 +261,7 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
     '''
     frozen = np.array(frozen)
     nocc = np.count_nonzero(mo_occ > 0)
-    nvir = len(mo_occ) - nocc
+
     assert nocc, 'No occupied orbitals?\n\nnocc = %s\nmo_occ = %s' % (nocc, mo_occ)
     all_frozen_unique = (len(frozen) - len(np.unique(frozen))) == 0
     if not all_frozen_unique:
@@ -428,12 +427,8 @@ def get_frozen_mask(mp):
 
 
 def _add_padding(mp, mo_coeff, mo_energy):
-    from pyscf.pbc import tools
-    from pyscf.pbc.cc.ccsd import _adjust_occ
     nmo = mp.nmo
     nocc = mp.nocc
-    nvir = nmo - nocc
-    nkpts = mp.nkpts
 
     # Check if these are padded mo coefficients and energies
     if not np.all([x.shape[0] == nmo for x in mo_coeff]):

@@ -20,7 +20,6 @@
 Foster-Boys localization
 '''
 
-import sys
 import time
 import numpy
 from functools import reduce

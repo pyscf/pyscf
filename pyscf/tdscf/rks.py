@@ -21,14 +21,15 @@
 #
 
 import time
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import symm
+from pyscf import scf
 from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
-from pyscf.scf import _response_functions
+from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
+from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
 
 # Low excitation filter to avoid numerical instability
@@ -167,8 +168,6 @@ class TDDFTNoHybrid(TDA):
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
-        from pyscf import scf
-        from pyscf.dft.rks import KohnShamDFT
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         mf = scf.addons.convert_to_rhf(mf)
@@ -182,8 +181,6 @@ TDH = dRPA
 
 class dTDA(TDA):
     def __init__(self, mf):
-        from pyscf import scf
-        from pyscf.dft.rks import KohnShamDFT
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         mf = scf.addons.convert_to_rhf(mf)
@@ -218,7 +215,6 @@ dft.roks.ROKS.dRPA          = dft.rks_symm.ROKS.dRPA          = None
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     from pyscf import dft
     mol = gto.Mole()
     mol.verbose = 0

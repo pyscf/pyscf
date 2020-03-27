@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -266,7 +266,7 @@ class KnownValues(unittest.TestCase):
         d_index1[:,:,0] = 0
         self.assertTrue(numpy.all(d_index0 == d_index1))
 
-    def test_des_linkstr(self):
+    def test_des_linkstr1(self):
         norb, nelec = 10, 4
         strs = cistring.make_strings(range(norb), nelec)
         numpy.random.seed(11)

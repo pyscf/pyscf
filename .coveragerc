@@ -31,7 +31,6 @@ exclude_lines =
     if DEBUG:
     except ImportError:
 
-omit = xianci/* 
 ignore_errors = True
 
 [html]

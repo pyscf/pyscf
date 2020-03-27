@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,7 +41,6 @@ def tddft(mf):
     else:
         return TDDFTNoHybrid(mf)
 
-from pyscf import lib
 from pyscf.pbc import dft
 dft.rks.RKS.TDA           = lib.class_as_method(TDA)
 dft.rks.RKS.TDHF          = None

@@ -333,7 +333,6 @@ def get_jk_amfi(mol, dm0):
     atom = copy.copy(mol)
     aoslice = mol.aoslice_by_atom(ao_loc)
     for ia in range(mol.natm):
-        symb = mol.atom_symbol(ia)
         b0, b1, p0, p1 = aoslice[ia]
         atom._bas = mol._bas[b0:b1]
         vj1, vk1 = get_jk(atom, (dma[p0:p1,p0:p1],dmb[p0:p1,p0:p1]))

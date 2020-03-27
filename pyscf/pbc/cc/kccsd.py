@@ -27,9 +27,9 @@ from pyscf.pbc import scf
 from pyscf.cc import gccsd
 from pyscf.cc import ccsd
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nmo, get_nocc,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc import kintermediates as imdk
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
 
 DEBUG = False
@@ -77,8 +77,6 @@ def update_amps(cc, t1, t2, eris):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:].copy()
-    foo = fock[:, :nocc, :nocc].copy()
-    fvv = fock[:, nocc:, nocc:].copy()
 
     # Get the momentum conservation array
     # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
@@ -364,9 +362,6 @@ class GCCSD(gccsd.GCCSD):
         t1 = numpy.zeros((nkpts, nocc, nvir), dtype=numpy.complex128)
         t2 = numpy.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=numpy.complex128)
         self.emp2 = 0
-        foo = eris.fock[:, :nocc, :nocc].copy()
-        fvv = eris.fock[:, nocc:, nocc:].copy()
-        fov = eris.fock[:, :nocc, nocc:].copy()
         eris_oovv = eris.oovv.copy()
 
         # Get location of padded elements in occupied and virtual space
@@ -483,7 +478,6 @@ def _make_eris_incore(cc, mo_coeff=None):
     nkpts = cc.nkpts
     nocc = cc.nocc
     nmo = cc.nmo
-    nvir = nmo - nocc
     eris.nocc = nocc
 
     #if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k] > 0) for k in range(nkpts)):
@@ -793,7 +787,7 @@ class _IMDS:
 
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris,kconserv, self._fimd['vovv'])
-        if ea_partition == 'mp' and np.all(t1 == 0):
+        if ea_partition == 'mp' and numpy.all(t1 == 0):
             self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv, self._fimd['vvvo'])
         else:
             self.Wvvvv = imd.Wvvvv(t1,t2,eris,kconserv, self._fimd['vvvv'])
@@ -802,12 +796,11 @@ class _IMDS:
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
 
-from pyscf.pbc import scf
 scf.kghf.KGHF.CCSD = lib.class_as_method(KGCCSD)
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto
 
     cell = gto.Cell()
     cell.atom='''

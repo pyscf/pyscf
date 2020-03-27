@@ -21,11 +21,7 @@ Non-relativistic rotational g-tensor for UKS
 '''
 
 
-import time
-import numpy
-from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.nmr import uks as uks_nmr
-from pyscf.prop.magnetizability import uhf as uhf_mag
 from pyscf.prop.magnetizability import uks as uks_mag
 from pyscf.prop.rotational_gtensor import rhf as rhf_g
 from pyscf.prop.rotational_gtensor import uhf as uhf_g

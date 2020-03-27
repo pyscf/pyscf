@@ -48,7 +48,6 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
-    nocc = mocc.shape[1]
     dm0 = numpy.dot(mocc, mocc.T) * 2
 
     if mf.nlc != '':

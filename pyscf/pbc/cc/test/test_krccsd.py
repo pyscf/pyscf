@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -352,6 +352,7 @@ class KnownValues(unittest.TestCase):
 
         check_gamma = False  # Turn me on to run the supercell calculation!
 
+        nk = [1,1,2]
         if check_gamma:
             from pyscf.pbc.tools.pbc import super_cell
             supcell = super_cell(cell, nk)

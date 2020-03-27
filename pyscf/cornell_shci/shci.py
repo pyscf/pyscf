@@ -51,7 +51,6 @@ except ImportError:
     settings.SHCIRUNTIMEDIR = getattr(__config__, 'shci_SHCIRUNTIMEDIR', None)
     settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
     if settings.SHCIEXE is None:
-        import sys
         sys.stderr.write('settings.py not found for module cornell_shci.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
@@ -547,7 +546,7 @@ class shci_client(object):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, scf, mcscf
+    from pyscf import gto, scf
     from pyscf.cornell_shci import shci
 
     # Initialize N2 molecule

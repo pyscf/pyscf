@@ -20,10 +20,8 @@
 
 import time
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import uhf as uhf_grad
 from pyscf.dft import numint, gen_grid
@@ -101,7 +99,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             rks_grad._d1_dot_(vmat[0], mol, ao[1:4], aow, mask, ao_loc, True)
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,1])
             rks_grad._d1_dot_(vmat[1], mol, ao[1:4], aow, mask, ao_loc, True)
-            rho = vxc = vrho = aow = None
+            vxc = vrho = aow = None
 
     elif xctype == 'GGA':
         ao_deriv = 2
@@ -163,13 +161,12 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             rks_grad._d1_dot_(vtmp, mol, ao[1:4], aow, mask, ao_loc, True)
             vmat[1] += vtmp
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[1]) * 2
-            rho = vxc = vrho = aow = None
+            vxc = vrho = aow = None
 
     elif xctype == 'GGA':
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
-            ngrids = weight.size
             sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)

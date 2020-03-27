@@ -64,7 +64,6 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''
     from pyscf import df
     from pyscf.scf import dhf
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
     if with_df is None:

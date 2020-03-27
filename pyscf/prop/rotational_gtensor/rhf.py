@@ -29,7 +29,6 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import jk
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.magnetizability import rhf as rhf_mag
 from pyscf.data import nist

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,10 +24,7 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 import time
 import numpy
 import copy
-import scipy.linalg
 import pyscf.lib.logger as logger
-from pyscf.mcscf import mc1step
-from pyscf.mcscf import umc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):
@@ -129,6 +126,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf.mcscf import addons
+    from pyscf.mcscf import umc1step
 
     mol = gto.Mole()
     mol.verbose = 0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -446,7 +446,7 @@ H   2.041481  -0.080642  -0.024174''')
                           [4, 12, 16, 24], [5, 13, 19, 27],
                           [6, 14, 18, 26], [7, 15, 17, 25]])
 
-    def test_s4(self):
+    def test_s4_1(self):
         coords1 = numpy.dot(make4(1.5), u)
         coords2 = numpy.dot(numpy.dot(make4(2.4), random_rotz()), u)
         atoms = [['C', c] for c in coords1] + [['C', c] for c in coords2]

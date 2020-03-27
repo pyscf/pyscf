@@ -32,7 +32,6 @@ from pyscf.cc import gccsd_rdm
 from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf.ci import cisd
 from pyscf.ci import ucisd
-from pyscf.fci import cistring
 
 
 def make_diagonal(myci, eris):
@@ -128,7 +127,7 @@ def from_ucisdvec(civec, nocc, orbspin):
         noccb = numpy.count_nonzero(orbspin[:nocc] == 1)
     else:
         nocca, noccb = nocc
-    nvira, nvirb = nmoa-nocca, nmob-noccb
+    nvira = nmoa - nocca
 
     if civec.size == nocca*nvira + (nocca*nvira)**2 + 1:  # RCISD
         c0, c1, c2 = cisd.cisdvec_to_amplitudes(civec, nmoa, nocca)
@@ -440,7 +439,6 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
-    from pyscf.cc.addons import spatial2spin
 
     mol = gto.Mole()
     mol.verbose = 0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import time
 import numpy as np
 from pyscf import lib
 from pyscf.pbc import tools
-from pyscf.pbc.dft import numint
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
@@ -96,7 +95,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         vj_kpts = np.zeros((nset,nband,nao,nao))
     else:
         vj_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
-    rho = None
+
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band):
         ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
         for i in range(nset):
@@ -239,8 +238,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/ngrids/nao)))
     lib.logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
                       max_memory, blksize)
-    ao1_dtype = np.result_type(*ao1_kpts)
-    ao2_dtype = np.result_type(*ao2_kpts)
+    #ao1_dtype = np.result_type(*ao1_kpts)
+    #ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
 
     t1 = (time.clock(), time.time())

@@ -17,7 +17,6 @@
 #
 
 import time
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import symm
@@ -25,7 +24,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
-from pyscf.scf import _response_functions
+from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -79,8 +78,6 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     e_ia = hdiag = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
-    mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
-    mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
@@ -182,8 +179,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b_ab += numpy.einsum('iajb->iajb', eri_ab[:nocc_a,nocc_a:,:nocc_b,nocc_b:])
 
     if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
-        from pyscf.dft import rks
-        from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -571,10 +566,6 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     orbv_a = mo_coeff[0][:,mo_occ[0]==0]
     orbo_b = mo_coeff[1][:,mo_occ[1]==1]
     orbv_b = mo_coeff[1][:,mo_occ[1]==0]
-    nocc_a = orbo_a.shape[1]
-    nvir_a = orbv_a.shape[1]
-    nocc_b = orbo_b.shape[1]
-    nvir_b = orbv_b.shape[1]
 
     ints_a = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_a.conj(), orbv_a)
     ints_b = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_b.conj(), orbv_b)
@@ -754,8 +745,6 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
-    mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
-    mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)

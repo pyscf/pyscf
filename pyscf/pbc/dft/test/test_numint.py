@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,10 +45,6 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=
                                             shls_slice, non0tab, out, verbose) * factor
     return numpy.asarray(aoR)
 
-def finger(a):
-    w = np.cos(np.arange(a.size))
-    return np.dot(w, a.ravel())
-
 def make_grids(mesh):
     L = 60
     cell = pbcgto.Cell()
@@ -88,20 +84,20 @@ class KnowValues(unittest.TestCase):
         ao0 = ao10[0]
         ao1 = ni.eval_ao(cell, grids.coords)
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(ao1), -0.54069672246407219, 8)
+        self.assertAlmostEqual(lib.fp(ao1), -0.54069672246407219, 8)
 
         ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
         self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
+        self.assertAlmostEqual(lib.fp(ao11), 8.8004405892746433, 8)
 
         ni.non0tab = ni.make_mask(cell, grids.coords)
         ao1 = ni.eval_ao(cell, grids.coords)
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(ao1), -0.54069672246407219, 8)
+        self.assertAlmostEqual(lib.fp(ao1), -0.54069672246407219, 8)
 
         ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
         self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
+        self.assertAlmostEqual(lib.fp(ao11), 8.8004405892746433, 8)
 
         ao11 = ni.eval_ao(cell, grids.coords, deriv=1, shls_slice=(3,7))
         self.assertTrue(numpy.allclose(ao10[:,:,6:17], ao11, atol=1e-9, rtol=1e-9))
@@ -136,10 +132,10 @@ class KnowValues(unittest.TestCase):
         kpts = np.random.random((4,3))
         ni = numint.KNumInt(kpts)
         ao1 = ni.eval_ao(cell, grids.coords, kpts)
-        self.assertAlmostEqual(finger(ao1[0]), (-2.4066959390326477-0.98044994099240701j), 8)
-        self.assertAlmostEqual(finger(ao1[1]), (-0.30643153325360639+0.1571658820483913j), 8)
-        self.assertAlmostEqual(finger(ao1[2]), (-1.1937974302337684-0.39039259235266233j), 8)
-        self.assertAlmostEqual(finger(ao1[3]), (0.17701966968272009-0.20232879692603079j), 8)
+        self.assertAlmostEqual(lib.fp(ao1[0]), (-2.4066959390326477-0.98044994099240701j), 8)
+        self.assertAlmostEqual(lib.fp(ao1[1]), (-0.30643153325360639+0.1571658820483913j), 8)
+        self.assertAlmostEqual(lib.fp(ao1[2]), (-1.1937974302337684-0.39039259235266233j), 8)
+        self.assertAlmostEqual(lib.fp(ao1[3]), (0.17701966968272009-0.20232879692603079j), 8)
 
     def test_eval_ao_kpt(self):
         cell = pbcgto.Cell()
@@ -160,7 +156,7 @@ class KnowValues(unittest.TestCase):
         ao0 = eval_ao(cell, grids.coords, kpt)
         ao1 = ni.eval_ao(cell, grids.coords, kpt)
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(ao1), (-2.4066959390326477-0.98044994099240701j), 8)
+        self.assertAlmostEqual(lib.fp(ao1), (-2.4066959390326477-0.98044994099240701j), 8)
 
     def test_nr_rks(self):
         cell = pbcgto.Cell()
@@ -185,22 +181,22 @@ class KnowValues(unittest.TestCase):
             ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 0, kpts[0])
         self.assertAlmostEqual(ne, 5.0499199224525153, 8)
         self.assertAlmostEqual(exc, -3.8870579114663886, 8)
-        self.assertAlmostEqual(finger(vmat), 0.42538491159934377+0.14139753327162483j, 8)
+        self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
         ni = numint.KNumInt()
         with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
             ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, 0, kpts)
         self.assertAlmostEqual(ne, 6.0923292346269742, 8)
         self.assertAlmostEqual(exc, -3.9899423803106466, 8)
-        self.assertAlmostEqual(finger(vmat[0]), -2348.9577179701278-60.733087913116719j, 7)
-        self.assertAlmostEqual(finger(vmat[1]), -2353.0350086740673-117.74811536967495j, 7)
+        self.assertAlmostEqual(lib.fp(vmat[0]), -2348.9577179701278-60.733087913116719j, 7)
+        self.assertAlmostEqual(lib.fp(vmat[1]), -2353.0350086740673-117.74811536967495j, 7)
 
         with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
             ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], 0, kpts)
         self.assertAlmostEqual(ne[1], 6.0923292346269742, 8)
         self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
-        self.assertAlmostEqual(finger(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 7)
-        self.assertAlmostEqual(finger(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 7)
+        self.assertAlmostEqual(lib.fp(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 7)
+        self.assertAlmostEqual(lib.fp(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 7)
 
     def test_eval_rho(self):
         cell, grids = make_grids([61]*3)
@@ -231,12 +227,12 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(rho0, rho1))
 
         rho1 = numint.eval_rho(cell, ao, dm, xctype='GGA')
-        self.assertAlmostEqual(finger(rho1), -255.45150185669198, 7)
+        self.assertAlmostEqual(lib.fp(rho1), -255.45150185669198, 7)
 
         rho1 = numint.eval_rho(cell, ao[0], dm, xctype='LDA')
-        self.assertAlmostEqual(finger(rho1), -17.198879910245601, 7)
+        self.assertAlmostEqual(lib.fp(rho1), -17.198879910245601, 7)
 
-    def test_eval_mat(self):
+    def test_eval_mat1(self):
         cell, grids = make_grids([61]*3)
         numpy.random.seed(10)
         nao = 10
@@ -261,10 +257,10 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(mat0, mat1))
 
         mat1 = numint.eval_mat(cell, ao, weight, rho, vxc, xctype='MGGA')
-        self.assertAlmostEqual(finger(mat1), -106.84965223363503+50.089526939523154j, 7)
+        self.assertAlmostEqual(lib.fp(mat1), -106.84965223363503+50.089526939523154j, 7)
 
         mat1 = numint.eval_mat(cell, ao[0], weight, rho, vxc, xctype='LDA')
-        self.assertAlmostEqual(finger(mat1), 10.483493302918024+3.5590312220458227j, 7)
+        self.assertAlmostEqual(lib.fp(mat1), 10.483493302918024+3.5590312220458227j, 7)
 
     def test_2d_rho(self):
         cell = pbcgto.Cell()
@@ -285,7 +281,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
-        self.assertAlmostEqual(lib.finger(rho), 7.2089907050590334, 9)
+        self.assertAlmostEqual(lib.fp(rho), 7.2089907050590334, 9)
 
     def test_1d_rho(self):
         cell = pbcgto.Cell()
@@ -306,7 +302,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
-        self.assertAlmostEqual(lib.finger(rho), 1.1624587519868457, 9)
+        self.assertAlmostEqual(lib.fp(rho), 1.1624587519868457, 9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")

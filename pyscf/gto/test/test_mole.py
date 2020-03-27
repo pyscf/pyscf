@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -220,7 +220,7 @@ C    SP
         mol1.output = '/dev/null'
         mol1.build(False, False)
         self.assertAlmostEqual(lib.fp(gto.inertia_moment(mol1)),
-                               2.139593709454326, 9)
+                               5.340587366981696, 9)
 
         mass = mol0.atom_mass_list(isotope_avg=True)
         self.assertAlmostEqual(lib.fp(gto.inertia_moment(mol1, mass)),
@@ -862,7 +862,7 @@ O    SP
         mol2.cart = True
         self.assertEqual(mol2.npgto_nr(), 100)
 
-    def test_intor_cross(self):
+    def test_intor_cross_cart(self):
         mol1 = gto.M(atom='He', basis={'He': [(2,(1.,1))]}, cart=True)
         s0 = gto.intor_cross('int1e_ovlp', mol1, mol0)
         self.assertEqual(s0.shape, (6, 34))

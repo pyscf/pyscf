@@ -26,14 +26,11 @@ Refs:
 '''
 
 from functools import reduce
-import numpy, sys
+import numpy
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.prop.nmr import uks as uks_nmr
 from pyscf.prop.esr import uhf as uhf_esr
-from pyscf.prop.esr.uhf import _write, align
-from pyscf.data import nist
 from pyscf.grad import rks as rks_grad
 
 
@@ -46,8 +43,6 @@ def para(obj, mo10, mo_coeff, mo_occ, qed_fac=1):
 
     orboa = mo_coeff[0][:,mo_occ[0]>0]
     orbob = mo_coeff[1][:,mo_occ[1]>0]
-    dm0a = numpy.dot(orboa, orboa.T)
-    dm0b = numpy.dot(orbob, orbob.T)
     dm10a = [reduce(numpy.dot, (mo_coeff[0], x, orboa.T)) for x in mo10[0]]
     dm10b = [reduce(numpy.dot, (mo_coeff[1], x, orbob.T)) for x in mo10[1]]
     dm10a = numpy.asarray([x-x.T for x in dm10a])
@@ -105,12 +100,12 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             wva, wvb = numint._uks_gga_wv0((rho_a, rho_b), vxc, weight)
 
             ip_ao = ao[1:4]
-            ipip_ao = ao[4:]
+            #ipip_ao = ao[4:]
             aow = rks_grad._make_dR_dao_w(ao, wva)
             _cross3x3_(vmat[0], mol, aow, ip_ao, mask, shls_slice, ao_loc)
             aow = rks_grad._make_dR_dao_w(ao, wvb)
             _cross3x3_(vmat[1], mol, aow, ip_ao, mask, shls_slice, ao_loc)
-            rho = vxc = vrho = vsigma = wv = aow = None
+            vxc = vrho = aow = None
         vmat = vmat - vmat.transpose(0,1,3,2)
 
     else:
@@ -144,7 +139,6 @@ class ESR(uhf_esr.ESR):
             mo10 = self.mo10
         return para(self, mo10, mo_coeff, mo_occ)
 
-    #make_para_soc2e = make_para_soc2e
     get_fock = uks_nmr.get_fock
 
 
@@ -158,30 +152,3 @@ if __name__ == '__main__':
     esr_obj.para_soc2e = False
     esr_obj.so_eff_charge = True
     print(esr_obj.kernel())
-
-    mol = gto.M(atom='''
-                H 0   0   1
-                H 1.2 0   1
-                H .1  1.1 0.3
-                H .8  .7  .6
-                ''',
-                basis='ccpvdz', spin=1, charge=1, verbose=3)
-    mf = scf.UKS(mol).set(xc='bp86').run()
-    gobj = GTensor(mf)
-    #print(gobj.kernel())
-    gobj.para_soc2e = 'SSO'
-    gobj.dia_soc2e = None
-    gobj.so_eff_charge = False
-    nao, nmo = mf.mo_coeff[0].shape
-    nelec = mol.nelec
-    numpy.random.seed(1)
-    mo10 =[numpy.random.random((3,nmo,nelec[0])),
-           numpy.random.random((3,nmo,nelec[1]))]
-    print(lib.finger(para(gobj, mo10, mf.mo_coeff, mf.mo_occ)) - -2.1813250579863279e-05)
-    numpy.random.seed(1)
-    dm0 = numpy.random.random((2,nao,nao))
-    dm0 = dm0 + dm0.transpose(0,2,1)
-    dm10 = numpy.random.random((2,3,nao,nao))
-    dm10 = dm10 - dm10.transpose(0,1,3,2)
-    print(lib.finger(make_para_soc2e(gobj, dm0, dm10)) - 0.0036073897889263721)
-

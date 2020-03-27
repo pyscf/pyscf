@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -117,38 +117,38 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
     def test_casci_4o4e(self):
-        mc = mcscf.CASCI(m.density_fit(), 4, 4)
+        mc = mcscf.CASCI(m.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -108.8896744464714, 7)
+        self.assertAlmostEqual(emc, -108.88669369639578, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.6910276344981119, 4)
 
     def test_casci_symm_4o4e(self):
-        mc = mcscf.CASCI(msym.density_fit(), 4, 4)
+        mc = mcscf.CASCI(msym.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -108.8896744464714, 7)
+        self.assertAlmostEqual(emc, -108.88669369639578, 7)
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.6910276344981119, 4)
 
-    def test_casci_4o4e(self):
+    def test_casci_4o4e_1(self):
         mc = mcscf.DFCASCI(m.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -108.88669369639578, 7)
 
-    def test_casci_symm_4o4e(self):
+    def test_casci_symm_4o4e_1(self):
         mc = mcscf.DFCASCI(msym.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -108.88669369639578, 7)
 
     def test_casci_from_uhf(self):
-        mf = scf.UHF(mol)
-        mf.scf()
-        mc = mcscf.CASCI(mf, 4, 4)
+        mf = scf.UHF(mol).run()
+        mc = mcscf.CASCI(mf.density_fit('weigend'), 4, 4)
         emc = mc.casci()[0]
-        self.assertAlmostEqual(emc, -108.8896744464714, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()), 0, 7)
+        self.assertAlmostEqual(emc, -108.88669369639578, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
+                               2.6910275883606078, 4)
 
-    def test_casci_from_uhf(self):
+    def test_casci_from_uhf1(self):
         mf = scf.UHF(mol)
         mf.scf()
         mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4))
@@ -185,16 +185,6 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.DFCASSCF(mf, 6, 6)
         mc.kernel()
         self.assertAlmostEqual(mc.e_tot, -108.98010545803884, 7)
-
-    def test_newton_casscf(self):
-        mc = mcscf.newton(mcscf.CASSCF(m, 4, 4))
-        mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
-
-    def test_newton_casscf_symm(self):
-        mc = mcscf.newton(mcscf.CASSCF(msym, 4, 4))
-        mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
 
     def test_init(self):
         from pyscf.mcscf import df

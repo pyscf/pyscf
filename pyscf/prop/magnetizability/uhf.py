@@ -27,7 +27,6 @@ Refs:
 
 
 import time
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -39,9 +38,9 @@ from pyscf.prop.magnetizability import rhf as rhf_mag
 def dia(magobj, gauge_orig=None):
     mol = magobj.mol
     mf = magobj._scf
-    mo_energy = magobj._scf.mo_energy
-    mo_coeff = magobj._scf.mo_coeff
-    mo_occ = magobj._scf.mo_occ
+    mo_energy = mf.mo_energy
+    mo_coeff = mf.mo_coeff
+    mo_occ = mf.mo_occ
     orboa = mo_coeff[0][:,mo_occ[0] > 0]
     orbob = mo_coeff[1][:,mo_occ[1] > 0]
     dm0a = numpy.dot(orboa, orboa.T)
@@ -94,9 +93,9 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
 
     mol = magobj.mol
     mf = magobj._scf
-    mo_energy = magobj._scf.mo_energy
-    mo_coeff = magobj._scf.mo_coeff
-    mo_occ = magobj._scf.mo_occ
+    mo_energy = mf.mo_energy
+    mo_coeff = mf.mo_coeff
+    mo_occ = mf.mo_occ
     orboa = mo_coeff[0][:,mo_occ[0] > 0]
     orbob = mo_coeff[1][:,mo_occ[1] > 0]
 

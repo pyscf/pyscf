@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,13 +20,7 @@
 # J. Mol. Struct. THEOCHEM, 914, 3
 #
 
-import time
-import copy
-from functools import reduce
-import numpy
 from pyscf import lib
-from pyscf.dft import numint
-from pyscf.ao2mo import _ao2mo
 from pyscf.pbc.tdscf import krhf
 
 
@@ -56,7 +50,6 @@ dft.kroks.KROKS.TDDFT = None
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
-    from pyscf.pbc import scf
     from pyscf.pbc import dft, df
     cell = gto.Cell()
     cell.unit = 'B'

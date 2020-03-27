@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,8 +30,9 @@ constant.  Allows the freedom to select thine own basis
 
 from functools import reduce
 import numpy
-from pyscf import lo, tools
-from pyscf.pbc import gto, scf, dft
+from pyscf import lib
+from pyscf import lo
+from pyscf.pbc import gto, dft
 
 def cdft(mf,cell,offset,orbital,basis=None):
     '''
@@ -49,11 +50,10 @@ def cdft(mf,cell,offset,orbital,basis=None):
         a = basis
     else:
         a = numpy.eye(cell._bas.shape[1])
-    results = numpy.asarray([])
 
-    '''
-     Here we run the calculation using each IAO as an offset parameter
-    '''
+    #
+    # Here we run the calculation using each IAO as an offset parameter
+    #
 
     iaoi = a.T[orbital,:]
     ##gonna try nomrlaizing to see if that makes life better
@@ -76,18 +76,18 @@ def fast_iao_mullikan_pop(mf,cell,a=None):
     Returns: mullikan populaion analysis in the basisIAO a
     '''
 
-    '''
-    here we convert the density matrix to the IAO basis
-    '''
+    #
+    # here we convert the density matrix to the IAO basis
+    #
     if a is None:
         a = numpy.eye(mf.make_rdm1().shape[1])
     #converts the occupied MOs to the IAO basis
     ovlpS = mf.get_ovlp()
     CIb = reduce(numpy.dot, (a.T, ovlpS , mf.make_rdm1()))
 
-    '''
-    This is the mullikan population below here
-    '''
+    #
+    # This is the mullikan population below here
+    #
 
     mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
     mo_occ = reduce(numpy.dot, (a.T, mf.get_ovlp(), mo_occ))

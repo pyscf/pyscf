@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,18 +19,16 @@ import sys
 import numpy as np
 
 from pyscf import lib
-from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.pbc.cc.kccsd_rhf import vector_to_nested, nested_to_vector
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-from pyscf.lib import linalg_helper
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.cc import eom_kccsd_ghf as eom_kgccsd
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 
 einsum = lib.einsum
 
@@ -42,7 +40,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
     if imds is None: imds = eom.make_imds()
-
+    nmo = eom.nmo
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = imds.t1.shape
     kconserv = imds.kconserv
@@ -81,7 +79,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     elif eom.partition == 'full':
         if diag is not None:
             diag = eom.get_diag(imds=imds)
-        diag_matrix2 = vector_to_amplitudes(diag, nmo, nocc)[1]
+        diag_matrix2 = eom.vector_to_amplitudes(diag, nmo, nocc)[1]
         Hr2 += diag_matrix2 * r2
     else:
         for ki in range(nkpts):
@@ -216,21 +214,15 @@ def ipccsd_diag(eom, kshift, imds=None, diag=None):
 def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift, imds=None):
     '''For description of arguments, see `ipccsd_star_contract` in `kccsd_ghf.py`.'''
     assert (eom.partition == None)
-    cpu1 = cpu0 = (time.clock(), time.time())
-    log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
     fock = eris.fock
     nkpts, nocc, nvir = t1.shape
-    nmo = nocc + nvir
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
 
-    fov = np.array([fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)])
-    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
-    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
@@ -333,8 +325,8 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
         l2 /= ldotr
 
         deltaE = 0.0 + 1j*0.0
-        eij = (mo_e_o[:, None, :, None, None] + mo_e_o[None, :, None, :, None])
-                #mo_e_o[None, None, :, None, None, :])
+        #eij = (mo_e_o[:, None, :, None, None] + mo_e_o[None, :, None, :, None])
+        #        #mo_e_o[None, None, :, None, None, :])
         for ka, kb in itertools.product(range(nkpts), repeat=2):
             lijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
             Plijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
@@ -438,7 +430,7 @@ class EOMIP_Ta(EOMIP):
 def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
     if imds is None: imds = eom.make_imds()
-
+    nmo = eom.nmo
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = imds.t1.shape
     kconserv = imds.kconserv
@@ -480,7 +472,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     elif eom.partition == 'full':
         if diag is not None:
             diag = eom.get_diag(imds=imds)
-        diag_matrix2 = vector_to_amplitudes(diag, nmo, nocc)[1]
+        diag_matrix2 = eom.vector_to_amplitudes(diag, nmo, nocc)[1]
         Hr2 += diag_matrix2 * r2
     else:
         for kj in range(nkpts):
@@ -598,7 +590,6 @@ def eaccsd_diag(eom, kshift, imds=None, diag=None):
                 Hr2[kj, ka] += fvv[ka].diagonal()[None, :, None]
                 Hr2[kj, ka] += fvv[kb].diagonal()
     else:
-        idx = np.eye(nvir, dtype=bool)
         for kj in range(nkpts):
             for ka in range(nkpts):
                 kb = kconserv[kshift, ka, kj]
@@ -626,21 +617,15 @@ def eaccsd_diag(eom, kshift, imds=None, diag=None):
 def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift, imds=None):
     '''For descreation of arguments, see `eaccsd_star_contract` in `kccsd_ghf.py`.'''
     assert (eom.partition == None)
-    cpu1 = cpu0 = (time.clock(), time.time())
-    log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
     fock = eris.fock
     nkpts, nocc, nvir = t1.shape
-    nmo = nocc + nvir
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
 
-    fov = np.array([fock[ikpt, :nocc, nocc:] for ikpt in range(nkpts)])
-    foo = np.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
-    fvv = np.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 

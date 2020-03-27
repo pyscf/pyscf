@@ -17,7 +17,6 @@
 density fitting MP2,  3-center integrals incore.
 '''
 
-import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger

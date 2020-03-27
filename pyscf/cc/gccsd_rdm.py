@@ -14,13 +14,11 @@
 # limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Jun Yang <junyang4711@gmail.com>
+#         Jun Yang
 #
 
-import time
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
 
 #einsum = numpy.einsum
 einsum = lib.einsum
@@ -258,7 +256,6 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import ao2mo
     from pyscf.cc import gccsd
-    from pyscf.cc import addons
 
     mol = gto.Mole()
     mol.atom = [

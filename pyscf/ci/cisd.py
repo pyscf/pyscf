@@ -28,7 +28,6 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
-from functools import reduce
 from pyscf import __config__
 
 BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
@@ -36,7 +35,6 @@ BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     log = logger.new_logger(myci, verbose)
-    mol = myci.mol
     diag = myci.make_diagonal(eris)
     ehf = diag[0]
     diag -= ehf
@@ -76,7 +74,6 @@ def make_diagonal(myci, eris):
     nmo = mo_energy.size
     jdiag = numpy.zeros((nmo,nmo))
     kdiag = numpy.zeros((nmo,nmo))
-    eris_oooo = _cp(eris.oooo)
     nocc = eris.nocc
     nvir = nmo - nocc
     jdiag[:nocc,:nocc] = numpy.einsum('iijj->ij', eris.oooo)
@@ -110,8 +107,6 @@ def contract(myci, civec, eris):
     nocc = myci.nocc
     nmo = myci.nmo
     nvir = nmo - nocc
-    nov = nocc * nvir
-    noo = nocc**2
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
 
     t2 = myci._add_vvvv(c2, eris, t2sym='jiba')
@@ -136,7 +131,6 @@ def contract(myci, civec, eris):
     blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-    nvir_pair = nvir * (nvir+1) // 2
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_oVoV = _cp(_cp(eris.oovv[:,:,p0:p1]).transpose(0,2,1,3))
         tmp = lib.einsum('kbjc,ikca->jiba', eris_oVoV, c2)
@@ -151,7 +145,7 @@ def contract(myci, civec, eris):
 
         ovov = -.5 * eris_oVoV
         ovov += eris_ovvo.transpose(3,1,0,2)
-        eris_oVoV = eris_oovv = None
+        eris_oVoV = eris_ovov = None
         theta = c2[:,:,p0:p1].transpose(2,0,1,3) * 2
         theta-= c2[:,:,p0:p1].transpose(2,1,0,3)
         for j in range(nocc):
@@ -163,7 +157,7 @@ def contract(myci, civec, eris):
         eris_ovoo = _cp(eris.ovoo[:,p0:p1])
         t1 -= lib.einsum('bjka,jbki->ia', theta, eris_ovoo)
         t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo.conj(), c1)
-        eris_vooo = None
+        eris_ovoo = None
 
         eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1)).conj()
         t1 += lib.einsum('cjib,jcba->ia', theta, eris_ovvv)
@@ -577,7 +571,6 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3 + 1, nvir**3*2+nocc*nvir**2 + 1)
     blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
-    iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dtype = numpy.result_type(civec).char
@@ -1056,7 +1049,6 @@ def _cp(a):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import fci
     from pyscf import ao2mo
 
     mol = gto.Mole()

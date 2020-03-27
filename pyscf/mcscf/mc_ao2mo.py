@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import ctypes
 import time
 from functools import reduce
@@ -105,7 +104,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     ao2mopt = _ao2mo.AO2MOpt(mol, intor,
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
     nstep = len(shranges)
-    paapp = 0
     maxbuflen = max([x[2] for x in shranges])
     log.debug('mem_words %.8g MB, maxbuflen = %d', mem_words*8/1e6, maxbuflen)
     bufs1 = numpy.empty((maxbuflen, nao_pair))
@@ -281,8 +279,6 @@ class _ERIS(object):
             self.j_pc, self.k_pc, self.ppaa, self.papa = \
                     trans_e1_incore(eri, mo, ncore, ncas)
         else:
-            import gc
-            gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
             self.feri = lib.H5TmpFile()
             max_memory = max(3000, casscf.max_memory*.9-mem_now)
@@ -297,7 +293,6 @@ class _ERIS(object):
             self.papa = self.feri['papa']
 
 def _mem_usage(ncore, ncas, nmo):
-    nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
     return incore, outcore, basic
@@ -309,7 +304,6 @@ def prange(start, end, step):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
-    from pyscf import ao2mo
     from pyscf.mcscf import mc1step
 
     mol = gto.Mole()

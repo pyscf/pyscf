@@ -17,7 +17,6 @@
 #
 
 import sys
-import copy
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -1031,7 +1030,6 @@ if __name__ == '__main__':
     from pyscf import mcscf
     from pyscf.tools import ring
 
-    mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
     mol.atom = [['H', c] for c in ring.make(6, 1.2)]
@@ -1094,9 +1092,3 @@ if __name__ == '__main__':
     mc = state_specific_(mc, 2)
     emc = mc.kernel()[0]
 
-
-    mc = mcscf.CASSCF(m, 4, 4)
-    mc.verbose = 4
-    hot_tuning_(mc, 'config1')
-    mc.kernel()
-    mc = None  # release for gc

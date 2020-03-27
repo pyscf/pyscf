@@ -23,7 +23,6 @@ Dirac Hartree-Fock
 import time
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger

@@ -43,7 +43,6 @@ from pyscf.lib import logger
 from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
-from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
@@ -51,7 +50,7 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
-from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
+from pyscf.pbc.df.df_jk import zdotCN
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
 from pyscf.pbc.df.aft import _sub_df_jk_
@@ -212,7 +211,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         try:
             j2c = scipy.linalg.cholesky(j2c, lower=True)
             j2ctag = 'CD'
-        except scipy.linalg.LinAlgError as e:
+        except scipy.linalg.LinAlgError:
             #msg =('===================================\n'
             #      'J-metric not positive definite.\n'
             #      'It is likely that mesh is not enough.\n'
@@ -726,7 +725,7 @@ class GDF(aft.AFTDF):
     ao2mo_7d = df_ao2mo.ao2mo_7d
 
     def update_mp(self):
-        mf = copy.copy(mf)
+        mf = copy.copy(self)
         mf.with_df = self
         return mf
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -298,7 +298,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
               nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
               iobuflen*nkl_pair*8/1e6)
 
-    klaoblks = len(fswap['0'])
+    #klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
     ao_loc = mol.ao_loc_nr('_cart' in intor)
     ti0 = time_1pass
@@ -427,7 +427,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     else:
         fswap = lib.H5TmpFile(swapfile)
     for icomp in range(comp):
-        g = fswap.create_group(str(icomp)) # for h5py old version
+        fswap.create_group(str(icomp)) # for h5py old version
 
     log.debug('step1: tmpfile %s  %.8g MB', fswap.filename, nij_pair*nao_pair*8/1e6)
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
@@ -773,7 +773,6 @@ del(MAX_MEMORY)
 
 if __name__ == '__main__':
     from pyscf import scf
-    from pyscf import gto
     from pyscf.ao2mo import addons
     mol = gto.Mole()
     mol.verbose = 5

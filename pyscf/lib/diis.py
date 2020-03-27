@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,11 +21,8 @@ DIIS
 """
 
 import sys
-import tempfile
 import numpy
 import scipy.linalg
-import h5py
-from pyscf.lib import parameters
 from pyscf.lib import logger
 from pyscf.lib import misc
 from pyscf.lib import numpy_helper

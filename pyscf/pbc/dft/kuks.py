@@ -122,7 +122,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
 def get_rho(mf, dm=None, grids=None, kpts=None):
     from pyscf.pbc.dft import krks
     if dm is None:
-        dm = self.make_rdm1()
+        dm = mf.make_rdm1()
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 

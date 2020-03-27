@@ -36,10 +36,10 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_uhf(mf)
         return UADC(mf, frozen, mo_coeff, mo_occ)
 
+ADC.__doc__ = uadc.UADC.__doc__
+
 
 def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    __doc__ = uadc.UADC.__doc__
-
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
@@ -52,3 +52,5 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-UADC')
     else:
         return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
+
+UADC.__doc__ = uadc.UADC.__doc__

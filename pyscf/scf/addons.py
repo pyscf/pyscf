@@ -307,9 +307,8 @@ def project_mo_nr2nr(mol1, mo1, mol2):
         return [lib.cho_solve(s22, numpy.dot(s21, x), strict_sym_pos=False)
                 for x in mo1]
 
+@lib.with_doc(project_mo_nr2nr.__doc__)
 def project_mo_nr2r(mol1, mo1, mol2):
-    __doc__ = project_mo_nr2nr.__doc__
-
     assert(not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
@@ -325,9 +324,8 @@ def project_mo_nr2r(mol1, mo1, mol2):
         return [lib.cho_solve(s22, numpy.dot(s21, x), strict_sym_pos=False)
                 for x in mo1]
 
+@lib.with_doc(project_mo_nr2nr.__doc__)
 def project_mo_r2r(mol1, mo1, mol2):
-    __doc__ = project_mo_nr2nr.__doc__
-
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     t22 = mol2.intor_symmetric('int1e_spsp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
@@ -369,9 +367,8 @@ def project_dm_nr2nr(mol1, dm1, mol2):
     else:
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
+@lib.with_doc(project_dm_nr2nr.__doc__)
 def project_dm_nr2r(mol1, dm1, mol2):
-    __doc__ = project_dm_nr2nr.__doc__
-
     assert(not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
@@ -386,14 +383,12 @@ def project_dm_nr2r(mol1, dm1, mol2):
     else:
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
+@lib.with_doc(project_dm_nr2nr.__doc__)
 def project_dm_r2r(mol1, dm1, mol2):
-    __doc__ = project_dm_nr2nr.__doc__
-
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     t22 = mol2.intor_symmetric('int1e_spsp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
     t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
-    n2c = s21.shape[1]
     pl = lib.cho_solve(s22, s21, strict_sym_pos=False)
     ps = lib.cho_solve(t22, t21, strict_sym_pos=False)
     p21 = scipy.linalg.block_diag(pl, ps)
@@ -518,7 +513,6 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to UHF', mf.__class__)
@@ -652,7 +646,6 @@ def convert_to_rhf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to RHF', mf.__class__)
@@ -734,7 +727,6 @@ def convert_to_ghf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to GHF', mf.__class__)

@@ -37,7 +37,7 @@ from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
 from pyscf import __config__
@@ -271,9 +271,6 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
-    from pyscf.lo import orth
-    from pyscf.tools import dump_mat
-
     mf.dump_scf_summary(verbose)
 
     mo_occ = mf.mo_occ
@@ -367,7 +364,7 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
     if grids is None:
         grids = gen_grid.UniformGrids(cell)
     if rho is None:
-        rho = numint.KNumInt().get_rho(cell, dm, grids, kpts, cell.max_memory)
+        rho = numint.KNumInt().get_rho(cell, dm_kpts, grids, kpts, cell.max_memory)
     return pbchf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
 
 def get_rho(mf, dm=None, grids=None, kpts=None):

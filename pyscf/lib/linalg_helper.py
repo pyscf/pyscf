@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,12 +23,9 @@ Extension to scipy.linalg module
 import sys
 import inspect
 import warnings
-import tempfile
 from functools import reduce
 import numpy
 import scipy.linalg
-import h5py
-from pyscf.lib import parameters
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
 from pyscf.lib import misc
@@ -371,8 +368,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     v = None
     conv = [False] * nroots
     emin = None
+    norm_min = 1
 
-    from pyscf import lib
     for icyc in range(max_cycle):
         if fresh_start:
             if _incore:
@@ -388,9 +385,11 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
             if len(xt) != x0len:
-                log.warn('QR decomposition removed %d vectors.  The davidson may fail.'
-                         'Check to see if `pick` function :%s: is providing linear dependent '
-                         'vectors' % (x0len - len(xt), pick.__name__))
+                log.warn('QR decomposition removed %d vectors.  The davidson may fail.',
+                         x0len - len(xt))
+                if callable(pick):
+                    log.warn('Check to see if `pick` function %s is providing '
+                             'linear dependent vectors', pick.__name__)
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
@@ -768,6 +767,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     v = None
     conv = [False] * nroots
     emin = None
+    norm_min = 1
 
     for icyc in range(max_cycle):
         if fresh_start:

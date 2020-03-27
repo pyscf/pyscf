@@ -431,7 +431,6 @@ scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0

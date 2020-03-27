@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -165,7 +165,7 @@ def _core_val_ryd_list(mol):
         nuc = mole.charge(mol.atom_symbol(ia))
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
-        symb = mol.atom_symbol(ia)
+
         nelec_ecp = mol.atom_nelec_core(ia)
         ecpcore = core_configuration(nelec_ecp)
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
@@ -244,7 +244,6 @@ def set_atom_conf(element, description):
 
 if __name__ == "__main__":
     from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 1
     mol.output = 'out_nao'
