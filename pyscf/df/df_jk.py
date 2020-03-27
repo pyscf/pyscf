@@ -189,8 +189,14 @@ class _DFHF(object):
     MP2 = method_not_implemented
     CISD = method_not_implemented
     CCSD = method_not_implemented
-    CASCI = method_not_implemented
-    CASSCF = method_not_implemented
+
+    def CASCI(self, ncas, nelecas, auxbasis=None, ncore=None):
+        from pyscf import mcscf
+        return mcscf.DFCASCI(self, ncas, nelecas, auxbasis, ncore)
+
+    def CASSCF(self, ncas, nelecas, auxbasis=None, ncore=None, frozen=None):
+        from pyscf import mcscf
+        return mcscf.DFCASSCF(self, ncas, nelecas, auxbasis, ncore, frozen)
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):

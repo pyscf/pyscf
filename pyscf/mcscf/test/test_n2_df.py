@@ -231,6 +231,13 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(mcscf.CASSCF(msym.newton().density_fit(), 2, 2), mcscf.mc1step_symm.CASSCF))
         self.assertTrue(isinstance(mcscf.CASSCF(msym.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
 
+        self.assertTrue(isinstance(msym.CASCI(2, 2), mcscf.casci_symm.CASCI))
+        self.assertTrue(isinstance(msym.density_fit().CASCI(2, 2), df._DFCASCI))
+        self.assertTrue(isinstance(msym.density_fit().CASCI(2, 2), mcscf.casci_symm.CASCI))
+        self.assertTrue(isinstance(msym.CASSCF(2, 2), mcscf.mc1step_symm.CASSCF))
+        self.assertTrue(isinstance(msym.density_fit().CASSCF(2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(msym.density_fit().CASSCF(2, 2), mcscf.mc1step_symm.CASSCF))
+
 
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")
