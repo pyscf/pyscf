@@ -734,6 +734,9 @@ class DMRGCI(lib.StreamObject):
             outFile = os.path.join(self.runtimeDir, self.outputFile)
             logger.debug1(self, open(outFile).read())
         calc_e = readEnergy(self)
+        if self.restart:
+            # Restart only the first iteration
+            self.restart = False
 
         return calc_e, roots
 
