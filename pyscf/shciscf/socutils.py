@@ -11,6 +11,62 @@ from pyscf.shciscf import shci
 from pyscf.x2c import x2c
 from pyscf.lib import logger
 
+alpha = 1./LIGHT_SPEED
+
+def get_socamf(atoms, basis):
+    hso1e_atoms = {}
+    factor = -alpha**2 * 0.25
+    for atom in atoms:
+        from pyscf import gto
+        atm_id=gto.elements.charge(atom)
+        spin=atm_id%2
+        mol_atom = gto.M(atom=[[atom,[0,0,0]]], basis=basis, spin=spin)
+        conf = gto.elements.CONFIGURATION[atm_id]
+        # generate configuration for spherical symmetry atom
+        if conf[0] % 2==0:
+            if conf[1]%6 == 0:
+                if conf[2]%10 == 0:
+                    if conf[3]%14 == 0:
+                        nopen = 0
+                        nact = 0
+                    else:
+                        nopen = 7
+                        nact = conf[3]%14
+                else:
+                    nopen = 5
+                    nact = conf[2]%10
+            else:
+                nopen = 3
+                nact = conf[1]%6
+        else:
+            nopen = 1
+            nact = 1
+        from pyscf import scf
+        mf_atom = scf.sfx2c1e(scf.AOCHF(mol_atom, nopen=nopen, nact=nact)) 
+        xatm, contr_coeff = x2c.X2C(mol_atom).get_xmol()
+        np, nc = contr_coeff.shape
+        mf_atom.kernel()
+        h1e, x, rp = get_hxr(mf_atom, uncontract=True)
+        dm = mf_atom.make_rdm1()
+        dm = dm[0]+dm[1]
+        dm = reduce(numpy.dot, (contr_coeff, dm, contr_coeff.T))
+        pLL, pLS, pSS = get_p(dm/2, x, rp)
+        h1ao_uncontract = numpy.zeros((3, np, np),dtype=complex)
+        h1ao = numpy.zeros((3, nc, nc),dtype=complex)
+        h1ao_uncontract += factor*get_fso2e_x2c(xatm, x, rp, pLL, pLS, pSS)
+        for ic in range(3):
+            h1ao[ic] = reduce(
+                numpy.dot, (contr_coeff.T, h1ao_uncontract[ic], contr_coeff))
+        hso1e = numpy.zeros((nc*2, nc*2),dtype=complex)
+        hso1e[1::2,0::2]+=h1ao[0]
+        hso1e[0::2,1::2]+=h1ao[0]
+        hso1e[1::2,0::2]+=-1.j*h1ao[1]
+        hso1e[0::2,1::2]+= 1.j*h1ao[1]
+        hso1e[0::2,0::2]+=h1ao[2]
+        hso1e[1::2,1::2]-=h1ao[2]
+        hso1e_atoms[atom]=hso1e
+    return hso1e_atoms
+
 def print1Int(h1, name):
     xyz = ["X", "Y", "Z"]
     for k in range(3):
@@ -146,7 +202,7 @@ def get_fso2e_x2c_original(mol, x, rp, pLL, pLS, pSS):
                 - 1.0 * lib.einsum('lmkn,lk->mn', kint, pLS)
         gsoSS = -2.0 * lib.einsum('mnkl,lk', kint, pLL) \
                 - 2.0 * lib.einsum('mnlk,lk', kint, pLL) \
-            + 2.0 * lib.einsum('mlnk,lk', kint, pLL)
+                + 2.0 * lib.einsum('mlnk,lk', kint, pLL)
         fso2e[i_x] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
             + x.T.dot(gsoSS.dot(x))
         fso2e[i_x] = reduce(numpy.dot, (rp.T, fso2e[i_x], rp))

@@ -55,6 +55,7 @@ def from_x2c(mf, ncore, nact, filename = 'FCIDUMP', tol=1e-16, intor='int2e_spin
     nact = nact*2
     mo_coeff = mf.mo_coeff[:,ncore:ncore+nact]
     mol = mf.mol
+
     assert mo_coeff.dtype == numpy.complex
 
     hcore = mf.get_hcore()

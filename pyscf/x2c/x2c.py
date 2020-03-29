@@ -26,6 +26,7 @@ from pyscf.scf import hf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
 from pyscf import __config__
+from pyscf.shciscf import socutils
 
 class X2C(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
@@ -109,7 +110,23 @@ class X2C(lib.StreamObject):
             contr_coeff[0::2,0::2] = contr_coeff_nr
             contr_coeff[1::2,1::2] = contr_coeff_nr
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
-        return h1
+        print (self.approx.upper())
+        hso1e = numpy.zeros((nc*2, nc*2), dtype=complex)
+        if 'SOCAMF' in self.approx.upper():
+            # incorporate X2CAMF approximation.
+            # since 1e SOC terms are already included.
+            hso1e_atoms = socutils.get_socamf(list(set(xmol.elements)), xmol.basis)
+            atom_slices = self.mol.aoslice_2c_by_atom()
+            for ia in range(xmol.natm):
+                ish0, ish1, c0, c1 = atom_slices[ia]
+                hso1e[c0:c1,c0:c1] += hso1e_atoms[self.mol.elements[ia]]
+            #i,j,k,l=atom_slices[0]
+            #N0=hso1e[k:l,k:l]
+            #i,j,k,l=atom_slices[1]
+            #N1=hso1e[k:l,k:l]
+            #print(N0-N1)
+            #exit(0)
+        return h1+hso1e
 
     def get_xmat(self, mol=None):
         if mol is None:
@@ -204,12 +221,17 @@ def get_init_guess(mol, key='minao'):
 
 
 class X2C_UHF(hf.SCF):
-    def __init__(self, mol):
+    def __init__(self, mol, nact=None, nopen=None):
         hf.SCF.__init__(self, mol)
         self.with_x2c = X2C(mol)
         #self.with_x2c.xuncontract = False
         self._keys = self._keys.union(['with_x2c'])
-
+        if nact is not None : self.nact=nact
+        else : self.nact=0
+        if nopen is not None : self.nopen=nopen
+        else : self.nopen=0
+        self.nclose=(mol.nelectron-self.nact)//2
+    
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -248,17 +270,21 @@ class X2C_UHF(hf.SCF):
         if mol is None: mol = self.mol
         return mol.intor_symmetric('int1e_ovlp_spinor')
 
-    def get_occ(self, mo_energy=None, mo_coeff=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None, nclose=None, nact=None, nopen=None):
         if mo_energy is None: mo_energy = self.mo_energy
+        if nclose is None : nclose = self.nclose
+        if nact is None : nact = self.nact
+        if nopen is None : nopen = self.nopen
         mol = self.mol
+        assert(mol.nelectron==nclose*2+nact)
         mo_occ = numpy.zeros_like(mo_energy)
-        if mol.nelectron%2 is 0:
+        if nopen is 0:
             mo_occ[:mol.nelectron] = 1
         else:
-            mo_occ[:mol.nelectron-1]=1
-            mo_occ[mol.nelectron-1]=0.5
-            mo_occ[mol.nelectron]=0.5
-        if mol.nelectron < len(mo_energy):
+            mo_occ[:2*nclose]=1
+            average_occ=nact/(nopen*2.)
+            mo_occ[2*nclose:2*(nclose+nopen)]=average_occ
+        if 2*(nopen+nclose) < len(mo_energy):
             logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g', \
                         mol.nelectron, mo_energy[mol.nelectron-1],
                         mo_energy[mol.nelectron])
