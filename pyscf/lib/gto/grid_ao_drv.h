@@ -16,6 +16,11 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdlib.h>
+#include <complex.h>
+#include <math.h>
+#include "cint.h"
+
 // 2 slots of int param[]
 #define POS_E1   0
 #define TENSOR   1
@@ -43,10 +48,6 @@ inline static int _nonzero_in(double *exps, int count) {
         return val;
 }
 #endif
-
-#include <stdlib.h>
-#include <complex.h>
-#include "cint.h"
 
 typedef int (*FPtr_exp)(double *ectr, double *coord, double *alpha, double *coeff,
                         int l, int nprim, int nctr, size_t ngrids, double fac);

@@ -1606,8 +1606,6 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         ke1 *= KE_RATIO
         ke_delimeter.append(ke1)
 
-    print(kecuts_pgto)
-    print(ke_delimeter)
     tasks = []
     for ke0, ke1 in zip(ke_delimeter[:-1], ke_delimeter[1:]):
         # shells which have high exps (small rcut)
@@ -1616,7 +1614,6 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         if len(shls_dense) == 0:
             continue
 
-        print(ke0, ke1, shls_dense)
         mesh = tools.cutoff_to_mesh(a, ke1)
         if TO_EVEN_GRIDS:
             mesh = (mesh+1)//2 * 2  # to the nearest even number
