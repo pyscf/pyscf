@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ from functools import reduce
 import ctypes
 import os
 import sys
+import re
 import struct
 import time
 import tempfile
@@ -46,14 +47,14 @@ except ImportError:
     from pyscf import __config__
     settings = lambda: None
     settings.SHCIEXE = getattr(__config__, 'shci_SHCIEXE', None)
+    settings.ZSHCIEXE = getattr(__config__, 'shci_ZSHCIEXE', None)
     settings.SHCISCRATCHDIR = getattr(__config__, 'shci_SHCISCRATCHDIR', None)
     settings.SHCIRUNTIMEDIR = getattr(__config__, 'shci_SHCIRUNTIMEDIR', None)
     settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
     if (settings.SHCIEXE is None or settings.SHCISCRATCHDIR is None):
         import sys
-        sys.stderr.write(
-            'settings.py not found.  Please create %s\n' % os.path.join(
-                os.path.dirname(__file__), 'settings.py'))
+        sys.stderr.write('settings.py not found for module shciscf.  Please create %s\n'
+                         % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 
 # Libraries
@@ -199,6 +200,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.nroots = 1
         self.nPTiter = 0
         self.DoRDM = True
+        self.DoTRDM = False
         self.DoSOC = False
         self.sweep_iter = []
         self.sweep_epsilon = []
@@ -246,9 +248,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.num_thrds = x
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** SHCI flags ********')
         log.info('executable             = %s', self.executable)
@@ -287,7 +287,33 @@ class SHCI(pyscf.lib.StreamObject):
     #
     #   --> See various remarks in the pertinent functions below.
     # -----------------------------------------------------------------------------------------------
+        
+    def trans_rdm1(self, state_i, state_j, norb, nelec, link_index=None, **kwargs):
+        if self.DoSOC:
+            trdm1 = numpy.zeros((norb, norb), dtype=complex)
+        else:
+            trdm1 = numpy.zeros((norb, norb))
+        # assume Dice prints only i < j transition rdm.
+        if state_i > state_j:
+            tmp = state_i
+            state_i = state_j
+            state_j = tmp
 
+        filetrdm1 = os.path.join(self.scratchDirectory, "transition1RDM.%d.%d.txt" % (state_i, state_j))
+        with open(filetrdm1) as f:
+            line = f.readline()
+            file_orb = int(line.split()[0])
+            for line in f:
+                orb1 = int(line.split()[0])
+                orb2 = int(line.split()[1])
+                if self.DoSOC:
+                    val = re.split("[(,)]", line.split()[2])
+                    val = complex(float(val[1]), float(val[2]))
+                else:
+                    val  = float(line.split()[2])
+                trdm1[orb1][orb2] = val
+        return trdm1
+        
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
         # Avoid calling self.make_rdm12 because it may be overloaded
         return self.make_rdm12(state, norb, nelec, link_index, **kwargs)[0]
@@ -327,16 +353,6 @@ class SHCI(pyscf.lib.StreamObject):
         onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons - 1)
         return onepdm, twopdm
-
-    def trans_rdm1(self,
-                   statebra,
-                   stateket,
-                   norb,
-                   nelec,
-                   link_index=None,
-                   **kwargs):
-        return self.trans_rdm12(statebra, stateket, norb, nelec, link_index,
-                                **kwargs)[0]
 
     def trans_rdm12(self,
                     statebra,
@@ -471,7 +487,7 @@ class SHCI(pyscf.lib.StreamObject):
                   state,
                   norb,
                   nelec,
-                  dt=numpy.dtype('Float64'),
+                  dt=numpy.float64,
                   filetype="binary",
                   link_index=None,
                   bypass=False,
@@ -559,7 +575,7 @@ class SHCI(pyscf.lib.StreamObject):
                   state,
                   norb,
                   nelec,
-                  dt=numpy.dtype('Float64'),
+                  dt=numpy.float64,
                   filetype="binary",
                   link_index=None,
                   bypass=False,
@@ -813,10 +829,7 @@ class SHCI(pyscf.lib.StreamObject):
             return calc_e, roots
         if self.returnInt:
             return h1e, eri
-        if self.DoSOC:
-            executeZSHCI(self)
-        else:
-            executeSHCI(self)
+        executeSHCI(self)
         if self.verbose >= logger.DEBUG1:
             outFile = os.path.join(self.runtimeDir, self.outputFile)
             logger.debug1(self, open(outFile).read())
@@ -882,10 +895,42 @@ class SHCI(pyscf.lib.StreamObject):
         """
         Remove the files used for Dice communication.
         """
-        os.remove("input.dat")
-        os.remove("output.dat")
-        os.remove("FCIDUMP")
+        
+        os.remove(os.path.join(self.runtimeDir, self.configFile))
+        os.remove(os.path.join(self.runtimeDir, self.outputFile))
+        os.remove(os.path.join(self.runtimeDir, self.integralFile))
 
+
+def transition_dipole(mc, state_i, state_j):
+    t_dm1 = mc.fcisolver.trans_rdm1(state_i, state_j, mc.ncas, mc.nelecas)
+    ncore = mc.ncore
+    ncasorb = mc.ncas
+    mol = mc.mol
+    mo_cas = mc.mo_coeff[:, ncore:ncore+ncasorb]
+    t_dm1 = pyscf.lib.einsum('pi, ij, qj->pq', mo_cas, t_dm1, mo_cas)
+    #print(t_dm1)
+    charge_center = (numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords()) / mol.atom_charges().sum())
+    with mol.with_common_origin(charge_center):
+        t_dip = numpy.einsum('xij,ji->x', mol.intor('int1e_r'), t_dm1)
+    return t_dip
+
+def oscillator_strength(mc, state_i, state_j):
+    t_dip = transition_dipole(mc, state_i, state_j)
+    calc_e = readEnergy(mc.fcisolver)
+    delta_e = abs(calc_e[state_i] - calc_e[state_j])
+    return 2./3.*delta_e*sum(abs(t_dip)**2), 2./3.*delta_e*abs(t_dip)**2
+
+def phospherescence_lifetime(mc, s0=0, triplet_list=[1,2,3]):
+    au2wavenumber = 219470.
+    tau = numpy.zeros(len(triplet_list))
+    calc_e = readEnergy(mc.fcisolver)
+    for state in triplet_list:
+        delta_e = calc_e[state] - calc_e[s0]
+        fosc = oscillator_strength(mc, s0, state)
+        tau[triplet_list.index(state)] = 1.5/(fosc*(delta_e*au2wavenumber)**2)
+    tau_av = 3./(sum(1/tau))
+    return tau_av, tau
+    
 
 def make_sched(SHCI):
 
@@ -914,81 +959,78 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
     # Reference determinant section
     f.write('#system\n')
     f.write('nocc %i\n' % (nelec[0] + nelec[1]))
-    if SHCI.dets is None:
-        if SHCI.__class__.__name__ == 'FakeCISolver':
+    if SHCI.__class__.__name__ == 'FakeCISolver':
+        if SHCI.initialStates is not None:
+            print("write determinants")
+            for i in range(len(SHCI.initialStates)):
+                for j in SHCI.initialStates[i]:
+                    f.write('%i ' % (j))
+                if (i != len(SHCI.initialStates) - 1):
+                    f.write('\n')
+        else:
             for i in range(nelec[0]):
                 f.write('%i ' % (2 * i))
             for i in range(nelec[1]):
                 f.write('%i ' % (2 * i + 1))
-        else:
-            if SHCI.initialStates is not None:
-                for i in range(len(SHCI.initialStates)):
-                    for j in SHCI.initialStates[i]:
-                        f.write('%i ' % (j))
-                    if (i != len(SHCI.initialStates) - 1):
-                        f.write('\n')
-            elif SHCI.irrep_nelec is None:
-                for i in range(int(nelec[0])):
-                    f.write('%i ' % (2 * i))
-                for i in range(int(nelec[1])):
-                    f.write('%i ' % (2 * i + 1))
-            else:
-                from pyscf import symm
-                from pyscf.dmrgscf import dmrg_sym
-                from pyscf.symm.basis import DOOH_IRREP_ID_TABLE
-                if SHCI.groupname is not None and SHCI.orbsym is not []:
-                    orbsym = dmrg_sym.convert_orbsym(SHCI.groupname, SHCI.orbsym)
-                else:
-                    orbsym = [1] * norb
-                done = []
-                for k, v in SHCI.irrep_nelec.items():
-
-                    irrep, nalpha, nbeta = [dmrg_sym.irrep_name2id(SHCI.groupname, k)],\
-                                           v[0], v[1]
-
-                    for i in range(len(orbsym)):  #loop over alpha electrons
-                        if (orbsym[i] == irrep[0] and nalpha != 0
-                                and i * 2 not in done):
-                            done.append(i * 2)
-                            f.write('%i ' % (i * 2))
-                            nalpha -= 1
-                        if (orbsym[i] == irrep[0] and nbeta != 0
-                                and i * 2 + 1 not in done):
-                            done.append(i * 2 + 1)
-                            f.write('%i ' % (i * 2 + 1))
-                            nbeta -= 1
-                    if (nalpha != 0):
-                        print("number of irreps %s in active space = %d" %
-                              (k, v[0] - nalpha))
-                        print(
-                            "number of irreps %s alpha electrons = %d" % (k, v[0]))
-                        exit(1)
-                    if (nbeta != 0):
-                        print("number of irreps %s in active space = %d" %
-                              (k, v[1] - nbeta))
-                        print(
-                            "number of irreps %s beta  electrons = %d" % (k, v[1]))
-                        exit(1)
     else:
-        nelec_all = nelec[0] + nelec[1]
-        for det in SHCI.dets:
-            if len(det) is not nelec_all:
-                if len(det) is 1:
-                    print("SHCI.dets should be a 2d array.")
-                else:
-                    print("number of electrons in SHCI.dets %d does not equal to nelecas %d" % (len(det), nelec_all))
-                exit(1)
-            else:
-                for i in det:
-                    f.write('%i '%i)
-                if det is not SHCI.dets[-1]:
+        if SHCI.initialStates is not None:
+            print("write determinants")
+            for i in range(len(SHCI.initialStates)):
+                for j in SHCI.initialStates[i]:
+                    f.write('%i ' % (j))
+                if (i != len(SHCI.initialStates) - 1):
                     f.write('\n')
+        elif SHCI.irrep_nelec is None:
+            for i in range(int(nelec[0])):
+                f.write('%i ' % (2 * i))
+            for i in range(int(nelec[1])):
+                f.write('%i ' % (2 * i + 1))
+        else:
+            from pyscf import symm
+            from pyscf.dmrgscf import dmrg_sym
+            from pyscf.symm.basis import DOOH_IRREP_ID_TABLE
+            if SHCI.groupname is not None and SHCI.orbsym is not []:
+                orbsym = dmrg_sym.convert_orbsym(SHCI.groupname, SHCI.orbsym)
+            else:
+                orbsym = [1] * norb
+            done = []
+            for k, v in SHCI.irrep_nelec.items():
 
+                irrep, nalpha, nbeta = [dmrg_sym.irrep_name2id(SHCI.groupname, k)],\
+                                       v[0], v[1]
+
+                for i in range(len(orbsym)):  #loop over alpha electrons
+                    if (orbsym[i] == irrep[0] and nalpha != 0
+                            and i * 2 not in done):
+                        done.append(i * 2)
+                        f.write('%i ' % (i * 2))
+                        nalpha -= 1
+                    if (orbsym[i] == irrep[0] and nbeta != 0
+                            and i * 2 + 1 not in done):
+                        done.append(i * 2 + 1)
+                        f.write('%i ' % (i * 2 + 1))
+                        nbeta -= 1
+                if (nalpha != 0):
+                    print("number of irreps %s in active space = %d" %
+                          (k, v[0] - nalpha))
+                    print(
+                        "number of irreps %s alpha electrons = %d" % (k, v[0]))
+                    exit(1)
+                if (nbeta != 0):
+                    print("number of irreps %s in active space = %d" %
+                          (k, v[1] - nbeta))
+                    print(
+                        "number of irreps %s beta  electrons = %d" % (k, v[1]))
+                    exit(1)
     f.write('\nend\n')
+
+    # Handle different cases for FCIDUMP file names/paths
+    f.write("orbitals {}\n".format(os.path.join(SHCI.runtimeDir, SHCI.integralFile)))
+
     f.write('nroots %r\n' % SHCI.nroots)
 
     # Variational Keyword Section
-    f.write('#variational\n')
+    f.write('\n#variational\n')
     if (not Restart):
         schedStr = make_sched(SHCI)
         f.write(schedStr)
@@ -1008,7 +1050,7 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
         f.write('fullrestart\n')
 
     # Perturbative Keyword Section
-    f.write('#pt\n')
+    f.write('\n#pt\n')
     if (SHCI.stochastic == False):
         f.write('deterministic \n')
     else:
@@ -1019,17 +1061,20 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
     f.write('sampleN %i\n' % SHCI.sampleN)
 
     # Miscellaneous Keywords
-    f.write('#misc\n')
+    f.write('\n#misc\n')
     if Restart is True:
         f.write('noio \n')
     if (SHCI.scratchDirectory != ""):
         if not os.path.exists(SHCI.scratchDirectory):
             os.makedirs(SHCI.scratchDirectory)
         f.write('prefix %s\n' % (SHCI.scratchDirectory))
+    if (SHCI.DoSOC):
+        f.write('DoSOC\n')
+        SHCI.DoRDM = False
     if (SHCI.DoRDM):
         f.write('DoRDM\n')
-    if(SHCI.DoSOC):
-        f.write('DoSOC\n')        
+    if (SHCI.nroots > 1 and (SHCI.DoRDM or SHCI.DoTRDM)):
+        f.write('DoTRDM\n')
     for line in SHCI.extraline:
         f.write('%s\n' % line)
 
@@ -1209,26 +1254,15 @@ def executeSHCI(SHCI):
     inFile = os.path.join(SHCI.runtimeDir, SHCI.configFile)
     outFile = os.path.join(SHCI.runtimeDir, SHCI.outputFile)
     try:
-        cmd = ' '.join((SHCI.mpiprefix, SHCI.executable, inFile))
-        cmd = "%s > %s 2>&1" % (cmd, outFile)
-        check_call(cmd, shell=True)
-        #save_output(SHCI)
-    except CalledProcessError as err:
-        logger.error(SHCI, cmd)
-        raise err
-
-
-def executeZSHCI(SHCI):
-    file1 = os.path.join(SHCI.runtimeDir, "%s/shci.e" % (SHCI.scratchDirectory))#what?
-    if os.path.exists(file1):                                                   #what?
-        os.remove(file1)                                                        #what?
-    inFile = os.path.join(SHCI.runtimeDir, SHCI.configFile)
-    outFile = os.path.join(SHCI.runtimeDir, SHCI.outputFile)
-    try:
-        cmd = ' '.join((SHCI.mpiprefix, SHCI.executableZDice2, inFile))
-        cmd = "%s > %s 2>&1" % (cmd, outFile)
-        check_call(cmd, shell=True)
-        #save_output(SHCI)
+        if SHCI.DoSOC:
+            cmd = ' '.join((SHCI.mpiprefix, SHCI.zdiceExecutable, inFile))
+            cmd = "%s > %s 2>&1" % (cmd, outFile)
+            check_call(cmd, shell=True)
+        else:
+            cmd = ' '.join((SHCI.mpiprefix, SHCI.executable, inFile))
+            cmd = "%s > %s 2>&1" % (cmd, outFile)
+            check_call(cmd, shell=True)
+            #save_output(SHCI)
     except CalledProcessError as err:
         logger.error(SHCI, cmd)
         raise err
@@ -1287,12 +1321,43 @@ def SHCISCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
 
 
 def dryrun(mc, mo_coeff=None):
-    '''Generate FCIDUMP and SHCI config file'''
+    '''
+    Generate FCIDUMP and SHCI input.dat file for a give multiconfigurational 
+    object. This method DOES NOT run a single iteration using Dice it just 
+    generates all the inputs you'd need to do so.
+
+    Args:
+        mc: a CASSCF/CASCI object (or RHF object)
+
+    Kwargs: 
+        mo_coeff: `np.ndarray` of the molecular orbital coefficients. 
+            Default is None.
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> from pyscf.shciscf import shci
+    >>> mol = gto.M(atom="H 0 0 0; H 0 0 2; O 0 1 1;", symmetry=True)
+    >>> mf = scf.RHF(mol).run()
+    >>> mc = mcscf.CASCI(mf, 3, 4)
+    >>> mc.fcisolver = shci.SHCI(mol)
+    >>> shci.dryrun(mc)
+
+    '''
     if mo_coeff is None:
         mo_coeff = mc.mo_coeff
-    #bak, mc.fcisolver.onlywriteIntegral = mc.fcisolver.onlywriteIntegral, True
-    mc.casci(mo_coeff)
-    #mc.fcisolver.onlywriteIntegral = bak
+    
+    # Set orbsym b/c it's needed in `writeIntegralFile()`
+    if mc.fcisolver.orbsym is not []:
+        mc.fcisolver.orbsym = getattr(mo_coeff, "orbsym", [])
+
+    #mc.kernel(mo_coeff) # Works, but runs full CASCI/CASSCF
+    h1e, ecore = mc.get_h1eff(mo_coeff)
+    h2e = mc.get_h2eff(mo_coeff)
+    writeIntegralFile(mc.fcisolver, h1e, h2e, mc.ncas, mc.nelecas, ecore)
+    writeSHCIConfFile(mc.fcisolver, mc.nelecas, False)
+
+
 
 
 if __name__ == '__main__':

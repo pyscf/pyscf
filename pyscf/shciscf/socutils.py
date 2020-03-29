@@ -6,6 +6,7 @@ import scipy.linalg
 
 from pyscf import gto, lib
 from pyscf.lib.parameters import LIGHT_SPEED
+from pyscf.lib import logger
 from pyscf.shciscf import shci
 from pyscf.x2c import x2c
 from pyscf.lib import logger
@@ -179,19 +180,20 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
         shl_size.append(ao_loc[-1] - ao_loc[-2])
         shl_slice.append(nbas)
     nbas = len(shl_size)
+    logger.info(mol, "Cutting basis functions into %d batches, need to calculate %d integrals batches.", nbas, nbas**4)
 
+    start = time.clock()
     for i in range(0, nbas):
         for j in range(0, nbas):
             for k in range(0, nbas):
                 for l in range(0, nbas):
-                    start = time.clock()
+                    start_this = time.clock()
                     ddint = mol.intor('int2e_ip1ip2_sph', comp=9, shls_slice=[shl_slice[i], shl_slice[i+1], shl_slice[j], shl_slice[j+1], shl_slice[k], shl_slice[k+1], shl_slice[l], shl_slice[l+1]]).reshape(3, 3, -1)
                     kint = numpy.zeros(3 * shl_size[i] * shl_size[j] * shl_size[k] * shl_size[l]).reshape(
                         3, shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[0] = (ddint[1, 2] - ddint[2, 1]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[1] = (ddint[2, 0] - ddint[0, 2]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
                     kint[2] = (ddint[0, 1] - ddint[1, 0]).reshape(shl_size[i], shl_size[j], shl_size[k], shl_size[l])
-                    logger.info(mol, "Time elapsed for integral calculation: %g, %d slice of total %d slice.", time.clock() - start, i*nbas**3+j*nbas**2+k*nbas+l+1, nbas**4)
 
                     gsoLL[:, ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]] \
                       +=-2.0*lib.einsum('ilmkn,lk->imn', kint, \
@@ -210,8 +212,9 @@ def get_fso2e_x2c(mol, x, rp, pLL, pLS, pSS):
                     gsoSS[:, ao_loc[i]:ao_loc[i+1], ao_loc[k]:ao_loc[k+1]] \
                       += 2.0*lib.einsum('imlnk,lk->imn', kint, \
                         pLL[ao_loc[j]:ao_loc[j+1], ao_loc[l]:ao_loc[l+1]])
-                    logger.info(mol, 'Time elapsed for integral contraction: %g, %d slice of total %d slice', time.clock() - start, i*nbas**3+j*nbas**2+k*nbas+l+1, nbas**4)
 
+                    logger.info(mol, "Time elapsed for %dth batch in %d batches is %g, cumulates time is %g.", \
+                    i*nbas**3+j*nbas**2+k*nbas+l+1, nbas*4, time.clock()-start_this, time.clock()-start)
     for comp in range(0, 3):
         fso2e[comp] = gsoLL[comp] + gsoLS[comp].dot(x) + x.T.dot(-gsoLS[comp].T) + x.T.dot(gsoSS[comp].dot(x))
         fso2e[comp] = reduce(numpy.dot, (rp.T, fso2e[comp], rp))
@@ -455,6 +458,7 @@ def writeSOCIntegrals(mc,
         hso1e += xmol.intor('ECPso')
 
     # two electron terms
+    logger.note(xmol, "Start calculating two-electron contribution to SOC integrals, be patient.")
     if (pictureChange2e == "bp"):
         hso1e += -factor * get_fso2e_bp(xmol, dm)
     elif (pictureChange2e == "bp1c"):
@@ -511,3 +515,4 @@ def doSOC(mc, pictureChange1e="bp", pictureChange2e="bp", uncontract=False, atom
     mch.fcisolver.DoSOC = True
     mch.fcisolver.DoRDM = False
     shci.dryrun(mch, mc.mo_coeff)
+    shci.executeSHCI(mc.fcisolver)
