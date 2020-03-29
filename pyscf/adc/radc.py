@@ -44,6 +44,42 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
+###################################################################
+    nocc = adc._nocc
+    nvir = adc._nvir
+#################### EA ###########################################
+
+#    n_singles = nvir
+#    n_doubles = nocc * nvir * nvir
+
+################# IP  ###########################################
+
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+
+    dim = n_singles + n_doubles
+
+    s1 = 0
+    f1 = n_singles
+    s2 = f1
+    f2 = s2 + n_doubles
+
+    N = np.zeros((dim,dim))
+    I = np.identity(dim)
+    
+    for i in range(dim):
+        N[:,i] = matvec(I[:,i]) 
+
+    h1_h1 = N[s2:f2,s2:f2]
+    h1_diag = np.diagonal(h1_h1)
+    print (np.linalg.norm(h1_diag))
+    #print (h1_diag_aaa)
+    #print (np.linalg.norm(h1_diag_bbb))
+    #print (h1_diag_bab)
+    #print (h1_diag_aba)
+    exit()
+#################################################################
+
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
     conv, E, U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space)
@@ -806,7 +842,13 @@ def get_imds_ip(adc, eris=None):
     return M_ij
 
 
-def ea_adc_diag(adc,M_ab=None):
+#def ea_adc_diag(adc,M_ab=None):
+def ea_adc_diag(adc,M_ab=None,eris=None):
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    method = adc.method
 
     if M_ab is None:
         M_ab = adc.get_imds()
@@ -847,11 +889,55 @@ def ea_adc_diag(adc,M_ab=None):
 
     diag[s2:f2] = D_iab
 
+    ###### Additional terms for the preconditioner ####
+    if (method == "adc(2)-x" or method == "adc(3)"):
+
+        if eris is None:
+            eris = radc_ao2mo.transform_integrals_incore(adc)
+
+        eris_oovv = eris.oovv
+        eris_vvvv = eris.vvvv
+        eris_ovvo = eris.ovvo
+
+        temp = np.zeros((nocc, eris_vvvv.shape[0]))
+        temp[:] += np.diag(eris_vvvv)
+        diag[s2:f2] += temp.reshape(-1)
+        
+        eris_ovov_p = eris.oovv.transpose(0,2,1,3) 
+        eris_ovov_p = np.ascontiguousarray(eris_ovov_p)
+        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nvir, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(1,0,2))
+        diag[s2:f2] += -temp.reshape(-1)
+
+        temp = temp.reshape(nocc, nvir, nvir)
+        temp = temp.transpose(0,2,1)
+        diag[s2:f2] += -temp.reshape(-1)
+
+        eris_ovvo_p = eris.ovvo.transpose(0,2,3,1) 
+        eris_ovvo_p = np.ascontiguousarray(eris_ovvo_p)
+        eris_ovvo_p = eris_ovvo_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nvir, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovvo_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(1,0,2))
+        diag[s2:f2] += temp.reshape(-1)
+
+    print (np.linalg.norm(diag[s2:f2]))
+
     return diag
 
 
-def ip_adc_diag(adc,M_ij=None):
+#def ip_adc_diag(adc,M_ij=None):
+def ip_adc_diag(adc,M_ij=None,eris=None):
    
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    method = adc.method
+
     if M_ij is None:
         M_ij = adc.get_imds()
 
@@ -890,7 +976,47 @@ def ip_adc_diag(adc,M_ij=None):
 
     diag[s2:f2] = D_aij.copy()
 
+    ###### Additional terms for the preconditioner ####
+    if (method == "adc(2)-x" or method == "adc(3)"):
+
+        if eris is None:
+            eris = radc_ao2mo.transform_integrals_incore(adc)
+
+        eris_oooo = eris.oooo
+
+        eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
+        eris_oooo_p = eris_oooo_p.reshape(nocc*nocc, nocc*nocc)
+  
+        temp = np.zeros((nvir, eris_oooo_p.shape[0]))
+        temp[:] += np.diag(eris_oooo_p)
+        diag[s2:f2] += -temp.reshape(-1)
+
+        eris_ovov_p = eris.oovv.transpose(0,2,1,3) 
+        eris_ovov_p = np.ascontiguousarray(eris_ovov_p)
+        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nocc, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(2,1,0))
+        diag[s2:f2] += temp.reshape(-1)
+
+        temp = temp.reshape(nvir, nocc, nocc)
+        temp = temp.transpose(0,2,1)
+        diag[s2:f2] += temp.reshape(-1)
+
+        eris_ovvo_p = eris.ovvo.transpose(0,2,3,1) 
+        eris_ovvo_p = np.ascontiguousarray(eris_ovvo_p)
+        eris_ovvo_p = eris_ovvo_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nocc, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovvo_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(2,1,0))
+        diag[s2:f2] += -temp.reshape(-1)
+
     diag = -diag
+
+    print (np.linalg.norm(diag[s2:f2]))
+
     return diag
 
 
@@ -981,14 +1107,14 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                eris_vvvv = eris.vvvv
                s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
 
-               s[s2:f2] -= 0.5*np.einsum('jzyi,jzx->ixy',eris_ovvo,r2_a,optimize = True).reshape(-1)
+               #s[s2:f2] -= 0.5*np.einsum('jzyi,jzx->ixy',eris_ovvo,r2_a,optimize = True).reshape(-1)
                s[s2:f2] -= 0.5*np.einsum('jiyz,jxz->ixy',eris_oovv,r2,optimize = True).reshape(-1)
                s[s2:f2] += 0.5*np.einsum('jzyi,jxz->ixy',eris_ovvo,r2,optimize = True).reshape(-1)
                s[s2:f2] -=  0.5*np.einsum('jixz,jzy->ixy',eris_oovv,r2,optimize = True).reshape(-1)
-               s[s2:f2] -= 0.5*np.einsum('jixw,jwy->ixy',eris_oovv,r2,optimize = True).reshape(-1)
+               s[s2:f2] -=  0.5*np.einsum('jixw,jwy->ixy',eris_oovv,r2,optimize = True).reshape(-1)
                s[s2:f2] -= 0.5*np.einsum('jiyw,jxw->ixy',eris_oovv,r2,optimize = True).reshape(-1)
                s[s2:f2] += 0.5*np.einsum('jwyi,jxw->ixy',eris_ovvo,r2,optimize = True).reshape(-1)
-               s[s2:f2] += 0.5*np.einsum('jwyi,jxw->ixy',eris_ovvo,r2_a,optimize = True).reshape(-1)
+               #s[s2:f2] += 0.5*np.einsum('jwyi,jxw->ixy',eris_ovvo,r2_a,optimize = True).reshape(-1)
 
             #print("Calculating additional terms for adc(3)")
         if (method == "adc(3)"):
@@ -1154,7 +1280,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                
                s[s2:f2] += 0.5*np.einsum('klba,bjl->ajk',eris_oovv,r2,optimize = True).reshape(-1)
                
-               s[s2:f2] +=  0.5*np.einsum('jabl,bkl->ajk',eris_ovvo,r2_a,optimize = True).reshape(-1)
+               #s[s2:f2] +=  0.5*np.einsum('jabl,bkl->ajk',eris_ovvo,r2_a,optimize = True).reshape(-1)
                s[s2:f2] +=  0.5*np.einsum('jlba,blk->ajk',eris_oovv,r2,optimize = True).reshape(-1)
                s[s2:f2] -=  0.5*np.einsum('jabl,blk->ajk',eris_ovvo,r2,optimize = True).reshape(-1)
                
@@ -1162,7 +1288,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                
                s[s2:f2] += 0.5*np.einsum('jiba,bik->ajk',eris_oovv,r2,optimize = True).reshape(-1)
                s[s2:f2] -= 0.5*np.einsum('jabi,bik->ajk',eris_ovvo,r2,optimize = True).reshape(-1)
-               s[s2:f2] -= 0.5*np.einsum('jabi,bik->ajk',eris_ovvo,r2_a,optimize = True).reshape(-1)
+               #s[s2:f2] -= 0.5*np.einsum('jabi,bik->ajk',eris_ovvo,r2_a,optimize = True).reshape(-1)
                
         if (method == "adc(3)"):
 
