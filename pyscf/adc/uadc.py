@@ -668,7 +668,7 @@ class UADC(lib.StreamObject):
     def ip_adc(self, nroots=1, guess=None):
         return UADCIP(self).kernel(nroots, guess)
 
-#@profile
+
 def get_imds_ea(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -1767,7 +1767,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         M_ab = adc.get_imds()
     M_ab_a, M_ab_b = M_ab
     
-    #@profile
     #Calculate sigma vector
     def sigma_(r):
 

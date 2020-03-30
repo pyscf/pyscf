@@ -47,10 +47,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 ####################################################################
 #    nocc = adc._nocc
 #    nvir = adc._nvir
-##################### EA ###########################################
+#################### EA ###########################################
 #
-##    n_singles = nvir
-##    n_doubles = nocc * nvir * nvir
+#    n_singles = nvir
+#    n_doubles = nocc * nvir * nvir
 #
 ################## IP  ###########################################
 #
@@ -902,48 +902,42 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
 
     diag[s2:f2] = D_iab
 
-#    ###### Additional terms for the preconditioner ####
-#    if (method == "adc(2)-x" or method == "adc(3)"):
-#
-#        if eris is None:
-#            eris = radc_ao2mo.transform_integrals_incore(adc)
-#
-#        eris_oovv = eris.oovv
-#        eris_vvvv = eris.vvvv
-#        eris_ovvo = eris.ovvo
-#
-#        temp = np.zeros((nocc, eris_vvvv.shape[0]))
-#        temp[:] += np.diag(eris_vvvv)
-#        diag[s2:f2] += temp.reshape(-1)
-#        
-#        eris_ovov_p = eris.oovv.transpose(0,2,1,3) 
-#        eris_ovov_p = np.ascontiguousarray(eris_ovov_p)
-#        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
-#
-#        temp = np.zeros((nvir, nocc, nvir))
-#        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
-#        temp = np.ascontiguousarray(temp.transpose(1,0,2))
-#        diag[s2:f2] += -temp.reshape(-1)
-#
-#        temp = temp.reshape(nocc, nvir, nvir)
-#        temp = temp.transpose(0,2,1)
-#        diag[s2:f2] += -temp.reshape(-1)
-#
-#        eris_ovvo_p = eris.ovvo.transpose(0,2,3,1) 
-#        eris_ovvo_p = np.ascontiguousarray(eris_ovvo_p)
-#        eris_ovvo_p = eris_ovvo_p.reshape(nocc*nvir, nocc*nvir)
-#
-#        temp = np.zeros((nvir, nocc, nvir))
-#        temp[:] += np.diagonal(eris_ovvo_p).reshape(nocc, nvir)
-#        temp = np.ascontiguousarray(temp.transpose(1,0,2))
-#        diag[s2:f2] += temp.reshape(-1)
-#
-#    print (np.linalg.norm(diag[s2:f2]))
+    ###### Additional terms for the preconditioner ####
+    if (method == "adc(2)-x" or method == "adc(3)"):
+
+        if eris is None:
+            eris = radc_ao2mo.transform_integrals_incore(adc)
+
+        eris_oovv = eris.oovv
+        eris_vvvv = eris.vvvv
+        eris_ovvo = eris.ovvo
+
+        temp = np.zeros((nocc, eris_vvvv.shape[0]))
+        temp[:] += np.diag(eris_vvvv)
+        diag[s2:f2] += temp.reshape(-1)
+        
+        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
+        eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1))
+        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nvir, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(1,0,2))
+        diag[s2:f2] += -temp.reshape(-1)
+
+        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
+        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nvir, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(1,2,0))
+        diag[s2:f2] += -temp.reshape(-1)
+
+    #print (np.linalg.norm(diag[s2:f2]))
 
     return diag
 
 
-#def ip_adc_diag(adc,M_ij=None):
 def ip_adc_diag(adc,M_ij=None,eris=None):
    
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -989,46 +983,43 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
 
     diag[s2:f2] = D_aij.copy()
 
-#    ###### Additional terms for the preconditioner ####
-#    if (method == "adc(2)-x" or method == "adc(3)"):
-#
-#        if eris is None:
-#            eris = radc_ao2mo.transform_integrals_incore(adc)
-#
-#        eris_oooo = eris.oooo
-#
-#        eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
-#        eris_oooo_p = eris_oooo_p.reshape(nocc*nocc, nocc*nocc)
-#  
-#        temp = np.zeros((nvir, eris_oooo_p.shape[0]))
-#        temp[:] += np.diag(eris_oooo_p)
-#        diag[s2:f2] += -temp.reshape(-1)
-#
-#        eris_ovov_p = eris.oovv.transpose(0,2,1,3) 
-#        eris_ovov_p = np.ascontiguousarray(eris_ovov_p)
-#        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
-#
-#        temp = np.zeros((nocc, nocc, nvir))
-#        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
-#        temp = np.ascontiguousarray(temp.transpose(2,1,0))
-#        diag[s2:f2] += temp.reshape(-1)
-#
-#        temp = temp.reshape(nvir, nocc, nocc)
-#        temp = temp.transpose(0,2,1)
-#        diag[s2:f2] += temp.reshape(-1)
-#
-#        eris_ovvo_p = eris.ovvo.transpose(0,2,3,1) 
-#        eris_ovvo_p = np.ascontiguousarray(eris_ovvo_p)
-#        eris_ovvo_p = eris_ovvo_p.reshape(nocc*nvir, nocc*nvir)
-#
-#        temp = np.zeros((nocc, nocc, nvir))
-#        temp[:] += np.diagonal(eris_ovvo_p).reshape(nocc, nvir)
-#        temp = np.ascontiguousarray(temp.transpose(2,1,0))
-#        diag[s2:f2] += -temp.reshape(-1)
+    ###### Additional terms for the preconditioner ####
+    if (method == "adc(2)-x" or method == "adc(3)"):
+
+        if eris is None:
+            eris = radc_ao2mo.transform_integrals_incore(adc)
+
+        eris_oooo = eris.oooo
+        eris_oovv = eris.oovv
+        eris_ovvo = eris.ovvo
+
+        eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
+        eris_oooo_p = eris_oooo_p.reshape(nocc*nocc, nocc*nocc)
+  
+        temp = np.zeros((nvir, eris_oooo_p.shape[0]))
+        temp[:] += np.diag(eris_oooo_p)
+        diag[s2:f2] += -temp.reshape(-1)
+
+        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
+        eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1)) 
+        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nocc, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(2,1,0))
+        diag[s2:f2] += temp.reshape(-1)
+
+        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
+        eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
+
+        temp = np.zeros((nocc, nocc, nvir))
+        temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
+        temp = np.ascontiguousarray(temp.transpose(2,0,1))
+        diag[s2:f2] += temp.reshape(-1)
 
     diag = -diag
 
-#    print (np.linalg.norm(diag[s2:f2]))
+    #print (np.linalg.norm(diag[s2:f2]))
 
     return diag
 
