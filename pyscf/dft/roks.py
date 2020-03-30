@@ -52,7 +52,10 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         return self
 
     get_veff = get_veff
+    get_vsap = rks.get_vsap
     energy_elec = energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
 
     def nuc_grad_method(self):
         from pyscf.grad import roks

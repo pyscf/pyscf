@@ -457,6 +457,24 @@ class KohnShamDFT(object):
         return self
 
 
+def init_guess_by_vsap(mf, mol=None):
+    '''Form SAP guess'''
+    if mol is None: mol = mf.mol
+
+    vsap = mf.get_vsap()
+    t = mol.intor_symmetric('int1e_kin')
+    s = mf.get_ovlp(mol)
+    hsap = t + vsap
+
+    # Form guess orbitals
+    mo_energy, mo_coeff = mf.eig(hsap, s)
+    logger.debug(mf, 'VSAP mo energies\n{}'.format(mo_energy))
+
+    # and guess density
+    mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    return mf.make_rdm1(mo_coeff, mo_occ)
+
+
 class RKS(KohnShamDFT, hf.RHF):
     __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + KohnShamDFT.__doc__
 
@@ -471,6 +489,8 @@ class RKS(KohnShamDFT, hf.RHF):
     get_veff = get_veff
     get_vsap = get_vsap
     energy_elec = energy_elec
+
+    init_guess_by_vsap = init_guess_by_vsap
 
     def nuc_grad_method(self):
         from pyscf.grad import rks as rks_grad

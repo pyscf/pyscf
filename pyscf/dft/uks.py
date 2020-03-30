@@ -157,7 +157,7 @@ def get_vsap(ks, mol=None):
         matrix Vsap = Vnuc + J + Vxc.
     '''
     Vsap = rks.get_vsap(ks, mol)
-    return [Vsap, Vsap]
+    return numpy.asarray([Vsap, Vsap])
 
 def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if dm is None: dm = ks.make_rdm1()
@@ -184,6 +184,8 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     get_veff = get_veff
     get_vsap = get_vsap
     energy_elec = energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
 
     def nuc_grad_method(self):
         from pyscf.grad import uks
