@@ -120,12 +120,6 @@ class X2C(lib.StreamObject):
             for ia in range(xmol.natm):
                 ish0, ish1, c0, c1 = atom_slices[ia]
                 hso1e[c0:c1,c0:c1] += hso1e_atoms[self.mol.elements[ia]]
-            #i,j,k,l=atom_slices[0]
-            #N0=hso1e[k:l,k:l]
-            #i,j,k,l=atom_slices[1]
-            #N1=hso1e[k:l,k:l]
-            #print(N0-N1)
-            #exit(0)
         return h1+hso1e
 
     def get_xmat(self, mol=None):

@@ -97,7 +97,9 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 
 class AOCHF(uhf.UHF):
     __doc__ = hf.SCF.__doc__
-
+    nclose = getattr(__config__, 'nclose', 0)
+    nact = getattr(__config__, 'nact', 0)
+    nopen = getattr(__config__, 'nopen', 0)
     def __init__(self, mol, nact=None, nopen=None):
         hf.SCF.__init__(self, mol)
         if nact is not None : self.nact=nact

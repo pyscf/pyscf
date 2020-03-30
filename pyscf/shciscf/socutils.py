@@ -42,7 +42,7 @@ def get_socamf(atoms, basis):
             nopen = 1
             nact = 1
         from pyscf import scf
-        mf_atom = scf.sfx2c1e(scf.AOCHF(mol_atom, nopen=nopen, nact=nact)) 
+        mf_atom = scf.sfx2c1e(scf.AOCHF(mol_atom, nopen=nopen, nact=nact))
         xatm, contr_coeff = x2c.X2C(mol_atom).get_xmol()
         np, nc = contr_coeff.shape
         mf_atom.kernel()
@@ -55,16 +55,23 @@ def get_socamf(atoms, basis):
         h1ao = numpy.zeros((3, nc, nc),dtype=complex)
         h1ao_uncontract += factor*get_fso2e_x2c(xatm, x, rp, pLL, pLS, pSS)
         for ic in range(3):
-            h1ao[ic] = reduce(
-                numpy.dot, (contr_coeff.T, h1ao_uncontract[ic], contr_coeff))
+             h1ao[ic] = reduce(numpy.dot, (contr_coeff.T, h1ao_uncontract[ic], contr_coeff))
         hso1e = numpy.zeros((nc*2, nc*2),dtype=complex)
-        hso1e[1::2,0::2]+=h1ao[0]
-        hso1e[0::2,1::2]+=h1ao[0]
-        hso1e[1::2,0::2]+=-1.j*h1ao[1]
-        hso1e[0::2,1::2]+= 1.j*h1ao[1]
-        hso1e[0::2,0::2]+=h1ao[2]
-        hso1e[1::2,1::2]-=h1ao[2]
-        hso1e_atoms[atom]=hso1e
+        #hso1e[1::2,0::2]+=h1ao[0,:,:]
+        #hso1e[0::2,1::2]+=h1ao[0,:,:]
+        #hso1e[1::2,0::2]+= 1.j*h1ao[1,:,:]
+        #hso1e[0::2,1::2]+=-1.j*h1ao[1,:,:]
+        #hso1e[0::2,0::2]+=h1ao[2,:,:]
+        #hso1e[1::2,1::2]-=h1ao[2,:,:]
+        for i in range(nc):
+            for j in range(nc):
+                hso1e[2*i  ,2*j+1]+=1.j*h1ao[0,i,j]
+                hso1e[2*i+1,2*j  ]+=1.j*h1ao[0,i,j]
+                hso1e[2*i  ,2*j+1]+= 1.*h1ao[1,i,j]
+                hso1e[2*i+1,2*j  ]+=-1.*h1ao[1,i,j]
+                hso1e[2*i  ,2*j  ]+= 1.j*h1ao[2,i,j]
+                hso1e[2*i+1,2*j+1]+=-1.j*h1ao[2,i,j]
+        hso1e_atoms[atom]=1.*hso1e
     return hso1e_atoms
 
 def print1Int(h1, name):
@@ -524,7 +531,10 @@ def writeSOCIntegrals(mc,
         hso1e += -factor * get_fso2e_x2c_original(xmol, x, rp, pLL, pLS, pSS)
     elif (pictureChange2e == "x2c"):
         pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
-        hso1e += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)
+        #hso1e += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)
+        hso1e[0] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[0]
+        hso1e[1] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[1]
+        hso1e[2] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[2]
     elif (pictureChange2e == "x2c1c"):
         pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
         hso1e += -factor * get_fso2e_x2c1c(xmol, x, rp, pLL, pLS, pSS)

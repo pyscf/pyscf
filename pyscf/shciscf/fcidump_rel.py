@@ -50,7 +50,7 @@ def write_head(fout, nmo, nelec, ms, orbsym=None):
     fout.write('  ISYM=0,\n')
     fout.write(' &END\n')
 
-def from_x2c(mf, ncore, nact, filename = 'FCIDUMP', tol=1e-16, intor='int2e_spinor', h1e = None):
+def from_x2c(mf, ncore, nact, filename = 'FCIDUMP', tol=1e-8, intor='int2e_spinor', h1e = None, approx = '1e'):
     ncore = ncore*2
     nact = nact*2
     mo_coeff = mf.mo_coeff[:,ncore:ncore+nact]
@@ -58,6 +58,7 @@ def from_x2c(mf, ncore, nact, filename = 'FCIDUMP', tol=1e-16, intor='int2e_spin
 
     assert mo_coeff.dtype == numpy.complex
 
+    mf.with_x2c.approx = approx
     hcore = mf.get_hcore()
     core_occ = numpy.zeros(len(mf.mo_energy))
     core_occ[:ncore]=1.0
@@ -66,7 +67,7 @@ def from_x2c(mf, ncore, nact, filename = 'FCIDUMP', tol=1e-16, intor='int2e_spin
     energy_core = mf.energy_nuc()
     energy_core += numpy.einsum('ij,ji', core_dm, hcore)
     energy_core += numpy.einsum('ij,ji', core_dm, corevhf) * .5
-    h1eff = reduce(numpy.dot, (mo_coeff.T, hcore+corevhf, mo_coeff))
+    h1eff = reduce(numpy.dot, (mo_coeff.T.conjugate(), hcore+corevhf, mo_coeff))
     #print(h1eff, energy_core)
     #reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))[ncore:ncore+nact, ncore:ncore+nact]
     if mf._eri is None:
@@ -78,7 +79,7 @@ def from_x2c(mf, ncore, nact, filename = 'FCIDUMP', tol=1e-16, intor='int2e_spin
     #dm = mf.make_rdm1(mo_occ = core_occ)
     #core_energy = scf.hf.energy_elec(mf, dm=dm)
     print(mf.energy_nuc(), energy_core)
-    from_integrals(filename = filename, h1e=h1eff, h2e=eri, nmo=nact, nelec=sum(mf.mol.nelec)-ncore, nuc=energy_core.real)
+    from_integrals(filename = filename, h1e=h1eff, h2e=eri, nmo=nact, nelec=sum(mf.mol.nelec)-ncore, nuc=energy_core.real, tol=tol)
     
 def from_dhf(mf, ncore, nact, filename = 'FCIDUMP', tol=1e-10, intor='int2e_spinor'):
     ncore = ncore*2
@@ -122,3 +123,4 @@ if __name__ == '__main__':
     mf_dirac = scf.DHF(mol)
     mf_dirac.kernel()
     from_dhf(mf_dirac, 0, 7, filename = 'FCIDUMP_dhf')
+
