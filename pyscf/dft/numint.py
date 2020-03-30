@@ -20,6 +20,7 @@ import warnings
 import ctypes
 import numpy
 from pyscf import lib
+from pyscf.dft.sap import sap_effective_charge
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):
@@ -709,6 +710,68 @@ def nr_vxc(mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     ni = NumInt()
     return ni.nr_vxc(mol, grids, xc_code, dms, spin, relativity,
                      hermi, max_memory, verbose)
+
+def nr_sap_vxc(ni, mol, grids, max_memory=2000, verbose=None):
+    '''Calculate superposition of atomic potentials matrix on given meshgrids.
+
+    Args:
+        ni : an instance of :class:`NumInt`
+
+        mol : an instance of :class:`Mole`
+
+        grids : an instance of :class:`Grids`
+            grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
+
+    Kwargs:
+        max_memory : int or float
+            The maximum size of cache to use (in MB).
+
+    Returns:
+        vmat is the XC potential matrix in 2D array of shape (nao,nao)
+        where nao is the number of AO functions.
+
+    Examples:
+    >>> import numpy
+    >>> from pyscf import gto, dft
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
+    >>> grids = dft.gen_grid.Grids(mol)
+    >>> ni = dft.numint.NumInt()
+    >>> vsap = ni.nr_sap(mol, grids)
+    '''
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
+    nao = mol.nao
+    vmat = numpy.zeros((nao,nao))
+    aow = None
+    vxcw = None
+    ao_deriv = 0
+
+    atom_coords = mol.atom_coords()
+    atom_charges = mol.atom_charges()
+    eps = numpy.finfo(float).eps
+
+    for ao, mask, weight, coords in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+        aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
+        vxc = numpy.ndarray(coords.shape[0], buffer=vxcw)
+        vxc.fill(0.0)
+        # Form potential
+        for igrid in range(vxc.size):
+            for iatom in range(len(mol._atm)):
+                # Distance from nucleus
+                rnuc = numpy.linalg.norm(atom_coords[iatom,:] - coords[igrid,:])
+                if rnuc > eps:
+                    # Zeff(R)
+                    Zeff = sap_effective_charge(atom_charges[iatom], rnuc)
+                    vxc[igrid] -= Zeff/rnuc
+
+        # *.5 because vmat + vmat.T
+        #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho, out=aow)
+        aow = _scale_ao(ao, .5*weight*vxc, out=aow)
+        vmat += _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
+        vxc = None
+
+    vmat = vmat + vmat.conj().T
+    return vmat
 
 def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
            max_memory=2000, verbose=None):
@@ -1874,8 +1937,13 @@ class NumInt(object):
             return self.nr_uks_fxc(mol, grids, xc_code, dm0, dms, relativity,
                                    hermi, rho0, vxc, fxc, max_memory, verbose)
 
+        #@lib.with_doc(nr_sap.__doc__)
+    def nr_sap(self, mol, grids, max_memory=2000, verbose=None):
+        return self.nr_sap_vxc(mol, grids, max_memory, verbose)
+
     nr_rks = nr_rks
     nr_uks = nr_uks
+    nr_sap_vxc = nr_sap_vxc
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
