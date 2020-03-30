@@ -164,7 +164,7 @@ def nwchem_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
     angs = leb_ngrid[angs]
     return angs
 
-# Prune scheme JCP 102, 346
+# Prune scheme JCP 102, 346 (1995); DOI:10.1063/1.469408
 def treutler_prune(nuc, rads, n_ang, radii=None):
     '''Treutler-Ahlrichs
 
@@ -196,7 +196,7 @@ def treutler_prune(nuc, rads, n_ang, radii=None):
 
 # Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996), eq.11
 def stratmann(g):
-    '''Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996)'''
+    '''Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996); DOI:10.1016/0009-2614(96)00600-8'''
     a = .64  # for eq. 14
     g = numpy.asarray(g)
     ma = g/a
@@ -207,7 +207,7 @@ def stratmann(g):
     return g1
 
 def original_becke(g):
-    '''Becke, JCP, 88, 2547 (1988)'''
+    '''Becke, JCP 88, 2547 (1988); DOI:10.1063/1.454033'''
 #    This funciton has been optimized in the C code VXCgen_grid
 #    g = (3 - g**2) * g * .5
 #    g = (3 - g**2) * g * .5

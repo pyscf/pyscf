@@ -36,7 +36,7 @@ from pyscf import __config__
 WITH_MICRO_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_micro_scheduler', False)
 WITH_STEPSIZE_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_stepsize_scheduler', True)
 
-# ref. JCP, 82, 5053;  JCP, 73, 2342
+# ref. JCP, 82, 5053 (1985); DOI: 10.1063/1.448627 and JCP 73, 2342 (1980); DOI:10.1063/1.440384
 
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):

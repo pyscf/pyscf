@@ -27,7 +27,7 @@ from pyscf import dmrgscf
 DMRG-CASCI then DMRG-NEVPT2 calculation.
 
 There are two NEVPT2 implementations available for DMRG Block program.  The slow
-version (default) strictly follows the formula presented in JCP, 117(2002), 9138
+version (default) strictly follows the formula presented in JCP 117, 9138 (2012); DOI:10.1063/1.1515317
 in which the 4-particle density matrix is explictly computed.  Typically 26
 orbitals is the upper limit of the slow version due to the large requirements
 on the memory usage.  The fast version employs the so called MPS-pertuber

@@ -19,7 +19,7 @@ from pyscf.lib.parameters import BOHR
 unknown = 1.999999
 
 #########################
-# JCP 41 3199 (1964).
+# JCP 41, 3199 (1964); DOI:10.1063/1.1725697.
 BRAGG = 1/BOHR * numpy.array((unknown,  # Ghost atom
         0.35,                                     1.40,             # 1s
         1.45, 1.05, 0.85, 0.70, 0.65, 0.60, 0.50, 1.50,             # 2s2p

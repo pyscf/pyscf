@@ -216,7 +216,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     return excsum, -vmat
 
 
-# JCP, 98, 5612
+# JCP 98, 5612 (1993); DOI:10.1063/1.464906
 def grids_response_cc(grids):
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
@@ -262,7 +262,7 @@ def grids_response_cc(grids):
             grid_dist.append(normv)
             grid_norm_vec.append(v)
 
-        def get_du(ia, ib):  # JCP, 98, 5612 (B10)
+        def get_du(ia, ib):  # JCP 98, 5612 (1993); (B10)
             uab = atm_coords[ia] - atm_coords[ib]
             duab = 1./atm_dist[ia,ib] * grid_norm_vec[ia]
             duab-= uab[:,None]/atm_dist[ia,ib]**3 * (grid_dist[ia]-grid_dist[ib])
@@ -304,7 +304,7 @@ def grids_response_cc(grids):
                     dpbecke[ib,ib] -= pt_uba * duba
                     dpbecke[ib,ia] -= pt_uab * duba
 
-# * JCP, 98, 5612 (B8) (B10) miss many terms
+# * JCP 98, 5612 (1993); (B8) (B10) miss many terms
                 if ia != atom_id and ib != atom_id:
                     ua_ub = grid_norm_vec[ia] - grid_norm_vec[ib]
                     ua_ub /= atm_dist[ia,ib]

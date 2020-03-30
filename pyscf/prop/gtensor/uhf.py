@@ -20,9 +20,9 @@
 Non-relativistic unrestricted Hartree-Fock g-tensor
 
 Refs:
-    JPC, 101, 3388
-    JCP, 115, 11080
-    JCP, 119, 10489
+    JPCA 101, 3388 (1997); DOI:10.1021/jp963060t
+    JCP 115, 11080 (2001); DOI:10.1063/1.1419058
+    JCP 119, 10489 (2003); DOI:10.1063/1.1620497
 Note g-tensor = 1/muB d^2 E/ dB dS
 In some literature, muB is not explicitly presented in the perturbation formula.
 '''
@@ -251,7 +251,7 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
         if with_soo:
             ej = numpy.einsum('yij,xji->xy', vj[0]-vj[1], dm10a+dm10b)
             gpara2e -= 2 * (ej - ek)
-    else:  # SOMF, see JCP 122, 034107 Eq (19)
+    else:  # SOMF, see JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (19)
         ej = numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
         ek = numpy.einsum('yil,xli->xy', vk[0]+vk[1], dm10a-dm10b)
         gpara2e -= ej - 1.5 * ek
@@ -300,7 +300,7 @@ def make_h01_soc1e(gobj, mo_coeff, mo_occ, qed_fac=1):
     #qed_fac = (nist.G_ELECTRON - 1)
 
 # hso1e is the imaginary part of [i sigma dot pV x p]
-# JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
+# JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (2) = 1/4c^2 hso1e
     if gobj.so_eff_charge:
         hso1e = 0
         for ia in range(mol.natm):
@@ -355,7 +355,7 @@ def get_j_amfi(mol, dm0):
 
 
 # hso2e is the imaginary part of SSO
-# SSO term of JCP, 122, 034107 Eq (3) = 1/4c^2 hso2e
+# SSO term of JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (3) = 1/4c^2 hso2e
 def make_h01_soc2e(gobj, mo_coeff, mo_occ, sso_qed_fac=1):
     mol = gobj.mol
     alpha2 = nist.ALPHA ** 2

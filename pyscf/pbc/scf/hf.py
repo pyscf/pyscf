@@ -473,7 +473,7 @@ class SCF(mol_hf.SCF):
             Exchange divergence treatment, can be one of
 
             | None : ignore G=0 contribution in exchange
-            | 'ewald' : Ewald probe charge correction (JCP, 122, 234102)
+            | 'ewald' : Ewald probe charge correction [JCP 122, 234102 (2005); DOI:10.1063/1.1926272]
 
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
