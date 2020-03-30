@@ -143,6 +143,60 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
+def get_vsap(ks, mol=None):
+    '''Superposition of atomic potentials
+
+    S. Lehtola, Assessment of initial guesses for self-consistent
+    field calculations. Superposition of Atomic Potentials: simple yet
+    efficient, J. Chem. Theory Comput. 15, 1593 (2019). DOI:
+    10.1021/acs.jctc.8b01089. arXiv:1810.11659.
+
+    This function evaluates the effective charge of a neutral atom,
+    given by exchange-only LDA on top of spherically symmetric
+    unrestricted Hartree-Fock calculations as described in
+
+    S. Lehtola, L. Visscher, E. Engel, Efficient implementation of the
+    superposition of atomic potentials initial guess for electronic
+    structure calculations in Gaussian basis sets, J. Chem. Phys., in
+    press (2020).
+
+    The potentials have been calculated for the ground-states of
+    spherically symmetric atoms at the non-relativistic level of theory
+    as described in
+
+    S. Lehtola, "Fully numerical calculations on atoms with fractional
+    occupations and range-separated exchange functionals", Phys. Rev. A
+    101, 012516 (2020). DOI: 10.1103/PhysRevA.101.012516
+
+    using accurate finite-element calculations as described in
+
+    S. Lehtola, "Fully numerical Hartree-Fock and density functional
+    calculations. I. Atoms", Int. J. Quantum Chem. e25945 (2019).
+    DOI: 10.1002/qua.25945
+
+    .. note::
+        This function will modify the input ks object.
+
+    Args:
+        ks : an instance of :class:`RKS`
+            XC functional are controlled by ks.xc attribute.  Attribute
+            ks.grids might be initialized.
+
+    Returns:
+        matrix Vsap = Vnuc + J + Vxc.
+    '''
+    if mol is None: mol = ks.mol
+    t0 = (time.clock(), time.time())
+
+    if ks.grids.coords is None:
+        ks.grids.build(with_non0tab=True)
+        t0 = logger.timer(ks, 'setting up grids', *t0)
+
+    ni = ks._numint
+    max_memory = ks.max_memory - lib.current_memory()[0]
+    vsap = ni.nr_sap(mol, ks.grids, max_memory=max_memory)
+    return vsap
+
 # The vhfopt of standard Coulomb operator can be used here as an approximate
 # opt since long-range part Coulomb is always smaller than standard Coulomb.
 # It's safe to prescreen LR integrals with the integral estimation from
@@ -415,6 +469,7 @@ class RKS(KohnShamDFT, hf.RHF):
         return KohnShamDFT.dump_flags(self, verbose)
 
     get_veff = get_veff
+    get_vsap = get_vsap
     energy_elec = energy_elec
 
     def nuc_grad_method(self):
