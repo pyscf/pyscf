@@ -81,6 +81,50 @@ class X2C(lib.StreamObject):
         t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
         v = xmol.intor_symmetric('int1e_nuc_spinor')
         w = xmol.intor_symmetric('int1e_spnucsp_spinor')
+
+        # an approximate one-electron spin-orbit integral to account for two-electron effect
+        # by adding an scaling factor
+        # Q = [0,2,10,28,60,110] for [s,p,d,f,g,h] seperately
+        # 
+        if 'BOETTGER' in self.approx.upper():
+            # first construct the array sqrt(Q(l)/Z)
+            fudge_factor = numpy.zeros(xmol.nao_2c())
+            spinor_labels = xmol.spinor_labels(0)
+            atom_slices = xmol.offset_2c_by_atom()
+            for ia in range(xmol.natm):
+                Z_ia = xmol.atom_charge(ia)
+                #print(Z_ia)
+                for iorb in range(atom_slices[ia][2], atom_slices[ia][3]):
+                    label = spinor_labels[iorb]
+                    if 'S' in label[2].upper():
+                        fudge_factor[iorb] = 0./Z_ia
+                        #print('s', label)
+                    elif 'P' in label[2].upper():
+                        #if 2 < Z_ia:
+                        fudge_factor[iorb] = 2./Z_ia
+                        #print('p', label)
+                    elif 'D' in label[2].upper():
+                        #if 10 < Z_ia:
+                        fudge_factor[iorb] = 10./Z_ia
+                        #print('d', label)
+                    elif 'F' in label[2].upper():
+                        #if 28 < Z_ia:
+                        fudge_factor[iorb] = 28./Z_ia
+                        #print('f', label)
+                    elif 'G' in label[2].upper():
+                        #if 60 < Z_ia:
+                        fudge_factor[iorb] = 60./Z_ia
+                        #print('g', label)
+                    elif 'H' in label[2].upper:
+                        #if 110 < Z_ia:
+                        #print('h', label)
+                        fudge_factor[iorb] = 110./Z_ia
+            #fudge_factor = numpy.sqrt(fudge_factor)
+            #print(fudge_factor)
+            for iorb in range(xmol.nao_2c()):
+                for jorb in range(xmol.nao_2c()):
+                    w[iorb, jorb]*=(1.-numpy.sqrt(fudge_factor[iorb]*fudge_factor[jorb]))
+                
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
@@ -110,7 +154,6 @@ class X2C(lib.StreamObject):
             contr_coeff[0::2,0::2] = contr_coeff_nr
             contr_coeff[1::2,1::2] = contr_coeff_nr
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
-        print (self.approx.upper())
         hso1e = numpy.zeros((nc*2, nc*2), dtype=complex)
         if 'SOCAMF' in self.approx.upper():
             # incorporate X2CAMF approximation.
