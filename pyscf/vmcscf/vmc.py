@@ -455,7 +455,7 @@ def bestDetValence(mol, lmo, occ, eri, writeToFile=True):
     for i in enumerate(maxLMOContributers):
         lmoSites[numpy.searchsorted(numpy.array(atomNumAOs), i[1])].append(i[0])
 
-    bestDet = [0 for i in range(lmo.shape[1])]
+    bestDet = ['0' for i in range(lmo.shape[1])]
     def pair(i):
         return i*(i+1)//2+i
     for i in enumerate(occ):
