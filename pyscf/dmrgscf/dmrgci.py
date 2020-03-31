@@ -135,7 +135,7 @@ class DMRGCI(lib.StreamObject):
         self.extraline = []
 
         if tol is None:
-            self.tol = 1e-8
+            self.tol = 1e-7
         else:
             self.tol = tol
         if maxM is None:
