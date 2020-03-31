@@ -135,6 +135,8 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
         orbsym = getattr(mo_coeff, 'orbsym', None)
     t = mol.intor_symmetric('int1e_kin')
     v = mol.intor_symmetric('int1e_nuc')
+    if len(mol._ecpbas) > 0:
+        v += mol.intor_symmetric('ECPscalar')
     h1e = reduce(numpy.dot, (mo_coeff.T, t+v, mo_coeff))
     eri = ao2mo.full(mol, mo_coeff, verbose=0)
     nuc = mol.energy_nuc()

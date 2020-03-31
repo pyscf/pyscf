@@ -66,6 +66,17 @@ def delley(n, *args, **kwargs):
     return r, dr
 gauss_legendre = delley
 
+def mura_knowles_inputFar(n, far, charge=None, *args, **kwargs):
+    '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''
+    far = 50
+    r = numpy.empty(n)
+    dr = numpy.empty(n)
+    for i in range(n):
+        x = (i+.5) / n
+        r[i] = -far * numpy.log(1-x**3)
+        dr[i] = far * 3*x*x/((1-x**3)*n)
+    return r, dr
+
 def mura_knowles(n, charge=None, *args, **kwargs):
     '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''
     r = numpy.empty(n)
@@ -84,6 +95,16 @@ def mura_knowles(n, charge=None, *args, **kwargs):
 # Gauss-Chebyshev of the second kind,  and the transformed interval [0,\infty)
 # Ref  Matthias Krack and Andreas M. Koster,  J. Chem. Phys. 108 (1998), 3226
 def gauss_chebyshev(n, *args, **kwargs):
+    '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''
+    far = 50
+    r = numpy.empty(n)
+    dr = numpy.empty(n)
+    for i in range(n):
+        x = (i+.5) / n
+        r[i] = -far * numpy.log(1-x**3)
+        dr[i] = far * 3*x*x/((1-x**3)*n)
+    return r, dr
+
     '''Gauss-Chebyshev (JCP, 108, 3226) radial grids'''
     ln2 = 1 / numpy.log(2)
     fac = 16./3 / (n+1)
