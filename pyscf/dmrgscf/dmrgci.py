@@ -384,7 +384,7 @@ class DMRGCI(lib.StreamObject):
             executeBLOCK(self)
             self.mpiprefix=mpisave
             end = time.time()
-            print('......production of RDMs took %10.2f sec' %(end-start))
+            logger.info(self, '......production of RDMs took %10.2f sec' %(end-start))
 
             if self.verbose >= logger.DEBUG1:
                 outFile = os.path.join(self.runtimeDir, self.outputFile)
@@ -418,7 +418,7 @@ class DMRGCI(lib.StreamObject):
         onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
         end = time.time()
-        print('......reading the RDM took    %10.2f sec' %(end-start))
+        logger.info(self, '......reading the RDM took    %10.2f sec' %(end-start))
         return onepdm, twopdm, threepdm
 
     def _make_dm123(self, state, norb, nelec, link_index=None, **kwargs):
@@ -463,7 +463,7 @@ class DMRGCI(lib.StreamObject):
             executeBLOCK(self)
             self.mpiprefix=mpisave
             end = time.time()
-            print('......production of RDMs took %10.2f sec' %(end-start))
+            logger.info(self, '......production of RDMs took %10.2f sec' %(end-start))
 
             if self.verbose >= logger.DEBUG1:
                 outFile = self.outputFile
@@ -484,14 +484,14 @@ class DMRGCI(lib.StreamObject):
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE3_BLOCK" (see below)
           if block_version(self.executable).startswith('1.5'):
-            print('Reading binary 3RDM from STACKBLOCK')
+            logger.info(self, 'Reading binary 3RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE3(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
             E3 = numpy.fromfile(fnameout, dtype=numpy.float64)
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
           else:
-            print('Reading binary 3RDM from BLOCK')
+            logger.info(self, 'Reading binary 3RDM from BLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             E3 = self.unpackE3_BLOCK(fname,norb)
 
@@ -500,7 +500,7 @@ class DMRGCI(lib.StreamObject):
         # and are stored here as E3[i1,j2,k3,n1,m2,l3]
         # This is done with SQA in mind.
         else:
-          print('Reading text-file 3RDM')
+          logger.info(self, 'Reading text-file 3RDM')
           fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
           f = open(fname, 'r')
           lines = f.readlines()
@@ -514,8 +514,7 @@ class DMRGCI(lib.StreamObject):
                                      int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
             self.populate(E3, [a,b,c,  f,e,d], integral)
         end = time.time()
-        print('......reading the RDM took    %10.2f sec' %(end-start))
-        print('')
+        logger.info(self, '......reading the RDM took    %10.2f sec\n' %(end-start))
         return E3
 
     def make_rdm4(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, restart=False, **kwargs):
@@ -545,7 +544,7 @@ class DMRGCI(lib.StreamObject):
             executeBLOCK(self)
             self.mpiprefix=mpisave
             end = time.time()
-            print('......production of RDMs took %10.2f sec' %(end-start))
+            logger.info(self, '......production of RDMs took %10.2f sec' %(end-start))
 
             if self.verbose >= logger.DEBUG1:
                 outFile = self.outputFile
@@ -568,14 +567,14 @@ class DMRGCI(lib.StreamObject):
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE4_BLOCK" (see below)
           if block_version(self.executable).startswith('1.5'):
-            print('Reading binary 4RDM from STACKBLOCK')
+            logger.info(self, 'Reading binary 4RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE4(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
             E4 = numpy.fromfile(fnameout, dtype=numpy.float64)
             E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
           else:
-            print('Reading binary 4RDM from BLOCK')
+            logger.info(self, 'Reading binary 4RDM from BLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             E4 = self.unpackE4_BLOCK(fname,norb)
 
@@ -584,7 +583,7 @@ class DMRGCI(lib.StreamObject):
         # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
         # This is done with SQA in mind.
         else:
-            print('Reading text-file 4RDM')
+            logger.info(self, 'Reading text-file 4RDM')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
@@ -598,8 +597,7 @@ class DMRGCI(lib.StreamObject):
                                            int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
               self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
         end = time.time()
-        print('......reading the RDM took    %10.2f sec' %(end-start))
-        print('')
+        logger.info(self, '......reading the RDM took    %10.2f sec\n' %(end-start))
         return E4
 
     def populate(self, array, list, value):
@@ -618,7 +616,7 @@ class DMRGCI(lib.StreamObject):
         # This is done with SQA in mind.
         E3=numpy.zeros((norb,norb,norb,norb,norb,norb), order='F')
         fil=open(fname,"rb")
-        print("[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
+        logger.debug1(self, "[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
         #fil.seek(93) # HOW DANGEROUS IS THAT ???!?!?!?
         fil.seek(53)  # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
@@ -631,9 +629,9 @@ class DMRGCI(lib.StreamObject):
                     E3[a,b,c,  f,e,d]=value
         try:
           (value,)=struct.unpack('c',fil.read(1))
-          print("MORE bytes TO READ!")
+          logger.warn(self, "MORE bytes TO READ!")
         except:
-          print("AT LEAST, NO MORE bytes TO READ!")
+          logger.warn(self, "AT LEAST, NO MORE bytes TO READ!")
         #exit(0)
         fil.close()
         return E3
@@ -645,7 +643,7 @@ class DMRGCI(lib.StreamObject):
         # This is done with SQA in mind.
         E4=numpy.zeros((norb,norb,norb,norb,norb,norb,norb,norb), order='F')
         fil=open(fname,"rb")
-        print("[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
+        logger.debug1(self, "[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
         fil.seek(109) # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
           for b in range(norb):
@@ -659,9 +657,9 @@ class DMRGCI(lib.StreamObject):
                         E4[a,b,c,d,  h,g,f,e]=value
         try:
           (value,)=struct.unpack('c',fil.read(1))
-          print("MORE bytes TO READ!")
+          logger.warn(self, "MORE bytes TO READ!")
         except:
-          print("AT LEAST, NO MORE bytes TO READ!")
+          logger.warn(self, "AT LEAST, NO MORE bytes TO READ!")
         #exit(0)
         fil.close()
         return E4
