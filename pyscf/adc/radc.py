@@ -44,42 +44,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
-####################################################################
-#    nocc = adc._nocc
-#    nvir = adc._nvir
-#################### EA ###########################################
-#
-#    n_singles = nvir
-#    n_doubles = nocc * nvir * nvir
-#
-################## IP  ###########################################
-#
-#    n_singles = nocc
-#    n_doubles = nvir * nocc * nocc
-#
-#    dim = n_singles + n_doubles
-#
-#    s1 = 0
-#    f1 = n_singles
-#    s2 = f1
-#    f2 = s2 + n_doubles
-#
-#    N = np.zeros((dim,dim))
-#    I = np.identity(dim)
-#    
-#    for i in range(dim):
-#        N[:,i] = matvec(I[:,i]) 
-#
-#    h1_h1 = N[s2:f2,s2:f2]
-#    h1_diag = np.diagonal(h1_h1)
-#    print (np.linalg.norm(h1_diag))
-#    #print (h1_diag_aaa)
-#    #print (np.linalg.norm(h1_diag_bbb))
-#    #print (h1_diag_bab)
-#    #print (h1_diag_aba)
-#    exit()
-##################################################################
-
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
     conv, E, U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space)
@@ -438,6 +402,8 @@ class RADC(lib.StreamObject):
         self.mo_energy = mf.mo_energy
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
+        self.method_type = "ea"
+        self.nroots = 5
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -463,7 +429,7 @@ class RADC(lib.StreamObject):
                     self.max_memory, lib.current_memory()[0])
         return self
     
-    def kernel(self):
+    def kernel_gs(self):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
     
@@ -483,18 +449,55 @@ class RADC(lib.StreamObject):
 
         return self.e_corr, self.t1, self.t2
 
+
+    def kernel(self):
+        assert(self.mo_coeff is not None)
+        assert(self.mo_occ is not None)
+    
+        self.method = self.method.lower()
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+            raise NotImplementedError(self.method)
+    
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        self.dump_flags_gs()
+    
+        eris = radc_ao2mo.transform_integrals_incore(self)
+        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
+        self.e_tot = self.scf_energy + self.e_corr
+
+        self._finalize()
+
+        self.method_type = self.method_type.lower()
+        if self.method_type not in ("ip", "ea"):
+            raise NotImplementedError(self.method_type)
+
+        def ip_adc(self, nroots=1, guess=None, eris=None):
+            return RADCIP(self).kernel(nroots, guess, eris)
+
+        def ea_adc(self, nroots=1, guess=None, eris=None):
+            return RADCEA(self).kernel(nroots, guess, eris)
+
+        if(self.method_type == "ip"):
+            self.ip_adc = ip_adc(self, nroots=1, guess=None, eris=eris)
+            return RADCIP(self).kernel(nroots, guess, eris)
+
+        if(self.method_type == "ea"):
+            self.ea_adc = ea_adc(self, nroots=1, guess=None, eris=eris)
+            return RADCEA(self).kernel(nroots, guess, eris)
+
+
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
         logger.note(self, 'E_corr = %.8f  E_tot = %.8f',
                     self.e_corr, self.e_tot)
         return self
     
-    def ea_adc(self, nroots=1, guess=None):
-        return RADCEA(self).kernel(nroots, guess)
-    
-    def ip_adc(self, nroots=1, guess=None):
-        return RADCIP(self).kernel(nroots, guess)
-
+#    def ea_adc(self, nroots=1, guess=None):
+#        return RADCEA(self).kernel(nroots, guess)
+#    
+#    def ip_adc(self, nroots=1, guess=None):
+#        return RADCIP(self).kernel(nroots, guess)
 
 def get_imds_ea(adc, eris=None):
 
