@@ -611,8 +611,9 @@ class UADC(lib.StreamObject):
         self.mo_energy_b = mf.mo_energy[1]
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
+        self.method_type = "ip"
 
-        keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
+        keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
         self._keys = set(self.__dict__.keys()).union(keys)
     
@@ -636,7 +637,7 @@ class UADC(lib.StreamObject):
                     self.max_memory, lib.current_memory()[0])
         return self
     
-    def kernel(self):
+    def kernel_gs(self):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
     
@@ -656,17 +657,46 @@ class UADC(lib.StreamObject):
 
         return self.e_corr, self.t1, self.t2
 
+    def kernel(self, nroots=1, guess=None, eris=None):
+        assert(self.mo_coeff is not None)
+        assert(self.mo_occ is not None)
+    
+        self.method = self.method.lower()
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+            raise NotImplementedError(self.method)
+    
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        self.dump_flags_gs()
+    
+        eris = uadc_ao2mo.transform_integrals_incore(self)
+        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
+        self.e_tot = self.scf_energy + self.e_corr
+
+        self._finalize()
+
+        self.method_type = self.method_type.lower()
+        if(self.method_type == "ea"):
+            self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+
+        if(self.method_type == "ip"):
+            self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+
+        elif self.method_type not in ("ip", "ea"):
+            raise NotImplementedError(self.method_type)
+
+
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
         logger.note(self, 'E_corr = %.8f  E_tot = %.8f',
                     self.e_corr, self.e_tot)
         return self
     
-    def ea_adc(self, nroots=1, guess=None):
-        return UADCEA(self).kernel(nroots, guess)
+    def ea_adc(self, nroots=1, guess=None, eris=None):
+        return UADCEA(self).kernel(nroots, guess, eris)
     
-    def ip_adc(self, nroots=1, guess=None):
-        return UADCIP(self).kernel(nroots, guess)
+    def ip_adc(self, nroots=1, guess=None, eris=None):
+        return UADCIP(self).kernel(nroots, guess, eris)
 
 
 def get_imds_ea(adc, eris=None):
@@ -2986,6 +3016,7 @@ class UADCEA(UADC):
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
         self.method = adc.method
+        self.method_type = adc.method_type
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
@@ -2999,7 +3030,7 @@ class UADCEA(UADC):
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
 
-        keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
+        keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
         self._keys = set(self.__dict__.keys()).union(keys)
     
@@ -3083,6 +3114,7 @@ class UADCIP(UADC):
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
         self.method = adc.method
+        self.method_type = adc.method_type
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
@@ -3096,7 +3128,7 @@ class UADCIP(UADC):
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
 
-        keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
+        keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
         self._keys = set(self.__dict__.keys()).union(keys)
 

@@ -402,8 +402,7 @@ class RADC(lib.StreamObject):
         self.mo_energy = mf.mo_energy
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
-        self.method_type = "ea"
-        self.nroots = 5
+        self.method_type = "ip"
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -449,8 +448,7 @@ class RADC(lib.StreamObject):
 
         return self.e_corr, self.t1, self.t2
 
-
-    def kernel(self):
+    def kernel(self, nroots=1, guess=None, eris=None):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
     
@@ -469,22 +467,14 @@ class RADC(lib.StreamObject):
         self._finalize()
 
         self.method_type = self.method_type.lower()
-        if self.method_type not in ("ip", "ea"):
-            raise NotImplementedError(self.method_type)
-
-        def ip_adc(self, nroots=1, guess=None, eris=None):
-            return RADCIP(self).kernel(nroots, guess, eris)
-
-        def ea_adc(self, nroots=1, guess=None, eris=None):
-            return RADCEA(self).kernel(nroots, guess, eris)
+        if(self.method_type == "ea"):
+            self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         if(self.method_type == "ip"):
-            self.ip_adc = ip_adc(self, nroots=1, guess=None, eris=eris)
-            return RADCIP(self).kernel(nroots, guess, eris)
+            self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
-        if(self.method_type == "ea"):
-            self.ea_adc = ea_adc(self, nroots=1, guess=None, eris=eris)
-            return RADCEA(self).kernel(nroots, guess, eris)
+        elif self.method_type not in ("ip", "ea"):
+            raise NotImplementedError(self.method_type)
 
 
     def _finalize(self):
@@ -493,11 +483,14 @@ class RADC(lib.StreamObject):
                     self.e_corr, self.e_tot)
         return self
     
-#    def ea_adc(self, nroots=1, guess=None):
-#        return RADCEA(self).kernel(nroots, guess)
-#    
-#    def ip_adc(self, nroots=1, guess=None):
-#        return RADCIP(self).kernel(nroots, guess)
+
+    def ea_adc(self, nroots=1, guess=None, eris=None):
+        return RADCEA(self).kernel(nroots, guess, eris)
+    
+
+    def ip_adc(self, nroots=1, guess=None, eris=None):
+        return RADCIP(self).kernel(nroots, guess, eris)
+
 
 def get_imds_ea(adc, eris=None):
 
@@ -936,8 +929,6 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         temp = np.ascontiguousarray(temp.transpose(1,2,0))
         diag[s2:f2] += -temp.reshape(-1)
 
-    #print (np.linalg.norm(diag[s2:f2]))
-
     return diag
 
 
@@ -1021,8 +1012,6 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
         diag[s2:f2] += temp.reshape(-1)
 
     diag = -diag
-
-    #print (np.linalg.norm(diag[s2:f2]))
 
     return diag
 
@@ -1654,6 +1643,7 @@ class RADCEA(RADC):
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
         self.method = adc.method
+        self.method_type = adc.method_type
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
@@ -1745,6 +1735,7 @@ class RADCIP(RADC):
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
         self.method = adc.method
+        self.method_type = adc.method_type
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
