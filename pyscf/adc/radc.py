@@ -1796,7 +1796,7 @@ if __name__ == '__main__':
     mf.kernel()
 
     myadc = adc.ADC(mf)
-    ecorr, t_amp1, t_amp2 = myadc.kernel()
+    ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr -  -0.3220169236051954)
 
     myadcip = RADCIP(myadc)
@@ -1825,7 +1825,7 @@ if __name__ == '__main__':
 
     myadc = adc.ADC(mf)
     myadc.method = "adc(3)"
-    ecorr, t_amp1, t_amp2 = myadc.kernel()
+    ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr - -0.31694173142858517)
 
     myadcip = RADCIP(myadc)
@@ -1854,16 +1854,15 @@ if __name__ == '__main__':
     print (p[2] - 1.9638550014980212)
 
     myadc.method = "adc(2)-x"
-    myadc.kernel()
-
-    e,v,p = myadc.ip_adc(nroots=4)
+    e,v,p = myadc.kernel(nroots=4)
     print("ADC(2)-x IP energies")
     print (e[0] - 0.5405255360673724)
     print (e[1] - 0.6208026698756577)
     print (e[2] - 0.6208026698756582)
     print (e[3] - 0.6465332771967947)
 
-    e,v,p = myadc.ea_adc(nroots=4)
+    myadc.method_type = "ea"
+    e,v,p = myadc.kernel(nroots=4)
     print("ADC(2)-x EA energies")
     print (e[0] - 0.0953065329985665)
     print (e[1] - 0.1238833070823509)
