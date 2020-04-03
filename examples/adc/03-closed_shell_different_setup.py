@@ -19,7 +19,7 @@ mf.conv_tol = 1e-12
 mf.kernel()
 
 myadc = adc.ADC(mf)
-myadc.kernel()
+myadc.kernel_gs()
 
 #IP-ADC(2)
 myadc.verbose = 4

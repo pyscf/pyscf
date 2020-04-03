@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-IP/EA-UADC calculations for closed-shell N2 for 1 root
+IP/EA-RADC calculations for N2 
 '''
 
 from pyscf import gto, scf, adc
@@ -19,21 +19,18 @@ mf.conv_tol = 1e-12
 mf.kernel()
 
 myadc = adc.ADC(mf)
-myadc.kernel_gs()
 
 #IP/EA-ADC(2) for 1 root
 myadc.verbose = 4
+myadc.kernel_gs()
 eip,vip,pip = myadc.ip_adc()
 eea,vea,pea = myadc.ea_adc()
 
-#IP/EA-ADC(2)-x for 1 root
+#IP for 3 roots
 myadc.method = "adc(2)-x"
-myadc.kernel()
-eip,vip,pip = myadc.ip_adc()
-eea,vea,pea = myadc.ea_adc()
+eip,vip,pip = myadc.kernel(nroots = 3)
 
-#IP/EA-ADC(3) for 1 root
+#EA-ADC(3) for 4 roots
 myadc.method = "adc(3)"
-myadc.kernel()
-eip,vip,pip = myadc.ip_adc()
-eea,vea,pea = myadc.ea_adc()
+myadc.method_type = "ea"
+eea,vea,pea = myadc.kernel(nroots = 4)

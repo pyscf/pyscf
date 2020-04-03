@@ -23,21 +23,17 @@ mf.conv_tol = 1e-12
 mf.kernel()
 
 myadc = adc.ADC(mf)
-myadc.kernel_gs()
+myadc.kernel()
 
-#IP/EA-ADC(2)
+#IP/ADC(2)
 myadc.verbose = 4
-eip,vip,pip = myadc.ip_adc(nroots=4)
-eea,vea,pea = myadc.ea_adc(nroots=4)
+eip,vip,pip = myadc.kernel(nroots=4)
 
 #IP/EA-ADC(2)-x
 myadc.method = "adc(2)-x"
-myadc.kernel()
-eip,vip,pip = myadc.ip_adc(nroots=4)
-eea,vea,pea = myadc.ea_adc(nroots=4)
+eip,vip,pip = myadc.kernel(nroots=4)
 
-#IP/EA-ADC(3)
+#EA-ADC(3)
 myadc.method = "adc(3)"
-myadc.kernel()
-eip,vip,pip = myadc.ip_adc(nroots=4)
-eea,vea,pea = myadc.ea_adc(nroots=4)
+myadc.method_type = "ea"
+eea,vea,pea = myadc.kernel(nroots=4)
