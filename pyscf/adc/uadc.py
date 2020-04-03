@@ -677,14 +677,15 @@ class UADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
-        if(self.method_type == "ip"):
-            self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+        elif(self.method_type == "ip"):
+            e_exc, v_exc, spec_fac = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif self.method_type not in ("ip", "ea"):
+        else:
             raise NotImplementedError(self.method_type)
 
+        return e_exc, v_exc, spec_fac
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -2955,7 +2956,7 @@ def get_trans_moments(adc):
     
     return (T_a, T_b)
 
-
+       
 def get_spec_factors(adc, T, U, nroots=1):
 
     T_a = T[0]

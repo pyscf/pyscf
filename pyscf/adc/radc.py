@@ -468,14 +468,15 @@ class RADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
-        if(self.method_type == "ip"):
-            self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+        elif(self.method_type == "ip"):
+            e_exc, v_exc, spec_fac = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif self.method_type not in ("ip", "ea"):
+        else:
             raise NotImplementedError(self.method_type)
 
+        return e_exc, v_exc, spec_fac
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -483,11 +484,9 @@ class RADC(lib.StreamObject):
                     self.e_corr, self.e_tot)
         return self
     
-
     def ea_adc(self, nroots=1, guess=None, eris=None):
         return RADCEA(self).kernel(nroots, guess, eris)
     
-
     def ip_adc(self, nroots=1, guess=None, eris=None):
         return RADCIP(self).kernel(nroots, guess, eris)
 
