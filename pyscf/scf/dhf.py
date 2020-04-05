@@ -108,6 +108,40 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
             vk[...,n2c:,n2c:] += k1
 
     return vj, vk
+
+def get_jk_sf_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
+                   opt_llll=None, opt_ssll=None, opt_ssss=None, omega=None, verbose=None):
+    log = logger.new_logger(mol, verbose)
+    with mol.with_range_coulomb(omega):
+        if coulomb_allow.upper() == 'LLLL':
+            log.debug('Coulomb integral: (LL|LL)')
+            j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
+            n2c = j1.shape[1]
+            vj = numpy.zeros_like(dm)
+            vk = numpy.zeros_like(dm)
+            vj[...,:n2c,:n2c] = j1
+            vk[...,:n2c,:n2c] = k1
+        elif coulomb_allow.upper() == 'SSLL' \
+          or coulomb_allow.upper() == 'LLSS':
+            log.debug('Coulomb integral: (LL|LL) + (SS|LL)')
+            vj, vk = _call_veff_sf_ssll(mol, dm, hermi, opt_ssll)
+            j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
+            n2c = j1.shape[1]
+            vj[...,:n2c,:n2c] += j1
+            vk[...,:n2c,:n2c] += k1
+        else: # coulomb_allow == 'SSSS'
+            log.debug('Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
+            vj, vk = _call_veff_sf_ssll(mol, dm, hermi, opt_ssll)
+            j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
+            n2c = j1.shape[1]
+            vj[...,:n2c,:n2c] += j1
+            vk[...,:n2c,:n2c] += k1
+            j1, k1 = _call_veff_sf_ssss(mol, dm, hermi, opt_ssss)
+            vj[...,n2c:,n2c:] += j1
+            vk[...,n2c:,n2c:] += k1
+
+    return vj, vk
+    
 get_jk = get_jk_coulomb
 
 
@@ -371,6 +405,9 @@ class UHF(hf.SCF):
     with_ssss = getattr(__config__, 'scf_dhf_SCF_with_ssss', True)
     with_gaunt = getattr(__config__, 'scf_dhf_SCF_with_gaunt', False)
     with_breit = getattr(__config__, 'scf_dhf_SCF_with_breit', False)
+    nopen = getattr(__config__, 'scf_dhf_SCF_nopen', 0)
+    nact = getattr(__config__, 'scf_dhf_SCF_nopen', 0)
+    nopen = getattr(__config__, 'scf_dhf_SCF_nopen', 0)
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
@@ -426,20 +463,31 @@ class UHF(hf.SCF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
+        nopen = self.nopen
+        nact = self.nact
+        nclose = mol.nelectron - nact
         c = lib.param.LIGHT_SPEED
         n4c = len(mo_energy)
         n2c = n4c // 2
         mo_occ = numpy.zeros(n2c * 2)
         if mo_energy[n2c] > -1.999 * c**2:
-            mo_occ[n2c:n2c+mol.nelectron] = 1
+            if nopen is 0:
+                mo_occ[n2c:n2c+mol.nelectron] = 1
+            else:
+                mo_occ[n2c:n2c+nclose] = 1
+                mo_occ[n2c+nclose:n2c+nclose+nopen] = 1.*nact/nopen
         else:
             lumo = mo_energy[mo_energy > -1.999 * c**2][mol.nelectron]
             mo_occ[mo_energy > -1.999 * c**2] = 1
             mo_occ[mo_energy >= lumo] = 0
         if self.verbose >= logger.INFO:
+            if nopen is 0:
+                homo_ndx = mol.nelectron
+            else:
+                homo_ndx = nclose + nopen
             logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
-                        n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1],
-                        n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
+                            n2c+homo_ndx, mo_energy[n2c+homo_ndx-1],
+                            n2c+homo_ndx+1, mo_energy[n2c+homo_ndx])
             logger.debug1(self, 'NES  mo_energy = %s', mo_energy[:n2c])
             logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ
@@ -669,6 +717,36 @@ def _call_veff_ssll(mol, dm, hermi=1, mf_opt=None):
         vk = vk.reshape(vk.shape[1:])
     return _jk_triu_(vj, vk, hermi)
 
+def _call_veff_sf_ssll(mol, dm, hermi=1, mf_opt=None):
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        n_dm = 1
+        n2c = dm.shape[0] // 2
+        dmll = dm[:n2c,:n2c].copy()
+        dmsl = dm[n2c:,:n2c].copy()
+        dmss = dm[n2c:,n2c:].copy()
+        dms = (dmll, dmss, dmsl)
+    else:
+        n_dm = len(dm)
+        n2c = dm[0].shape[0] // 2
+        dms = [dmi[:n2c,:n2c].copy() for dmi in dm] \
+            + [dmi[n2c:,n2c:].copy() for dmi in dm] \
+            + [dmi[n2c:,:n2c].copy() for dmi in dm]
+    jks = ('lk->s2ij',) * n_dm \
+        + ('ji->s2kl',) * n_dm \
+        + ('jk->s1il',) * n_dm
+    c1 = .5 / lib.param.LIGHT_SPEED
+    vx = _vhf.rdirect_bindm('int2e_pp1_spinor', 's4', jks, dms, 1,
+                            mol._atm, mol._bas, mol._env, mf_opt) * c1**2
+    vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
+    vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex)
+    vj[:,n2c:,n2c:] = vx[      :n_dm  ,:,:]
+    vj[:,:n2c,:n2c] = vx[n_dm  :n_dm*2,:,:]
+    vk[:,n2c:,:n2c] = vx[n_dm*2:      ,:,:]
+    if n_dm == 1:
+        vj = vj.reshape(vj.shape[1:])
+        vk = vk.reshape(vk.shape[1:])
+    return _jk_triu_(vj, vk, hermi)
+
 def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
     c1 = .5 / lib.param.LIGHT_SPEED
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -680,6 +758,21 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
         for dmi in dm:
             dms.append(dmi[n2c:,n2c:].copy())
     vj, vk = _vhf.rdirect_mapdm('int2e_spsp1spsp2_spinor', 's8',
+                                ('ji->s2kl', 'jk->s1il'), dms, 1,
+                                mol._atm, mol._bas, mol._env, mf_opt) * c1**4
+    return _jk_triu_(vj, vk, hermi)
+
+def _call_veff_sf_ssss(mol, dm, hermi=1, mf_opt=None):
+    c1 = .5 / lib.param.LIGHT_SPEED
+    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+        n2c = dm.shape[0] // 2
+        dms = dm[n2c:,n2c:].copy()
+    else:
+        n2c = dm[0].shape[0] // 2
+        dms = []
+        for dmi in dm:
+            dms.append(dmi[n2c:,n2c:].copy())
+    vj, vk = _vhf.rdirect_mapdm('int2e_pp1pp2_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dms, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt) * c1**4
     return _jk_triu_(vj, vk, hermi)

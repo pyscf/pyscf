@@ -12,7 +12,7 @@ from pyscf.x2c import x2c
 from pyscf.lib import logger
 
 alpha = 1./LIGHT_SPEED
-
+c = LIGHT_SPEED
 def get_socamf(atoms, basis):
     hso1e_atoms = {}
     factor = -alpha**2 * 0.25
@@ -42,36 +42,30 @@ def get_socamf(atoms, basis):
             nopen = 1
             nact = 1
         from pyscf import scf
-        mf_atom = scf.sfx2c1e(scf.AOCHF(mol_atom, nopen=nopen, nact=nact))
-        xatm, contr_coeff = x2c.X2C(mol_atom).get_xmol()
-        np, nc = contr_coeff.shape
+        mf_atom = scf.DHF(mol_atom)
+        mf_atom.nopen = nopen*2
+        mf_atom.nact = nact
         mf_atom.kernel()
-        h1e, x, rp = get_hxr(mf_atom, uncontract=True)
         dm = mf_atom.make_rdm1()
-        dm = dm[0]+dm[1]
-        dm = reduce(numpy.dot, (contr_coeff, dm, contr_coeff.T))
-        pLL, pLS, pSS = get_p(dm/2, x, rp)
-        h1ao_uncontract = numpy.zeros((3, np, np),dtype=complex)
-        h1ao = numpy.zeros((3, nc, nc),dtype=complex)
-        h1ao_uncontract += factor*get_fso2e_x2c(xatm, x, rp, pLL, pLS, pSS)
-        for ic in range(3):
-             h1ao[ic] = reduce(numpy.dot, (contr_coeff.T, h1ao_uncontract[ic], contr_coeff))
-        hso1e = numpy.zeros((nc*2, nc*2),dtype=complex)
-        #hso1e[1::2,0::2]+=h1ao[0,:,:]
-        #hso1e[0::2,1::2]+=h1ao[0,:,:]
-        #hso1e[1::2,0::2]+= 1.j*h1ao[1,:,:]
-        #hso1e[0::2,1::2]+=-1.j*h1ao[1,:,:]
-        #hso1e[0::2,0::2]+=h1ao[2,:,:]
-        #hso1e[1::2,1::2]-=h1ao[2,:,:]
-        for i in range(nc):
-            for j in range(nc):
-                hso1e[2*i  ,2*j+1]+=1.j*h1ao[0,i,j]
-                hso1e[2*i+1,2*j  ]+=1.j*h1ao[0,i,j]
-                hso1e[2*i  ,2*j+1]+= 1.*h1ao[1,i,j]
-                hso1e[2*i+1,2*j  ]+=-1.*h1ao[1,i,j]
-                hso1e[2*i  ,2*j  ]+= 1.j*h1ao[2,i,j]
-                hso1e[2*i+1,2*j+1]+=-1.j*h1ao[2,i,j]
-        hso1e_atoms[atom]=1.*hso1e
+        from pyscf.scf import dhf
+        x2c_obj = x2c.X2C(mol_atom)
+        x2c_obj.xuncontract = False
+        x = x2c_obj.get_xmat()
+        s = mol_atom.intor_symmetric('int1e_ovlp_spinor')
+        t = mol_atom.intor_symmetric('int1e_spsp_spinor')*.5
+        s1 = s + reduce(numpy.dot, (x.T.conj(), t, x)) * (.5/c**2)
+        r = x2c._get_r(s, s1)
+        vj, vk = dhf.get_jk_coulomb(mol_atom, dm, 1, mf_atom._coulomb_now)
+        vj_sf, vk_sf = dhf.get_jk_sf_coulomb(mol_atom, dm, 1, mf_atom._coulomb_now)
+
+        veff_sd = (vj-vk)-(vj_sf-vk_sf)
+        n2c=mol_atom.nao_2c()
+        g_ll = veff_sd[:n2c, :n2c]
+        g_ls = veff_sd[:n2c, n2c:]
+        g_sl = veff_sd[n2c:, :n2c]
+        g_ss = veff_sd[n2c:, n2c:]
+        g_so_mf = reduce(numpy.dot,(r.T.conj(), (g_ll+reduce(numpy.dot, (g_ls, x))+reduce(numpy.dot, (x.T.conj(), g_sl))+reduce(numpy.dot, (x.T.conj(), g_ss, x))),r))
+        hso1e_atoms[atom]=g_so_mf
     return hso1e_atoms
 
 def print1Int(h1, name):

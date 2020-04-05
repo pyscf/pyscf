@@ -33,10 +33,10 @@ def get_occ(mf, mo_energy=None, mo_coeff=None, nclose=None, nact=None, nopen=Non
             Number of active orbitals
     '''
     if mo_energy is None: mo_energy = mf.mo_energy
-    if nclose is None : nclose = mf.nclose
     if nact is None : nact = mf.nact
-    if nopen is None : nopen = mf.nopen
+    if nopen is None : nopen = mf.nopen // 2
 
+    nclose = (mf.mol.nelectron - nact) // 2
     if mo_energy is None: mo_energy = mf.mo_energy
     e_idx_a = numpy.argsort(mo_energy[0])
     e_idx_b = numpy.argsort(mo_energy[1])
@@ -100,12 +100,9 @@ class AOCHF(uhf.UHF):
     nclose = getattr(__config__, 'nclose', 0)
     nact = getattr(__config__, 'nact', 0)
     nopen = getattr(__config__, 'nopen', 0)
-    def __init__(self, mol, nact=None, nopen=None):
+
+    def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        if nact is not None : self.nact=nact
-        if nopen is not None : self.nopen=nopen
-        self.nclose=(mol.nelectron-self.nact)//2
-        print(self.nact, self.nopen, self.nclose)
         self.nelec=None
     
     get_occ = get_occ

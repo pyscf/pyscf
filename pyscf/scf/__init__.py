@@ -186,13 +186,13 @@ def DHF(mol, *args):
         return dhf.UHF(mol, *args)
 
 
-def X2C(mol, nopen=None, nact=None, *kwargs):
+def X2C(mol, *kwargs):
     '''X2C UHF (in testing)'''
     from pyscf.x2c import x2c
-    return x2c.UHF(mol, nopen=nopen, nact=nact, *kwargs)
+    return x2c.UHF(mol, *kwargs)
 
-def AOCHF(mol, nopen=None, nact=None):
-    return aochf.AOCHF(mol, nopen=nopen, nact=nact)
+def AOCHF(mol, *kwargs):
+    return aochf.AOCHF(mol, *kwargs)
 
 def sfx2c1e(mf):
     return mf.sfx2c1e()

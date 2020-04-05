@@ -98,29 +98,21 @@ class X2C(lib.StreamObject):
                     label = spinor_labels[iorb]
                     if 'S' in label[2].upper():
                         fudge_factor[iorb] = 0./Z_ia
-                        #print('s', label)
                     elif 'P' in label[2].upper():
                         #if 2 < Z_ia:
                         fudge_factor[iorb] = 2./Z_ia
-                        #print('p', label)
                     elif 'D' in label[2].upper():
                         #if 10 < Z_ia:
                         fudge_factor[iorb] = 10./Z_ia
-                        #print('d', label)
                     elif 'F' in label[2].upper():
                         #if 28 < Z_ia:
                         fudge_factor[iorb] = 28./Z_ia
-                        #print('f', label)
                     elif 'G' in label[2].upper():
                         #if 60 < Z_ia:
                         fudge_factor[iorb] = 60./Z_ia
-                        #print('g', label)
                     elif 'H' in label[2].upper:
                         #if 110 < Z_ia:
-                        #print('h', label)
                         fudge_factor[iorb] = 110./Z_ia
-            #fudge_factor = numpy.sqrt(fudge_factor)
-            #print(fudge_factor)
             for iorb in range(xmol.nao_2c()):
                 for jorb in range(xmol.nao_2c()):
                     w[iorb, jorb]*=(1.-numpy.sqrt(fudge_factor[iorb]*fudge_factor[jorb]))
@@ -155,7 +147,7 @@ class X2C(lib.StreamObject):
             contr_coeff[1::2,1::2] = contr_coeff_nr
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
         hso1e = numpy.zeros((nc*2, nc*2), dtype=complex)
-        if 'SOCAMF' in self.approx.upper():
+        if 'AMF' in self.approx.upper():
             # incorporate X2CAMF approximation.
             # since 1e SOC terms are already included.
             hso1e_atoms = socutils.get_socamf(list(set(xmol.elements)), xmol.basis)
@@ -258,17 +250,17 @@ def get_init_guess(mol, key='minao'):
 
 
 class X2C_UHF(hf.SCF):
-    def __init__(self, mol, nact=None, nopen=None):
+    nopen = getattr(__config__, 'scf_dhf_SCF_nopen', 0)
+    nact = getattr(__config__, 'scf_dhf_SCF_nact', 0)
+    nclose = getattr(__config__, 'scf_dhf_SCF_nclose', 0)
+    h1_somf = getattr(__config__, 'scf_dhf_SCF_h1_somf', None)  
+
+    def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.with_x2c = X2C(mol)
         #self.with_x2c.xuncontract = False
         self._keys = self._keys.union(['with_x2c'])
-        if nact is not None : self.nact=nact
-        else : self.nact=0
-        if nopen is not None : self.nopen=nopen
-        else : self.nopen=0
-        self.nclose=(mol.nelectron-self.nact)//2
-    
+         
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -302,26 +294,27 @@ class X2C_UHF(hf.SCF):
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         return self.with_x2c.get_hcore(mol)
+        
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
         return mol.intor_symmetric('int1e_ovlp_spinor')
 
-    def get_occ(self, mo_energy=None, mo_coeff=None, nclose=None, nact=None, nopen=None):
+    def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
-        if nclose is None : nclose = self.nclose
-        if nact is None : nact = self.nact
-        if nopen is None : nopen = self.nopen
+        nact = self.nact
+        nopen = self.nopen
         mol = self.mol
-        assert(mol.nelectron==nclose*2+nact)
+        nclose = mol.nelectron-nact
+        assert(mol.nelectron==nclose+nact)
         mo_occ = numpy.zeros_like(mo_energy)
         if nopen is 0:
             mo_occ[:mol.nelectron] = 1
         else:
-            mo_occ[:2*nclose]=1
-            average_occ=nact/(nopen*2.)
-            mo_occ[2*nclose:2*(nclose+nopen)]=average_occ
-        if 2*(nopen+nclose) < len(mo_energy):
+            mo_occ[:nclose]=1
+            average_occ=nact/nopen
+            mo_occ[nclose:nclose+nopen]=average_occ
+        if nopen+nclose < len(mo_energy):
             logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g', \
                         mol.nelectron, mo_energy[mol.nelectron-1],
                         mo_energy[mol.nelectron])
@@ -538,6 +531,16 @@ def _x2c1e_xmatrix(t, v, w, s, c):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
+    e, a = scipy.linalg.eigh(h, m)
+    cl = a[:nao,nao:]
+    cs = a[nao:,nao:]
+    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    return x
+
+def _x2cmf_xmatrix(h, s, c):
+    nao = s.shape[0] // 2
+    n2 = nao * 2
+    m = s
     e, a = scipy.linalg.eigh(h, m)
     cl = a[:nao,nao:]
     cs = a[nao:,nao:]
