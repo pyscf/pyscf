@@ -21,17 +21,17 @@ mf.kernel()
 myadc = adc.ADC(mf)
 myadc.kernel_gs()
 
-#IP-ADC(2)
+#IP-RADC(2) for 3 roots
 myadc.verbose = 4
 myadcip = adc.radc.RADCIP(myadc)
 eip,vip,pip = myadcip.kernel(nroots=3)
 
-#EA-ADC(3)
+#EA-RADC(3) for 3 roots
 myadc.method = "adc(3)"
 myadc.kernel_gs()
 myadcea = adc.radc.RADCEA(myadc)
 eea,vea,pea = myadcea.kernel(nroots=3)
 
-#IP/EA-ADC(3) for 1 root
+#IP/EA-RADC(3) for 1 root
 eip,vip,pip = myadc.ip_adc()
 eea,vea,pea = myadc.ea_adc()

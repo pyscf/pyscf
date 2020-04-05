@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-IP/EA-ADC calculations for open-shell OH
+IP/EA-UADC calculations for open-shell OH
 '''
 
 from pyscf import gto, scf, adc
@@ -24,15 +24,16 @@ mf.kernel()
 
 myadc = adc.ADC(mf)
 
-#IP/ADC(2)
+#IP-UADC(2) for 4 roots
 myadc.verbose = 4
 eip,vip,pip = myadc.kernel(nroots=4)
 
-#IP/EA-ADC(2)-x
+#IP-UADC(2)-x for 4 roots
 myadc.method = "adc(2)-x"
+myadc.method_type = "ip"
 eip,vip,pip = myadc.kernel(nroots=4)
 
-#EA-ADC(3)
+#EA-UADC(3) for 4 roots
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
 eea,vea,pea = myadc.kernel(nroots=4)

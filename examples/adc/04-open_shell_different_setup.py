@@ -25,19 +25,19 @@ mf.kernel()
 myadc = adc.ADC(mf)
 myadc.kernel_gs()
 
-#IP/EA-ADC(2)
+#IP/EA-UADC(2) for 4 roots
 myadc.verbose = 4
 eip,vip,pip = myadc.ip_adc(nroots=4)
 eea,vea,pea = myadc.ea_adc(nroots=4)
 
-#IP/EA-ADC(2)-x
+#IP/EA-UADC(2)-x for 4 roots
 myadc.method = "adc(2)-x"
-myadc.kernel()
+myadc.kernel_gs()
 eip,vip,pip = myadc.ip_adc(nroots=4)
 eea,vea,pea = myadc.ea_adc(nroots=4)
 
-#IP/EA-ADC(3)
+#IP/EA-UADC(3) for 4 roots
 myadc.method = "adc(3)"
-myadc.kernel()
+myadc.kernel_gs()
 eip,vip,pip = myadc.ip_adc(nroots=4)
 eea,vea,pea = myadc.ea_adc(nroots=4)
