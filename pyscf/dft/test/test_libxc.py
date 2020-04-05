@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
         self.assertEqual(fn_facs, [(106, 1), (1, -0.5)])
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.25*B3LYP')
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP\n+0.25*B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
         hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
         self.assertAlmostEqual(hyb, .15, 12)
@@ -255,6 +255,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
         self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
         self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
+
+    def test_ityh(self):
+        rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('ityh,', rho, 0, deriv=1)
+        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+        self.assertEqual(dft.libxc.rsh_coeff('ityh,'), [0.2, 0.0, 0.0])
 
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))

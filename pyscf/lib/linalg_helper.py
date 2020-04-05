@@ -1250,6 +1250,9 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     return conv, e, x0
 
 
+# TODO: new solver with Arnoldi iteration
+# The current implementation fails in polarizability. see
+# https://github.com/pyscf/pyscf/issues/507
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
            lindep=DSOLVE_LINDEP, callback=None, hermi=False,
            max_memory=MAX_MEMORY, verbose=logger.WARN):

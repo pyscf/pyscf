@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,12 @@ from pyscf.scf import _vhf
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+    '''
+    Electronic part of RHF/RKS gradients
+
+    Args:
+        mf_grad : grad.rhf.Gradients or grad.rks.Gradients object
+    '''
     mf = mf_grad.base
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
@@ -68,6 +74,11 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     return de
 
 def _write(dev, mol, de, atmlst):
+    '''Format output of nuclear gradients.
+    
+    Args:
+        dev : lib.logger.Logger object
+    '''
     if atmlst is None:
         atmlst = range(mol.natm)
     dev.stdout.write('         x                y                z\n')
@@ -77,6 +88,9 @@ def _write(dev, mol, de, atmlst):
 
 
 def grad_nuc(mol, atmlst=None):
+    '''
+    Derivatives of nuclear repulsion energy wrt nuclear coordinates
+    '''
     gs = numpy.zeros((mol.natm,3))
     for j in range(mol.natm):
         q2 = mol.atom_charge(j)
@@ -242,6 +256,12 @@ def as_scanner(mf_grad):
             mf_scanner = self.base
             e_tot = mf_scanner(mol)
             self.mol = mol
+
+            # If second integration grids are created for RKS and UKS
+            # gradients
+            if getattr(self, 'grids', None):
+                self.grids.reset(mol)
+
             de = self.kernel(**kwargs)
             return e_tot, de
     return SCF_GradScanner(mf_grad)

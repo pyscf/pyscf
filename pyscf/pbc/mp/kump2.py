@@ -196,7 +196,11 @@ def get_nocc(mp, per_kpoint=False):
     if mp._nocc is not None:
         return mp._nocc
 
-    if isinstance(mp.frozen, (int, np.integer)):
+    elif mp.frozen is None:
+        nocc = [[np.count_nonzero(mp.mo_occ[0][k] > 0) for k in range(mp.nkpts)],
+                [np.count_nonzero(mp.mo_occ[1][k] > 0) for k in range(mp.nkpts)]]
+
+    elif isinstance(mp.frozen, (int, np.integer)):
         nocc = [0]*2
         for spin in [0,1]:
             nocc[spin] = [(np.count_nonzero(mp.mo_occ[spin][k] > 0) - mp.frozen) for k in range(mp.nkpts)]
@@ -277,6 +281,10 @@ def get_nmo(mp, per_kpoint=False):
         for spin in [0,1]:
             nmo[spin] = [len(mp.mo_occ[spin][k]) - mp.frozen for k in range(mp.nkpts)]
 
+    elif mp.frozen is None:
+        nmo = [[len(mp.mo_occ[0][k]) for k in range(mp.nkpts)],
+               [len(mp.mo_occ[1][k]) for k in range(mp.nkpts)]]
+
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
         assert(len(mp.frozen) == 2)
@@ -330,7 +338,11 @@ def get_frozen_mask(mp):
 
     '''
     moidx = [[np.ones(x.size, dtype=np.bool) for x in mp.mo_occ[s]] for s in [0,1]]
-    if isinstance(mp.frozen, (int, np.integer)):
+
+    if mp.frozen is None:
+        pass
+
+    elif isinstance(mp.frozen, (int, np.integer)):
         for spin in [0,1]:
             for idx in moidx[spin]:
                 idx[:mp.frozen] = False

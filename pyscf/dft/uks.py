@@ -126,12 +126,12 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     return rks.energy_elec(ks, dm, h1e, vhf)
 
 
-class UKS(uhf.UHF, rks.KohnShamDFT):
+class UKS(rks.KohnShamDFT, uhf.UHF):
     '''Unrestricted Kohn-Sham
     See pyscf/dft/rks.py RKS class for document of the attributes'''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         uhf.UHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         uhf.UHF.dump_flags(self, verbose)

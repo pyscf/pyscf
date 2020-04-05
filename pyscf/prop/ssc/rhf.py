@@ -34,9 +34,9 @@ from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
 from pyscf.scf import cphf
+from pyscf.scf import _response_functions
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
-from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 
@@ -161,7 +161,7 @@ def solve_mo1_fc(sscobj, h1):
     nvir = orbv.shape[1]
     nmo = nocc + nvir
 
-    vresp = _gen_rhf_response(sscobj._scf, singlet=False, hermi=1)
+    vresp = sscobj._scf.gen_response(singlet=False, hermi=1)
     mo_v_o = numpy.asarray(numpy.hstack((orbv,orbo)), order='F')
     def vind(mo1):
         dm1 = _dm1_mo2ao(mo1.reshape(nset,nvir,nocc), orbv, orbo*2)  # *2 for double occupancy
@@ -297,7 +297,7 @@ def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential associated with h1_PSO'''
-    vresp = _gen_rhf_response(mf, singlet=True, hermi=2)
+    vresp = mf.gen_response(singlet=True, hermi=2)
     occidx = mo_occ > 0
     orbo = mo_coeff[:, occidx]
     orbv = mo_coeff[:,~occidx]

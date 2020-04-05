@@ -55,7 +55,8 @@ ORIGIN = getattr(__config__, 'cubegen_box_origin', None)
 EXTENT = getattr(__config__, 'cubegen_box_extent', None)
 
 
-def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
+def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
+            margin=BOX_MARGIN):
     """Calculates electron density and write out in cube format.
 
     Args:
@@ -82,8 +83,12 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             of nx/ny/nz will be determined by the resolution and the cube box
             size.
     """
+    from pyscf.pbc.gto import Cell
+    cc = Cube(mol, nx, ny, nz, resolution, margin)
 
-    cc = Cube(mol, nx, ny, nz, resolution)
+    GTOval = 'GTOval'
+    if isinstance(mol, Cell):
+        GTOval = 'PBC' + GTOval
 
     # Compute density on the .cube grid
     coords = cc.get_coords()
@@ -91,7 +96,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     blksize = min(8000, ngrids)
     rho = numpy.empty(ngrids)
     for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        ao = numint.eval_ao(mol, coords[ip0:ip1])
+        ao = mol.eval_gto(GTOval, coords[ip0:ip1])
         rho[ip0:ip1] = numint.eval_rho(mol, ao, dm)
     rho = rho.reshape(cc.nx,cc.ny,cc.nz)
 
@@ -100,7 +105,8 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     return rho
 
 
-def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
+def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION,
+            margin=BOX_MARGIN):
     """Calculate orbital value on real space grid and write out in cube format.
 
     Args:
@@ -127,7 +133,12 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             of nx/ny/nz will be determined by the resolution and the cube box
             size.
     """
-    cc = Cube(mol, nx, ny, nz, resolution)
+    from pyscf.pbc.gto import Cell
+    cc = Cube(mol, nx, ny, nz, resolution, margin)
+
+    GTOval = 'GTOval'
+    if isinstance(mol, Cell):
+        GTOval = 'PBC' + GTOval
 
     # Compute density on the .cube grid
     coords = cc.get_coords()
@@ -135,7 +146,7 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     blksize = min(8000, ngrids)
     orb_on_grid = numpy.empty(ngrids)
     for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        ao = numint.eval_ao(mol, coords[ip0:ip1])
+        ao = mol.eval_gto(GTOval, coords[ip0:ip1])
         orb_on_grid[ip0:ip1] = numpy.dot(ao, coeff)
     orb_on_grid = orb_on_grid.reshape(cc.nx,cc.ny,cc.nz)
 
@@ -144,7 +155,8 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     return orb_on_grid
 
 
-def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
+def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
+        margin=BOX_MARGIN):
     """Calculates the molecular electrostatic potential (MEP) and write out in
     cube format.
 
@@ -172,7 +184,7 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
             of nx/ny/nz will be determined by the resolution and the cube box
             size.
     """
-    cc = Cube(mol, nx, ny, nz, resolution)
+    cc = Cube(mol, nx, ny, nz, resolution, margin)
 
     coords = cc.get_coords()
 
@@ -203,28 +215,45 @@ class Cube(object):
     '''  Read-write of the Gaussian CUBE files  '''
     def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
                  margin=BOX_MARGIN, origin=ORIGIN, extent=EXTENT):
+        from pyscf.pbc.gto import Cell
         self.mol = mol
         coord = mol.atom_coords()
-        if extent is None:
-            box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
-            self.box = numpy.diag(box)
+
+        # If the molecule is periodic, use lattice vectors as the box
+        # and ignore magin, origin, and extent arguments
+        if isinstance(mol, Cell):
+            self.box = mol.lattice_vectors()
+            box = numpy.diag(self.box)
+            self.boxorig = (numpy.max(coord, axis=0) + numpy.min(coord, axis=0))/2 - box/2
         else:
-            self.box = numpy.diag(extent)
-        if origin is None:
-            self.boxorig = numpy.min(coord,axis=0) - margin
-        else:
-            self.boxorig = numpy.array(origin)
+            if extent is None:
+                box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+                self.box = numpy.diag(box)
+            else:
+                self.box = numpy.diag(extent)
+            if origin is None:
+                self.boxorig = numpy.min(coord,axis=0) - margin
+            else:
+                self.boxorig = numpy.array(origin)
+
         if resolution is not None:
             nx, ny, nz = numpy.ceil(numpy.diag(self.box) / resolution).astype(int)
 
         self.nx = nx
         self.ny = ny
         self.nz = nz
-        # .../(nx-1) to get symmetric mesh
-        # see also the discussion https://github.com/sunqm/pyscf/issues/154
-        self.xs = numpy.arange(nx) * (numpy.diag(self.box)[0] / (nx - 1))
-        self.ys = numpy.arange(ny) * (numpy.diag(self.box)[1] / (ny - 1))
-        self.zs = numpy.arange(nz) * (numpy.diag(self.box)[2] / (nz - 1))
+
+        # Use an asymmetric mesh for tiling unit cells
+        if isinstance(mol, Cell):
+            self.xs = numpy.arange(nx) * box[0] / nx
+            self.ys = numpy.arange(ny) * box[1] / ny
+            self.zs = numpy.arange(nz) * box[2] / nz
+        else:
+            # .../(nx-1) to get symmetric mesh
+            # see also the discussion https://github.com/sunqm/pyscf/issues/154
+            self.xs = numpy.arange(nx) * (numpy.diag(self.box)[0] / (nx - 1))
+            self.ys = numpy.arange(ny) * (numpy.diag(self.box)[1] / (ny - 1))
+            self.zs = numpy.arange(nz) * (numpy.diag(self.box)[2] / (nz - 1))
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored

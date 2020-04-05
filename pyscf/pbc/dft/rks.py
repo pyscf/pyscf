@@ -34,7 +34,7 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
-from pyscf.dft.rks import define_xc_
+from pyscf.dft import rks as mol_ks
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
@@ -155,8 +155,8 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rho
 
 
-def _dft_common_init_(mf):
-    mf.xc = 'LDA,VWN'
+def _dft_common_init_(mf, xc='LDA,VWN'):
+    mf.xc = xc
     mf.grids = gen_grid.UniformGrids(mf.cell)
     # Use rho to filter grids
     mf.small_rho_cutoff = getattr(__config__,
@@ -170,15 +170,8 @@ def _dft_common_init_(mf):
         mf._numint = numint.NumInt()
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
-class KohnShamDFT(object):
+class KohnShamDFT(mol_ks.KohnShamDFT):
     __init__ = _dft_common_init_
-
-    @property
-    def omega(self):
-        return self._numint.omega
-    @omega.setter
-    def omega(self, v):
-        self._numint.omega = float(v)
 
     def dump_flags(self, verbose=None):
         logger.info(self, 'XC functionals = %s', self.xc)
@@ -186,18 +179,21 @@ class KohnShamDFT(object):
         self.grids.dump_flags(verbose)
         return self
 
-    define_xc_ = define_xc_
+    def reset(self, mol=None):
+        pbchf.SCF.reset(self, mol)
+        self.grids.reset(mol)
+        return self
 
 
-class RKS(pbchf.RHF, KohnShamDFT):
+class RKS(KohnShamDFT, pbchf.RHF):
     '''RKS class adapted for PBCs.
 
     This is a literal duplication of the molecular RKS class with some `mol`
     variables replaced by `cell`.
     '''
-    def __init__(self, cell, kpt=numpy.zeros(3)):
+    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN'):
         pbchf.RHF.__init__(self, cell, kpt)
-        KohnShamDFT.__init__(self)
+        KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         pbchf.RHF.dump_flags(self, verbose)

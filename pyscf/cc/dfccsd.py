@@ -27,7 +27,7 @@ from pyscf import __config__
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 class RCCSD(ccsd.CCSD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         if getattr(mf, 'with_df', None):
             self.with_df = mf.with_df
@@ -35,6 +35,10 @@ class RCCSD(ccsd.CCSD):
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
         self._keys.update(['with_df'])
+
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return ccsd.CCSD.reset(self, mol)
 
     def ao2mo(self, mo_coeff=None):
         return _make_df_eris(self, mo_coeff)

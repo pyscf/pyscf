@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -640,7 +640,7 @@ class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.khf.KSCF))
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
@@ -840,7 +840,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
     #if not (cc.frozen is None or cc.frozen == 0):
-    #    raise NotImplementedError('cc.frozen = %s' % cc.frozen)
+    #    raise NotImplementedError('cc.frozen = %s' % str(cc.frozen))
 
     cput0 = (time.clock(), time.time())
     log = logger.new_logger(cc)
@@ -865,6 +865,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     fockb = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[1][k], mo))
              for k, mo in enumerate(mo_b)]
     eris.fock = (np.asarray(focka), np.asarray(fockb))
+    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     madelung = tools.madelung(cell, kpts)
     mo_ea = [focka[k].diagonal().real for k in range(nkpts)]

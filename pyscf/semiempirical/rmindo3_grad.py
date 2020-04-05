@@ -68,6 +68,7 @@ def grad_nuc(mol, atmlst=None):
 
     if atmlst is not None:
         gs = gs[atmlst]
+    gs *= lib.param.BOHR
     return gs
 
 def _get_gamma1(mol):
@@ -203,7 +204,7 @@ class Gradients(rhf_grad.Gradients):
         # should be passed to grad_elec.
         with lib.temporary_env(self, mol=self.base._mindo_mol):
             return rhf_grad.grad_elec(self, mo_energy, mo_coeff, mo_occ,
-                                      atmlst)
+                                      atmlst) * lib.param.BOHR
 
 Grad = Gradients
 
@@ -235,7 +236,7 @@ if __name__ == '__main__':
     g1 = mfs.nuc_grad_method().kernel()
     e1 = mfs(mol1)
     e2 = mfs(mol2)
-    print(abs((e1-e2)/0.0002 - g1[0,2]))
+    print(abs((e1-e2)/0.0002*lib.param.BOHR - g1[0,2]))
 
     dgamma = _get_gamma1(mol)
     gamma1 = mindo3._get_gamma(mol1)
@@ -248,7 +249,7 @@ if __name__ == '__main__':
     denuc = grad_nuc(mol)[0,2]
     enuc1 = mindo3.energy_nuc(mol1)
     enuc2 = mindo3.energy_nuc(mol2)
-    print(abs((enuc1 - enuc2)/0.0002 - denuc).max())
+    print(abs((enuc1 - enuc2)/0.0002*lib.param.BOHR - denuc).max())
 
     fcore = hcore_generator(mindo3.RMINDO3(mol).nuc_grad_method())
     dh = fcore(0)[2]

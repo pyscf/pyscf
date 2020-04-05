@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -353,7 +353,7 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
-def to_fcivec(cisdvec, norb, nelec, frozen=0):
+def to_fcivec(cisdvec, norb, nelec, frozen=None):
     '''Convert CISD coefficients to FCI coefficients'''
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -363,7 +363,9 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
 
     frozena_mask = numpy.zeros(norb, dtype=bool)
     frozenb_mask = numpy.zeros(norb, dtype=bool)
-    if isinstance(frozen, (int, numpy.integer)):
+    if frozen is None:
+        nfroza = nfrozb = 0
+    elif isinstance(frozen, (int, numpy.integer)):
         nfroza = nfrozb = frozen
         frozena_mask[:frozen] = True
         frozenb_mask[:frozen] = True
@@ -455,10 +457,11 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     fcivec1[:,parity_b] *= -1
     return fcivec1
 
-def from_fcivec(ci0, norb, nelec, frozen=0):
+def from_fcivec(ci0, norb, nelec, frozen=None):
     '''Extract CISD coefficients from FCI coefficients'''
-    if frozen is not 0:
+    if not (frozen is None or frozen == 0):
         raise NotImplementedError
+
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -617,7 +620,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
 
@@ -644,7 +647,8 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
-    return uccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return uccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
@@ -831,7 +835,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     dm1b[noccb:,noccb:] = dvvb
     dm1b[numpy.diag_indices(noccb)] += norm
 
-    if not (myci.frozen is 0 or myci.frozen is None):
+    if myci.frozen is not None:
         nmoa = myci.mo_occ[0].size
         nmob = myci.mo_occ[1].size
         nocca = numpy.count_nonzero(myci.mo_occ[0] > 0)

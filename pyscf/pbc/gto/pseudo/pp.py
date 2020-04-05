@@ -105,7 +105,7 @@ def get_projG(cell, kpt=np.zeros(3)):
     return get_gth_projG(cell, kpt+cell.Gv)
 
 def get_gth_projG(cell, Gvs):
-    '''G space projectors from the FT of the real-space projectors.
+    r'''G space projectors from the FT of the real-space projectors.
 
     \int e^{iGr} p_j^l(r) Y_{lm}^*(theta,phi)
     = i^l p_j^l(G) Y_{lm}^*(thetaG, phiG)

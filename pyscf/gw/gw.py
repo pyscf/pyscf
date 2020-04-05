@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
                            dft.roks.ROKS    , dft.uks.UKS,
                            dft.rks_symm.RKS , dft.uks_symm.UKS,
                            dft.rks_symm.ROKS, dft.uks_symm.UKS)))
-    assert(gw.frozen is 0 or gw.frozen is None)
+    assert(gw.frozen == 0 or gw.frozen is None)
 
     if eris is None:
         eris = gw.ao2mo(mo_coeff)
@@ -149,7 +149,7 @@ class GW(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    def __init__(self, mf, tdmf, frozen=0):
+    def __init__(self, mf, tdmf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self._tdscf = tdmf
@@ -157,9 +157,7 @@ class GW(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        #TODO: implement frozen orbs
-        #self.frozen = frozen
-        self.frozen = 0
+        self.frozen = frozen
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -180,7 +178,7 @@ class GW(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self
@@ -232,6 +230,13 @@ class GW(lib.StreamObject):
 
         logger.timer(self, 'GW', *cput0)
         return self.mo_energy
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        self._tdscf.reset(mol)
+        return self
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo

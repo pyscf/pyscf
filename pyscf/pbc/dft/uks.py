@@ -113,15 +113,15 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rks.get_rho(mf, dm[0]+dm[1], grids, kpt)
 
 
-class UKS(pbcuhf.UHF, rks.KohnShamDFT):
+class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     '''UKS class adapted for PBCs.
 
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
     '''
-    def __init__(self, cell, kpt=numpy.zeros(3)):
+    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN'):
         pbcuhf.UHF.__init__(self, cell, kpt)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         pbcuhf.UHF.dump_flags(self, verbose)

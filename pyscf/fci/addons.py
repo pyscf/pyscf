@@ -687,6 +687,27 @@ def fix_spin(fciobj, shift=.1, ss=None):
     return fix_spin_(copy.copy(fciobj), shift, ss)
 
 def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
+    '''
+    Transform CI coefficients (dimension conserved) to the representation in
+    new one-particle basis.  Solving CI problem for Hamiltonian h1, h2 defined
+    in old basis,
+    CI_old = fci.kernel(h1, h2, ...)
+    Given orbital rotation u, the CI problem can be either solved by
+    transforming the Hamiltonian, or transforming the coefficients.
+    CI_new = fci.kernel(u^T*h1*u, ...) = transform_ci_for_orbital_rotation(CI_old, u)
+
+    Args:
+        u : a squared 2D array or a list of 2D array
+            the orbital rotation to transform the old one-particle basis to new
+            one-particle basis
+    '''
+    if isinstance(u, numpy.ndarray) and u.ndim == 2:
+        assert u.shape == (norb, norb)
+    else:
+        assert u[0].shape == (norb, norb) and u[1].shape == (norb, norb)
+    return transform_ci(ci, nelec, u)
+
+def transform_ci(ci, nelec, u):
     '''Transform CI coefficients to the representation in new one-particle basis.
     Solving CI problem for Hamiltonian h1, h2 defined in old basis,
     CI_old = fci.kernel(h1, h2, ...)
@@ -697,59 +718,76 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     Args:
         u : 2D array or a list of 2D array
             the orbital rotation to transform the old one-particle basis to new
-            one-particle basis
+            one-particle basis. If u is not a squared matrix, the resultant CI
+            coefficients array may have different shape to the input CI
+            coefficients.
     '''
     neleca, nelecb = _unpack_nelec(nelec)
-    strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
-    strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
-    one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
-    na = len(strsa)
-    nb = len(strsb)
-    assert(ci.shape == (na, nb))
-
     if isinstance(u, numpy.ndarray) and u.ndim == 2:
         ua = ub = u
+        assert ua.shape == ub.shape
     else:
         ua, ub = u
+    norb_old, norb_new = ua.shape
+    na_old = cistring.num_strings(norb_old, neleca)
+    nb_old = cistring.num_strings(norb_old, nelecb)
+    na_new = cistring.num_strings(norb_new, neleca)
+    nb_new = cistring.num_strings(norb_new, nelecb)
+    ci = ci.reshape(na_old, nb_old)
+
+    one_particle_strs_old = numpy.asarray([1<<i for i in range(norb_old)])
+    one_particle_strs_new = numpy.asarray([1<<i for i in range(norb_new)])
 
     if neleca == 0:
-        trans_ci_a = numpy.ones((1,1))
+        trans_ci_a = numpy.ones((1, 1))
     else:
+        trans_ci_a = numpy.zeros((na_old, na_new))
+        strs_old = numpy.asarray(cistring.make_strings(range(norb_old), neleca))
+
         # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
-        occ_masks = (strsa[:,None] & one_particle_strs) != 0
-        trans_ci_a = numpy.zeros((na,na))
-        #for i in range(na): # for old basis
-        #    for j in range(na):
-        #        uij = u[occ_masks[i]][:,occ_masks[j]]
+        occ_masks_old = (strs_old[:,None] & one_particle_strs_old) != 0
+        if norb_old == norb_new:
+            occ_masks_new = occ_masks_old
+        else:
+            strs_new = numpy.asarray(cistring.make_strings(range(norb_new), neleca))
+            occ_masks_new = (strs_new[:,None] & one_particle_strs_new) != 0
+
+        # Perform
+        #for i in range(na_old): # old basis
+        #    for j in range(na_new): # new basis
+        #        uij = u[occ_masks_old[i]][:,occ_masks_new[j]]
         #        trans_ci_a[i,j] = numpy.linalg.det(uij)
-        occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(na,neleca)
-        for i in range(na):
-            ui = ua[occ_masks[i]].T.copy()
+        occ_idx_all_strs = numpy.where(occ_masks_new)[1].reshape(na_new,neleca)
+        for i in range(na_old):
+            ui = ua[occ_masks_old[i]].T.copy()
             minors = ui[occ_idx_all_strs]
             trans_ci_a[i,:] = numpy.linalg.det(minors)
 
     if neleca == nelecb and numpy.allclose(ua, ub):
         trans_ci_b = trans_ci_a
+    elif nelecb == 0:
+        trans_ci_b = numpy.ones((1, 1))
     else:
-        if nelecb == 0:
-            trans_ci_b = numpy.ones((1,1))
+        trans_ci_b = numpy.zeros((nb_old, nb_new))
+        strs_old = numpy.asarray(cistring.make_strings(range(norb_old), nelecb))
+
+        occ_masks_old = (strs_old[:,None] & one_particle_strs_old) != 0
+        if norb_old == norb_new:
+            occ_masks_new = occ_masks_old
         else:
-            occ_masks = (strsb[:,None] & one_particle_strs) != 0
-            trans_ci_b = numpy.zeros((nb,nb))
-            #for i in range(nb):
-            #    for j in range(nb):
-            #        uij = u[occ_masks[i]][:,occ_masks[j]]
-            #        trans_ci_b[i,j] = numpy.linalg.det(uij)
-            occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(nb,nelecb)
-            for i in range(nb):
-                ui = ub[occ_masks[i]].T.copy()
-                minors = ui[occ_idx_all_strs]
-                trans_ci_b[i,:] = numpy.linalg.det(minors)
+            strs_new = numpy.asarray(cistring.make_strings(range(norb_new), nelecb))
+            occ_masks_new = (strs_new[:,None] & one_particle_strs_new) != 0
+
+        occ_idx_all_strs = numpy.where(occ_masks_new)[1].reshape(nb_new,nelecb)
+        for i in range(nb_old):
+            ui = ub[occ_masks_old[i]].T.copy()
+            minors = ui[occ_idx_all_strs]
+            trans_ci_b[i,:] = numpy.linalg.det(minors)
 
     # Transform old basis to new basis for all alpha-electron excitations
-    ci = lib.dot(trans_ci_a.T, ci.reshape(na,nb))
+    ci = lib.dot(trans_ci_a.T, ci)
     # Transform old basis to new basis for all beta-electron excitations
-    ci = lib.dot(ci.reshape(na,nb), trans_ci_b)
+    ci = lib.dot(ci, trans_ci_b)
     return ci
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,7 +69,9 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     mo_energy = mycc._scf.mo_energy
     nao, nmo = mo_coeff.shape
     nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    with_frozen = not ((mycc.frozen is None)
+                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
+                       or (len(mycc.frozen) == 0))
     OA, VA, OF, VF = _index_frozen_active(mycc.get_frozen_mask(), mycc.mo_occ)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
@@ -223,36 +225,48 @@ def as_scanner(grad_cc):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
 
-            # cache eris. It is used multiple times when calculating gradients
-            g_ao2mo = g.base.__class__.ao2mo
-            def _save_eris(self, *args, **kwargs):
-                self._eris = g_ao2mo(self, *args, **kwargs)
-                return self._eris
-            self.base.__class__.ao2mo = _save_eris
-
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-            self.mol = mol
 
             cc = self.base
-            cc(mol)
-            cc.solve_lambda(cc.t1, cc.t2, eris=cc._eris)
-            de = self.kernel(cc.t1, cc.t2, eris=cc._eris, **kwargs)
-            cc._eris = None  # release the resources occupied by .eris
+            if cc.t2 is not None:
+                last_size = cc.vector_size()
+            else:
+                last_size = 0
+
+            cc.reset(mol)
+            mf_scanner = cc._scf
+            mf_scanner(mol)
+            cc.mo_coeff = mf_scanner.mo_coeff
+            cc.mo_occ = mf_scanner.mo_occ
+            if last_size != cc.vector_size():
+                cc.t1 = cc.t2 = cc.l1 = cc.l2 = None
+
+            self.mol = mol
+            eris = cc.ao2mo(cc.mo_coeff)
+            # Update cc.t1 and cc.t2
+            cc.kernel(t1=cc.t1, t2=cc.t2, eris=eris)
+            # Update cc.l1 and cc.l2
+            cc.solve_lambda(l1=cc.l1, l2=cc.l2, eris=eris)
+
+            de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, **kwargs)
             return cc.e_tot, de
         @property
         def converged(self):
             cc = self.base
             return all((cc._scf.converged, cc.converged, cc.converged_lambda))
+
     return CCSD_GradScanner(grad_cc)
 
 def _response_dm1(mycc, Xvo, eris=None):
     nvir, nocc = Xvo.shape
     nmo = nocc + nvir
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    with_frozen = not ((mycc.frozen is None)
+                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
+                       or (len(mycc.frozen) == 0))
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
         mo_occ = mycc.mo_occ

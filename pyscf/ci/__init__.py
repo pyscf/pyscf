@@ -19,7 +19,7 @@ from pyscf.ci import cisd
 from pyscf.ci import ucisd
 from pyscf.ci import gcisd
 
-def CISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def CISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = cisd.CISD.__doc__
     from pyscf.soscf import newton_ah
 
@@ -32,7 +32,7 @@ def CISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     else:
         return RCISD(mf, frozen, mo_coeff, mo_occ)
 
-def RCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = cisd.RCISD.__doc__
     from pyscf.soscf import newton_ah
 
@@ -44,7 +44,7 @@ def RCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     else:
         return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
 
-def UCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = ucisd.UCISD.__doc__
     from pyscf.soscf import newton_ah
 
@@ -57,7 +57,7 @@ def UCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
 
 
-def GCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def GCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = gcisd.GCISD.__doc__
     from pyscf.soscf import newton_ah
 

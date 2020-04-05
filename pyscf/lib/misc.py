@@ -482,12 +482,15 @@ class StreamObject(object):
         self.kernel(*args)
         return self
 
-    def set(self, **kwargs):
+    def set(self, *args, **kwargs):
         '''
         Update the attributes of the current object.  The return value of
         method set is the object itself.  This allows a series of
         functions/methods to be executed in pipe.
         '''
+        if args:
+            warnings.warn('method set() only supports keyword arguments.\n'
+                          'Arguments %s are ignored.' % args)
         #if getattr(self, '_keys', None):
         #    for k,v in kwargs.items():
         #        setattr(self, k, v)
@@ -918,14 +921,15 @@ class H5TmpFile(h5py.File):
     def __del__(self):
         try:
             self.close()
-        except ValueError:  # if close() is called twice
+        except:
+        #except ValueError:  # if close() is called twice
             pass
 
 def fingerprint(a):
     '''Fingerprint of numpy array'''
     a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
-finger = fingerprint
+finger = fp = fingerprint
 
 
 def ndpointer(*args, **kwargs):

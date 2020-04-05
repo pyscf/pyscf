@@ -500,9 +500,7 @@ class Grids(lib.StreamObject):
     def __setattr__(self, key, val):
         if key in ('atom_grid', 'atomic_radii', 'radii_adjust', 'radi_method',
                    'becke_scheme', 'prune', 'level'):
-            self.coords = None
-            self.weights = None
-            self.non0tab = None
+            self.reset()
         super(Grids, self).__setattr__(key, val)
 
     def dump_flags(self, verbose=None):

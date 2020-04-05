@@ -80,7 +80,13 @@ class X2C(lib.StreamObject):
         t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
         v = xmol.intor_symmetric('int1e_nuc_spinor')
         w = xmol.intor_symmetric('int1e_spnucsp_spinor')
-        if 'ATOM' in self.approx.upper():
+        if 'get_xmat' in self.__dict__:
+            # If the get_xmat method is overwritten by user, build the X
+            # matrix with the external get_xmat method
+            x = self.get_xmat(xmol)
+            h1 = _get_hcore_fw(t, v, w, s, x, c)
+
+        elif 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
             x = numpy.zeros((n2c,n2c), dtype=numpy.complex)
@@ -95,6 +101,7 @@ class X2C(lib.StreamObject):
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
+
         else:
             h1 = _x2c1e_get_hcore(t, v, w, s, c)
 
@@ -330,6 +337,7 @@ class X2C_UHF(hf.SCF):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.opt = None
+        return self
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)

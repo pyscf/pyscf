@@ -1013,7 +1013,7 @@ def _update_procs_mf(mf):
 
 class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = _update_procs_mf(mf)
         pyscf.pbc.cc.kccsd_rhf.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)

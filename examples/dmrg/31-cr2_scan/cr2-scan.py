@@ -47,7 +47,7 @@ def run(b, dm_guess, mo_guess, ci=None):
 # the initial guess for first calculation
         ncas = {'A1g' : 2, 'E1gx' : 1, 'E1gy' : 1, 'E2gx' : 1, 'E2gy' : 1,
                 'A1u' : 2, 'E1ux' : 1, 'E1uy' : 1, 'E2ux' : 1, 'E2uy' : 1}
-        mo_guess = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, ncas, ncore)
+        mo_guess = mc.sort_mo_by_irrep(ncas)
     else:
         mo_guess = mcscf.project_init_guess(mc, mo_guess)
 
@@ -101,7 +101,7 @@ def run(b, dm_guess, mo_guess, ci=None):
 #    mc1.sorting_mo_energy = True
 #    mc1.natorb = True
 
-    mc1.kernel()
+    mc1.kernel(mc.mo_coeff)
 
 # Passing the results as an initial guess to the next point.
     return mf.make_rdm1(), mc.mo_coeff, mc.ci

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ from pyscf.scf import chkfile
 from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm, ghf_symm
 from pyscf.scf import hf, rohf, uhf
+from pyscf.scf import _response_functions
 from pyscf.soscf import ciah
 from pyscf import __config__
 
@@ -89,7 +90,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if with_symmetry and mol.symmetry:
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
-    vind = _gen_rhf_response(mf, mo_coeff, mo_occ, singlet=None, hermi=1)
+    vind = mf.gen_response(mo_coeff, mo_occ, singlet=None, hermi=1)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -202,7 +203,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    vind = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
+    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1)
 
     def h_op(x):
         if with_symmetry and mol.symmetry:
@@ -258,7 +259,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    vind = _gen_ghf_response(mf, mo_coeff, mo_occ, hermi=1)
+    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -277,209 +278,6 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         return x2.ravel()
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
-
-
-def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
-                      singlet=None, hermi=0, max_memory=None):
-    assert(not isinstance(mf, (uhf.UHF, rohf.ROHF)))
-
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    if mo_occ is None: mo_occ = mf.mo_occ
-    mol = mf.mol
-    if _is_dft_object(mf):
-        from pyscf.dft import rks
-        from pyscf.dft import numint
-        ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'deriviative is not available. Its contribution is '
-                        'not included in the response function.')
-        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
-
-        # mf can be pbc.dft.RKS object with multigrid
-        if (not hybrid and
-            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
-            from pyscf.pbc.dft import multigrid
-            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-            return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
-
-        if singlet is None:  # for newton solver
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, 0)
-        else:
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
-        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
-
-        if max_memory is None:
-            mem_now = lib.current_memory()[0]
-            max_memory = max(2000, mf.max_memory*.8-mem_now)
-
-        if singlet is None:  # Without specify singlet, general case
-            def vind(dm1):
-                # The singlet hessian
-                if hermi == 2:
-                    v1 = numpy.zeros_like(dm1)
-                else:
-                    v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
-                                       rho0, vxc, fxc, max_memory=max_memory)
-                if hybrid:
-                    if hermi != 2:
-                        vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-                        vk *= hyb
-                        if abs(omega) > 1e-10:  # For range separated Coulomb
-                            vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
-                        v1 += vj - .5 * vk
-                    else:
-                        v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
-                elif hermi != 2:
-                    v1 += mf.get_j(mol, dm1, hermi=hermi)
-                return v1
-
-        elif singlet:
-            def vind(dm1):
-                if hermi == 2:
-                    v1 = numpy.zeros_like(dm1)
-                else:
-                    # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
-                                              True, rho0, vxc, fxc,
-                                              max_memory=max_memory)
-                    v1 *= .5
-                if hybrid:
-                    if hermi != 2:
-                        vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-                        vk *= hyb
-                        if abs(omega) > 1e-10:  # For range separated Coulomb
-                            vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
-                        v1 += vj - .5 * vk
-                    else:
-                        v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
-                elif hermi != 2:
-                    v1 += mf.get_j(mol, dm1, hermi=hermi)
-                return v1
-        else:  # triplet
-            def vind(dm1):
-                if hermi == 2:
-                    v1 = numpy.zeros_like(dm1)
-                else:
-                    # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm1, 0,
-                                              False, rho0, vxc, fxc,
-                                              max_memory=max_memory)
-                    v1 *= .5
-                if hybrid:
-                    vk = mf.get_k(mol, dm1, hermi=hermi)
-                    vk *= hyb
-                    if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
-                    v1 += -.5 * vk
-                return v1
-
-    else:  # HF
-        if (singlet is None or singlet) and hermi != 2:
-            def vind(dm1):
-                vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-                return vj - .5 * vk
-        else:
-            def vind(dm1):
-                return -.5 * mf.get_k(mol, dm1, hermi=hermi)
-
-    return vind
-
-
-def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
-                      with_j=True, hermi=0, max_memory=None):
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    if mo_occ is None: mo_occ = mf.mo_occ
-    mol = mf.mol
-    if _is_dft_object(mf):
-        from pyscf.dft import rks
-        ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'deriviative is not available. Its contribution is '
-                        'not included in the response function.')
-        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = abs(hyb) > 1e-10
-
-        # mf can be pbc.dft.UKS object with multigrid
-        if (not hybrid and
-            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
-            from pyscf.pbc.dft import multigrid
-            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-            return multigrid._gen_uhf_response(mf, dm0, with_j, hermi)
-
-        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                            mo_coeff, mo_occ, 1)
-        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
-        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
-        dm0 = None
-
-        if max_memory is None:
-            mem_now = lib.current_memory()[0]
-            max_memory = max(2000, mf.max_memory*.8-mem_now)
-
-        def vind(dm1):
-            if hermi == 2:
-                v1 = numpy.zeros_like(dm1)
-            else:
-                v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
-                                   rho0, vxc, fxc, max_memory=max_memory)
-            if not hybrid:
-                if with_j:
-                    vj = mf.get_j(mol, dm1, hermi=hermi)
-                    v1 += vj[0] + vj[1]
-            else:
-                if with_j:
-                    vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-                    vk *= hyb
-                    if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
-                    v1 += vj[0] + vj[1] - vk
-                else:
-                    vk = mf.get_k(mol, dm1, hermi=hermi)
-                    vk *= hyb
-                    if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
-                    v1 -= vk
-            return v1
-
-    elif with_j:
-        def vind(dm1):
-            vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-            v1 = vj[0] + vj[1] - vk
-            return v1
-
-    else:
-        def vind(dm1):
-            return -mf.get_k(mol, dm1, hermi=hermi)
-
-    return vind
-
-
-def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
-                      with_j=True, hermi=0, max_memory=None):
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    if mo_occ is None: mo_occ = mf.mo_occ
-    mol = mf.mol
-    if _is_dft_object(mf):
-        from pyscf.dft import numint
-        raise NotImplementedError
-
-    elif with_j:
-        def vind(dm1):
-            vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-            return vj - vk
-
-    else:
-        def vind(dm1):
-            return -mf.get_k(mol, dm1, hermi=hermi)
-
-    return vind
 
 
 # Dual basis for gradients and hessian
@@ -751,7 +549,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 
         if callable(mf.check_convergence):
             scf_conv = mf.check_convergence(locals())
-        elif abs((e_tot-last_hf_e)/e_tot)*1e3 < conv_tol and norm_gorb < conv_tol_grad:
+        elif abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad:
             scf_conv = True
 
         if dump_chk:
@@ -801,7 +599,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
 
 
 # A tag to label the derived SCF class
-class _CIAH_SOSCF(hf.SCF):
+class _CIAH_SOSCF(object):
     '''
     Attributes for Newton solver:
         max_cycle_inner : int
@@ -874,6 +672,11 @@ class _CIAH_SOSCF(hf.SCF):
         self._eri = None
         return self
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        return self._scf.reset(mol)
+
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
         cput0 = (time.clock(), time.time())
         if dm0 is not None:
@@ -944,6 +747,15 @@ class _CIAH_SOSCF(hf.SCF):
         if self._scf.mol.symmetry:
             orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
             mo = lib.tag_array(mo, orbsym=orbsym)
+
+        if isinstance(log, logger.Logger) and log.verbose >= logger.DEBUG:
+            idx = self.mo_occ > 0
+            s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
+                                   self.mo_coeff[:,idx]))
+            log.debug('Overlap to initial guess, SVD = %s',
+                      _effective_svd(s, 1e-5))
+            log.debug('Overlap to last step, SVD = %s',
+                      _effective_svd(u[idx][:,idx], 1e-5))
         return mo
 
 
@@ -969,38 +781,15 @@ def newton(mf):
     else:
         mf_doc = mf.__doc__
 
-    class SecondOrderRHF(mf.__class__, _CIAH_SOSCF):
-        __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-        __init__ = _CIAH_SOSCF.__init__
-        dump_flags = _CIAH_SOSCF.dump_flags
-        build = _CIAH_SOSCF.build
-        kernel = _CIAH_SOSCF.kernel
-
-        gen_g_hop = gen_g_hop_rhf
-
-        def rotate_mo(self, mo_coeff, u, log=None):
-            mo = _CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
-            if log is not None and log.verbose >= logger.DEBUG:
-                idx = self.mo_occ > 0
-                s = reduce(numpy.dot, (mo[:,idx].conj().T, self._scf.get_ovlp(),
-                                       self.mo_coeff[:,idx]))
-                log.debug('Overlap to initial guess, SVD = %s',
-                          _effective_svd(s, 1e-5))
-                log.debug('Overlap to last step, SVD = %s',
-                          _effective_svd(u[idx][:,idx], 1e-5))
-            return mo
-
     if isinstance(mf, rohf.ROHF):
-        class SecondOrderROHF(SecondOrderRHF):
+        class SecondOrderROHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             gen_g_hop = gen_g_hop_rohf
         return SecondOrderROHF(mf)
 
     elif isinstance(mf, uhf.UHF):
-        class SecondOrderUHF(mf.__class__, _CIAH_SOSCF):
+        class SecondOrderUHF(_CIAH_SOSCF, mf.__class__):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            __init__ = _CIAH_SOSCF.__init__
-            dump_flags = _CIAH_SOSCF.dump_flags
-            build = _CIAH_SOSCF.build
 
             gen_g_hop = gen_g_hop_uhf
 
@@ -1057,12 +846,8 @@ def newton(mf):
         return SecondOrderUHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
-        class SecondOrderGHF(mf.__class__, _CIAH_SOSCF):
+        class SecondOrderGHF(_CIAH_SOSCF, mf.__class__):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
-            __init__ = _CIAH_SOSCF.__init__
-            dump_flags = _CIAH_SOSCF.dump_flags
-            build = _CIAH_SOSCF.build
-            kernel = _CIAH_SOSCF.kernel
 
             gen_g_hop = gen_g_hop_ghf
 
@@ -1088,6 +873,9 @@ def newton(mf):
         raise RuntimeError('Not support Dirac-HF')
 
     else:
+        class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+            gen_g_hop = gen_g_hop_rhf
         return SecondOrderRHF(mf)
 
 SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)
@@ -1116,9 +904,6 @@ def _force_Ex_Ey_degeneracy_(dr, orbsym):
             else:
                 dr[Ex[:,None]&Ex] = dr_y
     return dr
-
-def _is_dft_object(mf):
-    return getattr(mf, 'xc', None) is not None and hasattr(mf, '_numint')
 
 
 if __name__ == '__main__':

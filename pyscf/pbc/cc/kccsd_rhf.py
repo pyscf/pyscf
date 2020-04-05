@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -497,7 +497,7 @@ def kconserve_pmatrix(nkpts, kconserv):
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
@@ -505,7 +505,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.ip_partition = None
         self.ea_partition = None
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
-        
+
         ##################################################
         # don't modify the following attributes, unless you know what you are doing
         self.keep_exxdiv = False
@@ -738,10 +738,12 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         with lib.temporary_env(cc._scf, exxdiv=exxdiv):
             # _scf.exxdiv affects eris.fock. HF exchange correction should be
             # excluded from the Fock matrix.
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+            vhf = cc._scf.get_veff(cell, dm)
+        fockao = cc._scf.get_hcore() + vhf
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
-        
+        self.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
+
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
 
         if not cc.keep_exxdiv:

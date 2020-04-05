@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,11 +23,10 @@ from pyscf import lib
 from pyscf import symm
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
+from pyscf.scf import _response_functions
 from pyscf.data import nist
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
@@ -85,28 +84,27 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(zs):
-        nz = len(zs)
+        zs = numpy.asarray(zs)
         if wfnsym is not None and mol.symmetry:
             zs = numpy.copy(zs)
             zs[:,sym_forbid] = 0
-        dmov = numpy.empty((2,nz,nao,nao))
-        for i, z in enumerate(zs):
-            za = z[:nocca*nvira].reshape(nocca,nvira)
-            zb = z[nocca*nvira:].reshape(noccb,nvirb)
-            dmov[0,i] = reduce(numpy.dot, (orboa, za, orbva.conj().T))
-            dmov[1,i] = reduce(numpy.dot, (orbob, zb, orbvb.conj().T))
 
-        v1ao = vresp(dmov)
-        v1a = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo)).reshape(-1,nocca,nvira)
-        v1b = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo)).reshape(-1,noccb,nvirb)
-        for i, z in enumerate(zs):
-            za = z[:nocca*nvira].reshape(nocca,nvira)
-            zb = z[nocca*nvira:].reshape(noccb,nvirb)
-            v1a[i] += numpy.einsum('ia,ia->ia', e_ia_a, za)
-            v1b[i] += numpy.einsum('ia,ia->ia', e_ia_b, zb)
+        za = zs[:,:nocca*nvira].reshape(-1,nocca,nvira)
+        zb = zs[:,nocca*nvira:].reshape(-1,noccb,nvirb)
+        dmova = lib.einsum('xov,po,qv->xpq', za, orboa, orbva.conj())
+        dmovb = lib.einsum('xov,po,qv->xpq', zb, orbob, orbvb.conj())
+
+        v1ao = vresp(numpy.asarray((dmova,dmovb)))
+
+        v1a = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
+        v1b = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+        v1a += numpy.einsum('xia,ia->xia', za, e_ia_a)
+        v1b += numpy.einsum('xia,ia->xia', zb, e_ia_b)
+
+        nz = zs.shape[0]
         hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
         if wfnsym is not None and mol.symmetry:
             hx[:,sym_forbid] = 0
@@ -761,48 +759,48 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(xys):
         nz = len(xys)
+        xys = numpy.asarray(xys).reshape(nz,2,-1)
         if wfnsym is not None and mol.symmetry:
             # shape(nz,2,-1): 2 ~ X,Y
-            xys = numpy.copy(xys).reshape(nz,2,-1)
+            xys = numpy.copy(xys)
             xys[:,:,sym_forbid] = 0
-        dms = numpy.empty((2,nz,nao,nao)) # 2 ~ alpha,beta
-        for i in range(nz):
-            x, y = xys[i].reshape(2,-1)
-            xa = x[:nocca*nvira].reshape(nocca,nvira)
-            xb = x[nocca*nvira:].reshape(noccb,nvirb)
-            ya = y[:nocca*nvira].reshape(nocca,nvira)
-            yb = y[nocca*nvira:].reshape(noccb,nvirb)
-            dmx = reduce(numpy.dot, (orboa, xa, orbva.T))
-            dmy = reduce(numpy.dot, (orbva, ya.T, orboa.T))
-            dms[0,i] = dmx + dmy  # AX + BY
-            dmx = reduce(numpy.dot, (orbob, xb, orbvb.T))
-            dmy = reduce(numpy.dot, (orbvb, yb.T, orbob.T))
-            dms[1,i] = dmx + dmy  # AX + BY
 
-        v1ao  = vresp(dms)
-        v1avo = _ao2mo.nr_e2(v1ao[0], mo_a, (nocca,nmo,0,nocca))
-        v1bvo = _ao2mo.nr_e2(v1ao[1], mo_b, (noccb,nmo,0,noccb))
-        v1aov = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo))
-        v1bov = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo))
-        hx = numpy.empty((nz,2,nvira*nocca+nvirb*noccb), dtype=v1avo.dtype)
-        for i in range(nz):
-            x, y = xys[i].reshape(2,-1)
-            hx[i,0,:nvira*nocca] = v1aov[i].ravel()
-            hx[i,0,nvira*nocca:] = v1bov[i].ravel()
-            hx[i,0]+= e_ia * x  # AX
-            hx[i,1,:nvira*nocca] =-v1avo[i].reshape(nvira,nocca).T.ravel()
-            hx[i,1,nvira*nocca:] =-v1bvo[i].reshape(nvirb,noccb).T.ravel()
-            hx[i,1]-= e_ia * y  #-AY
+        xs, ys = xys.transpose(1,0,2)
+        xa = xs[:,:nocca*nvira].reshape(nz,nocca,nvira)
+        xb = xs[:,nocca*nvira:].reshape(nz,noccb,nvirb)
+        ya = ys[:,:nocca*nvira].reshape(nz,nocca,nvira)
+        yb = ys[:,nocca*nvira:].reshape(nz,noccb,nvirb)
+        # dms = AX + BY
+        dmsa  = lib.einsum('xov,po,qv->xpq', xa, orboa, orbva.conj())
+        dmsa += lib.einsum('xov,pv,qo->xpq', ya, orbva, orboa.conj())
+        dmsb  = lib.einsum('xov,po,qv->xpq', xb, orbob, orbvb.conj())
+        dmsb += lib.einsum('xov,pv,qo->xpq', yb, orbvb, orbob.conj())
 
+        v1ao = vresp(numpy.asarray((dmsa,dmsb)))
+
+        v1aov = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
+        v1bov = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+        v1avo = lib.einsum('xpq,pv,qo->xov', v1ao[0], orbva.conj(), orboa)
+        v1bvo = lib.einsum('xpq,pv,qo->xov', v1ao[1], orbvb.conj(), orbob)
+
+        v1ov = xs * e_ia  # AX
+        v1vo = ys * e_ia  # AY
+        v1ov[:,:nocca*nvira] += v1aov.reshape(nz,-1)
+        v1vo[:,:nocca*nvira] += v1avo.reshape(nz,-1)
+        v1ov[:,nocca*nvira:] += v1bov.reshape(nz,-1)
+        v1vo[:,nocca*nvira:] += v1bvo.reshape(nz,-1)
         if wfnsym is not None and mol.symmetry:
-            hx[:,:,sym_forbid] = 0
-        return hx.reshape(nz,-1)
+            v1ov[:,sym_forbid] = 0
+            v1vo[:,sym_forbid] = 0
+        hx = numpy.hstack((v1ov, -v1vo))
+        return hx
 
     return vind, hdiag
+
 
 class TDHF(TDA):
     @lib.with_doc(gen_tdhf_operation.__doc__)

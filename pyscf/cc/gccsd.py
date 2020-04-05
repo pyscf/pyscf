@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ class GCCSD(ccsd.CCSD):
     conv_tol = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol_normt', 1e-6)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
@@ -160,7 +160,6 @@ class GCCSD(ccsd.CCSD):
             orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
             if not np.any(orbspin == -1):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
 
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
         if getattr(eris, 'orbspin', None) is not None:
@@ -244,7 +243,7 @@ class GCCSD(ccsd.CCSD):
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return gccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -256,7 +255,7 @@ class GCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return gccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+        return gccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo
@@ -319,6 +318,7 @@ class _PhysicistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
+        self.e_hf = None
         self.orbspin = None
 
         self.oooo = None
@@ -336,19 +336,22 @@ class _PhysicistsERIs:
         if getattr(mo_coeff, 'orbspin', None) is not None:
             self.orbspin = mo_coeff.orbspin[mo_idx]
             mo_coeff = lib.tag_array(mo_coeff[:,mo_idx], orbspin=self.orbspin)
-            self.mo_coeff = mo_coeff
         else:
             orbspin = scf.ghf.guess_orbspin(mo_coeff)
-            self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
+            mo_coeff = mo_coeff[:,mo_idx]
             if not np.any(orbspin == -1):
                 self.orbspin = orbspin[mo_idx]
-                self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
+                mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
+        self.mo_coeff = mo_coeff
 
         # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         self.nocc = mycc.nocc
+        self.mol = mycc.mol
 
         mo_e = self.mo_energy = self.fock.diagonal().real
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()

@@ -105,6 +105,7 @@ class KnownValues(unittest.TestCase):
         mymp = pyscf.pbc.mp.kmp2.KMP2(kmf, frozen=frozen)
         ekmp2, _ = mymp.kernel()
         self.assertAlmostEqual(ekmp2, -0.022416773725207319, 6)
+        self.assertAlmostEqual(mymp.e_tot, 2.155470531550681, 6)
 
         # Start of supercell calculations
         from pyscf.pbc.tools.pbc import super_cell
@@ -118,7 +119,6 @@ class KnownValues(unittest.TestCase):
         emp2 /= np.prod(nmp)
         self.assertAlmostEqual(emp2, -0.022416773725207319, 6)
 
-class RDM1(unittest.TestCase):
     def test_rdm1(self):
         cell = pbcgto.Cell()
         cell.atom = '''Al 0 0 0'''

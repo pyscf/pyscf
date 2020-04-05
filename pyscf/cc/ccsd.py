@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     cput1 = cput0 = (time.clock(), time.time())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
-    log.info('Init E(CCSD) = %.15g', eccsd)
+    log.info('Init E_corr(CCSD) = %.15g', eccsd)
 
     if isinstance(mycc.diis, lib.diis.DIIS):
         adiis = mycc.diis
@@ -80,7 +80,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
-        log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
+        log.info('cycle = %d  E_corr(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
@@ -288,20 +288,26 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     wooVV = numpy.zeros((nocc,nocc*nvir_pair))
 
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2*2.5 + nocc**2*nvir + 2
+    unit = nocc*nvir**2*3 + nocc**2*nvir + 2
     blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-    def load_ovvv(p0, p1):
-        if p0 < p1:
+
+    def load_ovvv(buf, p0):
+        if p0 < nvir:
+            p1 = min(nvir, p0+blksize)
             buf[:p1-p0] = eris.ovvv[:,p0:p1].transpose(1,0,2)
 
-    buf = numpy.empty((blksize,nocc,nvir_pair))
     with lib.call_in_background(load_ovvv, sync=not mycc.async_io) as prefetch:
-        load_ovvv(0, blksize)
+        buf = numpy.empty((blksize,nocc,nvir_pair))
+        buf_prefetch = numpy.empty((blksize,nocc,nvir_pair))
+
+        load_ovvv(buf_prefetch, 0)
         for p0, p1 in lib.prange(0, nvir, blksize):
-            eris_vovv, buf = buf[:p1-p0], numpy.empty_like(buf)
-            prefetch(p1, min(nvir, p1+blksize))
+            buf, buf_prefetch = buf_prefetch, buf
+            prefetch(buf_prefetch, p1)
+
+            eris_vovv = buf[:p1-p0]
 
             #:wooVV -= numpy.einsum('jc,ciba->jiba', t1[:,p0:p1], eris_vovv)
             lib.ddot(numpy.asarray(t1[:,p0:p1], order='C'),
@@ -561,6 +567,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
         def block_contract(i0, i1):
             off0 = i0*(i0+1)//2
             off1 = i1*(i1+1)//2
+            # TODO: prefetch vvvv
             wwbuf = numpy.asarray(vvvv[off0:off1], order='C')
             for j0, j1 in lib.prange(0, i1, blksize):
                 eri = wwbuf[tril2sq[i0:i1,j0:j1]-off0]
@@ -572,8 +579,6 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
                 contract_blk_(tmp, i0, i1, j0, j1)
 
         with lib.call_in_background(block_contract, sync=not mycc.async_io) as bcontract:
-            readbuf = numpy.empty((blksize,nvira,nvir_pair))
-            readbuf1 = numpy.empty_like(readbuf)
             for p0, p1 in lib.prange(0, nvira, blksize):
                 bcontract(p0, p1)
                 time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
@@ -782,19 +787,15 @@ def as_scanner(cc):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            for key in ('with_df', 'with_solvent'):
-                sub_mod = getattr(self, key, None)
-                if sub_mod:
-                    sub_mod.reset(mol)
-
             if self.t2 is not None:
                 last_size = self.vector_size()
             else:
                 last_size = 0
 
+            self.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
-            self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
             if last_size != self.vector_size():
@@ -875,7 +876,7 @@ class CCSD(lib.StreamObject):
     incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf import gto
         if isinstance(mf, gto.Mole):
             raise RuntimeError('''
@@ -887,8 +888,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             raise RuntimeError('CCSD Warning: The first argument mf is a DFT object. '
                                'CCSD calculation should be initialized with HF object.\n'
                                'DFT object can be converted to HF object with '
-                               'the code below:\n'
-                               '    mf_hf = scf.RHF(mol)\n'
+                               'the code:\n'
+                               '    mf_hf = mol.HF()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
@@ -911,6 +912,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.converged = False
         self.converged_lambda = False
         self.emp2 = None
+        self.e_hf = None
         self.e_corr = None
         self.t1 = None
         self.t2 = None
@@ -932,7 +934,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     @property
     def e_tot(self):
-        return self.e_corr + self._scf.e_tot
+        return (self.e_hf or self._scf.e_tot) + self.e_corr
 
     @property
     def nocc(self):
@@ -948,6 +950,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def nmo(self, n):
         self._nmo = n
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
+
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
@@ -958,7 +966,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
         log.info('CCSD nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)
@@ -1002,7 +1010,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             emp2 -=     numpy.einsum('jiab,iajb', t2[:,:,p0:p1], eris_ovov)
         self.emp2 = emp2.real
 
-        logger.info(self, 'Init t2, MP2 energy = %.15g', emp2.real)
+        e_hf = self.e_hf or eris.e_hf
+
+        logger.info(self, 'Init t2, MP2 energy = %.15g  E_corr(MP2) %.15g',
+                    e_hf + self.emp2, self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -1015,9 +1026,17 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def ccsd(self, t1=None, t2=None, eris=None):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
+
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
+
+        self.e_hf = getattr(eris, 'e_hf', None)
+        if self.e_hf is None:
+            self.e_hf = self._scf.e_tot
 
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
@@ -1110,7 +1129,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -1122,7 +1141,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:
@@ -1191,9 +1210,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if not self.chkfile:
             return self
         if t1_t2 is None: t1_t2 = self.t1, self.t2
-        if frozen is None: frozen = self.frozen
-
         t1, t2 = t1_t2
+
+        if frozen is None: frozen = self.frozen
+        # "None" cannot be serialized by the chkfile module
+        if frozen is None:
+            frozen = 0
+
         cc_chk = {'e_corr': self.e_corr,
                   't1': t1,
                   't2': t2,
@@ -1244,6 +1267,7 @@ class _ChemistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
+        self.e_hf = None
 
         self.oooo = None
         self.ovoo = None
@@ -1257,10 +1281,13 @@ class _ChemistsERIs:
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
         self.mo_coeff = mo_coeff = _mo_without_core(mycc, mo_coeff)
-# Note: Recomputed fock matrix since SCF may not be fully converged.
+
+# Note: Recomputed fock matrix and HF energy since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
@@ -1322,6 +1349,10 @@ def _make_eris_incore(mycc, mo_coeff=None):
     #:ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
     #:eris.ovvv = lib.pack_tril(ovvv.reshape(-1,nvir,nvir)).reshape(nocc,nvir,-1)
     #:eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+
+    if eri1.ndim == 4:
+        eri1 = ao2mo.restore(4, eri1, nmo)
+
     nvir_pair = nvir * (nvir+1) // 2
     eris.oooo = numpy.empty((nocc,nocc,nocc,nocc))
     eris.ovoo = numpy.empty((nocc,nvir,nocc,nocc))
@@ -1416,28 +1447,30 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     fload = ao2mo.outcore._load_from_h5g
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
-    def prefetch(p0, p1, rowmax):
-        p0, p1 = p1, min(rowmax, p1+blksize)
-        if p0 < p1:
+    def load(buf_prefetch, p0, rowmax):
+        if p0 < rowmax:
+            p1 = min(rowmax, p0+blksize)
             fload(fswap['0'], p0*nocc, p1*nocc, buf_prefetch)
 
     outbuf = numpy.empty((blksize*nocc,nmo**2))
-    with lib.call_in_background(prefetch, sync=not mycc.async_io) as bprefetch:
-        fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
+    with lib.call_in_background(load, sync=not mycc.async_io) as prefetch:
+        prefetch(buf_prefetch, 0, nocc)
         for p0, p1 in lib.prange(0, nocc, blksize):
-            nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(p0, p1, nocc)
+            prefetch(buf_prefetch, p1, nocc)
+
+            nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_occ_frac(p0, p1, dat)
         cput2 = log.timer_debug1('transforming oopp', *cput2)
 
-        fload(fswap['0'], nocc**2, min(nmo,nocc+blksize)*nocc, buf_prefetch)
+        prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
-            nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(nocc+p0, nocc+p1, nmo)
+            prefetch(buf_prefetch, nocc+p0, nmo)
+
+            nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)

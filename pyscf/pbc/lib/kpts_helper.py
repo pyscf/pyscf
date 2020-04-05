@@ -172,7 +172,7 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
 
 
 def get_kconserv3(cell, kpts, kijkab):
-    '''Get the momentum conservation array for a set of k-points.
+    r'''Get the momentum conservation array for a set of k-points.
 
     This function is similar to get_kconserv, but instead finds the 'kc'
     that satisfies momentum conservation for 5 k-points,

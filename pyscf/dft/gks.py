@@ -117,11 +117,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return vxc
 
 
-class GKS(ghf.GHF, rks.KohnShamDFT):
+class GKS(rks.KohnShamDFT, ghf.GHF):
     '''Generalized Kohn-Sham'''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         ghf.GHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         ghf.GHF.dump_flags(self, verbose)

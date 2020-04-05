@@ -27,8 +27,8 @@ from pyscf import scf
 from pyscf.adc import uadc
 from pyscf.adc import radc
 
-def ADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    if (frozen != 0):
+def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
     if isinstance(mf, scf.rhf.RHF):
@@ -43,10 +43,10 @@ def ADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     else :
         raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
 
-def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = uadc.UADC.__doc__
 
-    if (frozen != 0):
+    if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
     from pyscf.soscf import newton_ah

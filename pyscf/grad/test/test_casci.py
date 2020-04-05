@@ -214,7 +214,9 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
 def _response_dm1(mycc, Xvo, eris=None):
     nvir, nocc = Xvo.shape
     nmo = nocc + nvir
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    with_frozen = not ((mycc.frozen is None)
+                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
+                       or (len(mycc.frozen) == 0))
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
         mo_occ = mycc.mo_occ

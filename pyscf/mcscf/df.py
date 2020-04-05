@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             with_df.verbose = casscf.verbose
             with_df.auxbasis = auxbasis
 
-    class DFCASSCF(casscf_class, _DFCASSCF):
+    class DFCASSCF(_DFCASSCF, casscf_class):
         def __init__(self):
             self.__dict__.update(casscf.__dict__)
             #self.grad_update_dep = 0
@@ -80,6 +80,10 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix '
                         'and 2e integral transformation')
             return self
+
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return casscf_class.reset(self, mol)
 
         def ao2mo(self, mo_coeff=None):
             if self.with_df and 'CASSCF' in casscf_class.__name__:
@@ -195,6 +199,10 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
         def dump_flags(self, verbose=None):
             casscf_class.dump_flags(self, verbose)
             logger.info(self, 'CASSCF: density fitting for orbital hessian')
+
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return casscf_class.reset(self, mol)
 
         def ao2mo(self, mo_coeff):
 # the exact integral transformation

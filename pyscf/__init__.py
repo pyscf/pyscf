@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '1.7.0'
+__version__ = '1.7.1'
 
 import os
 # Avoid too many threads being created in OMP loops.

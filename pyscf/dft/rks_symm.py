@@ -28,9 +28,9 @@ from pyscf.dft import uks
 
 class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         hf_symm.RHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         hf_symm.RHF.dump_flags(self, verbose)
@@ -39,6 +39,8 @@ class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
 
     get_veff = rks.get_veff
     energy_elec = rks.energy_elec
+
+    reset = rks.KohnShamDFT.reset
 
     def nuc_grad_method(self):
         from pyscf.grad import rks
@@ -49,9 +51,9 @@ RKS = SymAdaptedRKS
 
 class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         hf_symm.ROHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         hf_symm.ROHF.dump_flags(self, verbose)
@@ -60,6 +62,8 @@ class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
 
     get_veff = uks.get_veff
     energy_elec = uks.energy_elec
+
+    reset = rks.KohnShamDFT.reset
 
     def nuc_grad_method(self):
         from pyscf.grad import roks

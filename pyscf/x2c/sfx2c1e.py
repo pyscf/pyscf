@@ -65,7 +65,7 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
-    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
+    class SFX2C1E_SCF(x2c._X2C_SCF, mf_class):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
@@ -90,6 +90,10 @@ def sfx2c1e(mf):
             if self.with_x2c:
                 self.with_x2c.dump_flags(verbose)
             return self
+
+        def reset(self, mol):
+            self.with_x2c.reset(mol)
+            return mf_class.reset(self, mol)
 
         def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
                        picture_change=True, **kwargs):
@@ -164,7 +168,13 @@ class SpinFreeX2C(x2c.X2C):
         v = xmol.intor_symmetric('int1e_nuc')
         s = xmol.intor_symmetric('int1e_ovlp')
         w = xmol.intor_symmetric('int1e_pnucp')
-        if 'ATOM' in self.approx.upper():
+        if 'get_xmat' in self.__dict__:
+            # If the get_xmat method is overwritten by user, build the X
+            # matrix with the external get_xmat method
+            x = self.get_xmat(xmol)
+            h1 = x2c._get_hcore_fw(t, v, w, s, x, c)
+
+        elif 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
             nao = xmol.nao_nr()
             x = numpy.zeros((nao,nao))
@@ -179,6 +189,7 @@ class SpinFreeX2C(x2c.X2C):
                     w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = x2c._get_hcore_fw(t, v, w, s, x, c)
+
         else:
             h1 = x2c._x2c1e_get_hcore(t, v, w, s, c)
 

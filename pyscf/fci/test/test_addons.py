@@ -257,6 +257,29 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, e1ref, 9)
         self.assertAlmostEqual(abs(abs(ci1ref)-abs(ci1)).sum(), 0, 9)
 
+    def test_transform_ci(self):
+        # transform for different orbital-space sizes
+        numpy.random.seed(12)
+        norb0, norb1 = 6, 7
+        nelec = (4,2)
+        na0 = fci.cistring.num_strings(norb0, nelec[0])
+        nb0 = fci.cistring.num_strings(norb0, nelec[1])
+        na1 = fci.cistring.num_strings(norb1, nelec[0])
+        nb1 = fci.cistring.num_strings(norb1, nelec[1])
+        ci0 = numpy.random.random((na0, nb0))
+        u = numpy.zeros((norb0, norb1))
+        u[:norb0,:norb0] = numpy.eye(norb0)
+
+        ci1_ref = numpy.zeros((na1, nb1))
+        ci1_ref[:na0,:na0] = ci0
+        ci1 = fci.addons.transform_ci(ci0, nelec, u)
+        self.assertAlmostEqual(abs(ci1 - ci1_ref).max(), 0, 14)
+
+        u = numpy.linalg.svd(numpy.random.random((norb0, norb1)))[0]
+        ci1 = fci.addons.transform_ci(ci0, nelec, u)
+        ci0_new = fci.addons.transform_ci(ci1, nelec, u.T)
+        self.assertAlmostEqual(abs(ci0 - ci0_new).max(), 0, 14)
+
     def test_overlap(self):
         numpy.random.seed(12)
         s = numpy.random.random((6,6))

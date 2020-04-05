@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,9 @@ import unittest
 from functools import reduce
 import numpy
 import scipy.special
-from pyscf import gto, scf, lib, dft
+from pyscf import lib, gto, scf, dft, ao2mo, df
 from pyscf.solvent import ddcosmo
+from pyscf.solvent import _attach_solvent
 from pyscf.symm import sph
 
 
@@ -152,6 +153,63 @@ def make_vmat(pcm, r_vdw, lebedev_order, lmax, LX, LS):
     return vmat
 
 
+def make_B(pcmobj, r_vdw, ui, ylm_1sph, cached_pol, L):
+    mol = pcmobj.mol
+    coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)
+    ngrid_1sph = coords_1sph.shape[0]
+    mol = pcmobj.mol
+    natm = mol.natm
+    nao  = mol.nao
+    lmax = pcmobj.lmax
+    nlm = (lmax+1)**2
+
+    atom_coords = mol.atom_coords()
+    atom_charges = mol.atom_charges()
+    grids = pcmobj.grids
+
+    extern_point_idx = ui > 0
+    cav_coords = (atom_coords.reshape(natm,1,3)
+                  + numpy.einsum('r,gx->rgx', r_vdw, coords_1sph))
+
+    max_memory = pcmobj.max_memory - lib.current_memory()[0]
+    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
+
+    cav_coords = cav_coords[extern_point_idx]
+    int3c2e = mol._add_suffix('int3c2e')
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas,
+                                         mol._env, int3c2e)
+    fakemol = gto.fakemol_for_charges(cav_coords)
+    v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij', cintopt=cintopt)
+    nao_pair = v_nj.shape[0]
+    v_phi = numpy.zeros((nao_pair, natm, ngrid_1sph))
+    v_phi[:,extern_point_idx] += v_nj
+
+    phi = numpy.einsum('n,xn,jn,ijn->ijx', weights_1sph, ylm_1sph, ui, v_phi)
+
+    Xvec = numpy.linalg.solve(L.reshape(natm*nlm,-1), phi.reshape(-1,natm*nlm).T)
+    Xvec = Xvec.reshape(natm,nlm,nao_pair)
+
+    ao = mol.eval_gto('GTOval', grids.coords)
+    aow = numpy.einsum('gi,g->gi', ao, grids.weights)
+    aopair = lib.pack_tril(numpy.einsum('gi,gj->gij', ao, aow))
+
+    psi = numpy.zeros((nao_pair, natm, nlm))
+    i1 = 0
+    for ia in range(natm):
+        fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
+        i0, i1 = i1, i1 + fak_pol[0].shape[1]
+        p1 = 0
+        for l in range(lmax+1):
+            fac = 4*numpy.pi/(l*2+1)
+            p0, p1 = p1, p1 + (l*2+1)
+            psi[:,ia,p0:p1] = -fac * numpy.einsum('mn,ni->im', fak_pol[l], aopair[i0:i1])
+
+    B = lib.einsum('pnl,nlq->pq', psi, Xvec)
+    B = B + B.T
+    B = ao2mo.restore(1, B, nao)
+    return B
+
+
 mol = gto.Mole()
 mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
                H                 -0.00000000   -0.84695236    0.59109389
@@ -160,6 +218,11 @@ mol.basis = '3-21g'
 mol.verbose = 5
 mol.output = '/dev/null'
 mol.build()
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 class KnownValues(unittest.TestCase):
     def test_ddcosmo_scf(self):
@@ -275,17 +338,19 @@ class KnownValues(unittest.TestCase):
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
         ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
         phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph, ui, v_phi)
-        phi1 = ddcosmo.make_phi(pcm, dm, r_vdw, ui)
+        phi1 = ddcosmo.make_phi(pcm, dm, r_vdw, ui, ylm_1sph)
         self.assertTrue(abs(phi - phi1).max() < 1e-12)
 
     def test_psi_vmat(self):
         pcm = ddcosmo.DDCOSMO(mol)
         pcm.lmax = 2
+        pcm.eps = 0
         r_vdw = ddcosmo.get_atomic_radii(pcm)
         fi = ddcosmo.make_fi(pcm, r_vdw)
         ui = 1 - fi
         ui[ui<0] = 0
         grids = dft.gen_grid.Grids(mol).build()
+        pcm.grids = grids
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
         ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
         cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)
@@ -299,15 +364,55 @@ class KnownValues(unittest.TestCase):
         LX = numpy.random.random((natm,nlm))
 
         L = ddcosmo.make_L(pcm, r_vdw, ylm_1sph, fi)
-        psi, vmat = ddcosmo.make_psi_vmat(pcm, dm, r_vdw, ui, grids,
+        psi, vmat = ddcosmo.make_psi_vmat(pcm, dm, r_vdw, ui,
                                           ylm_1sph, cached_pol, LX, L)[:2]
         psi_ref = make_psi(pcm.mol, dm, r_vdw, pcm.lmax)
         self.assertAlmostEqual(abs(psi_ref - psi).max(), 0, 12)
 
-        LS = numpy.linalg.solve(L.T.reshape(natm*nlm,-1),
+        LS = numpy.linalg.solve(L.reshape(natm*nlm,-1).T,
                                 psi_ref.ravel()).reshape(natm,nlm)
         vmat_ref = make_vmat(pcm, r_vdw, pcm.lebedev_order, pcm.lmax, LX, LS)
         self.assertAlmostEqual(abs(vmat_ref - vmat).max(), 0, 12)
+
+    def test_B_dot_x(self):
+        pcm = ddcosmo.DDCOSMO(mol)
+        pcm.lmax = 2
+        pcm.eps = 0
+        natm = mol.natm
+        nao = mol.nao
+        nlm = (pcm.lmax+1)**2
+        r_vdw = ddcosmo.get_atomic_radii(pcm)
+        fi = ddcosmo.make_fi(pcm, r_vdw)
+        ui = 1 - fi
+        ui[ui<0] = 0
+        grids = dft.gen_grid.Grids(mol).run(level=0)
+        pcm.grids = grids
+        coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
+        ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
+        cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)
+        L = ddcosmo.make_L(pcm, r_vdw, ylm_1sph, fi)
+        B = make_B(pcm, r_vdw, ui, ylm_1sph, cached_pol, L)
+
+        numpy.random.seed(19)
+        dm = numpy.random.random((2,nao,nao))
+        Bx = numpy.einsum('ijkl,xkl->xij', B, dm)
+
+        phi = ddcosmo.make_phi(pcm, dm, r_vdw, ui, ylm_1sph, with_nuc=False)
+        Xvec = numpy.linalg.solve(L.reshape(natm*nlm,-1), phi.reshape(-1,natm*nlm).T)
+        Xvec = Xvec.reshape(natm,nlm,-1).transpose(2,0,1)
+        psi, vref, LS = ddcosmo.make_psi_vmat(pcm, dm, r_vdw, ui, ylm_1sph,
+                                              cached_pol, Xvec, L, with_nuc=False)
+        self.assertAlmostEqual(abs(Bx - vref).max(), 0, 12)
+        e1 = numpy.einsum('nij,nij->n', psi, Xvec)
+        e2 = numpy.einsum('nij,nij->n', phi, LS)
+        e3 = numpy.einsum('nij,nij->n', dm, vref) * .5
+        self.assertAlmostEqual(abs(e1-e2).max(), 0, 12)
+        self.assertAlmostEqual(abs(e1-e3).max(), 0, 12)
+
+        vmat = pcm._B_dot_x(dm)
+        self.assertEqual(vmat.shape, (2,nao,nao))
+        self.assertAlmostEqual(abs(vmat-vref*.5).max(), 0, 12)
+        self.assertAlmostEqual(lib.fp(vmat), -17.383712106418606, 12)
 
     def test_vmat(self):
         mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', verbose=0)
@@ -353,6 +458,44 @@ class KnownValues(unittest.TestCase):
         mf_h2 = ddcosmo.ddcosmo_for_scf(scf.RHF(h2)).run()
         self.assertAlmostEqual(mf_h2.e_tot, mf_scanner.e_tot, 9)
 
+    def test_newton_rohf(self):
+        mf = mol.ROHF(max_memory=0).ddCOSMO()
+        mf = mf.newton()
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -75.570364368046086, 9)
+
+        mf = mol.RHF().ddCOSMO()
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -75.570364368046086, 9)
+
+    def test_convert_scf(self):
+        mf = mol.RHF().ddCOSMO()
+        mf = mf.to_uhf()
+        self.assertTrue(isinstance(mf, scf.uhf.UHF))
+        self.assertTrue(isinstance(mf, _attach_solvent._Solvation))
+
+    def test_reset(self):
+        mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
+        mf = scf.RHF(mol).density_fit().ddCOSMO().newton()
+        mf.reset(mol1)
+        self.assertTrue(mf.mol is mol1)
+        self.assertTrue(mf.with_df.mol is mol1)
+        self.assertTrue(mf.with_solvent.mol is mol1)
+        self.assertTrue(mf._scf.with_df.mol is mol1)
+        self.assertTrue(mf._scf.with_solvent.mol is mol1)
+
+    def test_rhf_tda(self):
+        # TDA with equilibrium_solvation
+        mf = mol.RHF().ddCOSMO().run()
+        td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
+        ref = numpy.array([0.3014315117408341, 0.358844688787903, 0.3951664712235241])
+        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 8)
+
+        # TDA without equilibrium_solvation
+        mf = mol.RHF().ddCOSMO().run()
+        td = mf.TDA().ddCOSMO().run()
+        ref = numpy.array([0.3016104587222408, 0.358896882513815, 0.4004977667270891])
+        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 8)
 
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 

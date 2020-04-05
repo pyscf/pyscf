@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,6 +28,12 @@ from pyscf.grad import rhf as rhf_grad
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+    '''
+    Electronic part of UHF/UKS gradients
+
+    Args:
+        mf_grad : grad.uhf.Gradients or grad.uks.Gradients object
+    '''
     mf = mf_grad.base
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
@@ -68,6 +74,12 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     return de
 
 def get_veff(mf_grad, mol, dm):
+    '''
+    First order derivative of HF potential matrix (wrt electron coordinates)
+
+    Args:
+        mf_grad : grad.uhf.Gradients or grad.uks.Gradients object
+    '''
     vj, vk = mf_grad.get_jk(mol, dm)
     return vj[0]+vj[1] - vk
 

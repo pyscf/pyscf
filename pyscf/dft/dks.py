@@ -94,19 +94,28 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
-#        if (ks._eri is None and ks.direct_scf and
-#            getattr(vhf_last, 'vk', None) is not None):
-#            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-#            vj, vk = ks.get_jk(mol, ddm, hermi)
-#            vj += vhf_last.vj
-#            vk += vhf_last.vk
-#        else:
-#            vj, vk = ks.get_jk(mol, dm, hermi)
-#        vxc += vj - vk * hyb
-#
-#        if ground_state:
-#            exc -= numpy.einsum('ij,ji', dm, vk).real * hyb * .5
-        raise NotImplementedError
+        if (ks._eri is None and ks.direct_scf and
+            getattr(vhf_last, 'vk', None) is not None):
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            vj, vk = ks.get_jk(mol, ddm, hermi)
+            vk *= hyb
+            if abs(omega) > 1e-10:  # For range separated Coulomb operator
+                vklr = ks.get_k(mol, ddm, hermi, omega=omega)
+                vklr *= (alpha - hyb)
+                vk += vklr
+            vj += vhf_last.vj
+            vk += vhf_last.vk
+        else:
+            vj, vk = ks.get_jk(mol, dm, hermi)
+            vk *= hyb
+            if abs(omega) > 1e-10:
+                vklr = ks.get_k(mol, dm, hermi, omega=omega)
+                vklr *= (alpha - hyb)
+                vk += vklr
+        vxc += vj - vk
+
+        if ground_state:
+            exc -= numpy.einsum('ij,ji', dm, vk).real * hyb * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
@@ -120,10 +129,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 energy_elec = rks.energy_elec
 
 
-class UKS(dhf.UHF, rks.KohnShamDFT):
-    def __init__(self, mol):
+class UKS(rks.KohnShamDFT, dhf.UHF):
+    def __init__(self, mol, xc='LDA,VWN'):
         dhf.UHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
         self._numint = r_numint.RNumInt()
 
     def dump_flags(self, verbose=None):

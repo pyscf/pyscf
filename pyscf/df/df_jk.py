@@ -80,7 +80,9 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     mf_class = mf.__class__
 
     if isinstance(mf, _DFHF):
-        if getattr(mf.with_df, 'auxbasis', None) != auxbasis:
+        if mf.with_df is None:
+            mf.with_df = with_df
+        elif getattr(mf.with_df, 'auxbasis', None) != auxbasis:
             #logger.warn(mf, 'DF might have been initialized twice.')
             mf = copy.copy(mf)
             mf.with_df = with_df
@@ -107,6 +109,10 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
             self.with_df = df
             self.only_dfj = only_dfj
             self._keys = self._keys.union(['with_df', 'only_dfj'])
+
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return mf_class.reset(self, mol)
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                    omega=None):

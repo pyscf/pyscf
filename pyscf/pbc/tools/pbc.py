@@ -172,7 +172,7 @@ def ifft(g, mesh):
 
 
 def fftk(f, mesh, expmikr):
-    '''Perform the 3D FFT of a real-space function which is (periodic*e^{ikr}).
+    r'''Perform the 3D FFT of a real-space function which is (periodic*e^{ikr}).
 
     fk(k+G) = \sum_r fk(r) e^{-i(k+G)r} = \sum_r [f(k)e^{-ikr}] e^{-iGr}
     '''
@@ -180,7 +180,7 @@ def fftk(f, mesh, expmikr):
 
 
 def ifftk(g, mesh, expikr):
-    '''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
+    r'''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
 
     fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
@@ -558,7 +558,7 @@ def cell_plus_imgs(cell, nimgs):
 
 
 def cutoff_to_mesh(a, cutoff):
-    '''
+    r'''
     Convert KE cutoff to FFT-mesh
 
         uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing

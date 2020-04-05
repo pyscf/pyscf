@@ -15,7 +15,7 @@
 from pyscf.pbc.cc import ccsd
 from pyscf.pbc import scf
 
-def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def KRCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.mpicc import kccsd_rhf
     mf = scf.addons.convert_to_rhf(mf)
     return kccsd_rhf.RCCSD(mf, frozen)

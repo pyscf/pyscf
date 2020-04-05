@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -332,7 +332,7 @@ def spin2spatial(tx, orbspin, kconserv):
 
 
 class GCCSD(gccsd.GCCSD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         if not isinstance(mf, scf.kghf.KGHF):
             mf = scf.addons.convert_to_ghf(mf)
@@ -544,9 +544,11 @@ def _make_eris_incore(cc, mo_coeff=None):
     with lib.temporary_env(cc._scf, exxdiv=None):
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+        vhf = cc._scf.get_veff(cell, dm)
+    fockao = cc._scf.get_hcore() + vhf
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
                                for k, mo in enumerate(eris.mo_coeff)])
+    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     eris.mo_energy = [eris.fock[k].diagonal().real for k in range(nkpts)]
     # Add HFX correction in the eris.mo_energy to improve convergence in

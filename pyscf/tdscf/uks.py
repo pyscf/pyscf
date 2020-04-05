@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,12 +21,10 @@ from functools import reduce
 import numpy
 from pyscf import symm
 from pyscf import lib
-from pyscf.dft import numint
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
+from pyscf.scf import _response_functions
 from pyscf.data import nist
-from pyscf.ao2mo import _ao2mo
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf import __config__
 
 # Low excitation filter to avoid numerical instability
@@ -92,30 +90,30 @@ class TDDFTNoHybrid(TDA):
         ed_ia = e_ia.ravel() * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
+        vresp = mf.gen_response(mo_coeff, mo_occ, hermi=1)
 
         def vind(zs):
             nz = len(zs)
+            zs = numpy.asarray(zs).reshape(nz,-1)
             if wfnsym is not None and mol.symmetry:
                 zs = numpy.copy(zs)
                 zs[:,sym_forbid] = 0
-            dmov = numpy.empty((2,nz,nao,nao))
-            for i in range(nz):
-                z = d_ia * zs[i]
-                za = z[:nocca*nvira].reshape(nocca,nvira)
-                zb = z[nocca*nvira:].reshape(noccb,nvirb)
-                dm = reduce(numpy.dot, (orboa, za, orbva.T))
-                dmov[0,i] = dm + dm.T
-                dm = reduce(numpy.dot, (orbob, zb, orbvb.T))
-                dmov[1,i] = dm + dm.T
 
-            v1ao = vresp(dmov)
-            v1a = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (0,nocca,nocca,nmo))
-            v1b = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (0,noccb,noccb,nmo))
+            dmsa = (zs[:,:nocca*nvira] * d_ia[:nocca*nvira]).reshape(nz,nocca,nvira)
+            dmsb = (zs[:,nocca*nvira:] * d_ia[nocca*nvira:]).reshape(nz,noccb,nvirb)
+            dmsa = lib.einsum('xov,po,qv->xpq', dmsa, orboa, orbva.conj())
+            dmsb = lib.einsum('xov,po,qv->xpq', dmsb, orbob, orbvb.conj())
+            dmsa = dmsa + dmsa.conj().transpose(0,2,1)
+            dmsb = dmsb + dmsb.conj().transpose(0,2,1)
+
+            v1ao = vresp(numpy.asarray((dmsa,dmsb)))
+
+            v1a = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
+            v1b = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+
             hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
-            for i, z in enumerate(zs):
-                hx[i] += ed_ia * z
-                hx[i] *= d_ia
+            hx += ed_ia * zs
+            hx *= d_ia
             return hx
 
         return vind, hdiag
@@ -204,22 +202,24 @@ class TDDFTNoHybrid(TDA):
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
-        if not getattr(mf, 'xc', None):
-            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         from pyscf import scf
+        from pyscf.dft.rks import KohnShamDFT
+        if not isinstance(mf, KohnShamDFT):
+            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         mf = scf.addons.convert_to_uhf(mf)
-        mf.xc = '0.0*LDA'
+        mf.xc = ''
         TDDFTNoHybrid.__init__(self, mf)
 
 TDH = dRPA
 
 class dTDA(TDA):
     def __init__(self, mf):
-        if not getattr(mf, 'xc', None):
-            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         from pyscf import scf
+        from pyscf.dft.rks import KohnShamDFT
+        if not isinstance(mf, KohnShamDFT):
+            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         mf = scf.addons.convert_to_uhf(mf)
-        mf.xc = '0.0*LDA'
+        mf.xc = ''
         TDA.__init__(self, mf)
 
 

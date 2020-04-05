@@ -1,4 +1,4 @@
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ from pyscf.tdscf.rks import TDRKS
 from pyscf.tdscf.uhf import TDUHF
 from pyscf.tdscf.uks import TDUKS
 from pyscf import scf
+from pyscf import dft
 
 
 def TDHF(mf):
@@ -39,13 +40,13 @@ def TDHF(mf):
 def TDA(mf):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, dft.rks.KohnShamDFT):
             return uks.TDA(mf)
         else:
             return uhf.TDA(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, dft.rks.KohnShamDFT):
             return rks.TDA(mf)
         else:
             return rhf.TDA(mf)
@@ -53,13 +54,13 @@ def TDA(mf):
 def TDDFT(mf):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, dft.rks.KohnShamDFT):
             return uks.tddft(mf)
         else:
             return uhf.TDHF(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, dft.rks.KohnShamDFT):
             return rks.tddft(mf)
         else:
             return rhf.TDHF(mf)

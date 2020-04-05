@@ -16,22 +16,40 @@
 import unittest
 from pyscf import lib
 from pyscf import gto, scf
-from pyscf.geomopt import berny_solver
 
+try:
+    from pyscf.geomopt import berny_solver
+except ImportError:
+    berny_solver = False
+
+mol = gto.M(atom='''
+    O  0.   0.       0.
+    H  0.   -0.757   0.587
+    H  0.   0.757    0.587
+            ''', symmetry=True, verbose=0)
+
+def tearDownModule():
+    global mol
+    del mol
+
+@unittest.skipIf(not berny_solver, "pyberny library not found.")
 class KnownValues(unittest.TestCase):
     def test_as_pyscf_method(self):
-        mol = gto.M(atom='''
-            O  0.   0.       0.
-            H  0.   -0.757   0.587
-            H  0.   0.757    0.587
-                    ''', symmetry=True, verbose=0)
         gs = scf.RHF(mol).nuc_grad_method().as_scanner()
         f = lambda mol: gs(mol)
         m = berny_solver.as_pyscf_method(mol, f)
         mol1 = berny_solver.optimize(m)
-        self.assertAlmostEqual(lib.finger(mol1.atom_coords()),
-                               3.039311839766823, 4)
+        self.assertAlmostEqual(lib.fp(mol1.atom_coords()), 2.20003359484436, 4)
         self.assertEqual(mol1.symmetry, 'C2v')
+
+    def test_optimize(self):
+        conv_params = {
+            'gradientmax': 0.1e-3,
+            'gradientrms': 0.1e-3,
+        }
+        mf = scf.RHF(mol)
+        mol_eq = mf.Gradients().optimizer(solver='berny').kernel(params=conv_params)
+        self.assertAlmostEqual(lib.fp(mol_eq.atom_coords()), 2.19943732625887, 4)
 
 if __name__ == "__main__":
     print("Tests for berny_solver")

@@ -139,7 +139,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     for k in range(nkpts):
         dm1b[k][numpy.diag_indices(noccb)] +=1
 
-    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         raise NotImplementedError
         _, nmoa = mycc.mo_occ[0].size
         _, nmob = mycc.mo_occ[1].size

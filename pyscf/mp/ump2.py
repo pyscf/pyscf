@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,18 +32,17 @@ WITH_T2 = getattr(__config__, 'mp_ump2_with_t2', True)
 
 # This is unrestricted (U)MP2, i.e. spin-orbital form.
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
-           verbose=logger.NOTE):
-    if mo_energy is None or mo_coeff is None:
-        moidx = mp.get_frozen_mask()
-        mo_coeff = None
-        mo_energy = (mp.mo_energy[0][moidx[0]], mp.mo_energy[1][moidx[1]])
-    else:
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
+    if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen is 0 or mp.frozen is None)
+        assert(mp.frozen == 0 or mp.frozen is None)
 
-    if eris is None: eris = mp.ao2mo(mo_coeff)
+    if eris is None:
+        eris = mp.ao2mo(mo_coeff)
+
+    if mo_energy is None:
+        mo_energy = eris.mo_energy
 
     nocca, noccb = mp.get_nocc()
     nmoa, nmob = mp.get_nmo()
@@ -104,6 +103,63 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
             t2bb[i] = t2i - t2i.transpose(0,2,1)
 
     return emp2.real, t2
+
+def energy(mp, t2, eris):
+    '''MP2 energy'''
+    t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape
+    eris_ovov = numpy.asarray(eris.ovov).reshape(nocca,nvira,nocca,nvira)
+    eris_OVOV = numpy.asarray(eris.OVOV).reshape(noccb,nvirb,noccb,nvirb)
+    eris_ovOV = numpy.asarray(eris.ovOV).reshape(nocca,nvira,noccb,nvirb)
+    e  = 0.25 * numpy.einsum('ijab,iajb->', t2aa, eris_ovov)
+    e -= 0.25 * numpy.einsum('ijab,ibja->', t2aa, eris_ovov)
+    e += 0.25 * numpy.einsum('ijab,iajb->', t2bb, eris_OVOV)
+    e -= 0.25 * numpy.einsum('ijab,ibja->', t2bb, eris_OVOV)
+    e +=        numpy.einsum('iJaB,iaJB->', t2ab, eris_ovOV)
+    if abs(e.imag) > 1e-4:
+        logger.warn(mp, 'Non-zero imaginary part found in UMP2 energy %s', e)
+    return e.real
+
+def update_amps(mp, t2, eris):
+    '''Update non-canonical MP2 amplitudes'''
+    #assert(isinstance(eris, _ChemistsERIs))
+    t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape
+    mo_ea_o = eris.mo_energy[0][:nocca]
+    mo_ea_v = eris.mo_energy[0][nocca:] + mp.level_shift
+    mo_eb_o = eris.mo_energy[1][:noccb]
+    mo_eb_v = eris.mo_energy[1][noccb:] + mp.level_shift
+
+    focka, fockb = eris.fock
+    fooa = focka[:nocca,:nocca] - numpy.diag(mo_ea_o)
+    foob = fockb[:noccb,:noccb] - numpy.diag(mo_eb_o)
+    fvva = focka[nocca:,nocca:] - numpy.diag(mo_ea_v)
+    fvvb = fockb[noccb:,noccb:] - numpy.diag(mo_eb_v)
+
+    u2aa  = lib.einsum('ijae,be->ijab', t2aa, fvva)
+    u2bb  = lib.einsum('ijae,be->ijab', t2bb, fvvb)
+    u2ab  = lib.einsum('iJaE,BE->iJaB', t2ab, fvvb)
+    u2ab += lib.einsum('iJeA,be->iJbA', t2ab, fvva)
+    u2aa -= lib.einsum('imab,mj->ijab', t2aa, fooa)
+    u2bb -= lib.einsum('imab,mj->ijab', t2bb, foob)
+    u2ab -= lib.einsum('iMaB,MJ->iJaB', t2ab, foob)
+    u2ab -= lib.einsum('mIaB,mj->jIaB', t2ab, fooa)
+
+    eris_ovov = numpy.asarray(eris.ovov).reshape(nocca,nvira,nocca,nvira).conj() * .5
+    eris_OVOV = numpy.asarray(eris.OVOV).reshape(noccb,nvirb,noccb,nvirb).conj() * .5
+    eris_ovOV = numpy.asarray(eris.ovOV).reshape(nocca,nvira,noccb,nvirb).conj()
+    u2aa = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
+    u2bb = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
+    u2ab = eris_ovOV.transpose(0,2,1,3)
+    u2aa = u2aa + u2aa.transpose(1,0,3,2)
+    u2bb = u2bb + u2bb.transpose(1,0,3,2)
+
+    eia_a = lib.direct_sum('i-a->ia', mo_ea_o, mo_ea_v)
+    eia_b = lib.direct_sum('i-a->ia', mo_eb_o, mo_eb_v)
+    u2aa /= lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
+    u2ab /= lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
+    u2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
+    return u2aa, u2ab, u2bb
 
 
 def get_nocc(mp):
@@ -213,7 +269,7 @@ def _gamma1_intermediates(mp, t2):
 
 
 # spin-orbital rdm2 in Chemist's notation
-def make_rdm2(mp, t2=None):
+def make_rdm2(mp, t2=None, ao_repr=False):
     r'''
     Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
 
@@ -240,7 +296,7 @@ def make_rdm2(mp, t2=None):
     nocca, noccb = nocca0, noccb0 = mp.nocc
     t2aa, t2ab, t2bb = t2
 
-    if not (mp.frozen is 0 or mp.frozen is None):
+    if mp.frozen is not None:
         nmoa0 = mp.mo_occ[0].size
         nmob0 = mp.mo_occ[1].size
         nocca0 = numpy.count_nonzero(mp.mo_occ[0] > 0)
@@ -313,6 +369,12 @@ def make_rdm2(mp, t2=None):
         for j in range(noccb0):
             dm2ab[i,i,j,j] += 1
 
+    if ao_repr:
+        from pyscf.cc import ccsd_rdm
+        from pyscf.cc import uccsd_rdm
+        dm2aa = ccsd_rdm._rdm2_mo2ao(dm2aa, mp.mo_coeff[0])
+        dm2bb = ccsd_rdm._rdm2_mo2ao(dm2bb, mp.mo_coeff[1])
+        dm2ab = uccsd_rdm._dm2ab_mo2ao(dm2ab, mp.mo_coeff[0], mp.mo_coeff[1])
     return dm2aa, dm2ab, dm2bb
 
 
@@ -321,10 +383,6 @@ class UMP2(mp2.MP2):
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
-
-    @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
-        return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -337,24 +395,61 @@ class UMP2(mp2.MP2):
         from pyscf.grad import ump2
         return ump2.Gradients(self)
 
+    # For non-canonical MP2
+    energy = energy
+    update_amps = update_amps
+    def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
+        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
+
 MP2 = UMP2
 
 from pyscf import scf
 scf.uhf.UHF.MP2 = lib.class_as_method(MP2)
 
 
+#TODO: Merge this _ChemistsERIs class with uccsd._ChemistsERIs class
 class _ChemistsERIs(mp2._ChemistsERIs):
-    def __init__(self, mp, mo_coeff=None):
+    def __init__(self, mol=None):
+        mp2._ChemistsERIs.__init__(self, mol)
+        self.OVOV = None
+        self.ovOV = None
+
+    def _common_init_(self, mp, mo_coeff=None):
+        self.mol = mp.mol
         if mo_coeff is None:
             mo_coeff = mp.mo_coeff
-        moidx = mp.get_frozen_mask()
-        self.mo_coeff = mo_coeff = \
-                (mo_coeff[0][:,moidx[0]], mo_coeff[1][:,moidx[1]])
+        if mo_coeff is None:
+            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
+                               'You may need to call mf.kernel() to generate them.')
+
+        mo_idx = mp.get_frozen_mask()
+        mo_a = mo_coeff[0][:,mo_idx[0]]
+        mo_b = mo_coeff[1][:,mo_idx[1]]
+        self.mo_coeff = (mo_a, mo_b)
+
+        if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+            self.mo_energy = (mp._scf.mo_energy[0][mo_idx[0]],
+                              mp._scf.mo_energy[1][mo_idx[1]])
+            self.fock = (numpy.diag(self.mo_energy[0]),
+                         numpy.diag(self.mo_energy[1]))
+            self.e_hf = mp._scf.e_tot
+        else:
+            dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
+            vhf = mp._scf.get_veff(mp.mol, dm)
+            fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
+            focka = mo_a.conj().T.dot(fockao[0]).dot(mo_a)
+            fockb = mo_b.conj().T.dot(fockao[1]).dot(mo_b)
+            self.fock = (focka, fockb)
+            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
+            nocca, noccb = self.nocc = mp.nocc
+            self.mo_energy = (focka.diagonal().real, fockb.diagonal().real)
+        return self
 
 def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)
     time0 = (time.clock(), time.time())
-    eris = _ChemistsERIs(mp, mo_coeff)
+    eris = _ChemistsERIs()
+    eris._common_init_(mp, mo_coeff)
 
     nocca, noccb = mp.get_nocc()
     nmoa, nmob = mp.get_nmo()
@@ -592,3 +687,7 @@ if __name__ == '__main__':
 
     pt = UMP2(scf.density_fit(mf, 'weigend'))
     print(pt.kernel()[0] - -0.3503781525098727)
+
+    mf = scf.UHF(mol).run(max_cycle=1)
+    pt = UMP2(mf)
+    print(pt.kernel()[0] - -0.117601521171095)
