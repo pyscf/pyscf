@@ -25,17 +25,23 @@ Algebraic Diagrammatic Construction
 
 from pyscf import scf
 from pyscf.adc import uadc
+from pyscf.adc import radc
 
 def ADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if (frozen != 0):
         raise NotImplementedError
 
-    if isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.rhf.RHF):
+        return RADC(mf, frozen, mo_coeff, mo_occ)
+    elif isinstance(mf, scf.uhf.UHF):
         return UADC(mf, frozen, mo_coeff, mo_occ)
-    else:
+    elif isinstance(mf, scf.rhf.ROHF):
+        lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
+                        'is converted to UHF object and UADC method is called.')
         mf = scf.addons.convert_to_uhf(mf)
         return UADC(mf, frozen, mo_coeff, mo_occ)
-
+    else :
+        raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
 
 def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = uadc.UADC.__doc__
@@ -52,3 +58,19 @@ def UADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-UADC')
     else:
         return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
+
+def RADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    __doc__ = radc.RADC.__doc__
+
+    if (frozen != 0):
+        raise NotImplementedError
+
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.rhf.RHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
+    if getattr(mf, 'with_df', None):
+        raise NotImplementedError('DF-RADC')
+    else:
+        return radc.RADC(mf, frozen, mo_coeff, mo_occ)

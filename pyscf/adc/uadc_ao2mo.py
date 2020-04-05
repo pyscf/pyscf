@@ -31,14 +31,8 @@ def transform_integrals_incore(myadc):
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
     nvir_b = vir_b.shape[1]
-    n_oo = nocc_a * (nocc_a + 1) // 2
-    n_OO = nocc_b * (nocc_b + 1) // 2
-    n_vv = nvir_a * (nvir_a + 1) // 2
-    n_VV = nvir_b * (nvir_b + 1) // 2
-    ind_oo = np.tril_indices(nocc_a)
-    ind_vv = np.tril_indices(nvir_a)
-    ind_OO = np.tril_indices(nocc_b)
-    ind_VV = np.tril_indices(nvir_b)
+    ind_vv_g = np.tril_indices(nvir_a, k=-1)
+    ind_VV_g = np.tril_indices(nvir_b, k=-1)
    
     eris = lambda:None
 
@@ -71,79 +65,21 @@ def transform_integrals_incore(myadc):
     eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-        eris.vvvv = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=True)
-        eris.VVVV = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=True)
-        eris.vvVV = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=True)
+
+        eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a), compact=False).reshape(nvir_a, nvir_a, nvir_a, nvir_a)
+        eris.vvvv_p = eris.vvvv_p.transpose(0,2,1,3)
+        eris.vvvv_p -= eris.vvvv_p.transpose(0,1,3,2)
+        eris.vvvv_p = eris.vvvv_p[:, :, ind_vv_g[0], ind_vv_g[1]]
+        eris.vvvv_p = eris.vvvv_p[ind_vv_g[0], ind_vv_g[1]].copy()
+
+        eris.VVVV_p = ao2mo.general(myadc._scf._eri, (vir_b, vir_b, vir_b, vir_b), compact=False).reshape(nvir_b, nvir_b, nvir_b, nvir_b)
+        eris.VVVV_p = eris.VVVV_p.transpose(0,2,1,3)
+        eris.VVVV_p -= eris.VVVV_p.transpose(0,1,3,2)
+        eris.VVVV_p = eris.VVVV_p[:, :, ind_VV_g[0], ind_VV_g[1]]
+        eris.VVVV_p = eris.VVVV_p[ind_VV_g[0], ind_VV_g[1]].copy()
+
+        eris.vVvV_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=False).reshape(nvir_a, nvir_a, nvir_b, nvir_b)
+        eris.vVvV_p = np.ascontiguousarray(eris.vVvV_p.transpose(0,2,1,3)) 
+        eris.vVvV_p = eris.vVvV_p.reshape(nvir_a*nvir_b, nvir_a*nvir_b) 
 
     return eris
-
-def unpack_eri_1(eri, norb):
-
-    n_oo = norb * (norb + 1) // 2
-    ind_oo = np.tril_indices(norb)
-
-    eri_ = None
-
-    if len(eri.shape) == 3:
-        if (eri.shape[0] == n_oo):
-            eri_ = np.zeros((norb, norb, eri.shape[1], eri.shape[2]))
-            eri_[ind_oo[0], ind_oo[1]] = eri
-            eri_[ind_oo[1], ind_oo[0]] = eri
-
-        elif (eri.shape[2] == n_oo):
-            eri_ = np.zeros((eri.shape[0], eri.shape[1], norb, norb))
-            eri_[:, :, ind_oo[0], ind_oo[1]] = eri
-            eri_[:, :, ind_oo[1], ind_oo[0]] = eri
-        else:
-            raise TypeError("ERI dimensions don't match")
-
-    else: 
-            raise RuntimeError("ERI does not have a correct dimension")
-
-    return eri_
-
-def unpack_eri_2s(eri, norb):
-
-    n_oo = norb * (norb + 1) // 2
-    ind_oo = np.tril_indices(norb)
-
-    eri_ = None
-
-    if len(eri.shape) == 2:
-        if (eri.shape[0] != n_oo or eri.shape[1] != n_oo):
-            raise TypeError("ERI dimensions don't match")
-
-        temp = np.zeros((n_oo, norb, norb))
-        temp[:, ind_oo[0], ind_oo[1]] = eri
-        temp[:, ind_oo[1], ind_oo[0]] = eri
-        eri_ = np.zeros((norb, norb, norb, norb))
-        eri_[ind_oo[0], ind_oo[1]] = temp
-        eri_[ind_oo[1], ind_oo[0]] = temp
-    else: 
-            raise RuntimeError("ERI does not have a correct dimension")
-
-    return eri_
-
-def unpack_eri_2(eri, norb1, norb2):
-
-    n_oo1 = norb1 * (norb1 + 1) // 2
-    ind_oo1 = np.tril_indices(norb1)
-    n_oo2 = norb2 * (norb2 + 1) // 2
-    ind_oo2 = np.tril_indices(norb2)
-
-    eri_ = None
-
-    if len(eri.shape) == 2:
-        if (eri.shape[0] != n_oo1 or eri.shape[1] != n_oo2):
-            raise TypeError("ERI dimensions don't match")
-
-        temp = np.zeros((n_oo1, norb2, norb2))
-        temp[:, ind_oo2[0], ind_oo2[1]] = eri
-        temp[:, ind_oo2[1], ind_oo2[0]] = eri
-        eri_ = np.zeros((norb1, norb1, norb2, norb2))
-        eri_[ind_oo1[0], ind_oo1[1]] = temp
-        eri_[ind_oo1[1], ind_oo1[0]] = temp
-    else: 
-            raise RuntimeError("ERI does not have a correct dimension")
-
-    return eri_
