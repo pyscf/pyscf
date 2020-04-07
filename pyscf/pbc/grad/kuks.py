@@ -28,7 +28,7 @@ from pyscf.pbc.dft import numint
 from pyscf.pbc import gto
 import time
 
-def get_veff(ks_grad, dm, kpts):
+def get_veff(ks_grad, dm=None, kpts=None):
     mf = ks_grad.base
     cell = ks_grad.cell
     if dm is None: dm = mf.make_rdm1()
