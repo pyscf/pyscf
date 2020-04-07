@@ -62,7 +62,7 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
 def RADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = radc.RADC.__doc__
 
-    if (frozen != 0):
+    if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
     from pyscf.soscf import newton_ah
