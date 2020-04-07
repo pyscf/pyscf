@@ -59,7 +59,7 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     else:
         return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
 
-def RADC(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = radc.RADC.__doc__
 
     if not (frozen is None or frozen == 0):
