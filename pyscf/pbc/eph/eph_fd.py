@@ -86,72 +86,30 @@ def gen_cells(cell, disp):
         cell_s.append(cells)
     return cell_a, cell_s
 
-
-def get_v_bra(mf, mf1):
-    '''
-    computing # <u+|Vxc(0)|v0> + <u0|Vxc(0)|v+>
-    '''
-    cell, cell1 = mf.cell, mf1.cell # construct a cell that contains both u0 and u+
-    atoms = []
-    symlst = []
-    for symbol, pos in cell1._atom:
-        sym = 'ghost'+symbol
-        atoms.append((sym, pos))
-
-    # warning: can not use set_geom_
-    fused_cell = gto.Cell()
-    fused_cell.atom = cell._atom + atoms
-    fused_cell.a = cell.a
-    fused_cell.mesh = cell.mesh
-    fused_cell.unit = cell.unit
-    fused_cell.pseudo = cell.pseudo
-    fused_cell.precision = cell.precision
-    fused_cell.basis = cell.basis
-    fused_cell.verbose = 0
-    fused_cell.build()
-
-    nao = cell.nao_nr()
-    dm0 = mf.make_rdm1()
-    RESTRICTED = (dm0.ndim==3)
-
-    nkpts = len(mf.kpts)
-    if RESTRICTED:
-        dm = np.zeros([nkpts,2*nao,2*nao]) # construct a fake DM to get Vxc matrix
-        dm[:,:nao,:nao] = dm0
-    else:
-        dm = np.zeros([2,nkpts,2*nao,2*nao])
-        dm[:,:,:nao,:nao] = dm0
-
-    mf0 = copy_mf(mf, fused_cell)
-    mf0.with_df.mesh = mf.with_df.mesh
-
-    veff = mf0.get_veff(fused_cell, dm) #<u*|Vxc(0)|v*> here p* includes both u0 and v+, Vxc is at equilibrium geometry because only the u0 block of the dm is filled
-    vnu = mf0.get_hcore(fused_cell) - fused_cell.pbc_intor('int1e_kin', kpts=mf.kpts)
-
-    vtot = veff + vnu
-    if RESTRICTED:
-        vtot = vtot[:,nao:,:nao]
-        vtot += vtot.transpose(0,2,1).conj()
-    else:
-        vtot = vtot[:,:,nao:,:nao]
-        vtot += vtot.transpose(0,1,3,2).conj()
-    return vtot
-
-
 def get_vmat(mf, mfset, disp):
     RESTRICTED = (mf.__class__.__name__[1] == 'R')
     nconfigs = len(mfset)
     vmat=[]
+    mygrad = mf.nuc_grad_method()
+
+    veff  = mygrad.get_veff()
+    v1e = mygrad.get_hcore() - np.asarray(mf.cell.pbc_intor("int1e_ipkin", kpts=mf.kpts))
+    vtmp = veff - v1e.transpose(1,0,2,3)
+
+    aoslice = mf.cell.aoslice_by_atom()
     for i in range(nconfigs):
+        atmid, axis = np.divmod(i, 3)
+        p0, p1 = aoslice[atmid][2:]
         mf1, mf2 = mfset[i]
         vfull1 = mf1.get_veff() + mf1.get_hcore() - mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts)  # <u+|V+|v+>
         vfull2 = mf2.get_veff() + mf2.get_hcore() - mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts)  # <u-|V-|v->
         vfull = (vfull1 - vfull2)/disp  # (<p+|V+|q+>-<p-|V-|q->)/dR
-        vbra1 = get_v_bra(mf, mf1)   #<p+|V0|q0> + <p0|V0|q+>
-        vbra2 = get_v_bra(mf, mf2)   #<p-|V0|q0> + <p0|V0|q->
-        vbra = (vbra1-vbra2)/disp
-        vtot = vfull - vbra   #<p0|dV0|q0> = d<p|V|q> - <dp|V0|q> - <p|V0|dq>
-        vmat.append(vtot)
+        if RESTRICTED:
+            vfull[:,p0:p1] -= vtmp[axis,:,p0:p1]
+            vfull[:,:,p0:p1] -= vtmp[axis,:,p0:p1].transpose(0,2,1).conj()
+
+        vmat.append(vfull)
+
     vmat= np.asarray(vmat)
     if vmat.ndim == 4:
         return vmat[:,0]
