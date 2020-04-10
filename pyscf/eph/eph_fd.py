@@ -77,8 +77,8 @@ def gen_moles(mol, disp):
             new_coords_s[i][x] -= disp
             atoma = [[mol.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_a)]
             atoms = [[mol.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_s)]
-            mol_a.append(mol.set_geom_(atoma, inplace=False))
-            mol_s.append(mol.set_geom_(atoms, inplace=False))
+            mol_a.append(mol.set_geom_(atoma, inplace=False, unit='B'))
+            mol_s.append(mol.set_geom_(atoms, inplace=False, unit='B'))
     return mol_a, mol_s
 
 def get_v_bra(mf, mf1):
@@ -90,7 +90,7 @@ def get_v_bra(mf, mf1):
     for symbol, pos in mol1._atom:
         atoms.append(('ghost'+symbol, pos))
 
-    fused_mol  = mol.set_geom_(mol._atom+atoms, inplace=False)
+    fused_mol  = mol.set_geom_(mol._atom+atoms, inplace=False, unit='B')
 
     nao = mol.nao_nr()
     dm0 = mf.make_rdm1()
