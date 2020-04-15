@@ -89,6 +89,7 @@ NUC_FRAC_CHARGE = 3
 NUC_ECP = 4  # atoms with pseudo potential
 
 BASE = getattr(__config__, 'BASE', 0)
+NORMALIZE_GTO = getattr(__config__, 'NORMALIZE_GTO', True)
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -770,8 +771,9 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         es = b_coeff[:,0]
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
-        cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
-        cs = _nomalize_contracted_ao(angl, es, cs)
+        if NORMALIZE_GTO:
+            cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
+            cs = _nomalize_contracted_ao(angl, es, cs)
 
         _env.append(es)
         _env.append(cs.T.reshape(-1))

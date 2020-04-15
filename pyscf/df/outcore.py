@@ -100,7 +100,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                  int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
                  max_memory=MAX_MEMORY, auxmol=None, verbose=logger.NOTE):
-    '''3-center 2-electron DF tensor.
+    '''3-center 2-electron DF tensor. Similar to cholesky_eri while this
+    function stores DF tensor in blocks.
     '''
     assert(aosym in ('s1', 's2ij'))
     log = logger.new_logger(mol, verbose)
