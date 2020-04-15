@@ -143,7 +143,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
             vj1 = rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                         ['ji->s2kl', -dm0[:,p0:p1]], # vj1
                                         shls_slice=shls_slice)
-            veff = vj1
+            veff = vj1[0]
         vtot = h1 + v1 + veff + vxc1ao[ia] + veff.transpose(0,2,1)
         vcore.append(vtot)
     vcore = np.asarray(vcore).reshape(-1,nao,nao)
