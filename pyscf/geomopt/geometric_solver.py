@@ -100,7 +100,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
            include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
            maxsteps=100, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 
@@ -163,7 +163,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
              maxsteps=100, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 

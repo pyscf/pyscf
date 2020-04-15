@@ -2117,7 +2117,11 @@ class Mole(lib.StreamObject):
         return self.spin + 1
     @multiplicity.setter
     def multiplicity(self, x):
-        self.spin = x - 1
+        if x is None:
+            self.spin = None
+        else:
+            self.spin = x - 1
+
     @property
     def ms(self):
         '''Spin quantum number. multiplicity = ms*2+1'''
@@ -2127,7 +2131,10 @@ class Mole(lib.StreamObject):
             return self.spin * .5
     @ms.setter
     def ms(self, x):
-        self.spin = int(round(2*x, 4))
+        if x is None:
+            self.spin = None
+        else:
+            self.spin = int(round(2*x, 4))
 
     def __getattr__(self, key):
         '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)

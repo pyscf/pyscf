@@ -108,6 +108,9 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
 def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
+    '''Derivatives of Coulomb (J) AO matrix at sampled k-points.
+    '''
+
     cell = mydf.cell
     mesh = mydf.mesh
 
@@ -299,7 +302,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
-               exxdiv=None):
+                  exxdiv=None):
+    '''Derivatives of exchange (K) AO matrix at sampled k-points.
+    '''
 
     cell = mydf.cell
     mesh = mydf.mesh
