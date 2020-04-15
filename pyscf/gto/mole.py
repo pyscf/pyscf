@@ -1774,7 +1774,11 @@ def atom_mass_list(mol, isotope_avg=False):
 
             mass.append(prop.get('mass', mass_table[z]))
     else:
-        mass = [mass_table[z] for z in mol.atom_charges()]
+        #mass = [mass_table[z] for z in mol.atom_charges()]
+        mass = []
+        for ia in range(mol.natm):
+            z = charge(mol.atom_symbol(ia))
+            mass.append(mass_table[z])
 
     return numpy.array(mass)
 
