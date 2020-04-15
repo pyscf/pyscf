@@ -30,8 +30,8 @@
 #
 # S. Lehtola, L. Visscher, E. Engel, Efficient implementation of the
 # superposition of atomic potentials initial guess for electronic
-# structure calculations in Gaussian basis sets, J. Chem. Phys., in
-# press (2020).
+# structure calculations in Gaussian basis sets, J. Chem. Phys. 152,
+# 144105 (2020). DOI: 10.1063/5.0004046
 #
 # and the original paper discussing the superposition of atomic
 # potentials
