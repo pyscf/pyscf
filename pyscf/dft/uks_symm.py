@@ -38,7 +38,10 @@ class SymAdaptedUKS(uhf_symm.UHF, rks.KohnShamDFT):
         return self
 
     get_veff = uks.get_veff
+    get_vsap = uks.get_vsap
     energy_elec = uks.energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
 
     reset = rks.KohnShamDFT.reset
 
