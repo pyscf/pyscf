@@ -122,29 +122,31 @@ def kernel(mf, disp=1e-5, mo_rep=False):
 
 if __name__ == '__main__':
     mol = gto.M()
-    mol.atom = '''O 0.000000000000 0.000000002577 0.868557119905
-                  H 0.000000000000 -1.456050381698 2.152719488376
-                  H 0.000000000000 1.456050379121 2.152719486067'''
+    mol.atom = '''O 0.000000000000  0.00000000136 0.459620634131
+                  H 0.000000000000 -0.77050867841 1.139170094494
+                  H 0.000000000000  0.77050867841 1.139170094494'''
 
-    mol.unit = 'Bohr'
+    mol.unit = 'angstrom'
     mol.basis = 'sto3g'
-    mol.verbose=0
+    mol.verbose=4
     mol.build() # this is a pre-computed relaxed geometry
-    from pyscf import hessian
+
     mf = dft.RKS(mol)
-    mf.grids.level=6
+    mf.grids.level=4
     mf.grids.build()
     mf.xc = 'b3lyp'
-    mf.conv_tol = 1e-16
-    mf.conv_tol_grad = 1e-10
+    mf.conv_tol = 1e-14
+    mf.conv_tol_grad = 1e-8
     mf.kernel()
 
     grad = mf.nuc_grad_method().kernel()
     print("Force on the atoms/au:")
     print(grad)
     assert(abs(grad).max()<1e-5)
+
     mat, omega = kernel(mf)
     matmo, _ = kernel(mf, mo_rep=True)
+
     from pyscf.eph.rks import EPH
     myeph = EPH(mf)
     eph, _ = myeph.kernel()

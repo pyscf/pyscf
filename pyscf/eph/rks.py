@@ -183,7 +183,7 @@ if __name__ == '__main__':
     mol.build() # this is a pre-computed relaxed geometry
 
     mf = dft.RKS(mol)
-    mf.grids.level=9
+    mf.grids.level=6
     mf.xc = 'b3lyp'
     mf.conv_tol = 1e-16
     mf.conv_tol_grad = 1e-10
@@ -195,5 +195,5 @@ if __name__ == '__main__':
 
 
     myeph = EPH(mf)
-    eph = myeph.kernel()
-    print(eph)
+    eph, omega = myeph.kernel(mo_rep=True)
+    print(np.amax(eph))
