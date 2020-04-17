@@ -19,8 +19,8 @@ import numpy as np
 import scipy
 from pyscf.lib import logger, param
 
-'''Hacky implementation of Electron-Phonon matrix from finite difference'''
-# Note, the code can only support single-kpoint mesh
+'''Electron-Phonon matrix from finite difference for Gamma Point'''
+# Note, the code now only return eph matrix at Gamma Point
 # cell relaxation needs to be performed before computing eph matrix
 
 AU_TO_CM = 2.19475 * 1e5
@@ -44,7 +44,7 @@ def copy_mf(mf, cell):
     return mf1
 
 def run_mfs(mf, cells_a, cells_b):
-    '''perform a set of calculations on given two sets of cellcules'''
+    '''perform a set of calculations on given two sets of cell'''
     nconfigs = len(cells_a)
     dm0 = mf.make_rdm1()
     mflist = []
@@ -61,7 +61,7 @@ def run_mfs(mf, cells_a, cells_b):
     return mflist
 
 def gen_cells(cell, disp):
-    """From the given cell, generate 3N molecules with a shift on + displacement(cell_a) and - displacement(cell_s) on each Cartesian coordinates"""
+    """From the given cell, generate 3N cells with a shift on + displacement(cell_a) and - displacement(cell_s) on each Cartesian coordinates"""
     coords = cell.atom_coords()
     if cell.unit[0].lower() == 'a':
         coords = np.asarray(coords) * param.BOHR
@@ -135,8 +135,8 @@ def kernel(mf, disp=1e-5, mo_rep=False):
     mo_coeff = np.asarray(mf.mo_coeff)
     RESTRICTED= (mo_coeff.ndim==3)
     cell = mf.cell
-    cells_a, cells_b = gen_cells(cell, disp/2.0) # generate a bunch of cellcules with disp/2 on each cartesion coord
-    mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cellcules
+    cells_a, cells_b = gen_cells(cell, disp/2.0) # generate a bunch of cells with disp/2 on each cartesion coord
+    mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cells
     vmat = get_vmat(mf, mfset, disp) # extracting <u|dV|v>/dR
     hmat = run_hess(mfset, disp)
     omega, vec = solve_hmat(cell, hmat)
