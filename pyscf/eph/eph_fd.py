@@ -27,30 +27,16 @@ import scipy
 from pyscf.lib import logger
 import copy
 
-def copy_mf(mf, mol):
-    RESTRICTED=(mf.mo_coeff.ndim==2)
-    DFT = hasattr(mf, 'xc')
-    if DFT:
-        if RESTRICTED:
-            mf1 = dft.RKS(mol, xc=mf.xc)
-        else:
-            mf1 = dft.UKS(mol, xc=mf.xc)
-        mf1.grids.level=mf.grids.level
-        mf1.conv_tol = mf.conv_tol
-        mf1.conv_tol_grad = mf.conv_tol_grad
-    else:
-        mf1  = copy.copy(mf)
-        mf1.reset(mol)
-    return mf1
-
 def run_mfs(mf, mols_a, mols_b):
     '''perform a set of calculations on given two sets of molecules'''
     nconfigs = len(mols_a)
     dm0 = mf.make_rdm1()
     mflist = []
     for i in range(nconfigs):
-        mf1 = copy_mf(mf, mols_a[i])
-        mf2 = copy_mf(mf, mols_b[i])
+        mf1 = copy.copy(mf)
+        mf1.reset(mols_a[i])
+        mf2 = copy.copy(mf)
+        mf2.reset(mols_b[i])
         mf1.kernel(dm0=dm0)
         mf2.kernel(dm0=dm0)
         if not (mf1.converged):
@@ -77,64 +63,33 @@ def gen_moles(mol, disp):
             new_coords_s[i][x] -= disp
             atoma = [[mol.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_a)]
             atoms = [[mol.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_s)]
-            mol_a.append(mol.set_geom_(atoma, inplace=False))
-            mol_s.append(mol.set_geom_(atoms, inplace=False))
+            mol_a.append(mol.set_geom_(atoma, inplace=False, unit='B'))
+            mol_s.append(mol.set_geom_(atoms, inplace=False, unit='B'))
     return mol_a, mol_s
-
-def get_v_bra(mf, mf1):
-    '''
-    computing # <u+|Vxc(0)|v0> + <u0|Vxc(0)|v+>
-    '''
-    mol, mol1 = mf.mol, mf1.mol # construct a mole that contains both u0 and u+
-    atoms = []
-    for symbol, pos in mol1._atom:
-        atoms.append(('ghost'+symbol, pos))
-
-    fused_mol  = mol.set_geom_(mol._atom+atoms, inplace=False)
-
-    nao = mol.nao_nr()
-    dm0 = mf.make_rdm1()
-    RESTRICTED = (dm0.ndim==2)
-
-    mf0 = copy_mf(mf, fused_mol)
-
-    if hasattr(mf, 'xc'):
-        mf0.grids = mf.grids
-    if RESTRICTED:
-        dm = np.zeros([2*nao,2*nao]) # construct a fake DM to get Vxc matrix
-        dm[:nao,:nao] = dm0
-    else:
-        dm = np.zeros([2,2*nao,2*nao])
-        dm[:,:nao,:nao] = dm0
-
-    veff = mf0.get_veff(fused_mol, dm) #<u*|Vxc(0)|v*> here p* includes both u0 and v+, Vxc is at equilibrium geometry because only the u0 block of the dm is filled
-    vnu = mf0.get_hcore(fused_mol) - fused_mol.intor_symmetric('int1e_kin') # <u*|h1|v*>, the kinetic part subtracted
-    vtot = veff + vnu
-
-    if RESTRICTED:
-        vtot = vtot[nao:,:nao]
-        vtot += vtot.T.conj()
-    else:
-        vtot = vtot[:,nao:,:nao]
-        vtot += vtot.transpose(0,2,1).conj()
-    return vtot
-
 
 def get_vmat(mf, mfset, disp):
     '''
     computing <u|dVxc/dR|v>
     '''
     vmat=[]
-    for (mf1, mf2) in mfset:
+    mygrad = mf.nuc_grad_method()
+    ve = mygrad.get_veff() + mygrad.get_hcore() + mf.mol.intor("int1e_ipkin")
+    RESTRICTED = (ve.ndim==3)
+    aoslice = mf.mol.aoslice_by_atom()
+    for ki, (mf1, mf2) in enumerate(mfset):
+        atmid, axis = np.divmod(ki, 3)
+        p0, p1 = aoslice[atmid][2:]
         vfull1 = mf1.get_veff() + mf1.get_hcore() - mf1.mol.intor_symmetric('int1e_kin')  # <u+|V+|v+>
         vfull2 = mf2.get_veff() + mf2.get_hcore() - mf2.mol.intor_symmetric('int1e_kin')  # <u-|V-|v->
         vfull = (vfull1 - vfull2)/disp  # (<p+|V+|q+>-<p-|V-|q->)/dR
-        vbra1 = get_v_bra(mf, mf1)   #<p+|V0|q0> + <p0|V0|q+>
-        vbra2 = get_v_bra(mf, mf2)   #<p-|V0|q0> + <p0|V0|q->
-        vbra = (vbra1-vbra2)/disp
+        if RESTRICTED:
+            vfull[p0:p1] -= ve[axis,p0:p1]
+            vfull[:,p0:p1] -= ve[axis,p0:p1].T
+        else:
+            vfull[:,p0:p1] -= ve[:,axis,p0:p1]
+            vfull[:,:,p0:p1] -= ve[:,axis,p0:p1].transpose(0,2,1)
+        vmat.append(vfull)
 
-        vtot = vfull - vbra   #<p0|dV0|q0> = d<p|V|q> - <dp|V0|q> - <p|V0|dq>
-        vmat.append(vtot)
     return np.asarray(vmat)
 
 def kernel(mf, disp=1e-5, mo_rep=False):
@@ -167,29 +122,31 @@ def kernel(mf, disp=1e-5, mo_rep=False):
 
 if __name__ == '__main__':
     mol = gto.M()
-    mol.atom = '''O 0.000000000000 0.000000002577 0.868557119905
-                  H 0.000000000000 -1.456050381698 2.152719488376
-                  H 0.000000000000 1.456050379121 2.152719486067'''
+    mol.atom = '''O 0.000000000000  0.00000000136 0.459620634131
+                  H 0.000000000000 -0.77050867841 1.139170094494
+                  H 0.000000000000  0.77050867841 1.139170094494'''
 
-    mol.unit = 'Bohr'
+    mol.unit = 'angstrom'
     mol.basis = 'sto3g'
-    mol.verbose=0
+    mol.verbose=4
     mol.build() # this is a pre-computed relaxed geometry
-    from pyscf import hessian
+
     mf = dft.RKS(mol)
-    mf.grids.level=6
+    mf.grids.level=4
     mf.grids.build()
     mf.xc = 'b3lyp'
-    mf.conv_tol = 1e-16
-    mf.conv_tol_grad = 1e-10
+    mf.conv_tol = 1e-14
+    mf.conv_tol_grad = 1e-8
     mf.kernel()
 
     grad = mf.nuc_grad_method().kernel()
     print("Force on the atoms/au:")
     print(grad)
     assert(abs(grad).max()<1e-5)
+
     mat, omega = kernel(mf)
     matmo, _ = kernel(mf, mo_rep=True)
+
     from pyscf.eph.rks import EPH
     myeph = EPH(mf)
     eph, _ = myeph.kernel()

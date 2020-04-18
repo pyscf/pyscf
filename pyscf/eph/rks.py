@@ -143,7 +143,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
             vj1 = rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                         ['ji->s2kl', -dm0[:,p0:p1]], # vj1
                                         shls_slice=shls_slice)
-            veff = vj1
+            veff = vj1[0]
         vtot = h1 + v1 + veff + vxc1ao[ia] + veff.transpose(0,2,1)
         vcore.append(vtot)
     vcore = np.asarray(vcore).reshape(-1,nao,nao)
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     mol.build() # this is a pre-computed relaxed geometry
 
     mf = dft.RKS(mol)
-    mf.grids.level=9
+    mf.grids.level=6
     mf.xc = 'b3lyp'
     mf.conv_tol = 1e-16
     mf.conv_tol_grad = 1e-10
@@ -195,5 +195,5 @@ if __name__ == '__main__':
 
 
     myeph = EPH(mf)
-    eph = myeph.kernel()
-    print(eph)
+    eph, omega = myeph.kernel(mo_rep=True)
+    print(np.amax(eph))

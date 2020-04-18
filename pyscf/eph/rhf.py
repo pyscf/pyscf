@@ -53,6 +53,7 @@ def solve_hmat(mol, hmat, CUTOFF_FREQUENCY=CUTOFF_FREQUENCY):
         for j in range(natom):
             h[i,j] = hmat[i,j] / np.sqrt(mass[i]*mass[j])
     forcemat = h.transpose(0,2,1,3).reshape(natom*3, natom*3)
+    forcemat[abs(forcemat)<1e-12]=0 #improve stability
     w, c = scipy.linalg.eig(forcemat)
     idx = np.argsort(w)[::-1] # sort the mode of the frequency
     w = w[idx]
@@ -188,5 +189,5 @@ if __name__ == '__main__':
     print("Force on the atoms/au:")
     print(grad)
 
-    eph = myeph.kernel()
-    print(eph)
+    eph, omega = myeph.kernel(mo_rep=True)
+    print(np.amax(eph))
