@@ -13,16 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from pyscf.pbc import scf, dft, gto, grad, df
+from pyscf.pbc import scf, dft, gto
 from pyscf.eph.rhf import solve_hmat
-from pyscf.eph.eph_fd import gen_moles
 import numpy as np
 import scipy
-from pyscf.lib import logger
-import copy
+from pyscf.lib import logger, param
 
-'''Hacky implementation of Electron-Phonon matrix from finite difference'''
-# Note, the code can only support single-kpoint mesh
+'''Electron-Phonon matrix from finite difference for Gamma Point'''
+# Note, the code now only return eph matrix at Gamma Point
 # cell relaxation needs to be performed before computing eph matrix
 
 AU_TO_CM = 2.19475 * 1e5
@@ -46,7 +44,7 @@ def copy_mf(mf, cell):
     return mf1
 
 def run_mfs(mf, cells_a, cells_b):
-    '''perform a set of calculations on given two sets of cellcules'''
+    '''perform a set of calculations on given two sets of cell'''
     nconfigs = len(cells_a)
     dm0 = mf.make_rdm1()
     mflist = []
@@ -63,99 +61,59 @@ def run_mfs(mf, cells_a, cells_b):
     return mflist
 
 def gen_cells(cell, disp):
-    """From the given equilibrium cellcule, generate 3N cellcules with a shift on + displacement(cell_a) and - displacement(cell_s) on each Cartesian coordinates"""
+    """From the given cell, generate 3N cells with a shift on + displacement(cell_a) and - displacement(cell_s) on each Cartesian coordinates"""
     coords = cell.atom_coords()
+    if cell.unit[0].lower() == 'a':
+        coords = np.asarray(coords) * param.BOHR
+        disp_ = disp * param.BOHR
+    else:
+        disp_ = disp
     natoms = len(coords)
-    cell_a, cell_s, coords_a, coords_s = [],[],[],[]
+    cell_a, cell_s = [],[]
     for i in range(natoms):
         for x in range(3):
             new_coords_a, new_coords_s = coords.copy(), coords.copy()
-            new_coords_a[i][x] += disp
-            new_coords_s[i][x] -= disp
-            coords_a.append(new_coords_a)
-            coords_s.append(new_coords_s)
-    nconfigs = 3*natoms
-    for i in range(nconfigs):
-        atoma, atoms = [], []
-        for j in range(natoms):
-            atoma.append([cell.atom_symbol(j), coords_a[i][j]])
-            atoms.append([cell.atom_symbol(j), coords_s[i][j]])
-        cella = cell.set_geom_(atoma, inplace=False)
-        cells = cell.set_geom_(atoms, inplace=False)
-        cell_a.append(cella)
-        cell_s.append(cells)
+            new_coords_a[i][x] += disp_
+            new_coords_s[i][x] -= disp_
+            atoma = [[cell.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_a)]
+            atoms = [[cell.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_s)]
+            cell_a.append(cell.set_geom_(atoma, inplace=False))
+            cell_s.append(cell.set_geom_(atoms, inplace=False))
     return cell_a, cell_s
 
-
-def get_v_bra(mf, mf1):
-    '''
-    computing # <u+|Vxc(0)|v0> + <u0|Vxc(0)|v+>
-    '''
-    cell, cell1 = mf.cell, mf1.cell # construct a cell that contains both u0 and u+
-    atoms = []
-    symlst = []
-    for symbol, pos in cell1._atom:
-        sym = 'ghost'+symbol
-        atoms.append((sym, pos))
-
-    # warning: can not use set_geom_
-    fused_cell = gto.Cell()
-    fused_cell.atom = cell._atom + atoms
-    fused_cell.a = cell.a
-    fused_cell.mesh = cell.mesh
-    fused_cell.unit = cell.unit
-    fused_cell.pseudo = cell.pseudo
-    fused_cell.precision = cell.precision
-    fused_cell.basis = cell.basis
-    fused_cell.verbose = 0
-    fused_cell.build()
-
-    nao = cell.nao_nr()
-    dm0 = mf.make_rdm1()
-    RESTRICTED = (dm0.ndim==3)
-
-    nkpts = len(mf.kpts)
-    if RESTRICTED:
-        dm = np.zeros([nkpts,2*nao,2*nao]) # construct a fake DM to get Vxc matrix
-        dm[:,:nao,:nao] = dm0
-    else:
-        dm = np.zeros([2,nkpts,2*nao,2*nao])
-        dm[:,:,:nao,:nao] = dm0
-
-    mf0 = copy_mf(mf, fused_cell)
-    mf0.with_df.mesh = mf.with_df.mesh
-
-    veff = mf0.get_veff(fused_cell, dm) #<u*|Vxc(0)|v*> here p* includes both u0 and v+, Vxc is at equilibrium geometry because only the u0 block of the dm is filled
-    vnu = mf0.get_hcore(fused_cell) - fused_cell.pbc_intor('int1e_kin', kpts=mf.kpts)
-
-    vtot = veff + vnu
-    if RESTRICTED:
-        vtot = vtot[:,nao:,:nao]
-        vtot += vtot.transpose(0,2,1).conj()
-    else:
-        vtot = vtot[:,:,nao:,:nao]
-        vtot += vtot.transpose(0,1,3,2).conj()
-    return vtot
-
-
 def get_vmat(mf, mfset, disp):
-    RESTRICTED = (mf.__class__.__name__[1] == 'R')
     nconfigs = len(mfset)
     vmat=[]
+    mygrad = mf.nuc_grad_method()
+    veff  = mygrad.get_veff()
+    RESTRICTED = (veff.ndim==4)
+    v1e = mygrad.get_hcore() - np.asarray(mf.cell.pbc_intor("int1e_ipkin", kpts=mf.kpts))
+    if RESTRICTED:
+        vtmp = veff - v1e.transpose(1,0,2,3)
+    else:
+        vtmp = veff - v1e.transpose(1,0,2,3)[:,None]
+
+    aoslice = mf.cell.aoslice_by_atom()
     for i in range(nconfigs):
+        atmid, axis = np.divmod(i, 3)
+        p0, p1 = aoslice[atmid][2:]
         mf1, mf2 = mfset[i]
         vfull1 = mf1.get_veff() + mf1.get_hcore() - mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts)  # <u+|V+|v+>
         vfull2 = mf2.get_veff() + mf2.get_hcore() - mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts)  # <u-|V-|v->
         vfull = (vfull1 - vfull2)/disp  # (<p+|V+|q+>-<p-|V-|q->)/dR
-        vbra1 = get_v_bra(mf, mf1)   #<p+|V0|q0> + <p0|V0|q+>
-        vbra2 = get_v_bra(mf, mf2)   #<p-|V0|q0> + <p0|V0|q->
-        vbra = (vbra1-vbra2)/disp
-        vtot = vfull - vbra   #<p0|dV0|q0> = d<p|V|q> - <dp|V0|q> - <p|V0|dq>
-        vmat.append(vtot)
+        if RESTRICTED:
+            vfull[:,p0:p1] -= vtmp[axis,:,p0:p1]
+            vfull[:,:,p0:p1] -= vtmp[axis,:,p0:p1].transpose(0,2,1).conj()
+        else:
+            vfull[:,:,p0:p1] -= vtmp[axis,:,:,p0:p1]
+            vfull[:,:,:,p0:p1] -= vtmp[axis,:,:,p0:p1].transpose(0,1,3,2).conj()
+
+        vmat.append(vfull)
+
     vmat= np.asarray(vmat)
-    if vmat.ndim == 4:
+    if RESTRICTED:
         return vmat[:,0]
-    elif vmat.ndim==5:
+    else:
         return vmat[:,:,0]
 
 def run_hess(mfset, disp):
@@ -173,17 +131,15 @@ def run_hess(mfset, disp):
 
 
 def kernel(mf, disp=1e-5, mo_rep=False):
-    if hasattr(mf, 'xc'): mf.grids.build(with_non0tab=True)
     if not mf.converged: mf.kernel()
     mo_coeff = np.asarray(mf.mo_coeff)
     RESTRICTED= (mo_coeff.ndim==3)
     cell = mf.cell
-    cells_a, cells_b = gen_moles(cell, disp/2.0) # generate a bunch of cellcules with disp/2 on each cartesion coord
-    mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cellcules
+    cells_a, cells_b = gen_cells(cell, disp/2.0) # generate a bunch of cells with disp/2 on each cartesion coord
+    mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cells
     vmat = get_vmat(mf, mfset, disp) # extracting <u|dV|v>/dR
     hmat = run_hess(mfset, disp)
     omega, vec = solve_hmat(cell, hmat)
-
     mass = cell.atom_mass_list() * 1836.15
     nmodes, natoms = len(omega), len(mass)
     vec = vec.reshape(natoms, 3, nmodes)
@@ -197,7 +153,7 @@ def kernel(mf, disp=1e-5, mo_rep=False):
         else:
             vmat = np.einsum('xsuv,sup,svq->xspq', vmat, mo_coeff[:,0].conj(), mo_coeff[:,0])
 
-    if vmat.ndim == 3:
+    if RESTRICTED:
         mat = np.einsum('xJ,xpq->Jpq', vec, vmat)
     else:
         mat = np.einsum('xJ,xspq->sJpq', vec, vmat)
@@ -209,7 +165,7 @@ if __name__ == '__main__':
     C 0.000000000000   0.000000000000   0.000000000000
     C 1.685068664391   1.685068664391   1.685068664391
     '''
-    cell.basis = 'gth-dzvp'
+    cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
     cell.a = '''
     0.000000000, 3.370137329, 3.370137329
@@ -221,7 +177,8 @@ if __name__ == '__main__':
 
     kpts = cell.make_kpts([1,1,1])
     mf = dft.KRKS(cell, kpts)
+    mf.conv_tol = 1e-14
+    mf.conv_tol_grad = 1e-8
     mf.kernel()
 
-    mat, omega = kernel(mf, disp=1e-4, mo_rep=True)
-    print("|Mat|_{max}",abs(mat).max())
+    vmat, omega = kernel(mf, mo_rep=True)
