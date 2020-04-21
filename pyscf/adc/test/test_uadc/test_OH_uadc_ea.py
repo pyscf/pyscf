@@ -46,10 +46,11 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
   
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.16402828164387806, 6)
+        myadc.method_type = "ea"
+        e,v,p = myadc.kernel(nroots=3)
+        e_corr = myadc.e_corr
 
-        e,v,p = myadc.ea_adc(nroots=3)
+        self.assertAlmostEqual(e_corr, -0.16402828164387806, 6)
 
         self.assertAlmostEqual(e[0], -0.048666915263496924, 6)
         self.assertAlmostEqual(e[1], 0.030845983085818485, 6)
@@ -61,22 +62,19 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2_oneroot(self):
   
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.16402828164387806, 6)
+        myadc.method_type = "ea"
+        e,v,p = myadc.kernel(nroots=1)
 
-        e,v,p = myadc.ea_adc(nroots=1)
-
-        self.assertAlmostEqual(e, 0.030845983085818485, 6)
+        self.assertAlmostEqual(e[0], 0.030845983085818485, 6)
 
         self.assertAlmostEqual(p[0], 0.9953781149964537, 6)
 
     def test_ea_adc2x(self):
   
         myadc.method = "adc(2)-x"
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.16402828164387806, 6)
+        myadc.method_type = "ea"
 
-        e,v,p = myadc.ea_adc(nroots=3)
+        e,v,p = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.07750642898162931, 6)
         self.assertAlmostEqual(e[1], 0.029292010466571882, 6)
@@ -84,15 +82,16 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0], 0.8323987058794676, 6)
         self.assertAlmostEqual(p[1], 0.9918705979602267, 6)
-        self.assertAlmostEqual(p[2], 0.977285529854136, 6)
+        self.assertAlmostEqual(p[2], 0.977286824280963 , 6)
 
     def test_ea_adc3(self):
   
         myadc.method = "adc(3)"
-        e, t_amp1, t_amp2 = myadc.kernel()
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.17616203329072136, 6)
 
-        e,v,p = myadc.ea_adc(nroots=3)
+        myadc.method_type = "ea"
+        e,v,p = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.045097652872531736, 6)
         self.assertAlmostEqual(e[1], 0.03004291636971322, 6)
@@ -100,7 +99,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0], 0.8722483551941809, 6)
         self.assertAlmostEqual(p[1], 0.9927117650068699, 6)
-        self.assertAlmostEqual(p[2], 0.9766456031927028, 6)
+        self.assertAlmostEqual(p[2], 0.9766465081527481, 6)
       
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell molecule")
