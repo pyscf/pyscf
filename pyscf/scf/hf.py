@@ -119,7 +119,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     mol = mf.mol
     if dm0 is None:
-        dm = mf.get_init_guess(mol, mf.init_guess)
+        breaksym = kwargs.get("breaksym", None)
+        dm = mf.get_init_guess(mol, mf.init_guess, breaksym=breaksym)
     else:
         dm = dm0
 

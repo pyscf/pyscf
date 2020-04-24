@@ -31,7 +31,7 @@ BREAKSYM = getattr(__config__, 'scf_uhf_init_guess_breaksym', True)
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def init_guess_by_minao(mol, breaksym=BREAKSYM):
+def init_guess_by_minao(mol, breaksym=None):
     '''Generate initial guess density matrix based on ANO basis, then project
     the density matrix to the basis set defined by ``mol``
 
@@ -40,6 +40,8 @@ def init_guess_by_minao(mol, breaksym=BREAKSYM):
     '''
     dm = hf.init_guess_by_minao(mol)
     dma = dmb = dm*.5
+    if breaksym is None:
+        breaksym = BREAKSYM
     if breaksym:
         #remove off-diagonal part of beta DM
         dmb = numpy.zeros_like(dma)

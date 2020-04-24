@@ -387,7 +387,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', breaksym=False):
         if cell is None:
             cell = self.cell
         dm_kpts = None
@@ -405,9 +405,9 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
             except (IOError, KeyError):
                 logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
                             self.chkfile)
-                dm = self.init_guess_by_minao(cell)
+                dm = self.init_guess_by_minao(cell, breaksym=breaksym)
         else:
-            dm = self.init_guess_by_minao(cell)
+            dm = self.init_guess_by_minao(cell, breaksym=breaksym)
 
         if dm_kpts is None:
             nao = dm[0].shape[-1]
