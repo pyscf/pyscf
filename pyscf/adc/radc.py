@@ -410,7 +410,7 @@ class RADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
 
-        keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
+        keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
         self._keys = set(self.__dict__.keys()).union(keys)
     
@@ -471,7 +471,6 @@ class RADC(lib.StreamObject):
         #eris = radc_ao2mo.transform_integrals_outcore(self)
 
 #############################################################################
-
         nmo = self._nmo
         nao = self.mo_coeff.shape[0]
         nmo_pair = nmo * (nmo+1) // 2
@@ -1016,15 +1015,21 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
         eris_oovv = eris.oovv
         eris_ovvo = eris.ovvo
 
-        eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
+        #eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
+############################################################################
+        eris_oooo_p = np.einsum('ijkl->ikjl',eris_oooo)
+############################################################################
         eris_oooo_p = eris_oooo_p.reshape(nocc*nocc, nocc*nocc)
   
         temp = np.zeros((nvir, eris_oooo_p.shape[0]))
         temp[:] += np.diag(eris_oooo_p)
         diag[s2:f2] += -temp.reshape(-1)
 
-        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
-        eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1)) 
+        #eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
+        #eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1)) 
+#############################################################################
+        eris_ovov_p = np.einsum('ijab->iajb',eris_oovv)
+#############################################################################
         eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
         temp = np.zeros((nocc, nocc, nvir))
@@ -1032,7 +1037,10 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
         temp = np.ascontiguousarray(temp.transpose(2,1,0))
         diag[s2:f2] += temp.reshape(-1)
 
-        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
+        #eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
+#############################################################################
+        eris_ovov_p = np.einsum('ijab->iajb',eris_oovv)
+#############################################################################
         eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
         temp = np.zeros((nocc, nocc, nvir))
