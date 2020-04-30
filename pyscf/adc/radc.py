@@ -111,7 +111,10 @@ def compute_amplitudes(myadc, eris):
 
     # Compute first-order doubles t2 (tijab)
 
-    v2e_oovv = eris_ovov.transpose(0,2,1,3).copy()
+    #v2e_oovv = eris_ovov.transpose(0,2,1,3).copy()
+##################################################
+    v2e_oovv = np.einsum('iajb->ijab',eris_ovov)
+##################################################
 
     t2_1 = v2e_oovv/D2
 
@@ -366,6 +369,9 @@ class RADC(lib.StreamObject):
             T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
     '''
     incore_complete = getattr(__config__, 'adc_radc_RADC_incore_complete', False)
+    async_io = getattr(__config__, 'adc_radc_RADC_async_io', True)
+    blkmin = getattr(__config__, 'adc_radc_RADC_blkmin', 4)
+    memorymin = getattr(__config__, 'adc_radc_RADC_memorymin', 2000)
     
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         from pyscf import gto
@@ -441,6 +447,7 @@ class RADC(lib.StreamObject):
         self.dump_flags_gs()
     
         eris = radc_ao2mo.transform_integrals_incore(self)
+        #eris = radc_ao2mo.transform_integrals_outcore(self)
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
@@ -460,7 +467,24 @@ class RADC(lib.StreamObject):
             self.check_sanity()
         self.dump_flags_gs()
     
-        eris = radc_ao2mo.transform_integrals_incore(self)
+        #eris = radc_ao2mo.transform_integrals_incore(self)
+        #eris = radc_ao2mo.transform_integrals_outcore(self)
+
+#############################################################################
+
+        nmo = self._nmo
+        nao = self.mo_coeff.shape[0]
+        nmo_pair = nmo * (nmo+1) // 2
+        nao_pair = nao * (nao+1) // 2
+        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
+        mem_now = lib.current_memory()[0]
+        if (self._scf._eri is not None and
+            (mem_incore+mem_now < self.max_memory or self.incore_complete)):
+            eris = radc_ao2mo.transform_integrals_incore(self)
+        else:
+            eris = radc_ao2mo.transform_integrals_outcore(self)
+##################################################################################
+
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
@@ -911,8 +935,11 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         temp[:] += np.diag(eris_vvvv)
         diag[s2:f2] += temp.reshape(-1)
         
-        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
-        eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1))
+        #eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
+        #eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1))
+#############################################################################
+        eris_ovov_p = np.einsum('ijab->iajb',eris_oovv)
+#############################################################################
         eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
         temp = np.zeros((nvir, nocc, nvir))
@@ -920,7 +947,10 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         temp = np.ascontiguousarray(temp.transpose(1,0,2))
         diag[s2:f2] += -temp.reshape(-1)
 
-        eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
+        #eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
+###############################################################################
+        eris_ovov_p = np.einsum('ijab->iajb',eris_oovv)
+###############################################################################
         eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
         temp = np.zeros((nvir, nocc, nvir))
