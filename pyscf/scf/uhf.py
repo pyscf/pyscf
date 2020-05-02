@@ -60,7 +60,7 @@ def init_guess_by_atom(mol, breaksym=BREAKSYM):
     return numpy.array((dma,dmb))
 
 def init_guess_by_huckel(mol, breaksym=BREAKSYM):
-    return UHF(mol).init_guess_by_huckel(mol)
+    return UHF(mol).init_guess_by_huckel(mol, breaksym)
 
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for UHF initial guess.

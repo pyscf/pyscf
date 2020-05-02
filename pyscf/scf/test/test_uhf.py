@@ -90,8 +90,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm1[1]-dm2[1]).max(), 0, 9)
 
     def test_init_guess_huckel(self):
-        dm = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 0.90742674256790956, 9)
+        dm1 = mf.init_guess_by_huckel(mol, breaksym=False)
+        self.assertAlmostEqual(lib.fp(dm1), 0.90742674256790956, 9)
+        dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
+        self.assertAlmostEqual(lib.fp(dm2), 0.8637012086471435, 9)
 
     def test_1e(self):
         mf = scf.UHF(gto.M(atom='H', spin=-1))
