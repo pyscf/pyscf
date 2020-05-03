@@ -114,11 +114,19 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 rho[i*2+0] = rho_u[i];
                                 rho[i*2+1] = rho_d[i];
                         }
+#if XC_MAJOR_VERSION >= 5
+                        xc_lda_exc_vxc_fxc_kxc(func_x, np, rho, ex, vxc, fxc, kxc);
+#else
                         xc_lda(func_x, np, rho, ex, vxc, fxc, kxc);
+#endif
                         free(rho);
                 } else {
                         rho = rho_u;
+#if XC_MAJOR_VERSION >= 5
+                        xc_lda_exc_vxc_fxc_kxc(func_x, np, rho, ex, vxc, fxc, kxc);
+#else
                         xc_lda(func_x, np, rho, ex, vxc, fxc, kxc);
+#endif
                 }
                 break;
         case XC_FAMILY_GGA:
@@ -162,7 +170,7 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2,
                                kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
 #else
-                        xc_gga_exc_vxc_fxc(func_x, np, rho, sigma, ex,
+                        xc_gga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, ex,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2,
                                kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
 #endif
@@ -197,7 +205,7 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2,
                                kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
 #else
-                        xc_gga_exc_fxc_kxc(func_x, np, rho, sigma, ex,
+                        xc_gga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, ex,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2,
                                kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
 
