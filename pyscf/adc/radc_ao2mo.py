@@ -47,8 +47,7 @@ def transform_integrals_incore(myadc):
         eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3)) 
         eris.vvvv = eris.vvvv.reshape(nvir*nvir, nvir*nvir)
 
-    return eris
-
+@profile    
 def transform_integrals_outcore(myadc):
 
     log = logger.Logger(myadc.stdout, myadc.verbose)
@@ -62,6 +61,7 @@ def transform_integrals_outcore(myadc):
 
     nocc = occ.shape[1]
     nvir = vir.shape[1]
+    nvpair = nvir * (nvir+1) // 2
 
     eris = lambda:None
 
@@ -71,7 +71,7 @@ def transform_integrals_outcore(myadc):
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
     eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
-    #eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
     def save_occ_frac(p0, p1, eri):
         eri = eri.reshape(p1-p0,nocc,nmo,nmo)
@@ -83,6 +83,18 @@ def transform_integrals_outcore(myadc):
         eris.ovoo[:,p0:p1] = eri[:,:,:nocc,:nocc].transpose(1,0,2,3)
         eris.ovvo[:,p0:p1] = eri[:,:,nocc:,:nocc].transpose(1,0,2,3)
         eris.ovov[:,p0:p1] = eri[:,:,:nocc,nocc:].transpose(1,0,2,3)
+        vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
+        eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
+
+################### forming eris_vvvv ########################################
+#
+#    if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+#        max_memory = max(myadc.memorymin, myadc.max_memory-lib.current_memory()[0])
+#        eris.feri2 = lib.H5TmpFile()
+#        ao2mo.full(mol, vir, eris.feri2, max_memory=max_memory, verbose=log)
+#        eris.vvvv = eris.feri2['eri_mo']
+#  
+##############################################################################
 
     fswap = lib.H5TmpFile()
     max_memory = max(myadc.memorymin, myadc.max_memory-lib.current_memory()[0])
@@ -126,7 +138,7 @@ def transform_integrals_outcore(myadc):
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
 
-    eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()
+    #eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=False).reshape(nvir, nvir, nvir, nvir)

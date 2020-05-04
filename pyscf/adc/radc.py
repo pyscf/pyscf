@@ -80,6 +80,33 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
+@profile
+def get_ovvv_1(myadc, eris):
+
+    nvir = myadc._nvir
+    ovvv = np.asarray(eris.ovvv)
+    ovvv = radc_ao2mo.unpack_eri_1(ovvv, nvir)
+    ovvv_p = np.ascontiguousarray(ovvv.transpose(0,2,1,3))
+    return ovvv_p
+
+@profile
+def get_ovvv_2(myadc, eris):
+
+    nvir = myadc._nvir
+    ovvv = np.asarray(eris.ovvv)
+    ovvv = radc_ao2mo.unpack_eri_1(ovvv, nvir)
+    ovvv_p = np.einsum('iabc->ibac',ovvv)
+    return ovvv_p
+
+@profile
+def get_ovvv_3(myadc, eris):
+
+    nvir = myadc._nvir
+    ovvv = eris.ovvv[:]
+    ovvv = radc_ao2mo.unpack_eri_1(ovvv, nvir)
+    ovvv_p = np.ascontiguousarray(ovvv.transpose(0,2,1,3))
+    return ovvv_p
+
 
 def compute_amplitudes(myadc, eris):
 
@@ -95,7 +122,23 @@ def compute_amplitudes(myadc, eris):
     eris_oovv = eris.oovv
     eris_ovvo = eris.ovvo
     eris_ovvv = eris.ovvv
+###################################################
 
+#    eris_ovvv = get_ovvv_1(myadc, eris)
+#    del eris_ovvv
+#    eris_ovvv = get_ovvv_2(myadc, eris)
+#    del eris_ovvv
+#    eris_ovvv = get_ovvv_3(myadc, eris)
+#    del eris_ovvv
+
+    eris_ovov = get_ovov_1(myadc, eris)
+    del eris_ovov
+    eris_ovov = get_ovov_2(myadc, eris)
+    del eris_ovov
+    eris_ovov = get_ovov_3(myadc, eris)
+    del eris_ovov
+    exit()
+###################################################
     e = myadc.mo_energy
 
     d_ij = e[:nocc][:,None] + e[:nocc]
@@ -446,8 +489,8 @@ class RADC(lib.StreamObject):
             self.check_sanity()
         self.dump_flags_gs()
     
-        eris = radc_ao2mo.transform_integrals_incore(self)
-        #eris = radc_ao2mo.transform_integrals_outcore(self)
+        #eris = radc_ao2mo.transform_integrals_incore(self)
+        eris = radc_ao2mo.transform_integrals_outcore(self)
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
