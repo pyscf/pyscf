@@ -806,6 +806,8 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
     assert(abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
     has_spin_square = getattr(casscf.fcisolver, 'spin_square', None)
+    if wfnsym is None:
+        wfnsym = casscf.fcisolver.wfnsym
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self, fcibase):
@@ -1016,9 +1018,9 @@ def _state_average_mcscf_solver(casscf, fcisolver):
 
     return StateAverageMCSCF(casscf)
 
-def state_average_(casscf, weights=(0.5,0.5)):
+def state_average_(casscf, weights=(0.5,0.5), wfnsym=None):
     ''' Inplace version of state_average '''
-    sacasscf = state_average (casscf, weights)
+    sacasscf = state_average (casscf, weights, wfnsym)
     casscf.__class__ = sacasscf.__class__
     casscf.__dict__.update (sacasscf.__dict__)
     return casscf
@@ -1041,6 +1043,8 @@ def state_specific_(casscf, state=1, wfnsym=None):
                         '    mc.state_specific_()\n' %
                         (casscf.fcisolver, fcibase_class.__base__.__module__,
                          fcibase_class.__base__.__name__))
+    if wfnsym is None:
+        wfnsym = casscf.fcisolver.wfnsym
 
     class FakeCISolver(fcibase_class, StateSpecificFCISolver):
         def __init__(self):
