@@ -152,47 +152,16 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   if(UNIX AND NOT APPLE)
     set(LIBM "LIBS=-lm")
   endif()
-if(APPLE)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
-    URL http://www.tddft.org/programs/libxc/down.php?file=4.3.4/libxc-4.3.4.tar.gz
-    #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
-    #URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    BUILD_IN_SOURCE 1
-    # When Xcode was installed on Mac, CMAKE_C_COMPILER may be set to the
-    # Xcode C compiler, which leads to "stdio.h not found" error. See relevant
-    # discussion in
-    # https://stackoverflow.com/questions/52509602/cant-compile-c-program-on-a-mac-after-upgrade-to-mojave
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
-
-## For git checkout
-#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-#          --enable-shared --disable-static --disable-fortran LIBS=-lm
+    CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
   )
-else()
-  ExternalProject_Add(libxc
-    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
-    #GIT_TAG master
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
-    #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
-    URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    BUILD_IN_SOURCE 1
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
-          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
-
-## For git checkout
-#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-#          --enable-shared --disable-static --disable-fortran LIBS=-lm
-#          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
-  )
-endif()
 endif() # ENABLE_LIBXC
 
 #if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
