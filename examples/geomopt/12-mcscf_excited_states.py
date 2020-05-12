@@ -65,3 +65,12 @@ mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2], (.5, .5))
 excited_grad = mc.nuc_grad_method().as_scanner()
 mol1 = excited_grad.optimizer().kernel()
 
+#
+# 4. Geometry optimization of the 3rd of 4 states
+#
+mc = mcscf.CASSCF(mf, 4,4)
+mc.state_average_([0.25, 0.25, 0.25, 0.25])
+excited_grad = mc.nuc_grad_method().as_scanner(state=2)
+mol1 = excited_grad.optimizer().kernel()
+
+

@@ -21,8 +21,14 @@ CASSCF analytical nuclear gradients
 
 Ref.
 J. Comput. Chem., 5, 589
+
+MRH: copied from pyscf.grad.casscf.py on 12/07/2019
+Contains my modifications for SA-CASSCF gradients
+1. Generalized Fock has nonzero i->a and u->a
+2. Memory footprint for differentiated eris bugfix
 '''
 
+import inspect
 import time
 from functools import reduce
 import numpy
@@ -32,7 +38,6 @@ from pyscf.lib import logger
 from pyscf.grad import casci as casci_grad
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
-
 
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     mc = mc_grad.base
@@ -51,24 +56,34 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
 
+    # Necessary kludge because gfock isn't zero in occ-virt space in SA-CASSCf
+    # Among many other potential applications!
+    if hasattr (mc, '_tag_gfock_ov_nonzero'):
+        if mc._tag_gfock_ov_nonzero:
+            nocc = nmo
+
     mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
-    mo_cas = mo_coeff[:,ncore:nocc]
+    mo_cas = mo_coeff[:,ncore:ncore+ncas]
 
     casdm1, casdm2 = mc.fcisolver.make_rdm12(ci, ncas, nelecas)
 
 # gfock = Generalized Fock, Adv. Chem. Phys., 69, 63
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
     dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
+    # MRH flag: this is one of my kludges
+    # It would be better to just pass the ERIS object used in orbital optimization
+    # But I am too lazy at the moment
     aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_occ, mo_cas), compact=False)
     aapa = aapa.reshape(ncas,ncas,nocc,ncas)
     vj, vk = mc._scf.get_jk(mol, (dm_core, dm_cas))
     h1 = mc.get_hcore()
     vhf_c = vj[0] - vk[0] * .5
     vhf_a = vj[1] - vk[1] * .5
-    gfock = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c + vhf_a, mo_occ)) * 2
-    gfock[:,ncore:nocc] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c, mo_cas, casdm1))
-    gfock[:,ncore:nocc] += numpy.einsum('uviw,vuwt->it', aapa, casdm2)
+    gfock = numpy.zeros ((nocc, nocc))
+    gfock[:,:ncore] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c + vhf_a, mo_core)) * 2
+    gfock[:,ncore:ncore+ncas] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c, mo_cas, casdm1))
+    gfock[:,ncore:ncore+ncas] += numpy.einsum('uviw,vuwt->it', aapa, casdm2)
     dme0 = reduce(numpy.dot, (mo_occ, (gfock+gfock.T)*.5, mo_occ.T))
     aapa = vj = vk = vhf_c = vhf_a = h1 = gfock = None
 
@@ -94,7 +109,10 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     de = numpy.zeros((len(atmlst),3))
 
     max_memory = mc_grad.max_memory - lib.current_memory()[0]
-    blksize = int(max_memory*.9e6/8 / ((aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
+    # MRH: this originally implied that the memory footprint would be max(p1-p0) * max(q1-q0) * nao_pair
+    # In fact, that's the size of dm2_ao AND EACH COMPONENT of the differentiated eris
+    # So the actual memory footprint is 4 times that!
+    blksize = int(max_memory*.9e6/8 / (4*(aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
     blksize = min(nao, max(2, blksize))
 
     for k, ia in enumerate(atmlst):

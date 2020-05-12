@@ -785,6 +785,18 @@ def _state_average_mcscf_solver(casscf, fcisolver):
                                 i, self.weights[i], ei)
             return self
 
+        def nuc_grad_method (self, state=None):
+            from pyscf.mcscf import mc1step
+            if isinstance (self, mc1step.CASSCF):
+                # If no state ever gets passed, the below should default to the
+                # gradient of the state-average energy
+                from pyscf.grad import sacasscf as sacasscf_grad
+                return sacasscf_grad.Gradients (self, state=state)
+            else: # Avoid messing up state-average CASCI
+                return self._base_class.nuc_grad_method (self)
+
+        Gradients = nuc_grad_method
+
     return StateAverageMCSCF(casscf)
 
 def state_average_(casscf, weights=(0.5,0.5)):
@@ -906,6 +918,11 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             self.e_states = [None]
             keys = set (('weights','e_states','_base_class'))
             self._keys = self._keys.union (keys)
+
+        @property
+        def _base_class (self):
+            ''' for convenience; this is equal to mcscfbase_class '''
+            return self.__class__.__bases__[0]
 
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
