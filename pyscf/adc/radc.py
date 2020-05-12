@@ -26,6 +26,9 @@ from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 from pyscf import __config__
 
+
+import pyscf.ao2mo as ao2mo
+
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     adc.method = adc.method.lower()
@@ -80,34 +83,25 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
-@profile
-def get_ovvv_1(myadc, eris):
+#@profile
+def get_vvvv_1(myadc, eris):
 
-    nvir = myadc._nvir
-    ovvv = np.asarray(eris.ovvv)
-    ovvv = radc_ao2mo.unpack_eri_1(ovvv, nvir)
-    ovvv_p = np.ascontiguousarray(ovvv.transpose(0,2,1,3))
-    return ovvv_p
+    vvvv = np.asarray(eris.vvvv)
+    return vvvv
 
-@profile
-def get_ovvv_2(myadc, eris):
+#@profile
+def get_vvvv_2(myadc, eris):
 
-    nvir = myadc._nvir
-    ovvv = np.asarray(eris.ovvv)
-    ovvv = radc_ao2mo.unpack_eri_1(ovvv, nvir)
-    ovvv_p = np.einsum('iabc->ibac',ovvv)
-    return ovvv_p
+    vvvv = np.einsum('pqrs',eris.vvvv)
+    return vvvv
 
-@profile
-def get_ovvv_3(myadc, eris):
+#@profile
+def get_vvvv_3(myadc, eris):
 
-    nvir = myadc._nvir
-    ovvv = eris.ovvv[:]
-    ovvv = radc_ao2mo.unpack_eri_1(ovvv, nvir)
-    ovvv_p = np.ascontiguousarray(ovvv.transpose(0,2,1,3))
-    return ovvv_p
+    vvvv = eris.vvvv[:]
+    return vvvv
 
-
+#@profile
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -124,19 +118,18 @@ def compute_amplitudes(myadc, eris):
     eris_ovvv = eris.ovvv
 ###################################################
 
-#    eris_ovvv = get_ovvv_1(myadc, eris)
-#    del eris_ovvv
-#    eris_ovvv = get_ovvv_2(myadc, eris)
-#    del eris_ovvv
-#    eris_ovvv = get_ovvv_3(myadc, eris)
-#    del eris_ovvv
+    #eris_vvvv = get_vvvv_1(myadc, eris)
+    #del eris_vvvv
+    #eris_vvvv = get_vvvv_2(myadc, eris)
+    #del eris_vvvv
+    #eris_vvvv = get_vvvv_3(myadc, eris)
+    #del eris_vvvv
 
-    eris_ovov = get_ovov_1(myadc, eris)
-    del eris_ovov
-    eris_ovov = get_ovov_2(myadc, eris)
-    del eris_ovov
-    eris_ovov = get_ovov_3(myadc, eris)
-    del eris_ovov
+
+#    if len(eris.vvvv.shape) == 2:  
+#        nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
+#        ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
+
     exit()
 ###################################################
     e = myadc.mo_energy
@@ -434,7 +427,8 @@ class RADC(lib.StreamObject):
         self.max_space = getattr(__config__, 'adc_radc_RADC_max_space', 12)
         self.max_cycle = getattr(__config__, 'adc_radc_RADC_max_cycle', 50)
         self.conv_tol = getattr(__config__, 'adc_radc_RADC_conv_tol', 1e-12)
-        self.scf_energy = mf.scf()
+        #self.scf_energy = mf.scf()
+        self.scf_energy = mf.e_tot
         
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
