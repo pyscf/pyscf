@@ -104,7 +104,7 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
     return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
 
 #TODO: \nabla^2 rho and tau = 1/2 (\nabla f)^2
-def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
+def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, idx=None, verbose=None):
     r'''Calculate the electron density for LDA functional, and the density
     derivatives for GGA functional.
 
@@ -127,6 +127,8 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
             LDA/GGA/mGGA.  It affects the shape of the return density.
         hermi : bool
             dm is hermitian or not
+        idx : 1D integer array
+            mask array to restrict the contraction between ao and dm in _contract_rho().
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -164,15 +166,15 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     if xctype == 'LDA' or xctype == 'HF':
         c0 = _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
         #:rho = numpy.einsum('pi,pi->p', ao, c0)
-        rho = _contract_rho(ao, c0)
+        rho = _contract_rho(ao, c0, idx)
     elif xctype in ('GGA', 'NLC'):
         rho = numpy.empty((4,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
         #:rho[0] = numpy.einsum('pi,pi->p', c0, ao[0])
-        rho[0] = _contract_rho(c0, ao[0])
+        rho[0] = _contract_rho(c0, ao[0], idx)
         for i in range(1, 4):
             #:rho[i] = numpy.einsum('pi,pi->p', c0, ao[i])
-            rho[i] = _contract_rho(c0, ao[i])
+            rho[i] = _contract_rho(c0, ao[i], idx)
             rho[i] *= 2 # *2 for +c.c. in the next two lines
             #c1 = _dot_ao_dm(mol, ao[i], dm, non0tab, shls_slice, ao_loc)
             #rho[i] += numpy.einsum('pi,pi->p', c1, ao[0])
@@ -181,25 +183,24 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         rho = numpy.empty((6,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
         #:rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
-        rho[0] = _contract_rho(ao[0], c0)
+        rho[0] = _contract_rho(ao[0], c0, idx)
         rho[5] = 0
         for i in range(1, 4):
             #:rho[i] = numpy.einsum('pi,pi->p', c0, ao[i]) * 2 # *2 for +c.c.
-            rho[i] = _contract_rho(c0, ao[i]) * 2
+            rho[i] = _contract_rho(c0, ao[i], idx) * 2
             c1 = _dot_ao_dm(mol, ao[i], dm.T, non0tab, shls_slice, ao_loc)
             #:rho[5] += numpy.einsum('pi,pi->p', c1, ao[i])
-            rho[5] += _contract_rho(c1, ao[i])
+            rho[5] += _contract_rho(c1, ao[i], idx)
         XX, YY, ZZ = 4, 7, 9
         ao2 = ao[XX] + ao[YY] + ao[ZZ]
         #:rho[4] = numpy.einsum('pi,pi->p', c0, ao2)
-        rho[4] = _contract_rho(c0, ao2)
+        rho[4] = _contract_rho(c0, ao2, idx)
         rho[4] += rho[5]
         rho[4] *= 2
         rho[5] *= .5
     return rho
 
-def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
-              verbose=None):
+def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA', idx=None, verbose=None):
     r'''Calculate the electron density for LDA functional, and the density
     derivatives for GGA functional.  This function has the same functionality
     as :func:`eval_rho` except that the density are evaluated based on orbital
@@ -223,6 +224,8 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             array can be obtained by calling :func:`make_mask`
         xctype : str
             LDA/GGA/mGGA.  It affects the shape of the return density.
+        idx : 1D integer array
+            mask array to restrict the contraction between ao and dm in _contract_rho().
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -249,34 +252,34 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cpos, non0tab, shls_slice, ao_loc)
             #:rho = numpy.einsum('pi,pi->p', c0, c0)
-            rho = _contract_rho(c0, c0)
+            rho = _contract_rho(c0, c0, idx)
         elif xctype in ('GGA', 'NLC'):
             rho = numpy.empty((4,ngrids))
             c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc)
             #:rho[0] = numpy.einsum('pi,pi->p', c0, c0)
-            rho[0] = _contract_rho(c0, c0)
+            rho[0] = _contract_rho(c0, c0, idx)
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc)
                 #:rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
-                rho[i] = _contract_rho(c0, c1) * 2
+                rho[i] = _contract_rho(c0, c1, idx) * 2
         else: # meta-GGA
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
             rho = numpy.empty((6,ngrids))
             c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc)
             #:rho[0] = numpy.einsum('pi,pi->p', c0, c0)
-            rho[0] = _contract_rho(c0, c0)
+            rho[0] = _contract_rho(c0, c0, idx)
             rho[5] = 0
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc)
                 #:rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
                 #:rho[5] += numpy.einsum('pi,pi->p', c1, c1)
-                rho[i] = _contract_rho(c0, c1) * 2
-                rho[5] += _contract_rho(c1, c1)
+                rho[i] = _contract_rho(c0, c1, idx) * 2
+                rho[5] += _contract_rho(c1, c1, idx)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
             c1 = _dot_ao_dm(mol, ao2, cpos, non0tab, shls_slice, ao_loc)
             #:rho[4] = numpy.einsum('pi,pi->p', c0, c1)
-            rho[4] = _contract_rho(c0, c1)
+            rho[4] = _contract_rho(c0, c1, idx)
             rho[4] += rho[5]
             rho[4] *= 2
 
@@ -295,31 +298,31 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cneg, non0tab, shls_slice, ao_loc)
             #:rho -= numpy.einsum('pi,pi->p', c0, c0)
-            rho -= _contract_rho(c0, c0)
+            rho -= _contract_rho(c0, c0, idx)
         elif xctype == 'GGA':
             c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc)
             #:rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
-            rho[0] -= _contract_rho(c0, c0)
+            rho[0] -= _contract_rho(c0, c0, idx)
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc)
                 #:rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
-                rho[i] -= _contract_rho(c0, c1) * 2 # *2 for +c.c.
+                rho[i] -= _contract_rho(c0, c1, idx) * 2 # *2 for +c.c.
         else:
             c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc)
             #:rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
-            rho[0] -= _contract_rho(c0, c0)
+            rho[0] -= _contract_rho(c0, c0, idx)
             rho5 = 0
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc)
                 #:rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
                 #:rho5 += numpy.einsum('pi,pi->p', c1, c1)
-                rho[i] -= _contract_rho(c0, c1) * 2 # *2 for +c.c.
-                rho5 += _contract_rho(c1, c1)
+                rho[i] -= _contract_rho(c0, c1, idx) * 2 # *2 for +c.c.
+                rho5 += _contract_rho(c1, c1, idx)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
             c1 = _dot_ao_dm(mol, ao2, cneg, non0tab, shls_slice, ao_loc)
             #:rho[4] -= numpy.einsum('pi,pi->p', c0, c1) * 2
-            rho[4] -= _contract_rho(c0, c1) * 2
+            rho[4] -= _contract_rho(c0, c1, idx) * 2
             rho[4] -= rho5 * 2
 
             rho[5] -= rho5 * .5
@@ -640,11 +643,14 @@ def _scale_ao(ao, wv, out=None):
         aow = numpy.einsum('nip,np->pi', ao, wv)
     return aow
 
-def _contract_rho(bra, ket):
+def _contract_rho(bra, ket, idx):
     #:rho  = numpy.einsum('pi,pi->p', bra.real, ket.real)
     #:rho += numpy.einsum('pi,pi->p', bra.imag, ket.imag)
     bra = bra.T
     ket = ket.T
+    if idx is not None:
+        bra = bra[idx]
+        ket = ket[idx]
     nao, ngrids = bra.shape
     rho = numpy.empty(ngrids)
 
