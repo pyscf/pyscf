@@ -108,7 +108,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                              shls_slice=shls_slice, non0tab=non0tab, out=out)
 
 
-def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
+def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, idx=None, verbose=None):
     '''Collocate the *real* density (opt. gradients) on the real-space grid.
 
     Args:
@@ -155,37 +155,37 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         if not hermi:
             dm = (dm + dm.conj().T) * .5
 
-        def dot_bra(bra, aodm):
+        def dot_bra(bra, aodm, idx):
             # rho = numpy.einsum('pi,pi->p', bra.conj(), aodm).real
             #:rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
             #:rho += numpy.einsum('pi,pi->p', bra.imag, aodm.imag)
             #:return rho
-            return _contract_rho(bra, aodm)
+            return _contract_rho(bra, aodm, idx)
 
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(cell, ao, dm, non0tab, shls_slice, ao_loc)
-            rho = dot_bra(ao, c0)
+            rho = dot_bra(ao, c0, idx)
 
         elif xctype == 'GGA':
             rho = numpy.empty((4,ngrids))
             c0 = _dot_ao_dm(cell, ao[0], dm, non0tab, shls_slice, ao_loc)
-            rho[0] = dot_bra(ao[0], c0)
+            rho[0] = dot_bra(ao[0], c0, idx)
             for i in range(1, 4):
-                rho[i] = dot_bra(ao[i], c0) * 2
+                rho[i] = dot_bra(ao[i], c0, idx) * 2
 
         else:
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
             rho = numpy.empty((6,ngrids))
             c0 = _dot_ao_dm(cell, ao[0], dm, non0tab, shls_slice, ao_loc)
-            rho[0] = dot_bra(ao[0], c0)
+            rho[0] = dot_bra(ao[0], c0, idx)
             rho[5] = 0
             for i in range(1, 4):
-                rho[i] = dot_bra(ao[i], c0) * 2  # *2 for +c.c.
+                rho[i] = dot_bra(ao[i], c0, idx) * 2  # *2 for +c.c.
                 c1 = _dot_ao_dm(cell, ao[i], dm, non0tab, shls_slice, ao_loc)
-                rho[5] += dot_bra(ao[i], c1)
+                rho[5] += dot_bra(ao[i], c1, idx)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
-            rho[4] = dot_bra(ao2, c0)
+            rho[4] = dot_bra(ao2, c0, idx)
             rho[4] += rho[5]
             rho[4] *= 2 # *2 for +c.c.
             rho[5] *= .5
@@ -211,11 +211,11 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(mo_coeff):
-        def dot(bra, ket):
+        def dot(bra, ket, idx):
             #:rho  = numpy.einsum('pi,pi->p', bra.real, ket.real)
             #:rho += numpy.einsum('pi,pi->p', bra.imag, ket.imag)
             #:return rho
-            return _contract_rho(bra, ket)
+            return _contract_rho(bra, ket, idx)
 
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
