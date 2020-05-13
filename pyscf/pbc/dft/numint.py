@@ -194,8 +194,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, idx=None, verbos
         rho = numint.eval_rho(cell, ao, dm, non0tab, xctype, hermi, verbose)
     return rho
 
-def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
-              verbose=None):
+def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA', idx=None, verbose=None):
     '''Refer to `pyscf.dft.numint.eval_rho2` for full documentation.
     '''
     xctype = xctype.upper()
@@ -225,28 +224,28 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         if pos.sum() > 0:
             if xctype == 'LDA' or xctype == 'HF':
                 c0 = _dot_ao_dm(cell, ao, cpos, non0tab, shls_slice, ao_loc)
-                rho = dot(c0, c0)
+                rho = dot(c0, c0, idx)
             elif xctype == 'GGA':
                 rho = numpy.empty((4,ngrids))
                 c0 = _dot_ao_dm(cell, ao[0], cpos, non0tab, shls_slice, ao_loc)
-                rho[0] = dot(c0, c0)
+                rho[0] = dot(c0, c0, idx)
                 for i in range(1, 4):
                     c1 = _dot_ao_dm(cell, ao[i], cpos, non0tab, shls_slice, ao_loc)
-                    rho[i] = dot(c0, c1) * 2  # *2 for +c.c.
+                    rho[i] = dot(c0, c1, idx) * 2  # *2 for +c.c.
             else: # meta-GGA
                 # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
                 rho = numpy.empty((6,ngrids))
                 c0 = _dot_ao_dm(cell, ao[0], cpos, non0tab, shls_slice, ao_loc)
-                rho[0] = dot(c0, c0)
+                rho[0] = dot(c0, c0, idx)
                 rho[5] = 0
                 for i in range(1, 4):
                     c1 = _dot_ao_dm(cell, ao[i], cpos, non0tab, shls_slice, ao_loc)
-                    rho[i] = dot(c0, c1) * 2  # *2 for +c.c.
-                    rho[5]+= dot(c1, c1)
+                    rho[i] = dot(c0, c1, idx) * 2  # *2 for +c.c.
+                    rho[5]+= dot(c1, c1, idx)
                 XX, YY, ZZ = 4, 7, 9
                 ao2 = ao[XX] + ao[YY] + ao[ZZ]
                 c1 = _dot_ao_dm(cell, ao2, cpos, non0tab, shls_slice, ao_loc)
-                rho[4] = dot(c0, c1)
+                rho[4] = dot(c0, c1, idx)
                 rho[4]+= rho[5]
                 rho[4]*= 2
                 rho[5]*= .5
@@ -263,25 +262,25 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             cneg = numpy.einsum('ij,j->ij', mo_coeff[:,neg], numpy.sqrt(-mo_occ[neg]))
             if xctype == 'LDA' or xctype == 'HF':
                 c0 = _dot_ao_dm(cell, ao, cneg, non0tab, shls_slice, ao_loc)
-                rho -= dot(c0, c0)
+                rho -= dot(c0, c0, idx)
             elif xctype == 'GGA':
                 c0 = _dot_ao_dm(cell, ao[0], cneg, non0tab, shls_slice, ao_loc)
-                rho[0] -= dot(c0, c0)
+                rho[0] -= dot(c0, c0, idx)
                 for i in range(1, 4):
                     c1 = _dot_ao_dm(cell, ao[i], cneg, non0tab, shls_slice, ao_loc)
-                    rho[i] -= dot(c0, c1) * 2  # *2 for +c.c.
+                    rho[i] -= dot(c0, c1, idx) * 2  # *2 for +c.c.
             else:
                 c0 = _dot_ao_dm(cell, ao[0], cneg, non0tab, shls_slice, ao_loc)
-                rho[0] -= dot(c0, c0)
+                rho[0] -= dot(c0, c0, idx)
                 rho5 = 0
                 for i in range(1, 4):
                     c1 = _dot_ao_dm(cell, ao[i], cneg, non0tab, shls_slice, ao_loc)
-                    rho[i] -= dot(c0, c1) * 2  # *2 for +c.c.
-                    rho5 -= dot(c1, c1)
+                    rho[i] -= dot(c0, c1, idx) * 2  # *2 for +c.c.
+                    rho5 -= dot(c1, c1, idx)
                 XX, YY, ZZ = 4, 7, 9
                 ao2 = ao[XX] + ao[YY] + ao[ZZ]
                 c1 = _dot_ao_dm(cell, ao2, cneg, non0tab, shls_slice, ao_loc)
-                rho[4] -= dot(c0, c1) * 2
+                rho[4] -= dot(c0, c1, idx) * 2
                 rho[4] -= rho5 * 2
                 rho[5] -= rho5 * .5
     else:
