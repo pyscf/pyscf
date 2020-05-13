@@ -1,14 +1,30 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import json
 import h5py
-import pyscf.gto
 
-def load_chkfile_key(chkfile, key):
-    return load(chkfile, key)
+if sys.version_info < (3,):
+    RANGE_TYPE = list
+else:
+    RANGE_TYPE = range
+
 def load(chkfile, key):
     '''Load array(s) from chkfile
     
@@ -16,8 +32,8 @@ def load(chkfile, key):
         chkfile : str
             Name of chkfile. The chkfile needs to be saved in HDF5 format.
         key : str
-            HDF5.dataset name or group name.  If key is the HDF5 group name,
-            the group will be loaded into an Python dict, recursively
+            HDF5.dataset name or group name.  If key is the name of a HDF5
+            group, the group will be loaded into a Python dict, recursively.
 
     Returns:
         whatever read from chkfile
@@ -52,15 +68,12 @@ def load(chkfile, key):
                 return dict([(k.replace('__from_list__', ''),
                               load_as_dic(k, val)) for k in val])
         else:
-            return val.value
+            return val[()]
 
     with h5py.File(chkfile, 'r') as fh5:
         return load_as_dic(key, fh5)
+load_chkfile_key = load
 
-def dump_chkfile_key(chkfile, key, value):
-    dump(chkfile, key, value)
-def save(chkfile, key, value):
-    dump(chkfile, key, value)
 def dump(chkfile, key, value):
     '''Save array(s) in chkfile
     
@@ -68,10 +81,11 @@ def dump(chkfile, key, value):
         chkfile : str
             Name of chkfile.
         key : str
-
-        value : array, vector ... or dict
-            If value is a python dict, the key/value of the dict will be saved
-            recursively as the HDF5 group/dataset
+            key to be used in h5py object. It can contain "/" to represent the
+            path in the HDF5 storage structure.
+        value : array, vector, list ... or dict
+            If value is a python dict or list, the key/value of the dict will
+            be saved recursively as the HDF5 group/dataset structure.
 
     Returns:
         No return value
@@ -82,7 +96,7 @@ def dump(chkfile, key, value):
     >>> from pyscf import lib
     >>> ci = {'Ci' : {'op': ('E', 'i'), 'irrep': ('Ag', 'Au')}}
     >>> lib.chkfile.save('symm.chk', 'symm', ci)
-    >>> f = h5py.File('symm.chk')
+    >>> f = h5py.File('symm.chk', 'r')
     >>> f.keys()
     ['symm']
     >>> f['symm'].keys()
@@ -97,10 +111,10 @@ def dump(chkfile, key, value):
             root1 = root.create_group(key)
             for k in value:
                 save_as_group(k, value[k], root1)
-        elif isinstance(value, (tuple, list)):
+        elif isinstance(value, (tuple, list, RANGE_TYPE)):
             root1 = root.create_group(key + '__from_list__')
             for k, v in enumerate(value):
-                save_as_group(str(k), v, root1)
+                save_as_group('%06d'%k, v, root1)
         else:
             try:
                 root[key] = value
@@ -110,7 +124,7 @@ def dump(chkfile, key, value):
                     raise e
                 root1 = root.create_group(key + '__from_list__')
                 for k, v in enumerate(value):
-                    save_as_group(str(k), v, root1)
+                    save_as_group('%06d'%k, v, root1)
 
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile, 'r+') as fh5:
@@ -122,6 +136,7 @@ def dump(chkfile, key, value):
     else:
         with h5py.File(chkfile, 'w') as fh5:
             save_as_group(key, value, fh5)
+dump_chkfile_key = save = dump
 
 
 def load_mol(chkfile):
@@ -143,17 +158,18 @@ def load_mol(chkfile):
     >>> lib.chkfile.load_mol('He.chk')
     <pyscf.gto.mole.Mole object at 0x7fdcd94d7f50>
     '''
+    from numpy import array  # noqa
+    from pyscf import gto
     try:
         with h5py.File(chkfile, 'r') as fh5:
-            mol = pyscf.gto.loads(fh5['mol'].value)
+            mol = gto.loads(fh5['mol'][()])
     except:
 # Compatibility to the old serialization format
 # TODO: remove it in future release
-        from numpy import array
         with h5py.File(chkfile, 'r') as fh5:
-            mol = pyscf.gto.Mole()
+            mol = gto.Mole()
             mol.output = '/dev/null'
-            moldic = eval(fh5['mol'].value)
+            moldic = eval(fh5['mol'][()])
             for key in ('mass', 'grids', 'light_speed'):
                 if key in moldic:
                     del(moldic[key])
@@ -164,13 +180,12 @@ def save_mol(mol, chkfile):
     '''Save Mole object in chkfile
 
     Args:
-        mol : an instance of :class:`Mole`.
-
-        chkfile : str
+        chkfile str:
             Name of chkfile.
 
     Returns:
         No return value
+
     '''
     dump(chkfile, 'mol', mol.dumps())
 dump_mol = save_mol

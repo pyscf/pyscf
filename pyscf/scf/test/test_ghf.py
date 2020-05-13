@@ -1,13 +1,31 @@
+#!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import copy
 import unittest
 import numpy
 import scipy.linalg
+from functools import reduce
+
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
+from pyscf import ao2mo
 
 mol = gto.M(
     verbose = 5,
@@ -19,7 +37,7 @@ H     0    0.757    0.587''',
     basis = 'cc-pvdz',
 )
 mf = scf.GHF(mol)
-mf.conv_tol = 1e-14
+mf.conv_tol = 1e-12
 mf.kernel()
 
 molsym = gto.M(
@@ -32,7 +50,17 @@ H     0    0.757    0.587''',
     basis = 'cc-pvdz',
     symmetry = 'c2v'
 )
-mfsym = scf.GHF(molsym)
+mfsym = scf.GHF(molsym).run()
+
+mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
+mf_r = scf.RHF(mol1).run()
+mf_u = scf.RHF(mol1).run()
+
+def tearDownModule():
+    global mol, mf, molsym, mfsym, mol1, mf_r, mf_u
+    mol.stdout.close()
+    molsym.stdout.close()
+    del mol, mf, molsym, mfsym, mol1, mf_r, mf_u
 
 def spin_square(mol, mo):
     s = mol.intor('int1e_ovlp')
@@ -64,28 +92,68 @@ def spin_square(mol, mo):
     ss+= s1.trace().real * .75
     return ss
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = mf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 14.00554247575052, 9)
+        self.assertEqual(dm.shape, (48,48))
+        self.assertAlmostEqual(lib.fp(dm[:24,:24])*2, 2.5912875957299684, 9)
+        self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.5912875957299684, 9)
+
+    def test_init_guess_atom(self):
+        dm = mf.get_init_guess(mol, key='atom')
+        self.assertEqual(dm.shape, (48,48))
+        self.assertAlmostEqual(lib.fp(dm[:24,:24])*2, 2.7458577873928842, 9)
+        self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.7458577873928842, 9)
+
+    def test_init_guess_chk(self):
+        dm = scf.ghf.GHF(mol).get_init_guess(mol, key='chkfile')
+        self.assertEqual(dm.shape, (48,48))
+        self.assertAlmostEqual(lib.fp(dm), 1.8117584283411752, 9)
+
+        dm = mf.get_init_guess(mol, key='chkfile')
+        self.assertEqual(dm.shape, (48,48))
+        self.assertAlmostEqual(lib.fp(dm), 1.3594274771226789, 9)
+
+        dm = scf.ghf.init_guess_by_chkfile(mol1, mf_r.chkfile, project=True)
+        self.assertEqual(dm.shape, (26,26))
+        self.assertAlmostEqual(lib.fp(dm), -3.742519160521582, 9)
+
+        dm = scf.ghf.init_guess_by_chkfile(mol1, mf_u.chkfile)
+        self.assertEqual(dm.shape, (26,26))
+        self.assertAlmostEqual(lib.fp(dm), -3.742519160521582, 9)
+
+    def test_init_guess_huckel(self):
+        dm = scf.GHF(mol).get_init_guess(mol, key='huckel')
+        self.assertAlmostEqual(lib.fp(dm), 1.1375435310601234, 9)
 
     def test_ghf_complex(self):
-        dm = mf.init_guess_by_1e(mol) + 0j
+        mf1 = scf.GHF(mol)
+        dm = mf1.init_guess_by_1e(mol) + 0j
         nao = dm.shape[0] // 2
         numpy.random.seed(12)
         dm[:nao,nao:] = numpy.random.random((nao,nao)) * .1j
         dm[nao:,:nao] = dm[:nao,nao:].T.conj()
-        mf.kernel(dm)
-        self.assertAlmostEqual(mf.e_tot, -76.0267656731, 9)
+        mf1.kernel(dm)
+        self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 9)
 
     def test_get_veff(self):
         nao = mol.nao_nr()*2
         numpy.random.seed(1)
-        d1 = numpy.random.random((nao,nao))
-        d2 = numpy.random.random((nao,nao))
-        d = (d1+d1.T, d2+d2.T)
+        d1 = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao)) * 1j
+        d2 = numpy.random.random((nao,nao)) + numpy.random.random((nao,nao)) * 1j
+        d = numpy.array((d1+d1.conj().T, d2+d2.conj().T))
+        eri = numpy.zeros((nao, nao, nao, nao))
+        n = nao // 2
+        eri[:n,:n,:n,:n] = \
+        eri[n:,n:,n:,n:] = \
+        eri[:n,:n,n:,n:] = \
+        eri[n:,n:,:n,:n] = ao2mo.restore(1, mf._eri, n)
+        vj = numpy.einsum('ijkl,xji->xkl', eri, d)
+        vk = numpy.einsum('ijkl,xjk->xil', eri, d)
+        ref = vj - vk
         v = mf.get_veff(mol, d)
-        self.assertAlmostEqual(numpy.linalg.norm(v), 556.53059717681901, 9)
+        self.assertAlmostEqual(abs(ref - v).max(), 0, 12)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 560.3785699368684, 9)
 
     def test_get_jk(self):
         nao = mol.nao_nr()*2
@@ -96,8 +164,8 @@ class KnowValues(unittest.TestCase):
         vj, vk = mf.get_jk(mol, d)
         self.assertEqual(vj.shape, (2,nao,nao))
         self.assertEqual(vk.shape, (2,nao,nao))
-        self.assertAlmostEqual(lib.finger(vj), 246.24944977538354, 9)
-        self.assertAlmostEqual(lib.finger(vk), 37.840557968925779, 9)
+        self.assertAlmostEqual(lib.fp(vj), 246.24944977538354, 9)
+        self.assertAlmostEqual(lib.fp(vk), 53.22954677121744, 9)
 
         numpy.random.seed(1)
         d1 = numpy.random.random((nao,nao)) + 1j*numpy.random.random((nao,nao))
@@ -106,8 +174,8 @@ class KnowValues(unittest.TestCase):
         vj, vk = mf.get_jk(mol, d)
         self.assertEqual(vj.shape, (2,nao,nao))
         self.assertEqual(vk.shape, (2,nao,nao))
-        self.assertAlmostEqual(lib.finger(vj), 254.68614111766146+0j, 9)
-        self.assertAlmostEqual(lib.finger(vk), 53.629159066971539-2.1298002812909353j, 9)
+        self.assertAlmostEqual(lib.fp(vj), 254.68614111766146+0j, 9)
+        self.assertAlmostEqual(lib.fp(vk), 62.08832587927003-8.640597547171135j, 9)
 
         nao = mol.nao_nr()
         numpy.random.seed(1)
@@ -117,8 +185,8 @@ class KnowValues(unittest.TestCase):
         vj, vk = mf.get_jk(mol, d)
         self.assertEqual(vj.shape, (2,nao,nao))
         self.assertEqual(vk.shape, (2,nao,nao))
-        self.assertAlmostEqual(lib.finger(vj), -388.17756605981504, 9)
-        self.assertAlmostEqual(lib.finger(vk), -84.276190743451622, 9)
+        self.assertAlmostEqual(lib.fp(vj), -388.17756605981504, 9)
+        self.assertAlmostEqual(lib.fp(vk), -84.276190743451622, 9)
 
     def test_spin_square(self):
         nao = mol.nao_nr()
@@ -157,15 +225,130 @@ class KnowValues(unittest.TestCase):
         mo[:,:nocc] = numpy.dot(mo[:,:nocc], u)
         mo[:,nocc:] = numpy.dot(mo[:,nocc:], vh)
         mo_e, mo = mf.canonicalize(mo, mf.mo_occ)
-        self.assertAlmostEqual(numpy.linalg.norm(mo_e-mf.mo_energy), 0, 8)
+        self.assertAlmostEqual(abs(mo_e-mf.mo_energy).max(), 0, 7)
+
+        e, c = mfsym.canonicalize(mfsym.mo_coeff, mfsym.mo_occ)
+        self.assertAlmostEqual(abs(e - mfsym.mo_energy).max(), 0, 6)
 
     def test_get_occ(self):
-        mfsym.irrep_nelec['B1'] = 1
-        occ = mfsym.get_occ(mf.mo_energy, mf.mo_coeff+0j)
-        self.assertAlmostEqual(lib.finger(occ), 1.3371797424932739, 9)
-        mfsym.irrep_nelec['A2'] = 5
-        occ = mfsym.get_occ(mf.mo_energy, mf.mo_coeff)
-        self.assertAlmostEqual(lib.finger(occ), -1.3108338866693456, 9)
+        mf1 = copy.copy(mfsym)
+        mf1.irrep_nelec = {}
+        mf1.irrep_nelec['B2'] = 1
+        occ = mf1.get_occ(mf.mo_energy, mf.mo_coeff+0j)
+        self.assertAlmostEqual(lib.fp(occ), 0.49368251542877073, 9)
+        mf1.irrep_nelec['A2'] = 5
+        occ = mf1.get_occ(mf.mo_energy, mf.mo_coeff)
+        self.assertAlmostEqual(lib.fp(occ), -1.3108338866693456, 9)
+
+        order = numpy.argsort(numpy.random.random(mfsym.mo_occ.size))
+        mo_e = mfsym.mo_energy[order]
+        mo = numpy.array(mfsym.mo_coeff[:,order])
+        self.assertTrue(numpy.allclose(mfsym.get_occ(mo_e, mo),
+                                       mfsym.mo_occ[order]))
+
+    def test_get_occ_extreme_case(self):
+        mol = gto.M(atom='He', verbose=7, output='/dev/null')
+        mf = scf.GHF(mol).run()
+        self.assertAlmostEqual(mf.e_tot, -2.8077839575399737, 12)
+
+        mol.charge = 2
+        mf = scf.GHF(mol).run()
+        self.assertAlmostEqual(mf.e_tot, 0, 12)
+        mol.stdout.close()
+
+    def test_analyze(self):
+        (pop, chg), dip = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 4.0049440587033116, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.05844441822, 5)
+        (pop, chg), dip = mf.analyze(with_meta_lowdin=False)
+        self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 3.2031790129016922, 6)
+
+        (pop, chg), dip = mfsym.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 4.0049440587033116, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.05844441822, 5)
+        (pop, chg), dip = mfsym.analyze(with_meta_lowdin=False)
+        self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 3.2031790129016922, 6)
+
+    def test_get_grad(self):
+        g = mf.get_grad(mf.mo_coeff, mf.mo_occ)
+        self.assertAlmostEqual(abs(g).max(), 0, 6)
+
+    def test_det_ovlp(self):
+        s, x = mf.det_ovlp(mf.mo_coeff, mf.mo_coeff, mf.mo_occ, mf.mo_occ)
+        self.assertAlmostEqual(s, 1.000000000, 9)
+
+    def test_spin_square1(self):
+        self.assertAlmostEqual(mf.spin_square()[0], 0, 9)
+
+    def test_get_veff1(self):
+        pmol = gto.Mole()
+        pmol.atom = '''
+O     0    0        0
+H     0    -0.757   0.587
+H     0    0.757    0.587'''
+        pmol.basis = '6-31g'
+        pmol.cart = True
+
+        mf1 = scf.ghf.GHF(pmol)
+        mf1.direct_scf = True
+        mf1.max_memory = 0
+        nao = pmol.nao_nr()*2
+        numpy.random.seed(1)
+        dm = numpy.random.random((2,3,nao,nao)) - .5 + 0.1j
+        vhf2 = mf1.get_veff(pmol, dm[0,0], hermi=0)
+        self.assertEqual(vhf2.ndim, 2)
+
+        vhf3 = mf1.get_veff(pmol, dm[0], hermi=0)
+        self.assertEqual(vhf3.ndim, 3)
+        self.assertAlmostEqual(abs(vhf3[0]-vhf2).max(), 0, 12)
+
+        vhf4 = mf1.get_veff(pmol, dm, hermi=0)
+        self.assertEqual(vhf4.ndim, 4)
+        self.assertAlmostEqual(lib.fp(vhf4),
+                               17.264430281812047-5.533144783448073j, 12)
+        self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
+
+        vj = mf1.get_j(pmol, dm[0,0], hermi=0)
+        vk = mf1.get_k(pmol, dm[0,0], hermi=0)
+        self.assertAlmostEqual(abs(vj-vk-vhf2).max(), 0, 12)
+
+    def test_guess_orbspin(self):
+        self.assertTrue(numpy.all(scf.ghf.guess_orbspin(mf.mo_coeff) == -1))
+        mf1 = scf.addons.convert_to_ghf(mf_r)
+        self.assertEqual(list(scf.ghf.guess_orbspin(mf1.mo_coeff)),
+                         [0,1,0,1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1])
+        mf1 = scf.addons.convert_to_ghf(mf_u)
+        self.assertEqual(list(scf.ghf.guess_orbspin(mf1.mo_coeff)),
+                         [0,1,0,1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1])
+
+    def test_get_irrep_nelec(self):
+        fock = mfsym.get_fock()
+        s1e = mfsym.get_ovlp()
+        e, c = mfsym.eig(fock, s1e)
+        mo_occ = mfsym.get_occ(e, c)
+        irrep_nelec = mfsym.get_irrep_nelec(molsym, c, mo_occ)
+        self.assertEqual(irrep_nelec['A1'], 6)
+        self.assertEqual(irrep_nelec['A2'], 0)
+        self.assertEqual(irrep_nelec['B1'], 2)
+        self.assertEqual(irrep_nelec['B2'], 2)
+
+        mf1 = copy.copy(mfsym)
+        mf1.irrep_nelec = irrep_nelec
+        mf1.irrep_nelec['A1'] = 2
+        mf1.irrep_nelec['A2'] = 2
+        self.assertRaises(ValueError, mf1.build)
+        mf1.irrep_nelec.pop('A2')
+        mf1.irrep_nelec['A1'] = 8
+        self.assertRaises(ValueError, mf1.build)
+        mf1.irrep_nelec['A1'] = (4,4)
+        mf1.irrep_nelec['A1g'] = 4
+        self.assertRaises(ValueError, mf1.build)
+
+    def test_scanner(self):
+        mf_scanner = mf.as_scanner()
+        e = mf_scanner(molsym)
+        self.assertAlmostEqual(e, mfsym.e_tot, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for GHF")

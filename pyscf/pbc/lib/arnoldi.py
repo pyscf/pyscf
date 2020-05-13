@@ -1,9 +1,23 @@
-import numpy as np
-import scipy.linalg
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 '''
 Extension to scipy.linalg module developed for PBC branch.
 '''
+
+import numpy as np
+import scipy.linalg
 
 def davidson_nosymm(matvec,size,nroots,Adiag=None):
     '''Davidson diagonalization method to solve A c = E c 
@@ -55,7 +69,7 @@ class Arnoldi:
         while self.converged == 0:
             if self.totalIter == 0:
                 self.guessInitial()
-            for i in xrange(self.maxM):
+            for i in range(self.maxM):
                 if self.deflated == 1:
                     self.currentSize = self.nEigen
 
@@ -78,8 +92,8 @@ class Arnoldi:
 
                 self.totalIter += 1
                 self.currentSize += 1
-        print ""
-        print "Converged in %3d cycles" % self.totalIter
+        print("")
+        print("Converged in %3d cycles" % self.totalIter)
         self.constructAllSolV()
         return self.outeigs, self.outevecs
 
@@ -112,11 +126,11 @@ class Arnoldi:
         nrm = np.linalg.norm(self.x0)
         self.x0 *= 1./nrm
         self.currentSize = self.nEigen
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.vlist[i] *= 0.0
             self.vlist[i,i] = 1.0 + 0.0*1j
             self.vlist[i] /= np.linalg.norm(self.vlist[i])
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.cv = self.vlist[i].copy()
             self.hMult()
             self.Avlist[i] = self.cAv.copy()
@@ -131,12 +145,12 @@ class Arnoldi:
 
     def constructSubspace(self):
         if self.totalIter == 0 or self.deflated == 1: # construct the full block of v^*Av
-            for i in xrange(self.currentSize):
-                for j in xrange(self.currentSize):
+            for i in range(self.currentSize):
+                for j in range(self.currentSize):
                    val = np.vdot(self.vlist[i],self.Avlist[j])
                    self.subH[i,j] = val
         else:
-            for j in xrange(self.currentSize):
+            for j in range(self.currentSize):
                 if j <= (self.currentSize-1):
                     val = np.vdot(self.vlist[j],self.Avlist[self.currentSize-1])
                     self.subH[j,self.currentSize-1] = val
@@ -184,25 +198,25 @@ class Arnoldi:
         #
         # gram-schmidt for residual vector
         #
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.dgks[i] = np.vdot( self.vlist[i], self.res )
             self.res -= self.dgks[i]*self.vlist[i]
         #
         # second gram-schmidt to make them really orthogonal
         #
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.dgks[i] = np.vdot( self.vlist[i], self.res )
             self.res -= self.dgks[i]*self.vlist[i]
         self.resnorm = np.linalg.norm(self.res)
         self.res /= self.resnorm
 
         orthog = 0.0
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             orthog += np.vdot(self.res,self.vlist[i])**2.0
         orthog = orthog ** 0.5
         if not self.deflated:
             if VERBOSE:
-                print "%3d %20.14f %20.14f  %10.4g" % (self.ciEig, self.cvEig.real, self.resnorm.real, orthog.real)
+                print("%3d %20.14f %20.14f  %10.4g" % (self.ciEig, self.cvEig.real, self.resnorm.real, orthog.real))
         #else:
         #    print "%3d %20.14f %20.14f %20.14f (deflated)" % (self.ciEig, self.cvEig,
         #                                                      self.resnorm, orthog)
@@ -216,18 +230,18 @@ class Arnoldi:
     def checkConvergence(self):
         if self.resnorm < self.tol:
             if VERBOSE:
-                print "Eigenvalue %3d converged! (res = %.15g)" % (self.ciEig, self.resnorm)
+                print("Eigenvalue %3d converged! (res = %.15g)" % (self.ciEig, self.resnorm))
             self.ciEig += 1
         if self.ciEig == self.nEigen:
             self.converged = True
         if self.resnorm < self.tol and not self.converged:
             if VERBOSE:
-                print ""
-                print ""
-                print "%-3s %-20s %-20s %-8s" % ("#", "  Eigenvalue", "  Res. Norm.", "  Ortho. (should be ~0)")
+                print("")
+                print("")
+                print("%-3s %-20s %-20s %-8s" % ("#", "  Eigenvalue", "  Res. Norm.", "  Ortho. (should be ~0)"))
 
     def gramSchmidtCurrentVec(self,northo):
-        for i in xrange(northo):
+        for i in range(northo):
             self.dgks[i] = np.vdot( self.vlist[i], self.cv )
             self.cv -= self.dgks[i]*self.vlist[i] #/ np.vdot(self.vlist[i],self.vlist[i])
         self.cv /= np.linalg.norm(self.cv)
@@ -237,17 +251,17 @@ class Arnoldi:
         if self.currentSize == self.maxM-1:
             self.deflated = 1
             #print "deflating..."
-            for i in xrange(self.nEigen):
+            for i in range(self.nEigen):
                 self.sol[:self.currentSize] = self.evecs[:self.currentSize,i]
                 self.constructSolV()            # Finds the "best" eigenvector for this eigenvalue
                 self.Avlist[i] = self.cv.copy() # Puts this guess in self.Avlist rather than self.vlist for now...
                                                 # since this would mess up self.constructSolV()'s solution
-            for i in xrange(self.nEigen):
+            for i in range(self.nEigen):
                 self.cv = self.Avlist[i].copy() # This is actually the "best" eigenvector v, not A*v (see above)
                 self.gramSchmidtCurrentVec(i)
                 self.vlist[i] = self.cv.copy()
 
-            for i in xrange(self.nEigen):
+            for i in range(self.nEigen):
                 self.cv = self.vlist[i].copy() # This is actually the "best" eigenvector v, not A*v (see above)
                 self.hMult()                   # Use current vector cv to create cAv
                 self.Avlist[i] = self.cAv.copy()

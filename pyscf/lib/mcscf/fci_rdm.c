@@ -1,5 +1,19 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
  *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <stdlib.h>
@@ -213,13 +227,10 @@ void FCIrdm12_drv(void (*dm12kernel)(),
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
 
-#pragma omp parallel default(none) \
-        shared(dm12kernel, bra, ket, norb, na, nb, nlinka, \
-               nlinkb, clinka, clinkb, rdm1, rdm2, symm), \
-        private(strk, i, ib, blen, pdm1, pdm2)
+#pragma omp parallel private(strk, i, ib, blen, pdm1, pdm2)
 {
-        pdm1 = calloc(nnorb, sizeof(double));
-        pdm2 = calloc(nnorb*nnorb, sizeof(double));
+        pdm1 = calloc(nnorb+2, sizeof(double));
+        pdm2 = calloc(nnorb*nnorb+2, sizeof(double));
 #pragma omp for schedule(dynamic, 40)
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += BUFBASE) {

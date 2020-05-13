@@ -46,7 +46,7 @@ mol.build()
 #
 # first pass, to generate initial guess
 #
-mf = scf.sfx2c(scf.UHF(mol))
+mf = scf.UHF(mol).x2c()
 mf.chkfile = 'hs.chk'
 mf.level_shift = 0.1
 mf.conv_tol = 1e-2
@@ -54,7 +54,7 @@ mf.kernel()
 #
 # second pass to converge SCF calculation
 #
-mf = scf.newton(mf)
+mf = mf.newton()
 mf.conv_tol = 1e-12
 mf.kernel()
 
@@ -383,7 +383,7 @@ nelec = 0.0
 nact = 0.0
 for iorb in range(nb):
     vec = lcoeff[:,iorb]**2
-    idx = list(numpy.argwhere(vec>pthresh))
+    idx = numpy.argwhere(vec>pthresh)[0]
     if ifACTONLY == False:
         if iorb < nc:
             print(' iorb_C=',iorb,' occ=',n_c[iorb],' fii=',e_c[iorb])
@@ -457,7 +457,7 @@ from pyscf import mrpt
 #
 mol.build(verbose=7, output = 'hs_dmrg.out')
 
-mf = scf.sfx2c1e(scf.RHF(mol))
+mf = scf.RHF(mol).x2c()
 mc = DMRGSCF(mf, norb, [nalpha,nbeta])
 mc.chkfile = 'hs_mc.chk'
 mc.max_memory = 30000

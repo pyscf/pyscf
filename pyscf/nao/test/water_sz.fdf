@@ -1,0 +1,34 @@
+SystemName          Water_sz 
+SystemLabel         water_sz
+
+PAO.EnergyShift            10 meV
+PAO.BasisSize              SZ
+
+xc.Authors          PBE
+xc.Functional       GGA
+
+%block ChemicalSpeciesLabel
+ 1  8  O     
+ 2  1  H
+%endblock ChemicalSpeciesLabel
+
+AtomicCoordinatesFormat  Ang
+AtomCoorFormatOut Ang
+
+NumberOfAtoms       3
+NumberOfSpecies     2
+
+%block AtomicCoordinatesAndAtomicSpecies
+0.0 -0.757 0.587  2   H
+0.0 0.757 0.587  2    H
+0.0 0.0   0.0    1    O
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+### Molecular dynamics 
+ElectronicTemperature      300 K
+MD.TypeOfRun               CG
+MD.NumCGsteps              0
+MaxSCFIterations           100
+
+coop.write     .true.
+xml.write      .true.

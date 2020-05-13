@@ -1,3 +1,22 @@
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
+ * Author: Sandeep Sharma
+ *
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "math.h"
@@ -46,7 +65,7 @@ void unpackE3(char* file, char* fout, int norb) {
                   size_t p = (A*A*A + 3*A*A + 2*A)/6  +  (B*B + B)/2 + C ;
 
                   // fully square number
-                  int q = i+j*norb+k*norb2+l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
+                  size_t q = i+j*norb+k*norb2+l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
 
                   e3[q] = fj[p];
                 }
@@ -146,7 +165,7 @@ void unpackE4(char* file, char* fout, int norb) {
                   size_t p = (A*A*A*A + 6*A*A*A + 11*A*A + 6*A)/24 + (B*B*B + 3*B*B + 2*B)/6  +  (C*C + C)/2 + D ;
 
                   // fully square number
-                  int q = i+j*norb+k*norb2+h*norb*norb2+l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
+                  size_t q = i+j*norb+k*norb2+h*norb*norb2+l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
 
                   e4[q] = fj[p];
                 }
@@ -180,8 +199,8 @@ void unpackE3_BLOCK(char* file, char* fout, int norb) {
               for (n=0; n<norb; n++)
                 {
                   // is given as E^ijk_nml and is expected to come out as E^ijk_lmn
-                  int p = i+j*norb+k*norb2  +n*norb*norb2+m*norb2*norb2+l*norb2*norb2*norb;
-                  int q = i+j*norb+k*norb2  +l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
+                  size_t p = i+j*norb+k*norb2  +n*norb*norb2+m*norb2*norb2+l*norb2*norb2*norb;
+                  size_t q = i+j*norb+k*norb2  +l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
                   e3[q] = fj[p];
                 };
 }
@@ -213,8 +232,8 @@ void unpackE4_BLOCK(char* file, char* fout, int norb) {
               for (o=0; o<norb; o++)
                 {
                   // is given as E^ijkh_onml and is expected to come out as E^ijkh_lmno
-                  int p = i+j*norb+k*norb2+h*norb*norb2 +o*norb2*norb2+n*norb*norb2*norb2+m*norb2*norb2*norb2+l*norb*norb2*norb2*norb2;
-                  int q = i+j*norb+k*norb2+h*norb*norb2 +l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
+                  size_t p = i+j*norb+k*norb2+h*norb*norb2 +o*norb2*norb2+n*norb*norb2*norb2+m*norb2*norb2*norb2+l*norb*norb2*norb2*norb2;
+                  size_t q = i+j*norb+k*norb2+h*norb*norb2 +l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
                   e4[q] = fj[p];
                 };
     FILE *f2 = fopen(fout, "wb");

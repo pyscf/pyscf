@@ -1,3 +1,17 @@
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 '''
 Coupled Cluster
 ===============
@@ -28,6 +42,10 @@ to control CCSD calculation.
         The step to start DIIS.  Default is 0.
     direct : bool
         AO-direct CCSD. Default is False.
+    async_io : bool
+        Allow for asynchronous function execution. Default is True.
+    incore_complete : bool
+        Avoid all I/O. Default is False.
     frozen : int or list
         If integer is given, the inner-most orbitals are frozen from CC
         amplitudes.  Given the orbital indices (0-based) in a list, both
@@ -40,9 +58,9 @@ Saved results
         CCSD converged or not
     e_tot : float
         Total CCSD energy (HF + correlation)
-    t1, t2 : 
+    t1, t2 :
         t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
-    l1, l2 : 
+    l1, l2 :
         Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
 '''
 
@@ -50,35 +68,32 @@ from pyscf.cc import ccsd
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import ccsd_rdm
 from pyscf.cc import addons
+from pyscf.cc import rccsd
+from pyscf.cc import uccsd
+from pyscf.cc import gccsd
+from pyscf.cc import eom_rccsd
+from pyscf.cc import eom_uccsd
+from pyscf.cc import eom_gccsd
+from pyscf import scf
 
-def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    __doc__ = ccsd.CCSD.__doc__
-    from pyscf import scf
-
-    if isinstance(mf, scf.uhf.UHF) or mf.mol.spin != 0:
+def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    if isinstance(mf, scf.uhf.UHF):
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
-
-    try:
-        import sys
-        from pyscf import dft
-        if isinstance(mf, (dft.rks.RKS, dft.uks.UKS, dft.roks.ROKS,
-                           dft.rks_symm.RKS, dft.uks_symm.UKS, dft.rks_symm.ROKS)):
-            sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
-                             'CCSD calculation should be used with HF object')
-    except:
-        pass
-
-    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
-        from pyscf.cc import dfccsd
-        raise NotImplementedError('DF-CCSD not implemented, use DF-RCCSD instead?')
+    elif isinstance(mf, scf.ghf.GHF):
+        return GCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
-        return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+        return RCCSD(mf, frozen, mo_coeff, mo_occ)
+CCSD.__doc__ = ccsd.CCSD.__doc__
 
-def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+scf.hf.SCF.CCSD = CCSD
+
+
+def RCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     import numpy
-    from pyscf.cc import rccsd
     from pyscf import lib
-    from pyscf import scf
+    from pyscf.soscf import newton_ah
+    from pyscf.cc import dfccsd
+
     if isinstance(mf, scf.uhf.UHF):
         raise RuntimeError('RCCSD cannot be used with UHF method.')
     elif isinstance(mf, scf.rohf.ROHF):
@@ -87,21 +102,76 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_uhf(mf)
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
-    elif hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
-        from pyscf.cc import dfccsd
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
+    if getattr(mf, 'with_df', None):
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
-    else:
+    elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
         return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
+    else:
+        return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)
+RCCSD.__doc__ = ccsd.CCSD.__doc__
 
-def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    from pyscf.cc import uccsd
-    from pyscf import scf
-    if not isinstance(mf, scf.uhf.UHF):
+
+def UCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
 
-    if hasattr(mf, 'with_df') and 'pbc' in str(mf.__module__):
+    if getattr(mf, 'with_df', None):
         raise NotImplementedError('DF-UCCSD')
     else:
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
+UCCSD.__doc__ = uccsd.UCCSD.__doc__
+
+
+def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
+        mf = scf.addons.convert_to_ghf(mf)
+
+    if getattr(mf, 'with_df', None):
+        raise NotImplementedError('DF-GCCSD')
+    else:
+        return gccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
+GCCSD.__doc__ = gccsd.GCCSD.__doc__
+
+
+def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None):
+    """Frozen natural orbital CCSD
+
+    Attributes:
+        thresh : float
+            Threshold on NO occupation numbers.  Default is 1e-6.
+        pct_occ : float
+            Percentage of total occupation number.  Default is None.  If present, overrides `thresh`.
+    """
+    #from pyscf import mp
+    #pt = mp.MP2(mf).set(verbose=0).run()
+    from pyscf.mp.mp2 import MP2
+    pt = MP2(mf).set(verbose=0).run()
+    frozen, no_coeff = pt.make_fno(thresh=thresh, pct_occ=pct_occ, nvir_act=nvir_act)
+    #pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run() #avoid DF
+    pt_no = MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
+    mycc = ccsd.CCSD(mf, frozen=frozen, mo_coeff=no_coeff) #avoid DF
+    mycc.delta_emp2 = pt.e_corr - pt_no.e_corr
+    from pyscf.lib import logger
+    def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
+        if self.converged:
+            logger.info(self, 'FNO-%s converged', self.__class__.__name__)
+        else:
+            logger.note(self, 'FNO-%s not converged', self.__class__.__name__)
+        logger.note(self, 'E(FNO-%s) = %.16g  E_corr = %.16g',
+                    self.__class__.__name__, self.e_tot, self.e_corr)
+        logger.note(self, 'E(FNO-%s+delta-MP2) = %.16g  E_corr = %.16g',
+                    self.__class__.__name__, self.e_tot+self.delta_emp2,
+                    self.e_corr+self.delta_emp2)
+        return self
+    mycc._finalize = _finalize.__get__(mycc, mycc.__class__)
+    return mycc

@@ -35,7 +35,7 @@ mf.kernel()
 
 # Mixed density fitting is another option for all-electron calculations
 mf = scf.RHF(cell).mix_density_fit()
-mf.with_df.gs = [5]*3  # Tune #PWs in MDF for performance/accuracy balance
+mf.with_df.mesh = [10]*3  # Tune #PWs in MDF for performance/accuracy balance
 mf.kernel()
 
 # Or use even-tempered Gaussian basis as auxiliary fitting functions.
@@ -53,7 +53,9 @@ mf.kernel()
 #
 mf = dft.RKS(cell).density_fit(auxbasis='weigend')
 mf.xc = 'bp86'
-mf = scf.newton(mf)
+# You should first set mf.xc then apply newton method (see also
+# examples/scf/22-newton.py)
+mf = mf.newton()
 mf.kernel()
 
 #

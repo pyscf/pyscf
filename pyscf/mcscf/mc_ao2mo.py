@@ -1,9 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import sys
 import ctypes
 import time
-import tempfile
 from functools import reduce
 import numpy
 import h5py
@@ -62,22 +73,21 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 
 # level = 1: ppaa, papa and jpc, kpc
-# level = 2 or 3: ppaa, papa
+# level > 1: ppaa, papa only.  It affects accuracy of hdiag
 def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                      max_memory=None, level=1, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
     log.debug1('trans_e1_outcore level %d  max_memory %d', level, max_memory)
     nao, nmo = mo.shape
     nao_pair = nao*(nao+1)//2
     nocc = ncore + ncas
 
-    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    faapp_buf = h5py.File(_tmpfile1.name)
-    feri = h5py.File(erifile, 'w')
+    faapp_buf = lib.H5TmpFile()
+    if isinstance(erifile, h5py.Group):
+        feri = erifile
+    else:
+        feri = lib.H5TmpFile(erifile, 'w')
 
     mo_c = numpy.asarray(mo, order='C')
     mo = numpy.asarray(mo, order='F')
@@ -94,7 +104,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     ao2mopt = _ao2mo.AO2MOpt(mol, intor,
                              'CVHFnr_schwarz_cond', 'CVHFsetnr_direct_scf')
     nstep = len(shranges)
-    paapp = 0
     maxbuflen = max([x[2] for x in shranges])
     log.debug('mem_words %.8g MB, maxbuflen = %d', mem_words*8/1e6, maxbuflen)
     bufs1 = numpy.empty((maxbuflen, nao_pair))
@@ -135,7 +144,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                  ctypes.POINTER(ctypes.c_void_p)(), ctypes.c_int(0))
             p0 = 0
             for ij in range(sh_range[0], sh_range[1]):
-                i,j = _ao2mo._extract_pair(ij)
+                i,j = lib.index_tril_to_pair(ij)
                 i0 = ao_loc[i]
                 j0 = ao_loc[j]
                 i1 = ao_loc[i+1]
@@ -183,7 +192,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                 bufpa.reshape(sh_range[2],nmo,ncas)[:,ncore:nocc].reshape(-1,ncas**2).T
         p0 = 0
         for ij in range(sh_range[0], sh_range[1]):
-            i,j = _ao2mo._extract_pair(ij)
+            i,j = lib.index_tril_to_pair(ij)
             i0 = ao_loc[i]
             j0 = ao_loc[j]
             i1 = ao_loc[i+1]
@@ -242,9 +251,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     tmp = tmp1 = None
     time1 = log.timer('ppaa pass 2', *time1)
 
-    faapp_buf.close()
-    feri.close()
-    _tmpfile1 = None
     time0 = log.timer('mc_ao2mo', *time0)
     return j_pc, k_pc
 
@@ -271,31 +277,24 @@ class _ERIS(object):
             if eri is None:
                 eri = mol.intor('int2e', aosym='s8')
             self.j_pc, self.k_pc, self.ppaa, self.papa = \
-                    trans_e1_incore(eri, mo, casscf.ncore, casscf.ncas)
+                    trans_e1_incore(eri, mo, ncore, ncas)
         else:
-            import gc
-            gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
-            self._tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            self.feri = lib.H5TmpFile()
             max_memory = max(3000, casscf.max_memory*.9-mem_now)
             if max_memory < mem_basic:
                 log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                          (mem_basic+mem_now)/.9, casscf.max_memory)
             self.j_pc, self.k_pc = \
-                    trans_e1_outcore(mol, mo, casscf.ncore, casscf.ncas,
-                                     self._tmpfile.name,
+                    trans_e1_outcore(mol, mo, ncore, ncas, self.feri,
                                      max_memory=max_memory,
                                      level=level, verbose=log)
-            self.feri = lib.H5TmpFile(self._tmpfile.name, 'r')
             self.ppaa = self.feri['ppaa']
             self.papa = self.feri['papa']
 
 def _mem_usage(ncore, ncas, nmo):
-    nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
-    if outcore > 10000:
-        sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore, basic
 
 def prange(start, end, step):
@@ -305,7 +304,6 @@ def prange(start, end, step):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
-    from pyscf import ao2mo
     from pyscf.mcscf import mc1step
 
     mol = gto.Mole()

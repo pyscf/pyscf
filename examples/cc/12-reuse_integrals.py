@@ -35,9 +35,9 @@ from pyscf.cc import ccsd_t
 ccsd_t.kernel(mycc, eris=eris)
 
 #
-# CCSD gradients need regular MO integrals to solve the relaxed 1-particle
-# density matrix
+# CCSD gradients need zeroth order MO integrals when solving the "relaxed"
+# 1-particle density matrix.
 #
-from pyscf.cc import ccsd_grad
-grad_e = ccsd_grad.kernel(mycc, eris=eris)  # The electronic part only
+from pyscf.grad.ccsd import Gradients
+grad_e = Gradients(mycc).kernel(eris=eris)  # The electronic part only
 

@@ -1,7 +1,22 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
  *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -9,7 +24,6 @@
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
-#include "fblas.h"
 #include "optimizer.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
@@ -65,7 +79,7 @@ int CVHFrkbllll_vkscreen(int *shls, CVHFOpt *opt,
         int idm;
         double qijkl = opt->q_cond[i*nbas+j] * opt->q_cond[k*nbas+l];
         double *pdmscond = opt->dm_cond + nbas*nbas;
-        for (idm = 0; idm < n_dm/2; idm++) {
+        for (idm = 0; idm < (n_dm+1)/2; idm++) {
 // note in _vhf.rdirect_mapdm, J and K share the same DM
                 dms_cond[idm*2+0] = pdmscond + idm*nbas*nbas; // for vj
                 dms_cond[idm*2+1] = pdmscond + idm*nbas*nbas; // for vk
@@ -117,7 +131,7 @@ int CVHFrkbssll_vkscreen(int *shls, CVHFOpt *opt,
         int idm;
         double qijkl = opt->q_cond[nbas*nbas*SS+i*nbas+j] * opt->q_cond[k*nbas+l];
         double *pdmscond = opt->dm_cond + 4*nbas*nbas;
-        int nset = n_dm / 3;
+        int nset = (n_dm+2) / 3;
         double *dmscondll = pdmscond + nset*nbas*nbas*LL;
         double *dmscondss = pdmscond + nset*nbas*nbas*SS;
         double *dmscondsl = pdmscond + nset*nbas*nbas*SL;
@@ -131,14 +145,14 @@ int CVHFrkbssll_vkscreen(int *shls, CVHFOpt *opt,
 }
 
 
-static void set_qcond(int (*intor)(), double *qcond,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+static void set_qcond(int (*intor)(), CINTOpt *cintopt, double *qcond,
+                      int *ao_loc, int *atm, int natm,
+                      int *bas, int nbas, double *env)
 {
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, qcond, atm, natm, bas, nbas, env)
+#pragma omp parallel
 {
         double qtmp, tmp;
         int i, j, ij, di, dj, ish, jsh;
@@ -146,7 +160,7 @@ static void set_qcond(int (*intor)(), double *qcond,
         double *cache = malloc(sizeof(double) * cache_size);
         di = 0;
         for (ish = 0; ish < nbas; ish++) {
-                dj = CINTcgto_spinor(ish, bas);
+                dj = ao_loc[ish+1] - ao_loc[ish];
                 di = MAX(di, dj);
         }
         double complex *buf = malloc(sizeof(double complex) * di*di*di*di);
@@ -154,14 +168,14 @@ static void set_qcond(int (*intor)(), double *qcond,
         for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
                 ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                 jsh = ij - ish*(ish+1)/2;
-                di = CINTcgto_spinor(ish, bas);
-                dj = CINTcgto_spinor(jsh, bas);
+                di = ao_loc[ish+1] - ao_loc[ish];
+                dj = ao_loc[jsh+1] - ao_loc[jsh];
                 shls[0] = ish;
                 shls[1] = jsh;
                 shls[2] = ish;
                 shls[3] = jsh;
                 qtmp = 1e-100;
-                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, NULL, cache)) {
+                if (0 != (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache)) {
                         for (i = 0; i < di; i++) {
                         for (j = 0; j < dj; j++) {
                                 tmp = cabs(buf[i+di*j+di*dj*i+di*dj*di*j]);
@@ -177,7 +191,8 @@ static void set_qcond(int (*intor)(), double *qcond,
 }
 }
 
-void CVHFrkbllll_direct_scf(CVHFOpt *opt, int *atm, int natm,
+void CVHFrkbllll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                            int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
         if (opt->q_cond) {
@@ -185,10 +200,12 @@ void CVHFrkbllll_direct_scf(CVHFOpt *opt, int *atm, int natm,
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
 
-        set_qcond(&int2e_spinor, opt->q_cond, atm, natm, bas, nbas, env);
+        assert(intor == &int2e_spinor);
+        set_qcond(intor, cintopt, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
 }
 
-void CVHFrkbssss_direct_scf(CVHFOpt *opt, int *atm, int natm,
+void CVHFrkbssss_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                            int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
         if (opt->q_cond) {
@@ -196,15 +213,19 @@ void CVHFrkbssss_direct_scf(CVHFOpt *opt, int *atm, int natm,
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
 
-        const int INC1 = 1;
-        int nn = nbas * nbas;
+        assert(intor == &int2e_spsp1spsp2_spinor);
+        set_qcond(intor, cintopt, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
         double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
-        set_qcond(&int2e_spsp1spsp2_spinor, opt->q_cond, atm, natm, bas, nbas, env);
-        dscal_(&nn, &c1, opt->q_cond, &INC1);
+        double *qcond = opt->q_cond;
+        int i;
+        for (i = 0; i < nbas*nbas; i++) {
+                qcond[i] *= c1;
+        }
 }
 
 
-void CVHFrkbssll_direct_scf(CVHFOpt *opt, int *atm, int natm,
+void CVHFrkbssll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                            int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
         if (opt->q_cond) {
@@ -212,40 +233,44 @@ void CVHFrkbssll_direct_scf(CVHFOpt *opt, int *atm, int natm,
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
 
-        const int INC1 = 1;
-        int nn = nbas * nbas;
-        double c1 = 1/(.25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]));
-        set_qcond(&int2e_spinor, opt->q_cond, atm, natm, bas, nbas, env);
-        set_qcond(&int2e_spsp1spsp2_spinor, opt->q_cond+nbas*nbas,
+        set_qcond(&int2e_spinor, NULL, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
+        set_qcond(&int2e_spsp1spsp2_spinor, NULL, opt->q_cond+nbas*nbas, ao_loc,
                   atm, natm, bas, nbas, env);
-        dscal_(&nn, &c1, opt->q_cond+nbas*nbas, &INC1);
+        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
+        double *qcond = opt->q_cond + nbas*nbas;
+        int i;
+        for (i = 0; i < nbas*nbas; i++) {
+                qcond[i] *= c1;
+        }
 }
 
 static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
                        double direct_scf_cutoff, int nset, int *ao_loc,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nao = ao_loc[nbas];
+        const size_t nao = ao_loc[nbas];
         double dmax, dmaxi, tmp;
         int i, j, ish, jsh;
         int iset;
         double complex *pdm;
 
         for (ish = 0; ish < nbas; ish++) {
-        for (jsh = 0; jsh < nbas; jsh++) {
+        for (jsh = 0; jsh <= ish; jsh++) {
                 dmax = 0;
                 for (iset = 0; iset < nset; iset++) {
                         dmaxi = 0;
                         pdm = dm + nao*nao*iset;
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                tmp = cabs(pdm[i*nao+j]);
+                                tmp = .5 * (cabs(pdm[i*nao+j]) + cabs(pdm[j*nao+i]));
                                 dmaxi = MAX(dmaxi, tmp);
                         } }
                         dmscond[iset*nbas*nbas+ish*nbas+jsh] = dmaxi;
+                        dmscond[iset*nbas*nbas+jsh*nbas+ish] = dmaxi;
                         dmax = MAX(dmax, dmaxi);
                 }
                 dmcond[ish*nbas+jsh] = dmax;
+                dmcond[jsh*nbas+ish] = dmax;
         } }
 }
 
@@ -285,6 +310,11 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
 {
         if (opt->dm_cond) {
                 free(opt->dm_cond);
+        }
+        if (nset < 3) {
+                fprintf(stderr, "At least 3 sets of DMs (dmll,dmss,dmsl) are "
+                        "required to set rkb prescreening\n");
+                exit(1);
         }
         nset = nset / 3;
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*4*(1+nset));

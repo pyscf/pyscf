@@ -1,3 +1,17 @@
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 '''
 *****************************************************
 PySCF Python-based simulations of chemistry framework
@@ -19,110 +33,57 @@ to try out the package::
     converged SCF energy = -1.06111199785749
     -1.06111199786
 
-
-Submodules
-----------
-In pyscf, most submodules requires explict import::
-
-    >>> from pyscf import gto, scf
-
-:mod:`gto`
-    Molecular structure and basis sets.
-scf
-    Non-relativistic and relativistic Hartree-Fock.
-mcscf
-    CASCI, 1-step and 2-step CASSCF
-ao2mo
-    General 2-electron AO to MO integral transformation
-dft
-    Non-relativistic DFT
-df
-    Density fitting
-fci
-    Full CI
-cc
-    Coupled Cluster
-dmrgscf
-    DMRGCI, 1-step and 2-step DMRG-CASSCF
-fciqmcscf
-    2-step FCIQMC-CASSCF
-grad
-    Gradients
-lo
-    Localization and orbital orthogonalization
-lib
-    Basic functions and C extensions
-nmr
-    NMR
-mp
-    Moller-Plesset perturbation theory
-symm
-    Symmetry
-pbc
-    A complete tool sets for periodic boundary condition.
-tools
-    fcidump, molden etc
-
-
-Pure function and Class
------------------------
-Class are designed to hold only the final results and the control parameters
-such as maximum number of iterations, convergence threshold, etc.
-The intermediate status are not saved in the class.  If the .kernel() function
-is finished without any errors,  the solution will be saved in the class (see
-documentation).
-
-Most useful functions are implemented at module level, and can be accessed in
-both class or module,  e.g.  ``scf.hf.get_jk(mol, dm)`` and
-``SCF(mol).get_jk(mol, dm)`` have the same functionality.  As a result, most
-functions and class are **pure**, i.e. no status are saved, and the argument
-are not changed inplace.  Exceptions (destructive functions and methods) are
-suffixed with underscore in the function name,  eg  ``mcscf.state_average_(mc)``
-changes the attribute of its argument ``mc``
-
-
-Stream functions
-----------------
-For most methods, there are three stream functions to pipe computing stream:
-
-1 ``.set`` function to update object attributes, eg
-``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
-``mf = scf.RHF(mol); mf.conv_tol=1e-5``
-
-2 ``.run`` function to execute the kernel function (the function arguments
-are passed to kernel function).  If keyword arguments is given, it will first
-call ``.set`` function to update object attributes then execute the kernel
-function.  Eg
-``mf = scf.RHF(mol).run(dm_init, conv_tol=1e-5)`` is identical to three steps
-``mf = scf.RHF(mol); mf.conv_tol=1e-5; mf.kernel(dm_init)``
-
-3 ``.apply`` function to apply the given function/class to the current object
-(function arguments and keyword arguments are passed to the given function).
-Eg
-``mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is identical to
-``mf = scf.RHF(mol); mf.kernel(); mcscf.CASSCF(mf, 6, 4, frozen=4)``
-
 '''
 
-__version__ = '1.4'
+__version__ = '1.7.1'
 
 import os
+# Avoid too many threads being created in OMP loops.
+# See issue https://github.com/pyscf/pyscf/issues/317
+if 'OPENBLAS_NUM_THREADS' not in os.environ:
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+if 'MKL_NUM_THREADS' not in os.environ:
+    os.environ['MKL_NUM_THREADS'] = '1'
+
+import sys
 from distutils.version import LooseVersion
 import numpy
-if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
+if LooseVersion(numpy.__version__) <= '1.8.0':
     raise SystemError("You're using an old version of Numpy (%s). "
-                      "It is recommended to upgrad numpy to 1.8.0 or newer. \n"
+                      "It is recommended to upgrade numpy to 1.8.0 or newer. \n"
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
-from pyscf import gto
+elif '1.16.2' <= LooseVersion(numpy.__version__) < '1.18':
+    #sys.stderr.write('Numpy 1.16 has memory leak bug  '
+    #                 'https://github.com/numpy/numpy/issues/13808\n'
+    #                 'It is recommended to downgrade to numpy 1.15 or older\n')
+    import ctypes
+    from numpy.core import _internal
+    def _get_void_ptr(arr):
+        simple_arr = numpy.asarray(_internal._unsafe_first_element_pointer(arr))
+        c_arr = (ctypes.c_char * 0).from_buffer(simple_arr)
+        return ctypes.cast(ctypes.byref(c_arr), ctypes.c_void_p)
+    # patch _get_void_ptr as a workaround to numpy issue #13808
+    _internal._get_void_ptr = _get_void_ptr
+
+from pyscf import __config__
 from pyscf import lib
+from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 
 #__path__.append(os.path.join(os.path.dirname(__file__), 'future'))
 __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
-DEBUG = False
+DEBUG = __config__.DEBUG
 
-del(os, LooseVersion, numpy)
+def M(**kwargs):
+    '''Main driver to create Molecule object (mol) or Material crystal object (cell)'''
+    from pyscf import __all__
+    if kwargs.get('a') is not None:  # a is crystal lattice parameter
+        return __all__.pbc.gto.M(**kwargs)
+    else:  # Molecule
+        return gto.M(**kwargs)
+
+del(os, sys, LooseVersion)

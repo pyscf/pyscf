@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# This issue has been solved in PR #149.  Remove me in the future
+#
+
+
 # On Mac OSX 10.11 or newer, you may get error message if you use clang compiler
 #
 #  OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib

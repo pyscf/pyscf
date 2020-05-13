@@ -30,7 +30,11 @@ cell.verbose = 0
 
 # Set up the kind of calculation to be done
 # Additional variables for mf_class are passed through mf_dict
-mf_class=pbcdft.RKS
+# E.g. gamma-point SCF calculation can be set to
+mf_class = pbcdft.RKS
+# SCF with k-point sampling can be set to
+mf_class = lambda cell: pbcdft.KRKS(cell, kpts=cell.make_kpts([2,2,2]))
+
 mf_dict = { 'xc' : 'lda,vwn' }
 
 # Once this is setup, ASE is used for everything from this point on

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -12,7 +25,6 @@ Refs:
     JCP, 118, 3939
 '''
 
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.scf import _vhf
@@ -24,7 +36,9 @@ from pyscf.prop.gtensor.uks import get_vxc_soc
 def make_h1_soc2e(hfcobj, dm0):
     mf = hfcobj._scf
     ni = mf._numint
-    hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    if abs(omega) > 1e-10:
+        raise NotImplementedError
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     v1 = get_vxc_soc(ni, mol, mf.grids, mf.xc, dm0,
@@ -47,6 +61,22 @@ def make_h1_soc2e(hfcobj, dm0):
 
 class HyperfineCoupling(uhf_hfc.HyperfineCoupling):
     make_h1_soc2e = make_h1_soc2e
+
+    def dump_flags(self, verbose=None):
+        log = lib.logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s for %s (In testing) ********',
+                 self.__class__, self._scf.__class__)
+        log.info('HFC for atoms %s', str(self.hfc_nuc))
+        if self.cphf:
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        log.info('para_soc2e = %s', self.para_soc2e)
+        log.info('so_eff_charge = %s (1e SO effective charge)',
+                 self.so_eff_charge)
+        if not self._scf.converged:
+            log.warn('Ground state SCF is not converged')
+        return self
 
 HFC = HyperfineCoupling
 

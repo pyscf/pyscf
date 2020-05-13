@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -16,14 +29,19 @@ from pyscf.lib import logger
 from pyscf.scf import hf_symm
 from pyscf.scf import uhf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
     mol = mf.mol
     if not mol.symmetry:
-        return uhf.analyze(mf, verbose, **kwargs)
+        return uhf.analyze(mf, verbose, with_meta_lowdin, **kwargs)
 
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -31,6 +49,8 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     ovlp_ao = mf.get_ovlp()
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
+        mf.dump_scf_summary(log)
+
         nirrep = len(mol.irrep_id)
         ovlp_ao = mf.get_ovlp()
         orbsyma, orbsymb = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
@@ -41,9 +61,9 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             if (noccsa[i]+noccsb[i]) % 2:
                 tot_sym ^= ir
         if mol.groupname in ('Dooh', 'Coov', 'SO3'):
-            log.note('TODO: total symmetry for %s', mol.groupname)
+            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
         else:
-            log.note('total symmetry = %s',
+            log.note('Wave-function symmetry = %s',
                      symm.irrep_id2name(mol.groupname, tot_sym))
         log.note('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
                  *mol.irrep_name)
@@ -65,7 +85,8 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             else:
                 irorbcnt[j] = 1
             log.note('alpha MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[0][k], mo_occ[0][k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j],
+                     mo_energy[0][k], mo_occ[0][k])
         irorbcnt = {}
         for k, j in enumerate(orbsymb):
             if j in irorbcnt:
@@ -73,7 +94,8 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             else:
                 irorbcnt[j] = 1
             log.note('beta  MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j],
+                     mo_energy[1][k], mo_occ[1][k])
 
     if mf.verbose >= logger.DEBUG:
         label = mol.ao_labels()
@@ -84,12 +106,17 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
-        orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-        c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[0]), label, molabel,
-                          start=1, **kwargs)
+            molabel.append('#%-d(%s #%d)' %
+                           (k+MO_BASE, irname_full[j], irorbcnt[j]))
+        if with_meta_lowdin:
+            log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
+            orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
+            c_inv = numpy.dot(orth_coeff.conj().T, ovlp_ao)
+            mo = c_inv.dot(mo_coeff[0])
+        else:
+            log.debug(' ** alpha MO coefficients (expansion on AOs) **')
+            mo = mo_coeff[0]
+        dump_mat.dump_rec(mf.stdout, mo, label, start=MO_BASE, **kwargs)
 
         molabel = []
         irorbcnt = {}
@@ -98,13 +125,23 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** beta MO coefficients (expansion on meta-Lowdin AOs) **')
-        dump_mat.dump_rec(mol.stdout, c_inv.dot(mo_coeff[1]), label, molabel,
-                          start=1, **kwargs)
+            molabel.append('#%-d(%s #%d)' %
+                           (k+MO_BASE, irname_full[j], irorbcnt[j]))
+        if with_meta_lowdin:
+            log.debug(' ** beta MO coefficients (expansion on meta-Lowdin AOs) **')
+            mo = c_inv.dot(mo_coeff[1])
+        else:
+            log.debug(' ** beta MO coefficients (expansion on AOs) **')
+            mo = mo_coeff[1]
+        dump_mat.dump_rec(mol.stdout, mo, label, molabel, start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    if with_meta_lowdin:
+        pop_and_charge = mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_charge = mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mol, dm, verbose=log)
+    return pop_and_charge, dip
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Alpha/beta electron numbers for each irreducible representation.
@@ -130,12 +167,12 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     >>> scf.uhf_symm.get_irrep_nelec(mol, mf.mo_coeff, mf.mo_occ)
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 1), 'B2': (1, 0)}
     '''
-    if hasattr(mo_coeff[0], 'orbsym'):
+    if getattr(mo_coeff[0], 'orbsym', None) is not None:
         orbsyma = mo_coeff[0].orbsym
     else:
         orbsyma = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                       mo_coeff[0], s, False)
-    if hasattr(mo_coeff[1], 'orbsym'):
+    if getattr(mo_coeff[1], 'orbsym', None) is not None:
         orbsymb = mo_coeff[1].orbsym
     else:
         orbsymb = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
@@ -146,8 +183,6 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                                              int(sum(mo_occ[1][orbsymb==ir]))))
                         for k, ir in enumerate(mol.irrep_id)])
     return irrep_nelec
-
-rhf_to_uhf = uhf.rhf_to_uhf
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
@@ -169,13 +204,14 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
 
-    if (hasattr(mo_coeff, 'orbsym') or
-        (hasattr(mo_coeff[0], 'orbsym') and hasattr(mo_coeff[1], 'orbsym'))):
+    if (getattr(mo_coeff, 'orbsym', None) is not None or
+        (getattr(mo_coeff[0], 'orbsym', None) is not None and
+         getattr(mo_coeff[1], 'orbsym', None) is not None)):
         orbsyma, orbsymb = get_orbsym(mol, mo_coeff)
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
                 cs[:,idx] = numpy.dot(mo_coeff[:,idx], c)
@@ -194,7 +230,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
                 c = numpy.dot(mo_coeff[:,idx], c)
@@ -210,8 +246,35 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
           lib.tag_array(mo[1], orbsym=orbsymb))
     return mo_e, mo
 
+def get_orbsym(mol, mo_coeff, s=None, check=False):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
+        orbsym = numpy.asarray(mo_coeff.orbsym)
+    else:
+        orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
+                  hf_symm.get_orbsym(mol, mo_coeff[1], s, check))
+    return orbsym
 
-class UHF(uhf.UHF):
+def get_wfnsym(mf, mo_coeff=None, mo_occ=None):
+    orbsyma, orbsymb = mf.get_orbsym(mo_coeff)
+    if mf.mol.groupname in ('SO3', 'Dooh', 'Coov'):
+        if numpy.any(orbsyma > 7):
+            logger.warn(mf, 'Wave-function symmetry for %s not supported. '
+                        'Wfn symmetry is mapped to D2h/C2v group.',
+                        mf.mol.groupname)
+            orbsyma = orbsyma % 10
+            orbsymb = orbsymb % 10
+
+    if mo_occ is None:
+        mo_occ = mf.mo_occ
+    wfnsym = 0
+    for ir in orbsyma[mo_occ[0] == 1]:
+        wfnsym ^= ir
+    for ir in orbsymb[mo_occ[1] == 1]:
+        wfnsym ^= ir
+    return wfnsym
+
+
+class SymAdaptedUHF(uhf.UHF):
     __doc__ = uhf.UHF.__doc__ + '''
     Attributes for symmetry allowed UHF:
         irrep_nelec : dict
@@ -240,8 +303,8 @@ class UHF(uhf.UHF):
         self.irrep_nelec = {}
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        uhf.UHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        uhf.UHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self
@@ -249,6 +312,10 @@ class UHF(uhf.UHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
+            for irname in self.irrep_nelec:
+                if irname not in self.mol.irrep_name:
+                    logger.warn(self, 'No irrep %s', irname)
+
             hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
@@ -326,8 +393,8 @@ class UHF(uhf.UHF):
                     neleca = self.irrep_nelec[irname] - nelecb
                 else:
                     neleca, nelecb = self.irrep_nelec[irname]
-                ea_idx = numpy.argsort(mo_energy[0][ir_idxa].round(9))
-                eb_idx = numpy.argsort(mo_energy[1][ir_idxb].round(9))
+                ea_idx = numpy.argsort(mo_energy[0][ir_idxa].round(9), kind='mergesort')
+                eb_idx = numpy.argsort(mo_energy[1][ir_idxb].round(9), kind='mergesort')
                 mo_occ[0,ir_idxa[ea_idx[:neleca]]] = 1
                 mo_occ[1,ir_idxb[eb_idx[:nelecb]]] = 1
                 neleca_fix += neleca
@@ -336,20 +403,21 @@ class UHF(uhf.UHF):
                 idx_ea_left.append(ir_idxa)
                 idx_eb_left.append(ir_idxb)
 
-        neleca_float = self.nelec[0] - neleca_fix
-        nelecb_float = self.nelec[1] - nelecb_fix
+        nelec = self.nelec
+        neleca_float = nelec[0] - neleca_fix
+        nelecb_float = nelec[1] - nelecb_fix
         assert(neleca_float >= 0)
         assert(nelecb_float >= 0)
         if len(idx_ea_left) > 0:
             idx_ea_left = numpy.hstack(idx_ea_left)
             ea_left = mo_energy[0][idx_ea_left]
-            ea_sort = numpy.argsort(ea_left.round(9))
+            ea_sort = numpy.argsort(ea_left.round(9), kind='mergesort')
             occ_idx = idx_ea_left[ea_sort][:neleca_float]
             mo_occ[0][occ_idx] = 1
         if len(idx_eb_left) > 0:
             idx_eb_left = numpy.hstack(idx_eb_left)
             eb_left = mo_energy[1][idx_eb_left]
-            eb_sort = numpy.argsort(eb_left.round(9))
+            eb_sort = numpy.argsort(eb_left.round(9), kind='mergesort')
             occ_idx = idx_eb_left[eb_sort][:nelecb_float]
             mo_occ[1][occ_idx] = 1
 
@@ -357,7 +425,6 @@ class UHF(uhf.UHF):
         if self.verbose >= logger.INFO and numpy.count_nonzero(vir_idx) > 0:
             noccsa = []
             noccsb = []
-            p0 = 0
             for i, ir in enumerate(mol.irrep_id):
                 irname = mol.irrep_name[i]
                 ir_idxa = orbsyma == ir
@@ -401,10 +468,12 @@ class UHF(uhf.UHF):
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[1])
-        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9))
-        va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9))
-        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9))
-        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9))
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
+        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9), kind='mergesort')
+        va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9), kind='mergesort')
+        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9), kind='mergesort')
+        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9), kind='mergesort')
         idxa = numpy.arange(ea.size)
         idxa = numpy.hstack((idxa[self.mo_occ[0]> 0][oa_sort],
                              idxa[self.mo_occ[0]==0][va_sort]))
@@ -421,9 +490,11 @@ class UHF(uhf.UHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=None, **kwargs):
+    @lib.with_doc(analyze.__doc__)
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
@@ -433,15 +504,21 @@ class UHF(uhf.UHF):
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
+    def get_orbsym(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('SCF object %s not initialized' % self)
+        return get_orbsym(self.mol, mo_coeff)
+    orbsym = property(get_orbsym)
+
+    get_wfnsym = get_wfnsym
+    wfnsym = property(get_wfnsym)
+
     canonicalize = canonicalize
 
-def get_orbsym(mol, mo_coeff, s=None, check=False):
-    if hasattr(mo_coeff, 'orbsym'):
-        orbsym = numpy.asarray(mo_coeff.orbsym)
-    else:
-        orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
-                  hf_symm.get_orbsym(mol, mo_coeff[1], s, check))
-    return orbsym
+UHF = SymAdaptedUHF
+
 
 class HF1e(UHF):
     def scf(self, *args):
@@ -455,6 +532,9 @@ class HF1e(UHF):
         self.e_tot = self.mo_energy[0][self.mo_occ[0]>0][0] + self.mol.energy_nuc()
         self._finalize()
         return self.e_tot
+
+
+del(WITH_META_LOWDIN)
 
 
 if __name__ == '__main__':

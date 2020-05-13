@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -16,10 +29,14 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
-from pyscf import scf
-from pyscf.scf import ciah
+from pyscf import gto
+from pyscf.soscf import ciah
+from pyscf import __config__
 
-# ref. JCP, 82, 5053;  JCP, 73, 2342
+WITH_MICRO_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_micro_scheduler', False)
+WITH_STEPSIZE_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_stepsize_scheduler', True)
+
+# ref. JCP, 82, 5053 (1985); DOI: 10.1063/1.448627 and JCP 73, 2342 (1980); DOI:10.1063/1.440384
 
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
@@ -194,7 +211,6 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
     u = 1
     g_orb, gorb_update, h_op, h_diag = \
             casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
-    ngorb = g_orb.size
     g_kf = g_orb
     norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
     log.debug('    |g|=%5.3g', norm_gorb)
@@ -272,9 +288,14 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
                 yield u, g_kf, ihop+jkcount, dxi
 
                 t3m = (time.clock(), time.time())
-                #g_kf1, gorb_update, h_op, h_diag = \
-                #        casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
-                #g_kf1 = gorb_update(u, casscf.with_dep4)
+# TODO: test whether to update h_op, h_diag to change the orbital hessian.
+# It leads to the different hessian operations in the same davidson
+# diagonalization procedure.  This is generally a bad approximation because it
+# results in ill-defined hessian eigenvalue in the davidson algorithm.  But in
+# certain cases, it is a small perturbation that help the mcscf optimization
+# algorithm move out of local minimum
+#                h_op, h_diag = \
+#                        casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)[2:4]
                 g_kf1 = gorb_update(u, fcivec())
                 jkcount += 1
 
@@ -290,8 +311,12 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
                     norm_gkf1 > norm_gkf*casscf.ah_grad_trust_region):
                     log.debug('    Keyframe |g|=%5.3g  |g_last| =%5.3g out of trust region',
                               norm_gkf1, norm_gorb)
-                    dr = -dxi
-                    g_kf = g_kf1 - hdxi
+# Slightly moving forward, not completely restoring last step.
+# In some cases, the optimization moves out of trust region in the first micro
+# iteration.  The small forward step can ensure the orbital changes in the
+# current iteration.
+                    dr = -dxi * (1 - casscf.scale_restoration)
+                    g_kf = g_kf1
                     break
                 t3m = log.timer('gen h_op', *t3m)
                 g_orb = g_kf = g_kf1
@@ -304,7 +329,7 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
-    '''CASSCF solver
+    '''quasi-newton CASSCF optimization driver
     '''
     log = logger.new_logger(casscf, verbose)
     cput0 = (time.clock(), time.time())
@@ -314,15 +339,22 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
     mo = mo_coeff
     nmo = mo_coeff.shape[1]
-    #TODO: lazy evaluate eris, to leave enough memory for FCI solver
+    ncore = casscf.ncore
+    ncas = casscf.ncas
+    nocc = ncore + ncas
+
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if casscf.ncas == nmo and not casscf.internal_rotation:
-        if casscf.canonicalization:
-            log.debug('CASSCF canonicalization')
-            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
-                                                        casscf.natorb, verbose=log)
-            return True, e_tot, e_ci, fcivec, mo, mo_energy
+    e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+# macro iterations are needed when added solvent model
+#    if ncas == nmo and not casscf.internal_rotation:
+#        if casscf.canonicalization:
+#            log.debug('CASSCF canonicalization')
+#            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
+#                                                        casscf.sorting_mo_energy,
+#                                                        casscf.natorb, verbose=log)
+#        else:
+#            mo_energy = None
+#        return True, e_tot, e_cas, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
@@ -335,7 +367,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     r0 = None
 
     t1m = log.timer('Initializing 1-step CASSCF', *cput0)
-    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
+    casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
     norm_ddm = 1e2
     casdm1_prev = casdm1_last = casdm1
     t3m = t2m = log.timer('CAS DM', *t1m)
@@ -360,7 +392,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                           imicro, norm_t, norm_gorb)
                 break
 
-            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris, locals())
+            casdm1, casdm2, gci, fcivec = \
+                    casscf.update_casdm(mo, u, fcivec, e_cas, eris, locals())
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
@@ -397,8 +430,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
+        e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
         log.timer('CASCI solver', *t2m)
@@ -425,17 +458,79 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if casscf.canonicalization:
         log.info('CASSCF canonicalization')
         mo, fcivec, mo_energy = \
-                casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
-        if casscf.natorb: # dump_chk may save casdm1
-            nocc = casscf.ncore + casscf.ncas
-            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
+                casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
+                                    casscf.natorb, casdm1, log)
+        if casscf.natorb and dump_chk: # dump_chk may save casdm1
+            occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = numpy.diag(-occ)
+    else:
+        mo_energy = None
 
     if dump_chk:
         casscf.dump_chk(locals())
 
     log.timer('1-step CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo, mo_energy
+    return conv, e_tot, e_cas, fcivec, mo, mo_energy
+
+
+def as_scanner(mc):
+    '''Generating a scanner for CASSCF PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total CASSCF energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters of MCSCF object
+    (conv_tol, max_memory etc) are automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1.2', verbose=0)
+    >>> mc_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).as_scanner()
+    >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
+    >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
+    '''
+    from pyscf.mcscf.addons import project_init_guess
+    if isinstance(mc, lib.SinglePointScanner):
+        return mc
+
+    logger.info(mc, 'Create scanner for %s', mc.__class__)
+
+    class CASSCF_Scanner(mc.__class__, lib.SinglePointScanner):
+        def __init__(self, mc):
+            self.__dict__.update(mc.__dict__)
+            self._scf = mc._scf.as_scanner()
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
+            # These properties can be updated when calling mf_scanner(mol) if
+            # they are shared with mc._scf. In certain scenario the properties
+            # may be created for mc separately, e.g. when mcscf.approx_hessian is
+            # called. For safety, the code below explicitly resets these
+            # properties.
+            for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
+                sub_mod = getattr(self, key, None)
+                if sub_mod:
+                    sub_mod.reset(mol)
+
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            self.mol = mol
+            if self.mo_coeff is None:
+                mo = mf_scanner.mo_coeff
+            else:
+                mo = self.mo_coeff
+            mo = project_init_guess(self, mo)
+            e_tot = self.kernel(mo, self.ci)[0]
+            return e_tot
+    return CASSCF_Scanner(mc)
 
 
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
@@ -456,7 +551,6 @@ class CASSCF(casci.CASCI):
             Default is 1e-4
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
-            (see notes in max_cycle_micro_inner attribute)
             Default is 0.03.
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
@@ -491,10 +585,10 @@ class CASSCF(casci.CASCI):
             >>> mc = mcscf.CASSCF(mf, 6, 6)
             >>> mc.conv_tol = 1e-10
             >>> mc.ah_conv_tol = 1e-5
-            >>> mc.kernel()
+            >>> mc.kernel()[0]
             -109.044401898486001
             >>> mc.ah_conv_tol = 1e-10
-            >>> mc.kernel()
+            >>> mc.kernel()[0]
             -109.044401887945668
 
         chkfile : str
@@ -507,17 +601,30 @@ class CASSCF(casci.CASCI):
             generated by the builtin function :func:`locals`, so that the
             callback function can access all local variables in the current
             envrionment.
+        scale_restoration : float
+            When a step of orbital rotation moves out of trust region, the
+            orbital optimization will be restored to previous state and the
+            step size of the orbital rotation needs to be reduced.
+            scale_restoration controls how much to scale down the step size.
 
     Saved results
 
         e_tot : float
             Total MCSCF energy (electronic energy plus nuclear repulsion)
+        e_cas : float
+            CAS space FCI energy
         ci : ndarray
             CAS space FCI coefficients
-        converged : bool
-            It indicates CASSCF optimization converged or not.
         mo_coeff : ndarray
-            Optimized CASSCF orbitals coefficients
+            Optimized CASSCF orbitals coefficients. When canonicalization is
+            specified, the returned orbitals make the general Fock matrix
+            (Fock operator on top of MCSCF 1-particle density matrix)
+            diagonalized within each subspace (core, active, external).
+            If natorb (natural orbitals in active space) is specified,
+            the active segment of the mo_coeff is natural orbitls.
+        mo_energy : ndarray
+            Diagonal elements of general Fock matrix (in mo_coeff
+            representation).
 
     Examples:
 
@@ -529,21 +636,18 @@ class CASSCF(casci.CASCI):
     >>> mc.kernel()[0]
     -109.044401882238134
     '''
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
-        self.frozen = frozen
+
 # the max orbital rotation and CI increment, prefer small step size
-        self.max_stepsize = .02
-        self.max_cycle_macro = 50
-        self.max_cycle_micro = 4
-        #self.max_cycle_micro_inner = 4
-        self.conv_tol = 1e-7
-        self.conv_tol_grad = None
-        # for augmented hessian
-        self.ah_level_shift = 1e-8
-        self.ah_conv_tol = 1e-12
-        self.ah_max_cycle = 30
-        self.ah_lindep = 1e-14
+    max_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_max_stepsize', .02)
+    max_cycle_macro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_macro', 50)
+    max_cycle_micro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_micro', 4)
+    conv_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'mcscf_mc1step_CASSCF_conv_tol_grad', None)
+    # for augmented hessian
+    ah_level_shift = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_level_shift', 1e-8)
+    ah_conv_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_conv_tol', 1e-12)
+    ah_max_cycle = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_max_cycle', 30)
+    ah_lindep = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_lindep', 1e-14)
 # * ah_start_tol and ah_start_cycle control the start point to use AH step.
 #   In function rotate_orb_cc, the orbital rotation is carried out with the
 #   approximate aug_hessian step after a few davidson updates of the AH eigen
@@ -560,54 +664,78 @@ class CASSCF(casci.CASCI):
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
-        self.ah_start_tol = 2.5
-        self.ah_start_cycle = 3
 # * Classic AH can be simulated by setting eg
-#               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
-# ah_grad_trust_region allow gradients increase for AH optimization
-        self.ah_grad_trust_region = 3.0
-        self.internal_rotation = False
-        self.chkfile = mf.chkfile
-        self.ci_response_space = 4
-        self.ci_grad_trust_region = 3.0
-        self.with_dep4 = False
-        self.callback = None
-        self.chk_ci = False
-        self.kf_interval = 4
-        self.kf_trust_region = 3.0
+# ah_grad_trust_region allow gradients being increased in AH optimization
+    ah_start_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_start_tol', 2.5)
+    ah_start_cycle = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_start_cycle', 3)
+    ah_grad_trust_region = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_grad_trust_region', 3.0)
 
-        self.fcisolver.max_cycle = 50
+    internal_rotation = getattr(__config__, 'mcscf_mc1step_CASSCF_internal_rotation', False)
+    ci_response_space = getattr(__config__, 'mcscf_mc1step_CASSCF_ci_response_space', 4)
+    ci_grad_trust_region = getattr(__config__, 'mcscf_mc1step_CASSCF_ci_grad_trust_region', 3.0)
+    with_dep4 = getattr(__config__, 'mcscf_mc1step_CASSCF_with_dep4', False)
+    chk_ci = getattr(__config__, 'mcscf_mc1step_CASSCF_chk_ci', False)
+    kf_interval = getattr(__config__, 'mcscf_mc1step_CASSCF_kf_interval', 4)
+    kf_trust_region = getattr(__config__, 'mcscf_mc1step_CASSCF_kf_trust_region', 3.0)
+
+    ao2mo_level = getattr(__config__, 'mcscf_mc1step_CASSCF_ao2mo_level', 2)
+    natorb = getattr(__config__, 'mcscf_mc1step_CASSCF_natorb', False)
+    canonicalization = getattr(__config__, 'mcscf_mc1step_CASSCF_canonicalization', True)
+    sorting_mo_energy = getattr(__config__, 'mcscf_mc1step_CASSCF_sorting_mo_energy', False)
+    scale_restoration = getattr(__config__, 'mcscf_mc1step_CASSCF_scale_restoration', 0.5)
+
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
+        self.frozen = frozen
+
+        self.callback = None
+        self.chkfile = self._scf.chkfile
+
+        self.fcisolver.max_cycle = getattr(__config__,
+                                           'mcscf_mc1step_CASSCF_fcisolver_max_cycle', 50)
+        self.fcisolver.conv_tol = getattr(__config__,
+                                          'mcscf_mc1step_CASSCF_fcisolver_conv_tol', 1e-8)
 
 ##################################################
 # don't modify the following attributes, they are not input options
         self.e_tot = None
         self.e_cas = None
         self.ci = None
-        self.mo_coeff = mf.mo_coeff
-        self.mo_energy = mf.mo_energy
+        self.mo_coeff = self._scf.mo_coeff
+        self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
 
-        self._keys = set(self.__dict__.keys())
+        keys = set(('max_stepsize', 'max_cycle_macro', 'max_cycle_micro',
+                    'conv_tol', 'conv_tol_grad', 'ah_level_shift',
+                    'ah_conv_tol', 'ah_max_cycle', 'ah_lindep',
+                    'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
+                    'internal_rotation', 'ci_response_space',
+                    'ci_grad_trust_region', 'with_dep4', 'chk_ci',
+                    'kf_interval', 'kf_trust_region', 'fcisolver_max_cycle',
+                    'fcisolver_conv_tol', 'natorb', 'canonicalization',
+                    'sorting_mo_energy', 'scale_restoration'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
-        nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
+        log.info('******** %s ********', self.__class__)
+        ncore = self.ncore
+        ncas = self.ncas
+        nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)
-        assert(self.ncas > 0)
+                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
+        assert(nvir >= 0 and ncore >= 0 and ncas >= 0)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)
         log.info('max_cycle_micro = %d', self.max_cycle_micro)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s', self.conv_tol_grad)
-        #log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
         log.info('orbital rotation max_stepsize = %g', self.max_stepsize)
         log.info('augmented hessian ah_max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian ah_conv_tol = %g', self.ah_conv_tol)
@@ -623,22 +751,43 @@ class CASSCF(casci.CASCI):
         log.info('with_dep4 %d', self.with_dep4)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
+        log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
+        log.info('ao2mo_level = %d', self.ao2mo_level)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('internal_rotation = %s', self.internal_rotation)
-        try:
+        if getattr(self.fcisolver, 'dump_flags', None):
             self.fcisolver.dump_flags(self.verbose)
-        except AttributeError:
-            pass
-        if hasattr(self, 'max_orb_stepsize'):
-            log.warn('Attribute "max_orb_stepsize" was replaced by "max_stepsize"')
         if self.mo_coeff is None:
-            log.warn('Orbital for CASCI is not specified.  You probably need '
-                     'call SCF.kernel() to initialize orbitals.')
+            log.error('Orbitals for CASCI are not specified. The relevant SCF '
+                      'object may not be initialized.')
+
+        if (getattr(self._scf, 'with_solvent', None) and
+            not getattr(self, 'with_solvent', None)):
+            log.warn('''Solvent model %s was found at SCF level but not applied to the CASSCF object.
+The SCF solvent model will not be applied to the current CASSCF calculation.
+To enable the solvent model for CASSCF, the following code needs to be called
+        from pyscf import solvent
+        mc = mcscf.CASSCF(...)
+        mc = solvent.ddCOSMO(mc)
+''',
+                     self._scf.with_solvent.__class__)
         return self
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
+        '''
+        Returns:
+            Five elements, they are
+            total energy,
+            active space CI energy,
+            the active space FCI wavefunction coefficients or DMRG wavefunction ID,
+            the MCSCF canonical orbital coefficients,
+            the MCSCF canonical orbital coefficients.
+
+        They are attributes of mcscf object, which can be accessed by
+        .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
+        '''
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else: # overwrite self.mo_coeff because it is needed in many methods of this class
@@ -666,32 +815,26 @@ class CASSCF(casci.CASCI):
         return self.kernel(mo_coeff, ci0, callback, mc2step.kernel)
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
+        log = logger.new_logger(self, verbose)
         if eris is None:
             fcasci = copy.copy(self)
             fcasci.ao2mo = self.get_h2cas
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        if isinstance(verbose, logger.Logger):
-            log = verbose
-        else:
-            if verbose is None:
-                verbose = self.verbose
-            log = logger.Logger(self.stdout, verbose)
-
-        e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
-        if numpy.size(e_ci) != 1:
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'
                                'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
-        elif numpy.ndim(e_ci) != 0:
+        elif numpy.ndim(e_cas) != 0:
             # This is a workaround for external CI solver compatibility.
-            e_ci = e_ci[0]
+            e_cas = e_cas[0]
 
         if envs is not None and log.verbose >= logger.INFO:
-            log.debug('CAS space CI energy = %.15g', e_ci)
+            log.debug('CAS space CI energy = %.15g', e_cas)
 
-            if hasattr(self.fcisolver,'spin_square'):
+            if getattr(self.fcisolver, 'spin_square', None):
                 ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
             else:
                 ss = None
@@ -720,7 +863,10 @@ class CASSCF(casci.CASCI):
                     log.info('CASCI E = %.15g', e_tot)
                 else:
                     log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
-        return e_tot, e_ci, fcivec
+        return e_tot, e_cas, fcivec
+
+    as_scanner = as_scanner
+
 
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
         nocc = ncore + ncas
@@ -761,7 +907,8 @@ class CASSCF(casci.CASCI):
         raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '
                                  'Use .ao2mo method instead')
 
-    def ao2mo(self, mo):
+    def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
 #        nmo = mo.shape[1]
 #        ncore = self.ncore
 #        ncas = self.ncas
@@ -777,12 +924,25 @@ class CASSCF(casci.CASCI):
 #        eris.papa = numpy.asarray(eri[:,ncore:nocc,:,ncore:nocc], order='C')
 #        return eris
 
-        return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
+        return mc_ao2mo._ERIS(self, mo_coeff, method='incore',
+                              level=self.ao2mo_level)
 
-    # Don't remove the two functions.  They are used in df/approx_hessian code
+    # Don't remove the two functions.  They are used in df.approx_hessian code
     def get_h2eff(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2cas when df.approx_hessian is applied,
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return self.get_h2cas(mo_coeff)
     def get_h2cas(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2eff when df.approx_hessian is applied,
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return casci.CASCI.ao2mo(self, mo_coeff)
 
     def update_jk_in_ah(self, mo, r, casdm1, eris):
@@ -805,11 +965,11 @@ class CASSCF(casci.CASCI):
 
 # hessian_co exactly expands up to first order of H
 # update_casdm exand to approx 2nd order of H
-    def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
+    def update_casdm(self, mo, u, fcivec, e_cas, eris, envs={}):
         nmo = mo.shape[1]
         rmat = u - numpy.eye(nmo)
 
-        #g = hessian_co(self, mo, rmat, fcivec, e_ci, eris)
+        #g = hessian_co(self, mo, rmat, fcivec, e_cas, eris)
         ### hessian_co part start ###
         ncas = self.ncas
         nelecas = self.nelecas
@@ -860,7 +1020,7 @@ class CASSCF(casci.CASCI):
               + numpy.einsum('pq,pq->', eris.vhf_c, ddm))
         ### hessian_co part end ###
 
-        ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_ci, envs)
+        ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_cas, envs)
         if g is not None:  # So state average CI, DMRG etc will not be applied
             ovlp = numpy.dot(fcivec.ravel(), ci1.ravel())
             norm_g = numpy.linalg.norm(g)
@@ -873,43 +1033,56 @@ class CASSCF(casci.CASCI):
 
         return casdm1, casdm2, g, ci1
 
-    def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci, envs):
+    def solve_approx_ci(self, h1, h2, ci0, ecore, e_cas, envs):
         ''' Solve CI eigenvalue/response problem approximately
         '''
         ncas = self.ncas
         nelecas = self.nelecas
-        ncore = self.ncore
-        nocc = ncore + ncas
         if 'norm_gorb' in envs:
             tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:
             tol = None
-        if hasattr(self.fcisolver, 'approx_kernel'):
+        if getattr(self.fcisolver, 'approx_kernel', None):
             fn = self.fcisolver.approx_kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
-                     tol=tol, max_memory=self.max_memory)[1]
+            e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
+                        tol=tol, max_memory=self.max_memory)
             return ci1, None
-        elif not (hasattr(self.fcisolver, 'contract_2e') and
-                  hasattr(self.fcisolver, 'absorb_h1e')):
+        elif not (getattr(self.fcisolver, 'contract_2e', None) and
+                  getattr(self.fcisolver, 'absorb_h1e', None)):
             fn = self.fcisolver.kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
-                     tol=tol, max_memory=self.max_memory,
-                     max_cycle=self.ci_response_space)[1]
+            e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
+                        tol=tol, max_memory=self.max_memory,
+                        max_cycle=self.ci_response_space)
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
-        hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
-        g = hc - (e_ci-ecore) * ci0.ravel()
+        # Be careful with the symmetry adapted contract_2e function. When the
+        # symmetry adapted FCI solver is used, the symmetry of ci0 may be
+        # different to fcisolver.wfnsym. This function may output 0.
+        if getattr(self.fcisolver, 'guess_wfnsym', None):
+            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0)
+        else:
+            wfnsym = None
+        def contract_2e(c):
+            if wfnsym is None:
+                hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            else:
+                with lib.temporary_env(self.fcisolver, wfnsym=wfnsym):
+                    hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            return hc.ravel()
+
+        hc = contract_2e(ci0)
+        g = hc - (e_cas-ecore) * ci0.ravel()
+
         if self.ci_response_space > 7:
             logger.debug(self, 'CI step by full response')
             # full response
             max_memory = max(400, self.max_memory-lib.current_memory()[0])
-            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0,
-                                           tol=tol, max_memory=max_memory)
+            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ecore=ecore,
+                                           ci0=ci0, tol=tol, max_memory=max_memory)
         else:
-            nd = min(max(self.ci_response_space, 2), ci0.size)
-            logger.debug(self, 'CI step by %dD subspace response', nd)
+            nd = self.ci_response_space
             xs = [ci0.ravel()]
             ax = [hc]
             heff = numpy.empty((nd,nd))
@@ -917,20 +1090,34 @@ class CASSCF(casci.CASCI):
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
             for i in range(1, nd):
-                xs.append(ax[i-1] - xs[i-1] * e_ci)
-                ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
-                                                     nelecas).ravel())
+                dx = ax[i-1] - xs[i-1] * e_cas
+                if numpy.linalg.norm(dx) < 1e-6:
+                    break
+                xs.append(dx)
+                ax.append(contract_2e(xs[i]))
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-            e, v = lib.safe_eigh(heff, seff)[:2]
+            nd = len(xs)
+            e, v = lib.safe_eigh(heff[:nd,:nd], seff[:nd,:nd])[:2]
             ci1 = xs[0] * v[0,0]
-            for i in range(1,nd):
+            for i in range(1, nd):
                 ci1 += xs[i] * v[i,0]
         return ci1, g
 
     def get_jk(self, mol, dm, hermi=1):
         return self._scf.get_jk(mol, dm, hermi=1)
+
+    def get_grad(self, mo_coeff=None, casdm1_casdm2=None, eris=None):
+        '''Orbital gradients'''
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if eris is None: eris = self.ao2mo(mo_coeff)
+        if casdm1_casdm2 is None:
+            e_tot, e_cas, civec = self.casci(mo_coeff, self.ci, eris)
+            casdm1, casdm2 = self.fcisolver.make_rdm12(civec, self.ncas, self.nelecas)
+        else:
+            casdm1, casdm2 = casdm1_casdm2
+        return self.gen_g_hop(mo_coeff, 1, casdm1, casdm2, eris)[0]
 
     def _exact_paaa(self, mo, u, out=None):
         nmo = mo.shape[1]
@@ -952,15 +1139,22 @@ class CASSCF(casci.CASCI):
         return paaa.reshape(nmo,ncas,ncas,ncas)
 
     def dump_chk(self, envs):
-        if hasattr(self.fcisolver, 'nevpt_intermediate'):
+        if not self.chkfile:
+            return self
+
+        if getattr(self.fcisolver, 'nevpt_intermediate', None):
             civec = None
         elif self.chk_ci:
             civec = envs['fcivec']
         else:
             civec = None
         ncore = self.ncore
-        nocc = self.ncore + self.ncas
-        mo_occ = numpy.zeros(envs['mo'].shape[1])
+        nocc = ncore + self.ncas
+        if 'mo' in envs:
+            mo_coeff = envs['mo']
+        else:
+            mo_coeff = envs['mo_coeff']
+        mo_occ = numpy.zeros(mo_coeff.shape[1])
         mo_occ[:ncore] = 2
         if self.natorb:
             occ = self._eig(-envs['casdm1'], ncore, nocc)[0]
@@ -973,17 +1167,16 @@ class CASSCF(casci.CASCI):
         else:
             mo_energy = 'None'
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
-                           envs['mo'], self.ncore, self.ncas, mo_occ,
-                           mo_energy, envs['e_ci'], civec, envs['casdm1'],
+                           mo_coeff, ncore, self.ncas, mo_occ,
+                           mo_energy, envs['e_cas'], civec, envs['casdm1'],
                            overwrite_mol=False)
         return self
 
-    def update(self, chkfile=None):
-        return self.update_from_chk(chkfile)
     def update_from_chk(self, chkfile=None):
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(lib.chkfile.load(chkfile, 'mcscf'))
         return self
+    update = update_from_chk
 
     def rotate_mo(self, mo, u, log=None):
         '''Rotate orbitals with the given unitary matrix'''
@@ -1001,31 +1194,73 @@ class CASSCF(casci.CASCI):
         return mo
 
     def micro_cycle_scheduler(self, envs):
-        #log_norm_ddm = numpy.log(envs['norm_ddm'])
-        #return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
-        return self.max_cycle_micro
+        if not WITH_MICRO_SCHEDULER:
+            return self.max_cycle_micro
+
+        log_norm_ddm = numpy.log(envs['norm_ddm'])
+        return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
 
     def max_stepsize_scheduler(self, envs):
+        if not WITH_STEPSIZE_SCHEDULER:
+            return self.max_stepsize
+
         if self._max_stepsize is None:
             self._max_stepsize = self.max_stepsize
-        if envs['de'] > self.conv_tol:  # Avoid total energy increasing
-            self._max_stepsize *= .5
+        if envs['de'] > -self.conv_tol:  # Avoid total energy increasing
+            self._max_stepsize *= .3
             logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
         else:
-            self._max_stepsize = numpy.sqrt(self.max_stepsize*self.max_stepsize)
+            self._max_stepsize = (self.max_stepsize*self._max_stepsize)**.5
         return self._max_stepsize
 
     def ah_scheduler(self, envs):
         pass
 
     @property
-    def ci_update_dep(self):
+    def max_orb_stepsize(self):  # pragma: no cover
+        return self.max_stepsize
+    @max_orb_stepsize.setter
+    def max_orb_stepsize(self, x):  # pragma: no cover
+        sys.stderr.write('WARN: Attribute "max_orb_stepsize" was replaced by "max_stepsize"\n')
+        self.max_stepsize = x
+    @property
+    def ci_update_dep(self):  # pragma: no cover
         return self.with_dep4
     @ci_update_dep.setter
-    def ci_update_dep(self, x):
+    def ci_update_dep(self, x):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .ci_update_dep was replaced by .with_dep4 since PySCF v1.1.\n')
         self.with_dep4 = x == 4
     grad_update_dep = ci_update_dep
+
+    @property
+    def max_cycle(self):
+        return self.max_cycle_macro
+    @max_cycle.setter
+    def max_cycle(self, x):
+        self.max_cycle_macro = x
+
+    def approx_hessian(self, auxbasis=None, with_df=None):
+        from pyscf.mcscf import df
+        return df.approx_hessian(self, auxbasis, with_df)
+
+    def nuc_grad_method(self):
+        from pyscf.grad import casscf
+        return casscf.Gradients(self)
+
+    def newton(self):
+        from pyscf.mcscf import newton_casscf
+        mc1 = newton_casscf.CASSCF(self._scf, self.ncas, self.nelecas)
+        mc1.__dict__.update(self.__dict__)
+        mc1.max_cycle_micro = 10
+        # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
+        if isinstance (self, StateAverageMCSCFSolver):
+            mc1 = mc1.state_average_(self.weights)
+        return mc1
+
+from pyscf import scf
+scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
+scf.uhf.UHF.CASSCF = None
 
 
 # to avoid calculating AO integrals
@@ -1039,14 +1274,13 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     mo_cas = mo[:,ncore:nocc]
     core_dm = numpy.dot(mo_core, mo_core.T) * 2
     hcore = casscf.get_hcore()
-    energy_core = casscf._scf.energy_nuc()
+    energy_core = casscf.energy_nuc()
     energy_core += numpy.einsum('ij,ji', core_dm, hcore)
     energy_core += eris.vhf_c[:ncore,:ncore].trace()
-    h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas)) + eris.vhf_c[ncore:nocc,ncore:nocc]
+    h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas))
+    h1eff += eris.vhf_c[ncore:nocc,ncore:nocc]
     mc.get_h1eff = lambda *args: (h1eff, energy_core)
 
-    ncore = casscf.ncore
-    nocc = ncore + casscf.ncas
     eri_cas = eris.ppaa[ncore:nocc,ncore:nocc,:,:].copy()
     mc.get_h2eff = lambda *args: eri_cas
     return mc
@@ -1056,9 +1290,8 @@ def expmat(a):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
-    import pyscf.fci
+    from pyscf import fci
     from pyscf.mcscf import addons
 
     mol = gto.Mole()
@@ -1087,8 +1320,8 @@ if __name__ == '__main__':
 
     mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]
     print(emc - -15.950852049859-mol.energy_nuc())
 
@@ -1116,8 +1349,8 @@ if __name__ == '__main__':
     mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
     mc.natorb = 1
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]
     print(emc - -3.62638367550087)
 
@@ -1133,7 +1366,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASSCF(m, 6, 4)
-    mc.fcisolver = pyscf.fci.solver(mol)
+    mc.fcisolver = fci.solver(mol)
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
     emc = mc.mc1step(mo)[0]
@@ -1143,8 +1376,8 @@ if __name__ == '__main__':
 
     mc = CASSCF(m, 6, (3,1))
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     mc.verbose = 4
     emc = mc.mc1step(mo)[0]
     #mc.analyze()

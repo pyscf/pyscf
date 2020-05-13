@@ -1,6 +1,6 @@
 ;;;;
-;;;; Copyright (C) 2015-  Qiming Sun <osirpt.sun@gmail.com>
-;;;; Description:
+;;;; Copyright (C) 2014-2017  Qiming Sun <osirpt.sun@gmail.com>
+;;;;
 
 (defun last-one? (lst)
   (null (cdr lst)))

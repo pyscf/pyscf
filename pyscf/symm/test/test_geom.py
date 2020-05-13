@@ -1,3 +1,17 @@
+#!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -5,6 +19,7 @@
 import unittest
 import numpy
 from functools import reduce
+from pyscf import lib
 from pyscf import gto
 from pyscf import symm
 from pyscf.symm import geom
@@ -13,7 +28,8 @@ from pyscf.symm import geom
 numpy.random.seed(12)
 u = numpy.random.random((3,3))
 u = numpy.linalg.svd(u)[0]
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_d5h(self):
         atoms = ringhat(5, u)
         atoms = atoms[5:]
@@ -138,7 +154,7 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(gpname, 'Cs')
         self.assertTrue(geom.check_given_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
-                         [[0, 1], [2, 4], [3], [5]])
+                         [[0, 4], [1, 3], [2], [5]])
 
     def test_ih1(self):
         coords = numpy.dot(make60(1.5, 1), u)
@@ -291,6 +307,15 @@ class KnowValues(unittest.TestCase):
         gpname, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(gpname, 'Cs')
 
+        numpy.random.seed(1)
+        c0 = numpy.random.random((4,3))
+        c0[:,1] *= .5
+        c1 = c0.copy()
+        c1[:,1] *= -1
+        atoms = [['C', c] for c in numpy.vstack((c0,c1))]
+        gpname, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(gpname, 'Cs')
+
     def test_td1(self):
         coords1 = numpy.dot(make4(1.5), u)
         atoms = [['C', c] for c in coords1]
@@ -330,7 +355,22 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(gpname, 'Cs')
         self.assertTrue(geom.check_given_symm('Cs', atoms))
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
-                         [[0, 3], [1], [2], [4, 7], [5], [6]])
+                         [[0, 1], [2], [3], [4, 5], [6], [7]])
+
+    def test_c3v_1(self):
+        mol = gto.M(atom='''
+C   0.948065  -0.081406  -0.007893
+C   0.462608  -0.144439   1.364854
+N   0.077738  -0.194439   2.453356
+H   0.591046   0.830035  -0.495369
+H   0.591062  -0.944369  -0.576807
+H   2.041481  -0.080642  -0.024174''')
+        gpname, orig, axes = geom.detect_symm(mol._atom)
+        self.assertEqual(gpname, 'C1')
+
+        with lib.temporary_env(geom, TOLERANCE=1e-3):
+            gpname, orig, axes = geom.detect_symm(mol._atom)
+        self.assertEqual(gpname, 'C3v')
 
     def test_t(self):
         atoms = [['C', ( 1.0   ,-1.0   , 1.0   )],
@@ -406,7 +446,7 @@ class KnowValues(unittest.TestCase):
                           [4, 12, 16, 24], [5, 13, 19, 27],
                           [6, 14, 18, 26], [7, 15, 17, 25]])
 
-    def test_s4(self):
+    def test_s4_1(self):
         coords1 = numpy.dot(make4(1.5), u)
         coords2 = numpy.dot(numpy.dot(make4(2.4), random_rotz()), u)
         atoms = [['C', c] for c in coords1] + [['C', c] for c in coords2]
@@ -556,10 +596,10 @@ class KnowValues(unittest.TestCase):
                  ['He', (1., 1.,-2.)],
                  ['He', (1.,-1.,-2.)]]
         l, orig, axes = geom.detect_symm(atoms)
-        self.assertEqual(l, 'D2')
+        self.assertEqual(l, 'D2d')
         atoms = geom.shift_atom(atoms, orig, axes)
         self.assertTrue(geom.check_given_symm('D2', atoms))
-        self.assertEqual(geom.symm_identical_atoms(l,atoms),
+        self.assertEqual(geom.symm_identical_atoms('D2', atoms),
                          [[0, 1], [2, 3, 4, 5]])
 
     def test_detect_symm_d2_b(self):
@@ -696,9 +736,8 @@ class KnowValues(unittest.TestCase):
             ['H', (-2.04168, -1.17876,  0.05942)],
             ['H', ( 0.00000, -1.43470,  1.20798)],
             ['H', ( 0.00000, -2.35753, -0.05942)], ]
-        tolbak, geom.TOLERANCE = geom.TOLERANCE, 1e-4
-        l, orig, axes = geom.detect_symm(atoms)
-        geom.TOLERANCE = tolbak
+        with lib.temporary_env(geom, TOLERANCE=1e-4):
+            l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'D3d')
 
     def test_quasi_c2v(self):
@@ -710,16 +749,81 @@ class KnowValues(unittest.TestCase):
             ['O' , ( 0.0000000000,   1.3265374484,   0.9444796669)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'Cs')
-        tolbak, geom.TOLERANCE = geom.TOLERANCE, 1e-2
-        l, orig, axes = geom.detect_symm(atoms)
-        geom.TOLERANCE = tolbak
+        with lib.temporary_env(geom, TOLERANCE=1e-2):
+            l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
 
-        tolbak, geom.TOLERANCE = geom.TOLERANCE, 1e-1
-        l, orig, axes = geom.detect_symm(atoms)
-        geom.TOLERANCE = tolbak
+        with lib.temporary_env(geom, TOLERANCE=1e-1):
+            l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'Td')
 
+    def test_as_subgroup(self):
+        axes = numpy.eye(3)
+        g, ax = symm.as_subgroup('D2d', axes)
+        self.assertEqual(g, 'D2')
+        self.assertAlmostEqual(abs(ax-numpy.eye(3)).max(), 0, 12)
+
+        g, ax = symm.as_subgroup('D2d', axes, 'D2')
+        self.assertEqual(g, 'D2')
+        self.assertAlmostEqual(abs(ax-numpy.eye(3)).max(), 0, 12)
+
+        g, ax = symm.as_subgroup('D2d', axes, 'C2v')
+        self.assertEqual(g, 'C2v')
+        self.assertAlmostEqual(ax[0,1], numpy.sqrt(.5), 9)
+        self.assertAlmostEqual(ax[1,0],-numpy.sqrt(.5), 9)
+
+        g, ax = symm.as_subgroup('C2v', axes, 'Cs')
+        self.assertEqual(g, 'Cs')
+        self.assertAlmostEqual(ax[2,0], 1, 9)
+
+        g, ax = symm.as_subgroup('D6', axes)
+        self.assertEqual(g, 'D2')
+
+        g, ax = symm.as_subgroup('C6h', axes)
+        self.assertEqual(g, 'C2h')
+
+        g, ax = symm.as_subgroup('C6v', axes)
+        self.assertEqual(g, 'C2v')
+
+        g, ax = symm.as_subgroup('C6', axes)
+        self.assertEqual(g, 'C2')
+
+    def test_ghost(self):
+        atoms = [
+            ['Fe'  , ( 0.0,   0.0,   0.0)],
+            ['O'   , (-1.3,   0.0,   0.0)],
+            ['GHOST-O' , ( 1.3,   0.0,   0.0)],
+            ['GHOST-O' , ( 0.0,  -1.3,   0.0)],
+            ['O'   , ( 0.0,   1.3,   0.0)],]
+        l, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(l, 'C2v')
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+
+        atoms = [
+            ['Fe'  , ( 0.0,   0.0,   0.0)],
+            ['O'   , (-1.3,   0.0,   0.0)],
+            ['XO'  , ( 1.3,   0.0,   0.0)],
+            ['GHOSTO' , ( 0.0,  -1.3,   0.0)],
+            ['O'   , ( 0.0,   1.3,   0.0)],]
+        l, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(l, 'C2v')
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+
+        atoms = [
+            ['Fe'  , ( 0.0,   0.0,   0.0)],
+            ['O'   , (-1.3,   0.0,   0.0)],
+            ['X' , ( 1.3,   0.0,   0.0)],
+            ['X' , ( 0.0,  -1.3,   0.0)],
+            ['O'   , ( 0.0,   1.3,   0.0)],]
+        l, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(l, 'C2v')
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+
+    def test_sort_coords(self):
+        c = numpy.random.random((5,3))
+        c0 = symm.sort_coords(c)
+        idx = symm.argsort_coords(c)
+        self.assertAlmostEqual(abs(c[idx] - c0).max(), 0, 9)
 
 
 def ring(n, start=0):

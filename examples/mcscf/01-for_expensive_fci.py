@@ -25,7 +25,7 @@ H -.990138, -0.436705  0''',
             symmetry = 1,
             spin = 2)
 
-mc = mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 14, 6).run(verbose=4, ci_update_dep=4, max_cycle_micro=10)
+mc = mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 14, 6).run(verbose=4, with_dep4=True, max_cycle_micro=10)
 
 #
 # Note: stream operations are used here.  This one line code is equivalent to
@@ -35,6 +35,6 @@ mc = mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 14, 6).run(verbose=4, ci_updat
 #mf.kernel()
 #mc = mcscf.CASSCF(mf, 14, 6)
 #mc.verbose = 4
-#mc.ci_update_dep = 4
+#mc.with_dep4 = True
 #mc.max_cycle_micro = 10
 #mc.kernel()

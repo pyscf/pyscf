@@ -1,4 +1,16 @@
-
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # 3. Use proper functions provided by PySCF
 #   * Switch between df.incore and df.outcore according to system memory
 #   *   (Koh: Is there an identical function in outcore? which one, incore or outcore, is used when need of more memory?)
@@ -9,7 +21,7 @@
 import numpy as np
 import scipy, time
 import scipy.linalg
-from pyscf import gto, dft, df
+from pyscf import gto, df
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import diis
@@ -34,7 +46,7 @@ def matrixpower(A,p,PrintCondition=False):
     """ Raise a Hermitian Matrix to a possibly fractional power. """
     u,s,v = np.linalg.svd(A)
     if (PrintCondition):
-        print "matrixpower: Minimal Eigenvalue =", np.min(s)
+        print("matrixpower: Minimal Eigenvalue =", np.min(s))
     for i in range(len(s)):
         if (abs(s[i]) < np.power(10.0,-14.0)):
             s[i] = np.power(10.0,-14.0)
@@ -84,6 +96,10 @@ class RTTDSCF(lib.StreamObject):
         end = time.time()
         logger.info(self,"Propagation time: %f", end-start)
 
+        logger.warn(self, 'RT-TDSCF is an experimental feature. It is '
+                    'still in testing.\nFeatures and APIs may be changed '
+                    'in the future.')
+
 
     def auxmol_set(self, mol, auxbas = "weigend"):
         """
@@ -110,8 +126,6 @@ class RTTDSCF(lib.StreamObject):
         auxmol.basis = auxbas
         auxmol.build()
         self.auxmol = auxmol
-        nao = mol.nao_nr()
-        naux = auxmol.nao_nr()
         atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env, auxmol._atm,\
         auxmol._bas, auxmol._env)
         eri3c = df.incore.aux_e2(mol, auxmol, intor="cint3c2e_sph", aosym="s1",\
@@ -275,8 +289,7 @@ class RTTDSCF(lib.StreamObject):
             """)
         n_ao = self.ks.mol.nao_nr()
         n_occ = int(sum(self.ks.mo_occ)/2)
-        logger.log(self,"n_ao: %d        n_occ: %d", n_ao,\
-        n_occ)
+        logger.log(self,"n_ao: %d        n_occ: %d", n_ao, n_occ)
         self.readparams(prm)
         fmat, c_am, v_lm = self.initfockbuild() # updates self.C
         rho = 0.5*np.diag(self.ks.mo_occ).astype(complex)
@@ -380,7 +393,6 @@ class RTTDSCF(lib.StreamObject):
             self.adiis = None
 
         fmat, jmat, kmat = self.fockbuild(dm_lao)
-        dm_lao_old = dm_lao
         etot = self.energy(dm_lao,fmat, jmat, kmat)+ self.enuc
 
         while (err > self.conv_tol):
@@ -482,7 +494,6 @@ class RTTDSCF(lib.StreamObject):
             eigs.sort()
             rot = rot[:,idx].copy()
             rho = transmat(rho, rot)
-            rhoM12 = transmat(rhom12, rot)
             v_lm = np.dot(v_lm , rot)
             c_am = np.dot(self.x , v_lm)
             n_v_lm = v_lm.copy()
@@ -604,7 +615,6 @@ class RTTDSCF(lib.StreamObject):
         it = 0
         tnow = 0
         rhom12 = rho.copy()
-        n_occ = int(sum(self.ks.mo_occ)/2)
         f = open(output,"a")
         logger.log(self,"\n\nPropagation Begins")
         start = time.time()

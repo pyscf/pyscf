@@ -16,6 +16,7 @@ BLOCKSCRATCHDIR = os.path.join(lib.param.TMPDIR, str(os.getpid()))
 #BLOCKRUNTIMEDIR = '.'
 BLOCKRUNTIMEDIR = str(os.getpid())
 MPIPREFIX = 'mpirun'  # change to srun for SLURM job system
+BLOCKVERSION = None
 
 
 # Use ChemPS2 as the FCI solver for CASSCF

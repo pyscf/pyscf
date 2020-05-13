@@ -1,11 +1,25 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Timothy Berkelbach <tim.berkelbach@gmail.com> 
 
 import os
-import pyscf.gto.basis
+from pyscf.gto import basis as _mol_basis
 from pyscf.pbc.gto.basis import parse_cp2k
+from pyscf import __config__
 
 ALIAS = {
     'gthaugdzvp'  : 'gth-aug-dzvp.dat',
@@ -23,11 +37,18 @@ ALIAS = {
     'gthccdzvp'   : 'gth-cc-dzvp.dat',
     'gthcctzvp'   : 'gth-cc-tzvp.dat',
     'gthccqzvp'   : 'gth-cc-qzvp.dat',
+    'gthszvmolopt'      : 'gth-szv-molopt.dat',
+    'gthdzvpmolopt'     : 'gth-dzvp-molopt.dat',
+    'gthtzvpmolopt'     : 'gth-tzvp-molopt.dat',
+    'gthtzv2pmolopt'    : 'gth-tzv2p-molopt.dat',
+    'gthszvmoloptsr'    : 'gth-szv-molopt-sr.dat',
+    'gthdzvpmoloptsr'   : 'gth-dzvp-molopt-sr.dat',
 }
 
-def parse(string):
-    '''Parse the basis text which is in CP2K format, return an internal
-    basis format which can be assigned to :attr:`Mole.basis`
+OPTIMIZE_CONTRACTION = getattr(__config__, 'pbc_gto_basis_parse_optimize', False)
+def parse(string, optimize=OPTIMIZE_CONTRACTION):
+    '''Parse the basis text in CP2K format, return an internal basis format
+    which can be assigned to :attr:`Cell.basis`
 
     Args:
         string : Blank linke and the lines of "BASIS SET" and "END" will be ignored
@@ -50,7 +71,7 @@ def parse(string):
     '''
     return parse_cp2k.parse(string)
 
-def load(file_or_basis_name, symb):
+def load(file_or_basis_name, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
 
     Args:
@@ -72,11 +93,25 @@ def load(file_or_basis_name, symb):
             with open(file_or_basis_name, 'r') as fin:
                 return parse_cp2k.parse(fin.read())
 
-    name = file_or_basis_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    name = _mol_basis._format_basis_name(file_or_basis_name)
+    if '@' in name:
+        split_name = name.split('@')
+        assert len(split_name) == 2
+        name = split_name[0]
+        contr_scheme = _mol_basis._convert_contraction(split_name[1])
+    else:
+        contr_scheme = 'Full'
+
     if name not in ALIAS:
-        return pyscf.gto.basis.load(file_or_basis_name, symb)
+        return _mol_basis.load(file_or_basis_name, symb)
+
     basmod = ALIAS[name]
     symb = ''.join(i for i in symb if i.isalpha())
     b = parse_cp2k.load(os.path.join(os.path.dirname(__file__), basmod), symb)
+
+    if contr_scheme != 'Full':
+        b = _mol_basis._truncate(b, contr_scheme, symb, split_name)
     return b
+
+del(OPTIMIZE_CONTRACTION)
 

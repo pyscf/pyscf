@@ -33,6 +33,10 @@ mf.kernel()
 mf = scf.RHF(mol).density_fit(auxbasis='weigend')
 mf.kernel()
 
+# DF method can be switched off by assigning None to with_df object
+mf.with_df = None
+mf.kernel()
+
 
 #
 # In PBC calculations, DF/MDF method should be used for all-electron
@@ -49,7 +53,7 @@ cell.a = '''
 3.370137329, 0.000000000, 3.370137329
 3.370137329, 3.370137329, 0.000000000'''
 cell.unit = 'B'
-cell.gs = [5]*3
+cell.mesh = [10]*3
 #cell.verbose = 4
 cell.build()
 kpts = cell.make_kpts([2,2,2])

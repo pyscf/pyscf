@@ -1,25 +1,41 @@
-from pyscf import dft, lib
+#!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from pyscf import dft
 import ctypes
 
-#libdft = lib.load_library('libxcfun_itrf')
 libdft = dft.xcfun._itrf
-libdft.xc_name.restype = ctypes.c_char_p
+libdft.xc_enumerate_parameters.restype = ctypes.c_char_p
 libdft.XCFUN_xc_type.restype = ctypes.c_int
-libdft.xc_short_description.restype = ctypes.c_char_p
-libdft.xc_long_description.restype = ctypes.c_char_p
+libdft.xc_describe_short.restype = ctypes.c_char_p
+libdft.xc_describe_short.argtype = [ctypes.c_char_p]
+libdft.xc_describe_long.restype = ctypes.c_char_p
+libdft.xc_describe_long.argtype = [ctypes.c_char_p]
 lda_ids = []
 gga_ids = []
 mgga_ids = []
 mlgga_ids = []
 xc_codes = {}
-for i in range(38):
-    name = libdft.xc_name(ctypes.c_int(i))
-    sdescr = libdft.xc_short_description(ctypes.c_int(i))
-    #ldescr = libdft.xc_long_description(ctypes.c_int(i))
+for i in range(68):
+    name = libdft.xc_enumerate_parameters(ctypes.c_int(i))
+    sdescr = libdft.xc_describe_short(name)
+    #ldescr = libdft.xc_describe_long(ctypes.c_int(i))
     if sdescr is not None:
         #print("'%s' : %d,  # %s" % (name, i, sdescr.replace('\n', '. ')))
-        print('%-16s: %2d,  # %s' % ("'%s'"%name[3:], i, sdescr.replace('\n', '. ')))
-        xc_codes[name[3:]] = i
+        print('%-16s: %2d,  # %s' % ("'%s'"%name, i, sdescr.replace('\n', '. ')))
+        xc_codes[name] = i
 
     fntype = libdft.XCFUN_xc_type(ctypes.c_int(i))
     if fntype == 0:
@@ -28,8 +44,6 @@ for i in range(38):
         gga_ids.append(i)
     elif fntype == 2:
         mgga_ids.append(i)
-    else:
-        mlgga_ids.append(i)
 
 alias = {
     'SLATER': 'SLATERX',
@@ -44,7 +58,6 @@ for k, v in alias.items():
 print('LDA_IDS = %s' % lda_ids)
 print('GGA_IDS = %s' % gga_ids)
 print('MGGA_IDS = %s' % mgga_ids)
-print('MLGGA_IDS = %s' % mlgga_ids)
 
 #define XC_D0 0
 #define XC_D1 1

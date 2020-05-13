@@ -1,5 +1,19 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
  *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <stdlib.h>
@@ -84,7 +98,7 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm];
+        double *dms_cond[n_dm+1];
         double dm_atleast;
         void (*pf)();
 
@@ -134,7 +148,7 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm];
+        double *dms_cond[n_dm+1];
         double dm_atleast;
         void (*pf)();
 
@@ -213,7 +227,7 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm];
+        double *dms_cond[n_dm+1];
         double dm_atleast;
         void (*pf)();
 
@@ -269,7 +283,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
                       CINTOpt *cintopt, CVHFOpt *vhfopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nao = ao_loc[nbas];
+        const size_t nao = ao_loc[nbas];
         int *tao = malloc(sizeof(int)*nao);
         CVHFtimerev_map(tao, bas, nbas);
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, tao,
@@ -280,9 +294,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
-#pragma omp parallel default(none) \
-        shared(intor, fdot, fjk, \
-               dms, vjk, n_dm, ncomp, nbas, cintopt, vhfopt, envs)
+#pragma omp parallel
 {
         int i, j, ij;
         double complex *v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);

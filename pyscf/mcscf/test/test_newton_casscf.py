@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 from functools import reduce
@@ -20,18 +33,24 @@ mol.atom = [
 ]
 mol.basis = 'sto-3g'
 mol.build()
-mf = scf.RHF(mol).run(conv_tol=1e-14)
-numpy.random.seed(1)
-mf.mo_coeff = numpy.random.random(mf.mo_coeff.shape)
+mf = scf.RHF(mol)
+mf.max_cycle = 3
+mf.kernel()
 mc = newton_casscf.CASSCF(mf, 4, 4)
 mc.fcisolver = fci.direct_spin1.FCI(mol)
-ci0 = numpy.random.random((6,6))
-ci0/= numpy.linalg.norm(ci0)
+mc.kernel()
+
+def tearDownModule():
+    global mol, mf, mc
+    del mol, mf, mc
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_gen_g_hop(self):
-        mo = mc.mo_coeff
+        numpy.random.seed(1)
+        mo = numpy.random.random(mf.mo_coeff.shape)
+        ci0 = numpy.random.random((6,6))
+        ci0/= numpy.linalg.norm(ci0)
         gall, gop, hop, hdiag = newton_casscf.gen_g_hop(mc, mo, ci0, mc.ao2mo(mo))
         self.assertAlmostEqual(lib.finger(gall), 21.288022525148595, 8)
         self.assertAlmostEqual(lib.finger(hdiag), -4.6864640132374618, 8)
@@ -40,6 +59,9 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(gop(u, ci1)), -412.9441873541524, 8)
         self.assertAlmostEqual(lib.finger(hop(x)), 73.358310983341198, 8)
 
+    def test_get_grad(self):
+        self.assertAlmostEqual(mc.e_tot, -3.6268060853430573, 8)
+        self.assertAlmostEqual(abs(mc.get_grad()).max(), 0, 5)
 
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")

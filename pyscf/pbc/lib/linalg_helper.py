@@ -1,25 +1,47 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+'''
+Extension to scipy.linalg module developed for PBC branch.
+'''
+
+from functools import reduce
 import time
 import numpy as np
 import scipy.linalg
 
-from pyscf import lib
 from pyscf.lib import logger
-
-'''
-Extension to scipy.linalg module developed for PBC branch.
-'''
 
 method = 'davidson'
 #method = 'arnoldi'
 
 VERBOSE = False
 
-def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
+try:
+# Temporary fix for davidson when using mpicc
+    from mpi4py import MPI
+    FOUND_MPI4PY = True
+    MPI_RANK = MPI.COMM_WORLD.Get_rank()
+    MPI_COMM = MPI.COMM_WORLD
+except (ImportError, OSError):
+    FOUND_MPI4PY = False
+
+def eigs(matvec, size, nroots, x0=None, Adiag=None, guess=False, verbose=logger.INFO):
     '''Davidson diagonalization method to solve A c = E c
     when A is not Hermitian.
     '''
@@ -32,7 +54,7 @@ def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
 
     if method == 'davidson':
         if guess == False:
-            conv, e, c, niter = davidson(matvec, size, nroots, Adiag, verbose)
+            conv, e, c, niter = davidson(matvec, size, nroots, x0, Adiag, verbose)
         else:
             conv, e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
         return conv, e, c
@@ -54,7 +76,7 @@ def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
         return david.solve_iter()
 
 
-def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
+def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
     """Diagonalize a matrix via non-symmetric Davidson algorithm.
 
     mult_by_A() is a function which takes a vector of length N
@@ -94,6 +116,14 @@ def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
     lamda_k = 0
     target = 0
     conv = False
+    if x0 is not None:
+        assert x0.shape == (N, Mmin)
+        b = x0.copy()
+
+        Ab = np.zeros((N,Mmin),np.complex)
+        for m in range(Mmin):
+            Ab[:,m] = mult_by_A(b[:,m])
+
     for istep,M in enumerate(range(Mmin,Mmax+1)):
         if M == Mmin:
             # Set of M unit vectors from lowest Adiag (NxM)
@@ -141,6 +171,9 @@ def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
 
         # orthonormalize xi wrt b
         bxi,R = np.linalg.qr(np.column_stack((b,xi)))
+        if FOUND_MPI4PY:  # Ensure all processes search in same direction
+            bxi = MPI_COMM.bcast(bxi)
+
         # append orthonormalized xi to b
         b = np.column_stack((b,bxi[:,-1]))
 
@@ -288,7 +321,7 @@ class Arnoldi(object):
         while self.converged == 0:
             if self.totalIter == 0:
                 self.guessInitial()
-            for i in xrange(self.maxM):
+            for i in range(self.maxM):
                 if self.deflated == 1:
                     self.currentSize = self.nEigen
 
@@ -345,16 +378,16 @@ class Arnoldi(object):
         nrm = np.linalg.norm(self.x0)
         self.x0 *= 1./nrm
         self.currentSize = self.nEigen
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.vlist[i] *= 0.0
             self.vlist[i,:] += np.random.rand(self.size)
             self.vlist[i,i] /= np.linalg.norm(self.vlist[i,i])
             self.vlist[i,i] *= 12.
-            for j in xrange(i):
+            for j in range(i):
                 fac = np.vdot( self.vlist[j,:], self.vlist[i,:] )
                 self.vlist[i,:] -= fac * self.vlist[j,:]
             self.vlist[i,:] /= np.linalg.norm(self.vlist[i,:])
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.cv = self.vlist[i].copy()
             self.hMult()
             self.Avlist[i] = self.cAv.copy()
@@ -369,12 +402,12 @@ class Arnoldi(object):
 
     def constructSubspace(self):
         if self.totalIter == 0 or self.deflated == 1: # construct the full block of v^*Av
-            for i in xrange(self.currentSize):
-                for j in xrange(self.currentSize):
+            for i in range(self.currentSize):
+                for j in range(self.currentSize):
                    val = np.vdot(self.vlist[i],self.Avlist[j])
                    self.subH[i,j] = val
         else:
-            for j in xrange(self.currentSize):
+            for j in range(self.currentSize):
                 if j <= (self.currentSize-1):
                     val = np.vdot(self.vlist[j,:],self.Avlist[self.currentSize-1,:])
                     self.subH[j,self.currentSize-1] = val
@@ -426,20 +459,20 @@ class Arnoldi(object):
         #
         # gram-schmidt for residual vector
         #
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.dgks[i] = np.vdot( self.vlist[i,:], self.res )
             self.res -= self.dgks[i]*self.vlist[i,:]
         #
         # second gram-schmidt to make them really orthogonal
         #
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             self.dgks[i] = np.vdot( self.vlist[i,:], self.res )
             self.res -= self.dgks[i]*self.vlist[i,:]
         self.resnorm = np.linalg.norm(self.res)
         self.res /= self.resnorm
 
         orthog = 0.0
-        for i in xrange(self.currentSize):
+        for i in range(self.currentSize):
             orthog += np.vdot(self.res,self.vlist[i])**2.0
             if orthog > 1e-8:
                 sys.exit( "Exiting davidson procedure ... orthog = %24.16f" % orthog )
@@ -471,13 +504,13 @@ class Arnoldi(object):
                 print("%-3s %-20s %-20s %-8s" % ("#", "  Eigenvalue", "  Res. Norm.", "  Ortho. (should be ~0)"))
 
     def gramSchmidtCurrentVec(self,northo):
-        for k in xrange(northo):
+        for k in range(northo):
             fac = np.vdot( self.vlist[k,:], self.cv )
             self.cv -= fac * self.vlist[k,:] #/ np.vdot(self.vlist[i],self.vlist[i])
         cvnorm = np.linalg.norm(self.cv)
         if cvnorm < 1e-4:
             self.cv = np.random.rand(self.size)
-            for k in xrange(northo):
+            for k in range(northo):
                 fac = np.vdot( self.vlist[k,:], self.cv )
                 self.cv -= fac * self.vlist[k,:] #/ np.vdot(self.vlist[i],self.vlist[i])
             ########################################################################
@@ -494,22 +527,22 @@ class Arnoldi(object):
     def checkDeflate(self):
         if self.currentSize == self.maxM-1:
             self.deflated = 1
-            for i in xrange(self.nEigen):
+            for i in range(self.nEigen):
                 self.sol[:self.currentSize] = self.evecs[:self.currentSize,i]
                 self.constructSolV()            # Finds the "best" eigenvector for this eigenvalue
                 self.Avlist[i,:] = self.cv.copy() # Puts this guess in self.Avlist rather than self.vlist for now...
                                                 # since this would mess up self.constructSolV()'s solution
-            for i in xrange(self.nEigen):
+            for i in range(self.nEigen):
                 self.cv = self.Avlist[i,:].copy() # This is actually the "best" eigenvector v, not A*v (see above)
                 self.gramSchmidtCurrentVec(i)
                 self.vlist[i,:] = self.cv.copy()
 
             orthog = 0.0
-            for j in xrange(self.nEigen):
-                for i in xrange(j):
+            for j in range(self.nEigen):
+                for i in range(j):
                     orthog += np.vdot(self.vlist[j,:],self.vlist[i,:])**2.0
 
-            for i in xrange(self.nEigen):
+            for i in range(self.nEigen):
                 self.cv = self.vlist[i].copy() # This is actually the "best" eigenvector v, not A*v (see above)
                 self.hMult()                   # Use current vector cv to create cAv
                 self.Avlist[i] = self.cAv.copy()
@@ -588,8 +621,9 @@ class DavidsonZL(object):
         rlst = []
         for niter in range(self.maxcycle):
             if self.iprt > 0:
-                if VERBOSE: print('\n --- niter=',niter,'ndim0=',self.ndim,\
-			           'ndim=',ndim,'---')
+                if VERBOSE:
+                    print('\n --- niter=',niter,'ndim0=',self.ndim,
+                          'ndim=',ndim,'---')
 
             # List[n,N] -> Max[N,n]
             vbas = np.array(vlst).transpose(1,0)

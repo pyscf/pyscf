@@ -1,7 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
-# Author: George Booth <george.booth24@gmail.com>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: George Booth
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os, sys
@@ -18,15 +31,7 @@ from subprocess import call
 try:
     from pyscf.fciqmcscf import settings
 except ImportError:
-    msg = '''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py')
-    sys.stderr.write(msg)
-
-try:
-    import settings
-except ImportError:
-    import os, sys
-    msg = '''settings.py not found.  Please create %s
+    msg = '''settings.py not found for module fciqmcscf.  Please create %s
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
 
@@ -103,9 +108,7 @@ class FCIQMCCI(object):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         log.info('******** FCIQMC options ********')
         log.info('Number of walkers = %s', self.maxwalkers)
         log.info('Maximum number of iterations = %d', self.maxIter)
@@ -156,7 +159,8 @@ class FCIQMCCI(object):
         execute_fciqmc(self)
         if self.verbose >= logger.DEBUG1:
             out_file = self.outputFileCurrent
-            logger.debug1(self, open(out_file))
+            with open(out_file) as f:
+                logger.debug1(self, f.read())
         rdm_energy = read_energy(self)
 
         return rdm_energy, None
@@ -211,11 +215,11 @@ def run_standalone(fciqmcci, scf_obj, orbs=None, restart=None):
     tol = 1e-9
     if isinstance(orbs,tuple):
         # Assume UHF
-        print 'uhf orbitals detected'
+        print('uhf orbitals detected')
         nmo = orbs[0].shape[1]
         tUHF = True
     else:
-        print 'rhf orbitals detected'
+        print('rhf orbitals detected')
         nmo = orbs.shape[1]
         tUHF = False
     nelec = fciqmcci.mol.nelectron
@@ -530,6 +534,8 @@ def execute_fciqmc(fciqmcci):
         logger.info(fciqmcci, 'Waiting for density matrices and output file '
                               'to be returned.')
         try:
+            if sys.version_info >= (3,)
+                raw_input = input
             raw_input("Press Enter to continue with calculation...")
         except:
             input("Press Enter to continue with calculation...")
@@ -661,7 +667,8 @@ def read_neci_2dms(fciqmcci, norb, nelec, filename_aa='TwoRDM_aaaa.1',
         assert(numpy.allclose(dm2ab[l,k,j,i],-val) or dm2ab[l,k,j,i] == 0.0)
         dm2ab[l,k,j,i] = -val
         # Time reversal sym
-#        print i,j,k,l,val,dm2ab[j,i,l,k], numpy.allclose(dm2ab[j,i,l,k],-val), dm2ab[j,i,l,k] == 0.0
+#        print(i,j,k,l,val,dm2ab[j,i,l,k],
+#        numpy.allclose(dm2ab[j,i,l,k],-val), dm2ab[j,i,l,k] == 0.0)
         assert(numpy.allclose(dm2ab[j,i,l,k],-val) or dm2ab[j,i,l,k] == 0.0)
         dm2ab[j,i,l,k] = -val
         assert(numpy.allclose(dm2ab[k,l,i,j],-val) or dm2ab[k,l,i,j] == 0.0)

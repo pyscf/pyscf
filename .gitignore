@@ -79,3 +79,7 @@ OneRDM*
 
 # Memoization and caching
 tmp/
+
+# IDEs
+.idea/
+.vscode/

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
@@ -14,6 +27,8 @@ import numpy as np
 import scipy.linalg
 import scipy.special
 from pyscf import lib
+from pyscf.gto import mole
+from pyscf.pbc.gto.pseudo import pp_int
 
 def get_alphas(cell):
     '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
@@ -27,70 +42,55 @@ def get_alphas(cell):
 
 def get_alphas_gth(cell):
     '''alpha parameters for the local GTH pseudopotential.'''
-
-    alphas = np.zeros(cell.natm)
-    for ia in range(cell.natm):
-        symb = cell.atom_symbol(ia)
-        if symb not in cell._pseudo:
-            continue
-
-        Zia = cell.atom_charge(ia)
-        pp = cell._pseudo[symb]
-        rloc, nexp, cexp = pp[1:3+1]
-
-        cfacs = [1., 3., 15., 105.]
-        alphas[ia] = ( 2*np.pi*Zia*rloc**2
-                     + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
-    return alphas
+    G0 = np.zeros((1,3))
+    return -get_gth_vlocG(cell, G0)
 
 def get_vlocG(cell, Gv=None):
-    '''Local PP kernel in G space: Vloc(G) for G!=0, 0 for G=0.
+    '''Local PP kernel in G space: Vloc(G)
 
     Returns:
-        (natm, ngs) ndarray
+        (natm, ngrids) ndarray
     '''
     if Gv is None: Gv = cell.Gv
-    Gvnorm = lib.norm(Gv, axis=1)
-    vlocG = get_gth_vlocG(cell, Gvnorm)
-    vlocG[:,0] = 0.
+    vlocG = get_gth_vlocG(cell, Gv)
     return vlocG
 
-def get_gth_vlocG(cell, G):
+def get_gth_vlocG(cell, Gv):
     '''Local part of the GTH pseudopotential.
 
     See MH (4.79).
 
     Args:
-        G : (ngs,) ndarray
+        Gv : (ngrids,3) ndarray
 
     Returns:
-         (natm, ngs) ndarray
+         (natm, ngrids) ndarray
     '''
-    with np.errstate(divide='ignore'):
-        coulG = 4*np.pi / G**2
-        coulG[0] = 0
+    vlocG = pp_int.get_gth_vlocG_part1(cell, Gv)
 
-    vlocG = np.zeros((cell.natm,len(G)))
+    # Add the C1, C2, C3, C4 contributions
+    G2 = np.einsum('ix,ix->i', Gv, Gv)
     for ia in range(cell.natm):
-        Zia = cell.atom_charge(ia)
         symb = cell.atom_symbol(ia)
         if symb not in cell._pseudo:
-            vlocG[ia] = Zia * coulG
             continue
+
         pp = cell._pseudo[symb]
         rloc, nexp, cexp = pp[1:3+1]
 
-        G_red = G*rloc
-        cfacs = np.array(
-                [1*G_red**0,
-                 3 - G_red**2,
-                 15 - 10*G_red**2 + G_red**4,
-                 105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
+        G2_red = G2 * rloc**2
+        cfacs = 0
+        if nexp >= 1:
+            cfacs += cexp[0]
+        if nexp >= 2:
+            cfacs += cexp[1] * (3 - G2_red)
+        if nexp >= 3:
+            cfacs += cexp[2] * (15 - 10*G2_red + G2_red**2)
+        if nexp >= 4:
+            cfacs += cexp[3] * (105 - 105*G2_red + 21*G2_red**2 - G2_red**3)
 
-        # Note the signs -- potential here is positive
-        vlocG[ia,:] = ( Zia * coulG * np.exp(-0.5*G_red**2)
-                       - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
-                            np.dot(cexp, cfacs[:nexp])) )
+        vlocG[ia,:] -= (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G2_red) * cfacs
+
     return vlocG
 
 def get_projG(cell, kpt=np.zeros(3)):
@@ -99,13 +99,13 @@ def get_projG(cell, kpt=np.zeros(3)):
     Returns:
         hs : list( list( np.array( , ) ) )
          - hs[atm][l][i,j]
-        projs : list( list( list( list( np.array(ngs) ) ) ) )
-         - projs[atm][l][m][i][ngs]
+        projs : list( list( list( list( np.array(ngrids) ) ) ) )
+         - projs[atm][l][m][i][ngrids]
     '''
     return get_gth_projG(cell, kpt+cell.Gv)
 
 def get_gth_projG(cell, Gvs):
-    '''G space projectors from the FT of the real-space projectors.
+    r'''G space projectors from the FT of the real-space projectors.
 
     \int e^{iGr} p_j^l(r) Y_{lm}^*(theta,phi)
     = i^l p_j^l(G) Y_{lm}^*(thetaG, phiG)
@@ -149,6 +149,11 @@ def projG_li(G, l, i, rl):
 
 def _qli(x,l,i):
     # MH Eqs. (4.82)-(4.93) :: beware typos!
+    # Mathematica formulas:
+    # p[l_, i_, r_] = Sqrt[2] r^(l + 2 (i - 1)) Exp[-r^2/(2 R^2)]/(R^(l + (4 i - 1)/2) Sqrt[Gamma[l + (4 i - 1)/2]])
+    # pG[l_, i_, G_] = Integrate[p[l, i, r] 4 Pi r^2 SphericalBesselJ[l, G r], {r, 0, Infinity}]
+    # qG[l_, i_, G_] := pG[l, i, G]/(Pi^(5/4) G^l Sqrt[R^(2 l + 3)]/Exp[(G R)^2/2])
+    # FullSimplify[qG[4, 3, G], R > 0 && G > 0]
     sqrt = np.sqrt
     if l==0 and i==0:
         return 4*sqrt(2.)
@@ -172,6 +177,18 @@ def _qli(x,l,i):
     elif l==2 and i==2:
         #return 32/3.*sqrt(2/15015.)*(63-36*x**2+4*x**4) # MH (wrong I think)
         return 32/3.*sqrt(2/15015.)*(63-18*x**2+x**4) # TCB
+    elif l==3 and i==0:
+        return 16*sqrt(1/105.)
+    elif l==3 and i==1:
+        return 32/3.*sqrt(1/1155.)*(9-x**2)
+    elif l==3 and i==2:
+        return 64/45.*sqrt(1/1001.)*(99-22*x**2+x**4)
+    elif l==4 and i==0:
+        return 16/3.*sqrt(2/105.)
+    elif l==4 and i==1:
+        return 32/3.*sqrt(2/15015.)*(11-x**2)
+    elif l==4 and i==2:
+        return 64/45.*sqrt(2/17017.)*(143-26*x**2+x**4)
     else:
         print("*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!")
         return 0.
@@ -212,12 +229,9 @@ def cart2polar(rvec):
 def get_pp(cell, kpt=np.zeros(3)):
     '''Get the periodic pseudotential nuc-el AO matrix
     '''
-    import pyscf.dft
     from pyscf.pbc import tools
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    coords = gen_grid.gen_uniform_grids(cell)
-    aoR = numint.eval_ao(cell, coords, kpt)
+    coords = cell.get_uniform_grids()
+    aoR = cell.pbc_eval_gto('GTOval', coords, kpt=kpt)
     nao = cell.nao_nr()
 
     SI = cell.get_SI()
@@ -226,23 +240,23 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpplocG[0] = np.sum(get_alphas(cell)) # from get_jvloc_G0 function
 
     # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs).real
+    vpplocR = tools.ifft(vpplocG, cell.mesh).real
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
     aokG = tools.fftk(np.asarray(aoR.T, order='C'),
-                      cell.gs, np.exp(-1j*np.dot(coords, kpt))).T
-    ngs = len(aokG)
+                      cell.mesh, np.exp(-1j*np.dot(coords, kpt))).T
+    ngrids = len(aokG)
 
-    fakemol = pyscf.gto.Mole()
-    fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
-    fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
-    ptr = pyscf.gto.PTR_ENV_START
+    fakemol = mole.Mole()
+    fakemol._atm = np.zeros((1,mole.ATM_SLOTS), dtype=np.int32)
+    fakemol._bas = np.zeros((1,mole.BAS_SLOTS), dtype=np.int32)
+    ptr = mole.PTR_ENV_START
     fakemol._env = np.zeros(ptr+10)
-    fakemol._bas[0,pyscf.gto.NPRIM_OF ] = 1
-    fakemol._bas[0,pyscf.gto.NCTR_OF  ] = 1
-    fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
-    fakemol._bas[0,pyscf.gto.PTR_COEFF] = ptr+4
+    fakemol._bas[0,mole.NPRIM_OF ] = 1
+    fakemol._bas[0,mole.NCTR_OF  ] = 1
+    fakemol._bas[0,mole.PTR_EXP  ] = ptr+3
+    fakemol._bas[0,mole.PTR_COEFF] = ptr+4
     Gv = np.asarray(cell.Gv+kpt)
     G_rad = lib.norm(Gv, axis=1)
 
@@ -256,12 +270,12 @@ def get_pp(cell, kpt=np.zeros(3)):
             rl, nl, hl = proj
             if nl > 0:
                 hl = np.asarray(hl)
-                fakemol._bas[0,pyscf.gto.ANG_OF] = l
+                fakemol._bas[0,mole.ANG_OF] = l
                 fakemol._env[ptr+3] = .5*rl**2
                 fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
-                pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
+                pYlm_part = fakemol.eval_gto('GTOval', Gv)
 
-                pYlm = np.empty((nl,l*2+1,ngs))
+                pYlm = np.empty((nl,l*2+1,ngrids))
                 for k in range(nl):
                     qkl = _qli(G_rad*rl, l, k)
                     pYlm[k] = pYlm_part.T * qkl
@@ -270,7 +284,7 @@ def get_pp(cell, kpt=np.zeros(3)):
                 SPG_lm_aoG = np.einsum('nmg,gp->nmp', SPG_lmi, aokG)
                 tmp = np.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                 vppnl += np.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-    vppnl *= (1./ngs**2)
+    vppnl *= (1./ngrids**2)
 
     if aoR.dtype == np.double:
         return vpploc.real + vppnl.real
@@ -281,5 +295,5 @@ def get_pp(cell, kpt=np.zeros(3)):
 def get_jvloc_G0(cell, kpt=np.zeros(3)):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
-    ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
+    ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt)
     return 1./cell.vol * np.sum(get_alphas(cell)) * ovlp

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -13,11 +26,13 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import scf
 from pyscf.scf import _vhf
 from pyscf.prop.nmr import rhf as rhf_nmr
+from pyscf.data import nist
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
+    '''Note the side effects of set_common_origin'''
+
     if shielding_nuc is None:
         shielding_nuc = range(mol.natm)
     if gauge_orig is not None:
@@ -106,6 +121,8 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
 
 def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
@@ -130,6 +147,8 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
 #TODO the uncouupled force
 def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
@@ -183,7 +202,37 @@ def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False,
         h1 += make_h10giao(mol, dm0, with_gaunt, verbose)
     return h1
 
+def get_fock(nmrobj, dm0=None, gauge_orig=None):
+    '''First order Fock matrix wrt external magnetic field.
+    Note the side effects of set_common_origin.
+    '''
+    if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
+    if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
+    t0 = (time.clock(), time.time())
+    log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
+    mol = nmrobj.mol
+    if nmrobj.mb.upper() == 'RMB':
+        h1 = make_h10rmb(mol, dm0, gauge_orig,
+                         with_gaunt=nmrobj._scf.with_gaunt, verbose=log)
+    else: # RKB
+        h1 = make_h10rkb(mol, dm0, gauge_orig,
+                         with_gaunt=nmrobj._scf.with_gaunt, verbose=log)
+    t0 = log.timer('%s h1'%nmrobj.mb, *t0)
+    if nmrobj.chkfile:
+        lib.chkfile.dump(nmrobj.chkfile, 'nmr/h1', h1)
+
+    if gauge_orig is None:
+        h1 += make_h10giao(mol, dm0,
+                           with_gaunt=nmrobj._scf.with_gaunt, verbose=log)
+    t0 = log.timer('GIAO', *t0)
+    if nmrobj.chkfile:
+        lib.chkfile.dump(nmrobj.chkfile, 'nmr/h1giao', h1)
+    return h1
+
 def make_s10(mol, gauge_orig=None, mb='RMB'):
+    '''First order overlap matrix wrt external magnetic field.
+    Note the side effects of set_common_origin.
+    '''
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     n2c = mol.nao_2c()
@@ -205,6 +254,42 @@ def make_s10(mol, gauge_orig=None, mb='RMB'):
         s1[:,:n2c,:n2c] += sg
         s1[:,n2c:,n2c:] += tg * (.25/c**2)
     return s1
+get_ovlp = make_s10
+
+def gen_vind(mf, mo_coeff, mo_occ):
+    '''Induced potential'''
+    mol = mf.mol
+    occidx = mo_occ > 0
+    orbo = mo_coeff[:,occidx]
+    nao, nmo = mo_coeff.shape
+    nocc = orbo.shape[1]
+    def vind(mo1):
+        #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
+        dm1 = numpy.asarray([reduce(numpy.dot, (mo_coeff, x, orbo.T.conj()))
+                             for x in mo1.reshape(-1,nmo,nocc)])
+        dm1 = dm1 + dm1.transpose(0,2,1).conj()
+# hermi=1 because dm1 = C^1 C^{0dagger} + C^0 C^{1dagger}
+        v1mo = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
+                              for x in mf.get_veff(mol, dm1, hermi=1)])
+        #mf.direct_scf = direct_scf_bak
+        return v1mo.ravel()
+    return vind
+
+#TODO: merge to hessian.rhf.solve_mo1 function
+@lib.with_doc(rhf_nmr.solve_mo1.__doc__)
+def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+              h1=None, s1=None, with_cphf=None):
+    if with_cphf is None:
+        with_cphf = nmrobj.cphf
+
+    # vind for DHF for first order equations
+    if with_cphf and not callable(with_cphf):
+        mf = nmrobj._scf
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
+        with_cphf = gen_vind(mf, mo_coeff, mo_occ)
+    return rhf_nmr.solve_mo1(nmrobj, mo_energy, mo_coeff, mo_occ,
+                             h1, s1, with_cphf)
 
 
 class NMR(rhf_nmr.NMR):
@@ -215,8 +300,8 @@ class NMR(rhf_nmr.NMR):
         self.mb = 'RMB'
         self._keys = self._keys.union(['mb'])
 
-    def dump_flags(self):
-        rhf_nmr.NMR.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rhf_nmr.NMR.dump_flags(self, verbose)
         logger.info(self, 'MB basis = %s', self.mb)
         return self
 
@@ -227,10 +312,11 @@ class NMR(rhf_nmr.NMR):
             self.check_sanity()
 
         t0 = (time.clock(), time.time())
-        msc_dia = self.dia() * rhf_nmr.UNIT_PPM
+        unit_ppm = nist.ALPHA**2 * 1e6
+        msc_dia = self.dia() * unit_ppm
         t0 = logger.timer(self, 'h11', *t0)
         msc_para, para_pos, para_neg, para_occ = \
-                [x*rhf_nmr.UNIT_PPM for x in self.para(mo10=mo1)]
+                [x*unit_ppm for x in self.para(mo10=mo1)]
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
@@ -266,50 +352,19 @@ class NMR(rhf_nmr.NMR):
             mo10 = self.mo10
         return para(mol, mo10, mo_coeff, mo_occ, shielding_nuc)
 
-    def make_h10(self, mol=None, dm0=None, gauge_orig=None):
-        if mol is None: mol = self.mol
-        if dm0 is None: dm0 = self._scf.make_rdm1()
-        if gauge_orig is None: gauge_orig = self.gauge_orig
-        t0 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-        if self.mb.upper() == 'RMB':
-            h1 = make_h10rmb(mol, dm0, gauge_orig,
-                             with_gaunt=self._scf.with_gaunt, verbose=log)
-        else: # RKB
-            h1 = make_h10rkb(mol, dm0, gauge_orig,
-                             with_gaunt=self._scf.with_gaunt, verbose=log)
-        t0 = log.timer('%s h1'%self.mb, *t0)
-        scf.chkfile.dump(self.chkfile, 'nmr/h1', h1)
-
-        if gauge_orig is None:
-            h1 += make_h10giao(mol, dm0,
-                               with_gaunt=self._scf.with_gaunt, verbose=log)
-        t0 = log.timer('GIAO', *t0)
-        scf.chkfile.dump(self.chkfile, 'nmr/h1giao', h1)
-        return h1
+    make_h10 = get_fock = get_fock
 
     def make_s10(self, mol=None, gauge_orig=None):
         if mol is None: mol = self.mol
         if gauge_orig is None: gauge_orig = self.gauge_orig
         return make_s10(mol, gauge_orig, mb=self.mb)
+    get_ovlp = make_s10
 
-    def gen_vind(self, mf, mo_coeff, mo_occ):
-        '''Induced potential'''
-        occidx = mo_occ > 0
-        orbo = mo_coeff[:,occidx]
-        nao, nmo = mo_coeff.shape
-        nocc = orbo.shape[1]
-        def vind(mo1):
-            #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
-            dm1 = numpy.asarray([reduce(numpy.dot, (mo_coeff, x, orbo.T.conj()))
-                                 for x in mo1.reshape(-1,nmo,nocc)])
-            dm1 = dm1 + dm1.transpose(0,2,1).conj()
-# hermi=1 because dm1 = C^1 C^{0dagger} + C^0 C^{1dagger}
-            v1mo = numpy.asarray([reduce(numpy.dot, (mo_coeff.T.conj(), x, orbo))
-                                  for x in mf.get_veff(self.mol, dm1, hermi=1)])
-            #mf.direct_scf = direct_scf_bak
-            return v1mo.ravel()
-        return vind
+    solve_mo1 = solve_mo1
+
+from pyscf import scf
+scf.dhf.UHF.NMR = lib.class_as_method(NMR)
+
 
 def _call_rmb_vhf1(mol, dm, key='giao'):
     c1 = .5 / lib.param.LIGHT_SPEED
@@ -394,7 +449,7 @@ if __name__ == '__main__':
 
     mf = scf.dhf.UHF(mol)
     mf.scf()
-    nmr = NMR(mf)
+    nmr = mf.NMR()
     nmr.mb = 'RMB'
     nmr.cphf = True
     msc = nmr.shielding()

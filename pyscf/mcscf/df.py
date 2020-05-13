@@ -1,15 +1,25 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import sys
 import time
-import tempfile
 import ctypes
 from functools import reduce
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
@@ -47,7 +57,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
     casscf_class = casscf.__class__
 
     if with_df is None:
-        if (hasattr(casscf._scf, 'with_df') and
+        if (getattr(casscf._scf, 'with_df', None) and
             (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
             with_df = casscf._scf.with_df
         else:
@@ -57,29 +67,37 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             with_df.verbose = casscf.verbose
             with_df.auxbasis = auxbasis
 
-    class CASSCF(casscf_class):
+    class DFCASSCF(_DFCASSCF, casscf_class):
         def __init__(self):
             self.__dict__.update(casscf.__dict__)
             #self.grad_update_dep = 0
             self.with_df = with_df
             self._keys = self._keys.union(['with_df'])
 
-        def dump_flags(self):
-            casscf_class.dump_flags(self)
-            logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
+        def dump_flags(self, verbose=None):
+            casscf_class.dump_flags(self, verbose)
+            logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix '
+                        'and 2e integral transformation')
+            return self
 
-        def ao2mo(self, mo_coeff):
-            if self.with_df:
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return casscf_class.reset(self, mol)
+
+        def ao2mo(self, mo_coeff=None):
+            if self.with_df and 'CASSCF' in casscf_class.__name__:
                 return _ERIS(self, mo_coeff, self.with_df)
             else:
                 return casscf_class.ao2mo(self, mo_coeff)
 
         def get_h2eff(self, mo_coeff=None):  # For CASCI
             if self.with_df:
+                ncore = self.ncore
+                nocc = ncore + self.ncas
                 if mo_coeff is None:
-                    mo_coeff = self.mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                    mo_coeff = self.mo_coeff[:,ncore:nocc]
                 elif mo_coeff.shape[1] != self.ncas:
-                    mo_coeff = mo_coeff[:,self.ncore:self.ncore+self.ncas]
+                    mo_coeff = mo_coeff[:,ncore:nocc]
                 return self.with_df.ao2mo(mo_coeff)
             else:
                 return casscf_class.get_h2eff(self, mo_coeff)
@@ -114,7 +132,15 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             else:
                 return casscf_class._exact_paaa(self, mol, u, out)
 
-    return CASSCF()
+        def nuc_grad_method(self):
+            raise NotImplementedError
+
+    return DFCASSCF()
+
+# A tag to label the derived MCSCF class
+class _DFCASSCF:
+    pass
+_DFCASCI = _DFCASSCF
 
 
 def approx_hessian(casscf, auxbasis=None, with_df=None):
@@ -148,11 +174,11 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
     if 'CASCI' in str(casscf_class):
         return casscf  # because CASCI does not need orbital optimization
 
-    if hasattr(casscf, 'with_df') and casscf.with_df:
+    if getattr(casscf, 'with_df', None):
         return casscf
 
     if with_df is None:
-        if (hasattr(casscf._scf, 'with_df') and
+        if (getattr(casscf._scf, 'with_df', None) and
             (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
             with_df = casscf._scf.with_df
         else:
@@ -170,9 +196,13 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             self.with_df = with_df
             self._keys = self._keys.union(['with_df'])
 
-        def dump_flags(self):
-            casscf_class.dump_flags(self)
+        def dump_flags(self, verbose=None):
+            casscf_class.dump_flags(self, verbose)
             logger.info(self, 'CASSCF: density fitting for orbital hessian')
+
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return casscf_class.reset(self, mol)
 
         def ao2mo(self, mo_coeff):
 # the exact integral transformation
@@ -189,8 +219,11 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
             fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
             ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
-            bufs1 = numpy.empty((self.with_df.blockdim,nmo,nmo))
-            for eri1 in self.with_df.loop():
+
+            max_memory = self.max_memory - lib.current_memory()[0]
+            blksize = max(4, int(min(self.with_df.blockdim, max_memory*.3e6/8/nmo**2)))
+            bufs1 = numpy.empty((blksize,nmo,nmo))
+            for eri1 in self.with_df.loop(blksize):
                 naux = eri1.shape[0]
                 buf = bufs1[:naux]
                 fdrv(ftrans, fmmm,
@@ -219,8 +252,6 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
 
 class _ERIS(object):
     def __init__(self, casscf, mo, with_df):
-        import gc
-        gc.collect()
         log = logger.Logger(casscf.stdout, casscf.verbose)
 
         mol = casscf.mol
@@ -245,16 +276,17 @@ class _ERIS(object):
         k_cp = numpy.zeros((ncore,nmo))
 
         mo = numpy.asarray(mo, order='F')
-        _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        fxpp = h5py.File(_tmpfile1.name)
+        fxpp = lib.H5TmpFile()
+
+        blksize = max(4, int(min(with_df.blockdim, (max_memory*.95e6/8-naoaux*nmo*ncas)/3/nmo**2)))
         bufpa = numpy.empty((naoaux,nmo,ncas))
-        bufs1 = numpy.empty((with_df.blockdim,nmo,nmo))
+        bufs1 = numpy.empty((blksize,nmo,nmo))
         fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_iltj
         fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
         ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2
         fxpp_keys = []
         b0 = 0
-        for k, eri1 in enumerate(with_df.loop()):
+        for k, eri1 in enumerate(with_df.loop(blksize)):
             naux = eri1.shape[0]
             bufpp = bufs1[:naux]
             fdrv(ftrans, fmmm,
@@ -307,7 +339,6 @@ class _ERIS(object):
         bufs1 = bufs2 = buf = None
         t1 = log.timer('density fitting ppaa pass2', *t1)
 
-        fxpp.close()
         self.feri.flush()
 
         dm_core = numpy.dot(mo[:,:ncore], mo[:,:ncore].T)
@@ -316,11 +347,8 @@ class _ERIS(object):
         t0 = log.timer('density fitting ao2mo', *t0)
 
 def _mem_usage(ncore, ncas, nmo):
-    nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
-    if outcore > 10000:
-        sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore, basic
 
 def prange(start, end, step):

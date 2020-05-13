@@ -1,10 +1,23 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import numpy
-from pyscf import symm
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import newton_casscf
@@ -14,20 +27,16 @@ from pyscf import fci
 
 class CASSCF(newton_casscf.CASSCF):
     __doc__ = newton_casscf.CASSCF.__doc__
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        assert(mf.mol.symmetry)
-        self.orbsym = []
-        newton_casscf.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
-        #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
-        self.fcisolver = fci.solver(mf.mol, False, True)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        newton_casscf.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
+        assert(self.mol.symmetry)
+        self.fcisolver = fci.solver(self.mol, False, True)
         self.fcisolver.max_cycle = 25
         #self.fcisolver.max_space = 25
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        else:
-            self.mo_coeff = mo_coeff
         if callback is None: callback = self.callback
         if _kern is None: _kern = newton_casscf.kernel
 
@@ -36,15 +45,15 @@ class CASSCF(newton_casscf.CASSCF):
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
 
-        casci_symm.label_symmetry_(self, self.mo_coeff)
-
-        if (hasattr(self.fcisolver, 'wfnsym') and
-            self.fcisolver.wfnsym is None and
-            hasattr(self.fcisolver, 'guess_wfnsym')):
-            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
-                                                 verbose=log)
-            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
-            log.info('Active space CI wfn symmetry = %s', wfnsym)
+        mo_coeff = self.mo_coeff = casci_symm.label_symmetry_(self, mo_coeff)
+#
+#        if (getattr(self.fcisolver, 'wfnsym', None) and
+#            self.fcisolver.wfnsym is None and
+#            getattr(self.fcisolver, 'guess_wfnsym', None)):
+#            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
+#                                                 verbose=log)
+#            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
+#            log.info('Active space CI wfn symmetry = %s', wfnsym)
 
         self.converged, self.e_tot, self.e_cas, self.ci, \
                 self.mo_coeff, self.mo_energy = \
@@ -61,29 +70,20 @@ class CASSCF(newton_casscf.CASSCF):
 # (by setting their mask value to 0 in _symmetrize).  Then pack_uniq_var and
 # unpack_uniq_var function only operates on those symmetry allowed matrix
 # elements.
-        return _symmetrize(mask, self.orbsym, self.mol.groupname)
+        # self.mo_coeff.orbsym is initialized in kernel function
+        return _symmetrize(mask, self.mo_coeff.orbsym, self.mol.groupname)
 
-    def _eig(self, mat, b0, b1):
-        return casci_symm.eig(mat, numpy.array(self.orbsym[b0:b1]))
+    def _eig(self, mat, b0, b1, orbsym=None):
+        # self.mo_coeff.orbsym is initialized in kernel function
+        if orbsym is None:
+            orbsym = self.mo_coeff.orbsym[b0:b1]
+        return casci_symm.eig(mat, orbsym)
 
-    def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                    casdm1=None, verbose=None):
-        self.mo_coeff, self.ci, occ = self.cas_natorb(mo_coeff, ci, eris,
-                                                      sort, casdm1, verbose)
-        if sort:
-            casci_symm.label_symmetry_(self, self.mo_coeff)
-        return self.mo_coeff, self.ci, occ
-
-    def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      cas_natorb=False, casdm1=None, verbose=None):
-        self.mo_coeff, ci, self.mo_energy = \
-                self.canonicalize(mo_coeff, ci, eris,
-                                  sort, cas_natorb, casdm1, verbose)
-        if sort:
-            casci_symm.label_symmetry_(self, self.mo_coeff)
-        if cas_natorb:  # When active space is changed, the ci solution needs to be updated
-            self.ci = ci
-        return self.mo_coeff, ci, self.mo_energy
+    def rotate_mo(self, mo, u, log=None):
+        '''Rotate orbitals with the given unitary matrix'''
+        mo = newton_casscf.CASSCF.rotate_mo(self, mo, u, log)
+        mo = lib.tag_array(mo, orbsym=self.mo_coeff.orbsym)
+        return mo
 
 def _symmetrize(mat, orbsym, groupname):
     mat1 = numpy.zeros_like(mat)

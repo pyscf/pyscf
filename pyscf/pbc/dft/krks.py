@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #          Qiming Sun <osirpt.sun@gmail.com>
@@ -18,8 +31,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -46,13 +59,26 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
+                                       kpts, kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     # ndim = 3 : dm.shape = (nkpts, nao, nao)
     ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
                     kpts_band is None)
 
-    if ks.grids.coords is None:
+# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+    if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
+        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
+            ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
@@ -65,16 +91,22 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         t0 = logger.timer(ks, 'vxc', *t0)
 
     weight = 1./len(kpts)
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
+    if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
     else:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vxc += vj - vk * (hyb * .5)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk * .5
 
         if ground_state:
-            exc -= np.einsum('Kij,Kji', dm, vk).real * .5 * hyb*.5 * weight
+            exc -= np.einsum('Kij,Kji', dm, vk).real * .5 * .5 * weight
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm, vj).real * .5 * weight
@@ -84,25 +116,29 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
+@lib.with_doc(khf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    if dm is None: dm = mf.make_rdm1()
+    if grids is None: grids = mf.grids
+    if kpts is None: kpts = mf.kpts
+    if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+        rho = mf.with_df.get_rho(dm, kpts)
+    else:
+        rho = mf._numint.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
+    return rho
 
-class KRKS(khf.KRHF):
+
+class KRKS(rks.KohnShamDFT, khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3))):
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN'):
         khf.KRHF.__init__(self, cell, kpts)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.UniformGrids(cell)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-##################################################
-# don't modify the following attributes, they are not input options
-        # Note Do not refer to .with_df._numint because gs/coords may be different
-        self._numint = numint._KNumInt(kpts)
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        rks.KohnShamDFT.__init__(self, xc)
 
-    def dump_flags(self):
-        khf.KRHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags()
+    def dump_flags(self, verbose=None):
+        khf.KRHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
 
@@ -113,13 +149,22 @@ class KRKS(khf.KRHF):
             vhf = self.get_veff(self.cell, dm_kpts)
 
         weight = 1./len(h1e_kpts)
-        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts).real
+        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
         tot_e = e1 + vhf.ecoul + vhf.exc
+        self.scf_summary['e1'] = e1.real
+        self.scf_summary['coul'] = vhf.ecoul.real
+        self.scf_summary['exc'] = vhf.exc.real
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-        return tot_e, vhf.ecoul + vhf.exc
+        return tot_e.real, vhf.ecoul + vhf.exc
+
+    get_rho = get_rho
 
     density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
+
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import krks
+        return krks.Gradients(self)
 
 
 if __name__ == '__main__':
@@ -137,4 +182,4 @@ if __name__ == '__main__':
     cell.output = '/dev/null'
     cell.build()
     mf = KRKS(cell, cell.make_kpts([2,1,1]))
-    print mf.kernel()
+    print(mf.kernel())

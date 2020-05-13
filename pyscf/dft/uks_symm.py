@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -8,25 +21,35 @@ Non-relativistic Unrestricted Kohn-Sham
 '''
 
 from pyscf.lib import logger
-import pyscf.scf
+from pyscf.scf import uhf_symm
 from pyscf.dft import uks
 from pyscf.dft import rks
 
 
-class UKS(pyscf.scf.uhf_symm.UHF):
+class SymAdaptedUKS(uhf_symm.UHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol):
-        pyscf.scf.uhf_symm.UHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+    def __init__(self, mol, xc='LDA,VWN'):
+        uhf_symm.UHF.__init__(self, mol)
+        rks.KohnShamDFT.__init__(self, xc)
 
-    def dump_flags(self):
-        pyscf.scf.uhf_symm.UHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags()
+    def dump_flags(self, verbose=None):
+        uhf_symm.UHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = uks.get_veff
+    get_vsap = uks.get_vsap
     energy_elec = uks.energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
+
+    reset = rks.KohnShamDFT.reset
+
+    def nuc_grad_method(self):
+        from pyscf.grad import uks
+        return uks.Gradients(self)
+
+UKS = SymAdaptedUKS
 
 
 if __name__ == '__main__':

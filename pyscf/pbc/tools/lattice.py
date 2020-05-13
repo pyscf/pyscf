@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 A2B = 1.889725989
 
 def get_ase_atom(formula):
@@ -29,7 +43,26 @@ def get_ase_atom(formula):
         ase_atom = get_ase_zincblende('B','N')
     elif formula == 'alp':
         ase_atom = get_ase_zincblende('Al','P')
+    elif formula == 'zno':
+        ase_atom = get_ase_wurtzite('Zn','O')
+    elif formula == 'cds':
+        ase_atom = get_ase_zincblende('Cd','S')
+    elif formula == 'zns':
+        ase_atom = get_ase_zincblende('Zn','S')
+ 
+    return ase_atom
 
+def get_ase_wurtzite(A='Zn', B='O'):
+    # Lattice constants taken from wikipedia (TODO: is wikipedia a valid
+    # citation at this point? en.wikipedia.org/wiki/Lattice_constant)
+    assert A in ['Zn']
+    assert B in ['O']
+    from ase.lattice import bulk
+    if A=='Zn' and B=='O':
+        ase_atom = bulk('ZnO', 'wurtzite', a=3.25*A2B, c=5.2*A2B)
+    else:
+        raise NotImplementedError('No formula found for system ',
+            A, B, '.  Choose a different system?  Or add it to the list!')
     return ase_atom
 
 def get_bandpath_fcc(ase_atom, npoints=30):
@@ -68,6 +101,9 @@ def get_ase_zincblende(A='Ga', B='As'):
         ase_atom = bulk('BN', 'zincblende', a=3.615*A2B)
     elif A=='Al' and B=='P':
         ase_atom = bulk('AlP', 'zincblende', a=5.451*A2B)
+    else:
+        raise NotImplementedError('No formula found for system ',
+            A, B, '.  Choose a different system?  Or add it to the list!')
 
     return ase_atom
 
@@ -86,6 +122,9 @@ def get_ase_rocksalt(A='Li', B='Cl'):
             ase_atom = bulk('LiCl', 'rocksalt', a=5.13*A2B)
     elif A=='Mg' and B=='O':
         ase_atom = bulk('MgO', 'rocksalt', a=4.213*A2B)
+    else:
+        raise NotImplementedError('No formula found for system ',
+            A, B, '.  Choose a different system?  Or add it to the list!')
 
     return ase_atom
 
@@ -97,8 +136,13 @@ def get_ase_diamond_primitive(atom='C'):
     from ase.build import bulk
     if atom == 'C':
         ase_atom = bulk('C', 'diamond', a=3.5668*A2B)
-    else:
+    elif atom == 'Si':
         ase_atom = bulk('Si', 'diamond', a=5.431*A2B)
+    elif atom == 'Ge':
+        ase_atom = bulk('Ge', 'diamond', a=5.658*A2B)
+    else:
+        raise NotImplementedError('No formula found for system ',
+            atom, '.  Choose a different system?  Or add it to the list!')
     return ase_atom
 
 def get_ase_diamond_cubic(atom='C'):
@@ -106,8 +150,11 @@ def get_ase_diamond_cubic(atom='C'):
     from ase.lattice.cubic import Diamond
     if atom == 'C':
         ase_atom = Diamond(symbol='C', latticeconstant=3.5668*A2B)
-    else:
+    elif atom == 'Si':
         ase_atom = Diamond(symbol='Si', latticeconstant=5.431*A2B)
+    else:
+        raise NotImplementedError('No formula found for system ',
+            atom, '.  Choose a different system?  Or add it to the list!')
     return ase_atom
 
 def get_ase_graphene(vacuum=5.0):

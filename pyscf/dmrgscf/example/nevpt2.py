@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Sheng Guo <shengg@princeton.edu>
 #         Qiming Sun <osirpt.sun@gmail.com>
@@ -14,7 +27,7 @@ from pyscf import dmrgscf
 DMRG-CASCI then DMRG-NEVPT2 calculation.
 
 There are two NEVPT2 implementations available for DMRG Block program.  The slow
-version (default) strictly follows the formula presented in JCP, 117(2002), 9138
+version (default) strictly follows the formula presented in JCP 117, 9138 (2012); DOI:10.1063/1.1515317
 in which the 4-particle density matrix is explictly computed.  Typically 26
 orbitals is the upper limit of the slow version due to the large requirements
 on the memory usage.  The fast version employs the so called MPS-pertuber

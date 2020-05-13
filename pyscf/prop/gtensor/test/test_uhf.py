@@ -1,25 +1,39 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
 from pyscf import gto, lib, scf
 from pyscf.prop import gtensor
+from pyscf.data import nist
 
 def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
     mol = gobj.mol
     dma, dmb = dm0
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    alpha2 = lib.param.ALPHA ** 2
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
+    alpha2 = nist.ALPHA ** 2
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
     nao = dma.shape[0]
 
     # int2e_ip1v_r1 = (ij|\frac{\vec{r}_{12}}{r_{12}^3} \vec{r}_1|kl)
     if gauge_orig is None:
         gc2e_ri = mol.intor('int2e_ip1v_r1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
     else:
-        mol.set_common_origin(gauge_orig)
-        gc2e_ri = mol.intor('int2e_ip1v_rc1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
+        with mol.with_common_origin(gauge_orig):
+            gc2e_ri = mol.intor('int2e_ip1v_rc1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
     ej = numpy.zeros((3,3))
     ek = numpy.zeros((3,3))
     if isinstance(gobj.para_soc2e, str) and 'SSO' in gobj.dia_soc2e.upper():
@@ -65,22 +79,22 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
 
 def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
     mol = gobj.mol
-    alpha2 = lib.param.ALPHA ** 2
+    alpha2 = nist.ALPHA ** 2
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
 
     dm0a, dm0b = dm0
     dm10a, dm10b = dm10
     nao = dm0a.shape[0]
 
 # hso2e is the imaginary part of SSO
-# SSO term of JCP, 122, 034107 Eq (3) = 1/4c^2 hso2e
+# SSO term of JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (3) = 1/4c^2 hso2e
 #
 # Different approximations for the spin operator part are used in
-# JCP, 122, 034107 Eq (15) and JCP, 115, 11080 Eq (34).  The formulae of the
-# so-called spin-averaging in JCP, 122, 034107 Eq (15) is not well documented
-# and its effects are not fully tested.  Approximation of JCP, 115, 11080 Eq (34)
+# JCP 122, 034107 (2005) Eq (15) and JCP 115, 11080 (2001) Eq (34).  The formulae of the
+# so-called spin-averaging in JCP 122, 034107 (2005) Eq (15) is not well documented
+# and its effects are not fully tested.  Approximation of JCP 115, 11080 (2001) Eq (34)
 # are adopted here.
     hso2e = mol.intor('int2e_p1vxp1', 3).reshape(3,nao,nao,nao,nao)
     ej = numpy.zeros((3,3))

@@ -1,10 +1,25 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
 import copy
 from pyscf import gto, lib, scf, dft
 from pyscf.prop import gtensor
+from pyscf.data import nist
+nist.ALPHA = 1./137.03599967994
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -52,8 +67,9 @@ class KnowValues(unittest.TestCase):
         mf1.xc = 'b3lyp'
         g = gtensor.uks.GTensor(mf1)
         g.para_soc2e = 'SSO'
-        dat = g.make_para_soc2e(dm0, dm1, 1)
-        self.assertAlmostEqual(lib.finger(dat), -0.103162219789111, 9)
+        dm = numpy.einsum('xpi,xqi->xpq', dm0, dm0)
+        dat = g.make_para_soc2e(dm, dm1, 1)
+        self.assertAlmostEqual(lib.finger(dat), -0.20729647343641752, 9)
 
     def test_nr_uks(self):
         g = gtensor.uhf.GTensor(mf)

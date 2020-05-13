@@ -1,6 +1,19 @@
-/*
- * Author: Qiming Sun <osirpt.sun@gmail.com>
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
  *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <stdlib.h>
@@ -68,9 +81,7 @@ void CCvhfs2kl(double *eri, double *dm, double *vj, double *vk, int ni, int nj)
         memset(vj, 0, sizeof(double)*ni*nj);
         memset(vk, 0, sizeof(double)*ni*nj);
 
-#pragma omp parallel default(none) \
-        shared(eri, dm, vj, vk, ni, nj) \
-        private(ij, i, j, off)
+#pragma omp parallel private(ij, i, j, off)
         {
                 double *vj_priv = malloc(sizeof(double)*ni*nj);
                 double *vk_priv = malloc(sizeof(double)*ni*nj);

@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -16,8 +30,9 @@ void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        int ib, i, j;
-        int np, nc, atm_id, bas_id;
+        int i, j;
+        int np, nc, atm_id;
+        size_t bas_id, ib;
         double rr, arr, maxc;
         double logcoeff[NPRIMAX];
         double dr[3];
@@ -60,83 +75,84 @@ next_blk:;
         }
 }
 
+// 1k grids per block
+#define GRIDS_BLOCK     512
+
 void VXCgen_grid(double *out, double *coords, double *atm_coords,
                  double *radii_table, int natm, int ngrids)
 {
         const size_t Ngrids = ngrids;
-        int i, j, n;
-        double dx, dy, dz, dist;
-        double *grid_dist = malloc(sizeof(double) * natm*Ngrids);
+        int i, j;
+        double dx, dy, dz;
+        double *atom_dist = malloc(sizeof(double) * natm*natm);
         for (i = 0; i < natm; i++) {
-                for (n = 0; n < Ngrids; n++) {
-                        dx = coords[0*Ngrids+n] - atm_coords[i*3+0];
-                        dy = coords[1*Ngrids+n] - atm_coords[i*3+1];
-                        dz = coords[2*Ngrids+n] - atm_coords[i*3+2];
-                        grid_dist[i*Ngrids+n] = sqrt(dx*dx + dy*dy + dz*dz);
+                for (j = 0; j < i; j++) {
+                        dx = atm_coords[i*3+0] - atm_coords[j*3+0];
+                        dy = atm_coords[i*3+1] - atm_coords[j*3+1];
+                        dz = atm_coords[i*3+2] - atm_coords[j*3+2];
+                        atom_dist[i*natm+j] = 1 / sqrt(dx*dx + dy*dy + dz*dz);
                 }
         }
 
-        double *bufs[MAX_THREADS];
-#pragma omp parallel default(none) \
-        shared(out, grid_dist, atm_coords, radii_table, natm, bufs) \
-        private(i, j, n, dx, dy, dz)
+#pragma omp parallel private(i, j, dx, dy, dz)
 {
-        int thread_id = omp_get_thread_num();
-        double *buf = out;
-        if (thread_id != 0) {
-                buf = malloc(sizeof(double) * natm*Ngrids);
-        }
-        bufs[thread_id] = buf;
-        for (i = 0; i < natm*Ngrids; i++) {
-                buf[i] = 1;
-        }
-        int ij;
+        double *grid_dist = malloc(sizeof(double) * natm*GRIDS_BLOCK);
+        double *buf = malloc(sizeof(double) * natm*GRIDS_BLOCK);
+        double *g = malloc(sizeof(double) * GRIDS_BLOCK);
+        size_t ig0, n, ngs;
         double fac;
-        double *g = malloc(sizeof(double)*Ngrids);
 #pragma omp for nowait schedule(static)
-        for (ij = 0; ij < natm*natm; ij++) {
-                i = ij / natm;
-                j = ij % natm;
-                if (i <= j) {
-                        continue;
-                }
+        for (ig0 = 0; ig0 < Ngrids; ig0 += GRIDS_BLOCK) {
+                ngs = MIN(Ngrids-ig0, GRIDS_BLOCK);
+                for (i = 0; i < natm; i++) {
+                for (n = 0; n < ngs; n++) {
+                        dx = coords[0*Ngrids+ig0+n] - atm_coords[i*3+0];
+                        dy = coords[1*Ngrids+ig0+n] - atm_coords[i*3+1];
+                        dz = coords[2*Ngrids+ig0+n] - atm_coords[i*3+2];
+                        grid_dist[i*GRIDS_BLOCK+n] = sqrt(dx*dx + dy*dy + dz*dz);
+                        buf[i*GRIDS_BLOCK+n] = 1;
+                } }
 
-                dx = atm_coords[i*3+0] - atm_coords[j*3+0];
-                dy = atm_coords[i*3+1] - atm_coords[j*3+1];
-                dz = atm_coords[i*3+2] - atm_coords[j*3+2];
-                fac = 1 / sqrt(dx*dx + dy*dy + dz*dz);
+                for (i = 0; i < natm; i++) {
+                for (j = 0; j < i; j++) {
 
-                for (n = 0; n < Ngrids; n++) {
-                        g[n] = grid_dist[i*Ngrids+n] - grid_dist[j*Ngrids+n];
-                        g[n] *= fac;
-                }
-                if (radii_table != NULL) {
-                        fac = radii_table[i*natm+j];
-                        for (n = 0; n < Ngrids; n++) {
-                                g[n] += fac * (1 - g[n]*g[n]);
+                        fac = atom_dist[i*natm+j];
+                        for (n = 0; n < ngs; n++) {
+                                g[n] = (grid_dist[i*GRIDS_BLOCK+n] -
+                                        grid_dist[j*GRIDS_BLOCK+n]) * fac;
+                        }
+                        if (radii_table != NULL) {
+                                fac = radii_table[i*natm+j];
+                                for (n = 0; n < ngs; n++) {
+                                        g[n] += fac * (1 - g[n]*g[n]);
+                                }
+                        }
+                        for (n = 0; n < ngs; n++) {
+                                g[n] = (3 - g[n]*g[n]) * g[n] * .5;
+                        }
+                        for (n = 0; n < ngs; n++) {
+                                g[n] = (3 - g[n]*g[n]) * g[n] * .5;
+                        }
+                        for (n = 0; n < ngs; n++) {
+                                g[n] = (3 - g[n]*g[n]) * g[n] * .5;
+                                g[n] *= .5;
+                        }
+                        for (n = 0; n < ngs; n++) {
+                                buf[i*GRIDS_BLOCK+n] *= .5 - g[n];
+                                buf[j*GRIDS_BLOCK+n] *= .5 + g[n];
+                        }
+                } }
+
+                for (i = 0; i < natm; i++) {
+                        for (n = 0; n < ngs; n++) {
+                                out[i*Ngrids+ig0+n] = buf[i*GRIDS_BLOCK+n];
                         }
                 }
-                for (n = 0; n < Ngrids; n++) {
-                        g[n] = (3 - g[n]*g[n]) * g[n] * .5;
-                }
-                for (n = 0; n < Ngrids; n++) {
-                        g[n] = (3 - g[n]*g[n]) * g[n] * .5;
-                }
-                for (n = 0; n < Ngrids; n++) {
-                        g[n] = (3 - g[n]*g[n]) * g[n] * .5;
-                        g[n] *= .5;
-                }
-                for (n = 0; n < Ngrids; n++) {
-                        buf[i*Ngrids+n] *= .5 - g[n];
-                        buf[j*Ngrids+n] *= .5 + g[n];
-                }
-        }
-        NPomp_dprod_reduce_inplace(bufs, natm*Ngrids);
-        if (thread_id != 0) {
-                free(buf);
         }
         free(g);
-}
+        free(buf);
         free(grid_dist);
+}
+        free(atom_dist);
 }
 

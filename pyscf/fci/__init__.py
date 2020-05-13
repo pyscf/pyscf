@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -32,13 +45,14 @@ from pyscf.fci.rdm import reorder_rdm
 from pyscf.fci.spin_op import spin_square
 from pyscf.fci.direct_spin1 import make_pspace_precond, make_diag_precond
 from pyscf.fci import direct_nosym
-from pyscf.fci import select_ci
-from pyscf.fci import select_ci_spin0
-from pyscf.fci import select_ci_symm
-from pyscf.fci import select_ci_spin0_symm
-from pyscf.fci.select_ci import SelectedCI, SCI
+from pyscf.fci import selected_ci
+select_ci = selected_ci  # for backward compatibility
+from pyscf.fci import selected_ci_spin0
+from pyscf.fci import selected_ci_symm
+from pyscf.fci import selected_ci_spin0_symm
+from pyscf.fci.selected_ci import SelectedCI, SCI
 
-def solver(mol=None, singlet=True, symm=None):
+def solver(mol=None, singlet=False, symm=None):
     if mol and symm is None:
         symm = mol.symmetry
     if symm:
@@ -48,11 +62,16 @@ def solver(mol=None, singlet=True, symm=None):
             return direct_spin1_symm.FCISolver(mol)
     else:
         if singlet:
+            # The code for singlet direct_spin0 sometimes gets error of 
+            # "State not singlet x.xxxxxxe-06" due to numerical issues.
+            # Calling direct_spin1 is slightly slower but more robust than
+            # direct_spin0 especially when combining to energy penalty method
+            # (:func:`fix_spin_`)
             return direct_spin0.FCISolver(mol)
         else:
             return direct_spin1.FCISolver(mol)
 
-def FCI(mol_or_mf, mo=None, singlet=True):
+def FCI(mol_or_mf, mo=None, singlet=False):
     '''FCI solver
     '''
     from functools import reduce
@@ -72,18 +91,18 @@ def FCI(mol_or_mf, mo=None, singlet=True):
     if mo is None:
         return cis
 
+    if mol.symmetry:
+        if mf is None:
+            orbsym = scf.hf_symm.get_orbsym(mol, mo)
+        else:
+            orbsym = scf.hf_symm.get_orbsym(mol, mo, mf.get_ovlp(mol))
+    else:
+        orbsym = None
+
     class CISolver(cis.__class__):
         def __init__(self):
             self.__dict__.update(cis.__dict__)
-            self.orbsym = None
-            self.eci = None
-            self.ci = None
-            if mol.symmetry:
-                if mf is None:
-                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo)
-                else:
-                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo, mf.get_ovlp(mol))
-            self._keys = set(self.__dict__.keys())
+            self.orbsym = orbsym
 
         def kernel(self, h1e=None, eri=None, norb=None, nelec=None, ci0=None,
                    ecore=None, **kwargs):
@@ -107,9 +126,7 @@ def FCI(mol_or_mf, mo=None, singlet=True):
                         ecore = mf.energy_nuc()
             if norb is None: norb = mo.shape[1]
             if nelec is None: nelec = mol.nelec
-            self.eci, self.ci = \
-                    cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0,
-                                         ecore=ecore, **kwargs)
-            return self.eci, self.ci
+            return cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0,
+                                        ecore=ecore, **kwargs)
     return CISolver()
 

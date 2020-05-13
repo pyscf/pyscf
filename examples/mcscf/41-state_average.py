@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 '''
-State average over different spin states
+State average over states of different spins and/or spatial symmetry
 
 The mcscf.state_average_ function maybe not generate the right spin or spatial
-symmetry as one needs.  One can modify the mc.fcisolver to handle arbitary
-states.  The following code is based on pyscf/mcscf/addons.py state_average_
-function
+symmetry as one needs.  This example shows how to put states with different
+spins and spatial symmetry in a state-average solver using the method
+state_average_mix_.
 '''
 
 import numpy as np
@@ -49,4 +49,29 @@ mcscf.state_average_mix_(mc, [solver1, solver2], weights)
 mc.check_sanity = lambda *args: None
 
 mc.verbose = 4
+mc.kernel()
+
+
+#
+# Example 2: Mix FCI wavefunctions with different symmetry irreps
+#
+mol = gto.Mole()
+mol.build(atom='''
+ O     0.    0.000    0.1174
+ H     0.    0.757   -0.4696
+ H     0.   -0.757   -0.4696
+''', symmetry=True, basis='631g')
+
+mf = scf.RHF(mol).run()
+
+weights = [.5, .5]
+solver1 = fci.direct_spin1_symm.FCI(mol)
+solver1.wfnsym= 'A1'
+solver1.spin = 0
+solver2 = fci.direct_spin1_symm.FCI(mol)
+solver2.wfnsym= 'A2'
+solver2.spin = 0
+
+mc = mcscf.CASSCF(mf, 4, 4)
+mcscf.state_average_mix_(mc, [solver1, solver2], weights)
 mc.kernel()

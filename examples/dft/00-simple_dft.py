@@ -3,31 +3,34 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf import gto, dft
+import pyscf
 
 '''
 A simple example to run DFT calculation.
 
-See pyscf/dft/vxc.py for the complete list of available XC functional
+See also pyscf/dft/libxc.py and pyscf/dft/xcfun.py for the complete list of
+available XC functionals.
 '''
 
-mol = gto.Mole()
-mol.build(
+mol = pyscf.M(
     atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
     basis = '631g',
     symmetry = True,
 )
 
-mydft = dft.RKS(mol)
-#mydft.xc = 'lda,vwn'
-#mydft.xc = 'lda,vwn_rpa'
-#mydft.xc = 'b86,p86'
-#mydft.xc = 'b88,lyp'
-#mydft.xc = 'b97,pw91'
-#mydft.xc = 'b3p86'
-#mydft.xc = 'o3lyp'
-mydft.xc = 'b3lyp'
-mydft.kernel()
+mf = mol.KS()
+#mf.xc = 'svwn' # shorthand for slater,vwn
+#mf.xc = 'bp86' # shorthand for b88,p86
+#mf.xc = 'blyp' # shorthand for b88,lyp
+#mf.xc = 'pbe' # shorthand for pbe,pbe
+#mf.xc = 'lda,vwn_rpa'
+#mf.xc = 'b97,pw91'
+#mf.xc = 'pbe0'
+#mf.xc = 'b3p86'
+#mf.xc = 'wb97x'
+#mf.xc = '' or mf.xc = None # Hartree term only, without exchange
+mf.xc = 'b3lyp'
+mf.kernel()
 
 # Orbital energies, Mulliken population etc.
-mydft.analyze()
+mf.analyze()

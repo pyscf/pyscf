@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Select CI
  */
 
@@ -342,13 +356,11 @@ void SCIcontract_2e_bbaa(double *eri, double *ci0, double *ci1,
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
-#pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
-               clinka, clinkb)
+#pragma omp parallel
 {
         int strk, ib, blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1));
-        double *ci1buf;
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        double *ci1buf = NULL;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
 #pragma omp for schedule(static)
@@ -392,16 +404,14 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
 {
         _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * inter_na);
         FCIcompress_link_tril(clinka, link_indexa, inter_na, nlinka);
-        _LinkTrilT *clinkb;
+        _LinkTrilT *clinkb = NULL;
 
         double *ci1bufs[MAX_THREADS];
-#pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nb, inter_na, nlinka, clinka, clinkb, \
-               ci1bufs)
+#pragma omp parallel
 {
         int strk, ib, blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*norb);
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*norb+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
@@ -415,6 +425,7 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);
@@ -488,12 +499,10 @@ void SCIrdm2_aaaa(void (*dm2kernel)(), double *rdm2, double *bra, double *ket,
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * inter_na);
         FCIcompress_link(clinka, link_indexa, norb, inter_na, nlinka);
 
-#pragma omp parallel default(none) \
-        shared(dm2kernel, bra, ket, norb, na, nb, inter_na, nlinka, clinka, rdm2), \
-        private(pdm2)
+#pragma omp parallel private(pdm2)
 {
         int strk, i, ib, blen;
-        double *buf = malloc(sizeof(double) * nnorb*BUFBASE*2);
+        double *buf = malloc(sizeof(double) * (nnorb*BUFBASE*2+2));
         pdm2 = calloc(nnorb*nnorb, sizeof(double));
 #pragma omp for schedule(dynamic, 40)
         for (strk = 0; strk < inter_na; strk++) {
@@ -565,13 +574,11 @@ void SCIcontract_2e_bbaa_symm(double *eri, double *ci0, double *ci1,
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
-#pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
-               clinka, clinkb, dimirrep, totirrep)
+#pragma omp parallel
 {
         int strk, ib, blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1));
-        double *ci1buf;
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        double *ci1buf = NULL;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
 #pragma omp for schedule(static)
@@ -623,16 +630,14 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
 {
         _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * inter_na);
         FCIcompress_link_tril(clinka, link_indexa, inter_na, nlinka);
-        _LinkTrilT *clinkb;
+        _LinkTrilT *clinkb = NULL;
 
         double *ci1bufs[MAX_THREADS];
-#pragma omp parallel default(none) \
-        shared(eri, ci0, ci1, norb, na, nb, inter_na, nlinka, clinka, clinkb, \
-               dimirrep, totirrep, ci1bufs)
+#pragma omp parallel
 {
         int strk, ib, blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*norb);
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*norb+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
@@ -647,6 +652,7 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);

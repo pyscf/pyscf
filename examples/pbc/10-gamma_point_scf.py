@@ -35,7 +35,7 @@ ehf = mf.kernel()
 print("HF energy (per unit cell) = %.17g" % ehf)
 
 mf = dft.RKS(cell)
-mf.xc = 'm06'
+mf.xc = 'm06,m06'
 edft = mf.kernel()
 print("DFT energy (per unit cell) = %.17g" % edft)
 
@@ -51,6 +51,6 @@ mf.kernel()
 # Second order SCF solver can be used in the PBC SCF code the same way in the
 # molecular calculation
 #
-mf = scf.newton(scf.RHF(cell))
+mf = scf.RHF(cell).newton()
 mf.kernel()
 

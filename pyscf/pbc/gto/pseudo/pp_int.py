@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -13,6 +26,7 @@ For GTH/HGH PPs, see:
 import ctypes
 import copy
 import numpy
+import scipy.special
 from pyscf import lib
 from pyscf import gto
 
@@ -26,23 +40,66 @@ def get_pp_loc_part1(cell, kpts=None):
 def get_gth_vlocG_part1(cell, Gv):
     '''PRB, 58, 3641 Eq (5) first term
     '''
+    from pyscf.pbc import tools
+    coulG = tools.get_coulG(cell, Gv=Gv)
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
-    with numpy.errstate(divide='ignore'):
-        coulG = 4*numpy.pi / G2
-        if G2[0] < 1e-16:
-            coulG[0] = 0
+    G0idx = numpy.where(G2==0)[0]
 
-    vlocG = numpy.zeros((cell.natm, len(G2)))
-    for ia in range(cell.natm):
-        Zia = cell.atom_charge(ia)
-        symb = cell.atom_symbol(ia)
-        vlocG[ia] = Zia * coulG
-        if symb in cell._pseudo:
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+        vlocG = numpy.zeros((cell.natm, len(G2)))
+        for ia in range(cell.natm):
+            Zia = cell.atom_charge(ia)
+            symb = cell.atom_symbol(ia)
+            # Note the signs -- potential here is positive
+            vlocG[ia] = Zia * coulG
+            if symb in cell._pseudo:
+                pp = cell._pseudo[symb]
+                rloc, nexp, cexp = pp[1:3+1]
+                vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
+                # alpha parameters from the non-divergent Hartree+Vloc G=0 term.
+                vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2
+
+    elif cell.dimension == 2:
+        # The following 2D ewald summation is taken from:
+        # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
+        vlocG = numpy.zeros((cell.natm,len(G2)))
+        b = cell.reciprocal_vectors()
+        inv_area = numpy.linalg.norm(numpy.cross(b[0], b[1]))/(2*numpy.pi)**2
+        lzd2 = cell.vol * inv_area / 2
+        lz = lzd2*2.
+
+        G2[G0idx] = 1e200
+        Gxy = numpy.linalg.norm(Gv[:,:2],axis=1)
+        Gz = abs(Gv[:,2])
+
+        for ia in range(cell.natm):
+            Zia = cell.atom_charge(ia)
+            symb = cell.atom_symbol(ia)
+            if symb not in cell._pseudo:
+                vlocG[ia] = Zia * coulG
+                continue
+
             pp = cell._pseudo[symb]
             rloc, nexp, cexp = pp[1:3+1]
-            vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
-# Note the sign of G=0 differs to the rest, see get_gth_vlocG, get_alphas_gth
-            vlocG[ia,0] = -2*numpy.pi*Zia*rloc**2
+
+            ew_eta = 1./numpy.sqrt(2)/rloc
+            JexpG2 = 4*numpy.pi / G2 * numpy.exp(-G2/(4*ew_eta**2))
+            fac = 4*numpy.pi / G2 * numpy.cos(Gz*lzd2)
+            JexpG2 -= fac * numpy.exp(-Gxy*lzd2)
+            eta_z1 = (ew_eta**2 * lz + Gxy) / (2.*ew_eta)
+            eta_z2 = (ew_eta**2 * lz - Gxy) / (2.*ew_eta)
+            JexpG2 += fac * 0.5*(numpy.exp(-eta_z1**2)*scipy.special.erfcx(eta_z2)
+                               + numpy.exp(-eta_z2**2)*scipy.special.erfcx(eta_z1) )
+            vlocG[ia,:] = Zia * JexpG2
+
+            JexpG0 = ( - numpy.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 )
+                       + numpy.pi/ew_eta**2 * scipy.special.erfc(ew_eta*lzd2)
+                       - numpy.sqrt(numpy.pi)*lz/ew_eta * numpy.exp( - (ew_eta*lzd2)**2 ) )
+            vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2 + Zia*JexpG0
+    else:
+        raise NotImplementedError('Low dimension ft_type ',
+            cell.low_dim_ft_type, ' not implemented for dimension ',
+            cell.dimension)
     return vlocG
 
 # part2 Vnuc - Vloc
@@ -56,20 +113,23 @@ def get_pp_loc_part2(cell, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    intors = ('int3c2e_sph', 'int3c1e_sph', 'int3c1e_r2_origk_sph',
-              'int3c1e_r4_origk_sph', 'int3c1e_r6_origk_sph')
+    intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
+              'int3c1e_r4_origk', 'int3c1e_r6_origk')
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
     buf = 0
     for cn in range(1, 5):
         fakecell = fake_cell_vloc(cell, cn)
         if fakecell.nbas > 0:
-            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2',
+            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
                               kptij_lst=kptij_lst)
             buf += numpy.einsum('...i->...', v)
 
     if isinstance(buf, int):
-        lib.logger.warn(cell, 'cell.pseudo were specified but its elements %s '
-                        'were not found in the system.', cell._pseudo.keys())
+        if any(cell.atom_symbol(ia) in cell._pseudo for ia in range(cell.natm)):
+            pass
+        else:
+            lib.logger.warn(cell, 'cell.pseudo was specified but its elements %s '
+                             'were not found in the system.', cell._pseudo.keys())
         vpploc = [0] * nkpts
     else:
         buf = buf.reshape(nkpts,-1)
@@ -96,7 +156,9 @@ def get_pp_nl(cell, kpts=None):
     nao = cell.nao_nr()
     buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
 
-    ppnl = [0] * nkpts
+    # We set this equal to zeros in case hl_blocks loop is skipped
+    # and ppnl is returned
+    ppnl = numpy.zeros((nkpts,nao,nao), dtype=numpy.complex128)
     for k, kpt in enumerate(kpts_lst):
         offset = [0] * 3
         for ib, hl in enumerate(hl_blocks):
@@ -110,13 +172,12 @@ def get_pp_nl(cell, kpts=None):
                 offset[i] = p0 + nd
             ppnl[k] += numpy.einsum('ilp,ij,jlq->pq', ilp.conj(), hl, ilp)
 
-        if abs(kpt).sum() < 1e-9:  # gamma_point:
-            ppnl[k] = ppnl[k].real
-
+    if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
+        ppnl = ppnl.real
 
     if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
-    return lib.asarray(ppnl)
+    return ppnl
 
 
 def fake_cell_vloc(cell, cn=0):
@@ -147,7 +208,7 @@ def fake_cell_vloc(cell, cn=0):
                 alpha = .5 / rloc**2
             else:
                 alpha = 1e16
-            norm = half_sph_norm / gto.mole._gaussian_int(2, alpha)
+            norm = half_sph_norm / gto.gaussian_int(2, alpha)
             fake_env.append([alpha, norm])
             fake_bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
             ptr += 2
@@ -235,6 +296,7 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
     def int_ket(_bas, intor):
         if len(_bas) == 0:
             return []
+        intor = cell._add_suffix(intor)
         atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                      fakecell._atm, _bas, fakecell._env)
         atm = numpy.asarray(atm, dtype=numpy.int32)
@@ -257,15 +319,15 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
             Ls.ctypes.data_as(ctypes.c_void_p),
             expkL.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*4)(*(shls_slice[:4])),
-            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt, lib.c_null_ptr(),
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-            env.ctypes.data_as(ctypes.c_void_p))
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
         return out
 
     hl_dims = numpy.asarray([len(hl) for hl in hl_blocks])
-    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp_sph'),
-           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi_sph'),
-           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi_sph'))
+    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp'),
+           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi'),
+           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))
     return out
 

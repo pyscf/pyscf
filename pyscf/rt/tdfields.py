@@ -1,8 +1,20 @@
-import pyscf
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from pyscf import lib
 import numpy as np
 import scipy
-import scipy.linalg
 import math
 from pyscf.rt import tdscf
 
@@ -59,28 +71,6 @@ class FIELDS(lib.StreamObject):
         Calculate the initial dipole moment
         """
         self.dip0 = self.expectation(rho0,c_am)
-
-    def applyfield(self, a_mat, tnow):
-        """
-        Args:
-            a_mat: float or complex
-                an AO matrix
-            tnow: float
-                current time.
-        Returns:
-            a_mat_field: float or complex
-                an AO matrix with the field added
-            ison: bool
-                On whether field is on or off
-        """
-        amp, ison = self.impulseamp(tnow)
-        mpol = self.pert_xyz * amp
-        if (ison):
-            a_mat_field = a_mat + 2.0*np.einsum("kij,k->ij",self.dip_ints,mpol)
-            return a_mat_field, True
-        else:
-            a_mat_field = a_mat.copy()
-            return a_mat, False
 
     def applyfield(self, a_mat, c_am, tnow):
         """

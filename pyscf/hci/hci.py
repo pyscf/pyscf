@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
@@ -12,6 +25,7 @@ Simple usage::
 
 '''
 
+import sys
 import numpy
 import time
 import ctypes
@@ -286,10 +300,9 @@ def excitation_level(string, nelec=None):
     return tn
 
 def find1(s):
-    return [i for i,x in enumerate(bin(s)[2:][::-1]) if x is '1']
+    return [i for i,x in enumerate(bin(s)[2:][::-1]) if x == '1']
 
 def toggle_bit(s, place):
-    nset = len(s)
     g, b = place//64, place%64
     s[-1-g] ^= numpy.uint64(1<<b)
     return s
@@ -311,7 +324,8 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
 
     str_add = numpy.empty((0,strs.shape[1]), dtype=numpy.uint64)
 
-    ndet_batch = int(myci.max_memory * 1024**2) // (8 * 4 * neleca * nelecb * (norb-neleca) * (norb-nelecb))
+    batch_size = max(1, 8 * 4 * neleca * nelecb * (norb-neleca) * (norb-nelecb))
+    ndet_batch = int(myci.max_memory * 1024**2) // batch_size
     nbatches = ndet // ndet_batch + 1
 
     for i in range(nbatches):
@@ -627,8 +641,8 @@ def from_fci(fcivec, ci_strs, norb, nelec):
     na = len(stradic)
     nb = len(strbdic)
     fcivec = fcivec.reshape(na,nb)
-    ta = [excitation_level(s, neleca) for s in strsa.reshape(-1,1)]
-    tb = [excitation_level(s, nelecb) for s in strsb.reshape(-1,1)]
+    #ta = [excitation_level(s, neleca) for s in strsa.reshape(-1,1)]
+    #tb = [excitation_level(s, nelecb) for s in strsb.reshape(-1,1)]
     ndet = len(ci_strs)
     civec = numpy.zeros(ndet)
     for idet, (stra, strb) in enumerate(ci_strs.reshape(ndet,2,-1)):
@@ -711,7 +725,7 @@ class SelectedCI(direct_spin1.FCISolver):
         return (h1, eri)
 
     def contract_2e(self, h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -720,7 +734,7 @@ class SelectedCI(direct_spin1.FCISolver):
 #        return contract_2e(h1_h2, civec, norb, nelec, hdiag, **kwargs)
 
     def contract_ss(self, civec, norb, nelec):
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -728,7 +742,7 @@ class SelectedCI(direct_spin1.FCISolver):
         return contract_ss(civec, norb, nelec)
 
     def spin_square(self, civec, norb, nelec):
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -740,7 +754,7 @@ class SelectedCI(direct_spin1.FCISolver):
 
     def to_fci(self, civec, norb, nelec):
 
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -750,7 +764,7 @@ class SelectedCI(direct_spin1.FCISolver):
 
     def make_rdm12s(self, civec, norb, nelec):
 
-        if hasattr(civec, '_strs'):
+        if getattr(civec, '_strs', None) is not None:
             self._strs = civec._strs
         else:
             assert(civec.size == len(self._strs))
@@ -774,7 +788,7 @@ def as_SCIvector(civec, ci_strs):
     return civec
 
 def as_SCIvector_if_not(civec, ci_strs):
-    if not hasattr(civec, '_strs'):
+    if getattr(civec, '_strs', None) is None:
         civec = as_SCIvector(civec, ci_strs)
     return civec
 

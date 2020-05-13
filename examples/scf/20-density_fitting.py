@@ -57,3 +57,7 @@ mf.with_df.auxbasis = 'cc-pvdz-jkfit'
 energy = mf.kernel()
 print('E = %.12f, ref = -75.390366559552' % energy)
 
+# Switch off density fitting
+mf.with_df = False
+energy = mf.kernel()
+print('E = %.12f, ref = %.12f' % (energy, scf.UKS(mol).kernel()))

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -18,12 +31,16 @@ direct_nosym        No            No             No**               Yes
 
 *  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+
+direct_spin0 solver is specified for singlet state. However, calling this
+solver sometimes ends up with the error "State not singlet x.xxxxxxe-06" due
+to numerical issues. Calling direct_spin1 for singlet state is slightly
+slower but more robust than direct_spin0 especially when combining to energy
+penalty method (:func:`fix_spin_`)
 '''
 
-import sys
 import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
@@ -103,7 +120,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   davidson_only, pspace_size, ecore=ecore, **kwargs)
     return e, c
 
-# dm_pq = <|p^+ q|>
+# dm[p,q] = <|q^+ p|>
 @lib.with_doc(direct_spin1.make_rdm1.__doc__)
 def make_rdm1(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
@@ -115,7 +132,7 @@ def make_rdm1(fcivec, norb, nelec, link_index=None):
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
                          norb, nelec, link_index)
-    return (rdm1, rdm1)
+    return rdm1, rdm1
 
 # Chemist notation
 @lib.with_doc(direct_spin1.make_rdm12.__doc__)
@@ -130,7 +147,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, True)
     return dm1, dm2
 
-# dm_pq = <I|p^+ q|J>
+# dm[p,q] = <I|q^+ p|J>
 @lib.with_doc(direct_spin1.trans_rdm1s.__doc__)
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
@@ -151,7 +168,7 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
-# dm_pq,rs = <I|p^+ q r^+ s|J>
+# dm[p,q,r,s] = <I|p^+ q r^+ s|J>
 @lib.with_doc(direct_spin1.trans_rdm12.__doc__)
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCItdm12kern_sf', cibra, ciket,
@@ -187,7 +204,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     ci0 = []
     for addra,addrb in init_strs:
         x = numpy.zeros((na,nb))
-        if addra == addrb == 0:
+        if addra == addrb:
             x[addra,addrb] = 1
         else:
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
@@ -210,47 +227,61 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if nroots is None: nroots = fci.nroots
     if davidson_only is None: davidson_only = fci.davidson_only
     if pspace_size is None: pspace_size = fci.pspace_size
+    if max_memory is None:
+        max_memory = fci.max_memory - lib.current_memory()[0]
+    log = logger.new_logger(fci, verbose)
 
     assert(fci.spin is None or fci.spin == 0)
+    assert(0 <= numpy.sum(nelec) <= norb*2)
 
     link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)
     eri = numpy.ascontiguousarray(eri)
     na = link_index.shape[0]
+
+    if max_memory < na**2*6*8e-6:
+        log.warn('Not enough memory for FCI solver. '
+                 'The minimal requirement is %.0f MB', na**2*60e-6)
+
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
+    nroots = min(hdiag.size, nroots)
 
-    addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
-    if pspace_size > 0:
-        pw, pv = fci.eig(h0)
-    else:
-        pw = pv = None
+    try:
+        addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
+        if pspace_size > 0:
+            pw, pv = fci.eig(h0)
+        else:
+            pw = pv = None
 
-    if pspace_size >= na*na and ci0 is None and not davidson_only:
+        if pspace_size >= na*na and ci0 is None and not davidson_only:
 # The degenerated wfn can break symmetry.  The davidson iteration with proper
 # initial guess doesn't have this issue
-        if na*na == 1:
-            return pw[0]+ecore, pv[:,0].reshape(1,1)
-        elif nroots > 1:
-            civec = numpy.empty((nroots,na*na))
-            civec[:,addr] = pv[:,:nroots].T
-            civec = civec.reshape(nroots,na,na)
-            try:
-                return pw[:nroots]+ecore, [_check_(ci) for ci in civec]
-            except ValueError:
-                pass
-        elif abs(pw[0]-pw[1]) > 1e-12:
-            civec = numpy.empty((na*na))
-            civec[addr] = pv[:,0]
-            civec = civec.reshape(na,na)
-            civec = lib.transpose_sum(civec) * .5
-            # direct diagonalization may lead to triplet ground state
+            if na*na == 1:
+                return pw[0]+ecore, pv[:,0].reshape(1,1)
+            elif nroots > 1:
+                civec = numpy.empty((nroots,na*na))
+                civec[:,addr] = pv[:,:nroots].T
+                civec = civec.reshape(nroots,na,na)
+                try:
+                    return pw[:nroots]+ecore, [_check_(ci) for ci in civec]
+                except ValueError:
+                    pass
+            elif abs(pw[0]-pw[1]) > 1e-12:
+                civec = numpy.empty((na*na))
+                civec[addr] = pv[:,0]
+                civec = civec.reshape(na,na)
+                civec = lib.transpose_sum(civec) * .5
+                # direct diagonalization may lead to triplet ground state
 ##TODO: optimize initial guess.  Using pspace vector as initial guess may have
 ## spin problems.  The 'ground state' of psapce vector may have different spin
 ## state to the true ground state.
-            try:
-                return pw[0]+ecore, _check_(civec.reshape(na,na))
-            except ValueError:
-                pass
+                try:
+                    return pw[0]+ecore, _check_(civec.reshape(na,na))
+                except ValueError:
+                    pass
+    except NotImplementedError:
+        addr = [0]
+        pw = pv = None
 
     precond = fci.make_precond(hdiag, pw, pv, addr)
 
@@ -261,20 +292,22 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
 #TODO: check spin of initial guess
     if ci0 is None:
-        if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
+        if callable(getattr(fci, 'get_init_guess', None)):
+            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
-            ci0 = []
-            for i in range(nroots):
-                x = numpy.zeros(na,na)
-                if addr[i] == 0:
-                    x[0,0] = 1
-                else:
+            def ci0():
+                x0 = []
+                for i in range(nroots):
+                    x = numpy.zeros((na,na))
                     addra = addr[i] // na
                     addrb = addr[i] % na
-                    x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
-                ci0.append(x.ravel())
-    else:
+                    if addra == addrb:
+                        x[addra,addrb] = 1
+                    else:
+                        x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
+                    x0.append(x.ravel())
+                return x0
+    elif not callable(ci0):
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*na:
             ci0 = [ci0.ravel()]
         else:
@@ -284,13 +317,14 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if lindep is None: lindep = fci.lindep
     if max_cycle is None: max_cycle = fci.max_cycle
     if max_space is None: max_space = fci.max_space
-    if max_memory is None: max_memory = fci.max_memory
-    if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
-    #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
-    e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
-                   max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                   max_memory=max_memory, verbose=verbose, follow_state=True,
-                   **kwargs)
+    tol_residual = getattr(fci, 'conv_tol_residual', None)
+
+    with lib.with_omp_threads(fci.threads):
+        #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
+        e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
+                       max_cycle=max_cycle, max_space=max_space, nroots=nroots,
+                       max_memory=max_memory, verbose=log, follow_state=True,
+                       tol_residual=tol_residual, **kwargs)
     if nroots > 1:
         return e+ecore, [_check_(ci.reshape(na,na)) for ci in c]
     else:
@@ -325,10 +359,13 @@ class FCISolver(direct_spin1.FCISolver):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
+        self.norb = norb
+        self.nelec = nelec
+        self.eci, self.ci = \
+                kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
                            davidson_only, pspace_size, ecore=ecore, **kwargs)
-        return e, ci
+        return self.eci, self.ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)

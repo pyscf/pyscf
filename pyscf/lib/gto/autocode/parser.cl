@@ -1,6 +1,5 @@
 ;;;;
-;;;; Copyright (C) 2015-  Qiming Sun <osirpt.sun@gmail.com>
-;;;; Description:
+;;;; Copyright (C) 2014-2017  Qiming Sun <osirpt.sun@gmail.com>
 ;;;;
 
 ;;; parse the expression such as ( op,op |h| op,op )

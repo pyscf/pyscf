@@ -41,7 +41,6 @@ Si
 #
 cell = gto.M(
     a = numpy.eye(3)*5,
-    gs = [4]*3,
     atom = 'Mg1 0 0 0; Mg2 0 0 1',
     pseudo = {'Mg1': 'gth-lda-q2', 'Mg2': 'gth-lda-q10'})
 

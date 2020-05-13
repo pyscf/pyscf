@@ -1,20 +1,32 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
-Unrestricted Dirac Hartree-Fock hyperfine coupling tensor
-(In testing)
+Dirac Hartree-Fock hyperfine coupling tensor (In testing)
 
-Refs: JCP, 134, 044111
+Refs: JCP 134, 044111 (2011); DOI:10.1063/1.3526263
 '''
 
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.prop.ssc import dhf as dhf_ssc
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
+from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 # TODO: 3 SCF for sx, sy, sz
 
@@ -47,11 +59,11 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
     hfc = []
     for atm_id in range(mol.natm):
         symb = mol.atom_symbol(atm_id)
-        nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
+        nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
         nuc_gyro = get_nuc_g_factor(symb) * nuc_mag
-        e_gyro = .5 * lib.param.G_ELECTRON
-        au2MHz = lib.param.HARTREE2J / lib.param.PLANCK * 1e-6
-        fac = lib.param.ALPHA**2 * nuc_gyro * e_gyro * au2MHz
+        e_gyro = .5 * nist.G_ELECTRON
+        au2MHz = nist.HARTREE2J / nist.PLANCK * 1e-6
+        fac = nist.ALPHA**2 * nuc_gyro * e_gyro * au2MHz
         #logger.debug('factor (MHz) %s', fac)
 
         h01 = make_h01(mol, 0)
@@ -76,7 +88,42 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
         hfc.append(e01)
     return numpy.asarray(hfc)
 
-class HyperfineCoupling(dhf_ssc.SSC):
+class HyperfineCoupling(lib.StreamObject):
+    def __init__(self, scf_method):
+        self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
+        self.chkfile = scf_method.chkfile
+        self._scf = scf_method
+
+        self.mb = 'sternheim' # or RMB, RKB
+
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self, verbose=None):
+        log = lib.logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s for %s (In testing) ********',
+                 self.__class__, self._scf.__class__)
+        log.warn('DHF-HFC is an experimental feature. It is '
+                 'still in testing.\nFeatures and APIs may be changed '
+                 'in the future.')
+        log.info('nuc_pair %s', self.nuc_pair)
+        log.info('mb = %s', self.mb)
+        if self.cphf:
+            log.info('Solving MO10 eq with CPHF.')
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        if not self._scf.converged:
+            log.warn('Ground state SCF is not converged')
+        return self
+
     kernel = kernel
 
 HFC = HyperfineCoupling

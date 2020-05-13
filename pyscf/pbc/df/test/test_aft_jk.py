@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 from pyscf.pbc import gto
@@ -9,32 +23,36 @@ cell = gto.Cell()
 cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
 cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
 cell.a = numpy.eye(3) * 2.5
-cell.gs = [10] * 3
+cell.mesh = [21] * 3
 cell.build()
+
+def tearDownModule():
+    global cell
+    del cell
 
 
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_jk(self):
         mf0 = scf.RHF(cell)
         dm = mf0.get_init_guess()
 
         mydf = aft.AFTDF(cell)
-        mydf.gs = [5]*3
-        vj, vk = mydf.get_jk(dm)
+        mydf.mesh = [11]*3
+        vj, vk = mydf.get_jk(dm, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 3.0455881073561235, 9)
-        self.assertAlmostEqual(ek1, 7.7905480251964629, 9)
+        self.assertAlmostEqual(ej1, 3.0455881073561235*(4./3.66768353356587)**2, 9)
+        self.assertAlmostEqual(ek1, 7.7905480251964629*(4./3.66768353356587)**2, 9)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
-        vj1, vk1 = mydf.get_jk(dm, hermi=0)
+        vj1, vk1 = mydf.get_jk(dm, hermi=0, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
         self.assertAlmostEqual(ej1, 12.234106555081793, 9)
@@ -42,7 +60,7 @@ class KnowValues(unittest.TestCase):
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
-        vj, vk = mydf.get_jk(dm, 1, kpt)
+        vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
         self.assertAlmostEqual(ej1, 12.233546641482697, 9)
@@ -55,7 +73,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.transpose(0,2,1)
         mydf = aft.AFTDF(cell)
         mydf.kpts = numpy.random.random((4,3))
-        mydf.gs = numpy.asarray((5,)*3)
+        mydf.mesh = numpy.asarray((11,)*3)
         vj = aft_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(finger(vj[0]), (0.93946193432413905+0.00010862804196223034j)/4, 9)
         self.assertAlmostEqual(finger(vj[1]), (0.94866073525335626+0.005571199307452865j)  /4, 9)
@@ -86,7 +104,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 9)
         self.assertAlmostEqual(finger(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 9)
 
-    def test_aft_k1(self):
+    def test_aft_k1_high_cost(self):
         kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
                                   [-.25,-.25, .25],
                                   [-.25, .25,-.25],

@@ -1,14 +1,37 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import copy
 import numpy
-from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
+from pyscf.data import elements
+from pyscf import __config__
+
+DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
+ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
+FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
+
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
@@ -44,35 +67,39 @@ DEFAULT_AUXBASIS = {
 }
 
 class load(ao2mo.load):
-    '''load 3c2e integrals from hdf5 file
-    Usage:
-        with load(cderifile) as eri:
-            print eri.shape
+    '''load 3c2e integrals from hdf5 file. It can be used in the context
+    manager:
+
+    with load(cderifile) as eri:
+        print(eri.shape)
     '''
     def __init__(self, eri, dataname='j3c'):
         ao2mo.load.__init__(self, eri, dataname)
 
 
-def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
-    '''augment weigend basis with even tempered gaussian basis
+def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
+                        start_at=FIRST_ETB_ELEMENT):
+    '''augment weigend basis with even-tempered gaussian basis
     exps = alpha*beta^i for i = 1..N
     '''
-    nuc_start = gto.mole._charge(start_at)
+    nuc_start = gto.charge(start_at)
     uniq_atoms = set([a[0] for a in mol._atom])
 
     newbasis = {}
     for symb in uniq_atoms:
-        nuc_charge = gto.mole._charge(symb)
+        nuc_charge = gto.charge(symb)
         if nuc_charge < nuc_start:
             newbasis[symb] = dfbasis
         #?elif symb in mol._ecp:
         else:
-            conf = lib.parameters.ELEMENTS[nuc_charge][2]
+            conf = elements.CONFIGURATION[nuc_charge]
             max_shells = 4 - conf.count(0)
             emin_by_l = [1e99] * 8
             emax_by_l = [0] * 8
+            l_max = 0
             for b in mol._basis[symb]:
                 l = b[0]
+                l_max = max(l_max, l)
                 if l >= max_shells+1:
                     continue
 
@@ -86,31 +113,37 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
                 emax_by_l[l] = max(es.max(), emax_by_l[l])
                 emin_by_l[l] = min(es.min(), emin_by_l[l])
 
-            l_max = 8 - emax_by_l.count(0)
-            emin_by_l = numpy.array(emin_by_l[:l_max])
-            emax_by_l = numpy.array(emax_by_l[:l_max])
+            l_max1 = l_max + 1
+            emin_by_l = numpy.array(emin_by_l[:l_max1])
+            emax_by_l = numpy.array(emax_by_l[:l_max1])
+
 # Estimate the exponents ranges by geometric average
             emax = numpy.sqrt(numpy.einsum('i,j->ij', emax_by_l, emax_by_l))
             emin = numpy.sqrt(numpy.einsum('i,j->ij', emin_by_l, emin_by_l))
-            liljsum = numpy.arange(l_max)[:,None] + numpy.arange(l_max)
-            emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max*2-1)]
-            emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max*2-1)]
+            liljsum = numpy.arange(l_max1)[:,None] + numpy.arange(l_max1)
+            emax_by_l = [emax[liljsum==ll].max() for ll in range(l_max1*2-1)]
+            emin_by_l = [emin[liljsum==ll].min() for ll in range(l_max1*2-1)]
             # Tune emin and emax
             emin_by_l = numpy.array(emin_by_l) * 2  # *2 for alpha+alpha on same center
-            emax_by_l = numpy.array(emax_by_l) * 2  #/ (numpy.arange(l_max*2-1)*.5+1)
+            emax_by_l = numpy.array(emax_by_l) * 2  #/ (numpy.arange(l_max1*2-1)*.5+1)
 
             ns = numpy.log((emax_by_l+emin_by_l)/emin_by_l) / numpy.log(beta)
-            etb = [(l, max(n,1), emin_by_l[l], beta)
-                   for l, n in enumerate(numpy.ceil(ns).astype(int))]
+            etb = []
+            for l, n in enumerate(numpy.ceil(ns).astype(int)):
+                if n > 0:
+                    etb.append((l, n, emin_by_l[l], beta))
             newbasis[symb] = gto.expand_etbs(etb)
 
     return newbasis
 
-def aug_etb(mol, beta=2.3):
+def aug_etb(mol, beta=ETB_BETA):
+    '''To generate the even-tempered auxiliary Gaussian basis'''
     return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)
 
 def make_auxbasis(mol, mp2fit=False):
-    '''Even-tempered Gaussians or the DF basis in DEFAULT_AUXBASIS'''
+    '''Depending on the orbital basis, generating even-tempered Gaussians or
+    the optimized auxiliary basis defined in DEFAULT_AUXBASIS
+    '''
     uniq_atoms = set([a[0] for a in mol._atom])
     if isinstance(mol.basis, str):
         _basis = dict(((a, mol.basis) for a in uniq_atoms))
@@ -120,7 +153,7 @@ def make_auxbasis(mol, mp2fit=False):
         _basis.update(mol.basis)
         del(_basis['default'])
     else:
-        _basis = mol.basis
+        _basis = mol._basis
 
     auxbasis = {}
     for k in _basis:
@@ -135,8 +168,8 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][0]
                 if auxb is not None and gto.basis.load(auxb, k):
                     auxbasis[k] = auxb
-                    logger.debug(mol, 'Default auxbasis %s is used for %s %s',
-                                 auxb, k, _basis[k])
+                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
@@ -152,7 +185,14 @@ def make_auxbasis(mol, mp2fit=False):
 
 def make_auxmol(mol, auxbasis=None):
     '''Generate a fake Mole object which uses the density fitting auxbasis as
-    the basis sets
+    the basis sets.  If auxbasis is not specified, the optimized auxiliary fitting
+    basis set will be generated according to the rules recorded in
+    pyscf.df.addons.DEFAULT_AUXBASIS.  If the optimized auxiliary basis is not
+    available (either not specified in DEFAULT_AUXBASIS or the basis set of the
+    required elements not defined in the optimized auxiliary basis),
+    even-tempered Gaussian basis set will be generated.
+
+    See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
     '''
     pmol = copy.copy(mol)  # just need shallow copy
 
@@ -181,3 +221,5 @@ def make_auxmol(mol, auxbasis=None):
     logger.debug(mol, 'num shells = %d, num cGTOs = %d',
                  pmol.nbas, pmol.nao_nr())
     return pmol
+
+del(DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

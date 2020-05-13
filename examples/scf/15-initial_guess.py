@@ -68,6 +68,21 @@ mf.init_guess = 'atom'
 mf.kernel()
 
 #
+# Also a Huckel guess based on on-the-fly atomic HF calculations is possible.
+#
+mf = scf.RHF(mol)
+mf.init_guess = 'huckel'
+mf.kernel()
+
+#
+# Superposition of atomic potentials can be used as initial guess for DFT
+# methods.
+#
+mf = mol.RKS().set(xc='b3lyp')
+mf.init_guess = 'vsap'
+mf.kernel()
+
+#
 # Initial guess can be read and projected from another chkfile.
 # In this initial guess method, mf.chkfile attribute needs to be specified.
 # It is allowed to use the chkfile of different molecule because the density

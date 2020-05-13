@@ -1,13 +1,23 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.dft.numint import _dot_ao_dm, _dot_ao_ao, BLKSIZE
 
@@ -18,7 +28,7 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
     feval = 'GTOval_spinor_deriv%d' % deriv
     aoLa, aoLb = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
     if with_s:
-        assert(deriv <= 1)
+        assert(deriv <= 1)  # only GTOval_ipsp_spinor
         ngrid, nao = aoLa.shape[-2:]
         if out is not None:
             aoSa = numpy.empty((comp,nao,ngrid), dtype=numpy.complex128)
@@ -26,10 +36,11 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
         else:
             out = numpy.ndarray((4,comp,nao,ngrid), dtype=numpy.complex128, buffer=out)
             aoSa, aoSb = out[2:]
+        comp = 1
         ao = mol.eval_gto('GTOval_sp_spinor', coords, comp, shls_slice, non0tab)
         aoSa[0] = ao[0].T
         aoSb[0] = ao[1].T
-        fevals = ['GTOval_ipsp_spinor']
+        fevals = ['GTOval_sp_spinor', 'GTOval_ipsp_spinor']
         p1 = 1
         for n in range(1, deriv+1):
             comp = (n+1)*(n+2)//2
@@ -43,18 +54,18 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
         if deriv == 0:
             aoSa = aoSa[0]
             aoSb = aoSb[0]
-    return aoLa, aoLb, aoSa, aoSb
+        return aoLa, aoLb, aoSa, aoSb
+    else:
+        return aoLa, aoLb
 
 def _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
     aoa, aob = ao
     out = _dot_ao_dm(mol, aoa, dm, non0tab, shls_slice, ao_loc, out=out)
     rhoaa = numpy.einsum('pi,pi->p', aoa.real, out.real)
     rhoaa+= numpy.einsum('pi,pi->p', aoa.imag, out.imag)
-    rhoba = numpy.einsum('pi,pi->p', aob.real, out.real)
-    rhoba+= numpy.einsum('pi,pi->p', aob.imag, out.imag)
+    rhoba = numpy.einsum('pi,pi->p', aob, out.conj())
     out = _dot_ao_dm(mol, aob, dm, non0tab, shls_slice, ao_loc, out=out)
-    rhoab = numpy.einsum('pi,pi->p', aoa.real, out.real)
-    rhoab+= numpy.einsum('pi,pi->p', aoa.imag, out.imag)
+    rhoab = numpy.einsum('pi,pi->p', aoa, out.conj())
     rhobb = numpy.einsum('pi,pi->p', aob.real, out.real)
     rhobb+= numpy.einsum('pi,pi->p', aob.imag, out.imag)
     return rhoaa, rhoab, rhoba, rhobb
@@ -62,8 +73,8 @@ def _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
 def _rho2x2_to_rho_m(rho2x2):
     raa, rab, rba, rbb = rho2x2
     rho = (raa + rbb).real
-    mx = rab + rba
-    my =(rba - rab)*1j
+    mx = rab.real + rba.real
+    my = rba.imag - rab.imag
     mz = raa - rbb
     m = numpy.vstack((mx, my, mz))
     return rho, m
@@ -113,7 +124,11 @@ def _vxc2x2_to_mat(mol, ao, weight, rho, vrho, non0tab, shls_slice, ao_loc):
 #    mat-= _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
 
     s = lib.norm(m, axis=0)
-    ws = vm * weight / (s+1e-300)
+    idx = s < 1e-20
+    with numpy.errstate(divide='ignore',invalid='ignore'):
+        ws = vm * weight / s
+    ws[idx] = 0
+
     aow = numpy.einsum('pi,p->pi', aoa, ws*m[0], out=aow)  # Mx
     tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
     mat = tmp + tmp.T.conj()
@@ -132,7 +147,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
              non0tab=None, xctype='LDA', verbose=None):
     aoa, aob = ao
     xctype = xctype.upper()
-    ngrids, nao = ao.shape[-2:]
+    ngrids, nao = aoa.shape[-2:]
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
@@ -143,9 +158,6 @@ def eval_mat(mol, ao, weight, rho, vxc,
         vrho = vxc[0]
         mat = _vxc2x2_to_mat(mol, ao, weight, rho, vrho, non0tab, shls_slice, ao_loc)
     else:
-        raise NotImplementedError
-
-    if xctype == 'MGGA':
         raise NotImplementedError
     return mat
 
@@ -168,7 +180,8 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, rho, 1, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, rho, 1, relativity, 1,
+                                      verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
@@ -191,34 +204,32 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         for idm in range(nset):
             vmat[idm,:n2c,:n2c] = matLL[idm]
             vmat[idm,n2c:,n2c:] = matSS[idm] * c1**2
+    else:
+        vmat = matLL
+
     if nset == 1:
         nelec = nelec[0]
         excsum = excsum[0]
     return nelec, excsum, vmat.reshape(dms.shape)
 
 
-def large_rho_indices(ni, mol, dm, grids, cutoff=1e-10, max_memory=2000):
-    dm = numpy.asarray(dm)
+def get_rho(ni, mol, dm, grids, max_memory=2000):
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi=1)
     n2c = mol.nao_2c()
     with_s = (nao == n2c*2)  # 4C DM
-
-    idx = []
-    cutoff = cutoff / grids.weights.size
-    nelec = 0
+    rho = numpy.empty(grids.weights.size)
+    p1 = 0
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
-        rho = make_rho(0, ao, mask, 'LDA')
-        kept = abs(rho[0]*weight) > cutoff
-        nelec += numpy.einsum('i,i', rho[0][kept], weight[kept])
-        idx.append(kept)
-    return nelec, numpy.hstack(idx)
+        p0, p1 = p1, p1 + weight.size
+        rho[p0:p1] = make_rho(0, ao, mask, 'LDA')[0]
+    return rho
 
 
-class _RNumInt(numint._NumInt):
+class RNumInt(numint.NumInt):
 
     r_vxc = nr_vxc = r_vxc
-    large_rho_indices = large_rho_indices
+    get_rho = get_rho
 
     def eval_ao(self, mol, coords, deriv=0, with_s=True, shls_slice=None,
                 non0tab=None, out=None, verbose=None):
@@ -249,7 +260,7 @@ class _RNumInt(numint._NumInt):
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                                  dtype=numpy.uint8)
-        feval = 'GTOval_spinor_deriv%d' % deriv
+
         if buf is None:
             buf = numpy.empty((4,comp,blksize,nao), dtype=numpy.complex128)
         for ip0 in range(0, ngrids, blksize):
@@ -287,26 +298,30 @@ class _RNumInt(numint._NumInt):
                 return self.eval_rho(mol, ao, dms[idm], non0tab, xctype)
         return make_rho, ndms, nao
 
-    def eval_xc(self, xc_code, rho, spin=1, relativity=0, deriv=1, verbose=None):
+    def eval_xc(self, xc_code, rho, spin=1, relativity=0, deriv=1, omega=None,
+                verbose=None):
+        if omega is None: omega = self.omega
         # JTCC, 2, 257
         r, m = rho[:2]
         s = lib.norm(m, axis=0)
         rhou = (r + s) * .5
         rhod = (r - s) * .5
         rho = (rhou, rhod)
-        xc = self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv, verbose)
+        xc = self.libxc.eval_xc(xc_code, rho, 1, relativity, deriv,
+                                omega, verbose)
         exc, vxc = xc[:2]
+        # update vxc[0] inplace
         vrho = vxc[0]
         vr, vm = (vrho[:,0]+vrho[:,1])*.5, (vrho[:,0]-vrho[:,1])*.5
         vrho[:,0] = vr
         vrho[:,1] = vm
         return xc
+_RNumInt = RNumInt
 
 
 if __name__ == '__main__':
     import time
     from pyscf import gto
-    from pyscf import dft
     from pyscf.dft import dks
 
     mol = gto.M(
@@ -316,7 +331,7 @@ if __name__ == '__main__':
         [1   , (0. , 0.757  , 0.587)] ],
         basis = '6311g*',)
     mf = dks.UKS(mol)
-    mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),},
+    mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),}
     mf.grids.prune = None
     mf.grids.build()
     dm = mf.get_init_guess(key='minao')

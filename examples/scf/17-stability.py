@@ -23,7 +23,17 @@ mf = scf.RHF(mol).run()
 mf.stability()
 
 #
-# If the SCF wavefunction is unstable, the stability analysis program will
+# In the RHF method, there are three kinds of instability: the internal
+# instability for the optimal solution in RHF space and the external
+# instability (including the RHF -> UHF instability, and real -> complex
+# instability).  By default the stability analysis only detects the internal
+# instability.  The external instability can be enabled by passing keyword
+# argument external=True to the stability function.
+#
+mf.stability(external=True)
+
+#
+# If the SCF wavefunction is unstable, the stability analysis program can
 # transform the SCF wavefunction and generate a set of initial guess (orbitals).
 # The initial guess can be used to make density matrix and fed into a new SCF
 # iteration (see 15-initial_guess.py).
@@ -39,5 +49,15 @@ mf.stability()
 # Also the initial guess orbitals from stability analysis can be used as with
 # second order SCF solver
 #
-mf = scf.newton(mf).run(mo1, mf.mo_occ)
+mf = mf.newton().run(mo1, mf.mo_occ)
 mf.stability()
+
+#
+# The UHF method has the internal
+# instability for the optimal solution in UHF space and the external
+# instability (UHF -> GHF, and real -> complex).  By default the stability
+# analysis only detects the internal instability.  The external instability
+# can be enabled by passing keyword argument external=True to the stability
+# function.
+#
+mf.stability(external=True)

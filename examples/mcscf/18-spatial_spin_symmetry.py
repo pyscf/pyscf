@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
+'''
+Force the FCI solver of CASSCF solving particular spin state.
+'''
+
 from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf
-
-'''
-Force the FCI solver of CASSCF following certain spin state.
-'''
 
 mol = gto.M(
     atom = '''

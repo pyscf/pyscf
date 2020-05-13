@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -13,7 +26,6 @@ Function symm.label_orb_symm can be used to detect the symmetry of the
 molecular orbitals.
 '''
 
-import time
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -23,10 +35,16 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import rohf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
+
 
 # mo_energy, mo_coeff, mo_occ are all in nosymm representation
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Occupancy for each irreps; Mulliken population analysis
     '''
@@ -34,7 +52,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     from pyscf.tools import dump_mat
     mol = mf.mol
     if not mol.symmetry:
-        return hf.analyze(mf, verbose, **kwargs)
+        return hf.analyze(mf, verbose, with_meta_lowdin, **kwargs)
 
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -42,11 +60,17 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     ovlp_ao = mf.get_ovlp()
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
+        mf.dump_scf_summary(log)
+
         nirrep = len(mol.irrep_id)
         orbsym = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
         wfnsym = 0
         noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-        log.note('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
+        if mol.groupname in ('SO3', 'Dooh', 'Coov'):
+            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+        else:
+            log.note('Wave-function symmetry = %s',
+                     symm.irrep_id2name(mol.groupname, wfnsym))
         log.note('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
         log.note('                           ' + (' %4d'*nirrep), *noccs)
         log.note('**** MO energy ****')
@@ -60,7 +84,8 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             else:
                 irorbcnt[j] = 1
             log.note('MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j],
+                     mo_energy[k], mo_occ[k])
 
     if log.verbose >= logger.DEBUG:
         label = mol.ao_labels()
@@ -71,14 +96,24 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
-        orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-        c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
-        dump_mat.dump_rec(mf.stdout, c, label, molabel, start=1, **kwargs)
+            molabel.append('#%-d(%s #%d)' %
+                           (k+MO_BASE, irname_full[j], irorbcnt[j]))
+        if with_meta_lowdin:
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
+            orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
+            c = reduce(numpy.dot, (orth_coeff.conj().T, ovlp_ao, mo_coeff))
+        else:
+            log.debug(' ** MO coefficients (expansion on AOs) **')
+            c = mo_coeff
+        dump_mat.dump_rec(mf.stdout, c, label, molabel, start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    if with_meta_lowdin:
+        pop_and_charge = mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_charge = mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mol, dm, verbose=log)
+    return pop_and_charge, dip
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Electron numbers for each irreducible representation.
@@ -126,7 +161,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.size)
 
-    if hasattr(mo_coeff, 'orbsym'):
+    if getattr(mo_coeff, 'orbsym', None) is not None:
         orbsym = mo_coeff.orbsym
         irreps = set(orbsym)
         for ir in irreps:
@@ -135,7 +170,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 idx = idx0 & idx1
                 if numpy.count_nonzero(idx) > 0:
                     orb = mo_coeff[:,idx]
-                    f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                    f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                     e, c = scipy.linalg.eigh(f1)
                     mo[:,idx] = numpy.dot(mo_coeff[:,idx], c)
                     mo_e[idx] = e
@@ -144,7 +179,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         for idx in (coreidx, openidx, viridx):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
-                f1 = reduce(numpy.dot, (orb.T.conj(), fock, orb))
+                f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 c = numpy.dot(mo_coeff[:,idx], c)
                 mo[:,idx] = _symmetrize_canonicalization_(mf, e, c, s)
@@ -173,15 +208,15 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
         cs = []
         for i,ir in enumerate(mol.irrep_id):
             so = mol.symm_orb[i]
-            sosc = numpy.dot(so.T, scsub)
-            s_ir = reduce(numpy.dot, (so.T, s, so))
-            fock_ir = numpy.dot(sosc*esub, sosc.T)
+            sosc = numpy.dot(so.conj().T, scsub)
+            s_ir = reduce(numpy.dot, (so.conj().T, s, so))
+            fock_ir = numpy.dot(sosc*esub, sosc.conj().T)
             mo_energy, u = mf._eigh(fock_ir, s_ir)
             idx = abs(mo_energy) > emin
             es.append(mo_energy[idx])
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
         es = numpy.hstack(es).round(7)
-        idx = numpy.argsort(es)
+        idx = numpy.argsort(es, kind='mergesort')
         assert(numpy.allclose(es[idx], esub.round(7)))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
     return mo_coeff
@@ -200,6 +235,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
     float_irname = []
     fix_na = 0
     fix_nb = 0
+    free_irrep_norbs = []
     for i, irname in enumerate(mol.irrep_name):
         if irname in irrep_nelec:
             if isinstance(irrep_nelec[irname], (int, numpy.integer)):
@@ -217,12 +253,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
             fix_nb += nelecb
         else:
             float_irname.append(irname)
-    if fix_na < fix_nb:
-        raise ValueError('alpha electrons %d < beta electrons %d\n'
-                         'irrep_nelec %s' % (fix_na, fix_nb, irrep_nelec))
-    if mol.spin < fix_na-fix_nb:
-        raise ValueError('alpha electrons %d - beta electrons %d > mol.spin %d\n'
-                         'irrep_nelec %s' % (fix_na, fix_nb, mol.spin, irrep_nelec))
+            free_irrep_norbs.append(mol.symm_orb[i].shape[1])
 
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec // 2
@@ -230,6 +261,9 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
     else:
         neleca, nelecb = nelec
     fix_ne = fix_na + fix_nb
+    float_neleca = neleca - fix_na
+    float_nelecb = nelecb - fix_nb
+    free_norb = sum(free_irrep_norbs)
     if ((fix_na > neleca) or (fix_nb > nelecb) or
         (fix_na+nelecb > mol.nelectron) or
         (fix_nb+neleca > mol.nelectron)):
@@ -239,13 +273,17 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
         raise ValueError(msg)
     else:
         logger.info(mol, 'Freeze %d electrons in irreps %s',
-                    fix_ne, irrep_nelec.keys())
+                    fix_ne, list(irrep_nelec.keys()))
 
     if len(set(float_irname)) == 0 and fix_ne != mol.nelectron:
         msg =('Num electrons defined by irrep_nelec != total num electrons. '
               'mol.nelectron = %d  irrep_nelec = %s' %
               (mol.nelectron, irrep_nelec))
         raise ValueError(msg)
+    elif float_neleca > free_norb or float_nelecb > free_norb:
+        raise ValueError('Not enough orbitals for (%d, %d) electrons in irreps %s '
+                         '(irrep_norb: %s)' %
+                         (float_neleca, float_nelecb, ' '.join(float_irname), free_norb))
     else:
         logger.info(mol, '    %d free electrons in irreps %s',
                     mol.nelectron-fix_ne, ' '.join(float_irname))
@@ -277,8 +315,35 @@ def eig(mf, h, s):
     c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
     return e, c
 
+def get_orbsym(mol, mo_coeff, s=None, check=False):
+    if mo_coeff is None:
+        orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
+                               for i, ir in enumerate(mol.irrep_id)])
+    elif getattr(mo_coeff, 'orbsym', None) is not None:
+        orbsym = mo_coeff.orbsym
+    else:
+        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                     mo_coeff, s, check)
+    return numpy.asarray(orbsym)
 
-class RHF(hf.RHF):
+def get_wfnsym(mf, mo_coeff=None, mo_occ=None):
+    orbsym = mf.get_orbsym(mo_coeff)
+    if mf.mol.groupname in ('SO3', 'Dooh', 'Coov'):
+        if numpy.any(orbsym > 7):
+            logger.warn(mf, 'Wave-function symmetry for %s not supported. '
+                        'Wfn symmetry is mapped to D2h/C2v group.',
+                        mf.mol.groupname)
+            orbsym = orbsym % 10
+
+    if mo_occ is None:
+        mo_occ = mf.mo_occ
+    wfnsym = 0
+    for ir in orbsym[mo_occ == 1]:
+        wfnsym ^= ir
+    return wfnsym
+
+
+class SymAdaptedRHF(hf.RHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed RHF:
         irrep_nelec : dict
@@ -307,6 +372,7 @@ class RHF(hf.RHF):
         self._keys = self._keys.union(['irrep_nelec'])
 
     def build(self, mol=None):
+        if mol is None: mol = self.mol
         for irname in self.irrep_nelec:
             if irname not in self.mol.irrep_name:
                 logger.warn(self, 'No irrep %s', irname)
@@ -344,7 +410,7 @@ class RHF(hf.RHF):
             if irname in self.irrep_nelec:
                 ir_idx = numpy.where(orbsym == ir)[0]
                 n = self.irrep_nelec[irname]
-                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9))
+                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='mergesort')
                 occ_idx  = ir_idx[occ_sort[:n//2]]
                 mo_occ[occ_idx] = 2
                 nelec_fix += n
@@ -353,7 +419,7 @@ class RHF(hf.RHF):
         assert(nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9))
+            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
             occ_idx  = rest_idx[occ_sort[:nelec_float//2]]
             mo_occ[occ_idx] = 2
 
@@ -383,8 +449,10 @@ class RHF(hf.RHF):
         hf.RHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9))
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         idx = numpy.arange(self.mo_energy.size)
         idx = numpy.hstack((idx[self.mo_occ> 0][o_sort],
                             idx[self.mo_occ==0][v_sort]))
@@ -397,9 +465,11 @@ class RHF(hf.RHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=None, **kwargs):
+    @lib.with_doc(analyze.__doc__)
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
@@ -409,10 +479,22 @@ class RHF(hf.RHF):
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
+    def get_orbsym(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('SCF object %s not initialized' % self)
+        return numpy.asarray(get_orbsym(self.mol, mo_coeff))
+    orbsym = property(get_orbsym)
+
+    get_wfnsym = get_wfnsym
+    wfnsym = property(get_wfnsym)
+
     canonicalize = canonicalize
+RHF = SymAdaptedRHF
 
 
-class ROHF(rohf.ROHF):
+class SymAdaptedROHF(rohf.ROHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed ROHF:
         irrep_nelec : dict
@@ -444,8 +526,8 @@ class ROHF(rohf.ROHF):
         self._irrep_soccs = []
         self._keys = self._keys.union(['irrep_nelec'])
 
-    def dump_flags(self):
-        rohf.ROHF.dump_flags(self)
+    def dump_flags(self, verbose=None):
+        rohf.ROHF.dump_flags(self, verbose)
         if self.irrep_nelec:
             logger.info(self, 'irrep_nelec %s', self.irrep_nelec)
         return self
@@ -453,10 +535,34 @@ class ROHF(rohf.ROHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
+            for irname in self.irrep_nelec:
+                if irname not in self.mol.irrep_name:
+                    logger.warn(self, 'No irrep %s', irname)
+
+            fix_na, fix_nb = check_irrep_nelec(mol, self.irrep_nelec, self.nelec)[:2]
+            alpha_open = beta_open = False
+            for ne in self.irrep_nelec.values():
+                if not isinstance(ne, (int, numpy.integer)):
+                    alpha_open |= ne[0] > ne[1]
+                    beta_open  |= ne[0] < ne[1]
+
+            frozen_spin = fix_na - fix_nb
+            if ((alpha_open and beta_open) or
+                (0 < mol.spin < frozen_spin) or (frozen_spin < 0 < mol.spin) or
+                (frozen_spin < mol.spin < 0) or (mol.spin < 0 < frozen_spin)):
+                raise ValueError('Low-spin configuration was found in '
+                                 'the irrep_nelec input. ROHF does not '
+                                 'support low-spin configuration.')
         return hf.RHF.build(self, mol)
 
-    eig = eig
+    @lib.with_doc(eig.__doc__)
+    def eig(self, fock, s):
+        e, c = eig(self, fock, s)
+        if getattr(fock, 'focka', None) is not None:
+            mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
+            mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
+            e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
+        return e, c
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = rohf.ROHF.get_grad(self, mo_coeff, mo_occ, fock)
@@ -480,7 +586,7 @@ class ROHF(rohf.ROHF):
         if not self.mol.symmetry:
             return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
 
-        if hasattr(mo_energy, 'mo_ea'):
+        if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea
             mo_eb = mo_energy.mo_eb
         else:
@@ -502,9 +608,13 @@ class ROHF(rohf.ROHF):
                     neleca = self.irrep_nelec[irname] - nelecb
                 else:
                     neleca, nelecb = self.irrep_nelec[irname]
+                if neleca > nelecb:
+                    ncore, nopen = nelecb, neleca - nelecb
+                else:
+                    ncore, nopen = neleca, nelecb - neleca
                 mo_occ[ir_idx] = rohf._fill_rohf_occ(mo_energy[ir_idx],
                                                      mo_ea[ir_idx], mo_eb[ir_idx],
-                                                     nelecb, neleca-nelecb)
+                                                     ncore, nopen)
                 neleca_fix += neleca
                 nelecb_fix += nelecb
                 rest_idx[ir_idx] = False
@@ -513,14 +623,13 @@ class ROHF(rohf.ROHF):
         assert(nelec_float >= 0)
         if len(rest_idx) > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            nopen = mol.spin - (neleca_fix - nelecb_fix)
+            nopen = abs(mol.spin - (neleca_fix - nelecb_fix))
             ncore = (nelec_float - nopen)//2
             mo_occ[rest_idx] = rohf._fill_rohf_occ(mo_energy[rest_idx],
                                                    mo_ea[rest_idx], mo_eb[rest_idx],
                                                    ncore, nopen)
 
-        ncore = self.nelec[1]
-        nocc  = self.nelec[0]
+        nocc, ncore = self.nelec
         nopen = nocc - ncore
         vir_idx = (mo_occ==0)
         if self.verbose >= logger.INFO and nocc < nmo and ncore > 0:
@@ -572,29 +681,31 @@ class ROHF(rohf.ROHF):
             numpy.set_printoptions(threshold=1000)
         return mo_occ
 
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if mo_occ is None:
             mo_occ = self.mo_occ
         mo_a = mo_coeff[:,mo_occ>0]
         mo_b = mo_coeff[:,mo_occ==2]
-        dm_a = numpy.dot(mo_a, mo_a.T)
-        dm_b = numpy.dot(mo_b, mo_b.T)
+        dm_a = numpy.dot(mo_a, mo_a.conj().T)
+        dm_b = numpy.dot(mo_b, mo_b.conj().T)
         return numpy.array((dm_a, dm_b))
 
     def _finalize(self):
         rohf.ROHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
-        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9))
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9))
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
+        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9), kind='mergesort')
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9), kind='mergesort')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         idx = numpy.arange(self.mo_energy.size)
         idx = numpy.hstack((idx[self.mo_occ==2][c_sort],
                             idx[self.mo_occ==1][o_sort],
                             idx[self.mo_occ==0][v_sort]))
-        if hasattr(self.mo_energy, 'mo_ea'):
+        if getattr(self.mo_energy, 'mo_ea', None) is not None:
             mo_ea = self.mo_energy.mo_ea[idx]
             mo_eb = self.mo_energy.mo_eb[idx]
             self.mo_energy = lib.tag_array(self.mo_energy[idx],
@@ -609,12 +720,13 @@ class ROHF(rohf.ROHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         from pyscf.lo import orth
         from pyscf.tools import dump_mat
         if not self.mol.symmetry:
-            return rohf.ROHF.analyze(self, verbose, **kwargs)
+            return rohf.ROHF.analyze(self, verbose, with_meta_lowdin, **kwargs)
 
         mol = self.mol
         mo_energy = self.mo_energy
@@ -623,6 +735,8 @@ class ROHF(rohf.ROHF):
         ovlp_ao = self.get_ovlp()
         log = logger.new_logger(self, verbose)
         if log.verbose >= logger.NOTE:
+            self.dump_scf_summary(log)
+
             nirrep = len(mol.irrep_id)
             orbsym = get_orbsym(self.mol, mo_coeff)
             wfnsym = 0
@@ -631,23 +745,23 @@ class ROHF(rohf.ROHF):
             for k,ir in enumerate(mol.irrep_id):
                 ndoccs.append(sum(orbsym[mo_occ==2] == ir))
                 nsoccs.append(sum(orbsym[mo_occ==1] == ir))
-                if nsoccs[k] % 2:
+                if nsoccs[k] % 2 == 1:
                     wfnsym ^= ir
-            if mol.groupname in ('Dooh', 'Coov'):
-                log.info('TODO: total symmetry for %s', mol.groupname)
+            if mol.groupname in ('SO3', 'Dooh', 'Coov'):
+                log.note('TODO: total wave-function symmetry for %s', mol.groupname)
             else:
-                log.info('total symmetry = %s',
+                log.note('Wave-function symmetry = %s',
                          symm.irrep_id2name(mol.groupname, wfnsym))
-            log.info('occupancy for each irrep:  ' + (' %4s'*nirrep),
+            log.note('occupancy for each irrep:  ' + (' %4s'*nirrep),
                      *mol.irrep_name)
-            log.info('double occ                 ' + (' %4d'*nirrep), *ndoccs)
-            log.info('single occ                 ' + (' %4d'*nirrep), *nsoccs)
-            log.info('**** MO energy ****')
+            log.note('double occ                 ' + (' %4d'*nirrep), *ndoccs)
+            log.note('single occ                 ' + (' %4d'*nirrep), *nsoccs)
+            log.note('**** MO energy ****')
             irname_full = {}
             for k,ir in enumerate(mol.irrep_id):
                 irname_full[ir] = mol.irrep_name[k]
             irorbcnt = {}
-            if hasattr(mo_energy, 'mo_ea'):
+            if getattr(mo_energy, 'mo_ea', None) is not None:
                 mo_ea = mo_energy.mo_ea
                 mo_eb = mo_energy.mo_eb
                 log.note('                          Roothaan           | alpha              | beta')
@@ -657,7 +771,7 @@ class ROHF(rohf.ROHF):
                     else:
                         irorbcnt[j] = 1
                     log.note('MO #%-4d(%-3s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
-                             k+1, irname_full[j], irorbcnt[j],
+                             k+MO_BASE, irname_full[j], irorbcnt[j],
                              mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
             else:
                 for k, j in enumerate(orbsym):
@@ -666,7 +780,7 @@ class ROHF(rohf.ROHF):
                     else:
                         irorbcnt[j] = 1
                     log.note('MO #%-3d (%s #%-2d), energy= %-18.15g occ= %g',
-                             k+1, irname_full[j], irorbcnt[j],
+                             k+MO_BASE, irname_full[j], irorbcnt[j],
                              mo_energy[k], mo_occ[k])
 
         if log.verbose >= logger.DEBUG:
@@ -678,40 +792,64 @@ class ROHF(rohf.ROHF):
                     irorbcnt[j] += 1
                 else:
                     irorbcnt[j] = 1
-                molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
-            orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
-            dump_mat.dump_rec(self.stdout, c, label, molabel, start=1, **kwargs)
+                molabel.append('#%-d(%s #%d)' %
+                               (k+MO_BASE, irname_full[j], irorbcnt[j]))
+            if with_meta_lowdin:
+                log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
+                orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
+                c = reduce(numpy.dot, (orth_coeff.conj().T, ovlp_ao, mo_coeff))
+            else:
+                log.debug(' ** MO coefficients (expansion on AOs) **')
+                c = mo_coeff
+            dump_mat.dump_rec(self.stdout, c, label, molabel, start=MO_BASE, **kwargs)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
-        return self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=verbose)
+        if with_meta_lowdin:
+            pop_and_charge = self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+        else:
+            pop_and_charge = self.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+        dip = self.dip_moment(mol, dm, verbose=log)
+        return pop_and_charge, dip
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import uhf_symm
         if mol is None: mol = self.mol
-        if mo_coeff is None: mo_coeff = (self.mo_coeff,self.mo_coeff)
-        if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if mo_occ is None: mo_occ = self.mo_occ
+        if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+            mo_coeff = (mo_coeff, mo_coeff)
+        if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
+            mo_occ = (numpy.array(mo_occ>0, dtype=numpy.double),
+                      numpy.array(mo_occ==2, dtype=numpy.double))
         return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
 
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
-        if not hasattr(fock, 'focka'):
-            fock = mf.get_fock(dm=dm)
+        if getattr(fock, 'focka', None) is None:
+            fock = self.get_fock(dm=self.make_rdm1(mo_coeff, mo_occ))
         mo_e, mo_coeff = canonicalize(self, mo_coeff, mo_occ, fock)
         mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
         mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
         mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         return mo_e, mo_coeff
 
+    def get_orbsym(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('SCF object %s not initialized' % self)
+        return numpy.asarray(get_orbsym(self.mol, mo_coeff))
+    orbsym = property(get_orbsym)
+
+    get_wfnsym = get_wfnsym
+    wfnsym = property(get_wfnsym)
+
+ROHF = SymAdaptedROHF
+
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
                     verbose=logger.DEBUG):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
-    nirrep = mol.symm_orb.__len__()
+    log = logger.new_logger(mol, verbose)
     for i, ir in enumerate(mol.irrep_id):
         irname = mol.irrep_name[i]
         ir_idx = (orbsym == ir)
@@ -748,16 +886,8 @@ class HF1e(ROHF):
         self._finalize()
         return self.e_tot
 
-def get_orbsym(mol, mo_coeff, s=None, check=False):
-    if mo_coeff is None:
-        orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
-                               for i, ir in enumerate(mol.irrep_id)])
-    elif hasattr(mo_coeff, 'orbsym'):
-        orbsym = mo_coeff.orbsym
-    else:
-        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                     mo_coeff, s, check)
-    return numpy.asarray(orbsym)
+
+del(WITH_META_LOWDIN)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,6 +19,7 @@
 import sys
 import numpy
 import ctypes
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
@@ -106,22 +120,20 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
     (80, 80)
 
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
-
     nao = mo_coeffs[0].shape[0]
-    nao_pair = nao*(nao+1)//2
-    assert(eri_ao.size in (nao_pair**2, nao_pair*(nao_pair+1)//2))
+
+    if eri_ao.size == nao**4:
+        return lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
+                          mo_coeffs[0].conj(), mo_coeffs[1],
+                          mo_coeffs[2].conj(), mo_coeffs[3])
 
 # transform e1
     eri1 = half_e1(eri_ao, mo_coeffs, compact)
     klmosym, nkl_pair, mokl, klshape = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
 
     if eri1.shape[0] == 0 or nkl_pair == 0:
-        # 0 dimension sometimes causes blas problem
-        return numpy.zeros((nij_pair,nkl_pair))
+        # 0 dimension causes error in certain BLAS implementations
+        return numpy.zeros((eri1.shape[0],nkl_pair))
 
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')
@@ -185,13 +197,15 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
         return eri1
 
     if eri_ao.size == nao_pair**2: # 4-fold symmetry
+        # half_e1 first transforms the indices which are contiguous in memory
+        # transpose the 4-fold integrals to make ij the contiguous indices
+        eri_ao = lib.transpose(eri_ao)
         ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s4
     elif eri_ao.size == nao_pair*(nao_pair+1)//2:
         ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s8
     else:
-        from pyscf.ao2mo.addons import restore
-        eri_ao = restore(4, eri_ao, nao)
-        ftrans = _ao2mo.libao2mo.AO2MOtranse1_incore_s4
+        raise NotImplementedError
+
     if ijmosym == 's2':
         fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_s2
     elif nmoi <= nmoj:
@@ -200,27 +214,27 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
         fmmm = _ao2mo.libao2mo.AO2MOmmm_nr_s2_igtj
     fdrv = getattr(_ao2mo.libao2mo, 'AO2MOnr_e1incore_drv')
 
-    bufs = numpy.empty((BLOCK, nij_pair))
-    for blk0 in range(0, nao_pair, BLOCK):
-        blk1 = min(blk0+BLOCK, nao_pair)
-        buf = bufs[:blk1-blk0]
+    buf = numpy.empty((BLOCK, nij_pair))
+    for p0, p1 in lib.prange(0, nao_pair, BLOCK):
         fdrv(ftrans, fmmm,
              buf.ctypes.data_as(ctypes.c_void_p),
              eri_ao.ctypes.data_as(ctypes.c_void_p),
              moij.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(blk0), ctypes.c_int(blk1-blk0),
+             ctypes.c_int(p0), ctypes.c_int(p1-p0),
              ctypes.c_int(nao),
              ctypes.c_int(ijshape[0]), ctypes.c_int(ijshape[1]),
              ctypes.c_int(ijshape[2]), ctypes.c_int(ijshape[3]))
-        eri1[:,blk0:blk1] = buf.T
+        eri1[:,p0:p1] = buf[:p1-p0].T
     return eri1
 
 def iden_coeffs(mo1, mo2):
     return (id(mo1) == id(mo2) or
-            (mo1.shape==mo2.shape and numpy.linalg.norm(mo1-mo2) < 1e-13))
+            (mo1.shape==mo2.shape and abs(mo1-mo2).max() < 1e-13))
 
 
 def _conc_mos(moi, moj, compact=False):
+    if numpy.result_type(moi, moj) != numpy.double:
+        compact = False
     nmoi = moi.shape[1]
     nmoj = moj.shape[1]
     if compact and iden_coeffs(moi, moj):

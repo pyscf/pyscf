@@ -1,14 +1,26 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import json
 import h5py
 import pyscf.pbc.gto
 import pyscf.lib.chkfile
-from pyscf.lib.chkfile import load_chkfile_key, load
-from pyscf.lib.chkfile import dump_chkfile_key, dump, save
+from pyscf.lib.chkfile import load_chkfile_key, load  # noqa
+from pyscf.lib.chkfile import dump_chkfile_key, dump, save  # noqa
 
 def load_cell(chkfile):
     '''Load Cell object from chkfile.
@@ -31,10 +43,10 @@ def load_cell(chkfile):
     '''
     with h5py.File(chkfile, 'r') as fh5:
         try:
-            cell = pyscf.pbc.gto.loads(fh5['mol'].value)
+            cell = pyscf.pbc.gto.loads(fh5['mol'][()])
         except:
-            from numpy import array  # for eval() function
-            celldic = eval(fh5['mol'].value)
+            from numpy import array  # noqa
+            celldic = eval(fh5['mol'][()])
             cell = pyscf.pbc.gto.cell.unpack(celldic)
             cell.build(False, False)
     return cell

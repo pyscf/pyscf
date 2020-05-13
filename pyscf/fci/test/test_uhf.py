@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 from functools import reduce
@@ -7,6 +20,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
+from pyscf.fci import fci_slow
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -54,7 +68,11 @@ numpy.random.seed(15)
 ci2 = numpy.random.random((na,nb))
 ci3 = numpy.random.random((na,nb))
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global mol, m, h1er, h1ei, h1es, g2er, g2ei, g2es, ci0, ci1, ci2, ci3
+    del mol, m, h1er, h1ei, h1es, g2er, g2ei, g2es, ci0, ci1, ci2, ci3
+
+class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1ref = fci.direct_spin1.contract_1e(h1er, ci0, norb, nelecr)
         ci1 = fci.direct_uhf.contract_1e(h1es, ci0, norb, nelecr)
@@ -86,11 +104,11 @@ class KnowValues(unittest.TestCase):
 
     def test_rdm1(self):
         dm1ref = fci.direct_spin1.make_rdm1(ci0, norb, nelecr)
-        dm1 = fci.direct_uhf.make_rdm1(ci0, norb, nelecr)
-        self.assertTrue(numpy.allclose(dm1ref, dm1))
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 393.03762428630, 10)
-        dm1 = fci.direct_uhf.make_rdm1(ci2, norb, neleci)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 242.33237916212, 10)
+        dm1 = fci.direct_uhf.make_rdm1s(ci0, norb, nelecr)
+        self.assertTrue(numpy.allclose(dm1ref, dm1[0]+dm1[1]))
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 393.03762428630, 10)
+        dm1 = fci.direct_uhf.make_rdm1s(ci2, norb, neleci)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 242.33237916212, 10)
 
     def test_rdm12(self):
         dm1ref, dm2ref = fci.direct_spin1.make_rdm12(ci0, norb, nelecr)
@@ -110,14 +128,14 @@ class KnowValues(unittest.TestCase):
 
     def test_trans_rdm1(self):
         dm1ref = fci.direct_spin1.trans_rdm1(ci0, ci1, norb, nelecr)
-        dm1 = fci.direct_uhf.trans_rdm1(ci0, ci1, norb, nelecr)
-        self.assertTrue(numpy.allclose(dm1ref, dm1))
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 294.40681527414, 10)
-        dm0 = fci.direct_uhf.make_rdm1(ci0, norb, nelecr)
-        dm1 = fci.direct_uhf.trans_rdm1(ci0, ci0, norb, nelecr)
+        dm1 = fci.direct_uhf.trans_rdm1s(ci0, ci1, norb, nelecr)
+        self.assertTrue(numpy.allclose(dm1ref, dm1[0]+dm1[1]))
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 294.40681527414, 10)
+        dm0 = fci.direct_uhf.make_rdm1s(ci0, norb, nelecr)
+        dm1 = fci.direct_uhf.trans_rdm1s(ci0, ci0, norb, nelecr)
         self.assertTrue(numpy.allclose(dm1, dm0))
-        dm1 = fci.direct_uhf.trans_rdm1(ci3, ci2, norb, neleci)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 193.703051323676, 10)
+        dm1 = fci.direct_uhf.trans_rdm1s(ci3, ci2, norb, neleci)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 193.703051323676, 10)
 
     def test_trans_rdm12(self):
         dm1ref, dm2ref = fci.direct_spin1.trans_rdm12(ci0, ci1, norb, nelecr)
@@ -154,6 +172,9 @@ class KnowValues(unittest.TestCase):
         ci0 = numpy.random.random((na,nb))
         ci1ref = fci.direct_uhf.contract_2e     ((u*1.1, u*2.2, u*1.8), ci0, norb, nelec)
         ci1 = fci.direct_uhf.contract_2e_hubbard((  1.1,   2.2,   1.8), ci0, norb, nelec)
+        self.assertTrue(numpy.allclose(ci1ref, ci1))
+
+        ci1 = fci_slow.contract_2e_hubbard((  1.1,   2.2,   1.8), ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
 
 

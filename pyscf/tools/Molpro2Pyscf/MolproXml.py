@@ -1,4 +1,17 @@
 # TODO: By PySCF-1.5 release
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # 1. code style
 #   * Indent space: 3 -> 4
 #   * Function/method should be all lowercase
@@ -17,6 +30,7 @@
 #  This file is adapted with permission from the wmme program of Gerald Knizia.
 #  See http://sites.psu.edu/knizia/software/
 #====================================================
+from __future__ import print_function
 
 
 
@@ -196,7 +210,7 @@ def _ReadOrbitals(OrbitalsNode, Atoms, OrbBasis, SkipVirtual):
    nBf = OrbBasis.nFn
    Orbitals = []
    count =0         #ELVIRA
-   print "# orb       iSym    iOrbInSym"      #ELVIRA 
+   print("# orb       iSym    iOrbInSym")      #ELVIRA 
 
    nOrbInSym = np.array(8*[0])
    for OrbNode in OrbitalsNode.findall("orbital"):
@@ -212,7 +226,7 @@ def _ReadOrbitals(OrbitalsNode, Atoms, OrbBasis, SkipVirtual):
          #raise Exception("Number of orbital coefficients differs from number of basis functions.")
       Orbitals.append(FOrbitalInfo(Coeffs, fEnergy, fOcc, iSym, iOrbInSym, OrbBasis))
       if fOcc != 0.0:
-       print count , "       ", iSym, "          ", iOrbInSym      #ELVIRA 
+       print(count , "       ", iSym, "          ", iOrbInSym)      #ELVIRA 
       count +=1  #ElVIRA
    return Orbitals
 
@@ -471,7 +485,7 @@ def _main():
    FileName = "benzene.xml"
    #FileName = "/home/cgk/dev/xml-molpro/test1.xml"
    XmlData = ReadMolproXml(FileName,SkipVirtual=True)
-   print "Atoms from file [a.u.]:\n%s" % XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)
+   print("Atoms from file [a.u.]:\n{}".format(XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)))
    OrbBasis = XmlData.OrbBasis
    #BasisLibs = ["def2-nzvpp-jkfit.libmol"]
 
@@ -481,14 +495,14 @@ def _main():
    from wmme import mdot
    C = XmlData.Orbs
    S = ic.MakeOverlap()
-   print "Orbital matrix shape: %s (loaded from '%s')" % (C.shape, FileName)
-   print "Overlap matrix shape: %s (made via WMME)" % (S.shape,)
+   print("Orbital matrix shape: {} (loaded from '{}')".format(C.shape, FileName))
+   print("Overlap matrix shape: {} (made via WMME)".format(S.shape))
    np.set_printoptions(precision=4,linewidth=10000,edgeitems=3,suppress=False)
    SMo = mdot(C.T, S, C)
-   print "Read orbitals:"
+   print("Read orbitals:")
    for OrbInfo in XmlData.Orbitals:
-      print "%30s" % OrbInfo.Desc
-   print "MO deviation from orthogonality: %.2e" % rmsd(SMo - np.eye(SMo.shape[0]))
+      print("{:30s}".format(OrbInfo.Desc))
+   print("MO deviation from orthogonality: {:.2e}".format(rmsd(SMo - np.eye(SMo.shape[0]))))
 
    pass
 

@@ -1,7 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Elvira R. Sayfutyarova <elviras@princeton.edu>
+#         Elvira R. Sayfutyarova
 #
 
 '''
@@ -9,17 +22,24 @@ Automated construction of molecular active spaces from atomic valence orbitals.
 Ref. arXiv:1701.07862 [physics.chem-ph]
 '''
 
-import re
 from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf.lib import logger
+from pyscf import __config__
 
-def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
-           openshelloption=2, canonicalize=True, verbose=None):
+THRESHOLD = getattr(__config__, 'mcscf_avas_threshold', 0.2)
+MINAO = getattr(__config__, 'mcscf_avas_minao', 'minao')
+WITH_IAO = getattr(__config__, 'mcscf_avas_with_iao', False)
+OPENSHELL_OPTION = getattr(__config__, 'mcscf_avas_openshell_option', 2)
+CANONICALIZE = getattr(__config__, 'mcscf_avas_canonicalize', True)
+
+
+def kernel(mf, aolabels, threshold=THRESHOLD, minao=MINAO, with_iao=WITH_IAO,
+           openshell_option=OPENSHELL_OPTION, canonicalize=CANONICALIZE,
+           ncore=0, verbose=None):
     '''AVAS method to construct mcscf active space.
     Ref. arXiv:1701.07862 [physics.chem-ph]
 
@@ -37,15 +57,17 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
             A reference AOs for AVAS.
         with_iao : bool
             Whether to use IAO localization to construct the reference active AOs.
-        openshelloption : int
+        openshell_option : int
             How to handle singly-occupied orbitals in the active space. The
             singly-occupied orbitals are projected as part of alpha orbitals
-            if openshelloption=2, or completely kept in active space if
-            openshelloption=3.  See Section III.E option 2 or 3 of the
+            if openshell_option=2, or completely kept in active space if
+            openshell_option=3.  See Section III.E option 2 or 3 of the
             reference paper for more details.
         canonicalize : bool
             Orbitals defined in AVAS method are local orbitals.  Symmetrizing
             the core, active and virtual space.
+        ncore : integer
+            Number of core orbitals to exclude from the AVAS method.
 
     Returns:
         active-space-size, #-active-electrons, orbital-initial-guess-for-CASCI/CASSCF
@@ -59,8 +81,6 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
     >>> ncas, nelecas, mo = avas.avas(mf, ['Cr 3d', 'Cr 4s'])
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(mo)
     '''
-    from pyscf.tools import mo_mapping
-
     if isinstance(verbose, logger.Logger):
         log = verbose
     elif verbose is not None:
@@ -75,7 +95,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         mo_coeff = mf.mo_coeff[0]
         mo_occ = mf.mo_occ[0]
         mo_energy = mf.mo_energy[0]
-        assert(openshelloption != 1)
+        assert(openshell_option != 1)
     else:
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
@@ -98,39 +118,41 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
 
     if with_iao:
         from pyscf.lo import iao
-        c = iao.iao(mol, mo_coeff[:,:nocc], minao)[:,baslst]
+        c = iao.iao(mol, mo_coeff[:,ncore:nocc], minao)[:,baslst]
         s2 = reduce(numpy.dot, (c.T, ovlp, c))
-        s21 = reduce(numpy.dot, (c.T, ovlp, mo_coeff))
+        s21 = reduce(numpy.dot, (c.T, ovlp, mo_coeff[:, ncore:]))
     else:
         s2 = pmol.intor_symmetric('int1e_ovlp')[baslst][:,baslst]
         s21 = gto.intor_cross('int1e_ovlp', pmol, mol)[baslst]
-        s21 = numpy.dot(s21, mo_coeff)
+        s21 = numpy.dot(s21, mo_coeff[:, ncore:])
     sa = s21.T.dot(scipy.linalg.solve(s2, s21, sym_pos=True))
 
-    if openshelloption == 2:
-        wocc, u = numpy.linalg.eigh(sa[:nocc,:nocc])
+    if openshell_option == 2:
+        wocc, u = numpy.linalg.eigh(sa[:(nocc-ncore), :(nocc-ncore)])
         log.info('Option 2: threshold %s', threshold)
         ncas_occ = (wocc > threshold).sum()
-        nelecas = mol.nelectron - (wocc < threshold).sum() * 2
-        mocore = mo_coeff[:,:nocc].dot(u[:,wocc<threshold])
-        mocas = mo_coeff[:,:nocc].dot(u[:,wocc>threshold])
+        nelecas = (mol.nelectron - ncore * 2) - (wocc < threshold).sum() * 2
+        if ncore > 0: mofreeze = mo_coeff[:,:ncore]
+        mocore = mo_coeff[:,ncore:nocc].dot(u[:,wocc<threshold])
+        mocas = mo_coeff[:,ncore:nocc].dot(u[:,wocc>threshold])
 
-        wvir, u = numpy.linalg.eigh(sa[nocc:,nocc:])
+        wvir, u = numpy.linalg.eigh(sa[(nocc-ncore):,(nocc-ncore):])
         ncas_vir = (wvir > threshold).sum()
         mocas = numpy.hstack((mocas, mo_coeff[:,nocc:].dot(u[:,wvir>threshold])))
         movir = mo_coeff[:,nocc:].dot(u[:,wvir<threshold])
         ncas = mocas.shape[1]
 
-    elif openshelloption == 3:
+    elif openshell_option == 3:
         docc = nocc - mol.spin
-        wocc, u = numpy.linalg.eigh(sa[:docc,:docc])
+        wocc, u = numpy.linalg.eigh(sa[:(docc-ncore),:(docc-ncore)])
         log.info('Option 3: threshold %s, num open shell %d', threshold, mol.spin)
         ncas_occ = (wocc > threshold).sum()
-        nelecas = mol.nelectron - (wocc < threshold).sum() * 2
-        mocore = mo_coeff[:,:docc].dot(u[:,wocc<threshold])
-        mocas = mo_coeff[:,:docc].dot(u[:,wocc>threshold])
+        nelecas = (mol.nelectron - ncore * 2) - (wocc < threshold).sum() * 2
+        if ncore > 0: mofreeze = mo_coeff[:,:ncore]
+        mocore = mo_coeff[:,ncore:docc].dot(u[:,wocc<threshold])
+        mocas = mo_coeff[:,ncore:docc].dot(u[:,wocc>threshold])
 
-        wvir, u = numpy.linalg.eigh(sa[nocc:,nocc:])
+        wvir, u = numpy.linalg.eigh(sa[(nocc-ncore):,(nocc-ncore):])
         ncas_vir = (wvir > threshold).sum()
         mocas = numpy.hstack((mocas, mo_coeff[:,docc:nocc],
                               mo_coeff[:,nocc:].dot(u[:,wvir>threshold])))
@@ -159,15 +181,19 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
                 fock = numpy.dot(csc*mo_energy, csc.T)
                 e, u = scipy.linalg.eigh(fock)
                 return dmet_cas.symmetrize(mol, e, numpy.dot(c, u), ovlp, log)
-        mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
+        if ncore > 0:
+           mo = numpy.hstack([trans(mofreeze), trans(mocore), trans(mocas), trans(movir)])
+        else:
+           mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
     else:
         mo = numpy.hstack((mocore, mocas, movir))
     return ncas, nelecas, mo
 avas = kernel
 
+del(THRESHOLD, MINAO, WITH_IAO, OPENSHELL_OPTION, CANONICALIZE)
+
+
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     from pyscf import mcscf
 
     mol = gto.M(

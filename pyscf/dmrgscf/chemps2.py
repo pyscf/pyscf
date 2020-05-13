@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -57,9 +70,7 @@ class CheMPS2(object):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
-        if verbose is None:
-            verbose = self.verbose
-        log = pyscf.lib.logger.Logger(self.stdout, verbose)
+        log = pyscf.lib.logger.new_logger(self, verbose)
         log.info('******** CheMPS2 flags ********')
         log.info('dmrg_states = %s', str(self.dmrg_states))
         log.info('dmrg_noise = %s', str(self.dmrg_noise))
@@ -68,7 +79,7 @@ class CheMPS2(object):
         log.info('dmrg_maxiter_noise = %d', self.dmrg_maxiter_noise)
         log.info('dmrg_maxiter_silent = %d', self.dmrg_maxiter_silent)
 
-    def kernel(self, h1e, eri, norb, nelec, ci0=None, **kwargs):
+    def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, **kwargs):
         global PyCheMPS2
         if PyCheMPS2 is None:
             PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
@@ -102,7 +113,7 @@ class CheMPS2(object):
         if isinstance(nelec, (int, numpy.integer)):
             spin2 = 0
         else:
-            spin2 = (nelec[0]-nelec[1]) * 2
+            spin2 = (nelec[0]-nelec[1])
             nelec = sum(nelec)
 
         Prob = PyCheMPS2.PyProblem(Ham, spin2, nelec, self.wfn_irrep)
@@ -120,7 +131,7 @@ class CheMPS2(object):
 
         with pyscf.lib.capture_stdout() as stdout:
             theDMRG = PyCheMPS2.PyDMRG(Prob, OptScheme)
-            Energy = theDMRG.Solve()
+            Energy = theDMRG.Solve() + ecore
             theDMRG.calc2DMandCorrelations()
             pyscf.lib.logger.debug1(self.mol, stdout.read())
 

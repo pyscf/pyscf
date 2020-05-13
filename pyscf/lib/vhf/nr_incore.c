@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Incore version of non-relativistic integrals JK contraction
  * ic in CVHFic... is short for incore
  */
@@ -21,7 +35,7 @@ void CVHFics8_ij_s2kl_o0(double *eri, double *dm, double *vj,
 {
         int i, j, ij;
         double dm_ij;
-        double *vj_ij = &vj[ic*nao+jc];
+        double vj_ij = 0;
 
         if (ic > jc) {
                 dm_ij = dm[ic*nao+jc] + dm[jc*nao+ic];
@@ -33,19 +47,21 @@ void CVHFics8_ij_s2kl_o0(double *eri, double *dm, double *vj,
 
         for (i = 0, ij = 0; i < ic; i++) {
                 for (j = 0; j < i; j++, ij++) {
-                        *vj_ij += eri[ij] *(dm[i*nao+j]+dm[j*nao+i]);
+                        vj_ij += eri[ij] *(dm[i*nao+j]+dm[j*nao+i]);
                         vj[i*nao+j] += eri[ij] * dm_ij;
                 }
-                *vj_ij += eri[ij] * dm[i*nao+i];
+                vj_ij += eri[ij] * dm[i*nao+i];
                 vj[i*nao+i] += eri[ij] * dm_ij;
                 ij++;
         }
         // i == ic
         for (j = 0; j < jc; j++, ij++) {
-                *vj_ij += eri[ij] *(dm[i*nao+j]+dm[j*nao+i]);
+                vj_ij += eri[ij] *(dm[i*nao+j]+dm[j*nao+i]);
                 vj[i*nao+j] += eri[ij] * dm_ij;
         }
-        *vj_ij += eri[ij] * dm_ij;
+        vj_ij += eri[ij] * dm_ij;
+
+        vj[ic*nao+jc] += vj_ij;
 }
 
 void CVHFics4_ij_s2kl_o0(double *eri, double *dm, double *vj,
@@ -73,14 +89,15 @@ void CVHFics2kl_kl_s1ij_o0(double *eri, double *dm, double *vj,
                            int nao, int ic, int jc)
 {
         int i, j, ij;
-        double *vj_ij = &vj[ic*nao+jc];
+        double vj_ij = 0;
         for (i = 0, ij = 0; i < nao; i++) {
                 for (j = 0; j < i; j++, ij++) {
-                        *vj_ij += eri[ij] *(dm[i*nao+j]+dm[j*nao+i]);
+                        vj_ij += eri[ij] *(dm[i*nao+j]+dm[j*nao+i]);
                 }
-                *vj_ij += eri[ij] * dm[i*nao+i];
+                vj_ij += eri[ij] * dm[i*nao+i];
                 ij++;
         }
+        vj[ic*nao+jc] += vj_ij;
 }
 
 
@@ -141,8 +158,8 @@ void CVHFics8_jk_s1il_o0(double *eri, double *dm, double *vk,
                 k = ic;
                 for (l = 0; l < k; l++, kl++) { // l<k
                         vk[ic*nao+l] += eri[kl] * dm[ic*nao+ic];
-                        vk[ic*nao+ic] += eri[kl] * dm[ic*nao+l];
                         vk[l*nao+ic] += eri[kl] * dm[ic*nao+ic];
+                        vk[ic*nao+ic] += eri[kl] * dm[ic*nao+l];
                         vk[ic*nao+ic] += eri[kl] * dm[l*nao+ic];
                 }
                 // ic = jc = k = l
@@ -154,6 +171,8 @@ void CVHFics8_jk_s2il_o0(double *eri, double *dm, double *vk,
                          int nao, int ic, int jc)
 {
         int k, l;
+        //double vk_jj = 0;
+        //double vk_ij = 0;
         if (ic > jc) {
                 // k < jc
                 for (k=0; k < jc; k++) {
@@ -170,9 +189,9 @@ void CVHFics8_jk_s2il_o0(double *eri, double *dm, double *vk,
                 }
                 // k = jc
                 for (l = 0; l < k; l++) {
-                        vk[jc*nao+l] += eri[l] * dm[ic*nao+jc];
+                        vk[jc*nao+l ] += eri[l] * dm[ic*nao+jc];
+                        vk[ic*nao+l ] += eri[l] * dm[jc*nao+jc];
                         vk[jc*nao+jc] += eri[l] *(dm[ic*nao+l] + dm[l*nao+ic]);
-                        vk[ic*nao+l] += eri[l] * dm[jc*nao+jc];
                         vk[ic*nao+jc] += eri[l] * dm[jc*nao+l];
                 }
                 // l = k = jc
@@ -373,22 +392,24 @@ void CVHFics8_tridm_vj(double *eri, double *tri_dm, double *vj,
 {
         int i, j, ij;
         double dm_ijc = tri_dm[ic*(ic+1)/2+jc];
-        double *vj_ij = &vj[ic*nao+jc];
+        double vj_ij = 0;
         const int INC1 = 1;
         int i1;
 
         for (i = 0, ij = 0; i < ic; i++) {
                 i1 = i + 1;
-                *vj_ij += ddot_(&i1, eri+ij, &INC1, tri_dm+ij, &INC1);
+                vj_ij += ddot_(&i1, eri+ij, &INC1, tri_dm+ij, &INC1);
                 daxpy_(&i1, &dm_ijc, eri+ij, &INC1, vj+i*nao, &INC1);
                 ij += i1;
         }
         // i == ic
         for (j = 0; j < jc; j++, ij++) {
-                *vj_ij += eri[ij] * tri_dm[ij];
+                vj_ij += eri[ij] * tri_dm[ij];
                 vj[i*nao+j] += eri[ij] * dm_ijc;
         }
-        *vj_ij += eri[ij] * dm_ijc;
+        vj_ij += eri[ij] * dm_ijc;
+
+        vj[ic*nao+jc] += vj_ij;
 }
 void CVHFics8_jk_s1il(double *eri, double *dm, double *vk,
                       int nao, int ic, int jc)
@@ -599,199 +620,188 @@ void CVHFics2kl_il_s1jk(double *eri, double *dm, double *vk,
  * s2kl 2-fold symmetry: k>=l
  * s1   no permutation symmetry
  **************************************************/
-void CVHFnrs8_incore_drv(double *eri, double *dmj, double *vj,
-                         double *dmk, double *vk,
-                         int n, void (*const fvj)(), void (*const fvk)())
+typedef void (*FjkPtr)(double *eri, double *dm, double *vk,
+                       int nao, int ic, int jc);
+void CVHFnrs8_incore_drv(double *eri, double **dms, double **vjk,
+                         int n_dm, int nao, void (**fjk)())
 {
-        const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
-        memset(vj, 0, sizeof(double)*n*n);
-        memset(vk, 0, sizeof(double)*n*n);
-
 #pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
+        shared(eri, dms, vjk, n_dm, nao, fjk)
         {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
+                int i, j, ic;
+                size_t ij, off;
+                size_t npair = nao*(nao+1)/2;
+                size_t nn = nao * nao;
+                double *v_priv = calloc(nn*n_dm, sizeof(double));
+                FjkPtr pf;
+                double *pv;
 #pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < npair; ij++) {
                         i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
                         j = ij - i*(i+1)/2;
                         off = ij*(ij+1)/2;
-                        (*fvj)(eri+off, dmj, vj_priv, n, i, j);
-                        (*fvk)(eri+off, dmk, vk_priv, n, i, j);
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pf = fjk[ic];
+                                pv = v_priv + ic*nn;
+                                (*pf)(eri+off, dms[ic], pv, nao, i, j);
+                        }
                 }
 #pragma omp critical
                 {
-                        for (i = 0; i < n*n; i++) {
-                                vj[i] += vj_priv[i];
-                                vk[i] += vk_priv[i];
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pv = vjk[ic];
+                                for (i = 0; i < nn; i++) {
+                                        pv[i] += v_priv[ic*nn+i];
+                                }
                         }
                 }
-                free(vj_priv);
-                free(vk_priv);
+                free(v_priv);
         }
 }
 
-void CVHFnrs4_incore_drv(double *eri, double *dmj, double *vj,
-                         double *dmk, double *vk,
-                         int n, void (*const fvj)(), void (*const fvk)())
+void CVHFnrs4_incore_drv(double *eri, double **dms, double **vjk,
+                         int n_dm, int nao, void (**fjk)())
 {
-        const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
-        memset(vj, 0, sizeof(double)*n*n);
-        memset(vk, 0, sizeof(double)*n*n);
-
 #pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
+        shared(eri, dms, vjk, n_dm, nao, fjk)
         {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(dynamic, 4)
-                for (ij = 0; ij < npair; ij++) {
-                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
-                        j = ij - i*(i+1)/2;
-                        off = ij * npair;
-                        (*fvj)(eri+off, dmj, vj_priv, n, i, j);
-                        (*fvk)(eri+off, dmk, vk_priv, n, i, j);
-                }
-#pragma omp critical
-                {
-                        for (i = 0; i < n*n; i++) {
-                                vj[i] += vj_priv[i];
-                                vk[i] += vk_priv[i];
-                        }
-                }
-                free(vj_priv);
-                free(vk_priv);
-        }
-}
-
-void CVHFnrs2ij_incore_drv(double *eri, double *dmj, double *vj,
-                           double *dmk, double *vk,
-                           int n, void (*const fvj)(), void (*const fvk)())
-{
-        const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
-        memset(vj, 0, sizeof(double)*n*n);
-        memset(vk, 0, sizeof(double)*n*n);
-
-#pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
-        {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(dynamic, 4)
-                for (ij = 0; ij < npair; ij++) {
-                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
-                        j = ij - i*(i+1)/2;
-                        off = ij * n * n;
-                        (*fvj)(eri+off, dmj, vj_priv, n, i, j);
-                        (*fvk)(eri+off, dmk, vk_priv, n, i, j);
-                }
-#pragma omp critical
-                {
-                        for (i = 0; i < n*n; i++) {
-                                vj[i] += vj_priv[i];
-                                vk[i] += vk_priv[i];
-                        }
-                }
-                free(vj_priv);
-                free(vk_priv);
-        }
-}
-
-void CVHFnrs2kl_incore_drv(double *eri, double *dmj, double *vj,
-                           double *dmk, double *vk,
-                           int n, void (*const fvj)(), void (*const fvk)())
-{
-        const int npair = n*(n+1)/2;
-        double *vj_priv, *vk_priv;
-        int i, j;
-        size_t ij, off;
-
-        memset(vj, 0, sizeof(double)*n*n);
-        memset(vk, 0, sizeof(double)*n*n);
-
-#pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n) \
-        private(ij, i, j, off, vj_priv, vk_priv)
-        {
-                vj_priv = malloc(sizeof(double)*n*n);
-                vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
-#pragma omp for nowait schedule(dynamic, 4)
-                for (ij = 0; ij < n*n; ij++) {
-                        i = ij / n;
-                        j = ij - i * n;
-                        off = ij * npair;
-                        (*fvj)(eri+off, dmj, vj_priv, n, i, j);
-                        (*fvk)(eri+off, dmk, vk_priv, n, i, j);
-                }
-#pragma omp critical
-                {
-                        for (i = 0; i < n*n; i++) {
-                                vj[i] += vj_priv[i];
-                                vk[i] += vk_priv[i];
-                        }
-                }
-                free(vj_priv);
-                free(vk_priv);
-        }
-}
-
-void CVHFnrs1_incore_drv(double *eri, double *dmj, double *vj,
-                         double *dmk, double *vk,
-                         int n, void (*const fvj)(), void (*const fvk)())
-{
-        memset(vj, 0, sizeof(double)*n*n);
-        memset(vk, 0, sizeof(double)*n*n);
-
-#pragma omp parallel default(none) \
-        shared(eri, dmj, dmk, vj, vk, n)
-        {
-                int i, j;
+                int i, j, ic;
                 size_t ij, off;
-                double *vj_priv = malloc(sizeof(double)*n*n);
-                double *vk_priv = malloc(sizeof(double)*n*n);
-                memset(vj_priv, 0, sizeof(double)*n*n);
-                memset(vk_priv, 0, sizeof(double)*n*n);
+                size_t npair = nao*(nao+1)/2;
+                size_t nn = nao * nao;
+                double *v_priv = calloc(nn*n_dm, sizeof(double));
+                FjkPtr pf;
+                double *pv;
 #pragma omp for nowait schedule(dynamic, 4)
-                for (ij = 0; ij < n*n; ij++) {
-                        i = ij / n;
-                        j = ij - i * n;
-                        off = ij * n * n;
-                        (*fvj)(eri+off, dmj, vj_priv, n, i, j);
-                        (*fvk)(eri+off, dmk, vk_priv, n, i, j);
+                for (ij = 0; ij < npair; ij++) {
+                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                        j = ij - i*(i+1)/2;
+                        off = ij * npair;
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pf = fjk[ic];
+                                pv = v_priv + ic*nn;
+                                (*pf)(eri+off, dms[ic], pv, nao, i, j);
+                        }
                 }
 #pragma omp critical
                 {
-                        for (i = 0; i < n*n; i++) {
-                                vj[i] += vj_priv[i];
-                                vk[i] += vk_priv[i];
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pv = vjk[ic];
+                                for (i = 0; i < nn; i++) {
+                                        pv[i] += v_priv[ic*nn+i];
+                                }
                         }
                 }
-                free(vj_priv);
-                free(vk_priv);
+                free(v_priv);
         }
 }
 
+void CVHFnrs2ij_incore_drv(double *eri, double **dms, double **vjk,
+                           int n_dm, int nao, void (**fjk)())
+{
+#pragma omp parallel default(none) \
+        shared(eri, dms, vjk, n_dm, nao, fjk)
+        {
+                int i, j, ic;
+                size_t ij, off;
+                size_t npair = nao*(nao+1)/2;
+                size_t nn = nao * nao;
+                double *v_priv = calloc(nn*n_dm, sizeof(double));
+                FjkPtr pf;
+                double *pv;
+#pragma omp for nowait schedule(dynamic, 4)
+                for (ij = 0; ij < npair; ij++) {
+                        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                        j = ij - i*(i+1)/2;
+                        off = ij * nn;
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pf = fjk[ic];
+                                pv = v_priv + ic*nn;
+                                (*pf)(eri+off, dms[ic], pv, nao, i, j);
+                        }
+                }
+#pragma omp critical
+                {
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pv = vjk[ic];
+                                for (i = 0; i < nn; i++) {
+                                        pv[i] += v_priv[ic*nn+i];
+                                }
+                        }
+                }
+                free(v_priv);
+        }
+}
+
+void CVHFnrs2kl_incore_drv(double *eri, double **dms, double **vjk,
+                           int n_dm, int nao, void (**fjk)())
+{
+#pragma omp parallel default(none) \
+        shared(eri, dms, vjk, n_dm, nao, fjk)
+        {
+                int i, j, ic;
+                size_t ij, off;
+                size_t npair = nao*(nao+1)/2;
+                size_t nn = nao * nao;
+                double *v_priv = calloc(nn*n_dm, sizeof(double));
+                FjkPtr pf;
+                double *pv;
+#pragma omp for nowait schedule(dynamic, 4)
+                for (ij = 0; ij < nn; ij++) {
+                        i = ij / nao;
+                        j = ij - i * nao;
+                        off = ij * npair;
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pf = fjk[ic];
+                                pv = v_priv + ic*nn;
+                                (*pf)(eri+off, dms[ic], pv, nao, i, j);
+                        }
+                }
+#pragma omp critical
+                {
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pv = vjk[ic];
+                                for (i = 0; i < nn; i++) {
+                                        pv[i] += v_priv[ic*nn+i];
+                                }
+                        }
+                }
+                free(v_priv);
+        }
+}
+
+void CVHFnrs1_incore_drv(double *eri, double **dms, double **vjk,
+                         int n_dm, int nao, void (**fjk)())
+{
+#pragma omp parallel default(none) \
+        shared(eri, dms, vjk, n_dm, nao, fjk)
+        {
+                int i, j, ic;
+                size_t ij, off;
+                size_t nn = nao * nao;
+                double *v_priv = calloc(nn*n_dm, sizeof(double));
+                FjkPtr pf;
+                double *pv;
+#pragma omp for nowait schedule(dynamic, 4)
+                for (ij = 0; ij < nn; ij++) {
+                        i = ij / nao;
+                        j = ij - i * nao;
+                        off = ij * nn;
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pf = fjk[ic];
+                                pv = v_priv + ic*nn;
+                                (*pf)(eri+off, dms[ic], pv, nao, i, j);
+                        }
+                }
+#pragma omp critical
+                {
+                        for (ic = 0; ic < n_dm; ic++) {
+                                pv = vjk[ic];
+                                for (i = 0; i < nn; i++) {
+                                        pv[i] += v_priv[ic*nn+i];
+                                }
+                        }
+                }
+                free(v_priv);
+        }
+}

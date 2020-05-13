@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,8 +19,8 @@
 '''Wave Function Stability Analysis
 
 Ref.
-JCP, 66, 3045
-JCP, 104, 9047
+JCP, 66, 3045 (1977); DOI:10.1063/1.434318
+JCP 104, 9047 (1996); DOI:10.1063/1.471637
 '''
 
 import numpy
@@ -55,9 +68,9 @@ def rhf_internal(mf, verbose=None):
     e = scipy.linalg.eigh(h.reshape(nov,nov))[0]
     log.debug('rhf_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
-        log.log('RHF wavefunction has an internal instablity')
+        log.log('RHF wavefunction has an internal instability')
     else:
-        log.log('RHF wavefunction is stable in the intenral stablity analysis')
+        log.log('RHF wavefunction is stable in the internal stability analysis')
 
 def rhf_external(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -86,9 +99,9 @@ def rhf_external(mf, verbose=None):
     e1 = scipy.linalg.eigh(h.reshape(nov,nov))[0]
     log.debug('rhf_external: lowest eigs = %s', e1[e1<=max(e1[0],1e-5)])
     if e1[0] < -1e-5:
-        log.log('RHF wavefunction has an RHF real -> complex instablity')
+        log.log('RHF wavefunction has an RHF real -> complex instability')
     else:
-        log.log('RHF wavefunction is stable in the RHF real -> complex stablity analysis')
+        log.log('RHF wavefunction is stable in the RHF real -> complex stability analysis')
 
     h =-numpy.einsum('cdlk->kcld', eri_mo[nocc:,nocc:,:nocc,:nocc])
     for a in range(nvir):
@@ -98,9 +111,9 @@ def rhf_external(mf, verbose=None):
     e3 = scipy.linalg.eigh(h.reshape(nov,nov))[0]
     log.debug('rhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
     if e3[0] < -1e-5:
-        log.log('RHF wavefunction has an RHF -> UHF instablity.')
+        log.log('RHF wavefunction has an RHF -> UHF instability.')
     else:
-        log.log('RHF wavefunction is stable in the RHF -> UHF stablity analysis')
+        log.log('RHF wavefunction is stable in the RHF -> UHF stability analysis')
 
 def uhf_internal(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -144,10 +157,10 @@ def uhf_internal(mf, verbose=None):
     e = scipy.linalg.eigh(hall)[0]
     log.debug('uhf_internal: lowest eigs of H = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
-        log.log('UHF wavefunction has an internal instablity. '
+        log.log('UHF wavefunction has an internal instability. '
                  'It maybe corresponds to (spatial) symmetry broken wfn.')
     else:
-        log.log('UHF wavefunction is stable in the intenral stablity analysis')
+        log.log('UHF wavefunction is stable in the internal stability analysis')
 
 def uhf_external(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -185,9 +198,9 @@ def uhf_external(mf, verbose=None):
     e1 = scipy.linalg.eigh(hall)[0]
     log.debug('uhf_external: lowest eigs of H = %s', e1[e1<=max(e1[0],1e-5)])
     if e1[0] < -1e-5:
-        log.log('UHF wavefunction has an UHF real -> complex instablity')
+        log.log('UHF wavefunction has an UHF real -> complex instability')
     else:
-        log.log('UHF wavefunction is stable in the UHF real -> complex stablity analysis')
+        log.log('UHF wavefunction is stable in the UHF real -> complex stability analysis')
 
     h11 =-numpy.einsum('abji->iajb', eri_ab[nocca:,nocca:,:noccb,:noccb])
     for a in range(nvira):
@@ -210,9 +223,9 @@ def uhf_external(mf, verbose=None):
     e3 = scipy.linalg.eigh(hall)[0]
     log.debug('uhf_external: lowest eigs of H = %s', e3[e3<=max(e3[0],1e-5)])
     if e3[0] < -1e-5:
-        log.log('UHF wavefunction has an UHF -> GHF instablity.')
+        log.log('UHF wavefunction has an UHF -> GHF instability.')
     else:
-        log.log('UHF wavefunction is stable in the UHF -> GHF stablity analysis')
+        log.log('UHF wavefunction is stable in the UHF -> GHF stability analysis')
 
 
 if __name__ == '__main__':

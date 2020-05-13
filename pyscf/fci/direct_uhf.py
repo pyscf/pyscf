@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -18,7 +31,6 @@ direct_nosym        No            No             No**               Yes
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
 '''
 
-import sys
 import ctypes
 import numpy
 from pyscf import lib
@@ -60,14 +72,6 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
-# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
-# h2e = eri_{pq,rs} p^+ q r^+ s
-#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
-# so eri is defined as
-#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
-# to restore the symmetry between pq and rs,
-#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
-# Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
     g2e_aa = ao2mo.restore(4, eri[0], norb)
@@ -182,9 +186,6 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     g2e_aa = ao2mo.restore(1, eri[0], norb)
     g2e_ab = ao2mo.restore(1, eri[1], norb)
     g2e_bb = ao2mo.restore(1, eri[2], norb)
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    nb = link_indexb.shape[0]
     if hdiag is None:
         hdiag = make_hdiag(h1e, eri, norb, nelec)
     if hdiag.size < np:
@@ -194,6 +195,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
             addr = numpy.argpartition(hdiag, np-1)[:np]
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
+    nb = cistring.num_strings(norb, nelecb)
     addra = addr // nb
     addrb = addr % nb
     stra = cistring.addrs2str(norb, neleca, addra)
@@ -237,7 +239,7 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
 
 # spacial part of DM, dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
-    return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
+    raise ValueError('Spin trace for UHF-FCI density matrices.')
 
 def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
     return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index, reorder)
@@ -247,7 +249,7 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
 
 # spacial part of DM
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
+    raise ValueError('Spin trace for UHF-FCI density matrices.')
 
 def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
@@ -278,13 +280,18 @@ class FCISolver(direct_spin1.FCISolver):
         from pyscf.fci import spin_op
         return spin_op.spin_square(fcivec, norb, nelec)
 
+    def make_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
+        return trans_rdm1(cibra, ciket, norb, nelec, link_index)
+
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
+        return trans_rdm1(cibra, ciket, norb, nelec, link_index)
+
 FCI = FCISolver
 
 if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

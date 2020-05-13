@@ -1,3 +1,21 @@
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
+ */
+
 #include <stdlib.h>
 #include <string.h>
 #include <complex.h>
@@ -49,13 +67,12 @@ void NPdgemm(const char trans_a, const char trans_b,
                         }
                 }
 
-#pragma omp parallel default(none) shared(a, b, c) \
-        private(i, j)
+#pragma omp parallel private(i, j)
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((k+nthread-1) / nthread, 1);
                 double D0 = 0;
-                double *cpriv = malloc(sizeof(double) * m * n);
+                double *cpriv = malloc(sizeof(double) * (m*n+2));
                 int di;
                 size_t ij;
                 size_t astride = nblk;
@@ -87,9 +104,9 @@ void NPdgemm(const char trans_a, const char trans_b,
                 free(cpriv);
 }
 
-        } else if (m > n+4) { // parallelize m
+        } else if (m > n*2) { // parallelize m
 
-#pragma omp parallel default(none) shared(a, b, c)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((m+nthread-1) / nthread, 1);
@@ -112,7 +129,7 @@ void NPdgemm(const char trans_a, const char trans_b,
 
         } else { // parallelize n
 
-#pragma omp parallel default(none) shared(a, b, c)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((n+nthread-1) / nthread, 1);
@@ -175,13 +192,12 @@ void NPzgemm(const char trans_a, const char trans_b,
                         }
                 }
 
-#pragma omp parallel default(none) shared(a, b, c, alpha) \
-        private(i, j)
+#pragma omp parallel private(i, j)
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((k+nthread-1) / nthread, 1);
                 double complex Z0 = 0;
-                double complex *cpriv = malloc(sizeof(double complex) * m * n);
+                double complex *cpriv = malloc(sizeof(double complex) * (m*n+2));
                 int di;
                 size_t ij;
                 size_t astride = nblk;
@@ -213,9 +229,9 @@ void NPzgemm(const char trans_a, const char trans_b,
                 free(cpriv);
 }
 
-        } else if (m > n+4) { // parallelize m
+        } else if (m > n*2) { // parallelize m
 
-#pragma omp parallel default(none) shared(a, b, c, alpha, beta)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((m+nthread-1) / nthread, 1);
@@ -238,7 +254,7 @@ void NPzgemm(const char trans_a, const char trans_b,
 
         } else { // parallelize n
 
-#pragma omp parallel default(none) shared(a, b, c, alpha, beta)
+#pragma omp parallel
 {
                 int nthread = omp_get_num_threads();
                 int nblk = MAX((n+nthread-1) / nthread, 1);

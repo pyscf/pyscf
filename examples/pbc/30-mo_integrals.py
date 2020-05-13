@@ -6,6 +6,7 @@ MO integrals in PBC code
 
 
 import numpy
+from pyscf import ao2mo
 from pyscf.pbc import gto, scf, tools
 
 cell = gto.M(
@@ -23,12 +24,26 @@ cell = gto.M(
     verbose = 4,
 )
 
+#
+# MO integrals at Gamma point.
+#
+mf = scf.RHF(cell).run()
+eri = mf.with_df.ao2mo(mf.mo_coeff)
+#
+# These integrals are real. They can be transformed under the 8-fold
+# permutation symmetry.
+#
+eri = ao2mo.restore(8, eri, mf.mo_coeff.shape[1])
+
+
+#
+# MO integrals at arbitrary k-point.
+#
+
 nk = [2,2,2]
 kpts = cell.make_kpts(nk)
 
-kmf = scf.KRHF(cell, kpts, exxdiv=None)
-kmf.kernel()
-
+kmf = scf.KRHF(cell, kpts).run()
 
 nmo = kmf.mo_coeff[0].shape[1]
 kconserv = tools.get_kconserv(cell, kpts)

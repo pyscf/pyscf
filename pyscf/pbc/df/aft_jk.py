@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -13,7 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
@@ -25,22 +38,25 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     nset, nkpts, nao = dms.shape[:3]
     vj_kpts = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
     kpt_allow = numpy.zeros(3)
-    coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
+    mesh = mydf.mesh
+    coulG = mydf.weighted_coulG(kpt_allow, False, mesh)
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
     weight = 1./len(kpts)
     dmsC = dms.conj()
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+    for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
         vG = [0] * nset
         #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                rho = numpy.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                rho = numpy.einsum('ij,Lij->L', dmsC[i,k],
+                                   aoao.reshape(-1,nao,nao)).conj()
                 vG[i] += rho * coulG[p0:p1]
         for i in range(nset):
             vG[i] *= weight
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i], aoao)
+                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i],
+                                             aoao.reshape(-1,nao,nao))
     aoao = aoaoks = p0 = p1 = None
 
     if gamma_point(kpts):
@@ -55,20 +71,20 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    dmsR = dms.real.reshape(nset,nkpts,nao**2)
-    dmsI = dms.imag.reshape(nset,nkpts,nao**2)
     kpt_allow = numpy.zeros(3)
-    coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
-    ngs = len(coulG)
-    vG = numpy.zeros((nset,ngs), dtype=numpy.complex128)
+    mesh = mydf.mesh
+    coulG = mydf.weighted_coulG(kpt_allow, False, mesh)
+    ngrids = len(coulG)
+    vG = numpy.zeros((nset,ngrids), dtype=numpy.complex128)
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
 
     dmsC = dms.conj()
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+    for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
         #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                rho = numpy.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                rho = numpy.einsum('ij,Lij->L', dmsC[i,k],
+                                   aoao.reshape(-1,nao,nao)).conj()
                 vG[i,p0:p1] += rho * coulG[p0:p1]
     aoao = aoaoks = p0 = p1 = None
     weight = 1./len(kpts)
@@ -78,11 +94,12 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     vj_kpts = numpy.zeros((nset,nband,nao,nao), dtype=numpy.complex128)
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_band,
+    for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_band,
                                         max_memory=max_memory):
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i,p0:p1], aoao)
+                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i,p0:p1],
+                                             aoao.reshape(-1,nao,nao))
     aoao = aoaoks = p0 = p1 = None
 
     if gamma_point(kpts_band):
@@ -94,7 +111,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
+    t1 = (time.clock(), time.time())
 
+    mesh = mydf.mesh
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
@@ -132,13 +151,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         #bufI = numpy.empty((blksize*nao**2))
         # Use DF object to mimic KRHF/KUHF object in function get_coulG
         mydf.exxdiv = exxdiv
-        vkcoulG = mydf.weighted_coulG(kpt, True, mydf.gs)
+        vkcoulG = mydf.weighted_coulG(kpt, True, mesh)
         kptjs = kpts[kptj_idx]
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
         #buf1R = numpy.empty((blksize*nao**2))
         #buf1I = numpy.empty((blksize*nao**2))
-        for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt, kptjs, max_memory=max_memory1):
-            coulG = numpy.sqrt(vkcoulG[p0:p1])
+        for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt, kptjs, max_memory=max_memory1):
             nG = p1 - p0
             bufR = numpy.empty((nG*nao**2))
             bufI = numpy.empty((nG*nao**2))
@@ -156,13 +174,14 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                 pLqI = numpy.ndarray((nao,nG,nao), buffer=bufI)
                 pLqR[:] = aoao.real.reshape(nG,nao,nao).transpose(1,0,2)
                 pLqI[:] = aoao.imag.reshape(nG,nao,nao).transpose(1,0,2)
-                pLqR *= coulG.reshape(1,nG,1)
-                pLqI *= coulG.reshape(1,nG,1)
-                iLkR = numpy.ndarray((nao*nG,nao), buffer=buf1R)
-                iLkI = numpy.ndarray((nao*nG,nao), buffer=buf1I)
+                iLkR = numpy.ndarray((nao,nG,nao), buffer=buf1R)
+                iLkI = numpy.ndarray((nao,nG,nao), buffer=buf1I)
                 for i in range(nset):
-                    iLkR, iLkI = zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
-                                        dmsR[i,kj], dmsI[i,kj], 1, iLkR, iLkI)
+                    zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
+                           dmsR[i,kj], dmsI[i,kj], 1,
+                           iLkR.reshape(-1,nao), iLkI.reshape(-1,nao))
+                    iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
+                    iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
                     zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i,ki], vkI[i,ki], 1)
@@ -171,11 +190,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 #:v4 = numpy.einsum('iLj,lLk->ijkl', pqk, pqk.conj())
 #:vk += numpy.einsum('ijkl,li->kj', v4, dm)
                 if swap_2e and not is_zero(kpt):
-                    iLkR = iLkR.reshape(nao,-1)
-                    iLkI = iLkI.reshape(nao,-1)
                     for i in range(nset):
-                        iLkR, iLkI = zdotNN(dmsR[i,ki], dmsI[i,ki], pLqR.reshape(nao,-1),
-                                            pLqI.reshape(nao,-1), 1, iLkR, iLkI)
+                        zdotNN(dmsR[i,ki], dmsI[i,ki], pLqR.reshape(nao,-1),
+                               pLqI.reshape(nao,-1), 1,
+                               iLkR.reshape(nao,-1), iLkI.reshape(nao,-1))
+                        iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
+                        iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
                         zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                                iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
                                1, vkR[i,kj], vkI[i,kj], 1)
@@ -184,6 +204,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         for kj, kptj in enumerate(kpts):
             if kk_todo[ki,kj]:
                 make_kpt(kptj-kpti)
+        t1 = log.timer_debug1('get_k_kpts: make_kpt (%d,*)'%ki, *t1)
 
     if (gamma_point(kpts) and gamma_point(kpts_band) and
         not numpy.iscomplexobj(dm_kpts)):
@@ -192,9 +213,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    # G=0 was not included in the non-uniform grids
-    if cell.dimension != 3 and exxdiv:
-        assert(exxdiv.lower() == 'ewald')
+    # Add ewald_exxdiv contribution because G=0 was not included in the
+    # non-uniform grids
+    if (exxdiv == 'ewald' and
+        (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
+         (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
@@ -229,16 +252,17 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     j_real = gamma_point(kpt)
     k_real = gamma_point(kpt) and not numpy.iscomplexobj(dms)
 
+    mesh = mydf.mesh
     kptii = numpy.asarray((kpt,kpt))
     kpt_allow = numpy.zeros(3)
 
     if with_j:
-        vjcoulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
+        vjcoulG = mydf.weighted_coulG(kpt_allow, False, mesh)
         vjR = numpy.zeros((nset,nao,nao))
         vjI = numpy.zeros((nset,nao,nao))
     if with_k:
         mydf.exxdiv = exxdiv
-        vkcoulG = mydf.weighted_coulG(kpt_allow, True, mydf.gs)
+        vkcoulG = mydf.weighted_coulG(kpt_allow, True, mesh)
         vkR = numpy.zeros((nset,nao,nao))
         vkI = numpy.zeros((nset,nao,nao))
     dmsR = numpy.asarray(dms.real.reshape(nset,nao,nao), order='C')
@@ -250,10 +274,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     # rho_rs(-G+k_rs) is computed as conj(rho_{rs^*}(G-k_rs))
     #                 == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
-    blksize = max(int(max_memory*.25e6/16/nao**2), 16)
-    bufR = numpy.empty(blksize*nao**2)
-    bufI = numpy.empty(blksize*nao**2)
-    for pqkR, pqkI, p0, p1 in mydf.pw_loop(mydf.gs, kptii, max_memory=max_memory):
+    #blksize = max(int(max_memory*.25e6/16/nao**2), 16)
+    pLqR = pLqI = None
+    for pqkR, pqkI, p0, p1 in mydf.pw_loop(mesh, kptii, max_memory=max_memory):
         t2 = log.timer_debug1('%d:%d ft_aopair'%(p0,p1), *t2)
         pqkR = pqkR.reshape(nao,nao,-1)
         pqkI = pqkI.reshape(nao,nao,-1)
@@ -275,30 +298,32 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         #t2 = log.timer_debug1('        with_j', *t2)
 
         if with_k:
-            coulG = numpy.sqrt(vkcoulG[p0:p1])
-            pqkR *= coulG
-            pqkI *= coulG
             #:v4 = numpy.einsum('ijL,lkL->ijkl', pqk, pqk.conj())
             #:vk += numpy.einsum('ijkl,jk->il', v4, dm)
-            pLqR = lib.transpose(pqkR, axes=(0,2,1), out=bufR).reshape(-1,nao)
-            pLqI = lib.transpose(pqkI, axes=(0,2,1), out=bufI).reshape(-1,nao)
-            iLkR = numpy.ndarray((nao*(p1-p0),nao), buffer=pqkR)
-            iLkI = numpy.ndarray((nao*(p1-p0),nao), buffer=pqkI)
+            pLqR = lib.transpose(pqkR, axes=(0,2,1), out=pLqR).reshape(-1,nao)
+            pLqI = lib.transpose(pqkI, axes=(0,2,1), out=pLqI).reshape(-1,nao)
+            nG = p1 - p0
+            iLkR = numpy.ndarray((nao,nG,nao), buffer=pqkR)
+            iLkI = numpy.ndarray((nao,nG,nao), buffer=pqkI)
             for i in range(nset):
                 if k_real:
-                    lib.dot(pLqR, dmsR[i], 1, iLkR)
-                    lib.dot(pLqI, dmsR[i], 1, iLkI)
+                    lib.dot(pLqR, dmsR[i], 1, iLkR.reshape(nao*nG,nao))
+                    lib.dot(pLqI, dmsR[i], 1, iLkI.reshape(nao*nG,nao))
+                    iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
+                    iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
                     lib.dot(iLkR.reshape(nao,-1), pLqR.reshape(nao,-1).T, 1, vkR[i], 1)
                     lib.dot(iLkI.reshape(nao,-1), pLqI.reshape(nao,-1).T, 1, vkR[i], 1)
                 else:
-                    zdotNN(pLqR, pLqI, dmsR[i], dmsI[i], 1, iLkR, iLkI)
+                    zdotNN(pLqR, pLqI, dmsR[i], dmsI[i], 1,
+                           iLkR.reshape(-1,nao), iLkI.reshape(-1,nao))
+                    iLkR *= vkcoulG[p0:p1].reshape(1,nG,1)
+                    iLkI *= vkcoulG[p0:p1].reshape(1,nG,1)
                     zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i], vkI[i])
             #t2 = log.timer_debug1('        with_k', *t2)
-        pqkR = pqkI = coulG = pLqR = pLqI = iLkR = iLkI = None
+        pqkR = pqkI = pLqR = pLqI = iLkR = iLkI = None
         #t2 = log.timer_debug1('%d:%d'%(p0,p1), *t2)
-    bufR = bufI = None
     t1 = log.timer_debug1('aft_jk.get_jk', *t1)
 
     if with_j:
@@ -312,8 +337,11 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        if cell.dimension != 3 and exxdiv:
-            assert(exxdiv.lower() == 'ewald')
+        # Add ewald_exxdiv contribution because G=0 was not included in the
+        # non-uniform grids
+        if (exxdiv == 'ewald' and
+            (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
+             (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
     return vj, vk
@@ -325,10 +353,10 @@ if __name__ == '__main__':
     from pyscf.pbc.df import aft
 
     L = 5.
-    n = 5
+    n = 10
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''He    3.    2.       3.
                    He    1.    1.       1.'''
@@ -341,7 +369,7 @@ if __name__ == '__main__':
     cell.verbose = 5
 
     df = aft.AFTDF(cell)
-    df.gs = (15,)*3
+    df.mesh = (31,)*3
     dm = pscf.RHF(cell).get_init_guess()
     vj, vk = df.get_jk(dm)
     print(numpy.einsum('ij,ji->', df.get_nuc(), dm), 'ref=-10.577490961074622')

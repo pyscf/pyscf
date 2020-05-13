@@ -1,6 +1,22 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 '''CASCI and CASSCF
+
+When using results of this code for publications, please cite the following paper:
+"A general second order complete active space self-consistent-field solver for large-scale systems", Q. Sun, J. Yang, and G. K.-L. Chan, Chem. Phys. Lett. 683, 291 (2017).
 
 Simple usage::
 
@@ -72,9 +88,9 @@ The Following attributes are used for CASSCF
         (NOTE although the default step size is small enough for many systems,
         it happens that the orbital optimizor crosses the barriar of local
         minimum and converge to the neighbour solution, e.g. the CAS(4,4) for
-        C2H4 in the test files.  In these cases, one need to fine the
-        optimization by reducing max_stepsize, max_ci_stepsize and
-        max_cycle_micro, max_cycle_micro_inner and ah_start_tol.)
+        C2H4 in the test files.  In these systems, adjusting max_stepsize,
+        max_ci_stepsize and max_cycle_micro, max_cycle_micro_inner and
+        ah_start_tol may be helpful)
 
         >>> mc = mcscf.CASSCF(mf, 6, 6)
         >>> mc.max_stepsize = .01
@@ -167,128 +183,127 @@ from pyscf.mcscf import mc1step_symm
 from pyscf.mcscf import casci
 from pyscf.mcscf import casci_symm
 from pyscf.mcscf import addons
-from pyscf.mcscf import casci_uhf
-from pyscf.mcscf import mc1step_uhf
+from pyscf.mcscf import ucasci
+casci_uhf = ucasci  # for backward compatibility
+from pyscf.mcscf import umc1step
+mc1step_uhf = umc1step  # for backward compatibility
 from pyscf.mcscf.addons import *
 from pyscf.mcscf import chkfile
 
-def CASSCF(mf, ncas, nelecas, **kwargs):
+def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
-    if isinstance(mf, gto.Mole):
-        raise RuntimeError('''
-You see this error message because of the API updates in pyscf v0.10.
-In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
-        mc = mcscf.CASSCF(mf, norb, nelec)
-Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
-of API conventions''')
+    from pyscf import scf
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol)
+    else:
+        mf = mf_or_mol
 
-    mf = _convert_to_rhf(mf, False)
-    if hasattr(mf, 'with_df'):
-        return DFCASSCF(mf, ncas, nelecas, **kwargs)
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf)
+    if getattr(mf, 'with_df', None):
+        return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
 
     if mf.mol.symmetry:
-        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
     else:
-        mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
 RCASSCF = CASSCF
 
 
-def CASCI(mf, ncas, nelecas, **kwargs):
+def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
     from pyscf import gto
-    if isinstance(mf, gto.Mole):
-        raise RuntimeError('''
-You see this error message because of the API updates in pyscf v0.10.
-In the new API, the first argument of CASSCF/CASCI class is HF objects.  e.g.
-        mc = mcscf.CASCI(mf, norb, nelec)
-Please see   http://sunqm.net/pyscf/code-rule.html#api-rules   for the details
-of API conventions''')
+    from pyscf import scf
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol)
+    else:
+        mf = mf_or_mol
 
-    mf = _convert_to_rhf(mf, False)
-    if hasattr(mf, 'with_df'):
-        return DFCASCI(mf, ncas, nelecas, **kwargs)
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
+    if getattr(mf, 'with_df', None):
+        return DFCASCI(mf, ncas, nelecas, ncore)
 
     if mf.mol.symmetry:
-        mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
     else:
-        mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci.CASCI(mf, ncas, nelecas, ncore)
     return mc
 
 RCASCI = CASCI
 
 
-def UCASCI(mf, ncas, nelecas, **kwargs):
+def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
+    from pyscf import gto
     from pyscf import scf
-    if isinstance(mf, scf.uhf.UHF):
-        mc = casci_uhf.CASCI(mf, ncas, nelecas, **kwargs)
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.UHF(mf_or_mol)
     else:
-        raise RuntimeError('First argument needs to be UHF object')
+        mf = mf_or_mol
+
+    if not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+    mc = ucasci.UCASCI(mf, ncas, nelecas, ncore)
     return mc
 
 
-def UCASSCF(mf, ncas, nelecas, **kwargs):
+def UCASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+    from pyscf import gto
     from pyscf import scf
-    if isinstance(mf, scf.uhf.UHF):
-        mc = mc1step_uhf.CASSCF(mf, ncas, nelecas, **kwargs)
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.UHF(mf_or_mol)
     else:
-        raise RuntimeError('First argument needs to be UHF object')
+        mf = mf_or_mol
+
+    if not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+    mc = umc1step.UCASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
 def newton(mc):
-    from pyscf.mcscf import newton_casscf
-    mc1 = newton_casscf.CASSCF(mc._scf, mc.ncas, mc.nelecas)
-    mc1.__dict__.update(mc.__dict__)
-    mc1.max_cycle_micro = 10
-    return mc1
+    return mc.newton()
 
 
-def _convert_to_rhf(mf, convert_df=True):
-    import copy
-    from pyscf.lib import logger
-    import pyscf.df
+from pyscf.mcscf import df
+def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
+             frozen=None):
+    from pyscf import gto
+    from pyscf import scf
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol).density_fit()
+    else:
+        mf = mf_or_mol
+
     if isinstance(mf, scf.uhf.UHF):
-        # convert to RHF
-        mf = copy.copy(mf)
-        if mf.mo_energy is not None: mf.mo_energy = mf.mo_energy[0]
-        if mf.mo_coeff is not None:  mf.mo_coeff  = mf.mo_coeff[0]
-        if mf.mo_occ is not None:    mf.mo_occ    = mf.mo_occ[0]
+        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
 
-    # Avoid doing density fitting
-    if (convert_df and hasattr(mf, 'with_df') and
-        isinstance(mf.with_df, pyscf.df.DF)):
-        mf = copy.copy(mf)
-        logger.warn(mf, 'CASSCF: The first argument is a density-fitting SCF object. '
-                    'Its orbitals are taken as the initial guess of CASSCF.\n'
-                    'The CASSCF object is the normal solver (no approximated integrals). '
-                    'mcscf.DFCASSCF is the function to create density fitting CASSCF '
-                    '(with approximate 2e integrals).')
-        mf.with_df = False
-    return mf
+    if mf.mol.symmetry:
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
+    else:
+        mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
+    return df.density_fit(mc, auxbasis)
 
+def DFCASCI(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None):
+    from pyscf import gto
+    from pyscf import scf
+    if isinstance(mf_or_mol, gto.Mole):
+        mf = scf.RHF(mf_or_mol).density_fit()
+    else:
+        mf = mf_or_mol
 
-try:
-    from pyscf.mcscf import df
-    def DFCASSCF(mf, ncas, nelecas, auxbasis=None, **kwargs):
-        mf = _convert_to_rhf(mf, False)
-        if mf.mol.symmetry:
-            mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
-        else:
-            mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
-        return df.density_fit(mc, auxbasis)
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
 
-    def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
-        mf = _convert_to_rhf(mf, False)
-        if mf.mol.symmetry:
-            mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
-        else:
-            mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
-        return df.density_fit(mc, auxbasis)
+    if mf.mol.symmetry:
+        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
+    else:
+        mc = casci.CASCI(mf, ncas, nelecas, ncore)
+    return df.density_fit(mc, auxbasis)
 
-    approx_hessian = df.approx_hessian
+approx_hessian = df.approx_hessian
 
-    def density_fit(mc, auxbasis=None, with_df=None):
-        return mc.density_fit(auxbasis, with_df)
+def density_fit(mc, auxbasis=None, with_df=None):
+    return mc.density_fit(auxbasis, with_df)
 
-except ImportError:
-    pass

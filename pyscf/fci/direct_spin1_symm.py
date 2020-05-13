@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -29,6 +42,8 @@ from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
+from pyscf.fci.addons import _unpack_nelec
+from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
@@ -50,7 +65,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
         return direct_spin1.contract_2e(eri, fcivec, norb, nelec, link_index)
 
     eri = ao2mo.restore(4, eri, norb)
-    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     link_indexa, link_indexb = direct_spin1._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
@@ -136,59 +151,38 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
 
     unknown = {}
     for k, v in kwargs.items():
-        setattr(cis, k, v)
         if not hasattr(cis, k):
             unknown[k] = v
+        setattr(cis, k, v)
     if unknown:
         sys.stderr.write('Unknown keys %s for FCI kernel %s\n' %
                          (str(unknown.keys()), __name__))
 
-    wfnsym = _id_wfnsym(cis, norb, nelec, cis.wfnsym)
-    if cis.wfnsym is not None and ci0 is None:
-        ci0 = addons.symm_initguess(norb, nelec, orbsym, wfnsym)
-
     e, c = cis.kernel(h1e, eri, norb, nelec, ci0, ecore=ecore, **unknown)
     return e, c
 
-# dm_pq = <|p^+ q|>
-def make_rdm1(fcivec, norb, nelec, link_index=None):
-    return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
+make_rdm1 = direct_spin1.make_rdm1
+make_rdm1s = direct_spin1.make_rdm1s
+make_rdm12 = direct_spin1.make_rdm12
 
-# alpha and beta 1pdm
-def make_rdm1s(fcivec, norb, nelec, link_index=None):
-    return direct_spin1.make_rdm1s(fcivec, norb, nelec, link_index)
-
-# dm_pq,rs = <|p^+ q r^+ s|>
-# dm_pq,rs = dm_sr,qp;  dm_qp,rs = dm_rs,qp
-# need call reorder_rdm for this rdm2 to get standard 2pdm
-
-def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
-    return direct_spin1.make_rdm12(fcivec, norb, nelec, link_index, reorder)
-
-# dm_pq = <I|p^+ q|J>
-def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin1.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
-
-def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
-
-# dm_pq,rs = <I|p^+ q r^+ s|J>
-def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    return direct_spin1.trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
+trans_rdm1s = direct_spin1.trans_rdm1s
+trans_rdm1 = direct_spin1.trans_rdm1
+trans_rdm12 = direct_spin1.trans_rdm12
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0):
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec) * .5
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index, orbsym, wfnsym)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
-def _id_wfnsym(cis, norb, nelec, wfnsym):
+def _id_wfnsym(cisolver, norb, nelec, orbsym, wfnsym):
+    '''Guess wfnsym or convert wfnsym to symmetry ID if it's a symmetry label'''
     if wfnsym is None:
-        neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+        neleca, nelecb = _unpack_nelec(nelec)
         wfnsym = 0  # Ag, A1 or A
-        for i in cis.orbsym[nelecb:neleca]:
+        for i in orbsym[nelecb:neleca]:
             wfnsym ^= i
     elif isinstance(wfnsym, str):
-        wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym)
+        wfnsym = symm.irrep_name2id(cisolver.mol.groupname, wfnsym)
     return wfnsym % 10
 
 def _gen_strs_irrep(strs, orbsym):
@@ -226,13 +220,14 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
         raise IndexError('Configuration of required symmetry (wfnsym=%d) not found' % wfnsym)
     return ci0
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
-    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    neleca, nelecb = _unpack_nelec(nelec)
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
     airreps = birreps = _gen_strs_irrep(strsa, orbsym)
     if neleca != nelecb:
         strsb = cistring.gen_strings4orblist(range(norb), nelecb)
         birreps = _gen_strs_irrep(strsb, orbsym)
     return _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym)
+
 
 def reorder_eri(eri, norb, orbsym):
     if orbsym is None:
@@ -279,59 +274,101 @@ def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
 
 
 class FCISolver(direct_spin1.FCISolver):
+
+    davidson_only = getattr(__config__, 'fci_direct_spin1_symm_FCI_davidson_only', True)
+    # pspace may break point group symmetry
+    pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 0)
+
     def __init__(self, mol=None, **kwargs):
         direct_spin1.FCISolver.__init__(self, mol, **kwargs)
-        self.davidson_only = True
-        self.pspace_size = 0  # Improper pspace size may break symmetry
-        self.wfnsym = 0
+        # wfnsym will be guessed based on initial guess if it is None
+        self.wfnsym = None
 
     def dump_flags(self, verbose=None):
-        if verbose is None: verbose = self.verbose
         direct_spin1.FCISolver.dump_flags(self, verbose)
-        log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
         if isinstance(self.wfnsym, str):
-            log.info('specified CI wfn symmetry = %s', self.wfnsym)
+            log.info('Input CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.number)):
-            log.info('specified CI wfn symmetry = %s',
+            log.info('Input CI wfn symmetry = %s',
                      symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+        else:
+            log.info('CI wfn symmetry = %s', self.wfnsym)
         return self
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):
+        nelec = _unpack_nelec(nelec, self.spin)
         return direct_spin1.absorb_h1e(h1e, eri, norb, nelec, fac)
 
     def make_hdiag(self, h1e, eri, norb, nelec):
+        nelec = _unpack_nelec(nelec, self.spin)
         return direct_spin1.make_hdiag(h1e, eri, norb, nelec)
 
     def pspace(self, h1e, eri, norb, nelec, hdiag, np=400):
+        nelec = _unpack_nelec(nelec, self.spin)
         return direct_spin1.pspace(h1e, eri, norb, nelec, hdiag, np)
 
     def contract_1e(self, f1e, fcivec, norb, nelec, link_index=None, **kwargs):
+        nelec = _unpack_nelec(nelec, self.spin)
         return contract_1e(f1e, fcivec, norb, nelec, link_index, **kwargs)
 
     def contract_2e(self, eri, fcivec, norb, nelec, link_index=None,
                     orbsym=None, wfnsym=None, **kwargs):
         if orbsym is None: orbsym = self.orbsym
         if wfnsym is None: wfnsym = self.wfnsym
-        wfnsym = _id_wfnsym(self, norb, nelec, wfnsym)
+        wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+        nelec = _unpack_nelec(nelec, self.spin)
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, wfnsym, **kwargs)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
-        wfnsym = _id_wfnsym(self, norb, nelec, self.wfnsym)
+        wfnsym = _id_wfnsym(self, norb, nelec, self.orbsym, self.wfnsym)
+        nelec = _unpack_nelec(nelec, self.spin)
         return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
 
-    def guess_wfnsym(self, norb, nelec, fcivec=None, wfnsym=None, **kwargs):
+    def guess_wfnsym(self, norb, nelec, fcivec=None, orbsym=None, wfnsym=None,
+                     **kwargs):
+        '''
+        Guess point group symmetry of the FCI wavefunction.  If fcivec is
+        given, the symmetry of fcivec is used.  Otherwise the symmetry is
+        based on the HF determinant.
+        '''
+        if orbsym is None:
+            orbsym = self.orbsym
+
+        verbose = kwargs.get('verbose', None)
+        log = logger.new_logger(self, verbose)
+
+        nelec = _unpack_nelec(nelec, self.spin)
         if fcivec is None:
-            wfnsym = _id_wfnsym(self, norb, nelec, wfnsym)
-        else:
-            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, self.orbsym)
-        if 'verbose' in kwargs:
-            if isinstance(kwargs['verbose'], logger.Logger):
-                log = kwargs['verbose']
-            else:
-                log = logger.Logger(self.stdout, kwargs['verbose'])
+            # guess wfnsym if initial guess is not given
+            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
             log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+
+        elif wfnsym is None:
+            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, orbsym)
+            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+
         else:
-            logger.debug(self, 'Guessing CI wfn symmetry = %s', wfnsym)
+            # verify if the input wfnsym is consistent with the symmetry of fcivec
+            neleca, nelecb = nelec
+            strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
+            strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
+            na, nb = strsa.size, strsb.size
+
+            airreps = numpy.zeros(na, dtype=numpy.int32)
+            birreps = numpy.zeros(nb, dtype=numpy.int32)
+            for i, ir in enumerate(orbsym):
+                airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
+                birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
+
+            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+            mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
+
+            if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
+                fcivec = [fcivec]
+            if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
+                raise RuntimeError('Input wfnsym is not consistent with fcivec coefficients')
+
         return wfnsym
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
@@ -339,23 +376,21 @@ class FCISolver(direct_spin1.FCISolver):
                nroots=None, davidson_only=None, pspace_size=None,
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if nroots is None: nroots = self.nroots
-        if orbsym is not None:
-            self.orbsym, orbsym_bak = orbsym, self.orbsym
-        if wfnsym is None:
-            wfnsym = self.wfnsym
+        if orbsym is None: orbsym = self.orbsym
+        if wfnsym is None: wfnsym = self.wfnsym
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        self.norb = norb
+        self.nelec = nelec
 
-        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
-        wfnsym_bak = self.wfnsym
-        self.wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
-        e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
-                                       tol, lindep, max_cycle, max_space, nroots,
-                                       davidson_only, pspace_size, ecore=ecore,
-                                       **kwargs)
-        if orbsym is not None:
-            self.orbsym = orbsym_bak
-        self.wfnsym = wfnsym_bak
+        wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
+
+        with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
+            e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
+                                           tol, lindep, max_cycle, max_space,
+                                           nroots, davidson_only, pspace_size,
+                                           ecore=ecore, **kwargs)
+        self.eci, self.ci = e, c
         return e, c
 
 FCI = FCISolver

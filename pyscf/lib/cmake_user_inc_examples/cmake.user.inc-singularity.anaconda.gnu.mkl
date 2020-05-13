@@ -1,0 +1,18 @@
+# cmake.arch.inc to use for automatic install using singularity
+enable_language(Fortran)
+set(CMAKE_Fortran_FLAGS "-DTIMING -pedantic -Wall -ffree-line-length-0")
+
+message("CMAKE_Fortran_COMPILER: ${CMAKE_Fortran_COMPILER}")
+message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
+
+set(MKLROOT "/opt/conda/lib/mkl/lib")
+
+set(BLAS_LIBRARIES "-L${MKLROOT} -lmkl_gf_ilp64 -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl")
+message("BLAS libraries: ${BLAS_LIBRARIES}")
+
+set(LAPACK_LIBRARIES "-L${MKLROOT} -lmkl_gf_ilp64 -lmkl_gnu_thread -lmkl_core -lgomp -lpthread -lm -ldl")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
+
+set(OpenMP_C_FLAGS "-fopenmp")
+add_subdirectory(nao)
+add_subdirectory(sparsetools)

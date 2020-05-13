@@ -1,0 +1,290 @@
+***************************
+  What's New in PySCF 1.4
+***************************
+
+This article explains new features in PySCF 1.4.
+
+
+Relase highlights
+=================
+
+New features:
+
+* Spinor-GTO evaluator
+* Dirac-Kohn-Sham (LDA functional)
+* EDIIS and ADIIS
+* Periodic CCSD with k-point sampling
+* Periodic EOM-IP-CCSD and EOM-EA-CCSD for single k-point calculation
+* spin-square value (per unit) of KUHF calculation
+* Update interface to fciqmc for standalone executing
+* Routines in fciqmc to read in the spinned one and two RDMs
+* Heat-Bath CI
+* Functions in dmrgci interface to access 3-pdm and 4-pdm
+* Function get_fermi
+* UCCSD lambda equation and 1,2-particle density matrix
+* SCF wfn stability analysis
+* Many-Body van der Waals Interactions (MBD)
+* Second order SCF solver for periodic HF and DFT
+* TDDFT for periodic k-point HF and DFT
+* U-TDHF and U-TDDFT for molecular and crystal systems
+* Many-body dispersion
+* MP2-F12 and F12 basis and F12 RI basis
+* Cartesian GTO (6d 10f) basis in molecular calculations
+* CP2K's HF pseudopotential data
+* Frozen core MP2
+* Molecular electrostatic potential (MEP)
+* CPHF and UCPHF solver
+* Non-relativistic RHF, UHF 4-component UHF spin-spin coupling
+* Generalized Hartree-Fock (GHF)
+* Second order SCF solver for GHF
+* non-relativistic UHF, UKS g-tensor
+* non-relativistic UHF, UKS hyperfine coupling
+* SHCI interface to Dice program
+* spin-orbital CISD
+* UCISD and UCISD 1- and 2-RDM
+* Restricted CC2 method
+* Density-fitting CCSD
+* Heat-bath selected CI (HCI) spin-orbital 1- and 2-RDM
+* "scanner" function for HF, DFT and CCSD to simplify energy or gradients
+  scanning for systems of different geometry.
+* Interface to pyberny geometry optimizer (geometry optimization for RHF, RKS
+  and RCCSD are supported).
+
+Improvements:
+
+* Performance of PBC-Gaussian function evaluator
+* Performance of analytical Fourier transformation for AO product
+* Performance of PBC 3-center integrals
+* Performance of PBC PP local-part integrals
+* Numerical stability associated to OpenMP reduce function
+* Performance of FCI 2-electron contraction function
+* Basis parser for Pople style basis sets
+* Arbitrary problem size in FCI solver
+* Symmetry labels in orbital coefficients
+* Disk usage of integral transformation in MP2
+* Performance of J/K contractions in molecular density fitting code
+* Input geometry parser for ghost atoms
+* U-CCSD(T) performance
+* ECP basis localization in Mulliken pop analysis
+* Changing the CASCI/CASSCF default FCI solver (the default solver will not
+  use spin symmetry for singlet state)
+* Supporting remove_linear_dep function to handle basis linear dependence in
+  k-point SCF
+* cell.rcut estimation for better integral accuracy
+* Convergence rates of PM localization
+* MP2 and RCISD integral transformation performance
+* Disk usage of CCSD-DIIS
+* Input basis parser to support union basis set (eg mol.basis=(bas1,bas2))
+* SCF initial guess for systems with pseudopotential (or ECP)
+* SCF initial guess for low-dimension PBC systems
+* Kinetic energy cutoff estimation
+* Density fitting default auxiliary basis
+* Memory usage for FFTDF module
+* libxc interface
+
+Bugfix:
+
+* PBC super cell function.  Atoms was missing on the super cell boundary
+* PBC dft atomic grids for low-dimension systems
+* The missing occ-vir blocks of Fock matrix in UCCSD
+* MGGA integration error
+* wfnsym of FCI solver for Dooh symmetry
+* In CIAH newton solver, the special treatment of negative hessian has been revised.
+* import lock which freezes threads for functions running in background
+* The undefined += operation (numpy issue #5241) in CISD and CCSD methods
+* Handle zero beta electrons in UCCSD.
+* Fix bug in KUHF gradients which affects newton SCF convergence.
+* Fix "hcore" initial guess for KHF.
+* Fix bug in Mulliken pop analysis caused by wrong overlap matrix for PBC calculations.
+* GIAO contributions to the off diagonal part of NMR shielding tensor.
+* Handle zero core electrons in ECP parser.
+* Handle 1-electron system in UHF.
+* Fix orbital ordering in SCF canonicalization when point group symmetry is used.
+* Fix pbc atomic grids for low-dimension system.
+* Fix eval_rho for GGA functional for non-hermitian density matrix
+* CCSD frozen core when using AO-driven algorithm
+* DFT UKS orbital hessian
+* PBC gamma-point UHF exxdiv=ewald correction
+* CISD output message for multiple roots
+* UHF hessian function in the second order SCF solver
+* Integer overflow in npdot and GTO basis evaluator
+* OMP stack overflow in GTO basis evaluator
+* KUHF dimension error in smearing function
+* SCF results inconsistency in chkfile and SOSCF solver
+* Default grids in DFT gen_grid function for system with ECP/PP
+* mol.intor function to generate STG and YP integrals in 8-fold symmetry
+* DMRG-CI runtime scratch path
+* PBC GDF integrals for auxiliary basis with g functions
+* post-HF initialization function when mean-field object is DF-SOSCF method
+* Single orbital localization
+* Race condition in MP2 asynchronized IO
+
+
+Package strucutre changes
+=========================
+
+The package was restructured following the suggestions of
+[The Hitchhiker's Guide to Python](http://docs.python-guide.org/en/latest/writing/structure/)
+
+
+
+Features
+========
+
+
+Heat-bath Selected CI
+---------------------
+Two versions of heat-bath selected CI are available.  One is through Sharma's
+Dice program (https://sanshar.github.io/Dice/).  Another is the built-in
+module hci.  For system over million determinants, Dice program has better
+scaling than the built-in hci module.  The :class:`SelectedCI` method in hci
+module is fully compatible to the :class:`FCISolver` in fci module.  It can be
+used the same way as fci module.
+
+
+UCCSD density matrices
+----------------------
+Alpha-alpha and beta-beta blocks of one-particle density matrices.
+Spin-orbital two-particle density matrices can be computed.
+
+
+SCF wavefunction stability analysis
+-----------------------------------
+Call ``mf.stability()`` for stability analysis.  For RHF, the stability
+check the transformations from real to complex and RHF to UHF.  For UHF, the
+stability analysis involves the real to complex and UHF to GHF transformation.
+
+
+Second order SCF solver for PBC systems
+---------------------------------------
+``pbc.scf.newton`` method can be used for k-point PBC SCF calculations.
+
+
+TDHF and TDDFT for PBC systems
+------------------------------
+High energy cutoff for FFT should be used.  Using DF and MDF methods in
+pbc TDDFT is often the better choice.
+
+
+Cartesian GTO (6d 10f) basis in molecular calculations
+------------------------------------------------------
+``mol.cart = True`` to switch on Cartesian GTO basis.  AO is not normalized.
+
+
+Geometry optimizer
+------------------
+Interface to pyberny geometry optimizer was implemented.  Molecule geometry can
+be optimized at RHF, RKS or RCCSD level using berny optimizer::
+
+    from pyscf import gto, scf, cc
+    from pyscf.geomopt import berny_solver
+    mol = gto.M(atom='O 0 0 0; H 0 1. 0.8; H 0 1. -0.8', basis='6-31g')
+    mycc = cc.CCSD(scf.RHF(mol))
+    mol1 = berny_solver.optimize(mycc)
+    print(mol1.atom_coords())
+
+
+g-tensor
+--------
+g-tensor can be calculated with non-relativistic UHF and UKS methods.  The
+spin-orbit coupling can be approximated at different level::
+
+    from pyscf import gto, dft
+    from pyscf.prop import gtensor
+    mol = gto.M(atom='C 0 0 0; N 0 0 1.1747', basis='ccpvdz', spin=1)
+    mf = dft.UKS(mol).set(xc='b3lyp').run()
+    gt = gtensor.uks.GTensor(mf).set(verbose=4)
+    gt.para_soc2e = 'AMFI'
+    gt.kernel()
+
+
+
+Improvements
+============
+
+Performance of PBC calculations
+-------------------------------
+Performance of PBC analytical Fourier transform, PBC 3-center integrals, and PBC
+PP local-part integrals are optimized.  They dramatically improve the
+performance of the PBC calculations.  More specifically, the initialization step
+of DF and MDF method is 5 - 100 times faster than the DF/MDF code in PySCF-1.3.
+The analytical Fourier transform is 1.5 - 5 times faster than the old
+implementations.
+
+
+Basis parser for Pople style basis sets
+---------------------------------------
+In PySCF-1.3, Pople basis was not parsed following Gaussian's convention,
+especially the polarized functions in hydrogen basis.  Polarized functions were
+assigned to hydrogen atom for 6-31G* basis and 6-311G* basis.  In PySCF-1.4,
+this problem has been corrected.  More polarization functions and diffuse
+functions were also added in the new release.  Basis input such as "6-31g(d,p)",
+"6-311++g" are all supported in the basis parser.
+
+.. note:: Even the system has only Poply basis, cartesian (6d,10f) GTO is not
+    enabled by default.  You should specify mol.cart = True to explicitly switch
+    to cartensian GTO calculations.
+
+Problem size in FCI solver
+--------------------------
+Support more than 64 orbitals in the FCI solver.  Note although large system is
+supported, the program may take long time to solve the large system.
+
+
+Ghost atoms in geometry parser
+------------------------------
+In PySCF-1.3 and older version, ghost atom is treated as a special element like
+all other elements.  To distinguish different types of ghost atoms in the
+system, suffix or prefix need to be assigned to the ghost atoms and the relevant
+basis sets need to be explicitly created::
+
+    mol.atom='''
+    ghost1     0.000000000     0.000000000     2.500000000
+    ghost2    -0.663641000    -0.383071000     3.095377000
+    ghost2     0.663588000     0.383072000     3.095377000
+    O     1.000000000     0.000000000     2.500000000
+    H    -1.663641000    -0.383071000     3.095377000
+    H     1.663588000     0.383072000     3.095377000
+    '''
+    mol.basis={'ghost1':gto.basis.load('sto3g', 'O'),
+               'ghost2':gto.basis.load('631g', 'H'),
+               'O':'sto3g', 'H':'631g'}
+
+This input is inconvenient when the system contains multiple types of ghost
+atoms as the example above.  PySCF-1.4 added a new prefix keyword "ghost" in the
+geometry section to specialize the ghost atoms.  When an element is prefixed by
+"ghost", a ghost atom will be placed at the position of the element and the
+basis set of the element will be assigned to the ghost atom::
+
+    mol.atom='''
+    ghost_O     0.000000000     0.000000000     2.500000000
+    ghost_H    -0.663641000    -0.383071000     3.095377000
+    ghost_H     0.663588000     0.383072000     3.095377000
+    O     1.000000000     0.000000000     2.500000000
+    H    -1.663641000    -0.383071000     3.095377000
+    H     1.663588000     0.383072000     3.095377000
+    '''
+    mol.basis={'O':'sto3g', 'H':'631g'}
+
+This input will create exactly the same system as the one before.  The STO-3G
+basis of oxygen atom will be assigned to ``ghost_O`` atom and 6-31G basis of
+hydrogen will be assigned to ``ghost_H`` atom.  See more examples in
+examples/gto/03-ghost_atom.py.
+
+
+DF auxiliary basis
+------------------
+The optimal auxiliary basis sets for SCF calculations are generated based on the
+rules defined in
+http://www.psicode.org/psi4manual/master/basissets_byfamily.html.
+If the optimal auxiliary basis is not available, even-tempered Gaussian
+functions will be generated.
+
+
+Kinetic energy cutoff estimation
+--------------------------------
+In the PBC calculation, kinetic energy cutoff can be estimated automatically
+based on the orbital basis, the lattice parameter and the required precision.
+If kinetic energy cutoff is specified in the input, a warning message will be
+issued when the kinetic energy cutoff is not enough to converge the integrals.
+

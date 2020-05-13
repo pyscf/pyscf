@@ -24,11 +24,11 @@ cell = gto.M(
 )
 
 mf = scf.RHF(cell).density_fit()
-mf.with_df.gs = [5]*3
+mf.with_df.mesh = [10]*3
 mf.kernel()
 
 #
-# Import CC, TDDFT moduel from the molecular implementations
+# Import CC, TDDFT module from the molecular implementations
 #
 from pyscf import cc, tddft
 mycc = cc.CCSD(mf)

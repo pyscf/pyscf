@@ -1,16 +1,37 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# Analytical integration
-# J. Chem. Phys. 65, 3826
-# J. Chem. Phys. 111, 8778
-# J. Comput. Phys. 44, 289
-#
-# Numerical integration
-# J. Comput. Chem. 27, 1009
-# Chem. Phys. Lett. 296, 445
-#
+
+'''
+Effective core potential (ECP)
+
+This module exposes some ecp integration functions from the C implementation.
+
+Reference for ecp integral computation
+* Analytical integration
+J. Chem. Phys. 65, 3826
+J. Chem. Phys. 111, 8778
+J. Comput. Phys. 44, 289
+
+* Numerical integration
+J. Comput. Chem. 27, 1009
+Chem. Phys. Lett. 296, 445
+'''
+
 
 import ctypes
 import numpy
@@ -31,13 +52,15 @@ def type1_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
+    cache = numpy.empty(buf.size*5)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(len(mol._ecpbas)),
        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def type2_by_shell(mol, shls, cart=False):
@@ -52,13 +75,40 @@ def type2_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
+    cache = numpy.empty(buf.size*5)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(len(mol._ecpbas)),
        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
+    return buf
+
+AS_ECPBAS_OFFSET= 18
+AS_NECPBAS      = 19
+def so_by_shell(mol, shls):
+    '''Spin-orbit coupling ECP in spinor basis
+    i/2 <Pauli_matrix dot l U(r)>
+    '''
+    li = mol.bas_angular(shls[0])
+    lj = mol.bas_angular(shls[1])
+    di = (li*4+2) * mol.bas_nctr(shls[0])
+    dj = (lj*4+2) * mol.bas_nctr(shls[1])
+    bas = numpy.vstack((mol._bas, mol._ecpbas))
+    mol._env[AS_ECPBAS_OFFSET] = len(mol._bas)
+    mol._env[AS_NECPBAS] = len(mol._ecpbas)
+    buf = numpy.empty((di,dj), order='F', dtype=numpy.complex128)
+    cache = numpy.empty(buf.size*48)
+    fn = libecp.ECPso_spinor
+    fn(buf.ctypes.data_as(ctypes.c_void_p),
+       (ctypes.c_int*2)(di, dj),
+       (ctypes.c_int*2)(*shls),
+       mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+       bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def core_configuration(nelec_core):
@@ -76,6 +126,8 @@ def core_configuration(nelec_core):
         78: '5s4p3d1f',
         92: '5s4p3d2f',
     }
+    if nelec_core not in conf_dic:
+        raise RuntimeError('Core configuration for %d core electrons is not available.')
     coreshell = [int(x) for x in conf_dic[nelec_core][::2]]
     return coreshell
 

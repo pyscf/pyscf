@@ -1,3 +1,17 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -11,11 +25,8 @@ def get_so(atoms, basis, cart=False):
     atoms = gto.mole.format_atom(atoms)
     gpname, origin, axes = symm.detect_symm(atoms)
     gpname, axes = symm.subgroup(gpname, axes)
-    atoms = gto.mole.format_atom(atoms, origin, axes)
-    try:
-        mol = gto.M(atom=atoms, basis=basis)
-    except RuntimeError:
-        mol = gto.M(atom=atoms, basis=basis, spin=1)
+    atoms = gto.mole.format_atom(atoms, origin, axes, 'Bohr')
+    mol = gto.M(atom=atoms, basis=basis, unit='Bohr', spin=None)
     mol.cart = cart
     so = symm.basis.symm_adapted_basis(mol, gpname)[0]
     n = 0
@@ -127,6 +138,31 @@ class KnowValues(unittest.TestCase):
                  'Li': gto.basis.load('cc_pvqz', 'C'),
                  'Be': gto.basis.load('cc_pvqz', 'C'),}
         self.assertEqual(get_so(atoms,basis)[0], 220)
+
+    def test_symm_orb_c3v_as_cs(self):
+        atoms = [['Fe', ( 0.000000  , 0.000000  , 0.015198 )],
+                 ['C',  ( 0.000000  , 0.000000  , -1.938396)],
+                 ['C',  ( 0.000000  , -1.394127 , -1.614155)],
+                 ['C',  ( -1.207349 , 0.697064  , -1.614155)],
+                 ['C',  ( 1.207349  , 0.697064  , -1.614155)],
+                 ['H',  ( -0.922915 , -1.965174 , -1.708739)],
+                 ['H',  ( 0.922915  , -1.965174 , -1.708739)],
+                 ['H',  ( -1.240433 , 1.781855  , -1.708739)],
+                 ['H',  ( -2.163348 , 0.183319  , -1.708739)],
+                 ['H',  ( 2.163348  , 0.183319  , -1.708739)],
+                 ['H',  ( 1.240433  , 1.781855  , -1.708739)],
+                 ['C',  ( 0.000000  , 1.558543  , 0.887110 )],
+                 ['C',  ( 1.349738  , -0.779272 , 0.887110 )],
+                 ['C',  ( -1.349738 , -0.779272 , 0.887110 )],
+                 ['O',  ( 0.000000  , 2.572496  , 1.441607 )],
+                 ['O',  ( 2.227847  , -1.286248 , 1.441607 )],
+                 ['O',  ( -2.227847 , -1.286248 , 1.441607 )],]
+        basis = {'Fe':gto.basis.load('def2svp', 'C'),
+                 'C': gto.basis.load('def2svp', 'C'),
+                 'H': gto.basis.load('def2svp', 'C'),
+                 'O': gto.basis.load('def2svp', 'C'),}
+        n, so = get_so(atoms, basis)
+        self.assertEqual([c.shape[1] for c in so], [134, 104])
 
 
 if __name__ == "__main__":

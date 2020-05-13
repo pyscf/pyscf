@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -8,9 +21,9 @@ Non-relativistic unrestricted Hartree-Fock zero-field splitting
 (In testing)
 
 Refs:
-    JCP, 134, 194113
-    PRB, 60, 9566
-    JCP, 127, 164112
+    JCP 134, 194113 (2011); DOI:10.1063/1.3590362
+    PRB 60, 9566 (1999); DOI:10.1103/PhysRevB.60.9566
+    JCP 127, 164112 (2007); 10.1063/1.2772857
 '''
 
 import time
@@ -18,11 +31,10 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.gto import mole
 from pyscf.ao2mo import _ao2mo
-from pyscf.scf.newton_ah import _gen_uhf_response
-from pyscf.prop.nmr import uhf as uhf_nmr
+from pyscf.scf import _response_functions  # noqa
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
+from pyscf.data import nist
 
 
 def koseki_charge(z):
@@ -40,12 +52,15 @@ def koseki_charge(z):
         return z * (.3 + z * .05)
     elif z <= 18:
         return z * (1.05 - z * .0125)
+    elif z <= 30:
+        return z * ( 0.385 + 0.025 * (z - 18 - 2) ) # Jia: J. Phys. Chem. A 1998, 102, 10430
+    elif z < 48:
+        return z * ( 4.680 + 0.060 * (z - 36 - 2) )
     else:
         return z
 
 
 def direct_spin_spin(zfsobj, mol, dm0, verbose=None):
-    log = logger.new_logger(zfsobj, verbose)
     if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2: # RHF DM
         return numpy.zeros((3,3))
 
@@ -55,9 +70,9 @@ def direct_spin_spin(zfsobj, mol, dm0, verbose=None):
     nao = dma.shape[0]
 
     # Use QED g-factor or Dirac g-factor
-    #g_fac = lib.param.G_ELECTRON**2/4  # QED
+    #g_fac = nist.G_ELECTRON**2/4  # QED
     g_fac = 1
-    fac = g_fac * lib.param.ALPHA**2 / 8 / (effspin * (effspin - .5))
+    fac = g_fac * nist.ALPHA**2 / 8 / (effspin * (effspin - .5))
 
     hss = mol.intor('int2e_ip1ip2', comp=9).reshape(3,3,nao,nao,nao,nao)
     hss = hss + hss.transpose(0,1,3,2,4,5)
@@ -110,7 +125,7 @@ def make_soc(zfsobj, mol, mo_coeff, mo_occ):
         dso -= fac * numpy.einsum('xij,yij->xy', h1ab, mo1ab)
         dso -= fac * numpy.einsum('xij,yij->xy', h1ba, mo1ba)
 
-    dso *= lib.param.ALPHA ** 4 / 4
+    dso *= nist.ALPHA ** 4 / 4
     return dso
 
 def make_h1_soc(zfsobj, mol, mo_coeff, mo_occ):
@@ -176,7 +191,7 @@ def make_soc2e(zfsobj, mo_coeff, mo_occ):
 def solve_mo1(sscobj, h1):
     cput1 = (time.clock(), time.time())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
-    mol = sscobj.mol
+
     mo_energy = sscobj._scf.mo_energy
     mo_coeff = sscobj._scf.mo_coeff
     mo_occ = sscobj._scf.mo_occ
@@ -219,7 +234,7 @@ def solve_mo1(sscobj, h1):
                         mo1[2].reshape(nset,-1),
                         mo1[3].reshape(nset,-1)))
 
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp = mf.gen_response(with_j=False, hermi=0)
     mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
     mo_va_ob = numpy.asarray(numpy.hstack((orbva,orbob)), order='F')
     mo_vb_oa = numpy.asarray(numpy.hstack((orbvb,orboa)), order='F')
@@ -277,20 +292,22 @@ class ZeroFieldSplitting(lib.StreamObject):
         self.mo10 = None
         self.mo_e10 = None
         self._keys = set(self.__dict__.keys())
+        logger.warn(self, 'UHF-ZFS is an experimental feature. It is still in '
+                    'testing\nFeatures and APIs may be changed in the future.')
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        log.info('******** %s for %s ********',
+        log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
         log.info('with cphf = %s', self.cphf)
         if self.cphf:
             log.info('CPHF conv_tol = %g', self.conv_tol)
             log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        logger.info(self, 'sso = %s (2e spin-same-orbit coupling)', self.sso)
-        logger.info(self, 'soo = %s (2e spin-other-orbit coupling)', self.soo)
-        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
-                    self.so_eff_charge)
+        log.info('sso = %s (2e spin-same-orbit coupling)', self.sso)
+        log.info('soo = %s (2e spin-other-orbit coupling)', self.soo)
+        log.info('so_eff_charge = %s (1e SO effective charge)',
+                 self.so_eff_charge)
         return self
 
     def kernel(self, mo1=None):
@@ -312,7 +329,7 @@ class ZeroFieldSplitting(lib.StreamObject):
         tmp = zfs_diag + dvalue/3
         tmp[zidx] = 0
         evalue = abs(tmp).max()
-        au2cm = lib.param.HARTREE2J / lib.param.PLANCK / lib.param.LIGHT_SPEED_SI * 1e-2
+        au2cm = nist.HARTREE2J / nist.PLANCK / nist.LIGHT_SPEED_SI * 1e-2
         logger.debug(self, 'D trace = %s', dtrace)
         logger.note(self, 'Axial   parameter D = %s (cm^{-1})', dvalue*au2cm)
         logger.note(self, 'Rhombic parameter E = %s (cm^{-1})', evalue*au2cm)

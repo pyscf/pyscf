@@ -1,31 +1,50 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# Foster-Boys localization
-#
 
-import sys
+'''
+Foster-Boys localization
+'''
+
 import time
 import numpy
 from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import ciah
+from pyscf.soscf import ciah
 from pyscf.lo import orth
+from pyscf import __config__
 
 
-def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
+def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
+    from pyscf.tools import mo_mapping
+    if mo_coeff is not None:
+        localizer.mo_coeff = numpy.asarray(mo_coeff, order='C')
+    if localizer.mo_coeff.shape[1] <= 1:
+        return localizer.mo_coeff
+
     if localizer.verbose >= logger.WARN:
         localizer.check_sanity()
     localizer.dump_flags()
 
     cput0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(localizer.stdout, verbose)
+    log = logger.new_logger(localizer, verbose=verbose)
+
     if localizer.conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(localizer.conv_tol*.1)
         log.info('Set conv_tol_grad to %g', conv_tol_grad)
@@ -33,12 +52,13 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
         conv_tol_grad = localizer.conv_tol_grad
 
     if mo_coeff is None:
-        mo_coeff = numpy.asarray(localizer.mo_coeff, order='C')
-        u0 = localizer.get_init_guess(localizer.init_guess)
+        if getattr(localizer, 'mol', None) and localizer.mol.natm == 0:
+            # For customized Hamiltonian
+            u0 = localizer.get_init_guess('random')
+        else:
+            u0 = localizer.get_init_guess(localizer.init_guess)
     else:
-        mo_coeff = numpy.asarray(mo_coeff, order='C')
-        localizer.mo_coeff = mo_coeff
-        u0 = localizer.get_init_guess(False)
+        u0 = localizer.get_init_guess(None)
 
     rotaiter = ciah.rotate_orb_cc(localizer, u0, conv_tol_grad, verbose=log)
     u, g_orb, stat = next(rotaiter)
@@ -75,7 +95,10 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=logger.NOTE):
     log.info('macro X = %d  f(x)= %.14g  |g|= %g  %d intor %d KF %d Hx',
              imacro+1, e, norm_gorb,
              (imacro+1)*2, tot_kf+imacro+1, tot_hop)
-    localizer.mo_coeff = lib.dot(mo_coeff, u0)
+# Sort the localized orbitals, to make each localized orbitals as close as
+# possible to the corresponding input orbitals
+    sorted_idx = mo_mapping.mo_1to1map(u0)
+    localizer.mo_coeff = lib.dot(localizer.mo_coeff, u0[:,sorted_idx])
     return localizer.mo_coeff
 
 
@@ -83,46 +106,104 @@ def dipole_integral(mol, mo_coeff):
     # The gauge origin has no effects for maximization |<r>|^2
     # Set to charge center for physical significance of <r>
     charge_center = numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
-    mol.set_common_orig(charge_center)
-    dip = numpy.asarray([reduce(lib.dot, (mo_coeff.T, x, mo_coeff))
-                         for x in mol.intor_symmetric('int1e_r', comp=3)])
+    with mol.with_common_origin(charge_center):
+        dip = numpy.asarray([reduce(lib.dot, (mo_coeff.conj().T, x, mo_coeff))
+                             for x in mol.intor_symmetric('int1e_r', comp=3)])
     return dip
 
 def atomic_init_guess(mol, mo_coeff):
     s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
-    mo = reduce(numpy.dot, (c.T, s, mo_coeff))
-    nmo = mo_coeff.shape[1]
+    mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
 # Find the AOs which have largest overlap to MOs
-    idx = numpy.argsort(numpy.einsum('pi,pi->p', mo, mo))
+    idx = numpy.argsort(numpy.einsum('pi,pi->p', mo.conj(), mo))
     nmo = mo.shape[1]
-    idx = idx[-nmo:]
+    idx = sorted(idx[-nmo:])
+
+    # Rotate mo_coeff, make it as close as possible to AOs
     u, w, vh = numpy.linalg.svd(mo[idx])
-    return lib.dot(vh, u.T)
+    return lib.dot(u, vh).conj().T
 
 class Boys(ciah.CIAHOptimizer):
+    r'''
+    The Foster-Boys localization optimizer that maximizes the orbital dipole
+
+    \sum_i | <i| r |i> |^2
+
+    Args:
+        mol : Mole object
+
+    Kwargs:
+        mo_coeff : size (N,N) np.array
+            The orbital space to localize for Boys localization.
+            When initializing the localization optimizer ``bopt = Boys(mo_coeff)``,
+
+            Note these orbitals ``mo_coeff`` may or may not be used as initial
+            guess, depending on the attribute ``.init_guess`` . If ``.init_guess``
+            is set to None, the ``mo_coeff`` will be used as initial guess. If
+            ``.init_guess`` is 'atomic', a few atomic orbitals will be
+            constructed inside the space of the input orbitals and the atomic
+            orbitals will be used as initial guess.
+
+            Note when calling .kernel(orb) method with a set of orbitals as
+            argument, the orbitals will be used as initial guess regardless of
+            the value of the attributes .mo_coeff and .init_guess.
+
+    Attributes for Boys class:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`.
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`.
+        conv_tol : float
+            Converge threshold.  Default 1e-6
+        conv_tol_grad : float
+            Converge threshold for orbital rotation gradients.  Default 1e-3
+        max_cycle : int
+            The max. number of macro iterations. Default 100
+        max_iters : int
+            The max. number of iterations in each macro iteration. Default 20
+        max_stepsize : float
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            Default 0.03.
+        init_guess : str or None
+            Initial guess for optimization. If set to None, orbitals defined
+            by the attribute .mo_coeff will be used as initial guess. If set
+            to 'atomic', atomic orbitals will be used as initial guess. Default
+            is 'atomic'
+
+    Saved results
+
+        mo_coeff : ndarray
+            Localized orbitals
+
+    '''
+
+    conv_tol = getattr(__config__, 'lo_boys_Boys_conv_tol', 1e-6)
+    conv_tol_grad = getattr(__config__, 'lo_boys_Boys_conv_tol_grad', None)
+    max_cycle = getattr(__config__, 'lo_boys_Boys_max_cycle', 100)
+    max_iters = getattr(__config__, 'lo_boys_Boys_max_iters', 20)
+    max_stepsize = getattr(__config__, 'lo_boys_Boys_max_stepsize', .05)
+    ah_trust_region = getattr(__config__, 'lo_boys_Boys_ah_trust_region', 3)
+    ah_start_tol = getattr(__config__, 'lo_boys_Boys_ah_start_tol', 1e9)
+    ah_max_cycle = getattr(__config__, 'lo_boys_Boys_ah_max_cycle', 40)
+    init_guess = getattr(__config__, 'lo_boys_Boys_init_guess', 'atomic')
+
     def __init__(self, mol, mo_coeff=None):
         ciah.CIAHOptimizer.__init__(self)
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.conv_tol = 1e-6
-        self.conv_tol_grad = None
-        self.max_cycle = 100
-        self.max_iters = 20
-        self.max_stepsize = .05
-        self.ah_trust_region = 3
-        self.ah_start_tol = 1e9
-        self.ah_max_cycle = 40
-        self.init_guess = 'atomic'
+        self.mo_coeff = mo_coeff
 
-        self.mo_coeff = numpy.asarray(mo_coeff, order='C')
-        self._keys = set(self.__dict__.keys())
+        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
+                    'max_stepsize', 'ah_trust_region', 'ah_start_tol',
+                    'ah_max_cycle', 'init_guess'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('conv_tol = %s'       , self.conv_tol       )
         log.info('conv_tol_grad = %s'  , self.conv_tol_grad  )
         log.info('max_cycle = %s'      , self.max_cycle      )
@@ -143,7 +224,7 @@ class Boys(ciah.CIAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.conj().T) * 2
 
         h_diag = numpy.einsum('xii,xpp->pi', dip, dip) * 2
         h_diag-= g0.diagonal() + g0.diagonal().reshape(-1,1)
@@ -166,7 +247,7 @@ class Boys(ciah.CIAHOptimizer):
         #:idx = numpy.tril_indices(nmo, -1)
         #:h = h[idx][:,idx[0],idx[1]]
 
-        g0 = g0 + g0.T
+        g0 = g0 + g0.conj().T
         def h_op(x):
             x = self.unpack_uniq_var(x)
             norb = x.shape[0]
@@ -184,7 +265,7 @@ class Boys(ciah.CIAHOptimizer):
             #:hx-= numpy.einsum('jk,xkj,xjp->pj', x, dip, dip) * 2
             #:return -self.pack_uniq_var(hx)
             #:hx = numpy.einsum('iq,qp->pi', g0, x)
-            hx = lib.dot(x.T, g0.T)
+            hx = lib.dot(x.T, g0.T).conj()
             #:hx+= numpy.einsum('qi,xiq,xip->pi', x, dip, dip) * 2
             hx+= numpy.einsum('xip,xi->pi', dip, numpy.einsum('qi,xiq->xi', x, dip)) * 2
             #:hx-= numpy.einsum('qp,xpp,xiq->pi', x, dip, dip) * 2
@@ -192,7 +273,7 @@ class Boys(ciah.CIAHOptimizer):
                               lib.dot(dip.reshape(-1,norb), x).reshape(3,norb,norb)) * 2
             #:hx-= numpy.einsum('qp,xip,xpq->pi', x, dip, dip) * 2
             hx-= numpy.einsum('xip,xp->pi', dip, numpy.einsum('qp,xpq->xp', x, dip)) * 2
-            return -self.pack_uniq_var(hx-hx.T)
+            return -self.pack_uniq_var(hx-hx.conj().T)
 
         return g, h_op, h_diag
 
@@ -201,7 +282,7 @@ class Boys(ciah.CIAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.conj().T) * 2
         return g
 
     def cost_function(self, u=None):
@@ -210,8 +291,8 @@ class Boys(ciah.CIAHOptimizer):
         dip = dipole_integral(self.mol, mo_coeff)
         r2 = self.mol.intor_symmetric('int1e_r2')
         r2 = numpy.einsum('pi,pi->', mo_coeff, lib.dot(r2, mo_coeff))
-        val = r2 - numpy.einsum('xii,xii->', dip, dip)
-        return val * 2
+        val = r2 - numpy.einsum('xii,xii->', dip, dip) * 2
+        return val
 
     def get_init_guess(self, key='atomic'):
         '''Generate initial guess for localization.
@@ -221,21 +302,21 @@ class Boys(ciah.CIAHOptimizer):
                 If key is 'atomic', initial guess is based on the projected
                 atomic orbitals. False
         '''
+        nmo = self.mo_coeff.shape[1]
         if isinstance(key, str) and key.lower() == 'atomic':
-            return atomic_init_guess(self.mol, self.mo_coeff)
+            u0 = atomic_init_guess(self.mol, self.mo_coeff)
         else:
-            nmo = self.mo_coeff.shape[1]
             u0 = numpy.eye(nmo)
-            if (isinstance(key, str) and key.lower().startswith('rand')
-                or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
-                # Add noise to kick initial guess out of saddle point
-                dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
-                u0 = self.extract_rotation(dr)
-            return u0
+        if (isinstance(key, str) and key.lower().startswith('rand')
+            or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
+            # Add noise to kick initial guess out of saddle point
+            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
+            u0 = self.extract_rotation(dr)
+        return u0
 
     kernel = kernel
 
-BF = Boys
+FB = BF = Boys
 
 
 if __name__ == '__main__':

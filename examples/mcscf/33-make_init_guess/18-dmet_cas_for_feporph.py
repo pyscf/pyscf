@@ -153,7 +153,10 @@ mf = scf.fast_newton(mf)
 # CASSCF results.
 #
 mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
-idx = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s or 'Fe 4d' in s]
+# Function mol.search_ao_label returns the indices of the required AOs
+# It is equivalent to the following expression
+#idx = [i for i,s in enumerate(mol.ao_labels()) if 'Fe 3d' in s or 'Fe 4d' in s]
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d'])
 mo = dmet_cas(mc, mf.make_rdm1(), idx)
 
 mc.fcisolver.wfnsym = 'Ag'
@@ -192,9 +195,8 @@ mf = scf.fast_newton(mf)
 # CAS(8e, 11o)
 #
 mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
-idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]
-idx4d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 4d' in s]
-mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d'])
+mo = dmet_cas(mc, mf.make_rdm1(), idx)
 #
 # 1. Small spin contaimination is observed for the default FCI solver.
 #    Call fci.addons.fix_spin_ to force FCI wfn following the triplet state.

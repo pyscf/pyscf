@@ -1,14 +1,32 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import re
 from functools import reduce
 import numpy
-import scipy.linalg
+from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf import lo
+from pyscf import __config__
 
-def mo_map(mol1, mo1, mol2, mo2, base=0, tol=.5):
+BASE = getattr(__config__, 'BASE', 0)
+MAP_TOL = getattr(__config__, 'mo_mapping_mo_map_tol', 0.5)
+ORTH_METHOD = getattr(__config__, 'mo_mapping_mo_comps_orth_method', 'meta_lowdin')
+
+
+def mo_map(mol1, mo1, mol2, mo2, base=BASE, tol=.5):
     '''Given two orbitals, based on their overlap <i|j>, search all
     orbital-pairs which have significant overlap.
 
@@ -38,7 +56,8 @@ def mo_1to1map(s):
         s1[:,k] = 0
     return like_input
 
-def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
+def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False,
+             orth_method=ORTH_METHOD):
     '''Given AO(s), show how the AO(s) are distributed in MOs.
 
     Args:
@@ -81,18 +100,16 @@ def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False, orth_method='meta_lo
     9        0.0000822361
     10       0.0021017982
     '''
-    import copy
-    if cart and not mol.cart:
-        assert(mo_coeff.shape[0] == mol.nao_nr(cart=True))
-        mol = copy.copy(mol)
-        mol.cart = True
-    s = mol.intor_symmetric('int1e_ovlp')
-    lao = lo.orth.orth_ao(mol, orth_method, s=s)
+    with lib.temporary_env(mol, cart=cart):
+        assert(mo_coeff.shape[0] == mol.nao)
+        s = mol.intor_symmetric('int1e_ovlp')
+        lao = lo.orth.orth_ao(mol, orth_method, s=s)
 
-    idx = gto.mole._aolabels2baslst(mol, aolabels_or_baslst)
-    if len(idx) == 0:
-        logger.warn(mol, 'Required orbitals are not found')
-    mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
-    s1 = numpy.einsum('ki,ki->i', mo1, mo1)
+        idx = gto.mole._aolabels2baslst(mol, aolabels_or_baslst)
+        if len(idx) == 0:
+            logger.warn(mol, 'Required orbitals are not found')
+        mo1 = reduce(numpy.dot, (lao[:,idx].T, s, mo_coeff))
+        s1 = numpy.einsum('ki,ki->i', mo1, mo1)
     return s1
 
+del(BASE, MAP_TOL, ORTH_METHOD)

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -7,11 +20,11 @@
 Non-relativistic unrestricted Hartree-Fock g-tensor
 
 Refs:
-    JPC, 101, 3388
-    JCP, 115, 11080
-    JCP, 119, 10489
+    JPCA 101, 3388 (1997); DOI:10.1021/jp963060t
+    JCP 115, 11080 (2001); DOI:10.1063/1.1419058
+    JCP 119, 10489 (2003); DOI:10.1063/1.1620497
 Note g-tensor = 1/muB d^2 E/ dB dS
-In some literature, muB is not explicitly presented in the perturbation formula
+In some literature, muB is not explicitly presented in the perturbation formula.
 '''
 
 import time
@@ -24,8 +37,11 @@ from pyscf.scf import _vhf
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.zfs.uhf import koseki_charge
+from pyscf.data import nist
 
 def dia(gobj, dm0, gauge_orig=None):
+    '''Note the side effects of set_common_origin'''
+
     if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2: # RHF DM
         return numpy.zeros((3,3))
     mol = gobj.mol
@@ -34,10 +50,10 @@ def dia(gobj, dm0, gauge_orig=None):
     spindm = dma - dmb
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    alpha2 = lib.param.ALPHA ** 2
+    alpha2 = nist.ALPHA ** 2
     #Many choices of qed_fac, see JPC, 101, 3388
-    #qed_fac = (lib.param.G_ELECTRON - 1)
-    #qed_fac = lib.param.G_ELECTRON / 2
+    #qed_fac = (nist.G_ELECTRON - 1)
+    #qed_fac = nist.G_ELECTRON / 2
     qed_fac = 1
 
 # relativistic mass correction (RMC)
@@ -78,12 +94,12 @@ def dia(gobj, dm0, gauge_orig=None):
 
     gc1e *= (alpha2/4) / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gc1e)[0], 'GC(1e)')
+        _write(gobj, gobj.align(gc1e)[0], 'GC(1e)')
 
     if gobj.dia_soc2e:
         gc2e = gobj.make_dia_gc2e(dm0, gauge_orig, qed_fac)
         if gobj.verbose >= logger.INFO:
-            _write(gobj, align(gc2e)[0], 'GC(2e)')
+            _write(gobj, gobj.align(gc2e)[0], 'GC(2e)')
     else:
         gc2e = 0
 
@@ -91,6 +107,8 @@ def dia(gobj, dm0, gauge_orig=None):
     return gdia
 
 def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
+    '''Note the side effects of set_common_origin'''
+
     if (isinstance(gobj.dia_soc2e, str) and
         ('SOMF' in gobj.dia_soc2e.upper() or 'AMFI' in gobj.dia_soc2e.upper())):
         raise NotImplementedError(gobj.dia_soc2e)
@@ -104,8 +122,8 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
     dma, dmb = dm0
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    alpha2 = lib.param.ALPHA ** 2
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
+    alpha2 = nist.ALPHA ** 2
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
 
     # int2e_ip1v_r1 = (ij|\frac{\vec{r}_{12}}{r_{12}^3} \vec{r}_1|kl)
     if gauge_orig is None:
@@ -173,8 +191,8 @@ def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     mol = gobj.mol
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    #qed_fac = (lib.param.G_ELECTRON - 1)
-    #qed_fac = lib.param.G_ELECTRON / 2
+    #qed_fac = (nist.G_ELECTRON - 1)
+    #qed_fac = nist.G_ELECTRON / 2
 
     orboa = mo_coeff[0][:,mo_occ[0]>0]
     orbob = mo_coeff[1][:,mo_occ[1]>0]
@@ -190,7 +208,7 @@ def para(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     gpara1e+= numpy.einsum('xji,yij->xy', dm10b, hso1e)
     gpara1e *= 1. / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gpara1e)[0], 'SOC(1e)/OZ')
+        _write(gobj, gobj.align(gpara1e)[0], 'SOC(1e)/OZ')
 
     gpara2e = gobj.make_para_soc2e((dm0a,dm0b), (dm10a,dm10b), qed_fac)
     gpara = gpara1e + gpara2e
@@ -210,11 +228,11 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
         return 0
 
     mol = gobj.mol
-    alpha2 = lib.param.ALPHA ** 2
+    alpha2 = nist.ALPHA ** 2
     effspin = mol.spin * .5
     muB = .5  # Bohr magneton
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
-    #sso_qed_fac = lib.param.G_ELECTRON / 2
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
+    #sso_qed_fac = nist.G_ELECTRON / 2
 
     dm10a, dm10b = dm10
     if with_amfi:
@@ -233,13 +251,13 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
         if with_soo:
             ej = numpy.einsum('yij,xji->xy', vj[0]-vj[1], dm10a+dm10b)
             gpara2e -= 2 * (ej - ek)
-    else:  # SOMF, see JCP 122, 034107 Eq (19)
+    else:  # SOMF, see JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (19)
         ej = numpy.einsum('yij,xji->xy', vj[0]+vj[1], dm10a-dm10b)
         ek = numpy.einsum('yil,xli->xy', vk[0]+vk[1], dm10a-dm10b)
         gpara2e -= ej - 1.5 * ek
     gpara2e *= (alpha2/4) / effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
+        _write(gobj, gobj.align(gpara2e)[0], 'SOC(2e)/OZ')
     return gpara2e
 
 
@@ -260,7 +278,7 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
     gpara1e+= numpy.einsum('xji,yij->xy', dm10b, hso1e)
     gpara1e *= 1./effspin / muB
     if gobj.verbose >= logger.INFO:
-        _write(gobj, align(gpara1e)[0], 'SOC(1e)/OZ')
+        _write(gobj, gobj.align(gpara1e)[0], 'SOC(1e)/OZ')
 
     if gobj.para_soc2e:
         h1aa, h1bb = make_h01_soc2e(gobj, mo_coeff, mo_occ, qed_fac)
@@ -268,7 +286,7 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
         gpara2e-= numpy.einsum('xji,yij->xy', dm10b, h1bb)
         gpara2e *= 1./effspin / muB
         if gobj.verbose >= logger.INFO:
-            _write(gobj, align(gpara2e)[0], 'SOC(2e)/OZ')
+            _write(gobj, gobj.align(gpara2e)[0], 'SOC(2e)/OZ')
     else:
         gpara2e = 0
     gpara = gpara1e + gpara2e
@@ -278,11 +296,11 @@ def para_for_debug(gobj, mo10, mo_coeff, mo_occ, qed_fac=1):
 def make_h01_soc1e(gobj, mo_coeff, mo_occ, qed_fac=1):
     mol = gobj.mol
     assert(not mol.has_ecp())
-    alpha2 = lib.param.ALPHA ** 2
-    #qed_fac = (lib.param.G_ELECTRON - 1)
+    alpha2 = nist.ALPHA ** 2
+    #qed_fac = (nist.G_ELECTRON - 1)
 
 # hso1e is the imaginary part of [i sigma dot pV x p]
-# JCP, 122, 034107 Eq (2) = 1/4c^2 hso1e
+# JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (2) = 1/4c^2 hso1e
     if gobj.so_eff_charge:
         hso1e = 0
         for ia in range(mol.natm):
@@ -315,7 +333,6 @@ def get_jk_amfi(mol, dm0):
     atom = copy.copy(mol)
     aoslice = mol.aoslice_by_atom(ao_loc)
     for ia in range(mol.natm):
-        symb = mol.atom_symbol(ia)
         b0, b1, p0, p1 = aoslice[ia]
         atom._bas = mol._bas[b0:b1]
         vj1, vk1 = get_jk(atom, (dma[p0:p1,p0:p1],dmb[p0:p1,p0:p1]))
@@ -338,11 +355,11 @@ def get_j_amfi(mol, dm0):
 
 
 # hso2e is the imaginary part of SSO
-# SSO term of JCP, 122, 034107 Eq (3) = 1/4c^2 hso2e
+# SSO term of JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (3) = 1/4c^2 hso2e
 def make_h01_soc2e(gobj, mo_coeff, mo_occ, sso_qed_fac=1):
     mol = gobj.mol
-    alpha2 = lib.param.ALPHA ** 2
-    #sso_qed_fac = (lib.param.G_ELECTRON - 1)
+    alpha2 = nist.ALPHA ** 2
+    #sso_qed_fac = (nist.G_ELECTRON - 1)
 
     dm0 = gobj._scf.make_rdm1(mo_coeff, mo_occ)
     vj, vk = get_jk(mol, dm0)
@@ -367,22 +384,6 @@ def make_h01_soc2e(gobj, mo_coeff, mo_occ, sso_qed_fac=1):
     hbb = (vjbb - vkbb) * (alpha2/4)
     return haa, hbb
 
-
-def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
-    log = logger.new_logger(mol, verbose=verbose)
-    if gauge_orig is None:
-        # A10_i dot p + p dot A10_i consistents with <p^2 g>
-        # A10_j dot p + p dot A10_j consistents with <g p^2>
-        # A10_j dot p + p dot A10_j => i/2 (rjxp - pxrj) = irjxp
-        log.debug('First-order GIAO Fock matrix')
-        h1 = -.5 * mol.intor('int1e_giao_irjxp', 3)
-        h1 += uhf_nmr.make_h10giao(mol, dm0)
-    else:
-        mol.set_common_origin(gauge_orig)
-        h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-        h1 = (h1, h1)
-    return h1
-
 def align(gtensor):
     '''Transform the orientation of g-tensor.
     The new orientations are the eigenvector of G matrix (G=g.gT)
@@ -405,7 +406,7 @@ def _write(gobj, gtensor, title):
         gobj.stdout.write('sqrt(ggT) %s\n' % w)
 
 
-class GTensor(uhf_nmr.NMR):
+class GTensor(lib.StreamObject):
     '''dE = B dot gtensor dot s
 
     Attributes:
@@ -422,7 +423,13 @@ class GTensor(uhf_nmr.NMR):
             Whether to use Koseki effective SOC charge in 1-electron
             diamagnetic term and paramagnetic term.  Default is False.
     '''
-    def __init__(self, scf_method):
+    def __init__(self, mf):
+        self.mol = mf.mol
+        self.verbose = mf.mol.verbose
+        self.stdout = mf.mol.stdout
+        self.chkfile = mf.chkfile
+        self._scf = mf
+
         # dia_soc2e is 2-electron spin-orbit coupling for diamagnetic term
         # dia_soc2e can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
         self.dia_soc2e = False
@@ -433,13 +440,24 @@ class GTensor(uhf_nmr.NMR):
         self.para_soc2e = 'SSO+SOO'
         # Koseki effective SOC charge
         self.so_eff_charge = False
-        self.mb = False   # corresponding to RMB basis (DO NOT use, in testing)
-        uhf_nmr.NMR.__init__(self, scf_method)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+        # corresponding to RMB basis (DO NOT use. It's in testing)
+        self.mb = False
+
+# gauge_orig=None will call GIAO. A coordinate array leads to common gauge
+        self.gauge_orig = None
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('\n')
-        log.info('******** %s for %s ********',
+        log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
         if self.gauge_orig is None:
             log.info('gauge = GIAO')
@@ -449,10 +467,10 @@ class GTensor(uhf_nmr.NMR):
         if self.cphf:
             log.info('CPHF conv_tol = %g', self.conv_tol)
             log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
-        logger.info(self, 'dia_soc2e = %s', self.dia_soc2e)
-        logger.info(self, 'para_soc2e = %s', self.para_soc2e)
-        logger.info(self, 'so_eff_charge = %s (1e SO effective charge)',
-                    self.so_eff_charge)
+        log.info('dia_soc2e = %s', self.dia_soc2e)
+        log.info('para_soc2e = %s', self.para_soc2e)
+        log.info('so_eff_charge = %s (1e SO effective charge)',
+                 self.so_eff_charge)
         return self
 
     def kernel(self, mo1=None):
@@ -460,18 +478,18 @@ class GTensor(uhf_nmr.NMR):
         self.check_sanity()
         self.dump_flags()
 
-        gdia = self.dia()
-        gpara = self.para(mo10=mo1)
+        gdia = self.dia(self._scf.make_rdm1(), self.gauge_orig)
+        gpara = self.para(mo1, self._scf.mo_coeff, self._scf.mo_occ)
         gshift = gpara + gdia
-        gtensor = gshift + numpy.eye(3) * lib.param.G_ELECTRON
+        gtensor = gshift + numpy.eye(3) * nist.G_ELECTRON
 
         logger.timer(self, 'g-tensor', *cput0)
         if self.verbose >= logger.NOTE:
-            logger.note(self, 'free electron g %s', lib.param.G_ELECTRON)
-            gtot, v = align(gtensor)
+            logger.note(self, 'free electron g %s', nist.G_ELECTRON)
+            gtot, v = self.align(gtensor)
             gdia = reduce(numpy.dot, (v.T, gdia, v))
             gpara = reduce(numpy.dot, (v.T, gpara, v))
-            gshift = gtot - numpy.eye(3) * lib.param.G_ELECTRON
+            gshift = gtot - numpy.eye(3) * nist.G_ELECTRON
             if self.verbose >= logger.INFO:
                 _write(self, gdia, 'g-tensor diamagnetic terms')
                 _write(self, gpara, 'g-tensor paramagnetic terms')
@@ -494,6 +512,13 @@ class GTensor(uhf_nmr.NMR):
 
     make_dia_gc2e = make_dia_gc2e
     make_para_soc2e = make_para_soc2e
+    solve_mo1 = uhf_nmr.solve_mo1
+    get_fock = uhf_nmr.get_fock
+
+    def get_ovlp(self, mol=None, gauge_orig=None):
+        if mol is None: mol = self.mol
+        if gauge_orig is None: gauge_orig = self.gauge_orig
+        return rhf_nmr.get_ovlp(mol, gauge_orig)
 
     def align(self, gtensor):
         return align(gtensor)

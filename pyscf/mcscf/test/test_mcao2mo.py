@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
@@ -8,11 +21,11 @@ from pyscf import ao2mo
 from pyscf import mcscf
 
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_rhf(self):
+        mol = gto.Mole()
+        mol.verbose = 7
+        mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
             ['H', ( 0., -0.757, 0.587)],
@@ -65,8 +78,12 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(k_pc , eris0.k_pc ))
         self.assertTrue(numpy.allclose(ppaa , eris0.ppaa ))
         self.assertTrue(numpy.allclose(papa , eris0.papa ))
+        mol.stdout.close()
 
     def test_uhf(self):
+        mol = gto.Mole()
+        mol.verbose = 7
+        mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
             ['H', ( 0., -0.757, 0.587)],
@@ -78,12 +95,12 @@ class KnowValues(unittest.TestCase):
         m = scf.UHF(mol)
         ehf = m.scf()
 
-        mc = mcscf.mc1step_uhf.CASSCF(m, 4, 4)
+        mc = mcscf.umc1step.CASSCF(m, 4, 4)
         mc.verbose = 5
         mo = m.mo_coeff
 
-        eris0 = mcscf.mc_ao2mo_uhf._ERIS(mc, mo, 'incore')
-        eris1 = mcscf.mc_ao2mo_uhf._ERIS(mc, mo, 'outcore')
+        eris0 = mcscf.umc_ao2mo._ERIS(mc, mo, 'incore')
+        eris1 = mcscf.umc_ao2mo._ERIS(mc, mo, 'outcore')
         self.assertTrue(numpy.allclose(eris1.jkcpp, eris0.jkcpp))
         self.assertTrue(numpy.allclose(eris1.jkcPP, eris0.jkcPP))
         self.assertTrue(numpy.allclose(eris1.jC_pp, eris0.jC_pp))
@@ -162,6 +179,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(IAPCV, eris0.IAPCV))
         self.assertTrue(numpy.allclose(apCV , eris0.apCV ))
         self.assertTrue(numpy.allclose(APcv , eris0.APcv ))
+        mol.stdout.close()
 
 
 if __name__ == "__main__":

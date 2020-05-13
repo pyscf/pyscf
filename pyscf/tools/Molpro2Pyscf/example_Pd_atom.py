@@ -1,4 +1,17 @@
 # TODO: By PySCF-1.5 release
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # 1. code style
 #   * Indent: 3 -> 4
 #   * Line wrap around 80 columns
@@ -15,6 +28,7 @@
 # Note, that right now the default value is  SkipVirtual =True, that means that Orbitals COrb include only those,
 # which have non-zero occupation numbers in XML file. If you want virtual orbitals too, change SkipVirtual to False.
 
+from __future__ import print_function
 
 import numpy as np
 from wmme import mdot
@@ -34,20 +48,20 @@ def rmsd(X):
 
 
 def PrintMatrix(Caption, M):
-   print "Matrix %s [%i x %i]:\n" % (Caption, M.shape[0], M.shape[1])
-   ColsFmt = M.shape[1] * " %11.5f"
+   print("Matrix {} [{} x {}]:\n".format(Caption, M.shape[0], M.shape[1]))
+   ColsFmt = M.shape[1] * " {:11.5f}"
    for iRow in range(M.shape[0]):
-      print "  %s" % (ColsFmt % tuple(M[iRow,:]))
+      print(ColsFmt.format(tuple(M[iRow,:])))
 
 
 def _run_with_pyscf(FileNameXml):
    # read Molpro XML file exported via {put,xml,filename}
-   print "\n* Reading: '%s'" % FileNameXml
+   print("\n* Reading: '{}'".format(FileNameXml))
    XmlData = MolproXml.ReadMolproXml(FileNameXml, SkipVirtual=True)
 # Note, that right now the default value is  SkipVirtual =True, that means that Orbitals COrb include only those,
 # which have non-zero occupation numbers in XML file. If you want virtual orbitals too, change SkipVirtual to False.
  
-   print "Atoms from file [a.u.]:\n%s" % XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)
+   print("Atoms from file [a.u.]:\n{}".format(XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)))
 
    # convert data from XML file (atom positions, basis sets, MO coeffs) into format compatible
    # with PySCF.
@@ -69,14 +83,14 @@ def _run_with_pyscf(FileNameXml):
    # and the overlap matrix computed with PySCF to check that MO were imported properly.
    SMo = mdot(COrb.T, S, COrb)
    PrintMatrix("MO-Basis overlap (should be unity!)", SMo)
-   print "RMSD(SMo-id): %8.2e" % rmsd(SMo - np.eye(SMo.shape[0]))
+   print("RMSD(SMo-id): {:8.2e}".format(rmsd(SMo - np.eye(SMo.shape[0]))))
    print
 
 def get_1e_integrals_in_MOs_from_Molpro_for_SOC(FileNameXml):
    # read Molpro XML file exported via {put,xml,filename}
-   print "\n* Reading: '%s'" % FileNameXml
+   print("\n* Reading: '{}'".format(FileNameXml))
    XmlData = MolproXml.ReadMolproXml(FileNameXml, SkipVirtual=True)
-   print "Atoms from file [a.u.]:\n%s" % XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)
+   print("Atoms from file [a.u.]:\n{}".format(XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)))
 
    # convert data from XML file (atom positions, basis sets, MO coeffs) into format compatible    # with PySCF.
    Atoms, Basis, COrb = MolproXmlToPyscf.ConvertMolproXmlToPyscfInput(XmlData)
@@ -109,8 +123,8 @@ def get_1e_integrals_in_MOs_from_Molpro_for_SOC(FileNameXml):
      for o2 in range(norb):
        ActOrb[o1,o2]= COrb[o1, Orblist[o2]]
 
-   print "================================================="
-   print " Now print So1e integrals" 
+   print("=================================================")
+   print(" Now print So1e integrals")
    for id in range(natoms):
      chg = mol.atom_charge(id)
      mol.set_rinv_origin_(mol.atom_coord(id)) # set the gauge origin to first atom
@@ -121,7 +135,7 @@ def get_1e_integrals_in_MOs_from_Molpro_for_SOC(FileNameXml):
      for i in range(3):
       for j in range(h1[i].shape[0]):
        for k in range(h1[i].shape[1]):
-        print id, i+1, j+1, k+1, h1[i][j,k]
+        print(id, i+1, j+1, k+1, h1[i][j,k])
 
 
 

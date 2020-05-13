@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import numpy as np
 import time
 import pyscf.pbc.tools as tools
@@ -6,7 +20,6 @@ from pyscf.lib import logger
 from pyscf.pbc.mpitools import mpi_load_balancer
 from pyscf import lib
 from pyscf.pbc import lib as pbclib
-from pyscf.cc.ccsd import _cp
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 
 comm = MPI.COMM_WORLD
@@ -15,11 +28,8 @@ comm = MPI.COMM_WORLD
 einsum = lib.einsum
 dot = np.dot
 
-#################################################
-# FOLLOWING:                                    #
-# S. Hirata, ..., R. J. Bartlett                #
-# J. Chem. Phys. 120, 2581 (2004)               #
-#################################################
+# This is restricted (R)CCSD
+# Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 
 ### Eqs. (37)-(39) "kappa"
 
@@ -83,7 +93,7 @@ def cc_Foo(cc,t1,t2,eris,feri2=None):
             #Fki[ki] += einsum('lkcd,licd->ki',eris.SoOvv[kk,kc],tau1_oOvv[ki,kc])
                 kd = kconserv[kk,kc,kl]
                 Soovv = 2*eris.oovv[kk,kl,kc] - eris.oovv[kk,kl,kd].transpose(0,1,3,2)
-#                Fki[ki] += einsum('klcd,ilcd->ki',Soovv,t2[ki,kl,kc])
+                #Fki[ki] += einsum('klcd,ilcd->ki',Soovv,t2[ki,kl,kc])
                 Fki[ki] += einsum('klcd,ilcd->ki',Soovv,unpack_tril(t2,nkpts,ki,kl,kc,kconserv[ki,kc,kl]))
             #if ki == kc:
             kd = kconserv[kk,ki,kl]
@@ -105,7 +115,7 @@ def cc_Fvv(cc,t1,t2,eris,feri2=None):
             for kk in range(nkpts):
                 kd = kconserv[kk,kc,kl]
                 Soovv = 2*eris.oovv[kk,kl,kc] - eris.oovv[kk,kl,kd].transpose(0,1,3,2)
-#                Fac[ka] += -einsum('klcd,klad->ac',Soovv,t2[kk,kl,ka])
+                #Fac[ka] += -einsum('klcd,klad->ac',Soovv,t2[kk,kl,ka])
                 Fac[ka] += -einsum('klcd,klad->ac',Soovv,unpack_tril(t2,nkpts,kk,kl,ka,kconserv[kk,ka,kl]))
             #if kk == ka
             kd = kconserv[ka,kc,kl]
@@ -181,11 +191,9 @@ def cc_Woooo(cc,t1,t2,eris,feri2=None):
                     oooo_tmp[iterkk,iterkl,iterki] += einsum('klic,jc->klij',eris.ooov[kk,kl,ki],t1[kj])
                     oooo_tmp[iterkk,iterkl,iterki] += einsum('klcj,ic->klij',eris.ooov[kl,kk,kj].transpose(1,0,3,2),t1[ki])
 
-                    ###################################################################################
                     # Note the indices and way the tau1 is stored : instead of a loop over kpt='kc' and
                     # loop over mo='c', the (kc,k,l,c,d) index is changed instead to (nkpts*nvir,k,l,d)
                     # so that we only have to loop over the first index, saving read operations.
-                    ###################################################################################
                     oooo_tmp[iterkk,iterkl,iterki] += einsum('ckld,cijd->klij',eris.ooVv[kk,kl],tau1_ooVv[ki,kj])
 
                     #for kc in range(nkpts):
@@ -198,9 +206,7 @@ def cc_Woooo(cc,t1,t2,eris,feri2=None):
         #Woooo[min(ranges0):max(ranges0)+1,min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1] = \
         #                oooo_tmp[:len(ranges0),:len(ranges1),:len(ranges2)]
 
-        #
         # for if you want to take into account symmetry of Woooo integral
-        #
         #feri2.Woooo[min(ranges1):max(ranges1)+1,min(ranges0):max(ranges0)+1,min(ranges2):max(ranges2)+1] = \
         #                oooo_tmp[:len(ranges0),:len(ranges1),:len(ranges2)].transpose(0,1,2,4,3,6,5)
         loader.slave_finished()
@@ -268,7 +274,7 @@ def cc_Wvoov(cc,t1,t2,eris,feri2=None):
         if good2go is False:
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
-        ix = sum([[min(x),max(x)+1] for x in ranges0,ranges1,ranges2], [])
+        ix = sum([[min(x),max(x)+1] for x in (ranges0,ranges1,ranges2)], [])
 
         #eris_ooov = eris.ooov[ix[0]:ix[1], ix[2]:ix[3], ix[4]:ix[5]]
         for iterka, ka in enumerate(ranges0):
@@ -278,8 +284,7 @@ def cc_Wvoov(cc,t1,t2,eris,feri2=None):
                     voov_tmp[iterka,iterkk,iterki] = np.array(eris.ovvo[kk,ka,kc]).transpose(1,0,3,2)
                     voov_tmp[iterka,iterkk,iterki] -= einsum('lkic,la->akic',eris.ooov[ka,kk,ki],t1[ka])
                     voov_tmp[iterka,iterkk,iterki] += einsum('akdc,id->akic',eris.ovvv[kk,ka,kc].transpose(1,0,3,2),t1[ki])
-                    # ==== Beginning of change ====
-                    #
+                    # Beginning of change
                     #for kl in range(nkpts):
                     #    # kl - kd + kk = kc
                     #    # => kd = kl - kc + kk
@@ -290,17 +295,15 @@ def cc_Wvoov(cc,t1,t2,eris,feri2=None):
                     #voov_tmp[iterka,iterkk,iterki] -= einsum('lkdc,id,la->akic',eris.oovv[ka,kk,ki],t1[ki],t1[ka])
                     #Wvoov[ka,kk,ki] = voov_tmp[iterka,iterkk,iterki]
 
-                    #
                     # Making various intermediates...
-                    #
-#                    t2_oOvv = t2[ki,:,ka].transpose(0,2,1,3,4).reshape(nkpts*nocc,nocc,nvir,nvir)
+                    #t2_oOvv = t2[ki,:,ka].transpose(0,2,1,3,4).reshape(nkpts*nocc,nocc,nvir,nvir)
                     t2_oOvv = unpack_tril(t2,nkpts,ki,range(nkpts),ka,kconserv[ki,ka,range(nkpts)]).transpose(0,2,1,3,4).reshape(nkpts*nocc,nocc,nvir,nvir)
                     #eris_oOvv = eris.oovv[kk,:,kc].transpose(0,2,1,3,4).reshape(nkpts*nocc,nocc,nvir,nvir)
 
                     voov_tmp[iterka,iterkk,iterki] += 0.5*einsum('lkcd,liad->akic',eris.SoOvv[kk,kc],t2_oOvv)
                     voov_tmp[iterka,iterkk,iterki] -= 0.5*einsum('lkcd,liad->akic',eris.oOvv[kk,kc],tau2_Oovv[ki,ka])
 
-                    # =====   End of change  =====
+                    # End of change
         #Wvoov[min(ranges0):max(ranges0)+1,min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1] = \
         #        voov_tmp[:len(ranges0),:len(ranges1),:len(ranges2)]
         WvOov[min(ranges0):max(ranges0)+1,min(ranges2):max(ranges2)+1,nocc*min(ranges1):nocc*(max(ranges1)+1)] = \
@@ -336,8 +339,7 @@ def cc_Wvovo(cc,t1,t2,eris,feri2=None):
                     vovo_tmp[iterka,iterkk,iterkc] = np.array(eris.ovov[kk,ka,ki]).transpose(1,0,3,2)
                     vovo_tmp[iterka,iterkk,iterkc] -= einsum('lkci,la->akci',eris.ooov[kk,ka,ki].transpose(1,0,3,2),t1[ka])
                     vovo_tmp[iterka,iterkk,iterkc] += einsum('akcd,id->akci',eris.ovvv[kk,ka,ki].transpose(1,0,3,2),t1[ki])
-                    # ==== Beginning of change ====
-                    #
+                    # Beginning of change
                     #for kl in range(nkpts):
                     #    kd = kconserv[kl,kc,kk]
                     #    vovo_tmp[iterka,iterkk,iterkc] -= 0.5*einsum('lkcd,ilda->akci',eris.oovv[kl,kk,kc],t2[ki,kl,kd])
@@ -345,7 +347,7 @@ def cc_Wvovo(cc,t1,t2,eris,feri2=None):
                     #Wvovo[ka,kk,kc] = vovo_tmp[iterka,iterkk,iterkc]
 
                     oovvf = eris.oovv[:,kk,kc].reshape(nkpts*nocc,nocc,nvir,nvir)
-#                    t2f   = t2[:,ki,ka].copy() #This is a tau like term
+                    #t2f   = t2[:,ki,ka].copy() #This is a tau like term
                     t2f   = unpack_tril(t2,nkpts,range(nkpts),ki,ka,kconserv[range(nkpts),ka,ki]).copy() #This is a tau like term
                     #for kl in range(nkpts):
                     #    kd = kconserv[kl,kc,kk]
@@ -360,7 +362,7 @@ def cc_Wvovo(cc,t1,t2,eris,feri2=None):
                 vovo_tmp[:len(ranges0),:len(ranges1),:len(ranges2)]
         WvOVo[min(ranges0):max(ranges0)+1,nocc*min(ranges1):nocc*(max(ranges1)+1),nvir*min(ranges2):nvir*(max(ranges2)+1)] = \
                 vovo_tmp[:len(ranges0),:len(ranges1),:len(ranges2)].transpose(0,1,4,2,5,3,6).reshape(len(ranges0),len(ranges1)*nocc,len(ranges2)*nvir,nvir,nocc)
-                    # =====   End of change  = ====
+                    # End of change
         loader.slave_finished()
     comm.Barrier()
     return
@@ -392,8 +394,7 @@ def cc_Wovov(cc,t1,t2,eris,feri2=None):
                     ovov_tmp[iterkk,iterka,iterki] = np.array(eris.ovov[kk,ka,ki],copy=True)
                     ovov_tmp[iterkk,iterka,iterki] -= einsum('lkci,la->kaic',eris.ooov[kk,ka,ki].transpose(1,0,3,2),t1[ka])
                     ovov_tmp[iterkk,iterka,iterki] += einsum('akcd,id->kaic',eris.ovvv[kk,ka,ki].transpose(1,0,3,2),t1[ki])
-                    # ==== Beginning of change ====
-                    #
+                    # Beginning of change
                     #for kl in range(nkpts):
                     #    kd = kconserv[kl,kc,kk]
                     #    ovov_tmp[iterka,iterkk,iterkc] -= 0.5*einsum('lkcd,ilda->akci',eris.oovv[kl,kk,kc],t2[ki,kl,kd])
@@ -401,7 +402,7 @@ def cc_Wovov(cc,t1,t2,eris,feri2=None):
                     #Wvovo[ka,kk,kc] = ovov_tmp[iterka,iterkk,iterkc]
 
                     oovvf = eris.oovv[:,kk,kc].reshape(nkpts*nocc,nocc,nvir,nvir)
-#                    t2f   = t2[:,ki,ka].copy() #This is a tau like term
+                    #t2f   = t2[:,ki,ka].copy() #This is a tau like term
                     t2f   = unpack_tril(t2,nkpts,range(nkpts),ki,ka,kconserv[range(nkpts),ka,ki]).copy() #This is a tau like term
                     #for kl in range(nkpts):
                     #    kd = kconserv[kl,kc,kk]
@@ -416,16 +417,12 @@ def cc_Wovov(cc,t1,t2,eris,feri2=None):
         #        ovov_tmp[:len(ranges0),:len(ranges1),:len(ranges2)]
         WOvov[min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1,nocc*min(ranges0):nocc*(max(ranges0)+1)] = \
                 ovov_tmp[:len(ranges0),:len(ranges1),:len(ranges2)].transpose(1,2,0,3,4,5,6).reshape(len(ranges1),len(ranges2),len(ranges0)*nocc,nvir,nocc,nvir)
-                    # =====   End of change  = ====
+                    # End of change
         loader.slave_finished()
     comm.Barrier()
     return
 
-########################################################
-#        EOM Intermediates w/ k-points                 #
-########################################################
-
-# Indices in the following can be safely permuted.
+# EOM Intermediates w/ k-points
 
 def Wooov(cc,t1,t2,eris,fint=None):
     nkpts, nocc, nvir = t1.shape
@@ -436,8 +433,8 @@ def Wooov(cc,t1,t2,eris,fint=None):
     else:
         Wklid = fint['Wooov']
 
-# TODO can do much better than this... call recursive function
-    ############## Adaptive Blocking :: BEGIN ##############
+    # TODO can do much better than this... call recursive function
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -445,7 +442,7 @@ def Wooov(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
     ooov_tmp_size = BLKSIZE + (nocc,nocc,nocc,nvir)
     ooov_tmp = np.empty(ooov_tmp_size,dtype=t2.dtype)
 
@@ -456,7 +453,7 @@ def Wooov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_ooov_kli = _cp(eris.ooov[s0,s1,s2])
         eris_oovv_kli = _cp(eris.oovv[s0,s1,s2])
 
@@ -485,8 +482,8 @@ def Wvovv(cc,t1,t2,eris,fint=None):
     else:
         Walcd = fint['Wvovv']
 
-# TODO can do much better than this... call recursive function
-    ############## Adaptive Blocking :: BEGIN ##############
+    # TODO can do much better than this... call recursive function
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nvir*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -494,7 +491,7 @@ def Wvovv(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
     vovv_tmp_size = BLKSIZE + (nvir,nocc,nvir,nvir)
     vovv_tmp = np.empty(vovv_tmp_size,dtype=t2.dtype)
 
@@ -505,7 +502,7 @@ def Wvovv(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv_alc = _cp(eris.vovv[s0,s1,s2])
         eris_oovv_alc = _cp(eris.oovv[s0,s1,s2])
 
@@ -534,7 +531,7 @@ def W1ovvo(cc,t1,t2,eris,fint=None):
     else:
         Wkaci  = fint['W1ovvo']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -542,7 +539,7 @@ def W1ovvo(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
     ovvo_tmp_size = BLKSIZE + (nocc,nvir,nvir,nocc)
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
@@ -553,7 +550,7 @@ def W1ovvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         eris_ovvo_kac = _cp(eris.ovvo[s0,s1,s2])
         eris_oovv_kXc = _cp(eris.oovv[s0,:,s2])
@@ -564,9 +561,9 @@ def W1ovvo(cc,t1,t2,eris,fint=None):
                 for iterkc,kc in enumerate(ranges2):
                     ki = kconserv[kk,kc,ka]
                     ovvo_tmp[iterkk,iterka,iterkc] = _cp(eris_ovvo_kac[iterkk,iterka,iterkc])
-#                    St2 = 2.*t2[ki,:,ka]
+                    #St2 = 2.*t2[ki,:,ka]
                     St2 = 2.*unpack_tril(t2,nkpts,ki,range(nkpts),ka,kconserv[ki,ka,range(nkpts)])
-#                    St2 -= t2[:,ki,ka].transpose(0,2,1,3,4)
+                    #St2 -= t2[:,ki,ka].transpose(0,2,1,3,4)
                     St2 -= unpack_tril(t2,nkpts,range(nkpts),ki,ka,kconserv[range(nkpts),ka,ki]).transpose(0,2,1,3,4)
                     ovvo_tmp[iterkk,iterka,iterkc] += einsum('klcd,ilad->kaci',eris_oovv_kXc[iterkk,:,iterkc].transpose(1,0,2,3,4).reshape(nocc,nkpts*nocc,nvir,nvir),
                                                                 St2.transpose(1,0,2,3,4).reshape(nocc,nkpts*nocc,nvir,nvir))
@@ -595,7 +592,7 @@ def W2ovvo(cc,t1,t2,eris,fint=None):
         Wkaci  = fint['W2ovvo']
         WWooov = fint['Wooov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -603,7 +600,7 @@ def W2ovvo(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
     ovvo_tmp_size = BLKSIZE + (nocc,nvir,nvir,nocc)
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
@@ -614,7 +611,7 @@ def W2ovvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wooov_akX     = _cp(WWooov[s1,s0])
         eris_ovvv_kac = _cp(eris.ovvv[s0,s1,s2])
@@ -651,8 +648,8 @@ def Wovvo(cc,t1,t2,eris,fint=None):
         W1kaci = fint['W1ovvo']
         W2kaci = fint['W2ovvo']
 
-# TODO can do much better than this... call recursive function
-    ############## Adaptive Blocking :: BEGIN ##############
+    # TODO can do much better than this... call recursive function
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -660,7 +657,7 @@ def Wovvo(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
 
     good2go = True
     while(good2go):
@@ -669,7 +666,7 @@ def Wovvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         Wkaci[s0,s1,s2] = _cp(W1kaci[s0,s1,s2]) + _cp(W2kaci[s0,s1,s2])
 
         loader.slave_finished()
@@ -690,7 +687,7 @@ def W1ovov(cc,t1,t2,eris,fint=None):
     else:
         Wkbid = fint['W1ovov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -698,7 +695,7 @@ def W1ovov(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     ovov_tmp_size = BLKSIZE + (nocc,nvir,nocc,nvir)
     ovov_tmp = np.empty(ovov_tmp_size,dtype=t2.dtype)
 
@@ -709,7 +706,7 @@ def W1ovov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_ovov = _cp(eris.ovov[s0,s1,s2])
 
         for iterkk,kk in enumerate(ranges0):
@@ -740,7 +737,7 @@ def W2ovov(cc,t1,t2,eris,fint=None):
         Wkbid = fint['W2ovov']
         WWooov = fint['Wooov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -748,7 +745,7 @@ def W2ovov(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     ovov_tmp_size = BLKSIZE + (nocc,nvir,nocc,nvir)
     ovov_tmp = np.empty(ovov_tmp_size,dtype=t2.dtype)
 
@@ -759,7 +756,7 @@ def W2ovov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_ovvv  = _cp(eris.ovvv[s0,s1,s2])
         WWooov_kbi = _cp(WWooov[s0,s1,s2])
 
@@ -791,7 +788,7 @@ def Wovov(cc,t1,t2,eris,fint=None):
         WW1ovov = fint['W1ovov']
         WW2ovov = fint['W2ovov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -799,7 +796,7 @@ def Wovov(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     ovov_tmp_size = BLKSIZE + (nocc,nvir,nocc,nvir)
     ovov_tmp = np.empty(ovov_tmp_size,dtype=t2.dtype)
 
@@ -810,7 +807,7 @@ def Wovov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wkbid[s0,s1,s2] = _cp(WW1ovov[s0,s1,s2]) + _cp(WW2ovov[s0,s1,s2])
 
@@ -836,7 +833,7 @@ def WovovRev(cc,t1,t2,eris,fint=None):
         WW1ovov = fint['W1ovov']
         WW2ovov = fint['W2ovov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -844,7 +841,7 @@ def WovovRev(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     ovov_tmp_size = BLKSIZE + (nocc,nvir,nocc,nvir)
     ovov_tmp = np.empty(ovov_tmp_size,dtype=t2.dtype)
 
@@ -855,7 +852,7 @@ def WovovRev(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wkbid[s2,s1,s0] = (_cp(WW1ovov[s0,s1,s2]) + _cp(WW2ovov[s0,s1,s2])).transpose(2,1,0,3,4,5,6)
 
@@ -869,9 +866,7 @@ def WovovRev(cc,t1,t2,eris,fint=None):
 
 
 
-##################################################
-# This is the same Woooo intermediate used in cc?#
-##################################################
+# This is the same Woooo intermediate used in cc
 
 def Woooo(cc,t1,t2,eris,fint=None):
     nkpts, nocc, nvir = t1.shape
@@ -882,7 +877,7 @@ def Woooo(cc,t1,t2,eris,fint=None):
     else:
         Wklij = fint['Woooo']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -891,7 +886,7 @@ def Woooo(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     oooo_tmp_size = BLKSIZE + (nocc,nocc,nocc,nocc)
     oooo_tmp = np.empty(oooo_tmp_size,dtype=t2.dtype)
 
@@ -902,7 +897,7 @@ def Woooo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_oovv_klX = _cp(eris.oovv[s0,s1,s2])
         eris_oooo_kli = _cp(eris.oooo[s0,s1,s2])
         eris_ooov_klX = _cp(eris.ooov[s0,s1,s2])
@@ -912,7 +907,7 @@ def Woooo(cc,t1,t2,eris,fint=None):
             for iterkl,kl in enumerate(ranges1):
                 for iterki,ki in enumerate(ranges2):
                     kj = kconserv[kk,ki,kl]
-#                    tau1 = t2[ki,kj,:].copy()
+                    #tau1 = t2[ki,kj,:].copy()
                     tau1 = unpack_tril(t2,nkpts,ki,kj,range(nkpts),kconserv[ki,range(nkpts),kj]).copy()
                     tau1[ki] += einsum('ic,jd->ijcd',t1[ki],t1[kj])
                     oooo_tmp[iterkk,iterkl,iterki] = eris_oooo_kli[iterkk,iterkl,iterki].copy()
@@ -941,7 +936,7 @@ def WooooS(cc,t1,t2,eris,fint=None):
     else:
         Wklij = fint['WooooS']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -950,7 +945,7 @@ def WooooS(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     oooo_tmp_size = BLKSIZE + (nocc,nocc,nocc,nocc)
     oooo_tmp = np.empty(oooo_tmp_size,dtype=t2.dtype)
 
@@ -961,7 +956,7 @@ def WooooS(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_oovv_klX = _cp(eris.oovv[s0,s1,s2])
         eris_oooo_kli = _cp(eris.oooo[s0,s1,s2])
         eris_ooov_klX = _cp(eris.ooov[s0,s1,s2])
@@ -971,7 +966,7 @@ def WooooS(cc,t1,t2,eris,fint=None):
             for iterkl,kl in enumerate(ranges1):
                 for iterki,ki in enumerate(ranges2):
                     kj = kconserv[kk,ki,kl]
-#                    tau1 = t2[ki,kj,:].copy()
+                    #tau1 = t2[ki,kj,:].copy()
                     tau1 = unpack_tril(t2,nkpts,ki,kj,range(nkpts),kconserv[ki,range(nkpts),kj]).copy()
                     tau1[ki] += einsum('ic,jd->ijcd',t1[ki],t1[kj])
                     oooo_tmp[iterkk,iterkl,iterki] = eris_oooo_kli[iterkk,iterkl,iterki].copy()
@@ -997,7 +992,7 @@ def Wvvvv(cc,t1,t2,eris,fint=None):
     else:
         Wabcd = fint['Wvvvv']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nvir*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -1006,12 +1001,12 @@ def Wvvvv(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     vvvv_tmp_size = BLKSIZE + (nvir,nvir,nvir,nvir)
     vvvv_tmp = np.empty(vvvv_tmp_size,dtype=t2.dtype)
 
-    print "vvvv blksize"
-    print BLKSIZE
+    print("vvvv blksize")
+    print(BLKSIZE)
 
     good2go = True
     while(good2go):
@@ -1020,7 +1015,7 @@ def Wvvvv(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv = _cp(eris.vovv[s0,s1,s2])
         eris_ovvv = _cp(eris.ovvv[s0,s1,s2])
         eris_oovv_abc = _cp(eris.oovv[s0,s1,s2])
@@ -1043,7 +1038,7 @@ def Wvvvv(cc,t1,t2,eris,fint=None):
                         # kk + kl - kc - kd = 0
                         kl = kconserv[kc,kk,kd]
                         OOvv[kk]   = eris.oovv[kk,kl,kc]
-#                        t2_tmp[kk] = t2[kk,kl,ka]
+                        #t2_tmp[kk] = t2[kk,kl,ka]
                         t2_tmp[kk] = unpack_tril(t2,nkpts,kk,kl,ka,kconserv[kk,ka,kl])
                     OOvv   = OOvv.reshape(-1,nvir,nvir)
                     t2_tmp = t2_tmp.reshape(-1,nvir,nvir)
@@ -1078,7 +1073,7 @@ def Wvvvo(cc,t1,t2,eris,fint=None):
         WW1voov = fint['W1voov']
         FFov = cc_Fov(cc,t1,t2,eris)
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -1087,7 +1082,7 @@ def Wvvvo(cc,t1,t2,eris,fint=None):
     BLKSIZE = (1,nkpts_blksize2,nkpts_blksize,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     vvvo_tmp_size = BLKSIZE + (nvir,nvir,nvir,nocc)
     vvvo_tmp = np.empty(vvvo_tmp_size,dtype=t2.dtype)
 
@@ -1098,7 +1093,7 @@ def Wvvvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv_aXc = _cp(eris.vovv[s0,:,s2])
         eris_ovvv_Xac = _cp(eris.ovvv[:,s0,s2])
         eris_ovvv_Xbc = _cp(eris.ovvv[:,s1,s2])
@@ -1123,9 +1118,9 @@ def Wvvvo(cc,t1,t2,eris,fint=None):
                         # ka + kl - kc - kd = 0
                         # => kd = ka - kc + kl
                         kd = kconserv[ka,kc,kl]
-#                        St2[kl] = 2.*t2[kl,kj,kd]
+                        #St2[kl] = 2.*t2[kl,kj,kd]
                         St2[kl] = 2.*unpack_tril(t2,nkpts,kl,kj,kd,kconserv[kl,kd,kj])
-#                        St2[kl] -= t2[kl,kj,kb].transpose(0,1,3,2)
+                        #St2[kl] -= t2[kl,kj,kb].transpose(0,1,3,2)
                         St2[kl] -= unpack_tril(t2,nkpts,kl,kj,kb,kconserv[kl,kb,kj]).transpose(0,1,3,2)
                     vvvo_tmp[iterka,iterkb,iterkc] += einsum('alcd,ljdb->abcj',
                                                         eris_vovv_aXc[iterka,:,iterkc].transpose(1,0,2,3,4).reshape(nvir,nkpts*nocc,nvir,nvir),
@@ -1141,11 +1136,11 @@ def Wvvvo(cc,t1,t2,eris,fint=None):
                                                         -unpack_tril(t2,nkpts,range(nkpts),kj,ka,kconserv[range(nkpts),ka,kj]).reshape(nkpts*nocc,nocc,nvir,nvir))
                     for kl in range(nkpts):
                         kk = kconserv[kb,kl,ka]
-#                        vvvo_tmp[iterka,iterkb,iterkc] += einsum('jclk,lkba->abcj',eris.ovoo[kj,kc,kl].conj(),t2[kl,kk,kb])
+                        #vvvo_tmp[iterka,iterkb,iterkc] += einsum('jclk,lkba->abcj',eris.ovoo[kj,kc,kl].conj(),t2[kl,kk,kb])
                         vvvo_tmp[iterka,iterkb,iterkc] += einsum('jclk,lkba->abcj',eris.ovoo[kj,kc,kl].conj(),unpack_tril(t2,nkpts,kl,kk,kb,kconserv[kl,kb,kk]))
 
                     vvvo_tmp[iterka,iterkb,iterkc] += einsum('lkjc,lb,ka->abcj',eris.ooov[kb,ka,kj],t1[kb],t1[ka])
-#                    vvvo_tmp[iterka,iterkb,iterkc] += einsum('lc,ljab->abcj',-FFov[kc],t2[kc,kj,ka])
+                    #vvvo_tmp[iterka,iterkb,iterkc] += einsum('lc,ljab->abcj',-FFov[kc],t2[kc,kj,ka])
                     vvvo_tmp[iterka,iterkb,iterkc] += einsum('lc,ljab->abcj',-FFov[kc],unpack_tril(t2,nkpts,kc,kj,ka,kconserv[kc,ka,kj]))
 
         Wabcj[s0,s1,s2] = vvvo_tmp[:len(ranges0),:len(ranges1),:len(ranges2)]
@@ -1174,7 +1169,7 @@ def WvvvoR1(cc,t1,t2,eris,fint=None):
         WW1voov = fint['W1voov']
         FFov = cc_Fov(cc,t1,t2,eris)
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -1182,7 +1177,7 @@ def WvvvoR1(cc,t1,t2,eris,fint=None):
     BLKSIZE = (1,nkpts_blksize2,nkpts_blksize,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here
     vvvo_tmp_size = BLKSIZE + (nvir,nvir,nvir,nocc)
     vvvo_tmp = np.empty(vvvo_tmp_size,dtype=t2.dtype)
 
@@ -1193,7 +1188,7 @@ def WvvvoR1(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv_aXc = _cp(eris.vovv[s0,:,s2])
         eris_ovvv_Xac = _cp(eris.ovvv[:,s0,s2])
         eris_ovvv_Xbc = _cp(eris.ovvv[:,s1,s2])
@@ -1220,9 +1215,9 @@ def WvvvoR1(cc,t1,t2,eris,fint=None):
                         # ka + kl - kc - kd = 0
                         # => kd = ka - kc + kl
                         kd = kconserv[ka,kc,kl]
-#                        St2[kl] = 2.*t2[kl,kj,kd]
+                        #St2[kl] = 2.*t2[kl,kj,kd]
                         St2[kl] = 2.*unpack_tril(t2,nkpts,kl,kj,kd,kconserv[kl,kd,kj])
-#                        St2[kl] -= t2[kl,kj,kb].transpose(0,1,3,2)
+                        #St2[kl] -= t2[kl,kj,kb].transpose(0,1,3,2)
                         St2[kl] -= unpack_tril(t2,nkpts,kl,kj,kb,kconserv[kl,kb,kj]).transpose(0,1,3,2)
                     vvvo_tmp[iterka,iterkb,iterkc] += einsum('alcd,ljdb->abcj',
                                                         eris_vovv_aXc[iterka,:,iterkc].transpose(1,0,2,3,4).reshape(nvir,nkpts*nocc,nvir,nvir),
@@ -1257,7 +1252,7 @@ def WvvvoR1(cc,t1,t2,eris,fint=None):
                                                             t2_tmp.reshape(-1,nvir,nvir))
 
                     vvvo_tmp[iterka,iterkb,iterkc] += einsum('lkjc,lb,ka->abcj',eris.ooov[kb,ka,kj],t1[kb],t1[ka])
-#                    vvvo_tmp[iterka,iterkb,iterkc] += einsum('lc,ljab->abcj',-FFov[kc],t2[kc,kj,ka])
+                    #vvvo_tmp[iterka,iterkb,iterkc] += einsum('lc,ljab->abcj',-FFov[kc],t2[kc,kj,ka])
                     vvvo_tmp[iterka,iterkb,iterkc] += einsum('lc,ljab->abcj',-FFov[kc],unpack_tril(t2,nkpts,kc,kj,ka,kconserv[kc,ka,kj]))
 
         Wabcj[s2,s0,s1] = vvvo_tmp[:len(ranges0),:len(ranges1),:len(ranges2)].transpose(2,0,1,3,4,5,6)
@@ -1287,17 +1282,17 @@ def Wovoo(cc,t1,t2,eris,fint=None):
         #WW1ovvo = fint['W1ovvo']
         WW1voov = fint['W1voov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
     nkpts_blksize2 = min(max(int(np.floor(mem/(pre*nkpts_blksize))),1),nkpts)
     nkpts_blksize2 = 1
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
-    print BLKSIZE
+    print(BLKSIZE)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END ################
+    # Adaptive blocking ends here 
     ovoo_tmp_size = BLKSIZE + (nocc,nvir,nocc,nocc)
     ovoo_tmp = np.empty(ovoo_tmp_size,dtype=t2.dtype)
 
@@ -1308,7 +1303,7 @@ def Wovoo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         WW1ovov_kbi = _cp(WW1ovov[s0,s1,s2])
         WWoooo_kbi  = _cp(WWoooo[s0,s1,s2])
         #WW1ovvo_kbi = _cp(WW1ovvo[s0,s1,s2])
@@ -1336,19 +1331,19 @@ def Wovoo(cc,t1,t2,eris,fint=None):
                                                                   unpack_tril(t2,nkpts,range(nkpts),ki,kb,
                                                                       kconserv[range(nkpts),kb,ki]).reshape(nkpts*nocc,nocc,nvir,nvir))
 
-#                    St2 = 2.*t2[kj,:,kb]
+                    #St2 = 2.*t2[kj,:,kb]
                     St2 = 2.*unpack_tril(t2,nkpts,kj,range(nkpts),kb,kconserv[kj,kb,range(nkpts)])
-#                    St2 -= t2[:,kj,kb].transpose(0,2,1,3,4)
+                    #St2 -= t2[:,kj,kb].transpose(0,2,1,3,4)
                     St2 -= unpack_tril(t2,nkpts,range(nkpts),kj,kb,kconserv[range(nkpts),kb,kj]).transpose(0,2,1,3,4)
                     St2 = St2.transpose(1,0,2,3,4).reshape(nocc,nkpts*nocc,nvir,nvir)
                     ovoo_tmp[iterkk,iterkb,iterki] += einsum('klid,jlbd->kbij', eris_ooov_kXi[iterkk,:,iterki].transpose(1,0,2,3,4).reshape(nocc,nkpts*nocc,nocc,nvir), St2)
 
-#                    tau1 = t2[kj,ki,:].copy()
+                    #tau1 = t2[kj,ki,:].copy()
                     tau1 = unpack_tril(t2,nkpts,kj,ki,range(nkpts),kconserv[kj,range(nkpts),ki]).copy()
                     tau1[kj] += einsum('jd,ic->jidc',t1[kj],t1[ki])
                     ovoo_tmp[iterkk,iterkb,iterki] += einsum('bkdc,jidc->kbij', eris_vovv_bkX[iterkb,iterkk,:].transpose(1,2,0,3,4).reshape(nvir,nocc,nvir*nkpts,nvir),
                                                                 tau1.transpose(1,2,0,3,4).reshape(nocc,nocc,nkpts*nvir,nvir))
-#                    ovoo_tmp[iterkk,iterkb,iterki] += einsum('kc,ijcb->kbij', FFov[kk],t2[ki,kj,kk])
+                    #ovoo_tmp[iterkk,iterkb,iterki] += einsum('kc,ijcb->kbij', FFov[kk],t2[ki,kj,kk])
                     ovoo_tmp[iterkk,iterkb,iterki] += einsum('kc,ijcb->kbij', FFov[kk],unpack_tril(t2,nkpts,ki,kj,kk,kconserv[ki,kk,kj]))
 
         Wkbij[s0,s1,s2] = ovoo_tmp[:len(ranges0),:len(ranges1),:len(ranges2)]
@@ -1369,7 +1364,7 @@ def W1voov(cc,t1,t2,eris,fint=None):
     else:
         Wkaci  = fint['W1voov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -1377,7 +1372,7 @@ def W1voov(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
     ovvo_tmp_size = BLKSIZE + (nocc,nvir,nvir,nocc)
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
@@ -1388,7 +1383,7 @@ def W1voov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         eris_ovvo_kac = _cp(eris.ovvo[s0,s1,s2])
         eris_oovv_kXc = _cp(eris.oovv[s0,:,s2])
@@ -1399,9 +1394,9 @@ def W1voov(cc,t1,t2,eris,fint=None):
                 for iterkc,kc in enumerate(ranges2):
                     ki = kconserv[kk,kc,ka]
                     ovvo_tmp[iterkk,iterka,iterkc] = _cp(eris_ovvo_kac[iterkk,iterka,iterkc])
-#                    St2 = 2.*t2[ki,:,ka]
+                    #St2 = 2.*t2[ki,:,ka]
                     St2 = 2.*unpack_tril(t2,nkpts,ki,range(nkpts),ka,kconserv[ki,ka,range(nkpts)])
-#                    St2 -= t2[:,ki,ka].transpose(0,2,1,3,4)
+                    #St2 -= t2[:,ki,ka].transpose(0,2,1,3,4)
                     St2 -= unpack_tril(t2,nkpts,range(nkpts),ki,ka,kconserv[range(nkpts),ka,ki]).transpose(0,2,1,3,4)
                     ovvo_tmp[iterkk,iterka,iterkc] += einsum('klcd,ilad->kaci',eris_oovv_kXc[iterkk,:,iterkc].transpose(1,0,2,3,4).reshape(nocc,nkpts*nocc,nvir,nvir),
                                                                 St2.transpose(1,0,2,3,4).reshape(nocc,nkpts*nocc,nvir,nvir))
@@ -1431,7 +1426,7 @@ def W2voov(cc,t1,t2,eris,fint=None):
         Wkaci  = fint['W2voov']
         WWooov = fint['Wooov']
 
-    ############## Adaptive Blocking :: BEGIN ##############
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -1439,7 +1434,7 @@ def W2voov(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
     ovvo_tmp_size = BLKSIZE + (nocc,nvir,nvir,nocc)
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
@@ -1450,7 +1445,7 @@ def W2voov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wooov_akX     = _cp(WWooov[s1,s0])
         eris_ovvv_kac = _cp(eris.ovvv[s0,s1,s2])
@@ -1487,8 +1482,8 @@ def Wvoov(cc,t1,t2,eris,fint=None):
         W1kaci = fint['W1voov']
         W2kaci = fint['W2voov']
 
-# TODO can do much better than this... call recursive function
-    ############## Adaptive Blocking :: BEGIN ##############
+    # TODO can do much better than this... call recursive function
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -1496,7 +1491,7 @@ def Wvoov(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
 
     good2go = True
     while(good2go):
@@ -1505,7 +1500,7 @@ def Wvoov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         Wkaci[s0,s1,s2] = _cp(W1kaci[s0,s1,s2]) + _cp(W2kaci[s0,s1,s2])
 
         loader.slave_finished()
@@ -1530,8 +1525,8 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
         W1kaci = fint['W1voov']
         W2kaci = fint['W2voov']
 
-# TODO can do much better than this... call recursive function
-    ############## Adaptive Blocking :: BEGIN ##############
+    # TODO can do much better than this... call recursive function
+    # Adaptive blocking begins here
     mem = 0.5e9
     pre = 1.*nocc*nocc*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(np.floor(mem/pre)),1),nkpts)
@@ -1539,7 +1534,7 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
-    ############## Adaptive Blocking :: END   ##############
+    # Adaptive blocking ends here
 
     good2go = True
     while(good2go):
@@ -1548,7 +1543,7 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         Wkaci[s2,s0,s1] = (_cp(W1kaci[s0,s1,s2]) + _cp(W2kaci[s0,s1,s2])).transpose(2,0,1,3,4,5,6)
 
         loader.slave_finished()
@@ -1560,3 +1555,5 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
 
     return Wkaci
 
+def _cp(a):
+    return np.array(a, copy=False, order='C')

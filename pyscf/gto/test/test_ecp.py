@@ -1,31 +1,98 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#
-# Analytical integration
-# J. Chem. Phys. 65, 3826
-# J. Chem. Phys. 111, 8778
-# J. Comput. Phys. 44, 289
-#
-# Numerical integration
-# J. Comput. Chem. 27, 1009
-# Chem. Phys. Lett. 296, 445
 #
 
 import unittest
 import numpy
 from pyscf import gto
 from pyscf import scf
+from pyscf import lib
 
 
-class KnowValues(unittest.TestCase):
+cu1_basis = gto.basis.parse('''
+ H    S
+       1.8000000              1.0000000
+ H    S
+       2.8000000              0.0210870             -0.0045400              0.0000000
+       1.3190000              0.3461290             -0.1703520              0.0000000
+       0.9059000              0.0393780              0.1403820              1.0000000
+ H    P
+       2.1330000              0.0868660              0.0000000
+       1.2000000              0.0000000              0.5000000
+       0.3827000              0.5010080              1.0000000
+ H    D
+       0.3827000              1.0000000
+ H    F
+       2.1330000              0.1868660              0.0000000
+       0.3827000              0.2010080              1.0000000
+                               ''')
+
+mol = gto.M(atom='''
+Cu1 0. 0. 0.
+Cu 0. 1. 0.
+He 1. 0. 0.
+''',
+            basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
+            ecp = {'cu':'lanl2dz'})
+
+mol1 = gto.M(atom='''
+Cu1 0.  0.  0.
+Cu 0. 1. 0.
+He 1. 0. 0.
+Ghost-Cu1 0.  0.  0.0001
+''',
+             basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
+             ecp = {'cu':'lanl2dz'})
+
+mol2 = gto.M(atom='''
+Cu1 0.  0.  0.
+Cu 0. 1. 0.
+He 1. 0. 0.
+Ghost-Cu1 0.  0. -0.0001
+''',
+             basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
+             ecp = {'cu':'lanl2dz'})
+
+def tearDownModule():
+    global mol, mol1, mol2, cu1_basis
+    del mol, mol1, mol2, cu1_basis
+
+class KnownValues(unittest.TestCase):
+    def test_ecp_by_shell(self):
+        for i in (0,2,3,6,9):
+            for j in (1,2,3,5,6):
+                ref = mol.intor_by_shell('ECPscalar_sph', (i,j))
+                dat = gto.ecp.type1_by_shell(mol, (i, j))
+                dat+= gto.ecp.type2_by_shell(mol, (i, j))
+                self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
+                ref = mol.intor_by_shell('ECPscalar_cart', (i,j))
+                dat = gto.ecp.type1_by_shell(mol, (i, j), cart=True)
+                dat+= gto.ecp.type2_by_shell(mol, (i, j), cart=True)
+                self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_nr_rhf(self):
         mol = gto.M(atom='Na 0. 0. 0.;  H  0.  0.  1.',
                     basis={'Na':'lanl2dz', 'H':'sto3g'},
                     ecp = {'Na':'lanl2dz'},
                     verbose=0)
+        self.assertAlmostEqual(lib.fp(mol.intor('ECPscalar')), -0.19922134780248762, 9)
         mf = scf.RHF(mol)
-        self.assertAlmostEqual(mf.kernel(), -0.45002331958981223, 10)
+        self.assertAlmostEqual(mf.kernel(), -0.45002315563472206, 10)
 
     def test_bfd(self):
         mol = gto.M(atom='H 0. 0. 0.',
@@ -58,6 +125,160 @@ class KnowValues(unittest.TestCase):
 #                    verbose=0)
 #        mf = scf.RHF(mol)
 #        self.assertAlmostEqual(mf.kernel(), -34.709059, 6)
+
+    def test_ecp_grad(self):
+        aoslices = mol.aoslice_nr_by_atom()
+        ish0, ish1 = aoslices[0][:2]
+        for i in range(ish0, ish1):
+            for j in range(mol.nbas):
+                shls = (i,j)
+                shls1 = (shls[0] + mol.nbas, shls[1])
+                ref = (mol1.intor_by_shell('ECPscalar_cart', shls1) -
+                       mol2.intor_by_shell('ECPscalar_cart', shls1)) / 0.0002 * lib.param.BOHR
+                dat = mol.intor_by_shell('ECPscalar_ipnuc_cart', shls, comp=3)
+                self.assertAlmostEqual(abs(-dat[2]-ref).max(), 0, 4)
+
+    def test_ecp_iprinv(self):
+        mol = gto.M(atom='''
+        Cu 0. 0. 0.
+        H  1. 0. 0.
+        ''',
+                    basis={'Cu':'lanl2dz', 'H':'ccpvdz'},
+                    ecp = {'cu':'lanl2dz'})
+        mol1 = gto.M(atom='''
+        Cu 0. 0. 0.
+        H  1. 0. 0.
+        Ghost-Cu 0.  0.  0.0001
+        ''',
+                    basis={'Cu':'lanl2dz', 'H':'ccpvdz'},
+                    ecp = {'cu':'lanl2dz'})
+        mol2 = gto.M(atom='''
+        Cu 0. 0. 0.
+        H  1. 0. 0.
+        Ghost-Cu 0.  0. -0.0001
+        ''',
+                    basis={'Cu':'lanl2dz', 'H':'ccpvdz'},
+                    ecp = {'cu':'lanl2dz'})
+        aoslices = mol.aoslice_nr_by_atom()
+        ish0, ish1 = aoslices[0][:2]
+        for i in range(ish0, ish1):
+            for j in range(mol.nbas):
+                shls = (i,j)
+                shls1 = (shls[0] + mol.nbas, shls[1])
+                ref = (mol1.intor_by_shell('ECPscalar_cart', shls1) -
+                       mol2.intor_by_shell('ECPscalar_cart', shls1)) / 0.0002 * lib.param.BOHR
+                with mol.with_rinv_at_nucleus(0):
+                    dat = mol.intor_by_shell('ECPscalar_iprinv_cart', shls, comp=3)
+                self.assertAlmostEqual(abs(-dat[2]-ref).max(), 0, 4)
+
+    def test_ecp_hessian(self):
+        aoslices = mol.aoslice_nr_by_atom()
+        ish0, ish1 = aoslices[0][:2]
+        for i in range(ish0, ish1):
+            for j in range(mol.nbas):
+                shls = (i,j)
+                shls1 = (shls[0] + mol.nbas, shls[1])
+                ref =-(mol1.intor_by_shell('ECPscalar_ipnuc_cart', shls1, comp=3) -
+                       mol2.intor_by_shell('ECPscalar_ipnuc_cart', shls1, comp=3)) / 0.0002 * lib.param.BOHR
+                dat = mol.intor_by_shell('ECPscalar_ipipnuc_cart', shls, comp=9)
+                di, dj = dat.shape[1:]
+                dat = dat.reshape(3,3,di,dj)
+                self.assertAlmostEqual(abs(dat[2]-ref).max(), 0, 3)
+
+        for i in range(mol.nbas):
+            for j in range(ish0, ish1):
+                shls = (i,j)
+                shls1 = (shls[0], shls[1] + mol.nbas)
+                ref =-(mol1.intor_by_shell('ECPscalar_ipnuc_cart', shls1, comp=3) -
+                       mol2.intor_by_shell('ECPscalar_ipnuc_cart', shls1, comp=3)) / 0.0002 * lib.param.BOHR
+                dat = mol.intor_by_shell('ECPscalar_ipnucip_cart', shls, comp=9)
+                di, dj = dat.shape[1:]
+                dat = dat.reshape(3,3,di,dj)
+                self.assertAlmostEqual(abs(dat[:,2]-ref).max(), 0, 3)
+
+    def test_pp_int(self):
+        from pyscf import gto, scf
+        from pyscf.pbc import gto as pbcgto
+        from pyscf.pbc import scf as pbcscf
+        from pyscf.pbc import df
+        cell = pbcgto.Cell()
+        cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
+        cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
+                      'C' :'gth-szv',}
+        cell.pseudo = {'C':'gth-pade',
+                       'He': pbcgto.pseudo.parse('''He
+        2
+         0.40000000    3    -1.98934751    -0.75604821    0.95604821
+        2
+         0.29482550    3     1.23870466    .855         .3
+                                           .71         -1.1
+                                                        .9
+         0.32235865    2     2.25670239    -0.39677748
+                                            0.93894690
+                                                     ''')}
+        cell.a = numpy.eye(3)
+        cell.dimension = 0
+        cell.build()
+        mol = cell.to_mol()
+
+        hcore = scf.RHF(mol).get_hcore()
+        mydf = df.AFTDF(cell)
+        ref = mydf.get_pp() + mol.intor('int1e_kin')
+        self.assertAlmostEqual(abs(hcore-ref).max(), 0, 2)
+
+        mf = pbcscf.RHF(cell)
+        mf.with_df = mydf
+        mf.run()
+        e_ref = mf.e_tot
+
+        e_tot = scf.RHF(mol).run().e_tot
+        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 6)
+
+    def test_scalar_vs_int1e_rinv(self):
+        mol = gto.M(atom='''
+                    Na 0.5 0.5 0.
+                    H  1.0 0.  0.2
+                    ''',
+                    basis={'Na': [(0, (1, 1)), (1, (4, 1)), (2, (1, 1))],
+                           'H': 'ccpvtz'},
+                    ecp = {'Na': gto.basis.parse_ecp('''
+Na nelec 8
+Na ul
+1      0.    -3.
+''')})
+        mat = mol.intor('ECPscalar')
+        with mol.with_rinv_orig(mol.atom_coord(0)):
+            ref = mol.intor('int1e_rinv')*-3
+        self.assertAlmostEqual(abs(mat-ref).max(), 0, 9)
+
+    def test_so_vs_int1e_rinv(self):
+        mol = gto.M(atom='''
+                    Na 0.5 0.5 0.
+                    ''',
+                    charge=1,
+                    basis={'Na': [(0, (1, 1)), (1, (4, 1)), (1, (1, 1)), (2, (1, 1))]},
+                    ecp = {'Na': gto.basis.parse_ecp('''
+Na nelec 8
+Na S
+1      0.    -3.    -3.
+Na P
+1      0.    -3.    -3.
+Na D
+1      0.    -3.    -3.
+Na F
+1      0.    -3.    -3.
+''')})
+        u = mol.sph2spinor_coeff()
+        ref = numpy.einsum('sxy,spq,xpi,yqj->ij', lib.PauliMatrices,
+                           mol.intor('int1e_inuc_rxp'), u.conj(), u)
+
+        mat = mol.intor('ECPso_spinor')
+        self.assertAlmostEqual(abs(ref-mat).max(), 0, 11)
+
+        mat = numpy.einsum('sxy,spq,xpi,yqj->ij', lib.PauliMatrices,
+                           mol.intor('ECPso'), u.conj(), u)
+        self.assertAlmostEqual(abs(ref-mat).max(), 0, 11)
+
 
 
 if __name__ == '__main__':

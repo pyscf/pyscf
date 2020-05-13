@@ -1,8 +1,17 @@
 #!/usr/bin/python
-
-import os
-import re
-import sys
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 def main():
 
@@ -26,7 +35,7 @@ def main():
                 banner_count = 1
                 is_header = False
                 is_footer = False
-            else: 
+            else:
                 if is_header:
                     header.append(line)
                 else:
@@ -41,10 +50,10 @@ def main():
         # The last one:
         all_pseudos.append(current_pseudo)
 
-    print "Found", len(xcs), "XC pseudopotentials."
+    print("Found", len(xcs), "XC pseudopotentials.")
 
 #    for line in header:
-#        print line
+#        print(line)
 #
     for xc, pseudo in zip(xcs, all_pseudos):
         with open('gth-%s.dat'%(xc.lower()),'w') as f:

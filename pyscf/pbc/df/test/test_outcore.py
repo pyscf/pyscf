@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import tempfile
 import numpy
@@ -13,7 +27,7 @@ import pyscf.pbc
 cell = pgto.Cell()
 cell.unit = 'B'
 cell.a = numpy.eye(3) * 4.
-cell.gs = [5,5,5]
+cell.mesh = [11]*3
 cell.atom = 'He 0 1 1; He 1 1 0'
 cell.basis = { 'He': [[0, (0.8, 1.0)],
                       [0, (1.2, 1.0)]] }
@@ -25,12 +39,12 @@ def finger(a):
     return numpy.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
-    def test_aux_e2(self):
+    def test_aux_e1(self):
         tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         numpy.random.seed(1)
         kptij_lst = numpy.random.random((3,2,3))
         kptij_lst[0] = 0
-        outcore.aux_e2(cell, cell, tmpfile.name, aosym='s2', comp=1,
+        outcore.aux_e1(cell, cell, tmpfile.name, aosym='s2', comp=1,
                        kptij_lst=kptij_lst, verbose=0)
         refk = incore.aux_e2(cell, cell, aosym='s2', kptij_lst=kptij_lst)
         with h5py.File(tmpfile.name, 'r') as f:

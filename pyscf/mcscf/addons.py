@@ -1,20 +1,42 @@
 #!/usr/bin/env python
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import sys
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf import fci
 from pyscf import scf
 from pyscf import symm
+from pyscf import __config__
+
+BASE = getattr(__config__, 'mcscf_addons_sort_mo_base', 1)
+MAP2HF_TOL = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
+
+if sys.version_info < (3,):
+    RANGE_TYPE = list
+else:
+    RANGE_TYPE = range
 
 
-def sort_mo(casscf, mo_coeff, caslst, base=1):
+def sort_mo(casscf, mo_coeff, caslst, base=BASE):
     '''Pick orbitals for CAS space
 
     Args:
@@ -47,43 +69,65 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
     -109.007378939813691
     '''
     ncore = casscf.ncore
+    def ext_list(nmo, caslst):
+        mask = numpy.ones(nmo, dtype=bool)
+        mask[caslst] = False
+        idx = numpy.where(mask)[0]
+        if len(idx) + casscf.ncas != nmo:
+            raise ValueError('Active space size is incompatible with caslist. '
+                             'ncas = %d.  caslist %s' % (casscf.ncas, caslst))
+        return idx
+
     if isinstance(ncore, (int, numpy.integer)):
-        assert(casscf.ncas == len(caslst))
         nmo = mo_coeff.shape[1]
         if base != 0:
             caslst = [i-base for i in caslst]
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst])
-        return numpy.hstack((mo_coeff[:,idx[:ncore]],
-                             mo_coeff[:,caslst],
-                             mo_coeff[:,idx[ncore:]]))
+        idx = ext_list(nmo, caslst)
+        mo = numpy.hstack((mo_coeff[:,idx[:ncore]],
+                           mo_coeff[:,caslst],
+                           mo_coeff[:,idx[ncore:]]))
+
+        if getattr(mo_coeff, 'orbsym', None) is not None:
+            orbsym = mo_coeff.orbsym
+            orbsym = numpy.hstack((orbsym[idx[:ncore]], orbsym[caslst],
+                                   orbsym[idx[ncore:]]))
+            mo = lib.tag_array(mo, orbsym=orbsym)
+        return mo
+
     else: # UHF-based CASSCF
         if isinstance(caslst[0], (int, numpy.integer)):
-            assert(casscf.ncas == len(caslst))
             if base != 0:
                 caslsta = [i-1 for i in caslst]
                 caslst = (caslsta, caslsta)
         else: # two casspace lists, for alpha and beta
-            assert(casscf.ncas == len(caslst[0]))
-            assert(casscf.ncas == len(caslst[1]))
             if base != 0:
                 caslst = ([i-base for i in caslst[0]],
                           [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
-        mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]],
+        idxa = ext_list(nmo, caslst[0])
+        mo_a = numpy.hstack((mo_coeff[0][:,idxa[:ncore[0]]],
                              mo_coeff[0][:,caslst[0]],
-                             mo_coeff[0][:,idx[ncore[0]:]]))
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
-        mo_b = numpy.hstack((mo_coeff[1][:,idx[:ncore[1]]],
+                             mo_coeff[0][:,idxa[ncore[0]:]]))
+        idxb = ext_list(nmo, caslst[1])
+        mo_b = numpy.hstack((mo_coeff[1][:,idxb[:ncore[1]]],
                              mo_coeff[1][:,caslst[1]],
-                             mo_coeff[1][:,idx[ncore[1]:]]))
+                             mo_coeff[1][:,idxb[ncore[1]:]]))
+
+        if getattr(mo_coeff[0], 'orbsym', None) is not None:
+            orbsyma, orbsymb = mo_coeff[0].orbsym, mo_coeff[1].orbsym
+            orbsyma = numpy.hstack((orbsyma[idxa[:ncore[0]]], orbsyma[caslst[0]],
+                                    orbsyma[idxa[ncore[0]:]]))
+            orbsymb = numpy.hstack((orbsymb[idxb[:ncore[1]]], orbsymb[caslst[1]],
+                                    orbsymb[idxb[ncore[1]:]]))
+            mo_a = lib.tag_array(mo_a, orbsym=orbsyma)
+            mo_b = lib.tag_array(mo_b, orbsym=orbsymb)
         return (mo_a, mo_b)
 
-def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=1):
+def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=BASE):
     raise RuntimeError('This function has been replaced by function caslst_by_irrep')
 
 def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
-                    cas_irrep_ncore=None, s=None, base=1):
+                    cas_irrep_ncore=None, s=None, base=BASE):
     '''Given number of active orbitals for each irrep, return the orbital
     indices of active space
 
@@ -126,10 +170,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     '''
     mol = casscf.mol
     log = logger.Logger(casscf.stdout, casscf.verbose)
-    if s is None:
-        s = casscf._scf.get_ovlp()
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s)
-    orbsym = numpy.asarray(orbsym)
+    orbsym = numpy.asarray(scf.hf_symm.get_orbsym(mol, mo_coeff))
     ncore = casscf.ncore
 
     irreps = set(orbsym)
@@ -142,7 +183,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             else:
                 irrep_ncore[k] = v
 
-        ncore_rest = casscf.ncore - sum(irrep_ncore.values())
+        ncore_rest = ncore - sum(irrep_ncore.values())
         if ncore_rest > 0:  # guess core configuration
             mask = numpy.ones(len(orbsym), dtype=bool)
             for ir in irrep_ncore:
@@ -151,12 +192,12 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
             core_rest = dict([(ir, numpy.count_nonzero(core_rest==ir))
                               for ir in set(core_rest)])
             log.info('Given core space %s < casscf core size %d',
-                     cas_irrep_ncore, casscf.ncore)
+                     cas_irrep_ncore, ncore)
             log.info('Add %s to core configuration', core_rest)
             irrep_ncore.update(core_rest)
         elif ncore_rest < 0:
             raise ValueError('Given core space %s > casscf core size %d'
-                             % (cas_irrep_ncore, casscf.ncore))
+                             % (cas_irrep_ncore, ncore))
     else:
         irrep_ncore = dict([(ir, sum(orbsym[:ncore]==ir)) for ir in irreps])
 
@@ -262,8 +303,8 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     -108.162863845084
     '''
     caslst = caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
-                             cas_irrep_ncore, s, 0)
-    return sort_mo(casscf, mo_coeff, caslst, 0)
+                             cas_irrep_ncore, s, base=0)
+    return sort_mo(casscf, mo_coeff, caslst, base=0)
 
 
 def project_init_guess(casscf, init_mo, prev_mol=None):
@@ -318,6 +359,17 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     from pyscf import lo
 
     def project(mfmo, init_mo, ncore, s):
+        s_init_mo = numpy.einsum('pi,pi->i', init_mo.conj(), s.dot(init_mo))
+        if abs(s_init_mo - 1).max() < 1e-7 and mfmo.shape[1] == init_mo.shape[1]:
+            # Initial guess orbitals are orthonormal
+            return init_mo
+# TODO: test whether the canonicalized orbitals are better than the projected orbitals
+# Be careful that the ordering of the canonicalized orbitals may be very different
+# to the CASSCF orbitals.
+#        else:
+#            fock = casscf.get_fock(mc, init_mo, casscf.ci)
+#            return casscf._scf.eig(fock, s)[1]
+
         nocc = ncore + casscf.ncas
         if ncore > 0:
             mo0core = init_mo[:,:ncore]
@@ -335,18 +387,23 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
                   - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
             mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
         else:
-            mocc = init_mo[:,:nocc]
+            mocc = lo.orth.vec_lowdin(init_mo[:,:nocc], s)
 
         # remove core and active space from rest
         if mocc.shape[1] < mfmo.shape[1]:
-            rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
-            e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
-            restorb = numpy.dot(rest, u[:,e>1e-7])
             if casscf.mol.symmetry:
-                t = casscf.mol.intor_symmetric('int1e_kin')
-                t = reduce(numpy.dot, (restorb.T, t, restorb))
-                e, u = numpy.linalg.eigh(t)
-                restorb = numpy.dot(restorb, u)
+                restorb = []
+                orbsym = scf.hf_symm.get_orbsym(casscf.mol, mfmo, s)
+                for ir in set(orbsym):
+                    mo_ir = mfmo[:,orbsym==ir]
+                    rest = mo_ir - reduce(numpy.dot, (mocc, mocc.T, s, mo_ir))
+                    e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+                    restorb.append(numpy.dot(rest, u[:,e>1e-7]))
+                restorb = numpy.hstack(restorb)
+            else:
+                rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
+                e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+                restorb = numpy.dot(rest, u[:,e>1e-7])
             mo = numpy.hstack((mocc, restorb))
         else:
             mo = mocc
@@ -362,24 +419,35 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     ncore = casscf.ncore
     mfmo = casscf._scf.mo_coeff
     s = casscf._scf.get_ovlp()
-    if isinstance(ncore, (int, numpy.integer)):
-        if prev_mol is not None:
+    if prev_mol is None:
+        if init_mo.shape[0] != mfmo.shape[0]:
+            raise RuntimeError('Initial guess orbitals has wrong dimension')
+    elif gto.same_mol(prev_mol, casscf.mol, cmp_basis=False):
+        if isinstance(ncore, (int, numpy.integer)):  # RHF
             init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, casscf.mol)
         else:
-            assert(mfmo.shape[0] == init_mo.shape[0])
-        mo = project(mfmo, init_mo, ncore, s)
-    else: # UHF-based CASSCF
-        if prev_mol is not None:
             init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], casscf.mol),
                        scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
+    elif gto.same_basis_set(prev_mol, casscf.mol):
+        if isinstance(ncore, (int, numpy.integer)):  # RHF
+            fock = casscf.get_fock(init_mo, casscf.ci)
+            return casscf._scf.eig(fock, s)[1]
         else:
-            assert(mfmo[0].shape[0] == init_mo[0].shape[0])
+            raise NotImplementedError('Project initial for UHF orbitals.')
+    else:
+        raise NotImplementedError('Project initial guess from different system.')
+
+# Be careful with the orbital projection. The projection may lead to bad
+# initial guess orbitals if the geometry is dramatically changed.
+    if isinstance(ncore, (int, numpy.integer)):
+        mo = project(mfmo, init_mo, ncore, s)
+    else: # UHF-based CASSCF
         mo = (project(mfmo[0], init_mo[0], ncore[0], s),
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo
 
 # on AO representation
-def make_rdm1(casscf, mo_coeff=None, ci=None):
+def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
     '''One-particle densit matrix in AO representation
 
     Args:
@@ -405,13 +473,13 @@ def make_rdm1(casscf, mo_coeff=None, ci=None):
     [ 0.0121563   0.0494735   0.0494735   1.95040395  1.95040395  1.98808879
       2.          2.          2.          2.        ]
     '''
-    return casscf.make_rdm1(mo_coeff, ci)
+    return casscf.make_rdm1(mo_coeff, ci, **kwargs)
 
 # make both alpha and beta density matrices
-def make_rdm1s(casscf, mo_coeff=None, ci=None):
+def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
     '''Alpha and beta one-particle densit matrices in AO representation
     '''
-    return casscf.make_rdm1s(mo_coeff, ci)
+    return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)
@@ -470,11 +538,10 @@ def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
     else:
         return casscf.cas_natorb(mo_coeff, ci, sort=sort)
 
-def map2hf(casscf, mf_mo=None, base=1, tol=.5):
+def map2hf(casscf, mf_mo=None, base=BASE, tol=MAP2HF_TOL):
     '''The overlap between the CASSCF optimized orbitals and the canonical HF orbitals.
     '''
-    if mf_mo is None:
-        mf_mo = casscf._scf.mo_coeff
+    if mf_mo is None: mf_mo = casscf._scf.mo_coeff
     s = casscf.mol.intor_symmetric('int1e_ovlp')
     s = reduce(numpy.dot, (casscf.mo_coeff.T, s, mf_mo))
     idx = numpy.argwhere(abs(s) > tol)
@@ -512,18 +579,28 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         if ovlp is None: ovlp = casscf._scf.get_ovlp()
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
-        sscas = fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        if isinstance(ci, (list, tuple, RANGE_TYPE)):
+            sscas = numpy.array([fci.spin_op.spin_square(c, ncas, nelecas, mocas, ovlp)[0]
+                                 for c in ci])
+        else:
+            sscas = fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)[0]
         mocore = (mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
-        sscore = scf.uhf.spin_square(mocore, ovlp)
-        logger.debug(casscf, 'S^2 of core %f  S^2 of cas %f', sscore[0], sscas[0])
-        ss = sscas[0]+sscore[0]
+        sscore = casscf._scf.spin_square(mocore, ovlp)[0]
+        logger.debug(casscf, 'S^2 of core %s  S^2 of cas %s', sscore, sscas)
+        ss = sscas+sscore
         s = numpy.sqrt(ss+.25) - .5
         return ss, s*2+1
 
+# A tag to label the derived FCI class
 class StateAverageFCISolver:
     pass
+class StateSpecificFCISolver:
+    pass
+# A tag to label the derived MCSCF class
+class StateAverageMCSCFSolver:
+    pass
 
-def state_average_(casscf, weights=(0.5,0.5)):
+def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
     ''' State average over the energy.  The energy funcitonal is
     E = w1<psi1|H|psi1> + w2<psi2|H|psi2> + ...
 
@@ -532,71 +609,197 @@ def state_average_(casscf, weights=(0.5,0.5)):
     mc.fcisolver = fci.solver(mol, False)
 
     before calling state_average_(mc), to mix the singlet and triplet states
+
+    MRH, 04/08/2019: Instead of turning casscf._finalize into an instance attribute
+    that points to the previous casscf object, I'm going to make a whole new child class.
+    This will have the added benefit of making state_average and state_average_
+    actually behave differently for the first time (until now they *both* modified the
+    casscf object inplace). I'm also going to assign the weights argument as a member
+    of the mc child class because an accurate second-order CASSCF algorithm for state-averaged
+    calculations requires that the gradient and Hessian be computed for CI vectors of each root
+    individually and then multiplied by that root's weight. The second derivatives computed
+    by newton_casscf.py need to be extended to state-averaged calculations in order to be
+    used as intermediates for calculations of the gradient of a single root in the context
+    of the SA-CASSCF method; see: Mol. Phys. 99, 103 (2001).
     '''
     assert(abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
-    if fcibase_class.__name__ == 'FakeCISolver':
-        sys.stderr.write('state_average function cannot work with decorated '
-                         'fcisolver %s.\nYou can restore the base fcisolver '
-                         'then call state_average function, eg\n'
-                         '    mc.fcisolver = %s.%s(mc.mol)\n'
-                         '    mc.state_average_()\n' %
-                         (casscf.fcisolver, fcibase_class.__base__.__module__,
-                          fcibase_class.__base__.__name__))
-        raise TypeError('mc.fcisolver is not base FCI solver')
+    has_spin_square = getattr(casscf.fcisolver, 'spin_square', None)
+
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
-        def __init__(self, mol=None):
+        def __init__(self, fcibase):
+            self.__dict__.update (fcibase.__dict__)
             self.nroots = len(weights)
+            self.weights = weights
+            self.wfnsym = wfnsym
+            self.e_states = [None]
+            keys = set (('weights','e_states','_base_class'))
+            self._keys = self._keys.union (keys)
+
+        def dump_flags(self, verbose=None):
+            if hasattr(fcibase_class, 'dump_flags'):
+                fcibase_class.dump_flags(self, verbose)
+            log = logger.new_logger(self, verbose)
+            log.info('State-average over %d states with weights %s',
+                     len(self.weights), self.weights)
+            return self
+
+        @property
+        def _base_class (self):
+            ''' for convenience; this is equal to fcibase_class '''
+            return self.__class__.__bases__[0]
+
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
 # pass self to fcibase_class.kernel function because orbsym argument is stored in self
 # but undefined in fcibase object
+            if 'nroots' not in kwargs:
+                kwargs['nroots'] = self.nroots
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
-                                        nroots=self.nroots, **kwargs)
-            if (casscf.verbose >= logger.DEBUG and
-                hasattr(fcibase_class, 'spin_square')):
-                for i, ei in enumerate(e):
-                    ss = fcibase_class.spin_square(self, c[i], norb, nelec)
-                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                                 i, ei, ss[0])
-            return numpy.einsum('i,i->', e, weights), c
+                                        wfnsym=self.wfnsym, **kwargs)
+            self.e_states = e
+
+            log = logger.new_logger(self, kwargs.get('verbose'))
+            if log.verbose >= logger.DEBUG:
+                if has_spin_square:
+                    ss = self.states_spin_square(c, norb, nelec)[0]
+                    for i, ei in enumerate(e):
+                        log.debug('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+                else:
+                    for i, ei in enumerate(e):
+                        log.debug('state %d  E = %.15g', i, ei)
+            return numpy.einsum('i,i->', e, self.weights), c
+
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
-            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
-                                        max_cycle=casscf.ci_response_space,
-                                        nroots=self.nroots, **kwargs)
-            return numpy.einsum('i,i->', e, weights), c
-        def make_rdm1(self, ci0, norb, nelec):
+            try:
+                e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
+                                                   ci0, nroots=self.nroots,
+                                                   wfnsym=self.wfnsym,
+                                                   **kwargs)
+            except AttributeError:
+                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                            nroots=self.nroots,
+                                            wfnsym=self.wfnsym, **kwargs)
+            return numpy.einsum('i,i->', e, self.weights), c
+
+        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
             dm1 = 0
-            for i, wi in enumerate(weights):
-                dm1 += wi*fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
+            for i, wi in enumerate(self.weights):
+                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec, *args, **kwargs)
             return dm1
-        def make_rdm12(self, ci0, norb, nelec):
+
+        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
+            dm1a, dm1b = 0, 0
+            for i, wi in enumerate(self.weights):
+                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec, *args, **kwargs)
+                dm1a += wi * dm1s[0]
+                dm1b += wi * dm1s[1]
+            return dm1a, dm1b
+
+        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
             rdm1 = 0
             rdm2 = 0
-            for i, wi in enumerate(weights):
-                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec)
+            for i, wi in enumerate(self.weights):
+                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec, *args, **kwargs)
                 rdm1 += wi * dm1
                 rdm2 += wi * dm2
             return rdm1, rdm2
 
-        if hasattr(fcibase_class, 'spin_square'):
-            def spin_square(self, ci0, norb, nelec):
-                ss = 0
-                multip = 0
-                for i, wi in enumerate(weights):
-                    res = fcibase_class.spin_square(self, ci0[i], norb, nelec)
-                    ss += wi * res[0]
-                    multip += wi * res[1]
-                return ss, multip
+        if has_spin_square:
+            def spin_square(self, ci0, norb, nelec, *args, **kwargs):
+                ss, multip = self.states_spin_square(ci0, norb, nelec, *args, **kwargs)
+                weights = self.weights
+                return numpy.dot(ss, weights), numpy.dot(multip, weights)
+            def states_spin_square(self, ci0, norb, nelec, *args, **kwargs):
+                s = [fcibase_class.spin_square(self, ci0[i], norb, nelec, *args, **kwargs)
+                     for i, wi in enumerate(self.weights)]
+                return [x[0] for x in s], [x[1] for x in s]
 
-    fcisolver = FakeCISolver(casscf.mol)
-    fcisolver.__dict__.update(casscf.fcisolver.__dict__)
-    fcisolver.nroots = len(weights)
-    casscf.fcisolver = fcisolver
+    # No recursion of FakeCISolver is allowed!
+    if isinstance (casscf.fcisolver, StateAverageFCISolver):
+        fcisolver = casscf.fcisolver
+        fcisolver.nroots = len(weights)
+        fcisolver.weights = weights
+    else:
+        fcisolver = FakeCISolver(casscf.fcisolver)
+    return _state_average_mcscf_solver(casscf, fcisolver)
+
+def _state_average_mcscf_solver(casscf, fcisolver):
+    '''A common routine for function state_average and state_average_mix to
+    generate state-average MCSCF solver.
+    '''
+    mcscfbase_class = casscf.__class__
+    if isinstance (casscf, StateAverageMCSCFSolver):
+        raise TypeError('mc is not base MCSCF solver\n'
+                        'state_average function cannot work with decorated '
+                        'MCSCF solver %s.\nYou can restore the base MCSCF '
+                        'then call state_average function, eg\n'
+                        '    mc = %s.%s(mc._scf, %s, %s)\n'
+                        '    mc.state_average_()\n' %
+                        (mcscfbase_class, mcscfbase_class.__base__.__module__,
+                         mcscfbase_class.__base__.__name__, casscf.ncas, casscf.nelecas))
+
+    has_spin_square = getattr(fcisolver, 'spin_square', None)
+
+    class StateAverageMCSCF(mcscfbase_class, StateAverageMCSCFSolver):
+        def __init__(self, my_mc):
+            self.__dict__.update (my_mc.__dict__)
+            self.fcisolver = fcisolver
+            keys = set (('weights', '_base_class'))
+            self._keys = self._keys.union (keys)
+
+        @property
+        def _base_class (self):
+            ''' for convenience; this is equal to mcscfbase_class '''
+            return self.__class__.__bases__[0]
+
+        @property
+        def weights (self):
+            ''' I want these to be accessible but not separable from fcisolver.weights '''
+            return self.fcisolver.weights
+        @weights.setter
+        def weights (self, x):
+            self.fcisolver.weights = x
+            return self.fcisolver.weights
+
+        @property
+        def e_average(self):
+            return numpy.dot(self.fcisolver.weights, self.fcisolver.e_states)
+
+        @property
+        def e_states(self):
+            return self.fcisolver.e_states
+
+        def _finalize(self):
+            mcscfbase_class._finalize(self)
+            # Do not overwrite self.e_tot because .e_tot needs to be used in
+            # geometry optimization. self.e_states can be used to access the
+            # energy of each state
+            #self.e_tot = self.fcisolver.e_states
+            logger.note(self, 'CASCI state-averaged energy = %.15g', self.e_average)
+            logger.note(self, 'CASCI energy for each state')
+            if has_spin_square:
+                ss = self.fcisolver.states_spin_square(self.ci, self.ncas,
+                                                       self.nelecas)[0]
+                for i, ei in enumerate(self.e_states):
+                    logger.note(self, '  State %d weight %g  E = %.15g S^2 = %.7f',
+                                i, self.weights[i], ei, ss[i])
+            else:
+                for i, ei in enumerate(self.e_states):
+                    logger.note(self, '  State %d weight %g  E = %.15g',
+                                i, self.weights[i], ei)
+            return self
+
+    return StateAverageMCSCF(casscf)
+
+def state_average_(casscf, weights=(0.5,0.5)):
+    ''' Inplace version of state_average '''
+    sacasscf = state_average (casscf, weights)
+    casscf.__class__ = sacasscf.__class__
+    casscf.__dict__.update (sacasscf.__dict__)
     return casscf
-state_average = state_average_
 
 
-def state_specific_(casscf, state=1):
+def state_specific_(casscf, state=1, wfnsym=None):
     '''For excited state
 
     Kwargs:
@@ -605,39 +808,50 @@ def state_specific_(casscf, state=1):
     '''
     fcibase_class = casscf.fcisolver.__class__
     if fcibase_class.__name__ == 'FakeCISolver':
-        sys.stderr.write('state_specific function cannot work with decorated '
-                         'fcisolver %s.\nYou can restore the base fcisolver '
-                         'then call state_specific function, eg\n'
-                         '    mc.fcisolver = %s.%s(mc.mol)\n'
-                         '    mc.state_specific_()\n' %
-                         (casscf.fcisolver, fcibase_class.__base__.__module__,
-                          fcibase_class.__base__.__name__))
-        raise TypeError('mc.fcisolver is not base FCI solver')
-    class FakeCISolver(fcibase_class, StateAverageFCISolver):
+        raise TypeError('mc.fcisolver is not base FCI solver\n'
+                        'state_specific function cannot work with decorated '
+                        'fcisolver %s.\nYou can restore the base fcisolver '
+                        'then call state_specific function, eg\n'
+                        '    mc.fcisolver = %s.%s(mc.mol)\n'
+                        '    mc.state_specific_()\n' %
+                        (casscf.fcisolver, fcibase_class.__base__.__module__,
+                         fcibase_class.__base__.__name__))
+    class FakeCISolver(fcibase_class, StateSpecificFCISolver):
         def __init__(self):
             self.nroots = state+1
             self._civec = None
+            self.wfnsym = wfnsym
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
                 ci0 = self._civec
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
-                                        nroots=self.nroots, **kwargs)
+                                        nroots=self.nroots, wfnsym=self.wfnsym,
+                                        **kwargs)
             if state == 0:
                 e = [e]
                 c = [c]
             self._civec = c
-            if (casscf.verbose >= logger.DEBUG and
-                hasattr(fcibase_class, 'spin_square')):
-                ss = fcibase_class.spin_square(self, c[state], norb, nelec)
-                logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                             state, e[state], ss[0])
+            log = logger.new_logger(self, kwargs.get('verbose'))
+            if log.verbose >= logger.DEBUG:
+                if getattr(fcibase_class, 'spin_square', None):
+                    ss = fcibase_class.spin_square(self, c[state], norb, nelec)
+                    log.debug('state %d  E = %.15g S^2 = %.7f',
+                              state, e[state], ss[0])
+                else:
+                    log.debug('state %d  E = %.15g', state, e[state])
             return e[state], c[state]
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
                 ci0 = self._civec
-            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
-                                        max_cycle=casscf.ci_response_space,
-                                        nroots=self.nroots, **kwargs)
+            try:
+                e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
+                                                   ci0, nroots=self.nroots,
+                                                   wfnsym=self.wfnsym,
+                                                   **kwargs)
+            except AttributeError:
+                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                                            nroots=self.nroots,
+                                            wfnsym=self.wfnsym, **kwargs)
             if state == 0:
                 self._civec = [c]
                 return e, c
@@ -652,22 +866,19 @@ def state_specific_(casscf, state=1):
     return casscf
 state_specific = state_specific_
 
-def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
+def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     '''State-average CASSCF over multiple FCI solvers.
     '''
     fcibase_class = fcisolvers[0].__class__
-#    if fcibase_class.__name__ == 'FakeCISolver':
-#        logger.warn(casscf, 'casscf.fcisolver %s is a decorated FCI solver. '
-#                    'state_average_mix_ function rolls back to the base solver %s',
-#                    fcibase_class, fcibase_class.__base__)
-#        fcibase_class = fcibase_class.__base__
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
+    has_spin_square = all(getattr(solver, 'spin_square', None)
+                          for solver in fcisolvers)
+    has_large_ci = all(getattr(solver, 'large_ci', None)
+                       for solver in fcisolvers)
+    has_transform_ci = all(getattr(solver, 'transform_ci_for_orbital_rotation', None)
+                           for solver in fcisolvers)
 
-    def collect(items):
-        items = list(items)
-        cols = [[item[i] for item in items] for i in range(len(items[0]))]
-        return cols
     def loop_solver(solvers, ci0):
         p0 = 0
         for solver in solvers:
@@ -685,18 +896,29 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 yield solver, ci0[i]
             p0 += solver.nroots
     def get_nelec(solver, nelec):
+        # FCISolver does not need this function. Some external solver may not
+        # have the function to handle nelec and spin
         if solver.spin is not None:
             nelec = numpy.sum(nelec)
             nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
         return nelec
+    def collect(fname, ci0, norb, nelec, *args, **kwargs):
+        for solver, c in loop_civecs(fcisolvers, ci0):
+            fn = getattr(solver, fname)
+            yield fn(c, norb, get_nelec(solver, nelec), *args, **kwargs)
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
+        def __init__(self, mol):
+            fcibase_class.__init__(self, mol)
+            self.nroots = len(weights)
+            self.weights = weights
+            self.e_states = [None]
+            keys = set (('weights','e_states','_base_class'))
+            self._keys = self._keys.union (keys)
+
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
-            if isinstance(verbose, logger.Logger):
-                log = verbose
-            else:
-                log = logger.Logger(sys.stdout, verbose)
+            log = logger.new_logger(self, verbose)
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
@@ -708,18 +930,30 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 else:
                     es.extend(e)
                     cs.extend(c)
-            ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
-                                 for solver, c0 in loop_civecs(fcisolvers, cs))
-            for i, ei in enumerate(es):
-                log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+            self.e_states = es
+            self.converged = numpy.all(getattr(sol, 'converged', True)
+                                       for sol in fcisolvers)
+
+            if log.verbose >= logger.DEBUG:
+                if has_spin_square:
+                    ss = self.states_spin_square(cs, norb, nelec)[0]
+                    for i, ei in enumerate(es):
+                        log.debug('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+                else:
+                    for i, ei in enumerate(es):
+                        log.debug('state %d  E = %.15g', i, ei)
             return numpy.einsum('i,i', numpy.array(es), weights), cs
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
-                e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
-                                     orbsym=self.orbsym, **kwargs)
+                try:
+                    e, c = solver.approx_kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+                                                orbsym=self.orbsym, **kwargs)
+                except AttributeError:
+                    e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+                                         orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
                     cs.append(c)
@@ -727,131 +961,68 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                     es.extend(e)
                     cs.extend(c)
             return numpy.einsum('i,i->', es, weights), cs
+
         def make_rdm1(self, ci0, norb, nelec, **kwargs):
             dm1 = 0
-            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1 += weights[i]*solver.make_rdm1(c, norb, get_nelec(solver, nelec), **kwargs)
+            for i, dm in enumerate(collect('make_rdm1', ci0, norb, nelec, **kwargs)):
+                dm1 += weights[i] * dm
             return dm1
+
+        def make_rdm1s(self, ci0, norb, nelec, **kwargs):
+            dm1a, dm1b = 0, 0
+            for i, dm1s in enumerate(collect('make_rdm1s', ci0, norb, nelec, **kwargs)):
+                dm1a += weights[i] * dm1s[0]
+                dm1b += weights[i] * dm1s[1]
+            return dm1a, dm1b
+
         def make_rdm12(self, ci0, norb, nelec, **kwargs):
             rdm1 = 0
             rdm2 = 0
-            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                dm1, dm2 = solver.make_rdm12(c, norb, get_nelec(solver, nelec), **kwargs)
+            for i, (dm1, dm2) in enumerate(collect('make_rdm12', ci0, norb, nelec, **kwargs)):
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
 
-        if hasattr(fcibase_class, 'spin_square'):
-            def spin_square(self, ci0, norb, nelec):
-                ss = 0
-                multip = 0
-                for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
-                    res = solver.spin_square(c, norb, nelec)
-                    ss += weights[i] * res[0]
-                    multip += weights[i] * res[1]
+        if has_spin_square:
+            def spin_square(self, ci0, norb, nelec, *args, **kwargs):
+                ss, multip = self.states_spin_square(ci0, norb, nelec, *args, **kwargs)
+                weights = self.weights
+                return numpy.dot(ss, weights), numpy.dot(multip, weights)
+            def states_spin_square(self, ci0, norb, nelec, *args, **kwargs):
+                res = list(collect('spin_square', ci0, norb, nelec, *args, **kwargs))
+                ss = [x[0] for x in res]
+                multip = [x[1] for x in res]
                 return ss, multip
+        else:
+            spin_square = None
+
+        large_ci = None
+        if has_large_ci:
+            def states_large_ci(self, fcivec, norb, nelec, *args, **kwargs):
+                return list(collect('large_ci', fcivec, norb, nelec, *args, **kwargs))
+
+        transform_ci_for_orbital_rotation = None
+        if has_transform_ci:
+            def states_transform_ci_for_orbital_rotation(self, fcivec, norb, nelec,
+                                                         *args, **kwargs):
+                return list(collect('transform_ci_for_orbital_rotation',
+                                    fcivec, norb, nelec, *args, **kwargs))
 
     fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     fcisolver.fcisolvers = fcisolvers
-    casscf.fcisolver = fcisolver
+    mc = _state_average_mcscf_solver(casscf, fcisolver)
+    return mc
+
+def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
+    ''' Inplace version of state_average '''
+    sacasscf = state_average_mix(casscf, fcisolvers, weights)
+    casscf.__class__ = sacasscf.__class__
+    casscf.__dict__.update(sacasscf.__dict__)
     return casscf
-state_average_mix = state_average_mix_
 
-def hot_tuning_(casscf, configfile=None):
-    '''Allow you to tune CASSCF parameters on the runtime
-    '''
-    import traceback
-    import tempfile
-    import json
-    #from numpy import array
 
-    if configfile is None:
-        fconfig = tempfile.NamedTemporaryFile(suffix='.json')
-        configfile = fconfig.name
-    logger.info(casscf, 'Function hot_tuning_ dumps CASSCF parameters in config file%s',
-                configfile)
-
-    exclude_keys = set(('stdout', 'verbose', 'ci', 'mo_coeff', 'mo_energy',
-                        'e_cas', 'e_tot', 'ncore', 'ncas', 'nelecas', 'mol',
-                        'callback', 'fcisolver', 'orbsym'))
-
-    casscf_settings = {}
-    for k, v in casscf.__dict__.items():
-        if not (k.startswith('_') or k in exclude_keys):
-            if (v is None or
-                isinstance(v, (str, bool, int, float, list, tuple, dict))):
-                casscf_settings[k] = v
-            elif isinstance(v, set):
-                casscf_settings[k] = list(v)
-
-    doc = '''# JSON format
-# Note the double quote "" around keyword
-'''
-    conf = {'casscf': casscf_settings}
-    with open(configfile, 'w') as f:
-        f.write(doc)
-        f.write(json.dumps(conf, indent=4, sort_keys=True) + '\n')
-        f.write('# Starting from this line, code are parsed as Python script.  The Python code\n'
-                '# will be injected to casscf.kernel through callback hook.  The casscf.kernel\n'
-                '# function local variables can be directly accessed.  Note, these variables\n'
-                '# cannot be directly modified because the environment is generated using\n'
-                '# locals() function (see\n'
-                '# https://docs.python.org/2/library/functions.html#locals).\n'
-                '# You can modify some variables with inplace updating, eg\n'
-                '# from pyscf import fci\n'
-                '# if imacro > 6:\n'
-                '#     casscf.fcislover = fci.fix_spin_(fci.direct_spin1, ss=2)\n'
-                '#     mo[:,:3] *= -1\n'
-                '# Warning: this runtime modification is unsafe and highly unrecommended.\n')
-
-    old_cb = casscf.callback
-    def hot_load(envs):
-        try:
-            with open(configfile) as f:
-# filter out comments
-                raw_js = []
-                balance = 0
-                data = [x for x in f.readlines()
-                        if not x.startswith('#') and x.rstrip()]
-                for n, line in enumerate(data):
-                    if not line.lstrip().startswith('#'):
-                        raw_js.append(line)
-                        balance += line.count('{') - line.count('}')
-                        if balance == 0:
-                            break
-            raw_py = ''.join(data[n+1:])
-            raw_js = ''.join(raw_js)
-
-            logger.debug(casscf, 'Reading CASSCF parameters from config file  %s',
-                         os.path.realpath(configfile))
-            logger.debug1(casscf, '    Inject casscf settings %s', raw_js)
-            conf = json.loads(raw_js)
-            casscf.__dict__.update(conf.pop('casscf'))
-
-            # Not yet found a way to update locals() on the runtime
-            # https://docs.python.org/2/library/functions.html#locals
-            #for k in conf:
-            #    if k in envs:
-            #        logger.info(casscf, 'Update envs[%s] = %s', k, conf[k])
-            #        envs[k] = conf[k]
-
-            logger.debug1(casscf, '    Inject python script\n%s\n', raw_py)
-            if len(raw_py.strip()) > 0:
-                if sys.version_info >= (3,):
-# A hacky call using eval because exec are so different in python2 and python3
-                    eval(compile('exec(raw_py, envs, {})', '<str>', 'exec'))
-                else:
-                    eval(compile('exec raw_py in envs, {}', '<str>', 'exec'))
-        except Exception as e:
-            logger.warn(casscf, 'CASSCF hot_load error %s', e)
-            logger.warn(casscf, ''.join(traceback.format_exc()))
-
-        if callable(old_cb):
-            old_cb(envs)
-
-    casscf.callback = hot_load
-    return casscf
+del(BASE, MAP2HF_TOL)
 
 
 if __name__ == '__main__':
@@ -859,7 +1030,6 @@ if __name__ == '__main__':
     from pyscf import mcscf
     from pyscf.tools import ring
 
-    mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
     mol.atom = [['H', c] for c in ring.make(6, 1.2)]
@@ -922,9 +1092,3 @@ if __name__ == '__main__':
     mc = state_specific_(mc, 2)
     emc = mc.kernel()[0]
 
-
-    mc = mcscf.CASSCF(m, 4, 4)
-    mc.verbose = 4
-    hot_tuning_(mc, 'config1')
-    mc.kernel()
-    mc = None  # release for gc

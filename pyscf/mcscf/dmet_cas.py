@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -8,11 +21,20 @@ import numpy
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.tools import dump_mat
-from pyscf import scf
+from pyscf import scf, gto
+from pyscf import __config__
 
-def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
-           orth_method='meta_lowdin', s=None, canonicalize=True,
-           freeze_imp=False, verbose=None):
+THRESHOLD = getattr(__config__, 'mcscf_dmet_cas_threshold', 0.05)
+OCC_CUTOFF = getattr(__config__, 'mcscf_dmet_cas_occ_cutoff', 1e-6)
+BASE = getattr(__config__, 'BASE', 0)
+ORTH_METHOD = getattr(__config__, 'mcscf_dmet_cas_orth_method', 'meta_lowdin')
+CANONICALIZE = getattr(__config__, 'mcscf_dmet_cas_canonicalize', True)
+FREEZE_IMP = getattr(__config__, 'mcscf_dmet_cas_freeze_imp', False)
+
+def kernel(mf, dm, aolabels_or_baslst, threshold=THRESHOLD,
+           occ_cutoff=OCC_CUTOFF, base=BASE,
+           orth_method=ORTH_METHOD, s=None, canonicalize=CANONICALIZE,
+           freeze_imp=FREEZE_IMP, verbose=None):
     '''DMET method to generate CASSCF initial guess.
     Ref. arXiv:1701.07862 [physics.chem-ph]
 
@@ -25,10 +47,10 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
             AO labels or indices
 
     Kwargs:
-        nelec_tol : float
+        threshold : float
             Entanglement threshold of DMET bath.  If the occupancy of an
-            orbital is less than nelec_tol, the orbital is considered as bath
-            orbtial.  If occ is greater than (1-nelec_tol), the orbitals are
+            orbital is less than threshold, the orbital is considered as bath
+            orbtial.  If occ is greater than (1-threshold), the orbitals are
             taken for core determinant.
         base : int
             0-based (C-style) or 1-based (Fortran-style) for baslst if baslst
@@ -54,7 +76,6 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(mo)
     '''
     from pyscf import lo
-    from pyscf.tools import mo_mapping
 
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -68,7 +89,7 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     if s is None:
         s = mf.get_ovlp()
 
-    if (not isinstance(mf, scf.hf.SCF)) and hasattr(mf, '_scf'):
+    if (not isinstance(mf, scf.hf.SCF)) and getattr(mf, '_scf', None):
         mf = mf._scf
 
     baslst = gto.mole._aolabels2baslst(mol, aolabels_or_baslst, base)
@@ -105,9 +126,9 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
     ne_error = abs(cum_nelec.round() - cum_nelec)
     nb4cas = nb
     for i in range(nb):
-        if (ne_error[i] < nelec_tol and
+        if (ne_error[i] < threshold and
 # whether all baths next to ith bath are less important
-            (occb[i] < nelec_tol or occb[i] > 2-nelec_tol)):
+            (occb[i] < threshold or occb[i] > 2-threshold)):
             nb4cas = i
             break
     ncas = nb4cas + nimp
@@ -163,6 +184,9 @@ def kernel(mf, dm, aolabels_or_baslst, nelec_tol=.05, occ_cutoff=1e-6, base=0,
                 return symmetrize(mol, e, numpy.dot(c, u), s, log)
 
         if freeze_imp:
+            # freeze_imp to avoid canonicalization for impurity orbitals. It
+            # reserves the locality of the impurity orbitals even the rest
+            # orbitals are diffused due to the canonicalization.
             log.debug('Semi-canonicalization for freeze_imp=True')
             mo = numpy.hstack([trans(mocore), trans(mocas[:,:nimp]),
                                trans(mocas[:,nimp:]), trans(movir)])
@@ -200,15 +224,14 @@ def symmetrize(mol, e, c, s, log):
                 es.append(e[idx])
                 cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
             es = numpy.hstack(es)
-            idx = numpy.argsort(es)
+            idx = numpy.argsort(es, kind='mergesort')
             assert(numpy.allclose(es[idx], esub, rtol=1e-3, atol=1e-4))
             c[:,degidx] = numpy.hstack(cs)[:,idx]
     return c
 
+del(THRESHOLD, OCC_CUTOFF, BASE, ORTH_METHOD, CANONICALIZE, FREEZE_IMP)
 
 if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf import gto
     from pyscf import mcscf
 
     mol = gto.M(

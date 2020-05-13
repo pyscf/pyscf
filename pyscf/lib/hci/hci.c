@@ -1,6 +1,21 @@
-/*
- * Slater-Condon rule implementation for Heat-Bath CI
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Alexander Sokolov <alexander.y.sokolov@gmail.com>
+ *
+ * Slater-Condon rule implementation for Heat-Bath CI
  */
 
 #include <stdlib.h>
@@ -18,7 +33,7 @@ void contract_h_c(double *h1, double *eri, int norb, int neleca, int nelecb, uin
 
     int *ts = malloc(sizeof(int) * ndet);
 
-    #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1, ts)
+    #pragma omp parallel
     {
 
     size_t ip, jp, p;
@@ -795,7 +810,7 @@ void contract_ss_c(int norb, int neleca, int nelecb, uint64_t *strs, double *civ
 
     int *ts = malloc(sizeof(int) * ndet);
 
-    #pragma omp parallel default(none) shared(norb, neleca, nelecb, strs, civec, ndet, ci1, ts)
+    #pragma omp parallel
     {
 
     size_t ip, jp, p, q;
@@ -873,7 +888,7 @@ void contract_h_c_ss_c(double *h1, double *eri, int norb, int neleca, int nelecb
 
     int *ts = malloc(sizeof(int) * ndet);
 
-    #pragma omp parallel default(none) shared(h1, eri, norb, neleca, nelecb, strs, civec, hdiag, ndet, ci1, ci2, ts)
+    #pragma omp parallel
     {
 
     size_t ip, jp, p, q;
@@ -1047,7 +1062,7 @@ void contract_h_c_ss_c(double *h1, double *eri, int norb, int neleca, int nelecb
 // 2-RDM is sorted in physicists notation: gamma_pqsr=<\Phi|a_p^dag a_q^dag a_r a_s|\Phi>
 void compute_rdm12s(int norb, int neleca, int nelecb, uint64_t *strs, double *civec, uint64_t ndet, double *rdm1a, double *rdm1b, double *rdm2aa, double *rdm2ab, double *rdm2bb) {
 
-    #pragma omp parallel default(none) shared(norb, neleca, nelecb, strs, civec, ndet, rdm1a, rdm1b, rdm2aa, rdm2ab, rdm2bb)
+    #pragma omp parallel
     {
 
     size_t ip, jp, p, q, r, s;

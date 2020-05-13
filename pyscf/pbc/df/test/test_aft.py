@@ -1,3 +1,17 @@
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 import numpy as np
@@ -72,14 +86,14 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
             product |ij).
 
     Returns:
-        mo_pairs_G : (ngs, nmoi*nmoj) ndarray
+        mo_pairs_G : (ngrids, nmoi*nmoj) ndarray
             The FFT of the real-space MO pairs.
     '''
     coords = gen_uniform_grids(cell)
     if kpts is None:
         q = np.zeros(3)
         aoR = eval_ao(cell, coords)
-        ngs = aoR.shape[0]
+        ngrids = aoR.shape[0]
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
@@ -95,7 +109,7 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
             q = kpts[1]-kpts[0]
         aoR_ki = eval_ao(cell, coords, kpt=kpts[0])
         aoR_kj = eval_ao(cell, coords, kpt=kpts[1])
-        ngs = aoR_ki.shape[0]
+        ngrids = aoR_ki.shape[0]
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -103,13 +117,13 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
         mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
-    mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
+    mo_pairs_G = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(-1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
+    for i in range(nmoi):
+        for j in range(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
-            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.gs, fac)
+            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.mesh, fac)
 
     return mo_pairs_G
 
@@ -124,14 +138,14 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
             product |ij).
 
     Returns:
-        mo_pairs_invG : (ngs, nmoi*nmoj) ndarray
+        mo_pairs_invG : (ngrids, nmoi*nmoj) ndarray
             The inverse FFTs of the real-space MO pairs.
     '''
     coords = gen_uniform_grids(cell)
     if kpts is None:
         q = np.zeros(3)
         aoR = eval_ao(cell, coords)
-        ngs = aoR.shape[0]
+        ngrids = aoR.shape[0]
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
@@ -147,7 +161,7 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
             q = kpts[1]-kpts[0]
         aoR_ki = eval_ao(cell, coords, kpt=kpts[0])
         aoR_kj = eval_ao(cell, coords, kpt=kpts[1])
-        ngs = aoR_ki.shape[0]
+        ngrids = aoR_ki.shape[0]
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -155,13 +169,13 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
         mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
-    mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
+    mo_pairs_invG = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
+    for i in range(nmoi):
+        for j in range(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
-            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.gs, fac))
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.mesh, fac))
 
     return mo_pairs_invG
 
@@ -176,14 +190,14 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
             product |ij).
 
     Returns:
-        mo_pairs_G, mo_pairs_invG : (ngs, nmoi*nmoj) ndarray
+        mo_pairs_G, mo_pairs_invG : (ngrids, nmoi*nmoj) ndarray
             The FFTs of the real-space MO pairs.
     '''
     coords = gen_uniform_grids(cell)
     if kpts is None:
         q = np.zeros(3)
         aoR = eval_ao(cell, coords)
-        ngs = aoR.shape[0]
+        ngrids = aoR.shape[0]
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
@@ -199,7 +213,7 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
             q = kpts[1]-kpts[0]
         aoR_ki = eval_ao(cell, coords, kpt=kpts[0])
         aoR_kj = eval_ao(cell, coords, kpt=kpts[1])
-        ngs = aoR_ki.shape[0]
+        ngrids = aoR_ki.shape[0]
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -207,14 +221,14 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
         mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
-    mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
-    mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
+    mo_pairs_G = np.zeros([ngrids,nmoi*nmoj], np.complex128)
+    mo_pairs_invG = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(-1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
-            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.gs, fac)
-            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R[:,i,j]), cell.gs,
+    for i in range(nmoi):
+        for j in range(nmoj):
+            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.mesh, fac)
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R[:,i,j]), cell.mesh,
                                                                    fac.conj()))
 
     return mo_pairs_G, mo_pairs_invG
@@ -230,8 +244,8 @@ def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None):
         q = np.zeros(3)
 
     coulqG = tools.get_coulG(cell, -1.0*q)
-    ngs = orb_pair_invG1.shape[0]
-    Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngs**2)
+    ngrids = orb_pair_invG1.shape[0]
+    Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngrids**2)
     eri = np.dot(orb_pair_invG1.T, Jorb_pair_G2)
     return eri
 
@@ -242,32 +256,32 @@ def get_ao_pairs_G(cell, kpt=np.zeros(3)):
         cell : instance of :class:`Cell`
 
     Returns:
-        ao_pairs_G, ao_pairs_invG : (ngs, nao*(nao+1)/2) ndarray
+        ao_pairs_G, ao_pairs_invG : (ngrids, nao*(nao+1)/2) ndarray
             The FFTs of the real-space AO pairs.
 
     '''
     coords = gen_uniform_grids(cell)
     aoR = eval_ao(cell, coords, kpt) # shape = (coords, nao)
-    ngs, nao = aoR.shape
+    ngrids, nao = aoR.shape
     gamma_point = abs(kpt).sum() < 1e-9
     if gamma_point:
         npair = nao*(nao+1)//2
-        ao_pairs_G = np.empty([ngs, npair], np.complex128)
+        ao_pairs_G = np.empty([ngrids, npair], np.complex128)
 
         ij = 0
         for i in range(nao):
             for j in range(i+1):
                 ao_ij_R = np.conj(aoR[:,i]) * aoR[:,j]
-                ao_pairs_G[:,ij] = tools.fft(ao_ij_R, cell.gs)
-                #ao_pairs_invG[:,ij] = ngs*tools.ifft(ao_ij_R, cell.gs)
+                ao_pairs_G[:,ij] = tools.fft(ao_ij_R, cell.mesh)
+                #ao_pairs_invG[:,ij] = ngrids*tools.ifft(ao_ij_R, cell.mesh)
                 ij += 1
         ao_pairs_invG = ao_pairs_G.conj()
     else:
-        ao_pairs_G = np.zeros([ngs, nao,nao], np.complex128)
+        ao_pairs_G = np.zeros([ngrids, nao,nao], np.complex128)
         for i in range(nao):
             for j in range(nao):
                 ao_ij_R = np.conj(aoR[:,i]) * aoR[:,j]
-                ao_pairs_G[:,i,j] = tools.fft(ao_ij_R, cell.gs)
+                ao_pairs_G[:,i,j] = tools.fft(ao_ij_R, cell.mesh)
         ao_pairs_invG = ao_pairs_G.transpose(0,2,1).conj().reshape(-1,nao**2)
         ao_pairs_G = ao_pairs_G.reshape(-1,nao**2)
     return ao_pairs_G, ao_pairs_invG
@@ -296,7 +310,7 @@ cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
               'C' :'gth-szv',}
 cell.pseudo = {'C':'gth-pade'}
 cell.a = np.eye(3) * 2.5
-cell.gs = [10] * 3
+cell.mesh = [21] * 3
 cell.build()
 np.random.seed(1)
 kpts = np.random.random((4,3))
@@ -307,10 +321,11 @@ cell1 = pgto.Cell()
 cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
 cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
 cell1.a = np.eye(3) * 2.5
-cell1.gs = [10] * 3
+cell1.mesh = [21] * 3
 cell1.build()
 kdf0 = mdf.MDF(cell1)
 kdf0.auxbasis = 'weigend'
+kdf0.mesh = [21] * 3
 kdf0.kpts = kpts
 
 
@@ -318,11 +333,16 @@ def finger(a):
     w = np.cos(np.arange(a.size))
     return np.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
+    def test_get_pp_loc_part1_high_cost(self):
+        df = aft.AFTDF(cell)
+        v1 = aft.get_pp_loc_part1(df, kpts[0])
+        self.assertAlmostEqual(finger(v1), (-6.0893491060887159+0.19823828749533859j), 8)
+
     def test_aft_get_nuc(self):
         df = aft.AFTDF(cell)
         v1 = df.get_nuc(kpts[0])
-        self.assertAlmostEqual(finger(v1), (-6.0893491060887159+0.19823828749533859j), 8)
+        self.assertAlmostEqual(finger(v1), (-5.764786312608102+0.19126292955145852j), 8)
 
     def test_aft_get_pp(self):
         v0 = pgto.pseudo.get_pp(cell, kpts[0])
@@ -337,6 +357,21 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(v1[3]), (-5.60115995450+0.275973062529j), 8)
 
     def test_aft_get_ao_eri(self):
+        df0 = fft.FFTDF(cell1)
+        df = aft.AFTDF(cell1)
+        eri0 = df0.get_ao_eri(compact=True)
+        eri1 = df.get_ao_eri(compact=True)
+        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+
+        eri0 = df0.get_ao_eri(kpts[0])
+        eri1 = df.get_ao_eri(kpts[0])
+        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+
+        eri0 = df0.get_ao_eri(kpts)
+        eri1 = df.get_ao_eri(kpts)
+        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+
+    def test_aft_get_ao_eri_high_cost(self):
         df0 = fft.FFTDF(cell)
         df = aft.AFTDF(cell)
         eri0 = df0.get_ao_eri(compact=True)
@@ -363,6 +398,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(np.allclose(eri0000, ref, atol=1e-6, rtol=1e-6))
         self.assertAlmostEqual(finger(eri0000), 0.23714016293926865, 9)
 
+    def test_get_eri_gamma(self):
+        odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         eri1111 = odf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
@@ -405,16 +442,16 @@ class KnowValues(unittest.TestCase):
         odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri(kpts)
         eri1111 = odf.get_eri(kpts)
-        self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
+        self.assertAlmostEqual(abs(eri1111-ref).max(), 0, 9)
         self.assertAlmostEqual(finger(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
 
         ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, kpts)
-        self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
+        self.assertAlmostEqual(abs(eri1111-ref).max(), 0, 9)
 
     def test_get_mo_eri(self):
-        df0 = fft.FFTDF(cell)
-        odf = aft.AFTDF(cell)
-        nao = cell.nao_nr()
+        df0 = fft.FFTDF(cell1)
+        odf = aft.AFTDF(cell1)
+        nao = cell1.nao_nr()
         numpy.random.seed(5)
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -451,6 +488,19 @@ class KnowValues(unittest.TestCase):
         eri_mo0 = df0.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
         eri_mo1 = odf.get_mo_eri((mo1,mo,mo1,mo), (kpts[0],kpts[1],kpts[1],kpts[0],))
         self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-7, rtol=1e-7))
+
+    def test_init_aft_1d(self):
+        cell = pgto.Cell()
+        cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
+        cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
+        cell.a = np.eye(3) * 2.5
+        cell.dimension = 1
+        cell.mesh = [3, 3, 3]
+        cell.build()
+        f = aft.AFTDF(cell)
+        np.random.seed(1)
+        f.kpts = np.random.random((4,3))
+        f.check_sanity()
 
 
 if __name__ == '__main__':

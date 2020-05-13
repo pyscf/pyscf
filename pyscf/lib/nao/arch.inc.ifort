@@ -1,0 +1,53 @@
+#
+#   SET compiler and flags
+#
+# For mpi use mpif90 rather than the standart compiler
+# module add intel/13.1.1
+# 
+# this file uses MKL for BLAS,LAPACK and FFTW. 
+# The option -mkl is provided only by Intel compiler.
+# Please, check that your CPATH shell variable contains
+# path to $(MKLPATH)/include/fftw directory.
+# If the option -i8 is used, then use also the parameter BLAS_INT 
+# of the same size -DBLAS_INT=8.
+# If the option -i4 is used, then use also the parameter BLAS_INT 
+# of the same size -DBLAS_INT=4.
+# Sometimes despite of using the -i8 option, ifort will link against 
+# integer(4) interface of blas/lapack/fftw libraries. In this case 
+# the shortcut option "-mkl" must be substituted by conventional options. 
+# Please use link-line advisor to find suitable options
+# https://software.intel.com/en-us/articles/intel-mkl-link-line-advisor
+# In order to control against which interface ifort has linked,
+# please use ldd utility. If you see libmkl_intel_lp64.so=>... then
+# integer(4) integers must be used to call BLAS/LAPACK/FFTW from MKL.
+# If you see libmkl_intel_ilp64.so=>... then integer(8) integers must 
+# be used to call BLAS/LAPACK/FFTW from MKL.
+
+#
+# Libxc must be compiled with the same version of fortran compiler 
+# that is going to be used during compilation/linking of the "client" package.
+# Adjust CPATH or FPATH or INCLUDE variables of your shell to 
+# point the directory where LibXC's include files (fortran .mod files actually)
+# were installed. 
+#
+
+CC=gcc -fPIC
+FORTRAN=ifort -DBLAS_INT=8 -i8 -DTIMING -DnoREADSIGMA -DLIBXC -DDEBUG #-DUSE_MEMORY_NOTE
+
+FLAGS= -fPIC -I$(MKLROOT)/include/fftw -warn all -O2 -g #-CB
+
+OMP_FLAGS = -qopenmp
+
+MPIFORTRAN=$(FORTRAN)
+OMPFORTRAN=$(FORTRAN)
+FORTRAN77=$(FORTRAN)
+LINK=$(FORTRAN)
+LFLAGS=$(FLAGS) $(OMP_FLAGS)
+
+FFTW_LIB=
+LAPACK_LIB=-mkl
+LIBXC = -lxcf90 -lxc
+
+USER_LIBS= $(FFTW_LIB) $(LAPACK_LIB) $(LIBXC)
+INSTALL_DIR=$(HOME)/bin
+TIME=

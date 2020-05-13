@@ -1,3 +1,17 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -23,7 +37,7 @@ cell.a = '''
 
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs = [9]*3
+cell.mesh = [19]*3
 cell.verbose = 5
 cell.output = '/dev/null'
 cell.build()
@@ -52,9 +66,15 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.137043711032916, 8)
 
+    def test_nr_rohf(self):
+        mf = scf.ROHF(cell).newton()
+        mf.conv_tol_grad = 1e-4
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -10.137043711032916, 8)
+
     def test_nr_rks_lda(self):
         mf = dft.RKS(cell)
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -62,7 +82,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_uks_lda(self):
         mf = dft.UKS(cell)
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -70,7 +90,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_rks_gga(self):
         mf = dft.RKS(cell)
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -78,7 +98,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_uks_gga(self):
         mf = dft.UKS(cell)
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -89,18 +109,24 @@ class KnowValues(unittest.TestCase):
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -10.683267257972522, 8)
+        self.assertAlmostEqual(mf.e_tot, -10.5309059210831, 8)
 
     def test_nr_kuhf(self):
         mf = scf.KUHF(cell, cell.make_kpts([2,1,1]))
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -10.683267257972522, 8)
+        self.assertAlmostEqual(mf.e_tot, -10.5309059210831, 8)
+
+    def test_nr_krohf(self):
+        mf = scf.KROHF(cell, cell.make_kpts([2,1,1])).newton()
+        mf.conv_tol_grad = 1e-4
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -10.5309059210831, 8)
 
     def test_nr_krks_lda(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -108,7 +134,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_kuks_lda(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -116,7 +142,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_krks_gga(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -124,7 +150,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_kuks_gga(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -143,7 +169,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.newton(mf)
         mf.grids.build()
         g, hop, hdiag = mf.gen_g_hop(mo, mo_occ, mf.get_hcore())
-        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 42.670833147785757, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 37.967972033738519, 7)
 
     def test_uks_gen_g_hop(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
@@ -158,7 +184,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.newton(mf)
         mf.grids.build()
         g, hop, hdiag = mf.gen_g_hop(mo, mo_occ, [mf.get_hcore()]*2)
-        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 31.551906770196428, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 28.01954683540594, 7)
 
 
 if __name__ == "__main__":

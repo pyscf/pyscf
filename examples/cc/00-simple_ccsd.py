@@ -7,14 +7,14 @@
 A simple example to run CCSD calculation.
 '''
 
-from pyscf import gto, scf, cc
+import pyscf
 
-mol = gto.M(
+mol = pyscf.M(
     atom = 'H 0 0 0; F 0 0 1.1',
     basis = 'ccpvdz')
 
-mf = scf.RHF(mol).run()
+mf = mol.RHF().run()
 
-mycc = cc.CCSD(mf).run()
+mycc = mf.CCSD().run()
 print('CCSD correlation energy', mycc.e_corr)
 
