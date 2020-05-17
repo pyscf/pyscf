@@ -111,7 +111,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 rho = vxc = vrho = wv = None
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     exc = None
@@ -209,7 +209,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     # - sign because nabla_X = -nabla_x
