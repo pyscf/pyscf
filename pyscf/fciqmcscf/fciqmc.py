@@ -534,7 +534,7 @@ def execute_fciqmc(fciqmcci):
         logger.info(fciqmcci, 'Waiting for density matrices and output file '
                               'to be returned.')
         try:
-            if sys.version_info >= (3,)
+            if sys.version_info[0] >= 3:
                 raw_input = input
             raw_input("Press Enter to continue with calculation...")
         except:
