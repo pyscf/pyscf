@@ -836,8 +836,6 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
     _basdic = {}
     for symb, basis_add in basis.items():
         bas0, env0 = make_bas_env(basis_add, 0, ptr_env)
-        if bas0.size == 0:
-            sys.stderr.write('No basis found for atom %s\n' % symb)
         ptr_env = ptr_env + len(env0)
         _basdic[symb] = bas0
         _env.append(env0)
