@@ -292,10 +292,6 @@ def get_subgroup(gpname, axes):
     elif gpname in ('I',):
         return 'C1', axes
     elif gpname in ('Td', 'T', 'Th'):
-        #x,y,z = axes
-        #x = _normalize(x+y)
-        #y = numpy.cross(z, x)
-        #return 'C2v', numpy.array((x,y,z))
         return 'D2', alias_axes(axes, numpy.eye(3))
     elif re.search(r'S\d+', gpname):
         n = int(re.search(r'\d+', gpname).group(0))
@@ -352,19 +348,25 @@ def as_subgroup(topgroup, axes, subgroup=None):
 
     if isinstance(subgroup, (str, unicode)):
         subgroup = std_symb(subgroup)
-        if (groupname == 'D2' and re.search(r'D\d+d', topgroup) and
+        if groupname == 'C2v' and subgroup == 'Cs':
+            axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
+
+        elif (groupname == 'D2' and re.search(r'D\d+d', topgroup) and
             subgroup in ('C2v', 'Cs')):
             # Special treatment for D2d, D4d, .... get_subgroup gives D2 by
             # default while C2v is also D2d's subgroup.
             groupname = 'C2v'
             axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[2], numpy.pi/4), axes)
 
-        if subgroup not in SUBGROUP[groupname]:
+        elif topgroup in ('Td', 'T', 'Th') and subgroup == 'C2v':
+            x, y, z = axes
+            x = _normalize(x+y)
+            y = numpy.cross(z, x)
+            axes = numpy.array((x,y,z))
+
+        elif subgroup not in SUBGROUP[groupname]:
             raise RuntimeError('%s not in Ablien subgroup of %s' %
                                (subgroup, topgroup))
-
-        if subgroup == 'Cs' and groupname == 'C2v':
-            axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
 
         groupname = subgroup
     return groupname, axes
