@@ -1105,9 +1105,6 @@ To enable the solvent model for CASSCF, the following code needs to be called
                 ci1 += xs[i] * v[i,0]
         return ci1, g
 
-    def get_jk(self, mol, dm, hermi=1):
-        return self._scf.get_jk(mol, dm, hermi=1)
-
     def get_grad(self, mo_coeff=None, casdm1_casdm2=None, eris=None):
         '''Orbital gradients'''
         if mo_coeff is None: mo_coeff = self.mo_coeff
