@@ -29,8 +29,6 @@ from pyscf.mcscf import addons
 
 class SymAdaptedCASCI(casci.CASCI):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
-# Ag, A1 or A
-#TODO:        self.wfnsym = symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
         assert(self.mol.symmetry)
@@ -152,7 +150,6 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
 
     return mo_coeff_with_orbsym
 
-from pyscf import scf
 scf.hf_symm.RHF.CASCI = scf.hf_symm.ROHF.CASCI = lib.class_as_method(SymAdaptedCASCI)
 scf.uhf_symm.UHF.CASCI = None
 
