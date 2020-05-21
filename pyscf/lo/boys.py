@@ -248,6 +248,7 @@ class Boys(ciah.CIAHOptimizer):
         #:h = h[idx][:,idx[0],idx[1]]
 
         g0 = g0 + g0.conj().T
+
         def h_op(x):
             x = self.unpack_uniq_var(x)
             norb = x.shape[0]

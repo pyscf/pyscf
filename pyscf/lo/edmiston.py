@@ -51,6 +51,7 @@ class EdmistonRuedenberg(boys.Boys):
         h_diag = -self.pack_uniq_var(h_diag) * 2
 
         g0 = g0 + g0.T
+
         def h_op(x):
             x = self.unpack_uniq_var(x)
             hx = numpy.einsum('iq,qp->pi', g0, x)

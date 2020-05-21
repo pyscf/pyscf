@@ -29,21 +29,6 @@ from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import member
 
-#try:
-### Moderate speedup by caching eval_ao
-#    from pyscf import pbc
-#    from joblib import Memory
-#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-#    def memory_cache(f):
-#        g = memory.cache(f)
-#        def maybe_cache(*args, **kwargs):
-#            if pbc.DEBUG:
-#                return g(*args, **kwargs)
-#            else:
-#                return f(*args, **kwargs)
-#        return maybe_cache
-#except:
-#    memory_cache = lambda f: f
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -82,7 +67,6 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=
     return ao_kpts[0]
 
 
-#@memory_cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
