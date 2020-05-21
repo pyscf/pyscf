@@ -211,6 +211,32 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_shciscf, e_casscf, places=6)
         mc.fcisolver.cleanup_dice_files()
 
+    @unittest.skipIf(NO_SHCI, "No SHCI Settings Found")
+    def test_spin_1RDM(self):
+        mol = gto.M(
+            atom="""
+            C   0.0000     0.0000    0.0000  
+            H   -0.9869    0.3895    0.2153  
+            H   0.8191     0.6798   -0.1969  
+            H   0.1676    -1.0693   -0.0190  
+        """,
+            spin=1,
+        )
+        ncas, nelecas = (7, 7)
+        mf = scf.ROHF(mol).run()
+        mc = shci.SHCISCF(mf, ncas, nelecas)
+        mc.davidsonTol = 1e-8
+        mc.dE = 1e-12
+        mc.kernel()
+
+        #
+        # Get our spin 1-RDMs
+        #
+        dm1 = mc.fcisolver.make_rdm1(0, ncas, nelecas)
+        dm_ab = mc.fcisolver.make_rdm1s()  # in MOs
+        dm1_check = numpy.linalg.norm(dm1 - numpy.sum(dm_ab, axis=0))
+        self.assertLess(dm1_check,1e-5)
+
     def test_D2htoDinfh(self):
         SHCI = lambda: None
         SHCI.groupname = 'Dooh'
