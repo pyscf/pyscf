@@ -776,7 +776,7 @@ To enable the solvent model for CASCI, the following code needs to be called
         return self._scf.get_hcore(mol)
 
     @lib.with_doc(scf.hf.get_jk.__doc__)
-    def get_jk(self, dm, hermi=1, with_j=True, with_k=True, omega=None):
+    def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
         return self._scf.get_jk(mol, dm, hermi, with_j, with_k, omega)
 
     @lib.with_doc(scf.hf.get_veff.__doc__)
@@ -786,7 +786,7 @@ To enable the solvent model for CASCI, the following code needs to be called
             mocore = self.mo_coeff[:,:self.ncore]
             dm = numpy.dot(mocore, mocore.T) * 2
 # don't call self._scf.get_veff because _scf might be DFT object
-        vj, vk = self.get_jk(mol, dm, hermi=hermi)
+        vj, vk = self.get_jk(mol, dm, hermi)
         return vj - vk * .5
 
     def _eig(self, h, *args):

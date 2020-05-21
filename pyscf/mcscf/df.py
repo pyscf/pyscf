@@ -113,7 +113,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 
 # only approximate jk for self.update_jk_in_ah
         @lib.with_doc(casscf_class.get_jk.__doc__)
-        def get_jk(self, dm, hermi=1, with_j=True, with_k=True, omega=None):
+        def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
             if self.with_df:
                 return self.with_df.get_jk(dm, hermi, with_j, with_k, omega=omega)
             else:
@@ -242,7 +242,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             return eris
 
         @lib.with_doc(casscf_class.get_jk.__doc__)
-        def get_jk(self, dm, hermi=1, with_j=True, with_k=True, omega=None):
+        def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
             if self.with_df:
                 return self.with_df.get_jk(dm, hermi, with_j, with_k, omega=omega)
             else:
