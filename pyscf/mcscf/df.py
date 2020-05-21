@@ -115,9 +115,11 @@ def density_fit(casscf, auxbasis=None, with_df=None):
         @lib.with_doc(casscf_class.get_jk.__doc__)
         def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
             if self.with_df:
-                return self.with_df.get_jk(dm, hermi, with_j, with_k, omega=omega)
+                return self.with_df.get_jk(dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
             else:
-                return casscf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+                return casscf_class.get_jk(self, mol, dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
 
         def _exact_paaa(self, mo, u, out=None):
             if self.with_df:
@@ -244,9 +246,11 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
         @lib.with_doc(casscf_class.get_jk.__doc__)
         def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
             if self.with_df:
-                return self.with_df.get_jk(dm, hermi, with_j, with_k, omega=omega)
+                return self.with_df.get_jk(dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
             else:
-                return casscf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+                return casscf_class.get_jk(self, mol, dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
 
     return CASSCF()
 

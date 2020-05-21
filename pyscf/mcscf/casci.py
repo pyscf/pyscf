@@ -777,7 +777,8 @@ To enable the solvent model for CASCI, the following code needs to be called
 
     @lib.with_doc(scf.hf.get_jk.__doc__)
     def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
-        return self._scf.get_jk(mol, dm, hermi, with_j, with_k, omega)
+        return self._scf.get_jk(mol, dm, hermi,
+                                with_j=with_j, with_k=with_k, omega=omega)
 
     @lib.with_doc(scf.hf.get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, hermi=1):
