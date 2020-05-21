@@ -36,7 +36,7 @@ from pyscf import __config__
 
 def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e-8, max_iter=200, verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals
-    
+
     This function serves as a wrapper to the underlying localization functions
     ibo_loc and PipekMezey to create IBOs.
 
@@ -58,7 +58,7 @@ def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e
     Returns:
         IBOs in the basis defined in mol object.
     '''
-    
+
     if s is None:
         if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
             if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
@@ -81,7 +81,7 @@ def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e
     return ibos
 
 def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
-        verbose=logger.NOTE):
+            verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals. [Ref. JCTC, 9, 4834]
 
     This implementation follows Knizia's implementation execept that the
@@ -228,11 +228,15 @@ def PipekMezey(mol, orbocc, iaos, s, exponent):
     >>> loc_orb = pm.kernel()
     '''
 
+    # Note: PM with Lowdin-orth IAOs is implemented in pipek.PM class
+    # TODO: Merge the implemenation here to pipek.PM
+
     MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
     cs = numpy.dot(iaos.T.conj(), s)
     s_iao = numpy.dot(cs, iaos)
     iao_inv = numpy.linalg.solve(s_iao, cs)
     iao_mol = iao.reference_mol(mol, minao=MINAO)
+
     # Define the mulliken population of each atom based on IAO basis.
     # proj[i].trace is the mulliken population of atom i.
     def atomic_pops(mol, mo_coeff, method=None):
@@ -291,6 +295,7 @@ def MakeAtomInfos():
     for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18/2+1+5+3
 
     AoLabels = {}
+
     def SetAo(At, AoDecl):
         Labels = AoDecl.split()
         AoLabels[At] = Labels
