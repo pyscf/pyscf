@@ -80,7 +80,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
-        log.info('cycle = %d  E_corr(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
+        log.info('cycle = %3d  E_corr(CCSD) = % 21.15g  dE = % 15.9g  norm(t1,t2) = %11.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
@@ -1116,7 +1116,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import eom_rccsd
         return eom_rccsd.EOMEE(self)
 
-    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, with_frozen=True, ao_repr=False):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1
@@ -1124,9 +1124,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, with_frozen=True, ao_repr=False):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -1138,7 +1138,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:
