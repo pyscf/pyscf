@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,16 +20,13 @@
 Spin-free lambda equation of RHF-CCSD(T)
 
 Ref:
-JCP, 147, 044104
+JCP 147, 044104 (2017); DOI:10.1063/1.4994918
 '''
 
-import time
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_lambda
 
 # Note: not support fov != 0
@@ -101,8 +98,6 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf.cc import ccsd
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

@@ -109,7 +109,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 @lib.with_doc(pbcuhf.get_rho.__doc__)
 def get_rho(mf, dm=None, grids=None, kpt=None):
     if dm is None:
-        dm = self.make_rdm1()
+        dm = mf.make_rdm1()
     return rks.get_rho(mf, dm[0]+dm[1], grids, kpt)
 
 

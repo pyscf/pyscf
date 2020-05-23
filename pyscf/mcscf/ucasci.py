@@ -185,7 +185,7 @@ class UCASCI(casci.CASCI):
         nmo = self.mo_coeff[0].shape[1]
         nvir_alpha = nmo - self.ncore[0] - self.ncas
         nvir_beta  = nmo - self.ncore[1]  - self.ncas
-        log.info('CAS ((%de+%de), %do), ncore = [%d+%d], nvir = [%d+%d]', \
+        log.info('CAS ((%de+%de), %do), ncore = [%d+%d], nvir = [%d+%d]',
                  self.nelecas[0], self.nelecas[1], self.ncas,
                  self.ncore[0], self.ncore[1], nvir_alpha, nvir_beta)
         log.info('max_memory %d (MB)', self.max_memory)

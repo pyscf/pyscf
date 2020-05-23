@@ -89,12 +89,12 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
     nao = dm0a.shape[0]
 
 # hso2e is the imaginary part of SSO
-# SSO term of JCP, 122, 034107 Eq (3) = 1/4c^2 hso2e
+# SSO term of JCP 122, 034107 (2005); DOI:10.1063/1.1829047 Eq (3) = 1/4c^2 hso2e
 #
 # Different approximations for the spin operator part are used in
-# JCP, 122, 034107 Eq (15) and JCP, 115, 11080 Eq (34).  The formulae of the
-# so-called spin-averaging in JCP, 122, 034107 Eq (15) is not well documented
-# and its effects are not fully tested.  Approximation of JCP, 115, 11080 Eq (34)
+# JCP 122, 034107 (2005) Eq (15) and JCP 115, 11080 (2001) Eq (34).  The formulae of the
+# so-called spin-averaging in JCP 122, 034107 (2005) Eq (15) is not well documented
+# and its effects are not fully tested.  Approximation of JCP 115, 11080 (2001) Eq (34)
 # are adopted here.
     hso2e = mol.intor('int2e_p1vxp1', 3).reshape(3,nao,nao,nao,nao)
     ej = numpy.zeros((3,3))

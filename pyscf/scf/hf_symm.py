@@ -26,7 +26,6 @@ Function symm.label_orb_symm can be used to detect the symmetry of the
 molecular orbitals.
 '''
 
-import time
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -851,7 +850,6 @@ ROHF = SymAdaptedROHF
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
                     verbose=logger.DEBUG):
     log = logger.new_logger(mol, verbose)
-    nirrep = mol.symm_orb.__len__()
     for i, ir in enumerate(mol.irrep_id):
         irname = mol.irrep_name[i]
         ir_idx = (orbsym == ir)

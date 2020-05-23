@@ -252,9 +252,6 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
         feri.close()
     return erifile
 
-def iden_coeffs(mo1, mo2):
-    return (id(mo1) == id(mo2)) or (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
-
 if __name__ == '__main__':
     import tempfile
     from pyscf import gto, scf, ao2mo

@@ -1,3 +1,48 @@
+PySCF 1.7.3 (2020-?-?)
+----------------------
+* Added
+  - ADC (RADC and UADC)
+  - Analytical nuclear gradients for state-average CASSCF
+
+
+PySCF 1.7.2 (2020-5-13)
+-----------------------
+* Added
+  - pbc.eph
+  - State-average CASSCF example
+  - Spin density analysis to uhf.analyze()
+  - Passing point group and wfnsym to Dice
+  - Analytical nuclear gradients for PBC SCF methods (based FFTDF)
+  - Geometry optimizer and Gradients scanner for pbc
+  - ccECPs and corresponding basis sets
+  - Interacting hybrid method i-CCSD/MP2
+  - Allow FNOs to be specified by number of active virtuals
+  - Enable frozen natural orbital CC
+  - Partial Cholesky orthogonalization
+  - Use requested initial guess in DHF
+* Improved
+  - libxc5 compatibility
+  - Redundant def2-*-jkfit basis sets were replaced by the def2-universal-jkfit basis
+  - FCIDUMP reader
+  - Treatment of breaksym in UHF init_guess function
+  - literature references and DOIs
+  - Ensure active orbitals are not changed during MCSCF canonicalization
+  - Improve linear dependency treatment in projection function in scf/addons.py
+  - Use customized get_xmat method for x2c if applicable
+* Fixed
+  - Integral bug in magnetizability
+  - Integer overflow in multigrid
+  - pbc.mdf h5 file initialization
+  - density fitting auxiliary basis for cc-pV*Z
+  - Handle basis and pp for ghost atoms in pbc initialization
+  - ecp treatments for ghost atoms
+  - FCI wfnsym initial guess
+  - SCF initial guess for super-heavy elements
+  - Initial guess "atom" due to missing basis
+  - Bugs of prefix ghost
+  - Handle duplicated primitives in GAMESS WFN writer
+
+
 PySCF 1.7.1 (2020-2-29)
 -----------------------
 * Added

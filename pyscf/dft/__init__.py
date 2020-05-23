@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,12 +54,13 @@ from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
 
 
 def KS(mol, xc='LDA,VWN'):
-    __doc__ = '''This is a wrap function to decide which DFT class to use, RKS or UKS\n
-    ''' + rks.RKS.__doc__
     if mol.spin == 0:
         return RKS(mol, xc)
     else:
         return UKS(mol, xc)
+KS.__doc__ = '''
+A wrap function to create DFT object (RKS or UKS).\n
+''' + rks.RKS.__doc__
 DFT = KS
 
 def RKS(mol, xc='LDA,VWN'):
@@ -75,6 +76,7 @@ def RKS(mol, xc='LDA,VWN'):
             return rks_symm.ROKS(mol, xc)
         else:
             return rks_symm.RKS(mol, xc)
+RKS.__doc__ = rks.RKS.__doc__
 
 def ROKS(mol, xc='LDA,VWN'):
     if mol.nelectron == 1:
@@ -83,15 +85,18 @@ def ROKS(mol, xc='LDA,VWN'):
         return roks.ROKS(mol, xc)
     else:
         return rks_symm.ROKS(mol, xc)
+ROKS.__doc__ = roks.ROKS.__doc__
 
 def UKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
         return uks.UKS(mol, xc)
     else:
         return uks_symm.UKS(mol, xc)
+UKS.__doc__ = uks.UKS.__doc__
 
 def GKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
         return gks.GKS(mol, xc)
     else:
         return gks_symm.GKS(mol, xc)
+GKS.__doc__ = gks.GKS.__doc__

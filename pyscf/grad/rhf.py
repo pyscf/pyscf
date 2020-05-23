@@ -277,6 +277,7 @@ class GradientsBasics(lib.StreamObject):
         self.mol = method.mol
         self.base = method
         self.max_memory = self.mol.max_memory
+        self.unit = 'au'
 
         self.atmlst = None
         self.de = None
@@ -290,6 +291,10 @@ class GradientsBasics(lib.StreamObject):
                      self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
+        if 'ANG' in self.unit.upper():
+            raise NotImplementedError('unit Eh/Ang is not supported')
+        else:
+            log.info('unit = Eh/Bohr')
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self
@@ -431,7 +436,6 @@ scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0

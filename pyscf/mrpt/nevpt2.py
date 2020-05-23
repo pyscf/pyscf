@@ -17,7 +17,6 @@
 #          Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import ctypes
 import time
 import tempfile
@@ -34,7 +33,7 @@ from pyscf.ao2mo import _ao2mo
 libmc = lib.load_library('libmcscf')
 
 NUMERICAL_ZERO = 1e-14
-# Ref JCP, 117, 9138
+# Ref JCP 117, 9138 (2002); DOI:10.1063/1.1515317
 
 # h1e is the CAS space effective 1e hamiltonian
 # h2e is the CAS space 2e integrals in  notation # a' -> p # b' -> q # c' -> r
@@ -548,7 +547,6 @@ def Sir(mc, dms, eris, verbose=None):
         h2e_v1 = h2e_v1.reshape(mo_virt.shape[1],ncore,ncas,ncas).transpose(0,2,1,3)
         h2e_v2 = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_cas,mo_cas,mo_core],compact=False)
         h2e_v2 = h2e_v2.reshape(mo_virt.shape[1],ncas,ncas,ncore).transpose(0,2,1,3)
-        core_dm = numpy.dot(mo_core,mo_core.T)*2
     else:
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
@@ -656,6 +654,12 @@ class NEVPT(lib.StreamObject):
         >>> mc = dmrgscf.DMRGSCF(mf, 4, 4).run()
         >>> NEVPT(mc, root=0).compress_approx(maxM=100).kernel()
         -0.14058324991532101
+
+        References:
+
+        J. Chem. Theory Comput. 12, 1583 (2016), doi:10.1021/acs.jctc.5b01225
+
+        J. Chem. Phys. 146, 244102 (2017), doi:10.1063/1.4986975
         '''
         #TODO
         #Some preprocess for compressed perturber
@@ -742,13 +746,13 @@ class NEVPT(lib.StreamObject):
                                                    nevptsolver=self.nevptsolver,
                                                    tol=self.tol)
             fh5 = h5py.File(perturb_file, 'r')
-            e_Si     =   fh5['Vi/energy'].value
+            e_Si     =   fh5['Vi/energy'][()]
             #The definition of norm changed.
             #However, there is no need to print out it.
             #Only perturbation energy is wanted.
-            norm_Si  =   fh5['Vi/norm'].value
-            e_Sr     =   fh5['Vr/energy'].value
-            norm_Sr  =   fh5['Vr/norm'].value
+            norm_Si  =   fh5['Vi/norm'][()]
+            e_Sr     =   fh5['Vr/energy'][()]
+            norm_Sr  =   fh5['Vr/norm'][()]
             fh5.close()
             logger.note(self, "Sr    (-1)',   E = %.14f",  e_Sr  )
             logger.note(self, "Si    (+1)',   E = %.14f",  e_Si  )

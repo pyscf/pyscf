@@ -17,14 +17,15 @@
 #
 
 import time
-from functools import reduce
 import numpy
 from pyscf import symm
 from pyscf import lib
+from pyscf import scf
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
-from pyscf.scf import _response_functions
+from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
+from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
 
 # Low excitation filter to avoid numerical instability
@@ -49,7 +50,6 @@ class TDDFTNoHybrid(TDA):
     '''
     def get_vind(self, mf):
         wfnsym = self.wfnsym
-        singlet = self.singlet
 
         mol = mf.mol
         mo_coeff = mf.mo_coeff
@@ -202,8 +202,6 @@ class TDDFTNoHybrid(TDA):
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
-        from pyscf import scf
-        from pyscf.dft.rks import KohnShamDFT
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         mf = scf.addons.convert_to_uhf(mf)
@@ -214,8 +212,6 @@ TDH = dRPA
 
 class dTDA(TDA):
     def __init__(self, mf):
-        from pyscf import scf
-        from pyscf.dft.rks import KohnShamDFT
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         mf = scf.addons.convert_to_uhf(mf)
@@ -242,7 +238,6 @@ dft.uks.UKS.dRPA          = dft.uks_symm.UKS.dRPA          = lib.class_as_method
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None

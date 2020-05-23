@@ -1,7 +1,5 @@
 import itertools
 import numpy as np
-from functools import reduce
-
 from pyscf import lib
 from pyscf.pbc.lib import kpts_helper
 
@@ -150,8 +148,6 @@ def cc_Fov(cc, t1, t2, eris):
     nkpts, nocc_a, nvir_a = t1a.shape
     nocc_b, nvir_b = t1b.shape[1:]
 
-    kconserv = cc.khelper.kconserv
-
     fov = eris.fock[0][:,:nocc_a,nocc_a:]
     fOV = eris.fock[1][:,:nocc_b,nocc_b:]
 
@@ -214,7 +210,6 @@ def cc_Woooo(cc, t1, t2, eris):
 
 def cc_Wvvvv(cc, t1, t2, eris):
     t1a, t1b = t1
-    nkpts = cc.nkpts
     kconserv = cc.khelper.kconserv
 
     #:wvvvv = eris.vvvv.copy()
@@ -260,7 +255,6 @@ def cc_Wvvvv(cc, t1, t2, eris):
 def cc_Wvvvv_half(cc, t1, t2, eris):
     '''Similar to cc_Wvvvv, without anti-symmetrization'''
     t1a, t1b = t1
-    nkpts = cc.nkpts
     kconserv = cc.khelper.kconserv
 
     #:wvvvv = eris.vvvv.copy()
@@ -580,7 +574,6 @@ def kconserv_mat(nkpts, kconserv):
     return P
 
 def Foo(cc,t1,t2,eris):
-    kconserv = cc.khelper.kconserv
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nkpts, nocca, noccb, nvira, nvirb = t2ab.shape[2:]
@@ -593,7 +586,6 @@ def Foo(cc,t1,t2,eris):
     return Fooa, Foob
 
 def Fvv(cc,t1,t2,eris):
-    kconserv = cc.khelper.kconserv
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nkpts, nocca, noccb, nvira, nvirb = t2ab.shape[2:]
@@ -869,7 +861,6 @@ def Woovo(cc,t1,t2,eris):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nkpts, nocca, noccb, nvira, nvirb = t2ab.shape[2:]
-    P = kconserv_mat(nkpts, kconserv)
 
     dtype = np.result_type(*t2)
     Woovo = np.zeros((nkpts, nkpts, nkpts, nocca, nocca, nvira, nocca), dtype=dtype)
@@ -972,7 +963,6 @@ def Wooov(cc, t1, t2, eris, kconserv):
     t1a, t1b = t1
     nkpts = t1a.shape[0]
 
-    P = kconserv_mat(nkpts, kconserv)
     Wooov = eris.ooov - np.asarray(eris.ooov).transpose(2,1,0,5,4,3,6)
     WooOV = np.array(eris.ooOV, copy=True)
     WOOov = np.array(eris.OOov, copy=True)
@@ -1104,8 +1094,6 @@ def _eri_spin2spatial(chemist_eri_spin, vvvv, eris, nocc, orbspin, cross_ab=Fals
     idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
     idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
     idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
-    nvir_a = len(idxva[0])
-    nvir_b = len(idxvb[0])
 
     def select_idx(s):
         if s.lower() == 'o':
@@ -1159,8 +1147,6 @@ def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris, orbspin, cross_ab=False):
     idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
     idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
     idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
-    nvir_a = len(idxva[0])
-    nvir_b = len(idxvb[0])
 
     def select_idx(s):
         if s.lower() == 'o':

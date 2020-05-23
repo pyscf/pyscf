@@ -62,6 +62,10 @@ class AtomSphericAverageRHF(hf.RHF):
         self.atomic_configuration = elements.NRSRHF_CONFIGURATION
         hf.SCF.__init__(self, mol)
 
+        # The default initial guess minao does not have super-heavy elements
+        if mol.atom_charge(0) > 96:
+            self.init_guess = '1e'
+
     def dump_flags(self, verbose=None):
         hf.RHF.dump_flags(self, verbose)
         logger.debug(self.mol, 'occupation averaged SCF for atom  %s',
@@ -69,7 +73,6 @@ class AtomSphericAverageRHF(hf.RHF):
 
     def eig(self, f, s):
         mol = self.mol
-        symb = mol.atom_symbol(0)
         ao_ang = _angular_momentum_for_each_ao(mol)
 
         nao = mol.nao

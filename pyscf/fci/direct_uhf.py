@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ direct_nosym        No            No             No**               Yes
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
 '''
 
-import sys
 import ctypes
 import numpy
 from pyscf import lib
@@ -187,9 +186,6 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     g2e_aa = ao2mo.restore(1, eri[0], norb)
     g2e_ab = ao2mo.restore(1, eri[1], norb)
     g2e_bb = ao2mo.restore(1, eri[2], norb)
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    nb = link_indexb.shape[0]
     if hdiag is None:
         hdiag = make_hdiag(h1e, eri, norb, nelec)
     if hdiag.size < np:
@@ -199,6 +195,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
             addr = numpy.argpartition(hdiag, np-1)[:np]
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
+    nb = cistring.num_strings(norb, nelecb)
     addra = addr // nb
     addrb = addr % nb
     stra = cistring.addrs2str(norb, neleca, addra)
@@ -295,7 +292,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

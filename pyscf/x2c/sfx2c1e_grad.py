@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,16 +17,14 @@
 Analytical nuclear gradients for 1-electron spin-free x2c method
 
 Ref.
-JCP 135 084114
+JCP 135, 084114 (2011); DOI:10.1063/1.3624397
 '''
 
-import time
 from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf.lib import logger
 from pyscf.x2c import x2c
 
 def hcore_grad_generator(x2cobj, mol=None):
@@ -218,7 +216,7 @@ def _gen_first_order_quantities(mol, e0, c0, x0, approx='1E'):
     return get_first_order
 
 def _get_r1(s0_roots, s_nesc0, s1, s_nesc1, r0_roots):
-# See JCP 135 084114, Eq (34)
+# See JCP 135, 084114 (2011); DOI:10.1063/1.3624397, Eq (34)
     w_sqrt, v_s = s0_roots
     w_invsqrt = 1. / w_sqrt
     wr0_sqrt, vr0 = r0_roots

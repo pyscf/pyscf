@@ -26,11 +26,8 @@ Refs:
 '''
 
 
-import time
-from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.scf import jk
 from pyscf.dft import numint
 from pyscf.prop.nmr import uks as uks_nmr
@@ -112,7 +109,7 @@ def dia(magobj, gauge_orig=None):
             vmata += lib.einsum('pxi,pyj->xyij', r_ao[0], aow)
             aow = numpy.einsum('npxi,np->pxi', r_ao, wvb)
             vmata += lib.einsum('pxi,pyj->xyij', r_ao[0], aow)
-            rho = vxc = vrho = vsigma = wv = aow = None
+            rho = vxc = vrho = aow = None
 
         vmata = vmata + vmata.transpose(0,1,3,2)
         vmatb = vmatb + vmatb.transpose(0,1,3,2)

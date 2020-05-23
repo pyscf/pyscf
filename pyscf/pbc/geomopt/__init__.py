@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-from pyscf.dft.libxc import *
-sys.stderr.write('WARN: vxc module was replaced by libxc module since PySCF-1.1\n')
+
+from pyscf.geomopt.addons import as_pyscf_method
+
+def optimize(method, *args, **kwargs):
+    try:
+        from pyscf.pbc.geomopt import geometric_solver as geom
+    except ImportError as e1:
+        raise e1
+    return geom.optimize(method, *args, **kwargs)

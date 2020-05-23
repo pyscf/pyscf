@@ -31,7 +31,7 @@ from pyscf.grad import uccsd as uccsd_grad
 
 def grad_elec(cigrad, civec=None, eris=None, atmlst=None, verbose=logger.INFO):
     myci = cigrad.base
-    if civec is None: civec = mycc.ci
+    if civec is None: civec = myci.ci
     nocc = myci.nocc
     nmo = myci.nmo
     d1 = ucisd._gamma1_intermediates(myci, civec, nmo, nocc)
@@ -75,7 +75,6 @@ ucisd.UCISD.Gradients = lib.class_as_method(Gradients)
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.M(
         atom = [

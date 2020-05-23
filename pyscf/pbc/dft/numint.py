@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 #
 
 import sys
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf.dft import numint
@@ -27,24 +26,9 @@ from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import _rks_gga_wv0, _rks_gga_wv1
 from pyscf.dft.numint import _uks_gga_wv0, _uks_gga_wv1
 from pyscf.dft.numint import OCCDROP
-from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
+from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
+from pyscf.pbc.lib.kpts_helper import member
 
-#try:
-### Moderate speedup by caching eval_ao
-#    from pyscf import pbc
-#    from joblib import Memory
-#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-#    def memory_cache(f):
-#        g = memory.cache(f)
-#        def maybe_cache(*args, **kwargs):
-#            if pbc.DEBUG:
-#                return g(*args, **kwargs)
-#            else:
-#                return f(*args, **kwargs)
-#        return maybe_cache
-#except:
-#    memory_cache = lambda f: f
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -83,7 +67,6 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=
     return ao_kpts[0]
 
 
-#@memory_cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
@@ -350,7 +333,6 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
-                vrho = vxc[0]
                 den = rho*weight
                 nelec[i] += den.sum()
                 excsum[i] += (den*exc).sum()
@@ -801,7 +783,6 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)[0]
         make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)[0]
 
-    shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
 
     vmata = [0] * nset
@@ -1019,7 +1000,7 @@ class NumInt(numint.NumInt):
         if grids.non0tab is None:
             grids.build(with_non0tab=True)
         if nao is None:
-            nao = mol.nao
+            nao = cell.nao
         grids_coords = grids.coords
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]

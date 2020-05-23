@@ -122,7 +122,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
 def get_rho(mf, dm=None, grids=None, kpts=None):
     from pyscf.pbc.dft import krks
     if dm is None:
-        dm = self.make_rdm1()
+        dm = mf.make_rdm1()
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
@@ -144,6 +144,9 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import kuks
+        return kuks.Gradients(self)
 
 
 if __name__ == '__main__':

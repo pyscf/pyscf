@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,9 +21,8 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.ao2mo.outcore import balance_segs
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
+from pyscf.pbc.lib.kpts_helper import gamma_point, unique, KPT_DIFF_TOL
 from pyscf.pbc.df.incore import wrap_int3c
-from pyscf import __config__
 
 libpbc = lib.load_library('libpbc')
 
@@ -183,7 +182,6 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-    naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
     nkptij = len(kptij_lst)
 
     nii = (ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,25 +22,18 @@
 
 import itertools
 import time
-from functools import reduce
 import numpy as np
-import h5py
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.pbc import scf
-from pyscf.cc import uccsd
-from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_rccsd
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-from pyscf.pbc.lib.kpts_helper import member, gamma_point
-from pyscf import __config__
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.cc import kintermediates as imd
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 
 einsum = lib.einsum
 
@@ -348,7 +341,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    nvir = nmo - nocc
     nkpts = eom.nkpts
     kconserv = imds.kconserv
     r1, r2 = vector_to_amplitudes_ip(vector, kshift, nkpts, nmo, nocc, kconserv)
@@ -497,11 +489,9 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
         the (ia) indices are coupled.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
-    cpu1 = cpu0 = (time.clock(), time.time())
-    log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -512,9 +502,6 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
 
-    fov = fock[:, :nocc, nocc:]
-    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
-    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
@@ -679,7 +666,6 @@ def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
     r1, r2 = eom.vector_to_amplitudes(vector, kshift=kshift)
     nkpts = eom.nkpts
     nocc, nmo = eom.nocc, eom.nmo
-    nvir = nmo - nocc
     kconserv = eom.kconserv
 
     # Get location of padded elements in occupied and virtual space
@@ -926,7 +912,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    nvir = nmo - nocc
     nkpts = eom.nkpts
     kconserv = imds.kconserv
     r1, r2 = vector_to_amplitudes_ea(vector, kshift, nkpts, nmo, nocc, kconserv)
@@ -969,7 +954,6 @@ def leaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     if imds is None: imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    nvir = nmo - nocc
     nkpts = eom.nkpts
     kconserv = imds.kconserv
     r1, r2 = vector_to_amplitudes_ea(vector, kshift, nkpts, nmo, nocc, kconserv)
@@ -1064,11 +1048,9 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
         before running the perturbative correction.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
-    cpu1 = cpu0 = (time.clock(), time.time())
-    log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -1079,9 +1061,6 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
 
-    fov = fock[:, :nocc, nocc:]
-    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
-    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
@@ -1207,7 +1186,6 @@ def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
     kconserv = eom.kconserv
     nkpts = eom.nkpts
     nocc, nmo = eom.nocc, eom.nmo
-    nvir = nmo - nocc
 
     # Get location of padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = eom.nonzero_opadding, eom.nonzero_vpadding

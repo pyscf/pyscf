@@ -425,7 +425,6 @@ class SymAdaptedUHF(uhf.UHF):
         if self.verbose >= logger.INFO and numpy.count_nonzero(vir_idx) > 0:
             noccsa = []
             noccsb = []
-            p0 = 0
             for i, ir in enumerate(mol.irrep_id):
                 irname = mol.irrep_name[i]
                 ir_idxa = orbsyma == ir

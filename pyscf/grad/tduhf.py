@@ -26,7 +26,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import tdrhf as tdrhf_grad
 from pyscf.scf import ucphf
-from pyscf import __config__
 
 
 def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
@@ -236,7 +235,6 @@ tdscf.uhf.TDA.Gradients = tdscf.uhf.TDHF.Gradients = lib.class_as_method(Gradien
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import dft
     from pyscf import tddft
     mol = gto.Mole()
     mol.verbose = 0

@@ -77,8 +77,6 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
 # 2e AO integrals dot 2pdm
     max_memory = max(0, mp.max_memory - lib.current_memory()[0])
     blksize = max(1, int(max_memory*.9e6/8/(nao**3*2.5)))
-    Imat1 = 0
-    Imat2 = 0
 
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
@@ -252,9 +250,6 @@ def _shell_prange(mol, start, stop, blksize):
 def _response_dm1(mp, Xvo):
     nvir, nocc = Xvo.shape
     nmo = nocc + nvir
-    with_frozen = not ((mp.frozen is None)
-                       or (isinstance(mp.frozen, (int, numpy.integer)) and mp.frozen == 0)
-                       or (len(mp.frozen) == 0))
     mo_energy = mp._scf.mo_energy
     mo_occ = mp.mo_occ
     mo_coeff = mp.mo_coeff

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -198,7 +198,7 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
 
     Reference:
         D. A. Matthews, J. F. Stanton "A new approach to approximate..."
-            JCP 145, 124102 (2016), Equation 14
+            JCP 145, 124102 (2016); DOI:10.1063/1.4962910, Equation 14
         Shavitt and Bartlett "Many-body Methods in Physics and Chemistry"
             2009, Equation 10.33
     """
@@ -208,8 +208,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     nocc, nvir = t1.shape
 
     fov = fock[:nocc, nocc:]
-    foo = fock[:nocc, :nocc].diagonal()
-    fvv = fock[nocc:, nocc:].diagonal()
+    #foo = fock[:nocc, :nocc].diagonal()
+    #fvv = fock[nocc:, nocc:].diagonal()
 
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 
 import sys
 import copy
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.fci import cistring
@@ -388,12 +389,7 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
 def _guess_wfnsym(ci, strsa, strsb, orbsym):
     na = len(strsa)
     nb = len(strsb)
-    if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
-        assert(ci.size == na*nb)
-        idx = numpy.argmax(abs(ci))
-    else:
-        assert(ci[0].size == na*nb)
-        idx = ci[0].argmax()
+    idx = abs(ci).argmax()
     stra = strsa[idx // nb]
     strb = strsb[idx % nb ]
 
@@ -426,7 +422,14 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     neleca, nelecb = _unpack_nelec(nelec)
     strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
     strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
-    return _guess_wfnsym(ci, strsa, strsb, orbsym)
+    if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
+        wfnsym = _guess_wfnsym(ci, strsa, strsb, orbsym)
+    else:
+        wfnsym = [_guess_wfnsym(c, strsa, strsb, orbsym) for c in ci]
+        if any(wfnsym[0] != x for x in wfnsym):
+            warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
+        wfnsym = wfnsym[0]
+    return wfnsym
 
 
 def des_a(ci0, norb, neleca_nelecb, ap_id):
@@ -639,8 +642,6 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             A modified FCI object based on fciobj.
     '''
     import types
-    from pyscf.fci import spin_op
-    from pyscf.fci import direct_spin0
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
                          'It was replaced by "ss"\n')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -129,11 +129,9 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
         s^{ b}_{ij}, i.e. the (jb) indices are coupled.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
-    cpu1 = cpu0 = (time.clock(), time.time())
-    log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -143,14 +141,14 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
-    fov = fock[:nocc, nocc:]
+    #fov = fock[:nocc, nocc:]
     foo = fock[:nocc, :nocc].diagonal()
     fvv = fock[nocc:, nocc:].diagonal()
 
     oovv = _cp(eris.oovv)
     ovvv = _cp(eris.ovvv)
     ovov = _cp(eris.ovov)
-    ovvo = -_cp(eris.ovov).transpose(0,1,3,2)
+    #ovvo = -_cp(eris.ovov).transpose(0,1,3,2)
     ooov = _cp(eris.ooov)
     vooo = _cp(ooov).conj().transpose(3,2,1,0)
     vvvo = _cp(ovvv).conj().transpose(3,2,1,0)
@@ -307,7 +305,6 @@ def leaccsd_matvec(eom, vector, imds=None, diag=None):
         imds = eom.make_imds()
     nocc = eom.nocc
     nmo = eom.nmo
-    nvir = nmo - nocc
     r1, r2 = vector_to_amplitudes_ea(vector, nmo, nocc)
 
     # Eq. (32)
@@ -361,11 +358,9 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
         See `ipccsd_star_contract` for description of arguments.
 
     Reference:
-        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999)
+        Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
     assert (eom.partition == None)
-    cpu1 = cpu0 = (time.clock(), time.time())
-    log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -375,7 +370,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
-    fov = fock[:nocc, nocc:].diagonal()
+    #fov = fock[:nocc, nocc:].diagonal()
     foo = fock[:nocc, :nocc].diagonal()
     fvv = fock[nocc:, nocc:].diagonal()
 
@@ -383,7 +378,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     oovv = _cp(eris.oovv)
     ovvv = _cp(eris.ovvv)
     ovov = _cp(eris.ovov)
-    ovvo = -_cp(eris.ovov).transpose(0,1,3,2)
+    #ovvo = -_cp(eris.ovov).transpose(0,1,3,2)
     ooov = _cp(eris.ooov)
     vooo = _cp(ooov).conj().transpose(3,2,1,0)
     vvvo = _cp(ovvv).conj().transpose(3,2,1,0)

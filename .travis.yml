@@ -25,8 +25,9 @@ python:
   - 3.6
   - 3.7
 
-#virtualenv:  affect python 3.5 3.6?
-#    system_site_packages: true
+cache:
+  apt: true
+  pip: true
 
 before_install:
   - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
@@ -59,7 +60,7 @@ script:
     nosetests -v --with-timer --with-coverage
     --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
-    --exclude-dir=cornell_shci
+    --exclude-dir=cornell_shci --exclude-dir=pbc/grad
     -e test_bz
     -e h2o_vdz
     -e test_mc2step_4o4e
@@ -72,6 +73,8 @@ script:
     -e skip
     -e call_in_background
     -e libxc_cam_beta_bug
+    -e test_finite_diff_rks_eph
+    -e test_finite_diff_uks_eph
     -I test_kuccsd_supercell_vs_kpts\.py
     -I test_kccsd_ghf\.py
     -I test_h_.*\.py

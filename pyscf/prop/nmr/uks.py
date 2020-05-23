@@ -92,7 +92,7 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             giao = mol.eval_gto('GTOval_ipig', coords, 9, non0tab=mask, out=buf[1:])
             rks_nmr._gga_sum_(vmat[0], mol, ao, giao, wva, mask, shls_slice, ao_loc)
             rks_nmr._gga_sum_(vmat[1], mol, ao, giao, wvb, mask, shls_slice, ao_loc)
-            rho = vxc = vrho = vsigma = wv = aow = None
+            vxc = vrho = vsigma = aow = None
     elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 

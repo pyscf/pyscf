@@ -33,7 +33,7 @@ from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
-from pyscf.data import nist, elements
+from pyscf.data import nist
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
@@ -410,6 +410,12 @@ def init_guess_by_minao(mol):
                              'will be used as initial guess for %s', symb)
         return occ, basis_ano
 
+    # Issue 548
+    if any(gto.charge(mol.atom_symbol(ia)) > 96 for ia in range(mol.natm)):
+        logger.info(mol, 'MINAO initial guess is not available for super-heavy '
+                    'elements. "atom" initial guess is used.')
+        return init_guess_by_atom(mol)
+
     nelec_ecp_dic = dict([(mol.atom_symbol(ia), mol.atom_nelec_core(ia))
                           for ia in range(mol.natm)])
 
@@ -456,17 +462,23 @@ def init_guess_by_atom(mol):
     Returns:
         Density matrix, 2D ndarray
     '''
-    import copy
     from pyscf.scf import atom_hf
-    from pyscf.scf import addons
     atm_scf = atom_hf.get_atm_nrhf(mol)
+    aoslice = mol.aoslice_by_atom()
     atm_dms = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if symb not in atm_scf:
             symb = mol.atom_pure_symbol(ia)
-        e_hf, e, c, occ = atm_scf[symb]
-        atm_dms.append(numpy.dot(c*occ, c.conj().T))
+
+        if symb in atm_scf:
+            e_hf, e, c, occ = atm_scf[symb]
+            dm = numpy.dot(c*occ, c.conj().T)
+        else:  # symb's basis is not specified in the input
+            nao_atm = aoslice[ia,3] - aoslice[ia,2]
+            dm = numpy.zeros((nao_atm, nao_atm))
+
+        atm_dms.append(dm)
 
     dm = scipy.linalg.block_diag(*atm_dms)
 
@@ -485,7 +497,6 @@ def init_guess_by_huckel(mol):
     Returns:
         Density matrix, 2D ndarray
     '''
-    if mol is None: mol = self.mol
     mo_energy, mo_coeff = _init_guess_huckel_orbitals(mol)
     mo_occ = get_occ(SCF(mol), mo_energy, mo_coeff)
     return make_rdm1(mo_coeff, mo_occ)
@@ -497,9 +508,7 @@ def _init_guess_huckel_orbitals(mol):
     Returns:
         An 1D array for Huckel orbital energies and an 2D array for orbital coefficients
     '''
-    import copy
     from pyscf.scf import atom_hf
-    from pyscf.scf import addons
     atm_scf = atom_hf.get_atm_nrhf(mol)
 
     # GWH parameter value
@@ -880,7 +889,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if damp_factor is None:
         damp_factor = mf.damp
     if s1e is None: s1e = mf.get_ovlp()
-    if dm is None: dm = self.make_rdm1()
+    if dm is None: dm = mf.make_rdm1()
 
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
@@ -1237,7 +1246,6 @@ def as_scanner(mf):
     >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     -98.414750424294368
     '''
-    import copy
     if isinstance(mf, lib.SinglePointScanner):
         return mf
 
@@ -1561,6 +1569,9 @@ class SCF(lib.StreamObject):
             dm = self.init_guess_by_1e(mol)
         elif key == 'atom':
             dm = self.init_guess_by_atom(mol)
+        elif key == 'vsap' and hasattr(self, 'init_guess_by_vsap'):
+            # Only available for DFT objects
+            dm = self.init_guess_by_vsap(mol)
         elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()
@@ -1591,7 +1602,7 @@ class SCF(lib.StreamObject):
     energy_tot = energy_tot
 
     def energy_nuc(self):
-        return gto.mole.energy_nuc(self.mol)
+        return self.mol.energy_nuc()
 
     # A hook for overloading convergence criteria in SCF iterations. Assigning
     # a function
@@ -1977,7 +1988,7 @@ class RHF(SCF):
         Returns:
             New orbitals that are more close to the stable condition.  The return
             value includes two set of orbitals.  The first corresponds to the
-            internal stablity and the second corresponds to the external stability.
+            internal stability and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)

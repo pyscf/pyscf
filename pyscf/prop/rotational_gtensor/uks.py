@@ -21,11 +21,7 @@ Non-relativistic rotational g-tensor for UKS
 '''
 
 
-import time
-import numpy
-from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.nmr import uks as uks_nmr
-from pyscf.prop.magnetizability import uhf as uhf_mag
 from pyscf.prop.magnetizability import uks as uks_mag
 from pyscf.prop.rotational_gtensor import rhf as rhf_g
 from pyscf.prop.rotational_gtensor import uhf as uhf_g
@@ -41,7 +37,7 @@ def dia(magobj, gauge_orig=None):
     if gauge_orig is None:
         mol = magobj.mol
         im, mass_center = rhf_g.inertia_tensor(mol)
-        # Eq. (35) of JCP, 105, 2804
+        # Eq. (35) of JCP 105, 2804 (1996); DOI:10.1063/1.472143
         e2 = uks_mag.dia(magobj, gauge_orig)
         e2 -= uks_mag.dia(magobj, mass_center)
         e2 = rhf_g._safe_solve(im, e2)

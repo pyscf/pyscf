@@ -33,11 +33,11 @@ from pyscf.scf import hf as mol_hf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.data import nist
-from pyscf.scf.hf import make_rdm1
+from pyscf.pbc import gto
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
-from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
 from pyscf import __config__
@@ -214,7 +214,6 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     Return:
         A list: the dipole moment on x, y and z components
     '''
-    from pyscf.pbc import gto
     from pyscf.pbc import tools
     from pyscf.pbc.dft import gen_grid
     from pyscf.pbc.dft import numint
@@ -374,7 +373,6 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 
 def _dip_correction(mf):
     '''Makov-Payne corrections for charged systems.'''
-    from pyscf.pbc import gto
     from pyscf.pbc import tools
     from pyscf.pbc.dft import gen_grid
     log = logger.new_logger(mf)
@@ -475,7 +473,7 @@ class SCF(mol_hf.SCF):
             Exchange divergence treatment, can be one of
 
             | None : ignore G=0 contribution in exchange
-            | 'ewald' : Ewald probe charge correction (JCP, 122, 234102)
+            | 'ewald' : Ewald probe charge correction [JCP 122, 234102 (2005); DOI:10.1063/1.1926272]
 
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
@@ -527,6 +525,7 @@ class SCF(mol_hf.SCF):
         '''Reset cell and relevant attributes associated to the old cell object'''
         if cell is not None:
             self.cell = cell
+            self.mol = cell # used by hf kernel
         self.with_df.reset(cell)
         return self
 

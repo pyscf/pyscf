@@ -101,18 +101,6 @@ class KnownValues(unittest.TestCase):
         self.assertListEqual(nocc, [1, 3, 2])
         self.assertListEqual(nmo, [2, 4, 4])
 
-    def test_frozen_kpt_list3(self):
-        mp = fake_mp(frozen=[[0,1,3],[3],[0]], mo_occ=[np.array([2, 2, 2, 0, 0])] * 3, nkpts=3)
-        nocc = get_nocc(mp)
-        nmo = get_nmo(mp)
-        self.assertAlmostEqual(nocc, 3)
-        self.assertAlmostEqual(nmo, 5)  # 2nd k-point has 3 occupied and 2 virtual orbitals
-
-        nocc = get_nocc(mp, per_kpoint=True)
-        nmo = get_nmo(mp, per_kpoint=True)
-        self.assertListEqual(nocc, [1, 3, 2])
-        self.assertListEqual(nmo, [2, 4, 4])
-
 if __name__ == '__main__':
     print("Full mask test")
     unittest.main()

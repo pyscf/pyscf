@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,7 +45,8 @@ from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
 
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
-        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
+        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom, \
+        _std_symbol_without_ghost
 
 # For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
@@ -88,6 +89,7 @@ NUC_FRAC_CHARGE = 3
 NUC_ECP = 4  # atoms with pseudo potential
 
 BASE = getattr(__config__, 'BASE', 0)
+NORMALIZE_GTO = getattr(__config__, 'NORMALIZE_GTO', True)
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -412,14 +414,10 @@ def format_basis(basis_tab):
             return basis.load(basis_name, symb)
 
     fmt_basis = {}
-    for atom in basis_tab:
+    for atom, atom_basis in basis_tab.items():
         symb = _atom_symbol(atom)
-        stdsymb = _std_symbol(symb)
-        if stdsymb[:2] == 'X-':
-            stdsymb = stdsymb[2:]
-        if stdsymb[:6] == 'GHOST-':
-            stdsymb = stdsymb[6:]
-        atom_basis = basis_tab[atom]
+        stdsymb = _std_symbol_without_ghost(symb)
+
         if isinstance(atom_basis, (str, unicode)):
             bset = convert(str(atom_basis), stdsymb)
         elif (any(isinstance(x, (str, unicode)) for x in atom_basis)
@@ -528,19 +526,20 @@ def format_ecp(ecp_tab):
        ...}
     '''
     fmt_ecp = {}
-    for atom in ecp_tab.keys():
+    for atom, atom_ecp in ecp_tab.items():
         symb = _atom_symbol(atom)
-        stdsymb = _std_symbol(symb)
-        if isinstance(ecp_tab[atom], (str, unicode)):
-            ecp_dat = basis.load_ecp(str(ecp_tab[atom]), stdsymb)
+
+        if isinstance(atom_ecp, (str, unicode)):
+            stdsymb = _std_symbol_without_ghost(symb)
+            ecp_dat = basis.load_ecp(str(atom_ecp), stdsymb)
             if ecp_dat is None or len(ecp_dat) == 0:
                 #raise RuntimeError('ECP not found for  %s' % symb)
                 sys.stderr.write('ECP %s not found for  %s\n' %
-                                 (ecp_tab[atom], symb))
+                                 (atom_ecp, symb))
             else:
                 fmt_ecp[symb] = ecp_dat
         else:
-            fmt_ecp[symb] = ecp_tab[atom]
+            fmt_ecp[symb] = atom_ecp
     return fmt_ecp
 
 # transform etb to basis format
@@ -772,8 +771,9 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         es = b_coeff[:,0]
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
-        cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
-        cs = _nomalize_contracted_ao(angl, es, cs)
+        if NORMALIZE_GTO:
+            cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
+            cs = _nomalize_contracted_ao(angl, es, cs)
 
         _env.append(es)
         _env.append(cs.T.reshape(-1))
@@ -836,8 +836,6 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
     _basdic = {}
     for symb, basis_add in basis.items():
         bas0, env0 = make_bas_env(basis_add, 0, ptr_env)
-        if bas0.size == 0:
-            sys.stderr.write('No basis found for atom %s\n' % symb)
         ptr_env = ptr_env + len(env0)
         _basdic[symb] = bas0
         _env.append(env0)
@@ -1051,7 +1049,8 @@ def dumps(mol):
 def loads(molstr):
     '''Deserialize a str containing a JSON document to a Mole object.
     '''
-    from numpy import array  # for eval function
+    # the numpy function array is used by eval function
+    from numpy import array  # noqa
     moldic = json.loads(molstr)
     if sys.version_info < (3,):
 # Convert to utf8 because JSON loads fucntion returns unicode.
@@ -1610,8 +1609,29 @@ def aoslice_by_atom(mol, ao_loc=None):
     aorange = numpy.empty((mol.natm,4), dtype=int)
     bas_atom = mol._bas[:,ATOM_OF]
     delimiter = numpy.where(bas_atom[0:-1] != bas_atom[1:])[0] + 1
-    aorange[:,0] = shell_start = numpy.append(0, delimiter)
-    aorange[:,1] = shell_end = numpy.append(delimiter, mol.nbas)
+
+    if mol.natm == len(delimiter) + 1:
+        aorange[:,0] = shell_start = numpy.append(0, delimiter)
+        aorange[:,1] = shell_end = numpy.append(delimiter, mol.nbas)
+
+    else:  # Some atoms miss basis
+        shell_start = numpy.empty(mol.natm, dtype=int)
+        shell_start[:] = -1
+        shell_start[0] = 0
+        shell_start[bas_atom[0]] = 0
+        shell_start[bas_atom[delimiter]] = delimiter
+
+        shell_end = numpy.empty(mol.natm, dtype=int)
+        shell_end[0] = 0
+        shell_end[bas_atom[delimiter-1]] = delimiter
+        shell_end[bas_atom[-1]] = mol.nbas
+
+        for i in range(1, mol.natm):
+            if shell_start[i] == -1:
+                shell_start[i] = shell_end[i] = shell_end[i-1]
+
+    aorange[:,0] = shell_start
+    aorange[:,1] = shell_end
     aorange[:,2] = ao_loc[shell_start]
     aorange[:,3] = ao_loc[shell_end]
     return aorange
@@ -1752,9 +1772,13 @@ def atom_mass_list(mol, isotope_avg=False):
             else:
                 prop = nucprop.get(stdsymb, {})
 
-            mass.append(nucprop.get('mass', mass_table[z]))
+            mass.append(prop.get('mass', mass_table[z]))
     else:
-        mass = [mass_table[z] for z in mol.atom_charges()]
+        #mass = [mass_table[z] for z in mol.atom_charges()]
+        mass = []
+        for ia in range(mol.natm):
+            z = charge(mol.atom_symbol(ia))
+            mass.append(mass_table[z])
 
     return numpy.array(mass)
 
@@ -1853,7 +1877,7 @@ def fromstring(string, format='xyz'):
         natm = int(dat[0])
         return '\n'.join(dat[2:natm+2])
     elif format == 'sdf':
-        raw = raw.splitlines()
+        raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
         atoms = []
         for line in raw[4:4+int(natoms)]:
@@ -2097,7 +2121,11 @@ class Mole(lib.StreamObject):
         return self.spin + 1
     @multiplicity.setter
     def multiplicity(self, x):
-        self.spin = x - 1
+        if x is None:
+            self.spin = None
+        else:
+            self.spin = x - 1
+
     @property
     def ms(self):
         '''Spin quantum number. multiplicity = ms*2+1'''
@@ -2107,7 +2135,10 @@ class Mole(lib.StreamObject):
             return self.spin * .5
     @ms.setter
     def ms(self, x):
-        self.spin = int(round(2*x, 4))
+        if x is None:
+            self.spin = None
+        else:
+            self.spin = int(round(2*x, 4))
 
     def __getattr__(self, key):
         '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
@@ -2123,7 +2154,7 @@ class Mole(lib.StreamObject):
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
-        from pyscf import __all__
+        from pyscf import __all__  # noqa
         from pyscf import scf, dft
         for mod in (scf, dft):
             method = getattr(mod, key, None)
@@ -2275,11 +2306,14 @@ class Mole(lib.StreamObject):
 
 # TODO: Consider ECP info in point group symmetry initialization
         if self.ecp:
+            # Unless explicitly input, ECP should not be assigned to ghost atoms
             if isinstance(self.ecp, (str, unicode)):
-                _ecp = dict([(a, str(self.ecp)) for a in uniq_atoms])
+                _ecp = dict([(a, str(self.ecp))
+                             for a in uniq_atoms if not is_ghost_atom(a)])
             elif 'default' in self.ecp:
                 default_ecp = self.ecp['default']
-                _ecp = dict(((a, default_ecp) for a in uniq_atoms))
+                _ecp = dict(((a, default_ecp)
+                             for a in uniq_atoms if not is_ghost_atom(a)))
                 _ecp.update(self.ecp)
                 del(_ecp['default'])
             else:
@@ -2491,9 +2525,9 @@ class Mole(lib.StreamObject):
             self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
             self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
                               'expnt,             c_1 c_2 ...\n')
-            for atom, basis in self._basis.items():
+            for atom, basis_set in self._basis.items():
                 self.stdout.write('[INPUT] %s\n' % atom)
-                for b in basis:
+                for b in basis_set:
                     if isinstance(b[1], int):
                         kappa = b[1]
                         b_coeff = b[2:]
@@ -3070,8 +3104,8 @@ class Mole(lib.StreamObject):
     def fromstring(self, string, format='xyz'):
         '''Update the Mole object based on the input geometry string'''
         self.atom = string
-        self._atom = mol.format_atom(fromstring(string, format))
-        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        self._atom = self.format_atom(fromstring(string, format))
+        self.set_geom_(self, self._atom, unit='Angstrom', inplace=True)
         if format == 'sdf' and 'M  CHG' in string:
             raise NotImplementedError
             #FIXME self.charge = 0
@@ -3080,8 +3114,8 @@ class Mole(lib.StreamObject):
     def fromfile(self, filename, format=None):
         '''Update the Mole object based on the input geometry file'''
         self.atom = filename
-        self._atom = mol.format_atom(fromfile(filename, format))
-        self.set_geom_(self, mol._atom, unit='Angstrom', inplace=True)
+        self._atom = self.format_atom(fromfile(filename, format))
+        self.set_geom_(self, self._atom, unit='Angstrom', inplace=True)
         return self
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,

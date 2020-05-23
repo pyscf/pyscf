@@ -129,7 +129,6 @@ def thermo(model, freq, temperature=298.15, pressure=101325):
     mass = mol.atom_mass_list(isotope_avg=True)
     mass_center = numpy.einsum('z,zx->x', mass, atom_coords) / mass.sum()
     atom_coords = atom_coords - mass_center
-    natm = atom_coords.shape[0]
 
     kB = nist.BOLTZMANN
     h = nist.PLANCK

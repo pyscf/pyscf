@@ -20,7 +20,7 @@
 Non-relativistic nuclear spin-rotation tensors for RHF
 
 Refs:
-[1] J. Gauss, K. Ruud, T. Helgaker, J. Chem. Phys., 105, 2804 (1996)
+[1] J. Gauss, K. Ruud, T. Helgaker, J. Chem. Phys. 105, 2804 (1996); DOI:10.1063/1.472143
 '''
 
 
@@ -48,7 +48,6 @@ def dia(nsrobj, gauge_orig=None, shielding_nuc=None, dm0=None):
     mol = nsrobj.mol
     im, mass_center = inertia_tensor(mol)
     if gauge_orig is None:
-        ao_coords = rhf_mag._get_ao_coords(mol)
         # Eq. (34) of JCP, 105, 2804
         nsr_dia = rhf_nmr.dia(nsrobj, gauge_orig, shielding_nuc, dm0)
         for n, atm_id in enumerate(shielding_nuc):

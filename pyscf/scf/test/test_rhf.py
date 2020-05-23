@@ -179,6 +179,13 @@ class KnownValues(unittest.TestCase):
         dm = scf.hf.get_init_guess(mol, key='atom')
         self.assertAlmostEqual(lib.fp(dm), 3.0664740316337697, 9)
 
+        mol.basis = {'h': '3-21g'}
+        mol.build(0, 0)
+        dm = scf.hf.get_init_guess(mol, key='atom')
+        self.assertEqual(dm.shape, (4, 4))
+        self.assertEqual(abs(dm[:2,:2]).max(), 0)
+        self.assertAlmostEqual(lib.fp(dm), -0.5158829428177857, 9)
+
     def test_init_guess_atom_with_ecp(self):
         s = re_ecp1.intor('int1e_ovlp')
         dm = scf.hf.get_init_guess(re_ecp1, key='atom')

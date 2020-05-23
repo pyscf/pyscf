@@ -316,7 +316,6 @@ def to_general_contraction(basis):
     basis = []
     for key in sorted(basdic.keys()):
         l_kappa = list(key)
-        l = l_kappa[0]
 
         es = numpy.hstack([ec[:,0] for ec in basdic[key]])
         cs = scipy.linalg.block_diag(*[ec[:,1:] for ec in basdic[key]])

@@ -32,19 +32,13 @@ Ref:
     Kossmann, Ute Becker, Edward Valeev, Frank Neese. Mol. Phys. 113, 1961 (2015)
 '''
 
-from functools import reduce
-import ctypes
 import time
 import numpy
 import numpy as np
 import scipy.linalg
 from pyscf import lib
-from pyscf import gto
 from pyscf.lib import logger
-
-from pyscf import df
 from pyscf import ao2mo
-from pyscf.gto.moleintor import getints, make_cintopt
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.df.grad.rhf import _int3c_wrapper
 
@@ -213,11 +207,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
         int3c_ipvip1 = tmp = None
 
-        s1ao = numpy.zeros((3,nao,nao))
-        s1ao[:,p0:p1] += s1a[:,p0:p1]
-        s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
-        s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
-
         e1[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
         ej[i0,i0] += numpy.einsum('xypq,pq->xy', vj1_diag[:,:,p0:p1], dm0[p0:p1])*2
         if with_k:
@@ -364,7 +353,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
-    time0 = t1 = (time.clock(), time.time())
     mol = hessobj.mol
     h1ao = [None] * mol.natm
     for ia, h1, vj1, vk1 in _gen_jk(hessobj, mo_coeff, mo_occ, chkfile,
@@ -383,7 +371,6 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
 
 def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
             verbose=None, with_k=True):
-    time0 = t1 = (time.clock(), time.time())
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -491,10 +478,6 @@ class Hessian(rhf_hess.Hessian):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-
-    import os, sys
-    sys.path.insert(0, os.path.abspath(os.path.join(__file__, '..', '..')))
-    import grad
 
     mol = gto.Mole()
     mol.verbose = 0

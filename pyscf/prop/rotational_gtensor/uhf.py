@@ -21,7 +21,6 @@ Non-relativistic rotational g-tensor for UHF
 '''
 
 
-import time
 import numpy
 from pyscf import lib
 from pyscf.prop.nmr import uhf as uhf_nmr
@@ -39,7 +38,7 @@ def dia(magobj, gauge_orig=None):
     mol = magobj.mol
     im, mass_center = rhf_g.inertia_tensor(mol)
     if gauge_orig is None:
-        # Eq. (35) of JCP, 105, 2804
+        # Eq. (35) of JCP 105, 2804 (1996); DOI:10.1063/1.472143
         e2 = uhf_mag.dia(magobj, gauge_orig)
         e2 -= uhf_mag.dia(magobj, mass_center)
         e2 = rhf_g._safe_solve(im, e2)

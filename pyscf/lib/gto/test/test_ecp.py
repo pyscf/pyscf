@@ -283,7 +283,7 @@ def so_by_shell(mol, shls, ecpatm_id, ecpbas):
         angi = facs_ang(type2_ang_part(li, lc, -rca), li, lc, i_fac_cache)
         angj = facs_ang(type2_ang_part(lj, lc, -rcb), lj, lc, j_fac_cache)
 
-        # Note the factor 2/(2l+1) in JCP 82 2664 is not multiplied here
+        # Note the factor 2/(2l+1) in JCP 82, 2664 (1985); DOI:10.1063/1.448263 is not multiplied here
         # because the ECP parameter has been scaled by 2/(2l+1) in CRENBL
         jmm = angular_moment_matrix(lc)
 

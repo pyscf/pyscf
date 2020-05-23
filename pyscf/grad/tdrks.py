@@ -20,12 +20,10 @@
 #
 
 import time
-import copy
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import dft
 from pyscf.dft import rks
 from pyscf.dft import numint
 from pyscf.scf import cphf
@@ -347,7 +345,6 @@ tdscf.rks.TDA.Gradients = tdscf.rks.TDDFT.Gradients = lib.class_as_method(Gradie
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     from pyscf import dft
     from pyscf import tddft
     mol = gto.Mole()

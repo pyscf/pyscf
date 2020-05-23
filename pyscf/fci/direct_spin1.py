@@ -274,7 +274,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 
 
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
-    '''Spin separated 1-particle density matrices.
+    r'''Spin separated 1-particle density matrices.
     The return values include two density matrices: (alpha,alpha), (beta,beta)
 
     dm1[p,q] = <q^\dagger p>
@@ -295,7 +295,7 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
     return rdm1a, rdm1b
 
 def make_rdm1(fcivec, norb, nelec, link_index=None):
-    '''Spin-traced one-particle density matrix
+    r'''Spin-traced one-particle density matrix
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
@@ -880,7 +880,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

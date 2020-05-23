@@ -199,8 +199,6 @@ cisd.CISD.Gradients = lib.class_as_method(Gradients)
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
-    from pyscf import grad
 
     mol = gto.M(
         atom = [

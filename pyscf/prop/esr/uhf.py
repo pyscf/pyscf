@@ -20,15 +20,13 @@ Refs:
 '''
 
 import time
+from functools import reduce
 import numpy
-import sys
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.prop.zfs.uhf import koseki_charge
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.nmr import rhf as rhf_nmr
-from pyscf.prop.magnetizability import rhf as rhf_mag
-from pyscf.prop.gtensor import uhf as uhf_gtensor
 from pyscf.prop.rotational_gtensor import rhf as rhf_rotg
 from pyscf.data import nist
 
@@ -40,16 +38,16 @@ def dia(gobj, dm0, gauge_orig=None):
         return numpy.zeros((3,3))
     mol = gobj.mol
     effspin = mol.spin * .5
-    muB = .5  # Bohr magneton
+    #muB = .5  # Bohr magneton
 
     dma, dmb = dm0
-    totdm = dma + dmb
+    #totdm = dma + dmb
     spindm = dma - dmb
     alpha2 = nist.ALPHA ** 2
     #Many choices of qed_fac, see JPC, 101, 3388
     #qed_fac = (nist.G_ELECTRON - 1)
     #qed_fac = nist.G_ELECTRON / 2
-    qed_fac = 1
+    #qed_fac = 1
 
     assert(not mol.has_ecp())
     if gauge_orig is not None:
@@ -81,8 +79,6 @@ def para(obj, mo10, mo_coeff, mo_occ, qed_fac=1):
     #qed_fac = nist.G_ELECTRON / 2
     orboa = mo_coeff[0][:,mo_occ[0]>0]
     orbob = mo_coeff[1][:,mo_occ[1]>0]
-    dm0a = numpy.dot(orboa, orboa.T)
-    dm0b = numpy.dot(orbob, orbob.T)
     dm10a = [reduce(numpy.dot, (mo_coeff[0], x, orboa.T)) for x in mo10[0]]
     dm10b = [reduce(numpy.dot, (mo_coeff[1], x, orbob.T)) for x in mo10[1]]
     dm10a = numpy.asarray([x-x.T for x in dm10a])
@@ -168,7 +164,6 @@ class ESR(lib.StreamObject):
         self._keys = set(self.__dict__.keys()) # keep this as input for attributes. Jia
 
     def kernel(self, mo1=None):
-        cput0 = (time.clock(), time.time())
         self.check_sanity()
         #self.dump_flags()
 
@@ -228,6 +223,7 @@ class ESR(lib.StreamObject):
 
     def align(self, tensor):
         return align(tensor)
+
 #====================================================
 if __name__ == '__main__':
     from pyscf import gto

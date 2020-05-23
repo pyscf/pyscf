@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,10 +22,10 @@ import time
 from itertools import product
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -475,8 +475,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     dtype = np.result_type(t1, t2)
 
     fov = fock[:, :nocc, nocc:]
-    foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
-    fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
+    #foo = [fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)]
+    #fvv = [fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)]
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
@@ -697,7 +697,7 @@ def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
             idx = (ki*(ki+1))//2 + kj
             pt2[idx,kb,idxj,idxi,idxb,idxa] += val.transpose(1,0,3,2)
     else:
-        raise ValueError('No known conversion for t2 shape %s' % t2.shape)
+        raise ValueError('No known conversion for t2 shape %s' % pt2.shape)
 
 
 def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
@@ -716,8 +716,8 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     dtype = np.result_type(t1, t2)
 
     fov = fock[:, :nocc, nocc:]
-    foo = np.asarray([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
-    fvv = np.asarray([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
+    #foo = np.asarray([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
+    #fvv = np.asarray([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])
     mo_energy_occ = np.array([eris.mo_energy[ki][:nocc] for ki in range(nkpts)])
     mo_energy_vir = np.array([eris.mo_energy[ki][nocc:] for ki in range(nkpts)])
 
@@ -737,8 +737,8 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     # Create necessary temporary eris for fast read
     from pyscf.pbc.cc.kccsd_t_rhf import create_t3_eris, get_data_slices
     feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
-    t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
-    fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
+    #t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
+    #fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
     cpu1 = logger.timer_debug1(mycc, 'CCSD(T) tmp eri creation', *cpu1)
 
     def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
@@ -781,7 +781,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
         tmp_t3Tv_ijk = np.asarray(data[0], dtype=dtype, order='C')
         tmp_t3Tv_jik = np.asarray(data[1], dtype=dtype, order='C')
         tmp_t3Tv_kji = np.asarray(data[2], dtype=dtype, order='C')
-        out_ijk = np.empty(data[0].shape, dtype=dtype, order='C')
+        #out_ijk = np.empty(data[0].shape, dtype=dtype, order='C')
 
         #drv = _ccsd.libcc.MPICCadd_and_permute_t3T
         #drv(ctypes.c_int(nocc), ctypes.c_int(nvir),
@@ -831,7 +831,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
                 kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
 
                 kpt_indices = [ki,kj,kk,ka,kb,kc]
-                data = get_data(kpt_indices)
+                #data = get_data(kpt_indices)
                 my_permuted_w[ki,kj,kk] = get_permuted_w(ki,kj,kk,ka,kb,kc,task)
 
             for ki, kj, kk in product(range(nkpts), repeat=3):

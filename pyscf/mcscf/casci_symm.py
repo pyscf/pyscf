@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,13 +25,10 @@ from pyscf import symm
 from pyscf import fci
 from pyscf.mcscf import casci
 from pyscf.mcscf import addons
-from pyscf import __config__
 
 
 class SymAdaptedCASCI(casci.CASCI):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
-# Ag, A1 or A
-#TODO:        self.wfnsym = symm.param.CHARACTER_TABLE[mol.groupname][0][0]
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
         assert(self.mol.symmetry)
@@ -152,6 +149,9 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
     log.info('Active space CI wfn symmetry = %s', wfnsym)
 
     return mo_coeff_with_orbsym
+
+scf.hf_symm.RHF.CASCI = scf.hf_symm.ROHF.CASCI = lib.class_as_method(SymAdaptedCASCI)
+scf.uhf_symm.UHF.CASCI = None
 
 
 if __name__ == '__main__':

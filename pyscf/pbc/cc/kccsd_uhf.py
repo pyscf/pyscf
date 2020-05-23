@@ -31,9 +31,10 @@ from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point
+from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
-                                padded_mo_coeff, padding_k_idx)
+                                padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf import __config__
 
@@ -58,7 +59,6 @@ def convert_mo_coeff(mo_coeff):
     return mo_coeff
 
 def update_amps(cc, t1, t2, eris):
-    from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
 
@@ -72,10 +72,10 @@ def update_amps(cc, t1, t2, eris):
 
     nkpts, nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape[1:]
-    fvv_ = eris.fock[0][:,nocca:,nocca:]
-    fVV_ = eris.fock[1][:,noccb:,noccb:]
-    foo_ = eris.fock[0][:,:nocca,:nocca]
-    fOO_ = eris.fock[1][:,:noccb,:noccb]
+    #fvv_ = eris.fock[0][:,nocca:,nocca:]
+    #fVV_ = eris.fock[1][:,noccb:,noccb:]
+    #foo_ = eris.fock[0][:,:nocca,:nocca]
+    #fOO_ = eris.fock[1][:,:noccb,:noccb]
     fov_ = eris.fock[0][:,:nocca,nocca:]
     fOV_ = eris.fock[1][:,:noccb,noccb:]
 
@@ -550,7 +550,6 @@ def vector_to_amplitudes(vec, nmo, nocc, nkpts=1):
 def add_vvvv_(cc, Ht2, t1, t2, eris):
     nocca, noccb = cc.nocc
     nmoa, nmob = cc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
     nkpts = cc.nkpts
     kconserv = cc.khelper.kconserv
 
@@ -684,7 +683,6 @@ class KUCCSD(uccsd.UCCSD):
             return _make_eris_outcore(self, mo_coeff)
 
     def init_amps(self, eris):
-        from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
         time0 = time.clock(), time.time()
 
         nocca, noccb = self.nocc
@@ -852,7 +850,6 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     mo_coeff = eris.mo_coeff
     nocca, noccb = eris.nocc
     nmoa, nmob = cc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
     mo_a, mo_b = mo_coeff
 
     # Re-make our fock MO matrix elements from density and fock AO
@@ -875,9 +872,9 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     eris.mo_energy = (mo_ea, mo_eb)
 
     orboa = np.asarray(mo_coeff[0][:,:,:nocca], order='C')
-    orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
     orbob = np.asarray(mo_coeff[1][:,:,:noccb], order='C')
-    orbvb = np.asarray(mo_coeff[1][:,:,noccb:], order='C')
+    #orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
+    #orbvb = np.asarray(mo_coeff[1][:,:,noccb:], order='C')
     dtype = np.result_type(*focka).char
 
     # The momentum conservation array
@@ -1037,10 +1034,10 @@ def _make_df_eris(cc, mo_coeff=None):
     nocca, noccb = cc.nocc
     nmoa, nmob = cc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
-    if getattr(thisdf, 'auxcell', None):
-        naux = thisdf.auxcell.nao_nr()
-    else:
-        naux = thisdf.get_naoaux()
+    #if getattr(thisdf, 'auxcell', None):
+    #    naux = thisdf.auxcell.nao_nr()
+    #else:
+    #    naux = thisdf.get_naoaux()
     nao = cell.nao_nr()
     mo_kpts_a, mo_kpts_b = eris.mo_coeff
 
@@ -1118,12 +1115,11 @@ def _make_df_eris(cc, mo_coeff=None):
     return eris
 
 
-from pyscf.pbc import scf
 scf.kuhf.KUHF.CCSD = lib.class_as_method(KUCCSD)
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto, cc
     from pyscf import lo
 
     cell = gto.Cell()

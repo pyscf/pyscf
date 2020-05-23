@@ -17,7 +17,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import scf
-from pyscf import ao2mo
 from pyscf.data.elements import _symbol
 from pyscf.semiempirical import mopac_param, mindo3
 
@@ -315,8 +314,6 @@ del(dat)
 @lib.with_doc(scf.hf.get_hcore.__doc__)
 def get_hcore(mol):
     assert(not mol.has_ecp())
-    nao = mol.nao
-
     atom_charges = mol.atom_charges()
     basis_atom_charges = atom_charges[mol._bas[:,gto.ATOM_OF]]
 
@@ -441,8 +438,6 @@ def energy_nuc(mol):
         for ja in range(ia):
             ni = atom_charges[ia]
             nj = atom_charges[ja]
-            ri = atom_coords[ia]
-            rj = atom_coords[ja]
             rij = distances_in_AA[ia,ja]
             scale = 1. + exp(-alp[ni] * rij) + exp(-alp[nj] * rij)
 

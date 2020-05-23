@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
-from pyscf import scf
 from pyscf.grad import rhf as rhf_grad
-from pyscf.data.elements import _symbol
 from pyscf.semiempirical import mindo3
 from pyscf.semiempirical import mopac_param
 

@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import sys
 import time
 import ctypes
 from functools import reduce
@@ -112,13 +111,15 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             vj, vk = self.get_jk(mol, dm, hermi)
             return vj - vk * .5
 
-# We don't modify self._scf because it changes self.h1eff function.
-# We only need approximate jk for self.update_jk_in_ah
-        def get_jk(self, mol, dm, hermi=1):
+# only approximate jk for self.update_jk_in_ah
+        @lib.with_doc(casscf_class.get_jk.__doc__)
+        def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
             if self.with_df:
-                return self.with_df.get_jk(dm, hermi=hermi)
+                return self.with_df.get_jk(dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
             else:
-                return casscf_class.get_jk(self, mol, dm, hermi)
+                return casscf_class.get_jk(self, mol, dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
 
         def _exact_paaa(self, mo, u, out=None):
             if self.with_df:
@@ -141,6 +142,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
 # A tag to label the derived MCSCF class
 class _DFCASSCF:
     pass
+_DFCASCI = _DFCASSCF
 
 
 def approx_hessian(casscf, auxbasis=None, with_df=None):
@@ -205,11 +207,11 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             return casscf_class.reset(self, mol)
 
         def ao2mo(self, mo_coeff):
-# the exact integral transformation
+            # the exact integral transformation
             eris = casscf_class.ao2mo(self, mo_coeff)
 
             log = logger.Logger(self.stdout, self.verbose)
-# Add the approximate diagonal term for orbital hessian
+            # Add the approximate diagonal term for orbital hessian
             t1 = t0 = (time.clock(), time.time())
             mo = numpy.asarray(mo_coeff, order='F')
             nao, nmo = mo.shape
@@ -241,19 +243,20 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
             log.timer('ao2mo density fit part', *t0)
             return eris
 
-        def get_jk(self, mol, dm, hermi=1):
+        @lib.with_doc(casscf_class.get_jk.__doc__)
+        def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
             if self.with_df:
-                return self.with_df.get_jk(dm, hermi=hermi)
+                return self.with_df.get_jk(dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
             else:
-                return casscf_class.get_jk(self, mol, dm, hermi)
+                return casscf_class.get_jk(self, mol, dm, hermi,
+                                           with_j=with_j, with_k=with_k, omega=omega)
 
     return CASSCF()
 
 
 class _ERIS(object):
     def __init__(self, casscf, mo, with_df):
-        import gc
-        gc.collect()
         log = logger.Logger(casscf.stdout, casscf.verbose)
 
         mol = casscf.mol
@@ -349,7 +352,6 @@ class _ERIS(object):
         t0 = log.timer('density fitting ao2mo', *t0)
 
 def _mem_usage(ncore, ncas, nmo):
-    nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
     return incore, outcore, basic

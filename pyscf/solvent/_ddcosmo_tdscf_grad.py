@@ -35,8 +35,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 from pyscf import df
-from pyscf.dft import gen_grid, numint
-from pyscf.symm import sph
+from pyscf.dft import numint
 from pyscf.solvent import ddcosmo
 from pyscf.solvent import ddcosmo_grad
 from pyscf.solvent._attach_solvent import _Solvation
@@ -927,7 +926,6 @@ def _grad_nn(pcmobj, r_vdw, ui, ylm_1sph, cached_pol, L):
     ngrid_1sph = coords_1sph.shape[0]
     lmax = pcmobj.lmax
     nlm = (lmax+1)**2
-    nao = mol.nao
     atom_coords = mol.atom_coords()
     atom_charges = mol.atom_charges()
 
@@ -995,7 +993,7 @@ def _grad_ne(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
     grids = pcmobj.grids
     aoslices = mol.aoslice_by_atom()
 
-    extern_point_idx = ui > 0
+    #extern_point_idx = ui > 0
     fi0 = ddcosmo.make_fi(pcmobj, r_vdw)
     fi1 = ddcosmo_grad.make_fi1(pcmobj, pcmobj.get_atomic_radii())
     fi1[:,:,ui==0] = 0
@@ -1045,9 +1043,7 @@ def _grad_ne(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
     Xvec1 = numpy.linalg.solve(L.reshape(natm*nlm,-1), phi1.reshape(-1,natm*nlm).T)
     Xvec1 = Xvec1.T.reshape(natm,3,natm,nlm)
 
-    i1 = 0
     for ia, (coords, weight, weight1) in enumerate(rks_grad.grids_response_cc(grids)):
-        i0, i1 = i1, i1 + weight.size
         ao = mol.eval_gto('GTOval_sph_deriv1', coords)
 
         fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
@@ -1122,13 +1118,11 @@ def _grad_ee(pcmobj, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L):
     nlm = (lmax+1)**2
 
     atom_coords = mol.atom_coords()
-    atom_charges = mol.atom_charges()
     aoslices = mol.aoslice_by_atom()
     grids = pcmobj.grids
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)
-    ngrid_1sph = coords_1sph.shape[0]
 
-    extern_point_idx = ui > 0
+    #extern_point_idx = ui > 0
     fi0 = ddcosmo.make_fi(pcmobj, r_vdw)
     fi1 = ddcosmo_grad.make_fi1(pcmobj, pcmobj.get_atomic_radii())
     fi1[:,:,ui==0] = 0
@@ -1211,9 +1205,7 @@ def _grad_ee(pcmobj, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L):
     Xvec1 = Xvec1.T.reshape(n_dm,natm,3,natm,nlm)
 
     psi1_dm1 = numpy.zeros((n_dm,natm,3,natm,nlm))
-    i1 = 0
     for ia, (coords, weight, weight1) in enumerate(rks_grad.grids_response_cc(grids)):
-        i0, i1 = i1, i1 + weight.size
         ao = mol.eval_gto('GTOval_sph_deriv1', coords)
 
         fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
@@ -1262,9 +1254,6 @@ def _grad_ee(pcmobj, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import dft
     mol0 = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
     mol1 = gto.M(atom='H  0.  0.  1.803; F  0.  0.  0.', verbose=0, unit='B')
     mol2 = gto.M(atom='H  0.  0.  1.805; F  0.  0.  0.', verbose=0, unit='B')

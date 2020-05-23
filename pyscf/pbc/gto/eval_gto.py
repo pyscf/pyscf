@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -182,7 +182,7 @@ def _estimate_rcut(cell):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, dft
+    from pyscf.pbc import gto
     cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
     coords = cell.get_uniform_grids([10]*3)
     ao_value = eval_gto(cell, "GTOval_sph", coords, kpts=cell.make_kpts([3]*3))

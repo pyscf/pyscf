@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 RHF-CCSD(T) for real integrals
 '''
 
-import gc
 import time
 import ctypes
 import numpy
@@ -31,7 +30,7 @@ from pyscf.cc import _ccsd
 
 # t3 as ijkabc
 
-# JCP, 94, 442.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
+# JCP 94, 442 (1991); DOI:10.1063/1.460359.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = cpu0 = (time.clock(), time.time())
     log = logger.new_logger(mycc, verbose)
@@ -156,7 +155,6 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     with lib.call_in_background(vvop.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((nocc,nmo,nvir), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
-        buf = numpy.empty((nocc,nvir,nvir), dtype=dtype)
         for j0, j1 in lib.prange(0, nvir, blksize):
             ovov = numpy.asarray(eris.ovov[:,j0:j1])
             #ovvv = numpy.asarray(eris.ovvv[:,j0:j1])

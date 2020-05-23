@@ -603,7 +603,6 @@ del(CUTOFF, PRECISION)
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto as pbcgto
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.atom = 'C 0 0 0; C 1 1 1'

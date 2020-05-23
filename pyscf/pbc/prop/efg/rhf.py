@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -164,7 +164,7 @@ def _fft_quad_integrals(mydf, dm, efg_nuc):
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):
         ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
         rhoR[p0:p1] += make_rho(0, ao_ks, mask, 'LDA')
-        ao = ao_ks = None
+        ao_ks = None
     rhoG = tools.fft(rhoR, mesh)
 
     Gv = cell.get_Gv(mesh)

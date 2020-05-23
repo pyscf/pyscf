@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -100,7 +100,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                  int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
                  max_memory=MAX_MEMORY, auxmol=None, verbose=logger.NOTE):
-    '''3-center 2-electron DF tensor.
+    '''3-center 2-electron DF tensor. Similar to cholesky_eri while this
+    function stores DF tensor in blocks.
     '''
     assert(aosym in ('s1', 's2ij'))
     log = logger.new_logger(mol, verbose)
@@ -211,10 +212,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     fswap = h5py.File(swapfile.name, 'r')
     time1 = log.timer('AO->MO eri transformation 1 pass', *time0)
 
-    nmoi = mo_coeffs[0].shape[1]
-    nmoj = mo_coeffs[1].shape[1]
     nao = mo_coeffs[0].shape[0]
-    auxmol = make_auxmol(mol, auxbasis)
     if aosym == 's1':
         nao_pair = nao * nao
         aosym_as_nr_e2 = 's1'

@@ -230,7 +230,6 @@ z-1,2-DiChloroEthene                   9.2
 '''
 
 import ctypes
-import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -306,7 +305,7 @@ def gen_ddcosmo_solver(pcmobj, verbose=None):
     return pcmobj._get_vind
 
 def energy(pcmobj, dm):
-    '''
+    r'''
     ddCOSMO energy
     Es = 1/2 f(eps) \int rho(r) W(r) dr
     '''

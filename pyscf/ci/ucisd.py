@@ -20,8 +20,6 @@
 Unrestricted CISD
 '''
 
-import time
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -469,7 +467,7 @@ def from_fcivec(ci0, norb, nelec, frozen=None):
         neleca, nelecb = nelec
 
     norba = norbb = norb
-    nocc = nocca, noccb = neleca, nelecb
+    nocca, noccb = neleca, nelecb
     nvira = norba - nocca
     nvirb = norbb - noccb
     t1addra, t1signa = cisd.tn_addrs_signs(norba, nocca, 1)
@@ -501,7 +499,7 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
             The overlap matrix of non-orthogonal one-particle basis
     '''
     if s is None:
-        return dot(cibra, ciket, nmo, nocc)
+        return numpy.dot(cibra, ciket, nmo, nocc)
 
     if isinstance(nmo, (int, numpy.integer)):
         nmoa = nmob = nmo
@@ -983,8 +981,6 @@ def _cp(a):
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

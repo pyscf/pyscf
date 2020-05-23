@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 '''Wave Function Stability Analysis
 
 Ref.
-JCP, 66, 3045
-JCP, 104, 9047
+JCP 66, 3045 (1977); DOI:10.1063/1.434318
+JCP 104, 9047 (1996); DOI:10.1063/1.471637
 
 See also tddft/rhf.py and scf/newton_ah.py
 '''
@@ -31,7 +31,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import newton_ah
-from pyscf.pbc.scf import _response_functions
+from pyscf.pbc.scf import _response_functions  # noqa
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     mo_i = mo_e = None
@@ -68,7 +68,7 @@ def rhf_internal(mf, verbose=None):
     x0[g!=0] = 1. / hdiag[g!=0]
     e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
     if e < -1e-5:
-        log.log('KRHF/KRKS wavefunction has an internal instablity')
+        log.log('KRHF/KRKS wavefunction has an internal instability')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
         log.log('KRHF/KRKS wavefunction is stable in the internal stability analysis')
@@ -93,10 +93,8 @@ def _rotate_mo(mo_coeff, mo_occ, dx):
 def _gen_hop_rhf_external(mf, verbose=None):
 #FIXME: numerically unstable with small mesh?
 #TODO: Add a warning message for small mesh.
-    from pyscf.pbc.dft import numint
     from pyscf.pbc.scf.newton_ah import _unpack
     cell = mf.cell
-    kpts = mf.kpts
 
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
@@ -156,7 +154,7 @@ def rhf_external(mf, verbose=None):
     x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
     if e3 < -1e-5:
-        log.log('KRHF/KRKS wavefunction has an KRHF/KRKS -> KUHF/KUKS instablity.')
+        log.log('KRHF/KRKS wavefunction has an KRHF/KRKS -> KUHF/KUKS instability.')
         mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
     else:
         log.log('KRHF/KRKS wavefunction is stable in the KRHF/KRKS -> KUHF/KUKS stability analysis')
@@ -177,7 +175,7 @@ def uhf_internal(mf, verbose=None):
     x0[g!=0] = 1. / hdiag[g!=0]
     e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
     if e < -1e-5:
-        log.log('KUHF/KUKS wavefunction has an internal instablity.')
+        log.log('KUHF/KUKS wavefunction has an internal instability.')
         tot_x_a = sum((occ>0).sum()*(occ==0).sum() for occ in mf.mo_occ[0])
         mo = (_rotate_mo(mf.mo_coeff[0], mf.mo_occ[0], v[:tot_x_a]),
               _rotate_mo(mf.mo_coeff[1], mf.mo_occ[1], v[tot_x_a:]))
@@ -275,7 +273,7 @@ def uhf_external(mf, verbose=None):
     log.debug('uhf_external: lowest eigs of H = %s', e3)
     mo = None
     if e3 < -1e-5:
-        log.log('KUHF/KUKS wavefunction has an KUHF/KUKS -> KGHF/KGKS instablity.')
+        log.log('KUHF/KUKS wavefunction has an KUHF/KUKS -> KGHF/KGKS instability.')
     else:
         log.log('KUHF/KUKS wavefunction is stable in the KUHF/KUKS -> KGHF/KGKS stability analysis')
     return mo

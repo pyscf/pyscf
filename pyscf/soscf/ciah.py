@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,7 +120,6 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
     g_op = lambda: g_orb
     x0_guess = g_orb
     while True:
-        g_orb0 = g_orb
         stat = Statistic()
         dr = 0
         ikf = 0

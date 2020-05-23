@@ -38,7 +38,6 @@ from pyscf.dmrgscf import dmrg_sym
 from pyscf import __config__
 
 # Libraries
-import pyscf.lib
 libunpack = lib.load_library('libicmpspt')
 
 # Settings
@@ -54,7 +53,6 @@ except ImportError:
     settings.MPIPREFIX = getattr(__config__, 'dmrgscf_MPIPREFIX', None)
     settings.BLOCKVERSION = getattr(__config__, 'dmrgscf_BLOCKVERSION', None)
     if (settings.BLOCKEXE is None or settings.BLOCKSCRATCHDIR is None):
-        import sys
         sys.stderr.write('settings.py not found for module dmrgci.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
@@ -1017,7 +1015,6 @@ def block_version(blockexe):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import mcscf
     settings.MPIPREFIX =''
     b = 1.4
     mol = gto.Mole()
