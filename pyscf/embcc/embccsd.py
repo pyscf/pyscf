@@ -37,6 +37,14 @@ class Cluster:
 
         self.mol = mf.mol
 
+        # Output
+        self.converged = True
+        self.e_ccsd = 0
+        self.e_pt = 0
+        self.nbath0 = 0
+        self.nbath = 0
+        self.nfrozen = 0
+
     def __len__(self):
         return len(self.indices)
 
@@ -54,6 +62,22 @@ class Cluster:
         p_12 = np.eye(nao)[:,self.indices]
         p = np.dot(p_12, p_21)
         return p
+
+    def make_projector_s121(self):
+        """Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b"""
+        S1 = self.mf.get_ovlp()
+        nao = self.mol.nao_nr()
+        S2 = S1[np.ix_(self.indices, self.indices)]
+        S21 = S1[self.indices]
+        #s2_inv = np.linalg.inv(s2)
+        #p_21 = np.dot(s2_inv, s21)
+        # Better: solve with Cholesky decomposition
+        # Solve: S2 * p_21 = S21 for p_21
+        p_21 = scipy.linalg.solve(S2, S21, assume_a="pos")
+        #p_12 = np.eye(nao)[:,self.indices]
+        p = np.dot(S21.T, p_21)
+        return p
+
 
     def make_local_orbitals(self, tol=1e-9):
         S = self.mf.get_ovlp()
@@ -190,66 +214,121 @@ class Cluster:
         # Accelerates convergence
         if diagonalize_fock:
             F = np.linalg.multi_dot((C_cc.T, mf.get_fock(), C_cc))
-            # Occupied
+            # Occupied active
             o = np.nonzero(occ > 0)[0]
             o = np.asarray([i for i in o if i in active])
-            e, r = np.linalg.eigh(F[np.ix_(o, o)])
-            C_cc[:,o] = np.dot(C_cc[:,o], r)
-            # Virtual
+            if len(o) > 0:
+                e, r = np.linalg.eigh(F[np.ix_(o, o)])
+                C_cc[:,o] = np.dot(C_cc[:,o], r)
+            # Virtual active
             v = np.nonzero(occ == 0)[0]
             v = np.asarray([i for i in v if i in active])
-            e, r = np.linalg.eigh(F[np.ix_(v, v)])
-            C_cc[:,v] = np.dot(C_cc[:,v], r)
+            if len(v) > 0:
+                e, r = np.linalg.eigh(F[np.ix_(v, v)])
+                C_cc[:,v] = np.dot(C_cc[:,v], r)
 
-        print("Running CCSD with %3d local, %3d DMET bath, %3d other bath and %3d frozen orbitals" % (len(self), nbath0, nbath-nbath0, len(frozen)))
+        #print("Running CCSD with %3d local, %3d DMET bath, %3d other bath and %3d frozen orbitals" % (len(self), nbath0, nbath-nbath0, len(frozen)))
         cc = pyscf.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
-
+        cc.max_cycle = 100
         #cc.verbose = 4
         cc.kernel()
-        assert cc.converged
-        assert np.allclose(C_cc, cc.mo_coeff)
 
-        e_loc, e_pertT = self.get_local_energy(cc, pertT=pertT)
+        self.converged = cc.converged
+        self.nbath0 = nbath0
+        self.nbath = nbath
+        self.nfrozen = len(frozen)
 
-        return e_loc, e_pertT
+        self.e_ccsd, self.e_pt = self.get_local_energy(cc, C, pertT=pertT)
 
-    def get_local_energy(self, cc, pertT=False):
+        return int(self.converged)
+
+    def get_local_energy(self, cc, C, pertT=False):
 
         a = cc.get_frozen_mask()
+        #nactive = sum(a)
+        #print("active orbitals: %d" % nactive)
         l = self.indices
         o = cc.mo_occ[a] > 0
         v = cc.mo_occ[a] == 0
         # Projector to local, occupied region
         S = self.mf.get_ovlp()
-        C = cc.mo_coeff[:,a]
+        C_cc = cc.mo_coeff[:,a]
+        #C = C[:,np.s_[:nactive]]
 
-        var = "pv2"
-        # Project amplitudes
-        if var == "po1":
-            P = np.linalg.multi_dot((C[:,o].T, S[:,l], C[l][:,o]))
+        var = "po"
+        if var == "po":
+            P = np.linalg.multi_dot((C_cc[:,o].T, S[:,l], C_cc[l][:,o]))
+            #P = (P + P.T)/2
+
             T1 = np.einsum("xi,ia->xa", P, cc.t1, optimize=True)
             # T2
             T2 = np.einsum("xi,ijab->xjab", P, cc.t2, optimize=True)
             # Add connected T1
             T21 = T2 + np.einsum('xa,jb->xjab', T1, cc.t1, optimize=True)
-        elif var == "pv1":
-            Pv = np.linalg.multi_dot((C[:,v].T, S[:,l], C[l][:,v]))
 
-            T1 = np.einsum("xa,ia->ix", Pv, cc.t1, optimize=True)
+        elif var == "pv":
+            P = np.linalg.multi_dot((C_cc[:,v].T, S[:,l], C_cc[l][:,v]))
+            #P = (P + P.T)/2
+
+            T1 = np.einsum("xa,ia->ix", P, cc.t1, optimize=True)
             # T2
-            T2 = np.einsum("xa,ijab->ijxb", Pv, cc.t2, optimize=True)
+            T2 = np.einsum("xa,ijab->ijxb", P, cc.t2, optimize=True)
             # Add connected T1
             T21 = T2 + np.einsum('ix,jb->ijxb', T1, cc.t1, optimize=True)
 
-        elif var == "pv2":
-            Pv = np.linalg.multi_dot((C[:,v].T, S[:,l], C[l][:,v])).T
+        elif var == "average":
+            P = np.linalg.multi_dot((C_cc.T, S[:,l], C_cc[l]))
+            Po = P[np.ix_(o, o)]
+            Pv = P[np.ix_(v, v)]
 
-            T1 = np.einsum("xa,ia->ix", Pv, cc.t1, optimize=True)
-            # T2
-            T2 = np.einsum("xb,ijab->ijax", Pv, cc.t2, optimize=True)
-            # Add connected T1
-            T21 = T2 + np.einsum('ia,jx->ijax', cc.t1, T1, optimize=True)
+            # Occ
+            T1o = np.einsum("xi,ia->xa", Po, cc.t1, optimize=True)
+            T2o = np.einsum("xi,ijab->xjab", Po, cc.t2, optimize=True)
+            T21o = T2o + np.einsum('xa,jb->xjab', T1o, cc.t1, optimize=True)
 
+            # Vir
+            T1v = np.einsum("xa,ia->ix", Pv, cc.t1, optimize=True)
+            T2v = np.einsum("xa,ijab->ijxb", Pv, cc.t2, optimize=True)
+            T21v = T2v + np.einsum('ix,jb->ijxb', T1v, cc.t1, optimize=True)
+
+            T1 = (T1o + T1v)/2
+            T21 = (T21o + T21v)/2
+
+        #elif var == "new-v":
+        #    loc = np.s_[:len(self)]
+        #    csc = np.linalg.multi_dot((C_cc[:,v].T, S, C[:,loc]))
+        #    P = np.dot(csc, csc.T)
+
+        #    S_121 = self.make_projector_s121()
+        #    P2 = np.linalg.multi_dot((C_cc[:,v].T, S_121, C_cc[:,v]))
+        #    assert np.allclose(P, P2)
+
+        #    T1 = np.einsum("xa,ia->ix", P, cc.t1, optimize=True)
+        #    # T2
+        #    T2 = np.einsum("xa,ijab->ijxb", P, cc.t2, optimize=True)
+        #    # Add connected T1
+        #    T21 = T2 + np.einsum('ix,jb->ijxb', T1, cc.t1, optimize=True)
+
+        #elif var == "Po":
+        #    S_121 = self.make_projector_s121()
+
+        #    P = np.linalg.multi_dot((C[:,o].T, S_121, C[:,o]))
+
+        #    T1 = np.einsum("xi,ia->xa", P, cc.t1, optimize=True)
+        #    # T2
+        #    T2 = np.einsum("xi,ijab->xjab", P, cc.t2, optimize=True)
+        #    # Add connected T1
+        #    T21 = T2 + np.einsum('xa,jb->xjab', T1, cc.t1, optimize=True)
+
+        #elif var == "Pv":
+        #    S_121 = self.make_projector_s121()
+        #    P = np.linalg.multi_dot((C[:,v].T, S_121, C[:,v]))
+
+        #    T1 = np.einsum("xa,ia->ix", P, cc.t1, optimize=True)
+        #    # T2
+        #    T2 = np.einsum("xa,ijab->ijxb", P, cc.t2, optimize=True)
+        #    # Add connected T1
+        #    T21 = T2 + np.einsum('ix,jb->ijxb', T1, cc.t1, optimize=True)
 
         # Energy
         eris = cc.ao2mo()
@@ -294,52 +373,72 @@ class EmbCCSD:
             c = Cluster(name, self.mf, ao_indices)
             clusters.append(c)
 
+        self.clusters = clusters
+
         return clusters
 
-    def run(self, max_power=0, pertT=False, cluster=None):
-        clusters = self.create_atom_clusters()
+    def collect_results(self):
+        clusters = self.clusters
+
+        converged = MPI_comm.reduce(np.asarray([c.converged for c in clusters]), op=MPI.PROD, root=0)
+        nbath0 = MPI_comm.reduce(np.asarray([c.nbath0 for c in clusters]), op=MPI.SUM, root=0)
+        nbath = MPI_comm.reduce(np.asarray([c.nbath for c in clusters]), op=MPI.SUM, root=0)
+        nfrozen = MPI_comm.reduce(np.asarray([c.nfrozen for c in clusters]), op=MPI.SUM, root=0)
+        e_ccsd = MPI_comm.reduce(np.asarray([c.e_ccsd for c in clusters]), op=MPI.SUM, root=0)
+        e_pt = MPI_comm.reduce(np.asarray([c.e_pt for c in clusters]), op=MPI.SUM, root=0)
+
+        if MPI_rank == 0:
+            print("Cluster results")
+            print("---------------")
+
+            fmtstr = "%10s [N=%3d,B0=%3d,B=%3d,F=%3d]: CCSD=%+16.8g Eh  (T)=%+16.8g Eh"
+            for i, c in enumerate(clusters):
+                print(fmtstr % (c.name, len(c), nbath0[i], nbath[i]-nbath0[i], nfrozen[i], e_ccsd[i], e_pt[i]))
+
+            self.e_ccsd = sum(e_ccsd)
+            self.e_pt = sum(e_pt)
+
+            print("%10s:                            CCSD=%+16.8g Eh  (T)=%+16.8g Eh" % ("Total", self.e_ccsd, self.e_pt))
+
+        return np.all(converged)
+
+    def run(self, max_power=0, pertT=False):
+        clusters = self.clusters
 
         MPI_comm.Barrier()
         t_start = MPI.Wtime()
 
-        ecl_sd = np.zeros((len(clusters),))
-        ecl_pt = np.zeros((len(clusters),))
         for idx, c in enumerate(clusters):
-            if cluster is not None and idx not in cluster:
-                continue
             if MPI_rank != (idx % MPI_size):
                 continue
-            ecl_sd[idx], ecl_pt[idx] = c.run_ccsd(max_power=max_power, pertT=pertT)
 
-        if MPI_rank == 0:
-            e_sd = np.zeros_like(ecl_sd)
-            e_pt = np.zeros_like(ecl_pt)
-        else:
-            e_sd = None
-            e_pt = None
+            c.run_ccsd(max_power=max_power, pertT=pertT)
 
-        #MPI_comm.Reduce([e_cluster, MPI.DOUBLE], [e_corr, MPI.DOUBLE], op=MPI.SUM, root=0)
-        MPI_comm.Reduce([ecl_sd, MPI.DOUBLE], [e_sd, MPI.DOUBLE], op=MPI.SUM, root=0)
-        MPI_comm.Reduce([ecl_pt, MPI.DOUBLE], [e_pt, MPI.DOUBLE], op=MPI.SUM, root=0)
+        all_conv = self.collect_results()
 
         MPI_comm.Barrier()
         wtime = MPI.Wtime() - t_start
         if MPI_rank == 0:
             print("Wall time: %.2g s" % wtime)
 
-        if MPI_rank == 0:
-            for cidx, cluster in enumerate(clusters):
-                print("%10s: CCSD=%+16.8g Eh  (T)=%+16.8g Eh" % (cluster.name, e_sd[cidx], e_pt[cidx]))
+        return all_conv
 
-            e_ccsd = sum(e_sd)
-            e_pt = sum(e_pt)
-            e_ccsdpt = e_ccsd + e_pt
+        #if MPI_rank == 0:
+        #    for cidx, cluster in enumerate(clusters):
+        #        print("%10s [N=%3d,B0=%3d,B=%3d,F=%3d]: CCSD=%+16.8g Eh  (T)=%+16.8g Eh" % (cluster.name, *sizes[cidx], e_sd[cidx], e_pt[cidx]))
 
-            print("%10s: CCSD=%+16.8g Eh  (T)=%+16.8g Eh" % ("Total", e_ccsd, e_pt))
+        #    e_ccsd = sum(e_sd)
+        #    e_pt = sum(e_pt)
+        #    e_ccsdpt = e_ccsd + e_pt
 
-            self.e_corr = e_ccsdpt
+        #    print("%10s:                            CCSD=%+16.8g Eh  (T)=%+16.8g Eh" % ("Total", e_ccsd, e_pt))
+        #    #self.e_corr = e_ccsdpt
 
-        return e_ccsd, e_pt
+        #else:
+        #    e_ccsd, e_pt = 0, 0
+
+        #return e_ccsd, e_pt
+
 
 if __name__ == "__main__":
     import pyscf
@@ -349,24 +448,28 @@ if __name__ == "__main__":
     from molecules import *
 
     eps = 1e-14
-    dists = np.arange(0.8, 4.0+eps, 0.2)
+    #dists = np.arange(0.7, 4.0+eps, 0.1)
     #dists = np.linspace(0, 2*np.pi, num=10, endpoint=False)
-    #dists = np.linspace(0, 180, num=30, endpoint=False)
+    dists = np.linspace(0, 180, num=30, endpoint=False)
+    #dists = [2.0]
 
     #basis = "sto-3g"
     #basis = "tzvp"
     basis = "cc-pVDZ"
+    #basis = "cc-pVTZ"
     output = "output.txt"
 
     pt = False
+
+    max_power = 2
 
     for d in dists:
         if MPI_rank == 0:
             print("Now calculating distance=%.3f" % d)
 
         #mol = build_dimer(["N", "N"], d, basis=basis)
-        mol = build_EtOH(d, basis=basis)
-        #mol = build_biphenyl(d, basis=basis)
+        #mol = build_EtOH(d, basis=basis)
+        mol = build_biphenyl(d, basis=basis)
 
         try:
             mf = pyscf.scf.RHF(mol)
@@ -375,43 +478,43 @@ if __name__ == "__main__":
             print(e)
             continue
 
-        if MPI_rank == 0:
-            print("Full space CCSD")
-        cc = pyscf.cc.CCSD(mf)
-        try:
-            cc.kernel()
-            e_ccsd_ref = cc.e_corr
-            assert cc.converged
-            if pt:
-                e_pt_ref = cc.ccsd_t()
-        except Exception as e:
-            print(e)
-            e_cc = -1
-        if MPI_rank == 0:
-            print("Done")
-
-        ecc = EmbCCSD(mf)
+        #if MPI_rank == 0:
+        #    print("Full space CCSD")
+        #cc = pyscf.cc.CCSD(mf)
         #try:
-        ecc_sd, ecc_pt = ecc.run(max_power=2, pertT=pt)
+        #    cc.kernel()
+        #    e_ccsd_ref = cc.e_corr
+        #    assert cc.converged
+        #    if pt:
+        #        e_pt_ref = cc.ccsd_t()
         #except Exception as e:
         #    print(e)
-        #    e_ecc = -1
+        #    e_cc = -1
+        #if MPI_rank == 0:
+        #    print("Done")
+        e_ccsd_ref = -1
+
+        ecc = EmbCCSD(mf)
+        ecc.create_atom_clusters()
+        conv = ecc.run(max_power=max_power, pertT=pt)
+        if MPI_rank == 0:
+            assert conv
 
         if MPI_rank == 0:
             print("CCSD correlation energy:    %+g" % e_ccsd_ref)
-            print("EmbCCSD correlation energy: %+g" % ecc_sd)
-            print("Error:                      %+g" % (ecc_sd - e_ccsd_ref))
-            print("%% Correlation:             %.3f %%" % (100*ecc_sd/e_ccsd_ref))
+            print("EmbCCSD correlation energy: %+g" % ecc.e_ccsd)
+            print("Error:                      %+g" % (ecc.e_ccsd - e_ccsd_ref))
+            print("%% Correlation:             %.3f %%" % (100*ecc.e_ccsd/e_ccsd_ref))
 
-            if pt:
-                print("CCSD(T) correlation energy:    %+g" % (e_ccsd_ref + e_pt_ref))
-                print("EmbCCSD(T) correlation energy: %+g" % (ecc_sd + ecc_pt))
-                print("Error:                         %+g" % (ecc_sd+ecc_pt - e_ccsd_ref-e_pt_ref))
-                print("%% Correlation:                %.3f %%" % (100*(ecc_sd+ecc_pt)/(e_ccsd_ref+e_pt_ref)))
+            with open(output, "a") as f:
+                f.write("%3f  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+ecc.e_ccsd))
 
-            if pt:
-                with open(output, "a") as f:
-                    f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+e_ccsd_ref+e_pt_ref, mf.e_tot+ecc_sd, mf.e_tot+ecc_sd+ecc_pt))
-            else:
-                with open(output, "a") as f:
-                    f.write("%3f  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+ecc_sd))
+            #if pt:
+            #    print("CCSD(T) correlation energy:    %+g" % (e_ccsd_ref + e_pt_ref))
+            #    print("EmbCCSD(T) correlation energy: %+g" % (ecc_sd + ecc_pt))
+            #    print("Error:                         %+g" % (ecc_sd+ecc_pt - e_ccsd_ref-e_pt_ref))
+            #    print("%% Correlation:                %.3f %%" % (100*(ecc_sd+ecc_pt)/(e_ccsd_ref+e_pt_ref)))
+
+            #    with open(output, "a") as f:
+            #        f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+e_ccsd_ref+e_pt_ref, mf.e_tot+ecc_sd, mf.e_tot+ecc_sd+ecc_pt))
+
