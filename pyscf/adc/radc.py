@@ -21,13 +21,11 @@ Restricted algebraic diagrammatic construction
 '''
 import time
 import numpy as np
+import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 from pyscf import __config__
-
-
-import pyscf.ao2mo as ao2mo
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
@@ -143,14 +141,12 @@ def compute_amplitudes(myadc, eris):
         eris_oooo = eris.oooo
         eris_ovvo = eris.ovvo
  
-        temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-
-        if (myadc.algorithm == "incore"): 
-        
+        if isinstance(eris.vvvv, list):
+            t2_2 = contract_ladder_outcore(myadc,t2_1,eris)
+        else:    
             eris_vvvv = eris.vvvv
+            temp = t2_1.reshape(nocc*nocc,nvir*nvir)
             t2_2 = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-        else  :
-            t2_2 = contract_ladder_outcore(myadc,temp,eris)
 
         t2_2 += lib.einsum('kilj,klab->ijab',eris_oooo,t2_1,optimize=True)
         t2_2 += lib.einsum('kcbj,kica->ijab',eris_ovvo,t2_1_a,optimize=True)
@@ -293,32 +289,31 @@ def compute_energy(myadc, t1, t2, eris):
         eris_oooo = eris.oooo
 
         eris_vvvv = eris.vvvv
-        temp = t2_1_a.reshape(nocc*nocc,nvir*nvir)
 
-        if (myadc.algorithm == "incore"): 
+        if isinstance(eris.vvvv, list):
+            temp_1_a = contract_ladder_outcore(myadc,t2_1_a,eris)
+        else : 
+            temp = t2_1_a.reshape(nocc*nocc,nvir*nvir)
             temp_1_a = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
+
+        if isinstance(eris.vvvv, list):
+            temp_1_ab = contract_ladder_outcore(myadc,t2_1,eris)
         else :
-            temp_1_a = contract_ladder_outcore(myadc,temp,eris)
-
-        temp_2 = t2_1.reshape(nocc*nocc,nvir*nvir)
-
-        if (myadc.algorithm == "incore"): 
+            temp_2 = t2_1.reshape(nocc*nocc,nvir*nvir)
             temp_1_ab = np.dot(temp_2,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-        else :
-            temp_1_ab = contract_ladder_outcore(myadc,temp_2,eris)
 
         e_mp3 =  lib.einsum('ijcd,ijcd',temp_1_ab, t2_1,optimize=True)
         del temp_1_ab
 
-        temp = temp.reshape(nocc,nocc,nvir,nvir)
-        temp = np.ascontiguousarray(temp.transpose(0,1,3,2))
-        temp = temp.reshape(nocc*nocc,nvir*nvir)
-
-        if (myadc.algorithm == "incore"): 
-            temp_1_a -= np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-        else :
-            temp_1_a_n = contract_ladder_outcore(myadc,temp,eris)
+        if isinstance(eris.vvvv, list):
+            t2_1_a_t = np.ascontiguousarray(t2_1_a.transpose(0,1,3,2))
+            temp_1_a_n = contract_ladder_outcore(myadc,t2_1_a_t,eris)
             temp_1_a -= temp_1_a_n
+        else :
+            temp = temp.reshape(nocc,nocc,nvir,nvir)
+            temp = np.ascontiguousarray(temp.transpose(0,1,3,2))
+            temp = temp.reshape(nocc*nocc,nvir*nvir)
+            temp_1_a -= np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
 
         e_mp3 += 0.25 * lib.einsum('ijcd,ijcd',temp_1_a, t2_1_a,optimize=True)
        
@@ -365,13 +360,17 @@ def contract_ladder_outcore(myadc,t_amp,eris):
     nocc = myadc._nocc
     nvir = myadc._nvir
 
+    t_amp_t = t_amp.reshape(nocc*nocc,nvir*nvir).T
     t = np.zeros((nvir,nvir, nocc*nocc))
 
-    for a in range(nvir):
-         t[a] = np.dot(eris.vvvv[a][:],t_amp.T)
+    a = 0
+    for dataset in eris.vvvv:
+         k = dataset.shape[0]
+         t[a:a+k] = np.dot(dataset[:],t_amp_t)
+         a += dataset.shape[0]
          
-    t = t.transpose(2,0,1).reshape(nocc, nocc, nvir, nvir)
-
+    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
+    
     return t
 
 
@@ -424,7 +423,6 @@ class RADC(lib.StreamObject):
         self.max_space = getattr(__config__, 'adc_radc_RADC_max_space', 12)
         self.max_cycle = getattr(__config__, 'adc_radc_RADC_max_cycle', 50)
         self.conv_tol = getattr(__config__, 'adc_radc_RADC_conv_tol', 1e-12)
-        #self.scf_energy = mf.scf()
         self.scf_energy = mf.e_tot
         
         self.frozen = frozen
@@ -488,10 +486,8 @@ class RADC(lib.StreamObject):
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            self.algorithm = "incore"
             eris = radc_ao2mo.transform_integrals_incore(self)
         else:
-            self.algorithm =  "outcore"
             eris = radc_ao2mo.transform_integrals_outcore(self)
 
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
@@ -521,10 +517,8 @@ class RADC(lib.StreamObject):
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            self.algorithm = "incore"
             eris = radc_ao2mo.transform_integrals_incore(self)
         else:
-            self.algorithm = "outcore"
             eris = radc_ao2mo.transform_integrals_outcore(self)
 
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
@@ -709,12 +703,30 @@ def get_imds_ea(adc, eris=None):
         M_ab += 0.25*lib.einsum('mlbd,noad,nlom->ab',t2_1_a, t2_1_a, eris_oooo, optimize=True)
         M_ab -= lib.einsum('mlbd,noad,nmol->ab',t2_1, t2_1, eris_oooo, optimize=True)
 
- 
-        t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
-        t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
-        
-        if (adc.algorithm == "incore"):
+        if isinstance(eris.vvvv, list):
 
+            temp = contract_ladder_outcore(adc,t2_1_a,eris)
+            temp_n = contract_ladder_outcore(adc,t2_1,eris)
+
+            M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp, optimize=True)
+            M_ab += 0.25*lib.einsum('mlaf,mlfb->ab',t2_1_a, temp, optimize=True)
+            M_ab -= lib.einsum('mlaf,mlbf->ab',t2_1, temp_n, optimize=True)
+
+            temp = np.zeros((nvir,nvir, nocc*nocc))
+            t2_1_a_r_t = t2_1_a.reshape(nocc*nocc,nvir*nvir).T
+            a = 0
+            for dataset in eris.vvvv:
+                 k = dataset.shape[0]
+                 temp[a:a+k] = np.dot(dataset[:],t2_1_a_r_t)
+                 a += dataset.shape[0]
+
+            temp = temp.reshape(nvir,nvir,nocc,nocc)
+            M_ab += 0.25*lib.einsum('adlm,mlbd->ab',temp, t2_1_a, optimize=True)
+     
+        else :
+
+            t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
+            t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
             eris_vvvv = eris.vvvv
             temp = np.dot(t2_1_a_r,eris_vvvv)
             temp_n = np.dot(t2_1_r,eris_vvvv)
@@ -727,22 +739,26 @@ def get_imds_ea(adc, eris=None):
             temp = temp.reshape(nvir,nvir,nocc,nocc)
             M_ab += 0.25*lib.einsum('adlm,mlbd->ab',temp, t2_1_a, optimize=True)
 
+       
+        if isinstance(eris.vvvv, list):
+            a = 0
+            temp = np.zeros((nvir,nvir))
+            for dataset in eris.vvvv:
+                k = dataset.shape[0]
+              
+                temp[a:a+k] = -0.25*lib.einsum('mlef,mlbd,adef->ab',t2_1_a, t2_1_a, dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                temp[a:a+k] += 0.5*lib.einsum('mldf,mled,aefb->ab',t2_1_a, t2_1_a,  dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1, t2_1, dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                temp[a:a+k] -= lib.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                temp[a:a+k] -= lib.einsum('mlef,mlbd,adef->ab',t2_1, t2_1, dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                temp[a:a+k] += lib.einsum('mldf,mlde,aebf->ab',t2_1, t2_1,   dataset[:].reshape(-1,nvir,nvir,nvir), optimize=True)
+                a += dataset.shape[0]
+
+            M_ab += temp
+
         else :
-            temp = contract_ladder_outcore(adc,t2_1_a_r,eris)
-            temp_n = contract_ladder_outcore(adc,t2_1_r,eris)
-
-            M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp, optimize=True)
-            M_ab += 0.25*lib.einsum('mlaf,mlfb->ab',t2_1_a, temp, optimize=True)
-            M_ab -= lib.einsum('mlaf,mlbf->ab',t2_1, temp_n, optimize=True)
-
-            temp = np.zeros((nvir,nvir, nocc*nocc))
-            for b in range(0,nvir):
-                temp[b] = np.dot(eris.vvvv[b][:],t2_1_a_r.T)
-
-            temp = temp.reshape(nvir,nvir,nocc,nocc)
-            M_ab += 0.25*lib.einsum('adlm,mlbd->ab',temp, t2_1_a, optimize=True)
-
-        if (adc.algorithm == "incore"):
 
             eris_vvvv = eris_vvvv.reshape(nvir,nvir,nvir,nvir)
             M_ab -= 0.25*lib.einsum('mlef,mlbd,adef->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
@@ -755,23 +771,6 @@ def get_imds_ea(adc, eris=None):
             M_ab += lib.einsum('mldf,mlde,aebf->ab',t2_1, t2_1,   eris_vvvv, optimize=True)
             eris_vvvv = eris_vvvv.reshape(nvir*nvir,nvir*nvir)
         
-        else :
-
-            temp = np.zeros((nvir,nvir))
-            for a in range(nvir):
-              
-                temp[a] = -0.25*lib.einsum('mlef,mlbd,def->b',t2_1_a, t2_1_a, eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-                temp[a] -= 0.5*lib.einsum('mldf,mled,ebf->b',t2_1_a, t2_1_a,  eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-                temp[a] += 0.5*lib.einsum('mldf,mled,efb->b',t2_1_a, t2_1_a,  eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-                temp[a] += lib.einsum('mlfd,mled,ebf->b',t2_1, t2_1, eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-                temp[a] -= lib.einsum('mlfd,mled,efb->b',t2_1, t2_1, eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-                temp[a] -= lib.einsum('mlef,mlbd,def->b',t2_1, t2_1,   eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-                temp[a] -= 0.5*lib.einsum('mldf,mled,ebf->b',t2_1_a, t2_1_a, eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-                temp[a] += lib.einsum('mldf,mlde,ebf->b',t2_1, t2_1,   eris.vvvv[a][:].reshape(-1,nvir,nvir), optimize=True)
-
-            M_ab += temp
-
-
     return M_ab
 
 
@@ -915,13 +914,21 @@ def get_imds_ip(adc, eris=None):
         M_ij -= 0.25*lib.einsum('lmde,jnde,lnmi->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
         M_ij += lib.einsum('lmde,jnde,limn->ij',t2_1 ,t2_1, eris_oooo, optimize = True)
 
-        eris_vvvv = eris.vvvv
-        t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
-        t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
-        temp = np.dot(t2_1_a_r,eris_vvvv)
-        temp_n = np.dot(t2_1_r,eris_vvvv)
-        temp = temp.reshape(nocc,nocc,nvir,nvir)
-        temp_n = temp_n.reshape(nocc,nocc,nvir,nvir)
+        if isinstance(eris.vvvv, list):
+
+            temp = contract_ladder_outcore(adc,t2_1_a,eris)
+            temp_n = contract_ladder_outcore(adc,t2_1,eris)
+
+        else :
+
+            eris_vvvv = eris.vvvv
+            t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
+            t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
+            temp = np.dot(t2_1_a_r,eris_vvvv)
+            temp_n = np.dot(t2_1_r,eris_vvvv)
+            temp = temp.reshape(nocc,nocc,nvir,nvir)
+            temp_n = temp_n.reshape(nocc,nocc,nvir,nvir)
+
         M_ij += 0.25*lib.einsum('ilde,jlde->ij',t2_1_a, temp, optimize = True)
         M_ij -= 0.25*lib.einsum('ilde,jled->ij',t2_1_a, temp, optimize = True)
         M_ij +=lib.einsum('ilde,jlde->ij',t2_1, temp_n, optimize = True)
@@ -1010,22 +1017,26 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         eris_oovv = eris.oovv
         eris_ovvo = eris.ovvo
 
-        if (adc.algorithm == "incore"):
+        if isinstance(eris.vvvv, list): 
+            temp = np.zeros((nvir,nvir))
+            a = 0
+            for dataset in eris.vvvv:
+                k = dataset.shape[0]
+                p = np.diag(dataset[:].reshape(-1,nvir*nvir))
+
+                temp[a:a+k] = np.diag(dataset[:].reshape(-1,nvir*nvir)).reshape(-1,nvir)
+                a += dataset.shape[0]
+
+            temp_1 = np.zeros((nocc, nvir*nvir))
+            temp_1[:] = temp.reshape(-1)
+            diag[s2:f2] += temp_1.reshape(-1)
+
+        else :
 
             eris_vvvv = eris.vvvv
             temp = np.zeros((nocc, eris_vvvv.shape[0]))
             temp[:] += np.diag(eris_vvvv)
             diag[s2:f2] += temp.reshape(-1)
-
-        else :
-        
-            temp = np.zeros((nvir,nvir))
-            for  a in range(nvir):
-                temp[a] = np.diag(eris.vvvv[a][:])
-
-            temp_1 = np.zeros((nocc, nvir*nvir))
-            temp_1[:] = temp.reshape(-1)
-            diag[s2:f2] += temp_1.reshape(-1)
 
         eris_ovov_p = np.ascontiguousarray(eris_oovv[:].transpose(0,2,1,3))
         eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
@@ -1101,21 +1112,14 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
         eris_oovv = eris.oovv
         eris_ovvo = eris.ovvo
 
-        #eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
-############################################################################
-        eris_oooo_p = np.einsum('ijkl->ikjl',eris_oooo)
-############################################################################
+        eris_oooo_p = np.ascontiguousarray(eris_oooo[:].transpose(0,2,1,3))
         eris_oooo_p = eris_oooo_p.reshape(nocc*nocc, nocc*nocc)
   
         temp = np.zeros((nvir, eris_oooo_p.shape[0]))
         temp[:] += np.diag(eris_oooo_p)
         diag[s2:f2] += -temp.reshape(-1)
 
-        #eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
-        #eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1)) 
-#############################################################################
-        eris_ovov_p = np.einsum('ijab->iajb',eris_oovv)
-#############################################################################
+        eris_ovov_p = np.ascontiguousarray(eris_oovv[:].transpose(0,2,1,3)) 
         eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
         temp = np.zeros((nocc, nocc, nvir))
@@ -1123,10 +1127,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
         temp = np.ascontiguousarray(temp.transpose(2,1,0))
         diag[s2:f2] += temp.reshape(-1)
 
-        #eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
-#############################################################################
-        eris_ovov_p = np.einsum('ijab->iajb',eris_oovv)
-#############################################################################
+        eris_ovov_p = np.ascontiguousarray(eris_oovv[:].transpose(0,2,1,3)) 
         eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
         temp = np.zeros((nocc, nocc, nvir))
@@ -1224,18 +1225,22 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                r_bab_t = r2.reshape(nocc,-1)
 
-               if (adc.algorithm == "incore"):
+               if isinstance(eris.vvvv, list):
 
-                   eris_vvvv = eris.vvvv
-                   s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
+                   temp = np.zeros((nvir,nvir,nocc))
+                   r_bab_T = r2.reshape(nocc,-1).T
+                   a = 0
+                   for dataset in eris.vvvv:
+                        k = dataset.shape[0]
+                        temp[a:a+k] = np.dot(dataset[:],r_bab_T)
+                        a += dataset.shape[0]
+
+                   s[s2:f2] += np.ascontiguousarray(temp.transpose(2,0,1)).reshape(-1)
 
                else :
 
-                   temp = np.zeros((nvir,nvir,nocc))
-                   for a in range(0,nvir):
-                       temp[a] = np.dot(eris.vvvv[a][:],r_bab_t.T)               
-
-                   s[s2:f2] += temp.transpose(2,0,1).reshape(-1)
+                   eris_vvvv = eris.vvvv
+                   s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
 
 ####################################################################################
 
@@ -1786,7 +1791,6 @@ class RADCEA(RADC):
         self.mo_coeff = adc.mo_coeff
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
-        self.algorithm = adc.algorithm
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 

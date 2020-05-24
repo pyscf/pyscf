@@ -52,7 +52,7 @@ def transform_integrals_incore(myadc):
 
     return eris
 
-#@profile    
+
 def transform_integrals_outcore(myadc):
 
     cput0 = (time.clock(), time.time())
@@ -147,17 +147,28 @@ def transform_integrals_outcore(myadc):
 
     eris.vvvv = []
 
-    for p in range(vir.shape[1]):
+    used_mem = (nmo**4) * 8/1e6 
+    avail_mem = myadc.max_memory - used_mem
+    vvv_mem = (nvir**3) * 8/1e6
 
-        orb_slice = vir[:, p:p+1]
+    chnk_size =  int(avail_mem/vvv_mem)
 
+    if chnk_size <= 0 :
+        chnk_size = 1
+
+    k = 0
+    for p in range(0,vir.shape[1],chnk_size):
+
+        orb_slice = vir[:, p:p+chnk_size]
+        
         vvvv = ao2mo.general(myadc._scf._eri, (orb_slice, vir, vir, vir), compact=False)
         vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
-        vvvv = vvvv.transpose(0,2,1,3).copy().reshape(-1, nvir * nvir)
+        vvvv = vvvv.transpose(0,2,1,3).copy().reshape(-1,nvir, nvir * nvir)
 
         vvvv_p = dataset(vvvv)
         eris.vvvv.append(vvvv_p)
-    
+        k = k+1
+
     return eris
 
 
