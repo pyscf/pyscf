@@ -257,8 +257,12 @@ class Cluster:
 
         var = "po"
         if var == "po":
-            P = np.linalg.multi_dot((C_cc[:,o].T, S[:,l], C_cc[l][:,o]))
+            #P = np.linalg.multi_dot((C_cc[:,o].T, S[:,l], C_cc[l][:,o]))
             #P = (P + P.T)/2
+
+            S_121 = self.make_projector_s121()
+            P = np.linalg.multi_dot((C_cc[:,o].T, S_121, C_cc[:,o]))
+
 
             T1 = np.einsum("xi,ia->xa", P, cc.t1, optimize=True)
             # T2
@@ -367,7 +371,8 @@ class EmbCCSD:
         base_atoms = np.asarray([ao[0] for ao in self.mol.ao_labels(None)])
 
         clusters = []
-        for atomid in range(self.mol.natm):
+        ncluster = self.mol.natm
+        for atomid in range(ncluster):
             ao_indices = np.nonzero(base_atoms == atomid)[0]
             name = self.mol.atom_symbol(atomid)
             c = Cluster(name, self.mf, ao_indices)
@@ -376,6 +381,28 @@ class EmbCCSD:
         self.clusters = clusters
 
         return clusters
+
+    def create_custom_clusters(self, clusters):
+        """Divide atomic orbitals into clusters."""
+
+        # base atom for each AO
+        #ao_labels = [ao for ao in self.mol.ao_labels(None)]
+        ao2atomlbl = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
+
+        # [("H1", "C2"), ("H3", "H4")]
+        ncluster = len(clusters)
+
+        clusters_out = []
+        for cluster in clusters:
+            ao_indices = np.nonzero(np.isin(ao2atomlbl, cluster))[0]
+            name = ",".join(cluster)
+            c = Cluster(name, self.mf, ao_indices)
+            clusters_out.append(c)
+
+        self.clusters = clusters_out
+
+        return clusters_out
+
 
     def collect_results(self):
         clusters = self.clusters
@@ -448,28 +475,30 @@ if __name__ == "__main__":
     from molecules import *
 
     eps = 1e-14
-    #dists = np.arange(0.7, 4.0+eps, 0.1)
+    dists = np.arange(0.7, 4.0+eps, 0.1)
     #dists = np.linspace(0, 2*np.pi, num=10, endpoint=False)
-    dists = np.linspace(0, 180, num=30, endpoint=False)
+    #dists = np.linspace(0, 180, num=30, endpoint=False)
     #dists = [2.0]
 
     #basis = "sto-3g"
     #basis = "tzvp"
-    basis = "cc-pVDZ"
-    #basis = "cc-pVTZ"
+    #basis = "cc-pVDZ"
+    basis = "cc-pVTZ"
     output = "output.txt"
 
     pt = False
 
-    max_power = 2
+    max_power = 0
+    full_ccsd = False
+    emb_ccsd = True
 
     for d in dists:
         if MPI_rank == 0:
             print("Now calculating distance=%.3f" % d)
 
         #mol = build_dimer(["N", "N"], d, basis=basis)
-        #mol = build_EtOH(d, basis=basis)
-        mol = build_biphenyl(d, basis=basis)
+        mol = build_EtOH(d, basis=basis)
+        #mol = build_biphenyl(d, basis=basis)
 
         try:
             mf = pyscf.scf.RHF(mol)
@@ -478,43 +507,44 @@ if __name__ == "__main__":
             print(e)
             continue
 
-        #if MPI_rank == 0:
-        #    print("Full space CCSD")
-        #cc = pyscf.cc.CCSD(mf)
-        #try:
-        #    cc.kernel()
-        #    e_ccsd_ref = cc.e_corr
-        #    assert cc.converged
-        #    if pt:
-        #        e_pt_ref = cc.ccsd_t()
-        #except Exception as e:
-        #    print(e)
-        #    e_cc = -1
-        #if MPI_rank == 0:
-        #    print("Done")
-        e_ccsd_ref = -1
-
-        ecc = EmbCCSD(mf)
-        ecc.create_atom_clusters()
-        conv = ecc.run(max_power=max_power, pertT=pt)
-        if MPI_rank == 0:
-            assert conv
-
-        if MPI_rank == 0:
-            print("CCSD correlation energy:    %+g" % e_ccsd_ref)
-            print("EmbCCSD correlation energy: %+g" % ecc.e_ccsd)
-            print("Error:                      %+g" % (ecc.e_ccsd - e_ccsd_ref))
-            print("%% Correlation:             %.3f %%" % (100*ecc.e_ccsd/e_ccsd_ref))
-
-            with open(output, "a") as f:
-                f.write("%3f  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+ecc.e_ccsd))
-
+        if full_ccsd:
+            cc = pyscf.cc.CCSD(mf)
+            cc.kernel()
+            e_ccsd_ref = cc.e_corr
+            assert cc.converged
             #if pt:
-            #    print("CCSD(T) correlation energy:    %+g" % (e_ccsd_ref + e_pt_ref))
-            #    print("EmbCCSD(T) correlation energy: %+g" % (ecc_sd + ecc_pt))
-            #    print("Error:                         %+g" % (ecc_sd+ecc_pt - e_ccsd_ref-e_pt_ref))
-            #    print("%% Correlation:                %.3f %%" % (100*(ecc_sd+ecc_pt)/(e_ccsd_ref+e_pt_ref)))
+            #    e_pt_ref = cc.ccsd_t()
 
-            #    with open(output, "a") as f:
-            #        f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+e_ccsd_ref+e_pt_ref, mf.e_tot+ecc_sd, mf.e_tot+ecc_sd+ecc_pt))
+            if not emb_ccsd:
+                with open(output, "a") as f:
+                    f.write("%3f  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref))
+
+        else:
+            e_ccsd_ref = 0
+
+        if emb_ccsd:
+            ecc = EmbCCSD(mf)
+            #ecc.create_custom_clusters([("O1", "H3")])
+            ecc.create_atom_clusters()
+            conv = ecc.run(max_power=max_power, pertT=pt)
+            if MPI_rank == 0:
+                assert conv
+
+            if MPI_rank == 0:
+                print("CCSD correlation energy:    %+g" % e_ccsd_ref)
+                print("EmbCCSD correlation energy: %+g" % ecc.e_ccsd)
+                print("Error:                      %+g" % (ecc.e_ccsd - e_ccsd_ref))
+                print("%% Correlation:             %.3f %%" % (100*ecc.e_ccsd/e_ccsd_ref))
+
+                with open(output, "a") as f:
+                    f.write("%3f  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+ecc.e_ccsd))
+
+                #if pt:
+                #    print("CCSD(T) correlation energy:    %+g" % (e_ccsd_ref + e_pt_ref))
+                #    print("EmbCCSD(T) correlation energy: %+g" % (ecc_sd + ecc_pt))
+                #    print("Error:                         %+g" % (ecc_sd+ecc_pt - e_ccsd_ref-e_pt_ref))
+                #    print("%% Correlation:                %.3f %%" % (100*(ecc_sd+ecc_pt)/(e_ccsd_ref+e_pt_ref)))
+
+                #    with open(output, "a") as f:
+                #        f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (d, mf.e_tot, mf.e_tot+e_ccsd_ref, mf.e_tot+e_ccsd_ref+e_pt_ref, mf.e_tot+ecc_sd, mf.e_tot+ecc_sd+ecc_pt))
 
