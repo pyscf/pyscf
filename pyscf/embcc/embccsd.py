@@ -39,8 +39,9 @@ class Cluster:
 
         # Output
         self.converged = True
-        self.e_ccsd = 0
-        self.e_pt = 0
+        self.e_cl_ccsd = 0.0
+        self.e_ccsd = 0.0
+        self.e_pt = 0.0
         self.nbath0 = 0
         self.nbath = 0
         self.nfrozen = 0
@@ -79,28 +80,45 @@ class Cluster:
         return p
 
 
-    def make_local_orbitals(self, tol=1e-9):
+    #def make_local_orbitals(self, tol=1e-9):
+    #    S = self.mf.get_ovlp()
+    #    #S_inv = np.linalg.inv(S)
+    #    C = self.mf.mo_coeff
+    #    S_inv = np.dot(C, C.T)
+    #    P = self.make_projector()
+
+    #    D_loc = np.linalg.multi_dot((P, S_inv, P.T))
+    #    C = self.mf.mo_coeff.copy()
+    #    SC = np.dot(S, C)
+
+    #    # Transform to C
+    #    D_loc = np.linalg.multi_dot((SC.T, D_loc, SC))
+    #    e, r = np.linalg.eigh(D_loc)
+    #    rev = np.s_[::-1]
+    #    e = e[rev]
+    #    r = r[:,rev]
+
+    #    nloc = len(e[e>tol])
+    #    assert nloc == len(self), "Error finding local orbitals: %s" % e
+    #    #C_loc = np.dot(C, r[:,:nimp])
+    #    C = np.dot(C, r)
+
+    #    return C
+
+    def make_local_orbitals(self):
         S = self.mf.get_ovlp()
-        #S_inv = np.linalg.inv(S)
-        C = self.mf.mo_coeff
-        S_inv = np.dot(C, C.T)
-        P = self.make_projector()
+        norb = S.shape[-1]
 
-        D_loc = np.linalg.multi_dot((P, S_inv, P.T))
-        C = self.mf.mo_coeff.copy()
-        SC = np.dot(S, C)
-
-        # Transform to C
-        D_loc = np.linalg.multi_dot((SC.T, D_loc, SC))
-        e, r = np.linalg.eigh(D_loc)
+        S121 = self.make_projector_s121()
+        assert np.allclose(S121, S121.T)
+        e, C = scipy.linalg.eigh(S121, b=S)
         rev = np.s_[::-1]
         e = e[rev]
-        r = r[:,rev]
+        C = C[:,rev]
 
-        nloc = len(e[e>tol])
+        nloc = len(e[e>1e-9])
         assert nloc == len(self), "Error finding local orbitals: %s" % e
-        #C_loc = np.dot(C, r[:,:nimp])
-        C = np.dot(C, r)
+        assert np.allclose(np.linalg.multi_dot((C.T, S, C)), np.eye(C.shape[-1]))
 
         return C
 
@@ -238,6 +256,9 @@ class Cluster:
         self.nbath = nbath
         self.nfrozen = len(frozen)
 
+        # CCSD energy of whole cluster
+        self.e_cl_ccsd = cc.e_corr
+
         self.e_ccsd, self.e_pt = self.get_local_energy(cc, C, pertT=pertT)
 
         return int(self.converged)
@@ -257,12 +278,11 @@ class Cluster:
 
         var = "po"
         if var == "po":
-            #P = np.linalg.multi_dot((C_cc[:,o].T, S[:,l], C_cc[l][:,o]))
+            P = np.linalg.multi_dot((C_cc[:,o].T, S[:,l], C_cc[l][:,o]))
             #P = (P + P.T)/2
 
-            S_121 = self.make_projector_s121()
-            P = np.linalg.multi_dot((C_cc[:,o].T, S_121, C_cc[:,o]))
-
+            #S_121 = self.make_projector_s121()
+            #P = np.linalg.multi_dot((C_cc[:,o].T, S_121, C_cc[:,o]))
 
             T1 = np.einsum("xi,ia->xa", P, cc.t1, optimize=True)
             # T2
@@ -352,17 +372,14 @@ class Cluster:
 
         return e_loc, e_pertT
 
-    #def make_local_orbitals_2(self):
-    #    C = self.mf.mo_coeff[self.indices]
-    #    C = pyscf.lo.vec_lowdin(C, self.S)
-    #    return C
-
 
 class EmbCCSD:
 
     def __init__(self, mf):
         self.mf = mf
         self.mol = mf.mol
+
+        self.clusters = None
 
     def create_atom_clusters(self):
         """Divide atomic orbitals into clusters."""
@@ -386,10 +403,8 @@ class EmbCCSD:
         """Divide atomic orbitals into clusters."""
 
         # base atom for each AO
-        #ao_labels = [ao for ao in self.mol.ao_labels(None)]
         ao2atomlbl = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
 
-        # [("H1", "C2"), ("H3", "H4")]
         ncluster = len(clusters)
 
         clusters_out = []
@@ -403,29 +418,77 @@ class EmbCCSD:
 
         return clusters_out
 
+    def merge_clusters(self, names):
+        clusters_out = []
+        merged = []
+        for cluster in self.clusters:
+            if cluster.name not in names:
+                clusters_out.append(cluster)
+            else:
+                merged.append(cluster)
+
+        merged_name = ",".join([c.name for c in merged])
+        merged_indices = np.hstack([c.indices for c in merged])
+        merged_cluster = Cluster(merged_name, merged[0].mf, merged_indices)
+        clusters_out.append(merged_cluster)
+        self.clusters = clusters_out
+
+        return clusters_out
+
+    def print_clusters(self, clusters=None):
+        if clusters is None:
+            clusters = self.clusters
+
+        ao_labels = self.mol.ao_labels(None)
+        for cidx, cluster in enumerate(clusters):
+            print("Cluster %3d: %s, %3d local atomic orbitals:" % (cidx, cluster.name, len(cluster)))
+            for ao in cluster.indices:
+                print("%4d %5s %3s %10s" % (ao_labels[ao][:]))
+
 
     def collect_results(self):
         clusters = self.clusters
 
+        # Communicate
         converged = MPI_comm.reduce(np.asarray([c.converged for c in clusters]), op=MPI.PROD, root=0)
         nbath0 = MPI_comm.reduce(np.asarray([c.nbath0 for c in clusters]), op=MPI.SUM, root=0)
         nbath = MPI_comm.reduce(np.asarray([c.nbath for c in clusters]), op=MPI.SUM, root=0)
         nfrozen = MPI_comm.reduce(np.asarray([c.nfrozen for c in clusters]), op=MPI.SUM, root=0)
+        e_cl_ccsd = MPI_comm.reduce(np.asarray([c.e_cl_ccsd for c in clusters]), op=MPI.SUM, root=0)
         e_ccsd = MPI_comm.reduce(np.asarray([c.e_ccsd for c in clusters]), op=MPI.SUM, root=0)
         e_pt = MPI_comm.reduce(np.asarray([c.e_pt for c in clusters]), op=MPI.SUM, root=0)
 
         if MPI_rank == 0:
-            print("Cluster results")
-            print("---------------")
+            for cidx, c in enumerate(self.clusters):
+                c.converged = converged[cidx]
+                c.nbath0 = nbath0[cidx]
+                c.nbath = nbath[cidx]
+                c.nfrozen = nfrozen[cidx]
+                c.e_cl_ccsd = e_cl_ccsd[cidx]
+                c.e_ccsd = e_ccsd[cidx]
+                c.e_pt = e_pt[cidx]
+
+        if MPI_rank == 0:
+            print("Local correlation energy contributions")
+            print("--------------------------------------")
 
             fmtstr = "%10s [N=%3d,B0=%3d,B=%3d,F=%3d]: CCSD=%+16.8g Eh  (T)=%+16.8g Eh"
             for i, c in enumerate(clusters):
                 print(fmtstr % (c.name, len(c), nbath0[i], nbath[i]-nbath0[i], nfrozen[i], e_ccsd[i], e_pt[i]))
 
+            fmtstr = "%10s [N=%3d,B0=%3d,B=%3d,F=%3d]: CCSD=%+16.8g Eh  (T)=%+16.8g Eh"
+            for c in enumerate(clusters):
+                print(fmtstr % (c.name, len(c), c.nbath0, c.nbath-c.nbath0, c.nfrozen, c.e_ccsd, c.e_pt))
+
             self.e_ccsd = sum(e_ccsd)
             self.e_pt = sum(e_pt)
 
             print("%10s:                            CCSD=%+16.8g Eh  (T)=%+16.8g Eh" % ("Total", self.e_ccsd, self.e_pt))
+
+            print("Full cluster CCSD energies")
+            print("--------------------------")
+            for c in enumerate(clusters):
+                print("%10s: CCSD=%+16.8g Eh" % (c.name, c.e_cl_ccsd))
 
         return np.all(converged)
 
@@ -488,17 +551,18 @@ if __name__ == "__main__":
 
     pt = False
 
-    max_power = 0
+    max_power = 1
     full_ccsd = False
     emb_ccsd = True
 
-    for d in dists:
+    for didx, d in enumerate(dists):
         if MPI_rank == 0:
             print("Now calculating distance=%.3f" % d)
 
         #mol = build_dimer(["N", "N"], d, basis=basis)
         mol = build_EtOH(d, basis=basis)
         #mol = build_biphenyl(d, basis=basis)
+        #1/0
 
         try:
             mf = pyscf.scf.RHF(mol)
@@ -526,6 +590,10 @@ if __name__ == "__main__":
             ecc = EmbCCSD(mf)
             #ecc.create_custom_clusters([("O1", "H3")])
             ecc.create_atom_clusters()
+            ecc.merge_clusters(("O1", "H3"))
+            if didx == 0:
+                ecc.print_clusters()
+
             conv = ecc.run(max_power=max_power, pertT=pt)
             if MPI_rank == 0:
                 assert conv
