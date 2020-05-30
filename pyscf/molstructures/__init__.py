@@ -2,10 +2,13 @@
 
 import numpy as np
 
+from pyscf import gto
+
 __all__ = [
         "build_dimer",
         "build_ring",
         "build_ethanol",
+        "build_ketene",
         "build_biphenyl",
         "build_H2O_NH3",
         ]
@@ -28,11 +31,14 @@ def Rz(alpha):
         ])
     return r
 
-def build_dimer(d, atoms):
-    atom = "{}1 0 0 {}; {}2 0 0 {}".format(atoms[0], -d/2, atoms[1], d/2),
-    return atoms
+def build_dimer(d, atoms, **kwargs):
+    atom = "{}1 0 0 {}; {}2 0 0 {}".format(atoms[0], -d/2, atoms[1], d/2)
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
 
-def build_ring(d, atoms):
+def build_ring(d, atoms, **kwargs):
     natom = len(atoms)
     angle = np.linspace(0, 2*np.pi, num=natom, endpoint=False)
     theta = 2*np.pi/natom
@@ -41,9 +47,12 @@ def build_ring(d, atoms):
     y = r*np.sin(angle)
     z = np.zeros_like(x)
     atom = [("%s%d" % (atoms[i], i+1), x[i], y[i], z[i]) for i in range(natom)]
-    return atom
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
 
-def build_ethanol(dOH):
+def build_ethanol(dOH, **kwargs):
     atoms = ["C1", "C2", "H1", "H2", "H3", "H4", "H5", "H6", "O1"]
     coords = np.asarray([
        ( 0.01247000,  0.02254000,  1.08262000),
@@ -63,11 +72,33 @@ def build_ethanol(dOH):
     v_oh = (coords[hidx] - coords[oidx])
     dOHeq = np.linalg.norm(v_oh)
     u_oh = v_oh / dOHeq
-    coords[hidx] += (dOH-deOHeq)*u_oh
+    coords[hidx] += (dOH-dOHeq)*u_oh
     atom = [(atoms[idx], coords[idx]) for idx in range(natom)]
-    return atom
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
 
-def build_biphenyl(angle):
+def build_ketene(dCC, **kwargs):
+    atoms = ["C1", "C2", "O3", "H4", "H5"]
+    coords = np.asarray([
+        (0.0000, 0.0000, 0.0000),
+        (0.0000, 0.0000, 1.3150),
+        (0.0000, 0.0000, 2.4750),
+        (0.0000, 0.9451, -0.5206),
+        (0.0000, -0.9451, -0.5206),
+    ])
+
+    dCCeq = 1.315
+    coords[1:3,2] += (dCC-dCCeq)
+    atom = [(atoms[atomidx], coords[atomidx]) for atomidx in range(len(atoms))]
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
+
+
+def build_biphenyl(angle, **kwargs):
     atoms = [
         "C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","C11","C12",
         "H13","H14","H15","H16","H17","H18","H19","H20","H21","H22"]
@@ -99,9 +130,12 @@ def build_biphenyl(angle):
     rot_mask = [(int(a[1:]) in rot_atoms) for a in atoms]
     pos[rot_mask] = np.dot(coords[rot_mask], Rz(angle))
     atom = [(atoms[atomidx], coords[atomidx]) for atomidx in range(len(atoms))]
-    return atom
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
 
-def build_H2O_NH3(dNH):
+def build_H2O_NH3(dNH, **kwargs):
     atoms = ["O1", "H1", "H2", "N1", "H3", "H4", "H5"]
     coords_h2o = np.asarray([
     (0.0000, 0.0000, 0.1173),
@@ -122,4 +156,7 @@ def build_H2O_NH3(dNH):
     coords = np.vstack((coods_h2o, coods_nh3))
     coords[:3,2] += dNH
     atom = [(atoms[idx], coords[idx]) for idx in range(len(atoms))]
-    return atom
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
