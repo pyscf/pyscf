@@ -2277,16 +2277,17 @@ class Mole(lib.StreamObject):
             # StringIO() does not have attribute 'name'
             and getattr(self.stdout, 'name', None) != self.output):
 
-            if self.verbose > logger.QUIET:
-                if os.path.isfile(self.output):
-                    print('overwrite output file: %s' % self.output)
-                else:
-                    print('output file: %s' % self.output)
+            #if self.verbose > logger.QUIET:
+            #    if os.path.isfile(self.output):
+            #        print('overwrite output file: %s' % self.output)
+            #    else:
+            #        print('output file: %s' % self.output)
 
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
             else:
-                self.stdout = open(self.output, 'w')
+                #self.stdout = open(self.output, 'w')
+                self.stdout = open(self.output, 'a')
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
