@@ -1,2 +1,0 @@
-qp --r0c0 etoh-p0.txt,y=3,l="EmbCCSD(P=0)"  etoh-p1.txt,y=3,l="EmbCCSD(P=1)" etoh-p2.txt,y=3,l="EmbCCSD(P=2)" etoh-p3.txt,y=3,l="EmbCCSD(P=3)" --xlim-data 0 3.3 -o plot2.pdf --x-label "d(O-H) (A)"
- --y-label "E (htr)" --left 0.13 --top 0.98 --right 0.98 --set-zero-at 3.3 --reference etoh-ccsd.txt,y=2,l=CCSD,ls=-.
