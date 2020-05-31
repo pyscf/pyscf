@@ -1,0 +1,118 @@
+#INFO: **** input file is /home/max/git/pyscf/pyscf/embcc/test/00-simple_casci.py ****
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
+'''
+A simple example to run CASCI calculation.
+'''
+
+import pyscf
+
+mol = pyscf.M(
+    atom = 'N 0 0 0; N 0 0 1.2',
+    basis = 'ccpvdz',
+    verbose=4
+    )
+
+myhf = mol.RHF().run()
+
+# 6 orbitals, 8 electrons
+from pyscf import mcscf
+cas = mcscf.CASCI(myhf, 6, 6)
+E = cas.run()
+print(E)
+
+
+
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='zombie', release='4.4.0-174-generic', version='#204-Ubuntu SMP Wed Jan 29 06:41:01 UTC 2020', machine='x86_64', processor='x86_64')  Threads 8
+Python 3.5.2 (default, Apr 16 2020, 17:47:17) 
+[GCC 5.4.0 20160609]
+numpy 1.15.4  scipy 1.1.0
+Date: Sat May 30 15:42:08 2020
+PySCF version 1.7.2
+PySCF path  /home/max/git/pyscf/pyscf
+GIT ORIG_HEAD cb0486ef192e5588945b2d08b61c3a8f7c1e5595
+GIT HEAD      ref: refs/heads/master
+GIT master branch  954037719c0503d24475009431087f39efa2fb90
+
+[ENV] PYSCFHOME /home/max/git/pyscf
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 2
+[INPUT] num. electrons = 14
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = angstrom
+[INPUT]  1 N      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 N      0.000000000000   0.000000000000   1.200000000000 AA    0.000000000000   0.000000000000   2.267671349478 Bohr
+
+nuclear repulsion = 21.6080694459
+number of shells = 10
+number of NR pGTOs = 52
+number of NR cGTOs = 28
+basis = ccpvdz
+ecp = {}
+CPU time:         0.51
+
+
+******** <class 'pyscf.scf.hf.RHF'> ********
+method = RHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/max/git/pyscf/pyscf/embcc/test/tmp1ytxw_af
+max_memory 4000 MB (current use 70 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -108.66592453301
+  HOMO = -0.362319032947156  LUMO = 0.0332103891978532
+cycle= 1 E= -108.891321627058  delta_E= -0.225  |g|= 0.304  |ddm|= 1.69
+  HOMO = -0.614908525636475  LUMO = 0.0817082857779487
+cycle= 2 E= -108.912607725096  delta_E= -0.0213  |g|= 0.0711  |ddm|= 0.268
+  HOMO = -0.564780066399274  LUMO = 0.127429374616613
+cycle= 3 E= -108.913961733218  delta_E= -0.00135  |g|= 0.0153  |ddm|= 0.0586
+  HOMO = -0.568815120801106  LUMO = 0.12436323444516
+cycle= 4 E= -108.914051730914  delta_E= -9e-05  |g|= 0.000948  |ddm|= 0.0226
+  HOMO = -0.568349521589319  LUMO = 0.124840750018993
+cycle= 5 E= -108.914051971126  delta_E= -2.4e-07  |g|= 0.000108  |ddm|= 0.00102
+  HOMO = -0.568349741566266  LUMO = 0.124836315935464
+cycle= 6 E= -108.914051974998  delta_E= -3.87e-09  |g|= 1.12e-05  |ddm|= 0.000136
+  HOMO = -0.568345210845322  LUMO = 0.124840410918803
+cycle= 7 E= -108.914051975051  delta_E= -5.29e-11  |g|= 1.49e-06  |ddm|= 2.99e-05
+  HOMO = -0.568344951713548  LUMO = 0.124840503813142
+Extra cycle  E= -108.914051975052  delta_E= -8.53e-13  |g|= 4.35e-07  |ddm|= 2.84e-06
+converged SCF energy = -108.914051975052
+
+******** CASCI flags ********
+CAS (3e+3e, 6o), ncore = 4, nvir = 18
+natorb = False
+canonicalization = True
+sorting_mo_energy = False
+max_memory 4000 (MB)
+******** <class 'pyscf.fci.direct_spin1.FCISolver'> ********
+max. cycles = 200
+conv_tol = 1e-08
+davidson only = False
+linear dependence = 1e-10
+level shift = 0.001
+max iter space = 12
+max_memory 4000 MB
+nroots = 1
+pspace_size = 400
+spin = None
+Density matrix diagonal elements [1.99074235 1.92469988 1.92469988 0.07801362 0.07801362 0.00383064]
+CASCI converged
+CASCI E = -109.00468049804  E(CI) = -11.0708032465957  S^2 = 0.0000000

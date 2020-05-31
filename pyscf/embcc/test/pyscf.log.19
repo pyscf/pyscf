@@ -1,0 +1,131 @@
+#INFO: **** input file is /home/max/git/pyscf/pyscf/embcc/test/00-simple_cisd.py ****
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
+'''
+A simple example to run CISD calculation.
+'''
+import numpy as np
+
+import pyscf
+import pyscf.scf
+import pyscf.ci
+
+mol = pyscf.M(
+    atom = 'H 0 0 0; H 0 0 1.2',
+    basis = 'ccpvdz',
+    verbose=4)
+
+mf = pyscf.scf.RHF(mol)
+mf.run()
+cc = pyscf.ci.CISD(mf)
+cc.run()
+print('RCISD correlation energy', cc.e_corr)
+
+C0, C1 ,C2 = cc.cisdvec_to_amplitudes(cc.ci)
+
+# Intermediate normalization <CI|HF> = 1
+renorm = 1/C0
+C1 *= renorm
+C2 *= renorm
+
+a = cc.get_frozen_mask()
+o = cc.mo_occ[a] > 0
+v = cc.mo_occ[a] == 0
+# Projector to local, occupied region
+S = mf.get_ovlp()
+C = cc.mo_coeff[:,a]
+
+eris = cc.ao2mo()
+F = eris.fock[o][:,v]
+e1 = 2*np.sum(F * C1)
+# Brillouin's theorem
+assert np.isclose(e1, 0)
+
+e2 = 2*np.einsum('ijab,iabj', C2, eris.ovvo, optimize=True)
+e2 -=  np.einsum('ijab,jabi', C2, eris.ovvo, optimize=True)
+
+e_ccsd = e1+e2
+
+print("%f, %e" % (e_ccsd, e_ccsd - cc.e_corr))
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='zombie', release='4.4.0-174-generic', version='#204-Ubuntu SMP Wed Jan 29 06:41:01 UTC 2020', machine='x86_64', processor='x86_64')  Threads 8
+Python 3.5.2 (default, Apr 16 2020, 17:47:17) 
+[GCC 5.4.0 20160609]
+numpy 1.15.4  scipy 1.1.0
+Date: Fri May 29 12:32:56 2020
+PySCF version 1.7.2
+PySCF path  /home/max/git/pyscf/pyscf
+GIT ORIG_HEAD cb0486ef192e5588945b2d08b61c3a8f7c1e5595
+GIT HEAD      ref: refs/heads/master
+GIT master branch  954037719c0503d24475009431087f39efa2fb90
+
+[ENV] PYSCFHOME /home/max/git/pyscf
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 2
+[INPUT] num. electrons = 2
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = angstrom
+[INPUT]  1 H      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      0.000000000000   0.000000000000   1.200000000000 AA    0.000000000000   0.000000000000   2.267671349478 Bohr
+
+nuclear repulsion = 0.4409810091
+number of shells = 6
+number of NR pGTOs = 14
+number of NR cGTOs = 10
+basis = ccpvdz
+ecp = {}
+CPU time:         0.69
+
+
+******** <class 'pyscf.scf.hf.RHF'> ********
+method = RHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/max/git/pyscf/pyscf/embcc/test/tmpid3j2qjk
+max_memory 4000 MB (current use 71 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -0.723311777193342
+  HOMO = -0.384475369076882  LUMO = 0.041292397372739
+cycle= 1 E= -1.06041428904839  delta_E= -0.337  |g|= 0.0437  |ddm|= 0.657
+  HOMO = -0.489119550273031  LUMO = 0.0965414834755519
+cycle= 2 E= -1.06109707888331  delta_E= -0.000683  |g|= 0.00632  |ddm|= 0.027
+  HOMO = -0.485303877789622  LUMO = 0.100214479170791
+cycle= 3 E= -1.06111199673962  delta_E= -1.49e-05  |g|= 4.67e-05  |ddm|= 0.0048
+  HOMO = -0.485252323944246  LUMO = 0.1002459197085
+cycle= 4 E= -1.06111199785719  delta_E= -1.12e-09  |g|= 7.28e-07  |ddm|= 7.37e-05
+  HOMO = -0.485256027852989  LUMO = 0.100245669077042
+cycle= 5 E= -1.06111199785749  delta_E= -2.99e-13  |g|= 4.39e-12  |ddm|= 1.23e-06
+  HOMO = -0.485256027850808  LUMO = 0.100245669075859
+Extra cycle  E= -1.06111199785749  delta_E= 8.88e-16  |g|= 8.06e-13  |ddm|= 5.95e-12
+converged SCF energy = -1.06111199785749
+
+******** <class 'pyscf.ci.cisd.RCISD'> ********
+CISD nocc = 1, nmo = 10
+max_cycle = 50
+direct = 0
+conv_tol = 1e-09
+max_cycle = 50
+max_space = 12
+lindep = 0
+nroots = 1
+max_memory 4000 MB (current use 76 MB)
+Init t2, MP2 energy = -0.0308758127191266
+RCISD converged
+E(RCISD) = -1.106855192554518  E_corr = -0.0457431946970299

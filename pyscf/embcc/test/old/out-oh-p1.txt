@@ -1,0 +1,286 @@
+Now calculating distance=0.700
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.25900739 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.25900739 Eh  (T)=              +0 Eh
+Wall time: 32 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.259007
+Error:                      -0.259007
+% Correlation:             -inf %
+Now calculating distance=0.800
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.26112509 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.26112509 Eh  (T)=              +0 Eh
+Wall time: 33 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.261125
+Error:                      -0.261125
+% Correlation:             -inf %
+Now calculating distance=0.900
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.26381969 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.26381969 Eh  (T)=              +0 Eh
+Wall time: 32 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.26382
+Error:                      -0.26382
+% Correlation:             -inf %
+Now calculating distance=1.000
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=      -0.2668703 Eh  (T)=              +0 Eh
+     Total:                            CCSD=      -0.2668703 Eh  (T)=              +0 Eh
+Wall time: 33 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.26687
+Error:                      -0.26687
+% Correlation:             -inf %
+Now calculating distance=1.100
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.27036099 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.27036099 Eh  (T)=              +0 Eh
+Wall time: 32 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.270361
+Error:                      -0.270361
+% Correlation:             -inf %
+Now calculating distance=1.200
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.27417638 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.27417638 Eh  (T)=              +0 Eh
+Wall time: 30 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.274176
+Error:                      -0.274176
+% Correlation:             -inf %
+Now calculating distance=1.300
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.27834863 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.27834863 Eh  (T)=              +0 Eh
+Wall time: 34 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.278349
+Error:                      -0.278349
+% Correlation:             -inf %
+Now calculating distance=1.400
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.28294586 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.28294586 Eh  (T)=              +0 Eh
+Wall time: 33 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.282946
+Error:                      -0.282946
+% Correlation:             -inf %
+Now calculating distance=1.500
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.28802102 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.28802102 Eh  (T)=              +0 Eh
+Wall time: 34 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.288021
+Error:                      -0.288021
+% Correlation:             -inf %
+Now calculating distance=1.600
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.29360036 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.29360036 Eh  (T)=              +0 Eh
+Wall time: 42 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.2936
+Error:                      -0.2936
+% Correlation:             -inf %
+Now calculating distance=1.700
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.29967154 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.29967154 Eh  (T)=              +0 Eh
+Wall time: 45 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.299672
+Error:                      -0.299672
+% Correlation:             -inf %
+Now calculating distance=1.800
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.30618599 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.30618599 Eh  (T)=              +0 Eh
+Wall time: 46 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.306186
+Error:                      -0.306186
+% Correlation:             -inf %
+Now calculating distance=1.900
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.31306783 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.31306783 Eh  (T)=              +0 Eh
+Wall time: 42 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.313068
+Error:                      -0.313068
+% Correlation:             -inf %
+Now calculating distance=2.000
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.32022979 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.32022979 Eh  (T)=              +0 Eh
+Wall time: 48 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.32023
+Error:                      -0.32023
+% Correlation:             -inf %
+Now calculating distance=2.100
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.32757332 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.32757332 Eh  (T)=              +0 Eh
+Wall time: 49 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.327573
+Error:                      -0.327573
+% Correlation:             -inf %
+Now calculating distance=2.200
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.33498334 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.33498334 Eh  (T)=              +0 Eh
+Wall time: 44 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.334983
+Error:                      -0.334983
+% Correlation:             -inf %
+Now calculating distance=2.300
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=      -0.3423542 Eh  (T)=              +0 Eh
+     Total:                            CCSD=      -0.3423542 Eh  (T)=              +0 Eh
+Wall time: 45 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.342354
+Error:                      -0.342354
+% Correlation:             -inf %
+Now calculating distance=2.400
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.34956927 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.34956927 Eh  (T)=              +0 Eh
+Wall time: 44 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.349569
+Error:                      -0.349569
+% Correlation:             -inf %
+Now calculating distance=2.500
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=      -0.3565448 Eh  (T)=              +0 Eh
+     Total:                            CCSD=      -0.3565448 Eh  (T)=              +0 Eh
+Wall time: 47 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.356545
+Error:                      -0.356545
+% Correlation:             -inf %
+Now calculating distance=2.600
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.36325526 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.36325526 Eh  (T)=              +0 Eh
+Wall time: 50 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.363255
+Error:                      -0.363255
+% Correlation:             -inf %
+Now calculating distance=2.700
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.36966933 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.36966933 Eh  (T)=              +0 Eh
+Wall time: 52 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.369669
+Error:                      -0.369669
+% Correlation:             -inf %
+Now calculating distance=2.800
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.37576054 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.37576054 Eh  (T)=              +0 Eh
+Wall time: 50 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.375761
+Error:                      -0.375761
+% Correlation:             -inf %
+Now calculating distance=2.900
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.38151346 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.38151346 Eh  (T)=              +0 Eh
+Wall time: 51 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.381513
+Error:                      -0.381513
+% Correlation:             -inf %
+Now calculating distance=3.000
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.38692279 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.38692279 Eh  (T)=              +0 Eh
+Wall time: 50 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.386923
+Error:                      -0.386923
+% Correlation:             -inf %
+Now calculating distance=3.100
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 44,F= 73]: CCSD=     -0.39199315 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.39199315 Eh  (T)=              +0 Eh
+Wall time: 57 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.391993
+Error:                      -0.391993
+% Correlation:             -inf %
+Now calculating distance=3.200
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 43,F= 74]: CCSD=     -0.39657786 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.39657786 Eh  (T)=              +0 Eh
+Wall time: 55 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.396578
+Error:                      -0.396578
+% Correlation:             -inf %
+Now calculating distance=3.300
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 43,F= 74]: CCSD=     -0.40100588 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.40100588 Eh  (T)=              +0 Eh
+Wall time: 47 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.401006
+Error:                      -0.401006
+% Correlation:             -inf %
+Now calculating distance=3.400
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 43,F= 74]: CCSD=      -0.4313583 Eh  (T)=              +0 Eh
+     Total:                            CCSD=      -0.4313583 Eh  (T)=              +0 Eh
+Wall time: 79 s
+CCSD correlation energy:    +0
+EmbCCSD correlation energy: -0.431358
+Error:                      -0.431358
+% Correlation:             -inf %
+Now calculating distance=3.500
+Cluster results
+---------------
+     O1,H3 [N= 44,B0= 13,B= 43,F= 74]: CCSD=     -0.46420567 Eh  (T)=              +0 Eh
+     Total:                            CCSD=     -0.46420567 Eh  (T)=              +0 Eh
+Wall time: 2.7e+02 s

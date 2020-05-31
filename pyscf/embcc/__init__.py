@@ -27,10 +27,5 @@ if MPI_rank > 0:
     logname += ".mpi%d" % MPI_rank
 logformat = "[{levelname:^8s}] {message:s}"
 logging.basicConfig(level=loglevel, format=logformat, filename=logname, style="{")
-#log = logging.getLogger(__name__)
-
-import sys
-# For PySCF output
-sys.argv += ["-o", "pyscf.log"]
 
 from .embcc import *

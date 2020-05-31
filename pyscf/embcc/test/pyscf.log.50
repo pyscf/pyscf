@@ -1,0 +1,204 @@
+#INFO: **** input file is /home/max/git/pyscf/pyscf/embcc/test/00-simple_cisd.py ****
+#!/usr/bin/env python
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
+
+'''
+A simple example to run CISD calculation.
+'''
+import numpy as np
+
+import pyscf
+import pyscf.scf
+import pyscf.ci
+import pyscf.cc
+
+#mol = pyscf.M(
+#    atom = 'H 0 0 0; H 0 0 1.2',
+#    basis = 'ccpvdz',
+#    verbose=4)
+
+mol = pyscf.M(
+    atom = 'N 0 0 0; N 0 0 1.2',
+    basis = 'ccpvdz',
+    verbose=4
+    )
+
+
+
+mf = pyscf.scf.RHF(mol)
+mf.run()
+
+from pyscf import mcscf
+cas = mcscf.CASCI(mf, 6, 6)
+Etot, Ecas, ci, mo_coeff, mo_energy = cas.kernel()
+print(Ecas)
+
+C0, C1 ,C2 = cc.cisdvec_to_amplitudes(ci)
+e_corr = get_ci_energy(C0, C1, C2)
+print(E_corr)
+
+1/0
+
+
+#cc = pyscf.cc.CCSD(mf)
+#cc.run()
+#
+#eris = cc.ao2mo()
+#eris_ovvo = eris.ovvo
+#eris_ovvo2 = np.moveaxis(eris_ovvo, [0,1,2,3], [3,2,1,0])
+#assert np.allclose(eris_ovvo, eris_ovvo2)
+#
+#T2 = cc.t2
+#T2t = np.moveaxis(T2, [0,1,2,3], [1,0,3,2])
+#assert np.allclose(T2, T2t)
+#
+#1/0
+
+cc = pyscf.ci.CISD(mf)
+cc.run()
+print('RCISD correlation energy', cc.e_corr)
+
+#C0, C1 ,C2 = cc.cisdvec_to_amplitudes(cc.ci)
+C0, C1 ,C2 = pyscf.cisd.cisdvec_to_amplitudes(cc.ci)
+
+def get_ci_energy(C0, C1, C2):
+
+    # Intermediate normalization <CI|HF> = 1
+    renorm = 1/C0
+    C1 *= renorm
+    C2 *= renorm
+
+    a = cc.get_frozen_mask()
+    o = cc.mo_occ[a] > 0
+    v = cc.mo_occ[a] == 0
+    #S = mf.get_ovlp()
+    #C = cc.mo_coeff[:,a]
+
+    eris = cc.ao2mo()
+    F = eris.fock[o][:,v]
+    e1 = 2*np.sum(F * C1)
+    # Brillouin's theorem
+    assert np.isclose(e1, 0)
+
+    e2 = 2*np.einsum('ijab,iabj', C2, eris.ovvo, optimize=True)
+    e2 -=  np.einsum('ijab,jabi', C2, eris.ovvo, optimize=True)
+
+    e_ccsd = e1+e2
+    return e_ccsd
+
+e_cisd = get_ci_energy(C0, C1, C2)
+print("%.10f, error=%.2e" % (e_cisd, e_cisd - cc.e_corr))
+
+# --- FCI
+import pyscf.fci
+
+fci = pyscf.fci.FCI(mol, mf.mo_coeff)
+e_fci, civec = fci.kernel()
+e_fci_corr = e_fci - mf.e_tot
+
+print(np.allclose(fci.mo_coeff, mf.mo_coeff))
+print(np.allclose(fci.mo_occ, mf.mo_occ))
+print("FCI: %f" % e_fci_corr)
+
+norb = len(mf.mo_energy)
+nelec = mol.nelectron
+cisdvec = pyscf.ci.cisd.from_fcivec(civec, norb, nelec)
+C0, C1 ,C2 = cc.cisdvec_to_amplitudes(cisdvec)
+
+e_cisd = get_ci_energy(C0, C1, C2)
+print("%.10f, error=%.2e" % (e_cisd, e_cisd - e_fci_corr))
+
+
+
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='zombie', release='4.4.0-174-generic', version='#204-Ubuntu SMP Wed Jan 29 06:41:01 UTC 2020', machine='x86_64', processor='x86_64')  Threads 8
+Python 3.5.2 (default, Apr 16 2020, 17:47:17) 
+[GCC 5.4.0 20160609]
+numpy 1.15.4  scipy 1.1.0
+Date: Sat May 30 15:47:37 2020
+PySCF version 1.7.2
+PySCF path  /home/max/git/pyscf/pyscf
+GIT ORIG_HEAD cb0486ef192e5588945b2d08b61c3a8f7c1e5595
+GIT HEAD      ref: refs/heads/master
+GIT master branch  954037719c0503d24475009431087f39efa2fb90
+
+[ENV] PYSCFHOME /home/max/git/pyscf
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 2
+[INPUT] num. electrons = 14
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = angstrom
+[INPUT]  1 N      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 N      0.000000000000   0.000000000000   1.200000000000 AA    0.000000000000   0.000000000000   2.267671349478 Bohr
+
+nuclear repulsion = 21.6080694459
+number of shells = 10
+number of NR pGTOs = 52
+number of NR cGTOs = 28
+basis = ccpvdz
+ecp = {}
+CPU time:         0.58
+
+
+******** <class 'pyscf.scf.hf.RHF'> ********
+method = RHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+SCF conv_tol = 1e-09
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /home/max/git/pyscf/pyscf/embcc/test/tmp7amwvpty
+max_memory 4000 MB (current use 70 MB)
+Set gradient conv threshold to 3.16228e-05
+init E= -108.66592453301
+  HOMO = -0.362319032947155  LUMO = 0.0332103891978539
+cycle= 1 E= -108.891321627059  delta_E= -0.225  |g|= 0.304  |ddm|= 1.69
+  HOMO = -0.614908525636471  LUMO = 0.0817082857779495
+cycle= 2 E= -108.912607725097  delta_E= -0.0213  |g|= 0.0711  |ddm|= 0.268
+  HOMO = -0.564780066399271  LUMO = 0.127429374616615
+cycle= 3 E= -108.913961733218  delta_E= -0.00135  |g|= 0.0153  |ddm|= 0.0586
+  HOMO = -0.5688151208011  LUMO = 0.124363234445162
+cycle= 4 E= -108.914051730914  delta_E= -9e-05  |g|= 0.000948  |ddm|= 0.0226
+  HOMO = -0.568349521589327  LUMO = 0.124840750018985
+cycle= 5 E= -108.914051971126  delta_E= -2.4e-07  |g|= 0.000108  |ddm|= 0.00102
+  HOMO = -0.568349741566265  LUMO = 0.124836315935467
+cycle= 6 E= -108.914051974998  delta_E= -3.87e-09  |g|= 1.12e-05  |ddm|= 0.000136
+  HOMO = -0.568345210845295  LUMO = 0.12484041091883
+cycle= 7 E= -108.914051975051  delta_E= -5.25e-11  |g|= 1.49e-06  |ddm|= 2.99e-05
+  HOMO = -0.568344951713557  LUMO = 0.124840503813135
+Extra cycle  E= -108.914051975052  delta_E= -1.25e-12  |g|= 4.35e-07  |ddm|= 2.84e-06
+converged SCF energy = -108.914051975052
+
+******** CASCI flags ********
+CAS (3e+3e, 6o), ncore = 4, nvir = 18
+natorb = False
+canonicalization = True
+sorting_mo_energy = False
+max_memory 4000 (MB)
+******** <class 'pyscf.fci.direct_spin1.FCISolver'> ********
+max. cycles = 200
+conv_tol = 1e-08
+davidson only = False
+linear dependence = 1e-10
+level shift = 0.001
+max iter space = 12
+max_memory 4000 MB
+nroots = 1
+pspace_size = 400
+spin = None
+Density matrix diagonal elements [1.99074235 1.92469988 1.92469988 0.07801362 0.07801362 0.00383064]
+CASCI converged
+CASCI E = -109.00468049804  E(CI) = -11.0708032465957  S^2 = 0.0000000
