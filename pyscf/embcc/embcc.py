@@ -17,6 +17,8 @@ import pyscf.fci
 import pyscf.pbc
 import pyscf.pbc.cc
 
+from .orbitals import Orbitals
+
 __all__ = [
         "EmbCC",
         ]
@@ -27,11 +29,46 @@ MPI_size = MPI_comm.Get_size()
 
 log = logging.getLogger(__name__)
 
+# optimize is False by default, despite NumPy's documentation, as of version 1.17
 einsum = functools.partial(np.einsum, optimize=True)
+
+def reorder_columns(a, *args):
+    """Reorder columns of matrix a. The new order must be specified by a list of tuples,
+    where each tuple represents a block of columns, with the first tuple index being the
+    first column index and the second tuple index the number of columns in the respective
+    block.
+    """
+    starts, sizes = zip(*args)
+    n = len(starts)
+
+    #slices = []
+    #for i in range(len(starts)):
+    #    start = starts[i]
+    #    size = sizes[i]
+    #    if start is None and size is None:
+    #        s = np.s_[:]
+    #    elif start is None:
+    #        s = np.s_[:size]
+    #    elif size is None:
+    #        s = np.s_[start:]
+    #    else:
+    #        s = np.s_[start:start+size]
+    #    slices.append(s)
+
+    #slices
+    starts = [s if s is not None else 0 for s in starts]
+    ends = [starts[i]+sizes[i] if sizes[i] is not None else None for i in range(n)]
+    slices = [np.s_[starts[i]:ends[i]] for i in range(n)]
+
+    b = np.hstack([a[:,s] for s in slices])
+    assert b.shape == a.shape
+    return b
+
 
 class Cluster:
 
-    def __init__(self, base, name, indices, solver="CCSD", bath_type=None, tol_bath=1e-3, tol_dmet_bath=1e-8):
+    def __init__(self, base, name, indices, solver="CCSD", bath_type=None, tol_bath=1e-3, tol_dmet_bath=1e-8,
+            **kwargs):
         """
         Parameters
         ----------
@@ -50,37 +87,74 @@ class Cluster:
         self.tol_bath = tol_bath
         self.tol_dmet_bath = tol_dmet_bath
 
-        # Indices which are NOT in the cluster
-        self.rest = np.asarray([i for i in np.arange(self.mol.nao_nr()) if i not in self.indices])
+        self.use_ref_orbitals_dmet = kwargs.get("use_ref_orbitals_dmet", True)
+        self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", True)
 
-        # Output attributes
+        self.set_default_attributes()
+
+    def reset(self, keep_ref_orbitals=True):
+        """Reset cluster object. By default it stores the previous orbitals, so they can be used
+        as reference orbitals for a new calculation of different geometry."""
+        ref_orbitals = self.orbitals
+        self.set_default_attributes()
+        if keep_ref_orbitals:
+            self.ref_orbitals = ref_orbitals
+        log.debug("Resetting cluster %s. New vars:\n%s", self.name, vars(self))
+
+    def set_default_attributes(self):
+        """Set default attributes of cluster object."""
+        # Orbital objects
+        self.orbitals = None
+        self.ref_orbitals = None
+        # Orbitals sizes
+        self.nbath0 = 0
+        self.nbath = 0
+        self.nfrozen = 0
+        # Calculation results
         self.converged = True
         self.e_corr = 0.0
         self.e_corr_full = 0.0
         self.e_corr_alt = 0.0
 
-        self.e_cl_ccsd = 0.0
-        self.e_ccsd = 0.0
-        self.e_pt = 0.0
-        self.nbath0 = 0
-        self.nbath = 0
-        self.nfrozen = 0
-
-        self.e_ccsd_v = 0.0
-        self.e_ccsd_w = 0.0
-        self.e_ccsd_z = 0.0
-
     def __len__(self):
+        """The number of local ("imurity") orbitals of the cluster."""
         return len(self.indices)
+
+    def loop_clusters(self, exclude_self=False):
+        """Loop over all clusters."""
+        for cluster in self.base.clusters:
+            if (exclude_self and cluster == self):
+                continue
+            yield cluster
 
     @property
     def mf(self):
+        """The underlying mean-field object is taken from self.base.
+        This is used throughout the construction of orbital spaces and as the reference for
+        the correlated solver.
+
+        Accessed attributes and methods are:
+        mf.get_ovlp()
+        mf.get_hcore()
+        mf.get_fock()
+        mf.make_rdm1()
+        mf.mo_energy
+        mf.mo_coeff
+        mf.mo_occ
+        mf.e_tot
+        """
         return self.base.mf
 
     @property
     def mol(self):
+        """The molecule or cell object is taken from self.base.mol.
+        It should be the same as self.base.mf.mol by default."""
         return self.base.mol
 
+    @property
+    def not_indices(self):
+        """Indices which are NOT in the cluster, i.e. complement to self.indices."""
+        return np.asarray([i for i in np.arange(self.mol.nao_nr()) if i not in self.indices])
 
     def make_projector(self):
         """Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b"""
@@ -112,50 +186,53 @@ class Cluster:
         p = np.dot(S21.T, p_21)
         return p
 
-
-    #def make_local_orbitals(self, tol=1e-9):
-    #    S = self.mf.get_ovlp()
-    #    #S_inv = np.linalg.inv(S)
-    #    C = self.mf.mo_coeff
-    #    S_inv = np.dot(C, C.T)
-    #    P = self.make_projector()
-
-    #    D_loc = np.linalg.multi_dot((P, S_inv, P.T))
-    #    C = self.mf.mo_coeff.copy()
-    #    SC = np.dot(S, C)
-
-    #    # Transform to C
-    #    D_loc = np.linalg.multi_dot((SC.T, D_loc, SC))
-    #    e, r = np.linalg.eigh(D_loc)
-    #    rev = np.s_[::-1]
-    #    e = e[rev]
-    #    r = r[:,rev]
-
-    #    nloc = len(e[e>tol])
-    #    assert nloc == len(self), "Error finding local orbitals: %s" % e
-    #    #C_loc = np.dot(C, r[:,:nimp])
-    #    C = np.dot(C, r)
-
-    #    return C
-
     def make_local_orbitals(self):
+        """Make local orbitals by orthonormalizing local AOs."""
         S = self.mf.get_ovlp()
         norb = S.shape[-1]
-
         S121 = self.make_projector_s121()
         assert np.allclose(S121, S121.T)
         e, C = scipy.linalg.eigh(S121, b=S)
         rev = np.s_[::-1]
         e = e[rev]
         C = C[:,rev]
-
         nloc = len(e[e>1e-9])
         assert nloc == len(self), "Error finding local orbitals: %s" % e
         assert np.allclose(np.linalg.multi_dot((C.T, S, C)), np.eye(C.shape[-1]))
 
         return C
 
+    def project_ref_orbitals(self, C, C_ref, space):
+        """Project reference orbitals into available space in new gemetry.
+
+        The projected orbitals will be ordered according to their eigenvalues within the space.
+
+        Parameters
+        ----------
+        C : ndarray
+            Orbital coefficients.
+        C_ref : ndarray
+            Orbital coefficients of reference orbitals.
+        space : slice
+            Space of current calculation to use for projection.
+        """
+        assert (C_ref.shape[-1] > 0)
+        C = C.copy()
+        S = self.mf.get_ovlp()
+        # Diagonalize reference orbitals among themselves (due to change in overlap matrix)
+        C_ref = pyscf.lo.vec_lowdin(C_ref, S)
+        # Diagonalize projector in space
+        CSC = np.linalg.multi_dot((C_ref.T, S, C[:,space]))
+        P = np.dot(CSC.T, CSC)
+        e, r = np.linalg.eigh(P)
+        rev = np.s_[::-1]
+        e = e[rev]
+        r = r[:,rev]
+        C[:,space] = np.dot(C[:,space], r)
+        return C, e
+
     def make_dmet_bath_orbitals(self, C, tol=None):
+        """If C_ref is specified, complete DMET orbital space using active projection of reference orbitals."""
         if tol is None:
             tol = self.tol_dmet_bath
         C = C.copy()
@@ -175,16 +252,50 @@ class Cluster:
         nbath0 = sum(mask_bath)
         nenvocc = sum(e[nbath0:] > 0.5)
 
-        log.debug("DMET bath eigenvalues:\n%s\nFollowing eigenvalues:\n%s", e[:nbath0], e[nbath0:nbath0+3])
-
+        log.debug("Found %d DMET bath orbitals. Eigenvalues:\n%s\nFollowing eigenvalues:\n%s", nbath0, e[:nbath0], e[nbath0:nbath0+3])
         assert nbath0 <= len(self)
 
         C[:,env] = np.dot(C[:,env], v)
 
+        # Complete DMET orbital space using reference
+        if self.use_ref_orbitals_dmet and self.ref_orbitals is not None:
+            C_ref = self.ref_orbitals.get_coeff("dmet-bath")
+            nref = C_ref.shape[-1]
+            nmissing = nref - nbath0
+            if nmissing == 0:
+                log.debug("Found %d DMET bath orbitals, reference: %d.", nbath0, nref)
+            elif nmissing > 0:
+                reftol = 0.8
+                # --- Occupied
+                ncl = len(self) + nbath0
+                C, eig = self.project_ref_orbitals(C, C_ref, space=np.s_[ncl:ncl+nenvocc])
+                naddocc = sum(eig >= reftol)
+                log.debug("Eigenvalues of projected occupied reference: %s, following: %s", eig[:naddocc], eig[naddocc:naddocc+3])
+                nbath0 += naddocc
+                # --- Virtual
+                ncl = len(self) + nbath0
+                nenvocc -= naddocc
+                # Diagonalize projector in remaining virtual space
+                C, eig = self.project_ref_orbitals(C, C_ref, space=np.s_[ncl+nenvocc:])
+                naddvir = sum(eig >= reftol)
+                log.debug("Eigenvalues of projected virtual reference: %s, following: %s", eig[:naddvir], eig[naddvir:naddvir+3])
+                # Reorder of virtual necessary
+                offset = len(self)+nbath0
+                C = reorder_columns(C,
+                        (None, offset),
+                        (offset+nenvocc, naddvir),
+                        (offset, nenvocc),
+                        (offset+nenvocc+naddvir, None),)
+                nbath0 += naddvir
+                if nbath0 != nref:
+                    log.critical("Number of DMET bath orbitals=%d not equal to reference=%d", nbath0, nref)
+            else:
+                log.critical("More DMET bath orbitals found than in reference=%d", nref)
+
+
         return C, nbath0, nenvocc
 
     def make_power_bath_orbitals(self, C, kind, non_local, power=1, tol=None, normalize=False):
-    #def make_power_bath_orbitals(self, C, kind, non_local, power=1, tol=None, normalize=True):
         if tol is None:
             tol = self.tol_bath
 
@@ -268,48 +379,6 @@ class Cluster:
 
         return C, nbath
 
-    def make_power_bath_orbitals(self, C, kind, non_local, power=1, tol=None, normalize=False):
-        if tol is None:
-            tol = self.tol_bath
-
-        if kind == "occ":
-            mask = self.mf.mo_occ > 0
-        elif kind == "vir":
-            mask = self.mf.mo_occ == 0
-        else:
-            raise ValueError()
-
-        S = self.mf.get_ovlp()
-        csc = np.linalg.multi_dot((C.T, S, self.mf.mo_coeff[:,mask]))
-        e = self.mf.mo_energy[mask]
-
-        loc = np.s_[:len(self)]
-
-        b = np.einsum("xi,i,ai->xa", csc[non_local], e**power, csc[loc], optimize=True)
-
-        if normalize:
-            b /= np.linalg.norm(b, axis=1, keepdims=True)
-            assert np.allclose(np.linalg.norm(b, axis=1), 1)
-
-        p = np.dot(b, b.T)
-        e, v = np.linalg.eigh(p)
-        assert np.all(e > -1e-13)
-        rev = np.s_[::-1]
-        e = e[rev]
-        v = v[:,rev]
-
-        nbath = sum(e >= tol)
-        #log.debug("Eigenvalues of kind=%s, power=%d bath:\n%r", kind, power, e)
-        log.debug("Eigenvalues of kind=%s, power=%d bath, tolerance=%e", kind, power, tol)
-        log.debug("%d eigenvalues above threshold:\n%r", nbath, e[:nbath])
-        log.debug("%d eigenvalues below threshold:\n%r", len(e)-nbath, e[nbath:])
-
-        C = C.copy()
-        C[:,non_local] = np.dot(C[:,non_local], v)
-
-        return C, nbath
-
-
     def make_matsubara_bath_orbitals(self, C, kind, non_local, npoints=1000, beta=100.0, tol=None, normalize=False):
 
         if kind == "occ":
@@ -354,118 +423,118 @@ class Cluster:
 
         return C, nbath
 
+    def run_solver(self, solver=None, max_power=0, pertT=False, diagonalize_fock=True, cc_verbose=4,
+            ref_orbitals=None):
 
-
-    #def make_power_bath_orbitals_2(self, C, kind, non_local, power=1, tol=None, normalize=False):
-    #    if tol is None:
-    #        tol = self.tol_bath
-
-    #    if kind == "occ":
-    #        mask = self.mf.mo_occ > 0
-    #    elif kind == "vir":
-    #        mask = self.mf.mo_occ == 0
-    #    else:
-    #        raise ValueError()
-
-    #    C = C.copy()
-    #    #env = np.s_[len(self):]
-    #    S = self.mf.get_ovlp()
-    #    dm = np.einsum("ai,i,bi->ab",
-    #            self.mf.mo_coeff[:,mask], self.mf.mo_energy[mask]**power, self.mf.mo_coeff[:,mask])
-    #    D = np.linalg.multi_dot((C[:,non_local].T, S, dm, S, C[:,non_local]))
-    #    e, v = np.linalg.eigh(D)
-    #    reverse = np.s_[::-1]
-    #    e = e[reverse]
-    #    v = v[:,reverse]
-
-    #    print("new")
-    #    print(e)
-    #    print(self.mf.mo_energy[self.mf.mo_energy>0])
-    #    1/0
-
-
-    #    S = self.mf.get_ovlp()
-    #    csc = np.linalg.multi_dot((C.T, S, self.mf.mo_coeff[:,mask]))
-    #    e = self.mf.mo_energy[mask]
-
-    #    loc = np.s_[:len(self)]
-
-    #    b = np.einsum("xi,i,ai->xa", csc[non_local], e**power, csc[loc], optimize=True)
-
-    #    if normalize:
-    #        b /= np.linalg.norm(b, axis=1, keepdims=True)
-    #        assert np.allclose(np.linalg.norm(b, axis=1), 1)
-
-    #    p = np.dot(b, b.T)
-    #    e, v = np.linalg.eigh(p)
-    #    assert np.all(e > -1e-13)
-    #    rev = np.s_[::-1]
-    #    e = e[rev]
-    #    v = v[:,rev]
-
-    #    nbath = sum(e >= tol)
-
-    #    C = C.copy()
-    #    C[:,non_local] = np.dot(C[:,non_local], v)
-
-    #    return C, nbath
-
-    def run_solver(self, solver=None, max_power=0, pertT=False, diagonalize_fock=True, cc_verbose=4):
+        solver = solver or self.solver
 
         if solver is None:
-            solver = self.solver
+            self.e_corr = 0.0
+            self.e_corr_alt = 0.0
+            return 1
+
+        ref_orbitals = ref_orbitals or self.ref_orbitals
 
         C = self.make_local_orbitals()
         C, nbath0, nenvocc = self.make_dmet_bath_orbitals(C)
         nbath = nbath0
 
+        ncl = len(self)+nbath0
+        orbitals = Orbitals(C)
+        orbitals.define_space("local", np.s_[:len(self)])
+        orbitals.define_space("dmet-bath", np.s_[len(self):ncl])
+        orbitals.define_space("occ-env", np.s_[ncl:ncl+nenvocc])
+        orbitals.define_space("vir-env", np.s_[ncl+nenvocc:])
+
+        # Use previous orbitals
+        if ref_orbitals and self.use_ref_orbitals_bath:
+            # Occupied
+            nbathocc = ref_orbitals.get_size("occ-bath")
+            if nbathocc == 0:
+                log.debug("No reference occupied bath orbitals.")
+            else:
+                C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("occ-bath"),
+                        orbitals.get_indices("occ-env"))
+                log.debug("Eigenvalues of %d projected occupied bath orbitals:\n%s",
+                        nbathocc, eig[:nbathocc])
+                log.debug("Next 3 eigenvalues: %s", eig[nbathocc:nbathocc+3])
+            # Virtual
+            nbathvir = ref_orbitals.get_size("vir-bath")
+            if nbathvir == 0:
+                log.debug("No reference virtual bath orbitals.")
+            else:
+                C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("vir-bath"),
+                        orbitals.get_indices("vir-env"))
+                log.debug("Eigenvalues of %d projected virtual bath orbitals:\n%s",
+                        nbathvir, eig[:nbathvir])
+                log.debug("Next 3 eigenvalues: %s", eig[nbathvir:nbathvir+3])
+
         # Add additional power bath orbitals
-        nbathpocc = 0
-        nbathpvir = 0
-        # Power orbitals
-        for power in range(1, max_power+1):
-            occ_space = np.s_[len(self)+nbath0+nbathpocc:len(self)+nbath0+nenvocc]
-            C, nbo = self.make_power_bath_orbitals(C, "occ", occ_space, power=power)
-            #C, nbo = self.make_power_bath_orbitals_2(C, "occ", occ_space, power=power)
-            #1/0
-            vir_space = np.s_[len(self)+nbath0+nenvocc+nbathpvir:]
-            C, nbv = self.make_power_bath_orbitals(C, "vir", vir_space, power=power)
-            #C, nbv = self.make_power_bath_orbitals_2(C, "vir", vir_space, power=power)
-            nbathpocc += nbo
-            nbathpvir += nbv
-        # Uncontracted DMET
-        if self.bath_type == "uncontracted":
-            occ_space = np.s_[len(self)+nbath0+nbathpocc:len(self)+nbath0+nenvocc]
-            C, nbo = self.make_uncontracted_dmet_orbitals(C, "occ", occ_space, tol=self.tol_bath)
-            vir_space = np.s_[len(self)+nbath0+nenvocc+nbathpvir:]
-            C, nbv = self.make_uncontracted_dmet_orbitals(C, "vir", vir_space, tol=self.tol_bath)
-            nbathpocc += nbo
-            nbathpvir += nbv
-        # Matsubara
-        elif self.bath_type == "matsubara":
-            occ_space = np.s_[len(self)+nbath0+nbathpocc:len(self)+nbath0+nenvocc]
-            C, nbo = self.make_matsubara_bath_orbitals(C, "occ", occ_space, tol=self.tol_bath)
-            vir_space = np.s_[len(self)+nbath0+nenvocc+nbathpvir:]
-            C, nbv = self.make_matsubara_bath_orbitals(C, "vir", vir_space, tol=self.tol_bath)
-            nbathpocc += nbo
-            nbathpvir += nbv
+        else:
+            nbathocc = 0
+            nbathvir = 0
+            # Power orbitals
+            for power in range(1, max_power+1):
+                occ_space = np.s_[len(self)+nbath0+nbathocc:len(self)+nbath0+nenvocc]
+                C, nbo = self.make_power_bath_orbitals(C, "occ", occ_space, power=power)
+                vir_space = np.s_[len(self)+nbath0+nenvocc+nbathvir:]
+                C, nbv = self.make_power_bath_orbitals(C, "vir", vir_space, power=power)
+                nbathocc += nbo
+                nbathvir += nbv
+            # Uncontracted DMET
+            if self.bath_type == "uncontracted":
+                occ_space = np.s_[len(self)+nbath0+nbathocc:len(self)+nbath0+nenvocc]
+                C, nbo = self.make_uncontracted_dmet_orbitals(C, "occ", occ_space, tol=self.tol_bath)
+                vir_space = np.s_[len(self)+nbath0+nenvocc+nbathvir:]
+                C, nbv = self.make_uncontracted_dmet_orbitals(C, "vir", vir_space, tol=self.tol_bath)
+                nbathocc += nbo
+                nbathvir += nbv
+            # Matsubara
+            elif self.bath_type == "matsubara":
+                occ_space = np.s_[len(self)+nbath0+nbathocc:len(self)+nbath0+nenvocc]
+                C, nbo = self.make_matsubara_bath_orbitals(C, "occ", occ_space, tol=self.tol_bath)
+                vir_space = np.s_[len(self)+nbath0+nenvocc+nbathvir:]
+                C, nbv = self.make_matsubara_bath_orbitals(C, "vir", vir_space, tol=self.tol_bath)
+                nbathocc += nbo
+                nbathvir += nbv
 
-        nbath += nbathpocc
-        nbath += nbathpvir
+        # The virtuals require reordering:
+        ncl = len(self)+nbath0
+        nvir0 = ncl+nenvocc                 # Start index for virtuals
+        C = np.hstack((
+            C[:,:ncl+nbathocc],               # impurity + DMET bath + occupied bath
+            C[:,nvir0:nvir0+nbathvir],        # virtual bath
+            C[:,ncl+nbathocc:nvir0],          # occupied frozen
+            C[:,nvir0+nbathvir:],             # virtual frozen
+            ))
+        nbath += nbathocc
+        nbath += nbathvir
 
+        # At this point save reference orbitals for other calculations
+        orbitals.C = C
+        orbitals.define_space("occ-bath", np.s_[ncl:ncl+nbathocc])
+        orbitals.define_space("vir-bath", np.s_[ncl+nbathocc:ncl+nbathocc+nbathvir])
+        orbitals.delete_space("occ-env")
+        orbitals.define_space("occ-env", np.s_[ncl+nbathocc+nbathvir:ncl+nbathocc+nbathvir+nenvocc])
+        orbitals.delete_space("vir-env")
+        orbitals.define_space("vir-env", np.s_[ncl+nbathocc+nbathvir+nenvocc:])
+        self.orbitals = orbitals
+
+        # Diagonalize cluster DM (Necessary for CCSD)
         S = self.mf.get_ovlp()
         SDS_hf = np.linalg.multi_dot((S, self.mf.make_rdm1(), S))
-
-        # Diagonalize cluster DM
         ncl = len(self) + nbath0
         cl = np.s_[:ncl]
         D = np.linalg.multi_dot((C[:,cl].T, SDS_hf, C[:,cl])) / 2
         e, v = np.linalg.eigh(D)
+        assert np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=1e-6, rtol=0)
         reverse = np.s_[::-1]
         e = e[reverse]
         v = v[:,reverse]
         C_cc = C.copy()
         C_cc[:,cl] = np.dot(C_cc[:,cl], v)
+        nocc_cl = sum(e > 0.5)
+        log.debug("Occupied/virtual states in local+DMET space: %d/%d", nocc_cl, ncl-nocc_cl)
 
         # Sort occupancy
         occ = np.einsum("ai,ab,bi->i", C_cc, SDS_hf, C_cc, optimize=True)
@@ -481,10 +550,15 @@ class Cluster:
         active = rank[:nactive]
         nocc_active = sum(occ[active] > 0)
 
+        log.debug("Occupancy of local + DMET bath orbitals:\n%s", occ[rank[:len(self)+nbath0]])
+        log.debug("Occupancy of other bath orbitals:\n%s", occ[rank[len(self)+nbath0:len(self)+nbath]])
+        log.debug("Occupancy of frozen orbitals:\n%s", occ[frozen])
+
         self.nbath0 = nbath0
         self.nbath = nbath
         self.nfrozen = len(frozen)
 
+        # Nothing to correlate for a single orbital
         if len(self) == 1 and nbath == 0:
             self.e_corr = 0.0
             self.e_corr_full = 0.0
@@ -508,9 +582,11 @@ class Cluster:
                 e, r = np.linalg.eigh(F[np.ix_(v, v)])
                 C_cc[:,v] = np.dot(C_cc[:,v], r)
 
-        pbc = hasattr(self.mol, "dimension")
-        log.debug("Attribute dimension found. Switching to pbc code.")
+        pbc = hasattr(self.mol, "a")
+        if pbc:
+            log.debug("\"A matrix\" found. Switching to pbc code.")
 
+        # Do not calculate correlation energy
         if solver == "CCSD":
             if pbc:
                 ccsd = pyscf.pbc.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
@@ -578,10 +654,15 @@ class Cluster:
 
             self.e_corr = self.e_ccsd
 
+            # TESTING
+            #self.get_local_energy_parts(ccsd, C1, C2)
+
+            # TEMP
             self.e_corr_alt = self.get_local_energy_most_indices(ccsd, C1, C2)
 
+
             # CCSD energy of whole cluster
-            self.e_cl_ccsd = ccsd.e_corr
+            #self.e_cl_ccsd = ccsd.e_corr
 
         elif solver == "CISD":
             self.e_cisd = self.get_local_energy(cisd, C1, C2)
@@ -592,13 +673,13 @@ class Cluster:
             self.e_fci = self.get_local_energy(cisd, C1, C2)
             self.e_corr = self.e_fci
 
-            self.e_corr_alt = self.get_local_energy_most_indices(cisd, C1, C2)
+            #self.e_corr_alt = self.get_local_energy_most_indices(cisd, C1, C2)
 
         log.debug("Calculating local energy done.")
 
         return int(self.converged)
 
-    def get_local_energy_most_indices(self, cc, C1, C2):
+    def get_local_energy_parts(self, cc, C1, C2):
 
         a = cc.get_frozen_mask()
         # Projector to local, occupied region
@@ -608,7 +689,7 @@ class Cluster:
 
         # Project one index of T amplitudes
         l= self.indices
-        r = self.rest
+        r = self.not_indices
         o = cc.mo_occ[a] > 0
         v = cc.mo_occ[a] == 0
 
@@ -642,17 +723,177 @@ class Cluster:
             T2p = einsum("pi,qj,ijab,sa,tb->pqst", P1, P2, C2, P3, P4)
             return T2p
 
-        T2_3l1x = (project_T2(Lo, Lo, Lv, Lv)
-                 + project_T2(Lo, Lo, Lv, Rv)
-                 + project_T2(Lo, Lo, Rv, Lv)
-                 + project_T2(Lo, Ro, Lv, Lv)
-                 + project_T2(Ro, Lo, Lv, Lv))
 
-        # Change notation back to i,j and a,b
-        e2 = 0.0
-        # 4:0 and 3:1 (The easy part)
-        e2 += 2*einsum('ijab,iabj', T2_3l1x, eris.ovvo)
-        e2 -=   einsum('ijab,jabi', T2_3l1x, eris.ovvo)
+        def epart(P1, P2, P3, P4):
+            T2_part = project_T2(P1, P2, P3, P4)
+            e_part = (2*einsum('ijab,iabj', T2_part, eris.ovvo)
+                  - einsum('ijab,jabi', T2_part, eris.ovvo))
+            return e_part
+
+        energies = []
+        # 4
+        energies.append(epart(Lo, Lo, Lv, Lv))
+        # 3
+        energies.append(2*epart(Lo, Lo, Lv, Rv))
+        energies.append(2*epart(Lo, Ro, Lv, Lv))
+        assert np.isclose(epart(Lo, Lo, Rv, Lv), epart(Lo, Lo, Lv, Rv))
+        assert np.isclose(epart(Ro, Lo, Lv, Lv), epart(Lo, Ro, Lv, Lv))
+
+        energies.append(  epart(Lo, Lo, Rv, Rv))
+        energies.append(2*epart(Lo, Ro, Lv, Rv))
+        energies.append(2*epart(Lo, Ro, Rv, Lv))
+        energies.append(  epart(Ro, Ro, Lv, Lv))
+
+        energies.append(2*epart(Lo, Ro, Rv, Rv))
+        energies.append(2*epart(Ro, Ro, Lv, Rv))
+        assert np.isclose(epart(Ro, Lo, Rv, Rv), epart(Lo, Ro, Rv, Rv))
+        assert np.isclose(epart(Ro, Ro, Rv, Lv), epart(Ro, Ro, Lv, Rv))
+
+        energies.append(  epart(Ro, Ro, Rv, Rv))
+
+        #e4 = e_aaaa
+        #e3 = e_aaab + e_aaba + e_abaa + e_baaa
+        #e2 = 0.5*(e_aabb + e_abab + e_abba + e_bbaa)
+
+        with open("energy-parts.txt", "a") as f:
+            f.write((10*"  %16.8e" + "\n") % tuple(energies))
+
+    def get_local_energy_most_indices_2C(self, cc, C1, C2):
+
+        a = cc.get_frozen_mask()
+        # Projector to local, occupied region
+        S = self.mf.get_ovlp()
+        C = cc.mo_coeff[:,a]
+        CTS = np.dot(C.T, S)
+
+        # Project one index of T amplitudes
+        l= self.indices
+        r = self.not_indices
+        o = cc.mo_occ[a] > 0
+        v = cc.mo_occ[a] == 0
+
+        eris = cc.ao2mo()
+
+        def get_projectors(aos):
+            Po = np.dot(CTS[o][:,aos], C[aos][:,o])
+            Pv = np.dot(CTS[v][:,aos], C[aos][:,v])
+            return Po, Pv
+
+        Lo, Lv = get_projectors(l)
+        Ro, Rv = get_projectors(r)
+
+        # Nomenclature:
+        # old occupied: i,j
+        # old virtual: a,b
+        # new occupied: p,q
+        # new virtual: s,t
+        T1_ll = einsum("pi,ia,sa->ps", Lo, C1, Lv)
+        T1_lr = einsum("pi,ia,sa->ps", Lo, C1, Rv)
+        T1_rl = einsum("pi,ia,sa->ps", Ro, C1, Lv)
+        T1 = T1_ll + (T1_lr + T1_rl)/2
+
+        F = eris.fock[o][:,v]
+        e1 = 2*np.sum(F * T1)
+        if not np.isclose(e1, 0):
+            log.warning("Warning: large E1 component: %.8e" % e1)
+
+        #tau = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
+        def project_T2(P1, P2, P3, P4):
+            T2p = einsum("pi,qj,ijab,sa,tb->pqst", P1, P2, C2, P3, P4)
+            return T2p
+
+        f3 = 1.0
+        f2 = 0.5
+        # 4
+        T2 = 1*project_T2(Lo, Lo, Lv, Lv)
+        # 3
+        T2 += f3*(2*project_T2(Lo, Lo, Lv, Rv)      # factor 2 for LLRL
+                + 2*project_T2(Ro, Lo, Lv, Lv))     # factor 2 for RLLL
+        # 2
+        T2 += f2*(  project_T2(Lo, Lo, Rv, Rv)
+                + 2*project_T2(Lo, Ro, Lv, Rv)      # factor 2 for RLRL
+                + 2*project_T2(Lo, Ro, Rv, Lv)      # factor 2 for RLLR
+                +   project_T2(Ro, Ro, Lv, Lv))
+
+        e2 = (2*einsum('ijab,iabj', T2, eris.ovvo)
+               -einsum('ijab,jabi', T2, eris.ovvo))
+
+        e_loc = e1 + e2
+
+        return e_loc
+
+    def get_local_energy_most_indices(self, cc, C1, C2):
+
+        a = cc.get_frozen_mask()
+        # Projector to local, occupied region
+        S = self.mf.get_ovlp()
+        C = cc.mo_coeff[:,a]
+        CTS = np.dot(C.T, S)
+
+        # Project one index of T amplitudes
+        l= self.indices
+        r = self.not_indices
+        o = cc.mo_occ[a] > 0
+        v = cc.mo_occ[a] == 0
+
+        eris = cc.ao2mo()
+
+        def get_projectors(aos):
+            Po = np.dot(CTS[o][:,aos], C[aos][:,o])
+            Pv = np.dot(CTS[v][:,aos], C[aos][:,v])
+            return Po, Pv
+
+        Lo, Lv = get_projectors(l)
+        Ro, Rv = get_projectors(r)
+
+        # Nomenclature:
+        # old occupied: i,j
+        # old virtual: a,b
+        # new occupied: p,q
+        # new virtual: s,t
+        T1_ll = einsum("pi,ia,sa->ps", Lo, C1, Lv)
+        T1_lr = einsum("pi,ia,sa->ps", Lo, C1, Rv)
+        T1_rl = einsum("pi,ia,sa->ps", Ro, C1, Lv)
+        T1 = T1_ll + (T1_lr + T1_rl)/2
+
+        F = eris.fock[o][:,v]
+        e1 = 2*np.sum(F * T1)
+        if not np.isclose(e1, 0):
+            log.warning("Warning: large E1 component: %.8e" % e1)
+
+        #tau = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
+        def project_T2(P1, P2, P3, P4):
+            T2p = einsum("pi,qj,ijab,sa,tb->pqst", P1, P2, C2, P3, P4)
+            return T2p
+
+        def project_C2(P1=None, P2=None, P3=None, P4=None):
+            pC2 = C2
+            if P1 is not None:
+                pC2 = einsum("xi,ijab->xjab", P1, pC2)
+            if P2 is not None:
+                pC2 = einsum("xj,ijab->ixab", P2, pC2)
+            if P3 is not None:
+                pC2 = einsum("xa,ijab->ijxb", P3, pC2)
+            if P4 is not None:
+                pC2 = einsum("xb,ijab->ijax", P4, pC2)
+            return pC2
+
+        assert np.allclose(project_T2(Lo, Lo, Lv, Rv) + project_T2(Lo, Lo, Lv, Lv), project_C2(Lo, Lo, Lv))
+
+        t0 = MPI.Wtime()
+        T2_4 = project_T2(Lo, Lo, Lv, Lv)
+        e2_4 = (2*einsum('ijab,iabj', T2_4, eris.ovvo)
+                 -einsum('ijab,jabi', T2_4, eris.ovvo))
+
+        T2_3 = (2*project_T2(Lo, Lo, Lv, Rv)
+               +2*project_T2(Ro, Lo, Lv, Lv))
+        e2_3 = (2*einsum('ijab,iabj', T2_3, eris.ovvo)
+                 -einsum('ijab,jabi', T2_3, eris.ovvo))
+
+        e2_1 = 0.0
+        e2_211 = 0.0
+        e2_22 = 0.0
+
         # Loop over other fragments
         for x, cx in enumerate(self.base.clusters):
             if cx == self:
@@ -665,8 +906,8 @@ class Cluster:
                          + project_T2(Xo, Lo, Lv, Xv)
                          + project_T2(Xo, Lo, Xv, Lv)
                          + project_T2(Xo, Xo, Lv, Lv))
-            e2 += 2*einsum('ijab,iabj', T2_2l2x, eris.ovvo)
-            e2 -=   einsum('ijab,jabi', T2_2l2x, eris.ovvo)
+            e2_22 += 2*einsum('ijab,iabj', T2_2l2x, eris.ovvo)
+            e2_22 -=   einsum('ijab,jabi', T2_2l2x, eris.ovvo)
 
             for y, cy in enumerate(self.base.clusters):
                 if (cy == self) or (cy == cx):
@@ -680,8 +921,8 @@ class Cluster:
                          + project_T2(Xo, Lo, Lv, Yv)
                          + project_T2(Xo, Lo, Yv, Lv)
                          + project_T2(Xo, Yo, Lv, Lv))
-                e2 += 2*einsum('ijab,iabj', T2_2lxy, eris.ovvo)
-                e2 -=   einsum('ijab,jabi', T2_2lxy, eris.ovvo)
+                e2_211 += 2*einsum('ijab,iabj', T2_2lxy, eris.ovvo)
+                e2_211 -=   einsum('ijab,jabi', T2_2lxy, eris.ovvo)
 
                 for z, cz in enumerate(self.base.clusters):
                     if (cz == self) or (cz == cx) or (cz == cy):
@@ -692,10 +933,114 @@ class Cluster:
                                   + project_T2(Xo, Lo, Yv, Zv)
                                   + project_T2(Xo, Yo, Lv, Zv)
                                   + project_T2(Xo, Yo, Zv, Lv))
-                    e2 += 2*einsum('ijab,iabj', T2_lxyz, eris.ovvo)
-                    e2 -=   einsum('ijab,jabi', T2_lxyz, eris.ovvo)
+                    e2_1 += 2*einsum('ijab,iabj', T2_lxyz, eris.ovvo)
+                    e2_1 -=   einsum('ijab,jabi', T2_lxyz, eris.ovvo)
+        time_old = MPI.Wtime() - t0
 
+
+
+        e2 = e2_4 + e2_3 + e2_211 + e2_22 + e2_1
         e_loc = e1 + e2
+
+        ### ABCD
+        ##T2 = 0.25*(2*project_C2(P1=Lo)
+        ##         + 2*project_C2(P3=Lv))
+        ### Correct AABC
+        ##T2 += 0.75*(project_C2(P1=Lo, P2=Lo)
+        ##        + 2*project_C2(P1=Lo, P3=Lv)
+        ##        + 2*project_C2(P1=Lo, P4=Lv)
+        ##        +   project_C2(P3=Lv, P4=Lv))
+        ### Correct AABB
+        ##for x, cx in enumerate(self.base.clusters):
+        ##    Xo, Xv = get_projectors(cx.indices)
+        ##    T2 += -0.5*(project_C2(P1=Lo, P2=Lo, P3=Xv, P4=Xv)
+        ##            + 2*project_C2(P1=Lo, P2=Xo, P3=Lv, P4=Xv)
+        ##            + 2*project_C2(P1=Lo, P2=Xo, P3=Xv, P4=Lv)
+        ##              + project_C2(P1=Xo, P2=Xo, P3=Lv, P4=Lv))
+        ### Correct AAAB (already correct?)
+        ###T2 += 0.75*(2*project_C2(P1=Lo, P2=Lo, P3=Lv)
+        ###           +2*project_C2(P2=Lo, P3=Lo, P4=Lv))
+        ### Correct AAAA
+        ##T2 += 1.0*project_C2(P1=Lo, P2=Lo, P3=Lv, P4=Lv)
+
+
+        # In the following:
+        # L = Local AO
+        # A,B,C = non-local AO, which cannot be equal, i.e. A != B != C
+        # X = Variable for arbitrary non-local, i.e. A, B, or C
+        # R = All non-local (union of A, B, C, ...)
+        # P(...) means all possible permutations of ...
+        # Factors of 2 are due to (abcd == badc) symmetry
+
+        t0 = MPI.Wtime()
+
+        # QUADRUPLE L
+        # ===========
+        T2 = project_C2(P1=Lo, P2=Lo, P3=Lv, P4=Lv)
+
+        # TRIPEL L
+        # ========
+        T2 += 2*project_C2(P1=Lo, P2=Lo, P3=Lv, P4=Rv)
+        T2 += 2*project_C2(P1=Lo, P2=Ro, P3=Lv, P4=Lv)
+
+        # DOUBLE L
+        # ========
+        # P(LLRR) [This wrongly includes: P(LLAA)]
+        T2 +=   project_C2(P1=Lo, P2=Lo, P3=Rv, P4=Rv)
+        T2 += 2*project_C2(P1=Lo, P2=Ro, P3=Lv, P4=Rv)
+        T2 += 2*project_C2(P1=Lo, P2=Ro, P3=Rv, P4=Lv)
+        T2 +=   project_C2(P1=Ro, P2=Ro, P3=Lv, P4=Lv)
+
+        # SINGLE L
+        # ========
+        # P(LRRR) [This wrongly includes: P(LAAR)]
+        T2 += 0.25*2*project_C2(P1=Lo, P2=Ro, P3=Rv, P4=Rv)
+        T2 += 0.25*2*project_C2(P1=Ro, P2=Ro, P3=Lv, P4=Rv)
+
+        #for x, cx in enumerate(self.base.clusters):
+        #    # Skip X=L
+        #    if cx == self:
+        #        continue
+        #for x in self.loop_clusters(exclude_self=True):
+        #    Xo, Xv = get_projectors(x.indices)
+
+        # CORRECTIONS
+        # ===========
+        for x in self.loop_clusters(exclude_self=True):
+            Xo, Xv = get_projectors(x.indices)
+
+            # DOUBLE CORRECTION
+            # -----------------
+            # Correct for wrong inclusion of P(LLAA)
+            # The case P(LLAA) was included with prefactor of 1 instead of 1/2
+            # We thus need to only correct by "-1/2"
+            T2 -= 0.5*  project_C2(P1=Lo, P2=Lo, P3=Xv, P4=Xv)
+            T2 -= 0.5*2*project_C2(P1=Lo, P2=Xo, P3=Lv, P4=Xv)
+            T2 -= 0.5*2*project_C2(P1=Lo, P2=Xo, P3=Xv, P4=Lv)
+            T2 -= 0.5*  project_C2(P1=Xo, P2=Xo, P3=Lv, P4=Lv)
+
+            # SINGLE CORRECTION
+            # -----------------
+            # Correct for wrong inclusion of P(LAAR)
+            # This corrects the case P(LAAB) but overcorrects P(LAAA)!
+            T2 -= 0.25*2*project_C2(Lo, Xo, Xv, Rv)
+            T2 -= 0.25*2*project_C2(Lo, Xo, Rv, Xv) # If R == X this is the same as above -> overcorrection
+            T2 -= 0.25*2*project_C2(Lo, Ro, Xv, Xv) # overcorrection
+            T2 -= 0.25*2*project_C2(Xo, Xo, Lv, Rv)
+            T2 -= 0.25*2*project_C2(Xo, Ro, Lv, Xv) # overcorrection
+            T2 -= 0.25*2*project_C2(Ro, Xo, Lv, Xv) # overcorrection
+
+            # Correct overcorrection
+            T2 += 0.25*2*2*project_C2(Lo, Xo, Xv, Xv)
+            T2 += 0.25*2*2*project_C2(Xo, Xo, Lv, Xv)
+
+        e2_new = (2*einsum('ijab,iabj', T2, eris.ovvo)
+                   -einsum('ijab,jabi', T2, eris.ovvo))
+        time_new = MPI.Wtime() - t0
+
+        log.debug("Alt E: %.10e vs %.10e", e2, e2_new)
+        log.debug("Times: %.3f s vs %.3f s", time_old, time_new)
+        assert np.isclose(e2, e2_new)
 
         return e_loc
 
@@ -710,7 +1055,7 @@ class Cluster:
 
         # Project one index of amplitudes
         l = self.indices
-        r = self.rest
+        r = self.not_indices
         if project == "occupied":
             P = np.linalg.multi_dot((C[:,o].T, S[:,l], C[l][:,o]))
             #S_121 = self.make_projector_s121()
@@ -737,149 +1082,15 @@ class Cluster:
 
         return e_loc
 
-    ##def get_local_energy(self, cc, projector="occ", pertT=False):
-
-    ##    a = cc.get_frozen_mask()
-    ##    o = cc.mo_occ[a] > 0
-    ##    v = cc.mo_occ[a] == 0
-    ##    # Projector to local, occupied region
-    ##    S = self.mf.get_ovlp()
-    ##    C = cc.mo_coeff[:,a]
-    ##    CTS = np.dot(C.T, S)
-
-    ##    # Project one index of T amplitudes
-    ##    l = self.indices
-    ##    r = self.rest
-    ##    if projector == "occ":
-    ##        Lo = np.linalg.multi_dot((C[:,o].T, S[:,l], C[l][:,o]))
-    ##        #S_121 = self.make_projector_s121()
-    ##        #P = np.linalg.multi_dot((C_cc[:,o].T, S_121, C_cc[:,o]))
-    ##        T1 = einsum("xi,ia->xa", Lo, cc.t1)
-    ##        T2 = einsum("xi,ijab->xjab", Lo, cc.t2)
-    ##        T21 = T2 + einsum('xa,jb->xjab', T1, cc.t1)
-    ##    elif projector == "vir":
-    ##        Lv = np.linalg.multi_dot((C[:,v].T, S[:,l], C[l][:,v]))
-    ##        T1 = einsum("xa,ia->ix", Lv, cc.t1)
-    ##        T2 = einsum("xa,ijab->ijxb", Lv, cc.t2)
-    ##        T21 = T2 + einsum('ix,jb->ijxb', T1, cc.t1)
-    ##    elif projector == "occ-2":
-    ##        Lo = np.linalg.multi_dot((CTS[o][:,l], C[l][:,o]))
-    ##        #Lv = np.linalg.multi_dot((CTS[v][:,l], C[l][:,v]))
-    ##        Ro = np.linalg.multi_dot((CTS[o][:,r], C[r][:,o]))
-    ##        #Rv = np.linalg.multi_dot((CTS[v][:,r], C[r][:,v]))
-
-    ##        T1 = einsum("pi,ia->pa", Lo, cc.t1)
-
-    ##        tau = cc.t2 + einsum("ia,jb->ijab", cc.t1, cc.t1)
-    ##        T2_ll = einsum("pi,qj,ijab->pqab", Lo, Lo, tau)
-    ##        T2_lr = einsum("pi,qj,ijab->pqab", Lo, Ro, tau)
-    ##        T2_rl = einsum("pi,qj,ijab->pqab", Ro, Lo, tau)
-    ##        T21 = T2_ll + (T2_lr + T2_rl)/2
-
-
-    ##    #elif projector == "weighted":
-    ##    #    #symmetrize= True
-    ##    #    # MF occ of AOs (population analysis)
-    ##    #    occ = np.einsum("ab,ba->a", self.mf.make_rdm1(), S) / 2
-    ##    #    # This may not be true?
-    ##    #    #assert np.all(0 < occ)
-    ##    #    #assert np.all(occ < 1)
-    ##    #    for idx, ao in enumerate(self.mol.ao_labels()):
-    ##    #        log.debug("%s: %f", ao, occ[idx])
-
-    ##    #    norm = sum(occ)
-    ##    #    log.debug("sum: %.8f" % sum(occ))
-    ##    #    occ = np.clip(occ, 0, 1)
-    ##    #    log.debug("sum: %.8f" % sum(occ))
-    ##    #    occ *= norm / sum(occ)
-    ##    #    log.debug("sum: %.8f" % sum(occ))
-
-    ##    #    w = occ[l]
-    ##    #    Po = np.einsum("ai,ab,b,bj->ij", C[:,o], S[:,l], w, C[l][:,o])
-    ##    #    Pv = np.einsum("ai,ab,b,bj->ij", C[:,v], S[:,l], (1-w), C[l][:,v])
-    ##    #    if symmetrize:
-    ##    #        Po = (Po + Po.T)/2
-    ##    #        Pv = (Pv + Pv.T)/2
-
-    ##    #    T1o = np.einsum("xi,ia->xa", Po, cc.t1, optimize=True)
-    ##    #    T1v = np.einsum("xa,ia->ix", Pv, cc.t1, optimize=True)
-    ##    #    T1 = T1o + T1v
-
-    ##    #    T2 = (np.einsum("xi,ijab->xjab", Po, cc.t2, optimize=True)
-    ##    #        + np.einsum("xa,ijab->ijxb", Pv, cc.t2, optimize=True))
-    ##    #    T21 = T2 + (np.einsum('xa,jb->xjab', T1o, cc.t1, optimize=True)
-    ##    #              + np.einsum('ix,jb->ijxb', T1v, cc.t1, optimize=True))
-
-    ##    #elif projector == "weighted-inv":
-    ##    #    #symmetrize= True
-    ##    #    # MF occ of AOs (population analysis)
-    ##    #    occ = np.einsum("ab,ba->a", self.mf.make_rdm1(), S) / 2
-    ##    #    # This may not be true?
-    ##    #    #assert np.all(0 < occ)
-    ##    #    #assert np.all(occ < 1)
-    ##    #    for idx, ao in enumerate(self.mol.ao_labels()):
-    ##    #        log.debug("%s: %f", ao, occ[idx])
-
-    ##    #    norm = sum(occ)
-    ##    #    log.debug("sum: %.8f" % sum(occ))
-    ##    #    occ = np.clip(occ, 0, 1)
-    ##    #    log.debug("sum: %.8f" % sum(occ))
-    ##    #    occ *= norm / sum(occ)
-    ##    #    log.debug("sum: %.8f" % sum(occ))
-
-    ##    #    w = occ[l]
-    ##    #    Po = np.einsum("ai,ab,b,bj->ij", C[:,o], S[:,l], (1-w), C[l][:,o])
-    ##    #    Pv = np.einsum("ai,ab,b,bj->ij", C[:,v], S[:,l], w, C[l][:,v])
-    ##    #    if symmetrize:
-    ##    #        Po = (Po + Po.T)/2
-    ##    #        Pv = (Pv + Pv.T)/2
-
-    ##    #    T1o = np.einsum("xi,ia->xa", Po, cc.t1, optimize=True)
-    ##    #    T1v = np.einsum("xa,ia->ix", Pv, cc.t1, optimize=True)
-    ##    #    T1 = T1o + T1v
-
-    ##    #    T2 = (np.einsum("xi,ijab->xjab", Po, cc.t2, optimize=True)
-    ##    #        + np.einsum("xa,ijab->ijxb", Pv, cc.t2, optimize=True))
-    ##    #    T21 = T2 + (np.einsum('xa,jb->xjab', T1o, cc.t1, optimize=True)
-    ##    #              + np.einsum('ix,jb->ijxb', T1v, cc.t1, optimize=True))
-
-    ##    else:
-    ##        raise ValueError()
-
-    ##    # Energy
-    ##    eris = cc.ao2mo()
-    ##    F = eris.fock[o][:,v]
-    ##    e1 = 2*np.sum(F * T1)
-    ##    #assert np.isclose(e1, 0)
-    ##    if not np.isclose(e1, 0):
-    ##        log.warning("Warning: large E1 component: %.8e" % e1)
-
-    ##    #e2 = 2*np.einsum('xjab,xabj', T21, eris.ovvo, optimize=True)
-    ##    #e2 -=  np.einsum('xjab,jabx', T21, eris.ovvo, optimize=True)
-    ##    e2 = 2*einsum('ijab,iabj', T21, eris.ovvo)
-    ##    e2 -=  einsum('ijab,jabi', T21, eris.ovvo)
-
-    ##    e_loc = e1 + e2
-
-    ##    if pertT:
-    ##        raise NotImplementedError()
-    ##        T1 = np.ascontiguousarray(T1)
-    ##        T2 = np.ascontiguousarray(T2)
-    ##        e_pertT = cc.ccsd_t(T1, T2, eris)
-    ##    else:
-    ##        e_pertT = 0
-
-    ##    return e_loc, e_pertT
-
 # ===== #
 
 class EmbCC:
 
-    def __init__(self, mf, solver="CCSD", bath_type=None, tol_bath=1e-3, tol_dmet_bath=1e-8):
+    def __init__(self, mf, solver="CCSD", bath_type=None, tol_bath=1e-3, tol_dmet_bath=1e-8,
+            use_ref_orbitals_dmet=True, use_ref_orbitals_bath=True):
         self.mf = mf
-        self.mol = mf.mol
 
-        if solver not in ("CCSD", "CISD", "FCI"):
+        if solver not in (None, "CISD", "CCSD", "FCI"):
             raise ValueError("Unknown solver: %s" % solver)
         if bath_type not in (None, "matsubara", "uncontracted"):
             raise ValueError()
@@ -887,14 +1098,22 @@ class EmbCC:
         self.bath_type = bath_type
         self.tol_bath = tol_bath
         self.tol_dmet_bath = tol_dmet_bath
+        self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
+        self.use_ref_orbitals_bath = use_ref_orbitals_bath
 
         self.clusters = []
+
+    @property
+    def mol(self):
+        return self.mf.mol
 
     def make_cluster(self, name, ao_indices, **kwargs):
         kwargs["solver"] = kwargs.get("solver", self.solver)
         kwargs["bath_type"] = kwargs.get("bath_type", self.bath_type)
         kwargs["tol_bath"] = kwargs.get("tol_bath", self.tol_bath)
         kwargs["tol_dmet_bath"] = kwargs.get("tol_dmet_bath", self.tol_dmet_bath)
+        kwargs["use_ref_orbitals_dmet"] = kwargs.get("use_ref_orbitals_dmet", self.use_ref_orbitals_dmet)
+        kwargs["use_ref_orbitals_bath"] = kwargs.get("use_ref_orbitals_bath", self.use_ref_orbitals_bath)
 
         cluster = Cluster(self, name, ao_indices, **kwargs)
         return cluster
@@ -1078,6 +1297,7 @@ class EmbCC:
         for idx, c in enumerate(clusters):
             if MPI_rank != (idx % MPI_size):
                 continue
+
             log.debug("Running cluster %s on rank %d", c.name, MPI_rank)
             c.run_solver(max_power=max_power, pertT=pertT)
             log.debug("Cluster %s on rank %d is done.", c.name, MPI_rank)
@@ -1105,7 +1325,7 @@ class EmbCC:
         nbath0 = mpi_reduce("nbath0")
         nbath = mpi_reduce("nbath")
         nfrozen = mpi_reduce("nfrozen")
-        e_cl_ccsd = mpi_reduce("e_cl_ccsd")
+        #e_cl_ccsd = mpi_reduce("e_cl_ccsd")
 
         e_corr = mpi_reduce("e_corr")
         e_corr_full = mpi_reduce("e_corr_full")
@@ -1216,3 +1436,9 @@ class EmbCC:
         for c in self.clusters:
             log.info(linefmt, c.name, c.solver, len(c)+c.nbath, len(c), c.nbath0, c.nbath-c.nbath0, c.nfrozen, c.e_corr_full, c.e_corr)
         log.info(totalfmt, self.e_corr)
+
+    def reset(self, mf=None, **kwargs):
+        if mf:
+            self.mf = mf
+        for c in self.clusters:
+            c.reset(**kwargs)
