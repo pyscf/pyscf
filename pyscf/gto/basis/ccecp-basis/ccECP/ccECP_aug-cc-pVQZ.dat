@@ -1,6 +1,5 @@
 # https://pseudopotentiallibrary.org/
-
-BASIS "ao basis" PRINT
+\nBASIS "ao basis" PRINT
 #BASIS SET
 Al S
 8.257944 0.003287
