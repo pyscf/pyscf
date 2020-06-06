@@ -42,6 +42,7 @@ install:
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7-deps.tar.gz | tar xzf -
   - pip install pyberny geometric
+  - if [[ $TRAVIS_PYTHON_VERSION != 2.7 && $TRAVIS_PYTHON_VERSION != 3.5 ]]; then pip install git+https://github.com/maxscheurer/cppe.git; fi
   - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     mkdir build &&
     cd build &&
