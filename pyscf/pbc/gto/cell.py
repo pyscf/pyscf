@@ -598,24 +598,24 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     if (cell.dimension < 2 or
         (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
         if cell.dimension == 0:
-            rx, wx = _non_uniform_Gv_base(mesh[0])
-            ry, wy = _non_uniform_Gv_base(mesh[1])
-            rz, wz = _non_uniform_Gv_base(mesh[2])
+            rx, wx = _non_uniform_Gv_base(mesh[0]//2)
+            ry, wy = _non_uniform_Gv_base(mesh[1]//2)
+            rz, wz = _non_uniform_Gv_base(mesh[2]//2)
             rx /= np.linalg.norm(b[0])
             ry /= np.linalg.norm(b[1])
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
         elif cell.dimension == 1:
             wx = np.repeat(np.linalg.norm(b[0]), mesh[0])
-            ry, wy = _non_uniform_Gv_base(mesh[1])
-            rz, wz = _non_uniform_Gv_base(mesh[2])
+            ry, wy = _non_uniform_Gv_base(mesh[1]//2)
+            rz, wz = _non_uniform_Gv_base(mesh[2]//2)
             ry /= np.linalg.norm(b[1])
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
         elif cell.dimension == 2:
             area = np.linalg.norm(np.cross(b[0], b[1]))
             wxy = np.repeat(area, mesh[0]*mesh[1])
-            rz, wz = _non_uniform_Gv_base(mesh[2])
+            rz, wz = _non_uniform_Gv_base(mesh[2]//2)
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
 
@@ -629,9 +629,8 @@ def _non_uniform_Gv_base(n):
     #rs, ws = radi.delley(n)
     #rs, ws = radi.treutler_ahlrichs(n)
     #rs, ws = radi.mura_knowles(n)
-    rs, ws = radi.gauss_chebyshev(n//2)
-    if n % 2 != 0:
-        return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
+    rs, ws = radi.gauss_chebyshev(n)
+    #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
     return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
 def get_SI(cell, Gv=None):

@@ -175,8 +175,9 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell).density_fit()
         mf.xc = 'camb3lyp'
         mf.omega = '0.7'
+        mf.exxdiv = None
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4836476875900297, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4836596871145558, 7)
 
         mol = cell.to_mol()
         mf1 = mol.RKS().density_fit()
