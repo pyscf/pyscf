@@ -201,9 +201,7 @@ class TestPolEmbed(unittest.TestCase):
         '''
         mol.basis = "STO-3G"
         mol.build()
-        pe_options = cppe.PeOptions()
-        pe_options.potfile = os.path.join(dname, "pna_6w.potential")
-        print(pe_options.potfile)
+        pe_options = {"potfile": os.path.join(dname, "pna_6w.potential")}
         pe = pol_embed.PolEmbed(mol, pe_options)
         mf = solvent.PE(scf.RHF(mol), pe)
         mf.conv_tol = 1e-10
