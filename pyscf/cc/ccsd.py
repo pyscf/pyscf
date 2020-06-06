@@ -289,6 +289,9 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nocc*nvir**2*3 + nocc**2*nvir + 2
     blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
+    if not mycc.direct:
+        unit = nocc*nvir**2*3 + nocc**2*nvir + 2 + nocc*nvir**2 + nocc*nvir
+        blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size-nocc**2*nvir)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
 
