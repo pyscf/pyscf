@@ -64,6 +64,15 @@ def reorder_columns(a, *args):
     assert b.shape == a.shape
     return b
 
+def get_time_string(seconds):
+    m, s = divmod(seconds, 60)
+    if seconds >= 3600:
+        tstr = "%.0f h, %.0f min, %.2f s" % (divmod(m, 60) + (s,))
+    elif seconds >= 60:
+        tstr = "%.0f min %.2f s" % (m, s)
+    else:
+        tstr = "%.2f s" % s
+    return tstr
 
 class Cluster:
 
@@ -99,7 +108,7 @@ class Cluster:
         self.set_default_attributes()
         if keep_ref_orbitals:
             self.ref_orbitals = ref_orbitals
-        log.debug("Resetting cluster %s. New vars:\n%s", self.name, vars(self))
+        #log.debug("Resetting cluster %s. New vars:\n%s", self.name, vars(self))
 
     def set_default_attributes(self):
         """Set default attributes of cluster object."""
@@ -114,7 +123,10 @@ class Cluster:
         self.converged = True
         self.e_corr = 0.0
         self.e_corr_full = 0.0
-        self.e_corr_alt = 0.0
+        self.e_corr_v = 0.0
+        self.e_corr_var = 0.0
+        self.e_corr_var2 = 0.0
+        self.e_corr_var3 = 0.0
 
     def __len__(self):
         """The number of local ("imurity") orbitals of the cluster."""
@@ -171,12 +183,14 @@ class Cluster:
         p = np.dot(p_12, p_21)
         return p
 
-    def make_projector_s121(self):
+    def make_projector_s121(self, indices=None):
         """Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b"""
+        if indices is None:
+            indices = self.indices
         S1 = self.mf.get_ovlp()
         nao = self.mol.nao_nr()
-        S2 = S1[np.ix_(self.indices, self.indices)]
-        S21 = S1[self.indices]
+        S2 = S1[np.ix_(indices, indices)]
+        S21 = S1[indices]
         #s2_inv = np.linalg.inv(s2)
         #p_21 = np.dot(s2_inv, s21)
         # Better: solve with Cholesky decomposition
@@ -423,6 +437,48 @@ class Cluster:
 
         return C, nbath
 
+    def analyze_orbitals(self, orbitals=None, sort=True):
+        if orbitals is None:
+            orbitals = self.orbitals
+
+        active_spaces = ["local", "dmet-bath", "occ-bath", "vir-bath"]
+        frozen_spaces = ["occ-env", "vir-env"]
+        spaces = [active_spaces, frozen_spaces, *active_spaces, *frozen_spaces]
+        chis = np.zeros((self.mol.nao_nr(), len(spaces)))
+
+        # Calculate chi
+        for ao in range(self.mol.nao_nr()):
+            S = self.mf.get_ovlp()
+            S121 = 1/S[ao,ao] * np.outer(S[:,ao], S[:,ao])
+            for ispace, space in enumerate(spaces):
+                C = orbitals.get_coeff(space)
+                SC = np.dot(S121, C)
+                chi = np.sum(SC[ao]**2)
+                chis[ao,ispace] = chi
+
+        ao_labels = np.asarray(self.mol.ao_labels(None))
+        if sort:
+            sort = np.argsort(-np.around(chis[:,0], 3), kind="mergesort")
+            ao_labels = ao_labels[sort]
+            chis2 = chis[sort]
+        else:
+            chis2 = chis
+
+        # Output
+        log.info("Orbitals of cluster %s", self.name)
+        log.info("===================="+len(self.name)*"=")
+        log.info(("%18s" + " " + len(spaces)*"  %9s"), "Atomic orbital", "Active", "Frozen", "Local", "DMET bath", "Occ. bath", "Vir. bath", "Occ. env.", "Vir. env")
+        log.info((18*"-" + " " + len(spaces)*("  "+(9*"-"))))
+        for ao in range(self.mol.nao_nr()):
+            line = "[%3s %3s %2s %-5s]:" % tuple(ao_labels[ao])
+            for ispace, space in enumerate(spaces):
+                line += "  %9.3g" % chis2[ao,ispace]
+            log.info(line)
+
+        # Active chis
+        return chis[:,0]
+
+
     def run_solver(self, solver=None, max_power=0, pertT=False, diagonalize_fock=True, cc_verbose=4,
             ref_orbitals=None):
 
@@ -430,7 +486,10 @@ class Cluster:
 
         if solver is None:
             self.e_corr = 0.0
-            self.e_corr_alt = 0.0
+            self.e_corr_v = 0.0
+            self.e_corr_var = 0.0
+            self.e_corr_var2 = 0.0
+            self.e_corr_var3 = 0.0
             return 1
 
         ref_orbitals = ref_orbitals or self.ref_orbitals
@@ -445,6 +504,23 @@ class Cluster:
         orbitals.define_space("dmet-bath", np.s_[len(self):ncl])
         orbitals.define_space("occ-env", np.s_[ncl:ncl+nenvocc])
         orbitals.define_space("vir-env", np.s_[ncl+nenvocc:])
+
+        ## Find excitation space [experimental]
+        ##Cv_hf = self.hf.mo_coeff[:,self.hf.mo_occ==0]
+        ##p_vir = np.dot(Cv_hf.T, Cv_hf)
+        #s121 = self.make_projector_s121()
+        ##csc = np.linalg.multi_dot((C[:,ncl:].T, s121, self.mf.mo_coeff[:,self.mf.mo_occ==0]))
+        ##p = np.dot(csc, csc.T)
+        #Cv = orbitals.get_coeff("vir-env")
+        #print(Cv[ncl:,0])
+        #S = self.mf.get_ovlp()
+        #print(np.linalg.multi_dot((S, s121, Cv))[ncl:,0])
+        #p = np.linalg.multi_dot((Cv.T, s121, Cv))
+        #e, v = np.linalg.eigh(p)
+        #log.debug("eigenvalues:\n%s", e)
+
+        #1/0
+
 
         # Use previous orbitals
         if ref_orbitals and self.use_ref_orbitals_bath:
@@ -468,6 +544,8 @@ class Cluster:
                 log.debug("Eigenvalues of %d projected virtual bath orbitals:\n%s",
                         nbathvir, eig[:nbathvir])
                 log.debug("Next 3 eigenvalues: %s", eig[nbathvir:nbathvir+3])
+
+
 
         # Add additional power bath orbitals
         else:
@@ -520,6 +598,9 @@ class Cluster:
         orbitals.define_space("vir-env", np.s_[ncl+nbathocc+nbathvir+nenvocc:])
         self.orbitals = orbitals
 
+        # TEST
+        chi = self.analyze_orbitals(orbitals)
+
         # Diagonalize cluster DM (Necessary for CCSD)
         S = self.mf.get_ovlp()
         SDS_hf = np.linalg.multi_dot((S, self.mf.make_rdm1(), S))
@@ -562,7 +643,10 @@ class Cluster:
         if len(self) == 1 and nbath == 0:
             self.e_corr = 0.0
             self.e_corr_full = 0.0
-            self.e_corr_alt = 0.0
+            self.e_corr_v = 0.0
+            self.e_corr_var = 0.0
+            self.e_corr_var2 = 0.0
+            self.e_corr_var3 = 0.0
             self.converged = True
             return 1
 
@@ -586,7 +670,7 @@ class Cluster:
         if pbc:
             log.debug("\"A matrix\" found. Switching to pbc code.")
 
-        # Do not calculate correlation energy
+        t0 = MPI.Wtime()
         if solver == "CCSD":
             if pbc:
                 ccsd = pyscf.pbc.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
@@ -599,6 +683,43 @@ class Cluster:
             log.debug("CCSD done. converged: %r", ccsd.converged)
             C1 = ccsd.t1
             C2 = ccsd.t2 + einsum('ia,jb->ijab', ccsd.t1, ccsd.t1)
+
+            # TESTING
+            if self.benchmark is not None:
+                a = ccsd.get_frozen_mask()
+                C = ccsd.mo_coeff[:,a]
+                o = ccsd.mo_occ[a] > 0
+                v = ccsd.mo_occ[a] == 0
+                Co = C[:,o]
+                Cv = C[:,v]
+
+                T2 = einsum("pi,qj,ijab,sa,tb->pqst", Co, Co, ccsd.t2, Cv, Cv)
+                ref = self.benchmark
+
+                a2 = ref.get_frozen_mask()
+                Cb = ref.mo_coeff[:,a2]
+                o2 = ref.mo_occ[a2] > 0
+                v2 = ref.mo_occ[a2] == 0
+                Co2 = Cb[:,o2]
+                Cv2 = Cb[:,v2]
+
+                T2_ref = einsum("pi,qj,ijab,sa,tb->pqst", Co2, Co2, ref.t2, Cv2, Cv2)
+
+                #norm_tot = np.linalg.norm(T2 - T2_ref)
+                #l = np.s_[:len(self)]
+                #norm_tot = np.linalg.norm(T2[l,l,l,l] - T2_ref[l,l,l,l])
+
+                delta = T2 - T2_ref
+                # Relative error
+                #delta = delta / (abs(T2_ref)+1e-14)
+                delta = np.linalg.norm(T2 - T2_ref, axis=(2,3))
+                delta = delta / np.linalg.norm(T2_ref, axis=(2,3))
+
+                #omega = einsum("a,b,c,d->abcd", chi, chi, chi, chi)
+                #omega = einsum("a,b,c,d->abcd", chi, chi, np.ones_like(chi), np.ones_like(chi))
+                omega = einsum("a,b->ab", chi, chi)
+
+                np.savetxt("omega-vs-T-cluster-%s" % self.name, np.vstack((omega.flatten(), delta.flatten())).T)
 
             self.converged = ccsd.converged
             self.e_corr_full = ccsd.e_corr
@@ -639,8 +760,10 @@ class Cluster:
 
         else:
             raise ValueError("Unknown solver: %s" % solver)
+        log.debug("Wall time for solver: %s", get_time_string(MPI.Wtime()-t0))
 
         log.debug("Calculating local energy...")
+        t0 = MPI.Wtime()
 
         if solver == "CCSD":
             #self.e_ccsd, self.e_pt = self.get_local_energy_old(ccsd, pertT=pertT)
@@ -649,17 +772,25 @@ class Cluster:
             #self.e_ccsd_z = self.get_local_energy_most_indices(ccsd)
 
             self.e_ccsd = self.get_local_energy(ccsd, C1, C2)
+
+            # TEST:
+            self.e_corr_var = self.get_local_energy(ccsd, C1, C2, project_var="left")
+            self.e_corr_var2 = self.get_local_energy(ccsd, C1, C2, project_var="center")
+
             self.e_ccsd_v = self.get_local_energy(ccsd, C1, C2, "virtual")
 
 
             self.e_corr = self.e_ccsd
 
+            self.e_corr_v = self.e_ccsd_v
+
             # TESTING
             #self.get_local_energy_parts(ccsd, C1, C2)
 
             # TEMP
-            self.e_corr_alt = self.get_local_energy_most_indices(ccsd, C1, C2)
-
+            #self.e_corr_var = self.get_local_energy_most_indices(ccsd, C1, C2)
+            #self.e_corr_var2 = self.get_local_energy_most_indices(ccsd, C1, C2, variant=2)
+            self.e_corr_var3 = self.get_local_energy_most_indices(ccsd, C1, C2, variant=3)
 
             # CCSD energy of whole cluster
             #self.e_cl_ccsd = ccsd.e_corr
@@ -676,87 +807,88 @@ class Cluster:
             #self.e_corr_alt = self.get_local_energy_most_indices(cisd, C1, C2)
 
         log.debug("Calculating local energy done.")
+        log.debug("Wall time for local energy: %s", get_time_string(MPI.Wtime()-t0))
 
         return int(self.converged)
 
-    def get_local_energy_parts(self, cc, C1, C2):
+    #def get_local_energy_parts(self, cc, C1, C2):
 
-        a = cc.get_frozen_mask()
-        # Projector to local, occupied region
-        S = self.mf.get_ovlp()
-        C = cc.mo_coeff[:,a]
-        CTS = np.dot(C.T, S)
+    #    a = cc.get_frozen_mask()
+    #    # Projector to local, occupied region
+    #    S = self.mf.get_ovlp()
+    #    C = cc.mo_coeff[:,a]
+    #    CTS = np.dot(C.T, S)
 
-        # Project one index of T amplitudes
-        l= self.indices
-        r = self.not_indices
-        o = cc.mo_occ[a] > 0
-        v = cc.mo_occ[a] == 0
+    #    # Project one index of T amplitudes
+    #    l= self.indices
+    #    r = self.not_indices
+    #    o = cc.mo_occ[a] > 0
+    #    v = cc.mo_occ[a] == 0
 
-        eris = cc.ao2mo()
+    #    eris = cc.ao2mo()
 
-        def get_projectors(aos):
-            Po = np.dot(CTS[o][:,aos], C[aos][:,o])
-            Pv = np.dot(CTS[v][:,aos], C[aos][:,v])
-            return Po, Pv
+    #    def get_projectors(aos):
+    #        Po = np.dot(CTS[o][:,aos], C[aos][:,o])
+    #        Pv = np.dot(CTS[v][:,aos], C[aos][:,v])
+    #        return Po, Pv
 
-        Lo, Lv = get_projectors(l)
-        Ro, Rv = get_projectors(r)
+    #    Lo, Lv = get_projectors(l)
+    #    Ro, Rv = get_projectors(r)
 
-        # Nomenclature:
-        # old occupied: i,j
-        # old virtual: a,b
-        # new occupied: p,q
-        # new virtual: s,t
-        T1_ll = einsum("pi,ia,sa->ps", Lo, C1, Lv)
-        T1_lr = einsum("pi,ia,sa->ps", Lo, C1, Rv)
-        T1_rl = einsum("pi,ia,sa->ps", Ro, C1, Lv)
-        T1 = T1_ll + (T1_lr + T1_rl)/2
+    #    # Nomenclature:
+    #    # old occupied: i,j
+    #    # old virtual: a,b
+    #    # new occupied: p,q
+    #    # new virtual: s,t
+    #    T1_ll = einsum("pi,ia,sa->ps", Lo, C1, Lv)
+    #    T1_lr = einsum("pi,ia,sa->ps", Lo, C1, Rv)
+    #    T1_rl = einsum("pi,ia,sa->ps", Ro, C1, Lv)
+    #    T1 = T1_ll + (T1_lr + T1_rl)/2
 
-        F = eris.fock[o][:,v]
-        e1 = 2*np.sum(F * T1)
-        if not np.isclose(e1, 0):
-            log.warning("Warning: large E1 component: %.8e" % e1)
+    #    F = eris.fock[o][:,v]
+    #    e1 = 2*np.sum(F * T1)
+    #    if not np.isclose(e1, 0):
+    #        log.warning("Warning: large E1 component: %.8e" % e1)
 
-        #tau = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
-        def project_T2(P1, P2, P3, P4):
-            T2p = einsum("pi,qj,ijab,sa,tb->pqst", P1, P2, C2, P3, P4)
-            return T2p
+    #    #tau = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
+    #    def project_T2(P1, P2, P3, P4):
+    #        T2p = einsum("pi,qj,ijab,sa,tb->pqst", P1, P2, C2, P3, P4)
+    #        return T2p
 
 
-        def epart(P1, P2, P3, P4):
-            T2_part = project_T2(P1, P2, P3, P4)
-            e_part = (2*einsum('ijab,iabj', T2_part, eris.ovvo)
-                  - einsum('ijab,jabi', T2_part, eris.ovvo))
-            return e_part
+    #    def epart(P1, P2, P3, P4):
+    #        T2_part = project_T2(P1, P2, P3, P4)
+    #        e_part = (2*einsum('ijab,iabj', T2_part, eris.ovvo)
+    #              - einsum('ijab,jabi', T2_part, eris.ovvo))
+    #        return e_part
 
-        energies = []
-        # 4
-        energies.append(epart(Lo, Lo, Lv, Lv))
-        # 3
-        energies.append(2*epart(Lo, Lo, Lv, Rv))
-        energies.append(2*epart(Lo, Ro, Lv, Lv))
-        assert np.isclose(epart(Lo, Lo, Rv, Lv), epart(Lo, Lo, Lv, Rv))
-        assert np.isclose(epart(Ro, Lo, Lv, Lv), epart(Lo, Ro, Lv, Lv))
+    #    energies = []
+    #    # 4
+    #    energies.append(epart(Lo, Lo, Lv, Lv))
+    #    # 3
+    #    energies.append(2*epart(Lo, Lo, Lv, Rv))
+    #    energies.append(2*epart(Lo, Ro, Lv, Lv))
+    #    assert np.isclose(epart(Lo, Lo, Rv, Lv), epart(Lo, Lo, Lv, Rv))
+    #    assert np.isclose(epart(Ro, Lo, Lv, Lv), epart(Lo, Ro, Lv, Lv))
 
-        energies.append(  epart(Lo, Lo, Rv, Rv))
-        energies.append(2*epart(Lo, Ro, Lv, Rv))
-        energies.append(2*epart(Lo, Ro, Rv, Lv))
-        energies.append(  epart(Ro, Ro, Lv, Lv))
+    #    energies.append(  epart(Lo, Lo, Rv, Rv))
+    #    energies.append(2*epart(Lo, Ro, Lv, Rv))
+    #    energies.append(2*epart(Lo, Ro, Rv, Lv))
+    #    energies.append(  epart(Ro, Ro, Lv, Lv))
 
-        energies.append(2*epart(Lo, Ro, Rv, Rv))
-        energies.append(2*epart(Ro, Ro, Lv, Rv))
-        assert np.isclose(epart(Ro, Lo, Rv, Rv), epart(Lo, Ro, Rv, Rv))
-        assert np.isclose(epart(Ro, Ro, Rv, Lv), epart(Ro, Ro, Lv, Rv))
+    #    energies.append(2*epart(Lo, Ro, Rv, Rv))
+    #    energies.append(2*epart(Ro, Ro, Lv, Rv))
+    #    assert np.isclose(epart(Ro, Lo, Rv, Rv), epart(Lo, Ro, Rv, Rv))
+    #    assert np.isclose(epart(Ro, Ro, Rv, Lv), epart(Ro, Ro, Lv, Rv))
 
-        energies.append(  epart(Ro, Ro, Rv, Rv))
+    #    energies.append(  epart(Ro, Ro, Rv, Rv))
 
-        #e4 = e_aaaa
-        #e3 = e_aaab + e_aaba + e_abaa + e_baaa
-        #e2 = 0.5*(e_aabb + e_abab + e_abba + e_bbaa)
+    #    #e4 = e_aaaa
+    #    #e3 = e_aaab + e_aaba + e_abaa + e_baaa
+    #    #e2 = 0.5*(e_aabb + e_abab + e_abba + e_bbaa)
 
-        with open("energy-parts.txt", "a") as f:
-            f.write((10*"  %16.8e" + "\n") % tuple(energies))
+    #    with open("energy-parts.txt", "a") as f:
+    #        f.write((10*"  %16.8e" + "\n") % tuple(energies))
 
     def get_local_energy_most_indices_2C(self, cc, C1, C2):
 
@@ -822,7 +954,7 @@ class Cluster:
 
         return e_loc
 
-    def get_local_energy_most_indices(self, cc, C1, C2):
+    def get_local_energy_most_indices(self, cc, C1, C2, variant=1):
 
         a = cc.get_frozen_mask()
         # Projector to local, occupied region
@@ -846,205 +978,154 @@ class Cluster:
         Lo, Lv = get_projectors(l)
         Ro, Rv = get_projectors(r)
 
-        # Nomenclature:
-        # old occupied: i,j
-        # old virtual: a,b
-        # new occupied: p,q
-        # new virtual: s,t
-        T1_ll = einsum("pi,ia,sa->ps", Lo, C1, Lv)
-        T1_lr = einsum("pi,ia,sa->ps", Lo, C1, Rv)
-        T1_rl = einsum("pi,ia,sa->ps", Ro, C1, Lv)
-        T1 = T1_ll + (T1_lr + T1_rl)/2
+        # ONE-ELECTRON
+        # ============
+        pC1 = einsum("pi,ia,sa->ps", Lo, C1, Lv)
+        pC1 += 0.5*einsum("pi,ia,sa->ps", Lo, C1, Rv)
+        pC1 += 0.5*einsum("pi,ia,sa->ps", Ro, C1, Lv)
 
         F = eris.fock[o][:,v]
-        e1 = 2*np.sum(F * T1)
+        e1 = 2*np.sum(F * pC1)
         if not np.isclose(e1, 0):
             log.warning("Warning: large E1 component: %.8e" % e1)
 
-        #tau = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
-        def project_T2(P1, P2, P3, P4):
-            T2p = einsum("pi,qj,ijab,sa,tb->pqst", P1, P2, C2, P3, P4)
-            return T2p
+        # TWO-ELECTRON
+        # ============
 
-        def project_C2(P1=None, P2=None, P3=None, P4=None):
-            pC2 = C2
-            if P1 is not None:
-                pC2 = einsum("xi,ijab->xjab", P1, pC2)
-            if P2 is not None:
-                pC2 = einsum("xj,ijab->ixab", P2, pC2)
-            if P3 is not None:
-                pC2 = einsum("xa,ijab->ijxb", P3, pC2)
-            if P4 is not None:
-                pC2 = einsum("xb,ijab->ijax", P4, pC2)
+        def project_C2_P1(P1):
+            pC2 = einsum("pi,ijab->pjab", P1, C2)
             return pC2
 
-        assert np.allclose(project_T2(Lo, Lo, Lv, Rv) + project_T2(Lo, Lo, Lv, Lv), project_C2(Lo, Lo, Lv))
+        def project_C2(P1, P2, P3, P4):
+            pC2 = einsum("pi,qj,ijab,sa,tb->pqst", P1, P2, C2, P3, P4)
+            return pC2
 
-        t0 = MPI.Wtime()
-        T2_4 = project_T2(Lo, Lo, Lv, Lv)
-        e2_4 = (2*einsum('ijab,iabj', T2_4, eris.ovvo)
-                 -einsum('ijab,jabi', T2_4, eris.ovvo))
+        if variant == 1:
 
-        T2_3 = (2*project_T2(Lo, Lo, Lv, Rv)
-               +2*project_T2(Ro, Lo, Lv, Lv))
-        e2_3 = (2*einsum('ijab,iabj', T2_3, eris.ovvo)
-                 -einsum('ijab,jabi', T2_3, eris.ovvo))
+            # QUADRUPLE L
+            # ===========
+            pC2 = project_C2(Lo, Lo, Lv, Lv)
 
-        e2_1 = 0.0
-        e2_211 = 0.0
-        e2_22 = 0.0
+            # TRIPEL L
+            # ========
+            pC2 += 2*project_C2(Lo, Lo, Lv, Rv)
+            pC2 += 2*project_C2(Lo, Ro, Lv, Lv)
 
-        # Loop over other fragments
-        for x, cx in enumerate(self.base.clusters):
-            if cx == self:
-                continue
-            # These should be democratic between L and X (factor=0.5)
-            Xo, Xv = get_projectors(cx.indices)
-            T2_2l2x = 0.5*(project_T2(Lo, Lo, Xv, Xv)
-                         + project_T2(Lo, Xo, Lv, Xv)
-                         + project_T2(Lo, Xo, Xv, Lv)
-                         + project_T2(Xo, Lo, Lv, Xv)
-                         + project_T2(Xo, Lo, Xv, Lv)
-                         + project_T2(Xo, Xo, Lv, Lv))
-            e2_22 += 2*einsum('ijab,iabj', T2_2l2x, eris.ovvo)
-            e2_22 -=   einsum('ijab,jabi', T2_2l2x, eris.ovvo)
+            # DOUBLE L
+            # ========
+            # P(LLRR) [This wrongly includes: P(LLAA) - correction below]
+            pC2 +=   project_C2(Lo, Lo, Rv, Rv)
+            pC2 += 2*project_C2(Lo, Ro, Lv, Rv)
+            pC2 += 2*project_C2(Lo, Ro, Rv, Lv)
+            pC2 +=   project_C2(Ro, Ro, Lv, Lv)
 
-            for y, cy in enumerate(self.base.clusters):
-                if (cy == self) or (cy == cx):
-                    continue
-                # These should contribute to L
-                # (we can neglect the interchange x <-> y, since both x and y are unrestricted (except x != y)
-                Yo, Yv = get_projectors(cy.indices)
-                T2_2lxy = (project_T2(Lo, Lo, Xv, Yv)
-                         + project_T2(Lo, Xo, Lv, Yv)
-                         + project_T2(Lo, Xo, Yv, Lv)
-                         + project_T2(Xo, Lo, Lv, Yv)
-                         + project_T2(Xo, Lo, Yv, Lv)
-                         + project_T2(Xo, Yo, Lv, Lv))
-                e2_211 += 2*einsum('ijab,iabj', T2_2lxy, eris.ovvo)
-                e2_211 -=   einsum('ijab,jabi', T2_2lxy, eris.ovvo)
+            # SINGLE L
+            # ========
+            # P(LRRR) [This wrongly includes: P(LAAR) - correction below]
+            four_idx_from_occ = False
 
-                for z, cz in enumerate(self.base.clusters):
-                    if (cz == self) or (cz == cx) or (cz == cy):
-                        continue
-                    # We can neglect interchange between x, y, z (see above)
-                    Zo, Zv = get_projectors(cz.indices)
-                    T2_lxyz = 0.25*(project_T2(Lo, Xo, Yv, Zv)
-                                  + project_T2(Xo, Lo, Yv, Zv)
-                                  + project_T2(Xo, Yo, Lv, Zv)
-                                  + project_T2(Xo, Yo, Zv, Lv))
-                    e2_1 += 2*einsum('ijab,iabj', T2_lxyz, eris.ovvo)
-                    e2_1 -=   einsum('ijab,jabi', T2_lxyz, eris.ovvo)
-        time_old = MPI.Wtime() - t0
+            if not four_idx_from_occ:
+                pC2 += 0.25*2*project_C2(Lo, Ro, Rv, Rv)
+                pC2 += 0.25*2*project_C2(Ro, Ro, Lv, Rv)
+            else:
+                pC2 += 0.5*2*project_C2(Lo, Ro, Rv, Rv)
+
+            # CORRECTIONS
+            # ===========
+            for x in self.loop_clusters(exclude_self=True):
+                Xo, Xv = get_projectors(x.indices)
+
+                # DOUBLE CORRECTION
+                # -----------------
+                # Correct for wrong inclusion of P(LLAA)
+                # The case P(LLAA) was included with prefactor of 1 instead of 1/2
+                # We thus need to only correct by "-1/2"
+                pC2 -= 0.5*  project_C2(Lo, Lo, Xv, Xv)
+                pC2 -= 0.5*2*project_C2(Lo, Xo, Lv, Xv)
+                pC2 -= 0.5*2*project_C2(Lo, Xo, Xv, Lv)
+                pC2 -= 0.5*  project_C2(Xo, Xo, Lv, Lv)
+
+                # SINGLE CORRECTION
+                # -----------------
+                # Correct for wrong inclusion of P(LAAR)
+                # This corrects the case P(LAAB) but overcorrects P(LAAA)!
+                if not four_idx_from_occ:
+                    pC2 -= 0.25*2*project_C2(Lo, Xo, Xv, Rv)
+                    pC2 -= 0.25*2*project_C2(Lo, Xo, Rv, Xv) # If R == X this is the same as above -> overcorrection
+                    pC2 -= 0.25*2*project_C2(Lo, Ro, Xv, Xv) # overcorrection
+                    pC2 -= 0.25*2*project_C2(Xo, Xo, Lv, Rv)
+                    pC2 -= 0.25*2*project_C2(Xo, Ro, Lv, Xv) # overcorrection
+                    pC2 -= 0.25*2*project_C2(Ro, Xo, Lv, Xv) # overcorrection
+
+                    # Correct overcorrection
+                    pC2 += 0.25*2*2*project_C2(Lo, Xo, Xv, Xv)
+                    pC2 += 0.25*2*2*project_C2(Xo, Xo, Lv, Xv)
+
+                else:
+                    pC2 -= 0.5*2*project_C2(Lo, Xo, Xv, Rv)
+                    pC2 -= 0.5*2*project_C2(Lo, Xo, Rv, Xv) # If R == X this is the same as above -> overcorrection
+                    pC2 -= 0.5*2*project_C2(Lo, Ro, Xv, Xv) # overcorrection
+
+                    # Correct overcorrection
+                    pC2 += 0.5*2*2*project_C2(Lo, Xo, Xv, Xv)
+
+            e2 = (2*einsum('ijab,iabj', pC2, eris.ovvo)
+                   -einsum('ijab,jabi', pC2, eris.ovvo))
+
+        elif variant == 2:
+            # QUADRUPLE L
+            # ===========
+            pC2 = project_C2(Lo, Lo, Lv, Lv)
+
+            # TRIPEL L
+            # ========
+            pC2 += 2*project_C2(Lo, Lo, Lv, Rv)
+            pC2 += 2*project_C2(Lo, Ro, Lv, Lv)
+
+            # DOUBLE L
+            # ========
+            pC2 +=   project_C2(Lo, Lo, Rv, Rv)
+            pC2 +=   2*project_C2(Lo, Ro, Lv, Rv)
+            pC2 +=   2*project_C2(Lo, Ro, Rv, Lv)
+            for x in self.loop_clusters(exclude_self=True):
+                Xo, Xv = get_projectors(x.indices)
+                pC2 -= project_C2(Lo, Xo, Lv, Xv)
+                pC2 -= project_C2(Lo, Xo, Xv, Lv)
+
+            # SINGLE L
+            # ========
+
+            # This wrongly includes LXXX
+            pC2 += 0.5*2*project_C2(Lo, Ro, Rv, Rv)
+            for x in self.loop_clusters(exclude_self=True):
+                Xo, Xv = get_projectors(x.indices)
+
+                pC2 -= 0.5*2*project_C2(Lo, Xo, Rv, Xv)
+                pC2 -= 0.5*2*project_C2(Lo, Xo, Xv, Rv)
+
+                pC2 += 0.5*2*project_C2(Lo, Xo, Xv, Xv)
+
+            e2 = (2*einsum('ijab,iabj', pC2, eris.ovvo)
+                   -einsum('ijab,jabi', pC2, eris.ovvo))
+
+        elif variant == 3:
+            # QUADRUPLE + TRIPLE L
+            # ====================
+            pC2 = project_C2_P1(Lo)
+            pC2 += project_C2(Ro, Lo, Lv, Lv)
+            for x in self.loop_clusters(exclude_self=True):
+                Xo, Xv = get_projectors(x.indices)
+                pC2 -= project_C2(Lo, Xo, Xv, Xv)
+
+            e2 = (2*einsum('ijab,iabj', pC2, eris.ovvo)
+                   -einsum('ijab,jabi', pC2, eris.ovvo))
 
 
-
-        e2 = e2_4 + e2_3 + e2_211 + e2_22 + e2_1
         e_loc = e1 + e2
-
-        ### ABCD
-        ##T2 = 0.25*(2*project_C2(P1=Lo)
-        ##         + 2*project_C2(P3=Lv))
-        ### Correct AABC
-        ##T2 += 0.75*(project_C2(P1=Lo, P2=Lo)
-        ##        + 2*project_C2(P1=Lo, P3=Lv)
-        ##        + 2*project_C2(P1=Lo, P4=Lv)
-        ##        +   project_C2(P3=Lv, P4=Lv))
-        ### Correct AABB
-        ##for x, cx in enumerate(self.base.clusters):
-        ##    Xo, Xv = get_projectors(cx.indices)
-        ##    T2 += -0.5*(project_C2(P1=Lo, P2=Lo, P3=Xv, P4=Xv)
-        ##            + 2*project_C2(P1=Lo, P2=Xo, P3=Lv, P4=Xv)
-        ##            + 2*project_C2(P1=Lo, P2=Xo, P3=Xv, P4=Lv)
-        ##              + project_C2(P1=Xo, P2=Xo, P3=Lv, P4=Lv))
-        ### Correct AAAB (already correct?)
-        ###T2 += 0.75*(2*project_C2(P1=Lo, P2=Lo, P3=Lv)
-        ###           +2*project_C2(P2=Lo, P3=Lo, P4=Lv))
-        ### Correct AAAA
-        ##T2 += 1.0*project_C2(P1=Lo, P2=Lo, P3=Lv, P4=Lv)
-
-
-        # In the following:
-        # L = Local AO
-        # A,B,C = non-local AO, which cannot be equal, i.e. A != B != C
-        # X = Variable for arbitrary non-local, i.e. A, B, or C
-        # R = All non-local (union of A, B, C, ...)
-        # P(...) means all possible permutations of ...
-        # Factors of 2 are due to (abcd == badc) symmetry
-
-        t0 = MPI.Wtime()
-
-        # QUADRUPLE L
-        # ===========
-        T2 = project_C2(P1=Lo, P2=Lo, P3=Lv, P4=Lv)
-
-        # TRIPEL L
-        # ========
-        T2 += 2*project_C2(P1=Lo, P2=Lo, P3=Lv, P4=Rv)
-        T2 += 2*project_C2(P1=Lo, P2=Ro, P3=Lv, P4=Lv)
-
-        # DOUBLE L
-        # ========
-        # P(LLRR) [This wrongly includes: P(LLAA)]
-        T2 +=   project_C2(P1=Lo, P2=Lo, P3=Rv, P4=Rv)
-        T2 += 2*project_C2(P1=Lo, P2=Ro, P3=Lv, P4=Rv)
-        T2 += 2*project_C2(P1=Lo, P2=Ro, P3=Rv, P4=Lv)
-        T2 +=   project_C2(P1=Ro, P2=Ro, P3=Lv, P4=Lv)
-
-        # SINGLE L
-        # ========
-        # P(LRRR) [This wrongly includes: P(LAAR)]
-        T2 += 0.25*2*project_C2(P1=Lo, P2=Ro, P3=Rv, P4=Rv)
-        T2 += 0.25*2*project_C2(P1=Ro, P2=Ro, P3=Lv, P4=Rv)
-
-        #for x, cx in enumerate(self.base.clusters):
-        #    # Skip X=L
-        #    if cx == self:
-        #        continue
-        #for x in self.loop_clusters(exclude_self=True):
-        #    Xo, Xv = get_projectors(x.indices)
-
-        # CORRECTIONS
-        # ===========
-        for x in self.loop_clusters(exclude_self=True):
-            Xo, Xv = get_projectors(x.indices)
-
-            # DOUBLE CORRECTION
-            # -----------------
-            # Correct for wrong inclusion of P(LLAA)
-            # The case P(LLAA) was included with prefactor of 1 instead of 1/2
-            # We thus need to only correct by "-1/2"
-            T2 -= 0.5*  project_C2(P1=Lo, P2=Lo, P3=Xv, P4=Xv)
-            T2 -= 0.5*2*project_C2(P1=Lo, P2=Xo, P3=Lv, P4=Xv)
-            T2 -= 0.5*2*project_C2(P1=Lo, P2=Xo, P3=Xv, P4=Lv)
-            T2 -= 0.5*  project_C2(P1=Xo, P2=Xo, P3=Lv, P4=Lv)
-
-            # SINGLE CORRECTION
-            # -----------------
-            # Correct for wrong inclusion of P(LAAR)
-            # This corrects the case P(LAAB) but overcorrects P(LAAA)!
-            T2 -= 0.25*2*project_C2(Lo, Xo, Xv, Rv)
-            T2 -= 0.25*2*project_C2(Lo, Xo, Rv, Xv) # If R == X this is the same as above -> overcorrection
-            T2 -= 0.25*2*project_C2(Lo, Ro, Xv, Xv) # overcorrection
-            T2 -= 0.25*2*project_C2(Xo, Xo, Lv, Rv)
-            T2 -= 0.25*2*project_C2(Xo, Ro, Lv, Xv) # overcorrection
-            T2 -= 0.25*2*project_C2(Ro, Xo, Lv, Xv) # overcorrection
-
-            # Correct overcorrection
-            T2 += 0.25*2*2*project_C2(Lo, Xo, Xv, Xv)
-            T2 += 0.25*2*2*project_C2(Xo, Xo, Lv, Xv)
-
-        e2_new = (2*einsum('ijab,iabj', T2, eris.ovvo)
-                   -einsum('ijab,jabi', T2, eris.ovvo))
-        time_new = MPI.Wtime() - t0
-
-        log.debug("Alt E: %.10e vs %.10e", e2, e2_new)
-        log.debug("Times: %.3f s vs %.3f s", time_old, time_new)
-        assert np.isclose(e2, e2_new)
 
         return e_loc
 
-    def get_local_energy(self, cc, C1, C2, project="occupied"):
+    def get_local_energy(self, cc, C1, C2, project="occupied", project_var="right"):
 
         a = cc.get_frozen_mask()
         o = cc.mo_occ[a] > 0
@@ -1057,7 +1138,17 @@ class Cluster:
         l = self.indices
         r = self.not_indices
         if project == "occupied":
-            P = np.linalg.multi_dot((C[:,o].T, S[:,l], C[l][:,o]))
+            if project_var == "right":
+                P = np.linalg.multi_dot((C[:,o].T, S[:,l], C[l][:,o]))
+            elif project_var == "left":
+                P = np.linalg.multi_dot((C[l][:,o].T, S[l], C[:,o]))
+            elif project_var == "center":
+                import scipy
+                import scipy.linalg
+                s = scipy.linalg.fractional_matrix_power(S, 0.5)
+                assert np.allclose(np.dot(s, s), S)
+                P = np.linalg.multi_dot((C[:,o].T, s[:,l], s[l], C[:,o]))
+
             #S_121 = self.make_projector_s121()
             #P = np.linalg.multi_dot((C_cc[:,o].T, S_121, C_cc[:,o]))
             C1 = einsum("xi,ia->xa", P, C1)
@@ -1087,7 +1178,7 @@ class Cluster:
 class EmbCC:
 
     def __init__(self, mf, solver="CCSD", bath_type=None, tol_bath=1e-3, tol_dmet_bath=1e-8,
-            use_ref_orbitals_dmet=True, use_ref_orbitals_bath=True):
+            use_ref_orbitals_dmet=True, use_ref_orbitals_bath=True, benchmark=None):
         self.mf = mf
 
         if solver not in (None, "CISD", "CCSD", "FCI"):
@@ -1100,6 +1191,9 @@ class EmbCC:
         self.tol_dmet_bath = tol_dmet_bath
         self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
         self.use_ref_orbitals_bath = use_ref_orbitals_bath
+
+        # For testing
+        self.benchmark = benchmark
 
         self.clusters = []
 
@@ -1116,6 +1210,8 @@ class EmbCC:
         kwargs["use_ref_orbitals_bath"] = kwargs.get("use_ref_orbitals_bath", self.use_ref_orbitals_bath)
 
         cluster = Cluster(self, name, ao_indices, **kwargs)
+        # For testing
+        cluster.benchmark = self.benchmark
         return cluster
 
     def make_atom_clusters(self, **kwargs):
@@ -1307,8 +1403,7 @@ class EmbCC:
             self.print_cluster_results()
 
         MPI_comm.Barrier()
-        wtime = MPI.Wtime() - t_start
-        log.info("Total wall time for EmbCCSD: %.0f min %.2g s", *divmod(wtime, 60.0))
+        log.info("Total wall time for EmbCCSD: %s", get_time_string(MPI.Wtime()-t_start))
 
         return all_conv
 
@@ -1329,7 +1424,10 @@ class EmbCC:
 
         e_corr = mpi_reduce("e_corr")
         e_corr_full = mpi_reduce("e_corr_full")
-        e_corr_alt = mpi_reduce("e_corr_alt")
+        e_corr_v = mpi_reduce("e_corr_v")
+        e_corr_var = mpi_reduce("e_corr_var")
+        e_corr_var2 = mpi_reduce("e_corr_var2")
+        e_corr_var3 = mpi_reduce("e_corr_var3")
 
         #e_ccsd = mpi_reduce("e_ccsd")
         #e_pt = mpi_reduce("e_pt")
@@ -1366,16 +1464,25 @@ class EmbCC:
                 #c.e_ccsd_z = e_ccsd_z[cidx]
 
                 c.e_corr_full = e_corr_full[cidx]
-                c.e_corr_alt = e_corr_alt[cidx]
+                c.e_corr_v = e_corr_v[cidx]
+                c.e_corr_var = e_corr_var[cidx]
+                c.e_corr_var2 = e_corr_var2[cidx]
+                c.e_corr_var3 = e_corr_var3[cidx]
 
             #self.e_ccsd = sum(e_ccsd)
             self.e_corr = sum(e_corr)
-            self.e_corr_alt = sum(e_corr_alt)
+            self.e_corr_v = sum(e_corr_v)
+            self.e_corr_var = sum(e_corr_var)
+            self.e_corr_var2 = sum(e_corr_var2)
+            self.e_corr_var3 = sum(e_corr_var3)
             #self.e_pt = sum(e_pt)
 
             #self.e_corr = self.e_ccsd + self.e_pt
             self.e_tot = self.mf.e_tot + self.e_corr
-            self.e_tot_alt = self.mf.e_tot + self.e_corr_alt
+            self.e_tot_v = self.mf.e_tot + self.e_corr_v
+            self.e_tot_var = self.mf.e_tot + self.e_corr_var
+            self.e_tot_var2 = self.mf.e_tot + self.e_corr_var2
+            self.e_tot_var3 = self.mf.e_tot + self.e_corr_var3
 
             #self.e_ccsd_v = sum(e_ccsd_v)
             #self.e_ccsd_w = sum(e_ccsd_w)
@@ -1429,7 +1536,7 @@ class EmbCC:
 
     def print_cluster_results(self):
         log.info("Energy contributions per cluster")
-        log.info("------------------------0-------")
+        log.info("--------------------------------")
         # Name solver nactive (local, dmet bath, add bath) nfrozen E_corr_full E_corr
         linefmt = "%10s  %6s  %3d (%3d,%3d,%3d)  %3d: Full=%16.8g Eh Local=%16.8g Eh"
         totalfmt = "Total=%16.8g Eh"

@@ -7,6 +7,7 @@ from pyscf import gto
 __all__ = [
         "build_dimer",
         "build_ring",
+        "build_methane",
         "build_ethanol",
         "build_ketene",
         "build_biphenyl",
@@ -51,6 +52,22 @@ def build_ring(d, atoms, **kwargs):
             atom=atom,
             **kwargs)
     return mol
+
+def build_methane(dCH=1.087, **kwargs):
+    x = 1/np.sqrt(3) * dCH
+    atom = [
+    ("C1", (0.0, 0.0, 0.0)),
+    ("H2", (x, x, x)),
+    ("H3", (x, -x, -x)),
+    ("H4", (-x, x, -x)),
+    ("H5", (-x, -x, x))]
+
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
+
+
 
 def build_ethanol(dOH, **kwargs):
     atoms = ["C1", "C2", "H1", "H2", "H3", "H4", "H5", "H6", "O1"]
