@@ -386,6 +386,22 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(d1_diag, 0.012738043220198926, 6)
         self.assertAlmostEqual(d2_diag, 0.1169239107130769, 6)
 
+    def test_ao2mo(self):
+        mycc = ccsd.CCSD(mf)
+        numpy.random.seed(2)
+        mo = numpy.random.random(mf.mo_coeff.shape)
+        eri_incore = mycc.ao2mo(mo)
+        mycc.max_memory = 0
+        eri_outcore = mycc.ao2mo(mo)
+        self.assertTrue(isinstance(eri_outcore.oovv, h5py.Dataset))
+        self.assertAlmostEqual(abs(eri_incore.oooo - eri_outcore.oooo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.oovv - eri_outcore.oovv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovoo - eri_outcore.ovoo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovvo - eri_outcore.ovvo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovov - eri_outcore.ovov).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovvv - eri_outcore.ovvv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.vvvv - eri_outcore.vvvv).max(), 0, 12)
+
 if __name__ == "__main__":
     print("Full Tests for RCCSD")
     unittest.main()
