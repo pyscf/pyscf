@@ -1468,7 +1468,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
             buf, buf_prefetch = buf_prefetch, buf
-            prefetch(buf_prefetch, nocc+p0, nmo)
+            prefetch(buf_prefetch, nocc+p1, nmo)
 
             nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
