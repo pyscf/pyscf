@@ -19,6 +19,7 @@ import unittest
 import copy
 import numpy
 import numpy as np
+import h5py
 
 from pyscf import gto, lib
 from pyscf import scf, dft
