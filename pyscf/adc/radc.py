@@ -40,7 +40,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     adc.dump_flags()
 
     if eris is None:
-        eris = adc.transform_integrals(adc)
+        eris = adc.transform_integrals()
 
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
@@ -451,7 +451,6 @@ class RADC(lib.StreamObject):
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
-        self.transform_integrals = radc_ao2mo.transform_integrals_incore
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -459,6 +458,7 @@ class RADC(lib.StreamObject):
     
     compute_amplitudes = compute_amplitudes
     compute_energy = compute_energy
+    transform_integrals = radc_ao2mo.transform_integrals_incore
     
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -499,7 +499,7 @@ class RADC(lib.StreamObject):
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             eris = radc_ao2mo.transform_integrals_incore(self)
         else:
-            self.transform_integrals = radc_ao2mo.transform_integrals_outcore
+            transform_integrals = radc_ao2mo.transform_integrals_outcore
             eris = radc_ao2mo.transform_integrals_outcore(self)
 
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
@@ -531,7 +531,7 @@ class RADC(lib.StreamObject):
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             eris = radc_ao2mo.transform_integrals_incore(self)
         else:
-            self.transform_integrals = radc_ao2mo.transform_integrals_outcore
+            transform_integrals = radc_ao2mo.transform_integrals_outcore
             eris = radc_ao2mo.transform_integrals_outcore(self)
             
 
@@ -590,7 +590,7 @@ def get_imds_ea(adc, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.transform_integrals(adc)
+        eris = adc.transform_integrals()
 
     eris_ovov = eris.ovov
 
@@ -809,7 +809,7 @@ def get_imds_ip(adc, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.transform_integrals(adc)
+        eris = adc.transform_integrals()
 
     eris_ovov = eris.ovov
 
@@ -1023,7 +1023,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     if (method == "adc(2)-x" or method == "adc(3)"):
 
         if eris is None:
-            eris = adc.transform_integrals(adc)
+            eris = adc.transform_integrals()
 
             if not isinstance(eris.vvvv, list): 
 
@@ -1103,7 +1103,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     if (method == "adc(2)-x" or method == "adc(3)"):
 
         if eris is None:
-            eris = adc.transform_integrals(adc)
+            eris = adc.transform_integrals()
 
             if not isinstance(eris.vvvv, list): 
 
@@ -1143,16 +1143,16 @@ def ea_contract_r_vvvv(myadc,r2,eris):
     nocc = myadc._nocc
     nvir = myadc._nvir
 
-    r2_vvvv = np.zeros((nvir,nvir,nocc))
-    r2_T = r2.reshape(nocc,-1).T
+    r2_vvvv = np.zeros((nocc,nvir,nvir))
+    r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
     a = 0
     for dataset in eris.vvvv:
          k = dataset.shape[0]
          dataset = dataset[:].reshape(-1,nvir*nvir)
-         r2_vvvv[a:a+k] = np.dot(dataset,r2_T).reshape(-1,nvir,nocc)
+         r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
          a += k
 
-    r2_vvvv = np.ascontiguousarray(r2_vvvv.transpose(2,0,1)).reshape(-1)
+    r2_vvvv = r2_vvvv.reshape(-1)
 
     return r2_vvvv
 
@@ -1184,7 +1184,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.transform_integrals(adc)
+        eris = adc.transform_integrals()
 
     s1 = 0
     f1 = n_singles
@@ -1362,7 +1362,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.transform_integrals(adc)
+        eris = adc.transform_integrals()
 
     s1 = 0
     f1 = n_singles
@@ -1799,7 +1799,6 @@ class RADCEA(RADC):
         self.mo_coeff = adc.mo_coeff
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
-        self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -1894,7 +1893,6 @@ class RADCIP(RADC):
         self.mo_coeff = adc.mo_coeff
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
-        self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
