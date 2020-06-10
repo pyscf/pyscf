@@ -124,7 +124,7 @@ def transform_integrals_outcore(myadc):
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_occ_frac(p0, p1, dat)
-       #cput2 = log.timer_debug1('transforming oopp', *cput2) 
+        #cput2 = log.timer_debug1('transforming oopp', *cput2) 
 
         prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
@@ -144,30 +144,31 @@ def transform_integrals_outcore(myadc):
 
 ################## forming eris_vvvv ########################################
 
-    eris.vvvv = []
+    if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+        eris.vvvv = []
 
-    used_mem = (nmo**3) * 8/1e6 
-    avail_mem = myadc.max_memory - used_mem
-    vvv_mem = (nvir**3) * 8/1e6
+        used_mem = (nmo**3) * 8/1e6 
+        avail_mem = myadc.max_memory - used_mem
+        vvv_mem = (nvir**3) * 8/1e6
 
-    chnk_size =  int(avail_mem/vvv_mem)
+        chnk_size =  int(avail_mem/vvv_mem)
 
-    if chnk_size <= 0 :
-        chnk_size = 1
+        if chnk_size <= 0 :
+            chnk_size = 1
 
-    for p in range(0,vir.shape[1],chnk_size):
+        for p in range(0,vir.shape[1],chnk_size):
 
-        if chnk_size < vir.shape[1] :
-            orb_slice = vir[:, p:p+chnk_size]
-        else :
-            orb_slice = vir[:, p:]
+            if chnk_size < vir.shape[1] :
+                orb_slice = vir[:, p:p+chnk_size]
+            else :
+                orb_slice = vir[:, p:]
 
-        vvvv = ao2mo.general(myadc._scf._eri, (orb_slice, vir, vir, vir), compact=False)
-        vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
-        vvvv = vvvv.transpose(0,2,1,3).copy().reshape(-1,nvir, nvir * nvir)
-
-        vvvv_p = dataset(vvvv)
-        eris.vvvv.append(vvvv_p)
+            vvvv = ao2mo.general(myadc._scf._eri, (orb_slice, vir, vir, vir), compact=False)
+            vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
+            vvvv = vvvv.transpose(0,2,1,3).copy().reshape(-1, nvir, nvir * nvir)
+        
+            vvvv_p = dataset(vvvv)
+            eris.vvvv.append(vvvv_p)
 
     return eris
 

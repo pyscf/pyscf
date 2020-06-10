@@ -134,11 +134,11 @@ def compute_amplitudes(myadc, eris):
 
     # Compute first-order doubles t2 (tijab)
 
-    v2e_oovv = eris_ovov.transpose(0,2,1,3).copy()
-    v2e_oovv -= eris_ovov.transpose(0,2,3,1).copy()
-    v2e_OOVV = eris_OVOV.transpose(0,2,1,3).copy()
-    v2e_OOVV -= eris_OVOV.transpose(0,2,3,1).copy()
-    v2e_oOvV = eris_ovOV.transpose(0,2,1,3).copy()
+    v2e_oovv = eris_ovov[:].transpose(0,2,1,3).copy()
+    v2e_oovv -= eris_ovov[:].transpose(0,2,3,1).copy()
+    v2e_OOVV = eris_OVOV[:].transpose(0,2,1,3).copy()
+    v2e_OOVV -= eris_OVOV[:].transpose(0,2,3,1).copy()
+    v2e_oOvV = eris_ovOV[:].transpose(0,2,1,3).copy()
 
     t2_1_a = v2e_oovv/D2_a
     t2_1_b = v2e_OOVV/D2_b
@@ -671,6 +671,7 @@ class UADC(lib.StreamObject):
         self.dump_flags_gs()
     
         eris = uadc_ao2mo.transform_integrals_incore(self)
+        #eris = uadc_ao2mo.transform_integrals_outcore(self)
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 

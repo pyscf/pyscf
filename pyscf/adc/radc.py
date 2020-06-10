@@ -40,7 +40,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     adc.dump_flags()
 
     if eris is None:
-        eris = adc.eris
+        eris = adc.transform_integrals(adc)
 
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
@@ -74,22 +74,21 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     return E, U, spec_factors
 
 
-def compute_amplitudes_energy(myadc, verbose=None):
+def compute_amplitudes_energy(myadc, eris, verbose=None):
 
-    t1, t2 = myadc.compute_amplitudes()
-    e_corr = myadc.compute_energy(t1, t2)
+    t1, t2 = myadc.compute_amplitudes(eris)
+    e_corr = myadc.compute_energy(t1, t2, eris)
 
     return e_corr, t1, t2
 
 
-def compute_amplitudes(myadc):
+def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     nocc = myadc._nocc
     nvir = myadc._nvir
-    eris = myadc.eris
 
     eris_oooo = eris.oooo
     eris_ovoo = eris.ovoo
@@ -148,6 +147,7 @@ def compute_amplitudes(myadc):
             eris_vvvv = eris.vvvv
             temp = t2_1.reshape(nocc*nocc,nvir*nvir)
             t2_2 = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
+
 
         t2_2 += lib.einsum('kilj,klab->ijab',eris_oooo,t2_1,optimize=True)
         t2_2 += lib.einsum('kcbj,kica->ijab',eris_ovvo,t2_1_a,optimize=True)
@@ -259,14 +259,13 @@ def compute_amplitudes(myadc):
     return t1, t2
 
 
-def compute_energy(myadc, t1, t2):
+def compute_energy(myadc, t1, t2, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     nocc = myadc._nocc
     nvir = myadc._nvir
-    eris = myadc.eris
 
     eris_ovov = eris.ovov
 
@@ -370,17 +369,18 @@ def contract_ladder_outcore(myadc,t_amp,eris):
     nocc = myadc._nocc
     nvir = myadc._nvir
 
-    t_amp_t = t_amp.reshape(nocc*nocc,nvir*nvir).T
+    t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc*nocc,nvir*nvir).T)
     t = np.zeros((nvir,nvir, nocc*nocc))
 
     a = 0
     for dataset in eris.vvvv:
          k = dataset.shape[0]
-         t[a:a+k] = np.dot(dataset[:],t_amp_t)
-         a += dataset.shape[0]
+         dataset = dataset[:].reshape(-1,nvir*nvir)
+         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
+         a += k
          
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
-    
+
     return t
 
 
@@ -444,7 +444,6 @@ class RADC(lib.StreamObject):
         self.e_tot = None
         self.t1 = None
         self.t2 = None
-        self.eris = None
         self._nocc = mf.mol.nelectron//2
         self._nmo = mo_coeff.shape[1]
         self._nvir = self._nmo - self._nocc
@@ -452,6 +451,7 @@ class RADC(lib.StreamObject):
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
+        self.transform_integrals = radc_ao2mo.transform_integrals_incore
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -497,11 +497,12 @@ class RADC(lib.StreamObject):
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            self.eris = radc_ao2mo.transform_integrals_incore(self)
+            eris = radc_ao2mo.transform_integrals_incore(self)
         else:
-            self.eris = radc_ao2mo.transform_integrals_outcore(self)
+            self.transform_integrals = radc_ao2mo.transform_integrals_outcore
+            eris = radc_ao2mo.transform_integrals_outcore(self)
 
-        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
         self._finalize()
@@ -528,11 +529,13 @@ class RADC(lib.StreamObject):
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            self.eris = radc_ao2mo.transform_integrals_incore(self)
+            eris = radc_ao2mo.transform_integrals_incore(self)
         else:
-            self.eris = radc_ao2mo.transform_integrals_outcore(self)
+            self.transform_integrals = radc_ao2mo.transform_integrals_outcore
+            eris = radc_ao2mo.transform_integrals_outcore(self)
+            
 
-        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
         self._finalize()
@@ -587,7 +590,7 @@ def get_imds_ea(adc, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.eris
+        eris = adc.transform_integrals(adc)
 
     eris_ovov = eris.ovov
 
@@ -757,7 +760,7 @@ def get_imds_ea(adc, eris=None):
                 temp[a:a+k] += 2.*lib.einsum('mlfd,mled,aebf->ab',t2_1, t2_1, eris_vvvv, optimize=True)
                 temp[a:a+k] -= lib.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, eris_vvvv, optimize=True)
                 del eris_vvvv
-                a += dataset.shape[0]
+                a += k
 
             M_ab += temp
 
@@ -806,7 +809,7 @@ def get_imds_ip(adc, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.eris
+        eris = adc.transform_integrals(adc)
 
     eris_ovov = eris.ovov
 
@@ -923,8 +926,8 @@ def get_imds_ip(adc, eris=None):
 
         if isinstance(eris.vvvv, list):
 
-            temp = contract_ladder_outcore(adc,t2_1_a,eris)
-            temp_n = contract_ladder_outcore(adc,t2_1,eris)
+            temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris)
+            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris)
 
         else :
 
@@ -1020,8 +1023,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     if (method == "adc(2)-x" or method == "adc(3)"):
 
         if eris is None:
-            eris = adc.eris
-            #eris = radc_ao2mo.transform_integrals_incore(adc)
+            eris = adc.transform_integrals(adc)
 
             if not isinstance(eris.vvvv, list): 
 
@@ -1101,7 +1103,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     if (method == "adc(2)-x" or method == "adc(3)"):
 
         if eris is None:
-            eris = adc.eris
+            eris = adc.transform_integrals(adc)
 
             if not isinstance(eris.vvvv, list): 
 
@@ -1109,14 +1111,14 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
                 eris_oovv = eris.oovv
                 eris_ovvo = eris.ovvo
 
-                eris_oooo_p = np.ascontiguousarray(eris_oooo[:].transpose(0,2,1,3))
+                eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
                 eris_oooo_p = eris_oooo_p.reshape(nocc*nocc, nocc*nocc)
   
                 temp = np.zeros((nvir, eris_oooo_p.shape[0]))
                 temp[:] += np.diag(eris_oooo_p)
                 diag[s2:f2] += -temp.reshape(-1)
 
-                eris_ovov_p = np.ascontiguousarray(eris_oovv[:].transpose(0,2,1,3)) 
+                eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
                 eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
                 temp = np.zeros((nocc, nocc, nvir))
@@ -1124,7 +1126,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
                 temp = np.ascontiguousarray(temp.transpose(2,1,0))
                 diag[s2:f2] += temp.reshape(-1)
 
-                eris_ovov_p = np.ascontiguousarray(eris_oovv[:].transpose(0,2,1,3)) 
+                eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
                 eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
 
                 temp = np.zeros((nocc, nocc, nvir))
@@ -1146,8 +1148,9 @@ def ea_contract_r_vvvv(myadc,r2,eris):
     a = 0
     for dataset in eris.vvvv:
          k = dataset.shape[0]
-         r2_vvvv[a:a+k] = np.dot(dataset[:],r2_T)
-         a += dataset.shape[0]
+         dataset = dataset[:].reshape(-1,nvir*nvir)
+         r2_vvvv[a:a+k] = np.dot(dataset,r2_T).reshape(-1,nvir,nocc)
+         a += k
 
     r2_vvvv = np.ascontiguousarray(r2_vvvv.transpose(2,0,1)).reshape(-1)
 
@@ -1181,7 +1184,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.eris
+        eris = adc.transform_integrals(adc)
 
     s1 = 0
     f1 = n_singles
@@ -1359,7 +1362,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     idn_vir = np.identity(nvir)
 
     if eris is None:
-        eris = adc.eris
+        eris = adc.transform_integrals(adc)
 
     s1 = 0
     f1 = n_singles
@@ -1777,6 +1780,7 @@ class RADCEA(RADC):
             Spectroscopic amplitudes for each EA transition.
     '''
     def __init__(self, adc):
+        self.mol = adc.mol
         self.verbose = adc.verbose
         self.stdout = adc.stdout
         self.max_memory = adc.max_memory
@@ -1785,16 +1789,17 @@ class RADCEA(RADC):
         self.conv_tol  = adc.conv_tol
         self.t1 = adc.t1
         self.t2 = adc.t2
-        self.eris = adc.eris
         self.e_corr = adc.e_corr
         self.method = adc.method
         self.method_type = adc.method_type
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
+        self._nmo = adc._nmo
         self.mo_coeff = adc.mo_coeff
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
+        self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -1870,6 +1875,7 @@ class RADCIP(RADC):
             Spectroscopic amplitudes for each IP transition.
     '''
     def __init__(self, adc):
+        self.mol = adc.mol
         self.verbose = adc.verbose
         self.stdout = adc.stdout
         self.max_memory = adc.max_memory
@@ -1878,16 +1884,17 @@ class RADCIP(RADC):
         self.conv_tol  = adc.conv_tol
         self.t1 = adc.t1
         self.t2 = adc.t2
-        self.eris= adc.eris
         self.e_corr = adc.e_corr
         self.method = adc.method
         self.method_type = adc.method_type
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
+        self._nmo = adc._nmo
         self.mo_coeff = adc.mo_coeff
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
+        self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
