@@ -391,6 +391,7 @@ class KnownValues(unittest.TestCase):
         mycc = ccsd.CCSD(mf)
         numpy.random.seed(2)
         mo = numpy.random.random(mf.mo_coeff.shape)
+        mycc.max_memory = 2000
         eri_incore = mycc.ao2mo(mo)
         mycc.max_memory = 0
         eri_outcore = mycc.ao2mo(mo)
@@ -403,7 +404,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri_incore.ovvv - eri_outcore.ovvv).max(), 0, 12)
         self.assertAlmostEqual(abs(eri_incore.vvvv - eri_outcore.vvvv).max(), 0, 12)
 
+        mycc1 = ccsd.CCSD(mf.density_fit(auxbasis='ccpvdz-ri'))
+        mycc1.max_memory = 0
+        eri_df = mycc1.ao2mo()
+        self.assertAlmostEqual(lib.fp(eri_df.oooo), -0.05615830878354956, 12)
+        self.assertAlmostEqual(lib.fp(eri_df.oovv),  0.6280510380482554 , 12)
+        self.assertAlmostEqual(lib.fp(eri_df.ovoo),  1.8946571365976894 , 12)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvo), -0.20360374093608674, 12)
+        self.assertAlmostEqual(lib.fp(eri_df.ovov), -0.05427758052505035, 12)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvv),  0.5904506815158043 , 12)
+        self.assertAlmostEqual(lib.fp(eri_df.vvvv),  3.7377697376281884, 12)
+
 if __name__ == "__main__":
     print("Full Tests for RCCSD")
     unittest.main()
-
