@@ -406,14 +406,14 @@ class KnownValues(unittest.TestCase):
 
         mycc1 = ccsd.CCSD(mf.density_fit(auxbasis='ccpvdz-ri'))
         mycc1.max_memory = 0
-        eri_df = mycc1.ao2mo()
-        self.assertAlmostEqual(lib.fp(eri_df.oooo), -0.05615830878354956, 12)
-        self.assertAlmostEqual(lib.fp(eri_df.oovv),  0.6280510380482554 , 12)
-        self.assertAlmostEqual(lib.fp(eri_df.ovoo),  1.8946571365976894 , 12)
-        self.assertAlmostEqual(lib.fp(eri_df.ovvo), -0.20360374093608674, 12)
-        self.assertAlmostEqual(lib.fp(eri_df.ovov), -0.05427758052505035, 12)
-        self.assertAlmostEqual(lib.fp(eri_df.ovvv),  0.5904506815158043 , 12)
-        self.assertAlmostEqual(lib.fp(eri_df.vvvv),  3.7377697376281884, 12)
+        eri_df = mycc1.ao2mo(mo)
+        self.assertAlmostEqual(lib.fp(eri_df.oooo), -493.98003157749906, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.oovv), -91.84858398271658 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovoo), -203.89515661847437, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvo), -14.883877359169205, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovov), -57.62195194777554 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvv), -24.359418953533535, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.vvvv),  76.9017539373456  , 9)
 
 if __name__ == "__main__":
     print("Full Tests for RCCSD")
