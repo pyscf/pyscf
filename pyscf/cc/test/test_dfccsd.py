@@ -239,7 +239,7 @@ class KnownValues(unittest.TestCase):
     def test_ao2mo(self):
         numpy.random.seed(2)
         mo = numpy.random.random(mf.mo_coeff.shape)
-        mycc = ccsd.CCSD(mf).density_fit(auxbasis='ccpvdz-ri')
+        mycc = cc.CCSD(mf).density_fit(auxbasis='ccpvdz-ri')
         mycc.max_memory = 0
         eri_df = mycc.ao2mo()
         self.assertAlmostEqual(lib.fp(eri_df.oooo), -0.05615830878354956, 12)
