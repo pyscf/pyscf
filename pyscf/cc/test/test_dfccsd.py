@@ -236,6 +236,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vec1T),-857.23800705535234, 9)
         self.assertAlmostEqual(lib.finger(vec2) , 14.360296355284504, 9)
 
+    def test_ao2mo(self):
+        numpy.random.seed(2)
+        mo = numpy.random.random(mf.mo_coeff.shape)
+        mycc = cc.CCSD(mf).density_fit(auxbasis='ccpvdz-ri')
+        mycc.max_memory = 0
+        eri_df = mycc.ao2mo(mo)
+        self.assertAlmostEqual(lib.fp(eri_df.oooo), -493.98003157749906, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.oovv), -91.84858398271658 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovoo), -203.89515661847437, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvo), -14.883877359169205, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovov), -57.62195194777554 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvv), -24.359418953533535, 9)
+        self.assertTrue(eri_df.vvvv is None)
+        self.assertAlmostEqual(lib.fp(eri_df.vvL),  -0.5165177516806061, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for DFCCSD")

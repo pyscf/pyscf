@@ -441,8 +441,8 @@ def madelung(cell, kpts):
         # Coulomb operator, the Ewald summation technique is not needed
         # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
         # quickly.
-        coulG = get_coulG(ecell)
         Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
+        coulG = get_coulG(ecell, Gv=Gv)
         ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
         return -np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
 

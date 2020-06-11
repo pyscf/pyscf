@@ -7,7 +7,7 @@
 This example shows how to call the PyFraME library to generate the potential
 file for the CPPE library used by pyscf polarizable embedding method
 
-More details of PyFraME usage can be found in CPPE paper arXiv:1804.03598
+More details of PyFraME usage can be found in PE tutorial paper arXiv:1804.03598
 '''
 
 import pyframe
