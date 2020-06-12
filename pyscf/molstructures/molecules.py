@@ -12,6 +12,7 @@ __all__ = [
         "build_ketene",
         "build_biphenyl",
         "build_H2O_NH3",
+        "build_H2O_CH6",
         ]
 
 def Ry(alpha):
@@ -177,3 +178,50 @@ def build_H2O_NH3(dNH, **kwargs):
             atom=atom,
             **kwargs)
     return mol
+
+
+def build_H2O_CH6(dOC, config="2-leg", **kwargs):
+
+    if config != "2-leg":
+        raise NotImplementedError()
+
+    water = [
+            ["O1", [0.0000, 0.0000, 0.0000]],
+            ["H2", [0.0000, 0.7572, -0.5865]],
+            ["H3", [0.0000, -0.7572, -0.5865]],
+            ]
+
+    # Binding Cs in 2-leg configuration are C4 and C7
+    benzene = [
+            ["C4" , [0.0000, 1.3970, 0.0000]],
+            ["C5" , [1.2098, 0.6985, 0.0000]],
+            ["C6" , [1.2098, -0.6985, 0.0000]],
+            ["C7" , [0.0000, -1.3970, 0.0000]],
+            ["C8" , [-1.2098, -0.6985, 0.0000]],
+            ["C9" , [-1.2098, 0.6985, 0.0000]],
+            ["H10", [0.0000, 2.4810, 0.0000]],
+            ["H11", [2.1486, 1.2405, 0.0000]],
+            ["H12", [2.1486, -1.2405, 0.0000]],
+            ["H13", [0.0000, -2.4810, 0.0000]],
+            ["H14", [-2.1486, -1.2405, 0.0000]],
+            ["H15", [-2.1486, 1.2405, 0.0000]],
+            ]
+
+    atom = water + benzene
+
+    # Shift water molecule
+    atom[0][1][2] += dOC
+    atom[1][1][2] += dOC
+    atom[2][1][2] += dOC
+
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+
+    #import lattices
+    #lattices.visualize_atoms(atom, indices=True)
+
+    return mol
+
+
+

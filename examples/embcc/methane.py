@@ -20,19 +20,20 @@ MPI_size = MPI_comm.Get_size()
 log = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
-parser.add_argument("-b", "--basis", default="cc-pVDZ")
+parser.add_argument("-b", "--basis", default="cc-pVTZ")
 parser.add_argument("-p", "--max-power", type=int, default=0)
 parser.add_argument("--full-ccsd", action="store_true")
-#parser.add_argument("--no-embccsd", action="store_true")
-parser.add_argument("--tol-bath", type=float, default=1e-5)
+parser.add_argument("--tol-bath", type=float, default=1e-8)
 parser.add_argument("--tol-vno", type=float, default=1e-3)
-parser.add_argument("--bath-type")
-parser.add_argument("--bath-target-size", type=int, nargs=2, default=[None, None])
-#parser.add_argument("--tol-vno", type=float, default=1e-3)
-parser.add_argument("--ircs", type=float, nargs=3, default=[0.6, 3.3, 0.2])
-parser.add_argument("-o", "--output", default="output.txt")
+parser.add_argument("--name", default="methane")
+parser.add_argument("--ircs", type=float, nargs=3, default=[0.6, 3.3, 0.1])
+parser.add_argument("--solver", default="CCSD")
+parser.add_argument("--output")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
+
+if args.output is None:
+    args.output = args.name + ".out"
 
 if MPI_rank == 0:
     log.info("Parameters")
@@ -42,7 +43,7 @@ if MPI_rank == 0:
 
 #ircs = np.arange(0.6, 3.3+1e-14, 0.1)
 ircs = np.arange(args.ircs[0], args.ircs[1]+1e-14, args.ircs[2])
-structure_builder = molstructures.build_ethanol
+structure_builder = molstructures.build_methane
 
 for ircidx, irc in enumerate(ircs):
     if MPI_rank == 0:
@@ -53,20 +54,24 @@ for ircidx, irc in enumerate(ircs):
     mf = pyscf.scf.RHF(mol)
     mf.kernel()
 
+    mp2 = pyscf.mp.MP2(mf)
+    mp2.kernel()
+    log.debug("MP2 correlation=%.8e", mp2.e_corr)
+
+    with open(args.name + "-mp2.txt", "a") as f:
+        f.write("%3f  %.8e  %.8e\n" % (irc, mf.e_tot, mp2.e_tot))
+
     if args.full_ccsd:
-        ccsd = pyscf.cc.CCSD(mf)
-        ccsd.kernel()
-        assert ccsd.converged
+        cc = pyscf.cc.CCSD(mf)
+        cc.kernel()
+        assert cc.converged
 
         with open(args.output, "a") as f:
-            f.write("%3f  %.8e  %.8e\n" % (irc, mf.e_tot, ccsd.e_tot))
+            f.write("%3f  %.8e  %.8e\n" % (irc, mf.e_tot, cc.e_tot))
 
-    #if not args.no_embccsd:
     else:
         if ircidx == 0:
-            cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size,
-                    tol_bath=args.tol_bath, tol_vno=args.tol_vno)
-            #cc = embcc.EmbCC(mf, tol_bath=args.tol_bath, benchmark=ccsd)
+            cc = embcc.EmbCC(mf, solver=args.solver, tol_bath=args.tol_bath, tol_vno=args.tol_vno)
             #ecc.create_custom_clusters([("O1", "H3")])
             cc.make_atom_clusters()
             #oh_cluster = cc.merge_clusters(("O1", "H3"))
@@ -84,9 +89,6 @@ for ircidx, irc in enumerate(ircs):
             if ircidx == 0:
                 with open(args.output, "a") as f:
                     #f.write("#IRC  HF  EmbCCSD  EmbCCSD(v)  EmbCCSD(1C)  EmbCCSD(1C,v)  EmbCCSD(1C,f)\n")
-                    #f.write("#IRC  HF  EmbCCSD  EmbCCSD(vir)  EmbCCSD(var)  EmbCCSD(var2)  EmbCCSD(var3)\n")
-                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(vir)  EmbCCSD(dMP2)  EmbCCSD(v,dMP2)\n")
+                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(vir) EmbCCSD(var)  EmbCCSD(var2)\n")
             with open(args.output, "a") as f:
-                #f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (irc, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_var, cc.e_tot_var2))
-                #f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (irc, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_var, cc.e_tot_var2, cc.e_tot_var3))
-                f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (irc, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_dmp2, cc.e_tot_v_dmp2))
+                f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (irc, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_var, cc.e_tot_var2))

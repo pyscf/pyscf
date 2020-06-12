@@ -54,6 +54,8 @@ parser.add_argument("--recalc-bath", action="store_true")
 parser.add_argument("--solver", choices=["CISD", "CCSD", "FCI"], default="CCSD")
 parser.add_argument("--benchmark", choices=["CISD", "CCSD", "FCI"])
 parser.add_argument("--tol-bath", type=float, default=1e-3)
+parser.add_argument("--tol-vno", type=float, default=False)
+parser.add_argument("--vno-ratio", type=float, default=1.0)
 parser.add_argument("--name", default="output")
 parser.add_argument("--max-memory", type=int, default=1e5)
 parser.add_argument("--output")
@@ -136,7 +138,9 @@ for icalc, distance in enumerate(args.distances):
 
     else:
         if icalc == 0:
-            cc = embcc.EmbCC(mf, solver=args.solver, tol_bath=args.tol_bath, use_ref_orbitals_bath=not args.recalc_bath)
+            #cc = embcc.EmbCC(mf, solver=args.solver, tol_bath=args.tol_bath, use_ref_orbitals_bath=not args.recalc_bath)
+            cc = embcc.EmbCC(mf, solver=args.solver, tol_bath=args.tol_bath, use_ref_orbitals_bath=not args.recalc_bath,
+                    tol_vno=args.tol_vno, vno_ratio=args.vno_ratio)
             cc.make_custom_atom_cluster(args.impurity_atoms)
             #cc.make_custom_atom_cluster(args.impurity_atoms)
             cc.make_rest_cluster(solver=None)
@@ -153,6 +157,8 @@ for icalc, distance in enumerate(args.distances):
         if MPI_rank == 0:
             if icalc == 0:
                 with open(args.output, "a") as f:
-                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(alt)  EmbCCSD(full)\n")
+                    #f.write("#IRC  HF  EmbCCSD  EmbCCSD(alt)  EmbCCSD(full)\n")
+                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(v)  EmbCCSD(dMP2)  EmbCCSD(v,dMP2)\n")
             with open(args.output, "a") as f:
-                f.write("%3f  %.8e  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_alt, mf.e_tot+cc.clusters[0].e_corr_full))
+                #f.write("%3f  %.8e  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_alt, mf.e_tot+cc.clusters[0].e_corr_full))
+                f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_dmp2, cc.e_tot_v_dmp2))
