@@ -962,6 +962,23 @@ H           1.00000        1.00000        0.00000
         v = mol.intor('int1e_nuc')
         self.assertAlmostEqual(abs(ref-v).max(), 0, 12)
 
+    def test_fromstring(self):
+        mol = gto.Mole()
+        mol.fromstring('2\n\nH 0 0 1\nH 0 -1 0')
+        print(mol._atom == [('H', [0.0, 0.0, 1.8897261245650618]), ('H', [0.0, -1.8897261245650618, 0.0])])
+        print(mol.atom == [('H', [0.0, 0.0, 1.0]), ('H', [0.0, -1.0, 0.0])])
+        print(mol.unit == 'Angstrom')
+
+    def test_fromfile(self):
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.xyz') as f:
+            f.write('2\n\nH 0 0 1; H 0 -1 0')
+            f.flush()
+            mol = gto.Mole()
+            mol.fromfile(f.name)
+            print(mol._atom == [('H', [0.0, 0.0, 1.8897261245650618]), ('H', [0.0, -1.8897261245650618, 0.0])])
+            print(mol.atom == [('H', [0.0, 0.0, 1.0]), ('H', [0.0, -1.0, 0.0])])
+            print(mol.unit == 'Angstrom')
+
 
 if __name__ == "__main__":
     print("test mole.py")

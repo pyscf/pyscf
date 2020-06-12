@@ -296,7 +296,8 @@ def format_atom(atoms, origin=0, axes=None,
             of the input atoms are the atomic unit;  If unit is one of strings
             (A, a, Angstrom, angstrom, Ang, ang), the coordinates are in the
             unit of angstrom;  If a number is given, the number are considered
-            as the Bohr value (in angstrom), which should be around 0.53
+            as the Bohr value (in angstrom), which should be around 0.53.
+            Set unit=1 if wishing to reserve the unit of the coordinates.
 
     Returns:
         "atoms" in the internal format. The internal format is
@@ -3103,9 +3104,8 @@ class Mole(lib.StreamObject):
 
     def fromstring(self, string, format='xyz'):
         '''Update the Mole object based on the input geometry string'''
-        self.atom = string
-        self._atom = self.format_atom(fromstring(string, format))
-        self.set_geom_(self, self._atom, unit='Angstrom', inplace=True)
+        atom = self.format_atom(fromstring(string, format), unit=1)
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
         if format == 'sdf' and 'M  CHG' in string:
             raise NotImplementedError
             #FIXME self.charge = 0
@@ -3113,9 +3113,10 @@ class Mole(lib.StreamObject):
 
     def fromfile(self, filename, format=None):
         '''Update the Mole object based on the input geometry file'''
-        self.atom = filename
-        self._atom = self.format_atom(fromfile(filename, format))
-        self.set_geom_(self, self._atom, unit='Angstrom', inplace=True)
+        atom = self.format_atom(fromfile(filename, format), unit=1)
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
+        if format == 'sdf':
+            raise NotImplementedError
         return self
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
