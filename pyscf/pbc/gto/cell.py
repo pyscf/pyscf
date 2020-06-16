@@ -1508,6 +1508,11 @@ class Cell(mole.Mole):
             a = np.asarray([float(x) for x in a.split()]).reshape(3,3)
         else:
             a = np.asarray(self.a, dtype=np.double)
+
+        # Save self.a in the internal format
+        if not isinstance(self.a, np.ndarray):
+            self.a = a
+
         if isinstance(self.unit, (str, unicode)):
             if self.unit.startswith(('B','b','au','AU')):
                 return a
