@@ -497,10 +497,13 @@ class RADC(lib.StreamObject):
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            eris = radc_ao2mo.transform_integrals_incore(self)
+            eris = self.transform_integrals()
         else:
-            transform_integrals = radc_ao2mo.transform_integrals_outcore
-            eris = radc_ao2mo.transform_integrals_outcore(self)
+            def outcore_transform():
+                return radc_ao2mo.transform_integrals_outcore(self)
+
+            self.transform_integrals = outcore_transform
+            eris = self.transform_integrals() 
 
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
@@ -529,12 +532,15 @@ class RADC(lib.StreamObject):
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            eris = radc_ao2mo.transform_integrals_incore(self)
+            eris = self.transform_integrals()
         else:
-            transform_integrals = radc_ao2mo.transform_integrals_outcore
-            eris = radc_ao2mo.transform_integrals_outcore(self)
-            
+            def outcore_transform():
+                return radc_ao2mo.transform_integrals_outcore(self)
 
+            self.transform_integrals = outcore_transform
+            eris = self.transform_integrals() 
+
+            
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
@@ -1137,6 +1143,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     diag = -diag
 
     return diag
+
 
 def ea_contract_r_vvvv(myadc,r2,eris):
 
@@ -1799,6 +1806,7 @@ class RADCEA(RADC):
         self.mo_coeff = adc.mo_coeff
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
+        self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -1893,6 +1901,7 @@ class RADCIP(RADC):
         self.mo_coeff = adc.mo_coeff
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
+        self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 

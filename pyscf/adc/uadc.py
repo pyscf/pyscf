@@ -188,10 +188,14 @@ def compute_amplitudes(myadc, eris):
         eris_OVvo = eris.OVvo
         eris_ovVO = eris.ovVO
 
-        temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]])
-        eris_vvvv = eris.vvvv_p
-        t2_2_temp = np.dot(temp,eris_vvvv.T)
-        del eris_vvvv
+        if isinstance(eris.vvvv, list):
+            t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_a,eris,nvir_a)
+        else:
+            eris_vvvv = eris.vvvv_p
+            temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]])
+            t2_2_temp = np.dot(temp,eris_vvvv.T)
+            del eris_vvvv
+
         t2_2_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
         t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]] = t2_2_temp    
         t2_2_a[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2_2_temp    
@@ -205,10 +209,15 @@ def compute_amplitudes(myadc, eris):
         t2_2_a += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
         t2_2_a += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
  
-        temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]])
-        eris_VVVV = eris.VVVV_p
-        t2_2_temp = np.dot(temp,eris_VVVV.T)
-        del eris_VVVV
+
+        if isinstance(eris.VVVV, list):
+            t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_b,eris,nvir_b)
+        else:
+            eris_VVVV = eris.VVVV_p
+            temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]])
+            t2_2_temp = np.dot(temp,eris_VVVV.T)
+            del eris_VVVV
+
         t2_2_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
         t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]] = t2_2_temp    
         t2_2_b[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2_2_temp    
@@ -221,10 +230,14 @@ def compute_amplitudes(myadc, eris):
 
         t2_2_b += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
         t2_2_b += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
- 
-        temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
-        eris_vVvV = eris.vVvV_p
-        t2_2_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
+
+
+        if isinstance(eris.vVvV, list):
+            t2_2_ab = contract_ladder_outcore(myadc,t2_1_ab,eris)
+        else:
+            temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
+            eris_vVvV = eris.vVvV_p
+            t2_2_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
 
         t2_2_ab += lib.einsum('kilj,klab->ijab',eris_ooOO,t2_1_ab,optimize=True)
         t2_2_ab += lib.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_a,optimize=True)
@@ -478,23 +491,37 @@ def compute_energy(myadc, t1, t2, eris):
         eris_OOOO = eris.OOOO
         eris_ooOO = eris.ooOO
 
-        temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]])
-        eris_vvvv = eris.vvvv_p
-        temp_1_a = np.dot(temp,eris_vvvv.T)
-        del eris_vvvv
+
+        if isinstance(eris.vvvv, list):
+            temp_1_a = contract_ladder_outcore_antisym(myadc,t2_1_a,eris,nvir_a)
+        else : 
+            temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]])
+            eris_vvvv = eris.vvvv_p
+            temp_1_a = np.dot(temp,eris_vvvv.T)
+            del eris_vvvv
+
         e_mp3 = 0.5 * lib.einsum('ijp,ijp',temp_1_a, temp)
         del temp_1_a
 
-        temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]])
-        eris_VVVV = eris.VVVV_p
-        temp_1_b = np.dot(temp,eris_VVVV.T)
-        del eris_VVVV
+        if isinstance(eris.VVVV, list):
+            temp_1_b = contract_ladder_outcore_antisym(myadc,t2_1_b,eris,nvir_b)
+        else : 
+            temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]])
+            eris_VVVV = eris.VVVV_p
+            temp_1_b = np.dot(temp,eris_VVVV.T)
+            del eris_VVVV
+
         e_mp3 += 0.5 * lib.einsum('ijp,ijp',temp_1_b, temp)
         del temp_1_b
 
-        temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
-        eris_vVvV = eris.vVvV_p
-        temp_1_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
+
+        if isinstance(eris.vVvV, list):
+            temp_1_ab = contract_ladder_outcore(myadc,t2_1_ab,eris)
+        else : 
+            temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
+            eris_vVvV = eris.vVvV_p
+            temp_1_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
+
         e_mp3 +=  lib.einsum('ijcd,ijcd',temp_1_ab, t2_1_ab)
         del temp_1_ab
 
@@ -546,6 +573,49 @@ def compute_energy(myadc, t1, t2, eris):
 
     return e_corr
 
+
+def contract_ladder_outcore_antisym(myadc,t_amp,eris,nvir):
+
+    nv_pair = nvir  *  (nvir - 1) // 2
+    tril_idx = np.tril_indices(nvir, k=-1)               
+
+    t_amp = t_amp[:,:,tril_idx[0],tril_idx[1]]
+    t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc*nocc,-1).T)
+    t = np.zeros((nvir,nvir, nocc*nocc))
+
+    a = 0
+    for dataset in eris.vvvv:
+         k = dataset.shape[0]
+         dataset = dataset[:].reshape(-1,nv_pair)
+         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
+         a += k
+
+    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
+    t = t[:, :, tril_idx[0], tril_idx[1]]
+
+    return t
+
+def contract_ladder_outcore(myadc,t_amp,eris):
+
+
+    nocc_a = myadc._nocc[0]
+    nocc_b = myadc._nocc[1]
+    nvir_a = myadc._nvir[0]
+    nvir_b = myadc._nvir[1]
+
+    t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc_a*nocc_b,-1).T)
+    t = np.zeros((nvir_a,nvir_b, nocc_a*nocc_b))
+
+    a = 0
+    for dataset in eris.vvvv:
+         k = dataset.shape[0]
+         dataset = dataset[:].reshape(-1,nvir_a * nvir_b)
+         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir_b,nocc_a*nocc_b)
+         a += k
+
+    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc_a, nocc_b, nvir_a, nvir_b)
+
+    return t
 
 class UADC(lib.StreamObject):
     '''Ground state calculations
@@ -670,8 +740,8 @@ class UADC(lib.StreamObject):
             self.check_sanity()
         self.dump_flags_gs()
     
-        eris = uadc_ao2mo.transform_integrals_incore(self)
-        #eris = uadc_ao2mo.transform_integrals_outcore(self)
+        #eris = uadc_ao2mo.transform_integrals_incore(self)
+        eris = uadc_ao2mo.transform_integrals_outcore(self)
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 

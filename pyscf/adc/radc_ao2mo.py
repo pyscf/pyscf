@@ -147,8 +147,8 @@ def transform_integrals_outcore(myadc):
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = []
 
-        used_mem = (nmo**3) * 8/1e6 
-        avail_mem = myadc.max_memory - used_mem
+        #used_mem = (nmo**3) * 8/1e6
+        avail_mem = myadc.max_memory - lib.current_memory()[0]
         vvv_mem = (nvir**3) * 8/1e6
 
         chnk_size =  int(avail_mem/vvv_mem)
