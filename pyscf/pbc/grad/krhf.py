@@ -293,6 +293,7 @@ class GradientsBasics(molgrad.GradientsBasics):
         self.kpts = method.kpts
         self.max_memory = self.cell.max_memory
         self.atmlst = None
+        self.unit = 'au'
         self.de = None
         self._keys = set(self.__dict__.keys())
 
