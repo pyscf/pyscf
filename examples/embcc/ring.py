@@ -49,6 +49,7 @@ structure_builder = functools.partial(molstructures.build_ring, atoms=atoms)
 
 dm0 = None
 
+ref_orbitals = None
 for icalc, distance in enumerate(distances):
     if MPI_rank == 0:
         log.info("Distance=%.3f", distance)
@@ -76,18 +77,25 @@ for icalc, distance in enumerate(distances):
             f.write("%3f  %.8e  %.8e\n" % (distance, mf.e_tot, mp2.e_tot))
     else:
 
-        if icalc == 0:
-            cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size)# , tol_bath=args.tol_bath)
-            #cc.make_atom_clusters()
-            cc.make_custom_atom_cluster(["H1"], symmetry_factor=args.size)
-            if MPI_rank == 0:
-                cc.print_clusters()
-        else:
-            cc.reset(mf=mf)
+        #if icalc == 0:
+        #    cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size)# , tol_bath=args.tol_bath)
+        #    #cc.make_atom_clusters()
+        #    cc.make_custom_atom_cluster(["H1"], symmetry_factor=args.size)
+        #    if MPI_rank == 0:
+        #        cc.print_clusters()
+        #else:
+        #    cc.reset(mf=mf)
+        cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size)
+        #cc.make_iao_atom_clusters()
+        cc.make_custom_iao_atom_cluster(["H1"], symmetry_factor=args.size)
+        if ref_orbitals is not None:
+            cc.set_reference_orbitals(ref_orbitals)
 
         conv = cc.run()
         if MPI_rank == 0:
             assert conv
+
+        ref_orbitals = cc.get_orbitals()
 
         if MPI_rank == 0:
             if icalc == 0:

@@ -24,13 +24,13 @@ parser.add_argument("-b", "--basis", default="cc-pVDZ")
 parser.add_argument("-p", "--max-power", type=int, default=0)
 parser.add_argument("--full-ccsd", action="store_true")
 #parser.add_argument("--no-embccsd", action="store_true")
-parser.add_argument("--tol-bath", type=float, default=1e-5)
-parser.add_argument("--tol-vno", type=float, default=1e-3)
+#parser.add_argument("--tol-bath", type=float, default=1e-5)
+#parser.add_argument("--tol-vno", type=float, default=1e-3)
 parser.add_argument("--bath-type")
 parser.add_argument("--bath-target-size", type=int, nargs=2, default=[None, None])
 #parser.add_argument("--tol-vno", type=float, default=1e-3)
 parser.add_argument("--ircs", type=float, nargs=3, default=[0.6, 3.3, 0.2])
-parser.add_argument("-o", "--output", default="output.txt")
+parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
 
@@ -44,6 +44,7 @@ if MPI_rank == 0:
 ircs = np.arange(args.ircs[0], args.ircs[1]+1e-14, args.ircs[2])
 structure_builder = molstructures.build_ethanol
 
+ref_orbitals = None
 for ircidx, irc in enumerate(ircs):
     if MPI_rank == 0:
         log.info("IRC=%.3f", irc)
@@ -63,22 +64,32 @@ for ircidx, irc in enumerate(ircs):
 
     #if not args.no_embccsd:
     else:
-        if ircidx == 0:
-            cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size,
-                    tol_bath=args.tol_bath, tol_vno=args.tol_vno)
-            #cc = embcc.EmbCC(mf, tol_bath=args.tol_bath, benchmark=ccsd)
-            #ecc.create_custom_clusters([("O1", "H3")])
-            cc.make_atom_clusters()
-            #oh_cluster = cc.merge_clusters(("O1", "H3"))
-            #coh_cluster = cc.merge_clusters(("C1", "O1", "H3"))
-            if MPI_rank == 0:
-                cc.print_clusters()
+        if False:
+            if ircidx == 0:
+                cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size,
+                        tol_bath=args.tol_bath, tol_vno=args.tol_vno)
+                #cc = embcc.EmbCC(mf, tol_bath=args.tol_bath, benchmark=ccsd)
+                #ecc.create_custom_clusters([("O1", "H3")])
+                cc.make_atom_clusters()
+                #oh_cluster = cc.merge_clusters(("O1", "H3"))
+                #coh_cluster = cc.merge_clusters(("C1", "O1", "H3"))
+                if MPI_rank == 0:
+                    cc.print_clusters()
+            else:
+                cc.reset(mf=mf)
         else:
-            cc.reset(mf=mf)
+            cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size)
+            cc.make_iao_atom_clusters()
+            if ref_orbitals is not None:
+                cc.set_reference_orbitals(ref_orbitals)
 
-        conv = cc.run(max_power=args.max_power)
+
+        #conv = cc.run(max_power=args.max_power)
+        conv = cc.run()
         if MPI_rank == 0:
             assert conv
+
+        ref_orbitals = cc.get_orbitals()
 
         if MPI_rank == 0:
             if ircidx == 0:

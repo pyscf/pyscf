@@ -8,6 +8,7 @@ import scipy.linalg
 from mpi4py import MPI
 
 import pyscf
+import pyscf.ao2mo
 import pyscf.lo
 import pyscf.cc
 import pyscf.ci
@@ -19,6 +20,7 @@ import pyscf.pbc
 import pyscf.pbc.cc
 
 from .orbitals import Orbitals
+from .util import eigassign, eigreorder_logging
 
 __all__ = [
         "EmbCC",
@@ -79,6 +81,29 @@ def get_time_string(seconds):
         tstr = "%.2f s" % s
     return tstr
 
+
+# This is not faster than PySCF...
+#def transform_eri(mf, C1, C2, C3, C4):
+#    mol = mf.mol
+#    norb = mol.nao_nr()
+#
+#    t0 = MPI.Wtime()
+#    #eri = mol.intor("int2e", aosym="s8")
+#    eri = mol.intor("int2e", aosym="1")
+#    time_eri = MPI.Wtime() - t0
+#
+#    #t0 = MPI.Wtime()
+#    #eri = pyscf.ao2mo.restore(1, eri, norb, 1)
+#    #time_restore = MPI.Wtime() - t0
+#
+#    t0 = MPI.Wtime()
+#    eri = einsum("abcd,ai,bj,ck,dl->ijkl", eri, C1, C2, C3, C4)
+#    time_trafo = MPI.Wtime() - t0
+#
+#    #log.debug("AO timings: eri=%s, restore=%s, transform=%s", *[get_time_string(t) for t in (time_eri, time_restore, time_trafo)])
+#    log.debug("AO timings: eri=%s, transform=%s", *[get_time_string(t) for t in (time_eri, time_trafo)])
+#    return eri
+
 class Cluster:
 
     def __init__(self, base, name, indices, coeff=None, solver="CCSD", bath_type="power", tol_bath=1e-3, tol_dmet_bath=1e-8,
@@ -123,6 +148,7 @@ class Cluster:
 
         self.use_ref_orbitals_dmet = kwargs.get("use_ref_orbitals_dmet", True)
         self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", True)
+        #self.use_ref_orbitals_bath = False
 
         self.symmetry_factor = kwargs.get("symmetry_factor", 1.0)
 
@@ -131,7 +157,7 @@ class Cluster:
         #self.restart_solver = kwargs.get("restart_solver", True)
         self.restart_solver = kwargs.get("restart_solver", False)
         # Parameters needed for restart (C0, C1, C2 for CISD; T1, T2 for CCSD) are saved here
-        self.restart_params = {}
+        self.restart_params = kwargs.get("restart_params", {})
 
         self.set_default_attributes()
 
@@ -250,7 +276,7 @@ class Cluster:
         rev = np.s_[::-1]
         e = e[rev]
         C = C[:,rev]
-        nloc = len(e[e>1e-7])
+        nloc = len(e[e>1e-5])
         assert nloc == len(self), "Error finding local orbitals: %s" % e
         assert np.allclose(np.linalg.multi_dot((C.T, S, C)), np.eye(C.shape[-1]))
 
@@ -396,7 +422,7 @@ class Cluster:
         return C, nbathocc, nbathvir
 
     def make_power_bath_orbitals_power(self, C, kind, non_local, powers=(1,), nbath=None, tol=1e-8,
-            normalize=False, eref=1.0):
+            normalize=False, eref=None):
         #if tol is None:
         #    tol = self.tol_bath
         assert nbath is not None or tol is not None
@@ -404,6 +430,10 @@ class Cluster:
         #if eref < max(abs(self.mf.mo_energy)):
         #    log.critical("Reference energy of power orbitals=%.5g smaller than absolute largest HF eigenvalue=%.5g",
         #            eref, max(abs(self.mf.mo_energy)))
+
+        if eref is None:
+            #eref = max(abs(self.mf.mo_energy))
+            eref = 1.0
 
         if kind == "occ":
             mask = self.mf.mo_occ > 0
@@ -416,11 +446,12 @@ class Cluster:
         csc = np.linalg.multi_dot((C.T, S, self.mf.mo_coeff[:,mask]))
         e = self.mf.mo_energy[mask]
 
-        loc = np.s_[:len(self)]
+        nloc = len(self)
+        loc = np.s_[:nloc]
 
         b = []
         for power in powers:
-            bp = eref*np.einsum("xi,i,ai->xa", csc[non_local], (e/eref)**power, csc[loc], optimize=True)
+            bp = np.einsum("xi,i,ai->xa", csc[non_local], (e/eref)**power, csc[loc], optimize=True)
             b.append(bp)
         b = np.hstack(b)
 
@@ -436,17 +467,51 @@ class Cluster:
         assert np.all(e > -tol/10)
         e, v = e[::-1], v[:,::-1]
 
+        with open("power-%d-%s-%s.txt" % (power, self.name, kind), "ab") as f:
+            np.savetxt(f, e[loc][np.newaxis])
+
+        # REORDER COUPLED ACCORDING TO REFERENCE
+        #if True:
+        if False:
+            # Here we reorder the eigenvalues
+            CV = np.dot(C[:,non_local], v[:,loc])
+            reffile = "power-%d-%s-ref.npz" % (power, kind)
+            if os.path.isfile(reffile):
+                ref = np.load(reffile)
+                e_ref, CV_ref = ref["e"], ref["CV"]
+
+                #if N_ref is not None and R_ref is not None:
+                log.debug("Reordering eigenvalues according to reference.")
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v/e", return_cost=True)
+                reorder, cost = eigassign(e_ref, CV_ref, e[loc], CV, b=S, cost_matrix="e^2/v", return_cost=True)
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*e", return_cost=True)
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*sqrt(e)", return_cost=True)
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="evv", return_cost=True)
+                eigreorder_logging(e[loc], reorder, log.debug)
+                log.debug("eigassign cost function value=%g", cost)
+                reorder_full = np.hstack((reorder, np.arange(nloc, len(e))))
+                log.debug("Reorder: %s", reorder)
+                log.debug("Full reorder: %s", reorder_full)
+                e = e[reorder_full]
+                v = v[:,reorder_full]
+                CV = CV[:,reorder]
+
+            with open("power-%d-%s-%s-ordered.txt" % (power, self.name, kind), "ab") as f:
+                np.savetxt(f, e[loc][np.newaxis])
+
+            np.savez(reffile, e=e[loc], CV=CV)
+
         # nbath takes preference
-        if nbath is None:
-            nbath = sum(e >= tol)
-            log.debug("Eigenvalues of kind=%s, power=%d bath, tolerance=%e", kind, power, tol)
-        else:
+        if nbath is not None:
             if tol is not None:
                 log.warning("Warning: tolerance is %.g, but nbath=%d is used.", tol, nbath)
             nbath = min(nbath, len(e))
             log.debug("Eigenvalues of kind=%s, power=%d bath", kind, power)
+        else:
+            nbath = sum(e >= tol)
+            log.debug("Eigenvalues of kind=%s, power=%d bath, tolerance=%e", kind, power, tol)
         log.debug("%d included eigenvalues:\n%r", nbath, e[:nbath])
-        log.debug("%d excluded eigenvalues:\n%r", len(e)-nbath, e[nbath:])
+        log.debug("%d excluded eigenvalues (first 3):\n%r", len(e)-nbath, e[nbath:nbath+3])
 
         C = C.copy()
         C[:,non_local] = np.dot(C[:,non_local], v)
@@ -496,7 +561,10 @@ class Cluster:
 
         return C, nbath
 
-    def make_matsubara_bath_orbitals(self, C, kind, non_local, npoints=1000, beta=100.0, tol=None, normalize=False):
+    def make_matsubara_bath_orbitals(self, C, kind, non_local, npoints=1000, beta=100.0,
+            nbath=None, tol=None, normalize=False):
+
+        assert nbath is not None or tol is not None
 
         if kind == "occ":
             mask = self.mf.mo_occ > 0
@@ -529,11 +597,17 @@ class Cluster:
         e = e[rev]
         v = v[:,rev]
 
-        nbath = sum(e >= tol)
-        #log.debug("Eigenvalues of kind=%s, power=%d bath:\n%r", kind, power, e)
-        log.debug("Eigenvalues of kind=%s Matsubara bath, tolerance=%e", kind, tol)
-        log.debug("%d eigenvalues above threshold:\n%r", nbath, e[:nbath])
-        log.debug("%d eigenvalues below threshold:\n%r", len(e)-nbath, e[nbath:])
+        # nbath takes preference
+        if nbath is not None:
+            if tol is not None:
+                log.warning("Warning: tolerance is %.g, but nbath=%d is used.", tol, nbath)
+            nbath = min(nbath, len(e))
+            log.debug("Eigenvalues of kind=%s bath", kind)
+        else:
+            nbath = sum(e >= tol)
+            log.debug("Eigenvalues of kind=%s bath, tolerance=%e", kind, tol)
+        log.debug("%d included eigenvalues:\n%r", nbath, e[:nbath])
+        log.debug("%d excluded eigenvalues (first 3):\n%r", len(e)-nbath, e[nbath:nbath+3])
 
         C = C.copy()
         C[:,non_local] = np.dot(C[:,non_local], v)
@@ -591,7 +665,7 @@ class Cluster:
         # Active chis
         return chis[:,0]
 
-    def make_mp2_no(self, orbitals, kind, nno=None, tol=None, symmetry_factor=None):
+    def make_mp2_no(self, orbitals, kind, nno=None, tol=None, symmetry_factor=None, N_ref=None, R_ref=None):
         """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
         assert nno is not None or tol is not None
         assert kind in ("occ", "vir")
@@ -627,6 +701,7 @@ class Cluster:
             Fo = np.linalg.multi_dot((Co.T, F, Co))
             Fv = np.linalg.multi_dot((Cv.T, F, Cv))
             # Canonicalization [optional]
+            t0 = MPI.Wtime()
             if canon_occ:
                 Eo, Ro = np.linalg.eigh(Fo)
                 Co = np.dot(Co, Ro)
@@ -637,31 +712,85 @@ class Cluster:
                 Cv = np.dot(Cv, Rv)
             else:
                 Ev = np.diag(Fv)
+            time_canon = MPI.Wtime() - t0
+            log.debug("Time for canonicalization: %s", get_time_string(time_canon))
             no = Co.shape[-1]
             nv = Cv.shape[-1]
             # Make T2
+            t0 = MPI.Wtime()
             eri = pyscf.ao2mo.general(self.mol, (Co, Cv, Co, Cv)).reshape(no,nv,no,nv)
+            time_ao2mo = MPI.Wtime() - t0
+            log.debug("Time for ao2mo: %s", get_time_string(time_ao2mo))
+
+            #t1 = MPI.Wtime() - t0
+            #t0 = MPI.Wtime()
+            #eri2 = pyscf.ao2mo.general(self.mol, (Cv, Co, Cv, Co)).reshape(nv,no,nv,no)
+            #t2 = MPI.Wtime() - t0
+            #t0 = MPI.Wtime()
+            #eri3 = pyscf.ao2mo.general(self.mol, (Co, Cv, Cv, Co)).reshape(no,nv,nv,no)
+            #t3 = MPI.Wtime() - t0
+            #t0 = MPI.Wtime()
+            #eri4 = pyscf.ao2mo.general(self.mol, (Cv, Co, Co, Cv)).reshape(nv,no,no,nv)
+            #t4 = MPI.Wtime() - t0
+
+            #with open("ao2mo-times.txt", "a") as f:
+            #    f.write("%3d  %3d  %.6g  %.6g  %.6g  %.6g\n" % (no, nv, t1, t2, t3, t4))
+
+            #assert np.allclose(eri, eri2.transpose(1, 0, 3, 2))
+            #assert np.allclose(eri, eri3.transpose(0, 1, 3, 2))
+            #assert np.allclose(eri, eri4.transpose(1, 0, 2, 3))
+            #1/0
+
             Eov = (Eo[:,np.newaxis] - Ev[np.newaxis,:])
+            t0 = MPI.Wtime()
             T2 = np.zeros((no,no,nv,nv))
             for i in range(no):
                 d = (Eov[i][np.newaxis,:,np.newaxis] + Eov[:,np.newaxis,:])
                 T2[i] += eri[i].transpose(1,0,2) / d
+            time_t2 = MPI.Wtime() - t0
+            log.debug("Time for T2: %s", get_time_string(time_t2))
             # MP2 energy [with optional local projector P]
+
+            # Alternative: PySCF MP2
+            C = np.hstack((Co, Cv))
+            E = np.hstack((Eo, Ev))
+            occ = np.asarray(no*[2] + nv*[0])
+            t0 = MPI.Wtime()
+            mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
+            eris = mp2.ao2mo()
+            assert np.allclose(eri, eris.ovov.reshape((no,nv,no,nv)))
+            e_mp2, T2b = mp2.kernel(mo_energy=E, eris=eris)
+            time_mp2 = MPI.Wtime() - t0
+            log.debug("Time for MP2: %s", get_time_string(time_mp2))
+
+            log.debug(T2.shape)
+            log.debug(T2b.shape)
+            log.debug(np.linalg.norm(T2-T2b))
+            log.debug(T2[0,0,0,0])
+            log.debug(T2b[0,0,0,0])
+            assert np.allclose(T2, T2b)
+
+
             if local_E:
-                l = self.indices
-                P = np.linalg.multi_dot((Co.T, S[:,l], Co[l]))
+                #l = self.indices
+                #P = np.linalg.multi_dot((Co.T, S[:,l], Co[l]))
 
                 # CHECK 1
-                P2 = self.get_local_energy_projector(Co)
-                assert np.allclose(P, P2)
+                P = self.get_local_energy_projector(Co)
+                #assert np.allclose(P, P2)
 
                 pT2 = einsum("xi,ijab->xjab", P, T2)
             else:
                 pT2 = T2
+            t0 = MPI.Wtime()
             e_mp2 = 2*einsum('ijab,iajb', pT2, eri)
             e_mp2 -=  einsum('ijab,jaib', pT2, eri)
+            time_emp2 = MPI.Wtime() - t0
+            log.debug("Time for energy: %s", get_time_string(time_emp2))
             # MP2 density matrix [optional]
             if make_dm:
+
+                t0 = MPI.Wtime()
                 #Doo2 = 2*(2*einsum("kiab,kjab->ij", T2, T2)
                 #          - einsum("kiab,kjba->ij", T2, T2))
                 Doo = 2*(2*einsum("ikab,jkab->ij", T2, T2)
@@ -670,6 +799,9 @@ class Cluster:
 
                 Dvv = 2*(2*einsum("ijac,ijbc->ab", T2, T2)
                          - einsum("ijac,ijcb->ab", T2, T2))
+
+                time_dm = MPI.Wtime() - t0
+                log.debug("Time for DM: %s", get_time_string(time_dm))
 
                 # Rotate back to input coeffients (undo canonicalization)
                 if canon_occ:
@@ -691,18 +823,69 @@ class Cluster:
             Cv = C_cl_v
             e_mp2_full, D, _ = make_MP2(Co, Cv)
             N, R = np.linalg.eigh(D[nclocc:,nclocc:])
-            log.debug("Occupation numbers:\n%s", N)
 
         N, R = N[::-1], R[:,::-1]
+        #log.debug("Occupation numbers:\n%s", N)
+
+        # --- TESTING ---
+        # Save occupation values
+        with open("mp2-no-%s-%s.txt" % (self.name, kind), "ab") as f:
+            np.savetxt(f, N[np.newaxis])
+
+        # Here we reorder the eigenvalues
+        #if True:
+        if False:
+            if kind == "vir":
+                CR = np.dot(Cv[:,nclvir:], R)
+            elif kind == "occ":
+                CR = np.dot(Co[:,nclocc:], R)
+            reffile = "mp2-no-%s-ref.npz" % kind
+
+            if os.path.isfile(reffile):
+                ref = np.load(reffile)
+                N_ref, CR_ref = ref["N"], ref["CR"]
+
+                #if N_ref is not None and R_ref is not None:
+                log.debug("Reordering eigenvalues according to reference.")
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v/e", return_cost=True)
+                reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="e^2/v", return_cost=True)
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*e", return_cost=True)
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*sqrt(e)", return_cost=True)
+                #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="evv", return_cost=True)
+                eigreorder_logging(N, reorder, log.debug)
+                log.debug("eigassign cost function value=%g", cost)
+                N = N[reorder]
+                R = R[:,reorder]
+                CR = CR[:,reorder]
+
+            with open("mp2-no-%s-%s-ordered.txt" % (self.name, kind), "ab") as f:
+                np.savetxt(f, N[np.newaxis])
+
+            np.savez(reffile, N=N, CR=CR)
+
         if nno is None:
             nno = sum(N >= tol)
-            nrest = len(N) - nno
-            log.debug("Using %d out of %d MP2 natural %s orbitals (tolerance=%.3g)", nno, len(N), kind, tol)
-            log.debug("Difference in occupation:\n%s", N[:nno])
         else:
             nno = min(nno, len(N))
-            log.debug("Using %d out of %d MP2 natural %s orbitals", nno, len(N), kind)
-            log.debug("Difference in occupation:\n%s", N[:nno])
+
+        protect_degeneracies = False
+        #protect_degeneracies = True
+        # Avoid splitting within degenerate subspace
+        if protect_degeneracies and nno > 0:
+            #dgen_tol = 1e-10
+            N0 = N[nno-1]
+            while nno < len(N):
+                #if abs(N[nno] - N0) <= dgen_tol:
+                if np.isclose(N[nno], N0, atol=1e-9, rtol=1e-6):
+                    log.debug("Degenerate MP2 NO found: %.6e vs %.6e - adding to bath space.", N[nno], N0)
+                    nno += 1
+                else:
+                    break
+
+        log.debug("Using %d out of %d MP2 natural %s orbitals", nno, len(N), kind)
+
+        log.debug("Difference in occupation:\n%s", N[:nno])
+        log.debug("Following 3:\n%s", N[nno:nno+3])
 
         # Delta MP2 correction
         # ====================
@@ -713,6 +896,7 @@ class Cluster:
             nclno = nclvir + nno
             Cno = Cno[:,:nclno]
             e_mp2_no = make_MP2(Co, Cno, make_dm=False)
+
         elif kind == "occ":
             Cno = Co.copy()
             Cno[:,nclocc:] = np.dot(Co[:,nclocc:], R)
@@ -808,6 +992,8 @@ class Cluster:
         #self.make_cubegen_file(C, orbitals=list(range(len(self))), filename="ortho-AO")
         #1/0
 
+        self.C_iao = C[:,:len(self)].copy()
+
         C, nbath0, nenvocc = self.make_dmet_bath_orbitals(C)
         nbath = nbath0
 
@@ -818,55 +1004,91 @@ class Cluster:
         orbitals.define_space("occ-env", np.s_[ncl:ncl+nenvocc])
         orbitals.define_space("vir-env", np.s_[ncl+nenvocc:])
 
-        # MP2 natural orbitals
-        # ====================
-        # Currently only MP2 NOs OR additional bath orbitals are supported!
-        #if self.tol_vno or self.n_vno:
-        if self.bath_type == "mp2-no":
-            t0 = MPI.Wtime()
-            orbitals2, nvno, e_delta_mp2_v = self.make_mp2_no(orbitals, kind="vir", nno=self.bath_target_size[1], tol=self.tol_bath)
-            log.debug("Wall time for MP2 VNO: %s", get_time_string(MPI.Wtime()-t0))
-            C = orbitals2.C
-            nbathvir = nvno
 
-            t0 = MPI.Wtime()
-            orbitals3, nono, e_delta_mp2_o = self.make_mp2_no(orbitals2, kind="occ", nno=self.bath_target_size[0], tol=self.tol_bath)
-            log.debug("Wall time for MP2 ONO: %s", get_time_string(MPI.Wtime()-t0))
-            C = orbitals3.C
-            nbathocc = nono
-            #e_delta_mp2_o = 0.0
-            #nbathocc = 0
-
-            e_delta_mp2 = e_delta_mp2_v + e_delta_mp2_o
-            log.debug("Total delta MP2 correction=%.8g", e_delta_mp2)
-
-        else:
-            e_delta_mp2 = 0.0
-            # Use previous orbitals
-            if ref_orbitals and self.use_ref_orbitals_bath:
-                # Occupied
-                nbathocc = ref_orbitals.get_size("occ-bath")
-                if nbathocc == 0:
-                    log.debug("No reference occupied bath orbitals.")
-                else:
-                    C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("occ-bath"),
-                            orbitals.get_indices("occ-env"))
-                    log.debug("Eigenvalues of %d projected occupied bath orbitals:\n%s",
-                            nbathocc, eig[:nbathocc])
-                    log.debug("Next 3 eigenvalues: %s", eig[nbathocc:nbathocc+3])
-                # Virtual
-                nbathvir = ref_orbitals.get_size("vir-bath")
-                if nbathvir == 0:
-                    log.debug("No reference virtual bath orbitals.")
-                else:
-                    C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("vir-bath"),
-                            orbitals.get_indices("vir-env"))
-                    log.debug("Eigenvalues of %d projected virtual bath orbitals:\n%s",
-                            nbathvir, eig[:nbathvir])
-                    log.debug("Next 3 eigenvalues: %s", eig[nbathvir:nbathvir+3])
-
-            # Add additional power bath orbitals
+        # Reuse reference orbitals
+        # ========================
+        log.debug("ref_orbitals: %r", self.ref_orbitals)
+        log.debug("use_ref_orbitals_bath: %r", self.use_ref_orbitals_bath)
+        if ref_orbitals and self.use_ref_orbitals_bath:
+            log.debug("Using reference bath orbitals.")
+            # Occupied
+            nbathocc = ref_orbitals.get_size("occ-bath")
+            if nbathocc == 0:
+                log.debug("No reference occupied bath orbitals.")
             else:
+                C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("occ-bath"),
+                        orbitals.get_indices("occ-env"))
+                log.debug("Eigenvalues of %d projected occupied bath orbitals:\n%s",
+                        nbathocc, eig[:nbathocc])
+                log.debug("Next 3 eigenvalues: %s", eig[nbathocc:nbathocc+3])
+            # Virtual
+            nbathvir = ref_orbitals.get_size("vir-bath")
+            if nbathvir == 0:
+                log.debug("No reference virtual bath orbitals.")
+            else:
+                C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("vir-bath"),
+                        orbitals.get_indices("vir-env"))
+                log.debug("Eigenvalues of %d projected virtual bath orbitals:\n%s",
+                        nbathvir, eig[:nbathvir])
+                log.debug("Next 3 eigenvalues: %s", eig[nbathvir:nbathvir+3])
+
+            e_delta_mp2 = 0.0
+
+        # Make new bath orbitals
+        else:
+            # MP2 natural orbitals
+            # ====================
+            # Currently only MP2 NOs OR additional bath orbitals are supported!
+            #if self.tol_vno or self.n_vno:
+            if self.bath_type == "mp2-no":
+                log.debug("Making MP2 virtual natural orbitals.")
+                t0 = MPI.Wtime()
+                orbitals2, nvno, e_delta_mp2_v = self.make_mp2_no(
+                        orbitals, kind="vir", nno=self.bath_target_size[1], tol=self.tol_bath)
+                log.debug("Wall time for MP2 VNO: %s", get_time_string(MPI.Wtime()-t0))
+                C = orbitals2.C
+                nbathvir = nvno
+
+                log.debug("Making MP2 occupied natural orbitals.")
+                t0 = MPI.Wtime()
+                orbitals3, nono, e_delta_mp2_o = self.make_mp2_no(
+                        orbitals2, kind="occ", nno=self.bath_target_size[0], tol=self.tol_bath)
+                log.debug("Wall time for MP2 ONO: %s", get_time_string(MPI.Wtime()-t0))
+                C = orbitals3.C
+                nbathocc = nono
+                #e_delta_mp2_o = 0.0
+                #nbathocc = 0
+
+                e_delta_mp2 = e_delta_mp2_v + e_delta_mp2_o
+                log.debug("Total delta MP2 correction=%.8g", e_delta_mp2)
+
+            else:
+                e_delta_mp2 = 0.0
+                # Use previous orbitals
+                #if ref_orbitals and self.use_ref_orbitals_bath:
+                #    # Occupied
+                #    nbathocc = ref_orbitals.get_size("occ-bath")
+                #    if nbathocc == 0:
+                #        log.debug("No reference occupied bath orbitals.")
+                #    else:
+                #        C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("occ-bath"),
+                #                orbitals.get_indices("occ-env"))
+                #        log.debug("Eigenvalues of %d projected occupied bath orbitals:\n%s",
+                #                nbathocc, eig[:nbathocc])
+                #        log.debug("Next 3 eigenvalues: %s", eig[nbathocc:nbathocc+3])
+                #    # Virtual
+                #    nbathvir = ref_orbitals.get_size("vir-bath")
+                #    if nbathvir == 0:
+                #        log.debug("No reference virtual bath orbitals.")
+                #    else:
+                #        C, eig = self.project_ref_orbitals(C, ref_orbitals.get_coeff("vir-bath"),
+                #                orbitals.get_indices("vir-env"))
+                #        log.debug("Eigenvalues of %d projected virtual bath orbitals:\n%s",
+                #                nbathvir, eig[:nbathvir])
+                #        log.debug("Next 3 eigenvalues: %s", eig[nbathvir:nbathvir+3])
+
+                ## Add additional power bath orbitals
+                #else:
                 nbathocc = 0
                 nbathvir = 0
                 # Power orbitals
@@ -900,9 +1122,9 @@ class Cluster:
                 # Matsubara
                 elif self.bath_type == "matsubara":
                     occ_space = np.s_[len(self)+nbath0+nbathocc:len(self)+nbath0+nenvocc]
-                    C, nbo = self.make_matsubara_bath_orbitals(C, "occ", occ_space, tol=self.tol_bath)
+                    C, nbo = self.make_matsubara_bath_orbitals(C, "occ", occ_space, nbath=self.bath_target_size[0], tol=self.tol_bath)
                     vir_space = np.s_[len(self)+nbath0+nenvocc+nbathvir:]
-                    C, nbv = self.make_matsubara_bath_orbitals(C, "vir", vir_space, tol=self.tol_bath)
+                    C, nbv = self.make_matsubara_bath_orbitals(C, "vir", vir_space, nbath=self.bath_target_size[1], tol=self.tol_bath)
                     nbathocc += nbo
                     nbathvir += nbv
 
@@ -1016,14 +1238,22 @@ class Cluster:
             else:
                 ccsd = pyscf.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
             # We want to reuse the integral for local energy
+            t0 = MPI.Wtime()
             eris = ccsd.ao2mo()
+            log.debug("Time for ao2mo: %s", get_time_string(MPI.Wtime()-t0))
             ccsd.max_cycle = 100
             ccsd.verbose = cc_verbose
-            log.debug("Running CCSD...")
-            ccsd.kernel(eris=eris, **self.restart_params)
+            if self.restart_solver:
+                log.debug("Running CCSD starting with parameters for: %r...", self.restart_params.keys())
+                ccsd.kernel(eris=eris, **self.restart_params)
+            else:
+                log.debug("Running CCSD...")
+                ccsd.kernel(eris=eris)
             log.debug("CCSD done. converged: %r", ccsd.converged)
             if self.restart_solver:
-                self.restart_params = {"t1" : ccsd.t1, "t2" : ccsd.t2}
+                #self.restart_params = {"t1" : ccsd.t1, "t2" : ccsd.t2}
+                self.restart_params["t1"] = ccsd.t1
+                self.restart_params["t2"] = ccsd.t2
             C1 = ccsd.t1
             C2 = ccsd.t2 + einsum('ia,jb->ijab', ccsd.t1, ccsd.t1)
 
@@ -1127,8 +1357,8 @@ class Cluster:
             #self.e_corr_var = self.get_local_energy(ccsd, C1, C2, project_var="left")
             #self.e_corr_var2 = self.get_local_energy(ccsd, C1, C2, project_var="center")
 
-            #self.e_ccsd_v = self.get_local_energy(ccsd, C1, C2, "virtual", eris=eris)
-            self.e_ccsd_v = self.get_local_energy_most_indices_2C(ccsd, C1, C2, eris=eris)
+            self.e_ccsd_v = self.get_local_energy(ccsd, C1, C2, "virtual", eris=eris)
+            #self.e_ccsd_v = self.get_local_energy_most_indices_2C(ccsd, C1, C2, eris=eris)
 
             self.e_corr = self.e_ccsd
             self.e_corr_dmp2 = self.e_ccsd + e_delta_mp2
@@ -1165,10 +1395,10 @@ class Cluster:
 
     def get_local_energy_projector(self, C, kind="right"):
         """Projector for local energy expression."""
-        log.debug("Making local energy projector for orbital type %s", self.local_orbital_type)
+        #log.debug("Making local energy projector for orbital type %s", self.local_orbital_type)
+        S = self.mf.get_ovlp()
         if self.local_orbital_type == "ao":
             l = self.indices
-            S = self.mf.get_ovlp()
             # This is the "natural way" to truncate in AO basis
             if kind == "right":
                 P = np.linalg.multi_dot((C.T, S[:,l], C[l]))
@@ -1186,9 +1416,14 @@ class Cluster:
                 raise ValueError("Unknown kind=%s" % kind)
 
         elif self.local_orbital_type == "iao":
-            n = C.shape[-1]
-            P = np.zeros((n, n))
-            P[:len(self),:len(self)] = np.eye(len(self))
+            #n = C.shape[-1]
+            #assert n <= len(self)
+            #P = np.zeros((n, n))
+            #P[:len(self),:len(self)] = np.eye(len(self))
+
+            C_iao = self.C_iao
+            CSC = np.linalg.multi_dot((C.T, S, C_iao))
+            P = np.dot(CSC, CSC.T)
 
         else:
             raise ValueError()
@@ -1521,7 +1756,7 @@ class Cluster:
 
         return e_loc
 
-    def get_local_energy(self, cc, C1, C2, project="occupied", project_var="right", eris=None,
+    def get_local_energy(self, cc, C1, C2, project="occupied", project_kind="right", eris=None,
             symmetry_factor=None):
 
         if symmetry_factor is None:
@@ -1535,38 +1770,13 @@ class Cluster:
         C = cc.mo_coeff[:,a]
 
         # Project one index of amplitudes
-        l = self.indices
-        r = self.not_indices
         if project == "occupied":
-            if project_var == "right":
-                P = np.linalg.multi_dot((C[:,o].T, S[:,l], C[l][:,o]))
-            elif project_var == "left":
-                P = np.linalg.multi_dot((C[l][:,o].T, S[l], C[:,o]))
-            elif project_var == "center":
-                import scipy
-                import scipy.linalg
-                s = scipy.linalg.fractional_matrix_power(S, 0.5)
-                assert np.isclose(np.linalg.norm(s.imag), 0)
-                s = s.real
-                assert np.allclose(np.dot(s, s), S)
-                P = np.linalg.multi_dot((C[:,o].T, s[:,l], s[l], C[:,o]))
-
-            P2 = self.get_local_energy_projector(C[:,o], kind=project_var)
-            assert np.allclose(P, P2)
-
-            #S_121 = self.make_projector_s121()
-            #P = np.linalg.multi_dot((C_cc[:,o].T, S_121, C_cc[:,o]))
+            P = self.get_local_energy_projector(C[:,o], kind=project_kind)
             if C1 is not None:
                 C1 = einsum("xi,ia->xa", P, C1)
             C2 = einsum("xi,ijab->xjab", P, C2)
         elif project == "virtual":
-            P = np.linalg.multi_dot((C[:,v].T, S[:,l], C[l][:,v]))
-            #S_121 = self.make_projector_s121()
-            #P = np.linalg.multi_dot((C_cc[:,o].T, S_121, C_cc[:,o]))
-
-            P2 = self.get_local_energy_projector(C[:,v], kind=project_var)
-            assert np.allclose(P, P2)
-
+            P = self.get_local_energy_projector(C[:,v], kind=project_kind)
             if C1 is not None:
                 C1 = einsum("xa,ia->ia", P, C1)
             C2 = einsum("xa,ijab->ijxb", P, C2)
@@ -1620,8 +1830,8 @@ class EmbCC:
             tol_dmet_bath=1e-8,
             #tol_vno=1e-3, vno_ratio=None,
             use_ref_orbitals_dmet=True,
-            #use_ref_orbitals_bath=True,
-            use_ref_orbitals_bath=False,
+            use_ref_orbitals_bath=True,
+            #use_ref_orbitals_bath=False,
             benchmark=None):
         self.mf = mf
 
@@ -1648,6 +1858,32 @@ class EmbCC:
     @property
     def mol(self):
         return self.mf.mol
+
+    def get_cluster_attributes(self, attr):
+        attrs = {}
+        for cluster in self.clusters:
+            attrs[cluster.name] = getattr(cluster, attr)
+        return attrs
+
+    def set_cluster_attributes(self, attr, values):
+        log.debug("Setting attribute %s of all clusters", attr)
+        for cluster in self.clusters:
+            setattr(cluster, attr, values[cluster.name])
+
+
+    def get_orbitals(self):
+        return self.get_cluster_attributes("orbitals")
+
+        #orbitals = {}
+        #for cluster in self.clusters:
+        #    orbitals[cluster.name] = cluster.orbitals
+        #return orbitals
+
+    def set_reference_orbitals(self, ref_orbitals):
+        return self.set_cluster_attributes("ref_orbitals", ref_orbitals)
+
+        #for cluster in self.clusters:
+        #    cluster.ref_orbitals = ref_orbitals[cluster.name]
 
     def make_cluster(self, name, ao_indices, **kwargs):
         for opt in self.default_options:
@@ -1685,29 +1921,15 @@ class EmbCC:
             self.clusters.append(c)
         return self.clusters
 
-    def make_iao_atom_clusters(self, minao=None, **kwargs):
-        """Divide intrinsic atomic orbitals into clusters according to their base atom."""
-
-        # base atom for each AO
-        base_atoms = np.asarray([ao[0] for ao in self.mol.ao_labels(None)])
-
-        # Make non-orthogonal IAOs
+    def get_iao_coeff(self, minao="minao"):
         C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
         C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
-
-        refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
-        iao_atoms = [x[1] for x in refmol.ao_labels(None)]
-        log.debug("Base atoms of IAOs: %r", iao_atoms)
-
-        iao_atoms = [x[0] for x in refmol.ao_labels(None)]
-        log.debug("Base atoms of IAOs: %r", iao_atoms)
+        niao = C_iao.shape[-1]
+        log.debug("Total number of IAOs=%d", niao)
 
         # Orthogonalize IAO
         S = self.mf.get_ovlp()
-        C_iao = pyscf.lo.vec_lowdin(iao, S)
-
-        niao = C_iao.shape[-1]
-        log.debug("Total number of IAOs=%d", niao)
+        C_iao = pyscf.lo.vec_lowdin(C_iao, S)
 
         # Add remaining virtual space
         # Transform to MO basis
@@ -1717,28 +1939,38 @@ class EmbCC:
         norb = self.mf.mo_coeff.shape[-1]
         P_env = np.eye(norb) - P_iao
         e, R = np.linalg.eigh(P_env)
-        print("Eigenvalues of projector into environment:\n%s" % e)
-        assert np.all(np.logical_or(abs(e) < 1e-12, abs(e)-1 < 1e-12))
-        mask = (e > 1e-12)
+        #log.debug("Eigenvalues of projector into environment:\n%s", e)
+        assert np.all(np.logical_or(abs(e) < 1e-10, abs(e)-1 < 1e-10))
+        mask = (e > 1e-10)
         assert (np.sum(mask) + niao == norb)
         C_env = R[:,mask]
 
         C_mo = np.hstack((C_iao_mo, C_env))
         # Rotate back to AO
         C = np.dot(self.mf.mo_coeff, C_mo)
-
         assert np.allclose(C.T.dot(S).dot(C) - np.eye(norb), 0)
+
+        # Get base atoms of IAOs
+        refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
+        iao_atoms = [x[0] for x in refmol.ao_labels(None)]
+        #log.debug("Base atoms of IAOs: %r", iao_atoms)
+
+        return C, iao_atoms
+
+
+    def make_iao_atom_clusters(self, minao="minao", **kwargs):
+        """Divide intrinsic atomic orbitals into clusters according to their base atom."""
+
+        C, iao_atoms = self.get_iao_coeff()
 
         self.clear_clusters()
         ncluster = self.mol.natm
         for atomid in range(ncluster):
-
-            iao_indices = np.nonzero(iao_atoms == atomid)[0]
+            iao_indices = np.nonzero(np.isin(iao_atoms, atomid))[0]
             name = self.mol.atom_symbol(atomid)
             c = self.make_cluster(name, iao_indices, coeff=C, local_orbital_type="iao", **kwargs)
             self.clusters.append(c)
         return self.clusters
-
 
     def make_ao_clusters(self, **kwargs):
         """Divide atomic orbitals into clusters."""
@@ -1788,6 +2020,7 @@ class EmbCC:
         self.clusters.append(c)
         return c
 
+
     def make_custom_atom_cluster(self, atoms, name=None, **kwargs):
         """Make custom clusters in terms of atoms..
 
@@ -1801,10 +2034,45 @@ class EmbCC:
             name = ",".join(atoms)
         # base atom for each AO
         ao2atomlbl = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
+
+        for atom in atoms:
+            if atom not in ao2atomlbl:
+                raise ValueError("Atom %s not in molecule." % atom)
+
         ao_indices = np.nonzero(np.isin(ao2atomlbl, atoms))[0]
         c = self.make_cluster(name, ao_indices, **kwargs)
         self.clusters.append(c)
         return c
+
+    def make_custom_iao_atom_cluster(self, atoms, name=None, **kwargs):
+        """Make custom clusters in terms of atoms..
+
+        Parameters
+        ----------
+        atoms : iterable
+            List of atom symbols for cluster.
+        """
+
+        if name is None:
+            name = ",".join(atoms)
+
+        C, iao_atoms = self.get_iao_coeff()
+
+        atom_symbols = [self.mol.atom_symbol(atomid) for atomid in iao_atoms]
+        log.debug("Atom symbols: %r", atom_symbols)
+
+        for atom in atoms:
+            if atom not in atom_symbols:
+                raise ValueError("Atom %s not in molecule." % atom)
+
+        iao_indices = np.nonzero(np.isin(atom_symbols, atoms))[0]
+        log.debug("IAO indices: %r", iao_indices)
+        cluster = self.make_cluster(name, iao_indices, coeff=C, local_orbital_type="iao", **kwargs)
+
+        self.clusters.append(cluster)
+        return cluster
+
+
 
     def merge_clusters(self, clusters, name=None, **kwargs):
         """Attributes solver, bath_type, tol_bath, and tol_dmet_bath will be taken from first cluster,
@@ -1860,14 +2128,19 @@ class EmbCC:
                     return False
         return True
 
+
     def clear_clusters(self):
         """Clear all previously defined clusters."""
         self.clusters = []
+
 
     def print_clusters(self, clusters=None, file=None):
         """Print clusters to logging or file."""
         if clusters is None:
             clusters = self.clusters
+
+        if clusters[0].local_orbital_type == "iao":
+            raise NotImplementedError()
 
         ao_labels = self.mol.ao_labels(None)
 
