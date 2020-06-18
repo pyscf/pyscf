@@ -327,12 +327,10 @@ ALIAS = {
     'ccecpregccpvtz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVTZ.dat'),
     'ccecpregccpvqz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVQZ.dat'),
     'ccecpregccpv5z'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pV5Z.dat'),
-    'ccecpregccpv6z'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pV6Z.dat'),
     'ccecpregaugccpvdz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVDZ.dat'),
     'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
     'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
-    'ccecpregaugccpv6z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV6Z.dat'),
 }
 
 def _is_pople_basis(basis):
