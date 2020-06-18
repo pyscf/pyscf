@@ -321,6 +321,18 @@ ALIAS = {
     'ccecpheaugccpvqz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpheaugccpv5z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV5Z.dat'),
     'ccecpheaugccpv6z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV6Z.dat'),
+# ccECP_reg
+    'ccecpreg'         : join('ccecp-basis', 'ccECP_reg', 'ccECP.dat'   ),
+    'ccecpregccpvdz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVDZ.dat'),
+    'ccecpregccpvtz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVTZ.dat'),
+    'ccecpregccpvqz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVQZ.dat'),
+    'ccecpregccpv5z'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pV5Z.dat'),
+    'ccecpregccpv6z'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pV6Z.dat'),
+    'ccecpregaugccpvdz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVDZ.dat'),
+    'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
+    'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
+    'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
+    'ccecpregaugccpv6z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV6Z.dat'),
 }
 
 def _is_pople_basis(basis):
