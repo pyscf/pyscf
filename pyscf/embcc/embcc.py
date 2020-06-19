@@ -22,7 +22,8 @@ import pyscf.pbc.mp
 import pyscf.pbc.tools
 
 from .orbitals import Orbitals
-from .util import eigassign, eigreorder_logging
+from .util import *
+from .bath import *
 
 __all__ = [
         "EmbCC",
@@ -35,84 +36,17 @@ MPI_size = MPI_comm.Get_size()
 log = logging.getLogger(__name__)
 
 # optimize is False by default, despite NumPy's documentation, as of version 1.17
-einsum = functools.partial(np.einsum, optimize=True)
-
-#class Threshold:
-#
-#    def __init__(self, minnum=None, maxnum=None, minval=None, maxval=None):
-#        self.minnum = minnum
-#        self.maxnum = maxnum
-#        self.minval = minval
-#        self.maxval = maxval
-#
-#    def get_number(self, a):
-#        """Number is in [minnum, maxnum]
-#        if minval
-#
-#
-#        if self.number is not None:
-#            return self.number
-#        else:
-#            return
-
-def reorder_columns(a, *args):
-    """Reorder columns of matrix a. The new order must be specified by a list of tuples,
-    where each tuple represents a block of columns, with the first tuple index being the
-    first column index and the second tuple index the number of columns in the respective
-    block.
-    """
-    starts, sizes = zip(*args)
-    n = len(starts)
-
-    #slices
-    starts = [s if s is not None else 0 for s in starts]
-    ends = [starts[i]+sizes[i] if sizes[i] is not None else None for i in range(n)]
-    slices = [np.s_[starts[i]:ends[i]] for i in range(n)]
-
-    b = np.hstack([a[:,s] for s in slices])
-    assert b.shape == a.shape
-    return b
-
-def get_time_string(seconds):
-    m, s = divmod(seconds, 60)
-    if seconds >= 3600:
-        tstr = "%.0f h, %.0f min, %.0f s" % (divmod(m, 60) + (s,))
-    elif seconds >= 60:
-        tstr = "%.0f min %.1f s" % (m, s)
-    else:
-        tstr = "%.2f s" % s
-    return tstr
-
-
-# This is not faster than PySCF...
-#def transform_eri(mf, C1, C2, C3, C4):
-#    mol = mf.mol
-#    norb = mol.nao_nr()
-#
-#    t0 = MPI.Wtime()
-#    #eri = mol.intor("int2e", aosym="s8")
-#    eri = mol.intor("int2e", aosym="1")
-#    time_eri = MPI.Wtime() - t0
-#
-#    #t0 = MPI.Wtime()
-#    #eri = pyscf.ao2mo.restore(1, eri, norb, 1)
-#    #time_restore = MPI.Wtime() - t0
-#
-#    t0 = MPI.Wtime()
-#    eri = einsum("abcd,ai,bj,ck,dl->ijkl", eri, C1, C2, C3, C4)
-#    time_trafo = MPI.Wtime() - t0
-#
-#    #log.debug("AO timings: eri=%s, restore=%s, transform=%s", *[get_time_string(t) for t in (time_eri, time_restore, time_trafo)])
-#    log.debug("AO timings: eri=%s, transform=%s", *[get_time_string(t) for t in (time_eri, time_trafo)])
-#    return eri
+#einsum = functools.partial(np.einsum, optimize=True)
 
 class Cluster:
 
-    def __init__(self, base, name, indices, coeff=None, solver="CCSD", bath_type="power", tol_bath=1e-3, tol_dmet_bath=1e-8,
+    def __init__(self, base, name, indices, C_local, C_env, coeff=None, solver="CCSD", bath_type="power", tol_bath=1e-3, tol_dmet_bath=1e-8,
             **kwargs):
         """
         Parameters
         ----------
+        base : EmbCC
+            Base EmbCC object.
         name :
             Name of cluster.
         indices:
@@ -120,10 +54,18 @@ class Cluster:
             Intrinsic atomic orbital indices of cluster. [ local_orbital_type == "iao" ]
         """
 
+
         self.base = base
+        log.debug("Making cluster with local orbital type %s", self.local_orbital_type)
         self.name = name
         self.indices = indices
-        self.coeff = coeff
+        #self.coeff = coeff
+
+        # NEW: local and environment orbitals
+        self.C_local = C_local
+        self.C_env = C_env
+
+        self.nlocal = len(self.indices)
 
         # Optional
         assert solver in ("MP2", "CISD", "CCSD", "FCI")
@@ -131,10 +73,11 @@ class Cluster:
         self.bath_type = bath_type
 
 
-        self.local_orbital_type = kwargs.get("local_orbital_type", "ao")
-        if self.local_orbital_type == "iao":
-            if self.coeff is None:
-                raise ValueError()
+        #self.local_orbital_type = kwargs.get("local_orbital_type", "AO")
+        #assert self.local_orbital_type in ("AO", "IAO")
+        #if self.local_orbital_type == "iao":
+        #    if self.coeff is None:
+        #        raise ValueError()
 
         #self.bath_target_size = (None, None)    # (Occupied, Virtual)
         self.bath_target_size = kwargs.get("bath_target_size", [None, None])    # (Occupied, Virtual)
@@ -154,7 +97,6 @@ class Cluster:
         #self.use_ref_orbitals_bath = False
 
         self.symmetry_factor = kwargs.get("symmetry_factor", 1.0)
-
 
         # Restart solver from previous solution [True/False]
         #self.restart_solver = kwargs.get("restart_solver", True)
@@ -178,9 +120,13 @@ class Cluster:
         """Set default attributes of cluster object."""
         # Orbital objects
         self.orbitals = None
-        self.ref_orbitals = None
 
-        self.ref_orbitals_new = {}
+        #self.ref_orbitals = None
+
+
+        # Reference orbitals should be saved with keys
+        # dmet-bath, occ-bath, vir-bath
+        self.ref_orbitals = {}
 
         # Orbitals sizes
         self.nbath0 = 0
@@ -240,6 +186,10 @@ class Cluster:
         return isinstance(self.mol, pyscf.pbc.gto.Cell)
 
     @property
+    def local_orbital_type(self):
+        return self.base.local_orbital_type
+
+    @property
     def not_indices(self):
         """Indices which are NOT in the cluster, i.e. complement to self.indices."""
         return np.asarray([i for i in np.arange(self.mol.nao_nr()) if i not in self.indices])
@@ -292,7 +242,6 @@ class Cluster:
 
         return C
 
-
     def project_ref_orbitals(self, C, C_ref, space):
         """Project reference orbitals into available space in new geometry.
 
@@ -316,11 +265,41 @@ class Cluster:
         CSC = np.linalg.multi_dot((C_ref.T, S, C[:,space]))
         P = np.dot(CSC.T, CSC)
         e, r = np.linalg.eigh(P)
-        rev = np.s_[::-1]
-        e = e[rev]
-        r = r[:,rev]
+        e = e[::-1]
+        r = r[:,::-1]
         C[:,space] = np.dot(C[:,space], r)
         return C, e
+
+    def project_ref_orbitals_new(self, C_ref, C):
+        """Project reference orbitals into available space in new geometry.
+
+        The projected orbitals will be ordered according to their eigenvalues within the space.
+
+        Parameters
+        ----------
+        C : ndarray
+            Orbital coefficients.
+        C_ref : ndarray
+            Orbital coefficients of reference orbitals.
+        """
+        assert (C_ref.shape[-1] > 0)
+        assert (C_ref.shape[-1] <= C.shape[-1])
+        S = self.mf.get_ovlp()
+        # Diagonalize reference orbitals among themselves (due to change in overlap matrix)
+        C_ref = pyscf.lo.vec_lowdin(C_ref, S)
+        # Diagonalize projector in space
+        CSC = np.linalg.multi_dot((C_ref.T, S, C))
+        P = np.dot(CSC.T, CSC)
+        e, R = np.linalg.eigh(P)
+        e, R = e[::-1], R[:,::-1]
+        C = np.dot(C, R)
+
+        return C, e
+
+    # Methods from bath.py
+    make_dmet_bath = make_dmet_bath
+    make_bath = make_bath
+    make_mf_bath = make_mf_bath
 
     def make_dmet_bath_orbitals(self, C, ref_orbitals=None, tol=None):
         """If C_ref is specified, complete DMET orbital space using active projection of reference orbitals."""
@@ -351,8 +330,8 @@ class Cluster:
         C[:,env] = np.dot(C[:,env], v)
 
         # Complete DMET orbital space using reference
-        if self.use_ref_orbitals_dmet and ref_orbitals is not None:
-            C_ref = ref_orbitals.get_coeff("dmet-bath")
+        if self.use_ref_orbitals_dmet and "dmet-bath" in ref_orbitals:
+            C_ref = ref_orbitals["dmet-bath"]
             nref = C_ref.shape[-1]
             nmissing = nref - nbath0
             if nmissing == 0:
@@ -574,6 +553,7 @@ class Cluster:
 
         return C, nbath
 
+
     def make_matsubara_bath_orbitals(self, C, kind, non_local, npoints=1000, beta=100.0,
             nbath=None, tol=None, normalize=False):
 
@@ -766,8 +746,7 @@ class Cluster:
         assert nno is not None or tol is not None
         assert kind in ("occ", "vir")
 
-        if symmetry_factor is None:
-            symmetry_factor = self.symmetry_factor
+        symmetry_factor = self.symmetry_factor
 
         if kind == "vir":
             nvir = orbitals.get_size(("vir-env"))
@@ -902,53 +881,90 @@ class Cluster:
 
         return orbitals_out, nno, e_delta_mp2
 
-    def make_cluster(self, ref_orbitals=None):
+    def make_dmet_cluster(self, ref_orbitals=None):
+        """Make DMET cluster space.
+
+        Returns
+        -------
+        C_occclst : ndarray
+            Occupied cluster orbitals.
+        C_virclst : ndarray
+            Virtual cluster orbitals.
+        C_occenv : ndarray
+            Occupied environment orbitals.
+        C_virenv : ndarray
+            Virtual environment orbitals.
+        """
 
         # Orbitals from a reference calaculation (e.g. different geometry)
         # Used for recovery of orbitals via active transformation
+        if ref_orbitals is None:
+            ref_orbitals = {}
         ref_orbitals = ref_orbitals or self.ref_orbitals
 
-        if self.coeff is None:
-            assert self.local_orbital_type == "AO"
-            C = self.make_local_orbitals()
-        else:
-            assert self.local_orbital_type == "IAO"
-            # Reorder local orbitals to the front
-            C = np.hstack((self.coeff[:,self.indices], self.coeff[:,self.not_indices]))
+        #if self.coeff is None:
+        #    assert self.local_orbital_type == "AO"
+        #    C = self.make_local_orbitals()
+        #else:
+        #    assert self.local_orbital_type == "IAO"
+        #    # Reorder local orbitals to the front
+        #    C = np.hstack((self.coeff[:,self.indices], self.coeff[:,self.not_indices]))
+        #C_local = C[:,:self.nlocal].copy()
+        #C_env = C[:,self.nlocal:].copy()
+        #self.C_local = C_local
 
-        self.C_local = C[:,:len(self)].copy()
-
-        #C = self.make_local_orbitals()
-        C, nbath0, nenvocc = self.make_dmet_bath_orbitals(C, ref_orbitals=ref_orbitals)
-        nbath = nbath0
+        C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=ref_orbitals.get("dmet-bath", None))
 
         # Diagonalize cluster DM to get fully occupied/virtual orbitals
         S = self.mf.get_ovlp()
-        ncl = len(self) + nbath0
-        cl = np.s_[:ncl]
-        SC = np.dot(S, C[:,cl])
-        D = np.linalg.multi_dot((SC.T, self.mf.make_rdm1(), SC)) / 2
-        e, v = np.linalg.eigh(D)
-        assert np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=1e-6, rtol=0)
-        rev = np.s_[::-1]
-        e, v = e[rev], v[:,rev]
-        C[:,cl] = np.dot(C[:,cl], v)
-        nocc_cl = sum(e > 0.5)
-        nvir_cl = sum(e <= 0.5)
-        log.info("Occupied/virtual states in local+DMET space: %d/%d", nocc_cl, nvir_cl)
+        C_clst = np.hstack((self.C_local, C_bath))
+        D_clst = np.linalg.multi_dot((C_clst.T, S, self.mf.make_rdm1(), S, C_clst)) / 2
+        e, R = np.linalg.eigh(D_clst)
+        if not np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=1e-6, rtol=0):
+            raise RuntimeError("Error while diagonalizing cluster DM: eigenvalues not all close to 0 or 1:\n%s", e)
+        e, R = e[::-1], R[:,::-1]
+        C_clst = np.dot(C_clst, R)
+        nocc_clst = sum(e > 0.5)
+        nvir_clst = sum(e < 0.5)
+        log.info("DMET cluster orbitals: occupied=%3d, virtual=%3d", nocc_clst, nvir_clst)
 
-        orbitals = Orbitals(C)
-        #orbitals.define_space("local", np.s_[:len(self)])
-        #orbitals.define_space("dmet-bath", np.s_[len(self):ncl])
-        orbitals.define_space("occ-imp", np.s_[:nocc_cl])
-        orbitals.define_space("vir-imp", np.s_[nocc_cl:ncl])
-        orbitals.define_space("occ-env", np.s_[ncl:ncl+nenvocc])
-        orbitals.define_space("vir-env", np.s_[ncl+nenvocc:])
+        C_occclst = C_clst[:,:nocc_clst]
+        C_virclst = C_clst[:,nocc_clst:]
 
-        return Orbitals
+        return C_occclst, C_virclst, C_occenv, C_virenv
 
+    def canonicalize(self, *C):
+        """Diagonalize Fock matrix within subspace.
 
-    def run_solver(self, solver=None, max_power=0, pertT=False, diagonalize_fock=True, cc_verbose=4,
+        Parameters
+        ----------
+        *C : ndarrays
+            Orbital coefficients.
+
+        Returns
+        -------
+        C : ndarray
+            Canonicalized orbital coefficients.
+        """
+        C = np.hstack(C)
+        # DEBUG
+        S = self.mf.get_ovlp()
+        D = np.linalg.multi_dot((C.T, S, self.mf.make_rdm1(), S, C))
+        occ = np.diag(D)
+        log.debug("Canonicalize occ: %s", occ)
+
+        F = np.linalg.multi_dot((C.T, self.mf.get_fock(), C))
+        E, R = np.linalg.eigh(F)
+        C = np.dot(C, R)
+        return C
+
+    def get_occ(self, C):
+        S = self.mf.get_ovlp()
+        D = np.linalg.multi_dot((C.T, S, self.mf.make_rdm1(), S, C))
+        occ = np.diag(D)
+        return occ
+
+    def run_solver(self, solver=None, max_power=0, pertT=False, diagonalize_fock=True,
             ref_orbitals=None, analyze_orbitals=False):
 
         solver = solver or self.solver
@@ -968,22 +984,26 @@ class Cluster:
 
         #self.make_cubegen_file(np.eye(self.mol.nao_nr()), orbitals=list(range(len(self))), filename="AO")
 
-        if self.coeff is None:
+        if self.local_orbital_type == "AO":
             C = self.make_local_orbitals()
-        else:
+        elif self.local_orbital_type == "IAO":
             # Reorder local orbitals to the front
-            C = np.hstack((self.coeff[:,self.indices], self.coeff[:,self.not_indices]))
+            #C = np.hstack((self.coeff[:,self.indices], self.coeff[:,self.not_indices]))
+            C = np.hstack((self.C_local, self.C_env))
 
         #self.make_cubegen_file(C, orbitals=list(range(len(self))), filename="ortho-AO")
         #1/0
 
-        self.C_local = C[:,:len(self)].copy()
+        #self.C_local = C[:,:len(self)].copy()
 
         C, nbath0, nenvocc = self.make_dmet_bath_orbitals(C)
         nbath = nbath0
+        log.debug("Nenvocc=%d", nenvocc)
 
+        C_occclst, C_virclst, C_occenv, C_virenv = self.make_dmet_cluster(ref_orbitals)
 
-
+        log.debug("clst occ: %s", self.get_occ(C_occclst))
+        log.debug("clst vir: %s", self.get_occ(C_virclst))
 
         ncl = len(self)+nbath0
         orbitals = Orbitals(C)
@@ -992,6 +1012,8 @@ class Cluster:
         orbitals.define_space("occ-env", np.s_[ncl:ncl+nenvocc])
         orbitals.define_space("vir-env", np.s_[ncl+nenvocc:])
 
+        assert np.allclose(C_occenv, orbitals.get_coeff("occ-env"))
+        assert np.allclose(C_virenv, orbitals.get_coeff("vir-env"))
 
         # Reuse reference orbitals
         # ========================
@@ -1119,28 +1141,66 @@ class Cluster:
         # The virtuals require reordering:
         ncl = len(self)+nbath0
         nvir0 = ncl+nenvocc                 # Start index for virtuals
+        C2 = C.copy()
         C = np.hstack((
             C[:,:ncl+nbathocc],               # impurity + DMET bath + occupied bath
             C[:,nvir0:nvir0+nbathvir],        # virtual bath
             C[:,ncl+nbathocc:nvir0],          # occupied frozen
             C[:,nvir0+nbathvir:],             # virtual frozen
             ))
+        assert C.shape == C2.shape
         nbath += nbathocc
         nbath += nbathvir
+
+        #assert (ncl + nbathocc + nbathvir + 
 
         # At this point save reference orbitals for other calculations
         orbitals.C = C
         orbitals.define_space("occ-bath", np.s_[ncl:ncl+nbathocc])
         orbitals.define_space("vir-bath", np.s_[ncl+nbathocc:ncl+nbathocc+nbathvir])
         orbitals.delete_space("occ-env")
-        orbitals.define_space("occ-env", np.s_[ncl+nbathocc+nbathvir:ncl+nbathocc+nbathvir+nenvocc])
+        #orbitals.define_space("occ-env", np.s_[ncl+nbathocc+nbathvir:ncl+nbathocc+nbathvir+nenvocc])
+        # buggy before
+        orbitals.define_space("occ-env", np.s_[ncl+nbathocc+nbathvir:ncl+nbathvir+nenvocc])
         orbitals.delete_space("vir-env")
-        orbitals.define_space("vir-env", np.s_[ncl+nbathocc+nbathvir+nenvocc:])
+        #orbitals.define_space("vir-env", np.s_[ncl+nbathocc+nbathvir+nenvocc:])
+        orbitals.define_space("vir-env", np.s_[ncl+nbathvir+nenvocc:])
         self.orbitals = orbitals
 
+        for space in orbitals.spaces:
+            log.debug("Size %s: %d", space, orbitals.get_size(space))
+            S = self.mf.get_ovlp()
+            Cs = orbitals.get_coeff(space)
+            D = np.linalg.multi_dot((Cs.T, S, self.mf.make_rdm1(), S, Cs))
+            occ = np.diag(D)
+            log.debug("Occ: %s", occ)
+
+        # NEW
+        # --- Occupied
+        C_occbath, C_occenv = self.make_bath(C_occenv, self.bath_type, "occ",
+                ref_orbitals.get("occ-bath", None), nbath=self.bath_target_size[0])
+        # --- Virtual
+        C_virbath, C_virenv = self.make_bath(C_virenv, self.bath_type, "vir",
+                ref_orbitals.get("vir-bath", None), nbath=self.bath_target_size[1])
+
+        assert np.allclose(C_occbath, orbitals.get_coeff("occ-bath"))
+        assert np.allclose(C_virbath, orbitals.get_coeff("vir-bath"))
+        #assert np.allclose(C_occenv, orbitals.get_coeff("occ-env"))
+        #assert np.allclose(C_virenv[:,:10], orbitals.get_coeff("vir-env")[:,:10])
+        #assert np.allclose(C_virenv[:,:20], orbitals.get_coeff("vir-env")[:,:20])
+        #assert np.allclose(C_virenv[:,:24], orbitals.get_coeff("vir-env")[:,:24])
+        #assert np.allclose(C_virenv[:,:25], orbitals.get_coeff("vir-env")[:,:25])
+        #assert np.allclose(C_virenv[:,:26], orbitals.get_coeff("vir-env")[:,:26])
+        #assert np.allclose(C_virenv, orbitals.get_coeff("vir-env"))
+
+        log.debug("bath occ: %s", self.get_occ(C_occbath))
+        log.debug("bath vir: %s", self.get_occ(C_virbath))
+
+        #1/0
+
         # TEST
-        if analyze_orbitals:
-            chi = self.analyze_orbitals(orbitals)
+        #if analyze_orbitals:
+        #    chi = self.analyze_orbitals(orbitals)
 
         # Diagonalize cluster DM (Necessary for CCSD)
         S = self.mf.get_ovlp()
@@ -1207,6 +1267,38 @@ class Cluster:
                 ev, r = np.linalg.eigh(F[np.ix_(v, v)])
                 C_cc[:,v] = np.dot(C_cc[:,v], r)
 
+        # NEW CANONICALIZE
+        C_occact = self.canonicalize(C_occclst, C_occbath)
+        C_viract = self.canonicalize(C_virclst, C_virbath)
+        log.debug("Active occupied=%d, virtual=%d", C_occact.shape[-1], C_viract.shape[-1])
+        log.debug("clst occ: %s", self.get_occ(C_occclst))
+        log.debug("clst vir: %s", self.get_occ(C_virclst))
+        log.debug("bath occ: %s", self.get_occ(C_occbath))
+        log.debug("bath vir: %s", self.get_occ(C_virbath))
+
+        np.allclose(C_occact, C_cc[:,o])
+        np.allclose(C_viract, C_cc[:,v])
+
+        # Combine, important to keep occupied orbitals first
+        # Put frozen orbitals to the front and back
+        Co = np.hstack((C_occenv, C_occact))
+        Cv = np.hstack((C_viract, C_virenv))
+        C = np.hstack((Co, Cv))
+        No = Co.shape[-1]
+        Nv = Cv.shape[-1]
+        occup = np.asarray(No*[2] + Nv*[0])
+
+        frozen_occ = list(range(C_occenv.shape[-1]))
+        frozen_vir = list(range(Co.shape[-1]+C_viract.shape[-1], C.shape[-1]))
+        frozen_all = frozen_occ + frozen_vir
+        log.debug("Frozen orbitals: %s", frozen_all)
+        # DEBUG
+        occ_check = np.diag(np.linalg.multi_dot((C.T, S, self.mf.make_rdm1(), S, C)))
+        log.debug("Occ: %s", occup)
+        log.debug("diag(D): %s", occ_check)
+        maxdiff = max(abs(np.diff(occup-occ_check)))
+        log.debug("max diff = %e", maxdiff)
+
         if self.has_pbc:
             log.debug("Cell object found -> using pbc code.")
 
@@ -1243,20 +1335,28 @@ class Cluster:
         elif solver == "CCSD":
             if self.has_pbc:
                 ccsd = pyscf.pbc.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
+                cc = pyscf.pbc.cc.CCSD(self.mf, mo_coeff=C, mo_occ=occup, frozen=frozen_all)
             else:
                 ccsd = pyscf.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
+                cc = pyscf.cc.CCSD(self.mf, mo_coeff=C, mo_occ=occup, frozen=frozen_all)
+
             # We want to reuse the integral for local energy
             t0 = MPI.Wtime()
             eris = ccsd.ao2mo()
-            log.debug("Time for ao2mo: %s", get_time_string(MPI.Wtime()-t0))
+            log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+            t0 = MPI.Wtime()
+            eris2 = cc.ao2mo()
+            log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
             ccsd.max_cycle = 100
-            ccsd.verbose = cc_verbose
+            cc.max_cycle = 100
+
             if self.restart_solver:
                 log.debug("Running CCSD starting with parameters for: %r...", self.restart_params.keys())
                 ccsd.kernel(eris=eris, **self.restart_params)
             else:
                 log.debug("Running CCSD...")
                 ccsd.kernel(eris=eris)
+                cc.kernel(eris=eris2)
             log.debug("CCSD done. converged: %r", ccsd.converged)
             if self.restart_solver:
                 #self.restart_params = {"t1" : ccsd.t1, "t2" : ccsd.t2}
@@ -1265,42 +1365,8 @@ class Cluster:
             C1 = ccsd.t1
             C2 = ccsd.t2 + einsum('ia,jb->ijab', ccsd.t1, ccsd.t1)
 
-            # TESTING
-            if self.benchmark is not None:
-                a = ccsd.get_frozen_mask()
-                C = ccsd.mo_coeff[:,a]
-                o = ccsd.mo_occ[a] > 0
-                v = ccsd.mo_occ[a] == 0
-                Co = C[:,o]
-                Cv = C[:,v]
-
-                T2 = einsum("pi,qj,ijab,sa,tb->pqst", Co, Co, ccsd.t2, Cv, Cv)
-                ref = self.benchmark
-
-                a2 = ref.get_frozen_mask()
-                Cb = ref.mo_coeff[:,a2]
-                o2 = ref.mo_occ[a2] > 0
-                v2 = ref.mo_occ[a2] == 0
-                Co2 = Cb[:,o2]
-                Cv2 = Cb[:,v2]
-
-                T2_ref = einsum("pi,qj,ijab,sa,tb->pqst", Co2, Co2, ref.t2, Cv2, Cv2)
-
-                #norm_tot = np.linalg.norm(T2 - T2_ref)
-                #l = np.s_[:len(self)]
-                #norm_tot = np.linalg.norm(T2[l,l,l,l] - T2_ref[l,l,l,l])
-
-                delta = T2 - T2_ref
-                # Relative error
-                #delta = delta / (abs(T2_ref)+1e-14)
-                delta = np.linalg.norm(T2 - T2_ref, axis=(2,3))
-                delta = delta / np.linalg.norm(T2_ref, axis=(2,3))
-
-                #omega = einsum("a,b,c,d->abcd", chi, chi, chi, chi)
-                #omega = einsum("a,b,c,d->abcd", chi, chi, np.ones_like(chi), np.ones_like(chi))
-                omega = einsum("a,b->ab", chi, chi)
-
-                np.savetxt("omega-vs-T-cluster-%s" % self.name, np.vstack((omega.flatten(), delta.flatten())).T)
+            C1b = cc.t1
+            C2b = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
 
             self.converged = ccsd.converged
             e_corr_full = ccsd.e_corr
@@ -1359,6 +1425,10 @@ class Cluster:
             #self.e_ccsd_z = self.get_local_energy_most_indices(ccsd)
 
             self.e_ccsd = self.get_local_energy(ccsd, C1, C2, eris=eris)
+            self.e_ccsd2 = self.get_local_energy(cc, C1b, C2b, eris=eris2)
+            np.isclose(self.e_ccsd, self.e_ccsd2)
+            1/0
+
             #self.e_ccsd = self.get_local_energy(ccsd, C1, C2, eris=eris)
 
             # TEST:
@@ -1405,7 +1475,7 @@ class Cluster:
         """Projector for local energy expression."""
         #log.debug("Making local energy projector for orbital type %s", self.local_orbital_type)
         S = self.mf.get_ovlp()
-        if self.local_orbital_type == "ao":
+        if self.local_orbital_type == "AO":
             l = self.indices
             # This is the "natural way" to truncate in AO basis
             if kind == "right":
@@ -1423,7 +1493,7 @@ class Cluster:
             else:
                 raise ValueError("Unknown kind=%s" % kind)
 
-        elif self.local_orbital_type == "iao":
+        elif self.local_orbital_type == "IAO":
             CSC = np.linalg.multi_dot((C.T, S, self.C_local))
             P = np.dot(CSC, CSC.T)
 
@@ -1825,20 +1895,45 @@ class EmbCC:
             "use_ref_orbitals_bath"
             ]
 
-    def __init__(self, mf, solver="CCSD", bath_type="power", bath_target_size=(None, None), tol_bath=1e-3,
+    def __init__(self, mf,
+            solver="CCSD",
+            bath_type="power",
+            bath_target_size=(None, None),
+            tol_bath=1e-3,
+            local_orbital_type="AO",
+            minao="minao",
             tol_dmet_bath=1e-8,
             #tol_vno=1e-3, vno_ratio=None,
             use_ref_orbitals_dmet=True,
             use_ref_orbitals_bath=True,
             #use_ref_orbitals_bath=False,
             benchmark=None):
-        self.mf = mf
+        """
+        Parameters
+        ----------
+        mf : pyscf.scf object
+            Converged mean-field object.
+        """
 
-        # Options
+        # Check input
+        if not mf.converged:
+            raise ValueError("Mean-field calculation not converged.")
+        if local_orbital_type not in ("AO", "IAO"):
+            raise ValueError("Unknown local_orbital_type: %s" % local_orbital_type)
         if solver not in (None, "MP2", "CISD", "CCSD", "FCI"):
             raise ValueError("Unknown solver: %s" % solver)
         if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-no"):
-            raise ValueError()
+            raise ValueError("Unknown bath type: %s" % bath_type)
+
+        self.mf = mf
+        self.local_orbital_type = local_orbital_type
+        if self.local_orbital_type == "IAO":
+            self.C_iao, self.C_env, self.iao_labels = self.make_iao(minao=minao)
+
+            C_test, _ = self.get_iao_coeff(minao=minao)
+            assert np.allclose(C_test, np.hstack((self.C_iao, self.C_env)))
+
+        # Options
         self.solver = solver
         self.bath_type = bath_type
         self.tol_bath = tol_bath
@@ -1858,67 +1953,149 @@ class EmbCC:
     def mol(self):
         return self.mf.mol
 
+    @property
+    def nclusters(self):
+        """Number of cluster."""
+        return len(self.clusters)
+
+    def make_ao_projector(self, ao_indices):
+        """Create projetor into AO subspace
+
+        Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b
+
+        Parameters
+        ----------
+        ao_indices : list
+            Indices of subspace AOs.
+
+        Returns
+        -------
+        P : ndarray
+            Projector into AO subspace.
+        """
+        S1 = self.mf.get_ovlp()
+        S2 = S1[np.ix_(ao_indices, ao_indices)]
+        S21 = S1[ao_indices]
+        P21 = scipy.linalg.solve(S2, S21, assume_a="pos")
+        P = np.dot(S21.T, P21)
+        assert np.allclose(P, P.T)
+        return P
+
+    def make_local_ao_orbitals(self, ao_indices):
+        S = self.mf.get_ovlp()
+        nao = S.shape[-1]
+        P = self.make_ao_projector(ao_indices)
+        e, C = scipy.linalg.eigh(P, b=S)
+        e, C = e[::-1], C[:,::-1]
+        nlocal = len(e[e>1e-5])
+        if nlocal != len(ao_indices):
+            raise RuntimeError("Error finding local orbitals. Eigenvalues: %s" % e)
+        assert np.allclose(np.linalg.multi_dot((C.T, S, C)) - np.eye(nao), 0)
+        C_local = C[:,:nlocal].copy()
+        C_env = C[:,nlocal:].copy()
+
+        return C_local, C_env
+
+    def make_local_iao_orbitals(self, iao_indices):
+        C_local = self.C_iao[:,iao_indices]
+        #not_indices = np.asarray([i for i in np.arange(len(iao_indices)) if i not in iao_indices])
+        not_indices = np.asarray([i for i in np.arange(self.C_iao.shape[-1]) if i not in iao_indices])
+        C_env = np.hstack((self.C_iao[:,not_indices], self.C_env))
+
+        return C_local, C_env
+
+    def make_cluster(self, name, C_local, C_env, **kwargs):
+        """Create cluster object and add to list.
+
+        Parameters
+        ----------
+        name : str
+            Unique name for cluster.
+        C_local : ndarray
+            Local (fragment) orbitals of cluster.
+        C_env : ndarray
+            All environment (non-fragment) orbials.
+
+        Returns
+        -------
+        cluster : Cluster
+            Cluster object
+        """
+        # Check that name is unique
+        for cluster in self.clusters:
+            if name == cluster.name:
+                raise ValueError("Cluster with name %s already exists." % name)
+        for opt in self.default_options:
+            kwargs[opt] = kwargs.get(opt, getattr(self, opt))
+        # Symmetry factor, if symmetry related clusters exist in molecule (e.g. hydrogen rings)
+        kwargs["symmetry_factor"] = kwargs.get("symmetry_factor", 1.0)
+        cluster = Cluster(self, name, C_local=C_local, C_env=C_env, **kwargs)
+        # For Testing
+        cluster.benchmark = self.benchmark
+        self.clusters.append(cluster)
+        return cluster
+
+    def make_atom_cluster(self, atoms, name=None, **kwargs):
+        """
+        Parameters
+        ---------
+        atoms : list or str
+            Atom labels of atoms in cluster.
+        name : str
+            Name of cluster.
+        """
+        # atoms may be a single atom label
+        if isinstance(atoms, str):
+            atoms = [atoms]
+        # Check if atoms are valid labels of molecule
+        atom_symbols = [self.mol.atom_symbol(atomid) for atomid in range(self.mol.natm)]
+        for atom in atoms:
+            if atom not in atom_symbols:
+                raise ValueError("Atom %s not in molecule." % atom)
+        if name is None:
+            name = ",".join(atoms)
+
+        # Indices refers to AOs or IAOs, respectively
+        if self.local_orbital_type == "AO":
+            # Base atom for each AO
+            ao_atoms = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
+            indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
+            C_local, C_env = self.make_local_ao_orbitals(indices)
+        elif self.local_orbital_type == "IAO":
+            # Base atom for each IAO
+            iao_atoms = [iao[1] for iao in self.iao_labels]
+            indices = np.nonzero(np.isin(iao_atoms, atoms))[0]
+            log.debug("IAO atoms: %s", iao_atoms)
+            log.debug("IAO indices: %s", indices)
+            C_local, C_env = self.make_local_iao_orbitals(indices)
+
+        cluster = self.make_cluster(name, C_local, C_env, indices=indices, **kwargs)
+        return cluster
+
+    def make_all_atom_clusters(self, **kwargs):
+        """Make a cluster for each atom in the molecule."""
+        for atomid in range(self.mol.natm):
+            atom_symbol = self.mol.atom_symbol(atomid)
+            self.make_atom_cluster(atom_symbol, **kwargs)
+
     def get_cluster_attributes(self, attr):
+        """Get attribute for each cluster."""
         attrs = {}
         for cluster in self.clusters:
             attrs[cluster.name] = getattr(cluster, attr)
         return attrs
 
     def set_cluster_attributes(self, attr, values):
+        """Set attribute for each cluster."""
         log.debug("Setting attribute %s of all clusters", attr)
         for cluster in self.clusters:
             setattr(cluster, attr, values[cluster.name])
 
-
     def get_orbitals(self):
         return self.get_cluster_attributes("orbitals")
 
-        #orbitals = {}
-        #for cluster in self.clusters:
-        #    orbitals[cluster.name] = cluster.orbitals
-        #return orbitals
-
     def set_reference_orbitals(self, ref_orbitals):
         return self.set_cluster_attributes("ref_orbitals", ref_orbitals)
-
-        #for cluster in self.clusters:
-        #    cluster.ref_orbitals = ref_orbitals[cluster.name]
-
-    def make_cluster(self, name, ao_indices, **kwargs):
-        for opt in self.default_options:
-            kwargs[opt] = kwargs.get(opt, getattr(self, opt))
-
-        #kwargs["solver"] = kwargs.get("solver", self.solver)
-        #kwargs["bath_type"] = kwargs.get("bath_type", self.bath_type)
-        #kwargs["tol_bath"] = kwargs.get("tol_bath", self.tol_bath)
-        #kwargs["tol_dmet_bath"] = kwargs.get("tol_dmet_bath", self.tol_dmet_bath)
-        #kwargs["tol_vno"] = kwargs.get("tol_vno", self.tol_vno)
-        #kwargs["vno_ratio"] = kwargs.get("vno_ratio", self.vno_ratio)
-        #kwargs["use_ref_orbitals_dmet"] = kwargs.get("use_ref_orbitals_dmet", self.use_ref_orbitals_dmet)
-        #kwargs["use_ref_orbitals_bath"] = kwargs.get("use_ref_orbitals_bath", self.use_ref_orbitals_bath)
-
-        kwargs["symmetry_factor"] = kwargs.get("symmetry_factor", 1.0)
-
-        cluster = Cluster(self, name, ao_indices, **kwargs)
-        # For testing
-        cluster.benchmark = self.benchmark
-        return cluster
-
-
-    def make_atom_clusters(self, **kwargs):
-        """Divide atomic orbitals into clusters according to their base atom."""
-
-        # base atom for each AO
-        base_atoms = np.asarray([ao[0] for ao in self.mol.ao_labels(None)])
-
-        self.clear_clusters()
-        ncluster = self.mol.natm
-        for atomid in range(ncluster):
-            ao_indices = np.nonzero(base_atoms == atomid)[0]
-            name = self.mol.atom_symbol(atomid)
-            c = self.make_cluster(name, ao_indices, **kwargs)
-            self.clusters.append(c)
-        return self.clusters
 
     def get_iao_coeff(self, minao="minao"):
         C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
@@ -1957,242 +2134,79 @@ class EmbCC:
         return C, iao_atoms
 
 
-    def make_iao_atom_clusters(self, minao="minao", **kwargs):
-        """Divide intrinsic atomic orbitals into clusters according to their base atom."""
-
-        C, iao_atoms = self.get_iao_coeff(minao=minao)
-
-        self.clear_clusters()
-        ncluster = self.mol.natm
-        for atomid in range(ncluster):
-            iao_indices = np.nonzero(np.isin(iao_atoms, atomid))[0]
-            name = self.mol.atom_symbol(atomid)
-            c = self.make_cluster(name, iao_indices, coeff=C, local_orbital_type="iao", **kwargs)
-            self.clusters.append(c)
-        return self.clusters
-
-    def make_ao_clusters(self, **kwargs):
-        """Divide atomic orbitals into clusters."""
-
-        self.clear_clusters()
-        for aoid in range(self.mol.nao_nr()):
-            name = self.mol.ao_labels()[aoid]
-            c = self.make_cluster(name, [aoid], **kwargs)
-            self.clusters.append(c)
-        return self.clusters
-
-    def make_rest_cluster(self, name="rest", **kwargs):
-        """Combine all AOs which are not part of a cluster, into a rest cluster."""
-
-        ao_indices = list(range(self.mol.nao_nr()))
-        for c in self.clusters:
-            ao_indices = [i for i in ao_indices if i not in c.indices]
-        if ao_indices:
-            c = self.make_cluster(name, ao_indices, **kwargs)
-            self.clusters.append(c)
-            return c
-        else:
-            return None
-
-    def make_custom_cluster(self, ao_symbols, name=None, **kwargs):
-        """Make custom clusters in terms of AOs.
+    def make_iao(self, minao="minao"):
+        """Make intrinsic atomic orbitals.
 
         Parameters
         ----------
-        ao_symbols : iterable
-            List of atomic orbital symbols for cluster.
+        minao : str, optional
+            Minimal basis set for IAOs.
+
+        Returns
+        -------
+        C_iao : ndarray
+            IAO coefficients.
+        C_env : ndarray
+            Remaining orbital coefficients.
+        iao_atoms : list
+            Atom ID for each IAO.
         """
-        if isinstance(ao_symbols, str):
-            ao_symbols = [ao_symbols]
+        C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
+        C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
+        niao = C_iao.shape[-1]
+        log.debug("Total number of IAOs=%3d", niao)
 
-        if name is None:
-            name = ",".join(ao_symbols)
+        # Orthogonalize IAO
+        S = self.mf.get_ovlp()
+        C_iao = pyscf.lo.vec_lowdin(C_iao, S)
 
-        ao_indices = []
-        for ao_idx, ao_label in enumerate(self.mol.ao_labels()):
-            for ao_symbol in ao_symbols:
-                if ao_symbol in ao_label:
-                    log.debug("AO symbol %s found in %s", ao_symbol, ao_label)
-                    ao_indices.append(ao_idx)
-                    break
-        c = self.make_cluster(name, ao_indices, **kwargs)
-        self.clusters.append(c)
-        return c
+        # Add remaining virtual space
+        # Transform to MO basis
+        C_iao_mo = np.linalg.multi_dot((self.mf.mo_coeff.T, S, C_iao))
+        # Get eigenvectors of projector into complement
+        P_iao = np.dot(C_iao_mo, C_iao_mo.T)
+        norb = self.mf.mo_coeff.shape[-1]
+        P_env = np.eye(norb) - P_iao
+        e, C = np.linalg.eigh(P_env)
+        assert np.all(np.logical_or(abs(e) < 1e-10, abs(e)-1 < 1e-10))
+        mask_env = (e > 1e-10)
+        assert (np.sum(mask_env) + niao == norb)
+        # Transform back to AO basis
+        C_env = np.dot(self.mf.mo_coeff, C[:,mask_env])
 
+        # Get base atoms of IAOs
+        refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
+        iao_labels = refmol.ao_labels(None)
+        assert len(iao_labels) == C_iao.shape[-1]
 
-    def make_custom_atom_cluster(self, atoms, name=None, **kwargs):
-        """Make custom clusters in terms of atoms..
+        C = np.hstack((C_iao, C_env))
+        assert np.allclose(C.T.dot(S).dot(C) - np.eye(norb), 0)
 
-        Parameters
-        ----------
-        atoms : iterable
-            List of atom symbols for cluster.
-        """
+        return C_iao, C_env, iao_labels
 
-        if name is None:
-            name = ",".join(atoms)
-        # base atom for each AO
-        ao2atomlbl = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
-
-        for atom in atoms:
-            if atom not in ao2atomlbl:
-                raise ValueError("Atom %s not in molecule." % atom)
-
-        ao_indices = np.nonzero(np.isin(ao2atomlbl, atoms))[0]
-        c = self.make_cluster(name, ao_indices, **kwargs)
-        self.clusters.append(c)
-        return c
-
-    def make_custom_iao_atom_cluster(self, atoms, name=None, minao="minao", **kwargs):
-        """Make custom clusters in terms of atoms..
-
-        Parameters
-        ----------
-        atoms : iterable
-            List of atom symbols for cluster.
-        """
-
-        if name is None:
-            name = ",".join(atoms)
-
-        C, iao_atoms = self.get_iao_coeff(minao=minao)
-
-        atom_symbols = [self.mol.atom_symbol(atomid) for atomid in iao_atoms]
-        log.debug("Atom symbols: %r", atom_symbols)
-
-        for atom in atoms:
-            if atom not in atom_symbols:
-                raise ValueError("Atom %s not in molecule." % atom)
-
-        iao_indices = np.nonzero(np.isin(atom_symbols, atoms))[0]
-        log.debug("IAO indices: %r", iao_indices)
-        cluster = self.make_cluster(name, iao_indices, coeff=C, local_orbital_type="iao", **kwargs)
-
-        self.clusters.append(cluster)
-        return cluster
-
-
-
-    def merge_clusters(self, clusters, name=None, **kwargs):
-        """Attributes solver, bath_type, tol_bath, and tol_dmet_bath will be taken from first cluster,
-        unless specified in **kwargs.
-        name will be auto generated, unless specified.
-
-        Parameters
-        ----------
-        clusters : iterable
-            List of clusters to merge.
-        """
-        clusters_out = []
-        merged = []
-        for c in self.clusters:
-            if c.name.strip() in clusters:
-                merged.append(c)
-            else:
-                clusters_out.append(c)
-
-        if len(merged) < 2:
-            raise ValueError("Not enough clusters (%d) found to merge." % len(merged))
-
-        if name is None:
-            name = "+".join([c.name for c in merged])
-        ao_indices = np.hstack([c.indices for c in merged])
-
-        # Get options from first cluster
-        for opt in self.default_options:
-            kwargs[opt] = kwargs.get(opt, getattr(merged[0], opt))
-        #kwargs["solver"] = kwargs.get("solver", merged[0].solver)
-        #kwargs["bath_type"] = kwargs.get("bath_type", merged[0].bath_type)
-        #kwargs["tol_bath"] = kwargs.get("tol_bath", merged[0].tol_bath)
-        #kwargs["tol_dmet_bath"] = kwargs.get("tol_dmet_bath", merged[0].tol_dmet_bath)
-        #merged_cluster = Cluster(merged_name, self.mf, merged_indices,
-        #        tol_dmet_bath=tol_dmet_bath, tol_bath=tol_bath)
-        assert np.all([(m.symmetry_factor == merged[0].symmetry_factor) for m in merged])
-
-        c = self.make_cluster(name, ao_indices, **kwargs)
-        clusters_out.append(c)
-        self.clusters = clusters_out
-        return c
-
-    def check_no_overlap(self, clusters=None):
-        "Check that no clusters are overlapping."
-        if clusters is None:
-            clusters = self.clusters
-        for c in clusters:
-            for c2 in clusters:
-                if c == c2:
-                    continue
-                if np.any(np.isin(c.indices, c2.indices)):
-                    log.error("Cluster %s and cluster %s are overlapping.", c.name, c2.name)
-                    return False
-        return True
-
-
-    def clear_clusters(self):
-        """Clear all previously defined clusters."""
-        self.clusters = []
-
-
-    def print_clusters(self, clusters=None, file=None):
-        """Print clusters to logging or file."""
-        if clusters is None:
-            clusters = self.clusters
-
-        if clusters[0].local_orbital_type == "iao":
-            raise NotImplementedError()
-
-        ao_labels = self.mol.ao_labels(None)
-
-        end = "\n" if file else ""
-        headfmt = "Cluster %3d: %s with %3d local orbitals:" + end
-        linefmt = "%4d %5s %3s %10s" + end
-
-        if file is None:
-            for cidx, c in enumerate(clusters):
-                log.info(headfmt, cidx, c.name, len(c))
-                for ao in c.indices:
-                    log.info(linefmt, *ao_labels[ao])
-        else:
-            with open(file, "w") as f:
-                for cidx, c in enumerate(clusters):
-                    f.write(headfmt % (cidx, c.name, len(c)))
-                    for ao in c.indices:
-                        f.write(linefmt % ao_labels[ao])
-
-    def get_cluster(self, name):
-        for c in self.clusters:
-            if c.name == name:
-                return c
-        else:
-            raise ValueError()
-
-    def run(self, clusters=None, max_power=0, pertT=False):
-        if pertT:
-            raise NotImplementedError("Perturbative triplet correction currently not implemented.")
-        if clusters is None:
-            clusters = self.clusters
-        if not clusters:
+    def run(self, **kwargs):
+        if not self.clusters:
             raise ValueError("No clusters defined for EmbCC calculation.")
 
-        assert self.check_no_overlap()
+        #assert self.check_no_overlap()
 
         MPI_comm.Barrier()
         t_start = MPI.Wtime()
 
-        for idx, c in enumerate(clusters):
+        for idx, cluster in enumerate(self.clusters):
             if MPI_rank != (idx % MPI_size):
                 continue
 
-            log.debug("Running cluster %s on rank %d", c.name, MPI_rank)
-            c.run_solver(max_power=max_power, pertT=pertT)
-            log.debug("Cluster %s on rank %d is done.", c.name, MPI_rank)
+            log.debug("Running cluster %s on MPI process=%d...", cluster.name, MPI_rank)
+            cluster.run_solver(**kwargs)
+            log.debug("Cluster %s on MPI process=%d is done.", cluster.name, MPI_rank)
 
         all_conv = self.collect_results()
         if MPI_rank == 0:
             self.print_cluster_results()
 
         MPI_comm.Barrier()
-        log.info("Total wall time for EmbCCSD: %s", get_time_string(MPI.Wtime()-t_start))
+        log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
 
         return all_conv
 
@@ -2218,29 +2232,9 @@ class EmbCC:
         e_corr_dmp2 = mpi_reduce("e_corr_dmp2")
         e_corr_v_dmp2 = mpi_reduce("e_corr_v_dmp2")
 
-
         e_corr_var = mpi_reduce("e_corr_var")
         e_corr_var2 = mpi_reduce("e_corr_var2")
         e_corr_var3 = mpi_reduce("e_corr_var3")
-
-        #e_ccsd = mpi_reduce("e_ccsd")
-        #e_pt = mpi_reduce("e_pt")
-
-        #e_ccsd_v = mpi_reduce("e_ccsd_v")
-        #e_ccsd_w = mpi_reduce("e_ccsd_w")
-        #e_ccsd_z = mpi_reduce("e_ccsd_z")
-
-        #converged = MPI_comm.reduce(np.asarray([c.converged for c in clusters]), op=MPI.PROD, root=0)
-        #nbath0 = MPI_comm.reduce(np.asarray([c.nbath0 for c in clusters]), op=MPI.SUM, root=0)
-        #nbath = MPI_comm.reduce(np.asarray([c.nbath for c in clusters]), op=MPI.SUM, root=0)
-        #nfrozen = MPI_comm.reduce(np.asarray([c.nfrozen for c in clusters]), op=MPI.SUM, root=0)
-        #e_cl_ccsd = MPI_comm.reduce(np.asarray([c.e_cl_ccsd for c in clusters]), op=MPI.SUM, root=0)
-        #e_ccsd = MPI_comm.reduce(np.asarray([c.e_ccsd for c in clusters]), op=MPI.SUM, root=0)
-        #e_pt = MPI_comm.reduce(np.asarray([c.e_pt for c in clusters]), op=MPI.SUM, root=0)
-
-        #e_ccsd_v = MPI_comm.reduce(np.asarray([c.e_ccsd_v for c in clusters]), op=MPI.SUM, root=0)
-        #e_ccsd_w = MPI_comm.reduce(np.asarray([c.e_ccsd_w for c in clusters]), op=MPI.SUM, root=0)
-        #e_ccsd_z = MPI_comm.reduce(np.asarray([c.e_ccsd_z for c in clusters]), op=MPI.SUM, root=0)
 
         if MPI_rank == 0:
             for cidx, c in enumerate(self.clusters):
@@ -2251,18 +2245,12 @@ class EmbCC:
                 #c.e_cl_ccsd = e_cl_ccsd[cidx]
                 #c.e_ccsd = e_ccsd[cidx]
                 c.e_corr = e_corr[cidx]
-                #c.e_pt = e_pt[cidx]
-
-                #c.e_ccsd_v = e_ccsd_v[cidx]
-                #c.e_ccsd_w = e_ccsd_w[cidx]
-                #c.e_ccsd_z = e_ccsd_z[cidx]
 
                 c.e_corr_full = e_corr_full[cidx]
                 c.e_corr_v = e_corr_v[cidx]
 
                 c.e_corr_dmp2 = e_corr_dmp2[cidx]
                 c.e_corr_v_dmp2 = e_corr_v_dmp2[cidx]
-
 
                 c.e_corr_var = e_corr_var[cidx]
                 c.e_corr_var2 = e_corr_var2[cidx]
@@ -2278,7 +2266,6 @@ class EmbCC:
             self.e_corr_var = sum(e_corr_var)
             self.e_corr_var2 = sum(e_corr_var2)
             self.e_corr_var3 = sum(e_corr_var3)
-            #self.e_pt = sum(e_pt)
 
             #self.e_corr = self.e_ccsd + self.e_pt
             self.e_tot = self.mf.e_tot + self.e_corr
@@ -2306,5 +2293,261 @@ class EmbCC:
     def reset(self, mf=None, **kwargs):
         if mf:
             self.mf = mf
-        for c in self.clusters:
-            c.reset(**kwargs)
+        for cluster in self.clusters:
+            cluster.reset(**kwargs)
+
+    def clear_clusters(self):
+        """Clear all previously defined clusters."""
+        self.clusters = []
+
+    def print_clusters(self, file=None, filemode="a"):
+        """Print clusters to log or file.
+
+        Parameters
+        ----------
+        file : str, optional
+            If not None, write output to file.
+        """
+        # Format strings
+        end = "\n" if file else ""
+        if self.local_orbital_type == "AO":
+            headfmt = "Cluster %3d: %s with %3d atomic orbitals:" + end
+        elif self.local_orbital_type == "IAO":
+            headfmt = "Cluster %3d: %s with %3d intrinsic atomic orbitals:" + end
+        linefmt = "%4d %5s %3s %10s" + end
+
+        if self.local_orbital_type == "AO":
+            labels = self.mol.ao_labels(None)
+        elif self.local_orbital_type == "IAO":
+            labels = self.iao_labels
+
+        if file is None:
+            for i, cluster in enumerate(self.clusters):
+                log.info(headfmt, i, cluster.name, cluster.nlocal)
+                for idx in cluster.indices:
+                    log.info(linefmt, *labels[idx])
+        else:
+            with open(file, filemode) as f:
+                for i, cluster in enumerate(self.clusters):
+                    f.write(headfmt % (c, cluster.name, cluster.nlocal))
+                    for idx in cluster.indices:
+                        f.write(linefmt % labels[idx])
+
+
+    # OLD
+
+    #def make_cluster_old(self, name, ao_indices, **kwargs):
+    #    """Create cluster"""
+    #    for opt in self.default_options:
+    #        kwargs[opt] = kwargs.get(opt, getattr(self, opt))
+
+    #    #kwargs["solver"] = kwargs.get("solver", self.solver)
+    #    #kwargs["bath_type"] = kwargs.get("bath_type", self.bath_type)
+    #    #kwargs["tol_bath"] = kwargs.get("tol_bath", self.tol_bath)
+    #    #kwargs["tol_dmet_bath"] = kwargs.get("tol_dmet_bath", self.tol_dmet_bath)
+    #    #kwargs["tol_vno"] = kwargs.get("tol_vno", self.tol_vno)
+    #    #kwargs["vno_ratio"] = kwargs.get("vno_ratio", self.vno_ratio)
+    #    #kwargs["use_ref_orbitals_dmet"] = kwargs.get("use_ref_orbitals_dmet", self.use_ref_orbitals_dmet)
+    #    #kwargs["use_ref_orbitals_bath"] = kwargs.get("use_ref_orbitals_bath", self.use_ref_orbitals_bath)
+
+    #    kwargs["symmetry_factor"] = kwargs.get("symmetry_factor", 1.0)
+
+    #    cluster = Cluster(self, name, ao_indices, **kwargs)
+    #    # For testing
+    #    cluster.benchmark = self.benchmark
+    #    return cluster
+
+    #def make_atom_clusters(self, **kwargs):
+    #    """Divide atomic orbitals into clusters according to their base atom."""
+
+    #    # base atom for each AO
+    #    base_atoms = np.asarray([ao[0] for ao in self.mol.ao_labels(None)])
+
+    #    self.clear_clusters()
+    #    ncluster = self.mol.natm
+    #    for atomid in range(ncluster):
+    #        ao_indices = np.nonzero(base_atoms == atomid)[0]
+    #        name = self.mol.atom_symbol(atomid)
+    #        c = self.make_cluster(name, ao_indices, **kwargs)
+    #        self.clusters.append(c)
+    #    return self.clusters
+
+    #def make_iao_atom_clusters(self, minao="minao", **kwargs):
+    #    """Divide intrinsic atomic orbitals into clusters according to their base atom."""
+
+    #    C, iao_atoms = self.get_iao_coeff(minao=minao)
+
+    #    self.clear_clusters()
+    #    ncluster = self.mol.natm
+    #    for atomid in range(ncluster):
+    #        iao_indices = np.nonzero(np.isin(iao_atoms, atomid))[0]
+    #        name = self.mol.atom_symbol(atomid)
+    #        c = self.make_cluster(name, iao_indices, coeff=C, local_orbital_type="iao", **kwargs)
+    #        self.clusters.append(c)
+    #    return self.clusters
+
+    #def make_ao_clusters(self, **kwargs):
+    #    """Divide atomic orbitals into clusters."""
+
+    #    self.clear_clusters()
+    #    for aoid in range(self.mol.nao_nr()):
+    #        name = self.mol.ao_labels()[aoid]
+    #        c = self.make_cluster(name, [aoid], **kwargs)
+    #        self.clusters.append(c)
+    #    return self.clusters
+
+    #def make_rest_cluster(self, name="rest", **kwargs):
+    #    """Combine all AOs which are not part of a cluster, into a rest cluster."""
+
+    #    ao_indices = list(range(self.mol.nao_nr()))
+    #    for c in self.clusters:
+    #        ao_indices = [i for i in ao_indices if i not in c.indices]
+    #    if ao_indices:
+    #        c = self.make_cluster(name, ao_indices, **kwargs)
+    #        self.clusters.append(c)
+    #        return c
+    #    else:
+    #        return None
+
+    #def make_custom_cluster(self, ao_symbols, name=None, **kwargs):
+    #    """Make custom clusters in terms of AOs.
+
+    #    Parameters
+    #    ----------
+    #    ao_symbols : iterable
+    #        List of atomic orbital symbols for cluster.
+    #    """
+    #    if isinstance(ao_symbols, str):
+    #        ao_symbols = [ao_symbols]
+
+    #    if name is None:
+    #        name = ",".join(ao_symbols)
+
+    #    ao_indices = []
+    #    for ao_idx, ao_label in enumerate(self.mol.ao_labels()):
+    #        for ao_symbol in ao_symbols:
+    #            if ao_symbol in ao_label:
+    #                log.debug("AO symbol %s found in %s", ao_symbol, ao_label)
+    #                ao_indices.append(ao_idx)
+    #                break
+    #    c = self.make_cluster(name, ao_indices, **kwargs)
+    #    self.clusters.append(c)
+    #    return c
+
+
+    #def make_custom_atom_cluster(self, atoms, name=None, **kwargs):
+    #    """Make custom clusters in terms of atoms..
+
+    #    Parameters
+    #    ----------
+    #    atoms : iterable
+    #        List of atom symbols for cluster.
+    #    """
+
+    #    if name is None:
+    #        name = ",".join(atoms)
+    #    # base atom for each AO
+    #    ao2atomlbl = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
+
+    #    for atom in atoms:
+    #        if atom not in ao2atomlbl:
+    #            raise ValueError("Atom %s not in molecule." % atom)
+
+    #    ao_indices = np.nonzero(np.isin(ao2atomlbl, atoms))[0]
+    #    c = self.make_cluster(name, ao_indices, **kwargs)
+    #    self.clusters.append(c)
+    #    return c
+
+    #def make_custom_iao_atom_cluster(self, atoms, name=None, minao="minao", **kwargs):
+    #    """Make custom clusters in terms of atoms..
+
+    #    Parameters
+    #    ----------
+    #    atoms : iterable
+    #        List of atom symbols for cluster.
+    #    """
+
+    #    if name is None:
+    #        name = ",".join(atoms)
+
+    #    C, iao_atoms = self.get_iao_coeff(minao=minao)
+
+    #    atom_symbols = [self.mol.atom_symbol(atomid) for atomid in iao_atoms]
+    #    log.debug("Atom symbols: %r", atom_symbols)
+
+    #    for atom in atoms:
+    #        if atom not in atom_symbols:
+    #            raise ValueError("Atom %s not in molecule." % atom)
+
+    #    iao_indices = np.nonzero(np.isin(atom_symbols, atoms))[0]
+    #    log.debug("IAO indices: %r", iao_indices)
+    #    cluster = self.make_cluster(name, iao_indices, coeff=C, local_orbital_type="iao", **kwargs)
+
+    #    self.clusters.append(cluster)
+    #    return cluster
+
+
+
+    #def merge_clusters(self, clusters, name=None, **kwargs):
+    #    """Attributes solver, bath_type, tol_bath, and tol_dmet_bath will be taken from first cluster,
+    #    unless specified in **kwargs.
+    #    name will be auto generated, unless specified.
+
+    #    Parameters
+    #    ----------
+    #    clusters : iterable
+    #        List of clusters to merge.
+    #    """
+    #    clusters_out = []
+    #    merged = []
+    #    for c in self.clusters:
+    #        if c.name.strip() in clusters:
+    #            merged.append(c)
+    #        else:
+    #            clusters_out.append(c)
+
+    #    if len(merged) < 2:
+    #        raise ValueError("Not enough clusters (%d) found to merge." % len(merged))
+
+    #    if name is None:
+    #        name = "+".join([c.name for c in merged])
+    #    ao_indices = np.hstack([c.indices for c in merged])
+
+    #    # Get options from first cluster
+    #    for opt in self.default_options:
+    #        kwargs[opt] = kwargs.get(opt, getattr(merged[0], opt))
+    #    #kwargs["solver"] = kwargs.get("solver", merged[0].solver)
+    #    #kwargs["bath_type"] = kwargs.get("bath_type", merged[0].bath_type)
+    #    #kwargs["tol_bath"] = kwargs.get("tol_bath", merged[0].tol_bath)
+    #    #kwargs["tol_dmet_bath"] = kwargs.get("tol_dmet_bath", merged[0].tol_dmet_bath)
+    #    #merged_cluster = Cluster(merged_name, self.mf, merged_indices,
+    #    #        tol_dmet_bath=tol_dmet_bath, tol_bath=tol_bath)
+    #    assert np.all([(m.symmetry_factor == merged[0].symmetry_factor) for m in merged])
+
+    #    c = self.make_cluster(name, ao_indices, **kwargs)
+    #    clusters_out.append(c)
+    #    self.clusters = clusters_out
+    #    return c
+
+    #def check_no_overlap(self, clusters=None):
+    #    "Check that no clusters are overlapping."
+    #    if clusters is None:
+    #        clusters = self.clusters
+    #    for c in clusters:
+    #        for c2 in clusters:
+    #            if c == c2:
+    #                continue
+    #            if np.any(np.isin(c.indices, c2.indices)):
+    #                log.error("Cluster %s and cluster %s are overlapping.", c.name, c2.name)
+    #                return False
+    #    return True
+
+
+    #def get_cluster(self, name):
+    #    for c in self.clusters:
+    #        if c.name == name:
+    #            return c
+    #    else:
+    #        raise ValueError()
+
+

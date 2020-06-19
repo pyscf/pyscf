@@ -1,11 +1,46 @@
+import functools
 import numpy as np
 import scipy
 import scipy.optimize
 
 __all__ = [
+        "einsum",
+        "reorder_columns",
+        "get_time_string",
         "eigassign",
         "eigreorder_logging",
         ]
+
+einsum = functools.partial(np.einsum, optimize=True)
+
+def reorder_columns(a, *args):
+    """Reorder columns of matrix a. The new order must be specified by a list of tuples,
+    where each tuple represents a block of columns, with the first tuple index being the
+    first column index and the second tuple index the number of columns in the respective
+    block.
+    """
+    starts, sizes = zip(*args)
+    n = len(starts)
+
+    #slices
+    starts = [s if s is not None else 0 for s in starts]
+    ends = [starts[i]+sizes[i] if sizes[i] is not None else None for i in range(n)]
+    slices = [np.s_[starts[i]:ends[i]] for i in range(n)]
+
+    b = np.hstack([a[:,s] for s in slices])
+    assert b.shape == a.shape
+    return b
+
+def get_time_string(seconds):
+    m, s = divmod(seconds, 60)
+    if seconds >= 3600:
+        tstr = "%.0f h, %.0f min, %.0f s" % (divmod(m, 60) + (s,))
+    elif seconds >= 60:
+        tstr = "%.0f min %.1f s" % (m, s)
+    else:
+        tstr = "%.2f s" % s
+    return tstr
+
 
 def eigassign(e1, v1, e2, v2, b=None, cost_matrix="e^2/v", return_cost=False):
     """
