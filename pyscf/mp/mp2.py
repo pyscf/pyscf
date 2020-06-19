@@ -20,6 +20,7 @@ RMP2
 
 import time
 import copy
+import functools
 import numpy
 from pyscf import gto
 from pyscf import lib
@@ -30,6 +31,7 @@ from pyscf import __config__
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
+einsum = functools.partial(numpy.einsum, optimize=True)
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
     if mo_energy is not None or mo_coeff is not None:
@@ -63,8 +65,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
-        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
-        emp2 -= numpy.einsum('jab,jba', t2i, gi)
+        emp2 += einsum('jab,jab', t2i, gi) * 2
+        emp2 -= einsum('jab,jba', t2i, gi)
         if with_t2:
             t2[i] = t2i
 
@@ -113,8 +115,8 @@ def energy(mp, t2, eris):
     '''MP2 energy'''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
-    emp2  = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
-    emp2 -= numpy.einsum('ijab,ibja', t2, eris_ovov)
+    emp2  = einsum('ijab,iajb', t2, eris_ovov) * 2
+    emp2 -= einsum('ijab,ibja', t2, eris_ovov)
     return emp2.real
 
 def update_amps(mp, t2, eris):
@@ -188,10 +190,11 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
         else:
             t2i = t2[i]
         l2i = t2i.conj()
-        dm1vir += numpy.einsum('jca,jcb->ba', l2i, t2i) * 2 \
-                - numpy.einsum('jca,jbc->ba', l2i, t2i)
-        dm1occ += numpy.einsum('iab,jab->ij', l2i, t2i) * 2 \
-                - numpy.einsum('iab,jba->ij', l2i, t2i)
+        dm1vir += einsum('jca,jcb->ba', l2i, t2i) * 2 \
+                - einsum('jca,jbc->ba', l2i, t2i)
+        dm1occ += einsum('iab,jab->ij', l2i, t2i) * 2 \
+                - einsum('iab,jba->ij', l2i, t2i)
+
     return -dm1occ, dm1vir
 
 
@@ -213,6 +216,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
     idx = numpy.argsort(n)[::-1]
     n,v = n[idx], v[:,idx]
+    #print("FNO eigenvalues:\n%s" % n)
 
     if nvir_act is None:
         if pct_occ is None:

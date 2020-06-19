@@ -18,6 +18,8 @@ import pyscf.mp
 
 import pyscf.pbc
 import pyscf.pbc.cc
+import pyscf.pbc.mp
+import pyscf.pbc.tools
 
 from .orbitals import Orbitals
 from .util import eigassign, eigreorder_logging
@@ -124,6 +126,7 @@ class Cluster:
         self.coeff = coeff
 
         # Optional
+        assert solver in ("MP2", "CISD", "CCSD", "FCI")
         self.solver = solver
         self.bath_type = bath_type
 
@@ -176,6 +179,9 @@ class Cluster:
         # Orbital objects
         self.orbitals = None
         self.ref_orbitals = None
+
+        self.ref_orbitals_new = {}
+
         # Orbitals sizes
         self.nbath0 = 0
         self.nbath = 0
@@ -228,6 +234,10 @@ class Cluster:
         """The molecule or cell object is taken from self.base.mol.
         It should be the same as self.base.mf.mol by default."""
         return self.base.mol
+
+    @property
+    def has_pbc(self):
+        return isinstance(self.mol, pyscf.pbc.gto.Cell)
 
     @property
     def not_indices(self):
@@ -315,7 +325,7 @@ class Cluster:
     def make_dmet_bath_orbitals(self, C, ref_orbitals=None, tol=None):
         """If C_ref is specified, complete DMET orbital space using active projection of reference orbitals."""
         if ref_orbitals is None:
-            ref_orbitals=self.ref_orbitals
+            ref_orbitals = self.ref_orbitals
         if tol is None:
             tol = self.tol_dmet_bath
         C = C.copy()
@@ -448,6 +458,9 @@ class Cluster:
 
         nloc = len(self)
         loc = np.s_[:nloc]
+
+        Cr = np.linalg.multi_dot((self.C_local.T, S, self.mf.mo_coeff[:,mask]))
+        assert np.allclose(csc[loc], Cr)
 
         b = []
         for power in powers:
@@ -625,6 +638,10 @@ class Cluster:
             cubegen.orbital(self.mol, filename_orb, C[:,orb], **kwargs)
 
     def analyze_orbitals(self, orbitals=None, sort=True):
+        if self.local_orbital_type == "iao":
+            raise NotImplementedError()
+
+
         if orbitals is None:
             orbitals = self.orbitals
 
@@ -665,7 +682,86 @@ class Cluster:
         # Active chis
         return chis[:,0]
 
-    def make_mp2_no(self, orbitals, kind, nno=None, tol=None, symmetry_factor=None, N_ref=None, R_ref=None):
+    def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True):
+        """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
+
+        F = self.mf.get_fock()
+        Fo = np.linalg.multi_dot((Co.T, F, Co))
+        Fv = np.linalg.multi_dot((Cv.T, F, Cv))
+        # Canonicalization [optional]
+        if canon_occ:
+            eo, Ro = np.linalg.eigh(Fo)
+            Co = np.dot(Co, Ro)
+        else:
+            eo = np.diag(Fo)
+        if canon_vir:
+            ev, Rv = np.linalg.eigh(Fv)
+            Cv = np.dot(Cv, Rv)
+        else:
+            ev = np.diag(Fv)
+        C = np.hstack((Co, Cv))
+        eigs = np.hstack((eo, ev))
+        no = Co.shape[-1]
+        nv = Cv.shape[-1]
+        # Use PySCF MP2 for T2 amplitudes
+        occ = np.asarray(no*[2] + nv*[0])
+        if self.has_pbc:
+            mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
+        else:
+            mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
+        # Integral transformation
+        t0 = MPI.Wtime()
+        eris = mp2.ao2mo()
+        time_ao2mo = MPI.Wtime() - t0
+        log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
+        # T2 amplitudes
+        t0 = MPI.Wtime()
+        e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris)
+        e_mp2_full *= self.symmetry_factor
+        time_mp2 = MPI.Wtime() - t0
+        log.debug("Full MP2 energy = %12.8g htr", e_mp2_full)
+        log.debug("Time for MP2 amplitudes: %s", get_time_string(time_mp2))
+
+        # Calculate local energy
+        # Project first occupied index onto local space
+        P = self.get_local_energy_projector(Co)
+        pT2 = einsum("xi,ijab->xjab", P, T2)
+        e_mp2 = self.symmetry_factor * mp2.energy(pT2, eris)
+
+        # MP2 density matrix [optional]
+        if make_dm:
+            t0 = MPI.Wtime()
+            #Doo = 2*(2*einsum("ikab,jkab->ij", T2, T2)
+            #         - einsum("ikab,jkba->ij", T2, T2))
+            #Dvv = 2*(2*einsum("ijac,ijbc->ab", T2, T2)
+            #         - einsum("ijac,ijcb->ab", T2, T2))
+            Doo, Dvv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
+            Doo, Dvv = -2*Doo, 2*Dvv
+            time_dm = MPI.Wtime() - t0
+            log.debug("Time for DM: %s", get_time_string(time_dm))
+
+            # Rotate back to input coeffients (undo canonicalization)
+            if canon_occ:
+                Doo = np.linalg.multi_dot((Ro, Doo, Ro.T))
+            if canon_vir:
+                Dvv = np.linalg.multi_dot((Rv, Dvv, Rv.T))
+
+            return e_mp2, Doo, Dvv
+        else:
+            return e_mp2
+
+    def get_delta_mp2(self, Co1, Cv1, Co2, Cv2):
+        """Calculate delta MP2 correction."""
+
+        e1 = run_mp2(Co1, Cv1)
+        e2 = run_mp2(Co2, Co2)
+        e_delta = e1 - e2
+
+        log.debug("Delta MP2: full=%.8g, active=%.8g, correction=%.8g", e1, e2, e_delta)
+        return e_delta
+
+
+    def make_mp2_natorb(self, orbitals, kind, nno=None, tol=None):
         """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
         assert nno is not None or tol is not None
         assert kind in ("occ", "vir")
@@ -695,137 +791,20 @@ class Cluster:
         C_cl_o = np.dot(C_cl, r)[:,:nclocc]
         C_cl_v = np.dot(C_cl, r)[:,nclocc:]
 
-        F = self.mf.get_fock()
-
-        def make_MP2(Co, Cv, make_dm=True, local_E=True, canon_occ=True, canon_vir=True):
-            Fo = np.linalg.multi_dot((Co.T, F, Co))
-            Fv = np.linalg.multi_dot((Cv.T, F, Cv))
-            # Canonicalization [optional]
-            t0 = MPI.Wtime()
-            if canon_occ:
-                Eo, Ro = np.linalg.eigh(Fo)
-                Co = np.dot(Co, Ro)
-            else:
-                Eo = np.diag(Fo)
-            if canon_vir:
-                Ev, Rv = np.linalg.eigh(Fv)
-                Cv = np.dot(Cv, Rv)
-            else:
-                Ev = np.diag(Fv)
-            time_canon = MPI.Wtime() - t0
-            log.debug("Time for canonicalization: %s", get_time_string(time_canon))
-            no = Co.shape[-1]
-            nv = Cv.shape[-1]
-            # Make T2
-            t0 = MPI.Wtime()
-            eri = pyscf.ao2mo.general(self.mol, (Co, Cv, Co, Cv)).reshape(no,nv,no,nv)
-            time_ao2mo = MPI.Wtime() - t0
-            log.debug("Time for ao2mo: %s", get_time_string(time_ao2mo))
-
-            #t1 = MPI.Wtime() - t0
-            #t0 = MPI.Wtime()
-            #eri2 = pyscf.ao2mo.general(self.mol, (Cv, Co, Cv, Co)).reshape(nv,no,nv,no)
-            #t2 = MPI.Wtime() - t0
-            #t0 = MPI.Wtime()
-            #eri3 = pyscf.ao2mo.general(self.mol, (Co, Cv, Cv, Co)).reshape(no,nv,nv,no)
-            #t3 = MPI.Wtime() - t0
-            #t0 = MPI.Wtime()
-            #eri4 = pyscf.ao2mo.general(self.mol, (Cv, Co, Co, Cv)).reshape(nv,no,no,nv)
-            #t4 = MPI.Wtime() - t0
-
-            #with open("ao2mo-times.txt", "a") as f:
-            #    f.write("%3d  %3d  %.6g  %.6g  %.6g  %.6g\n" % (no, nv, t1, t2, t3, t4))
-
-            #assert np.allclose(eri, eri2.transpose(1, 0, 3, 2))
-            #assert np.allclose(eri, eri3.transpose(0, 1, 3, 2))
-            #assert np.allclose(eri, eri4.transpose(1, 0, 2, 3))
-            #1/0
-
-            Eov = (Eo[:,np.newaxis] - Ev[np.newaxis,:])
-            t0 = MPI.Wtime()
-            T2 = np.zeros((no,no,nv,nv))
-            for i in range(no):
-                d = (Eov[i][np.newaxis,:,np.newaxis] + Eov[:,np.newaxis,:])
-                T2[i] += eri[i].transpose(1,0,2) / d
-            time_t2 = MPI.Wtime() - t0
-            log.debug("Time for T2: %s", get_time_string(time_t2))
-            # MP2 energy [with optional local projector P]
-
-            # Alternative: PySCF MP2
-            C = np.hstack((Co, Cv))
-            E = np.hstack((Eo, Ev))
-            occ = np.asarray(no*[2] + nv*[0])
-            t0 = MPI.Wtime()
-            mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
-            eris = mp2.ao2mo()
-            assert np.allclose(eri, eris.ovov.reshape((no,nv,no,nv)))
-            e_mp2, T2b = mp2.kernel(mo_energy=E, eris=eris)
-            time_mp2 = MPI.Wtime() - t0
-            log.debug("Time for MP2: %s", get_time_string(time_mp2))
-
-            log.debug(T2.shape)
-            log.debug(T2b.shape)
-            log.debug(np.linalg.norm(T2-T2b))
-            log.debug(T2[0,0,0,0])
-            log.debug(T2b[0,0,0,0])
-            assert np.allclose(T2, T2b)
-
-
-            if local_E:
-                #l = self.indices
-                #P = np.linalg.multi_dot((Co.T, S[:,l], Co[l]))
-
-                # CHECK 1
-                P = self.get_local_energy_projector(Co)
-                #assert np.allclose(P, P2)
-
-                pT2 = einsum("xi,ijab->xjab", P, T2)
-            else:
-                pT2 = T2
-            t0 = MPI.Wtime()
-            e_mp2 = 2*einsum('ijab,iajb', pT2, eri)
-            e_mp2 -=  einsum('ijab,jaib', pT2, eri)
-            time_emp2 = MPI.Wtime() - t0
-            log.debug("Time for energy: %s", get_time_string(time_emp2))
-            # MP2 density matrix [optional]
-            if make_dm:
-
-                t0 = MPI.Wtime()
-                #Doo2 = 2*(2*einsum("kiab,kjab->ij", T2, T2)
-                #          - einsum("kiab,kjba->ij", T2, T2))
-                Doo = 2*(2*einsum("ikab,jkab->ij", T2, T2)
-                         - einsum("ikab,jkba->ij", T2, T2))
-                #assert np.allclose(Doo, Doo2)
-
-                Dvv = 2*(2*einsum("ijac,ijbc->ab", T2, T2)
-                         - einsum("ijac,ijcb->ab", T2, T2))
-
-                time_dm = MPI.Wtime() - t0
-                log.debug("Time for DM: %s", get_time_string(time_dm))
-
-                # Rotate back to input coeffients (undo canonicalization)
-                if canon_occ:
-                    Doo = np.linalg.multi_dot((Ro, Doo, Ro.T))
-                if canon_vir:
-                    Dvv = np.linalg.multi_dot((Rv, Dvv, Rv.T))
-                return e_mp2, Doo, Dvv
-
-            return e_mp2
-
         # All virtuals
         if kind == "vir":
             Co = C_cl_o
             Cv = np.hstack((C_cl_v, orbitals.get_coeff(("vir-env"))))
-            e_mp2_full, _, D = make_MP2(Co, Cv)
-            N, R = np.linalg.eigh(D[nclvir:,nclvir:])
+            e_mp2_all, _, D = self.run_mp2(Co, Cv, make_dm=True)
+            D = D[nclvir:,nclvir:]
         elif kind == "occ":
             Co = np.hstack((C_cl_o, orbitals.get_coeff(("occ-env"))))
             Cv = C_cl_v
-            e_mp2_full, D, _ = make_MP2(Co, Cv)
-            N, R = np.linalg.eigh(D[nclocc:,nclocc:])
+            e_mp2_all, D, _ = self.run_mp2(Co, Cv, make_dm=True)
+            D = D[nclocc:,nclocc:]
 
+        N, R = np.linalg.eigh(D[nclocc:,nclocc:])
         N, R = N[::-1], R[:,::-1]
-        #log.debug("Occupation numbers:\n%s", N)
 
         # --- TESTING ---
         # Save occupation values
@@ -895,20 +874,16 @@ class Cluster:
             Cno[:,nclvir:] = np.dot(Cv[:,nclvir:], R)
             nclno = nclvir + nno
             Cno = Cno[:,:nclno]
-            e_mp2_no = make_MP2(Co, Cno, make_dm=False)
-
+            e_mp2_act = self.run_mp2(Co, Cno, make_dm=False)
         elif kind == "occ":
             Cno = Co.copy()
             Cno[:,nclocc:] = np.dot(Co[:,nclocc:], R)
             nclno = nclocc + nno
             Cno = Cno[:,:nclno]
-            e_mp2_no = make_MP2(Cno, Cv, make_dm=False)
+            e_mp2_act = self.run_mp2(Cno, Cv, make_dm=False)
 
-        e_mp2_full *= symmetry_factor
-        e_mp2_no *= symmetry_factor
-
-        e_delta_mp2 = e_mp2_full - e_mp2_no
-        log.debug("Delta MP2 correction: full=%.8e, active=%.8e, correction=%+.8e", e_mp2_full, e_mp2_no, e_delta_mp2)
+        e_delta_mp2 = e_mp2_all - e_mp2_act
+        log.debug("Delta MP2 correction (%s): all=%.8e, active=%.8e, correction=%+.8e", kind, e_mp2_all, e_mp2_act, e_delta_mp2)
 
         orbitals_out = orbitals.copy()
 
@@ -933,7 +908,17 @@ class Cluster:
         # Used for recovery of orbitals via active transformation
         ref_orbitals = ref_orbitals or self.ref_orbitals
 
-        C = self.make_local_orbitals()
+        if self.coeff is None:
+            assert self.local_orbital_type == "AO"
+            C = self.make_local_orbitals()
+        else:
+            assert self.local_orbital_type == "IAO"
+            # Reorder local orbitals to the front
+            C = np.hstack((self.coeff[:,self.indices], self.coeff[:,self.not_indices]))
+
+        self.C_local = C[:,:len(self)].copy()
+
+        #C = self.make_local_orbitals()
         C, nbath0, nenvocc = self.make_dmet_bath_orbitals(C, ref_orbitals=ref_orbitals)
         nbath = nbath0
 
@@ -992,10 +977,13 @@ class Cluster:
         #self.make_cubegen_file(C, orbitals=list(range(len(self))), filename="ortho-AO")
         #1/0
 
-        self.C_iao = C[:,:len(self)].copy()
+        self.C_local = C[:,:len(self)].copy()
 
         C, nbath0, nenvocc = self.make_dmet_bath_orbitals(C)
         nbath = nbath0
+
+
+
 
         ncl = len(self)+nbath0
         orbitals = Orbitals(C)
@@ -1043,7 +1031,7 @@ class Cluster:
             if self.bath_type == "mp2-no":
                 log.debug("Making MP2 virtual natural orbitals.")
                 t0 = MPI.Wtime()
-                orbitals2, nvno, e_delta_mp2_v = self.make_mp2_no(
+                orbitals2, nvno, e_delta_mp2_v = self.make_mp2_natorb(
                         orbitals, kind="vir", nno=self.bath_target_size[1], tol=self.tol_bath)
                 log.debug("Wall time for MP2 VNO: %s", get_time_string(MPI.Wtime()-t0))
                 C = orbitals2.C
@@ -1051,7 +1039,7 @@ class Cluster:
 
                 log.debug("Making MP2 occupied natural orbitals.")
                 t0 = MPI.Wtime()
-                orbitals3, nono, e_delta_mp2_o = self.make_mp2_no(
+                orbitals3, nono, e_delta_mp2_o = self.make_mp2_natorb(
                         orbitals2, kind="occ", nno=self.bath_target_size[0], tol=self.tol_bath)
                 log.debug("Wall time for MP2 ONO: %s", get_time_string(MPI.Wtime()-t0))
                 C = orbitals3.C
@@ -1210,30 +1198,50 @@ class Cluster:
             o = np.nonzero(occ > 0)[0]
             o = np.asarray([i for i in o if i in active])
             if len(o) > 0:
-                e, r = np.linalg.eigh(F[np.ix_(o, o)])
+                eo, r = np.linalg.eigh(F[np.ix_(o, o)])
                 C_cc[:,o] = np.dot(C_cc[:,o], r)
             # Virtual active
             v = np.nonzero(occ == 0)[0]
             v = np.asarray([i for i in v if i in active])
             if len(v) > 0:
-                e, r = np.linalg.eigh(F[np.ix_(v, v)])
+                ev, r = np.linalg.eigh(F[np.ix_(v, v)])
                 C_cc[:,v] = np.dot(C_cc[:,v], r)
 
-        pbc = hasattr(self.mol, "a")
-        if pbc:
-            log.debug("\"A matrix\" found. Switching to pbc code.")
+        if self.has_pbc:
+            log.debug("Cell object found -> using pbc code.")
 
         t0 = MPI.Wtime()
 
         if solver == "MP2":
-            mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
+            if self.has_pbc:
+                mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
+            else:
+                mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
             eris = mp2.ao2mo()
             e_corr_full, t2 = mp2.kernel(eris=eris)
             self.e_corr_full = self.symmetry_factor*e_corr_full
             C1, C2 = None, t2
 
+            #F = np.linalg.multi_dot((C_cc[:,active].T, self.mf.get_fock(), C_cc[:,active]))
+            #eigs = np.diag(F).copy()
+
+            #if self.has_pbc:
+            #    mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=C_cc[:,active], mo_occ=occ[active])
+
+            #    madelung = pyscf.pbc.tools.madelung(self.mol, [(0,0,0)])
+            #    log.debug("Madelung energy= %.8g", madelung)
+            #    log.debug("Eigenvalues before shift:\n%s", eigs)
+            #    eigs[occ[active]>0] -= madelung
+            #    log.debug("Eigenvalues after shift:\n%s", eigs)
+
+            #else:
+            #    mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C_cc[:,active], mo_occ=occ[active])
+            #eris = mp2.ao2mo()
+            #e_corr_full, t2 = mp2.kernel(mo_energy=eigs, eris=eris)
+            #C1, C2 = None, t2
+
         elif solver == "CCSD":
-            if pbc:
+            if self.has_pbc:
                 ccsd = pyscf.pbc.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
             else:
                 ccsd = pyscf.cc.CCSD(self.mf, mo_coeff=C_cc, mo_occ=occ, frozen=frozen)
@@ -1342,7 +1350,7 @@ class Cluster:
         if solver == "MP2":
             self.e_mp2 = self.get_local_energy(mp2, C1, C2, eris=eris)
             self.e_corr = self.e_mp2
-            self.e_corr_v = self.e_mp2 + e_delta
+            self.e_corr_v = self.e_mp2 + e_delta_mp2
 
         elif solver == "CCSD":
             #self.e_ccsd, self.e_pt = self.get_local_energy_old(ccsd, pertT=pertT)
@@ -1416,17 +1424,8 @@ class Cluster:
                 raise ValueError("Unknown kind=%s" % kind)
 
         elif self.local_orbital_type == "iao":
-            #n = C.shape[-1]
-            #assert n <= len(self)
-            #P = np.zeros((n, n))
-            #P[:len(self),:len(self)] = np.eye(len(self))
-
-            C_iao = self.C_iao
-            CSC = np.linalg.multi_dot((C.T, S, C_iao))
+            CSC = np.linalg.multi_dot((C.T, S, self.C_local))
             P = np.dot(CSC, CSC.T)
-
-        else:
-            raise ValueError()
 
         return P
 
@@ -1961,7 +1960,7 @@ class EmbCC:
     def make_iao_atom_clusters(self, minao="minao", **kwargs):
         """Divide intrinsic atomic orbitals into clusters according to their base atom."""
 
-        C, iao_atoms = self.get_iao_coeff()
+        C, iao_atoms = self.get_iao_coeff(minao=minao)
 
         self.clear_clusters()
         ncluster = self.mol.natm
@@ -2044,7 +2043,7 @@ class EmbCC:
         self.clusters.append(c)
         return c
 
-    def make_custom_iao_atom_cluster(self, atoms, name=None, **kwargs):
+    def make_custom_iao_atom_cluster(self, atoms, name=None, minao="minao", **kwargs):
         """Make custom clusters in terms of atoms..
 
         Parameters
@@ -2056,7 +2055,7 @@ class EmbCC:
         if name is None:
             name = ",".join(atoms)
 
-        C, iao_atoms = self.get_iao_coeff()
+        C, iao_atoms = self.get_iao_coeff(minao=minao)
 
         atom_symbols = [self.mol.atom_symbol(atomid) for atomid in iao_atoms]
         log.debug("Atom symbols: %r", atom_symbols)
