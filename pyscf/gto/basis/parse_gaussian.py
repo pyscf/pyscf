@@ -20,6 +20,8 @@
 Parsers for basis set in Gaussian program format
 '''
 
+__all__ = ['parse', 'load']
+
 try:
     from pyscf.gto.basis.parse_nwchem import optimize_contraction
     from pyscf.gto.basis.parse_nwchem import remove_zero
@@ -37,44 +39,51 @@ MAPSPDF = {'S': 0,
            'I': 6,
            'K': 7}
 
+DELIMETER = '****'
+
 def parse(string, optimize=True):
     '''Parse the basis text which is in NWChem format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
     Lines started with # are ignored.
     '''
-    bastxt = []
+    raw_basis = []
     for dat in string.splitlines():
         x = dat.split('!', 1)[0].strip()
-        if x and x != '****':
-            bastxt.append(x)
-    return _parse(bastxt, optimize)
+        if x and x != DELIMETER:
+            raw_basis.append(x)
+    return _parse(raw_basis, optimize)
 
 def load(basisfile, symb, optimize=True):
-    return _parse(search_seg(basisfile, symb), optimize)
+    raw_basis = search_seg(basisfile, symb)
+    #if not raw_basis:
+    #    raise BasisNotFoundError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    return _parse(raw_basis, optimize)
 
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
-        # ignore head
-        dat = fin.readline()
-        dat = fin.readline()
-        _seek(fin, '****')
 
-        dat = fin.readline()
-        while dat:
-            dat = dat.strip().upper()
-            if dat.split(' ', 1)[0] == symb.upper():
-                seg = []
-                dat = fin.readline().strip()
-                while dat:
-                    if dat == '****':
-                        break
-                    seg.append(dat)
-                    dat = fin.readline().strip()
-                return seg
-            else:
-                _seek(fin, '****')
+        def _seek(test_str):
+            raw_basis = []
             dat = fin.readline()
-    return []
+            while dat:
+                if test_str in dat:
+                    return True, raw_basis
+                elif dat.strip():  # Skip empty lines
+                    raw_basis.append(dat)
+                dat = fin.readline()
+            return False, raw_basis
+
+        has_delimeter, raw_basis = _seek(DELIMETER)
+        if has_delimeter:
+            dat = fin.readline()
+            while dat:
+                if dat.strip().split(' ', 1)[0].upper() == symb.upper():
+                    raw_basis = _seek(DELIMETER)[1]
+                    break
+                else:
+                    _seek(DELIMETER)
+                dat = fin.readline()
+    return raw_basis
 
 def _parse(raw_basis, optimize=True):
     basis_add = []
@@ -109,14 +118,6 @@ def _parse(raw_basis, optimize=True):
 
     basis_sorted = remove_zero(basis_sorted)
     return basis_sorted
-
-def _seek(fbasis, test_str):
-    dat = fbasis.readline()
-    while dat:
-        if test_str in dat:
-            return True
-        dat = fbasis.readline()
-    return False
 
 if __name__ == '__main__':
     print(load('def2-qzvp-jkfit.gbs', 'C'))

@@ -21,6 +21,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.gto.basis import parse_molpro
 from pyscf.gto.basis import parse_gaussian
+from pyscf.lib.exceptions import BasisNotFoundError
 
 class KnownValues(unittest.TestCase):
     def test_parse_pople(self):
@@ -36,8 +37,8 @@ class KnownValues(unittest.TestCase):
 
     def test_basis_load(self):
         self.assertEqual(gto.basis.load(__file__, 'H'), [])
-        self.assertRaises(KeyError, gto.basis.load, 'abas', 'H')
-        #self.assertRaises(RuntimeError, gto.basis.load(__file__, 'C'), [])
+        self.assertRaises(BasisNotFoundError, gto.basis.load, 'abas', 'H')
+        #self.assertRaises(BasisNotFoundError, gto.basis.load(__file__, 'C'), [])
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
         self.assertEqual(len(gto.basis.load('ccpcvdz', 'C')), 7)
@@ -89,7 +90,7 @@ C    SP
       2.9412494             -0.09996723             0.15591627       
       0.6834831              0.39951283             0.60768372       
       0.2222899              0.70011547             0.39195739       '''
-        self.assertRaises(KeyError, gto.basis.parse_nwchem.parse, basis_str, 'O')
+        self.assertRaises(BasisNotFoundError, gto.basis.parse_nwchem.parse, basis_str, 'O')
         basis_dat = gto.basis.parse_nwchem.parse(basis_str)
         self.assertEqual(len(basis_dat), 3)
 
@@ -260,7 +261,7 @@ END ''')
     def test_parse_gaussian_basis(self):
         basis_str = '''
 ****
-C     0 
+C     0
 S   8   1.00
    8236.0000000              0.0005310        
    1235.0000000              0.0041080        
@@ -313,7 +314,7 @@ F   1   1.00
 
         basis_str = '''
 ****
-C     0 
+C     0
 S   6   1.00
    4563.2400000              0.00196665       
     682.0240000              0.0152306        
@@ -368,6 +369,47 @@ F   1   1.00
         basis1 = parse_gaussian.parse(basis_str)
         ref = gto.basis.load('631g(3df,3pd)', 'C')
         self.assertEqual(ref, basis1)
+
+    def test_parse_gaussian_load_basis(self):
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+****
+H 0
+S 1 1.0
+1.0 1.0
+****
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+H 0
+S 1 1.0
+1.0 1.0
+****
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+****
+H 0
+S 1 1.0
+1.0 1.0
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+H 0
+S 1 1.0
+1.0 1.0
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
 
     def test_basis_truncation(self):
         b = gto.basis.load('ano@3s1p1f', 'C')

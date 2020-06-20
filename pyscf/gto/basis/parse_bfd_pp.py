@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ Parsers for basis set associated with Burkatzi-Filippi-Dolg  pseudo potential
 '''
 
 import os
+from pyscf.lib.exceptions import BasisNotFoundError
 
 MAPSPDF = {'S': 0,
            'P': 1,
@@ -118,7 +119,7 @@ def search_seg(basisfile, symb):
                     dat = fin.readline().lstrip(' ')
                 return seg[:-1]
             dat = fin.readline().lstrip(' ')
-    raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    raise BasisNotFoundError('Basis not found for  %s  in  %s' % (symb, basisfile))
 
 
 if __name__ == '__main__':

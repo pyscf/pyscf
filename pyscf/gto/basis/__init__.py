@@ -24,6 +24,7 @@ if sys.version_info < (2,7):
 else:
     import importlib
 from pyscf.gto.basis import parse_nwchem
+from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf import __config__
 
 ALIAS = {
@@ -444,7 +445,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         # read basis from given file
         try:
             return parse_nwchem.load(filename_or_basisname, symb, optimize)
-        except RuntimeError:
+        except BasisNotFoundError:
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse(fin.read(), symb)
 
@@ -464,16 +465,16 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
             try:
                 return parse_nwchem.parse(filename_or_basisname)
             except IndexError:
-                raise KeyError('Invalid basis name %s' % filename_or_basisname)
+                raise RuntimeError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
-            raise KeyError('Basis %s not found' % filename_or_basisname)
+            raise BasisNotFoundError('Basis %s not found' % filename_or_basisname)
 
     if name in ALIAS:
         basmod = ALIAS[name]
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
     else:
-        raise RuntimeError('Basis %s not found' % filename_or_basisname)
+        raise BasisNotFoundError('Basis %s not found' % filename_or_basisname)
 
     if 'dat' in basmod:
         b = parse_nwchem.load(join(_BASIS_DIR, basmod), symb, optimize)
@@ -503,7 +504,7 @@ def load_ecp(filename_or_basisname, symb):
         # read basis from given file
         try:
             return parse_nwchem.load_ecp(filename_or_basisname, symb)
-        except RuntimeError:
+        except BasisNotFoundError:
             with open(filename_or_basisname, 'r') as fin:
                 return parse_ecp(fin.read(), symb)
 

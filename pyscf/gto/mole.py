@@ -48,6 +48,8 @@ from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
         _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom, \
         _std_symbol_without_ghost
 
+from pyscf.lib.exceptions import BasisNotFoundError
+
 # For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
     unicode = str
@@ -435,7 +437,7 @@ def format_basis(basis_tab):
         fmt_basis[symb] = bset
 
         if len(fmt_basis[symb]) == 0:
-            raise RuntimeError('Basis not found for  %s' % symb)
+            raise BasisNotFoundError('Basis not found for  %s' % symb)
     return fmt_basis
 
 def uncontracted_basis(_basis):
@@ -534,7 +536,7 @@ def format_ecp(ecp_tab):
             stdsymb = _std_symbol_without_ghost(symb)
             ecp_dat = basis.load_ecp(str(atom_ecp), stdsymb)
             if ecp_dat is None or len(ecp_dat) == 0:
-                #raise RuntimeError('ECP not found for  %s' % symb)
+                #raise BasisNotFoundError('ECP not found for  %s' % symb)
                 sys.stderr.write('ECP %s not found for  %s\n' %
                                  (atom_ecp, symb))
             else:
