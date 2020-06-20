@@ -22,6 +22,7 @@ import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 import pyscf.lib.parameters as param
+from pyscf.lib.exceptions import BasisNotFoundError
 
 mol0 = gto.Mole()
 mol0.atom = [
@@ -786,7 +787,7 @@ O    SP
         mol1.build(False, False)
         gto.basis.load_ecp('lanl08', 'O')
         gto.format_ecp({'O':'lanl08', 1:'lanl2dz'})
-        self.assertRaises(KeyError, gto.format_ecp, {'H':'lan2ldz'})
+        self.assertRaises(BasisNotFoundError, gto.format_ecp, {'H':'lan2ldz'})
 
     def test_condense_to_shell(self):
         mol1 = mol0.copy()

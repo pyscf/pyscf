@@ -461,20 +461,20 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
-        except KeyError:
+        except BasisNotFoundError:
             try:
                 return parse_nwchem.parse(filename_or_basisname)
             except IndexError:
-                raise RuntimeError('Invalid basis name %s' % filename_or_basisname)
+                raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
-            raise BasisNotFoundError('Basis %s not found' % filename_or_basisname)
+            raise BasisNotFoundError(filename_or_basisname)
 
     if name in ALIAS:
         basmod = ALIAS[name]
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
     else:
-        raise BasisNotFoundError('Basis %s not found' % filename_or_basisname)
+        raise BasisNotFoundError(filename_or_basisname)
 
     if 'dat' in basmod:
         b = parse_nwchem.load(join(_BASIS_DIR, basmod), symb, optimize)
