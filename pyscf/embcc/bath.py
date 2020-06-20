@@ -2,12 +2,21 @@
 
 import logging
 import numpy as np
+from mpi4py import MPI
+
+import pyscf
+import pyscf.mp
+import pyscf.pbc
+import pyscf.pbc.mp
+
 from .util import *
 
 __all__ = [
         "make_dmet_bath",
         "make_bath",
         "make_mf_bath",
+        "run_mp2",
+        "make_mp2_bath",
         ]
 
 
@@ -140,7 +149,12 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, nbath=None, tol=None, **k
         log.debug("Eigenvalues of projected bath orbitals:\n%s", eig[:nref])
         log.debug("Largest remaining: %s", eig[nref:nref+3])
         C_bath, C_env = np.hsplit(C, [nref])
-    #elif bathtype == "matsubara":
+    elif bathtype == "mp2-natorb":
+        log.debug("Making bath orbitals of type %s", bathtype)
+        C_occclst = self.C_occclst
+        C_virclst = self.C_virclst
+        C_bath, C_env = self.make_mp2_bath(C_occclst, C_virclst, C_env, kind, nbath=nbath, tol=tol,
+                **kwargs)
     else:
         log.debug("Making bath orbitals of type %s", bathtype)
         C_bath, C_env = self.make_mf_bath(C_env, kind, bathtype=bathtype, nbath=nbath, tol=tol,
@@ -214,5 +228,166 @@ def make_mf_bath(self, C_env, kind, bathtype, nbath=None, tol=None, **kwargs):
 
     C = np.dot(C_env, R)
     C_bath, C_env = np.hsplit(C, [nbath])
+
+    return C_bath, C_env
+
+def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True):
+    """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
+
+    F = self.mf.get_fock()
+    Fo = np.linalg.multi_dot((Co.T, F, Co))
+    Fv = np.linalg.multi_dot((Cv.T, F, Cv))
+    # Canonicalization [optional]
+    if canon_occ:
+        eo, Ro = np.linalg.eigh(Fo)
+        Co = np.dot(Co, Ro)
+    else:
+        eo = np.diag(Fo)
+    if canon_vir:
+        ev, Rv = np.linalg.eigh(Fv)
+        Cv = np.dot(Cv, Rv)
+    else:
+        ev = np.diag(Fv)
+    C = np.hstack((Co, Cv))
+    eigs = np.hstack((eo, ev))
+    no = Co.shape[-1]
+    nv = Cv.shape[-1]
+    # Use PySCF MP2 for T2 amplitudes
+    occ = np.asarray(no*[2] + nv*[0])
+    if self.has_pbc:
+        mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
+    else:
+        mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
+    # Integral transformation
+    t0 = MPI.Wtime()
+    eris = mp2.ao2mo()
+    time_ao2mo = MPI.Wtime() - t0
+    log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
+    # T2 amplitudes
+    t0 = MPI.Wtime()
+    e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris)
+    e_mp2_full *= self.symmetry_factor
+    time_mp2 = MPI.Wtime() - t0
+    log.debug("Full MP2 energy = %12.8g htr", e_mp2_full)
+    log.debug("Time for MP2 amplitudes: %s", get_time_string(time_mp2))
+
+    # Calculate local energy
+    # Project first occupied index onto local space
+    P = self.get_local_energy_projector(Co)
+    pT2 = einsum("xi,ijab->xjab", P, T2)
+    e_mp2 = self.symmetry_factor * mp2.energy(pT2, eris)
+
+    # MP2 density matrix [optional]
+    if make_dm:
+        t0 = MPI.Wtime()
+        #Doo = 2*(2*einsum("ikab,jkab->ij", T2, T2)
+        #         - einsum("ikab,jkba->ij", T2, T2))
+        #Dvv = 2*(2*einsum("ijac,ijbc->ab", T2, T2)
+        #         - einsum("ijac,ijcb->ab", T2, T2))
+        Doo, Dvv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
+        Doo, Dvv = -2*Doo, 2*Dvv
+        time_dm = MPI.Wtime() - t0
+        log.debug("Time for DM: %s", get_time_string(time_dm))
+
+        # Rotate back to input coeffients (undo canonicalization)
+        if canon_occ:
+            Doo = np.linalg.multi_dot((Ro, Doo, Ro.T))
+        if canon_vir:
+            Dvv = np.linalg.multi_dot((Rv, Dvv, Rv.T))
+
+        return e_mp2, Doo, Dvv
+    else:
+        return e_mp2
+
+def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None, **kwargs):
+    """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
+    assert nbath is not None or tol is not None
+    assert kind in ("occ", "vir")
+
+    if kind == "occ":
+        Co = np.hstack((C_occclst, C_env))
+        Cv = C_virclst
+    elif kind == "vir":
+        Co = C_occclst
+        Cv = np.hstack((C_virclst, C_env))
+
+    e_mp2_all, Do, Dv = self.run_mp2(Co, Cv, make_dm=True, **kwargs)
+
+    env = np.s_[-C_env.shape[-1]:]
+    if kind == "occ":
+        D = Do[env,env]
+    elif kind == "vir":
+        D = Dv[env,env]
+    N, R = np.linalg.eigh(D)
+    N, R = N[::-1], R[:,::-1]
+    C_env = np.dot(C_env, R)
+
+    ##### Here we reorder the eigenvalues
+    #####if True:
+    ####if False:
+    ####    if kind == "vir":
+    ####        CR = np.dot(Cv[:,nclvir:], R)
+    ####    elif kind == "occ":
+    ####        CR = np.dot(Co[:,nclocc:], R)
+    ####    reffile = "mp2-no-%s-ref.npz" % kind
+
+    ####    if os.path.isfile(reffile):
+    ####        ref = np.load(reffile)
+    ####        N_ref, CR_ref = ref["N"], ref["CR"]
+
+    ####        #if N_ref is not None and R_ref is not None:
+    ####        log.debug("Reordering eigenvalues according to reference.")
+    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v/e", return_cost=True)
+    ####        reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="e^2/v", return_cost=True)
+    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*e", return_cost=True)
+    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*sqrt(e)", return_cost=True)
+    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="evv", return_cost=True)
+    ####        eigreorder_logging(N, reorder, log.debug)
+    ####        log.debug("eigassign cost function value=%g", cost)
+    ####        N = N[reorder]
+    ####        R = R[:,reorder]
+    ####        CR = CR[:,reorder]
+
+    ####    with open("mp2-no-%s-%s-ordered.txt" % (self.name, kind), "ab") as f:
+    ####        np.savetxt(f, N[np.newaxis])
+
+    ####    np.savez(reffile, N=N, CR=CR)
+
+    if nbath is None:
+        nbath = sum(N >= tol)
+    else:
+        nbath = min(nbath, len(N))
+
+    ###protect_degeneracies = False
+    ####protect_degeneracies = True
+    #### Avoid splitting within degenerate subspace
+    ###if protect_degeneracies and nno > 0:
+    ###    #dgen_tol = 1e-10
+    ###    N0 = N[nno-1]
+    ###    while nno < len(N):
+    ###        #if abs(N[nno] - N0) <= dgen_tol:
+    ###        if np.isclose(N[nno], N0, atol=1e-9, rtol=1e-6):
+    ###            log.debug("Degenerate MP2 NO found: %.6e vs %.6e - adding to bath space.", N[nno], N0)
+    ###            nno += 1
+    ###        else:
+    ###            break
+
+    log.debug("MP2 natural %s bath orbitals: active=%d, frozen=%d", kind, nbath, (len(N)-nbath))
+    log.debug("Active occupation:\n%s", N[:nbath])
+    log.debug("Following 3:\n%s", N[nbath:nbath+3])
+    C_bath, C_env = np.hsplit(C_env, [nbath])
+
+    # Delta MP2 correction
+    # ====================
+
+    if kind == "occ":
+        Co = np.hstack((C_occclst, C_bath))
+    elif kind == "vir":
+        Cv = np.hstack((C_virclst, C_bath))
+
+    e_mp2_act = self.run_mp2(Co, Cv, **kwargs)
+
+    e_delta_mp2 = e_mp2_all - e_mp2_act
+    log.debug("Delta MP2 correction (%s): all=%.8e, active=%.8e, correction=%+.8e", kind, e_mp2_all, e_mp2_act, e_delta_mp2)
 
     return C_bath, C_env

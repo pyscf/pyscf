@@ -300,6 +300,8 @@ class Cluster:
     make_dmet_bath = make_dmet_bath
     make_bath = make_bath
     make_mf_bath = make_mf_bath
+    make_mp2_bath = make_mp2_bath
+    run_mp2 = run_mp2
 
     def make_dmet_bath_orbitals(self, C, ref_orbitals=None, tol=None):
         """If C_ref is specified, complete DMET orbital space using active projection of reference orbitals."""
@@ -759,6 +761,7 @@ class Cluster:
 
         # Seperate cluster space into occupied and virtual
         C_cl = orbitals.get_coeff(("local", "dmet-bath"))
+        log.debug("C_cl-shape: %r", list(C_cl.shape))
         S = self.mf.get_ovlp()
         D_cl = np.linalg.multi_dot((C_cl.T, S, self.mf.make_rdm1(), S, C_cl)) / 2
         e, r = np.linalg.eigh(D_cl)
@@ -769,6 +772,9 @@ class Cluster:
         log.debug("Number of occupied/virtual cluster orbitals: %d/%d", nclocc, nclvir)
         C_cl_o = np.dot(C_cl, r)[:,:nclocc]
         C_cl_v = np.dot(C_cl, r)[:,nclocc:]
+
+        assert np.allclose(C_cl_o, self.C_occclst)
+        assert np.allclose(C_cl_v, self.C_virclst)
 
         # All virtuals
         if kind == "vir":
@@ -782,7 +788,8 @@ class Cluster:
             e_mp2_all, D, _ = self.run_mp2(Co, Cv, make_dm=True)
             D = D[nclocc:,nclocc:]
 
-        N, R = np.linalg.eigh(D[nclocc:,nclocc:])
+        #N, R = np.linalg.eigh(D[nclocc:,nclocc:])
+        N, R = np.linalg.eigh(D)
         N, R = N[::-1], R[:,::-1]
 
         # --- TESTING ---
@@ -850,6 +857,7 @@ class Cluster:
 
         if kind == "vir":
             Cno = Cv.copy()
+            log.debug("%r %r %r", list(Cno.shape), nclvir, list(R.shape))
             Cno[:,nclvir:] = np.dot(Cv[:,nclvir:], R)
             nclno = nclvir + nno
             Cno = Cno[:,:nclno]
@@ -928,8 +936,9 @@ class Cluster:
         nvir_clst = sum(e < 0.5)
         log.info("DMET cluster orbitals: occupied=%3d, virtual=%3d", nocc_clst, nvir_clst)
 
-        C_occclst = C_clst[:,:nocc_clst]
-        C_virclst = C_clst[:,nocc_clst:]
+        #C_occclst = C_clst[:,:nocc_clst]
+        #C_virclst = C_clst[:,nocc_clst:]
+        C_occclst, C_virclst = np.hsplit(C_clst, [nocc_clst])
 
         return C_occclst, C_virclst, C_occenv, C_virenv
 
@@ -1002,8 +1011,8 @@ class Cluster:
 
         C_occclst, C_virclst, C_occenv, C_virenv = self.make_dmet_cluster(ref_orbitals)
 
-        log.debug("clst occ: %s", self.get_occ(C_occclst))
-        log.debug("clst vir: %s", self.get_occ(C_virclst))
+        self.C_occclst = C_occclst
+        self.C_virclst = C_virclst
 
         ncl = len(self)+nbath0
         orbitals = Orbitals(C)
@@ -1050,7 +1059,7 @@ class Cluster:
             # ====================
             # Currently only MP2 NOs OR additional bath orbitals are supported!
             #if self.tol_vno or self.n_vno:
-            if self.bath_type == "mp2-no":
+            if self.bath_type == "mp2-natorb":
                 log.debug("Making MP2 virtual natural orbitals.")
                 t0 = MPI.Wtime()
                 orbitals2, nvno, e_delta_mp2_v = self.make_mp2_natorb(
@@ -1167,15 +1176,7 @@ class Cluster:
         orbitals.define_space("vir-env", np.s_[ncl+nbathvir+nenvocc:])
         self.orbitals = orbitals
 
-        for space in orbitals.spaces:
-            log.debug("Size %s: %d", space, orbitals.get_size(space))
-            S = self.mf.get_ovlp()
-            Cs = orbitals.get_coeff(space)
-            D = np.linalg.multi_dot((Cs.T, S, self.mf.make_rdm1(), S, Cs))
-            occ = np.diag(D)
-            log.debug("Occ: %s", occ)
-
-        # NEW
+        # NEW Bath
         # --- Occupied
         C_occbath, C_occenv = self.make_bath(C_occenv, self.bath_type, "occ",
                 ref_orbitals.get("occ-bath", None), nbath=self.bath_target_size[0])
@@ -1922,7 +1923,7 @@ class EmbCC:
             raise ValueError("Unknown local_orbital_type: %s" % local_orbital_type)
         if solver not in (None, "MP2", "CISD", "CCSD", "FCI"):
             raise ValueError("Unknown solver: %s" % solver)
-        if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-no"):
+        if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-natorb"):
             raise ValueError("Unknown bath type: %s" % bath_type)
 
         self.mf = mf
