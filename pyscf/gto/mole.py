@@ -958,7 +958,7 @@ def tot_electrons(mol):
 
     if abs(nelectron - nelectron_int) > 1e-4:
         logger.warn(mol, 'Found fractional number of electrons %f. Round it to %d',
-                   nelectron, nelectron_int)
+                    nelectron, nelectron_int)
     return nelectron_int
 
 def copy(mol):
@@ -1030,6 +1030,7 @@ def dumps(mol):
         return json.dumps(moldic)
     except TypeError:
         import warnings
+
         def skip_value(dic):
             dic1 = {}
             for k,v in dic.items():
@@ -1056,7 +1057,7 @@ def loads(molstr):
     from numpy import array  # noqa
     moldic = json.loads(molstr)
     if sys.version_info < (3,):
-# Convert to utf8 because JSON loads fucntion returns unicode.
+        # Convert to utf8 because JSON loads fucntion returns unicode.
         def byteify(inp):
             if isinstance(inp, dict):
                 return dict([(byteify(k), byteify(v)) for k, v in inp.iteritems()])
@@ -1095,9 +1096,9 @@ def loads(molstr):
         # decompress symm_orb
         for val, x, y, shape in mol.symm_orb:
             if isinstance(val[0], list):
-# backward compatibility for chkfile of pyscf-1.4 in which val is an array of
-# real floats. In pyscf-1.5, val can be a list of list, to include the
-# imaginary part
+                # backward compatibility for chkfile of pyscf-1.4 in which val
+                # is an array of real floats. In pyscf-1.5, val can be a list
+                # of list, to include the imaginary part
                 val_real, val_imag = val
             else:
                 val_real, val_imag = val, None
@@ -2150,7 +2151,7 @@ class Mole(lib.StreamObject):
         if key[:2] == '__':  # Skip Python builtins
             raise AttributeError('Mole object has no attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
-                   '_repr_mimebundle_'):
+                     '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
             # https://github.com/jupyter/notebook/issues/2014
             raise AttributeError
@@ -2509,8 +2510,8 @@ class Mole(lib.StreamObject):
         for ia,atom in enumerate(self._atom):
             coorda = tuple([x * param.BOHR for x in atom[1]])
             coordb = tuple([x for x in atom[1]])
-            self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '\
-                              '%16.12f %16.12f %16.12f Bohr\n' \
+            self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '
+                              '%16.12f %16.12f %16.12f Bohr\n'
                               % ((ia+1, _symbol(atom[0])) + coorda + coordb))
         if self.nucmod:
             if isinstance(self.nucmod, (int, str, unicode,
@@ -2526,7 +2527,7 @@ class Mole(lib.StreamObject):
 
         if self.verbose >= logger.DEBUG:
             self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
-            self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
+            self.stdout.write('[INPUT] l, kappa, [nprim/nctr], '
                               'expnt,             c_1 c_2 ...\n')
             for atom, basis_set in self._basis.items():
                 self.stdout.write('[INPUT] %s\n' % atom)
@@ -2664,7 +2665,7 @@ class Mole(lib.StreamObject):
         return _TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
     def set_f12_zeta(self, zeta):
-        '''Set zeta for YP exp(-zeta r12)/r12 or STG exp(-zeta r12) type integrals  
+        '''Set zeta for YP exp(-zeta r12)/r12 or STG exp(-zeta r12) type integrals
         '''
         self._env[PTR_F12_ZETA] = zeta
 
@@ -2730,6 +2731,7 @@ class Mole(lib.StreamObject):
             self._env[AS_RINV_ORIG_ATOM] = atm_id  # required by ecp gradients
             rinv0 = self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
             zeta0 = self._env[PTR_RINV_ZETA].copy()
+
             def set_rinv(z, r):
                 self._env[PTR_RINV_ZETA] = z
                 self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
@@ -3413,7 +3415,7 @@ def _update_from_cmdargs_(mol):
         __IPYTHON__
         #sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
         return
-    except:
+    except Exception:
         pass
 
     if not mol._built: # parse cmdline args only once
@@ -3545,7 +3547,7 @@ def cart2zmat(coord):
             if abs(nb0) < 1e-7: # o0, o1, c in line
                 a2 = 0
                 zstr.append('%d %.15g %d %.15g %d %.15g' %
-                           (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
+                            (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
             else:
                 b1 = numpy.cross(o2-o0, r1)
                 nb1 = numpy.linalg.norm(b1)
@@ -3553,7 +3555,7 @@ def cart2zmat(coord):
                 if abs(nb1) < 1e-7:  # o0 o1 o2 in line
                     a2 = 0
                     zstr.append('%d %.15g %d %.15g %d %.15g' %
-                               (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
+                                (p0, nr0, p1, a1*180/numpy.pi, p2, a2))
                     o2 = c
                     p2 = 4 + k
                 else:
@@ -3562,7 +3564,7 @@ def cart2zmat(coord):
                     else:
                         a2 =-numpy.arccos(numpy.dot(b1, b0) / (nb0*nb1))
                     zstr.append('%d %.15g %d %.15g %d %.15g' %
-                               (p0, nr0, p1, a1*180/numpy.pi, p2, a2*180/numpy.pi))
+                                (p0, nr0, p1, a1*180/numpy.pi, p2, a2*180/numpy.pi))
 
     return '\n'.join(zstr)
 
@@ -3573,8 +3575,8 @@ def dyall_nuc_mod(nuc_charge, nucprop={}):
     Ref. L. Visscher and K. Dyall, At. Data Nucl. Data Tables, 67, 207 (1997)
     '''
     mass = nucprop.get('mass', elements.ISOTOPE_MAIN[nuc_charge])
-    r = (0.836 * mass**(1./3) + 0.570) / 52917.7249;
-    zeta = 1.5 / (r**2);
+    r = (0.836 * mass**(1./3) + 0.570) / 52917.7249
+    zeta = 1.5 / (r**2)
     return zeta
 
 def filatov_nuc_mod(nuc_charge, nucprop={}):
