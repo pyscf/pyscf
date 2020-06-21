@@ -31,8 +31,19 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
+from pyscf.scf.uhf import UHF
+from pyscf.pbc.gto import Cell
+from pyscf.pbc.scf.khf import KSCF
 from pyscf.tools.wfn_format import TYPE_MAP
 
+
+def make_tagger(fout):
+    @contextlib.contextmanager
+    def tagger(session):
+        fout.write('<%s>\n' % session)
+        yield
+        fout.write('</%s>\n' % session)
+    return tagger
 
 def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     if not isinstance(mo_coeff, numpy.ndarray) or mo_coeff.ndim == 3:
@@ -42,7 +53,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         raise NotImplementedError('Cartesian basis not available')
 
     #FIXME: Duplicated primitives may lead to problems.  x2c._uncontract_mol
-    # is the workaround at the moment to remove duplicated primitives.
+    # is a workaround at the moment to remove duplicated primitives.
     from pyscf.x2c import x2c
     mol, ctr = x2c._uncontract_mol(mol, True, 0.)
     mo_coeff = numpy.dot(ctr, mo_coeff)
@@ -78,11 +89,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     nprim, nmo = mo_cart.shape
     neleca, nelecb = mol.nelec
 
-    @contextlib.contextmanager
-    def tag(session):
-        fout.write('<%s>\n' % session)
-        yield
-        fout.write('</%s>\n' % session)
+    tag = make_tagger(fout)
 
     with tag('Title'):
         fout.write(' From PySCF\n')
@@ -91,8 +98,6 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         fout.write(' GTO\n')
     with tag('Number of Nuclei'):
         fout.write(' %s\n' % mol.natm)
-    with tag('Number of Occupied Orbitals'):
-        fout.write(' %d\n' % neleca)
     with tag('Number of Perturbations'):
         fout.write(' 0\n')
     with tag('Net Charge'):
@@ -124,8 +129,17 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         for c in mol.atom_coords():
             fout.write(' %19.12e %19.12e %19.12e\n' % tuple(c))
 
+    if isinstance(mol, Cell):
+        cell = mol
+        with tag('Number of Translation Vectors'):
+            fout.write(' %d\n' % cell.dimension)
+        with tag('Translation Vectors'):
+            a = cell.lattice_vectors()
+            for r in a[:cell.dimension]:
+                fout.write(' %15.8e %15.8e %15.8e\n' % (r[0], r[1], r[2]))
+
     with tag('Number of Primitives'):
-        fout.write(' %d\n' % mo_cart.shape[0])
+        fout.write(' %d\n' % nprim)
     with tag('Primitive Centers'):
         for i0, i1 in lib.prange(0, nprim, 5):
             fout.write(' %s\n' % ' '.join('%19d'%x for x in centers[i0:i1]))
@@ -149,6 +163,9 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     #    with tag('EDF Primitive Coefficients'):
     #        pass
 
+
+    with tag('Number of Occupied Orbitals'):
+        fout.write(' %d\n' % nmo)
     if mo_occ is not None:
         with tag('Molecular Orbital Occupation Numbers'):
             for c in mo_occ:
@@ -164,7 +181,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     with tag('Molecular Orbital Primitive Coefficients'):
         for k in range(nmo):
             with tag('MO Number'):
-                fout.write(' %d\n' % (i+1))
+                fout.write(' %d\n' % (k+1))
 
             for i0, i1 in lib.prange(0, nprim, 5):
                 fout.write(' %s\n' % ' '.join('%19.12e'%x for x in mo_cart[i0:i1,k]))
@@ -179,23 +196,58 @@ def from_mo(mol, filename=None, mo_coeff=None, ene=None, occ=None):
 
 def from_scf(mf, filename=None):
     '''Dump an SCF object in WFX format'''
+    if isinstance(mf, UHF):
+        raise NotImplementedError('UHF/UKS object')
+
     if filename is None:
         fout = sys.stdout
     else:
         fout = open(filename, 'w')
 
-    write_mo(fout, mf.mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ)
+    tag = make_tagger(fout)
 
-    @contextlib.contextmanager
-    def tag(session):
-        fout.write('<%s>\n' % session)
-        yield
-        fout.write('</%s>\n' % session)
+    if isinstance(mf, KSCF):
+        nkpts = len(mf.kpts)
+        weight = 1. / nkpts
+        mo_energy_kpts = numpy.hstack(mf.mo_energy)
+        mo_occ_kpts = numpy.hstack(mf.mo_occ)
+        k_index = numpy.hstack([numpy.repeat(i+1, c.size)
+                                for i, c in enumerate(mf.mo_occ)])
+        idx = mo_energy_kpts.argsort()
+
+        write_mo(fout, mf.cell, numpy.hstack(mf.mo_coeff),
+                 mo_energy_kpts[idx], mo_occ_kpts[idx])
+
+        with tag('Orbital Type'):
+            fout.write('canonical natural\n')
+        with tag('Type of Orbital Primitive Coefficients'):
+            fout.write(' complex\n')
+
+        with tag('Number of Kpoints'):
+            fout.write(' %d\n' % nkpts)
+        with tag('Kpoint Weights'):
+            for i in range(nkpts):
+                fout.write(' %g\n' % weight)
+        with tag('Kpoint Index for Orbitals'):
+            for i in idx:
+                fout.write(' %d\n' % k_index[i])
+        with tag('Kpoint Fractional Coordinates'):
+            dimension = mf.cell.dimension
+            kpts = mf.cell.get_scaled_kpts(mf.kpts)
+            for k in kpts[:,:dimension]:
+                fout.write((' %g'*dimension) % tuple(k) + '\n')
+    else:
+        write_mo(fout, mf.mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ)
+        with tag('Orbital Type'):
+            fout.write(' canonical natural\n')
+        with tag('Type of Orbital Primitive Coefficients'):
+            fout.write(' real\n')
+        # TODO:
+        with tag('Virial Ratio (-V/T)'):
+            fout.write(' 0.000000000000e+00\n')
 
     with tag('Energy = T + Vne + Vee + Vnn'):
         fout.write( '%19.12e\n' % mf.e_tot)
-    with tag('Virial Ratio (-V/T)'):
-        fout.write(' 0.000000000000e+00\n')
 
     if filename is not None:
         fout.close()

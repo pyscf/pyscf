@@ -103,7 +103,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         raise NotImplementedError('Cartesian basis not available')
 
     #FIXME: Duplicated primitives may lead to problems.  x2c._uncontract_mol
-    # is the workaround at the moment to remove duplicated primitives.
+    # is a workaround at the moment to remove duplicated primitives.
     from pyscf.x2c import x2c
     mol, ctr = x2c._uncontract_mol(mol, True, 0.)
     mo_coeff = numpy.dot(ctr, mo_coeff)

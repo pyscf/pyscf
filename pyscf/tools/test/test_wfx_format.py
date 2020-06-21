@@ -16,6 +16,7 @@
 import unittest
 import tempfile
 import numpy
+import pyscf
 from pyscf import lib
 from pyscf import gto
 from pyscf.tools import wfx_format
@@ -49,6 +50,19 @@ class KnownValues(unittest.TestCase):
     def test_from_mo(self):
         with tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfcidump:
             wfx_format.from_mo(mf.mol, tmpfcidump.name, mf.mo_coeff)
+
+    def test_from_kscf(self):
+        cell = pyscf.M(
+            atom = '''He 2 0 0''',
+            a = numpy.eye(3) * 3,
+            mesh = [10,10,10],
+            basis = { 'He': [[0, (0.8, 1.0)],
+                             [0, (1.2, 1.0)]]})
+        mf = cell.KRHF()
+        mf.kpts = cell.make_kpts([2,1,1])
+        mf.kernel()
+        with tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfcidump:
+            wfx_format.from_scf(mf, tmpfcidump.name)
 
 
 if __name__ == "__main__":
