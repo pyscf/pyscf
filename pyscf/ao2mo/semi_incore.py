@@ -161,7 +161,7 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
     log.debug('  Half transformed eri size (MB): {:.3g}'
               .format(nij_pair*nao_pair*typesize))
     log.debug('  RAM buffer (MB): {:.3g}'
-             .format(nij_pair*IOBLK_SIZE*typesize*2))
+              .format(nij_pair*IOBLK_SIZE*typesize*2))
 
     if eri_ao.size == nao_pair**2: # 4-fold symmetry
         # half_e1 first transforms the indices which are contiguous in memory

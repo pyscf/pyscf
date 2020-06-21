@@ -126,7 +126,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
             log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
         elif getattr(mo_coeff, 'orbsym', None) is not None:  # It may be reordered SCF orbitals
             cas_orb = mo_coeff[:,ncore:nocc]
-            s = reduce(numpy.dot, (cas_orb.T, mc._scf.get_ovlp(), mc._scf.mo_coeff))
+            s = reduce(numpy.dot, (cas_orb.conj().T, mc._scf.get_ovlp(), mc._scf.mo_coeff))
             if numpy.all(numpy.max(s, axis=1) > 1-1e-9):
                 idx = numpy.argmax(s, axis=1)
                 cas_orbsym = orbsym[ncore:nocc]
