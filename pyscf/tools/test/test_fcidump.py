@@ -43,16 +43,30 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_from_chkfile(self):
-        tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15,
-                             molpro_orbsym=True)
+        with tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfcidump:
+            fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15,
+                                 molpro_orbsym=True)
+            result = fcidump.read(tmpfcidump.name)
+            self.assertEqual(result['NORB'], 10)
+            self.assertEqual(result['NELEC'], 14)
+            self.assertEqual(result['MS2'], 0)
+            self.assertEqual(result['ORBSYM'], [1, 5, 1, 5, 3, 2, 1, 6, 7, 5])
+            self.assertAlmostEqual(result['ECORE'], 23.6218304956, 9)
+            self.assertAlmostEqual(result['H1'].trace(), -120.2183431789, 7)
 
     def test_from_integral(self):
-        tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
-        h2 = ao2mo.full(mf._eri, mf.mo_coeff)
-        fcidump.from_integrals(tmpfcidump.name, h1, h2, h1.shape[0],
-                               mol.nelectron, tol=1e-15)
+        with tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfcidump:
+            h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
+            h2 = ao2mo.full(mf._eri, mf.mo_coeff)
+            fcidump.from_integrals(tmpfcidump.name, h1, h2, h1.shape[0],
+                                   mol.nelectron, tol=1e-15)
+            result = fcidump.read(tmpfcidump.name)
+            self.assertEqual(result['NORB'], 10)
+            self.assertEqual(result['NELEC'], 14)
+            self.assertEqual(result['MS2'], 0)
+            self.assertEqual(result['ORBSYM'], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            self.assertEqual(result['ECORE'], 0.0)
+            self.assertAlmostEqual(result['H1'].trace(), -120.2183431789, 7)
 
     def test_read(self):
         with tempfile.NamedTemporaryFile(mode='w+') as f:
@@ -84,9 +98,7 @@ ORBSYM=1,2,3,4,
             result = fcidump.read(f.name)
         self.assertEqual(result['MS2'], 0)
 
+
 if __name__ == "__main__":
     print("Full Tests for fcidump")
     unittest.main()
-
-
-
