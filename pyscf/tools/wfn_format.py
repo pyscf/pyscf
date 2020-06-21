@@ -21,9 +21,13 @@
 GAMESS WFN File format
 '''
 
+__all__ = ['from_mo', 'from_scf', 'from_mcscf', 'from_chkfile', 'load']
+
+import sys
+import numpy
 from pyscf import gto
 from pyscf import lib
-import numpy
+from pyscf import scf
 
 # types
 # 1 S
@@ -91,6 +95,10 @@ TYPE_MAP = [
     [56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36],  # H
 ]
 def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
+    '''Dump MO coefficients in WFN format
+
+    fout : a file wrapper or a stream object
+    '''
     if mol.cart:
         raise NotImplementedError('Cartesian basis not available')
 
@@ -158,14 +166,12 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         for i0, i1 in lib.prange(0, nprim, 5):
             fout.write(' %s\n' % ' '.join('%15.8E'%x for x in mo[i0:i1]))
     fout.write('END DATA\n')
-    if mo_energy is None or mo_occ is None:
-        fout.write('ALDET    ENERGY =        0.0000000000   VIRIAL(-V/T)  =   0.00000000\n')
-    elif mo_energy is None and mo_occ is None:
-        pass
-    else :
-        fout.write('RHF      ENERGY =        0.0000000000   VIRIAL(-V/T)  =   0.00000000\n')
 
 def write_ci(fout, fcivec, norb, nelec, ncore=0):
+    '''Dump CI coefficients in WFN format
+
+    fout : a file wrapper or a stream object
+    '''
     from pyscf import fci
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -179,6 +185,7 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
     nb = fci.cistring.num_strings(norb, nelecb)
     stringsa = fci.cistring.gen_strings4orblist(range(norb), neleca)
     stringsb = fci.cistring.gen_strings4orblist(range(norb), nelecb)
+
     def str2orbidx(string, ncore):
         bstring = bin(string)
         return [i+1+ncore for i,s in enumerate(bstring[::-1]) if s == '1']
@@ -191,11 +198,51 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
         #TODO:add a cuttoff and a counter for ndets
         fout.write('%18.10E %s %s\n' % (fcivec[addra,addrb], ' '.join(idxa), ' '.join(idxb)))
 
+def from_mo(mol, filename=None, mo_coeff=None, ene=None, occ=None):
+    '''Dump orbitals in WFN format'''
+    if filename is None:
+        write_mo(sys.stdout, mol, mo_coeff, mo_energy=ene, mo_occ=occ)
+    else:
+        with open(filename, 'w') as f:
+            write_mo(f, mol, mo_coeff, mo_energy=ene, mo_occ=occ)
+
+def from_scf(mf, filename=None):
+    '''Dump an SCF object in WFN format'''
+    coeff = mf.mo_coeff[:,mf.mo_occ>0]
+    energy = mf.mo_energy[mf.mo_occ>0]
+    occ = mf.mo_occ[mf.mo_occ>0]
+    if filename is None:
+        fout = sys.stdout
+    else:
+        fout = open(filename, 'w')
+
+    write_mo(fout, mf.mol, coeff, mo_energy=energy, mo_occ=occ)
+    fout.write('RHF      ENERGY =  %18.10f   VIRIAL(-V/T)  = %12.10f\n' % (mf.e_tot, 0))
+
+    if filename is not None:
+        fout.close()
+
+def from_mcscf(mc, filename=None, cas_natorb=False):
+    '''Dump an MCSCF object in WFN format'''
+    raise NotImplementedError
+
+def from_chkfile(filename=None, chkfile=None):
+    '''Read HF/DFT results from chkfile and dump them in WFN format'''
+    mol, mfdic = scf.chkfile.load_scf(chkfile)
+    mf = mol.RHF()
+    mf.__dict__.update(mfdic)
+    from_scf(mf, filename)
+
+def load(wfn_file, verbose=0):
+    '''Read SCF results from a WFN file then construct mol and SCF objects
+    '''
+    raise NotImplementedError
+
 if __name__ == '__main__':
-    from pyscf import scf, mcscf, symm
+    from pyscf import mcscf, symm
     from pyscf.tools import molden
-    mol = gto.M(atom='N 0 0 0; N 0 0 2.88972599', 
-                unit='B', basis='ccpvtz', verbose=4, 
+    mol = gto.M(atom='N 0 0 0; N 0 0 2.88972599',
+                unit='B', basis='ccpvtz', verbose=4,
                 symmetry=1, symmetry_subgroup='d2h')
     mf = scf.RHF(mol).run()
     coeff = mf.mo_coeff[:,mf.mo_occ>0]
@@ -208,7 +255,7 @@ if __name__ == '__main__':
     mc.kernel()
     nmo = mc.ncore + mc.ncas
     nelecas = mc.nelecas[0] + mc.nelecas[1]
-    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, mc.ncas, mc.nelecas) 
+    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, mc.ncas, mc.nelecas)
     rdm1, rdm2 = mcscf.addons._make_rdm12_on_mo(casdm1, casdm2, mc.ncore, mc.ncas, nmo)
     den_file = 'n2_cas.den'
     fspt = open(den_file,'w')
@@ -223,7 +270,7 @@ if __name__ == '__main__':
             for k in range(nmo):
                 for l in range(nmo):
                     if (abs(rdm2[i,j,k,l]) > 1e-12):
-                            fspt.write('%i %i %i %i %.16f\n' % ((i+1), (j+1), (k+1), (l+1), rdm2[i,j,k,l]))
+                        fspt.write('%i %i %i %i %.16f\n' % ((i+1), (j+1), (k+1), (l+1), rdm2[i,j,k,l]))
     fspt.close()
     orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mc.mo_coeff[:,:nmo])
     natocc, natorb = symm.eigh(-rdm1, orbsym)

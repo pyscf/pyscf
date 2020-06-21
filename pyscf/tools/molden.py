@@ -25,14 +25,22 @@ import numpy
 import pyscf
 from pyscf import lib
 from pyscf import gto
+from pyscf import scf
 from pyscf.lib import logger
 from pyscf import __config__
 
 IGNORE_H = getattr(__config__, 'molden_ignore_h', True)
 
+__all__ = ['from_mo', 'from_scf', 'from_mcscf', 'from_chkfile', 'load',
+           'remove_high_l']
+
 
 def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
                   occ=None, ignore_h=IGNORE_H):
+    '''Dump orbital coefficients in molden format
+
+    fout : a file wrapper or a stream object
+    '''
     from pyscf.symm import label_orb_symm
     if mol.cart:
         # pyscf Cartesian GTOs are not normalized. This may not be consistent
@@ -72,24 +80,21 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
         for i,j in enumerate(aoidx):
             fout.write(' %3d    %18.14g\n' % (i+1, mo_coeff[j,imo]))
 
-def from_mo(mol, filename, mo_coeff, spin='Alpha', symm=None, ene=None,
+def from_mo(mol, filename=None, mo_coeff=None, spin='Alpha', symm=None, ene=None,
             occ=None, ignore_h=IGNORE_H):
-    '''Dump the given MOs in Molden format'''
+    '''Dump orbitals in Molden format'''
     with open(filename, 'w') as f:
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, spin, symm, ene, occ, ignore_h)
 
 
-def from_scf(mf, filename, ignore_h=IGNORE_H):
-    '''Dump the given SCF object in Molden format'''
-    dump_scf(mf, filename, ignore_h)
-def dump_scf(mf, filename, ignore_h=IGNORE_H):
-    import pyscf.scf
+def from_scf(mf, filename=None, ignore_h=IGNORE_H):
+    '''Dump an SCF object in Molden format'''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     with open(filename, 'w') as f:
         header(mol, f, ignore_h)
-        if isinstance(mf, pyscf.scf.uhf.UHF) or 'UHF' == mf.__class__.__name__:
+        if isinstance(mf, scf.uhf.UHF) or 'UHF' == mf.__class__.__name__:
             orbital_coeff(mol, f, mo_coeff[0], spin='Alpha',
                           ene=mf.mo_energy[0], occ=mf.mo_occ[0],
                           ignore_h=ignore_h)
@@ -99,8 +104,10 @@ def dump_scf(mf, filename, ignore_h=IGNORE_H):
         else:
             orbital_coeff(mf.mol, f, mf.mo_coeff,
                           ene=mf.mo_energy, occ=mf.mo_occ, ignore_h=ignore_h)
+dump_scf = from_scf
 
-def from_mcscf(mc, filename, ignore_h=IGNORE_H, cas_natorb=False):
+def from_mcscf(mc, filename=None, ignore_h=IGNORE_H, cas_natorb=False):
+    '''Dump MCSCF orbitals in Molden format'''
     mol = mc.mol
     dm1 = mc.make_rdm1()
     if cas_natorb:
@@ -114,19 +121,19 @@ def from_mcscf(mc, filename, ignore_h=IGNORE_H, cas_natorb=False):
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, ene=mo_energy, occ=occ, ignore_h=ignore_h)
 
-def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=IGNORE_H):
-    import pyscf.scf
+def from_chkfile(filename=None, chkfile=None, key='scf/mo_coeff', ignore_h=IGNORE_H):
+    '''Read HF/DFT or MCSCF orbitals from chkfile and dump them in Molden format'''
     with open(filename, 'w') as f:
         if key == 'scf/mo_coeff':
-            mol, mf = pyscf.scf.chkfile.load_scf(chkfile)
+            mol, mf = scf.chkfile.load_scf(chkfile)
             header(mol, f, ignore_h)
             ene = mf['mo_energy']
             occ = mf['mo_occ']
             mo = mf['mo_coeff']
         else:
-            mol = pyscf.scf.chkfile.load_mol(chkfile)
+            mol = scf.chkfile.load_mol(chkfile)
             header(mol, f, ignore_h)
-            dat = pyscf.scf.chkfile.load(chkfile, key.split('/')[0])
+            dat = scf.chkfile.load(chkfile, key.split('/')[0])
             if 'mo_energy' in dat:
                 ene = dat['mo_energy']
             else:
@@ -140,9 +147,9 @@ def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=IGNORE_H):
             occ = None
         if occ.ndim == 2:
             orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0],
-                         ignore_h=ignore_h)
+                          ignore_h=ignore_h)
             orbital_coeff(mol, f, mo[1], spin='Beta', ene=ene[1], occ=occ[1],
-                         ignore_h=ignore_h)
+                          ignore_h=ignore_h)
         else:
             orbital_coeff(mol, f, mo, ene=ene, occ=occ, ignore_h=ignore_h)
 
@@ -267,7 +274,7 @@ def _parse_mo(lines, envs):
     aoidx = numpy.argsort(order_ao_index(mol))
     mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
     if mol.cart:
-# Cartesian GTOs are normalized in molden format but they are not in pyscf
+        # Cartesian GTOs are normalized in molden format but they are not in pyscf
         s = mol.intor('int1e_ovlp')
         mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
 
@@ -301,7 +308,7 @@ _SEC_PARSER = {'GTO'      : _parse_gto,
               }
 
 def load(moldenfile, verbose=0):
-    '''Extract mol and orbitals from molden file
+    '''Extract mol and orbitals from a molden file
     '''
     with open(moldenfile, 'r') as f:
         mol = gto.Mole()
@@ -366,6 +373,10 @@ def _d2e(token):
     return token.replace('D', 'e').replace('d', 'e')
 
 def header(mol, fout, ignore_h=IGNORE_H):
+    '''Dump Molden header (the information like basis, geometry etc.)
+
+    fout : a file wrapper or a stream object
+    '''
     if ignore_h:
         mol = remove_high_l(mol)[0]
     fout.write('[Molden Format]\n')
@@ -407,15 +418,15 @@ def header(mol, fout, ignore_h=IGNORE_H):
     fout.write('\n')
 
 def order_ao_index(mol):
-# reorder d,f,g fucntion to
-#  5D: D 0, D+1, D-1, D+2, D-2
-#  6D: xx, yy, zz, xy, xz, yz
-#
-#  7F: F 0, F+1, F-1, F+2, F-2, F+3, F-3
-# 10F: xxx, yyy, zzz, xyy, xxy, xxz, xzz, yzz, yyz, xyz
-#
-#  9G: G 0, G+1, G-1, G+2, G-2, G+3, G-3, G+4, G-4
-# 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
+    # reorder d,f,g fucntion to
+    #  5D: D 0, D+1, D-1, D+2, D-2
+    #  6D: xx, yy, zz, xy, xz, yz
+    #
+    #  7F: F 0, F+1, F-1, F+2, F-2, F+3, F-3
+    # 10F: xxx, yyy, zzz, xyy, xxy, xxz, xzz, yzz, yyz, xyz
+    #
+    #  9G: G 0, G+1, G-1, G+2, G-2, G+3, G-3, G+4, G-4
+    # 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
     idx = []
     off = 0
     if mol.cart:
@@ -494,7 +505,6 @@ def remove_high_l(mol, mo_coeff=None):
 
 
 if __name__ == '__main__':
-    from pyscf import scf
     import tempfile
     mol = gto.Mole()
     mol.verbose = 5

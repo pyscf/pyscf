@@ -3,6 +3,7 @@ PySCF 1.7.? (2020-?-?)
 * Added
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
+  - WFX format writer
 * Fixed
   - Bug in Mole.fromstring
 
@@ -881,7 +882,7 @@ PySCF 1.2 alpha (2016-8-5)
 --------------------------
 * Added
   - MDF (mixed density fitting) method for molecule and PBC 2-election integrals
-  - GAMESS WFN wirter
+  - GAMESS WFN writer
   - Periodic boundary condition (PBC) for gamma point RHF, UHF, RKS, UKS
   - PBC RHF, UHF, RKS, UKS with k-point sampling
   - PBC AO integrals

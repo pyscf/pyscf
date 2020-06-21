@@ -321,9 +321,11 @@ class Cube(object):
             data = f.readline().split()
             natm = int(data[0])
             self.boxorig = numpy.array([float(x) for x in data[1:]])
+
             def parse_nx(data):
                 d = data.split()
                 return int(d[0]), numpy.array([float(x) for x in d[1:]])
+
             self.nx, self.xs = parse_nx(f.readline())
             self.ny, self.ys = parse_nx(f.readline())
             self.nz, self.zs = parse_nx(f.readline())
