@@ -121,6 +121,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
         lattice_type = '_nonorth'
     eval_fn = 'NUMINTeval_' + xctype.lower() + lattice_type
     drv = libdft.NUMINT_fill2c
+
     def make_mat(weights):
         if comp == 1:
             mat = numpy.zeros((nimgs,naoj,naoi))
@@ -230,6 +231,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
         shape = (comp, numpy.prod(submesh))
     eval_fn = 'NUMINTrho_' + xctype.lower() + lattice_type
     drv = libdft.NUMINT_rho_drv
+
     def make_rho_(rho, dm):
         drv(getattr(libdft, eval_fn),
             rho.ctypes.data_as(ctypes.c_void_p),
@@ -275,8 +277,9 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
                 has_imag = (hermi == 0 and abs(dmI).max() > 1e-8)
                 if (has_imag and xctype == 'LDA' and
                     naoi == naoj and
-# For hermitian density matrices, the anti-symmetry character of the imaginary
-# part of the density matrices can be found by rearranging the repeated images.
+                    # For hermitian density matrices, the anti-symmetry
+                    # character of the imaginary part of the density matrices
+                    # can be found by rearranging the repeated images.
                     abs(dmI + dmI[::-1].transpose(0,2,1)).max() < 1e-8):
                     has_imag = False
             dm_i = None
@@ -354,6 +357,7 @@ def get_pp(mydf, kpts=None):
 
     # buf for SPG_lmi upto l=0..3 and nl=3
     buf = numpy.empty((48,ngrids), dtype=numpy.complex128)
+
     def vppnl_by_k(kpt):
         Gk = Gv + kpt
         G_rad = lib.norm(Gk, axis=1)
@@ -962,7 +966,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
     for i in range(nset):
-        exc, vxc = ni.eval_xc(xc_code, rhoR[i], 0, deriv=1)[:2]
+        exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=0, deriv=1)[:2]
         if xctype == 'LDA':
             wv = vxc[0].reshape(1,ngrids) * weight
         elif xctype == 'GGA':
@@ -1062,7 +1066,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     nelec = numpy.zeros((2))
     excsum = 0
 
-    exc, vxc = ni.eval_xc(xc_code, rhoR, 1, deriv=1)[:2]
+    exc, vxc = ni.eval_xc(xc_code, rhoR, spin=1, deriv=1)[:2]
     if xctype == 'LDA':
         vrho = vxc[0]
         wva = vrho[:,0].reshape(1,ngrids) * weight
@@ -1487,7 +1491,7 @@ def multi_grids_tasks_for_rcut(cell, fft_mesh=None, verbose=None):
                       numpy.append(rcut_delimeter, 0)):
         # shells which have high exps (small rcut)
         shls_dense = [ib for ib, rc in enumerate(rcuts_pgto)
-                     if numpy.any((r1 <= rc) & (rc < r0))]
+                      if numpy.any((r1 <= rc) & (rc < r0))]
         if len(shls_dense) == 0:
             continue
         cell_dense, ao_idx_dense, ke_cutoff, rcut_atom = \
@@ -1610,7 +1614,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
     for ke0, ke1 in zip(ke_delimeter[:-1], ke_delimeter[1:]):
         # shells which have high exps (small rcut)
         shls_dense = [ib for ib, ke in enumerate(kecuts_pgto)
-                     if numpy.any((ke0 < ke) & (ke <= ke1))]
+                      if numpy.any((ke0 < ke) & (ke <= ke1))]
         if len(shls_dense) == 0:
             continue
 
