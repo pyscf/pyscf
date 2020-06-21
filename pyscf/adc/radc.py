@@ -530,6 +530,8 @@ class RADC(lib.StreamObject):
         nao_pair = nao * (nao+1) // 2
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
+        print (self._scf._eri)
+        exit()
         if (self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             eris = self.transform_integrals()
