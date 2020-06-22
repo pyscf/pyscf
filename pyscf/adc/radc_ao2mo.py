@@ -149,7 +149,6 @@ def transform_integrals_outcore(myadc):
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = []
 
-        #used_mem = (nmo**3) * 8/1e6
         avail_mem = myadc.max_memory - lib.current_memory()[0]
         vvv_mem = (nvir**3) * 8/1e6
 
@@ -170,17 +169,16 @@ def transform_integrals_outcore(myadc):
 
             #vvvv = ao2mo.general(myadc._scf._eri, (orb_slice, vir, vir, vir), compact=False)
 
-            ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), 'vvvv.h5',max_memory = mem, compact=False)
-            vvvv = np.asarray('vvvv.h5')
+            #ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), 'vvvv.h5',max_memory = mem, compact=False)
+            #vvvv = np.asarray('vvvv.h5')
      
-            #vvvv = ao2mo.outcore.general_iofree(mol, (orb_slice, vir, vir, vir), max_memory = mem, compact=False)
-#            #vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
-#            #vvvv = vvvv.transpose(0,2,1,3).copy().reshape(-1, nvir, nvir * nvir)
-#        
-#            vvvv_p = dataset(vvvv)
-#            eris.vvvv.append(vvvv_p)
+            vvvv = ao2mo.outcore.general_iofree(mol, (orb_slice, vir, vir, vir), max_memory = mem, compact=False)
+            vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
+            vvvv = vvvv.transpose(0,2,1,3).copy().reshape(-1, nvir, nvir * nvir)
+        
+            vvvv_p = dataset(vvvv)
+            eris.vvvv.append(vvvv_p)
 
-    exit()
     return eris
 
 

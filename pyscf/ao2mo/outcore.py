@@ -265,7 +265,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
 
 # transform e1
-
     fswap = lib.H5TmpFile()
     half_e1(mol, mo_coeffs, fswap, intor, aosym, comp, max_memory, ioblk_size,
             log, compact)
@@ -288,7 +287,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         else:
             h5d_eri[icomp,row0:row1] = buf[:row1-row0]
 
- 
     ioblk_size = max(max_memory*.1, ioblk_size)
     iobuflen = guess_e2bufsize(ioblk_size, nij_pair, max(nao_pair,nkl_pair))[0]
     buf = numpy.empty((iobuflen,nao_pair))
@@ -323,6 +321,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
                                  ao_loc=ao_loc, out=outbuf)
                     async_write(icomp, row0, row1, outbuf)
                     outbuf, buf_write = buf_write, outbuf  # avoid flushing writing buffer
+
                     ti1 = (time.clock(), time.time())
                     log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
                                istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])

@@ -221,6 +221,7 @@ def transform_integrals_outcore(myadc):
         eris.VVVV_p = []
         eris.vVvV_p = []
 
+
         used_mem = (nmo_a**3) * 8/1e6 
         avail_mem = myadc.max_memory - used_mem
         vvv_mem = (nvir_a**3) * 8/1e6
