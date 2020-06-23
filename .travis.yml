@@ -1,9 +1,10 @@
 # More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
 # Workaround present for https://github.com/sunqm/pyscf/issues/71
 
-sudo: required
 language: python
-group: travis_lts
+group: travis_latest
+os: linux
+dist: bionic
 
 git:
   depth: 20
