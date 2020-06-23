@@ -12,15 +12,42 @@ import pyscf.pbc.mp
 from .util import *
 
 __all__ = [
+        "project_ref_orbitals",
         "make_dmet_bath",
         "make_bath",
         "make_mf_bath",
+        "transform_mp2_eris",
         "run_mp2",
+        "get_mp2_correction",
         "make_mp2_bath",
         ]
 
-
 log = logging.getLogger(__name__)
+
+def project_ref_orbitals(self, C_ref, C):
+    """Project reference orbitals into available space in new geometry.
+
+    The projected orbitals will be ordered according to their eigenvalues within the space.
+
+    Parameters
+    ----------
+    C : ndarray
+        Orbital coefficients.
+    C_ref : ndarray
+        Orbital coefficients of reference orbitals.
+    """
+    assert (C_ref.shape[-1] > 0)
+    S = self.mf.get_ovlp()
+    # Diagonalize reference orbitals among themselves (due to change in overlap matrix)
+    C_ref = pyscf.lo.vec_lowdin(C_ref, S)
+    # Diagonalize projector in space
+    CSC = np.linalg.multi_dot((C_ref.T, S, C))
+    P = np.dot(CSC.T, CSC)
+    e, R = np.linalg.eigh(P)
+    e, R = e[::-1], R[:,::-1]
+    C = np.dot(C, R)
+
+    return C, e
 
 def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
     """Calculate DMET bath, occupied environment and virtual environment orbitals.
@@ -90,13 +117,13 @@ def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
             # Otherwise, it is not guaranteed that the additional bath orbitals are
             # fully (or very close to fully) occupied or virtual.
             # --- Occupied
-            C_occenv, eig = self.project_ref_orbitals_new(C_occenv, C_ref)
+            C_occenv, eig = self.project_ref_orbitals(C_ref, C_occenv)
             mask_occref = eig >= reftol
             mask_occenv = eig < reftol
             log.debug("Eigenvalues of projected occupied reference: %s, Largest remaining: %s",
                     eig[mask_occref], max(eig[mask_occenv]))
             # --- Virtual
-            C_virenv, eig = self.project_ref_orbitals_new(C_virenv, C_ref)
+            C_virenv, eig = self.project_ref_orbitals(C_ref, C_virenv)
             mask_virref = eig >= reftol
             mask_virenv = eig < reftol
             log.debug("Eigenvalues of projected virtual reference: %s, Largest remaining: %s",
@@ -140,27 +167,47 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, nbath=None, tol=None, **k
         Environment orbitals.
     """
 
-
-    # --- Occupied
+    log.debug("Making bath with nbath=%r and tol=%r", nbath, tol)
+    e_delta_mp2 = None
     # Project
     if C_ref is not None:
         nref = C_ref.shape[-1]
-        C, eig = self.project_ref_orbitals_new(C_ref, C_env)
-        log.debug("Eigenvalues of projected bath orbitals:\n%s", eig[:nref])
-        log.debug("Largest remaining: %s", eig[nref:nref+3])
-        C_bath, C_env = np.hsplit(C, [nref])
+        if nref > 0:
+            C_env, eig = self.project_ref_orbitals(C_ref, C_env)
+            log.debug("Eigenvalues of projected bath orbitals:\n%s", eig[:nref])
+            log.debug("Largest remaining: %s", eig[nref:nref+3])
+        C_bath, C_env = np.hsplit(C_env, [nref])
+
     elif bathtype == "mp2-natorb":
         log.debug("Making bath orbitals of type %s", bathtype)
         C_occclst = self.C_occclst
         C_virclst = self.C_virclst
-        C_bath, C_env = self.make_mp2_bath(C_occclst, C_virclst, C_env, kind, nbath=nbath, tol=tol,
+        C_bath, C_env, e_delta_mp2 = self.make_mp2_bath(C_occclst, C_virclst, C_env, kind, nbath=nbath, tol=tol,
                 **kwargs)
-    else:
+    elif bathtype is not None:
         log.debug("Making bath orbitals of type %s", bathtype)
         C_bath, C_env = self.make_mf_bath(C_env, kind, bathtype=bathtype, nbath=nbath, tol=tol,
                 **kwargs)
+    else:
+        log.debug("No bath to make.")
+        C_bath, C_env = np.hsplit(C_env, [0])
 
-    return C_bath, C_env
+    if self.mp2_correction and C_env.shape[-1] > 0:
+        if e_delta_mp2 is None:
+            if kind == "occ":
+                Co_act = np.hstack((self.C_occclst, C_bath))
+                Co_all = np.hstack((Co_act, C_env))
+                Cv = self.C_virclst
+                e_delta_mp2 = self.get_mp2_correction(Co_all, Cv, Co_act, Cv)
+            elif kind == "vir":
+                Cv_act = np.hstack((self.C_virclst, C_bath))
+                Cv_all = np.hstack((Cv_act, C_env))
+                Co = self.C_occclst
+                e_delta_mp2 = self.get_mp2_correction(Co, Cv_all, Co, Cv_act)
+    else:
+        e_delta_mp2 = 0.0
+
+    return C_bath, C_env, e_delta_mp2
 
 # ================================================================================================ #
 
@@ -214,13 +261,21 @@ def make_mf_bath(self, C_env, kind, bathtype, nbath=None, tol=None, **kwargs):
 
     # nbath takes preference
     if nbath is not None:
+
+        if isinstance(nbath, (float, np.floating)):
+            assert nbath >= 0.0
+            assert nbath <= 1.0
+            nbath_int = int(nbath*len(e) + 0.5)
+            log.info("nbath = %.1f %% -> nbath = %d", nbath*100, nbath_int)
+            nbath = nbath_int
+
         if tol is not None:
-            log.warning("Warning: tolerance is %.g, but nbath=%d is used.", tol, nbath)
+            log.warning("Warning: tolerance is %.g, but nbath=%r is used.", tol, nbath)
         nbath = min(nbath, len(e))
     elif tol is not None:
         nbath = sum(e >= tol)
     else:
-        raise ValueError()
+        raise ValueError("Neither nbath nor tol specified.")
     log.debug("Eigenvalues of projector into %s bath space", kind)
     log.debug("%d included eigenvalues:\n%r", nbath, e[:nbath])
     log.debug("%d excluded eigenvalues (first 3):\n%r", (len(e)-nbath), e[nbath:nbath+3])
@@ -231,7 +286,7 @@ def make_mf_bath(self, C_env, kind, bathtype, nbath=None, tol=None, **kwargs):
 
     return C_bath, C_env
 
-def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True):
+def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=None):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
 
     F = self.mf.get_fock()
@@ -260,34 +315,40 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True):
         mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
     # Integral transformation
     t0 = MPI.Wtime()
-    eris = mp2.ao2mo()
-    time_ao2mo = MPI.Wtime() - t0
-    log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
+    if eris is None:
+        eris = mp2.ao2mo()
+        time_ao2mo = MPI.Wtime() - t0
+        log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
+    # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
+    else:
+        eris = self.transform_mp2_eris(eris, Co, Cv)
+        #eris2 = mp2.ao2mo()
+        #log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
+        #assert np.allclose(eris.ovov, eris2.ovov)
+        time_mo2mo = MPI.Wtime() - t0
+        log.debug("Time for MO->MO: %s", get_time_string(time_mo2mo))
+
+    eris.nocc = mp2.nocc
+
     # T2 amplitudes
-    t0 = MPI.Wtime()
     e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris)
     e_mp2_full *= self.symmetry_factor
-    time_mp2 = MPI.Wtime() - t0
     log.debug("Full MP2 energy = %12.8g htr", e_mp2_full)
-    log.debug("Time for MP2 amplitudes: %s", get_time_string(time_mp2))
 
     # Calculate local energy
     # Project first occupied index onto local space
-    P = self.get_local_energy_projector(Co)
+    P = self.get_local_projector(Co)
     pT2 = einsum("xi,ijab->xjab", P, T2)
     e_mp2 = self.symmetry_factor * mp2.energy(pT2, eris)
 
     # MP2 density matrix [optional]
     if make_dm:
-        t0 = MPI.Wtime()
         #Doo = 2*(2*einsum("ikab,jkab->ij", T2, T2)
         #         - einsum("ikab,jkba->ij", T2, T2))
         #Dvv = 2*(2*einsum("ijac,ijbc->ab", T2, T2)
         #         - einsum("ijac,ijcb->ab", T2, T2))
         Doo, Dvv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
         Doo, Dvv = -2*Doo, 2*Dvv
-        time_dm = MPI.Wtime() - t0
-        log.debug("Time for DM: %s", get_time_string(time_dm))
 
         # Rotate back to input coeffients (undo canonicalization)
         if canon_occ:
@@ -295,9 +356,49 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True):
         if canon_vir:
             Dvv = np.linalg.multi_dot((Rv, Dvv, Rv.T))
 
-        return e_mp2, Doo, Dvv
+        return e_mp2, eris, Doo, Dvv
     else:
-        return e_mp2
+        Doo = Dvv = None
+
+    return e_mp2, eris, Doo, Dvv
+
+def transform_mp2_eris(self, eris, Co, Cv):
+    """Transform OVOV kind ERIS."""
+
+    S = self.mf.get_ovlp()
+    Co0, Cv0 = np.hsplit(eris.mo_coeff, [eris.nocc])
+    no0 = Co0.shape[-1]
+    nv0 = Cv0.shape[-1]
+    no = Co.shape[-1]
+    nv = Cv.shape[-1]
+
+    transform_occ = (no != no0 or not np.allclose(Co, Co0))
+    transform_vir = (nv != nv0 or not np.allclose(Cv, Cv0))
+    if transform_occ:
+        Ro = np.linalg.multi_dot((Co.T, S, Co0))
+    if transform_vir:
+        Rv = np.linalg.multi_dot((Cv.T, S, Cv0))
+
+    govov = eris.ovov.reshape((no0, nv0, no0, nv0))
+    if transform_occ and transform_vir:
+        govov = einsum("xi,ya,zj,wb,iajb->xyzw", Ro, Rv, Ro, Rv, govov)
+    elif transform_occ:
+        govov = einsum("xi,zj,iajb->xazb", Ro, Ro, govov)
+    elif transform_vir:
+        govov = einsum("ya,wb,iajb->iyjw", Rv, Rv, govov)
+    eris.ovov = govov.reshape((no*nv, no*nv))
+    eris.mo_coeff = None
+    eris.mo_energy = None
+    return eris
+
+def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
+    """Calculate delta MP2 correction."""
+    e_mp2_all, eris = self.run_mp2(Co1, Cv1)[:2]
+    e_mp2_act = self.run_mp2(Co2, Cv2, eris=eris)[0]
+    e_delta_mp2 = e_mp2_all - e_mp2_act
+    log.debug("MP2 correction: all=%.4g, active=%.4g, correction=%+.4g",
+            e_mp2_all, e_mp2_act, e_delta_mp2)
+    return e_delta_mp2
 
 def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None, **kwargs):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
@@ -311,7 +412,7 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None,
         Co = C_occclst
         Cv = np.hstack((C_virclst, C_env))
 
-    e_mp2_all, Do, Dv = self.run_mp2(Co, Cv, make_dm=True, **kwargs)
+    e_mp2_all, eris, Do, Dv = self.run_mp2(Co, Cv, make_dm=True, **kwargs)
 
     env = np.s_[-C_env.shape[-1]:]
     if kind == "occ":
@@ -356,6 +457,13 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None,
     if nbath is None:
         nbath = sum(N >= tol)
     else:
+        if isinstance(nbath, (float, np.floating)):
+            assert nbath >= 0.0
+            assert nbath <= 1.0
+            nbath_int = int(nbath*len(N) + 0.5)
+            log.info("nbath = %.1f %% -> nbath = %d", nbath*100, nbath_int)
+            nbath = nbath_int
+
         nbath = min(nbath, len(N))
 
     ###protect_degeneracies = False
@@ -380,14 +488,19 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None,
     # Delta MP2 correction
     # ====================
 
-    if kind == "occ":
-        Co = np.hstack((C_occclst, C_bath))
-    elif kind == "vir":
-        Cv = np.hstack((C_virclst, C_bath))
+    if self.mp2_correction and C_env.shape[-1] > 0:
+        S = self.mf.get_ovlp()
+        if kind == "occ":
+            Co_act = np.hstack((C_occclst, C_bath))
+            Cv_act = Cv
+        elif kind == "vir":
+            Co_act = Co
+            Cv_act = np.hstack((C_virclst, C_bath))
 
-    e_mp2_act = self.run_mp2(Co, Cv, **kwargs)
+        e_mp2_act = self.run_mp2(Co_act, Cv_act, eris=eris, **kwargs)[0]
+        e_delta_mp2 = e_mp2_all - e_mp2_act
+        log.debug("MP2 correction (%s): all=%.4g, active=%.4g, correction=%+.4g", kind, e_mp2_all, e_mp2_act, e_delta_mp2)
+    else:
+        e_delta_mp2 = 0.0
 
-    e_delta_mp2 = e_mp2_all - e_mp2_act
-    log.debug("Delta MP2 correction (%s): all=%.8e, active=%.8e, correction=%+.8e", kind, e_mp2_all, e_mp2_act, e_delta_mp2)
-
-    return C_bath, C_env
+    return C_bath, C_env, e_delta_mp2

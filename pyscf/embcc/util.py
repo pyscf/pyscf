@@ -116,6 +116,17 @@ def eigreorder_logging(e, reorder, log):
         else:
             log("Reordering eigenvalues %3d --> %3d : %+6.3g --> %+6.3g", j, i, e[j], e[i])
 
+def make_cubegen_file(mol, C, orbitals, filename, **kwargs):
+    from pyscf.tools import cubegen
+
+    orbital_labels = np.asarray(mol.ao_labels(None))[orbitals]
+    orbital_labels = ["-".join(x) for x in orbital_labels]
+
+    for idx, orb in enumerate(orbitals):
+        filename_orb = "%s-%s" % (filename, orbital_labels[idx])
+        cubegen.orbital(mol, filename_orb, C[:,orb], **kwargs)
+
+
 
 def _test():
 
