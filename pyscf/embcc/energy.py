@@ -34,7 +34,9 @@ def get_local_energy(self, cc, C1, C2, eris, project="occupied", project_kind="r
         pC2 = einsum("xi,ijab->xjab", P, C2)
 
         # Test new method
-        p2C1, p2C2 = self.project_amplitudes(C[:,occ], C1, C2, kind=project_kind)
+        #p2C1, p2C2 = self.project_amplitudes(C[:,occ], C1, C2, kind=project_kind)
+        P = self.get_local_projector(C[:,occ], kind=project_kind)
+        p2C1, p2C2 = self.project_amplitudes(P, C1, C2)
         assert np.allclose(pC1, p2C1)
         assert np.allclose(pC2, p2C2)
 

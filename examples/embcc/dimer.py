@@ -29,8 +29,9 @@ parser.add_argument("--benchmark", choices=["CISD", "CCSD", "FCI"])
 parser.add_argument("--distances", type=float, nargs="*")
 parser.add_argument("--distances-range", type=float, nargs=3, default=[0.5, 4.0, 0.1])
 #parser.add_argument("--clusters", default="atoms")
-parser.add_argument("--bath-type")
-parser.add_argument("--bath-target-size", type=int, nargs=2, default=[0,0])
+parser.add_argument("--bath-type", default="matsubara")
+parser.add_argument("--bath-size", type=float, nargs=2, default=[0.2, 0.2])
+parser.add_argument("--maxiter", type=int, default=1)
 parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
@@ -72,22 +73,25 @@ for idist, dist in enumerate(args.distances):
             f.write("%3f  %.8e  %.8e\n" % (dist, mf.e_tot, cc.e_tot))
 
     else:
-        if idist == 0:
-            cc = embcc.EmbCC(mf, solver=args.solver, bath_type=args.bath_type, bath_target_size=args.bath_target_size)#  tol_bath=args.tol_bath)
-            cc.make_atom_clusters()
+        #if idist == 0:
+        #    cc = embcc.EmbCC(mf, solver=args.solver, bath_type=args.bath_type, bath_target_size=args.bath_target_size)#  tol_bath=args.tol_bath)
+        #    cc.make_atom_clusters()
 
-            if MPI_rank == 0:
-                cc.print_clusters()
-        else:
-            cc.reset(mf=mf)
+        #    if MPI_rank == 0:
+        #        cc.print_clusters()
+        #else:
+        #    cc.reset(mf=mf)
+        cc = embcc.EmbCC(mf, solver=args.solver, bath_type=args.bath_type, bath_size=args.bath_size,
+                maxiter=args.maxiter)#  tol_bath=args.tol_bath)
+        cc.make_all_atom_clusters()
+        if idist == 0 and MPI_rank == 0:
+            cc.print_clusters()
 
-        conv = cc.run()
-        if MPI_rank == 0:
-            assert conv
+        cc.run()
 
         if MPI_rank == 0:
             if idist == 0:
                 with open(args.output, "a") as f:
-                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(v)  EmbCCSD(dMP2)  EmbCCSD(v,dMP2)\n")
+                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(dMP2)\n")
             with open(args.output, "a") as f:
-                f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (dist, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_dmp2, cc.e_tot_v_dmp2))
+                f.write("%3f  %.8e  %.8e  %.8e\n" % (dist, mf.e_tot, cc.e_tot, cc.e_tot_dmp2))

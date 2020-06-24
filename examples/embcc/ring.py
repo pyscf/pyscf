@@ -30,7 +30,8 @@ parser.add_argument("--atomtype", default="H")
 parser.add_argument("--size", type=int, default=10)
 parser.add_argument("--distances", type=float, nargs=3, default=[0.5, 3.0, 0.1])
 parser.add_argument("--bath-type")
-parser.add_argument("--bath-target-size", type=int, nargs=2, default=[None, None])
+parser.add_argument("--bath-size", type=float, nargs=2)
+parser.add_argument("--maxiter", type=int, default=1)
 parser.add_argument("-o", "--output", default="energies.txt")
 parser.add_argument("--benchmark", choices=["MP2", "CCSD"])
 args, restargs = parser.parse_known_args()
@@ -85,21 +86,23 @@ for icalc, distance in enumerate(distances):
         #        cc.print_clusters()
         #else:
         #    cc.reset(mf=mf)
-        cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_target_size=args.bath_target_size)
+        cc = embcc.EmbCC(mf, bath_type=args.bath_type, bath_size=args.bath_size, maxiter=args.maxiter)
         #cc.make_iao_atom_clusters()
-        cc.make_custom_iao_atom_cluster(["H1"], symmetry_factor=args.size)
+        #cc.make_custom_iao_atom_cluster(["H1"], symmetry_factor=args.size)
+        cc.make_all_atom_clusters()
+        if icalc == 0:
+            cc.print_clusters()
+
         if ref_orbitals is not None:
             cc.set_reference_orbitals(ref_orbitals)
 
-        conv = cc.run()
-        if MPI_rank == 0:
-            assert conv
+        cc.run()
 
         ref_orbitals = cc.get_orbitals()
 
         if MPI_rank == 0:
             if icalc == 0:
                 with open(args.output, "a") as f:
-                    f.write("#distance  HF  EmbCCSD  EmbCCSD(vir)  EmbCCSD(dMP2)  EmbCCSD(v,dMP2)\n")
+                    f.write("#distance  HF  EmbCCSD  EmbCCSD(dMP2)\n")
             with open(args.output, "a") as f:
-                f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_dmp2, cc.e_tot_v_dmp2))
+                f.write("%3f  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_dmp2))

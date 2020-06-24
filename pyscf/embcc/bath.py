@@ -83,8 +83,14 @@ def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
     D_env = np.linalg.multi_dot((C_env.T, S, self.mf.make_rdm1(), S, C_env)) / 2
     e, R = np.linalg.eigh(D_env)
     e, R = e[::-1], R[:,::-1]
-    assert np.all(e > -1e-12)
-    assert np.all(e < 1+1e-12)
+
+    warntol = 1e-10
+    if not (np.all(e > -warntol) and np.all(e < 1+warntol)):
+        log.error("Eigenvalues of environment DM not strictly in [0,1].")
+        log.error("Eigenvalues < 0: %s", e[e < -warntol])
+        log.error("Eigenvalues > 1: %s", e[e > 1+warntol])
+
+
     C_env = np.dot(C_env, R)
     mask_bath = np.logical_and(e >= tol, e <= 1-tol)
     mask_occenv = e > 1-tol
@@ -414,10 +420,12 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None,
 
     e_mp2_all, eris, Do, Dv = self.run_mp2(Co, Cv, make_dm=True, **kwargs)
 
-    env = np.s_[-C_env.shape[-1]:]
+    #env = np.s_[-C_env.shape[-1]:]
     if kind == "occ":
+        env = np.s_[C_occclst.shape[-1]:]
         D = Do[env,env]
     elif kind == "vir":
+        env = np.s_[C_virclst.shape[-1]:]
         D = Dv[env,env]
     N, R = np.linalg.eigh(D)
     N, R = N[::-1], R[:,::-1]

@@ -51,6 +51,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
+    if hasattr(mycc, "tailorfunc"):
+        t1, t2 = mycc.tailorfunc(t1, t2)
+
     cput1 = cput0 = (time.clock(), time.time())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
@@ -67,6 +70,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
+        # For tailored CC
+        if hasattr(mycc, "tailorfunc"):
+            t1new, t2new = mycc.tailorfunc(t1new, t2new)
         tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
         tmpvec -= mycc.amplitudes_to_vector(t1, t2)
         normt = numpy.linalg.norm(tmpvec)

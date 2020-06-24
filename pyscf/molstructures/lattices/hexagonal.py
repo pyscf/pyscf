@@ -1,5 +1,6 @@
 """Module to setup unit cell of 2D hexagonal boron nitride."""
 
+import logging
 import copy
 
 import numpy as np
@@ -18,7 +19,9 @@ __all__ = [
         "add_atom_indices",
         ]
 
-def make(a, c, atoms, supercell=(1, 1, 1), distance=np.inf, add_shell_numbers=True):
+log = logging.getLogger(__name__)
+
+def make(a, c, atoms, supercell=(1, 1, 1), distance=np.inf, add_shell_numbers=True, shift_z=True):
 
     # unit cell
     amat_uc, atoms_uc = make_unit_cell(a, c, atoms)
@@ -35,6 +38,15 @@ def make(a, c, atoms, supercell=(1, 1, 1), distance=np.inf, add_shell_numbers=Tr
 
     if distance != np.inf:
         atoms = add_substrate(atoms, distance=distance, n_atom_idx=n_atom)
+
+        if shift_z:
+            maxz = np.amax([a[1][-1] for a in atoms])
+            minz = np.amin([a[1][-1] for a in atoms])
+            midz = (maxz+minz)/2.0
+            dz = midz - c/2.0
+            log.debug("maxz=%f minz=%f midz=%f dz=%f", maxz, minz, midz, dz)
+            for atom in atoms:
+                atom[1][-1] += dz
 
     return a_matrix, atoms
 

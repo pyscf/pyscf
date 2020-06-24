@@ -21,15 +21,14 @@ log = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
 parser.add_argument("-b", "--basis", default="cc-pVDZ")
-parser.add_argument("-p", "--max-power", type=int, default=0)
-parser.add_argument("--full-ccsd", action="store_true")
+parser.add_argument("--benchmark", choices=["CCSD"])
 #parser.add_argument("--no-embccsd", action="store_true")
 #parser.add_argument("--tol-bath", type=float, default=1e-5)
 #parser.add_argument("--tol-vno", type=float, default=1e-3)
 parser.add_argument("--bath-type")
 parser.add_argument("--bath-target-size", type=int, nargs=2, default=[None, None])
 #parser.add_argument("--tol-vno", type=float, default=1e-3)
-parser.add_argument("--ircs", type=float, nargs=3, default=[0.6, 3.3, 0.2])
+parser.add_argument("--distances", type=float, nargs=3, default=[0.6, 3.3, 0.2])
 parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
@@ -41,20 +40,20 @@ if MPI_rank == 0:
         log.info("%10s: %r", name, value)
 
 #ircs = np.arange(0.6, 3.3+1e-14, 0.1)
-ircs = np.arange(args.ircs[0], args.ircs[1]+1e-14, args.ircs[2])
+args.distancse = np.arange(args.distances[0], args.distances[1]+1e-14, args.distances[2])
 structure_builder = molstructures.build_ethanol
 
 ref_orbitals = None
-for ircidx, irc in enumerate(ircs):
+for i, dist in enumerate(args.distances):
     if MPI_rank == 0:
-        log.info("IRC=%.3f", irc)
+        log.info("distance=%.3f", dist)
 
-    mol = structure_builder(irc, basis=args.basis, verbose=5)
+    mol = structure_builder(dist, basis=args.basis, verbose=5)
 
     mf = pyscf.scf.RHF(mol)
     mf.kernel()
 
-    if args.full_ccsd:
+    if args.benchmark == "CCSD":
         ccsd = pyscf.cc.CCSD(mf)
         ccsd.kernel()
         assert ccsd.converged

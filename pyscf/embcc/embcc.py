@@ -51,12 +51,14 @@ class EmbCC:
         ----------
         mf : pyscf.scf object
             Converged mean-field object.
+        minao :
+            Minimal basis for intrinsic atomic orbitals (IAO).
         """
 
         # Check input
         if not mf.converged:
             raise ValueError("Mean-field calculation not converged.")
-        if local_orbital_type not in ("AO", "IAO"):
+        if local_orbital_type not in ("AO", "IAO", "OrthAO"):
             raise ValueError("Unknown local_orbital_type: %s" % local_orbital_type)
         if solver not in (None, "MP2", "CISD", "CCSD", "FCI"):
             raise ValueError("Unknown solver: %s" % solver)
@@ -67,9 +69,11 @@ class EmbCC:
         self.local_orbital_type = local_orbital_type
         if self.local_orbital_type == "IAO":
             self.C_iao, self.C_env, self.iao_labels = self.make_iao(minao=minao)
+        elif self.local_orbital_type == "OrthAO":
+            self.C_iao, self.C_env, self.iao_labels = self.make_orth_ao()
+            self.local_orbital_type = "IAO"
 
         self.maxiter = maxiter
-        self.maxiter = 10
         # Options
         self.solver = solver
 
@@ -89,6 +93,10 @@ class EmbCC:
         # Global amplitudes
         self.T1 = None
         self.T2 = None
+        # For tailored CC
+        self.tccT1 = None
+        self.tccT2 = None
+
 
     @property
     def mol(self):
@@ -295,6 +303,15 @@ class EmbCC:
 
         return C_iao, C_env, iao_labels
 
+    def make_orth_ao(self):
+        """We can simply (ab)use the IAO code, since the nomenclature here."""
+        S = self.mf.get_ovlp()
+        C_iao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
+        C_iao, C_env = np.hsplit(C_iao, [C_iao.shape[-1]])
+        iao_labels = self.mol.ao_labels(None)
+
+        return C_iao, C_env, iao_labels
+
     def run(self, **kwargs):
         if not self.clusters:
             raise ValueError("No clusters defined for EmbCC calculation.")
@@ -315,6 +332,14 @@ class EmbCC:
             log.debug("converged = %s", results["converged"])
             raise RuntimeError("Not all cluster converged")
 
+        # TEST energy
+        #import pyscf
+        #import pyscf.cc
+        #cc = pyscf.cc.CCSD(self.mf)
+        #eris = cc.ao2mo()
+        #energy = cc.energy(t1=self.T1, t2=self.T2, eris=eris)
+        #log.info("EmbCC energy=%.8g", energy)
+
         self.e_corr = sum(results["e_corr"])
         self.e_corr_dmp2 = sum(results["e_corr_dmp2"])
 
@@ -324,30 +349,36 @@ class EmbCC:
         MPI_comm.Barrier()
         log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
 
-
         if self.maxiter > 1:
             for it in range(2, self.maxiter+1):
+
+                self.tccT1 = self.T1
+                self.tccT2 = self.T2
+                self.T1 = None
+                self.T2 = None
+
                 for idx, cluster in enumerate(self.clusters):
                     if MPI_rank != (idx % MPI_size):
                         continue
 
+                    # Only rerun the solver
                     log.debug("Running cluster %s on MPI process=%d...", cluster.name, MPI_rank)
                     cluster.run_solver()
                     log.debug("Cluster %s on MPI process=%d is done.", cluster.name, MPI_rank)
 
-        results = self.collect_results("converged", "e_corr", "e_corr_dmp2")
-        if MPI_rank == 0 and not np.all(results["converged"]):
-            log.debug("converged = %s", results["converged"])
-            raise RuntimeError("Not all cluster converged")
+                results = self.collect_results("converged", "e_corr", "e_corr_dmp2")
+                if MPI_rank == 0 and not np.all(results["converged"]):
+                    log.debug("converged = %s", results["converged"])
+                    raise RuntimeError("Not all cluster converged")
 
-        self.e_corr = sum(results["e_corr"])
-        self.e_corr_dmp2 = sum(results["e_corr_dmp2"])
+                self.e_corr = sum(results["e_corr"])
+                self.e_corr_dmp2 = sum(results["e_corr_dmp2"])
 
-        if MPI_rank == 0:
-            self.print_results(results)
+                if MPI_rank == 0:
+                    self.print_results(results)
 
-        MPI_comm.Barrier()
-        log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
+                MPI_comm.Barrier()
+                log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
 
     def collect_results(self, *attributes):
         log.debug("Communicating results.")

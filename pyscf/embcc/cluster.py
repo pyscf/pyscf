@@ -402,11 +402,13 @@ class Cluster:
             P = np.dot(CSC, CSC.T)
 
         if inverse:
-            P = np.eye(P.shape[-1]) - P
+            log.debug("Inverting projector")
+            P = (np.eye(P.shape[-1]) - P)
 
         return P
 
-    def project_amplitudes(self, C, T1, T2, indices_T1=None, indices_T2=None, symmetrize_T2=False, **kwargs):
+    #def project_amplitudes(self, C, T1, T2, indices_T1=None, indices_T2=None, symmetrize_T2=False, **kwargs):
+    def project_amplitudes(self, P, T1, T2, indices_T1=None, indices_T2=None, symmetrize_T2=False):
         """Project full amplitudes to local space.
 
         Parameters
@@ -430,7 +432,8 @@ class Cluster:
         if indices_T2 is None:
             indices_T2 = [0]
 
-        P = self.get_local_projector(C, **kwargs)
+        #P = self.get_local_projector(C, **kwargs)
+        #log.debug("Project amplitudes shapes: P=%r, T1=%r, T2=%r", P.shape, T1.shape, T2.shape)
 
         # T1 amplitudes
         assert indices_T1 == [0]
@@ -508,10 +511,10 @@ class Cluster:
             cc.max_cycle = 100
 
             # Taylored CC in iterations > 1
-            if self.iteration > 1:
+            if self.base.tccT1 is not None:
                 log.debug("Adding tailorfunc for tailored CC.")
 
-                tcc_mix_factor = 0.2
+                tcc_mix_factor = 1
 
                 # Transform to cluster basis
                 act = cc.get_frozen_mask()
@@ -522,17 +525,40 @@ class Cluster:
                 S = self.mf.get_ovlp()
                 Ro = np.linalg.multi_dot((Co.T, S, Cmfo))
                 Rv = np.linalg.multi_dot((Cv.T, S, Cmfv))
-                T1bath, T2bath = self.transform_amplitudes(Ro, Rv, self.base.T1, self.base.T2)
+                ttcT1, ttcT2 = self.transform_amplitudes(Ro, Rv, self.base.tccT1, self.base.tccT2)
 
                 # Get occupied bath projector
                 Pbath = self.get_local_projector(Co, inverse=True)
+                #Pbath2 = self.get_local_projector(Co)
+                #log.debug("%r", Pbath)
+                #log.debug("%r", Pbath2)
+                #1/0
+                #CSC = np.linalg.multi_dot((Co.T, S, self.C_env))
+                #Pbath2 = np.dot(CSC, CSC.T)
+                #assert np.allclose(Pbath, Pbath2)
+
+                #CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_occclst, self.C_occbath))))
+                CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_bath, self.C_occbath))))
+                Pbath2 = np.dot(CSC, CSC.T)
+                assert np.allclose(Pbath, Pbath2)
+
+                #log.debug("DIFF %g", np.linalg.norm(Pbath - Pbath2))
+                #log.debug("DIFF %g", np.linalg.norm(Pbath + Pbath2 - np.eye(Pbath.shape[-1])))
 
                 def tailorfunc(T1, T2):
                     # Difference of bath to local amplitudes
-                    dT1 = T1bath - T1
-                    dT2 = T2bath - T2
+                    dT1 = ttcT1 - T1
+                    dT2 = ttcT2 - T2
+
+                    log.debug("Norm of dT1=%.3g, dT2=%.3g", np.linalg.norm(dT1), np.linalg.norm(dT2))
                     # Project difference amplitudes to bath-bath block in occupied indices
-                    pT1, pT2 = self.project_amplitudes(Co, dT1, dT2, indices_T2=[0, 1])
+                    #pT1, pT2 = self.project_amplitudes(Co, dT1, dT2, indices_T2=[0, 1])
+                    pT1, pT2 = self.project_amplitudes(Pbath, dT1, dT2, indices_T2=[0, 1])
+                    _, pT2_0 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[0])
+                    _, pT2_1 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[1])
+                    pT2 += (pT2_0 + pT2_1)/2
+
+                    log.debug("Norm of pT1=%.3g, pT2=%.3g", np.linalg.norm(pT1), np.linalg.norm(pT2))
                     # Add projected difference amplitudes
                     T1 += tcc_mix_factor*pT1
                     T2 += tcc_mix_factor*pT2
@@ -561,7 +587,8 @@ class Cluster:
 
             # TESTING: Get global amplitudes:
             #if False:
-            if True:
+            #if True:
+            if self.maxiter > 1:
                 if self.base.T1 is None:
                     No = sum(self.mf.mo_occ > 0)
                     Nv = len(self.mf.mo_occ) - No
@@ -576,7 +603,9 @@ class Cluster:
                 Co = cc.mo_coeff[:,act][:,occ]
                 Cv = cc.mo_coeff[:,act][:,vir]
 
-                pT1, pT2 = self.project_amplitudes(Co, cc.t1, cc.t2)
+                P = self.get_local_projector(Co)
+                #pT1, pT2 = self.project_amplitudes(Co, cc.t1, cc.t2)
+                pT1, pT2 = self.project_amplitudes(P, cc.t1, cc.t2)
 
                 # Transform to HF MO basis
                 Cmfo = self.mf.mo_coeff[:,self.mf.mo_occ>0]

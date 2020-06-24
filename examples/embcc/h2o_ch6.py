@@ -57,6 +57,9 @@ for idist, dist in enumerate(args.distances):
     mol = structure_builder(dist, basis=args.basis, verbose=4)
 
     mf = pyscf.scf.RHF(mol)
+
+    mf = mf.density_fit()
+
     mf.kernel()
 
     if args.benchmark:
