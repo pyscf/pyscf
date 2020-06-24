@@ -295,6 +295,9 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nocc*nvir**2*3 + nocc**2*nvir + 2
     blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
+    if not mycc.direct:
+        unit = nocc*nvir**2*3 + nocc**2*nvir + 2 + nocc*nvir**2 + nocc*nvir
+        blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size-nocc**2*nvir)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
 
@@ -1471,7 +1474,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
             buf, buf_prefetch = buf_prefetch, buf
-            prefetch(buf_prefetch, nocc+p0, nmo)
+            prefetch(buf_prefetch, nocc+p1, nmo)
 
             nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),

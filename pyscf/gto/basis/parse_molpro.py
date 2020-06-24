@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 '''
 Parses for basis set in the Molpro format
 '''
+
+__all__ = ['parse', 'load']
 
 import numpy
 
@@ -43,19 +45,22 @@ COMMENT_KEYWORDS = '!*#'
 # parse the basis text which is in Molpro format, return an internal basis
 # format which can be assigned to gto.mole.basis
 def parse(string, optimize=True):
-    bastxt = []
+    raw_basis = []
     for x in string.splitlines():
         x = x.strip()
         if x and x[0] not in COMMENT_KEYWORDS:
-            bastxt.append(x)
-    return _parse(bastxt, optimize)
+            raw_basis.append(x)
+    return _parse(raw_basis, optimize)
 
 def load(basisfile, symb, optimize=True):
-    return _parse(search_seg(basisfile, symb), optimize)
+    raw_basis = search_seg(basisfile, symb)
+    #if not raw_basis:
+    #    raise BasisNotFoundError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    return _parse(raw_basis, optimize)
 
 def search_seg(basisfile, symb):
+    raw_basis = []
     with open(basisfile, 'r') as fin:
-        rawbas = []
         dat = fin.readline()
         while dat:
             if dat[0] in COMMENT_KEYWORDS:
@@ -63,14 +68,14 @@ def search_seg(basisfile, symb):
                 continue
             elif dat[0].isalpha():
                 if dat.startswith(symb+' '):
-                    rawbas.append(dat.splitlines()[0])
-                elif rawbas:
-                    return rawbas
+                    raw_basis.append(dat.splitlines()[0])
+                elif raw_basis:
+                    return raw_basis
                 fin.readline()  # line for references
-            elif rawbas:
-                rawbas.append(dat.splitlines()[0])
+            elif raw_basis:
+                raw_basis.append(dat.splitlines()[0])
             dat = fin.readline()
-    raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    return raw_basis
 
 
 def _parse(raw_basis, optimize=True):

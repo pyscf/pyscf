@@ -90,6 +90,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+            -DBLAS_LIBRARIES=${BLAS_LIBRARIES}
   )
 endif()
 endif()

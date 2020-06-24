@@ -489,7 +489,7 @@ setup(
               'install': PostInstallCommand},
     install_requires=['numpy', 'scipy', 'h5py'],
     extras_require={
-        'geomopt': ['pyberny>=0.6.2', 'geometric'],
+        'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
     },
     setup_requires = ['numpy'],
 )

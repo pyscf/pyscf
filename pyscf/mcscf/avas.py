@@ -173,6 +173,7 @@ def kernel(mf, aolabels, threshold=THRESHOLD, minao=MINAO, with_iao=WITH_IAO,
 
     if canonicalize:
         from pyscf.mcscf import dmet_cas
+
         def trans(c):
             if c.shape[1] == 0:
                 return c
@@ -182,9 +183,9 @@ def kernel(mf, aolabels, threshold=THRESHOLD, minao=MINAO, with_iao=WITH_IAO,
                 e, u = scipy.linalg.eigh(fock)
                 return dmet_cas.symmetrize(mol, e, numpy.dot(c, u), ovlp, log)
         if ncore > 0:
-           mo = numpy.hstack([trans(mofreeze), trans(mocore), trans(mocas), trans(movir)])
+            mo = numpy.hstack([trans(mofreeze), trans(mocore), trans(mocas), trans(movir)])
         else:
-           mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
+            mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
     else:
         mo = numpy.hstack((mocore, mocas, movir))
     return ncas, nelecas, mo

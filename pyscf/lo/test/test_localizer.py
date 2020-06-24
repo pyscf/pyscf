@@ -101,6 +101,14 @@ class KnowValues(unittest.TestCase):
         z = numpy.einsum('xii,xii->', pop, pop)
         self.assertAlmostEqual(z, 3.5368940222128247, 4)
 
+    def test_pipek_becke_scheme(self):
+        loc = pipek.PipekMezey(h2o, mf_h2o.mo_coeff[:,3:8])
+        loc.pop_method = 'becke'
+        mo = loc.kernel()
+        pop = pipek.atomic_pops(h2o, mo)
+        z = numpy.einsum('xii,xii->', pop, pop)
+        self.assertAlmostEqual(z, 3.548139685217463, 4)
+
     def test_1orbital(self):
         lmo = boys.Boys(mol, mf.mo_coeff[:,:1]).kernel()
         self.assertTrue(numpy.all(mf.mo_coeff[:,:1] == lmo))

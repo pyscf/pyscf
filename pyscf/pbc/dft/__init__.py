@@ -39,10 +39,15 @@ def KS(cell, *args, **kwargs):
         return rks.RKS(cell, *args, **kwargs)
     else:
         return uks.UKS(cell, *args, **kwargs)
+KS.__doc__ = '''
+A wrap function to create DFT object (RKS or UKS) for PBC systems.\n
+''' + rks.RKS.__doc__
 
 def KKS(cell, *args, **kwargs):
     if cell.spin == 0:
         return krks.KRKS(cell, *args, **kwargs)
     else:
         return kuks.KUKS(cell, *args, **kwargs)
-
+KKS.__doc__ = '''
+A wrap function to create DFT object with k-point sampling (KRKS or KUKS).\n
+''' + krks.KRKS.__doc__

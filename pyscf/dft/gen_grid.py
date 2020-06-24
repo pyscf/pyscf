@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,33 +38,33 @@ BLKSIZE = 128  # needs to be the same to lib/gto/grid_ao_drv.c
 
 # ~= (L+1)**2/3
 LEBEDEV_ORDER = {
-      0:    1,
-      3:    6,
-      5:   14,
-      7:   26,
-      9:   38,
-     11:   50,
-     13:   74,
-     15:   86,
-     17:  110,
-     19:  146,
-     21:  170,
-     23:  194,
-     25:  230,
-     27:  266,
-     29:  302,
-     31:  350,
-     35:  434,
-     41:  590,
-     47:  770,
-     53:  974,
-     59: 1202,
-     65: 1454,
-     71: 1730,
-     77: 2030,
-     83: 2354,
-     89: 2702,
-     95: 3074,
+    0  : 1   ,
+    3  : 6   ,
+    5  : 14  ,
+    7  : 26  ,
+    9  : 38  ,
+    11 : 50  ,
+    13 : 74  ,
+    15 : 86  ,
+    17 : 110 ,
+    19 : 146 ,
+    21 : 170 ,
+    23 : 194 ,
+    25 : 230 ,
+    27 : 266 ,
+    29 : 302 ,
+    31 : 350 ,
+    35 : 434 ,
+    41 : 590 ,
+    47 : 770 ,
+    53 : 974 ,
+    59 : 1202,
+    65 : 1454,
+    71 : 1730,
+    77 : 2030,
+    83 : 2354,
+    89 : 2702,
+    95 : 3074,
     101: 3470,
     107: 3890,
     113: 4334,
@@ -275,11 +275,15 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
     return atom_grids_tab
 
 
-def gen_partition(mol, atom_grids_tab,
+def get_partition(mol, atom_grids_tab,
                   radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
-                  becke_scheme=original_becke):
+                  becke_scheme=original_becke, concat=True):
     '''Generate the mesh grid coordinates and weights for DFT numerical integration.
     We can change radii_adjust, becke_scheme functions to generate different meshgrid.
+
+    Kwargs:
+        concat: bool
+            Whether to concatenate grids and weights in return
 
     Returns:
         grid_coord and grid_weight arrays.  grid_coord array has shape (N,3);
@@ -302,6 +306,7 @@ def gen_partition(mol, atom_grids_tab,
                                            for i in range(mol.natm)
                                            for j in range(mol.natm)])
             p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
+
         def gen_grid_partition(coords):
             coords = numpy.asarray(coords, order='F')
             ngrids = coords.shape[0]
@@ -339,7 +344,12 @@ def gen_partition(mol, atom_grids_tab,
         weights = vol * pbecke[ia] * (1./pbecke.sum(axis=0))
         coords_all.append(coords)
         weights_all.append(weights)
-    return numpy.vstack(coords_all), numpy.hstack(weights_all)
+
+    if concat:
+        coords_all = numpy.vstack(coords_all)
+        weights_all = numpy.hstack(weights_all)
+    return coords_all, weights_all
+gen_partition = get_partition
 
 def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
     '''Mask to indicate whether a shell is zero on grid
@@ -453,6 +463,7 @@ class Grids(lib.StreamObject):
         self.non0tab = None
 
         cur_mod = sys.modules[__name__]
+
         def _load_conf(mod, name, default):
             var = getattr(__config__, name, None)
             if var is None:
@@ -525,7 +536,7 @@ class Grids(lib.StreamObject):
                                                self.radi_method,
                                                self.level, self.prune, **kwargs)
         self.coords, self.weights = \
-                self.gen_partition(mol, atom_grids_tab,
+                self.get_partition(mol, atom_grids_tab,
                                    self.radii_adjust, self.atomic_radii,
                                    self.becke_scheme)
         if with_non0tab:
@@ -551,20 +562,22 @@ class Grids(lib.StreamObject):
     @lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
                          level=None, prune=None, **kwargs):
-        ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = self.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
         return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune, **kwargs)
 
-    @lib.with_doc(gen_partition.__doc__)
-    def gen_partition(self, mol, atom_grids_tab,
+    @lib.with_doc(get_partition.__doc__)
+    def get_partition(self, mol, atom_grids_tab=None,
                       radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
-                      becke_scheme=original_becke):
-        ''' See gen_grid.gen_partition function'''
-        return gen_partition(mol, atom_grids_tab, radii_adjust, atomic_radii,
-                             becke_scheme)
+                      becke_scheme=original_becke, concat=True):
+        if atom_grids_tab is None:
+            atom_grids_tab = self.gen_atomic_grids(mol)
+        return get_partition(mol, atom_grids_tab, radii_adjust, atomic_radii,
+                             becke_scheme, concat=concat)
+
+    gen_partition = get_partition
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, mol=None, coords=None, relativity=0, shls_slice=None,

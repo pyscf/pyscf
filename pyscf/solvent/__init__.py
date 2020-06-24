@@ -82,17 +82,16 @@ def PE(method_or_mol, solvent_obj, dm=None):
         method_or_mol (pyscf method object or gto.Mole object)
             If method_or_mol is gto.Mole object, this function returns a
             PolEmbed object constructed with this Mole object.
-        solvent_obj (PolEmbed object or cppe.PeOptions object or str)
+        solvent_obj (PolEmbed object or dictionary with options or str)
             If solvent_obj is an object of PolEmbed class, the PE-enabled
             method will be created using solvent_obj.
-            If solvent_obj is cppe.PeOptions or str, an PolEmbed object will
+            If solvent_obj is dict or str, a PolEmbed object will
             be created first with the solvent_obj, on top of which PE-enabled
             method will be created.
 
     Examples:
 
-    >>> pe_options = cppe.PeOptions()
-    >>> pe_options.potfile = "pyframe.pot"
+    >>> pe_options = {"potfile": "pyframe.pot"}
     >>> mf = PE(scf.RHF(mol), pe_options)
     >>> mf.kernel()
     '''

@@ -46,7 +46,7 @@ def cdft(mf,cell,offset,orbital,basis=None):
         mf -- converged mean field object (with AO basis)
 
     '''
-    if not basis is None:
+    if basis is not None:
         a = basis
     else:
         a = numpy.eye(cell._bas.shape[1])
@@ -59,7 +59,8 @@ def cdft(mf,cell,offset,orbital,basis=None):
     ##gonna try nomrlaizing to see if that makes life better
     ##iaoi = iaoi / numpy.linalg.norm(iaoi)
     mf.shift_hamiltonian= numpy.diag(iaoi) * offset
-    mf.constrained_dft=True
+    mf.constrained_dft = True
+
     def get_veff(*args, **kwargs):
         vxc = dft.rks.get_veff(mf, *args, **kwargs)
         # Make a shift to the Veff matrix, while ecoul and exc are kept unchanged.

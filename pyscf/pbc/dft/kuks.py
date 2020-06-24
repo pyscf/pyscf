@@ -32,6 +32,7 @@ from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
+from pyscf import __config__
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -129,8 +130,9 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
 class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN'):
-        kuhf.KUHF.__init__(self, cell, kpts)
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        kuhf.KUHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):

@@ -1,8 +1,27 @@
-PySCF 1.7.3 (2020-?-?)
+PySCF 1.7.? (2020-?-?)
 ----------------------
 * Added
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
+* Fixed
+  - Bug in Mole.fromstring
+
+
+PySCF 1.7.3 (2020-6-10)
+-----------------------
+* Added
+  - CcECP basis
+  - Spin 1RDM for shci
+  - PM localization for charge populations based on Becke partition
+* Improved
+  - Compatibility of get_jk methods between mcscf class and scf class
+  - CPPE interface
+  - Interface between IAO and PM
+* Fixed
+  - an CCSD integral bug introduced in 1.7.1
+  - Td as its subgroup C2v
+  - Fix an error when calculating grad of dft method with "HF" as xc
+
 
 
 PySCF 1.7.2 (2020-5-13)

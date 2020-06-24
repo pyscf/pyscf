@@ -24,6 +24,7 @@ See also
 https://cms.mpi.univie.ac.at/vasp/vasp/CHGCAR_file.html
 '''
 
+import sys
 import collections
 import time
 import numpy

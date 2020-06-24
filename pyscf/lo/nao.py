@@ -161,7 +161,7 @@ def _core_val_ryd_list(mol):
     k = 0
     for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
-# Avoid calling mol.atom_charge because we should include ECP core electrons here
+        # Avoid calling mol.atom_charge because we should include ECP core electrons here
         nuc = mole.charge(mol.atom_symbol(ia))
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
@@ -211,6 +211,7 @@ def set_atom_conf(element, description):
             | ("3s2p","1d") : 3 s, 2 p shells for core and 1 d shells for valence
     '''
     charge = mole.charge(element)
+
     def to_conf(desc):
         desc = desc.replace(' ','').replace('-','').replace('_','').lower()
         if "doublep" in desc:
@@ -223,6 +224,7 @@ def set_atom_conf(element, description):
             loc = AOSHELL[charge][1].find('0')
             desc = '1' + AOSHELL[charge][1][loc+1]
         return desc
+
     if isinstance(description, str):
         c_desc, v_desc = AOSHELL[charge][0], to_conf(description)
     else:

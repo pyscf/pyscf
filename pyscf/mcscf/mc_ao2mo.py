@@ -210,7 +210,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                 buf1 = bufpa[p0:p0+dij].reshape(di,dj,-1)
                 mo1 = mo[j0:j1,ncore:nocc].copy()
                 for i in range(di):
-                     lib.dot(mo1.T, buf1[i], 1, papa_buf[i0+i], 1)
+                    lib.dot(mo1.T, buf1[i], 1, papa_buf[i0+i], 1)
             mo1 = mo[i0:i1,ncore:nocc].copy()
             buf1 = lib.dot(mo1.T, buf1.reshape(di,-1))
             papa_buf[j0:j1] += buf1.reshape(ncas,dj,-1).transpose(1,0,2)

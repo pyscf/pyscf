@@ -60,8 +60,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         t3m = t2m
         casdm1_old = casdm1
         casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, casscf.ncas, casscf.nelecas)
-        norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_old[0])
-                 + numpy.linalg.norm(casdm1[1] - casdm1_old[1]))
+        norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_old[0]) +
+                   numpy.linalg.norm(casdm1[1] - casdm1_old[1]))
         t3m = log.timer('update CAS DM', *t3m)
         max_cycle_micro = 1 # casscf.micro_cycle_scheduler(locals())
         max_stepsize = casscf.max_stepsize_scheduler(locals())

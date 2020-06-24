@@ -112,7 +112,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     e2buflen = guess_e2bufsize(ioblk_size, nij_pair, nao_pair)[0]
 
     log.debug('step2: kl-pair (ao %d, mo %d), mem %.8g MB, '
-              'ioblock (r/w) %.8g/%.8g MB', \
+              'ioblock (r/w) %.8g/%.8g MB',
               nao_pair, nkl_pair, e2buflen*nao_pair*16/1e6,
               e2buflen*nij_pair*16/1e6, e2buflen*nkl_pair*16/1e6)
 
@@ -130,7 +130,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         for icomp in range(comp):
             istep += 1
             tioi = 0
-            log.debug('step 2 [%d/%d], [%d,%d:%d], row = %d', \
+            log.debug('step 2 [%d/%d], [%d,%d:%d], row = %d',
                       istep, ijmoblks, icomp, row0, row1, nrow)
 
             col0 = 0
@@ -151,7 +151,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
             tioi += time.time()-tw1
 
             ti1 = (time.clock(), time.time())
-            log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f', \
+            log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f',
                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
     buf = pbuf = None
@@ -194,18 +194,19 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     e1buflen, mem_words, iobuf_words, ioblk_words = \
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
-# The buffer to hold AO integrals in C code
+    # The buffer to hold AO integrals in C code
     aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
     shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2ij', 'a2ij')),
                                           aobuflen, e1buflen, mol.ao_loc_2c(), False)
     if ao2mopt is None:
-#        if intor == 'int2e_spinor':
-#            ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
-#                                     'CVHFsetnr_direct_scf')
-#        elif intor == 'int2e_spsp1_spinor':
-#        elif intor == 'int2e_spsp1spsp2_spinor':
-#        else:
-#            ao2mopt = _ao2mo.AO2MOpt(mol, intor)
+        # TODO:
+        #if intor == 'int2e_spinor':
+        #    ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
+        #                             'CVHFsetnr_direct_scf')
+        #elif intor == 'int2e_spsp1_spinor':
+        #elif intor == 'int2e_spsp1spsp2_spinor':
+        #else:
+        #    ao2mopt = _ao2mo.AO2MOpt(mol, intor)
         ao2mopt = _ao2mo.AO2MOpt(mol, intor)
 
     log.debug('step1: tmpfile %.8g MB', nij_pair*nao_pair*16/1e6)
@@ -222,14 +223,14 @@ def half_e1(mol, mo_coeffs, swapfile,
     ti0 = log.timer('Initializing ao2mo.outcore.half_e1', *time0)
     nstep = len(shranges)
     for istep,sh_range in enumerate(shranges):
-        log.debug('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
+        log.debug('step 1 [%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *(sh_range[:3]))
         buflen = sh_range[2]
         iobuf = numpy.empty((comp,buflen,nij_pair), dtype=numpy.complex)
         nmic = len(sh_range[3])
         p0 = 0
         for imic, aoshs in enumerate(sh_range[3]):
-            log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d', \
+            log.debug1('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d',
                        imic+1, nmic, *aoshs)
             buf = _ao2mo.r_e1(intor, moij, ijshape, aoshs,
                               mol._atm, mol._bas, mol._env,
