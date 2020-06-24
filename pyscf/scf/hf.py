@@ -639,7 +639,7 @@ def static_dft(s, f, factor, tau, epsilon, mu, option = 2):
 
         return v_c_static
 
-    v_c_static = static_coefficients(mo_occ)
+    v_c_static = static_coefficients(tau, epsilon, mu, option)
     d=self.make_rdm1(mo_coeff, v_c_static)
     F_static = reduce(numpy.dot, (s, d, s))
     return f + F_static
