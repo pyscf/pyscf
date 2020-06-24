@@ -17,10 +17,10 @@ import unittest
 from functools import reduce
 import numpy
 from pyscf import gto, scf, lib, fci
-from pyscf.mcscf import newton_casscf
+from pyscf.mcscf import newton_casscf, CASSCF
 
 mol = gto.Mole()
-mol.verbose = 0
+mol.verbose = 0 
 mol.atom = [
     ['H', ( 5.,-1.    , 1.   )],
     ['H', ( 0.,-5.    ,-2.   )],
@@ -39,6 +39,10 @@ mf.kernel()
 mc = newton_casscf.CASSCF(mf, 4, 4)
 mc.fcisolver = fci.direct_spin1.FCI(mol)
 mc.kernel()
+sa = CASSCF(mf, 4, 4)
+sa.fcisolver = fci.direct_spin1.FCI (mol)
+sa = sa.state_average ([0.5,0.5]).newton ()
+sa.kernel()
 
 def tearDownModule():
     global mol, mf, mc
@@ -62,6 +66,26 @@ class KnownValues(unittest.TestCase):
     def test_get_grad(self):
         self.assertAlmostEqual(mc.e_tot, -3.6268060853430573, 8)
         self.assertAlmostEqual(abs(mc.get_grad()).max(), 0, 5)
+
+    def test_sa_gen_g_hop(self):
+        numpy.random.seed(1)
+        mo = numpy.random.random(mf.mo_coeff.shape)
+        ci0 = numpy.random.random((2,36))
+        ci0/= numpy.linalg.norm(ci0, axis=1)[:,None]
+        ci0 = list (ci0.reshape ((2,6,6)))
+        gall, gop, hop, hdiag = newton_casscf.gen_g_hop(sa, mo, ci0, sa.ao2mo(mo))
+        self.assertAlmostEqual(lib.finger(gall), 32.46973284682045, 8)
+        self.assertAlmostEqual(lib.finger(hdiag), -63.6527761153809, 8)
+        x = numpy.random.random(gall.size)
+        u, ci1 = newton_casscf.extract_rotation(sa, x, 1, ci0)
+        self.assertAlmostEqual(lib.finger(gop(u, ci1)), -49.017079186126, 8)
+        self.assertAlmostEqual(lib.finger(hop(x)), 169.47893548740288, 8)
+
+    def test_sa_get_grad(self):
+        self.assertAlmostEqual(sa.e_tot, -3.62638372957158, 7)
+        # MRH 06/24/2020: convergence thresh of scf may not have consistent
+        # meaning in SA problems
+        self.assertAlmostEqual(abs(sa.get_grad()).max(), 0, 5)
 
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")
