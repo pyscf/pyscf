@@ -286,16 +286,9 @@ class GradientsBasics(molgrad.GradientsBasics):
     Basic nuclear gradient functions for non-relativistic methods
     '''
     def __init__(self, method):
-        self.verbose = method.verbose
-        self.stdout = method.stdout
         self.cell = method.cell
-        self.base = method
         self.kpts = method.kpts
-        self.max_memory = self.cell.max_memory
-        self.atmlst = None
-        self.unit = 'au'
-        self.de = None
-        self._keys = set(self.__dict__.keys())
+        molgrad.GradientsBasics.__init__(self, method)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
