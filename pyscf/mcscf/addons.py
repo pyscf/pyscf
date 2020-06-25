@@ -708,6 +708,15 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
                 rdm2 += wi * dm2
             return rdm1, rdm2
 
+        def trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
+            tdm1 = 0
+            tdm2 = 0
+            for i, wi in enumerate (self.weights):
+                dm1, dm2 = fcibase_class.trans_rdm12 (self, ci1[i], ci0[i], norb, nelec)
+                tdm1 += wi * dm1
+                tdm2 += wi * dm2
+            return tdm1, tdm2
+
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec, *args, **kwargs):
                 ss, multip = self.states_spin_square(ci0, norb, nelec, *args, **kwargs)
@@ -1018,12 +1027,14 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             return rdm1, rdm2
 
         # TODO: linkstr support
-        def trans_rdm12 (self, ci1, ci0, ncas, nelecas, **kwargs):
+        def trans_rdm12 (self, ci1, ci0, norb, nelec, **kwargs):
             tdm1 = 0
             tdm2 = 0
+            print ("Hello?")
             for w, (sbra, bra), (sket, ket) in zip (weights, self._loop_civecs (ci1), self._loop_civecs (ci0)):
                 assert (sbra is sket)
-                dm1, dm2 = sbra.trans_rdm12 (bra, ket, ncas, nelecas)
+                print (bra.shape, ket.shape, norb, self._get_nelec (sbra, nelec))
+                dm1, dm2 = sbra.trans_rdm12 (bra, ket, norb, self._get_nelec (sbra, nelec))
                 tdm1 += w * dm1
                 tdm2 += w * dm2
             return tdm1, tdm2
