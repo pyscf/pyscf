@@ -44,7 +44,7 @@ def _pack_ci_get_H (mc, ci):
     nelecas = mc.nelecas
 
     # State average mix
-    if isinstance (mc, addons.StateAverageMCSCFSolver) and hasattr (mc.fcisolver, 'fcisolvers'):
+    if isinstance (mc.fcisolver, addons.StateAverageMixFCISolver):
         linkstrl = []
         linkstr =  []
         for solver, my_kets in mc.fcisolver._loop_solver (ci):

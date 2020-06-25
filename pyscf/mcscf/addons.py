@@ -595,6 +595,8 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
 # A tag to label the derived FCI class
 class StateAverageFCISolver:
     pass
+class StateAverageMixFCISolver(StateAverageFCISolver):
+    pass
 class StateSpecificFCISolver:
     pass
 # A tag to label the derived MCSCF class
@@ -897,7 +899,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                        for solver in fcisolvers)
     has_transform_ci = all(getattr(solver, 'transform_ci_for_orbital_rotation', None)
                            for solver in fcisolvers)
-    class FakeCISolver(fcibase_class, StateAverageFCISolver):
+    class FakeCISolver(fcibase_class, StateAverageMixFCISolver):
         def __init__(self, mol):
             fcibase_class.__init__(self, mol)
             self.nroots = len(weights)
@@ -913,7 +915,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             return self.__class__.__bases__[0]
 
         # MRH 06/24/2020: I need these functions in newton_casscf!
-
+        # TODO: handle things like linkstr somehow (variables that
+        # have to be different for different solvers or ci vecs)
         def _loop_solver(self, ci0):
             p0 = 0
             for solver in self.fcisolvers:
@@ -1013,6 +1016,17 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
+
+        # TODO: linkstr support
+        def trans_rdm12 (self, ci1, ci0, ncas, nelecas, **kwargs):
+            tdm1 = 0
+            tdm2 = 0
+            for w, (sbra, bra), (sket, ket) in zip (weights, self._loop_civecs (ci1), self._loop_civecs (ci0))):
+                assert (sbra is sket)
+                dm1, dm2 = sbra.trans_rdm12 (bra, ket, ncas, nelecas)
+                tdm1 += w * dm1
+                tdm2 += w * dm2
+            return tdm1, tdm2
 
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec, *args, **kwargs):
