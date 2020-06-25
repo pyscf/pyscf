@@ -31,6 +31,67 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf import scf
 from pyscf.soscf import ciah
 
+def _pack_ci_get_H (mc, ci):
+    # MRH 06/24/2020: get wrapped Hci and Hdiag functions for
+    # SA and SA-mix case. Put ci in a consistent format: list of raveled CI vecs
+    # so that list comprehension can do all the +-*/ and dot operations
+    if mc.fcisolver.nroots == 1:
+        ci = [ci.ravel ()]
+    else:
+        ci = [c.ravel () for c in ci]
+        assert (len (ci) == mc.fcisolver.nroots)
+    ncas = mc.ncas
+    nelecas = mc.nelecas
+
+    # State average mix
+    if isinstance (mc, addons.StateAverageMCSCFSolver) and hasattr (mc.fcisolver, 'fcisolvers'):
+        linkstrl = []
+        linkstr =  []
+        for solver, my_kets in mc.fcisolver._loop_solver (ci):
+            nelec = mc.fcisolver._get_nelec (solver, nelecas)
+            if getattr (mc.fcisolver, 'gen_linkstr', None):
+                linkstrl.append (mc.fcisolver.gen_linkstr (ncas, nelec, True))
+                linkstr.append  (mc.fcisolver.gen_linkstr (ncas, nelec, False))
+            else:
+                linkstrl.append (None)
+                linkstr.append (None)
+
+        def _Hci (h1, h2, ket):
+            hci = []
+            for ix, (solver, my_kets) in enumerate (mc.fcisolver._loop_solver (ket)):
+                nelec = mc.fcisolver._get_nelec (solver, nelecas)
+                op = solver.absorb_h1e (h1, h2, ncas, nelec, 0.5) if h1 is not None else h2
+                hci.extend ((solver.contract_2e (op, k, ncas, nelec, link_index=linkstrl).ravel () for k in my_kets))
+            return hci
+
+        def _Hdiag (h1, h2):
+            hdiag = []
+            for solver, c in mc.fcisolver._loop_solver (ci):
+                nelec = mc.fcisolver._get_nelec (solver, nelecas)
+                my_hdiag = solver.make_hdiag (h1, h2, ncas, nelec)
+                for ix in range (len (c)): hdiag.append (my_hdiag)
+            return hdiag
+
+    # Only one solver
+    else:
+        if getattr(mc.fcisolver, 'gen_linkstr', None):
+            linkstrl = mc.fcisolver.gen_linkstr(ncas, nelecas, True)
+            linkstr  = mc.fcisolver.gen_linkstr(ncas, nelecas, False)
+        else:
+            linkstrl = linkstr  = None
+
+        # Should work with either state average or normal
+        def _Hci (h1, h2, ket):
+            op = mc.fcisolver.absorb_h1e (h1, h2, ncas, nelecas, 0.5) if h1 is not None else h2
+            hci = [mc.fcisolver.contract_2e (op, k, ncas, nelecas, link_index=linkstrl).ravel () for k in ket]
+            return hci
+
+        def _Hdiag (h1, h2):
+            hdiag = mc.fcisolver.make_hdiag (h1, h2, ncas, nelecas)
+            return [hdiag for ix in range (len (ci))]
+
+    return ci, _Hci, _Hdiag, linkstrl, linkstr
+
 
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
