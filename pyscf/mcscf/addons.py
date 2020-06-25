@@ -1021,7 +1021,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         def trans_rdm12 (self, ci1, ci0, ncas, nelecas, **kwargs):
             tdm1 = 0
             tdm2 = 0
-            for w, (sbra, bra), (sket, ket) in zip (weights, self._loop_civecs (ci1), self._loop_civecs (ci0))):
+            for w, (sbra, bra), (sket, ket) in zip (weights, self._loop_civecs (ci1), self._loop_civecs (ci0)):
                 assert (sbra is sket)
                 dm1, dm2 = sbra.trans_rdm12 (bra, ket, ncas, nelecas)
                 tdm1 += w * dm1
