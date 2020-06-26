@@ -188,6 +188,7 @@ def compute_amplitudes(myadc, eris):
         eris_OVvo = eris.OVvo
         eris_ovVO = eris.ovVO
 
+        t2_2_temp = None
         if isinstance(eris.vvvv_p, list):
             t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_a,eris,spin="alpha")
         else:
@@ -210,6 +211,7 @@ def compute_amplitudes(myadc, eris):
         t2_2_a += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
  
 
+        t2_2_temp = None
         if isinstance(eris.VVVV_p, list):
             t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_b,eris,spin="beta")
         else:
@@ -252,7 +254,7 @@ def compute_amplitudes(myadc, eris):
         t2_2_a = t2_2_a/D2_a
         t2_2_b = t2_2_b/D2_b
         t2_2_ab = t2_2_ab/D2_ab
-
+         
         t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
 
     if (myadc.method == "adc(3)"):
@@ -598,6 +600,7 @@ def contract_ladder_outcore_antisym(myadc,t_amp,eris,spin=None):
 
     t_amp = t_amp[:,:,tril_idx[0],tril_idx[1]]
     t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc*nocc,-1).T)
+
     t = np.zeros((nvir,nvir, nocc*nocc))
 
     a = 0
@@ -609,7 +612,7 @@ def contract_ladder_outcore_antisym(myadc,t_amp,eris,spin=None):
 
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
     t = t[:, :, tril_idx[0], tril_idx[1]]
-
+    
     return t
 
 def contract_ladder_outcore(myadc,t_amp,eris):
@@ -1165,8 +1168,8 @@ def get_imds_ea(adc, eris=None):
                 eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
                 eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
                 
-                temp  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
-                temp  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
+                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
+                temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
                 del eris_VVVV
                 a += k
             M_ab_b  += temp            
@@ -1206,14 +1209,12 @@ def get_imds_ea(adc, eris=None):
 
             a = 0
             temp = np.zeros((nvir_b,nvir_b))
-            for dataset in eris.vVvV_p:
+            for dataset in eris.VvVv_p:
                 k = dataset.shape[0]
-                eris_vVvV = dataset[:].reshape(-1,nvir_b,nvir_a,nvir_b)
-
-                temp -= 0.5*lib.einsum('mldf,mled,eafb->ab',t2_1_a, t2_1_a, eris_vVvV, optimize=True)
-                temp += lib.einsum('mlfd,mled,eafb->ab',t2_1_ab, t2_1_ab, eris_vVvV, optimize=True)
+                eris_VvVv = dataset[:].reshape(-1,nvir_a,nvir_b,nvir_a)
+                temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_VvVv, optimize=True)
+                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_VvVv, optimize=True)
                 a += k
-
             M_ab_b  += temp    
 
         else :
@@ -3373,6 +3374,7 @@ class UADCEA(UADC):
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
+        self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
@@ -3472,6 +3474,7 @@ class UADCIP(UADC):
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
+        self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
 
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))

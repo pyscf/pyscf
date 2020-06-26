@@ -326,10 +326,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
                     log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
                                istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])
                     ti0 = ti1
+
     fswap = None
     if isinstance(erifile, str):
         feri.close()
-
+       
     log.timer('AO->MO transformation for %s 2 pass'%intor, *time_1pass)
     log.timer('AO->MO transformation for %s '%intor, *time_0pass)
     return erifile

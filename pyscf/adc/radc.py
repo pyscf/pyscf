@@ -81,7 +81,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
-
+#@profile
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -147,7 +147,6 @@ def compute_amplitudes(myadc, eris):
             eris_vvvv = eris.vvvv
             temp = t2_1.reshape(nocc*nocc,nvir*nvir)
             t2_2 = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-
 
         t2_2 += lib.einsum('kilj,klab->ijab',eris_oooo,t2_1,optimize=True)
         t2_2 += lib.einsum('kcbj,kica->ijab',eris_ovvo,t2_1_a,optimize=True)
@@ -378,7 +377,7 @@ def contract_ladder_outcore(myadc,t_amp,eris):
          dataset = dataset[:].reshape(-1,nvir*nvir)
          t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
          a += k
-         
+                      
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
 
     return t

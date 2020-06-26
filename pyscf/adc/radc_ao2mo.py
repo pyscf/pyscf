@@ -52,6 +52,7 @@ def transform_integrals_incore(myadc):
 
     return eris
 
+
 def transform_integrals_outcore(myadc):
 
     cput0 = (time.clock(), time.time())
@@ -67,7 +68,7 @@ def transform_integrals_outcore(myadc):
     nocc = occ.shape[1]
     nvir = vir.shape[1]
     nvpair = nvir * (nvir+1) // 2
-
+    
     eris = lambda:None
 
     eris.feri1 = lib.H5TmpFile()
@@ -92,10 +93,11 @@ def transform_integrals_outcore(myadc):
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
 
+    cput1 = time.clock(), time.time()
     fswap = lib.H5TmpFile()
-    #max_memory = max(myadc.memorymin, myadc.max_memory-lib.current_memory()[0])
-    #max_memory = myadc.max_memory-lib.current_memory()[0]
-    max_memory = myadc.max_memory
+    max_memory = myadc.max_memory-lib.current_memory()[0]
+    if max_memory <= 0:
+        max_memory = myadc.memorymin   
     int2e = mol._add_suffix('int2e')
     ao2mo.outcore.half_e1(mol, (mo_coeff,occ), fswap, int2e,
                           's4', 1, max_memory=max_memory, verbose=log)
@@ -105,7 +107,7 @@ def transform_integrals_outcore(myadc):
     blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
     blksize = min(nmo, max(myadc.blkmin, blksize))
     log.debug1('blksize %d', blksize)
-    #cput2 = cput1
+    cput2 = cput1
 
     fload = ao2mo.outcore._load_from_h5g
     buf = np.empty((blksize*nocc,nao_pair))
@@ -126,7 +128,7 @@ def transform_integrals_outcore(myadc):
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_occ_frac(p0, p1, dat)
-        #cput2 = log.timer_debug1('transforming oopp', *cput2) 
+        cput2 = log.timer_debug1('transforming oopp', *cput2) 
 
         prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
@@ -138,18 +140,18 @@ def transform_integrals_outcore(myadc):
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
 
-            #cput2 = log.timer_debug1('transforming ovpp [%d:%d]'%(p0,p1), *cput2)
+            cput2 = log.timer_debug1('transforming ovpp [%d:%d]'%(p0,p1), *cput2)
 
-    #cput1 = log.timer_debug1('transforming oppp', *cput1)
-    #log.timer('ADC integral transformation', *cput0)
+    cput1 = log.timer_debug1('transforming oppp', *cput1)
 
 
 ################### forming eris_vvvv ########################################
-
+    
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = []
 
-        avail_mem = myadc.max_memory - lib.current_memory()[0]
+        cput3 = time.clock(), time.time()
+        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5
         vvv_mem = (nvir**3) * 8/1e6
 
         chnk_size =  int(avail_mem/vvv_mem)
@@ -164,29 +166,31 @@ def transform_integrals_outcore(myadc):
             else :
                 orb_slice = vir[:, p:]
 
-
-            mem = myadc.max_memory
-
-            #vvvv = ao2mo.general(myadc._scf._eri, (orb_slice, vir, vir, vir), compact=False)
-
-            #ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), 'vvvv.h5',max_memory = mem, compact=False)
-            #vvvv = np.asarray('vvvv.h5')
-     
-            vvvv = ao2mo.outcore.general_iofree(mol, (orb_slice, vir, vir, vir), max_memory = mem, compact=False)
+            _, tmp = tempfile.mkstemp()
+            ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
+            vvvv = read_dataset(tmp,'eri_mo')
             vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
-            vvvv = vvvv.transpose(0,2,1,3).copy().reshape(-1, nvir, nvir * nvir)
-        
-            vvvv_p = dataset(vvvv)
+            vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
+            
+            vvvv_p = write_dataset(vvvv)
+            del vvvv
             eris.vvvv.append(vvvv_p)
+            cput3 = log.timer_debug1('transforming vvvv', *cput3)
 
+    log.timer('ADC integral transformation', *cput0)
+          
     return eris
 
+def read_dataset(h5file, dataname):
+    f5 = h5py.File(h5file, 'r')
+    data = f5[dataname][:]
+    f5.close()
+    return data
 
-def dataset(data):
+def write_dataset(data):
     _, fname = tempfile.mkstemp()
     f = h5py.File(fname, mode='w')
     return f.create_dataset('data', data=data)
-
 
 def unpack_eri_1(eri, norb):
 

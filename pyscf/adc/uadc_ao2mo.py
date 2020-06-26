@@ -90,16 +90,12 @@ def transform_integrals_incore(myadc):
 
     return eris
 
-
+#@profile
 def transform_integrals_outcore(myadc):
 
-    #cput0 = (time.clock(), time.time())
-    #log = logger.Logger(myadc.stdout, myadc.verbose)
-    #mol = myadc.mol
-    #mo_coeff = myadc.mo_coeff
-    #nao = mo_coeff.shape[0]
-    #nmo = myadc._nmo
-
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(myadc.stdout, myadc.verbose)
+    
     mo_a = myadc.mo_coeff[0]
     mo_b = myadc.mo_coeff[1]
     nmo_a = mo_a.shape[1]
@@ -117,9 +113,6 @@ def transform_integrals_outcore(myadc):
 
     nvpair_a = nvir_a * (nvir_a+1) // 2
     nvpair_b = nvir_b * (nvir_b+1) // 2
-
-    ind_vv_g = np.tril_indices(nvir_a, k=-1)
-    ind_VV_g = np.tril_indices(nvir_b, k=-1)
 
     eris = lambda:None
 
@@ -216,14 +209,18 @@ def transform_integrals_outcore(myadc):
 ################## forming eris_vvvv ########################################
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+    
+        cput2 = time.clock(), time.time()
+
+        ind_vv_g = np.tril_indices(nvir_a, k=-1)
+        ind_VV_g = np.tril_indices(nvir_b, k=-1)
 
         eris.vvvv_p = []
         eris.VVVV_p = []
         eris.vVvV_p = []
+        eris.VvVv_p = []
 
-
-        used_mem = (nmo_a**3) * 8/1e6 
-        avail_mem = myadc.max_memory - used_mem
+        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 / 4
         vvv_mem = (nvir_a**3) * 8/1e6
 
         chnk_size =  int(avail_mem/vvv_mem)
@@ -231,55 +228,95 @@ def transform_integrals_outcore(myadc):
         if chnk_size <= 0 :
             chnk_size = 1
 
-        vvvv = form_vvvv_antisym(myadc, vir_a, chnk_size, ind_vv_g)
-        VVVV = form_vvvv_antisym(myadc, vir_b, chnk_size, ind_VV_g)
-        vVvV = form_vvvv(myadc, vir_a, vir_b, chnk_size)
-  
-        vvvv_p = dataset(vvvv)
-        VVVV_p = dataset(VVVV)
-        vVvV_p = dataset(vVvV)
-        eris.vvvv_p.append(vvvv_p)
-        eris.VVVV_p.append(VVVV_p)
-        eris.vVvV_p.append(vVvV_p)
+        for p in range(0,vir_a.shape[1],chnk_size):
+
+            if chnk_size < vir_a.shape[1] :
+                orb_slice = vir_a[:, p:p+chnk_size]
+            else :
+                orb_slice = vir_a[:, p:]
+
+            _, tmp = tempfile.mkstemp()
+            ao2mo.outcore.general(mol, (orb_slice, vir_a, vir_a, vir_a), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
+            vvvv = read_dataset(tmp,'eri_mo')
+            vvvv = vvvv.reshape(orb_slice.shape[1], vir_a.shape[1], vir_a.shape[1], vir_a.shape[1])
+            vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3))
+            vvvv -= np.ascontiguousarray(vvvv.transpose(0,1,3,2))
+            vvvv = vvvv[:, :, ind_vv_g[0], ind_vv_g[1]]
+
+            vvvv_p = write_dataset(vvvv)
+            del vvvv
+            eris.vvvv_p.append(vvvv_p)       
 
 
+        for p in range(0,vir_b.shape[1],chnk_size):
+
+            if chnk_size < vir_b.shape[1] :
+                orb_slice = vir_b[:, p:p+chnk_size]
+            else :
+                orb_slice = vir_b[:, p:]
+
+            _, tmp = tempfile.mkstemp()
+            ao2mo.outcore.general(mol, (orb_slice, vir_b, vir_b, vir_b), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
+            VVVV = read_dataset(tmp,'eri_mo')
+            VVVV = VVVV.reshape(orb_slice.shape[1], vir_b.shape[1], vir_b.shape[1], vir_b.shape[1])
+            VVVV = np.ascontiguousarray(VVVV.transpose(0,2,1,3))
+            VVVV -= np.ascontiguousarray(VVVV.transpose(0,1,3,2))
+            VVVV = VVVV[:, :, ind_VV_g[0], ind_VV_g[1]]
+
+            VVVV_p = write_dataset(VVVV)
+            del VVVV
+            eris.VVVV_p.append(VVVV_p)       
+
+
+        for p in range(0,vir_a.shape[1],chnk_size):
+
+            if chnk_size < vir_a.shape[1] :
+                orb_slice = vir_a[:, p:p+chnk_size]
+            else :
+                orb_slice = vir_a[:, p:]
+
+            _, tmp = tempfile.mkstemp()
+            ao2mo.outcore.general(mol, (orb_slice, vir_a, vir_b, vir_b), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
+            vVvV = read_dataset(tmp,'eri_mo')
+            vVvV = vVvV.reshape(orb_slice.shape[1], vir_a.shape[1], vir_b.shape[1], vir_b.shape[1])
+            vVvV = np.ascontiguousarray(vVvV.transpose(0,2,1,3))
+            vVvV = vVvV.reshape(-1, vir_b.shape[1], vir_a.shape[1] * vir_b.shape[1])
+
+            vVvV_p = write_dataset(vVvV)
+            del vVvV
+            eris.vVvV_p.append(vVvV_p)       
+
+
+        for p in range(0,vir_b.shape[1],chnk_size):
+
+            if chnk_size < vir_b.shape[1] :
+                orb_slice = vir_b[:, p:p+chnk_size]
+            else :
+                orb_slice = vir_b[:, p:]
+
+            _, tmp = tempfile.mkstemp()
+            ao2mo.outcore.general(mol, (orb_slice, vir_b, vir_a, vir_a), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
+            VvVv = read_dataset(tmp,'eri_mo')
+            VvVv = VvVv.reshape(orb_slice.shape[1], vir_b.shape[1], vir_a.shape[1], vir_a.shape[1])
+            VvVv = np.ascontiguousarray(VvVv.transpose(0,2,1,3))
+            VvVv = VvVv.reshape(-1, vir_a.shape[1], vir_b.shape[1] * vir_a.shape[1])
+
+            VvVv_p = write_dataset(VvVv)
+            del VvVv
+            eris.VvVv_p.append(VvVv_p)       
+        cput2 = logger.timer_debug1(myadc, 'transforming vvvv', *cput2)
+
+    log.timer('ADC integral transformation', *cput0)
     return eris
 
-def form_vvvv_antisym(myadc, orb, chnk_size, tril_idx):
-
-    for p in range(0,orb.shape[1],chnk_size):
-
-        if chnk_size < orb.shape[1] :
-            orb_slice = orb[:, p:p+chnk_size]
-        else :
-            orb_slice = orb[:, p:]
-
-        vvvv = ao2mo.general(myadc._scf._eri, (orb_slice, orb, orb, orb), compact=False)
-        vvvv = vvvv.reshape(orb_slice.shape[1], orb.shape[1], orb.shape[1], orb.shape[1])
-        vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3))
-        vvvv -= np.ascontiguousarray(vvvv.transpose(0,1,3,2))
-        vvvv = vvvv[:, :, tril_idx[0], tril_idx[1]]
-    
-    return vvvv
-
-def form_vvvv(myadc, orb_a, orb_b, chnk_size):
-
-    for p in range(0,orb_a.shape[1], chnk_size):
-
-        if chnk_size < orb_a.shape[1] :
-            orb_slice = orb_a[:, p:p+chnk_size]
-        else :
-            orb_slice = orb_a[:, p:]
-
-        vvvv = ao2mo.general(myadc._scf._eri, (orb_slice, orb_a, orb_b, orb_b), compact=False)
-        vvvv = vvvv.reshape(orb_slice.shape[1], orb_a.shape[1], orb_b.shape[1], orb_b.shape[1])
-        vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3))
-        vvvv = vvvv.reshape(-1, orb_b.shape[1], orb_a.shape[1] * orb_b.shape[1])
-    
-    return vvvv
+def read_dataset(h5file, dataname):
+    f5 = h5py.File(h5file, 'r')
+    data = f5[dataname][:]
+    f5.close()
+    return data
 
 
-def dataset(data):
+def write_dataset(data):
     _, fname = tempfile.mkstemp()
     f = h5py.File(fname, mode='w')
     return f.create_dataset('data', data=data)
