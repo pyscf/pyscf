@@ -113,6 +113,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     nelecas = casscf.nelecas
     nmo = mo.shape[1]
     ci0, _Hci, _Hdiag, linkstrl, linkstr, _pack_ci, _unpack_ci = _pack_ci_get_H (casscf, ci0)
+    weights = getattr (casscf, 'weights', [1.0]) # MRH 06/24/2020 I'm proud of myself for thinking of this :)
 
     # part5
     jkcaa = numpy.empty((nocc,ncas))
@@ -198,6 +199,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         h1cas_2 = h1e_mo1[ncore:nocc,ncore:nocc] + vhf_c[ncore:nocc,ncore:nocc]
         hci0 = _Hci (h1cas_2, eri_cas_2, fcivec)
         gci = [hc - c * c.dot(hc) for c, hc in zip (fcivec, hci0)]
+        gci = [g * w for g, w in zip (gci, weights)]
 
         g = numpy.zeros_like(h1e_mo)
         g[:,:ncore] = (h1e_mo1[:,:ncore] + vhf_c[:,:ncore] + vhf_a[:,:ncore]) * 2
@@ -261,9 +263,11 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     h_diag = casscf.pack_uniq_var(h_diag)
 
     hci_diag = [hd - ec - gc*c*4 for hd, ec, gc, c in zip (_Hdiag (h1cas_0, eri_cas), eci0, gci, ci0)]
+    hci_diag = [h * w for h, w in zip (hci_diag, weights)]
     hdiag_all = numpy.hstack((h_diag*2, _pack_ci (hci_diag)*2))
 
     g_orb = casscf.pack_uniq_var(gpq-gpq.T)
+    gci = [g * w for g, w in zip (gci, weights)]
     g_all = numpy.hstack((g_orb*2, _pack_ci (gci)*2))
     ngorb = g_orb.size
 
@@ -304,8 +308,9 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         h1aa = numpy.dot(h1e_mo[ncore:nocc]+eris.vhf_c[ncore:nocc], ra)
         h1aa = h1aa + h1aa.T + jk
         kci0 = _Hci (h1aa, aaaa, ci0)
+        kci0 = [kc0 - kc0.dot(c0) * c0 for kc0, c0 in zip (kci0, ci0)]
         hci1 = [hc1 + kc0 for hc1, kc0 in zip (hci1, kci0)]
-        hci1 = [hc1 - kc0.dot(c0) * c0 for hc1, kc0, c0 in zip (hci1, kci0, ci0)]
+        hci1 = [h * w for h, w in zip (hci1, weights)]
 
         # H_oo
         # part7
@@ -335,8 +340,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
             x2[:ncore,ncore:] += vc
 
         # H_oc
-        w0 = getattr (casscf, 'weights', [1.0]) # MRH 06/24/2020 I'm proud of myself for thinking of this :)
-        s10 = sum ([c1.dot(c0) * 2 * w for c1, c0, w in zip (ci1, ci0, w0)])
+        s10 = sum ([c1.dot(c0) * 2 * w for c1, c0, w in zip (ci1, ci0, weights)])
         x2[:,:ncore] += ((h1e_mo[:,:ncore]+eris.vhf_c[:,:ncore]) * s10 + vhf_a) * 2
         x2[:,ncore:nocc] += numpy.dot(h1e_mo[:,ncore:nocc]+eris.vhf_c[:,ncore:nocc], tdm1)
         x2[:,ncore:nocc] += g_dm2
