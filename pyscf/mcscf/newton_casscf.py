@@ -31,27 +31,27 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf import scf
 from pyscf.soscf import ciah
 
-def _pack_ci_get_H (mc, ci):
+def _pack_ci_get_H (mc, ci0):
     # MRH 06/24/2020: get wrapped Hci and Hdiag functions for
     # SA and SA-mix case. Put ci in a consistent format: list of raveled CI vecs
     # so that list comprehension can do all the +-*/ and dot operations
     if mc.fcisolver.nroots == 1:
-        ci = [ci.ravel ()]
+        ci0 = [ci0.ravel ()]
         def _pack_ci (x):
             return x[0]
         def _unpack_ci (x):
             return [x.ravel ()]
     else:
-        ci = [c.ravel () for c in ci]
+        ci0 = [c.ravel () for c in ci0]
         def _pack_ci (x):
             return numpy.concatenate ([y.ravel () for y in x])
         def _unpack_ci (x):
             z = []
-            for i, c in enumerate (ci):
+            for i, c in enumerate (ci0):
                 y, x = x[:c.size], x[c.size:]
                 z.append (y)
             return z
-        assert (len (ci) == mc.fcisolver.nroots)
+        assert (len (ci0) == mc.fcisolver.nroots)
     ncas = mc.ncas
     nelecas = mc.nelecas
 
@@ -59,7 +59,7 @@ def _pack_ci_get_H (mc, ci):
     if isinstance (mc.fcisolver, addons.StateAverageMixFCISolver):
         linkstrl = []
         linkstr =  []
-        for solver, my_kets in mc.fcisolver._loop_solver (ci):
+        for solver, my_kets in mc.fcisolver._loop_solver (ci0):
             nelec = mc.fcisolver._get_nelec (solver, nelecas)
             if getattr (mc.fcisolver, 'gen_linkstr', None):
                 linkstrl.append (mc.fcisolver.gen_linkstr (ncas, nelec, True))
@@ -68,23 +68,31 @@ def _pack_ci_get_H (mc, ci):
                 linkstrl.append (None)
                 linkstr.append (None)
 
-        def _Hci (h1, h2, ket):
+        def _Hci (h1, h2, ci1):
             hci = []
-            for ix, (solver, my_kets) in enumerate (mc.fcisolver._loop_solver (ket)):
+            for ix, (solver, ci) in enumerate (mc.fcisolver._loop_solver (ci1)):
                 nelec = mc.fcisolver._get_nelec (solver, nelecas)
                 op = solver.absorb_h1e (h1, h2, ncas, nelec, 0.5) if h1 is not None else h2
-                hci.extend ((solver.contract_2e (op, k, ncas, nelec, link_index=linkstrl).ravel () for k in my_kets))
+                hci.extend ((solver.contract_2e (op, c, ncas, nelec, link_index=linkstrl).ravel () for c in ci))
             return hci
 
         def _Hdiag (h1, h2):
             hdiag = []
-            for solver, c in mc.fcisolver._loop_solver (ci):
+            for solver, c in mc.fcisolver._loop_solver (ci0):
                 nelec = mc.fcisolver._get_nelec (solver, nelecas)
                 my_hdiag = solver.make_hdiag (h1, h2, ncas, nelec)
                 for ix in range (len (c)): hdiag.append (my_hdiag)
             return hdiag
 
-    # Only one solver
+        def _make_rdm12_unroll (ci1, **kwargs):
+            rdm1 = []
+            rdm2 = []
+            for dm1, dm2 in mc.fcisolver._collect('make_rdm12', ci1, ncas, nelecas, **kwargs):
+                rdm1.append (dm1)
+                rdm2.append (dm2)
+            return numpy.stack (rdm1, axis=0), numpy.stack (rdm2, axis=0)
+
+    # Not state average mix
     else:
         if getattr(mc.fcisolver, 'gen_linkstr', None):
             linkstrl = mc.fcisolver.gen_linkstr(ncas, nelecas, True)
@@ -100,9 +108,21 @@ def _pack_ci_get_H (mc, ci):
 
         def _Hdiag (h1, h2):
             hdiag = mc.fcisolver.make_hdiag (h1, h2, ncas, nelecas)
-            return [hdiag for ix in range (len (ci))]
+            return [hdiag for ix in range (len (ci0))]
 
-    return ci, _Hci, _Hdiag, linkstrl, linkstr, _pack_ci, _unpack_ci
+        if isinstance (mc.fcisolver, addons.StateAverageFCISolver):
+            fci_class = mc.fcisolver._base_class
+        else:
+            fci_class = mc.fcisolver.__class__
+        def _make_rdm12_unroll (ci1, **kwargs):
+            rdm1 = []
+            rdm2 = []
+            for dm1, dm2 in (fci_class.make_rdm12 (mc.fcisolver, c, ncas, nelecas, **kwargs) for c in ci1):
+                rdm1.append (dm1)
+                rdm2.append (dm2)
+            return numpy.stack (rdm1, axis=0), numpy.stack (rdm2, axis=0)
+
+    return ci0, _Hci, _Hdiag, _make_rdm12_unroll, linkstrl, linkstr, _pack_ci, _unpack_ci
 
 
 # gradients, hessian operator and hessian diagonal
@@ -112,32 +132,38 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     nocc = ncas + ncore
     nelecas = casscf.nelecas
     nmo = mo.shape[1]
-    ci0, _Hci, _Hdiag, linkstrl, linkstr, _pack_ci, _unpack_ci = _pack_ci_get_H (casscf, ci0)
+    ci0, _Hci, _Hdiag, _make_rdm12_unroll, linkstrl, linkstr, _pack_ci, _unpack_ci = _pack_ci_get_H (casscf, ci0)
     weights = getattr (casscf, 'weights', [1.0]) # MRH 06/24/2020 I'm proud of myself for thinking of this :)
+    nroots = len (weights)
 
+    # MRH 06/25/2020: Unfortunately, we need gpq for each root individually in H_op below.
+    # I want to minimize Python loops and I also want to call eris.ppaa as few times as possible
+    # because that is disk I/O for large molecules
     # part5
-    jkcaa = numpy.empty((nocc,ncas))
+    jkcaa = numpy.empty((nroots,nocc,ncas))
     # part2, part3
-    vhf_a = numpy.empty((nmo,nmo))
+    vhf_a = numpy.empty((nroots,nmo,nmo))
     # part1 ~ (J + 2K)
-    casdm1, casdm2 = casscf.fcisolver.make_rdm12(ci0, ncas, nelecas) #TODO , link_index=linkstr)
-    dm2tmp = casdm2.transpose(1,2,0,3) + casdm2.transpose(0,2,1,3)
-    dm2tmp = dm2tmp.reshape(ncas**2,-1)
-    hdm2 = numpy.empty((nmo,ncas,nmo,ncas))
-    g_dm2 = numpy.empty((nmo,ncas))
+    casdm1, casdm2 = _make_rdm12_unroll (ci0) #TODO , link_index=linkstr)
+    dm2tmp = casdm2.transpose(0,2,3,1,4) + casdm2.transpose(0,1,3,2,4) 
+    dm2tmp = dm2tmp.reshape(nroots,ncas**2,-1) 
+    hdm2 = numpy.empty((nroots,nmo,ncas,nmo,ncas))
+    g_dm2 = numpy.empty((nroots,nmo,ncas)) 
     eri_cas = numpy.empty((ncas,ncas,ncas,ncas))
+    jtmp = numpy.empty ((nroots,nmo,ncas,ncas))
+    ktmp = numpy.empty ((nroots,nmo,ncas,ncas))
     for i in range(nmo):
         jbuf = eris.ppaa[i]
         kbuf = eris.papa[i]
         if i < nocc:
-            jkcaa[i] = numpy.einsum('ik,ik->i', 6*kbuf[:,i]-2*jbuf[i], casdm1)
-        vhf_a[i] =(numpy.einsum('quv,uv->q', jbuf, casdm1)
-                 - numpy.einsum('uqv,uv->q', kbuf, casdm1) * .5)
-        jtmp = lib.dot(jbuf.reshape(nmo,-1), casdm2.reshape(ncas*ncas,-1))
-        jtmp = jtmp.reshape(nmo,ncas,ncas)
-        ktmp = lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2tmp)
-        hdm2[i] = (ktmp.reshape(nmo,ncas,ncas)+jtmp).transpose(1,0,2)
-        g_dm2[i] = numpy.einsum('uuv->v', jtmp[ncore:nocc])
+            jkcaa[:,i] = numpy.einsum('ik,rik->ri', 6*kbuf[:,i]-2*jbuf[i], casdm1)
+        vhf_a[:,i] =(numpy.einsum('quv,ruv->rq', jbuf, casdm1)
+                 - numpy.einsum('uqv,ruv->rq', kbuf, casdm1) * .5)
+        for r, (dm2, dm2t) in enumerate (zip (casdm2, dm2tmp)):
+            jtmp[r] = lib.dot(jbuf.reshape(nmo,-1), dm2.reshape(ncas*ncas,-1)).reshape (nmo,ncas,ncas)
+            ktmp[r] = lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2t).reshape (nmo,ncas,ncas)
+        hdm2[:,i,:,:,:] = (ktmp+jtmp).transpose (0,2,1,3)
+        g_dm2[:,i,:] = numpy.einsum('ruuv->rv', jtmp[:,ncore:nocc])
         if ncore <= i < nocc:
             eri_cas[i-ncore] = jbuf[ncore:nocc]
     jbuf = kbuf = jtmp = ktmp = dm2tmp = casdm2 = None
@@ -145,10 +171,16 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     h1e_mo = reduce(numpy.dot, (mo.T, casscf.get_hcore(), mo))
 
     ################# gradient #################
-    gpq = numpy.zeros_like(h1e_mo)
-    gpq[:,:ncore] = (h1e_mo[:,:ncore] + vhf_ca[:,:ncore]) * 2
-    gpq[:,ncore:nocc] = numpy.dot(h1e_mo[:,ncore:nocc]+eris.vhf_c[:,ncore:nocc],casdm1)
-    gpq[:,ncore:nocc] += g_dm2
+    gpq = numpy.zeros((nroots, nmo, nmo), dtype=h1e_mo.dtype)
+    gpq[:,:,:ncore] = (h1e_mo[None,:,:ncore] + vhf_ca[:,:,:ncore]) * 2
+    gpq[:,:,ncore:nocc] = numpy.dot(h1e_mo[:,ncore:nocc]+eris.vhf_c[:,ncore:nocc],casdm1).transpose (1,0,2)
+    gpq[:,:,ncore:nocc] += g_dm2
+
+    # Roll up intermediates that no longer need to be separated by root
+    vhf_ca = numpy.einsum ('r,rpq->pq', weights, vhf_ca)
+    casdm1 = numpy.einsum ('r,rpq->pq', weights, casdm1)
+    jkcaa = numpy.einsum ('r,rpq->pq', weights, jkcaa)
+    hdm2 = numpy.einsum ('r,rpqst->pqst', weights, hdm2)
 
     h1cas_0 = h1e_mo[ncore:nocc,ncore:nocc] + eris.vhf_c[ncore:nocc,ncore:nocc]
     hci0 = _Hci (h1cas_0, eri_cas, ci0)
@@ -225,7 +257,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     h_diag = h_diag + h_diag.T
 
     # part8
-    g_diag = gpq.diagonal()
+    g_diag = numpy.einsum ('r,rpp->p', weights, gpq)
     h_diag -= g_diag + g_diag.reshape(-1,1)
     idx = numpy.arange(nmo)
     h_diag[idx,idx] += g_diag * 2
@@ -266,7 +298,8 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     hci_diag = [h * w for h, w in zip (hci_diag, weights)]
     hdiag_all = numpy.hstack((h_diag*2, _pack_ci (hci_diag)*2))
 
-    g_orb = casscf.pack_uniq_var(gpq-gpq.T)
+    g_orb = numpy.einsum ('r,rpq->pq', weights, gpq)
+    g_orb = casscf.pack_uniq_var(g_orb-g_orb.T)
     gci = [g * w for g, w in zip (gci, weights)]
     g_all = numpy.hstack((g_orb*2, _pack_ci (gci)*2))
     ngorb = g_orb.size
@@ -318,7 +351,8 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         x2 = reduce(lib.dot, (h1e_mo, x1, dm1))
         # part8
         # (g_{ps}\delta_{qr}R_rs + g_{qr}\delta_{ps}) * R_pq)/2 + (pr<->qs)
-        x2 -= numpy.dot((gpq+gpq.T), x1) * .5
+        g_orb = numpy.einsum ('r,rpq->pq', weights, gpq)
+        x2 -= numpy.dot((g_orb + g_orb.T), x1) * .5
         # part2
         # (-2Vhf_{sp}\delta_{qr}R_pq - 2Vhf_{qr}\delta_{sp}R_rs)/2 + (pr<->qs)
         x2[:ncore] += reduce(numpy.dot, (x1[:ncore,ncore:], vhf_ca[ncore:])) * 2
@@ -340,11 +374,11 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
             x2[:ncore,ncore:] += vc
 
         # H_oc
-        s10 = sum ([c1.dot(c0) * 2 * w for c1, c0, w in zip (ci1, ci0, weights)])
-        x2[:,:ncore] += ((h1e_mo[:,:ncore]+eris.vhf_c[:,:ncore]) * s10 + vhf_a) * 2
+        s10 = [c1.dot(c0) * 2 * w for c1, c0, w in zip (ci1, ci0, weights)]
+        x2[:,:ncore] += ((h1e_mo[:,:ncore]+eris.vhf_c[:,:ncore]) * sum (s10) + vhf_a) * 2
         x2[:,ncore:nocc] += numpy.dot(h1e_mo[:,ncore:nocc]+eris.vhf_c[:,ncore:nocc], tdm1)
         x2[:,ncore:nocc] += g_dm2
-        x2 -= s10 * gpq
+        x2 -= numpy.einsum ('r,rpq->pq', s10, gpq)
 
         # (pr<->qs)
         x2 = x2 - x2.T
