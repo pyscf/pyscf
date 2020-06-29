@@ -510,7 +510,7 @@ class W90:
         self.nn_list = None 
         self.proj_site = None
         self.proj_l = None
-        proj_m = None
+        self.proj_m = None
         self.proj_radial = None
         self.proj_z = None 
         self.proj_x = None
