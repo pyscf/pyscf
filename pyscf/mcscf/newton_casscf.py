@@ -90,16 +90,6 @@ def _pack_ci_get_H (mc, mo, ci0):
                 for ix in range (solver.nroots): hdiag.append (my_hdiag)
             return hdiag
 
-        def _make_rdm12_unroll (ci1, **kwargs):
-            rdm1 = []
-            rdm2 = []
-            nelec = _solver_arg ([mc.fcisolver._get_nelec (solver, nelecas) for solver in mc.fcisolver.fcisolvers])
-            ci1 = _state_arg (ci1)
-            for dm1, dm2 in mc.fcisolver._collect('make_rdm12', ci1, ncas, nelec, **kwargs):
-                rdm1.append (dm1)
-                rdm2.append (dm2)
-            return numpy.stack (rdm1, axis=0), numpy.stack (rdm2, axis=0)
-
     # Not state average mix
     else:
         if getattr(mc.fcisolver, 'gen_linkstr', None):
@@ -118,19 +108,7 @@ def _pack_ci_get_H (mc, mo, ci0):
             hdiag = mc.fcisolver.make_hdiag (h1, h2, ncas, nelecas)
             return [hdiag for ix in range (len (ci0))]
 
-        if isinstance (mc.fcisolver, addons.StateAverageFCISolver):
-            fci_class = mc.fcisolver._base_class
-        else:
-            fci_class = mc.fcisolver.__class__
-        def _make_rdm12_unroll (ci1, **kwargs):
-            rdm1 = []
-            rdm2 = []
-            for dm1, dm2 in (fci_class.make_rdm12 (mc.fcisolver, c, ncas, nelecas, **kwargs) for c in ci1):
-                rdm1.append (dm1)
-                rdm2.append (dm2)
-            return numpy.stack (rdm1, axis=0), numpy.stack (rdm2, axis=0)
-
-    return ci0, _Hci, _Hdiag, _make_rdm12_unroll, linkstrl, linkstr, _pack_ci, _unpack_ci
+    return ci0, _Hci, _Hdiag, linkstrl, linkstr, _pack_ci, _unpack_ci
 
 
 # gradients, hessian operator and hessian diagonal
@@ -140,7 +118,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     nocc = ncas + ncore
     nelecas = casscf.nelecas
     nmo = mo.shape[1]
-    ci0, _Hci, _Hdiag, _make_rdm12_unroll, linkstrl, linkstr, _pack_ci, _unpack_ci = _pack_ci_get_H (casscf, mo, ci0)
+    ci0, _Hci, _Hdiag, linkstrl, linkstr, _pack_ci, _unpack_ci = _pack_ci_get_H (casscf, mo, ci0)
     weights = getattr (casscf, 'weights', [1.0]) # MRH 06/24/2020 I'm proud of myself for thinking of this :)
     nroots = len (weights)
 
@@ -152,7 +130,15 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     # part2, part3
     vhf_a = numpy.empty((nroots,nmo,nmo))
     # part1 ~ (J + 2K)
-    casdm1, casdm2 = _make_rdm12_unroll (ci0) #TODO , link_index=linkstr)
+    try:
+        casdm1, casdm2 = casscf.fcisolver.states_make_rdm12 (ci0, ncas, nelecas, link_index=linkstr)
+        casdm1 = numpy.asarray (casdm1)
+        casdm2 = numpy.asarray (casdm2)
+    except AttributeError as e:
+        assert (not (isinstance (casscf.fcisolver, addons.StateAverageFCISolver))), e
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12 (ci0, ncas, nelecas, link_index=linkstr)
+        casdm1 = numpy.asarray ([casdm1])
+        casdm2 = numpy.asarray ([casdm2])
     dm2tmp = casdm2.transpose(0,2,3,1,4) + casdm2.transpose(0,1,3,2,4) 
     dm2tmp = dm2tmp.reshape(nroots,ncas**2,-1) 
     hdm2 = numpy.empty((nroots,nmo,ncas,nmo,ncas))
@@ -208,7 +194,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 
         fcivec = [c / numpy.linalg.norm (c) for c in fcivec]
         fciarg = fcivec if casscf.fcisolver.nroots > 1 else fcivec[0] # MRH 06/24/2020: this is inelegant...
-        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fciarg, ncas, nelecas) #TODO , link_index=linkstr)
+        casdm1, casdm2 = casscf.fcisolver.make_rdm12(fciarg, ncas, nelecas, link_index=linkstr)
         #casscf.with_dep4 = False
         #casscf.ci_response_space = 3
         #casscf.ci_grad_trust_region = 3
@@ -327,7 +313,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         ddm_c = numpy.zeros((nmo,nmo))
         ddm_c[:,:ncore] = rc[:,:ncore] * 2
         ddm_c[:ncore,:]+= rc[:,:ncore].T * 2
-        tdm1, tdm2 = casscf.fcisolver.trans_rdm12(ci1, ci0, ncas, nelecas) #TODO, link_index=linkstr)
+        tdm1, tdm2 = casscf.fcisolver.trans_rdm12(ci1, ci0, ncas, nelecas, link_index=linkstr)
         tdm1 = tdm1 + tdm1.T
         tdm2 = tdm2 + tdm2.transpose(1,0,3,2)
         tdm2 =(tdm2 + tdm2.transpose(2,3,0,1)) * .5
