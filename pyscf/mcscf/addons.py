@@ -962,15 +962,31 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                     elif isinstance (item, _solver_args):
                         my_kwargs[key] = item[ix]
                     else:
-                        my_kwargs.key = item
+                        my_kwargs[key] = item
                 yield solver, my_args, my_kwargs
                 p0 += solver.nroots
 
-        def _loop_civecs(self, ci0):
+        def _loop_civecs(self, *args, **kwargs):
             p0 = 0
-            for solver in self.fcisolvers:
-                for i in range(p0, p0+solver.nroots):
-                    yield solver, ci0[i]
+            for i, solver in enumerate (self.fcisolvers):
+                for j in range(p0, p0+solver.nroots):
+                    my_args = []
+                    for arg in args:
+                        if isinstance (arg, _state_args):
+                            my_args.append (arg[j])
+                        elif isinstance (arg, _solver_args):
+                            my_args.append (arg[i])
+                        else:
+                            my_args.append (arg)
+                    my_kwargs = {}
+                    for key, item in kwargs.items ():
+                        if isinstance (item, _state_args):
+                            my_kwargs[key] = item[j]
+                        elif isinstance (item, _solver_args):
+                            my_kwargs[key] = item[i]
+                        else:
+                            my_kwargs[key] = item
+                    yield solver, my_args, my_kwargs
                 p0 += solver.nroots
 
         def _get_nelec(self, solver, nelec):
@@ -983,9 +999,11 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             return nelec
 
         def _collect(self, fname, ci0, norb, nelec, *args, **kwargs):
-            for solver, c in self._loop_civecs(ci0):
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            for solver, my_args, my_kwargs in self._loop_civecs(_state_args (ci0), nelec):
+                c, ne = my_args
                 fn = getattr(solver, fname)
-                yield fn(c, norb, self._get_nelec(solver, nelec), *args, **kwargs)
+                yield fn(c, norb, ne, *args, **kwargs)
 
 
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
@@ -1061,8 +1079,12 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         def trans_rdm12 (self, ci1, ci0, norb, nelec, **kwargs):
             tdm1 = 0
             tdm2 = 0
-            for w, (sbra, bra), (sket, ket) in zip (weights, self._loop_civecs (ci1), self._loop_civecs (ci0)):
+            ci1 = _state_args (ci1)
+            ci0 = _state_args (ci0)
+            for w, (sbra, bra, _), (sket, ket, _) in zip (weights, self._loop_civecs (ci1), self._loop_civecs (ci0)):
                 assert (sbra is sket)
+                bra = bra[0]
+                ket = ket[0]
                 dm1, dm2 = sbra.trans_rdm12 (bra, ket, norb, self._get_nelec (sbra, nelec))
                 tdm1 += w * dm1
                 tdm2 += w * dm2
