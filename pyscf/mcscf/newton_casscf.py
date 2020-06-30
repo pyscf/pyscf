@@ -31,10 +31,11 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf import scf
 from pyscf.soscf import ciah
 
-def _pack_ci_get_H (mc, ci0):
+def _pack_ci_get_H (mc, mo, ci0):
     # MRH 06/24/2020: get wrapped Hci and Hdiag functions for
     # SA and SA-mix case. Put ci in a consistent format: list of raveled CI vecs
     # so that list comprehension can do all the +-*/ and dot operations
+    orbsym = getattr (mo, 'orbsym', getattr (mc.fcisolver, 'orbsym', None))
     if mc.fcisolver.nroots == 1:
         ci0 = [ci0.ravel ()]
         def _pack_ci (x):
@@ -72,8 +73,10 @@ def _pack_ci_get_H (mc, ci0):
             hci = []
             for ix, (solver, ci) in enumerate (mc.fcisolver._loop_solver (ci1)):
                 nelec = mc.fcisolver._get_nelec (solver, nelecas)
+                wfnsym = getattr (solver, 'wfnsym', None)
                 op = solver.absorb_h1e (h1, h2, ncas, nelec, 0.5) if h1 is not None else h2
-                hci.extend ((solver.contract_2e (op, c, ncas, nelec, link_index=linkstrl).ravel () for c in ci))
+                if solver.nroots == 1: ci = [ci]
+                hci.extend ((solver.contract_2e (op, c, ncas, nelec, link_index=linkstrl[ix], orbsym=orbsym, wfnsym=wfnsym).ravel () for c in ci))
             return hci
 
         def _Hdiag (h1, h2):
@@ -132,7 +135,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     nocc = ncas + ncore
     nelecas = casscf.nelecas
     nmo = mo.shape[1]
-    ci0, _Hci, _Hdiag, _make_rdm12_unroll, linkstrl, linkstr, _pack_ci, _unpack_ci = _pack_ci_get_H (casscf, ci0)
+    ci0, _Hci, _Hdiag, _make_rdm12_unroll, linkstrl, linkstr, _pack_ci, _unpack_ci = _pack_ci_get_H (casscf, mo, ci0)
     weights = getattr (casscf, 'weights', [1.0]) # MRH 06/24/2020 I'm proud of myself for thinking of this :)
     nroots = len (weights)
 
@@ -424,14 +427,21 @@ def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     return g_all, g_update, h_op, hdiag_all
 
 # MRH, 04/08/2019: enable multiple roots
+# MRH, 06/29/2020: enable state-average mix
 def extract_rotation(casscf, dr, u, ci0):
     nroots = casscf.fcisolver.nroots
     nmo = casscf.mo_coeff.shape[1]
     ngorb = numpy.count_nonzero (casscf.uniq_var_indices (nmo, casscf.ncore, casscf.ncas, casscf.frozen))
     u = numpy.dot(u, casscf.update_rotate_matrix(dr[:ngorb]))
-    ci1 = (numpy.asarray (ci0).ravel() + dr[ngorb:]).reshape (nroots, -1)
-    ci1 *= 1./numpy.linalg.norm(ci1, axis=1)[:,None]
-    ci1 = [ci1[iroot].ravel () for iroot in range (nroots)]
+    if nroots == 1: ci0 = [ci0]
+    p0 = ngorb
+    ci1 = []
+    for c in ci0:
+        p1 = p0 + c.size
+        d = c.ravel () + dr[p0:p1]
+        d *= 1./numpy.linalg.norm (d)
+        ci1.append (d)
+        p0 = p1
     if nroots == 1: ci1 = ci1[0]
     return u, ci1
 
@@ -562,10 +572,14 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                     break
 
     u, ci_kf = extract_rotation(casscf, dr, u, ci_kf)
+    if casscf.fcisolver.nroots == 1:
+        dci_kf = ci_kf - ci0
+    else:
+        dci_kf = numpy.concatenate ([(x-y).ravel () for x, y in zip (ci_kf, ci0)])
     log.debug('    tot inner=%d  |g|= %4.3g (%4.3g %4.3g) |u-1|= %4.3g  |dci|= %4.3g',
-              stat.imic, norm_gall, norm_gorb, norm_gci,
-              numpy.linalg.norm(u-numpy.eye(nmo)),
-              numpy.linalg.norm(numpy.asarray(ci_kf)-numpy.asarray(ci0)))
+          stat.imic, norm_gall, norm_gorb, norm_gci,
+          numpy.linalg.norm(u-numpy.eye(nmo)),
+          numpy.linalg.norm(dci_kf))
     return u, ci_kf, norm_gkf, stat, dxi
 
 

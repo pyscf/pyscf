@@ -17,10 +17,11 @@ import unittest
 from functools import reduce
 import numpy
 from pyscf import gto, scf, lib, fci
-from pyscf.mcscf import newton_casscf, CASSCF
+from pyscf.mcscf import newton_casscf, CASSCF, addons
 
 mol = gto.Mole()
-mol.verbose = 0 
+mol.verbose = lib.logger.DEBUG
+mol.output = '/dev/null'
 mol.atom = [
     ['H', ( 5.,-1.    , 1.   )],
     ['H', ( 0.,-5.    ,-2.   )],
@@ -33,6 +34,28 @@ mol.atom = [
 ]
 mol.basis = 'sto-3g'
 mol.build()
+
+b = 1.4
+mol_N2 = gto.Mole()
+mol_N2.build(
+verbose = lib.logger.DEBUG,
+output = '/dev/null',
+atom = [
+    ['N',(  0.000000,  0.000000, -b/2)],
+    ['N',(  0.000000,  0.000000,  b/2)], ],
+basis = {'N': 'ccpvdz', },
+symmetry = 1
+)
+mf_N2 = scf.RHF (mol_N2).run ()
+solver1 = fci.FCI(mol_N2)
+solver1.spin = 0
+solver1.nroots = 2
+solver2 = fci.FCI(mol_N2, singlet=False)
+solver2.spin = 2
+mc_N2 = CASSCF(mf_N2, 4, 4)
+mc_N2 = addons.state_average_mix_(mc_N2, [solver1, solver2],
+                                     (0.25,0.25,0.5)).newton ()
+mc_N2.kernel()
 mf = scf.RHF(mol)
 mf.max_cycle = 3
 mf.kernel()
@@ -45,8 +68,8 @@ sa = sa.state_average ([0.5,0.5]).newton ()
 sa.kernel()
 
 def tearDownModule():
-    global mol, mf, mc
-    del mol, mf, mc
+    global mol, mf, mc, sa, mol_N2, mf_N2, mc_N2
+    del mol, mf, mc, sa, mol_N2, mf_N2, mc_N2
 
 
 class KnownValues(unittest.TestCase):
@@ -86,6 +109,20 @@ class KnownValues(unittest.TestCase):
         # MRH 06/24/2020: convergence thresh of scf may not have consistent
         # meaning in SA problems
         self.assertAlmostEqual(abs(sa.get_grad()).max(), 0, 5)
+
+    def test_sa_mix(self):
+        e = mc_N2.e_states
+        self.assertAlmostEqual(mc_N2.e_tot, -108.80340952016508, 7)
+        self.assertAlmostEqual(mc_N2.e_average, -108.80340952016508, 7)
+        self.assertAlmostEqual(numpy.dot(e,[.25,.25,.5]), -108.80340952016508, 7)
+        dm1 = mc_N2.analyze()
+        self.assertAlmostEqual(lib.fp(dm1[0]), 0.52172669549357464, 4)
+        self.assertAlmostEqual(lib.fp(dm1[1]), 0.53366776017869022, 4)
+        self.assertAlmostEqual(lib.fp(dm1[0]+dm1[1]), 1.0553944556722636, 4)
+
+        mc_N2.cas_natorb()
+
+
 
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")
