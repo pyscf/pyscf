@@ -685,36 +685,56 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
                                             wfnsym=self.wfnsym, **kwargs)
             return numpy.einsum('i,i->', e, self.weights), c
 
-        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
-            dm1 = 0
-            for i, wi in enumerate(self.weights):
-                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec, *args, **kwargs)
+        def states_make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
+            dm1 = [fcibase_class.make_rdm1(self, c, norb, nelec, *args, **kwargs) for c in ci0]
             return dm1
 
-        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
-            dm1a, dm1b = 0, 0
-            for i, wi in enumerate(self.weights):
-                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec, *args, **kwargs)
-                dm1a += wi * dm1s[0]
-                dm1b += wi * dm1s[1]
+        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
+            return sum ([w * dm for w, dm in zip (self.weights,
+                self.states_make_rdm1 (ci0, norb, nelec, *args, **kwargs))])
+
+        def states_make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
+            dm1a = []
+            dm1b = []
+            for c in ci0:
+                dm1s = fcibase_class.make_rdm1s(self, c, norb, nelec, *args, **kwargs)
+                dm1a.append (dm1s[0])
+                dm1b.append (dm1s[1])
             return dm1a, dm1b
 
-        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
-            rdm1 = 0
-            rdm2 = 0
-            for i, wi in enumerate(self.weights):
-                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec, *args, **kwargs)
-                rdm1 += wi * dm1
-                rdm2 += wi * dm2
+        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
+            dm1s = self.states_make_rdm1s(ci0, norb, nelec, *args, **kwargs)
+            dm1s = numpy.einsum ('r,srpq->spq', self.weights, dm1s)
+            return dm1s[0], dm1s[1]
+
+        def states_make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
+            rdm1 = []
+            rdm2 = []
+            for c in ci0:
+                dm1, dm2 = fcibase_class.make_rdm12(self, c, norb, nelec, *args, **kwargs)
+                rdm1.append (dm1)
+                rdm2.append (dm2)
             return rdm1, rdm2
 
+        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
+            rdm1, rdm2 = self.states_make_rdm12(ci0, norb, nelec, *args, **kwargs)
+            rdm1 = numpy.einsum ('r,rpq->pq', self.weights, rdm1)
+            rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
+            return rdm1, rdm2
+
+        def states_trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
+            tdm1 = []
+            tdm2 = []
+            for c1, c0 in zip (ci1, ci0):
+                dm1, dm2 = fcibase_class.trans_rdm12 (self, c1, c0, norb, nelec)
+                tdm1.append (dm1)
+                tdm2.append (dm2)
+            return tdm1, tdm2
+
         def trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
-            tdm1 = 0
-            tdm2 = 0
-            for i, wi in enumerate (self.weights):
-                dm1, dm2 = fcibase_class.trans_rdm12 (self, ci1[i], ci0[i], norb, nelec)
-                tdm1 += wi * dm1
-                tdm2 += wi * dm2
+            tdm1, tdm2 = self.states_trans_rdm12 (ci1, ci0, norb, nelec, *args, **kwargs)
+            tdm1 = numpy.einsum ('r,rpq->pq', self.weights, tdm1)
+            tdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, tdm2)
             return tdm1, tdm2
 
         if has_spin_square:
@@ -1051,46 +1071,66 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                     cs.extend(c)
             return numpy.einsum('i,i->', es, weights), cs
 
-        def make_rdm1(self, ci0, norb, nelec, **kwargs):
-            dm1 = 0
+        def states_make_rdm1 (self, ci0, norb, nelec, link_index=None, **kwargs):
             ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
             nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
-            for i, dm in enumerate(self._collect('make_rdm1', ci0, norb, nelec, **kwargs)):
-                dm1 += weights[i] * dm
-            return dm1
+            return [dm for dm in self._collect ('make_rdm1', ci0, norb, nelec, link_index=link_index, **kwargs)]
 
-        def make_rdm1s(self, ci0, norb, nelec, **kwargs):
-            dm1a, dm1b = 0, 0
+        def make_rdm1(self, ci0, norb, nelec, link_index=None, **kwargs):
+            dm1 = self.states_make_rdm1 (ci0, norb, nelec, link_index=link_index, **kwargs)
+            return numpy.einsum ('r,rpq->pq', self.weights, dm1)
+
+        def states_make_rdm1s (self, ci0, norb, nelec, link_index=None, **kwargs):
             ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
             nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
-            for i, dm1s in enumerate(self._collect('make_rdm1s', ci0, norb, nelec, **kwargs)):
-                dm1a += weights[i] * dm1s[0]
-                dm1b += weights[i] * dm1s[1]
+            dm1a = []
+            dm1b = []
+            for dm1s in self._collect ('make_rdm1s', ci0, norb, nelec, link_index=link_index, **kwargs):
+                dm1a.append (dm1s[0])
+                dm1b.append (dm1s[1])
             return dm1a, dm1b
 
-        def make_rdm12(self, ci0, norb, nelec, **kwargs):
-            rdm1 = 0
-            rdm2 = 0
+        def make_rdm1s(self, ci0, norb, nelec, link_index=None, **kwargs):
+            dm1a, dm1b = self.states_make_rdm1s (ci0, norb, nelec, link_index=link_index, **kwargs)
+            dm1s = numpy.einsum ('r,srpq->spq', self.weights, [dm1a, dm1b])
+            return dm1s[0], dm1s[1]
+
+        def states_make_rdm12 (self, ci0, norb, nelec, link_index=None, **kwargs):
             ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
             nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
-            for i, (dm1, dm2) in enumerate(self._collect('make_rdm12', ci0, norb, nelec, **kwargs)):
-                rdm1 += weights[i] * dm1
-                rdm2 += weights[i] * dm2
+            rdm1 = []
+            rdm2 = []
+            for dm1, dm2 in self._collect ('make_rdm12', ci0, norb, nelec, link_index=link_index, **kwargs):
+                rdm1.append (dm1)
+                rdm2.append (dm2)
+            return rdm1, rdm2
+
+        def make_rdm12(self, ci0, norb, nelec, link_index=None, **kwargs):
+            rdm1, rdm2 = self.states_make_rdm12 (ci0, norb, nelec, link_index=link_index, **kwargs)
+            rdm1 = numpy.einsum ('r,rpq->pq', self.weights, rdm1)
+            rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
             return rdm1, rdm2
 
         # TODO: linkstr support
-        def trans_rdm12 (self, ci1, ci0, norb, nelec, **kwargs):
-            tdm1 = 0
-            tdm2 = 0
+        def states_trans_rdm12 (self, ci1, ci0, norb, nelec, link_index=None, **kwargs):
             ci1 = _state_args (ci1)
             ci0 = _state_args (ci0)
-            for w, (sbra, bra, _), (sket, ket, _) in zip (weights, self._loop_civecs (ci1), self._loop_civecs (ci0)):
-                assert (sbra is sket)
-                bra = bra[0]
-                ket = ket[0]
-                dm1, dm2 = sbra.trans_rdm12 (bra, ket, norb, self._get_nelec (sbra, nelec))
-                tdm1 += w * dm1
-                tdm2 += w * dm2
+            link_index = _solver_args (link_index)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            tdm1 = []
+            tdm2 = []
+            for dm1, dm2 in self._collect ('trans_rdm12', ci1, ci0, norb, nelec, link_index=link_index, **kwargs):
+                tdm1.append (dm1)
+                tdm2.append (dm2)
+            return tdm1, tdm2
+
+        def trans_rdm12 (self, ci1, ci0, norb, nelec, link_index=None, **kwargs):
+            tdm1, tdm2 = self.states_trans_rdm12 (ci1, ci0, norb, nelec, link_index=link_index, **kwargs)
+            tdm1 = numpy.einsum ('r,rpq->pq', self.weights, tdm1)
+            tdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, tdm2)
             return tdm1, tdm2
 
         if has_spin_square:
