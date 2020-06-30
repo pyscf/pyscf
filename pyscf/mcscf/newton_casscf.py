@@ -57,10 +57,11 @@ def _pack_ci_get_H (mc, mo, ci0):
     nelecas = mc.nelecas
 
     # State average mix
+    _state_arg = addons.StateAverageMixFCISolver_state_args
     if isinstance (mc.fcisolver, addons.StateAverageMixFCISolver):
         linkstrl = []
         linkstr =  []
-        for solver, my_kets in mc.fcisolver._loop_solver (ci0):
+        for solver, my_arg, my_kwargs in mc.fcisolver._loop_solver (_state_arg (ci0)):
             nelec = mc.fcisolver._get_nelec (solver, nelecas)
             if getattr (mc.fcisolver, 'gen_linkstr', None):
                 linkstrl.append (mc.fcisolver.gen_linkstr (ncas, nelec, True))
@@ -71,7 +72,8 @@ def _pack_ci_get_H (mc, mo, ci0):
 
         def _Hci (h1, h2, ci1):
             hci = []
-            for ix, (solver, ci) in enumerate (mc.fcisolver._loop_solver (ci1)):
+            for ix, (solver, my_args, my_kwargs) in enumerate (mc.fcisolver._loop_solver (_state_arg (ci1))):
+                ci = my_args[0]
                 nelec = mc.fcisolver._get_nelec (solver, nelecas)
                 wfnsym = getattr (solver, 'wfnsym', None)
                 op = solver.absorb_h1e (h1, h2, ncas, nelec, 0.5) if h1 is not None else h2
@@ -81,10 +83,10 @@ def _pack_ci_get_H (mc, mo, ci0):
 
         def _Hdiag (h1, h2):
             hdiag = []
-            for solver, c in mc.fcisolver._loop_solver (ci0):
+            for solver, my_args, my_kwargs in mc.fcisolver._loop_solver (_state_arg (ci0)):
                 nelec = mc.fcisolver._get_nelec (solver, nelecas)
                 my_hdiag = solver.make_hdiag (h1, h2, ncas, nelec)
-                for ix in range (len (c)): hdiag.append (my_hdiag)
+                for ix in range (solver.nroots): hdiag.append (my_hdiag)
             return hdiag
 
         def _make_rdm12_unroll (ci1, **kwargs):

@@ -896,6 +896,18 @@ def state_specific_(casscf, state=1, wfnsym=None):
     return casscf
 state_specific = state_specific_
 
+class StateAverageMixFCISolver_solver_args:
+    def __init__(self, data):
+        self._data = data
+    def __getitem__(self, key): # Handle data = None
+        try:
+            return self._data[key]
+        except TypeError as e:
+            assert (self._data is None), e
+            return None
+class StateAverageMixFCISolver_state_args (StateAverageMixFCISolver_solver_args):
+    pass
+
 def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     '''State-average CASSCF over multiple FCI solvers.
     '''
@@ -908,6 +920,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                        for solver in fcisolvers)
     has_transform_ci = all(getattr(solver, 'transform_ci_for_orbital_rotation', None)
                            for solver in fcisolvers)
+    _solver_args = StateAverageMixFCISolver_solver_args
+    _state_args = StateAverageMixFCISolver_state_args
     class FakeCISolver(fcibase_class, StateAverageMixFCISolver):
         def __init__(self, mol):
             fcibase_class.__init__(self, mol)
@@ -926,15 +940,30 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         # MRH 06/24/2020: I need these functions in newton_casscf!
         # TODO: handle things like linkstr somehow (variables that
         # have to be different for different solvers or ci vecs)
-        def _loop_solver(self, ci0):
+        def _loop_solver(self, *args, **kwargs):
             p0 = 0
-            for solver in self.fcisolvers:
-                if ci0 is None:
-                    yield solver, None
-                elif solver.nroots == 1:
-                    yield solver, ci0[p0]
-                else:
-                    yield solver, ci0[p0:p0+solver.nroots]
+            for ix, solver in enumerate (self.fcisolvers):
+                my_args = []
+                for arg in args:
+                    if isinstance (arg, _state_args):
+                        my_arg = arg[p0:p0+solver.nroots]
+                        if solver.nroots == 1 and my_arg is not None: my_arg = my_arg[0]
+                        my_args.append (my_arg)
+                    elif isinstance (arg, _solver_args):
+                        my_args.append (arg[ix])
+                    else:
+                        my_args.append (arg)
+                my_kwargs = {}
+                for key, item in kwargs.items ():
+                    if isinstance (item, _state_args):
+                        my_arg = item[p0:p0+solver.nroots]
+                        if solver.nroots == 1 and my_arg is not None: my_arg = my_arg[0]
+                        my_kwargs[key] = my_arg
+                    elif isinstance (item, _solver_args):
+                        my_kwargs[key] = item[ix]
+                    else:
+                        my_kwargs.key = item
+                yield solver, my_args, my_kwargs
                 p0 += solver.nroots
 
         def _loop_civecs(self, ci0):
@@ -964,7 +993,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             log = logger.new_logger(self, verbose)
             es = []
             cs = []
-            for solver, c0 in self._loop_solver(ci0):
+            for solver, my_args, my_kwargs in self._loop_solver(_state_args (ci0)):
+                c0 = my_args[0]
                 e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
                                      orbsym=self.orbsym, verbose=log, **kwargs)
                 if solver.nroots == 1:
@@ -990,7 +1020,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             es = []
             cs = []
-            for solver, c0 in self._loop_solver(ci0):
+            for ix, (solver, my_args, my_kwargs) in enumerate (self._loop_solver(_state_args (ci0))):
+                c0 = my_args[0]
                 try:
                     e, c = solver.approx_kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
                                                 orbsym=self.orbsym, **kwargs)
