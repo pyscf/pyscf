@@ -998,13 +998,10 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                 nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
             return nelec
 
-        def _collect(self, fname, ci0, norb, nelec, *args, **kwargs):
-            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
-            for solver, my_args, my_kwargs in self._loop_civecs(_state_args (ci0), nelec):
-                c, ne = my_args
+        def _collect(self, fname, *args, **kwargs):
+            for solver, args, kwargs in self._loop_civecs(*args, **kwargs):
                 fn = getattr(solver, fname)
-                yield fn(c, norb, ne, *args, **kwargs)
-
+                yield fn(*args, **kwargs)
 
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
             # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
@@ -1056,12 +1053,16 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
 
         def make_rdm1(self, ci0, norb, nelec, **kwargs):
             dm1 = 0
+            ci0 = _state_args (ci0)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
             for i, dm in enumerate(self._collect('make_rdm1', ci0, norb, nelec, **kwargs)):
                 dm1 += weights[i] * dm
             return dm1
 
         def make_rdm1s(self, ci0, norb, nelec, **kwargs):
             dm1a, dm1b = 0, 0
+            ci0 = _state_args (ci0)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
             for i, dm1s in enumerate(self._collect('make_rdm1s', ci0, norb, nelec, **kwargs)):
                 dm1a += weights[i] * dm1s[0]
                 dm1b += weights[i] * dm1s[1]
@@ -1070,6 +1071,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         def make_rdm12(self, ci0, norb, nelec, **kwargs):
             rdm1 = 0
             rdm2 = 0
+            ci0 = _state_args (ci0)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
             for i, (dm1, dm2) in enumerate(self._collect('make_rdm12', ci0, norb, nelec, **kwargs)):
                 rdm1 += weights[i] * dm1
                 rdm2 += weights[i] * dm2
@@ -1097,6 +1100,8 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                 return numpy.dot(ss, weights), numpy.dot(multip, weights)
 
             def states_spin_square(self, ci0, norb, nelec, *args, **kwargs):
+                ci0 = _state_args (ci0)
+                nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
                 res = list(self._collect('spin_square', ci0, norb, nelec, *args, **kwargs))
                 ss = [x[0] for x in res]
                 multip = [x[1] for x in res]
@@ -1107,12 +1112,16 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         large_ci = None
         if has_large_ci:
             def states_large_ci(self, fcivec, norb, nelec, *args, **kwargs):
+                fcivec = _state_args (fcivec)
+                nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
                 return list(self._collect('large_ci', fcivec, norb, nelec, *args, **kwargs))
 
         transform_ci_for_orbital_rotation = None
         if has_transform_ci:
             def states_transform_ci_for_orbital_rotation(self, fcivec, norb, nelec,
                                                          *args, **kwargs):
+                fcivec = _state_args (fcivec)
+                nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
                 return list(self._collect('transform_ci_for_orbital_rotation',
                                     fcivec, norb, nelec, *args, **kwargs))
 

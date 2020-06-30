@@ -58,6 +58,7 @@ def _pack_ci_get_H (mc, mo, ci0):
 
     # State average mix
     _state_arg = addons.StateAverageMixFCISolver_state_args
+    _solver_arg = addons.StateAverageMixFCISolver_solver_args
     if isinstance (mc.fcisolver, addons.StateAverageMixFCISolver):
         linkstrl = []
         linkstr =  []
@@ -92,7 +93,9 @@ def _pack_ci_get_H (mc, mo, ci0):
         def _make_rdm12_unroll (ci1, **kwargs):
             rdm1 = []
             rdm2 = []
-            for dm1, dm2 in mc.fcisolver._collect('make_rdm12', ci1, ncas, nelecas, **kwargs):
+            nelec = _solver_arg ([mc.fcisolver._get_nelec (solver, nelecas) for solver in mc.fcisolver.fcisolvers])
+            ci1 = _state_arg (ci1)
+            for dm1, dm2 in mc.fcisolver._collect('make_rdm12', ci1, ncas, nelec, **kwargs):
                 rdm1.append (dm1)
                 rdm2.append (dm2)
             return numpy.stack (rdm1, axis=0), numpy.stack (rdm2, axis=0)
