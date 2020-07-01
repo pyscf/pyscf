@@ -553,7 +553,7 @@ def static_dft(mf, s, f, tau, mo_energy, mo_occ, option=2):
 
         return v_c_static
 
-    vcs = static_potential(mf, mo_occ, mo_energy, mf.mol.FermiEnergy, mf.mol.tau, option=2)
+    vcs = static_potential(mf, mo_occ, mo_energy, option=2)
     d=self.make_rdm1(mo_coeff,vcs)
     F_static = reduce(numpy.dot, (s, d, s))
     return f + F_static
