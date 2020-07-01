@@ -52,7 +52,7 @@ def _pack_ci_get_H (mc, mo, ci0):
                 y, x = x[:c.size], x[c.size:]
                 z.append (y)
             return z
-        assert (len (ci0) == mc.fcisolver.nroots)
+        assert (len (ci0) == mc.fcisolver.nroots), '{} {}'.format (len (ci0), mc.fcisolver.nroots)
     ncas = mc.ncas
     nelecas = mc.nelecas
 
@@ -70,16 +70,16 @@ def _pack_ci_get_H (mc, mo, ci0):
             else:
                 linkstrl.append (None)
                 linkstr.append (None)
+            solver.orbsym = orbsym
 
         def _Hci (h1, h2, ci1):
             hci = []
             for ix, (solver, my_args, my_kwargs) in enumerate (mc.fcisolver._loop_solver (_state_arg (ci1))):
                 ci = my_args[0]
                 nelec = mc.fcisolver._get_nelec (solver, nelecas)
-                wfnsym = getattr (solver, 'wfnsym', None)
                 op = solver.absorb_h1e (h1, h2, ncas, nelec, 0.5) if h1 is not None else h2
                 if solver.nroots == 1: ci = [ci]
-                hci.extend ((solver.contract_2e (op, c, ncas, nelec, link_index=linkstrl[ix], orbsym=orbsym, wfnsym=wfnsym).ravel () for c in ci))
+                hci.extend ((solver.contract_2e (op, c, ncas, nelec, link_index=linkstrl[ix]).ravel () for c in ci))
             return hci
 
         def _Hdiag (h1, h2):
@@ -377,43 +377,6 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         # (pr<->qs)
         x2 = x2 - x2.T
         return numpy.hstack((casscf.pack_uniq_var(x2)*2, _pack_ci (hci1)*2))
-
-    return g_all, g_update, h_op, hdiag_all
-
-def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
-    ''' MRH, 04/08/2019: This is a thin wrapper around the original gen_g_hop to weight and average the derivatives
-        in the second-order algorithm for a SA-CASSCF calculation. '''
-    # TODO: make compatible with state_average_mix
-    ngorb = numpy.count_nonzero (casscf.uniq_var_indices (mo.shape[1], casscf.ncore, casscf.ncas, casscf.frozen))
-    nroots = casscf.fcisolver.nroots
-    fcasscf = casscf._base_class (casscf._scf, casscf.ncas, casscf.nelecas)
-    fcasscf.fcisolver = casscf.fcisolver._base_class (casscf.mol)
-    fcasscf.mo_coeff = mo
-    # MRH, 07/23/2019: make sure to inherit symmetry!
-    if hasattr (casscf.fcisolver, 'orbsym'):
-        fcasscf.fcisolver.orbsym = casscf.fcisolver.orbsym
-    if hasattr (casscf.fcisolver, 'wfnsym'):
-        fcasscf.fcisolver.wfnsym = casscf.fcisolver.wfnsym
-
-    # Warning: do not call gen_g_hop from here with casscf: infinite recursion danger
-    gh_roots = [gen_g_hop (fcasscf, mo, ci0_i, eris, verbose=verbose) for ci0_i in ci0]
-    def avg_orb_wgt_ci (x_roots):
-        x_orb = sum ([x_iroot[:ngorb] * w for x_iroot, w in zip (x_roots, casscf.weights)])
-        x_ci = numpy.stack ([x_iroot[ngorb:] * w for x_iroot, w in zip (x_roots, casscf.weights)], axis=0)
-        x_all = numpy.append (x_orb, x_ci.ravel ()).ravel ()
-        return x_all
-
-    g_all = avg_orb_wgt_ci ([gh_iroot[0] for gh_iroot in gh_roots])
-    hdiag_all = avg_orb_wgt_ci ([gh_iroot[3] for gh_iroot in gh_roots])
-
-    def g_update (u, fcivec):
-        return avg_orb_wgt_ci ([gh_iroot[1] (u, ci) for gh_iroot, ci in zip (gh_roots, fcivec)])
-
-    def h_op (x):
-        x_orb = x[:ngorb]
-        x_ci = x[ngorb:].reshape (nroots, -1)
-        return avg_orb_wgt_ci ([gh_iroot[2] (numpy.append (x_orb, x_ci_iroot))
-            for gh_iroot, x_ci_iroot in zip (gh_roots, x_ci)])
 
     return g_all, g_update, h_op, hdiag_all
 

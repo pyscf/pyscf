@@ -204,6 +204,43 @@ class KnownValues(unittest.TestCase):
         e2 = mcs.e_average
         self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
 
+    def test_state_average_mix_scanner_state_0(self):
+        mc = mcscf.CASSCF(mf, 4, 4)
+        mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test 12 lines down
+        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        gs = mc.nuc_grad_method().as_scanner(state = 0)
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.39026617466018, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.06398917856902565, 7)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_states[0]
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_states[0]
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
+        # ^ Maybe loosen thresh instead of conv_tol = 1e-10?
+
+    def test_state_average_mix_scanner_state_1(self):
+        mc = mcscf.CASSCF(mf, 4, 4)
+        mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test 12 lines down
+        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        gs = mc.nuc_grad_method().as_scanner(state = 1)
+        e, de = gs(mol)
+        self.assertAlmostEqual(e, -108.37742625358983, 9)
+        self.assertAlmostEqual(lib.finger(de), -0.14288919328322952, 7)
+
+        mcs = gs.base
+        pmol = mol.copy()
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e1 = mcs.e_states[1]
+        mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs.e_states[1]
+        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
+        # ^ Maybe loosen thresh instead of conv_tol = 1e-10?
+
+
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
             mc = mcscf.CASSCF(mf.x2c(), 4, 4).run()

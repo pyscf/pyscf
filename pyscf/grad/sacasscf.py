@@ -17,7 +17,7 @@
 #
 
 from pyscf.grad import lagrange
-from pyscf.mcscf.addons import StateAverageMCSCFSolver
+from pyscf.mcscf.addons import StateAverageMCSCFSolver, StateAverageFCISolver, StateAverageMixFCISolver, state_average_mix_
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.mcscf import mc1step, mc1step_symm, newton_casscf
 from pyscf.grad import casscf as casscf_grad
@@ -29,6 +29,7 @@ from pyscf import lib, ao2mo
 import numpy as np
 import copy, time, gc
 from functools import reduce
+from itertools import product
 from scipy import linalg
 
 def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None):
@@ -226,20 +227,14 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
     nelecas = mc.nelecas
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
-    nroots = ci.shape[0]
+    nroots = len (ci)
 
     mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
 
-    # MRH: TDMs + c.c. instead of RDMs
-    casdm1 = np.zeros ((nroots, ncas, ncas))
-    casdm2 = np.zeros ((nroots, ncas, ncas, ncas, ncas))
-    for iroot in range (nroots):
-        #print ("norm of Lci, ci for root {}: {} {}".format (iroot, linalg.norm (Lci[iroot]), linalg.norm (ci[iroot])))
-        casdm1[iroot], casdm2[iroot] = mc.fcisolver.trans_rdm12 (Lci[iroot], ci[iroot], ncas, nelecas)
-    casdm1 = (casdm1 * weights[:,None,None]).sum (0)
-    casdm2 = (casdm2 * weights[:,None,None,None,None]).sum (0)
+    # MRH: TDMs + c.c. instead of RDMs; 06/30/2020: new interface in mcscf.addons makes this much more transparent
+    casdm1, casdm2 = mc.fcisolver.trans_rdm12 (Lci, ci, ncas, nelecas)
     casdm1 += casdm1.transpose (1,0)
     casdm2 += casdm2.transpose (1,0,3,2)
 
@@ -387,10 +382,18 @@ class Gradients (lagrange.Gradients):
         nmo = mc.mo_coeff.shape[-1]
         self.ngorb = np.count_nonzero (mc.uniq_var_indices (nmo, mc.ncore, mc.ncas, mc.frozen))
         self.nroots = mc.fcisolver.nroots
-        if hasattr (mc.fcisolver, 'fcisolvers'):
-            self.nroots = sum ([s.nroots for s in mc.fcisolver.fcisolvers])
         neleca, nelecb = _unpack_nelec (mc.nelecas)
-        self.nci = cistring.num_strings (mc.ncas, neleca) * cistring.num_strings (mc.ncas, nelecb) * self.nroots
+        self.na_states = [cistring.num_strings (mc.ncas, neleca),] * self.nroots
+        self.nb_states = [cistring.num_strings (mc.ncas, nelecb),] * self.nroots
+        if isinstance (mc.fcisolver, StateAverageMixFCISolver):
+            self.nroots = p0 = 0
+            for solver in mc.fcisolver.fcisolvers:
+                self.nroots += solver.nroots
+                nea, neb = mc.fcisolver._get_nelec (solver, (neleca, nelecb))
+                self.na_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, nea) for x in range (self.nroots))
+                self.nb_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, neb) for x in range (self.nroots))
+                p0 = self.nroots
+        self.nci = sum ([na * nb for na, nb in zip (self.na_states, self.nb_states)])
         if state is not None:
             self.state = state
         elif hasattr (mc, 'nuc_grad_state'):
@@ -403,24 +406,48 @@ class Gradients (lagrange.Gradients):
             self.e_states = np.asarray (mc.e_states)
         except AttributeError as e:
             self.e_states = np.asarray (mc.e_tot)
-        if hasattr (mc, 'weights'):
+        if isinstance (mc, StateAverageMCSCFSolver):
             self.weights = np.asarray (mc.weights)
         assert (len (self.weights) == self.nroots), '{} {} {}'.format (mc.fcisolver.__class__, self.weights, self.nroots)
         lagrange.Gradients.__init__(self, mc, self.ngorb+self.nci)
         self.max_cycle = mc.max_cycle_macro
 
-    def make_fcasscf (self, casscf_attr={}, fcisolver_attr={}):
+    def pack_uniq_var (self, xorb, xci):
+        # TODO: point-group symmetry of the xci components? CSFs?
+        xorb = self.base.pack_uniq_var (xorb)
+        xci = np.concatenate ([x.ravel () for x in xci])
+        return np.append (xorb, xci)
+
+    def unpack_uniq_var (self, x):
+        # TODO: point-group symmetry of the xci components? CSFs?
+        xorb, x = self.base.unpack_uniq_var (x[:self.ngorb]), x[self.ngorb:]
+        xci = []
+        for na, nb in zip (self.na_states, self.nb_states):
+            xci.append (x[:na*nb].reshape (na, nb))
+            x = x[na*nb:]
+        return xorb, xci
+
+    def make_fcasscf (self, state=None, casscf_attr={}, fcisolver_attr={}):
         ''' Make a fake CASSCF object for ostensible single-state calculations '''
         if isinstance (self.base, mc1step_symm.CASSCF):
             fcasscf = mc1step_symm.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
         else:
             fcasscf = mc1step.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
         fcasscf.__dict__.update (self.base.__dict__)
-        # Fix me for state_average_mix!
-        if hasattr (self.base, 'weights'):
-            fcasscf.fcisolver = self.base.fcisolver._base_class (self.base.mol)
-            fcasscf.nroots = 1
+        if isinstance (fcasscf.fcisolver, StateAverageFCISolver):
+            if isinstance (fcasscf.fcisolver, StateAverageMixFCISolver):
+                p0 = 0
+                for solver in fcasscf.fcisolver.fcisolvers:
+                    p1 = p0 + solver.nroots
+                    if p0 <= state < p1:
+                        solver_class = solver.__class__
+                        break
+                    p0 = p1
+            else:
+                solver_class = self.base.fcisolver._base_class
+            fcasscf.fcisolver = solver_class (self.base.mol)
             fcasscf.fcisolver.__dict__.update (self.base.fcisolver.__dict__)
+            fcasscf.fcisolver.nroots = 1
         fcasscf.__dict__.update (casscf_attr)
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
         fcasscf.verbose, fcasscf.stdout = self.verbose, self.stdout
@@ -429,10 +456,12 @@ class Gradients (lagrange.Gradients):
 
     def make_fcasscf_sa (self, casscf_attr={}, fcisolver_attr={}):
         ''' Make a fake SA-CASSCF object to get around weird inheritance conflicts '''
-        # Fix me for state_average_mix!
-        fcasscf = self.make_fcasscf (casscf_attr={}, fcisolver_attr={})
-        if hasattr (self.base, 'weights'):
-            fcasscf.state_average_(self.base.weights)
+        fcasscf = self.make_fcasscf (state=0, casscf_attr={}, fcisolver_attr={})
+        if isinstance (self.base, StateAverageMCSCFSolver):
+            if isinstance (self.base.fcisolver, StateAverageMixFCISolver):
+                fcasscf = state_average_mix_(fcasscf, self.base.fcisolver.fcisolvers, self.base.weights)
+            else:
+                fcasscf.state_average_(self.base.weights)
         return fcasscf
 
     def kernel (self, state=None, atmlst=None, verbose=None, mo=None, ci=None, eris=None, mf_grad=None, e_states=None, level_shift=None, **kwargs):
@@ -446,8 +475,6 @@ class Gradients (lagrange.Gradients):
         if mf_grad is None: mf_grad = self.base._scf.nuc_grad_method ()
         if state is None:
             return casscf_grad.Gradients (self.base).kernel (mo_coeff=mo, ci=ci, atmlst=atmlst, verbose=verbose)
-        elif hasattr (self.base.fcisolver, 'fcisolvers'):
-            raise NotImplementedError ('State-average mix single state gradients')
         if e_states is None:
             try:
                 e_states = self.e_states = np.asarray (self.base.e_states)
@@ -462,8 +489,8 @@ class Gradients (lagrange.Gradients):
         if verbose is None: verbose = self.verbose
         if mo is None: mo = self.base.mo_coeff
         if ci is None: ci = self.base.ci
-        ndet = ci[state].size
-        fcasscf = self.make_fcasscf ()
+        ndet = self.na_states[state] * self.nb_states[state]
+        fcasscf = self.make_fcasscf (state)
         fcasscf.mo_coeff = mo
         fcasscf.ci = ci[state]
         eris = fcasscf.ao2mo (mo)
@@ -471,7 +498,9 @@ class Gradients (lagrange.Gradients):
         g_all = np.zeros (self.nlag)
         g_all[:self.ngorb] = g_all_state[:self.ngorb]
         # No need to reshape or anything, just use the magic of repeated slicing
-        g_all[self.ngorb:][ndet*state:][:ndet] = g_all_state[self.ngorb:]
+        offs = sum ([na * nb for na, nb in zip (self.na_states[:state],
+            self.nb_states[:state])]) if state > 0 else 0
+        g_all[self.ngorb:][offs:][:ndet] = g_all_state[self.ngorb:]
         return g_all
 
     def get_Aop_Adiag (self, atmlst=None, state=None, verbose=None, mo=None, ci=None, eris=None, level_shift=None, **kwargs):
@@ -502,7 +531,7 @@ class Gradients (lagrange.Gradients):
             eris = self.eris = self.base.ao2mo (mo)
         elif eris is None:
             eris = self.eris
-        fcasscf_grad = casscf_grad.Gradients (self.make_fcasscf ())
+        fcasscf_grad = casscf_grad.Gradients (self.make_fcasscf (state))
         fcasscf_grad.mo_coeff = mo
         fcasscf_grad.ci = ci[state]
         return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst, verbose=verbose)
@@ -526,9 +555,10 @@ class Gradients (lagrange.Gradients):
 
         # Just sum the weights now... Lorb can be implicitly summed
         # Lci may be in the csf basis
-        Lorb = self.base.unpack_uniq_var (Lvec[:self.ngorb])
-        Lci = Lvec[self.ngorb:].reshape (self.nroots, -1)
-        ci = np.ravel (ci).reshape (self.nroots, -1)
+        Lorb, Lci = self.unpack_uniq_var (Lvec)
+        #Lorb = self.base.unpack_uniq_var (Lvec[:self.ngorb])
+        #Lci = Lvec[self.ngorb:].reshape (self.nroots, -1)
+        #ci = np.ravel (ci).reshape (self.nroots, -1)
 
         # CI part
         t0 = (time.clock (), time.time ())
@@ -684,21 +714,14 @@ class Gradients (lagrange.Gradients):
             itvec[0] += 1
             geff = geff_op (x)
             deltax = x - Lvec_last
-            gorb = geff[:self.ngorb]
-            xci = x[self.ngorb:]
-            gci = geff[self.ngorb:]
-            deltaorb = deltax[:self.ngorb]
-            deltaci = deltax[self.ngorb:]
+            gorb, gci = self.unpack_uniq_var (geff)
+            deltaorb, deltaci = self.unpack_uniq_var (deltax)
+            gci = np.concatenate ([g.ravel () for g in gci])
+            deltaci = np.concatenate ([d.ravel () for d in deltaci])
             lib.logger.info (self, ('Lagrange optimization iteration {}, |gorb| = {}, |gci| = {}, '
                 '|dLorb| = {}, |dLci| = {}').format (itvec[0], linalg.norm (gorb), linalg.norm (gci),
                 linalg.norm (deltaorb), linalg.norm (deltaci))) 
             Lvec_last[:] = x[:]
-            #ci_arr = np.array (self.ci).reshape (self.nroots, -1)
-            #deltaci_ovlp = ci_arr @ deltaci.reshape (self.nroots, -1).T
-            #gci_ovlp = ci_arr @ gci.reshape (self.nroots, -1).T
-            #xci_ovlp = ci_arr @ xci.reshape (self.nroots, -1).T
-            #print (xci_ovlp)
-            #print (linalg.norm (xci - (ci_arr.T @ xci_ovlp).ravel ()))
         return my_call
 
     def project_Aop (self, Aop, ci, state):
@@ -706,12 +729,20 @@ class Gradients (lagrange.Gradients):
             changes between SA-CASSCF and MC-PDFT so modify this part in child classes. '''
         def my_Aop (x):
             Ax = Aop (x)
-            Ax_ci = Ax[self.ngorb:].reshape (self.nroots, -1)
-            ci_arr = np.asarray (ci).reshape (self.nroots, -1)
-            ovlp = np.dot (ci_arr.conjugate (), Ax_ci.T)
-            Ax_ci -= np.dot (ovlp.T, ci_arr)
-            Ax[self.ngorb:] = Ax_ci.ravel ()
-            return Ax
+            Ax_orb, Ax_ci = self.unpack_uniq_var (Ax)
+            for i, j in product (range (self.nroots), repeat=2):
+                # I'm assuming the only symmetry here that's actually built into the data structure is solver.spin
+                # This will be the case as long as the various solvers are determinants with a common total charge
+                # occupying a common set of orbitals
+                if self.na_states[i] != self.na_states[j]: continue
+                if self.nb_states[i] != self.nb_states[j]: continue
+                Ax_ci[i] -= np.dot (Ax_ci[i].ravel (), ci[j].ravel ()) * ci[j]
+            #Ax_ci = Ax[self.ngorb:].reshape (self.nroots, -1)
+            #ci_arr = np.asarray (ci).reshape (self.nroots, -1)
+            #ovlp = np.dot (ci_arr.conjugate (), Ax_ci.T)
+            #Ax_ci -= np.dot (ovlp.T, ci_arr)
+            #Ax[self.ngorb:] = Ax_ci.ravel ()
+            return self.pack_uniq_var (Ax_orb, Ax_ci)
         return my_Aop
 
     as_scanner = as_scanner
@@ -741,12 +772,16 @@ class SACASLagPrec (lagrange.LagPrec):
         Make the operand's matrix element with <K|Rci(I) before taking the dot product! 
 '''
 
+    # TODO: fix me (subclass me? wrap me?) for state_average_mix
     def __init__(self, nroots=None, nlag=None, ngorb=None, Adiag=None, ci=None, level_shift=None, **kwargs):
         self.level_shift = level_shift
         self.nroots = nroots
         self.nlag = nlag
         self.ngorb = ngorb
         self.ci = np.asarray (ci).reshape (self.nroots, -1)
+        self.ci_idx = # Just an index list. It just sorts the list, doesn't do anything else.
+        self.nroots_symm = # Number of roots per symmetry block. Here we only care about ms symmetry
+        # ^ These two things are ALL I need; don't overthink this ^
         self._init_orb (Adiag)
         self._init_ci (Adiag)
 
