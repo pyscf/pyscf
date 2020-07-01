@@ -90,7 +90,7 @@ def transform_integrals_incore(myadc):
 
     return eris
 
-#@profile
+
 def transform_integrals_outcore(myadc):
 
     cput0 = (time.clock(), time.time())
@@ -150,7 +150,6 @@ def transform_integrals_outcore(myadc):
 
     cput1 = time.clock(), time.time()
     mol = myadc.mol
-    # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
     tmpf = lib.H5TmpFile()
     if nocc_a > 0:
         ao2mo.general(mol, (occ_a,mo_a,mo_a,mo_a), tmpf, 'aa')
@@ -206,7 +205,7 @@ def transform_integrals_outcore(myadc):
     buf = None
     cput1 = logger.timer_debug1(myadc, 'transforming oopq, ovpq', *cput1)
 
-################## forming eris_vvvv ########################################
+    ############### forming eris_vvvv ########################################
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
     
@@ -220,7 +219,7 @@ def transform_integrals_outcore(myadc):
         eris.vVvV_p = []
         eris.VvVv_p = []
 
-        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 / 4
+        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.25 
         vvv_mem = (nvir_a**3) * 8/1e6
 
         chnk_size =  int(avail_mem/vvv_mem)
@@ -238,6 +237,7 @@ def transform_integrals_outcore(myadc):
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_a, vir_a, vir_a), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
             vvvv = read_dataset(tmp,'eri_mo')
+            del (tmp)
             vvvv = vvvv.reshape(orb_slice.shape[1], vir_a.shape[1], vir_a.shape[1], vir_a.shape[1])
             vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3))
             vvvv -= np.ascontiguousarray(vvvv.transpose(0,1,3,2))
@@ -258,6 +258,7 @@ def transform_integrals_outcore(myadc):
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_b, vir_b, vir_b), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
             VVVV = read_dataset(tmp,'eri_mo')
+            del (tmp)
             VVVV = VVVV.reshape(orb_slice.shape[1], vir_b.shape[1], vir_b.shape[1], vir_b.shape[1])
             VVVV = np.ascontiguousarray(VVVV.transpose(0,2,1,3))
             VVVV -= np.ascontiguousarray(VVVV.transpose(0,1,3,2))
@@ -278,6 +279,7 @@ def transform_integrals_outcore(myadc):
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_a, vir_b, vir_b), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
             vVvV = read_dataset(tmp,'eri_mo')
+            del (tmp)
             vVvV = vVvV.reshape(orb_slice.shape[1], vir_a.shape[1], vir_b.shape[1], vir_b.shape[1])
             vVvV = np.ascontiguousarray(vVvV.transpose(0,2,1,3))
             vVvV = vVvV.reshape(-1, vir_b.shape[1], vir_a.shape[1] * vir_b.shape[1])
@@ -297,6 +299,7 @@ def transform_integrals_outcore(myadc):
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_b, vir_a, vir_a), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
             VvVv = read_dataset(tmp,'eri_mo')
+            del tmp
             VvVv = VvVv.reshape(orb_slice.shape[1], vir_b.shape[1], vir_a.shape[1], vir_a.shape[1])
             VvVv = np.ascontiguousarray(VvVv.transpose(0,2,1,3))
             VvVv = VvVv.reshape(-1, vir_a.shape[1], vir_b.shape[1] * vir_a.shape[1])
@@ -304,10 +307,12 @@ def transform_integrals_outcore(myadc):
             VvVv_p = write_dataset(VvVv)
             del VvVv
             eris.VvVv_p.append(VvVv_p)       
+    
         cput2 = logger.timer_debug1(myadc, 'transforming vvvv', *cput2)
 
     log.timer('ADC integral transformation', *cput0)
     return eris
+
 
 def read_dataset(h5file, dataname):
     f5 = h5py.File(h5file, 'r')

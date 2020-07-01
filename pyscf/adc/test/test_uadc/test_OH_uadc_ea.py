@@ -82,7 +82,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0], 0.8323987058794676, 6)
         self.assertAlmostEqual(p[1], 0.9918705979602267, 6)
-        self.assertAlmostEqual(p[2], 0.977286824280963 , 6)
+        self.assertAlmostEqual(p[2], 0.9772855298541363, 6)
 
     def test_ea_adc3(self):
   
@@ -99,7 +99,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0], 0.8722483551941809, 6)
         self.assertAlmostEqual(p[1], 0.9927117650068699, 6)
-        self.assertAlmostEqual(p[2], 0.9766465081527481, 6)
+        self.assertAlmostEqual(p[2], 0.9766456031927034, 6)
       
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell molecule")

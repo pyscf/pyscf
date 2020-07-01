@@ -25,7 +25,7 @@ import time
 import h5py
 import tempfile
 
-### Integral transformation for integrals in Chemists' notation###
+### Incore integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
     occ = myadc.mo_coeff[:,:myadc._nocc]
@@ -53,10 +53,12 @@ def transform_integrals_incore(myadc):
     return eris
 
 
+### Out-of-core integral transformation for integrals in Chemists' notation###
 def transform_integrals_outcore(myadc):
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
+
     mol = myadc.mol
     mo_coeff = myadc.mo_coeff
     nao = mo_coeff.shape[0]
@@ -145,7 +147,7 @@ def transform_integrals_outcore(myadc):
     cput1 = log.timer_debug1('transforming oppp', *cput1)
 
 
-################### forming eris_vvvv ########################################
+    ############### forming eris_vvvv ########################################
     
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = []
@@ -181,16 +183,19 @@ def transform_integrals_outcore(myadc):
           
     return eris
 
+
 def read_dataset(h5file, dataname):
     f5 = h5py.File(h5file, 'r')
     data = f5[dataname][:]
     f5.close()
     return data
 
+
 def write_dataset(data):
     _, fname = tempfile.mkstemp()
     f = h5py.File(fname, mode='w')
     return f.create_dataset('data', data=data)
+
 
 def unpack_eri_1(eri, norb):
 

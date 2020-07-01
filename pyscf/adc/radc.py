@@ -67,7 +67,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
                          adc.method, 0, E, E*27.2114, spec_factors, conv)
         else :
             for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
-                logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+                logger.info(adc, '%s root %d    Energy (Eh) = %.13f    Energy (eV) = %.13f    Spec factors = %.13f    conv = %s',
                           adc.method, n, en, en*27.2114, pn, convn)
         log.timer('ADC', *cput0)
 
@@ -81,7 +81,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
-#@profile
+
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):

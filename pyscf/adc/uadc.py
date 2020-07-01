@@ -615,6 +615,7 @@ def contract_ladder_outcore_antisym(myadc,t_amp,eris,spin=None):
     
     return t
 
+
 def contract_ladder_outcore(myadc,t_amp,eris):
 
     nocc_a = myadc._nocc[0]
@@ -635,6 +636,7 @@ def contract_ladder_outcore(myadc,t_amp,eris):
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc_a, nocc_b, nvir_a, nvir_b)
 
     return t
+
 
 class UADC(lib.StreamObject):
     '''Ground state calculations
@@ -744,7 +746,7 @@ class UADC(lib.StreamObject):
         nao = self.mo_coeff[0].shape[0]
         nmo_pair = nmo_a * (nmo_a+1) // 2
         nao_pair = nao * (nao+1) // 2
-        mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 8/1e6
+        mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
         if (self._scf._eri is not None and
@@ -780,7 +782,7 @@ class UADC(lib.StreamObject):
         nao = self.mo_coeff[0].shape[0]
         nmo_pair = nmo_a * (nmo_a+1) // 2
         nao_pair = nao * (nao+1) // 2
-        mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 8/1e6
+        mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
         if (self._scf._eri is not None and
@@ -3289,25 +3291,25 @@ def get_trans_moments(adc):
             T_aa = adc.compute_trans_moments(orb, spin = "alpha")
             T_a.append(T_aa)
 
-    T_a = np.array(T_a)
-
     for orb in range(nmo_b):
 
             T_bb = adc.compute_trans_moments(orb, spin = "beta")
             T_b.append(T_bb)
     
-    T_b = np.array(T_b)
-    
     return (T_a, T_b)
 
-       
+   
 def get_spec_factors(adc, T, U, nroots=1):
 
     T_a = T[0]
     T_b = T[1]
 
+    T_a = np.array(T_a)
     X_a = np.dot(T_a, U.T).reshape(-1,nroots)
+    del T_a
+    T_b = np.array(T_b)
     X_b = np.dot(T_b, U.T).reshape(-1,nroots)
+    del T_b
 
     P = lib.einsum("pi,pi->i", X_a, X_a)
     P += lib.einsum("pi,pi->i", X_b, X_b)
