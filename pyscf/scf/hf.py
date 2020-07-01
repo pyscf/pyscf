@@ -508,7 +508,7 @@ def get_init_guess(mol, key='minao'):
 #Making Vc-static self consistent
 
 
-def static_dft(mf, s, f, tau, mo_energy, mo_occ, FermiEnergy, option=2):
+def static_dft(mf, s, f, tau, mo_energy, mo_occ, option=2):
     r'''Add static DFT operator to Fock matrix
 
     .. math::
@@ -523,7 +523,7 @@ def static_dft(mf, s, f, tau, mo_energy, mo_occ, FermiEnergy, option=2):
         New Fock matrix, 2D ndarray
     '''
 
-    def static_potential(mf, mo_occ, mo_energy, FermiEnergy, option=2):
+    def static_potential(mf, mo_occ, mo_energy, option=2):
         # Static correlation potential
         # Define as the product among the partial derivative of Ecstatic respect to mo_occ, the partial derivative of mo_occ respect to mo_energy, the mo_energy and mo_occ
         #Here is the code
@@ -536,6 +536,8 @@ def static_dft(mf, s, f, tau, mo_energy, mo_occ, FermiEnergy, option=2):
         '''
         kb = 3.166810413e-6 # Boltzman constant in Hartree/K
         beta = kb * mf.mol.tau
+        e_idx = numpy.argsort(mo_energy)
+        nocc = mf.mol.nelectron // 2
         mf.mol.FermiEnergy = mo_energy[e_idx[nocc]]
         delta = mo_energy - mf.mol.FermiEnergy
         exp_neg_beta_delta = np.exp(-beta * delta)
