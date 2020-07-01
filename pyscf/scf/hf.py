@@ -536,6 +536,7 @@ def static_dft(mf, s, f, tau, mo_energy, mo_occ, FermiEnergy, option=2):
         '''
         kb = 3.166810413e-6 # Boltzman constant in Hartree/K
         beta = kb * mf.mol.tau
+        mf.mol.FermiEnergy = mo_energy[e_idx[nocc]]
         delta = mo_energy - mf.mol.FermiEnergy
         exp_neg_beta_delta = np.exp(-beta * delta)
         p = exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta) # Equation 5, file=notes
