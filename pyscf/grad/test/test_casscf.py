@@ -153,17 +153,11 @@ class KnownValues(unittest.TestCase):
     def test_state_average_scanner(self):
         mc = mcscf.CASSCF(mf, 4, 4)
         mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
+        mc.fcisolver.conv_tol = 1e-10
         gs = mc.state_average_([0.5, 0.5]).nuc_grad_method().as_scanner()
         e_avg, de_avg = gs(mol)
         e_0, de_0 = gs(mol, state=0)
         e_1, de_1 = gs(mol, state=1)
-        self.assertAlmostEqual(e_avg, -108.38384621394407, 9)
-        self.assertAlmostEqual(lib.fp(de_avg), -0.1034371259306721, 7)
-        self.assertAlmostEqual(e_0, -108.39026617466018, 9)
-        self.assertAlmostEqual(lib.finger(de_0), -0.06398917856902565, 7) 
-        self.assertAlmostEqual(e_1, -108.37742625358983, 9)
-        self.assertAlmostEqual(lib.finger(de_1), -0.14288919328322952, 7)
-
         mcs = gs.base
         pmol = mol.copy()
         mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
@@ -174,6 +168,17 @@ class KnownValues(unittest.TestCase):
         e2_avg = mcs.e_average
         e2_0 = mcs.e_states[0]
         e2_1 = mcs.e_states[1]
+
+        #fmt_str = ' '.join (['{:19.12e}' for i in range (9)])
+        #print ('sa nosymm: ' + fmt_str.format (e_avg, e_0, e_1, lib.fp (de_avg), lib.fp (de_0), lib.fp (de_1), 
+        #    (e1_avg-e2_avg)/0.002*lib.param.BOHR, (e1_0-e2_0)/0.002*lib.param.BOHR,
+        #    (e1_1-e2_1)/0.002*lib.param.BOHR))
+        self.assertAlmostEqual(e_avg, -1.083838462141e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034340877616e-01, 7)
+        self.assertAlmostEqual(e_0, -1.083902662193e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_0), -6.398928175441e-02, 7) 
+        self.assertAlmostEqual(e_1, -1.083774262089e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428890918626e-01, 7)
         self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
@@ -191,13 +196,6 @@ class KnownValues(unittest.TestCase):
         e_avg, de_avg = gs(mol_symm)
         e_0, de_0 = gs(mol_symm, state=0)
         e_1, de_1 = gs(mol_symm, state=1)
-        self.assertAlmostEqual(e_avg, -108.38384621394407, 9)
-        self.assertAlmostEqual(lib.fp(de_avg), -0.1034392760319155, 7)
-        self.assertAlmostEqual(e_0, -108.39026616561537, 9)
-        self.assertAlmostEqual(lib.finger(de_0), -0.06398912016568913, 7)
-        self.assertAlmostEqual(e_1, -108.3774262627828, 9)
-        self.assertAlmostEqual(lib.finger(de_1), -0.1428892488132803, 7)
-
         mcs = gs.base
         pmol = mol_symm.copy()
         mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
@@ -208,6 +206,17 @@ class KnownValues(unittest.TestCase):
         e2_avg = mcs.e_average
         e2_0 = mcs.e_states[0]
         e2_1 = mcs.e_states[1]
+
+        #fmt_str = ' '.join (['{:19.12e}' for i in range (9)])
+        #print ('sa mix: ' + fmt_str.format (e_avg, e_0, e_1, lib.fp (de_avg), lib.fp (de_0), lib.fp (de_1), 
+        #    (e1_avg-e2_avg)/0.002*lib.param.BOHR, (e1_0-e2_0)/0.002*lib.param.BOHR,
+        #    (e1_1-e2_1)/0.002*lib.param.BOHR))
+        self.assertAlmostEqual(e_avg, -1.083838462142e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034392760319e-01, 7)
+        self.assertAlmostEqual(e_0, -1.083902661656e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_0), -6.398921124172e-02, 7)
+        self.assertAlmostEqual(e_1, -1.083774262628e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428891618903e-01, 7)
         self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)

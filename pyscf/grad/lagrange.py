@@ -25,10 +25,10 @@ from scipy import linalg, optimize
 from scipy.sparse import linalg as sparse_linalg
 import time
 
-default_level_shift = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_level_shift', 1e-8)
-default_conv_tol = getattr (__config__, 'mcscf_mc1step_CASSCF_ah_conv_tol', 1e-12)
-default_max_cycle = getattr (__config__, 'mcscf_mc1step_CASSCF_max_cycle', 50) 
-default_lindep = getattr (__config__, 'mcscf_mc1step_CASSCF_lindep', 1e-14)
+default_level_shift = getattr(__config__, 'grad_lagrange_Gradients_level_shift', 1e-8)
+default_conv_atol = getattr (__config__, 'grad_lagrange_Gradients_conv_atol', 1e-12)
+default_conv_rtol = getattr (__config__, 'grad_lagrange_Gradients_conv_rtol', 1e-7)
+default_max_cycle = getattr (__config__, 'grad_lagrange_Gradients_max_cycle', 50) 
 
 class Gradients (rhf_grad.GradientsBasics):
     ''' Dummy parent class for calculating analytical nuclear gradients using the technique of Lagrange multipliers:
@@ -76,9 +76,9 @@ class Gradients (rhf_grad.GradientsBasics):
         #self._keys = set (self.__dict__.keys ())
         #--------------------------------------#
         self.level_shift = default_level_shift
-        self.conv_tol = default_conv_tol
+        self.conv_atol = default_conv_atol
+        self.conv_rtol = default_conv_rtol
         self.max_cycle = default_max_cycle
-        self.lindep = default_lindep
         rhf_grad.GradientsBasics.__init__(self, method)
 
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, **kwargs):
@@ -119,7 +119,7 @@ class Gradients (rhf_grad.GradientsBasics):
         Aop_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=Aop, dtype=bvec.dtype)
         prec_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=precond, dtype=bvec.dtype)
         x0_guess = self.get_init_guess (bvec, Adiag, Aop, precond)
-        Lvec, info_int = sparse_linalg.cg (Aop_obj, -bvec, x0=x0_guess, atol=self.conv_tol, maxiter=self.max_cycle, callback=my_call, M=prec_obj)
+        Lvec, info_int = sparse_linalg.cg (Aop_obj, -bvec, x0=x0_guess, tol=self.conv_rtol, atol=self.conv_atol, maxiter=self.max_cycle, callback=my_call, M=prec_obj)
         lib.logger.info (self, 'Lagrange multiplier determination {} after {} iterations\n   |geff| = {}, |Lvec| = {}'.format (
             ('converged','not converged')[bool (info_int)], it[0], linalg.norm (my_geff (Lvec)), linalg.norm (Lvec))) 
         if info_int < 0: lib.logger.info (self, 'Lagrange multiplier determination error code {}'.format (info_int))
