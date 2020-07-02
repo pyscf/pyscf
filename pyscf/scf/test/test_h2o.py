@@ -192,7 +192,9 @@ class KnownValues(unittest.TestCase):
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.hf.init_guess_by_chkfile(mol, ftmp.name, project=False)
+        print(numpy.linalg.norm(dm0))
         dm1 = mf.get_init_guess(key='minao')
+        print(numpy.linalg.norm(dm1))
         self.assertTrue(numpy.allclose(dm0, dm1))
 
         mf = scf.DHF(mol)
