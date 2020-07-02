@@ -24,7 +24,7 @@ import sys
 import tempfile
 import time
 from functools import reduce
-import numpy 
+import numpy
 import scipy.linalg
 import h5py
 from pyscf import gto
@@ -598,63 +598,9 @@ def get_init_guess(mol, key='minao'):
     '''
     return RHF(mol).get_init_guess(mol, key)
 
-#Making Vc-static self consistent
-
-
-def static_dft(mf, s, f, mo_energy, mo_occ, mo_coeff, option=2):
-    r'''Add static DFT operator to Fock matrix
-
-    .. math::
-       :nowrap:
-
-       \begin{align}
-         FC &= SCE \\
-         F &= F + SC vcs C^\dagger S \\
-       \end{align}
-
-    Returns:
-        New Fock matrix, 2D ndarray
-    '''
-
-    def static_potential(mf, mo_occ, mo_energy, option=2):
-        # Static correlation potential
-        # Define as the product among the partial derivative of Ecstatic respect to mo_occ, the partial derivative of mo_occ respect to mo_energy, the mo_energy and mo_occ
-        #Here is the code
-        '''
-        Inputs:
-            tau: temperature
-            epsilon: numpy array of Kohn-Sham eigenvalues(mo_energy)
-            mu: chemical potential (fermi_energy)
-            option: 1: Eq. 18; 2: Eq. 20
-        '''
-        kb = 3.166810413e-6 # Boltzman constant in Hartree/K
-        beta = kb * mf.mol.tau
-        e_idx = numpy.argsort(mo_energy)
-        nocc = mf.mol.nelectron // 2
-        mf.mol.FermiEnergy = mo_energy[e_idx[nocc]]
-        delta = mo_energy - mf.mol.FermiEnergy
-        exp_neg_beta_delta = numpy.exp(-beta * delta)
-        p = exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta) # Equation 5, file=notes
-        dpde = - beta * exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta ) * ( 1.0 + exp_neg_beta_delta)
-
-        if option == 1:
-            dEdp = beta * numpy.where((p > 0.0) & (p < 0.5), -1.0 / (1.0 - p), numpy.where((p > 0.5) & (p < 1.0), 1.0 / p, 0))
-        else:
-            dEdp = beta * numpy.where((p > 0.0) & (p < 1.0), numpy.log(p) - numpy.log(1-p), 0)
-
-        v_c_static = dEdp * dpde * mo_energy
-
-        return v_c_static
-
-    vcs = static_potential(mf, mo_occ, mo_energy, option=2)
-    d = mf.make_rdm1(mo_coeff,vcs)
-    F_static = reduce(numpy.dot, (s, d, s))
-    return f + F_static
-
-
 
 # eigenvalue of d is 1
-def static_dft(s, f, factor, tau, epsilon, mu, option = 2):
+def static_dft(s, mo_occ, f, factor):
     r'''Add static DFT operator to Fock matrix
 
     .. math::
@@ -669,32 +615,12 @@ def static_dft(s, f, factor, tau, epsilon, mu, option = 2):
         New Fock matrix, 2D ndarray
     '''
 
-    def static_coefficients(tau, epsilon, mu, option = 2):
-        '''
-        Inputs:
-            tau: temperature
-            epsilon: numpy array of Kohn-Sham eigenvalues
-            mu: chemical potential
-            option: 1: Eq. 18; 2: Eq. 20
-        '''
-        kb = 3.166810413e-6 # Boltzman constant in Hartree/K
-        beta = kb * tau
-        delta = epsilon - mu
-        exp_neg_beta_delta = np.exp(-beta * delta)
-        p = exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta)
-        dpde = - beta * exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta ) / ( 1.0 + exp_neg_beta_delta)
+    def static_coefficients(mo_occ):
+        # bla bla
+        return bla
 
-        if option == 1:
-            dEdp = beta * np.where(p < 0.5, -1.0 / (1.0 - p), np.where(p > 0.5, 1.0 / p, 0))
-        else:
-            dEdp = beta * (np.log(p) - np.log(1-p))
-
-        v_c_static = dEdp * dpde * epsilon
-
-        return v_c_static
-
-    v_c_static = static_coefficients(tau, epsilon, mu, option)
-    d=self.make_rdm1(mo_coeff, v_c_static)
+    bla = static_coefficients(mo_occ)
+    d=self.make_rdm1(mo_coeff,bla)
     F_static = reduce(numpy.dot, (s, d, s))
     return f + F_static
 
@@ -1024,26 +950,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     nmo = mo_energy.size
     mo_occ = numpy.zeros(nmo)
     nocc = mf.mol.nelectron // 2
-    elec = mf.mol.nelectron
-
-    # MP 2019
-    if not mf.mol.smearing:
-        mo_occ[e_idx[:nocc]] = 2
-    else:
-        if mf.verbose >= logger.INFO:
-            logger.warn(mf, "WARNING: experimental, use at your own risk")
-        mf.mol.FermiEnergy = mo_energy[e_idx[nocc]] 
-        from pyscf.scf.addons import fermi_smearing_mo_occ
-        def nelec_cost_fn(e_f):
-            mo_occ = fermi_smearing_mo_occ(e_f, mo_energy, mf.mol.tau)*2
-            nelec = numpy.sum(mo_occ)
-            return (nelec - elec)**2
-        res = scipy.optimize.minimize(nelec_cost_fn, mf.mol.FermiEnergy, method='Powell', options={'maxiter': 2000})
-        mf.mol.FermiEnergy = res.x
-        mo_occ = fermi_smearing_mo_occ(mf.mol.FermiEnergy, mo_energy, mf.mol.tau, elec)*2
-        if not numpy.isclose(numpy.sum(mo_occ),elec):
-            print('Fermi-Dirac did not converge. Try raising mol.tau.', nelec_cost_fn(mf.mol.FermiEnergy)) 
-
+    mo_occ[e_idx[:nocc]] = 2
     if mf.verbose >= logger.INFO and nocc < nmo:
         if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
             logger.warn(mf, 'HOMO %.15g == LUMO %.15g',
@@ -1618,7 +1525,6 @@ class SCF(lib.StreamObject):
 
     get_fock = get_fock
     get_occ = get_occ
-    static_dft = static_dft
 
     @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
