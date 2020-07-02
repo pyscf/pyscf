@@ -545,9 +545,9 @@ def static_dft(mf, s, f, mo_energy, mo_occ, option=2):
         dpde = - beta * exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta ) * ( 1.0 + exp_neg_beta_delta)
 
         if option == 1:
-            dEdp = beta * numpy.where(p > 0.0, p < 0.5, -1.0 / (1.0 - p), numpy.where(p > 0.5, p < 1.0, 1.0 / p, 0))
+            dEdp = beta * numpy.where((p > 0.0) & (p < 0.5), -1.0 / (1.0 - p), numpy.where((p > 0.5) & (p < 1.0), 1.0 / p, 0))
         else:
-            dEdp = beta * numpy.where(p > 0.0, p < 1.0, (numpy.log(p) - numpy.log(1-p)))
+            dEdp = beta * numpy.where((p > 0.0) & (p < 1.0), (numpy.log(p) - numpy.log(1-p)))
 
         v_c_static = dEdp * dpde * mo_energy
 
