@@ -24,7 +24,7 @@ import sys
 import tempfile
 import time
 from functools import reduce
-import numpy
+import numpy as np
 import scipy.linalg
 from pyscf import gto
 from pyscf import lib
@@ -34,7 +34,6 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
-import numpy as np
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
@@ -541,14 +540,14 @@ def static_dft(mf, s, f, mo_energy, mo_occ, option=2):
         nocc = mf.mol.nelectron // 2
         mf.mol.FermiEnergy = mo_energy[e_idx[nocc]]
         delta = mo_energy - mf.mol.FermiEnergy
-        exp_neg_beta_delta = np.exp(-beta * delta)
+        exp_neg_beta_delta = numpy.exp(-beta * delta)
         p = exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta) # Equation 5, file=notes
         dpde = - beta * exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta ) * ( 1.0 + exp_neg_beta_delta)
 
         if option == 1:
-            dEdp = beta * np.where(p > 0.0, p < 0.5, -1.0 / (1.0 - p), np.where(p > 0.5, p < 1.0, 1.0 / p, 0))
+            dEdp = beta * numpy.where(p > 0.0, p < 0.5, -1.0 / (1.0 - p), numpy.where(p > 0.5, p < 1.0, 1.0 / p, 0))
         else:
-            dEdp = beta * np.where(p > 0.0, p < 1.0, (np.log(p) - np.log(1-p)))
+            dEdp = beta * numpy.where(p > 0.0, p < 1.0, (numpy.log(p) - numpy.log(1-p)))
 
         v_c_static = dEdp * dpde * mo_energy
 
