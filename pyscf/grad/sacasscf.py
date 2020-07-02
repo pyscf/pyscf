@@ -383,6 +383,7 @@ class Gradients (lagrange.Gradients):
         self.ngorb = np.count_nonzero (mc.uniq_var_indices (nmo, mc.ncore, mc.ncas, mc.frozen))
         self.nroots = mc.fcisolver.nroots
         neleca, nelecb = _unpack_nelec (mc.nelecas)
+        self.spin_states = [neleca - nelecb,] * self.nroots
         self.na_states = [cistring.num_strings (mc.ncas, neleca),] * self.nroots
         self.nb_states = [cistring.num_strings (mc.ncas, nelecb),] * self.nroots
         if isinstance (mc.fcisolver, StateAverageMixFCISolver):
@@ -390,8 +391,9 @@ class Gradients (lagrange.Gradients):
             for solver in mc.fcisolver.fcisolvers:
                 self.nroots += solver.nroots
                 nea, neb = mc.fcisolver._get_nelec (solver, (neleca, nelecb))
-                self.na_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, nea) for x in range (self.nroots))
-                self.nb_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, neb) for x in range (self.nroots))
+                self.spin_states[p0:self.nroots] = (nea - neb for x in range (solver.nroots))
+                self.na_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, nea) for x in range (solver.nroots))
+                self.nb_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, neb) for x in range (solver.nroots))
                 p0 = self.nroots
         self.nci = sum ([na * nb for na, nb in zip (self.na_states, self.nb_states)])
         if state is not None:
@@ -434,6 +436,7 @@ class Gradients (lagrange.Gradients):
         else:
             fcasscf = mc1step.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
         fcasscf.__dict__.update (self.base.__dict__)
+
         if isinstance (fcasscf.fcisolver, StateAverageFCISolver):
             if isinstance (fcasscf.fcisolver, StateAverageMixFCISolver):
                 p0 = 0
@@ -441,12 +444,14 @@ class Gradients (lagrange.Gradients):
                     p1 = p0 + solver.nroots
                     if p0 <= state < p1:
                         solver_class = solver.__class__
+                        solver_obj = solver
                         break
                     p0 = p1
             else:
                 solver_class = self.base.fcisolver._base_class
+                solver_obj = self.base.fcisolver
             fcasscf.fcisolver = solver_class (self.base.mol)
-            fcasscf.fcisolver.__dict__.update (self.base.fcisolver.__dict__)
+            fcasscf.fcisolver.__dict__.update (solver_obj.__dict__)
             fcasscf.fcisolver.nroots = 1
         fcasscf.__dict__.update (casscf_attr)
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
@@ -457,11 +462,14 @@ class Gradients (lagrange.Gradients):
     def make_fcasscf_sa (self, casscf_attr={}, fcisolver_attr={}):
         ''' Make a fake SA-CASSCF object to get around weird inheritance conflicts '''
         fcasscf = self.make_fcasscf (state=0, casscf_attr={}, fcisolver_attr={})
+        fcasscf.__dict__.update (self.base.__dict__)
         if isinstance (self.base, StateAverageMCSCFSolver):
             if isinstance (self.base.fcisolver, StateAverageMixFCISolver):
                 fcasscf = state_average_mix_(fcasscf, self.base.fcisolver.fcisolvers, self.base.weights)
             else:
                 fcasscf.state_average_(self.base.weights)
+        fcasscf.__dict__.update (casscf_attr)
+        fcasscf.fcisolver.__dict__.update (fcisolver_attr)
         return fcasscf
 
     def kernel (self, state=None, atmlst=None, verbose=None, mo=None, ci=None, eris=None, mf_grad=None, e_states=None, level_shift=None, **kwargs):
@@ -532,8 +540,6 @@ class Gradients (lagrange.Gradients):
         elif eris is None:
             eris = self.eris
         fcasscf_grad = casscf_grad.Gradients (self.make_fcasscf (state))
-        fcasscf_grad.mo_coeff = mo
-        fcasscf_grad.ci = ci[state]
         return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst, verbose=verbose)
 
     def get_LdotJnuc (self, Lvec, state=None, atmlst=None, verbose=None, mo=None, ci=None, eris=None, mf_grad=None, **kwargs):
@@ -706,8 +712,7 @@ class Gradients (lagrange.Gradients):
     def get_lagrange_precond (self, Adiag, level_shift=None, ci=None, **kwargs):
         if level_shift is None: level_shift = self.level_shift
         if ci is None: ci = self.base.ci
-        return SACASLagPrec (nroots=self.nroots, nlag=self.nlag, ngorb=self.ngorb, Adiag=Adiag, 
-            level_shift=level_shift, ci=ci, **kwargs)
+        return SACASLagPrec (Adiag=Adiag, level_shift=level_shift, ci=ci, grad_method=self)
 
     def get_lagrange_callback (self, Lvec_last, itvec, geff_op):
         def my_call (x):
@@ -734,8 +739,7 @@ class Gradients (lagrange.Gradients):
                 # I'm assuming the only symmetry here that's actually built into the data structure is solver.spin
                 # This will be the case as long as the various solvers are determinants with a common total charge
                 # occupying a common set of orbitals
-                if self.na_states[i] != self.na_states[j]: continue
-                if self.nb_states[i] != self.nb_states[j]: continue
+                if self.spin_states[i] != self.spin_states[j]: continue
                 Ax_ci[i] -= np.dot (Ax_ci[i].ravel (), ci[j].ravel ()) * ci[j]
             #Ax_ci = Ax[self.ngorb:].reshape (self.nroots, -1)
             #ci_arr = np.asarray (ci).reshape (self.nroots, -1)
@@ -773,57 +777,94 @@ class SACASLagPrec (lagrange.LagPrec):
 '''
 
     # TODO: fix me (subclass me? wrap me?) for state_average_mix
-    def __init__(self, nroots=None, nlag=None, ngorb=None, Adiag=None, ci=None, level_shift=None, **kwargs):
+    def __init__(self, Adiag=None, level_shift=None, ci=None, grad_method=None):
         self.level_shift = level_shift
-        self.nroots = nroots
-        self.nlag = nlag
-        self.ngorb = ngorb
-        self.ci = np.asarray (ci).reshape (self.nroots, -1)
-        self.ci_idx = # Just an index list. It just sorts the list, doesn't do anything else.
-        self.nroots_symm = # Number of roots per symmetry block. Here we only care about ms symmetry
-        # ^ These two things are ALL I need; don't overthink this ^
-        self._init_orb (Adiag)
-        self._init_ci (Adiag)
+        self.nroots = grad_method.nroots
+        self.nlag = grad_method.nlag
+        self.ngorb = grad_method.ngorb
+        self.spin_states = grad_method.spin_states
+        self.na_states = grad_method.na_states
+        self.nb_states = grad_method.nb_states
+        self.grad_method = grad_method
+        Aorb, Aci = self.unpack_uniq_var (Adiag)
+        self._init_orb (Aorb)
+        self._init_ci (Aci, ci)
 
-    def _init_orb (self, Adiag):
-        self.Rorb = Adiag[:self.ngorb]
+    def unpack_uniq_var (self, x):
+        return self.grad_method.unpack_uniq_var (x)
+
+    def pack_uniq_var (self, xorb, xci):
+        return self.grad_method.pack_uniq_var (xorb, xci)
+
+    def _init_orb (self, Aorb):
+        self.Rorb = Aorb
         self.Rorb[abs(self.Rorb)<1e-8] = 1e-8
         self.Rorb = 1./self.Rorb
 
-    def _init_ci (self, Adiag):
-        self.Rci = Adiag[self.ngorb:].reshape (self.nroots, -1) + self.level_shift
-        self.Rci[abs(self.Rci)<1e-8] = 1e-8
-        self.Rci = 1./self.Rci
-        # R_I|J> 
-        # Indices: I, det, J
-        Rci_cross = self.Rci[:,:,None] * self.ci.T[None,:,:]
-        # S(I)_JK = <J|R_I|K> (first index of CI contract with middle index of R_I|J> and reshape to put I first)
-        Sci = np.tensordot (self.ci.conjugate (), Rci_cross, axes=(1,1)).transpose (1,0,2)
-        # R_I|J> S(I)_JK^-1 (can only loop explicitly because of necessary call to linalg.inv)
-        # Indices: I, det, K
-        self.Rci_sa = np.zeros_like (Rci_cross)
-        for iroot in range (self.nroots):
-            self.Rci_sa[iroot] = np.dot (Rci_cross[iroot], linalg.inv (Sci[iroot]))
+    def _init_ci (self, Aci_spins, ci_spins):
+        self.ci = []
+        self.Rci = []
+        self.Rci_sa = []
+        for [Aci, ci] in self._iterate_ci (Aci_spins, ci_spins):
+            nroots = Aci.shape[0]
+            Rci = Aci + self.level_shift
+            Rci[abs(Rci)<1e-8] = 1e-8
+            Rci = 1./Rci
+            # R_I|J> 
+            # Indices: I, det, J
+            Rci_cross = Rci[:,:,None] * ci.T[None,:,:]
+            # S(I)_JK = <J|R_I|K> (first index of CI contract with middle index of R_I|J> and reshape to put I first)
+            Sci = np.tensordot (ci.conjugate (), Rci_cross, axes=(1,1)).transpose (1,0,2)
+            # R_I|J> S(I)_JK^-1 (can only loop explicitly because of necessary call to linalg.inv)
+            # Indices: I, det, K
+            Rci_sa = np.zeros_like (Rci_cross)
+            for iroot in range (nroots):
+                Rci_sa[iroot] = np.dot (Rci_cross[iroot], linalg.inv (Sci[iroot]))
+            self.ci.append (ci)
+            self.Rci.append (Rci)
+            self.Rci_sa.append (Rci_sa)
+
+    def _iterate_ci (self, *args):
+        # All args must be iterables over CI vectors in input order
+        # Eventually, get rid of copying (np.asarray, etc.)
+        # Don't assume args are ndarrays on input
+        for my_spin in np.unique (self.spin_states):
+            idx = np.where (self.spin_states == my_spin)[0]
+            yield [np.asarray ([arg[i] for i in idx]).reshape (len (idx), -1) for arg in args]
 
     def __call__(self, x):
-        xorb = self.orb_prec (x)
-        xci = self.ci_prec (x)
-        return np.append (xorb, xci.ravel ())
+        xorb, xci = self.unpack_uniq_var (x)
+        Mxorb = self.orb_prec (xorb)
+        Mxci = self.ci_prec (xci)
+        return self.pack_uniq_var (Mxorb, Mxci)
 
-    def orb_prec (self, x):
-        return self.Rorb * x[:self.ngorb]
+    def orb_prec (self, xorb):
+        return self.Rorb * xorb
 
-    def ci_prec (self, x):
-        xci = x[self.ngorb:].reshape (self.nroots, -1)
-        # R_I|H I> (indices: I, det)
-        Rx = self.Rci * xci
-        # <J|R_I|H I> (indices: J, I)
-        sa_ovlp = np.dot (self.ci.conjugate (), Rx.T) 
-        # R_I|J> S(I)_JK^-1 <K|R_I|H I> (indices: I, det)
-        Rx_sub = np.zeros_like (Rx)
-        for iroot in range (self.nroots): 
-            Rx_sub[iroot] = np.dot (self.Rci_sa[iroot], sa_ovlp[:,iroot])
-        return Rx - Rx_sub
+    def ci_prec (self, xci_spins):
+        Mxci = [None,] * self.nroots
+        for ix_spin, [xci, desort_spin] in enumerate (self._iterate_ci (xci_spins, list(range(self.nroots)))):
+            desort_spin = np.atleast_1d (np.squeeze (desort_spin))
+            nroots = xci.shape[0]
+            ci = self.ci[ix_spin]
+            Rci = self.Rci[ix_spin]
+            Rci_sa = self.Rci_sa[ix_spin]
+            # R_I|H I> (indices: I, det)
+            Rx = Rci * xci
+            # <J|R_I|H I> (indices: J, I)
+            sa_ovlp = np.dot (ci.conjugate (), Rx.T) 
+            # R_I|J> S(I)_JK^-1 <K|R_I|H I> (indices: I, det)
+            Rx_sub = np.zeros_like (Rx)
+            for iroot in range (nroots): 
+                Rx_sub[iroot] = np.dot (Rci_sa[iroot], sa_ovlp[:,iroot])
+            for i, j in enumerate (desort_spin):
+                try:
+                    Mxci[j] = Rx[i] - Rx_sub[i]
+                except Exception as e:
+                    print (i, j, desort_spin)
+                    raise (e)
+        assert (all ([i is not None for i in Mxci]))
+        return Mxci
 
 from pyscf import mcscf
 mcscf.addons.StateAverageMCSCFSolver.Gradients = lib.class_as_method(Gradients)
