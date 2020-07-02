@@ -186,9 +186,13 @@ class KnownValues(unittest.TestCase):
         dm = scf.hf.init_guess_by_minao(mol)
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
+        print(occ)
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334714065913508, 9)
+
+        chk_mol, scf_rec = scf.chkfile.load_scf(ftmp.name)
+        print(scf_rec["mo_occ"])
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.hf.init_guess_by_chkfile(mol, ftmp.name, project=False)
