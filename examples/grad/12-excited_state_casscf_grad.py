@@ -23,15 +23,12 @@ mf = scf.RHF(mol).run()
 
 mc = mcscf.CASSCF(mf, 4, 4).state_average ([0.25, 0.25, 0.25, 0.25])
 mc.run()
-print (inspect.getmro (mc.Gradients ().__class__))
 
 # PySCF-1.6.1 and newer supports the .Gradients method to create a grad
 # object after grad module was imported. It is equivalent to call the
 # .nuc_grad_method method.
 from pyscf import grad
 mc = mcscf.CASSCF(mf, 4, 4).state_average ([0.25, 0.25, 0.25, 0.25]).run ()
-print (inspect.getmro (mc.__class__))
-print (inspect.getmro (mc.Gradients ().__class__))
 g = mc.Gradients().kernel(state=3)
 print('Gradients of the 3rd excited state')
 print(g)
@@ -51,6 +48,11 @@ print(g)
 #
 # Unless explicitly specified as an input argument of set_geom_ function,
 # set_geom_ function will use the same unit as the one specified in mol.unit.
+# TODO: come up with an example that doesn't have two local minima; the below
+# will inconsistently have a state-average energy of either -75.7415 Eh or
+# -75.7425 Eh with slightly different gradients to match. Oops! If you have
+# more than one thread on your machine you'll see both if you run the
+# calculation about 10 times!
 mol.set_geom_('''O   0.   0.      0.1
                  H   0.  -0.757   0.587
                  H   0.   0.757   0.587''')
