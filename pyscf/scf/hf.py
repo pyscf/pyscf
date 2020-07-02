@@ -508,7 +508,7 @@ def get_init_guess(mol, key='minao'):
 #Making Vc-static self consistent
 
 
-def static_dft(mf, s, f, tau, mo_energy, mo_occ, option=2):
+def static_dft(mf, s, f, mo_energy, mo_occ, option=2):
     r'''Add static DFT operator to Fock matrix
 
     .. math::
