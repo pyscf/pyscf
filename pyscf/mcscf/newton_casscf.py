@@ -64,9 +64,9 @@ def _pack_ci_get_H (mc, mo, ci0):
         linkstr =  []
         for solver, my_arg, my_kwargs in mc.fcisolver._loop_solver (_state_arg (ci0)):
             nelec = mc.fcisolver._get_nelec (solver, nelecas)
-            if getattr (mc.fcisolver, 'gen_linkstr', None):
-                linkstrl.append (mc.fcisolver.gen_linkstr (ncas, nelec, True))
-                linkstr.append  (mc.fcisolver.gen_linkstr (ncas, nelec, False))
+            if getattr (solver, 'gen_linkstr', None):
+                linkstrl.append (solver.gen_linkstr (ncas, nelec, True))
+                linkstr.append  (solver.gen_linkstr (ncas, nelec, False))
             else:
                 linkstrl.append (None)
                 linkstr.append (None)

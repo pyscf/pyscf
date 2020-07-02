@@ -186,7 +186,7 @@ class KnownValues(unittest.TestCase):
     def test_state_average_mix_scanner(self):
         mc = mcscf.CASSCF(mf_symm, 4, 4)
         mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
-        fcisolvers = [fci.solver (mol_symm, symm=True) for i in range (2)]
+        fcisolvers = [fci.solver (mol_symm, singlet=bool(i), symm=True) for i in range (2)]
         fcisolvers[0].spin = 2
         fcisolvers[0].wfnsym = 'B1'
         fcisolvers[1].wfnsym = 'A1'
