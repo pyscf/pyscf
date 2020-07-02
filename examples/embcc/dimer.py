@@ -30,11 +30,17 @@ parser.add_argument("--distances", type=float, nargs="*")
 parser.add_argument("--distances-range", type=float, nargs=3, default=[0.5, 4.0, 0.1])
 #parser.add_argument("--clusters", default="atoms")
 parser.add_argument("--bath-type", default="matsubara")
-parser.add_argument("--bath-size", type=float, nargs=2, default=[0.2, 0.2])
+parser.add_argument("--bath-relative-size", type=float, nargs=2, default=[0.2, 0.2])
+parser.add_argument("--bath-size", type=int, nargs=2)
 parser.add_argument("--maxiter", type=int, default=1)
+parser.add_argument("--local-orbitals", default="AO")
 parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
+
+if args.bath_size is None:
+    args.bath_size = args.bath_relative_size
+
 
 if MPI_rank == 0:
     log.info("Parameters")
@@ -81,7 +87,8 @@ for idist, dist in enumerate(args.distances):
         #        cc.print_clusters()
         #else:
         #    cc.reset(mf=mf)
-        cc = embcc.EmbCC(mf, solver=args.solver, bath_type=args.bath_type, bath_size=args.bath_size,
+        cc = embcc.EmbCC(mf, local_orbital_type=args.local_orbitals,
+                solver=args.solver, bath_type=args.bath_type, bath_size=args.bath_size,
                 maxiter=args.maxiter)#  tol_bath=args.tol_bath)
         cc.make_all_atom_clusters()
         if idist == 0 and MPI_rank == 0:
@@ -92,6 +99,8 @@ for idist, dist in enumerate(args.distances):
         if MPI_rank == 0:
             if idist == 0:
                 with open(args.output, "a") as f:
-                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(dMP2)\n")
+                    #f.write("#IRC  HF  EmbCCSD  EmbCCSD(dMP2)\n")
+                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(vir)  EmbCCSD(dem)\n")
             with open(args.output, "a") as f:
-                f.write("%3f  %.8e  %.8e  %.8e\n" % (dist, mf.e_tot, cc.e_tot, cc.e_tot_dmp2))
+                #f.write("%3f  %.8e  %.8e  %.8e\n" % (dist, mf.e_tot, cc.e_tot, cc.e_tot_dmp2))
+                f.write("%3f  %.8e  %.8e  %.8e  %.8e\n" % (dist, mf.e_tot, cc.e_tot, mf.e_tot + cc.e_corr_v, mf.e_tot + cc.e_corr_d))

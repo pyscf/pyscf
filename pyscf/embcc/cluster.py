@@ -35,7 +35,10 @@ log = logging.getLogger(__name__)
 
 class Cluster:
 
-    def __init__(self, base, name, indices, C_local, C_env, coeff=None, solver="CCSD",
+    def __init__(self, base, cluster_id, name,
+            indices, C_local, C_env,
+            #coeff=None,
+            solver="CCSD",
             bath_type="power", bath_size=None, bath_tol=1e-4,
             **kwargs):
         """
@@ -43,6 +46,8 @@ class Cluster:
         ----------
         base : EmbCC
             Base EmbCC object.
+        cluster_id : int
+            Unique ID of cluster.
         name :
             Name of cluster.
         indices:
@@ -52,19 +57,20 @@ class Cluster:
 
 
         self.base = base
-        log.debug("Making cluster with local orbital type %s", self.local_orbital_type)
+        self.id = cluster_id
         self.name = name
+        log.debug("Making cluster %d: %s with local orbital type %s", self.id, self.name, self.local_orbital_type)
         self.indices = indices
 
         # NEW: local and environment orbitals
         self.C_local = C_local
         self.C_env = C_env
 
-        assert self.nlocal == len(self.indices)
+        #assert self.nlocal == len(self.indices)
+        assert self.size == len(self.indices)
 
-        #self.nlocal = len(self.indices)
+        # Options
 
-        # Optional
         assert solver in ("MP2", "CISD", "CCSD", "FCI")
         self.solver = solver
 
@@ -79,8 +85,11 @@ class Cluster:
 
         self.mp2_correction = kwargs.get("mp2_correction", True)
 
+        # Currently not in use (always on!)
         self.use_ref_orbitals_dmet = kwargs.get("use_ref_orbitals_dmet", True)
-        self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", True)
+
+        #self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", True)
+        self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", False)
 
         self.symmetry_factor = kwargs.get("symmetry_factor", 1.0)
 
@@ -89,6 +98,14 @@ class Cluster:
         self.restart_solver = kwargs.get("restart_solver", False)
         # Parameters needed for restart (C0, C1, C2 for CISD; T1, T2 for CCSD) are saved here
         self.restart_params = kwargs.get("restart_params", {})
+
+
+        #self.project_type = kwargs.get("project_type", "first-occ")
+
+
+        #
+        self.occbath_eigref = kwargs.get("occbath-eigref", None)
+        self.virbath_eigref = kwargs.get("virbath-eigref", None)
 
         # Maximum number of iterations for consistency of amplitudes between clusters
         self.maxiter = kwargs.get("maxiter", 1)
@@ -129,12 +146,21 @@ class Cluster:
 
         self.converged = False
         self.e_corr = 0.0
-        self.e_corr_full = 0.0
         self.e_corr_dmp2 = 0.0
 
+        # For testing:
+        # Full cluster correlation energy
+        self.e_corr_full = 0.0
+        self.e_corr_v = 0.0
+        self.e_corr_d = 0.0
+
+    #@property
+    #def nlocal(self):
+    #    """Number of local (fragment) orbitals."""
+    #    return self.C_local.shape[-1]
 
     @property
-    def nlocal(self):
+    def size(self):
         """Number of local (fragment) orbitals."""
         return self.C_local.shape[-1]
 
@@ -168,6 +194,20 @@ class Cluster:
                 }
         return orbitals
 
+    def get_refdata(self):
+        """Get data of reference calculation for smooth PES."""
+        refdata = {
+                "dmet-bath" : self.C_bath,
+                "occbath-eigref" : self.occbath_eigref,
+                "virbath-eigref" : self.virbath_eigref,
+                }
+        return refdata
+
+    def set_refdata(self, refdata):
+        log.debug("Setting refdata: %r", refdata.keys())
+        self.occbath_eigref = refdata["occbath-eigref"]
+        self.virbath_eigref = refdata["virbath-eigref"]
+
     def reset(self, keep_ref_orbitals=True):
         """Reset cluster object. By default it stores the previous orbitals, so they can be used
         as reference orbitals for a new calculation of different geometry."""
@@ -175,10 +215,6 @@ class Cluster:
         self.set_default_attributes()
         if keep_ref_orbitals:
             self.ref_orbitals = ref_orbitals
-
-    #def __len__(self):
-    #    """The number of local ("imurity") orbitals of the cluster."""
-    #    return len(self.indices)
 
     def loop_clusters(self, exclude_self=False):
         """Loop over all clusters."""
@@ -263,10 +299,11 @@ class Cluster:
     make_mf_bath = make_mf_bath
     make_mp2_bath = make_mp2_bath
     get_mp2_correction = get_mp2_correction
-    transform_mp2_eris = transform_mp2_eris 
+    transform_mp2_eris = transform_mp2_eris
     run_mp2 = run_mp2
 
     # Methods from energy.py
+    get_local_amplitudes = get_local_amplitudes
     get_local_energy = get_local_energy
 
     def analyze_orbitals(self, orbitals=None, sort=True):
@@ -397,24 +434,24 @@ class Cluster:
                 raise ValueError("Unknown kind=%s" % kind)
 
         # Project onto space of local (fragment) orbitals.
-        elif self.local_orbital_type == "IAO":
+        #elif self.local_orbital_type == "IAO":
+        elif self.local_orbital_type in ("LAO", "IAO"):
             CSC = np.linalg.multi_dot((C.T, S, self.C_local))
             P = np.dot(CSC, CSC.T)
 
         if inverse:
-            log.debug("Inverting projector")
+            #log.debug("Inverting projector")
             P = (np.eye(P.shape[-1]) - P)
 
         return P
 
-    #def project_amplitudes(self, C, T1, T2, indices_T1=None, indices_T2=None, symmetrize_T2=False, **kwargs):
     def project_amplitudes(self, P, T1, T2, indices_T1=None, indices_T2=None, symmetrize_T2=False):
         """Project full amplitudes to local space.
 
         Parameters
         ----------
-        C : ndarray
-            Molecular orbital coefficients of T amplitudes.
+        P : ndarray
+            Projector.
         T1 : ndarray
             C1/T1 amplitudes.
         T2 : ndarray
@@ -432,9 +469,6 @@ class Cluster:
         if indices_T2 is None:
             indices_T2 = [0]
 
-        #P = self.get_local_projector(C, **kwargs)
-        #log.debug("Project amplitudes shapes: P=%r, T1=%r, T2=%r", P.shape, T1.shape, T2.shape)
-
         # T1 amplitudes
         assert indices_T1 == [0]
         if T1 is not None:
@@ -450,10 +484,9 @@ class Cluster:
         elif indices_T2 == [0, 1]:
             pT2 = einsum("xi,yj,ijab->xyab", P, P, T2)
 
-        #log.debug("Projected T2 symmetry error = %.3g", np.linalg.norm(pT2 - pT2.transpose(1,0,3,2)))
-
         if symmetrize_T2:
-            raise NotImplementedError()
+            log.debug("Projected T2 symmetry error = %.3g", np.linalg.norm(pT2 - pT2.transpose(1,0,3,2)))
+            pT2 = (pT2 + pT2.transpose(1,0,3,2))/2
 
         return pT1, pT2
 
@@ -528,19 +561,19 @@ class Cluster:
                 ttcT1, ttcT2 = self.transform_amplitudes(Ro, Rv, self.base.tccT1, self.base.tccT2)
 
                 # Get occupied bath projector
-                Pbath = self.get_local_projector(Co, inverse=True)
-                #Pbath2 = self.get_local_projector(Co)
-                #log.debug("%r", Pbath)
-                #log.debug("%r", Pbath2)
-                #1/0
-                #CSC = np.linalg.multi_dot((Co.T, S, self.C_env))
+                #Pbath = self.get_local_projector(Co, inverse=True)
+                ##Pbath2 = self.get_local_projector(Co)
+                ##log.debug("%r", Pbath)
+                ##log.debug("%r", Pbath2)
+                ##1/0
+                ##CSC = np.linalg.multi_dot((Co.T, S, self.C_env))
+                ##Pbath2 = np.dot(CSC, CSC.T)
+                ##assert np.allclose(Pbath, Pbath2)
+
+                ##CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_occclst, self.C_occbath))))
+                #CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_bath, self.C_occbath))))
                 #Pbath2 = np.dot(CSC, CSC.T)
                 #assert np.allclose(Pbath, Pbath2)
-
-                #CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_occclst, self.C_occbath))))
-                CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_bath, self.C_occbath))))
-                Pbath2 = np.dot(CSC, CSC.T)
-                assert np.allclose(Pbath, Pbath2)
 
                 #log.debug("DIFF %g", np.linalg.norm(Pbath - Pbath2))
                 #log.debug("DIFF %g", np.linalg.norm(Pbath + Pbath2 - np.eye(Pbath.shape[-1])))
@@ -550,15 +583,20 @@ class Cluster:
                     dT1 = ttcT1 - T1
                     dT2 = ttcT2 - T2
 
-                    log.debug("Norm of dT1=%.3g, dT2=%.3g", np.linalg.norm(dT1), np.linalg.norm(dT2))
                     # Project difference amplitudes to bath-bath block in occupied indices
                     #pT1, pT2 = self.project_amplitudes(Co, dT1, dT2, indices_T2=[0, 1])
-                    pT1, pT2 = self.project_amplitudes(Pbath, dT1, dT2, indices_T2=[0, 1])
-                    _, pT2_0 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[0])
-                    _, pT2_1 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[1])
-                    pT2 += (pT2_0 + pT2_1)/2
+                    ###pT1, pT2 = self.project_amplitudes(Pbath, dT1, dT2, indices_T2=[0, 1])
+                    ###_, pT2_0 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[0])
+                    ###_, pT2_1 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[1])
+                    ###pT2 += (pT2_0 + pT2_1)/2
 
-                    log.debug("Norm of pT1=%.3g, pT2=%.3g", np.linalg.norm(pT1), np.linalg.norm(pT2))
+                    #pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, inverse=True)
+                    pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, variant="democratic", inverse=True)
+                    # Subtract to get non-local amplitudes
+                    #pT1 = dT1 - pT1
+                    #pT2 = dT2 - pT2
+
+                    log.debug("Norm of pT1=%6.2g, dT1=%6.2g, pT2=%6.2g, dT2=%6.2g", np.linalg.norm(dT1), np.linalg.norm(pT1), np.linalg.norm(dT2), np.linalg.norm(pT2))
                     # Add projected difference amplitudes
                     T1 += tcc_mix_factor*pT1
                     T2 += tcc_mix_factor*pT2
@@ -583,7 +621,17 @@ class Cluster:
             C1 = cc.t1
             C2 = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
 
-            e_corr = self.get_local_energy(cc, C1, C2, eris=eris)
+            #e_corr = self.get_local_energy(cc, C1, C2, eris=eris)
+
+            pC1, pC2 = self.get_local_amplitudes(cc, C1, C2)
+            e_corr = self.get_local_energy(cc, pC1, pC2, eris=eris)
+
+            # Other energy variants
+            if False:
+                pC1v, pC2v = self.get_local_amplitudes(cc, C1, C2, variant="first-vir")
+                pC1d, pC2d = self.get_local_amplitudes(cc, C1, C2, variant="democratic")
+                e_corr_v = self.get_local_energy(cc, pC1v, pC2v, eris=eris)
+                e_corr_d = self.get_local_energy(cc, pC1d, pC2d, eris=eris)
 
             # TESTING: Get global amplitudes:
             #if False:
@@ -595,44 +643,21 @@ class Cluster:
                     self.base.T1 = np.zeros((No, Nv))
                     self.base.T2 = np.zeros((No, No, Nv, Nv))
 
+                #pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2)
+                pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2, variant="democratic")
+
+                # Transform to HF MO basis
                 act = cc.get_frozen_mask()
                 occ = cc.mo_occ[act] > 0
                 vir = cc.mo_occ[act] == 0
-                # Projector to local, occupied region
                 S = self.mf.get_ovlp()
                 Co = cc.mo_coeff[:,act][:,occ]
                 Cv = cc.mo_coeff[:,act][:,vir]
-
-                P = self.get_local_projector(Co)
-                #pT1, pT2 = self.project_amplitudes(Co, cc.t1, cc.t2)
-                pT1, pT2 = self.project_amplitudes(P, cc.t1, cc.t2)
-
-                # Transform to HF MO basis
                 Cmfo = self.mf.mo_coeff[:,self.mf.mo_occ>0]
                 Cmfv = self.mf.mo_coeff[:,self.mf.mo_occ==0]
                 Ro = np.linalg.multi_dot((Cmfo.T, S, Co))
                 Rv = np.linalg.multi_dot((Cmfv.T, S, Cv))
                 pT1, pT2 = self.transform_amplitudes(Ro, Rv, pT1, pT2)
-
-                # Restore symmetry?
-                pT2sym = (pT2 + pT2.transpose(1,0,3,2))/2.0
-                log.debug("T2 symmetry error = %.3g", np.linalg.norm(pT2 - pT2.transpose(1,0,3,2)))
-                log.debug("T2 symmetry error = %.3g", np.linalg.norm(pT2sym - pT2sym.transpose(1,0,3,2)))
-
-                # ??
-                pT2 = pT2sym
-
-                # Alternative to?
-                #pT1a, pT2a00 = self.project_amplitudes(Co, cc.t1, cc.t2, indices_T2=[0,1])
-                #_, pT2a01 = self.project_amplitudes(Co, None, cc.t2, indices_T2=[0])
-                #_, pT2a10 = self.project_amplitudes(Co, None, cc.t2, indices_T2=[1])
-                ##pT2a = pT2a00 + (pT2a01+pT2a10)/2
-                #pT2a = (pT2a01+pT2a10)/2 #- pT2a00
-                #pT1a, pT2a = self.transform_amplitudes(Ro, Rv, pT1a, pT2a)
-                #log.debug("T2 symmetry error = %.3g", np.linalg.norm(pT2a - pT2a.transpose(1,0,3,2)))
-                #assert np.allclose(pT1a, pT1)
-                #assert np.allclose(pT2a, pT2sym)
-                #1/0
 
                 self.base.T1 += pT1
                 self.base.T2 += pT2
@@ -692,13 +717,19 @@ class Cluster:
         if self.maxiter > 1:
             self.eris = eris
 
-        log.debug("Full cluster correlation energy=%.8g", e_corr_full)
+        log.debug("Full cluster correlation energy = %.10g htr", e_corr_full)
+        self.e_corr_full = e_corr_full
 
         self.converged = converged
         if self.e_corr != 0.0:
-            log.debug("dE=%.8g", (e_corr-self.e_corr))
+            log.debug("dEcorr=%.8g", (e_corr-self.e_corr))
         self.e_corr = e_corr
-        self.e_corr_dmp2 = e_corr + self.e_delta_mp2
+
+
+        #self.e_corr_dmp2 = e_corr + self.e_delta_mp2
+
+        #self.e_corr_v = e_corr_v
+        #self.e_corr_d = e_corr_d
 
         return converged, e_corr
 
@@ -731,12 +762,32 @@ class Cluster:
         self.C_virclst = C_virclst
 
         # === Additional bath orbitals
-        C_occbath, C_occenv, e_delta_occ = self.make_bath(C_occenv, self.bath_type, "occ",
-                ref_orbitals.get("occ-bath", None), nbath=self.bath_target_size[0], tol=self.bath_tol[0])
-        C_virbath, C_virenv, e_delta_vir = self.make_bath(C_virenv, self.bath_type, "vir",
-                ref_orbitals.get("vir-bath", None), nbath=self.bath_target_size[1], tol=self.bath_tol[1])
+        if self.use_ref_orbitals_bath:
+            C_occref = ref_orbitals.get("occ-bath", None)
+            C_virref = ref_orbitals.get("vir-bath", None)
+        else:
+            C_occref = None
+            C_virref = None
+
+        # Reorder
+        occbath_eigref = self.occbath_eigref
+        virbath_eigref = self.virbath_eigref
+
+        C_occbath, C_occenv, e_delta_occ, occbath_eigref = self.make_bath(
+                C_occenv, self.bath_type, "occ",
+                C_ref=C_occref, eigref=occbath_eigref,
+                nbath=self.bath_target_size[0], tol=self.bath_tol[0])
+        C_virbath, C_virenv, e_delta_vir, virbath_eigref = self.make_bath(
+                C_virenv, self.bath_type, "vir",
+                C_ref=C_virref, eigref=virbath_eigref,
+                nbath=self.bath_target_size[1], tol=self.bath_tol[1])
         self.C_occbath = C_occbath
         self.C_virbath = C_virbath
+
+        # For future reorderings
+        self.occbath_eigref = occbath_eigref
+        self.virbath_eigref = virbath_eigref
+
         self.e_delta_mp2 = e_delta_occ + e_delta_vir
         log.debug("MP2 correction = %.8g", self.e_delta_mp2)
 
@@ -745,7 +796,8 @@ class Cluster:
         C_viract = self.canonicalize(C_virclst, C_virbath)
 
         # Combine, important to keep occupied orbitals first
-        # Put frozen orbitals to the front and back
+        # Put frozen (occenv, virenv) orbitals to the front and back
+        # and active orbitals (occact, viract) in the middle
         Co = np.hstack((C_occenv, C_occact))
         Cv = np.hstack((C_viract, C_virenv))
         mo_coeff = np.hstack((Co, Cv))

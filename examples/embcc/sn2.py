@@ -1,3 +1,4 @@
+# SN2 reaction of Wouter et al
 import sys
 import logging
 import argparse

@@ -42,7 +42,7 @@ def get_time_string(seconds):
     return tstr
 
 
-def eigassign(e1, v1, e2, v2, b=None, cost_matrix="e^2/v", return_cost=False):
+def eigassign(e1, v1, e2, v2, b=None, cost_matrix="e^2/v"):
     """
     Parameters
     ----------
@@ -61,31 +61,39 @@ def eigassign(e1, v1, e2, v2, b=None, cost_matrix="e^2/v", return_cost=False):
     if e2.shape[0] != v2.shape[-1]:
         raise ValueError("e2=%r with shape=%r and v2=%r with shape=%r are not compatible." % (e2, e2.shape, v2, v2.shape))
 
-
     assert np.allclose(e1.imag, 0)
     assert np.allclose(e2.imag, 0)
     assert np.allclose(v1.imag, 0)
     assert np.allclose(v2.imag, 0)
 
-    # Distance function
+    # Define a cost matrix ("dist") which measures the difference of two eigenpairs (ei,vi), (e'j, v'j)
+    # of different eigenvalue problems
     if b is None:
         vmat = np.abs(np.dot(v1.T, v2))
     else:
         vmat = np.abs(np.linalg.multi_dot((v1.T, b, v2)))
     emat = np.abs(np.subtract.outer(e1, e2))
 
+    # relative energy difference
+    ematrel = emat / np.fmax(abs(e1), 1e-14)[:,np.newaxis]
+
     # Original formulation
     if cost_matrix == "(1-v)*e":
         dist = (1-vmat) * emat
     elif cost_matrix == "(1-v)":
         dist = (1-vmat)
+    elif cost_matrix == "1/v":
+        dist = 1/np.fmax(vmat, 1e-14)
     elif cost_matrix == "v/e":
         dist = -vmat / (emat + 1e-14)
     elif cost_matrix == "e/v":
-        dist = emat / (vmat + 1e-14)
+        dist = emat / np.fmax(vmat, 1e-14)
+    elif cost_matrix == "er/v":
+        dist = ematrel / np.fmax(vmat, 1e-14)
+    elif cost_matrix == "e/v^2":
+        dist = emat / np.fmax(vmat, 1e-14)**2
     # This performed best in tests
     elif cost_matrix == "e^2/v":
-        #dist = emat**2 / (vmat + 1e-14)
         dist = emat**2 / np.fmax(vmat, 1e-14)
     elif cost_matrix == "e^2/v**2":
         dist = emat**2 / (vmat + 1e-14)**2
@@ -96,12 +104,9 @@ def eigassign(e1, v1, e2, v2, b=None, cost_matrix="e^2/v", return_cost=False):
 
     row, col = scipy.optimize.linear_sum_assignment(dist)
     # The col indices are the new sorting
+    cost = dist[row,col].sum()
     sort = col
-    if return_cost:
-        cost = dist[row,col].sum()
-        return sort, cost
-    else:
-        return sort
+    return sort, cost
 
 def eigreorder_logging(e, reorder, log):
     for i, j in enumerate(reorder):

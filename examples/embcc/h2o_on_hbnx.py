@@ -26,8 +26,8 @@ parser.add_argument("--lattice-const", type=float, nargs=2, default=[2.51, 30.0]
         help="Lattice constants a (plane) and c (non-periodic dimension) in Angstrom")
 parser.add_argument("--supercell", type=int, nargs=3,
         #default=[2, 2, 1],
-        default=[3, 3, 1],
-        #default=[4, 4, 1],
+        #default=[3, 3, 1],
+        default=[4, 4, 1],
         help="Supercell size in each direction")
 parser.add_argument("--distances", type=float, nargs="*",
         #default=[2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 4.0, 4.2, 4.5, 5.0, 6.0, 7.0, 8.0],
@@ -36,7 +36,8 @@ parser.add_argument("--distances", type=float, nargs="*",
 parser.add_argument("--ke-cutoff", type=float, help="Planewave cutoff")
 parser.add_argument("--precision", type=float, default=1e-6,
         help="Precision for density fitting, determines cell.mesh")
-parser.add_argument("--exp-to-discard", type=float, default=0.1,
+#parser.add_argument("--exp-to-discard", type=float, default=0.1,
+parser.add_argument("--exp-to-discard", type=float,
         help="Threshold for discarding diffuse Gaussians, helps convergence.")
 parser.add_argument("--basis", default="gth-dzv", help="Basis set")
 parser.add_argument("--large-basis-atoms", default=["H*2", "O*1", "H*0", "N#0", "B#1"],
@@ -48,7 +49,8 @@ parser.add_argument("--minao", default="gth-szv", help="Basis set for IAOs.")
 
 parser.add_argument("--impurity-atoms", nargs="*",
         #default=["H*2", "O*1", "H*0", "N#0"],
-        default=["H*2", "O*1", "H*0", "N#0", "B#1"],
+        #default=["H*2", "O*1", "H*0", "N#0", "B#1"],
+        default=["H*2", "O*1", "H*0", "N#0", "B#1", "N#2"],
         help="Atoms to include in the impurity space. N1 for closest nitrogen atom, B2 for next-nearest boron atoms.")
 
 #parser.add_argument("-p", "--max-power", type=int, default=0)
@@ -59,22 +61,22 @@ parser.add_argument("--max-memory", type=int, default=1e5)
 parser.add_argument("-o", "--output", default="energies.txt")
 
 parser.add_argument("--bath-type")
-parser.add_argument("--local-type", choices=["IAO", "AO"], default="IAO")
+parser.add_argument("--local-type", choices=["IAO", "LAO", "AO"], default="IAO")
 #parser.add_argument("--local-type", choices=["IAO", "AO"], default="AO")
 parser.add_argument("--bath-tol", type=float, nargs=2)
 parser.add_argument("--bath-size", type=int, nargs=2)
-parser.add_argument("--bath-relative-size", type=float, nargs=2, default=[None, None])
+parser.add_argument("--bath-relative-size", type=float, nargs=2)
 parser.add_argument("--mp2-correction", action="store_true")
+#parser.add_argument("--use-)
 # Load and restore DF integrals
 parser.add_argument("--cderi-name", default="cderi-%.2f")
-parser.add_argument("--cderi-save", action="store_true")
 parser.add_argument("--cderi-load", action="store_true")
+
+parser.add_argument("--print-ao", action="store_true")
+parser.add_argument("--mf-only", action="store_true")
 
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
-
-if args.cderi_load is None:
-    args.cderi_load = args.cderi_save
 
 if args.bath_size is None:
     args.bath_size = args.bath_relative_size
@@ -134,27 +136,36 @@ def setup_cell(distance, args):
     return cell
 
 ref_orbitals = None
+refdata = None
 for icalc, distance in enumerate(args.distances):
     if MPI_rank == 0:
         log.info("distance=%.3f", distance)
 
     cell = setup_cell(distance, args)
 
+    if args.print_ao:
+        for ao in cell.ao_labels():
+            log.info("%s", ao)
+        break
+
     mf = pyscf.pbc.scf.RHF(cell)
 
     # Density fitting
     mf = mf.density_fit()
     cderi_name = args.cderi_name % distance
-    if args.cderi_save:
-        log.debug("Saving DF in file %s", cderi_name)
-        mf.with_df._cderi_to_save = cderi_name
-    elif args.cderi_load:
+    if args.cderi_load:
         log.debug("Loading DF from file %s", cderi_name)
         mf.with_df._cderi = cderi_name
+    else:
+        log.debug("Saving DF in file %s", cderi_name)
+        mf.with_df._cderi_to_save = cderi_name
 
     t0 = MPI.Wtime()
     mf.kernel()
     log.info("Time for mean-field: %.2g", MPI.Wtime()-t0)
+
+    if args.mf_only:
+        continue
 
     if args.benchmark:
         import pyscf.pbc
@@ -178,43 +189,30 @@ for icalc, distance in enumerate(args.distances):
             f.write("%3f  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, mf.e_tot+bm.e_corr, bm.e_tot))
 
     else:
-        #if args.local_type == "AO":
-        #    if icalc == 0:
-        #        #cc = embcc.EmbCC(mf, solver=args.solver, tol_bath=args.tol_bath, use_ref_orbitals_bath=not args.recalc_bath)
-        #        cc = embcc.EmbCC(mf, solver=args.solver, tol_bath=args.tol_bath, use_ref_orbitals_bath=not args.recalc_bath,
-        #                tol_vno=args.tol_vno, vno_ratio=args.vno_ratio)
-        #        cc.make_custom_atom_cluster(args.impurity_atoms)
-        #        #cc.make_custom_atom_cluster(args.impurity_atoms)
-        #        cc.make_rest_cluster(solver=None)
-        #    else:
-        #        cc.reset(mf=mf)
+        cc = embcc.EmbCC(mf, local_type=args.local_type, minao=args.minao, solver=args.solver,
+                bath_type=args.bath_type, bath_size=args.bath_size, bath_tol=args.bath_tol,
+                mp2_correction=args.mp2_correction)
 
-        #    if icalc == 0 and MPI_rank == 0:
-        #        cc.print_clusters()
-        #else:
-        #cc = embcc.EmbCC(mf, solver=args.solver, bath_type=args.bath_type, bath_target_size=args.bath_target_size)
-        cc = embcc.EmbCC(mf, local_orbital_type=args.local_type, minao=args.minao, solver=args.solver, bath_type=args.bath_type, bath_size=args.bath_size, bath_tol=args.bath_tol)
-        #cc.make_custom_iao_atom_cluster(args.impurity_atoms, minao=args.minao)
         cc.make_atom_cluster(args.impurity_atoms)
 
         if ref_orbitals is not None:
             cc.set_reference_orbitals(ref_orbitals)
 
+        cc.set_refdata(refdata)
+        cc.print_clusters()
+
         if icalc == 0 and MPI_rank == 0:
-            cc.print_clusters()
+            cc.print_clusters_orbitals()
 
         cc.run()
 
-        if args.local_type == "IAO":
-            ref_orbitals = cc.get_orbitals()
+        refdata = cc.get_refdata()
+
+        ref_orbitals = cc.get_orbitals()
 
         if MPI_rank == 0:
             if icalc == 0:
                 with open(args.output, "a") as f:
-                    #f.write("#IRC  HF  EmbCCSD  EmbCCSD(alt)  EmbCCSD(full)\n")
-                    #f.write("#IRC  HF  EmbCCSD  EmbCCSD(v)  EmbCCSD(dMP2)  EmbCCSD(v,dMP2)\n")
-                    f.write("#IRC  HF  EmbCCSD  EmbCCSD(dMP2)\n")
+                    f.write("#IRC  HF  EmbCC  dMP2  EmbCCSD+dMP2  FullCC\n")
             with open(args.output, "a") as f:
-                #f.write("%3f  %.8e  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_alt, mf.e_tot+cc.clusters[0].e_corr_full))
-                #f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_v, cc.e_tot_dmp2, cc.e_tot_v_dmp2))
-                f.write("%3f  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_tot_dmp2))
+                f.write("%3f  %.8e  %.8e  %.8e  %.8e  %.8e\n" % (distance, mf.e_tot, cc.e_tot, cc.e_delta_mp2, cc.e_tot+cc.e_delta_mp2, mf.e_tot+cc.e_corr_full))

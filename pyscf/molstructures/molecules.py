@@ -1,5 +1,6 @@
 """Molecular systems for testing."""
 
+import logging
 import numpy as np
 
 from pyscf import gto
@@ -9,11 +10,15 @@ __all__ = [
         "build_ring",
         "build_methane",
         "build_ethanol",
+        "build_chloroethanol",
         "build_ketene",
         "build_biphenyl",
         "build_H2O_NH3",
         "build_H2O_CH6",
+        "build_water_borazine",
         ]
+
+log = logging.getLogger(__name__)
 
 def Ry(alpha):
     alpha = np.deg2rad(alpha)
@@ -96,6 +101,36 @@ def build_ethanol(dOH, **kwargs):
             atom=atom,
             **kwargs)
     return mol
+
+def build_chloroethanol(dOH, **kwargs):
+    atoms = ["C1", "C2", "Cl3", "O4", "H5", "H6", "H7", "H8", "H9"]
+    coords = np.asarray([
+        (0.9623650,     -0.5518170,     0.0000000),
+        (0.0000000,     0.6114150 ,     0.0000000),
+        (-1.682237,     0.0056080 ,     0.0000000),
+        (2.2607680,     0.0168280 ,     0.0000000),
+        (0.7859910,     -1.1642170,     0.8849280),
+        (0.7859910,     -1.1642170,     -0.8849280),
+        (0.1338630,     1.2200610 ,     0.8854980),
+        (0.1338630,     1.2200610 ,    -0.8854980),
+        (2.8979910,     -0.6992380,     0.0000000),
+        ])
+    natom = len(atoms)
+    oidx = 3
+    hidx = -1
+    #d = [np.linalg.norm(coords[oidx] - coords[i]) for i in range(natom-1)]
+    #hidx = np.argmin(d)
+    #log.debug("H index: %d", hidx)
+    v_oh = (coords[hidx] - coords[oidx])
+    dOHeq = np.linalg.norm(v_oh)
+    u_oh = v_oh / dOHeq
+    coords[hidx] += (dOH-dOHeq)*u_oh
+    atom = [(atoms[idx], coords[idx]) for idx in range(natom)]
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
+
 
 def build_ketene(dCC, **kwargs):
     atoms = ["C1", "C2", "O3", "H4", "H5"]
@@ -223,5 +258,49 @@ def build_H2O_CH6(dOC, config="2-leg", **kwargs):
 
     return mol
 
+def build_water_borazine(distance, **kwargs):
+    """From suppl. mat. of J. Chem. Phys. 147, 044710 (2017)
 
+    Water molecule are O1, H1, H2.
+    Nearest nitrogen is N1.
+    Next nearest borons are B1, B3.
 
+    Distance measured from O to molecular plane?
+    """
+
+    # At 3.32 A
+    eq = [
+        ["O1", [6.07642824900005, 5.45929539300001, 3.88230000000000]],
+        ["H1", [5.29230349199999, 4.92565706249998, 4.09910000000000]],
+        ["H2", [6.08425933200003, 5.49983635649998, 2.90580000000000]],
+        ["B1", [5.00435273549996, 6.44422098149999, 0.55828330799997]],
+        ["B2", [3.72565904700004, 4.27443283650000, 0.41692162499995]],
+        ["B3", [6.24820422149998, 4.24146091050005, 0.45255167849998]],
+        ["N1", [6.21955164299997, 5.67465859050003, 0.56921574450005]],
+        ["N2", [4.98001838850001, 3.57987289349996, 0.39688556550001]],
+        ["N3", [3.77999653349999, 5.70466272150004, 0.49999999950000]],
+        ["H3", [5.02076127599995, 7.64373657450001, 0.60758282549997]],
+        ["H4", [7.10527023150000, 6.17375954850001, 0.58709578200002]],
+        ["H5", [7.28364120750005, 3.63461177700003, 0.41760386850004]],
+        ["H6", [4.96865547299997, 2.56629642749996, 0.32842254299997]],
+        ["H7", [2.67920894549999, 3.68622618450004, 0.36779496749997]],
+        ["H8", [2.90474809949995, 6.22044015000000, 0.50692081349997]],
+    ]
+
+    atom = [[a[0], np.asarray(a[1])] for a in eq]
+
+    xy_dist = np.linalg.norm(atom[0][1][:2] - atom[6][1][:2])
+    z = np.sqrt(distance**2 - xy_dist**2)
+    dzeq = atom[0][1][-1] - atom[6][1][-1]
+
+    for i in range(3):
+        atom[i][1][-1] += z - dzeq
+
+    #for a in atom[3:9]:
+    #    d = np.linalg.norm(atom[6][1] - a[1])
+    #    print(a[0], d)
+
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
+    return mol

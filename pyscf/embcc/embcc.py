@@ -24,6 +24,7 @@ MPI_size = MPI_comm.Get_size()
 log = logging.getLogger(__name__)
 
 class EmbCC:
+    """What should this be named?"""
 
     default_options = [
             "solver",
@@ -37,12 +38,13 @@ class EmbCC:
             ]
 
     def __init__(self, mf,
+            local_type="IAO",
             solver="CCSD",
             bath_type="mp2-natorb", bath_size=None, bath_tol=1e-3,
-            local_orbital_type="IAO",
             minao="minao",
             use_ref_orbitals_dmet=True,
-            use_ref_orbitals_bath=True,
+            #use_ref_orbitals_bath=True,
+            use_ref_orbitals_bath=False,
             mp2_correction=False,
             maxiter=1,
             ):
@@ -58,20 +60,28 @@ class EmbCC:
         # Check input
         if not mf.converged:
             raise ValueError("Mean-field calculation not converged.")
-        if local_orbital_type not in ("AO", "IAO", "OrthAO"):
-            raise ValueError("Unknown local_orbital_type: %s" % local_orbital_type)
+        # Local orbital types:
+        # AO : Atomic orbitals non-orthogonal wrt to non-fragment AOs
+        # IAO : Intrinstric atom-orbitals
+        # LAO : Lowdin orthogonalized AOs
+
+        if local_type not in ("AO", "IAO", "LAO"):
+            raise ValueError("Unknown local_type: %s" % local_type)
         if solver not in (None, "MP2", "CISD", "CCSD", "FCI"):
             raise ValueError("Unknown solver: %s" % solver)
         if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-natorb"):
             raise ValueError("Unknown bath type: %s" % bath_type)
 
         self.mf = mf
-        self.local_orbital_type = local_orbital_type
+        self.local_orbital_type = local_type
         if self.local_orbital_type == "IAO":
             self.C_iao, self.C_env, self.iao_labels = self.make_iao(minao=minao)
-        elif self.local_orbital_type == "OrthAO":
-            self.C_iao, self.C_env, self.iao_labels = self.make_orth_ao()
-            self.local_orbital_type = "IAO"
+            log.debug("IAO labels:")
+            for ao in self.iao_labels:
+                log.debug("%r", ao)
+        elif self.local_orbital_type == "LAO":
+            self.C_lao, self.lao_labels = self.make_lowdin_ao()
+            #self.local_orbital_type = "IAO"
 
         self.maxiter = maxiter
         # Options
@@ -86,9 +96,11 @@ class EmbCC:
 
         self.clusters = []
 
-        # Results
+        # Correlation energy and MP2 correction
         self.e_corr = 0.0
-        self.e_corr_dmp2 = 0.0
+        self.e_delta_mp2 = 0.0
+
+        self.e_corr_full = 0.0
 
         # Global amplitudes
         self.T1 = None
@@ -96,7 +108,6 @@ class EmbCC:
         # For tailored CC
         self.tccT1 = None
         self.tccT2 = None
-
 
     @property
     def mol(self):
@@ -110,10 +121,6 @@ class EmbCC:
     @property
     def e_tot(self):
         return self.mf.e_tot + self.e_corr
-
-    @property
-    def e_tot_dmp2(self):
-        return self.mf.e_tot + self.e_corr_dmp2
 
     def make_ao_projector(self, ao_indices):
         """Create projetor into AO subspace
@@ -144,11 +151,11 @@ class EmbCC:
         P = self.make_ao_projector(ao_indices)
         e, C = scipy.linalg.eigh(P, b=S)
         e, C = e[::-1], C[:,::-1]
-        nlocal = len(e[e>1e-5])
-        if nlocal != len(ao_indices):
+        size = len(e[e>1e-5])
+        if size != len(ao_indices):
             raise RuntimeError("Error finding local orbitals. Eigenvalues: %s" % e)
         assert np.allclose(np.linalg.multi_dot((C.T, S, C)) - np.eye(nao), 0)
-        C_local, C_env = np.hsplit(C, [nlocal])
+        C_local, C_env = np.hsplit(C, [size])
 
         return C_local, C_env
 
@@ -157,6 +164,13 @@ class EmbCC:
         #not_indices = np.asarray([i for i in np.arange(len(iao_indices)) if i not in iao_indices])
         not_indices = np.asarray([i for i in np.arange(self.C_iao.shape[-1]) if i not in iao_indices])
         C_env = np.hstack((self.C_iao[:,not_indices], self.C_env))
+
+        return C_local, C_env
+
+    def make_local_lao_orbitals(self, lao_indices):
+        C_local = self.C_lao[:,lao_indices]
+        not_indices = np.asarray([i for i in np.arange(self.C_lao.shape[-1]) if i not in lao_indices])
+        C_env = self.C_lao[:,not_indices]
 
         return C_local, C_env
 
@@ -177,15 +191,19 @@ class EmbCC:
         cluster : Cluster
             Cluster object
         """
-        # Check that name is unique
+        # Get new ID
+        cluster_id = len(self.clusters)
+        # Check that ID and name are unique
         for cluster in self.clusters:
             if name == cluster.name:
                 raise ValueError("Cluster with name %s already exists." % name)
+            assert (cluster_id != cluster.id)
+        # Pass options to cluster object via keyword arguments
         for opt in self.default_options:
             kwargs[opt] = kwargs.get(opt, getattr(self, opt))
         # Symmetry factor, if symmetry related clusters exist in molecule (e.g. hydrogen rings)
         kwargs["symmetry_factor"] = kwargs.get("symmetry_factor", 1.0)
-        cluster = Cluster(self, name, C_local=C_local, C_env=C_env, **kwargs)
+        cluster = Cluster(self, cluster_id=cluster_id, name=name, C_local=C_local, C_env=C_env, **kwargs)
         self.clusters.append(cluster)
         return cluster
 
@@ -210,11 +228,21 @@ class EmbCC:
             name = ",".join(atoms)
 
         # Indices refers to AOs or IAOs, respectively
+
+        # Non-orthogonal AOs
         if self.local_orbital_type == "AO":
             # Base atom for each AO
             ao_atoms = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
             indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
             C_local, C_env = self.make_local_ao_orbitals(indices)
+
+        # Lowdin orthonalized AOs
+        elif self.local_orbital_type == "LAO":
+            lao_atoms = [lao[1] for lao in self.lao_labels]
+            indices = np.nonzero(np.isin(lao_atoms, atoms))[0]
+            C_local, C_env = self.make_local_lao_orbitals(indices)
+
+        # Orthogonal intrinsic AOs
         elif self.local_orbital_type == "IAO":
             # Base atom for each IAO
             iao_atoms = [iao[1] for iao in self.iao_labels]
@@ -252,6 +280,20 @@ class EmbCC:
 
     def set_reference_orbitals(self, ref_orbitals):
         return self.set_cluster_attributes("ref_orbitals", ref_orbitals)
+
+
+    def get_refdata(self):
+        refdata = {}
+        for cluster in self.clusters:
+            refdata[cluster.name] = cluster.get_refdata()
+        return refdata
+
+    def set_refdata(self, refdata):
+        if refdata is None:
+            return False
+        for cluster in self.clusters:
+            cluster.set_refdata(refdata[cluster.name])
+        return True
 
     def make_iao(self, minao="minao"):
         """Make intrinsic atomic orbitals.
@@ -303,14 +345,13 @@ class EmbCC:
 
         return C_iao, C_env, iao_labels
 
-    def make_orth_ao(self):
+    def make_lowdin_ao(self):
         """We can simply (ab)use the IAO code, since the nomenclature here."""
         S = self.mf.get_ovlp()
-        C_iao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
-        C_iao, C_env = np.hsplit(C_iao, [C_iao.shape[-1]])
-        iao_labels = self.mol.ao_labels(None)
+        C_lao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
+        lao_labels = self.mol.ao_labels(None)
+        return C_lao, lao_labels
 
-        return C_iao, C_env, iao_labels
 
     def run(self, **kwargs):
         if not self.clusters:
@@ -327,7 +368,8 @@ class EmbCC:
             cluster.run(**kwargs)
             log.debug("Cluster %s on MPI process=%d is done.", cluster.name, MPI_rank)
 
-        results = self.collect_results("converged", "e_corr", "e_corr_dmp2")
+        #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
+        results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_full", "e_corr_v", "e_corr_d")
         if MPI_rank == 0 and not np.all(results["converged"]):
             log.debug("converged = %s", results["converged"])
             raise RuntimeError("Not all cluster converged")
@@ -341,7 +383,12 @@ class EmbCC:
         #log.info("EmbCC energy=%.8g", energy)
 
         self.e_corr = sum(results["e_corr"])
-        self.e_corr_dmp2 = sum(results["e_corr_dmp2"])
+        self.e_delta_mp2 = sum(results["e_delta_mp2"])
+
+        self.e_corr_full = sum(results["e_corr_full"])
+
+        self.e_corr_v = sum(results["e_corr_v"])
+        self.e_corr_d = sum(results["e_corr_d"])
 
         if MPI_rank == 0:
             self.print_results(results)
@@ -366,13 +413,19 @@ class EmbCC:
                     cluster.run_solver()
                     log.debug("Cluster %s on MPI process=%d is done.", cluster.name, MPI_rank)
 
-                results = self.collect_results("converged", "e_corr", "e_corr_dmp2")
+                #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
+                results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_full", "e_corr_v", "e_corr_d")
                 if MPI_rank == 0 and not np.all(results["converged"]):
                     log.debug("converged = %s", results["converged"])
                     raise RuntimeError("Not all cluster converged")
 
                 self.e_corr = sum(results["e_corr"])
-                self.e_corr_dmp2 = sum(results["e_corr_dmp2"])
+                self.e_delta_mp2 = sum(results["e_delta_mp2"])
+
+                self.e_corr_full = sum(results["e_corr_full"])
+
+                self.e_corr_v = sum(results["e_corr_v"])
+                self.e_corr_d = sum(results["e_corr_d"])
 
                 if MPI_rank == 0:
                     self.print_results(results)
@@ -381,7 +434,7 @@ class EmbCC:
                 log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
 
     def collect_results(self, *attributes):
-        log.debug("Communicating results.")
+        log.debug("Collecting attributes %r from all clusters", (attributes,))
         clusters = self.clusters
 
         def mpi_reduce(attr, op=MPI.SUM, root=0):
@@ -402,11 +455,13 @@ class EmbCC:
         #totalfmt = "Total=%16.8g Eh"
         #for c in self.clusters:
         #    log.info(linefmt, c.name, c.solver, len(c)+c.nbath, len(c), c.nbath0, c.nbath-c.nbath0, c.nfrozen, c.e_corr_full, c.e_corr)
-        linefmt  = "%10s [%6s] = %16.8g htr , %16.8g htr"
+        linefmt  = "%3d %20s [%8s] = %16.8g htr + %16.8g htr = %16.8g"
         totalfmt = "Total = %16.8g htr , %16.8g htr"
         for i, cluster in enumerate(self.clusters):
-            log.info(linefmt, cluster.name, cluster.solver, results["e_corr"][i], results["e_corr_dmp2"][i])
-        log.info(totalfmt, self.e_corr, self.e_corr_dmp2)
+            e_corr = results["e_corr"][i]
+            e_delta_mp2 = results["e_delta_mp2"][i]
+            log.info(linefmt, cluster.id, cluster.name, cluster.solver, e_corr, e_delta_mp2, e_corr+e_delta_mp2)
+        log.info(totalfmt, self.e_corr, self.e_corr + self.e_delta_mp2)
 
     def reset(self, mf=None, **kwargs):
         if mf:
@@ -414,8 +469,15 @@ class EmbCC:
         for cluster in self.clusters:
             cluster.reset(**kwargs)
 
-    def print_clusters(self, file=None, filemode="a"):
-        """Print clusters to log or file.
+    def print_clusters(self):
+        """Print fragments of calculations."""
+        log.info("%3s  %20s  %8s  %4s", "ID", "Name", "Solver", "Size")
+        for cluster in self.clusters:
+            log.info("%3d  %20s  %8s  %4d", cluster.id, cluster.name, cluster.solver, cluster.size)
+
+
+    def print_clusters_orbitals(self, file=None, filemode="a"):
+        """Print clusters orbitals to log or file.
 
         Parameters
         ----------
@@ -425,24 +487,31 @@ class EmbCC:
         # Format strings
         end = "\n" if file else ""
         if self.local_orbital_type == "AO":
-            headfmt = "Cluster %3d: %s with %3d atomic orbitals:" + end
-        elif self.local_orbital_type == "IAO":
-            headfmt = "Cluster %3d: %s with %3d intrinsic atomic orbitals:" + end
+            orbital_name = "atomic"
+        if self.local_orbital_type == "LAO":
+            orbital_name = "Lowdin orthogonalized atomic"
+        if self.local_orbital_type == "IAO":
+            orbital_name = "intrinsic atomic"
+
+        headfmt = "Cluster %3d: %s with %3d {} orbitals:".format(orbital_name) + end
+
         linefmt = "%4d %5s %3s %10s" + end
 
         if self.local_orbital_type == "AO":
             labels = self.mol.ao_labels(None)
+        elif self.local_orbital_type == "LAO":
+            labels = self.lao_labels
         elif self.local_orbital_type == "IAO":
             labels = self.iao_labels
 
         if file is None:
-            for i, cluster in enumerate(self.clusters):
-                log.info(headfmt, i, cluster.name, cluster.nlocal)
+            for cluster in self.clusters:
+                log.info(headfmt, cluster.id, cluster.name, cluster.size)
                 for idx in cluster.indices:
                     log.info(linefmt, *labels[idx])
         else:
             with open(file, filemode) as f:
-                for i, cluster in enumerate(self.clusters):
-                    f.write(headfmt % (c, cluster.name, cluster.nlocal))
+                for cluster in self.clusters:
+                    f.write(headfmt % (cluster.id, cluster.name, cluster.size))
                     for idx in cluster.indices:
                         f.write(linefmt % labels[idx])

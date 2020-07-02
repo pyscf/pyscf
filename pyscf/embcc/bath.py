@@ -126,14 +126,16 @@ def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
             C_occenv, eig = self.project_ref_orbitals(C_ref, C_occenv)
             mask_occref = eig >= reftol
             mask_occenv = eig < reftol
-            log.debug("Eigenvalues of projected occupied reference: %s, Largest remaining: %s",
-                    eig[mask_occref], max(eig[mask_occenv]))
+            log.debug("Eigenvalues of projected occupied reference: %s", eig[mask_occref])
+            if np.any(mask_occenv):
+                log.debug("Largest remaining: %s", max(eig[mask_occenv]))
             # --- Virtual
             C_virenv, eig = self.project_ref_orbitals(C_ref, C_virenv)
             mask_virref = eig >= reftol
             mask_virenv = eig < reftol
-            log.debug("Eigenvalues of projected virtual reference: %s, Largest remaining: %s",
-                    eig[mask_virref], max(eig[mask_virenv]))
+            log.debug("Eigenvalues of projected virtual reference: %s", eig[mask_virref])
+            if np.any(mask_virenv):
+                log.debug("Largest remaining: %s", max(eig[mask_virenv]))
             # -- Update coefficient matrices
             C_bath = np.hstack((C_bath, C_occenv[:,mask_occref], C_virenv[:,mask_virref]))
             C_occenv = C_occenv[:,mask_occenv].copy()
@@ -151,7 +153,7 @@ def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
 
 # ================================================================================================ #
 
-def make_bath(self, C_env, bathtype, kind, C_ref=None, nbath=None, tol=None, **kwargs):
+def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, tol=None, **kwargs):
     """Make additional bath (beyond DMET bath) orbitals.
 
     Parameters
@@ -164,6 +166,8 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, nbath=None, tol=None, **k
         Occupied or virtual.
     C_ref : ndarray, optional
         Reference bath orbitals from previous calculation.
+    eigref : tuple, optional
+        Eigenpair reference data. If given, the bath orbitals are sorted correspondingly.
 
     Returns
     -------
@@ -174,6 +178,7 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, nbath=None, tol=None, **k
     """
 
     log.debug("Making bath with nbath=%r and tol=%r", nbath, tol)
+    eigref_out = None
     e_delta_mp2 = None
     # Project
     if C_ref is not None:
@@ -183,21 +188,25 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, nbath=None, tol=None, **k
             log.debug("Eigenvalues of projected bath orbitals:\n%s", eig[:nref])
             log.debug("Largest remaining: %s", eig[nref:nref+3])
         C_bath, C_env = np.hsplit(C_env, [nref])
-
-    elif bathtype == "mp2-natorb":
-        log.debug("Making bath orbitals of type %s", bathtype)
-        C_occclst = self.C_occclst
-        C_virclst = self.C_virclst
-        C_bath, C_env, e_delta_mp2 = self.make_mp2_bath(C_occclst, C_virclst, C_env, kind, nbath=nbath, tol=tol,
-                **kwargs)
-    elif bathtype is not None:
-        log.debug("Making bath orbitals of type %s", bathtype)
-        C_bath, C_env = self.make_mf_bath(C_env, kind, bathtype=bathtype, nbath=nbath, tol=tol,
-                **kwargs)
+    # Make new bath orbitals
     else:
-        log.debug("No bath to make.")
-        C_bath, C_env = np.hsplit(C_env, [0])
+        if bathtype == "mp2-natorb":
+            log.debug("Making bath orbitals of type %s", bathtype)
+            C_occclst = self.C_occclst
+            C_virclst = self.C_virclst
+            C_bath, C_env, e_delta_mp2, eigref_out = self.make_mp2_bath(C_occclst, C_virclst, C_env, kind,
+                    eigref=eigref, nbath=nbath, tol=tol, **kwargs)
 
+        elif bathtype is not None:
+            log.debug("Making bath orbitals of type %s", bathtype)
+            C_bath, C_env, eigref_out = self.make_mf_bath(C_env, kind, bathtype=bathtype, eigref=eigref, nbath=nbath, tol=tol,
+                    **kwargs)
+
+        else:
+            log.debug("No bath to make.")
+            C_bath, C_env = np.hsplit(C_env, [0])
+
+    # MP2 correction
     if self.mp2_correction and C_env.shape[-1] > 0:
         if e_delta_mp2 is None:
             if kind == "occ":
@@ -213,11 +222,11 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, nbath=None, tol=None, **k
     else:
         e_delta_mp2 = 0.0
 
-    return C_bath, C_env, e_delta_mp2
+    return C_bath, C_env, e_delta_mp2, eigref_out
 
 # ================================================================================================ #
 
-def make_mf_bath(self, C_env, kind, bathtype, nbath=None, tol=None, **kwargs):
+def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None, **kwargs):
     """Make mean-field bath orbitals.
 
     Parameters
@@ -264,6 +273,30 @@ def make_mf_bath(self, C_env, kind, bathtype, nbath=None, tol=None, **kwargs):
     e, R = np.linalg.eigh(P)
     assert np.all(e > -1e-13)
     e, R = e[::-1], R[:,::-1]
+    C_env = np.dot(C_env, R)
+
+    # Reorder here
+    if True:
+        with open("bath-%s-%s.txt" % (self.name, kind), "ab") as f:
+            np.savetxt(f, e[np.newaxis])
+
+    ##### Here we reorder the eigenvalues
+    if True:
+        if eigref is not None:
+            log.debug("eigref given: performing reordering of eigenpairs.")
+            # Get reordering array
+            reorder, cost = eigassign(eigref[0], eigref[1], e, C_env, b=S, cost_matrix="er/v")
+            log.debug("Optimized linear assignment cost=%.3e", cost)
+
+            e = e[reorder]
+            C_env = C_env[:,reorder]
+
+        if True:
+            with open("bath-%s-%s-ordered.txt" % (self.name, kind), "ab") as f:
+                np.savetxt(f, e[np.newaxis])
+
+    # Reference for future calculation
+    eigref_out = (e.copy(), C_env.copy())
 
     # nbath takes preference
     if nbath is not None:
@@ -287,10 +320,11 @@ def make_mf_bath(self, C_env, kind, bathtype, nbath=None, tol=None, **kwargs):
     log.debug("%d excluded eigenvalues (first 3):\n%r", (len(e)-nbath), e[nbath:nbath+3])
     log.debug("%d excluded eigenvalues (all):\n%r", (len(e)-nbath), e[nbath:])
 
-    C = np.dot(C_env, R)
-    C_bath, C_env = np.hsplit(C, [nbath])
+    C_bath, C_env = np.hsplit(C_env, [nbath])
 
-    return C_bath, C_env
+    return C_bath, C_env, eigref_out
+
+# ================================================================================================ #
 
 def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=None):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
@@ -343,8 +377,8 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=No
 
     # Calculate local energy
     # Project first occupied index onto local space
-    P = self.get_local_projector(Co)
-    pT2 = einsum("xi,ijab->xjab", P, T2)
+    _, pT2 = self.get_local_amplitudes(mp2, None, T2, symmetrize=False)
+    #_, pT2 = self.get_local_amplitudes(mp2, None, T2, variant="democratic")
     e_mp2 = self.symmetry_factor * mp2.energy(pT2, eris)
 
     # MP2 density matrix [optional]
@@ -368,6 +402,8 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=No
 
     return e_mp2, eris, Doo, Dvv
 
+# ================================================================================================ #
+
 def transform_mp2_eris(self, eris, Co, Cv):
     """Transform OVOV kind ERIS."""
 
@@ -385,7 +421,9 @@ def transform_mp2_eris(self, eris, Co, Cv):
     if transform_vir:
         Rv = np.linalg.multi_dot((Cv.T, S, Cv0))
 
-    govov = eris.ovov.reshape((no0, nv0, no0, nv0))
+    #govov = eris.ovov.reshape((no0, nv0, no0, nv0))
+    # eris.ovov may be hfd5 dataset on disk -> allocate in memory with [:]
+    govov = eris.ovov[:].reshape((no0, nv0, no0, nv0))
     if transform_occ and transform_vir:
         govov = einsum("xi,ya,zj,wb,iajb->xyzw", Ro, Rv, Ro, Rv, govov)
     elif transform_occ:
@@ -397,6 +435,8 @@ def transform_mp2_eris(self, eris, Co, Cv):
     eris.mo_energy = None
     return eris
 
+# ================================================================================================ #
+
 def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
     """Calculate delta MP2 correction."""
     e_mp2_all, eris = self.run_mp2(Co1, Cv1)[:2]
@@ -406,61 +446,109 @@ def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
             e_mp2_all, e_mp2_act, e_delta_mp2)
     return e_delta_mp2
 
-def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None, **kwargs):
-    """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
-    assert nbath is not None or tol is not None
-    assert kind in ("occ", "vir")
+# ================================================================================================ #
 
+def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=None, tol=None):
+    """Select occupied or virtual bath space from MP2 natural orbitals.
+
+    The natural orbitals are calculated only including the local virtual (occupied)
+    cluster orbitals when calculating occupied (virtual) bath orbitals, i.e. they do not correspond
+    to the full system MP2 natural orbitals and are different for every cluster.
+
+    Set nbath to a very high number or tol to -1 to get all bath orbitals.
+
+    Parameters
+    ----------
+    C_occclst : ndarray
+        Occupied cluster (fragment + DMET bath) orbitals.
+    C_virclst : ndarray
+        Virtual cluster (fragment + DMET bath) orbitals.
+    C_env : ndarray
+        Environment orbitals. These need to be off purely occupied character if kind=="occ"
+        and of purely virtual character if kind=="vir".
+    kind : str ["occ", "vir"]
+        Calculate occupied or virtual bath orbitals.
+    eigref : tuple(eigenvalues, eigenvectors), optional
+        Reference eigenvalues and eigenvectors from previous calculation for consistent sorting
+        (see also: eigref_out).
+    nbath : int, optional
+        Target number of bath orbitals. If given, tol is ignored.
+        The actual number of bath orbitals might be lower, if not enough
+        environment orbitals are available.
+    tol : float, optional
+        Occupation change tolerance for bath orbitals. Ignored if nbath is not None.
+        Should be chosen between 0 and 1.
+
+    Returns
+    -------
+    C_bath : ndarray
+        MP2 natural orbitals with the largest occupation change.
+    C_env : ndarray
+        Remaining MP2 natural orbitals.
+    e_delta_mp2 : float
+        MP2 correction energy (0 if self.mp2_corretion == False)
+    eigref_out : tuple(eigenvalues, eigenvectors)
+        Reference eigenvalues and eigenvectors for future calculation for consistent sorting
+        (see also: eigref).
+    """
+    if nbath is None and tol is None:
+        raise ValueError("Both nbath and tol are None.")
+    if kind not in ("occ", "vir"):
+        raise ValueError("Unknown kind: %s", kind)
     if kind == "occ":
+        kind = "occupied"
+    else:
+        kind = "virtual"
+
+    # Combine occupied cluster orbitals with all occupied environment orbitals
+    # but use only the virtual cluster orbitals
+    if kind == "occupied":
         Co = np.hstack((C_occclst, C_env))
         Cv = C_virclst
-    elif kind == "vir":
+    # Use only the occupied cluster orbitals
+    # but combine virtual custer orbitals with all virtual environment orbitals
+    elif kind == "virtual":
         Co = C_occclst
         Cv = np.hstack((C_virclst, C_env))
 
-    e_mp2_all, eris, Do, Dv = self.run_mp2(Co, Cv, make_dm=True, **kwargs)
+    # Run MP2 calculation to get locally projected energy, ERIs, and occupied
+    # and virtual correction of the density-matrix
+    e_mp2_all, eris, Do, Dv = self.run_mp2(Co, Cv, make_dm=True)
 
-    #env = np.s_[-C_env.shape[-1]:]
-    if kind == "occ":
+    # Diagonalize environment-environment block of MP2 DM correction
+    # and rotate into natural orbital basis, with the orbitals sorted
+    # with decreasing (absolute) occupation change
+    # [Note that Do is minus the change of the occupied DM]
+    if kind == "occupied":
         env = np.s_[C_occclst.shape[-1]:]
         D = Do[env,env]
-    elif kind == "vir":
+    elif kind == "virtual":
         env = np.s_[C_virclst.shape[-1]:]
         D = Dv[env,env]
     N, R = np.linalg.eigh(D)
     N, R = N[::-1], R[:,::-1]
-    C_env = np.dot(C_env, R)
+    C_no = np.dot(C_env, R)
 
-    ##### Here we reorder the eigenvalues
-    #####if True:
-    ####if False:
-    ####    if kind == "vir":
-    ####        CR = np.dot(Cv[:,nclvir:], R)
-    ####    elif kind == "occ":
-    ####        CR = np.dot(Co[:,nclocc:], R)
-    ####    reffile = "mp2-no-%s-ref.npz" % kind
+    if True:
+        with open("MP2-natorb-%s-%s.txt" % (self.name, kind), "ab") as f:
+            np.savetxt(f, N[np.newaxis])
 
-    ####    if os.path.isfile(reffile):
-    ####        ref = np.load(reffile)
-    ####        N_ref, CR_ref = ref["N"], ref["CR"]
+    # Reorder the eigenvalues and vectors according to the reference ordering, specified in eigref
+    if True:
+        if eigref is not None:
+            log.debug("eigref given: performing reordering of eigenpairs.")
+            # Get reordering array
+            S = self.mf.get_ovlp()
+            reorder, cost = eigassign(eigref[0], eigref[1], N, C_no, b=S, cost_matrix="er/v")
+            log.debug("Optimized linear assignment cost=%.3e", cost)
+            N = N[reorder]
+            C_no = C_no[:,reorder]
+        if True:
+            with open("MP2-natorb-%s-%s-ordered.txt" % (self.name, kind), "ab") as f:
+                np.savetxt(f, N[np.newaxis])
 
-    ####        #if N_ref is not None and R_ref is not None:
-    ####        log.debug("Reordering eigenvalues according to reference.")
-    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v/e", return_cost=True)
-    ####        reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="e^2/v", return_cost=True)
-    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*e", return_cost=True)
-    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="v*sqrt(e)", return_cost=True)
-    ####        #reorder, cost = eigassign(N_ref, CR_ref, N, CR, b=S, cost_matrix="evv", return_cost=True)
-    ####        eigreorder_logging(N, reorder, log.debug)
-    ####        log.debug("eigassign cost function value=%g", cost)
-    ####        N = N[reorder]
-    ####        R = R[:,reorder]
-    ####        CR = CR[:,reorder]
-
-    ####    with open("mp2-no-%s-%s-ordered.txt" % (self.name, kind), "ab") as f:
-    ####        np.savetxt(f, N[np.newaxis])
-
-    ####    np.savez(reffile, N=N, CR=CR)
+    # Return ordered eigenpairs as a reference for future calculations
+    eigref_out = (N.copy(), C_no.copy())
 
     if nbath is None:
         nbath = sum(N >= tol)
@@ -473,6 +561,14 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None,
             nbath = nbath_int
 
         nbath = min(nbath, len(N))
+
+    # Check for split degeneracies
+    if False:
+        for Nb in N[:nbath]:
+            for Nenv in N[nbath:]:
+                if np.isclose(Nb, Nenv):
+                    log.warning("MP2 bath orbitals are splitting the "
+                            "degenerate occupation numbers %.8e a %.8e", Nb, Nenv)
 
     ###protect_degeneracies = False
     ####protect_degeneracies = True
@@ -488,27 +584,33 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, nbath=None, tol=None,
     ###        else:
     ###            break
 
-    log.debug("MP2 natural %s bath orbitals: active=%d, frozen=%d", kind, nbath, (len(N)-nbath))
-    log.debug("Active occupation:\n%s", N[:nbath])
-    log.debug("Following 3:\n%s", N[nbath:nbath+3])
-    C_bath, C_env = np.hsplit(C_env, [nbath])
+    # Split MP2 natural orbitals into bath and environment
+    C_bath, C_env = np.hsplit(C_no, [nbath])
+
+    # Output some information
+    log.info("%s MP2 natural orbitals:" % kind.title())
+    if nbath > 0:
+        log.info("%3d bath orbitals:        largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
+            nbath, max(N[:nbath]), min(N[:nbath]), np.mean(N[:nbath]))
+    if nbath < len(N):
+        log.info("%3d environment orbitals: largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
+                len(N)-nbath, max(N[nbath:]), min(N[nbath:]), np.mean(N[nbath:]))
 
     # Delta MP2 correction
-    # ====================
-
+    # No correction if all natural orbitals are already included (0 environment orbitals)
     if self.mp2_correction and C_env.shape[-1] > 0:
         S = self.mf.get_ovlp()
-        if kind == "occ":
+        if kind == "occupied":
             Co_act = np.hstack((C_occclst, C_bath))
             Cv_act = Cv
-        elif kind == "vir":
+        elif kind == "virtual":
             Co_act = Co
             Cv_act = np.hstack((C_virclst, C_bath))
 
-        e_mp2_act = self.run_mp2(Co_act, Cv_act, eris=eris, **kwargs)[0]
+        e_mp2_act = self.run_mp2(Co_act, Cv_act, eris=eris)[0]
         e_delta_mp2 = e_mp2_all - e_mp2_act
         log.debug("MP2 correction (%s): all=%.4g, active=%.4g, correction=%+.4g", kind, e_mp2_all, e_mp2_act, e_delta_mp2)
     else:
         e_delta_mp2 = 0.0
 
-    return C_bath, C_env, e_delta_mp2
+    return C_bath, C_env, e_delta_mp2, eigref_out
