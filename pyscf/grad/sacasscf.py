@@ -343,8 +343,8 @@ def as_scanner(mcscf_grad, state=None):
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
-    if state is None and (not hasattr (mcscf_grad, 'state') or (mcscf_grad.state is None)):
-        return casscf_grad.as_scanner (mcscf_grad)
+    #if state is None and (not hasattr (mcscf_grad, 'state') or (mcscf_grad.state is None)):
+    #    return casscf_grad.as_scanner (mcscf_grad)
 
     lib.logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
 
@@ -360,12 +360,12 @@ def as_scanner(mcscf_grad, state=None):
                 mol = mol_or_geom
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-
+            if 'state' in kwargs: self.state = kwargs['state']
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
             if hasattr (mc_scanner, 'e_mcscf'): self.e_mcscf = mc_scanner.e_mcscf
-            #if isinstance (e_tot, (list, tuple, np.ndarray)): e_tot = e_tot[self.state]
-            if hasattr (mc_scanner, 'e_states'): e_tot = mc_scanner.e_states[self.state]
+            if hasattr (mc_scanner, 'e_states') and self.state is not None:
+                e_tot = mc_scanner.e_states[self.state]
             self.mol = mol
             if not ('state' in kwargs):
                 kwargs['state'] = self.state
