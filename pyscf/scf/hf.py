@@ -24,7 +24,7 @@ import sys
 import tempfile
 import time
 from functools import reduce
-import numpy as np
+import numpy 
 import scipy.linalg
 from pyscf import gto
 from pyscf import lib
