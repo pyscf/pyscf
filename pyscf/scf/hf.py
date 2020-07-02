@@ -1458,6 +1458,7 @@ class SCF(lib.StreamObject):
 
     get_fock = get_fock
     get_occ = get_occ
+    static_dft = static_dft
 
     @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
