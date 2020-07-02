@@ -651,54 +651,6 @@ def static_dft(mf, s, f, mo_energy, mo_occ, mo_coeff, option=2):
     F_static = reduce(numpy.dot, (s, d, s))
     return f + F_static
 
-
-
-# eigenvalue of d is 1
-def static_dft(s, f, factor, tau, epsilon, mu, option = 2):
-    r'''Add static DFT operator to Fock matrix
-
-    .. math::
-       :nowrap:
-
-       \begin{align}
-         FC &= SCE \\
-         F &= F + SC bla C^\dagger S \\
-       \end{align}
-
-    Returns:
-        New Fock matrix, 2D ndarray
-    '''
-
-    def static_coefficients(tau, epsilon, mu, option = 2):
-        '''
-        Inputs:
-            tau: temperature
-            epsilon: numpy array of Kohn-Sham eigenvalues
-            mu: chemical potential
-            option: 1: Eq. 18; 2: Eq. 20
-        '''
-        kb = 3.166810413e-6 # Boltzman constant in Hartree/K
-        beta = kb * tau
-        delta = epsilon - mu
-        exp_neg_beta_delta = np.exp(-beta * delta)
-        p = exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta)
-        dpde = - beta * exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta ) / ( 1.0 + exp_neg_beta_delta)
-
-        if option == 1:
-            dEdp = beta * np.where(p < 0.5, -1.0 / (1.0 - p), np.where(p > 0.5, 1.0 / p, 0))
-        else:
-            dEdp = beta * (np.log(p) - np.log(1-p))
-
-        v_c_static = dEdp * dpde * epsilon
-
-        return v_c_static
-
-    v_c_static = static_coefficients(tau, epsilon, mu, option)
-    d=self.make_rdm1(mo_coeff, v_c_static)
-    F_static = reduce(numpy.dot, (s, d, s))
-    return f + F_static
-
-
 # eigenvalue of d is 1
 def level_shift(s, d, f, factor):
     r'''Apply level shift :math:`\Delta` to virtual orbitals
