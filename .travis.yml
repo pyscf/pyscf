@@ -4,7 +4,7 @@
 language: python
 group: travis_latest
 os: linux
-dist: bionic
+#dist: bionic
 
 git:
   depth: 20
