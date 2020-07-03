@@ -32,7 +32,12 @@ cache:
 
 before_install:
   - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
-  - pip install numpy scipy==1.4.1 h5py nose nose-exclude nose-timer codecov
+  - pip install numpy h5py nose nose-exclude nose-timer codecov
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then 
+        pip install scipy; 
+    else
+        pip install scipy==1.4.1; 
+    fi
 
 install:
   # openblas from numpy may be slightly faster than the default libblas library
