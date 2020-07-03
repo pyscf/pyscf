@@ -591,6 +591,7 @@ class Gradients (lagrange.Gradients):
         if mo is None: mo = self.base.mo_coeff
         if ci is None: ci = self.base.ci
         Lorb, Lci = self.unpack_uniq_var (Lvec)
+        Lci_norm = [np.dot (c.ravel (), c.ravel ()) for c in Lci]
         try:
             Lci_ss = self.base.fcisolver.states_spin_square (Lci, self.base.ncas, self.base.nelecas)[0]
         except AttributeError:
@@ -598,10 +599,10 @@ class Gradients (lagrange.Gradients):
             Lci_ss = [spin_square (L, self.base.ncas, ((nelec+m)//2,(nelec-m)//2))[0]
                 for L, m in zip (Lci, self.spin_states)]
             Lci_ss = [x[0] for x in Lci_ss]
-        Lci_ss = [x / np.dot (y.ravel (), y.ravel ()) for x, y in zip (Lci_ss, Lci)] # Lci is not normalized
+        Lci_ss = [x / y for x, y in zip (Lci_ss, Lci_norm)] # Lci is not normalized
         Lci_multip = [np.sqrt (x+.25) - .5 for x in Lci_ss]
-        for ix, (ss, multip) in enumerate (zip (Lci_ss, Lci_multip)):
-            lib.logger.debug (self, ' State {} Lagrange CI vector <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format (ix, ss, multip))
+        for ix, (norm, ss, multip) in enumerate (zip (Lci_norm, Lci_ss, Lci_multip)):
+            lib.logger.debug (self, ' State {} Lagrange CI vector norm = {:.7e} ; <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format (ix, norm, ss, multip))
         #lib.logger.info (self, '{} gradient: state = {}'.format (self.base.__class__.__name__, state))
         #ngorb = self.ngorb
         #nci = self.nci
