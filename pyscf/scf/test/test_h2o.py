@@ -197,8 +197,14 @@ class KnownValues(unittest.TestCase):
         print("mo diff: ", numpy.linalg.norm(mo-mo_coeff))
         mo_occa = (mo_occ>1e-8).astype(numpy.double)
         mo_occb = mo_occ - mo_occa
-        dm_test = scf.uhf.make_rdm1([mo_coeff,mo_coeff], [mo_occa,mo_occb])
-        print("dm_test: ", numpy.linalg.norm(dm_test[0]+dm_test[1]))
+        print(mo_occa)
+        print(mo_occb)
+        dm_a = numpy.dot(mo_coeff*mo_occa, mo_coeff.conj().T)
+        dm_b = numpy.dot(mo_coeff*mo_occb, mo_coeff.conj().T)
+        print(numpy.linalg.norm(dm_a))
+        print(numpy.linalg.norm(dm_b))
+        #dm_test = scf.uhf.make_rdm1([mo_coeff,mo_coeff], [mo_occa,mo_occb])
+        print("dm_test: ", numpy.linalg.norm(dm_a+dm_b))
 
         mf = scf.hf.RHF(mol)
         dm0 = scf.hf.init_guess_by_chkfile(mol, ftmp.name, project=False)
