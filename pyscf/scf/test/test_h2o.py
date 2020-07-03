@@ -190,27 +190,9 @@ class KnownValues(unittest.TestCase):
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334714065913508, 9)
 
-        chk_mol, scf_rec = scf.chkfile.load_scf(ftmp.name)
-        mo_occ = scf_rec["mo_occ"]
-        print("occ diff: ", numpy.linalg.norm(mo_occ - occ))
-        mo_coeff =  scf_rec["mo_coeff"]
-        print("mo diff: ", numpy.linalg.norm(mo-mo_coeff))
-        mo_occa = (mo_occ>1e-8).astype(numpy.double)
-        mo_occb = mo_occ - mo_occa
-        print(mo_occa)
-        print(mo_occb)
-        dm_a = numpy.dot(mo_coeff*mo_occa, mo_coeff.conj().T)
-        dm_b = numpy.dot(mo_coeff*mo_occb, mo_coeff.conj().T)
-        print(numpy.linalg.norm(dm_a))
-        print(numpy.linalg.norm(dm_b))
-        #dm_test = scf.uhf.make_rdm1([mo_coeff,mo_coeff], [mo_occa,mo_occb])
-        print("dm_test: ", numpy.linalg.norm(dm_a+dm_b))
-
         mf = scf.hf.RHF(mol)
         dm0 = scf.hf.init_guess_by_chkfile(mol, ftmp.name, project=False)
-        print("dm0: ", numpy.linalg.norm(dm0))
         dm1 = mf.get_init_guess(key='minao')
-        print("dm1: ", numpy.linalg.norm(dm1))
         self.assertTrue(numpy.allclose(dm0, dm1))
 
         mf = scf.DHF(mol)
