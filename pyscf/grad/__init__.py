@@ -42,6 +42,7 @@ grad_nuc = rhf.grad_nuc
 try:
     from . import casci
     from . import casscf
+    from . import sacasscf
     from . import ccsd
     #from . import ccsd_t
     from . import cisd
