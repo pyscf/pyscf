@@ -138,7 +138,7 @@ class Gradients (rhf_grad.GradientsBasics):
             self.dump_flags()
 
         conv, Lvec, bvec, Aop, Adiag = self.solve_lagrange (level_shift=level_shift, **kwargs)
-        #self.debug_lagrange (Lvec, bvec, Aop, Adiag, **kwargs)
+        self.debug_lagrange (Lvec, bvec, Aop, Adiag, **kwargs)
         #if not conv: raise RuntimeError ('Lagrange multiplier determination not converged!')
         cput1 = lib.logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
 

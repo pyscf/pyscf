@@ -17,7 +17,7 @@ from pyscf.tools import molden
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casscf as casscf_grad
 from pyscf.grad.mp2 import _shell_prange
-
+from pyscf.fci.addons import fix_spin_
 
 def grad_elec(mc, mf_grad):
     mf = mf_grad.base
@@ -169,16 +169,16 @@ class KnownValues(unittest.TestCase):
         e2_0 = mcs.e_states[0]
         e2_1 = mcs.e_states[1]
 
-        #fmt_str = ' '.join (['{:19.12e}' for i in range (9)])
+        #fmt_str = ' '.join (['{:22.15e}' for i in range (9)])
         #print ('sa nosymm: ' + fmt_str.format (e_avg, e_0, e_1, lib.fp (de_avg), lib.fp (de_0), lib.fp (de_1), 
         #    (e1_avg-e2_avg)/0.002*lib.param.BOHR, (e1_0-e2_0)/0.002*lib.param.BOHR,
         #    (e1_1-e2_1)/0.002*lib.param.BOHR))
-        self.assertAlmostEqual(e_avg, -1.083838462141e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_avg), -1.034340877616e-01, 7)
-        self.assertAlmostEqual(e_0, -1.083902662193e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_0), -6.398928175441e-02, 7) 
-        self.assertAlmostEqual(e_1, -1.083774262089e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_1), -1.428890918626e-01, 7)
+        self.assertAlmostEqual(e_avg, -1.083838462140703e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034340877615413e-01, 7)
+        self.assertAlmostEqual(e_0, -1.083902662192770e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_0), -6.398928175384316e-02, 7) 
+        self.assertAlmostEqual(e_1, -1.083774262088640e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428890918624837e-01, 7)
         self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
@@ -187,10 +187,23 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf_symm, 4, 4)
         mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
         fcisolvers = [fci.solver (mol_symm, singlet=bool(i), symm=True) for i in range (2)]
-        fcisolvers[0].spin = 2
-        fcisolvers[0].wfnsym = 'B1'
-        fcisolvers[1].wfnsym = 'A1'
         fcisolvers[0].conv_tol = fcisolvers[1].conv_tol = 1e-10
+        fcisolvers[0].wfnsym = 'B1' 
+        fcisolvers[1].wfnsym = 'A1' 
+        fcisolvers[0].spin = 2      
+        # MRH 07/02/2020: Using fix_spin_ here increases 100-sample std of lib.fp (de_0 or de_1) 
+        # to roughly single-precision round-off-error for some reason (I am using 8 threads).
+        # However, the point groups alone only keep the 2 states orthogonal to single precision,
+        # and this indirectly causes the same problem in lib.fp. Fortunately, using solver.spin
+        # forces the two solvers into disjoint Hilbert spaces entirely and the result is at least
+        # more precise. I kind of want to turn off the point group symmetry now and see if I can
+        # use the same reference numbers in the assertions within the two state average tests 
+        # (here and above), but without the point groups, I don't trust that fcisolver[1] will 
+        # stay singlet even using direct_spin1. I would have to use fix_spin_, which brings me
+        # full circle. (Of course, the alternative is to just loosen the tolerances in the
+        # assertions until a single set of numbers and single-precision rounding works for both
+        # tests, but I don't want to hide the fact that these two approaches give different
+        # results to within machine reproducibility.) 
         mc = mcscf.addons.state_average_mix_(mc, fcisolvers, (.5, .5))
         gs = mc.nuc_grad_method().as_scanner()
         e_avg, de_avg = gs(mol_symm)
@@ -207,16 +220,16 @@ class KnownValues(unittest.TestCase):
         e2_0 = mcs.e_states[0]
         e2_1 = mcs.e_states[1]
 
-        #fmt_str = ' '.join (['{:19.12e}' for i in range (9)])
+        #fmt_str = ' '.join (['{:22.15e}' for i in range (9)])
         #print ('sa mix: ' + fmt_str.format (e_avg, e_0, e_1, lib.fp (de_avg), lib.fp (de_0), lib.fp (de_1), 
         #    (e1_avg-e2_avg)/0.002*lib.param.BOHR, (e1_0-e2_0)/0.002*lib.param.BOHR,
         #    (e1_1-e2_1)/0.002*lib.param.BOHR))
-        self.assertAlmostEqual(e_avg, -1.083838462142e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_avg), -1.034392760319e-01, 7)
-        self.assertAlmostEqual(e_0, -1.083902661656e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_0), -6.398921124172e-02, 7)
-        self.assertAlmostEqual(e_1, -1.083774262628e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_1), -1.428891618903e-01, 7)
+        self.assertAlmostEqual(e_avg, -1.083838462141992e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034392760319145e-01, 7)
+        self.assertAlmostEqual(e_0, -1.083902661656155e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_0), -6.398921123988113e-02, 7)
+        self.assertAlmostEqual(e_1, -1.083774262627830e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428891618903179e-01, 7)
         self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)

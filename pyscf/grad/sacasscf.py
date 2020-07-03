@@ -23,7 +23,7 @@ from pyscf.mcscf import mc1step, mc1step_symm, newton_casscf
 from pyscf.grad import casscf as casscf_grad
 from pyscf.grad import rhf as rhf_grad
 from pyscf.fci.direct_spin1 import _unpack_nelec
-from pyscf.fci.spin_op import spin_square0
+from pyscf.fci.spin_op import spin_square
 from pyscf.fci import cistring
 from pyscf import lib, ao2mo
 import numpy as np
@@ -586,11 +586,22 @@ class Gradients (lagrange.Gradients):
         return de_Lci + de_Lorb
     
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, state=None, mo=None, ci=None, **kwargs):
-        return
         # This needs to be rewritten substantially to work properly with state_average_mix
-        #if state is None: state = self.state
-        #if mo is None: mo = self.base.mo_coeff
-        #if ci is None: ci = self.base.ci
+        if state is None: state = self.state
+        if mo is None: mo = self.base.mo_coeff
+        if ci is None: ci = self.base.ci
+        Lorb, Lci = self.unpack_uniq_var (Lvec)
+        try:
+            Lci_ss = self.base.fcisolver.states_spin_square (Lci, self.base.ncas, self.base.nelecas)[0]
+        except AttributeError:
+            nelec = _unpack_nelec (self.base.nelecas)
+            Lci_ss = [spin_square (L, self.base.ncas, ((nelec+m)//2,(nelec-m)//2))[0]
+                for L, m in zip (Lci, self.spin_states)]
+            Lci_ss = [x[0] for x in Lci_ss]
+        Lci_ss = [x / np.dot (y.ravel (), y.ravel ()) for x, y in zip (Lci_ss, Lci)] # Lci is not normalized
+        Lci_multip = [np.sqrt (x+.25) - .5 for x in Lci_ss]
+        for ix, (ss, multip) in enumerate (zip (Lci_ss, Lci_multip)):
+            lib.logger.debug (self, ' State {} Lagrange CI vector <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format (ix, ss, multip))
         #lib.logger.info (self, '{} gradient: state = {}'.format (self.base.__class__.__name__, state))
         #ngorb = self.ngorb
         #nci = self.nci
@@ -673,7 +684,7 @@ class Gradients (lagrange.Gradients):
         #ncsf = bci_csf.shape[1]
         #for iroot in range (self.nroots):
         #    lib.logger.debug (self, "{} gradient Lagrange factor, CI part root {} spin square: {}".format (
-        #        self.base.__class__.__name__, iroot, spin_square0 (Lci[iroot], ncas, nelecas)))
+        #        self.base.__class__.__name__, iroot, spin_square (Lci[iroot], ncas, nelecas)))
         #    lib.logger.debug (self, "Base CI vector")
         #    for icsf in range (ncsf):
         #        lib.logger.debug (self, '{} {}'.format (ci_lbls[iroot,icsf], ci_csf[iroot,icsf]))
