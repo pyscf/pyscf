@@ -31,7 +31,7 @@ cache:
   pip: true
 
 before_install:
-  - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
+  - sudo apt-get -qq install gcc gfortran libgfortran3 libblas-dev cmake curl
   - pip install numpy h5py nose nose-exclude nose-timer codecov
   - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then 
         pip install scipy; 
