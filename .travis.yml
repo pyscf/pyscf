@@ -2,7 +2,7 @@
 # Workaround present for https://github.com/sunqm/pyscf/issues/71
 
 language: python
-group: travis_latest
+#group: travis_latest
 os: linux
 #dist: bionic
 
