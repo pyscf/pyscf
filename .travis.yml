@@ -1,9 +1,10 @@
 # More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
 # Workaround present for https://github.com/sunqm/pyscf/issues/71
 
-sudo: required
 language: python
-group: travis_lts
+#group: travis_latest
+os: linux
+#dist: bionic
 
 git:
   depth: 20
@@ -30,8 +31,13 @@ cache:
   pip: true
 
 before_install:
-  - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
-  - pip install numpy scipy h5py nose nose-exclude nose-timer codecov
+  - sudo apt-get -qq install gcc gfortran libgfortran3 libblas-dev cmake curl
+  - pip install numpy h5py nose nose-exclude nose-timer codecov
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then 
+        pip install scipy; 
+    else
+        pip install scipy==1.4.1; 
+    fi
 
 install:
   # openblas from numpy may be slightly faster than the default libblas library
