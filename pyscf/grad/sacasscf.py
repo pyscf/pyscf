@@ -590,19 +590,30 @@ class Gradients (lagrange.Gradients):
         if state is None: state = self.state
         if mo is None: mo = self.base.mo_coeff
         if ci is None: ci = self.base.ci
+        def _debug_cispace (xci, label):
+            xci_norm = [np.dot (c.ravel (), c.ravel ()) for c in xci]
+            try:
+                xci_ss = self.base.fcisolver.states_spin_square (xci, self.base.ncas, self.base.nelecas)[0]
+            except AttributeError:
+                nelec = _unpack_nelec (self.base.nelecas)
+                xci_ss = [spin_square (x, self.base.ncas, ((nelec+m)//2,(nelec-m)//2))[0]
+                    for x, m in zip (xci, self.spin_states)]
+                xci_ss = [x[0] for x in xci_ss]
+            xci_ss = [x / max (y, 1e-8) for x, y in zip (xci_ss, xci_norm)] 
+            xci_multip = [np.sqrt (x+.25) - .5 for x in xci_ss]
+            for ix, (norm, ss, multip) in enumerate (zip (xci_norm, xci_ss, xci_multip)):
+                lib.logger.debug (self,
+                    ' State {} {} norm = {:.7e} ; <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format
+                    (ix, label, norm, ss, multip))
+        borb, bci = self.unpack_uniq_var (bvec)
+        lib.logger.debug (self, 'Orbital rotation gradient norm = {:.7e}'.format (linalg.norm (borb)))
+        _debug_cispace (bci, 'CI gradient')
+        Aorb, Aci = self.unpack_uniq_var (Adiag)
+        lib.logger.debug (self, 'Orbital rotation Hamiltonian diagonal norm = {:.7e}'.format (linalg.norm (Aorb)))
+        _debug_cispace (Aci, 'Hamiltonian diagonal')
         Lorb, Lci = self.unpack_uniq_var (Lvec)
-        Lci_norm = [np.dot (c.ravel (), c.ravel ()) for c in Lci]
-        try:
-            Lci_ss = self.base.fcisolver.states_spin_square (Lci, self.base.ncas, self.base.nelecas)[0]
-        except AttributeError:
-            nelec = _unpack_nelec (self.base.nelecas)
-            Lci_ss = [spin_square (L, self.base.ncas, ((nelec+m)//2,(nelec-m)//2))[0]
-                for L, m in zip (Lci, self.spin_states)]
-            Lci_ss = [x[0] for x in Lci_ss]
-        Lci_ss = [x / y for x, y in zip (Lci_ss, Lci_norm)] # Lci is not normalized
-        Lci_multip = [np.sqrt (x+.25) - .5 for x in Lci_ss]
-        for ix, (norm, ss, multip) in enumerate (zip (Lci_norm, Lci_ss, Lci_multip)):
-            lib.logger.debug (self, ' State {} Lagrange CI vector norm = {:.7e} ; <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format (ix, norm, ss, multip))
+        lib.logger.debug (self, 'Orbital rotation Lagrange vector norm = {:.7e}'.format (linalg.norm (Lorb)))
+        _debug_cispace (Lci, 'Lagrange vector')
         #lib.logger.info (self, '{} gradient: state = {}'.format (self.base.__class__.__name__, state))
         #ngorb = self.ngorb
         #nci = self.nci
