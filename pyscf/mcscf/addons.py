@@ -868,7 +868,9 @@ def state_specific_(casscf, state=1, wfnsym=None):
 
     fcisolver = FakeCISolver()
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
-    fcisolver.nroots = state+1
+    fcisolver.nroots = state + 1
+    if wfnsym is not None:
+        fcisolver.wfnsym = wfnsym
     casscf.fcisolver = fcisolver
     return casscf
 state_specific = state_specific_
