@@ -97,16 +97,12 @@ def FCI(mol_or_mf, mo=None, singlet=False):
         mol = mf.mol
         if mo is None:
             mo = mf.mo_coeff
+        is_uhf = isinstance(mf, scf.uhf.UHF)
     else:
         mf = None
         mol = mol_or_mf
-
-    is_uhf = isinstance(mf, scf.uhf.UHF)
-    nelec = mol.nelec
-    if is_uhf:
-        nelec = mf.nelec
-    elif not (isinstance(mo, numpy.ndarray) and mo.ndim == 2):
-        is_uhf = True
+        is_rhf = (mo is None or (isinstance(mo, numpy.ndarray) and mo.ndim == 2))
+        is_uhf = not is_rhf
 
     if is_uhf:
         fcisolver = direct_uhf.FCI(mol)
@@ -116,6 +112,8 @@ def FCI(mol_or_mf, mo=None, singlet=False):
     # Just create the FCI solver without initializing Hamiltonian
     if mo is None:
         return fcisolver
+
+    nelec = getattr(mf, 'nelec', mol.nelec)
 
     if mf is None:
         hcore = scf.hf.get_hcore(mol)
