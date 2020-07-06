@@ -652,7 +652,6 @@ def static_dft(mf, s, f, mo_energy, mo_occ, mo_coeff, option=2):
     return f + F_static
 
 
-
 # eigenvalue of d is 1
 #def static_dft(s, f, factor, tau, epsilon, mu, option = 2):
 #    r'''Add static DFT operator to Fock matrix
@@ -1726,11 +1725,13 @@ class SCF(lib.StreamObject):
     check_convergence = None
     
     #Static_DFT
-    def static_dft(self, mo_coeff=None, mo_occ=None, mo_energy=None )
+    def static_dft(self, s=None, f=None, mo_coeff=None, mo_occ=None, mo_energy=None)
         if mo_energy is None: mo_energy = self.mo_energy
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_occ = self.mo_coeff
-        return static_dft(mo_energy, mo_coeff, mo_occ )
+        if s is None: s = self.get_ovlp(mol)
+        if f is None: f = self.get_fock()
+        return static_dft(s, f, mo_energy, mo_coeff, mo_occ)
 
     def scf(self, dm0=None, **kwargs):
         '''SCF main driver
