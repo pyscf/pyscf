@@ -142,7 +142,7 @@ def compute_amplitudes(myadc, eris):
         eris_ovvo = eris.ovvo
 
         if isinstance(eris.vvvv, list):
-            t2_2 = contract_ladder_outcore(myadc,t2_1,eris)
+            t2_2 = contract_ladder_outcore(myadc,t2_1,eris.vvvv)
         else:    
             eris_vvvv = eris.vvvv
             temp = t2_1.reshape(nocc*nocc,nvir*nvir)
@@ -299,13 +299,13 @@ def compute_energy(myadc, t1, t2, eris):
         temp_t2_ab_vvvv = None
 
         if isinstance(eris.vvvv, list):
-            temp_t2_a_vvvv = contract_ladder_outcore(myadc,t2_1_a,eris)
+            temp_t2_a_vvvv = contract_ladder_outcore(myadc,t2_1_a,eris.vvvv)
         else : 
             temp_t2_a = t2_1_a.reshape(nocc*nocc,nvir*nvir)
             temp_t2_a_vvvv = np.dot(temp_t2_a,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
 
         if isinstance(eris.vvvv, list):
-            temp_t2_ab_vvvv = contract_ladder_outcore(myadc,t2_1,eris)
+            temp_t2_ab_vvvv = contract_ladder_outcore(myadc,t2_1,eris.vvvv)
         else :
             temp_t2_ab = t2_1.reshape(nocc*nocc,nvir*nvir)
             temp_t2_ab_vvvv = np.dot(temp_t2_ab,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
@@ -315,7 +315,7 @@ def compute_energy(myadc, t1, t2, eris):
 
         if isinstance(eris.vvvv, list):
             t2_1_a_t = np.ascontiguousarray(t2_1_a.transpose(0,1,3,2))
-            temp_t2_a_vvvv_n = contract_ladder_outcore(myadc,t2_1_a_t,eris)
+            temp_t2_a_vvvv_n = contract_ladder_outcore(myadc,t2_1_a_t,eris.vvvv)
             temp_t2_a_vvvv -= temp_t2_a_vvvv_n
         else :
             temp_t2_a = temp_t2_a.reshape(nocc,nocc,nvir,nvir)
@@ -363,7 +363,7 @@ def compute_energy(myadc, t1, t2, eris):
     return e_corr
 
 
-def contract_ladder_outcore(myadc,t_amp,eris):
+def contract_ladder_outcore(myadc,t_amp,v_list):
 
     nocc = myadc._nocc
     nvir = myadc._nvir
@@ -372,7 +372,7 @@ def contract_ladder_outcore(myadc,t_amp,eris):
     t = np.zeros((nvir,nvir, nocc*nocc))
 
     a = 0
-    for dataset in eris.vvvv:
+    for dataset in v_list:
          k = dataset.shape[0]
          dataset = dataset[:].reshape(-1,nvir*nvir)
          t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
@@ -723,8 +723,8 @@ def get_imds_ea(adc, eris=None):
 
         if isinstance(eris.vvvv, list):
 
-            temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris)
-            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris)
+            temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris.vvvv)
+            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris.vvvv)
 
             M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp_t2a_vvvv, optimize=True)
             M_ab += 0.25*lib.einsum('mlaf,mlfb->ab',t2_1_a, temp_t2a_vvvv, optimize=True)
@@ -749,8 +749,8 @@ def get_imds_ea(adc, eris=None):
 
        
         if isinstance(eris.vvvv, list):
-            temp_t2_a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris)
-            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris)
+            temp_t2_a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris.vvvv)
+            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris.vvvv)
             M_ab -= 0.25*lib.einsum('mlad,mlbd->ab', temp_t2_a_vvvv, t2_1_a, optimize=True)
             M_ab -= lib.einsum('mlad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
 
@@ -930,8 +930,8 @@ def get_imds_ip(adc, eris=None):
 
         if isinstance(eris.vvvv, list):
 
-            temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris)
-            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris)
+            temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris.vvvv)
+            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris.vvvv)
 
         else :
 
@@ -1143,7 +1143,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     return diag
 
 
-def ea_contract_r_vvvv(myadc,r2,eris):
+def ea_contract_r_vvvv(myadc,r2,v_list):
 
     nocc = myadc._nocc
     nvir = myadc._nvir
@@ -1151,7 +1151,7 @@ def ea_contract_r_vvvv(myadc,r2,eris):
     r2_vvvv = np.zeros((nocc,nvir,nvir))
     r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
     a = 0
-    for dataset in eris.vvvv:
+    for dataset in v_list:
          k = dataset.shape[0]
          dataset = dataset[:].reshape(-1,nvir*nvir)
          r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
@@ -1246,7 +1246,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                r2 = r2.reshape(nocc, nvir, nvir)
 
                if isinstance(eris.vvvv, list):
-                   s[s2:f2] += ea_contract_r_vvvv(adc,r2,eris)
+                   s[s2:f2] += ea_contract_r_vvvv(adc,r2,eris.vvvv)
 
                else :
                    r_bab_t = r2.reshape(nocc,-1)
