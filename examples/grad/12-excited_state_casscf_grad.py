@@ -18,9 +18,7 @@ mol = gto.M(
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. ,-0.757  , 0.587)],
         [1   , (0. , 0.757  , 0.587)]],
-    basis = '631g',
-    output = 'nosymm.log', # Delete this before pull request
-    verbose = lib.logger.DEBUG
+    basis = '631g'
 )
 mf = scf.RHF(mol).run()
 
@@ -56,17 +54,20 @@ print(g2_nosymm)
 #
 # Unless explicitly specified as an input argument of set_geom_ function,
 # set_geom_ function will use the same unit as the one specified in mol.unit.
-mol.set_geom_('''O   0.   0.      0.1
-                 H   0.  -0.757   0.587
-                 H   0.   0.757   0.587''')
-e3_nosymm_shift, g3_nosymm_shift = g_scanner(mol, state=3)
-print('Gradients of the 3rd excited state at a shifted geometry')
-print(g3_nosymm_shift)
+#
 # This has two nearby local minima consisting of different orbitals, although
 # the spins and symmetries of the states are the same as above in both cases.
 # The local minimum at the state-average energy of -74.7425 Eh has O atom
 # 2py (b2), 2pz (a1), 3s (a1), and 3pz (a1) orbitals. That at -74.7415 has O
 # atom 2py (b2), 2pz (a1), and 3py (b2) and one OH antibonding orbital (a1). 
+mol.set_geom_('''O   0.   0.      0.1
+                 H   0.  -0.757   0.587
+                 H   0.   0.757   0.587''')
+e3_nosymm_shift, g3_nosymm_shift = g_scanner(mol, state=3)
+print (g_scanner.base.e_tot, g_scanner.base.e_states)
+print('Energy of the 3rd excited state at a shifted geometry =', e3_nosymm_shift,'Eh')
+print('Gradients of the 3rd excited state at a shifted geometry:')
+print(g3_nosymm_shift)
 
 # 
 # State-average mix to average states of selected spins or symmetries
@@ -77,9 +78,7 @@ mol = gto.M(
         [1   , (0. ,-0.757  , 0.587)],
         [1   , (0. , 0.757  , 0.587)]],
     basis = '631g',
-    symmetry = True,
-    output = 'symm.log',
-    verbose = lib.logger.DEBUG
+    symmetry = True
 )
 mol.build ()
 mf = scf.RHF (mol).run ()
@@ -100,15 +99,9 @@ mol.set_geom_('''O   0.   0.      0.1
                  H   0.  -0.757   0.587
                  H   0.   0.757   0.587''')
 e3_symm_shift, g3_symm_shift = g_scanner (mol, state=1)
-print('Gradients of the 3rd excited state')
+print('Gradients of the 3rd excited state using symmetry')
 print(g3_symm)
-print('Gradients of the 3rd excited state at a shifted geometry')
+print('Gradients of the 3rd excited state at a shifted geometry using symmetry')
 print(g3_symm_shift)
-print (('Disagreements between state average solver without symmetry and '
-'state average mix solver using symmetry'))
-print ("E(3B2) at orig geometry = {:.3e} Eh".format (e3_symm-e3_nosymm))
-print ("g(3B2) at orig geometry =\n", g3_symm - g3_nosymm)
-print ("E(3B2) at shift geometry = {:.3e} Eh".format (e3_symm_shift 
-    - e3_nosymm_shift))
-print ("g(3B2) at shift geometry =\n", g3_symm_shift- g3_nosymm_shift)
+
 
