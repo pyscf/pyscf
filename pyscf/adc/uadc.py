@@ -1969,35 +1969,21 @@ def ea_contract_r_vvvv_antisym(myadc,r2,v_list):
 
     return r2_vvvv
 
+def ea_contract_r_vvvv(myadc,r2,v_list):
 
-def ea_contract_r_vvvv(myadc,r2,eris,spin=None):
+    nocc_1 = r2.shape[0]
+    nvir_1 = r2.shape[1] 
+    nvir_2 = r2.shape[2] 
 
-    nocc_a = myadc._nocc[0]
-    nvir_a = myadc._nvir[0]
-    nocc_b = myadc._nocc[1]
-    nvir_b = myadc._nvir[1]
- 
-    if spin == "bab" :
-        r2_vvvv = np.zeros((nocc_b,nvir_a,nvir_b))
+    r2 = r2.reshape(-1,nvir_1*nvir_2)
+    r2_vvvv = np.zeros((nocc_1,nvir_1,nvir_2))
 
-        a = 0
-        for dataset in eris.vVvV_p:
-             k = dataset.shape[0]
-             dataset = dataset[:].reshape(-1,nvir_a*nvir_b)
-             r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc_b,-1,nvir_b)
-             a += k
-
-    if spin == "aba" :
-        r2_vvvv = np.zeros((nvir_a,nvir_b,nocc_a))
-
-        a = 0
-        for dataset in eris.vVvV_p:
-             k = dataset.shape[0]
-             dataset = dataset[:].reshape(-1,nvir_a*nvir_b)
-             r2_vvvv[a:a+k] = np.dot(dataset,r2.T).reshape(-1,nvir_b,nocc_a)
-             a += k
-
-        r2_vvvv = np.ascontiguousarray(r2_vvvv.transpose(2,1,0)) 
+    a = 0
+    for dataset in v_list:
+         k = dataset.shape[0]
+         dataset = dataset[:].reshape(-1,nvir_1*nvir_2)
+         r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc_1,-1,nvir_2)
+         a += k
 
     return r2_vvvv
 
@@ -2198,10 +2184,8 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                if isinstance(eris.vVvV_p, list):
 
-                   r_bab_t = r_bab.reshape(nocc_b,-1)
-                   r_aba_t = r_aba.transpose(0,2,1).reshape(nocc_a,-1)
-                   temp_1 = ea_contract_r_vvvv(adc,r_bab_t,eris,spin="bab")
-                   temp_2 = ea_contract_r_vvvv(adc,r_aba_t,eris,spin="aba")
+                   temp_1 = ea_contract_r_vvvv(adc,r_bab,eris.vVvV_p)
+                   temp_2 = ea_contract_r_vvvv(adc,r_aba,eris.VvVv_p)
 
                    s[s_bab:f_bab] += temp_1.reshape(-1)
                    s[s_aba:f_aba] += temp_2.reshape(-1)

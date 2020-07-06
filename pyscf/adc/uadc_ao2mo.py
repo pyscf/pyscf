@@ -89,7 +89,6 @@ def transform_integrals_incore(myadc):
 
     return eris
 
-
 def transform_integrals_outcore(myadc):
 
     cput0 = (time.clock(), time.time())
