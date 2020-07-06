@@ -1614,7 +1614,6 @@ class SCF(lib.StreamObject):
 
     get_fock = get_fock
     get_occ = get_occ
-    static_dft = static_dft
 
     @lib.with_doc(get_grad.__doc__)
     def get_grad(self, mo_coeff, mo_occ, fock=None):
@@ -1725,6 +1724,13 @@ class SCF(lib.StreamObject):
     #   f(envs) => bool
     # to check_convergence can overwrite the default convergence criteria
     check_convergence = None
+    
+    #Static_DFT
+    def static_dft(self, mo_coeff=None, mo_occ=None, mo_energy=None )
+        if mo_energy is None: mo_energy = self.mo_energy
+        if mo_occ is None: mo_occ = self.mo_occ
+        if mo_coeff is None: mo_occ = self.mo_coeff
+        return static_dft(mo_energy, mo_coeff, mo_occ )
 
     def scf(self, dm0=None, **kwargs):
         '''SCF main driver
