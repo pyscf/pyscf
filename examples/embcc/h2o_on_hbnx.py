@@ -31,7 +31,8 @@ parser.add_argument("--supercell", type=int, nargs=3,
         help="Supercell size in each direction")
 parser.add_argument("--distances", type=float, nargs="*",
         #default=[2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 4.0, 4.2, 4.5, 5.0, 6.0, 7.0, 8.0],
-        default=[2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 4.0, 4.2, 4.5, 5.0, 6.0, 7.0, 8.0],
+        #default=[2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 4.0, 4.2, 4.5, 5.0, 6.0, 7.0, 8.0],
+        default=[2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.6, 3.8, 4.0, 4.2, 4.5, 5.0, 6.0, 7.0, 8.0],
         help="Set of substrate-surface distances to calculate")
 parser.add_argument("--ke-cutoff", type=float, help="Planewave cutoff")
 parser.add_argument("--precision", type=float, default=1e-6,
@@ -39,11 +40,9 @@ parser.add_argument("--precision", type=float, default=1e-6,
 #parser.add_argument("--exp-to-discard", type=float, default=0.1,
 parser.add_argument("--exp-to-discard", type=float,
         help="Threshold for discarding diffuse Gaussians, helps convergence.")
-parser.add_argument("--basis", default="gth-dzv", help="Basis set")
-parser.add_argument("--large-basis-atoms", default=["H*2", "O*1", "H*0", "N#0", "B#1"],
-        help="High accuracy basis set for chemical active atoms")
-parser.add_argument("--large-basis", default="gth-dzvp",
-        help="High accuracy basis set for chemical active atoms")
+
+parser.add_argument("--basis", nargs="*", help="Basis set.")
+
 parser.add_argument("--pseudopot", default="gth-pade", help="Pseudo potential.")
 parser.add_argument("--minao", default="gth-szv", help="Basis set for IAOs.")
 
@@ -72,24 +71,47 @@ parser.add_argument("--mp2-correction", action="store_true")
 parser.add_argument("--cderi-name", default="cderi-%.2f")
 parser.add_argument("--cderi-load", action="store_true")
 
+parser.add_argument("--df", choices=["gaussian", "mixed"], default="gaussian")
 parser.add_argument("--print-ao", action="store_true")
 parser.add_argument("--mf-only", action="store_true")
 
+# Counterpoise
+parser.add_argument("--counterpoise", choices=["none", "water", "water-full", "surface", "surface-full"])
+
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
+
+def parse_basis(args):
+    # Default basis
+    basis = {"default" : "gth-dzv"}
+    for atom in args.impurity_atoms:
+        if atom in ("H*0", "N#0"):
+            basis[atom] = "gth-aug-dzvp"
+        else:
+            basis[atom] = "gth-dzvp"
+
+    log.debug("Default basis=%r", basis)
+
+    if args.basis:
+        basis_updates = {}
+        for elem in args.basis:
+            atom, bas = elem.split("=")
+            basis_updates[atom] = bas
+        basis.update(basis_updates)
+
+    log.debug("Final basis=%r", basis)
+
+    args.basis = basis
+
 
 if args.bath_size is None:
     args.bath_size = args.bath_relative_size
     del args.bath_relative_size
 
-if args.large_basis == args.basis or not args.large_basis_atoms:
-    basis = args.basis
-else:
-    basis = {atom : args.large_basis for atom in args.large_basis_atoms}
-    basis["default"] = args.basis
-    args.basis = basis
-del args.large_basis
-del args.large_basis_atoms
+if args.counterpoise == "none":
+    args.counterpoise = None
+
+parse_basis(args)
 
 if args.minao == "full":
     args.minao = args.basis
@@ -100,6 +122,53 @@ if MPI_rank == 0:
     for name, value in sorted(vars(args).items()):
         log.info("%20s: %r", name, value)
 
+def counterpoise_mod(atoms, basis):
+    log.debug("Atoms before assigning ghosts:\n%r", atoms)
+    log.debug("Basis before assigning ghosts:\n%r", basis)
+    atoms_new = []
+    basis_new = {}
+    # Remove surface
+    if args.counterpoise == "water":
+        atoms_new = [atom for atom in atoms if atom[0][0] in ("H", "O")]
+        #basis_new = args.basis
+        basis_new = {key : basis[key] for key in basis if key[0] in ("H", "O")}
+        basis_new["default"] = basis["default"]
+    # Remove water
+    elif args.counterpoise == "surface":
+        atoms_new = [atom for atom in atoms if atom[0][0] in ("B", "N")]
+        basis_new = {key : basis[key] for key in basis if key[0] in ("B", "N")}
+        basis_new["default"] = basis["default"]
+        #basis_new = args.basis
+    # Remove surface but keep surface basis
+    elif args.counterpoise == "water-full":
+        for atom in atoms:
+            if atom[0][0] in ("B", "N"):
+                atomlabel = "GHOST-" + atom[0]
+            else:
+                atomlabel = atom[0]
+            atoms_new.append((atomlabel, atom[1]))
+        for key, val in args.basis.items():
+            if key[0] in ("B", "N"):
+                key = "GHOST-" + key
+            basis_new[key] = val
+    # Remove water but keep water basis
+    elif args.counterpoise == "surface-full":
+        for atom in atoms:
+            if atom[0][0] in ("H", "O"):
+                atomlabel = "GHOST-" + atom[0]
+            else:
+                atomlabel = atom[0]
+            atoms_new.append((atomlabel, atom[1]))
+        for key, val in basis.items():
+            if key[0] in ("H", "O"):
+                key = "GHOST-" + key
+            basis_new[key] = val
+
+    log.debug("Atoms after assigning ghosts:\n%r", atoms_new)
+    log.debug("Basis after assigning ghosts:\n%r", basis_new)
+    return atoms_new, basis_new
+
+
 def setup_cell(distance, args):
     """Setup PySCF cell object."""
 
@@ -109,13 +178,11 @@ def setup_cell(distance, args):
 
     cell = pyscf.pbc.gto.Cell()
     cell.a = a_matrix
-    cell.atom = atoms
 
-    #if args.large_basis == args.basis or not args.large_basis_atoms:
-    #    cell.basis = args.basis
-    #else:
-    #    cell.basis = {atom : args.large_basis for atom in args.large_basis_atoms}
-    #    cell.basis["default"] = args.basis
+    if args.counterpoise:
+        atoms, args.basis = counterpoise_mod(atoms, args.basis)
+
+    cell.atom = atoms
     cell.basis = args.basis
 
     if args.pseudopot:
@@ -151,7 +218,11 @@ for icalc, distance in enumerate(args.distances):
     mf = pyscf.pbc.scf.RHF(cell)
 
     # Density fitting
-    mf = mf.density_fit()
+    if args.df == "gaussian":
+        mf = mf.density_fit()
+    elif args.df == "mixed":
+        mf = mf.mix_density_fit()
+
     cderi_name = args.cderi_name % distance
     if args.cderi_load:
         log.debug("Loading DF from file %s", cderi_name)
