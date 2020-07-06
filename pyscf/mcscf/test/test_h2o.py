@@ -62,7 +62,7 @@ class KnownValues(unittest.TestCase):
     def test_nosymm_sa4_newton (self):
         mc = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4).newton ()
         mc.kernel ()
-        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 9)
+        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (mc.e_states, mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[1].spin = 2
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (m, 4, 4), fcisolvers, [0.25,]*4).run ()
-        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 9)
+        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[1].spin = 2
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (m, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()
-        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 9)
+        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].wfnsym = 'A1'
         fcisolvers[1].wfnsym = 'B2'
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).run ()
-        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 9)
+        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
         
@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
         fcisolvers[0].wfnsym = 'A1'
         fcisolvers[1].wfnsym = 'B2'
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()
-        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 9)
+        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
@@ -110,7 +110,7 @@ class KnownValues(unittest.TestCase):
         fcisolvers[2].wfnsym = fcisolvers[3].wfnsym = 'A1'
         fcisolvers[1].spin = fcisolvers[3].spin = 2
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).run ()
-        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 9)
+        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 
@@ -120,7 +120,7 @@ class KnownValues(unittest.TestCase):
         fcisolvers[2].wfnsym = fcisolvers[3].wfnsym = 'A1'
         fcisolvers[1].spin = fcisolvers[3].spin = 2
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()
-        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 9)
+        self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
 

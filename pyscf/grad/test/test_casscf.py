@@ -85,14 +85,14 @@ mol.verbose = 5
 mol.output = '/dev/null'
 mol.symmetry = False 
 mol.build()
-mf = scf.RHF(mol).run(conv_tol=1e-14)
+mf = scf.RHF(mol).run(conv_tol=1e-12)
 mol_symm = gto.Mole()
 mol_symm.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
 mol_symm.verbose = 5
 mol_symm.output = '/dev/null'
 mol_symm.symmetry = True 
 mol_symm.build()
-mf_symm = scf.RHF(mol_symm).run(conv_tol=1e-14)
+mf_symm = scf.RHF(mol_symm).run(conv_tol=1e-12)
 
 def tearDownModule():
     global mol, mf, mol_symm, mf_symm
