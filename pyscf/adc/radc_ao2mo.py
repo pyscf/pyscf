@@ -20,7 +20,6 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import __config__
 import time
 import h5py
 import tempfile

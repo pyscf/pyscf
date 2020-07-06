@@ -494,16 +494,16 @@ class RADC(lib.StreamObject):
         nao_pair = nao * (nao+1) // 2
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            eris = self.transform_integrals()
-        else:
+
+        if (self._scf._eri is None or
+            (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+
             def outcore_transform():
                 return radc_ao2mo.transform_integrals_outcore(self)
-
             self.transform_integrals = outcore_transform
-            eris = self.transform_integrals() 
 
+        eris = self.transform_integrals()
+        
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
 
@@ -530,16 +530,14 @@ class RADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory or self.incore_complete)):
-            eris = self.transform_integrals()
-        else:
+        if (self._scf._eri is None or
+            (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+
             def outcore_transform():
                 return radc_ao2mo.transform_integrals_outcore(self)
-
             self.transform_integrals = outcore_transform
-            eris = self.transform_integrals() 
 
+        eris = self.transform_integrals() 
             
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
@@ -1255,8 +1253,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                    eris_vvvv = eris.vvvv
                    s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
 
-####################################################################################
-
                s[s2:f2] -= 0.5*lib.einsum('jzyi,jzx->ixy',eris_ovvo,r2_a,optimize = True).reshape(-1)
                s[s2:f2] -= 0.5*lib.einsum('jiyz,jxz->ixy',eris_oovv,r2,optimize = True).reshape(-1)
                s[s2:f2] += 0.5*lib.einsum('jzyi,jxz->ixy',eris_ovvo,r2,optimize = True).reshape(-1)
@@ -1327,8 +1323,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_1= -lib.einsum('lyd,lixd->ixy',temp,t2_1,optimize=True)
                s[s2:f2] -= temp_1.reshape(-1)
                del eris_ovvv
-
-######################################################################################
 
                temp_1 = lib.einsum('b,lbmi->lmi',r1,eris_ovoo)
                s[s2:f2] += lib.einsum('lmi,lmxy->ixy',temp_1, t2_1, optimize=True).reshape(-1)
@@ -1491,8 +1485,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp,eris_ovoo,optimize=True)
                s[s1:f1] -= 0.5*lib.einsum('blj,lbij->i',temp_1,eris_ovoo,optimize=True)
                s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp_2,eris_ovoo,optimize=True)
-
-####################################################################################
 
                temp_1  = lib.einsum('i,lbik->kbl',r1,eris_ovoo)
                temp_1  -= lib.einsum('i,iblk->kbl',r1,eris_ovoo)

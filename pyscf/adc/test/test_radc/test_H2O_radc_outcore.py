@@ -70,6 +70,7 @@ class KnownValues(unittest.TestCase):
     def test_ea_adc3(self):
 
         myadc.method = "adc(3)"
+        myadc.max_memory = 20
         myadc.incore_complete = False
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2263968409281272, 6)

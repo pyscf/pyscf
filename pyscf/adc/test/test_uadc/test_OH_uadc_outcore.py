@@ -64,6 +64,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2x(self):
   
+        myadc.max_memory = 50
         myadc.incore_complete = False
         myadc.method = "adc(2)-x"
 
@@ -81,6 +82,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc3(self):
   
+        myadc.max_memory = 60
         myadc.incore_complete = False
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()

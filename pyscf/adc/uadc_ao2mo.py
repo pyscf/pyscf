@@ -20,9 +20,8 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import __config__
+from pyscf.adc import radc_ao2mo
 import time
-import h5py
 import tempfile
 
 ### Integral transformation for integrals in Chemists' notation###
@@ -236,14 +235,14 @@ def transform_integrals_outcore(myadc):
 
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_a, vir_a, vir_a), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
-            vvvv = read_dataset(tmp,'eri_mo')
+            vvvv = radc_ao2mo.read_dataset(tmp,'eri_mo')
             del (tmp)
             vvvv = vvvv.reshape(orb_slice.shape[1], vir_a.shape[1], vir_a.shape[1], vir_a.shape[1])
             vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3))
             vvvv -= np.ascontiguousarray(vvvv.transpose(0,1,3,2))
             vvvv = vvvv[:, :, ind_vv_g[0], ind_vv_g[1]]
 
-            vvvv_p = write_dataset(vvvv)
+            vvvv_p = radc_ao2mo.write_dataset(vvvv)
             del vvvv
             eris.vvvv_p.append(vvvv_p)       
 
@@ -257,14 +256,14 @@ def transform_integrals_outcore(myadc):
 
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_b, vir_b, vir_b), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
-            VVVV = read_dataset(tmp,'eri_mo')
+            VVVV = radc_ao2mo.read_dataset(tmp,'eri_mo')
             del (tmp)
             VVVV = VVVV.reshape(orb_slice.shape[1], vir_b.shape[1], vir_b.shape[1], vir_b.shape[1])
             VVVV = np.ascontiguousarray(VVVV.transpose(0,2,1,3))
             VVVV -= np.ascontiguousarray(VVVV.transpose(0,1,3,2))
             VVVV = VVVV[:, :, ind_VV_g[0], ind_VV_g[1]]
 
-            VVVV_p = write_dataset(VVVV)
+            VVVV_p = radc_ao2mo.write_dataset(VVVV)
             del VVVV
             eris.VVVV_p.append(VVVV_p)       
 
@@ -278,13 +277,13 @@ def transform_integrals_outcore(myadc):
 
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_a, vir_b, vir_b), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
-            vVvV = read_dataset(tmp,'eri_mo')
+            vVvV = radc_ao2mo.read_dataset(tmp,'eri_mo')
             del (tmp)
             vVvV = vVvV.reshape(orb_slice.shape[1], vir_a.shape[1], vir_b.shape[1], vir_b.shape[1])
             vVvV = np.ascontiguousarray(vVvV.transpose(0,2,1,3))
             vVvV = vVvV.reshape(-1, vir_b.shape[1], vir_a.shape[1] * vir_b.shape[1])
 
-            vVvV_p = write_dataset(vVvV)
+            vVvV_p = radc_ao2mo.write_dataset(vVvV)
             del vVvV
             eris.vVvV_p.append(vVvV_p)       
 
@@ -298,13 +297,13 @@ def transform_integrals_outcore(myadc):
 
             _, tmp = tempfile.mkstemp()
             ao2mo.outcore.general(mol, (orb_slice, vir_b, vir_a, vir_a), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
-            VvVv = read_dataset(tmp,'eri_mo')
+            VvVv = radc_ao2mo.read_dataset(tmp,'eri_mo')
             del tmp
             VvVv = VvVv.reshape(orb_slice.shape[1], vir_b.shape[1], vir_a.shape[1], vir_a.shape[1])
             VvVv = np.ascontiguousarray(VvVv.transpose(0,2,1,3))
             VvVv = VvVv.reshape(-1, vir_a.shape[1], vir_b.shape[1] * vir_a.shape[1])
 
-            VvVv_p = write_dataset(VvVv)
+            VvVv_p = radc_ao2mo.write_dataset(VvVv)
             del VvVv
             eris.VvVv_p.append(VvVv_p)       
     
@@ -312,16 +311,3 @@ def transform_integrals_outcore(myadc):
 
     log.timer('ADC integral transformation', *cput0)
     return eris
-
-
-def read_dataset(h5file, dataname):
-    f5 = h5py.File(h5file, 'r')
-    data = f5[dataname][:]
-    f5.close()
-    return data
-
-
-def write_dataset(data):
-    _, fname = tempfile.mkstemp()
-    f = h5py.File(fname, mode='w')
-    return f.create_dataset('data', data=data)
