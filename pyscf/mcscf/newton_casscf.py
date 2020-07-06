@@ -23,6 +23,7 @@ Second order CASSCF
 import time
 import copy
 from functools import reduce
+from itertools import product
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -35,7 +36,11 @@ def _pack_ci_get_H (mc, mo, ci0):
     # MRH 06/24/2020: get wrapped Hci and Hdiag functions for
     # SA and SA-mix case. Put ci in a consistent format: list of raveled CI vecs
     # so that list comprehension can do all the +-*/ and dot operations
-    orbsym = getattr (mo, 'orbsym', getattr (mc.fcisolver, 'orbsym', None))
+    orbsym = getattr (mo, 'orbsym', None)
+    if orbsym is None:
+        orbsym = getattr (mc.fcisolver, 'orbsym', None)
+    else:
+        orbsym = orbsym[mc.ncore:][:mc.ncas]
     if mc.fcisolver.nroots == 1:
         ci0 = [ci0.ravel ()]
         def _pack_ci (x):
