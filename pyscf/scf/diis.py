@@ -29,10 +29,11 @@ from pyscf.lib import logger
 
 DEBUG = False
 
-# J. Mol. Struct. 114, 31-34
-# PCCP, 4, 11
-# GEDIIS, JCTC, 2, 835
-# C2DIIS, IJQC, 45, 31
+# J. Mol. Struct. 114, 31-34 (1984); DOI:10.1016/S0022-2860(84)87198-7
+# PCCP, 4, 11 (2002); DOI:10.1039/B108658H
+# GEDIIS, JCTC, 2, 835 (2006); DOI:10.1021/ct050275a
+# C2DIIS, IJQC, 45, 31 (1993); DOI:10.1002/qua.560450106
+# SCF-EDIIS, JCP 116, 8255 (2002); DOI:10.1063/1.1470195
 
 # error vector = SDF-FDS
 # error vector = F_ai ~ (S-SDS)*S^{-1}FDS = FDS - SDFDS ~ FDS-SDF in converge
@@ -82,7 +83,7 @@ def get_err_vec(s, d, f):
 
 class EDIIS(lib.diis.DIIS):
     '''SCF-EDIIS
-    Ref: JCP 116, 8255
+    Ref: JCP 116, 8255 (2002); DOI:10.1063/1.1470195
     '''
     def update(self, s, d, f, mf, h1e, vhf):
         if self._head >= self.space:
@@ -142,7 +143,7 @@ def ediis_minimize(es, ds, fs):
 
 class ADIIS(lib.diis.DIIS):
     '''
-    Ref: JCP, 132, 054109
+    Ref: JCP 132, 054109 (2010); DOI:10.1063/1.3304922
     '''
     def update(self, s, d, f, mf, h1e, vhf):
         if self._head >= self.space:

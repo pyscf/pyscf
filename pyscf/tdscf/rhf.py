@@ -29,9 +29,8 @@ from pyscf import gto
 from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
-from pyscf.dft import numint
 from pyscf.scf import hf_symm
-from pyscf.scf import _response_functions
+from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -143,8 +142,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
 
     if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
-        from pyscf.dft import rks
-        from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -995,7 +992,6 @@ del(OUTPUT_THRESHOLD)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0

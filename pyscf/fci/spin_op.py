@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ctypes
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.fci import cistring
-from pyscf.fci import rdm
 from pyscf.fci.addons import _unpack_nelec
 
 librdm = lib.load_library('libfci')
@@ -110,8 +108,8 @@ def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
     multip = s*2+1
     return ss, multip
 
+@lib.with_doc(spin_square_general.__doc__)
 def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
-    __doc__ = spin_square_general.__doc__
     from pyscf.fci import direct_spin1
     if mo_coeff is None:
         mo_coeff = (numpy.eye(norb),) * 2
@@ -258,7 +256,6 @@ def contract_ss(fcivec, norb, nelec):
 
 
 if __name__ == '__main__':
-    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo

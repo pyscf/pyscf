@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,11 +16,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.dft.numint import _dot_ao_dm, _dot_ao_ao, BLKSIZE
 
@@ -263,7 +260,7 @@ class RNumInt(numint.NumInt):
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
                                  dtype=numpy.uint8)
-        feval = 'GTOval_spinor_deriv%d' % deriv
+
         if buf is None:
             buf = numpy.empty((4,comp,blksize,nao), dtype=numpy.complex128)
         for ip0 in range(0, ngrids, blksize):
@@ -325,7 +322,6 @@ _RNumInt = RNumInt
 if __name__ == '__main__':
     import time
     from pyscf import gto
-    from pyscf import dft
     from pyscf.dft import dks
 
     mol = gto.M(

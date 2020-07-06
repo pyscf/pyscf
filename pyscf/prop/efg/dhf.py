@@ -90,7 +90,6 @@ scf.dhf.UHF.EFG = lib.class_as_method(EFG)
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf, dft
 
     mol = gto.Mole()
     mol.verbose = 4

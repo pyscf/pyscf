@@ -401,7 +401,7 @@ if 1:
     libxc_lib_path = search_lib_path('libxc'+so_ext, [pyscf_lib_dir,
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
-                                     version='4.0.0')
+                                     version='5')
     libxc_inc_path = search_inc_path('xc.h', [pyscf_lib_dir,
                                               os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libxc_lib_path and libxc_inc_path:
@@ -417,7 +417,7 @@ if 1:
     else:
         print("****************************************************************")
         print("*** WARNING: libxc library not found.")
-        print("* You can download libxc library from http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz")
+        print("* You can download libxc library from http://www.tddft.org/programs/libxc/down.php?file=4.3.4/libxc-4.3.4.tar.gz")
         print("* libxc library needs to be compiled with the flag --enable-shared")
         print("* May need to set PYSCF_INC_DIR if libxc library was not installed in the")
         print("* system standard install path (/usr, /usr/local, etc). Eg")
@@ -477,7 +477,7 @@ setup(
     author_email=AUTHOR_EMAIL,
     platforms=PLATFORMS,
     #package_dir={'pyscf': 'pyscf'},  # packages are under directory pyscf
-    #include *.so *.dat files. They are now placed in MAINTAINER.in
+    #include *.so *.dat files. They are now placed in MANIFEST.in
     #package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']},
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*dmrgscf*', '*fciqmcscf*', '*icmpspt*',
@@ -488,6 +488,9 @@ setup(
     cmdclass={'build_ext': BuildExtWithoutPlatformSuffix,
               'install': PostInstallCommand},
     install_requires=['numpy', 'scipy', 'h5py'],
+    extras_require={
+        'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
+    },
     setup_requires = ['numpy'],
 )
 

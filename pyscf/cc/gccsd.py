@@ -22,7 +22,6 @@ from pyscf import ao2mo
 from pyscf import scf
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import addons
 from pyscf.cc import gintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf import __config__
@@ -360,7 +359,6 @@ class _PhysicistsERIs:
         return self
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
-    cput0 = (time.clock(), time.time())
     eris = _PhysicistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
@@ -567,7 +565,6 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
 
 if __name__ == '__main__':
-    from pyscf import scf
     from pyscf import gto
     mol = gto.Mole()
     mol.atom = [['O', (0.,   0., 0.)],

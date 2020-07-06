@@ -23,7 +23,7 @@ Non-relativistic static and dynamic polarizability and hyper-polarizability tens
 
 from pyscf.prop.polarizability.rhf import \
         (polarizability, hyper_polarizability, polarizability_with_freq,
-         Polarizability)
+         Polarizability)  # noqa
 
 
 if __name__ == '__main__':

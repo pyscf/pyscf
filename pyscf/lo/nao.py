@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -161,11 +161,11 @@ def _core_val_ryd_list(mol):
     k = 0
     for ib in range(mol.nbas):
         ia = mol.bas_atom(ib)
-# Avoid calling mol.atom_charge because we should include ECP core electrons here
+        # Avoid calling mol.atom_charge because we should include ECP core electrons here
         nuc = mole.charge(mol.atom_symbol(ia))
         l = mol.bas_angular(ib)
         nc = mol.bas_nctr(ib)
-        symb = mol.atom_symbol(ia)
+
         nelec_ecp = mol.atom_nelec_core(ia)
         ecpcore = core_configuration(nelec_ecp)
         coreshell = [int(x) for x in AOSHELL[nuc][0][::2]]
@@ -211,6 +211,7 @@ def set_atom_conf(element, description):
             | ("3s2p","1d") : 3 s, 2 p shells for core and 1 d shells for valence
     '''
     charge = mole.charge(element)
+
     def to_conf(desc):
         desc = desc.replace(' ','').replace('-','').replace('_','').lower()
         if "doublep" in desc:
@@ -223,6 +224,7 @@ def set_atom_conf(element, description):
             loc = AOSHELL[charge][1].find('0')
             desc = '1' + AOSHELL[charge][1][loc+1]
         return desc
+
     if isinstance(description, str):
         c_desc, v_desc = AOSHELL[charge][0], to_conf(description)
     else:
@@ -244,7 +246,6 @@ def set_atom_conf(element, description):
 
 if __name__ == "__main__":
     from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 1
     mol.output = 'out_nao'

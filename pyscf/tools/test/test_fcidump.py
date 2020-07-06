@@ -20,6 +20,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto, scf, ao2mo
 from pyscf.tools import fcidump
+import tempfile
 
 mol = gto.Mole()
 mol.atom = '''
@@ -43,7 +44,8 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_from_chkfile(self):
         tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15)
+        fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15,
+                             molpro_orbsym=True)
 
     def test_from_integral(self):
         tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -51,6 +53,36 @@ class KnownValues(unittest.TestCase):
         h2 = ao2mo.full(mf._eri, mf.mo_coeff)
         fcidump.from_integrals(tmpfcidump.name, h1, h2, h1.shape[0],
                                mol.nelectron, tol=1e-15)
+
+    def test_read(self):
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''&FCI NORB=4,
+NELEC=4, MS2=0, ISYM=1,
+ORBSYM=1,2,3,4,
+&END
+0.42 1 1 1 1
+0.33 1 1 2 2
+0.07 1 1 3 1
+0.46 1 1 0 0
+0.13 1 2 0 0
+1.1  0 0 0 0
+''')
+            f.flush()
+            result = fcidump.read(f.name)
+        self.assertEqual(result['ISYM'], 1)
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''&FCI NORB=4, NELEC=4, MS2=0, ISYM=1,ORBSYM=1,2,3,4, &END
+0.42 1 1 1 1
+0.33 1 1 2 2
+0.07 1 1 3 1
+0.46 1 1 0 0
+0.13 1 2 0 0
+1.1  0 0 0 0
+''')
+            f.flush()
+            result = fcidump.read(f.name)
+        self.assertEqual(result['MS2'], 0)
 
 if __name__ == "__main__":
     print("Full Tests for fcidump")

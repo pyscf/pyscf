@@ -29,12 +29,11 @@ import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc import kintermediates_rhf as imdk
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-from pyscf.lib import linalg_helper
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -63,8 +62,8 @@ def update_amps(cc, t1, t2, eris):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:]
-    foo = fock[:, :nocc, :nocc]
-    fvv = fock[:, nocc:, nocc:]
+    #foo = fock[:, :nocc, :nocc]
+    #fvv = fock[:, nocc:, nocc:]
 
     kconserv = cc.khelper.kconserv
 
@@ -610,11 +609,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         if mbpt2:
-            cctyp = 'MBPT2'
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
 
-        cctyp = 'CCSD'
         self.converged, self.e_corr, self.t1, self.t2 = \
             kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                    tol=self.conv_tol, tolnormt=self.conv_tol_normt,
@@ -714,7 +711,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
         cput0 = (time.clock(), time.time())
-        moidx = get_frozen_mask(cc)
         cell = cc._scf.cell
         kpts = cc.kpts
         nkpts = cc.nkpts
@@ -946,7 +942,7 @@ def _init_df_eris(cc, eris):
 
     kpts = cc.kpts
     nkpts = len(kpts)
-    naux = cc._scf.with_df.get_naoaux()
+    #naux = cc._scf.with_df.get_naoaux()
     if gamma_point(kpts):
         dtype = np.double
     else:
@@ -1100,13 +1096,12 @@ def _mem_usage(nkpts, nocc, nvir):
     return incore * 16 / 1e6, outcore * 16 / 1e6, basic * 16 / 1e6
 
 
-from pyscf.pbc import scf
 scf.khf.KRHF.CCSD = lib.class_as_method(KRCCSD)
 scf.krohf.KROHF.CCSD = None
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto, cc
 
     cell = gto.Cell()
     cell.atom = '''

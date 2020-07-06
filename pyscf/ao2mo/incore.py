@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,10 +120,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
     (80, 80)
 
     '''
-    log = logger.new_logger(sys, verbose)
-
     nao = mo_coeffs[0].shape[0]
-    nao_pair = nao*(nao+1)//2
 
     if eri_ao.size == nao**4:
         return lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),

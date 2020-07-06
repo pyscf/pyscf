@@ -36,7 +36,7 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.grad import casci as casci_grad
-from pyscf.grad import rhf as rhf_grad
+from pyscf.grad import rhf as rhf_grad  # noqa
 from pyscf.grad.mp2 import _shell_prange
 
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):

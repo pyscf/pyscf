@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -376,12 +376,8 @@ def get_frozen_mask(mp):
 
 def _add_padding(mp, mo_coeff, mo_energy):
     raise NotImplementedError("Implementation needs to be checked first")
-    from pyscf.pbc import tools
-    from pyscf.pbc.cc.ccsd import _adjust_occ
     nmo = mp.nmo
     nocc = mp.nocc
-    nvir = nmo - nocc
-    nkpts = mp.nkpts
 
     # Check if these are padded mo coefficients and energies
     if not np.all([x.shape[0] == nmo for x in mo_coeff]):
@@ -419,30 +415,3 @@ class KUMP2(kmp2.KMP2):
 
 from pyscf.pbc import scf
 scf.kuhf.KUHF.MP2 = lib.class_as_method(KUMP2)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, mp
-
-    #cell = gto.Cell()
-    #cell.atom='''
-    #C 0.000000000000   0.000000000000   0.000000000000
-    #C 1.685068664391   1.685068664391   1.685068664391
-    #'''
-    #cell.basis = 'gth-szv'
-    #cell.pseudo = 'gth-pade'
-    #cell.a = '''
-    #0.000000000, 3.370137329, 3.370137329
-    #3.370137329, 0.000000000, 3.370137329
-    #3.370137329, 3.370137329, 0.000000000'''
-    #cell.unit = 'B'
-    #cell.verbose = 5
-    #cell.build()
-
-    ## Running HF and MP2 with 1x1x2 Monkhorst-Pack k-point mesh
-    #kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2]), exxdiv=None)
-    #ehf = kmf.kernel()
-
-    #mymp = mp.KMP2(kmf)
-    #emp2, t2 = mymp.kernel()
-    #print(emp2 - -0.204721432828996)

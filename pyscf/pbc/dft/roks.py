@@ -20,13 +20,13 @@
 Restricted open-shell Kohn-Sham for periodic systems at a single k-point
 '''
 
-import time
 import numpy
 import pyscf.dft
 from pyscf import lib
 from pyscf.pbc.scf import rohf
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import uks
+from pyscf import __config__
 
 
 @lib.with_doc(uks.get_veff.__doc__)
@@ -47,8 +47,9 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
     '''
-    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN'):
-        rohf.ROHF.__init__(self, cell, kpt)
+    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        rohf.ROHF.__init__(self, cell, kpt, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):

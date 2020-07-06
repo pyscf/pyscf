@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 MP2-F12 (In testing)
 
 Refs:
-* JCC 32  2492
-* JCP 139 084112
+* JCC 32, 2492 (2011); DOI:10.1002/jcc.21825
+* JCP 139, 084112 (2013); DOI:10.1063/1.4818753
 
 With strong orthogonalization ansatz 2
 '''
@@ -182,7 +182,6 @@ def energy_f12(mf, auxmol, zeta):
 
 if __name__ == '__main__':
     from pyscf import scf
-    from pyscf import gto
     mol = gto.Mole()
     #mol.atom = [
     #    [8 , (0. , 0.     , 0.)],

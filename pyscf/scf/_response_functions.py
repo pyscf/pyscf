@@ -41,7 +41,6 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if _is_dft_object(mf):
-        from pyscf.dft import rks
         from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -66,7 +65,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         else:
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                                 [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
-        dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
+        dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -155,7 +154,6 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if _is_dft_object(mf):
-        from pyscf.dft import rks
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -229,7 +227,6 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if _is_dft_object(mf):
-        from pyscf.dft import numint
         raise NotImplementedError
 
     elif with_j:
@@ -254,4 +251,3 @@ ghf.GHF.gen_response = _gen_ghf_response
 # Use UHF response function for ROHF because in second order solver uhf
 # response function is called to compute ROHF orbital hessian
 rohf.ROHF.gen_response = _gen_uhf_response
-

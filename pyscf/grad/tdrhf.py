@@ -315,7 +315,6 @@ tdscf.rhf.TDA.Gradients = tdscf.rhf.TDHF.Gradients = lib.class_as_method(Gradien
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import dft
     from pyscf import tddft
     mol = gto.Mole()
     mol.verbose = 0

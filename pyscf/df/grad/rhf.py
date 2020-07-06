@@ -46,7 +46,6 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True):
     auxmol = with_df.auxmol
     if auxmol is None:
         auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
-    pmol = mol + auxmol
     ao_loc = mol.ao_loc
     nbas = mol.nbas
     nauxbas = auxmol.nbas
@@ -278,7 +277,6 @@ Grad = Gradients
 
 
 if __name__ == '__main__':
-    from pyscf import scf
     mol = gto.Mole()
     mol.atom = [
         ['O' , (0. , 0.     , 0.)],

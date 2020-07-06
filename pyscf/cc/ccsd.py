@@ -98,7 +98,6 @@ def update_amps(mycc, t1, t2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc*nvir
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:] + mycc.level_shift
@@ -238,7 +237,7 @@ def update_amps(mycc, t1, t2, eris):
                 #:t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
                 update_t2(q0, q1, theta)
                 theta = None
-        eris_VOov = wVOov = wVooV = update_wVOov = update_t2new = None
+        eris_VOov = wVOov = wVooV = update_wVOov = None
         time1 = log.timer_debug1('voov [%d:%d]'%(p0, p1), *time1)
     fwVOov = fwVooV = fswap = None
 
@@ -290,6 +289,9 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nocc*nvir**2*3 + nocc**2*nvir + 2
     blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
+    if not mycc.direct:
+        unit = nocc*nvir**2*3 + nocc**2*nvir + 2 + nocc*nvir**2 + nocc*nvir
+        blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size-nocc**2*nvir)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
 
@@ -326,7 +328,6 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
                     tmp = lib.einsum('jcd,cdbk->jbk', tau, vvvo)
                     t2new[i] -= lib.einsum('ka,jbk->jab', t1, tmp)
                     tau = tmp = None
-                eris_vvvo = None
 
             wVOov[p0:p1] = lib.einsum('biac,jc->bija', eris_vovv, t1)
 
@@ -877,7 +878,6 @@ class CCSD(lib.StreamObject):
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        from pyscf import gto
         if isinstance(mf, gto.Mole):
             raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -1468,7 +1468,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
             buf, buf_prefetch = buf_prefetch, buf
-            prefetch(buf_prefetch, nocc+p0, nmo)
+            prefetch(buf_prefetch, nocc+p1, nmo)
 
             nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
@@ -1486,14 +1486,11 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
-    mol = mycc.mol
     mo_coeff = numpy.asarray(eris.mo_coeff, order='F')
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
     nvir_pair = nvir*(nvir+1)//2
-    orbo = mo_coeff[:,:nocc]
-    orbv = mo_coeff[:,nocc:]
 
     naux = mycc._scf.with_df.get_naoaux()
     Loo = numpy.empty((naux,nocc,nocc))
@@ -1549,7 +1546,6 @@ def _fp(nocc, nvir):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
 
     mol = gto.Mole()

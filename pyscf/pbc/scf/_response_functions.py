@@ -127,7 +127,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
 
 def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                       with_j=True, hermi=0, max_memory=None):
-    from pyscf.pbc.dft import numint, multigrid
+    from pyscf.pbc.dft import multigrid
     assert(isinstance(mf, (kuhf.KUHF, krohf.KROHF)))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff

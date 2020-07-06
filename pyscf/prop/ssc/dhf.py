@@ -16,8 +16,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-# JCP, 112, 3493
-# JCC, 20, 1262
+# JCP 112, 3493 (2000); DOI:10.1063/1.480504
+# JCC 20, 1262 (1999); DOI:10.1002/(SICI)1096-987X(199909)20:12<1262::AID-JCC6>3.0.CO;2-H
 
 '''
 4-component Dirac-Hartree-Fock spin-spin coupling (SSC) constants
@@ -314,8 +314,6 @@ scf.dhf.UHF.SSC = scf.dhf.UHF.SpinSpinCoupling = lib.class_as_method(SSC)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 3
     mol.output = None

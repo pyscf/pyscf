@@ -118,7 +118,9 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     dme0 = (gfock+gfock.T)/2 # This transpose is for the overlap matrix later on
     aapa = vj = vk = vhf_c = vhf_a = None
 
-    vhf1c, vhf1a, vhf1cL, vhf1aL = mf_grad.get_veff(mol, (dm_core, dm_cas, dmL_core, dmL_cas))
+    vj, vk = mf_grad.get_jk (mol, (dm_core, dm_cas, dmL_core, dmL_cas))
+    vhf1c, vhf1a, vhf1cL, vhf1aL = vj - vk * 0.5
+    #vhf1c, vhf1a, vhf1cL, vhf1aL = mf_grad.get_veff(mol, (dm_core, dm_cas, dmL_core, dmL_cas))
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
 
@@ -260,7 +262,9 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
     dme0 = reduce(np.dot, (mo_coeff, (gfock+gfock.T)*.5, mo_coeff.T))
     aapa = vj = vk = vhf_c = vhf_a = h1 = gfock = None
 
-    vhf1c, vhf1a = mf_grad.get_veff(mol, (dm_core, dm_cas))
+    vj, vk = mf_grad.get_jk (mol, (dm_core, dm_cas))
+    vhf1c, vhf1a = vj - vk * 0.5
+    #vhf1c, vhf1a = mf_grad.get_veff(mol, (dm_core, dm_cas))
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
 

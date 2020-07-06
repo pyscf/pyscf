@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
                     basis={'Na':'lanl2dz', 'H':'sto3g'},
                     ecp = {'Na':'lanl2dz'},
                     verbose=0)
-        self.assertAlmostEqual(lib.finger(mol.intor('ECPscalar')), -0.19922134780248762, 9)
+        self.assertAlmostEqual(lib.fp(mol.intor('ECPscalar')), -0.19922134780248762, 9)
         mf = scf.RHF(mol)
         self.assertAlmostEqual(mf.kernel(), -0.45002315563472206, 10)
 

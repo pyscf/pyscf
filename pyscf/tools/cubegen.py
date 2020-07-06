@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -212,7 +212,24 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
 
 
 class Cube(object):
-    '''  Read-write of the Gaussian CUBE files  '''
+    '''  Read-write of the Gaussian CUBE files
+
+    Attributes:
+        nx : int
+            Number of grid point divisions in x direction.
+            Note this is function of the molecule's size; a larger molecule
+            will have a coarser representation than a smaller one for the
+            same value. Conflicts to keyword resolution.
+        ny : int
+            Number of grid point divisions in y direction.
+        nz : int
+            Number of grid point divisions in z direction.
+        resolution: float
+            Resolution of the mesh grid in the cube box. If resolution is
+            given in the input, the input nx/ny/nz have no effects.  The value
+            of nx/ny/nz will be determined by the resolution and the cube box
+            size. The unit is Bohr.
+    '''
     def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
                  margin=BOX_MARGIN, origin=ORIGIN, extent=EXTENT):
         from pyscf.pbc.gto import Cell
@@ -322,7 +339,7 @@ class Cube(object):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, scf
+    from pyscf import scf
     from pyscf.tools import cubegen
     mol = gto.M(atom='''O 0.00000000,  0.000000,  0.000000
                 H 0.761561, 0.478993, 0.00000000

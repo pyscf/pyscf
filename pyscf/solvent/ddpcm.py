@@ -24,13 +24,11 @@ JCP, 144, 054101
 JCP, 144, 160901
 '''
 
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
-from pyscf import df
-from pyscf.dft import gen_grid, numint
+from pyscf.dft import gen_grid
 from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
@@ -141,7 +139,7 @@ def gen_ddpcm_solver(pcmobj, verbose=None):
     return gen_vind
 
 def energy(pcmobj, dm):
-    '''
+    r'''
     ddPCM energy
     Es = 1/2 f(eps) \int rho(r) W(r) dr
     '''

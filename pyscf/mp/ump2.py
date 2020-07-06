@@ -268,6 +268,48 @@ def _gamma1_intermediates(mp, t2):
     return ((dooa, doob), (dvva, dvvb))
 
 
+def make_fno(mp, thresh=1e-6, pct_occ=None, t2=None, eris=None):
+    r'''
+    Frozen natural orbitals
+
+    Returns:
+        frozen : list or ndarray
+            Length-2 list of orbitals to freeze
+        no_coeff : ndarray
+            Length-2 list of semicanonical NO coefficients in the AO basis
+    '''
+    mf = mp._scf
+    dmab = mp.make_rdm1(t2=t2)
+
+    frozen = list()
+    no_coeff = list()
+    for s,dm in enumerate(dmab):
+        nocc = mp.nocc[s]
+        nmo = mp.nmo[s]
+        n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
+        idx = numpy.argsort(n)[::-1]
+        n,v = n[idx], v[:,idx]
+
+        if pct_occ is None:
+            nvir_act = numpy.count_nonzero(n>thresh)
+        else:
+            print(numpy.cumsum(n/numpy.sum(n)))
+            nvir_act = numpy.count_nonzero(numpy.cumsum(n/numpy.sum(n))<pct_occ)
+
+        fvv = numpy.diag(mf.mo_energy[s][nocc:])
+        fvv_no = numpy.dot(v.T, numpy.dot(fvv, v))
+        _, v_canon = numpy.linalg.eigh(fvv_no[:nvir_act,:nvir_act])
+
+        no_coeff_1 = numpy.dot(mf.mo_coeff[s][:,nocc:], numpy.dot(v[:,:nvir_act], v_canon))
+        no_coeff_2 = numpy.dot(mf.mo_coeff[s][:,nocc:], v[:,nvir_act:])
+        no_coeff_s = numpy.concatenate((mf.mo_coeff[s][:,:nocc], no_coeff_1, no_coeff_2), axis=1)
+
+        frozen.append(numpy.arange(nocc+nvir_act,nmo))
+        no_coeff.append(no_coeff_s)
+
+    return frozen, no_coeff
+
+
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mp, t2=None, ao_repr=False):
     r'''
@@ -389,6 +431,7 @@ class UMP2(mp2.MP2):
         return _make_eris(self, mo_coeff, verbose=self.verbose)
 
     make_rdm1 = make_rdm1
+    make_fno = make_fno
     make_rdm2 = make_rdm2
 
     def nuc_grad_method(self):
@@ -647,7 +690,6 @@ del(WITH_T2)
 if __name__ == '__main__':
     from functools import reduce
     from pyscf import scf
-    from pyscf import gto
     mol = gto.Mole()
     mol.atom = [['O', (0.,   0., 0.)],
                 ['O', (1.21, 0., 0.)]]

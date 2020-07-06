@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,9 +46,6 @@ h1 = h1 + h1.T
 
 spin0_ci_strs = [[0b111, 0b1011, 0b10101], [0b111, 0b1011, 0b10101]]
 spin0_ci_coeff = ci_coeff + ci_coeff.T
-
-def finger(a):
-    return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
 
 def tearDownModule():
     global ci_strs, ci_coeff, civec_strs, eri, h1, spin0_ci_strs, spin0_ci_coeff
@@ -117,11 +114,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e2, eref, 9)
 
         dm1 = myci.make_rdm1(civec_strs, norb, nelec)
-        self.assertAlmostEqual(finger(dm1), 0.70181046385686563, 9)
+        self.assertAlmostEqual(lib.fp(dm1), 0.70181046385686563, 9)
         dm1 = myci.trans_rdm1(civec_strs, civec_strs, norb, nelec)
-        self.assertAlmostEqual(finger(dm1), 0.70181046385686563, 9)
+        self.assertAlmostEqual(lib.fp(dm1), 0.70181046385686563, 9)
         dm2 = myci.make_rdm2(civec_strs, norb, nelec)
-        self.assertAlmostEqual(finger(dm2), -3.8397469683353962, 9)
+        self.assertAlmostEqual(lib.fp(dm2), -3.8397469683353962, 9)
 
     def test_contract_2e_1(self):
         myci = selected_ci.SCI()
@@ -182,7 +179,7 @@ class KnownValues(unittest.TestCase):
 
     def test_hdiag(self):
         hdiag = selected_ci.make_hdiag(h1, eri, ci_strs, norb, nelec)
-        self.assertAlmostEqual(finger(hdiag), 8.2760894885437377, 9)
+        self.assertAlmostEqual(lib.fp(hdiag), 8.2760894885437377, 9)
 
     def test_h8(self):
         mol = gto.Mole()
@@ -269,7 +266,7 @@ class KnownValues(unittest.TestCase):
         d_index1[:,:,0] = 0
         self.assertTrue(numpy.all(d_index0 == d_index1))
 
-    def test_des_linkstr(self):
+    def test_des_linkstr1(self):
         norb, nelec = 10, 4
         strs = cistring.make_strings(range(norb), nelec)
         numpy.random.seed(11)
@@ -469,9 +466,31 @@ class KnownValues(unittest.TestCase):
     def test_rdm_vs_slow_version(self):
         ci_and_str = (civec_strs, ci_strs)
         dm1 = selected_ci_slow.make_rdm1(ci_and_str, norb, nelec)
-        self.assertAlmostEqual(finger(dm1), 0.70181046385686563, 9)
+        self.assertAlmostEqual(lib.fp(dm1), 0.70181046385686563, 9)
         dm2 = selected_ci_slow.make_rdm2(ci_and_str, norb, nelec)
-        self.assertAlmostEqual(finger(dm2), -3.8397469683353962, 9)
+        self.assertAlmostEqual(lib.fp(dm2), -3.8397469683353962, 9)
+
+    def test_guess_wfnsym(self):
+        norb, nelec = 7, (4,4)
+        strs = cistring.make_strings(range(norb), nelec[0])
+        numpy.random.seed(11)
+        mask = numpy.random.random(len(strs)) > .3
+        strsa = strs[mask]
+        mask = numpy.random.random(len(strs)) > .2
+        strsb = strs[mask]
+        ci_strs = (strsa, strsb)
+        ci0 = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        fake_mol = gto.M()
+        fake_mol.groupname = 'C2v'
+        cis = selected_ci_symm.SelectedCI(fake_mol)
+        cis.orbsym = orbsym = (numpy.random.random(norb) * 4).astype(int)
+
+        self.assertEqual(cis.guess_wfnsym(norb, nelec), 0)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0), 3)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym=0), 0)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym='B2'), 3)
+        ci0[:] = 0
+        self.assertRaises(RuntimeError, cis.guess_wfnsym, norb, nelec, ci0, wfnsym=1)
 
 
 def gen_des_linkstr(strs, norb, nelec):

@@ -14,13 +14,11 @@
 # limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Jun Yang <junyang4711@gmail.com>
+#         Jun Yang
 #
 
-import time
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf import ao2mo
 
 #einsum = numpy.einsum
@@ -629,7 +627,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
     from pyscf.cc import uccsd
 
     mol = gto.Mole()

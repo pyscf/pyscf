@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ J. Chem. Phys. 147, 164119 (2017)
 
 import copy
 import numpy
+from pyscf.lib import logger
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import aft_jk
 

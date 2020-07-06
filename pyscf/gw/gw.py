@@ -21,13 +21,10 @@
 G0W0 approximation
 '''
 
-from functools import reduce
 import time
-import tempfile
 from functools import reduce
 import numpy
 import numpy as np
-import h5py
 from scipy.optimize import newton
 
 from pyscf import lib
@@ -371,7 +368,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, tddft
+    from pyscf import gto, tddft
     mol = gto.Mole()
     mol.verbose = 5
     mol.atom = [

@@ -27,7 +27,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
-import pyscf.scf.chkfile
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)

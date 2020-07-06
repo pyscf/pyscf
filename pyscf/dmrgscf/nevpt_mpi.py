@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,14 +26,12 @@ import subprocess
 from functools import reduce
 import numpy
 import h5py
-import pyscf.lib
 from pyscf.lib import logger
 from pyscf.lib import chkfile
 from pyscf.dmrgscf import dmrg_sym
 from pyscf.dmrgscf import dmrgci
 from pyscf import ao2mo
 from pyscf import gto
-from pyscf.mcscf import casci
 from pyscf.tools import fcidump
 from pyscf.dmrgscf import settings
 
@@ -75,7 +73,9 @@ def write_chk(mc,root,chkfile):
     fh5 = h5py.File(chkfile,'w')
 
     if mc.fcisolver.nroots > 1:
-        mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff,ci=root)
+        logger.info(mc, "Canonicalize orbitals for root "+str(root))
+        mc.mo_coeff,_, mc.mo_energy = mc.canonicalize(mc.mo_coeff, ci=root,
+                                                      cas_natorb=False)
 
 
     fh5['mol']        =       mc.mol.dumps()
@@ -166,6 +166,11 @@ def default_nevpt_schedule(fcisolver, maxM=500, tol=1e-7):
         nevptsolver.mpiprefix = fcisolver.mpiprefix
         nevptsolver.spin = fcisolver.spin
         nevptsolver.groupname = fcisolver.groupname
+        nevptsolver.num_thrds = fcisolver.num_thrds
+        # runtimeDir is only used to generate the common part of the input
+        nevptsolver.runtimeDir = nevptsolver.scratchDirectory
+        if not os.path.exists(nevptsolver.scratchDirectory):
+            os.makedirs(nevptsolver.scratchDirectory)
 
     nevptsolver.scheduleSweeps = [0, 4]
     nevptsolver.scheduleMaxMs  = [maxM, maxM]
@@ -180,21 +185,12 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
 
     if isinstance(nevpt_integral, str) and h5py.is_hdf5(nevpt_integral):
         nevpt_integral_file = os.path.abspath(nevpt_integral)
-        mol = chkfile.load_mol(nevpt_integral_file)
-
         fh5 = h5py.File(nevpt_integral_file, 'r')
-        ncas = fh5['mc/ncas'].value
-        ncore = fh5['mc/ncore'].value
-        nvirt = fh5['mc/nvirt'].value
-        nelecas = fh5['mc/nelecas'].value
-        nroots = fh5['mc/nroots'].value
-        wfnsym = fh5['mc/wfnsym'].value
+        nelecas = fh5['mc/nelecas'][()]
+        nroots = fh5['mc/nroots'][()]
+        wfnsym = fh5['mc/wfnsym'][()]
         fh5.close()
     else :
-        mol = mc.mol
-        ncas = mc.ncas
-        ncore = mc.ncore
-        nvirt = mc.mo_coeff.shape[1] - mc.ncas-mc.ncore
         nelecas = mc.nelecas
         nroots = mc.fcisolver.nroots
         wfnsym = mc.fcisolver.wfnsym
@@ -208,8 +204,8 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     nevptsolver.nroots = nroots
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
     if nevptsolver.executable == getattr(mc.fcisolver, 'executable', None):
-        logger.warn(mc, 'DMRG executable file for nevptsolver %s is the same '
-                    'to the executable file for DMRG solver %s. If they are '
+        logger.warn(mc, 'DMRG executable file for nevptsolver is the same '
+                    'to the executable file for DMRG solver. If they are '
                     'both compiled by MPI compilers, they may cause error or '
                     'random results in DMRG-NEVPT calculation.')
 
@@ -248,18 +244,18 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     logger.debug(nevptsolver, 'DMRG_COMPRESS_NEVPT cmd %s', cmd)
 
     try:
-        output = subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
     except subprocess.CalledProcessError as err:
         logger.error(nevptsolver, cmd)
         raise err
 
     if nevptsolver.verbose >= logger.DEBUG1:
-        logger.debug1(nevptsolver, open(os.path.join(nevpt_scratch, '0', 'dmrg.out')).read())
+        logger.debug1(nevptsolver, open(os.path.join(nevpt_scratch, 'nevpt2_0', 'dmrg.out')).read())
 
-    perturb_file = os.path.join(nevpt_scratch, '0', 'Perturbation_%d'%root)
+    perturb_file = os.path.join(nevpt_scratch, 'Perturbation_%d'%root)
     fh5 = h5py.File(perturb_file, 'r')
-    Vi_e  =  fh5['Vi/energy'].value
-    Vr_e  =  fh5['Vr/energy'].value
+    Vi_e  =  fh5['Vi/energy'][()]
+    Vr_e  =  fh5['Vr/energy'][()]
     fh5.close()
     logger.note(nevptsolver,'Nevpt Energy:')
     logger.note(nevptsolver,'Sr Subspace:  E = %.14f'%( Vr_e))
@@ -276,21 +272,21 @@ def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
 
     mc_chkfile = os.path.abspath(mc_chkfile)
     dmrg_scratch = os.path.abspath(dmrg_scratch)
-    nevpt_scratch = os.path.abspath(os.path.join(nevpt_scratch, str(rank)))
+    nevpt_scratch_mpi = os.path.abspath(os.path.join(nevpt_scratch, "nevpt2_"+str(rank)))
 
-    nevpt_inp = os.path.join(nevpt_scratch, 'dmrg.conf')
-    nevpt_out = os.path.join(nevpt_scratch, 'dmrg.out')
-    if not os.path.exists(nevpt_scratch):
-        os.makedirs(os.path.join(nevpt_scratch, 'node0'))
+    nevpt_inp = os.path.join(nevpt_scratch_mpi, 'dmrg.conf')
+    nevpt_out = os.path.join(nevpt_scratch_mpi, 'dmrg.out')
+    if not os.path.exists(nevpt_scratch_mpi):
+        os.makedirs(os.path.join(nevpt_scratch_mpi, 'node0'))
 
-    ncas, partial_core, partial_virt = _write_integral_file(mc_chkfile, nevpt_scratch, comm)
+    ncas, partial_core, partial_virt = _write_integral_file(mc_chkfile, nevpt_scratch_mpi, comm)
 
     nevpt_conf = _load(mc_chkfile, 'dmrg.conf', comm)
     with open(nevpt_inp, 'w') as f:
         f.write(nevpt_conf)
         f.write('restart_mps_nevpt %d %d %d \n'%(ncas, partial_core, partial_virt))
 
-    _distribute_dmrg_files(dmrg_scratch, nevpt_scratch, comm)
+    _distribute_dmrg_files(dmrg_scratch, nevpt_scratch_mpi, comm)
 
     root = _load(mc_chkfile, 'mc/root', comm)
 
@@ -301,15 +297,15 @@ def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
             del(env[k])
 
     p = subprocess.Popen(['%s %s > %s'%(blockfile,nevpt_inp,nevpt_out)],
-                         env=env, shell=True, cwd=nevpt_scratch)
+                         env=env, shell=True, cwd=nevpt_scratch_mpi)
     p.wait()
 
-    f = open(os.path.join(nevpt_scratch, 'node0', 'Va_%d'%root), 'r')
+    f = open(os.path.join(nevpt_scratch_mpi, 'node0', 'Va_%d'%root), 'r')
     Vr_energy = float(f.readline())
     Vr_norm = float(f.readline())
     f.close()
 
-    f = open(os.path.join(nevpt_scratch, 'node0', 'Vi_%d'%root), 'r')
+    f = open(os.path.join(nevpt_scratch_mpi, 'node0', 'Vi_%d'%root), 'r')
     Vi_energy = float(f.readline())
     Vi_norm = float(f.readline())
     f.close()
@@ -342,7 +338,7 @@ def _load(chkfile, key, comm):
     rank = comm.Get_rank()
     if rank == 0:
         with h5py.File(chkfile, 'r') as fh5:
-            return comm.bcast(fh5[key].value)
+            return comm.bcast(fh5[key][()])
     else:
         return comm.bcast(None)
 
@@ -354,7 +350,7 @@ def _write_integral_file(mc_chkfile, nevpt_scratch, comm):
         fh5 = h5py.File(mc_chkfile, 'r')
         def load(key):
             if key in fh5:
-                return comm.bcast(fh5[key].value)
+                return comm.bcast(fh5[key][()])
             else:
                 return comm.bcast([])
     else:

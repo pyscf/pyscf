@@ -43,9 +43,10 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     else :
         raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
 
-def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    __doc__ = uadc.UADC.__doc__
+ADC.__doc__ = uadc.UADC.__doc__
 
+
+def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
@@ -58,6 +59,8 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-UADC')
     else:
         return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
+
+UADC.__doc__ = uadc.UADC.__doc__
 
 def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     __doc__ = radc.RADC.__doc__
@@ -74,3 +77,5 @@ def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         raise NotImplementedError('DF-RADC')
     else:
         return radc.RADC(mf, frozen, mo_coeff, mo_occ)
+
+RADC.__doc__ = radc.RADC.__doc__

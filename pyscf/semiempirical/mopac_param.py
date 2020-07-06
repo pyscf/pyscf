@@ -239,7 +239,7 @@ CORE = numpy.array((0,
 # to exponents of \zeta, you need only multiply each
 # exponent by \zeta^2
 # The rest of these functions can be obtained from Stewart,
-#  JCP 52, 431 (1970)
+# JCP 52, 431 (1970); DOI:10.1063/1.1672702
 
 gexps_1s = [2.310303149e01,4.235915534e00,1.185056519e00,
             4.070988982e-01,1.580884151e-01,6.510953954e-02]
@@ -279,8 +279,8 @@ gexps_4p = [2.389722618, 7.960947826e-1,3.415541380e-1,
 gcoefs_4p = [-1.665913575e-3,-1.657464971e-2,-5.958513378e-2,
              4.053115554e-1,5.433958189e-1,1.20970491e-1]
 
-# Here are the STO-6G values from Hehre, Stewart, Pople JCP 51,2657 (1969),
-# and Hehre, Ditchfield, Stewart, Pople JCP 52, 2769 (1970)
+# Here are the STO-6G values from Hehre, Stewart, Pople JCP 51, 2657 (1969); DOI:10.1063/1.1672392
+# and Hehre, Ditchfield, Stewart, Pople JCP 52, 2769 (1970); DOI:10.1063/1.1673374
 # which are a little different, in that they use the same exponent for
 # 2s,2p, and 3s,3p, which makes the fit a bit different.
 gexps_old_2 = [1.03087e1,2.04036,6.34142e-1,

@@ -43,7 +43,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    moidx = mp.get_frozen_mask()
+    #moidx = mp.get_frozen_mask()
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     if with_t2:
@@ -66,7 +66,7 @@ def energy(mp, t2, eris):
     eris_oovv = numpy.array(eris.oovv)
     e = 0.25*numpy.einsum('ijab,ijab', t2, eris_oovv)
     if abs(e.imag) > 1e-4:
-        logger.warn(cc, 'Non-zero imaginary part found in GMP2 energy %s', e)
+        logger.warn(mp, 'Non-zero imaginary part found in GMP2 energy %s', e)
     return e.real
 
 def update_amps(mp, t2, eris):
@@ -208,7 +208,6 @@ class GMP2(mp2.MP2):
 
 MP2 = GMP2
 
-from pyscf import scf
 scf.ghf.GHF.MP2 = lib.class_as_method(MP2)
 
 

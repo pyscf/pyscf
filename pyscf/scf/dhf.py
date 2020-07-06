@@ -23,7 +23,6 @@ Dirac Hartree-Fock
 import time
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -46,7 +45,7 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         conv_tol_grad = numpy.sqrt(conv_tol)
         logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
     if dm0 is None:
-        dm = mf.get_init_guess()
+        dm = mf.get_init_guess(mf.mol, mf.init_guess)
     else:
         dm = dm0
 

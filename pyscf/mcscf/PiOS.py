@@ -412,7 +412,7 @@ def GetNumPiElec(iAt, Elements,Coords):
 
     # find number of bonded partners
     iBonded = []
-    for (jAt, AtJ) in len(Atoms):
+    for (jAt, AtJ) in enumerate(Elements):
         if iAt == jAt:
             continue
         rij = np.sum((Coords[At] - Coords[AtJ])**2)**.5
@@ -515,8 +515,8 @@ def MakePiSystemOrbitals(TargetName, iTargetAtomsForPlane_, iTargetAtomsForBasis
     print("    size of CAomix2       {} ".format(CAoMix.shape[1]))
 
 
-    nOccOrbExpected=nPiElec/2
-    nVirtOrbExpected=nTargetIb - nPiElec/2
+    nOccOrbExpected=nPiElec//2
+    nVirtOrbExpected=nTargetIb - nPiElec//2
     CPiOcc = MakeOverlappingOrbSubspace("Pi", "Occ", COcc, nOccOrbExpected,   CTargetIb, S1, Fock)
     CPiVir = MakeOverlappingOrbSubspace("Pi", "Vir", CVir, nVirtOrbExpected,   CTargetIb, S1, Fock)
     return CPiOcc, CPiVir,nOccOrbExpected,nVirtOrbExpected

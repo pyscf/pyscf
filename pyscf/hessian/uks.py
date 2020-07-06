@@ -49,15 +49,12 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     moccb = mo_coeff[1][:,mo_occ[1]>0]
     dm0a = numpy.dot(mocca, mocca.T)
     dm0b = numpy.dot(moccb, moccb.T)
-    dm0 = dm0a + dm0b
+
     # Energy weighted density matrix
     mo_ea = mo_energy[0][mo_occ[0]>0]
     mo_eb = mo_energy[1][mo_occ[1]>0]
     dme0 = numpy.einsum('pi,qi,i->pq', mocca, mocca, mo_ea)
     dme0+= numpy.einsum('pi,qi,i->pq', moccb, moccb, mo_eb)
-
-    hcore_deriv = hessobj.hcore_generator(mol)
-    s1aa, s1ab, s1a = rhf_hess.get_ovlp(mol)
 
     if mf.nlc != '':
         raise NotImplementedError
@@ -126,7 +123,6 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return de2
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
-    time0 = t1 = (time.clock(), time.time())
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -276,7 +272,7 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
             contract_(vmatb[3], ao, [XYY,YYY,YYZ], wvb, mask)
             contract_(vmatb[4], ao, [XYZ,YYZ,YZZ], wvb, mask)
             contract_(vmatb[5], ao, [XZZ,YZZ,ZZZ], wvb, mask)
-            rho = vxc = aowa = aowb = None
+            vxc = aowa = aowb = None
 
     elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')

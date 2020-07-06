@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -66,7 +65,7 @@ def pre_orth_ao(mol, method=REF_BASIS):
     '''Restore AO characters.  Possible methods include the ANO/MINAO
     projection or fraction-averaged atomic RHF calculation'''
     if method.upper() in ('ANO', 'MINAO'):
-# Use ANO/MINAO basis to define the strongly occupied set
+        # Use ANO/MINAO basis to define the strongly occupied set
         return project_to_atomic_orbitals(mol, method)
     else:
         return pre_orth_ao_atm_scf(mol)
@@ -78,6 +77,7 @@ def project_to_atomic_orbitals(mol, basname):
     from pyscf.scf.addons import project_mo_nr2nr
     from pyscf.scf import atom_hf
     from pyscf.gto.ecp import core_configuration
+
     def search_atm_l(atm, l):
         bas_ang = atm._bas[:,gto.ANG_OF]
         ao_loc = atm.ao_loc_nr()
@@ -163,16 +163,16 @@ def project_to_atomic_orbitals(mol, basname):
         atmp._built = True
 
         if symb in nelec_ecp_dic and nelec_ecp_dic[symb] > 0:
+            # If ECP basis has good atomic character, ECP basis can be used in the
+            # localization/population analysis directly. Otherwise project ECP
+            # basis to ANO basis.
             if not PROJECT_ECP_BASIS:
-# If ECP basis has good atomic character, ECP basis can be used in the
-# localization/population analysis directly. Otherwise project ECP basis to
-# ANO basis.
                 continue
 
             ecpcore = core_configuration(nelec_ecp_dic[symb])
-# Comparing to ANO valence basis, to check whether the ECP basis set has
-# reasonable AO-character contraction.  The ANO valence AO should have
-# significant overlap to ECP basis if the ECP basis has AO-character.
+            # Comparing to ANO valence basis, to check whether the ECP basis set has
+            # reasonable AO-character contraction.  The ANO valence AO should have
+            # significant overlap to ECP basis if the ECP basis has AO-character.
             if abs(ecp_ano_det_ovlp(atm, atmp, ecpcore)) > .1:
                 aos[symb] = numpy.diag(1./numpy.sqrt(s0.diagonal()))
                 continue
@@ -199,7 +199,7 @@ def project_to_atomic_orbitals(mol, basname):
                 degen = l * 2 + 1
 
             if nbf_atm_l > nbf_ano_l > 0:
-# For angular l, first place the projected ANO, then the rest AOs.
+                # For angular l, first place the projected ANO, then the rest AOs.
                 sdiag = reduce(numpy.dot, (rm_ano[:,idx].T, s0, rm_ano[:,idx])).diagonal()
                 nleft = (nbf_atm_l - nbf_ano_l) // degen
                 shell_average = numpy.einsum('ij->i', sdiag.reshape(-1,degen))
@@ -276,7 +276,6 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=None, scf_method=None,
             s = mol.intor_symmetric('int1e_ovlp')
 
     if pre_orth_ao is None:
-#        pre_orth_ao = numpy.eye(mol.nao_nr())
         pre_orth_ao = project_to_atomic_orbitals(mol, REF_BASIS)
 
     if method.lower() == 'lowdin':
@@ -285,8 +284,9 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=None, scf_method=None,
     elif method.lower() == 'nao':
         assert(mf is not None)
         c_orth = nao.nao(mol, mf, s)
-    else: # meta_lowdin: divide ao into core, valence and Rydberg sets,
-          # orthogonalizing within each set
+    else:
+        # meta_lowdin: partition AOs into core, valence and Rydberg sets,
+        # orthogonalizing within each set
         weight = numpy.ones(pre_orth_ao.shape[0])
         c_orth = nao._nao_sub(mol, weight, pre_orth_ao, s)
     # adjust phase
@@ -299,7 +299,6 @@ del(ORTH_METHOD)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     from pyscf.lo import nao
     mol = gto.Mole()

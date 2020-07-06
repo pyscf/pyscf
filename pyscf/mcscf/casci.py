@@ -27,7 +27,6 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.mcscf import addons
-from pyscf import symm
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
@@ -107,8 +106,8 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
             dump_mat.dump_tri(log.stdout, dm1b, label, **kwargs)
     else:
         casdm1 = casscf.fcisolver.make_rdm1(civec, ncas, nelecas)
-        dm1a =(numpy.dot(mocore, mocore.T) * 2
-             + reduce(numpy.dot, (mocas, casdm1, mocas.T)))
+        dm1a = (numpy.dot(mocore, mocore.T) * 2 +
+                reduce(numpy.dot, (mocas, casdm1, mocas.T)))
         dm1b = None
         dm1 = dm1a
 
@@ -226,8 +225,8 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
             vj[i] = numpy.einsum('ij,qij->q', casdm1, eris.ppaa[i])
             vk[i] = numpy.einsum('ij,iqj->q', casdm1, eris.papa[i])
         mo_inv = numpy.dot(mo_coeff.T, mc._scf.get_ovlp())
-        fock =(mc.get_hcore()
-             + reduce(numpy.dot, (mo_inv.T, eris.vhf_c+vj-vk*.5, mo_inv)))
+        fock = (mc.get_hcore() +
+                reduce(numpy.dot, (mo_inv.T, eris.vhf_c+vj-vk*.5, mo_inv)))
     else:
         dm_core = numpy.dot(mo_coeff[:,:ncore]*2, mo_coeff[:,:ncore].T)
         mocas = mo_coeff[:,ncore:nocc]
@@ -404,8 +403,6 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         A tuple, (natural orbitals, CI coefficients, orbital energies)
         The orbital energies are the diagonal terms of effective Fock matrix.
     '''
-    from pyscf.lo import orth
-    from pyscf.tools import dump_mat
     from pyscf.mcscf import addons
     log = logger.new_logger(mc, verbose)
 
@@ -428,8 +425,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                            verbose, with_meta_lowdin)
     else:
-# Keep the active space unchanged by default.  The rotation in active space
-# may cause problem for external CI solver eg DMRG.
+        # Keep the active space unchanged by default.  The rotation in active space
+        # may cause problem for external CI solver eg DMRG.
         mo_coeff1 = mo_coeff.copy()
         log.info('Density matrix diagonal elements %s', casdm1.diagonal())
 
@@ -552,6 +549,7 @@ def as_scanner(mc):
         def __init__(self, mc):
             self.__dict__.update(mc.__dict__)
             self._scf = mc._scf.as_scanner()
+
         def __call__(self, mol_or_geom, mo_coeff=None, ci0=None):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
@@ -739,7 +737,7 @@ class CASCI(lib.StreamObject):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
@@ -777,13 +775,19 @@ To enable the solvent model for CASCI, the following code needs to be called
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)
 
+    @lib.with_doc(scf.hf.get_jk.__doc__)
+    def get_jk(self, mol, dm, hermi=1, with_j=True, with_k=True, omega=None):
+        return self._scf.get_jk(mol, dm, hermi,
+                                with_j=with_j, with_k=with_k, omega=omega)
+
+    @lib.with_doc(scf.hf.get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None:
             mocore = self.mo_coeff[:,:self.ncore]
             dm = numpy.dot(mocore, mocore.T) * 2
 # don't call self._scf.get_veff because _scf might be DFT object
-        vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
+        vj, vk = self.get_jk(mol, dm, hermi)
         return vj - vk * .5
 
     def _eig(self, h, *args):

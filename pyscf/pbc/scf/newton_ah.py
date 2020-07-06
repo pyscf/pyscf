@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@ Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.pbc.scf import khf, kuhf, krohf
-from pyscf.pbc.scf import _response_functions
+from pyscf.pbc.scf import _response_functions  # noqa
 
 def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     cell = mf.cell
@@ -154,10 +153,6 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
         uniq_var_b = viridxb[:,None] & occidxb[k]
         uniq_ab = uniq_var_a | uniq_var_b
         nmo = len(mo_occ[k])
-        nocca = numpy.count_nonzero(mo_occa[k])
-        noccb = numpy.count_nonzero(mo_occb[k])
-        nvira = nmo - nocca
-        nvirb = nmo - noccb
 
         n_uniq_ab = numpy.count_nonzero(uniq_ab)
         idx_array = numpy.zeros((nmo,nmo), dtype=int)

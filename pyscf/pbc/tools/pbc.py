@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,8 @@ import copy
 import numpy as np
 import scipy.linalg
 from pyscf import lib
-from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3
+from pyscf.lib import logger
+from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
 
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'BLAS')
@@ -440,8 +441,8 @@ def madelung(cell, kpts):
         # Coulomb operator, the Ewald summation technique is not needed
         # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
         # quickly.
-        coulG = get_coulG(ecell)
         Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
+        coulG = get_coulG(ecell, Gv=Gv)
         ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
         return -np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
 

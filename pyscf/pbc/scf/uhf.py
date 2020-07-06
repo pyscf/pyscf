@@ -115,6 +115,8 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None
+        self.init_guess_breaksym = None
+        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):

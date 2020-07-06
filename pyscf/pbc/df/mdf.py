@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,8 +38,8 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.df import fuse_auxcell, _round_off_to_odd_mesh
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
+from pyscf.pbc.df.df_jk import zdotCN
+from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, unique,
                                        KPT_DIFF_TOL)
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
@@ -114,7 +114,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #            j2ctag = 'CD'
 #        except scipy.linalg.LinAlgError as e:
 #
-# Abandon CD treatment for better numerical stablity
+# Abandon CD treatment for better numerical stability
         w, v = scipy.linalg.eigh(j2c)
         log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
                   uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
@@ -128,7 +128,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         j2ctag = 'eig'
         return j2c, j2c_negative, j2ctag
 
-    feri = h5py.File(cderi_file, 'a')
+    feri = h5py.File(cderi_file, 'w')
     feri['j3c-kptij'] = kptij_lst
     nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id, cholesky_j2c):  # kpt = kptj - kpti

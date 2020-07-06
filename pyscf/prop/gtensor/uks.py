@@ -192,7 +192,7 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             _cross3x3_(vmat[0], mol, aow, ip_ao, mask, shls_slice, ao_loc)
             aow = rks_grad._make_dR_dao_w(ao, wvb)
             _cross3x3_(vmat[1], mol, aow, ip_ao, mask, shls_slice, ao_loc)
-            rho = vxc = vrho = vsigma = wv = aow = None
+            vxc = vrho = aow = None
         vmat = vmat - vmat.transpose(0,1,3,2)
 
     else:

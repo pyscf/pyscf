@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -865,31 +865,72 @@ def _symbol(symb_or_chg):
         return ELEMENTS[symb_or_chg]
 
 def _std_symbol(symb_or_chg):
+    '''For a given atom symbol (lower case or upper case) or charge, return the
+    standardized atom symbol (without the numeric prefix or suffix)
+    '''
     if isinstance(symb_or_chg, (str, unicode)):
         symb_or_chg = str(symb_or_chg.upper())
         rawsymb = _rm_digit(symb_or_chg)
-        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2] != 'XE':
+        if rawsymb in _ELEMENTS_UPPER:
+            return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2] != 'XE':
             rawsymb = rawsymb[1:]  # Remove the prefix X
             return 'X-' + _ELEMENTS_UPPER[rawsymb]
         elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
             rawsymb = rawsymb[5:]  # Remove the prefix GHOST
             return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
         else:
+            raise RuntimeError('Unsupported atom symbol %s' % symb_or_chg)
+    else:
+        return ELEMENTS[symb_or_chg]
+
+def _std_symbol_without_ghost(symb_or_chg):
+    '''For a given atom symbol (lower case or upper case) or charge, return the
+    standardized atom symbol
+    '''
+    if isinstance(symb_or_chg, (str, unicode)):
+        symb_or_chg = str(symb_or_chg.upper())
+        rawsymb = _rm_digit(symb_or_chg)
+        if rawsymb in _ELEMENTS_UPPER:
             return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2] != 'XE':
+            rawsymb = rawsymb[1:]  # Remove the prefix X
+            return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+            rawsymb = rawsymb[5:]  # Remove the prefix GHOST
+            return _ELEMENTS_UPPER[rawsymb]
+        else:
+            raise RuntimeError('Unsupported atom symbol %s' % symb_or_chg)
     else:
         return ELEMENTS[symb_or_chg]
 
 def _atom_symbol(symb_or_chg):
+    '''For a given atom symbol (lower case or upper case) or charge, return the
+    standardized atom symbol (with the numeric prefix or suffix)
+    '''
     if isinstance(symb_or_chg, (str, unicode)):
         a = str(symb_or_chg.strip().upper())
         if a.isdigit():
             symb = ELEMENTS[int(a)]
         else:
             rawsymb = _rm_digit(a)
-            if len(rawsymb) > 1 and a[0] == 'X' and a[:2] != 'XE':
-                rawsymb = rawsymb[1:]  # Remove the prefix X
-            elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
-                rawsymb = rawsymb[5:]  # Remove the prefix GHOST
+            if rawsymb not in _ELEMENTS_UPPER:  # likely a ghost atom
+                if len(rawsymb) > 1 and a[0] == 'X' and a[:2] != 'XE':
+                    rawsymb = rawsymb[1:]  # Remove the prefix X
+                    # put hyphen between X prefix and the atomic symbol
+                    if a[1].isalpha():
+                        a = a[0] + '-' + a[1:]
+                    else:
+                        a = a[0] + '-' + a[2:]
+                elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+                    rawsymb = rawsymb[5:]  # Remove the prefix GHOST
+                    # put hyphen between Ghost prefix and the atomic symbol
+                    if a[5].isalpha():
+                        a = a[:5] + '-' + a[5:]
+                    elif a[5] != '-':
+                        a = a[:5] + '-' + a[6:]
+                else:
+                    raise RuntimeError('Unsupported atom symbol %s' % a)
             stdsymb = _ELEMENTS_UPPER[rawsymb]
             symb = a.replace(rawsymb, stdsymb)
     else:

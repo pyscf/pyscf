@@ -17,7 +17,6 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import sys
 import copy
 from functools import reduce
 import numpy

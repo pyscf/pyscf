@@ -19,15 +19,12 @@
 '''
 This interface requires the cppe library
 
-https://github.com/maxscheurer/cppe
-arXiv:1804.03598
+GitHub:      https://github.com/maxscheurer/cppe
+Code:        10.5281/zenodo.3345696
+Publication: https://doi.org/10.1021/acs.jctc.9b00758
 
-The CPPE library needs to be built from sources (according to the CPPE document):
-
-mkdir build && cd build && cmake -DENABLE_PYTHON_INTERFACE=ON .. && make
-
-If successfully built, find the directory where the file cppe.*.so locates
-then put the directory in PYTHONPATH.
+The CPPE library can be installed via:
+pip install git+https://github.com/maxscheurer/cppe.git
 
 The potential file required by CPPE library needs to be generated from the
 PyFraME library  https://gitlab.com/FraME-projects/PyFraME
@@ -35,10 +32,11 @@ PyFraME library  https://gitlab.com/FraME-projects/PyFraME
 
 import sys
 import numpy
+from pkg_resources import parse_version
 
 try:
     import cppe
-except:
+except ModuleNotFoundError:
     sys.stderr.write('cppe library was not found\n')
     sys.stderr.write(__doc__)
     raise
@@ -98,20 +96,27 @@ class PolEmbed(lib.StreamObject):
 ##################################################
 # don't modify the following attributes, they are not input options
         if isinstance(options_or_potfile, str):
-            options = cppe.PeOptions()
-            options.potfile = options_or_potfile
+            options = {"potfile": options_or_potfile}
         else:
             options = options_or_potfile
 
-        if not isinstance(options, cppe.PeOptions):
-            raise TypeError("Invalid type for options.")
+        min_version = "0.2.0"
+        if parse_version(cppe.__version__) < parse_version(min_version):
+            raise ModuleNotFoundError("cppe version {} is required at least. "
+                                      "Version {}"
+                                      " was found.".format(min_version,
+                                                           cppe.__version__))
+
+        if not isinstance(options, dict):
+            raise TypeError("Options should be a dictionary.")
 
         self.options = options
         self.cppe_state = self._create_cppe_state(mol)
         self.potentials = self.cppe_state.potentials
         self.V_es = None
 
-        # e (the dielectric correction) and v (the additional potential) are
+        # e (the electrostatic and induction energy)
+        # and v (the additional potential) are
         # updated during the SCF iterations
         self.e = None
         self.v = None
@@ -121,20 +126,12 @@ class PolEmbed(lib.StreamObject):
 
     def dump_flags(self, verbose=None):
         logger.info(self, '******** %s flags ********', self.__class__)
-        options = self.options
+        options = self.cppe_state.options
+        option_keys = cppe.valid_option_keys
         logger.info(self, 'frozen = %s'       , self.frozen)
         logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
-        logger.info(self, "cppe.potfile                  = %s", options.potfile)
-        logger.info(self, "cppe.iso_pol                  = %s", options.iso_pol)
-        logger.info(self, "cppe.induced_thresh           = %s", options.induced_thresh)
-        logger.info(self, "cppe.do_diis                  = %s", options.do_diis)
-        logger.info(self, "cppe.diis_start_norm          = %s", options.diis_start_norm)
-        logger.info(self, "cppe.maxiter                  = %s", options.maxiter)
-        logger.info(self, "cppe.damp_induced             = %s", options.damp_induced)
-        logger.info(self, "cppe.damping_factor_induced   = %s", options.damping_factor_induced)
-        logger.info(self, "cppe.damp_multipole           = %s", options.damp_multipole)
-        logger.info(self, "cppe.damping_factor_multipole = %s", options.damping_factor_multipole)
-        logger.info(self, "cppe.pe_border                = %s", options.pe_border)
+        for key in option_keys:
+            logger.info(self, "cppe.%s = %s", key, options[key])
         return self
 
     def _create_cppe_state(self, mol):
@@ -310,9 +307,7 @@ class PolEmbed(lib.StreamObject):
 
 if __name__ == '__main__':
     import tempfile
-    from pyscf import gto
     from pyscf.solvent import PE
-    from pyscf.solvent import pol_embed
     mol = gto.M(atom='''
            6        0.000000    0.000000   -0.542500
            8        0.000000    0.000000    0.677500
@@ -346,9 +341,8 @@ EXCLISTS
 2   1  3
 3   1  2''')
         f.flush()
-        pe_options = cppe.PeOptions()
-        pe_options.potfile = f.name
-        #pe = pol_embed.PolEmbed(mol, pe_options)
+        pe_options = {"potfile": f.name}
+        # pe = pol_embed.PolEmbed(mol, pe_options)
         #mf = PE(mf, pe).run()
         mf = PE(mf, pe_options).run()
         print(mf.e_tot - -112.35232445743728)

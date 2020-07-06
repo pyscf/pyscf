@@ -43,7 +43,7 @@ from pyscf.solvent import ddcosmo
 from pyscf.solvent._attach_solvent import _Solvation
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
-from pyscf.grad import tdrhf as tdrhf_grad
+from pyscf.grad import tdrhf as tdrhf_grad  # noqa
 
 
 # TODO: Define attribute grad_method.base to point to the class of the 0th
@@ -256,7 +256,6 @@ def make_fi1(pcmobj, r_vdw):
 def make_phi1(pcmobj, dm, r_vdw, ui, ylm_1sph):
     mol = pcmobj.mol
     natm = mol.natm
-    nlm = (pcmobj.lmax+1)**2
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
         dm = dm[0] + dm[1]
@@ -270,7 +269,7 @@ def make_phi1(pcmobj, dm, r_vdw, ui, ylm_1sph):
     atom_charges = mol.atom_charges()
 
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)
-    extern_point_idx = ui > 0
+    #extern_point_idx = ui > 0
 
     fi1 = make_fi1(pcmobj, pcmobj.get_atomic_radii())
     fi1[:,:,ui==0] = 0
@@ -321,13 +320,11 @@ def make_e_psi1(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L):
     mol = pcmobj.mol
     natm = mol.natm
     lmax = pcmobj.lmax
-    nlm = (lmax+1)**2
     grids = pcmobj.grids
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
         dm = dm[0] + dm[1]
     ni = numint.NumInt()
-    max_memory = pcmobj.max_memory - lib.current_memory()[0]
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm)
     den = numpy.empty((4,grids.weights.size))
 

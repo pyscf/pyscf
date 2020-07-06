@@ -20,7 +20,7 @@
 
 import numpy
 from pyscf.data import radii
-from pyscf.data.elements import ELEMENTS_PROTON
+from pyscf.data.elements import charge as elements_proton
 
 BRAGG_RADII = radii.BRAGG
 COVALENT_RADII = radii.COVALENT
@@ -39,7 +39,7 @@ def murray(n, *args, **kwargs):
 
 # Gauss-Chebyshev of the first kind,  and the transformed interval [0,\infty)
 def becke(n, charge, *args, **kwargs):
-    '''Becke, JCP, 88, 2547 (1988)'''
+    '''Becke, JCP 88, 2547 (1988); DOI:10.1063/1.454033'''
     if charge == 1:
         rm = BRAGG_RADII[charge]
     else:
@@ -52,7 +52,7 @@ def becke(n, charge, *args, **kwargs):
 # scale rad and rad_weight if necessary
 # gauss-legendre
 def delley(n, *args, **kwargs):
-    '''B. Delley radial grids. Ref. JCP, 104, 9848 log2 algorithm'''
+    '''B. Delley radial grids. Ref. JCP 104, 9848 (1996); DOI:10.1063/1.471749. log2 algorithm'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     r_outer = 12.
@@ -67,7 +67,7 @@ def delley(n, *args, **kwargs):
 gauss_legendre = delley
 
 def mura_knowles(n, charge=None, *args, **kwargs):
-    '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''
+    '''Mura-Knowles [JCP 104, 9848 (1996); DOI:10.1063/1.471749] log3 quadrature radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
 # 7 for Li, Be, Na, Mg, K, Ca, otherwise 5
@@ -84,7 +84,7 @@ def mura_knowles(n, charge=None, *args, **kwargs):
 # Gauss-Chebyshev of the second kind,  and the transformed interval [0,\infty)
 # Ref  Matthias Krack and Andreas M. Koster,  J. Chem. Phys. 108 (1998), 3226
 def gauss_chebyshev(n, *args, **kwargs):
-    '''Gauss-Chebyshev (JCP, 108, 3226) radial grids'''
+    '''Gauss-Chebyshev [JCP 108, 3226 (1998); DOI:10.1063/1.475719) radial grids'''
     ln2 = 1 / numpy.log(2)
     fac = 16./3 / (n+1)
     x1 = numpy.arange(1,n+1) * numpy.pi / (n+1)
@@ -98,7 +98,7 @@ def gauss_chebyshev(n, *args, **kwargs):
 
 def treutler_ahlrichs(n, *args, **kwargs):
     '''
-    Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids
+    Treutler-Ahlrichs [JCP 102, 346 (1995); DOI:10.1063/1.469408] (M4) radial grids
     '''
     r = numpy.empty(n)
     dr = numpy.empty(n)
@@ -121,7 +121,7 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    charges = [ELEMENTS_PROTON[x] for x in mol.elements]
+    charges = [elements_proton(x) for x in mol.elements]
     rad = atomic_radii[charges] + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
@@ -137,12 +137,12 @@ def becke_atomic_radii_adjust(mol, atomic_radii):
     return fadjust
 
 def treutler_atomic_radii_adjust(mol, atomic_radii):
-    '''Treutler atomic radii adjust function: JCP, 102, 346'''
-# JCP, 102, 346
+    '''Treutler atomic radii adjust function: [JCP 102, 346 (1995); DOI:10.1063/1.469408]'''
+# JCP 102, 346 (1995)
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    charges = [ELEMENTS_PROTON[x] for x in mol.elements]
+    charges = [elements_proton(x) for x in mol.elements]
     rad = numpy.sqrt(atomic_radii[charges]) + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)

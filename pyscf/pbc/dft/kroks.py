@@ -26,6 +26,7 @@ from pyscf.pbc.scf import krohf
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft.kuks import energy_elec
+from pyscf import __config__
 
 
 @lib.with_doc(kuks.get_veff.__doc__)
@@ -43,8 +44,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 class KROKS(rks.KohnShamDFT, krohf.KROHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN'):
-        krohf.KROHF.__init__(self, cell, kpts)
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        krohf.KROHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
