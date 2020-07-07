@@ -63,11 +63,11 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if adc.verbose >= logger.INFO:
         if nroots == 1:
-            logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+            logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
                          adc.method, 0, E, E*27.2114, spec_factors, conv)
         else :
             for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
-                logger.info(adc, '%s root %d    Energy (Eh) = %.8f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
                           adc.method, n, en, en*27.2114, pn, convn)
         log.timer('ADC', *cput0)
 
