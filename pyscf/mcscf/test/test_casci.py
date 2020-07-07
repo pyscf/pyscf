@@ -96,6 +96,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(abs(mo1-mo2).max()), 0, 9)
         self.assertAlmostEqual(ci1.ravel().dot(ci2.ravel()), 1, 9)
 
+        # Make sure that mc.mo_occ has been set and that the NOONs add to nelectron
+        mo_occ = getattr(mc1, "mo_occ", numpy.array([]))
+        self.assertNotEqual(mo_occ, numpy.array([]))
+        self.assertAlmostEqual(numpy.sum(mo_occ), mc1.mol.nelectron, 9)
+
     def test_multi_roots(self):
         mc1 = mcscf.CASCI(m, 4, 4)
         mc1.fcisolver.nroots = 2
