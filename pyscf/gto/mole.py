@@ -2056,6 +2056,7 @@ class Mole(lib.StreamObject):
         self.smearing = False
         self.tau      = None
         self.FermiEnergy = None
+        self.static = None
 # Nuclear property. self.nucprop = {atom_symbol: {key: value}}
         self.nucprop = {}
 ##################################################
