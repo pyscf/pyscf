@@ -1700,11 +1700,7 @@ class SCF(lib.StreamObject):
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_occ = self.mo_coeff
         if s is None: s = self.get_ovlp()
-<<<<<<< HEAD
         if option is None: option = 2
-=======
-        if option is None: option = 1
->>>>>>> 9f9ddb0d1b24916e367e02cb65116b1af1e37850
         return static_dft(self,s, mo_energy, mo_coeff, mo_occ,option)
 
     def scf(self, dm0=None, **kwargs):
