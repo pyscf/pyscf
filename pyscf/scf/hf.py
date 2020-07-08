@@ -172,10 +172,17 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        # attach mo_coeff and mo_occ to dm to improve DFT get_veff efficiency
         dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
+
+        #:PRG:
+        mf.mo_energy=mo_energy
+        mf.mo_occ=mo_occ
+        mf.mo_coeff=mo_coeff
+
+
+        # attach mo_coeff and mo_occ to dm to improve DFT get_veff efficiency
 
         # Here Fock matrix is h1e + vhf, without DIIS.  Calling get_fock
         # instead of the statement "fock = h1e + vhf" because Fock matrix may
@@ -598,10 +605,8 @@ def get_init_guess(mol, key='minao'):
     '''
     return RHF(mol).get_init_guess(mol, key)
 
-#Making Vc-static self consistent
-
-
-def static_dft(mf, s, f, mo_energy, mo_occ, mo_coeff, option=2):
+#:PRG:
+def static_dft(mf, s, mo_energy, mo_occ, mo_coeff, option=2):
     r'''Add static DFT operator to Fock matrix
 
     .. math::
@@ -647,54 +652,12 @@ def static_dft(mf, s, f, mo_energy, mo_occ, mo_coeff, option=2):
         return v_c_static
 
     vcs = static_potential(mf, mo_occ, mo_energy, option=2)
-    d = mf.make_rdm1(mo_coeff,vcs)
+    #print("static: ", numpy.shape(vcs))
+    d = numpy.dot(mo_coeff*vcs, mo_coeff.conj().T) #mf.make_rdm1(mo_coeff,vcs)
     F_static = reduce(numpy.dot, (s, d, s))
-    return f + F_static
+    return F_static
 
 
-# eigenvalue of d is 1
-#def static_dft(s, f, factor, tau, epsilon, mu, option = 2):
-#    r'''Add static DFT operator to Fock matrix
-#    .. math::
-#       :nowrap:
-#       \begin{align}
-#         FC &= SCE \\
-#         F &= F + SC bla C^\dagger S \\
-#       \end{align}
-#    Returns:
-#        New Fock matrix, 2D ndarray
-#    '''
-#
-#    def static_coefficients(tau, epsilon, mu, option = 2):
-#        '''
-#        Inputs:
-#            tau: temperature
-#            epsilon: numpy array of Kohn-Sham eigenvalues
-#            mu: chemical potential
-#            option: 1: Eq. 18; 2: Eq. 20
-#        '''
-#        kb = 3.166810413e-6 # Boltzman constant in Hartree/K
-#        beta = kb * tau
-#        delta = epsilon - mu
-#        exp_neg_beta_delta = np.exp(-beta * delta)
-#        p = exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta)
-#        dpde = - beta * exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta ) / ( 1.0 + exp_neg_beta_delta)
-
-#        if option == 1:
-#            dEdp = beta * np.where(p < 0.5, -1.0 / (1.0 - p), np.where(p > 0.5, 1.0 / p, 0))
-#        else:
-#            dEdp = beta * (np.log(p) - np.log(1-p))
-
-#        v_c_static = dEdp * dpde * epsilon
-
-#        return v_c_static
-
-#    v_c_static = static_coefficients(tau, epsilon, mu, option)
-#    d=self.make_rdm1(mo_coeff, v_c_static)
-#    F_static = reduce(numpy.dot, (s, d, s))
-#    return f + F_static
-
-# eigenvalue of d is 1
 def level_shift(s, d, f, factor):
     r'''Apply level shift :math:`\Delta` to virtual orbitals
 
@@ -992,6 +955,10 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         f = diis.update(s1e, dm, f, mf, h1e, vhf)
     if abs(level_shift_factor) > 1e-4:
         f = level_shift(s1e, dm*.5, f, level_shift_factor)
+    #:PRG:
+    if mf.static and cycle >0:
+        #f +=mf.static_dft(mo_occ=mo_occ,mo_coeff=mo_coeff,mo_energy=mo_energy)
+        f +=mf.static_dft()
     return f
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
@@ -1467,6 +1434,8 @@ class SCF(lib.StreamObject):
             An extra cycle to check convergence after SCF iterations.
         check_convergence : function(envs) => bool
             A hook for overloading convergence criteria in SCF iterations.
+        static : bool
+            If True it performs self-consistent static-correlation DFT :PRG:
 
     Saved results:
 
@@ -1521,6 +1490,7 @@ class SCF(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
+        self.static = mol.static
 
 # If chkfile is muted, SCF intermediates will not be dumped anywhere.
         if MUTE_CHKFILE:
@@ -1724,14 +1694,14 @@ class SCF(lib.StreamObject):
     # to check_convergence can overwrite the default convergence criteria
     check_convergence = None
     
-    #Static_DFT
-    def static_dft(self, s=None, f=None, mo_coeff=None, mo_occ=None, mo_energy=None)
+    #:PRG:
+    def static_dft(self, s=None, mo_coeff=None, mo_occ=None, mo_energy=None,option=None):
         if mo_energy is None: mo_energy = self.mo_energy
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_occ = self.mo_coeff
-        if s is None: s = self.get_ovlp(mol)
-        if f is None: f = self.get_fock()
-        return static_dft(s, f, mo_energy, mo_coeff, mo_occ)
+        if s is None: s = self.get_ovlp()
+        if option is None: option = 1
+        return static_dft(self,s, mo_energy, mo_coeff, mo_occ,option)
 
     def scf(self, dm0=None, **kwargs):
         '''SCF main driver
