@@ -25,7 +25,7 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.fci.direct_spin1 import _unpack_nelec
 from pyscf.fci.spin_op import spin_square
 from pyscf.fci import cistring
-from pyscf import lib, ao2mo
+from pyscf import lib, ao2mo, mcscf
 import numpy as np
 import copy, time, gc
 from functools import reduce
@@ -431,10 +431,7 @@ class Gradients (lagrange.Gradients):
 
     def make_fcasscf (self, state=None, casscf_attr={}, fcisolver_attr={}):
         ''' Make a fake CASSCF object for ostensible single-state calculations '''
-        if isinstance (self.base, mc1step_symm.CASSCF):
-            fcasscf = mc1step_symm.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
-        else:
-            fcasscf = mc1step.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
+        fcasscf = mcscf.CASSCF (self.base._scf, self.base.ncas, self.base.nelecas)
         fcasscf.__dict__.update (self.base.__dict__)
 
         if isinstance (fcasscf.fcisolver, StateAverageFCISolver):
@@ -595,10 +592,9 @@ class Gradients (lagrange.Gradients):
             try:
                 xci_ss = self.base.fcisolver.states_spin_square (xci, self.base.ncas, self.base.nelecas)[0]
             except AttributeError:
-                nelec = _unpack_nelec (self.base.nelecas)
+                nelec = sum (_unpack_nelec (self.base.nelecas))
                 xci_ss = [spin_square (x, self.base.ncas, ((nelec+m)//2,(nelec-m)//2))[0]
                     for x, m in zip (xci, self.spin_states)]
-                xci_ss = [x[0] for x in xci_ss]
             xci_ss = [x / max (y, 1e-8) for x, y in zip (xci_ss, xci_norm)] 
             xci_multip = [np.sqrt (x+.25) - .5 for x in xci_ss]
             for ix, (norm, ss, multip) in enumerate (zip (xci_norm, xci_ss, xci_multip)):
