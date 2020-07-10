@@ -658,6 +658,8 @@ class CASCI(lib.StreamObject):
         mo_energy : ndarray
             Diagonal elements of general Fock matrix (in mo_coeff
             representation).
+        mo_occ : ndarray
+            Occupation numbers of natural orbitals if natorb is specified.
 
     Examples:
 
@@ -712,6 +714,7 @@ class CASCI(lib.StreamObject):
         self.ci = None
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
+        self.mo_occ = None
         self.converged = False
 
         keys = set(('natorb', 'canonicalization', 'sorting_mo_energy'))
