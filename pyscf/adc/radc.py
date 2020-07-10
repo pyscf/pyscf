@@ -534,7 +534,8 @@ class RADC(lib.StreamObject):
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
 
             def outcore_transform():
-                return radc_ao2mo.transform_integrals_outcore(self)
+                #return radc_ao2mo.transform_integrals_outcore(self)
+                return radc_ao2mo.transform_integrals_outcore_df(self)
             self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals() 
@@ -568,6 +569,19 @@ class RADC(lib.StreamObject):
     def ip_adc(self, nroots=1, guess=None, eris=None):
         return RADCIP(self).kernel(nroots, guess, eris)
 
+############################################################
+#
+#    def density_fit(self, auxbasis=None, with_df=None):
+#        from pyscf.adc import dfadc
+#        myadc = dfadc.RADC(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+#        if with_df is not None:
+#            myadc.with_df = with_df
+#        if myadc.with_df.auxbasis != auxbasis:
+#            import copy
+#            myadc.with_df = copy.copy(myadc.with_df)
+#            myadc.with_df.auxbasis = auxbasis
+#        return myadc
+###########################################################
 
 def get_imds_ea(adc, eris=None):
 

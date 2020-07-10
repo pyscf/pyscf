@@ -26,6 +26,7 @@ Algebraic Diagrammatic Construction
 from pyscf import scf
 from pyscf.adc import uadc
 from pyscf.adc import radc
+from pyscf.adc import dfadc
 
 def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
@@ -42,6 +43,14 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         return UADC(mf, frozen, mo_coeff, mo_occ)
     else :
         raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
+
+#####################################################################
+#    if getattr(mf, 'with_df', None):
+#        return dfadc.RADC(mf, frozen, mo_coeff, mo_occ)
+#    else:
+#        return adc.ADC(mf, frozen, mo_coeff, mo_occ)
+#
+#####################################################################
 
 ADC.__doc__ = uadc.UADC.__doc__
 
@@ -74,7 +83,9 @@ def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_rhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-RADC')
+        return dfadc.RADC(mf, frozen, mo_coeff, mo_occ)
+    #if getattr(mf, 'with_df', None):
+    #    raise NotImplementedError('DF-RADC')
     else:
         return radc.RADC(mf, frozen, mo_coeff, mo_occ)
 

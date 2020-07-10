@@ -181,6 +181,62 @@ def transform_integrals_outcore(myadc):
           
     return eris
 
+################ DF eris ############################
+
+def transform_integrals_outcore_df(myadc):
+    cput0 = (time.clock(), time.time())
+    #log = logger.Logger(mycc.stdout, mycc.verbose)
+
+    mo_coeff = np.asarray(myadc.mo_coeff, order='F')
+    nocc = myadc._nocc
+    nao, nmo = mo_coeff.shape
+    nvir = myadc._nmo - myadc._nocc
+    nvir_pair = nvir*(nvir+1)//2
+   
+    eris = lambda:None
+
+    naux = myadc._scf.with_df.get_naoaux()
+    Loo = np.empty((naux,nocc,nocc))
+    Lov = np.empty((naux,nocc,nvir))
+    Lvo = np.empty((naux,nvir,nocc))
+    Lvv = np.empty((naux,nvir_pair))
+    ijslice = (0, nmo, 0, nmo)
+    Lpq = None
+    p1 = 0
+    for eri1 in myadc._scf.with_df.loop():
+        Lpq = ao2mo._ao2mo.nr_e2(eri1, mo_coeff, ijslice, aosym='s2', out=Lpq).reshape(-1,nmo,nmo)
+        p0, p1 = p1, p1 + Lpq.shape[0]
+        Loo[p0:p1] = Lpq[:,:nocc,:nocc]
+        Lov[p0:p1] = Lpq[:,:nocc,nocc:]
+        Lvo[p0:p1] = Lpq[:,nocc:,:nocc]
+        Lvv[p0:p1] = lib.pack_tril(Lpq[:,nocc:,nocc:].reshape(-1,nvir,nvir))
+    Loo = Loo.reshape(naux,nocc*nocc)
+    Lov = Lov.reshape(naux,nocc*nvir)
+    Lvo = Lvo.reshape(naux,nocc*nvir)
+
+    eris.feri1 = lib.H5TmpFile()
+    eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
+    eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
+    eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
+    eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
+    eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8')
+    eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir_pair,nvir_pair), 'f8')
+    eris.oooo[:] = lib.ddot(Loo.T, Loo).reshape(nocc,nocc,nocc,nocc)
+    eris.ovoo[:] = lib.ddot(Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)
+    eris.oovv[:] = lib.unpack_tril(lib.ddot(Loo.T, Lvv)).reshape(nocc,nocc,nvir,nvir)
+    eris.ovvo[:] = lib.ddot(Lov.T, Lvo).reshape(nocc,nvir,nvir,nocc)
+    eris.ovov[:] = lib.ddot(Lov.T, Lov).reshape(nocc,nvir,nocc,nvir)
+    eris.ovvv[:] = lib.ddot(Lov.T, Lvv).reshape(nocc,nvir,nvir_pair)
+    eris.vvvv[:] = lib.ddot(Lvv.T, Lvv)
+    #eris.vvvv = np.asarray(eris.vvvv) 
+    eris.vvvv =  unpack_eri_3(eris.vvvv[:], nvir)
+    eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3)) 
+    eris.vvvv = eris.vvvv.reshape(nvir*nvir, nvir*nvir)
+    #log.timer('CCSD integral transformation', *cput0)
+
+    return eris
+########################################################################
 
 def read_dataset(h5file, dataname):
     f5 = h5py.File(h5file, 'r')
@@ -242,3 +298,27 @@ def unpack_eri_2(eri, norb):
             raise RuntimeError("ERI does not have a correct dimension")
 
     return eri_
+
+
+def unpack_eri_3(eri, norb):
+
+    n_oo = norb * (norb + 1) // 2
+    ind_oo = np.tril_indices(norb)
+
+    eri_ = None
+
+    if len(eri.shape) == 2:
+        if (eri.shape[0] != n_oo or eri.shape[1] != n_oo):
+            raise TypeError("ERI dimensions don't match")
+
+        temp = np.zeros((n_oo, norb, norb))
+        temp[:, ind_oo[0], ind_oo[1]] = eri
+        temp[:, ind_oo[1], ind_oo[0]] = eri
+        eri_ = np.zeros((norb, norb, norb, norb))
+        eri_[ind_oo[0], ind_oo[1]] = temp
+        eri_[ind_oo[1], ind_oo[0]] = temp
+    else: 
+            raise RuntimeError("ERI does not have a correct dimension")
+
+    return eri_
+
