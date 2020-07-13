@@ -49,6 +49,7 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         linkstr  = casscf.fcisolver.gen_linkstr(ncas, nelecas, False)
     else:
         linkstrl = linkstr  = None
+
     def fci_matvec(civec, h1, h2):
         h2cas = casscf.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
         hc = casscf.fcisolver.contract_2e(h2cas, civec, ncas, nelecas, link_index=linkstrl).ravel()
@@ -70,8 +71,8 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         kbuf = eris.papa[i]
         if i < nocc:
             jkcaa[i] = numpy.einsum('ik,ik->i', 6*kbuf[:,i]-2*jbuf[i], casdm1)
-        vhf_a[i] =(numpy.einsum('quv,uv->q', jbuf, casdm1)
-                 - numpy.einsum('uqv,uv->q', kbuf, casdm1) * .5)
+        vhf_a[i] = (numpy.einsum('quv,uv->q', jbuf, casdm1) -
+                    numpy.einsum('uqv,uv->q', kbuf, casdm1) * .5)
         jtmp = lib.dot(jbuf.reshape(nmo,-1), casdm2.reshape(ncas*ncas,-1))
         jtmp = jtmp.reshape(nmo,ncas,ncas)
         ktmp = lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2tmp)
@@ -266,11 +267,11 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 
         if ncore > 0:
             # part4, part5, part6
-# Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-#    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-# x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
-# x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
-# x2[:ncore] += H' * x1[:ncore]
+            # Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
+            #    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
+            # x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
+            # x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
+            # x2[:ncore] += H' * x1[:ncore]
             va, vc = casscf.update_jk_in_ah(mo, x1, casdm1, eris)
             x2[ncore:nocc] += va
             x2[:ncore,ncore:] += vc
@@ -320,8 +321,8 @@ def _sa_gen_g_hop(casscf, mo, ci0, eris, verbose=None):
     def h_op (x):
         x_orb = x[:ngorb]
         x_ci = x[ngorb:].reshape (nroots, -1)
-        return avg_orb_wgt_ci ([gh_iroot[2] (numpy.append (x_orb, x_ci_iroot))
-            for gh_iroot, x_ci_iroot in zip (gh_roots, x_ci)])
+        return avg_orb_wgt_ci([gh_iroot[2] (numpy.append (x_orb, x_ci_iroot))
+                               for gh_iroot, x_ci_iroot in zip (gh_roots, x_ci)])
 
     return g_all, g_update, h_op, hdiag_all
 
@@ -434,7 +435,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                 break
 
             elif ((ikf >= max(casscf.kf_interval, casscf.kf_interval-numpy.log(norm_dr+1e-7)) or
-# Insert keyframe if the keyframe and the esitimated grad are too different
+                   # Insert keyframe if the keyframe and the esitimated grad are too different
                    norm_gall < norm_gkf/casscf.kf_trust_region)):
                 ikf = 0
                 u, ci_kf = extract_rotation(casscf, dr, u, ci_kf)
@@ -603,7 +604,7 @@ class CASSCF(mc1step.CASSCF):
             can affect the accuracy and performance of CASSCF solver.  Lower
             ``ah_conv_tol`` and ``ah_lindep`` might improve the accuracy of CASSCF
             optimization, but decrease the performance.
-            
+
             >>> from pyscf import gto, scf, mcscf
             >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
             >>> mf = scf.UHF(mol)
@@ -695,7 +696,7 @@ class CASSCF(mc1step.CASSCF):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], self.ncas, ncore, nvir)
         assert(nvir > 0 and ncore > 0 and self.ncas > 0)
         if self.frozen is not None:

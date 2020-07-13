@@ -73,6 +73,19 @@ def solver(mol=None, singlet=False, symm=None):
 
 def FCI(mol_or_mf, mo=None, singlet=False):
     '''FCI solver
+
+    Args:
+        mol_or_mf :
+            A Mole object or an SCF object
+
+    Kwargs:
+        mo :
+            Molecular orbital coefficients
+        singlet :
+            Whether to enable spin symmetry for S=0 RHF-based FCI solver.
+
+    Returns:
+        A FCI object
     '''
     from functools import reduce
     import numpy
@@ -84,49 +97,74 @@ def FCI(mol_or_mf, mo=None, singlet=False):
         mol = mf.mol
         if mo is None:
             mo = mf.mo_coeff
+        is_uhf = isinstance(mf, scf.uhf.UHF)
     else:
         mf = None
         mol = mol_or_mf
-    cis = solver(mol, singlet=(singlet and mol.spin==0))
+        is_rhf = (mo is None or (isinstance(mo, numpy.ndarray) and mo.ndim == 2))
+        is_uhf = not is_rhf
+
+    if is_uhf:
+        fcisolver = direct_uhf.FCI(mol)
+    else:
+        fcisolver = solver(mol, singlet=(singlet and mol.spin==0))
+
+    # Just create the FCI solver without initializing Hamiltonian
     if mo is None:
-        return cis
+        return fcisolver
+
+    nelec = getattr(mf, 'nelec', mol.nelec)
+
+    if mf is None:
+        hcore = scf.hf.get_hcore(mol)
+        ecore = mol.energy_nuc()
+    else:
+        hcore = mf.get_hcore()
+        ecore = mf.energy_nuc()
+
+    if mf is None or mf._eri is None:
+        eri_ao = mol
+    else:
+        eri_ao = mf._eri
 
     if mol.symmetry:
         if mf is None:
-            orbsym = scf.hf_symm.get_orbsym(mol, mo)
+            s = mol.intor('int1e_ovlp')
         else:
-            orbsym = scf.hf_symm.get_orbsym(mol, mo, mf.get_ovlp(mol))
+            s = mf.get_ovlp()
+
+        if is_uhf:
+            orbsym = scf.uhf_symm.get_orbsym(mol, mo, s)
+        else:
+            orbsym = scf.hf_symm.get_orbsym(mol, mo, s)
     else:
         orbsym = None
 
-    class CISolver(cis.__class__):
-        def __init__(self):
-            self.__dict__.update(cis.__dict__)
+    if is_uhf:
+        h1e = [reduce(numpy.dot, (mo[0].conj().T, hcore, mo[0])),
+               reduce(numpy.dot, (mo[1].conj().T, hcore, mo[1]))]
+        eri_aa = ao2mo.kernel(eri_ao, (mo[0], mo[0], mo[0], mo[0]))
+        eri_ab = ao2mo.kernel(eri_ao, (mo[0], mo[0], mo[1], mo[1]))
+        eri_bb = ao2mo.kernel(eri_ao, (mo[1], mo[1], mo[1], mo[1]))
+        eri = [eri_aa, eri_ab, eri_bb]
+        norb = mo[0].shape[1]
+    else:
+        h1e = reduce(numpy.dot, (mo.conj().T, hcore, mo))
+        eri = ao2mo.kernel(mol, mo)
+        norb = mo.shape[1]
+
+    fcisolver_class = fcisolver.__class__
+    class CISolver(fcisolver_class):
+        def __init__(self, mol=None):
+            fcisolver_class.__init__(self, mol)
             self.orbsym = orbsym
 
-        def kernel(self, h1e=None, eri=None, norb=None, nelec=None, ci0=None,
-                   ecore=None, **kwargs):
-            if h1e is None or eri is None:
-                if mf is None:
-                    if h1e is None:
-                        h1e = reduce(numpy.dot, (mo.T, scf.hf.get_hcore(mol), mo))
-                    if eri is None:
-                        eri = ao2mo.full(mol, mo)
-                    if ecore is None:
-                        ecore = mol.energy_nuc()
-                else:
-                    if h1e is None:
-                        h1e = reduce(numpy.dot, (mo.T, mf.get_hcore(mol), mo))
-                    if eri is None:
-                        if mf._eri is None:
-                            eri = ao2mo.full(mol, mo)
-                        else:
-                            eri = ao2mo.full(mf._eri, mo)
-                    if ecore is None:
-                        ecore = mf.energy_nuc()
-            if norb is None: norb = mo.shape[1]
-            if nelec is None: nelec = mol.nelec
-            return cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0,
-                                        ecore=ecore, **kwargs)
-    return CISolver()
+        def kernel(self, h1e=h1e, eri=eri, norb=norb, nelec=nelec, ci0=None,
+                   ecore=ecore, **kwargs):
+            return fcisolver_class.kernel(self, h1e, eri, norb, nelec, ci0,
+                                          ecore=ecore, **kwargs)
+    cisolver = CISolver(mol)
+    cisolver.__dict__.update(fcisolver.__dict__)
+    cisolver.orbsym = orbsym
+    return cisolver
 

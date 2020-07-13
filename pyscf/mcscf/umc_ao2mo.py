@@ -79,6 +79,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
                           verbose=log, compact=False)
 
     klaoblks = len(fswap['0'])
+
     def load_bufa(bfn_id):
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('between load_buf', *tuple(time1))
@@ -92,6 +93,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('load_buf', *tuple(time1))
         return buf
+
     time0 = log.timer('halfe1-beta', *time0)
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
@@ -111,6 +113,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
                           verbose=log, compact=False)
 
     klaoblks = len(fswap['0'])
+
     def load_bufb(bfn_id):
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('between load_buf', *tuple(time1))
@@ -124,6 +127,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('load_buf', *tuple(time1))
         return buf
+
     time0 = log.timer('halfe1-alpha', *time0)
     time1 = [time.clock(), time.time()]
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
