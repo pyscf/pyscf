@@ -532,11 +532,11 @@ class GDF(aft.AFTDF):
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
                                          self.exp_to_discard)
 
+        uniq_idx = unique(self.kpts)[1]
+        kpts = numpy.asarray(self.kpts)[uniq_idx]
         if self.kpts_band is None:
-            kpts = self.kpts
             kband_uniq = numpy.zeros((0,3))
         else:
-            kpts = self.kpts
             kband_uniq = [k for k in self.kpts_band if len(member(k, kpts))==0]
         if j_only is None:
             j_only = self._j_only
