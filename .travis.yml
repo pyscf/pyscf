@@ -31,7 +31,7 @@ cache:
 
 before_install:
   - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
-  - pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py nose nose-exclude nose-timer codecov
+  - pip install "numpy!=1.16,!=1.17" "scipy<1.5" h5py nose nose-exclude nose-timer codecov
 
 install:
   # openblas from numpy may be slightly faster than the default libblas library
