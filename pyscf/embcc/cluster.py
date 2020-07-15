@@ -79,6 +79,7 @@ class Cluster:
         if not hasattr(bath_size, "__getitem__"):
             bath_size = (bath_size, bath_size)
 
+        assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
         self.bath_type = bath_type
         self.bath_target_size = bath_size
         self.bath_tol = bath_tol

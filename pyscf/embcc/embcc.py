@@ -69,7 +69,8 @@ class EmbCC:
             raise ValueError("Unknown local_type: %s" % local_type)
         if solver not in (None, "MP2", "CISD", "CCSD", "FCI"):
             raise ValueError("Unknown solver: %s" % solver)
-        if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-natorb"):
+        #if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-natorb"):
+        if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-natorb", "full"):
             raise ValueError("Unknown bath type: %s" % bath_type)
 
         self.mf = mf

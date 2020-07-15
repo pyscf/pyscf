@@ -4,6 +4,7 @@ import logging
 import numpy as np
 
 from pyscf import gto
+from .counterpoise import mod_for_counterpoise
 
 __all__ = [
         "build_dimer",
@@ -258,7 +259,7 @@ def build_H2O_CH6(dOC, config="2-leg", **kwargs):
 
     return mol
 
-def build_water_borazine(distance, **kwargs):
+def build_water_borazine(distance, counterpoise=None, **kwargs):
     """From suppl. mat. of J. Chem. Phys. 147, 044710 (2017)
 
     Water molecule are O1, H1, H2.
@@ -299,6 +300,20 @@ def build_water_borazine(distance, **kwargs):
     #for a in atom[3:9]:
     #    d = np.linalg.norm(atom[6][1] - a[1])
     #    print(a[0], d)
+
+    water = [a[0] for a in atom[:3]]
+    borazine = [a[0] for a in atom[3:]]
+    basis = None
+    if counterpoise == "water":
+        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), water, remove_basis=True)
+    elif counterpoise == "water-full":
+        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), water, remove_basis=False)
+    elif counterpoise == "borazine":
+        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), borazine, remove_basis=True)
+    elif counterpoise == "borazine-full":
+        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), borazine, remove_basis=False)
+    if basis is not None:
+        kwargs["basis"] = basis
 
     mol = gto.M(
         atom=atom,

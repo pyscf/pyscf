@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(allow_abbrev=False)
 parser.add_argument("-b", "--basis", default="cc-pVDZ")
 parser.add_argument("--solver", choices=["CISD", "CCSD", "FCI"], default="CCSD")
-parser.add_argument("--benchmark", choices=["CISD", "CCSD", "FCI"])
+parser.add_argument("--benchmarks", nargs="*", choices=["MP2", "CISD", "CCSD", "FCI"])
 #parser.add_argument("--tol-bath", type=float, default=1e-3)
 parser.add_argument("--distances", type=float, nargs="*")
 parser.add_argument("--distances-range", type=float, nargs=3, default=[2.8, 8.0, 0.2])
@@ -33,9 +33,14 @@ parser.add_argument("--impurity", nargs="*", default=["O1", "H1", "H2", "N1"])
 parser.add_argument("--mp2-correction", action="store_true")
 parser.add_argument("--use-ref-orbitals-bath", type=int, default=0)
 parser.add_argument("--minao", default="minao")
+
+parser.add_argument("--counterpoise", choices=["none", "water", "water-full", "borazine", "borazine-full"])
 parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
+
+if args.counterpoise == "none":
+    args.counterpoise = None
 
 args.use_ref_orbitals_bath = bool(args.use_ref_orbitals_bath)
 
@@ -60,28 +65,47 @@ for idist, dist in enumerate(args.distances):
         log.info("Distance=%.2f", dist)
         log.info("=============")
 
-    mol = structure_builder(dist, basis=args.basis, verbose=4)
+    mol = structure_builder(dist, counterpoise=args.counterpoise, basis=args.basis, verbose=4)
 
     mf = pyscf.scf.RHF(mol)
     #mf = mf.density_fit()
     mf.kernel()
     assert mf.converged
 
-    if args.benchmark:
-        if args.benchmark == "CISD":
-            import pyscf.ci
-            cc = pyscf.ci.CISD(mf)
-        elif args.benchmark == "CCSD":
-            import pyscf.cc
-            cc = pyscf.cc.CCSD(mf)
-        elif args.benchmark == "FCI":
-            import pyscf.fci
-            cc = pyscf.fci.FCI(mol, mf.mo_coeff)
-        cc.kernel()
-        assert cc.converged
+    if args.benchmarks:
+        energies = []
+        for bm in args.benchmarks:
+            t0 = MPI.Wtime()
+            if bm == "MP2":
+                import pyscf.mp
+                mp2 = pyscf.mp.MP2(mf)
+                mp2.kernel()
+                energies.append(mf.e_tot + mp2.e_corr)
+            elif bm == "CISD":
+                import pyscf.ci
+                ci = pyscf.ci.CISD(mf)
+                ci.kernel()
+                assert ci.converged
+                energies.append(mf.e_tot + ci.e_corr)
+            elif bm == "CCSD":
+                import pyscf.cc
+                cc = pyscf.cc.CCSD(mf)
+                cc.kernel()
+                assert cc.converged
+                energies.append(mf.e_tot + cc.e_corr)
+            elif bm == "FCI":
+                import pyscf.fci
+                fci = pyscf.fci.FCI(mol, mf.mo_coeff)
+                fci.kernel()
+                assert fci.converged
+                energies.append(mf.e_tot + fci.e_corr)
+            log.info("Time for %s: %.2g", bm, MPI.Wtime()-t0)
 
+        if idist == 0:
+            with open(args.output, "w") as f:
+                f.write("#distance  HF  " + "  ".join(args.benchmarks) + "\n")
         with open(args.output, "a") as f:
-            f.write("%3f  %.8e  %.8e\n" % (dist, mf.e_tot, cc.e_tot))
+            f.write(("%.3f  %.8e" + (len(args.benchmarks)*"  %.8e") + "\n") % (dist, mf.e_tot, *energies))
 
     else:
         cc = embcc.EmbCC(mf,

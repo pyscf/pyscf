@@ -177,11 +177,19 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, 
         Environment orbitals.
     """
 
-    log.debug("Making bath with nbath=%r and tol=%r", nbath, tol)
+    log.debug("Making bath of type %r (nbath=%r, tol=%r, C_ref given=%r)", bathtype, nbath, tol, C_ref is not None)
     eigref_out = None
     e_delta_mp2 = None
-    # Project
-    if C_ref is not None:
+    # No bath
+    if bathtype is None:
+        C_bath, C_env = np.hsplit(C_env, [0])
+        assert C_bath.shape[-1] == 0
+    # Full environment as bath
+    elif bathtype == "full":
+        C_bath, C_env = np.hsplit(C_env, [C_env.shape[-1]])
+        assert C_env.shape[-1] == 0
+    # Project reference orbitals
+    elif C_ref is not None:
         nref = C_ref.shape[-1]
         if nref > 0:
             C_env, eig = self.project_ref_orbitals(C_ref, C_env)
@@ -191,22 +199,14 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, 
     # Make new bath orbitals
     else:
         if bathtype == "mp2-natorb":
-            log.debug("Making bath orbitals of type %s", bathtype)
-            C_occclst = self.C_occclst
-            C_virclst = self.C_virclst
-            C_bath, C_env, e_delta_mp2, eigref_out = self.make_mp2_bath(C_occclst, C_virclst, C_env, kind,
+            C_bath, C_env, e_delta_mp2, eigref_out = self.make_mp2_bath(
+                    self.C_occclst, self.C_virclst, C_env, kind,
                     eigref=eigref, nbath=nbath, tol=tol, **kwargs)
-
-        elif bathtype is not None:
-            log.debug("Making bath orbitals of type %s", bathtype)
+        else:
             C_bath, C_env, eigref_out = self.make_mf_bath(C_env, kind, bathtype=bathtype, eigref=eigref, nbath=nbath, tol=tol,
                     **kwargs)
 
-        else:
-            log.debug("No bath to make.")
-            C_bath, C_env = np.hsplit(C_env, [0])
-
-    # MP2 correction
+    # MP2 correction [only of there are environment (non bath) states, else = 0.0]
     if self.mp2_correction and C_env.shape[-1] > 0:
         if e_delta_mp2 is None:
             if kind == "occ":
