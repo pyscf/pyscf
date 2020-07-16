@@ -182,7 +182,7 @@ def transform_integrals_outcore(myadc):
     return eris
 
 ################ DF eris ############################
-
+#@profile
 def transform_integrals_outcore_df(myadc):
     cput0 = (time.clock(), time.time())
     #log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -263,7 +263,7 @@ def transform_integrals_outcore_df(myadc):
         #    Pvv[:,:,a:a+k] = dataset[:].reshape(naux,-1)
         #    a += k 
 
-        avail_mem = (myadc.max_memory - lib.current_memory()[0]) 
+        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
         vvv_mem = (nvir**3) * 8/1e6
 
         chnk_size =  int(avail_mem/vvv_mem)
@@ -275,20 +275,20 @@ def transform_integrals_outcore_df(myadc):
 
             Lvv = Lvv.reshape(naux,nvir,nvir) 
             if chnk_size < nvir:
-                Lvv_temp = Lvv[:,:,p:p+chnk_size].reshape(naux,-1)
+                Lvv_temp = Lvv.T[p:p+chnk_size].reshape(-1,naux)
             else :
-                Lvv_temp = Lvv.reshape(naux,-1)
-
-            Lvv = Lvv.reshape(naux,nvir*nvir) 
-
-            vvvv = lib.ddot(Lvv_temp.T, Lvv)
-            vvvv = vvvv.reshape(chnk_size, nvir, nvir, nvir)
+                Lvv_temp = Lvv.T.reshape(-1,naux)
+       
+            Lvv = Lvv.reshape(naux,nvir*nvir)
+            #vvvv = lib.ddot(Lvv_temp, Lvv)
+            vvvv = np.dot(Lvv_temp, Lvv)
+            vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
             vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
-            
+
             vvvv_p = write_dataset(vvvv)
             del vvvv
             eris.vvvv.append(vvvv_p)
-
+     
     return eris
 ########################################################################
 
