@@ -643,9 +643,11 @@ def static_dft(mf, s, mo_energy, mo_occ, mo_coeff, option=2):
         dpde = - beta * exp_neg_beta_delta / ( 1.0 + exp_neg_beta_delta ) / ( 1.0 + exp_neg_beta_delta)
 
         if option == 1:
-            dEdp = beta * numpy.where((p > 0.0) & (p < 0.5), -1.0 / (1.0 - p), numpy.where((p > 0.5) & (p < 1.0), 1.0 / p, 0))
+            dEdp = beta * numpy.where(p < 0.5, -1.0 / (1.0 - p), numpy.where(p > 0.5, 1.0 / p, 0)) 
+            #dEdp = beta * numpy.where((p > 0.0) & (p < 0.5), -1.0 / (1.0 - p), numpy.where((p > 0.5) & (p < 1.0), 1.0 / p, 0))
         else:
-            dEdp = beta * numpy.where((p > 0.0) & (p < 1.0), numpy.log(p) - numpy.log(1-p), 0)
+            dEdp = beta * (numpy.log(p) - numpy.log(1-p))
+            #dEdp = beta * numpy.where((p > 0.0) & (p < 1.0), numpy.log(p) - numpy.log(1-p), 0)
 
         v_c_static = dEdp * dpde * mo_energy
 
@@ -653,7 +655,8 @@ def static_dft(mf, s, mo_energy, mo_occ, mo_coeff, option=2):
 
     vcs = static_potential(mf, mo_occ, mo_energy, option=2)
     #print("static: ", numpy.shape(vcs))
-    d = numpy.dot(mo_coeff*vcs, mo_coeff.conj().T) #mf.make_rdm1(mo_coeff,vcs)
+    #d = numpy.dot(mo_coeff*vcs, mo_coeff.conj().T) 
+    d = mf.make_rdm1(mo_coeff,vcs)
     F_static = reduce(numpy.dot, (s, d, s))
     return F_static
 
