@@ -7,22 +7,34 @@
 A simple example to run FCI
 '''
 
-from pyscf import gto, scf, fci
+import pyscf
 
-mol = gto.Mole()
-mol.build(
+mol = pyscf.M(
     atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
     basis = '6-31g',
     symmetry = True,
 )
-
-myhf = scf.RHF(mol)
-myhf.kernel()
+myhf = mol.RHF().run()
 
 #
-# Function fci.FCI creates an FCI solver based on the given orbitals and the
-# num. electrons and spin of the given mol object
+# create an FCI solver based on the SCF object
 #
-cisolver = fci.FCI(mol, myhf.mo_coeff)
+cisolver = pyscf.fci.FCI(myhf)
 print('E(FCI) = %.12f' % cisolver.kernel()[0])
+
+#
+# create an FCI solver based on the SCF object
+#
+myuhf = mol.UHF().run()
+cisolver = pyscf.fci.FCI(myuhf)
+print('E(UHF-FCI) = %.12f' % cisolver.kernel()[0])
+
+#
+# create an FCI solver based on the given orbitals and the num. electrons and
+# spin of the mol object
+#
+cisolver = pyscf.fci.FCI(mol, myhf.mo_coeff)
+print('E(FCI) = %.12f' % cisolver.kernel()[0])
+
+
 

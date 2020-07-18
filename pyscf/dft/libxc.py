@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -849,7 +849,8 @@ def rsh_coeff(xc_code):
         elif check_omega:
             # Check functional is actually a CAM functional
             if rsh_tmp[0] != 0 and not _itrf.LIBXC_is_cam_rsh(ctypes.c_int(xid)):
-                raise KeyError('Libxc functional %i employs a range separation kernel that is not supported in PySCF' % xid)
+                raise KeyError('Libxc functional %i employs a range separation '
+                               'kernel that is not supported in PySCF' % xid)
             # Check omega
             if (rsh_tmp[0] != 0 and rsh_pars[0] != rsh_tmp[0]):
                 raise ValueError('Different values of omega found for RSH functionals')
@@ -988,6 +989,7 @@ def parse_xc(description):
         else:
             raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
+
     def parse_token(token, ftype, search_xc_alias=False):
         if token:
             if token[0] == '-':
@@ -1004,7 +1006,7 @@ def parse_xc(description):
                 fac, key = sign, token
 
             if key[:3] == 'RSH':
-# RSH(alpha; beta; omega): Range-separated-hybrid functional
+                # RSH(alpha; beta; omega): Range-separated-hybrid functional
                 alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
                 assign_omega(omega, fac*(alpha+beta), fac*alpha)
             elif key == 'HF':

@@ -363,11 +363,11 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
 
         if ncore > 0:
             # part4, part5, part6
-# Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-#    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-# x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
-# x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
-# x2[:ncore] += H' * x1[:ncore]
+            # Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
+            #    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
+            # x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
+            # x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
+            # x2[:ncore] += H' * x1[:ncore]
             va, vc = casscf.update_jk_in_ah(mo, x1, casdm1, eris)
             x2[ncore:nocc] += va
             x2[:ncore,ncore:] += vc
@@ -501,7 +501,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                 break
 
             elif ((ikf >= max(casscf.kf_interval, casscf.kf_interval-numpy.log(norm_dr+1e-7)) or
-# Insert keyframe if the keyframe and the esitimated grad are too different
+                   # Insert keyframe if the keyframe and the esitimated grad are too different
                    norm_gall < norm_gkf/casscf.kf_trust_region)):
                 ikf = 0
                 u, ci_kf = extract_rotation(casscf, dr, u, ci_kf)
@@ -674,7 +674,7 @@ class CASSCF(mc1step.CASSCF):
             can affect the accuracy and performance of CASSCF solver.  Lower
             ``ah_conv_tol`` and ``ah_lindep`` might improve the accuracy of CASSCF
             optimization, but decrease the performance.
-            
+
             >>> from pyscf import gto, scf, mcscf
             >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
             >>> mf = scf.UHF(mol)
@@ -766,7 +766,7 @@ class CASSCF(mc1step.CASSCF):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], self.ncas, ncore, nvir)
         assert(nvir > 0 and ncore > 0 and self.ncas > 0)
         if self.frozen is not None:
