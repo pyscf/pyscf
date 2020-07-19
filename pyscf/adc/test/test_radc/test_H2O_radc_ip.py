@@ -89,12 +89,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0], 0.4481211042230935, 6)
         self.assertAlmostEqual(e[1], 0.5316292617891758, 6)
         self.assertAlmostEqual(e[2], 0.6850054080600295, 6)
-        self.assertAlmostEqual(e[3], 1.130637379907676, 6)
+        self.assertAlmostEqual(e[3], 1.1090318744878, 6)
 
         self.assertAlmostEqual(p[0], 1.8682367032338498, 6)
         self.assertAlmostEqual(p[1], 1.8720029748507658, 6)
         self.assertAlmostEqual(p[2], 1.8881842403480831, 6)
-        self.assertAlmostEqual(p[3], 0.0001554555011236, 6)
+        self.assertAlmostEqual(p[3], 0.1651131053450, 6)
       
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for water molecule")
