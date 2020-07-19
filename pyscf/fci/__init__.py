@@ -123,6 +123,8 @@ def FCI(mol_or_mf, mo=None, singlet=False):
         ecore = mf.energy_nuc()
 
     if mf is None or mf._eri is None:
+        if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
+            raise NotImplementedError('Integral transformation for PBC object')
         eri_ao = mol
     else:
         eri_ao = mf._eri
