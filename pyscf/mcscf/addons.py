@@ -18,7 +18,7 @@
 
 import sys
 from functools import reduce
-import numpy
+import numpy, scipy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -306,6 +306,79 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     caslst = caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                              cas_irrep_ncore, s, base=0)
     return sort_mo(casscf, mo_coeff, caslst, base=0)
+
+def project_init_guess_by_qr(casscf, init_mo, prioritize_active=False):
+    '''Project the given initial guess to the current CASSCF problem using
+    a QR decomposition. Differs from project_init_guess in that it does
+    not make use of an underlying set of Hartree-Fock orbitals. Designed
+    for geometry optimizations, where non-orthonormal orbital guesses from
+    a previous geometry step may be closer to the optimized orbitals than
+    the Hartree-Fock ones. QR decomposition is not invariant to orbital
+    permutation - columns closer to the left in init_mo will be changed
+    less than columns closer to the right. 
+
+    Args:
+        casscf : an :class:`CASSCF` or :class:`CASCI` object
+
+        init_mo : ndarray or list of ndarray
+            Initial guess orbitals which are not orth-normal for the current
+            molecule.  When the casscf is UHF-CASSCF, the init_mo needs to be
+            a list of two ndarrays, for alpha and beta orbitals
+
+    Kwargs:
+        prioritize_active : logical
+            If true, the qr decomposition will be performed on MO columns
+            resorted into the order (active, inactive, virtual). This will
+            minimize the changes to the active orbitals and maximize the
+            changes to the virtual orbitals, which is ideal for molecules with
+            large active spaces and long CI vectors. Otherwise, the default
+            ordering (inactive, active, virtual) is used.
+
+    Returns:
+        New orthogonal initial guess orbitals'''
+
+    from pyscf import lo
+    ncore, ncas = casscf.ncore, casscf.ncas
+    nocc = ncore + ncas
+    s0 = casscf._scf.get_ovlp ()
+ 
+    def project (mo, s0):
+        ovlp = reduce (numpy.dot, (mo.conjugate ().T, s0, mo))
+        nmo = mo.shape[1]
+        if abs(ovlp - numpy.eye (nmo)).max() < 1e-7:
+            # Initial guess orbitals are orthonormal
+            return mo
+        morth = lo.orth.vec_lowdin (mo, s0)
+        morth_mo = reduce (numpy.dot, (morth.conj ().T, s0, mo))
+        Q, R = scipy.linalg.qr (morth_mo, mode='full')
+        mo = numpy.dot (morth, Q)
+        ovlp = reduce (numpy.dot, (mo.conjugate ().T, s0, mo))
+        assert (abs(ovlp - numpy.eye (nmo)).max() < 1e-7), 'QR decomposition failed?\n{}'.format (ovlp)
+        return mo
+
+    mo = init_mo.copy ()
+    if prioritize_active: # i,a,v->a,i,v
+        mo[:,:nocc] = numpy.hstack ((mo[:,ncore:nocc], mo[:,:ncore]))
+
+    if casscf.mol.symmetry:
+        orbsym = scf.hf_symm.get_orbsym(casscf.mol, mo, s0)
+        for ir in set(orbsym):
+            idx = (orbsym == ir)
+            mo[:,idx] = project (mo[:,idx], s0)
+    else:
+        mo = project (init_mo, s0)
+
+    if prioritize_active: # a,i,v->i,a,v
+        mo[:,:nocc] = numpy.hstack ((mo[:,ncas:nocc], mo[:,:ncas]))
+
+    if casscf.verbose >= logger.DEBUG:
+        s1 = reduce(numpy.dot, (mo.T, s0, init_mo))
+        idx = numpy.argmax (numpy.abs (s1), axis=0)
+        for i, j in enumerate (idx):
+            logger.debug(casscf, 'Init guess <mo-orth|mo-init>  %d  %d  %12.8f',
+                         ncore+i+1, j+1, s1[i,j])
+
+    return mo
 
 
 def project_init_guess(casscf, init_mo, prev_mol=None):
