@@ -1,9 +1,10 @@
 # More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
 # Workaround present for https://github.com/sunqm/pyscf/issues/71
 
-sudo: required
 language: python
-group: travis_lts
+#group: travis_latest
+os: linux
+#dist: bionic
 
 git:
   depth: 20
@@ -30,7 +31,7 @@ cache:
   pip: true
 
 before_install:
-  - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
+  - sudo apt-get -qq install gcc gfortran libgfortran3 libblas-dev cmake curl
   - pip install "numpy!=1.16,!=1.17" "scipy<1.5" h5py nose nose-exclude nose-timer codecov
 
 install:

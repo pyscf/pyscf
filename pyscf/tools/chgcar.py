@@ -233,10 +233,10 @@ class CHGCAR(cubegen.Cube):
             f.write('\n')
             f.write('%6.5s %6.5s %6.5s \n' % (self.nx,self.ny,self.nz))
             fmt = ' %14.8e '
-            for iz in range(self.nx):
+            for iz in range(self.nz):
                 for iy in range(self.ny):
                     f.write('\n')
-                    for ix in range(self.nz):
+                    for ix in range(self.nx):
                         f.write(fmt % field[ix,iy,iz])
 
     def read(self, chgcar_file):

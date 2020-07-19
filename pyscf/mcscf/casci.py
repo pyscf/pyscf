@@ -422,7 +422,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     nmo = mo_coeff.shape[1]
     fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
     if cas_natorb:
-        mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
+        mo_coeff1, ci, mc.mo_occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                            verbose, with_meta_lowdin)
     else:
         # Keep the active space unchanged by default.  The rotation in active space
@@ -658,6 +658,8 @@ class CASCI(lib.StreamObject):
         mo_energy : ndarray
             Diagonal elements of general Fock matrix (in mo_coeff
             representation).
+        mo_occ : ndarray
+            Occupation numbers of natural orbitals if natorb is specified.
 
     Examples:
 
@@ -712,6 +714,7 @@ class CASCI(lib.StreamObject):
         self.ci = None
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
+        self.mo_occ = None
         self.converged = False
 
         keys = set(('natorb', 'canonicalization', 'sorting_mo_energy'))
@@ -914,9 +917,9 @@ To enable the solvent model for CASCI, the following code needs to be called
     @lib.with_doc(cas_natorb.__doc__)
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                     casdm1=None, verbose=None, with_meta_lowdin=WITH_META_LOWDIN):
-        self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
+        self.mo_coeff, self.ci, self.mo_occ = cas_natorb(self, mo_coeff, ci, eris,
                                                  sort, casdm1, verbose)
-        return self.mo_coeff, self.ci, occ
+        return self.mo_coeff, self.ci, self.mo_occ
 
     def get_fock(self, mo_coeff=None, ci=None, eris=None, casdm1=None,
                  verbose=None):
