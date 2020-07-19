@@ -595,6 +595,8 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
 # A tag to label the derived FCI class
 class StateAverageFCISolver:
     pass
+class StateAverageMixFCISolver(StateAverageFCISolver):
+    pass
 class StateSpecificFCISolver:
     pass
 # A tag to label the derived MCSCF class
@@ -683,28 +685,57 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
                                             wfnsym=self.wfnsym, **kwargs)
             return numpy.einsum('i,i->', e, self.weights), c
 
-        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
-            dm1 = 0
-            for i, wi in enumerate(self.weights):
-                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec, *args, **kwargs)
+        def states_make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
+            dm1 = [fcibase_class.make_rdm1(self, c, norb, nelec, *args, **kwargs) for c in ci0]
             return dm1
 
-        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
-            dm1a, dm1b = 0, 0
-            for i, wi in enumerate(self.weights):
-                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec, *args, **kwargs)
-                dm1a += wi * dm1s[0]
-                dm1b += wi * dm1s[1]
+        def make_rdm1(self, ci0, norb, nelec, *args, **kwargs):
+            return sum ([w * dm for w, dm in zip (self.weights,
+                self.states_make_rdm1 (ci0, norb, nelec, *args, **kwargs))])
+
+        def states_make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
+            dm1a = []
+            dm1b = []
+            for c in ci0:
+                dm1s = fcibase_class.make_rdm1s(self, c, norb, nelec, *args, **kwargs)
+                dm1a.append (dm1s[0])
+                dm1b.append (dm1s[1])
             return dm1a, dm1b
 
-        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
-            rdm1 = 0
-            rdm2 = 0
-            for i, wi in enumerate(self.weights):
-                dm1, dm2 = fcibase_class.make_rdm12(self, ci0[i], norb, nelec, *args, **kwargs)
-                rdm1 += wi * dm1
-                rdm2 += wi * dm2
+        def make_rdm1s(self, ci0, norb, nelec, *args, **kwargs):
+            dm1s = self.states_make_rdm1s(ci0, norb, nelec, *args, **kwargs)
+            dm1s = numpy.einsum ('r,srpq->spq', self.weights, dm1s)
+            return dm1s[0], dm1s[1]
+
+        def states_make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
+            rdm1 = []
+            rdm2 = []
+            for c in ci0:
+                dm1, dm2 = fcibase_class.make_rdm12(self, c, norb, nelec, *args, **kwargs)
+                rdm1.append (dm1)
+                rdm2.append (dm2)
             return rdm1, rdm2
+
+        def make_rdm12(self, ci0, norb, nelec, *args, **kwargs):
+            rdm1, rdm2 = self.states_make_rdm12(ci0, norb, nelec, *args, **kwargs)
+            rdm1 = numpy.einsum ('r,rpq->pq', self.weights, rdm1)
+            rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
+            return rdm1, rdm2
+
+        def states_trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
+            tdm1 = []
+            tdm2 = []
+            for c1, c0 in zip (ci1, ci0):
+                dm1, dm2 = fcibase_class.trans_rdm12 (self, c1, c0, norb, nelec)
+                tdm1.append (dm1)
+                tdm2.append (dm2)
+            return tdm1, tdm2
+
+        def trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
+            tdm1, tdm2 = self.states_trans_rdm12 (ci1, ci0, norb, nelec, *args, **kwargs)
+            tdm1 = numpy.einsum ('r,rpq->pq', self.weights, tdm1)
+            tdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, tdm2)
+            return tdm1, tdm2
 
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec, *args, **kwargs):
@@ -887,6 +918,18 @@ def state_specific_(casscf, state=1, wfnsym=None):
     return casscf
 state_specific = state_specific_
 
+class StateAverageMixFCISolver_solver_args:
+    def __init__(self, data):
+        self._data = data
+    def __getitem__(self, key): # Handle data = None
+        try:
+            return self._data[key]
+        except TypeError as e:
+            assert (self._data is None), e
+            return None
+class StateAverageMixFCISolver_state_args (StateAverageMixFCISolver_solver_args):
+    pass
+
 def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     '''State-average CASSCF over multiple FCI solvers.
     '''
@@ -899,45 +942,16 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                        for solver in fcisolvers)
     has_transform_ci = all(getattr(solver, 'transform_ci_for_orbital_rotation', None)
                            for solver in fcisolvers)
-
-    def loop_solver(solvers, ci0):
-        p0 = 0
-        for solver in solvers:
-            if ci0 is None:
-                yield solver, None
-            elif solver.nroots == 1:
-                yield solver, ci0[p0]
-            else:
-                yield solver, ci0[p0:p0+solver.nroots]
-            p0 += solver.nroots
-
-    def loop_civecs(solvers, ci0):
-        p0 = 0
-        for solver in solvers:
-            for i in range(p0, p0+solver.nroots):
-                yield solver, ci0[i]
-            p0 += solver.nroots
-
-    def get_nelec(solver, nelec):
-        # FCISolver does not need this function. Some external solver may not
-        # have the function to handle nelec and spin
-        if solver.spin is not None:
-            nelec = numpy.sum(nelec)
-            nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
-        return nelec
-
-    def collect(fname, ci0, norb, nelec, *args, **kwargs):
-        for solver, c in loop_civecs(fcisolvers, ci0):
-            fn = getattr(solver, fname)
-            yield fn(c, norb, get_nelec(solver, nelec), *args, **kwargs)
-
-    class FakeCISolver(fcibase_class, StateAverageFCISolver):
+    _solver_args = StateAverageMixFCISolver_solver_args
+    _state_args = StateAverageMixFCISolver_state_args
+    class FakeCISolver(fcibase_class, StateAverageMixFCISolver):
         def __init__(self, mol):
             fcibase_class.__init__(self, mol)
             self.nroots = len(weights)
             self.weights = weights
             self.e_states = [None]
-            keys = set (('weights','e_states','_base_class'))
+            self.fcisolvers = fcisolvers
+            keys = set (('weights','e_states','_base_class','fcisolvers'))
             self._keys = self._keys.union (keys)
 
         @property
@@ -945,13 +959,80 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             ''' for convenience; this is equal to mcscfbase_class '''
             return self.__class__.__bases__[0]
 
+        # MRH 06/24/2020: I need these functions in newton_casscf!
+        # TODO: handle things like linkstr somehow (variables that
+        # have to be different for different solvers or ci vecs)
+        def _loop_solver(self, *args, **kwargs):
+            p0 = 0
+            for ix, solver in enumerate (self.fcisolvers):
+                my_args = []
+                for arg in args:
+                    if isinstance (arg, _state_args):
+                        my_arg = arg[p0:p0+solver.nroots]
+                        if solver.nroots == 1 and my_arg is not None: my_arg = my_arg[0]
+                        my_args.append (my_arg)
+                    elif isinstance (arg, _solver_args):
+                        my_args.append (arg[ix])
+                    else:
+                        my_args.append (arg)
+                my_kwargs = {}
+                for key, item in kwargs.items ():
+                    if isinstance (item, _state_args):
+                        my_arg = item[p0:p0+solver.nroots]
+                        if solver.nroots == 1 and my_arg is not None: my_arg = my_arg[0]
+                        my_kwargs[key] = my_arg
+                    elif isinstance (item, _solver_args):
+                        my_kwargs[key] = item[ix]
+                    else:
+                        my_kwargs[key] = item
+                yield solver, my_args, my_kwargs
+                p0 += solver.nroots
+
+        def _loop_civecs(self, *args, **kwargs):
+            p0 = 0
+            for i, solver in enumerate (self.fcisolvers):
+                for j in range(p0, p0+solver.nroots):
+                    my_args = []
+                    for arg in args:
+                        if isinstance (arg, _state_args):
+                            my_args.append (arg[j])
+                        elif isinstance (arg, _solver_args):
+                            my_args.append (arg[i])
+                        else:
+                            my_args.append (arg)
+                    my_kwargs = {}
+                    for key, item in kwargs.items ():
+                        if isinstance (item, _state_args):
+                            my_kwargs[key] = item[j]
+                        elif isinstance (item, _solver_args):
+                            my_kwargs[key] = item[i]
+                        else:
+                            my_kwargs[key] = item
+                    yield solver, my_args, my_kwargs
+                p0 += solver.nroots
+
+        def _get_nelec(self, solver, nelec):
+            # FCISolver does not need this function. Some external solver may not
+            # have the function to handle nelec and spin
+            # MRH 06/24/2020: Yes, FCISolver DOES need this function!
+            if solver.spin is not None:
+                nelec = numpy.sum(nelec)
+                nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
+            return nelec
+
+        def _collect(self, fname, *args, **kwargs):
+            for solver, args, kwargs in self._loop_civecs(*args, **kwargs):
+                fn = getattr(solver, fname)
+                yield fn(*args, **kwargs)
+
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
             # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
             log = logger.new_logger(self, verbose)
             es = []
             cs = []
-            for solver, c0 in loop_solver(fcisolvers, ci0):
-                e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+            for solver, my_args, my_kwargs in self._loop_solver(_state_args (ci0)):
+                c0 = my_args[0]
+                e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
                                      orbsym=self.orbsym, verbose=log, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
@@ -976,12 +1057,13 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             es = []
             cs = []
-            for solver, c0 in loop_solver(fcisolvers, ci0):
+            for ix, (solver, my_args, my_kwargs) in enumerate (self._loop_solver(_state_args (ci0))):
+                c0 = my_args[0]
                 try:
-                    e, c = solver.approx_kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+                    e, c = solver.approx_kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
                                                 orbsym=self.orbsym, **kwargs)
                 except AttributeError:
-                    e, c = solver.kernel(h1, h2, norb, get_nelec(solver, nelec), c0,
+                    e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
                                          orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
@@ -991,26 +1073,67 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                     cs.extend(c)
             return numpy.einsum('i,i->', es, weights), cs
 
-        def make_rdm1(self, ci0, norb, nelec, **kwargs):
-            dm1 = 0
-            for i, dm in enumerate(collect('make_rdm1', ci0, norb, nelec, **kwargs)):
-                dm1 += weights[i] * dm
-            return dm1
+        def states_make_rdm1 (self, ci0, norb, nelec, link_index=None, **kwargs):
+            ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            return [dm for dm in self._collect ('make_rdm1', ci0, norb, nelec, link_index=link_index, **kwargs)]
 
-        def make_rdm1s(self, ci0, norb, nelec, **kwargs):
-            dm1a, dm1b = 0, 0
-            for i, dm1s in enumerate(collect('make_rdm1s', ci0, norb, nelec, **kwargs)):
-                dm1a += weights[i] * dm1s[0]
-                dm1b += weights[i] * dm1s[1]
+        def make_rdm1(self, ci0, norb, nelec, link_index=None, **kwargs):
+            dm1 = self.states_make_rdm1 (ci0, norb, nelec, link_index=link_index, **kwargs)
+            return numpy.einsum ('r,rpq->pq', self.weights, dm1)
+
+        def states_make_rdm1s (self, ci0, norb, nelec, link_index=None, **kwargs):
+            ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            dm1a = []
+            dm1b = []
+            for dm1s in self._collect ('make_rdm1s', ci0, norb, nelec, link_index=link_index, **kwargs):
+                dm1a.append (dm1s[0])
+                dm1b.append (dm1s[1])
             return dm1a, dm1b
 
-        def make_rdm12(self, ci0, norb, nelec, **kwargs):
-            rdm1 = 0
-            rdm2 = 0
-            for i, (dm1, dm2) in enumerate(collect('make_rdm12', ci0, norb, nelec, **kwargs)):
-                rdm1 += weights[i] * dm1
-                rdm2 += weights[i] * dm2
+        def make_rdm1s(self, ci0, norb, nelec, link_index=None, **kwargs):
+            dm1a, dm1b = self.states_make_rdm1s (ci0, norb, nelec, link_index=link_index, **kwargs)
+            dm1s = numpy.einsum ('r,srpq->spq', self.weights, [dm1a, dm1b])
+            return dm1s[0], dm1s[1]
+
+        def states_make_rdm12 (self, ci0, norb, nelec, link_index=None, **kwargs):
+            ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            rdm1 = []
+            rdm2 = []
+            for dm1, dm2 in self._collect ('make_rdm12', ci0, norb, nelec, link_index=link_index, **kwargs):
+                rdm1.append (dm1)
+                rdm2.append (dm2)
             return rdm1, rdm2
+
+        def make_rdm12(self, ci0, norb, nelec, link_index=None, **kwargs):
+            rdm1, rdm2 = self.states_make_rdm12 (ci0, norb, nelec, link_index=link_index, **kwargs)
+            rdm1 = numpy.einsum ('r,rpq->pq', self.weights, rdm1)
+            rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
+            return rdm1, rdm2
+
+        # TODO: linkstr support
+        def states_trans_rdm12 (self, ci1, ci0, norb, nelec, link_index=None, **kwargs):
+            ci1 = _state_args (ci1)
+            ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            tdm1 = []
+            tdm2 = []
+            for dm1, dm2 in self._collect ('trans_rdm12', ci1, ci0, norb, nelec, link_index=link_index, **kwargs):
+                tdm1.append (dm1)
+                tdm2.append (dm2)
+            return tdm1, tdm2
+
+        def trans_rdm12 (self, ci1, ci0, norb, nelec, link_index=None, **kwargs):
+            tdm1, tdm2 = self.states_trans_rdm12 (ci1, ci0, norb, nelec, link_index=link_index, **kwargs)
+            tdm1 = numpy.einsum ('r,rpq->pq', self.weights, tdm1)
+            tdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, tdm2)
+            return tdm1, tdm2
 
         if has_spin_square:
             def spin_square(self, ci0, norb, nelec, *args, **kwargs):
@@ -1019,7 +1142,9 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
                 return numpy.dot(ss, weights), numpy.dot(multip, weights)
 
             def states_spin_square(self, ci0, norb, nelec, *args, **kwargs):
-                res = list(collect('spin_square', ci0, norb, nelec, *args, **kwargs))
+                ci0 = _state_args (ci0)
+                nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+                res = list(self._collect('spin_square', ci0, norb, nelec, *args, **kwargs))
                 ss = [x[0] for x in res]
                 multip = [x[1] for x in res]
                 return ss, multip
@@ -1029,18 +1154,22 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
         large_ci = None
         if has_large_ci:
             def states_large_ci(self, fcivec, norb, nelec, *args, **kwargs):
-                return list(collect('large_ci', fcivec, norb, nelec, *args, **kwargs))
+                fcivec = _state_args (fcivec)
+                nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+                return list(self._collect('large_ci', fcivec, norb, nelec, *args, **kwargs))
 
         transform_ci_for_orbital_rotation = None
         if has_transform_ci:
             def states_transform_ci_for_orbital_rotation(self, fcivec, norb, nelec,
                                                          *args, **kwargs):
-                return list(collect('transform_ci_for_orbital_rotation',
+                fcivec = _state_args (fcivec)
+                nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+                return list(self._collect('transform_ci_for_orbital_rotation',
                                     fcivec, norb, nelec, *args, **kwargs))
 
     fcisolver = FakeCISolver(casscf.mol)
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
-    fcisolver.fcisolvers = fcisolvers
+    fcisolver.nroots = nroots
     mc = _state_average_mcscf_solver(casscf, fcisolver)
     return mc
 
