@@ -16,7 +16,7 @@
 import copy
 import unittest
 from functools import reduce
-import numpy
+import numpy, scipy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -314,9 +314,13 @@ class KnownValues(unittest.TestCase):
         atom = [
             ['N',(  0.000000,  0.000000, -b/2)],
             ['N',(  0.000000,  0.000000,  b/2)], ],
-        basis = 'ccpvdz',)
+        basis = 'ccpvdz',
+        symmetry=1)
         mf1 = scf.RHF(mol1).run()
-        mc1 = mcscf.CASSCF(mf1, 4, 4).run()
+        mc1 = mcscf.CASSCF(mf1, 5, 6).run()
+        mfr_mo_norm = numpy.einsum ('ip,ip->p', mfr.mo_coeff.conj (),
+            mf1.get_ovlp ().dot (mfr.mo_coeff))
+        mfr_mo_norm = mfr.mo_coeff / numpy.sqrt (mfr_mo_norm)[None,:]
 
         mo1 = mcscf.project_init_guess(mc1, mfr.mo_coeff, prev_mol=mol)
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
@@ -324,17 +328,59 @@ class KnownValues(unittest.TestCase):
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
 
-        mo1 = mcscf.addons.project_init_guess_by_qr (mc1, mfr.mo_coeff, False)
+        # Active first
+        mo1 = mcscf.addons.project_init_guess_alt (mc1, mfr.mo_coeff, priority='active')
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
+        s1_test = [reduce (numpy.dot, (mf1.get_ovlp (), mo1[:,i], mfr_mo_norm[:,i]))
+            for i in (0,2,4)] # core, core, active (same irrep)
+        self.assertFalse (s1_test[0] > s1_test[2])
+        self.assertFalse (s1_test[1] > s1_test[2])
 
-        mo1 = mcscf.addons.project_init_guess_by_qr (mc1, mfr.mo_coeff, True)
+        # Core first
+        mo1 = mcscf.addons.project_init_guess_alt (mc1, mfr.mo_coeff, priority='core')
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
+        s1_test = [reduce (numpy.dot, (mf1.get_ovlp (), mo1[:,i], mfr_mo_norm[:,i]))
+            for i in (0,2,4)] # core, core, active (same irrep)
+        self.assertTrue (s1_test[0] > s1_test[2])
+        self.assertTrue (s1_test[1] > s1_test[2])
+
+        # Gram-Schmidt case (priority = [[0],[1],[2],...])
+        gram_schmidt_idx = numpy.arange (27, dtype=numpy.integer)[:,None].tolist ()
+        mo1 = mcscf.addons.project_init_guess_alt (mc1, mfr.mo_coeff, priority=gram_schmidt_idx)
+        s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
+        self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
+                         s1.shape[0])
+        self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
+        mf2moi = reduce (numpy.dot, (mf1.mo_coeff.conj ().T, mf1.get_ovlp (), mfr.mo_coeff))
+        Q, R = scipy.linalg.qr (mf2moi) # Arbitrary sign, so abs below
+        mo2 = numpy.dot (mf1.mo_coeff, Q)
+        s2 = numpy.abs (reduce (numpy.dot, (mo1.conj ().T, mf1.get_ovlp (), mo2)))
+        self.assertAlmostEqual(numpy.linalg.norm(s2), 5.2915026221291841, 9)
+        
+        # Spin-unrestricted case
+        mf1 = scf.UHF(mol1).run()
+        mc1 = mcscf.UCASSCF(mf1, 4, 4).run()
+        mo1_u = mcscf.addons.project_init_guess_alt (mc1, mfu.mo_coeff, priority='active')
+        for mo1 in mo1_u:
+            s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
+            self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
+                             s1.shape[0])
+            self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
+
+        # Random priority lists
+        pr = [[[27,5],[3],[6,12]],[[17,15],[13,10,8,6]]]
+        mo1_u = mcscf.addons.project_init_guess_alt (mc1, mfu.mo_coeff, priority=pr)
+        for mo1 in mo1_u:
+            s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
+            self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
+                             s1.shape[0])
+            self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
 
     def test_state_average_bad_init_guess(self):
         mc = mcscf.CASCI(mfr, 4, 4)
