@@ -46,6 +46,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
   
+        myadc.max_memory = 50
         myadc.method_type = "ea"
         e,v,p = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
@@ -60,32 +61,29 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.9953781149964537, 6)
         self.assertAlmostEqual(p[2], 0.9956169835481459, 6)
 
-    def test_ea_adc2_oneroot(self):
+
+    def test_ip_adc2x(self):
   
-        myadc.method_type = "ea"
-        e,v,p = myadc.kernel(nroots=1)
-
-        self.assertAlmostEqual(e[0], 0.030845983085818485, 6)
-
-        self.assertAlmostEqual(p[0], 0.9953781149964537, 6)
-
-    def test_ea_adc2x(self):
-  
+        myadc.max_memory = 50
+        myadc.incore_complete = False
         myadc.method = "adc(2)-x"
-        myadc.method_type = "ea"
 
+        myadc.method_type = "ip"
         e,v,p = myadc.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], -0.07750642898162931, 6)
-        self.assertAlmostEqual(e[1], 0.029292010466571882, 6)
-        self.assertAlmostEqual(e[2], 0.030814773752482663, 6)
+        self.assertAlmostEqual(e[0], 0.4389083582117278, 6)
+        self.assertAlmostEqual(e[1], 0.45720829251439343, 6)
+        self.assertAlmostEqual(e[2], 0.5588942056812034, 6)
 
-        self.assertAlmostEqual(p[0], 0.8323987058794676, 6)
-        self.assertAlmostEqual(p[1], 0.9918705979602267, 6)
-        self.assertAlmostEqual(p[2], 0.9772855298541363, 6)
+        self.assertAlmostEqual(p[0], 0.9169548953028459, 6)
+        self.assertAlmostEqual(p[1], 0.6997121885268642, 6)
+        self.assertAlmostEqual(p[2], 0.212879313736106, 6)
+
 
     def test_ea_adc3(self):
   
+        myadc.max_memory = 60
+        myadc.incore_complete = False
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.17616203329072136, 6)
@@ -100,7 +98,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.8722483551941809, 6)
         self.assertAlmostEqual(p[1], 0.9927117650068699, 6)
         self.assertAlmostEqual(p[2], 0.9766456031927034, 6)
+
       
 if __name__ == "__main__":
-    print("EA calculations for different ADC methods for open-shell molecule")
+    print("Out-of-core EA and IP calculations for different UADC methods for open-shell molecule OH")
     unittest.main()

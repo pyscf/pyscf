@@ -335,7 +335,7 @@ def _check_(c):
     c *= .5
     norm = numpy.linalg.norm(c)
     if abs(norm-1) > 1e-6:
-        raise ValueError('State not singlet %g' % abs(numpy.linalg.norm(c)-1))
+        raise ValueError('State not singlet %g' % (norm - 1))
     return c/norm
 
 
