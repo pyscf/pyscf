@@ -342,19 +342,19 @@ def project_init_guess_by_qr(casscf, init_mo, prioritize_active=False):
     nocc = ncore + ncas
     s0 = casscf._scf.get_ovlp ()
  
-    def project (mo, s0):
-        ovlp = reduce (numpy.dot, (mo.conjugate ().T, s0, mo))
-        nmo = mo.shape[1]
+    def project (mymo, s0):
+        ovlp = reduce (numpy.dot, (mymo.conjugate ().T, s0, mymo))
+        nmo = mymo.shape[1]
         if abs(ovlp - numpy.eye (nmo)).max() < 1e-7:
             # Initial guess orbitals are orthonormal
-            return mo
-        morth = lo.orth.vec_lowdin (mo, s0)
-        morth_mo = reduce (numpy.dot, (morth.conj ().T, s0, mo))
-        Q, R = scipy.linalg.qr (morth_mo, mode='full')
-        mo = numpy.dot (morth, Q)
-        ovlp = reduce (numpy.dot, (mo.conjugate ().T, s0, mo))
+            return mymo
+        morth = lo.orth.vec_lowdin (mymo, s0)
+        morth_mo = reduce (numpy.dot, (morth.conj ().T, s0, mymo))
+        Q, R = scipy.linalg.qr (morth_mo)
+        mymo = numpy.dot (morth, Q)
+        ovlp = reduce (numpy.dot, (mymo.conjugate ().T, s0, mymo))
         assert (abs(ovlp - numpy.eye (nmo)).max() < 1e-7), 'QR decomposition failed?\n{}'.format (ovlp)
-        return mo
+        return mymo
 
     mo = init_mo.copy ()
     if prioritize_active: # i,a,v->a,i,v
@@ -366,17 +366,20 @@ def project_init_guess_by_qr(casscf, init_mo, prioritize_active=False):
             idx = (orbsym == ir)
             mo[:,idx] = project (mo[:,idx], s0)
     else:
-        mo = project (init_mo, s0)
+        mo = project (mo, s0)
 
     if prioritize_active: # a,i,v->i,a,v
         mo[:,:nocc] = numpy.hstack ((mo[:,ncas:nocc], mo[:,:ncas]))
+
+    sgn = numpy.einsum ('pi,pi->i', mo.conj(), numpy.dot (s0, init_mo))
+    mo[:,sgn<0] *= -1
 
     if casscf.verbose >= logger.DEBUG:
         s1 = reduce(numpy.dot, (mo.T, s0, init_mo))
         idx = numpy.argmax (numpy.abs (s1), axis=0)
         for i, j in enumerate (idx):
             logger.debug(casscf, 'Init guess <mo-orth|mo-init>  %d  %d  %12.8f',
-                         ncore+i+1, j+1, s1[i,j])
+                         i+1, j+1, s1[i,j])
 
     return mo
 

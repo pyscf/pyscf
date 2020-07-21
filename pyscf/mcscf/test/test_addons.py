@@ -309,34 +309,27 @@ class KnownValues(unittest.TestCase):
     def test_project_init_guess(self):
         b = 1.5
         mol1 = gto.M(
-        verbose = 0,
+        verbose = lib.logger.DEBUG,
+        output = 'qr_test.log',
         atom = [
             ['N',(  0.000000,  0.000000, -b/2)],
             ['N',(  0.000000,  0.000000,  b/2)], ],
         basis = 'ccpvdz',)
         mf1 = scf.RHF(mol1).run()
         mc1 = mcscf.CASSCF(mf1, 4, 4).run()
+
         mo1 = mcscf.project_init_guess(mc1, mfr.mo_coeff, prev_mol=mol)
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
 
-    def test_project_init_guess(self):
-        b = 1.5
-        mol1 = gto.M(
-        verbose = 0,
-        atom = [
-            ['N',(  0.000000,  0.000000, -b/2)],
-            ['N',(  0.000000,  0.000000,  b/2)], ],
-        basis = 'ccpvdz',)
-        mf1 = scf.RHF(mol1).run()
-        mc1 = mcscf.CASSCF(mf1, 4, 4).run()
         mo1 = mcscf.addons.project_init_guess_by_qr (mc1, mfr.mo_coeff, False)
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
+
         mo1 = mcscf.addons.project_init_guess_by_qr (mc1, mfr.mo_coeff, True)
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
