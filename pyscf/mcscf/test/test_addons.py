@@ -317,7 +317,7 @@ class KnownValues(unittest.TestCase):
         basis = 'ccpvdz',
         symmetry=1)
         mf1 = scf.RHF(mol1).run()
-        mc1 = mcscf.CASSCF(mf1, 5, 6).run()
+        mc1 = mcscf.CASSCF(mf1, 6, 8).run()
         mfr_mo_norm = numpy.einsum ('ip,ip->p', mfr.mo_coeff.conj (),
             mf1.get_ovlp ().dot (mfr.mo_coeff))
         mfr_mo_norm = mfr.mo_coeff / numpy.sqrt (mfr_mo_norm)[None,:]
@@ -335,9 +335,9 @@ class KnownValues(unittest.TestCase):
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
         s1_test = [reduce (numpy.dot, (mf1.get_ovlp (), mo1[:,i], mfr_mo_norm[:,i]))
-            for i in (0,2,4)] # core, core, active (same irrep)
-        self.assertFalse (s1_test[0] > s1_test[2])
-        self.assertFalse (s1_test[1] > s1_test[2])
+            for i in (1,3)] # core, core, active (same irrep)
+        self.assertFalse (s1_test[0] > s1_test[1])
+        self.assertAlmostEqual (s1_test[1], 1.0, 9)
 
         # Core first
         mo1 = mcscf.addons.project_init_guess_alt (mc1, mfr.mo_coeff, priority='core')
@@ -346,9 +346,9 @@ class KnownValues(unittest.TestCase):
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
         s1_test = [reduce (numpy.dot, (mf1.get_ovlp (), mo1[:,i], mfr_mo_norm[:,i]))
-            for i in (0,2,4)] # core, core, active (same irrep)
-        self.assertTrue (s1_test[0] > s1_test[2])
-        self.assertTrue (s1_test[1] > s1_test[2])
+            for i in (1,3)] # core, core, active (same irrep)
+        self.assertTrue (s1_test[0] > s1_test[1])
+        self.assertAlmostEqual (s1_test[0], 1.0, 9)
 
         # Gram-Schmidt case (priority = [[0],[1],[2],...])
         gram_schmidt_idx = numpy.arange (27, dtype=numpy.integer)[:,None].tolist ()
