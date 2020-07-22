@@ -266,7 +266,9 @@ def irrep_id2name(gpname, irrep_id):
     if gpname in ('Dooh', 'Coov'):
         return basis.linearmole_irrep_id2symb(gpname, irrep_id)
     else:
-        return param.CHARACTER_TABLE[gpname][irrep_id][0]
+        # irrep_id may be obtained from high symmetry (Dooh, Coov)
+        irrep_id_in_d2h = irrep_id % 10
+        return param.CHARACTER_TABLE[gpname][irrep_id_in_d2h][0]
 
 def irrep_name(pgname, irrep_id):
     raise RuntimeError('This function was obsoleted. Use irrep_id2name')
