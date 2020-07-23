@@ -310,9 +310,6 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
 def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_core=None):
     '''Project the given initial guess to the current CASSCF problem 
     giving using a sequence of SVDs on orthogonal orbital subspaces.
-    The Hartree-Fock orbitals are used only as a convenient orthonormal
-    basis. Currently designed for geometry scans only (not different
-    basis sets).
 
     Args:
         casscf : an :class:`CASSCF` or :class:`CASCI` object
@@ -322,21 +319,17 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             current molecule.  When the casscf is UHF-CASSCF, mo_init
             needs to be a list of two ndarrays, for alpha and beta
             orbitals. Cannot have linear dependencies (i.e., you cannot
-            give more orbitals than the basis of casscf.mol has). If
-            incomplete (fewer orbitals than the basis of casscf.mol),
-            additional virtual orbitals will be constructed from the
-            null space of the HF orbitals and appended to the end.
+            give more orbitals than the basis of casscf.mol has). Must
+            have at least ncore+ncas columns with active orbitals last,
+            even if use_hf_core=True. If incomplete, additional virtual
+            orbitals will be constructed and appended automatically.
 
     Kwargs:
         prev_mol : an instance of :class:`Mole`
             If given, the inital guess orbitals are associated to the
-            basis of prev_mol.  Otherwise, the orbitals are presumed to 
-            be in the basis of casscf.mol. OMIT if you are projecting
-            from a different geometry. To project across both a geometry
-            change and a basis change, call this function twice. If you
-            are projecting from a LARGER basis to a SMALLER basis,
-            first, stop and rethink your life; secondly, discard
-            orbitals from mo_init until there are no lindeps.
+            basis of prev_mol. Otherwise, the orbitals are presumed to 
+            be in the basis of casscf.mol. Beware linear dependencies if
+            you are projecting from a LARGER basis to a SMALLER one.
 
         priority : 'active', 'core', nested idx arrays, or mask array
             If arrays are 3d, UHF-CASSCF must be used; arrays can always
@@ -382,7 +375,7 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             raise NotImplementedError('Project initial guess from different system.')
     if priority is None: priority = ('core','active')[prev_mol is None]
     if use_hf_core is None: use_hf_core = (prev_mol is not None)
-    
+
     # Do the projection
     def _symmcase (mo_basis, mo_target):
         ovlp = reduce (numpy.dot, (mo_basis.conj ().T, s0, mo_target))
@@ -421,11 +414,11 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
 
     # Iterate over orbital ranges
     def _spincase (mo_basis, mo_target, range_idx, ncore):
-        # Swap out HF core orbitals
+        # Swap out HF core orbitals (be sure to make a copy since this still points to the original arg!)
         if use_hf_core:
             ovlp = numpy.dot (mo_target.conj ().T, s0.dot (mo_basis))
-            idx_core = numpy.argmax (numpy.abs (ovlp[:ncore,:]), axis=1)
-            mo_target[:,:ncore] = mo_basis[:,idx_core]
+            ix = numpy.argmax (numpy.abs (ovlp[:ncore,:]), axis=1)
+            mo_target = numpy.append (mo_basis[:,ix], mo_target[:,ncore:], axis=1)
         # Do the iteration
         mo = numpy.zeros_like (mo_target)
         for idx in range_idx:
@@ -437,10 +430,11 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
         sgn = numpy.einsum ('pi,pi->i', mo.conj (), s0.dot (mo_target))
         mo[:,sgn<0] *= -1
         if casscf.verbose >= logger.DEBUG:
-            s1 = reduce(numpy.dot, (mo.T, s0, mo_target))
+            mocc = mo[:,:ncore+ncas]
+            s1 = reduce(numpy.dot, (mocc.T, s0, mo_target))
             tnorm = numpy.einsum ('pi,pi->i', mo_target.conj (), s0.dot (mo_target))
             s1_norm = s1 / numpy.sqrt (tnorm) [None,:]
-            idx = numpy.argmax (numpy.abs (s1), axis=0)
+            idx = numpy.argmax (numpy.abs (s1), axis=1)
             for i, j in enumerate (idx):
                 logger.debug(casscf, 'Init guess <mo-orth|mo-init>  %d  %d  %10.8f (%10.8f after norm)',
                              i+1, j+1, s1[i,j], s1_norm[i,j])
@@ -449,44 +443,41 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             mo = numpy.append (mo, mo_basis, axis=1)
         return mo
 
-    # Check validity of range lists (from "priority" keyword)
-    # Add missing orbitals to the end, if any
-    def _check_range (priority, ncore):
+    # Interpret "priority" keyword
+    def _interpret (priority, ncore):
         # Interpret priority keyword
         nocc = ncore + ncas
         if isinstance (priority, str):
             ridx = numpy.zeros ((2, nmo_init), dtype=numpy.bool)
-            if priority == 'active':
-                ridx[0,ncore:nocc] = True
-                ridx[1,:ncore]     = True
-            elif priority == 'core':
-                ridx[0,:ncore]     = True
-                ridx[1,ncore:nocc] = True
-            else:
-                raise RuntimeError ("Invalid priority keyword (string must be 'active' or 'core')")
-        elif not isinstance (priority, numpy.ndarray):
-            ridx = numpy.zeros ((len (priority), nmo), dtype=numpy.bool)
-            for row, idx in zip (ridx, priority):
-                row[idx] = True
+            ridx[0,:ncore] = ridx[1,ncore:nocc] = True
+            if priority.lower () == 'active': ridx = ridx[::-1,:]
+            elif not priority.lower () == 'core':
+                raise RuntimeError ("Invalid priority keyword: string must be either 'active' or 'core'")
         else:
-            errstr = "Invalid priority keyword (required format: string, nested list of indices, or mask array)"
-            assert (priority.shape[-1] == nmo_init), errstr
-        ridx_counts = ridx.astype (numpy.integer).sum (0)
-        if numpy.any (ridx_counts > 1):
-            raise RuntimeError ("Invalid priority keyword (repeated elements)")
+            ridx = numpy.zeros ((len (priority), nmo), dtype=numpy.bool_)
+            for row, idx in zip (ridx, priority):
+                try:
+                    row[idx] = True
+                except IndexError as e:
+                    raise RuntimeError ("Invalid priority keyword: index array cannot address shape (*,nmo_init)")
+            ridx_counts = ridx.astype (numpy.integer).sum (0)
+            if numpy.any (ridx_counts > 1):
+                raise RuntimeError ("Invalid priority keyword: index array has repeated elements")
+        missing = ~numpy.any (ridx, axis=0)
+        if numpy.any (missing): ridx = numpy.vstack ((ridx, missing))
         return ridx
 
     # Iterate over spin cases
     if isinstance(ncore, (int, numpy.integer)):
         errstr = 'Invalid priority keyword (3-dim is valid for UHF-CAS only)'
-        range_idx = _check_range (priority, ncore)
+        range_idx = _interpret (priority, ncore)
         mo = _spincase (mf_mo, mo_init, range_idx, ncore)
     else: # UHF-based CASSCF
         if (isinstance (priority, str) # single string
-            or isinstance (priority[0][0], (int, numpy.integer)) # 2d nested list
-            or (isinstance (priority, numpy.ndarray) and priority.ndim == 2)): # single mask array
+            or (isinstance (priority, numpy.ndarray) and priority.ndim == 2) # single mask array
+            or isinstance (priority[0][0], (int, numpy.integer))): # 2d nested list
                 priority = [priority, priority]
-        range_idx = [_check_range (p, n) for p, n in zip (priority, ncore)]
+        range_idx = [_interpret (p, n) for p, n in zip (priority, ncore)]
         mo = (_spincase (mf_mo[0], mo_init[0], range_idx[0], ncore[0]),
               _spincase (mf_mo[1], mo_init[1], range_idx[1], ncore[1]))
 
