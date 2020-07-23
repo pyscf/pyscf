@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -229,7 +229,10 @@ def symmetrize_space(mol, mo, s=None,
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
-    return str(gpname[0].upper() + gpname[1:].lower())
+    if gpname == 'SO3':
+        return gpname
+    else:
+        return str(gpname[0].upper() + gpname[1:].lower())
 
 def irrep_name2id(gpname, symb):
     '''Convert the irrep symbol to internal irrep ID
@@ -245,7 +248,9 @@ def irrep_name2id(gpname, symb):
     '''
     gpname = std_symb(gpname)
     symb = std_symb(symb)
-    if gpname in ('Dooh', 'Coov'):
+    if gpname == 'SO3':
+        return basis.so3_irrep_symb2id(irrep_id)
+    elif gpname in ('Dooh', 'Coov'):
         return basis.linearmole_irrep_symb2id(gpname, symb)
     else:
         return param.IRREP_ID_TABLE[gpname][symb]
@@ -263,7 +268,9 @@ def irrep_id2name(gpname, irrep_id):
         Irrep sybmol, str
     '''
     gpname = std_symb(gpname)
-    if gpname in ('Dooh', 'Coov'):
+    if gpname == 'SO3':
+        return basis.so3_irrep_id2symb(irrep_id)
+    elif gpname in ('Dooh', 'Coov'):
         return basis.linearmole_irrep_id2symb(gpname, irrep_id)
     else:
         return param.CHARACTER_TABLE[gpname][irrep_id][0]

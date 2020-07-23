@@ -3,6 +3,7 @@ PySCF 1.7.? (2020-?-?)
 * Added
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
+  - Support SO3 symmetry
 * Fixed
   - Bug in Mole.fromstring
 
