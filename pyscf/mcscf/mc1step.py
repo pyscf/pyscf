@@ -496,7 +496,7 @@ def as_scanner(mc):
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf.mcscf.addons import project_init_guess_alt
+    from pyscf.mcscf.addons import project_init_guess
     if isinstance(mc, lib.SinglePointScanner):
         return mc
 
@@ -530,7 +530,7 @@ def as_scanner(mc):
                 mo = mf_scanner.mo_coeff
             else:
                 mo = self.mo_coeff
-            mo = project_init_guess_alt (self, mo)
+            mo = project_init_guess (self, mo)
             e_tot = self.kernel(mo, self.ci)[0]
             return e_tot
     return CASSCF_Scanner(mc)

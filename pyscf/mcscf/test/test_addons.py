@@ -309,8 +309,7 @@ class KnownValues(unittest.TestCase):
     def test_project_init_guess(self):
         b = 1.5
         mol1 = gto.M(
-        verbose = lib.logger.DEBUG,
-        output = 'qr_test.log',
+        verbose = 0,
         atom = [
             ['N',(  0.000000,  0.000000, -b/2)],
             ['N',(  0.000000,  0.000000,  b/2)], ],
@@ -322,14 +321,8 @@ class KnownValues(unittest.TestCase):
             mf1.get_ovlp ().dot (mfr.mo_coeff))
         mfr_mo_norm = mfr.mo_coeff / numpy.sqrt (mfr_mo_norm)[None,:]
 
-        mo1 = mcscf.project_init_guess(mc1, mfr.mo_coeff, prev_mol=mol)
-        s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
-        self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
-                         s1.shape[0])
-        self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
-
         # Active first
-        mo1 = mcscf.addons.project_init_guess_alt (mc1, mfr.mo_coeff, priority='active')
+        mo1 = mcscf.addons.project_init_guess (mc1, mfr.mo_coeff, priority='active')
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
@@ -340,7 +333,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual (s1_test[1], 1.0, 9)
 
         # Core first
-        mo1 = mcscf.addons.project_init_guess_alt (mc1, mfr.mo_coeff, priority='core')
+        mo1 = mcscf.addons.project_init_guess (mc1, mfr.mo_coeff, priority='core')
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
@@ -352,7 +345,7 @@ class KnownValues(unittest.TestCase):
 
         # Gram-Schmidt case (priority = [[0],[1],[2],...])
         gram_schmidt_idx = numpy.arange (27, dtype=numpy.integer)[:,None].tolist ()
-        mo1 = mcscf.addons.project_init_guess_alt (mc1, mfr.mo_coeff, priority=gram_schmidt_idx)
+        mo1 = mcscf.addons.project_init_guess (mc1, mfr.mo_coeff, priority=gram_schmidt_idx)
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
@@ -363,10 +356,21 @@ class KnownValues(unittest.TestCase):
         s2 = numpy.abs (reduce (numpy.dot, (mo1.conj ().T, mf1.get_ovlp (), mo2)))
         self.assertAlmostEqual(numpy.linalg.norm(s2), 5.2915026221291841, 9)
         
+        # Incomplete initial guess
+        mo1 = mcscf.addons.project_init_guess (mc1, mfr.mo_coeff[:,:12], priority='active')
+        s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
+        self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
+                         s1.shape[0])
+        self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
+        s1_test = [reduce (numpy.dot, (mf1.get_ovlp (), mo1[:,i], mfr_mo_norm[:,i]))
+            for i in (1,3)] # core, core, active (same irrep)
+        self.assertFalse (s1_test[0] > s1_test[1])
+        self.assertAlmostEqual (s1_test[1], 1.0, 9)
+
         # Spin-unrestricted case
         mf1 = scf.UHF(mol1).run()
         mc1 = mcscf.UCASSCF(mf1, 4, 4).run()
-        mo1_u = mcscf.addons.project_init_guess_alt (mc1, mfu.mo_coeff, priority='active')
+        mo1_u = mcscf.addons.project_init_guess (mc1, mfu.mo_coeff, priority='active')
         for mo1 in mo1_u:
             s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
             self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
@@ -375,7 +379,7 @@ class KnownValues(unittest.TestCase):
 
         # Random priority lists
         pr = [[[27,5],[3],[6,12]],[[17,15],[13,10,8,6]]]
-        mo1_u = mcscf.addons.project_init_guess_alt (mc1, mfu.mo_coeff, priority=pr)
+        mo1_u = mcscf.addons.project_init_guess (mc1, mfu.mo_coeff, priority=pr)
         for mo1 in mo1_u:
             s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
             self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
