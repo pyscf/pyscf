@@ -75,10 +75,10 @@ class TDDFTNoHybrid(TDA):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsyma = orbsyma % 10
-            orbsymb = orbsymb % 10
-            sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
-            sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
+            orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+            orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+            sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
+            sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
             sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
         e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T

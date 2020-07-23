@@ -67,10 +67,10 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsyma = orbsyma % 10
-        orbsymb = orbsymb % 10
-        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
-        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+        sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
@@ -632,10 +632,10 @@ class TDA(rhf.TDA):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mf.mo_coeff)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsyma = orbsyma % 10
-            orbsymb = orbsymb % 10
-            e_ia_a[(orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym] = 1e99
-            e_ia_b[(orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym] = 1e99
+            orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+            orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+            e_ia_a[(orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym] = 1e99
+            e_ia_b[(orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym] = 1e99
 
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
         nov = e_ia.size
@@ -733,10 +733,10 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsyma = orbsyma % 10
-        orbsymb = orbsymb % 10
-        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
-        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+        sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
