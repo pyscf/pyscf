@@ -249,7 +249,7 @@ def irrep_name2id(gpname, symb):
     gpname = std_symb(gpname)
     symb = std_symb(symb)
     if gpname == 'SO3':
-        return basis.so3_irrep_symb2id(irrep_id)
+        return basis.so3_irrep_symb2id(symb)
     elif gpname in ('Dooh', 'Coov'):
         return basis.linearmole_irrep_symb2id(gpname, symb)
     else:

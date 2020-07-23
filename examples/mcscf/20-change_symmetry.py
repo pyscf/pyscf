@@ -36,7 +36,7 @@ mol = pyscf.M(
     atom = 'Cr   0  0  0',
     basis = 'cc-pvtz',
     spin = 6,
-    symmetry = True,
+    symmetry = 'Dooh',
 )
 myhf = mol.RHF()
 myhf.irrep_nelec = {'A1g': (5,3), 'E1gx': (1,0), 'E1gy': (1,0),

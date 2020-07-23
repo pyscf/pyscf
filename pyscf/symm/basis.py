@@ -300,7 +300,7 @@ _SO3_ID2SYMB = dict([(v, k) for k, v in _SO3_SYMB2ID.items()])
 _ANGULAR = 'spdfghik'
 
 def so3_irrep_symb2id(symb):
-    return _SO3_SYMB2ID[symb]
+    return _SO3_SYMB2ID[symb.lower()]
 
 def so3_irrep_id2symb(irrep_id):
     return _SO3_ID2SYMB[irrep_id]
