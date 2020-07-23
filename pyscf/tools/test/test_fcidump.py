@@ -28,8 +28,7 @@ N  0.0000000000   0.0000000000   0.0000000000
 N  0.0000000000   0.0000000000   1.0977000000
            '''
 mol.basis = 'sto-3g'
-mol.symmetry = 1
-mol.symmetry_subgroup = 'D2h'
+mol.symmetry = 'D2h'
 mol.charge = 0
 mol.spin = 0 #2*S; multiplicity-1
 mol.verbose = 0
@@ -83,6 +82,16 @@ ORBSYM=1,2,3,4,
             f.flush()
             result = fcidump.read(f.name)
         self.assertEqual(result['MS2'], 0)
+
+    def test_to_scf(self):
+        '''Test from_scf and to_scf'''
+        tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        fcidump.from_scf(mf, tmpfcidump.name)
+        mf1 = fcidump.to_scf(tmpfcidump.name)
+        mf1.init_guess = mf.make_rdm1()
+        mf1.kernel()
+        self.assertTrue(abs(mf1.e_tot - mf.e_tot).max() < 1e-9)
+        self.assertTrue(numpy.array_equal(mf.orbsym, mf1.orbsym))
 
 if __name__ == "__main__":
     print("Full Tests for fcidump")

@@ -1557,6 +1557,9 @@ class SCF(lib.StreamObject):
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
     def get_init_guess(self, mol=None, key='minao'):
+        if not isinstance(key, (str, unicode)):
+            return key
+
         key = key.lower()
         if mol is None:
             mol = self.mol
