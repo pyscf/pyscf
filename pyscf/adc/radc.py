@@ -141,15 +141,6 @@ def compute_amplitudes(myadc, eris):
         eris_oooo = eris.oooo
         eris_ovvo = eris.ovvo
 
-        #if isinstance(eris.vvvv, type(None)):
-        #    t2_2 = contract_ladder(myadc,t2_1,eris.Lvv)
-        #elif isinstance(eris.vvvv, list):
-        #    t2_2 = contract_ladder(myadc,t2_1,eris.vvvv)
-        #else:    
-        #    eris_vvvv = eris.vvvv
-        #    temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-        #    t2_2 = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-
         if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
             eris_vvvv = eris.vvvv
             temp = t2_1.reshape(nocc*nocc,nvir*nvir)
@@ -298,7 +289,6 @@ def compute_energy(myadc, t1, t2, eris):
         eris_ovvo = eris.ovvo
         eris_oooo = eris.oooo
 
-
         temp_t2_a = None
         temp_t2_ab = None
         temp_t2_t2 = None
@@ -308,27 +298,11 @@ def compute_energy(myadc, t1, t2, eris):
 
         eris_vvvv = eris.vvvv
 
-        #if isinstance(eris.vvvv, type(None)):
-        #    temp_t2_a_vvvv = contract_ladder(myadc,t2_1_a,eris.Lvv)
-        #elif isinstance(eris.vvvv, list):
-        #    temp_t2_a_vvvv = contract_ladder(myadc,t2_1_a,eris.vvvv)
-        #else : 
-        #    temp_t2_a = t2_1_a.reshape(nocc*nocc,nvir*nvir)
-        #    temp_t2_a_vvvv = np.dot(temp_t2_a,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-
         if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
             temp_t2_a = t2_1_a.reshape(nocc*nocc,nvir*nvir)
             temp_t2_a_vvvv = np.dot(temp_t2_a,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
         else : 
             temp_t2_a_vvvv = contract_ladder(myadc,t2_1_a,eris)
-
-        #if isinstance(eris.vvvv, type(None)):
-        #    temp_t2_ab_vvvv = contract_ladder(myadc,t2_1,eris.Lvv)
-        #elif isinstance(eris.vvvv, list):
-        #    temp_t2_ab_vvvv = contract_ladder(myadc,t2_1,eris.vvvv)
-        #else :
-        #    temp_t2_ab = t2_1.reshape(nocc*nocc,nvir*nvir)
-        #    temp_t2_ab_vvvv = np.dot(temp_t2_ab,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
 
         if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
             temp_t2_ab = t2_1.reshape(nocc*nocc,nvir*nvir)
@@ -340,19 +314,6 @@ def compute_energy(myadc, t1, t2, eris):
         e_mp3 =  lib.einsum('ijcd,ijcd',temp_t2_ab_vvvv, t2_1,optimize=True)
         del temp_t2_ab_vvvv
 
-        #if isinstance(eris.vvvv, type(None)):
-        #    t2_1_a_t = np.ascontiguousarray(t2_1_a.transpose(0,1,3,2))
-        #    temp_t2_a_vvvv_n = contract_ladder(myadc,t2_1_a_t,eris.Lvv)
-        #    temp_t2_a_vvvv -= temp_t2_a_vvvv_n
-        #elif isinstance(eris.vvvv, list):
-        #    t2_1_a_t = np.ascontiguousarray(t2_1_a.transpose(0,1,3,2))
-        #    temp_t2_a_vvvv_n = contract_ladder(myadc,t2_1_a_t,eris.vvvv)
-        #    temp_t2_a_vvvv -= temp_t2_a_vvvv_n
-        #else :
-        #    temp_t2_a = temp_t2_a.reshape(nocc,nocc,nvir,nvir)
-        #    temp_t2_a = np.ascontiguousarray(temp_t2_a.transpose(0,1,3,2))
-        #    temp_t2_a = temp_t2_a.reshape(nocc*nocc,nvir*nvir)
-        #    temp_t2_a_vvvv -= np.dot(temp_t2_a,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
 
         if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
             temp_t2_a = temp_t2_a.reshape(nocc,nocc,nvir,nvir)
@@ -404,50 +365,6 @@ def compute_energy(myadc, t1, t2, eris):
     return e_corr
 
 
-#def contract_ladder_outcore(myadc,t_amp,v_list):
-#
-#    nocc = myadc._nocc
-#    nvir = myadc._nvir
-#
-#    t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc*nocc,nvir*nvir).T)
-#    t = np.zeros((nvir,nvir, nocc*nocc))
-#
-#    a = 0
-#    for dataset in v_list:
-#         k = dataset.shape[0]
-#         dataset = dataset[:].reshape(-1,nvir*nvir)
-#         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
-#         a += k
-#                      
-#    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
-#
-#    return t
-#
-#
-#def contract_ladder_df(myadc,t_amp,eris):
-#
-#    nocc = myadc._nocc
-#    nvir = myadc._nvir
-#
-#    t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc*nocc,nvir*nvir).T)
-#    t = np.zeros((nvir,nvir, nocc*nocc))
-#
-#    chnk_size = radc_ao2mo.calculate_chunk_size(myadc)
-#
-#    a = 0 
-#    for p in range(0,nvir,chnk_size):
-#        vvvv = radc_ao2mo.get_vvvv_df(myadc, eris.Lvv, p, chnk_size)
-#        k = vvvv.shape[0]
-#        vvvv = vvvv.reshape(-1,nvir*nvir)
-#        t[a:a+k] = np.dot(vvvv,t_amp_t).reshape(-1,nvir,nocc*nocc)
-#        del (vvvv)
-#        a += k
-#                      
-#    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
-#
-#    return t
-
-
 def contract_ladder(myadc,t_amp,eris):
 
     nocc = myadc._nocc
@@ -476,6 +393,7 @@ def contract_ladder(myadc,t_amp,eris):
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
 
     return t
+
 
 class RADC(lib.StreamObject):
     '''Ground state calculations
@@ -838,40 +756,6 @@ def get_imds_ea(adc, eris=None):
         M_ab += 0.25*lib.einsum('mlbd,noad,nlom->ab',t2_1_a, t2_1_a, eris_oooo, optimize=True)
         M_ab -= lib.einsum('mlbd,noad,nmol->ab',t2_1, t2_1, eris_oooo, optimize=True)
 
-        #if isinstance(eris.vvvv, type(None)):
-        #    temp_t2a_vvvv = contract_ladder_df(adc,t2_1_a,eris)
-        #    temp_t2_vvvv = contract_ladder_df(adc,t2_1,eris)
-
-        #    M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp_t2a_vvvv, optimize=True)
-        #    M_ab += 0.25*lib.einsum('mlaf,mlfb->ab',t2_1_a, temp_t2a_vvvv, optimize=True)
-        #    M_ab -= lib.einsum('mlaf,mlbf->ab',t2_1, temp_t2_vvvv, optimize=True)
-        #    M_ab += 0.25*lib.einsum('lmad,mlbd->ab',temp_t2a_vvvv, t2_1_a, optimize=True)
-
-        #elif isinstance(eris.vvvv, list):
-
-        #    temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris.vvvv)
-        #    temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris.vvvv)
-
-        #    M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp_t2a_vvvv, optimize=True)
-        #    M_ab += 0.25*lib.einsum('mlaf,mlfb->ab',t2_1_a, temp_t2a_vvvv, optimize=True)
-        #    M_ab -= lib.einsum('mlaf,mlbf->ab',t2_1, temp_t2_vvvv, optimize=True)
-        #    M_ab += 0.25*lib.einsum('lmad,mlbd->ab',temp_t2a_vvvv, t2_1_a, optimize=True)
-     
-        #else :
-
-        #    t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
-        #    t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
-        #    eris_vvvv = eris.vvvv
-        #    temp_t2a = np.dot(t2_1_a_r,eris_vvvv)
-        #    temp_t2 = np.dot(t2_1_r,eris_vvvv)
-        #    temp_t2a = temp_t2a.reshape(nocc,nocc,nvir,nvir)
-        #    temp_t2 = temp_t2.reshape(nocc,nocc,nvir,nvir)
-        #    M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp_t2a, optimize=True)
-        #    M_ab += 0.25*lib.einsum('mlaf,mlfb->ab',t2_1_a, temp_t2a, optimize=True)
-        #    M_ab -= lib.einsum('mlaf,mlbf->ab',t2_1, temp_t2, optimize=True)
-        #    temp_vvvv_t2a = np.dot(eris_vvvv,t2_1_a_r.T)
-        #    temp_vvvv_t2a = temp_vvvv_t2a.reshape(nvir,nvir,nocc,nocc)
-        #    M_ab += 0.25*lib.einsum('adlm,mlbd->ab',temp_vvvv_t2a, t2_1_a, optimize=True)
 
         if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
             t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
@@ -947,65 +831,6 @@ def get_imds_ea(adc, eris=None):
                     a += k
 
             M_ab += temp
-
-        #if isinstance(eris.vvvv, type(None)):
-        #    temp_t2_a_vvvv = contract_ladder_df(adc,t2_1_a,eris)
-        #    temp_t2_vvvv = contract_ladder_df(adc,t2_1,eris)
-        #    M_ab -= 0.25*lib.einsum('mlad,mlbd->ab', temp_t2_a_vvvv, t2_1_a, optimize=True)
-        #    M_ab -= lib.einsum('mlad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
-
-
-        #    chnk_size = radc_ao2mo.calculate_chunk_size(adc)
-        #    a = 0 
-        #    temp = np.zeros((nvir,nvir))
-        #    for p in range(0,nvir,chnk_size):
-
-        #        vvvv = radc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
-        #        k = vvvv.shape[0]
-        #        temp[a:a+k] -= lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  vvvv, optimize=True)
-        #        temp[a:a+k] += 0.5*lib.einsum('mldf,mled,aefb->ab',t2_1_a, t2_1_a,  vvvv, optimize=True)
-        #        temp[a:a+k] += 2.*lib.einsum('mlfd,mled,aebf->ab',t2_1, t2_1, vvvv, optimize=True)
-        #        temp[a:a+k] -= lib.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, vvvv, optimize=True)
-        #        del vvvv
-        #        a += k
-        #    M_ab += temp
-       
-        #elif isinstance(eris.vvvv, list):
-        #    temp_t2_a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris.vvvv)
-        #    temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris.vvvv)
-        #    M_ab -= 0.25*lib.einsum('mlad,mlbd->ab', temp_t2_a_vvvv, t2_1_a, optimize=True)
-        #    M_ab -= lib.einsum('mlad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
-
-        #    a = 0
-        #    temp = np.zeros((nvir,nvir))
-        #    for dataset in eris.vvvv:
-        #        k = dataset.shape[0]
-        #        eris_vvvv = dataset[:].reshape(-1,nvir,nvir,nvir)
-        #        temp[a:a+k] -= lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
-        #        temp[a:a+k] += 0.5*lib.einsum('mldf,mled,aefb->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
-        #        temp[a:a+k] += 2.*lib.einsum('mlfd,mled,aebf->ab',t2_1, t2_1, eris_vvvv, optimize=True)
-        #        temp[a:a+k] -= lib.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, eris_vvvv, optimize=True)
-        #        del eris_vvvv
-        #        a += k
-
-        #    M_ab += temp
-
-        #else :
-
-        #    t2_1_a_temp = t2_1_a.reshape(nocc*nocc,nvir*nvir)
-        #    t2_1_temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-        #    temp_1 = np.dot(t2_1_temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-        #    temp_1_a = np.dot(t2_1_a_temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
-
-        #    M_ab -= 0.25*lib.einsum('mlad,mlbd->ab', temp_1_a, t2_1_a, optimize=True)
-        #    M_ab -= lib.einsum('mlad,mlbd->ab', temp_1, t2_1, optimize=True)
-
-        #    eris_vvvv = eris_vvvv.reshape(nvir,nvir,nvir,nvir)
-        #    M_ab -= lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        #    M_ab += 0.5*lib.einsum('mldf,mled,aefb->ab',t2_1_a, t2_1_a, eris_vvvv, optimize=True)
-        #    M_ab += 2.*lib.einsum('mlfd,mled,aebf->ab',t2_1, t2_1, eris_vvvv, optimize=True)
-        #    M_ab -= lib.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, eris_vvvv, optimize=True)
-        #    eris_vvvv = eris_vvvv.reshape(nvir*nvir,nvir*nvir)
 
         
     return M_ab
@@ -1366,47 +1191,6 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     return diag
 
 
-#def ea_contract_r_df(myadc,r2,eris):
-#
-#    nocc = myadc._nocc
-#    nvir = myadc._nvir
-#
-#    r2_vvvv = np.zeros((nocc,nvir,nvir))
-#    r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
-#
-#    chnk_size = radc_ao2mo.calculate_chunk_size(myadc)
-#
-#    a = 0
-#    for p in range(0,nvir,chnk_size):
-#
-#        vvvv = radc_ao2mo.get_vvvv_df(myadc, eris.Lvv, p, chnk_size)
-#        k = vvvv.shape[0]
-#        vvvv = vvvv.reshape(-1,nvir*nvir)
-#        r2_vvvv[:,a:a+k] = np.dot(r2,vvvv.T).reshape(nocc,-1,nvir)
-#        a += k
-#
-#    r2_vvvv = r2_vvvv.reshape(-1)
-#
-#    return r2_vvvv
-#
-#def ea_contract_r_vvvv(myadc,r2,v_list):
-#
-#    nocc = myadc._nocc
-#    nvir = myadc._nvir
-#
-#    r2_vvvv = np.zeros((nocc,nvir,nvir))
-#    r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
-#    a = 0
-#    for dataset in v_list:
-#         k = dataset.shape[0]
-#         dataset = dataset[:].reshape(-1,nvir*nvir)
-#         r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
-#         a += k
-#
-#    r2_vvvv = r2_vvvv.reshape(-1)
-#
-#    return r2_vvvv
-
 def ea_contract_r_vvvv(myadc,r2,eris):
 
     nocc = myadc._nocc
@@ -1523,23 +1307,12 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                r2 = r2.reshape(nocc, nvir, nvir)
 
-               #if isinstance(eris.vvvv, type(None)):
-               #    s[s2:f2] += ea_contract_r_df(adc,r2,eris)
-               #elif isinstance(eris.vvvv, list):
-               #    s[s2:f2] += ea_contract_r_vvvv(adc,r2,eris.vvvv)
-
-               #else :
-               #    r_bab_t = r2.reshape(nocc,-1)
-               #    eris_vvvv = eris.vvvv
-               #    s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
-
                if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
                    r_bab_t = r2.reshape(nocc,-1)
                    eris_vvvv = eris.vvvv
                    s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
                else :
                    s[s2:f2] += ea_contract_r_vvvv(adc,r2,eris)
-
 
                s[s2:f2] -= 0.5*lib.einsum('jzyi,jzx->ixy',eris_ovvo,r2_a,optimize = True).reshape(-1)
                s[s2:f2] -= 0.5*lib.einsum('jiyz,jxz->ixy',eris_oovv,r2,optimize = True).reshape(-1)
