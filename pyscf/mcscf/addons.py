@@ -413,8 +413,8 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
         return mo_proj, mo_null
 
     # Iterate over orbital ranges
-    def _spincase (mo_basis, mo_target, range_idx, ncore):
-        # Swap out HF core orbitals (be sure to make a copy since this still points to the original arg!)
+    def _spincase (mo_basis, mo_target, range_idx, sort_idx, ncore):
+        # Swap out HF core orbitals (making a copy for safety)
         if use_hf_core:
             ovlp = numpy.dot (mo_target.conj ().T, s0.dot (mo_basis))
             ix = numpy.argmax (numpy.abs (ovlp[:ncore,:]), axis=1)
@@ -426,9 +426,14 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
         idx = numpy.any (range_idx, axis=0)
         mo = mo[:,idx]
         mo_target = mo_target[:,idx]
-        # Fix sign and debug print
+        # Fix sign
         sgn = numpy.einsum ('pi,pi->i', mo.conj (), s0.dot (mo_target))
         mo[:,sgn<0] *= -1
+        # Append remaining virtual orbitals
+        if mo_basis.shape[-1] > 0:
+            mo = numpy.append (mo, mo_basis, axis=1)
+        # Sort and debug print
+        mo[:,:nmo_init] = mo[:,:nmo_init][:,sort_idx]
         if casscf.verbose >= logger.DEBUG:
             mocc = mo[:,:ncore+ncas]
             s1 = reduce(numpy.dot, (mocc.T, s0, mo_target))
@@ -438,9 +443,6 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             for i, j in enumerate (idx):
                 logger.debug(casscf, 'Init guess <mo-orth|mo-init>  %d  %d  %10.8f (%10.8f after norm)',
                              i+1, j+1, s1[i,j], s1_norm[i,j])
-        # Append remaining virtual orbitals
-        if mo_basis.shape[-1] > 0:
-            mo = numpy.append (mo, mo_basis, axis=1)
         return mo
 
     # Interpret "priority" keyword
@@ -463,23 +465,23 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             ridx_counts = ridx.astype (numpy.integer).sum (0)
             if numpy.any (ridx_counts > 1):
                 raise RuntimeError ("Invalid priority keyword: index array has repeated elements")
-        missing = ~numpy.any (ridx, axis=0)
-        if numpy.any (missing): ridx = numpy.vstack ((ridx, missing))
-        return ridx
+        incl = numpy.any (ridx, axis=0)
+        sidx = numpy.append (numpy.where (incl)[0], numpy.where (~incl)[0])
+        return ridx, numpy.argsort (sidx)
 
     # Iterate over spin cases
     if isinstance(ncore, (int, numpy.integer)):
         errstr = 'Invalid priority keyword (3-dim is valid for UHF-CAS only)'
-        range_idx = _interpret (priority, ncore)
-        mo = _spincase (mf_mo, mo_init, range_idx, ncore)
+        range_idx, sort_idx = _interpret (priority, ncore)
+        mo = _spincase (mf_mo, mo_init, range_idx, sort_idx, ncore)
     else: # UHF-based CASSCF
         if (isinstance (priority, str) # single string
             or (isinstance (priority, numpy.ndarray) and priority.ndim == 2) # single mask array
             or isinstance (priority[0][0], (int, numpy.integer))): # 2d nested list
                 priority = [priority, priority]
-        range_idx = [_interpret (p, n) for p, n in zip (priority, ncore)]
-        mo = (_spincase (mf_mo[0], mo_init[0], range_idx[0], ncore[0]),
-              _spincase (mf_mo[1], mo_init[1], range_idx[1], ncore[1]))
+        idx = [_interpret (p, n) for p, n in zip (priority, ncore)]
+        mo = (_spincase (mf_mo[0], mo_init[0], idx[0][0], idx[0][1], ncore[0]),
+              _spincase (mf_mo[1], mo_init[1], idx[1][0], idx[1][1], ncore[1]))
 
     return mo
 
