@@ -404,7 +404,7 @@ class SHCI(pyscf.lib.StreamObject):
         r2RDM(twopdm, norb, os.path.join(self.scratchDirectory, file2pdm).encode())
 
         # Symmetry addon
-        if (self.groupname == "Dooh" or self.groupname == "Coov") and self.useExtraSymm:
+        if self.groupname in ('SO3', 'Dooh', 'Coov') and self.useExtraSymm:
             nRows, rowIndex, rowCoeffs = DinfhtoD2h(self, norb, nelec)
             twopdmcopy = 1.0 * twopdm
             twopdm = 0.0 * twopdm
@@ -1148,6 +1148,9 @@ def D2htoDinfh(SHCI, norb, nelec):
     orbsym1 = numpy.zeros(shape=(norb, ), dtype=int)
 
     orbsym = numpy.asarray(SHCI.orbsym)
+    # Convert SO3 -> Dooh, see pyscf.symm.basis.so3_irrep_id
+    orbsym = orbsym % 100
+
     A_irrep_ids = set([0, 1, 4, 5])
     E_irrep_ids = set(orbsym).difference(A_irrep_ids)
 
@@ -1214,6 +1217,8 @@ def DinfhtoD2h(SHCI, norb, nelec):
     rowCoeffs = numpy.zeros(shape=(4 * norb, ), dtype=float)
 
     orbsym = numpy.asarray(SHCI.orbsym)
+    # Convert SO3 -> Dooh, see pyscf.symm.basis.so3_irrep_id
+    orbsym = orbsym % 100
     A_irrep_ids = set([0, 1, 4, 5])
     E_irrep_ids = set(orbsym).difference(A_irrep_ids)
 
@@ -1274,7 +1279,7 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
     from pyscf import symm
     from pyscf.dmrgscf import dmrg_sym
 
-    if (SHCI.groupname == "Dooh" or SHCI.groupname == "Coov") and SHCI.useExtraSymm:
+    if SHCI.groupname in ('SO3', 'Dooh', 'Coov') and SHCI.useExtraSymm:
         coeffs, nRows, rowIndex, rowCoeffs, orbsym = D2htoDinfh(SHCI, norb, nelec)
 
         newintt = numpy.tensordot(coeffs.conj(), h1eff, axes=([1], [0]))

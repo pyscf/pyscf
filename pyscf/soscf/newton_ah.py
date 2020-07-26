@@ -736,9 +736,12 @@ class _CIAH_SOSCF(object):
 
         if WITH_EX_EY_DEGENERACY:
             mol = self._scf.mol
-            if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+            if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
                 orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-                _force_Ex_Ey_degeneracy_(dr, orbsym)
+                if mol.groupname == 'SO3':
+                    _force_SO3_degeneracy_(dr, orbsym)
+                else:
+                    _force_Ex_Ey_degeneracy_(dr, orbsym)
         return numpy.dot(u0, expmat(dr))
 
     def rotate_mo(self, mo_coeff, u, log=None):
@@ -807,10 +810,14 @@ def newton(mf):
 
                 if WITH_EX_EY_DEGENERACY:
                     mol = self._scf.mol
-                    if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                    if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
                         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-                        _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
-                        _force_Ex_Ey_degeneracy_(dr[1], orbsymb)
+                        if mol.groupname == 'SO3':
+                            _force_SO3_degeneracy_(dr[0], orbsyma)
+                            _force_SO3_degeneracy_(dr[1], orbsymb)
+                        else:
+                            _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
+                            _force_Ex_Ey_degeneracy_(dr[1], orbsymb)
 
                 if isinstance(u0, int) and u0 == 1:
                     return numpy.asarray((expmat(dr[0]), expmat(dr[1])))
@@ -855,9 +862,12 @@ def newton(mf):
 
                 if WITH_EX_EY_DEGENERACY:
                     mol = self._scf.mol
-                    if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                    if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
                         orbsym = scf.ghf_symm.get_orbsym(mol, mo_coeff)
-                        _force_Ex_Ey_degeneracy_(dr, orbsym)
+                        if mol.groupname == 'SO3':
+                            _force_SO3_degeneracy_(dr, orbsym)
+                        else:
+                            _force_Ex_Ey_degeneracy_(dr, orbsym)
                 return numpy.dot(u0, expmat(dr))
 
             def rotate_mo(self, mo_coeff, u, log=None):
@@ -882,6 +892,25 @@ def _effective_svd(a, tol=SVD_TOL):
     w = numpy.linalg.svd(a)[1]
     return w[(tol<w) & (w<1-tol)]
 del(SVD_TOL)
+
+def _force_SO3_degeneracy_(dr, orbsym):
+    '''Force orbitals of same angular momentum to use the same rotation matrix'''
+    orbsym = numpy.asarray(orbsym)
+    orbsym_l = orbsym % 100
+    lmax = max(orbsym_l)
+
+    for l in range(lmax + 1):
+        idx_l = numpy.where(orbsym_l == l)[0]
+        nso_l = dix_l.size
+        if nso_l > 0:
+            degen = l * 2 + 1
+            nso_m = nso_l / degen
+            dr_l = dr[idx[:,None],idx].reshape(degen, nso_m, degen, nso_m)
+            dr_avg = numpy.einsum('ipiq->pq', dr_l) / degen
+            for m in range(degen):
+                dr_l[m,:,m,:] = dr_avg
+            dr[idx[:,None],idx] = dr_l.reshape(nso_l, nso_l)
+    return dr
 
 def _force_Ex_Ey_degeneracy_(dr, orbsym):
     '''Force the Ex and Ey orbitals to use the same rotation matrix'''

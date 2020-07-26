@@ -54,9 +54,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         nirrep = len(mol.irrep_id)
         ovlp_ao = mf.get_ovlp()
         orbsyma, orbsymb = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
         tot_sym = 0
-        noccsa = [sum(orbsyma[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
-        noccsb = [sum(orbsymb[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
+        noccsa = [sum(orbsyma_in_d2h[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
+        noccsb = [sum(orbsymb_in_d2h[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
         for i, ir in enumerate(mol.irrep_id):
             if (noccsa[i]+noccsb[i]) % 2:
                 tot_sym ^= ir

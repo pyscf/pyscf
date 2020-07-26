@@ -180,20 +180,22 @@ def _id_wfnsym(cisolver, norb, nelec, orbsym, wfnsym):
         neleca, nelecb = _unpack_nelec(nelec)
         wfnsym = 0  # Ag, A1 or A
         for i in orbsym[nelecb:neleca]:
-            wfnsym ^= i
+            wfnsym ^= i % 10
     elif isinstance(wfnsym, str):
         wfnsym = symm.irrep_name2id(cisolver.mol.groupname, wfnsym)
+    # % 10 to convert irrep_ids to irrep of D2h
     return wfnsym % 10
 
 def _gen_strs_irrep(strs, orbsym):
-    orbsym = numpy.asarray(orbsym) % 10
+    # % 10 to convert irrep_ids to irrep of D2h
+    orbsym_in_d2h = numpy.asarray(orbsym) % 10
     irreps = numpy.zeros(len(strs), dtype=numpy.int32)
     if isinstance(strs, cistring.OIndexList):
         nocc = strs.shape[1]
         for i in range(nocc):
-            irreps ^= orbsym[strs[:,i]]
+            irreps ^= orbsym_in_d2h[strs[:,i]]
     else:
-        for i, ir in enumerate(orbsym):
+        for i, ir in enumerate(orbsym_in_d2h):
             irreps[numpy.bitwise_and(strs, 1<<i) > 0] ^= ir
     return irreps
 
@@ -232,9 +234,10 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 def reorder_eri(eri, norb, orbsym):
     if orbsym is None:
         return [eri], numpy.arange(norb), numpy.zeros(norb,dtype=numpy.int32)
-# map irrep IDs of Dooh or Coov to D2h, C2v
-# see symm.basis.linearmole_symm_descent
+
+    # % 10 to map irrep IDs of Dooh or Coov, etc. to irreps of D2h, C2v
     orbsym = numpy.asarray(orbsym) % 10
+
 # irrep of (ij| pair
     trilirrep = (orbsym[:,None]^orbsym)[numpy.tril_indices(norb)]
 # and the number of occurence for each irrep
@@ -355,9 +358,10 @@ class FCISolver(direct_spin1.FCISolver):
             strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
             na, nb = strsa.size, strsb.size
 
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10
             airreps = numpy.zeros(na, dtype=numpy.int32)
             birreps = numpy.zeros(nb, dtype=numpy.int32)
-            for i, ir in enumerate(orbsym):
+            for i, ir in enumerate(orbsym_in_d2h):
                 airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
                 birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
 
