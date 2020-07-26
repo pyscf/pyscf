@@ -509,8 +509,6 @@ class SymAdaptedUHF(uhf.UHF):
     def get_orbsym(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        if mo_coeff is None:
-            raise RuntimeError('SCF object %s not initialized' % self)
         if s is None:
             s = self.get_ovlp()
         return get_orbsym(self.mol, mo_coeff, s)
