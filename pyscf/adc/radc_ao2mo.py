@@ -177,7 +177,6 @@ def transform_integrals_outcore(myadc):
     return eris
 
 ################ DF eris ############################
-#@profile
 def transform_integrals_df(myadc):
     cput0 = (time.clock(), time.time())
     #log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -242,7 +241,6 @@ def calculate_chunk_size(myadc):
 
     return chnk_size
 
-
 def  get_vvvv_df(myadc, Lvv, p, chnk_size):
 
     nocc = myadc._nocc
@@ -252,12 +250,13 @@ def  get_vvvv_df(myadc, Lvv, p, chnk_size):
     Lvv = Lvv.reshape(naux,nvir,nvir)
 
     if chnk_size < nvir:
-        Lvv_temp = Lvv.T[p:p+chnk_size].reshape(-1,naux)
+        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
     else :
-        Lvv_temp = Lvv.T.reshape(-1,naux)
+        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
 
     Lvv = Lvv.reshape(naux,nvir*nvir)
-    vvvv = lib.ddot(Lvv_temp, Lvv)
+    #vvvv = lib.ddot(Lvv_temp, Lvv)
+    vvvv = np.dot(Lvv_temp, Lvv)
     vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
     vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
     return vvvv    

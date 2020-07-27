@@ -81,7 +81,6 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
-
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -256,7 +255,6 @@ def compute_amplitudes(myadc, eris):
     t2 = (t2_1, t2_2)
 
     return t1, t2
-
 
 def compute_energy(myadc, t1, t2, eris):
 
@@ -603,7 +601,6 @@ class RADC(lib.StreamObject):
 #            myadc.with_df.auxbasis = auxbasis
 #        return myadc
 ###########################################################
-
 def get_imds_ea(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -1189,7 +1186,6 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     diag = -diag
 
     return diag
-
 
 def ea_contract_r_vvvv(myadc,r2,eris):
 
