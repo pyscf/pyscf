@@ -98,6 +98,9 @@ ints_from_sph = numpy.einsum('ipa,xijpq,jqb->xab', numpy.conj(c), ints_sph, c)
 
 print(abs(ints_from_sph - ints_spinor).max())
 
+#
+# Integrals (LS|LS) related to Gaunt term
+#
 # Note the order of spin operators
 # SIGMA1X * SIGMA2X     0
 # SIGMA1Y * SIGMA2X     1
@@ -118,19 +121,22 @@ print(abs(ints_from_sph - ints_spinor).max())
 gaunt_spinor = mol.intor('int2e_ssp1ssp2_spinor')
 gaunt_sph = mol.intor('int2e_ssp1ssp2')
 si = numpy.array([paulix * 1j, pauliy * 1j, pauliz * 1j, iden])
-# Be careful the order of the 16 components:
-# index electron 1 runs inside, index electron 2 runs outside
+# Be careful with the order of the 16 components:
+# index for electron 1 runs inside, index for electron 2 runs outside
 ints_from_sph = lib.einsum('xypqrs,xij,ykl,ipa,jqb,krc,lsd->abcd',
                            gaunt_sph.reshape(4,4,nao,nao,nao,nao).transpose(1,0,2,3,4,5),
                            si, si, c.conj(), c, c.conj(), c)
 print(abs(ints_from_sph - gaunt_spinor).max())
 
-ints_spinor = mol.intor('int2e_spsp1spsp2_spinor')
-ints_sph = mol.intor('int2e_spsp1spsp2')
+#
+# (SS|SS) for four small component basis functions in Dirac-Coulomb interaction
+#
+ssss_spinor = mol.intor('int2e_spsp1spsp2_spinor')
+ssss_sph = mol.intor('int2e_spsp1spsp2')
 si = numpy.array([paulix * 1j, pauliy * 1j, pauliz * 1j, iden])
-# Be careful the order of the 16 components:
-# index electron 1 runs inside, index electron 2 runs outside
-ints_from_sph = lib.einsum('xypqrs,xij,ykl,ipa,jqb,krc,lsd->abcd',
-                           ints_sph.reshape(4,4,nao,nao,nao,nao).transpose(1,0,2,3,4,5),
+# Be careful with the order of the 16 components:
+# index for electron 1 runs inside, index for electron 2 runs outside
+ssss_from_sph = lib.einsum('xypqrs,xij,ykl,ipa,jqb,krc,lsd->abcd',
+                           ssss_sph.reshape(4,4,nao,nao,nao,nao).transpose(1,0,2,3,4,5),
                            si, si, c.conj(), c, c.conj(), c)
-print(abs(ints_from_sph - ints_spinor).max())
+print(abs(ssss_from_sph - ssss_spinor).max())
