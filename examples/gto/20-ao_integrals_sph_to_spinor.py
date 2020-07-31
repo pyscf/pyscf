@@ -97,3 +97,40 @@ c = mol.sph2spinor_coeff()
 ints_from_sph = numpy.einsum('ipa,xijpq,jqb->xab', numpy.conj(c), ints_sph, c)
 
 print(abs(ints_from_sph - ints_spinor).max())
+
+# Note the order of spin operators
+# SIGMA1X * SIGMA2X     0
+# SIGMA1Y * SIGMA2X     1
+# SIGMA1Z * SIGMA2X     2
+# I1_2x2  * SIGMA2X     3
+# SIGMA1X * SIGMA2Y     4
+# SIGMA1Y * SIGMA2Y     5
+# SIGMA1Z * SIGMA2Y     6
+# I1_2x2  * SIGMA2Y     7
+# SIGMA1X * SIGMA2Z     8
+# SIGMA1Y * SIGMA2Z     9
+# SIGMA1Z * SIGMA2Z     10
+# I1_2x2  * SIGMA2Z     11
+# SIGMA1X * I2_2x2      12
+# SIGMA1Y * I2_2x2      13
+# SIGMA1Z * I2_2x2      14
+# I1_2x2  * I2_2x2      15
+gaunt_spinor = mol.intor('int2e_ssp1ssp2_spinor')
+gaunt_sph = mol.intor('int2e_ssp1ssp2')
+si = numpy.array([paulix * 1j, pauliy * 1j, pauliz * 1j, iden])
+# Be careful the order of the 16 components:
+# index electron 1 runs inside, index electron 2 runs outside
+ints_from_sph = lib.einsum('xypqrs,xij,ykl,ipa,jqb,krc,lsd->abcd',
+                           gaunt_sph.reshape(4,4,nao,nao,nao,nao).transpose(1,0,2,3,4,5),
+                           si, si, c.conj(), c, c.conj(), c)
+print(abs(ints_from_sph - gaunt_spinor).max())
+
+ints_spinor = mol.intor('int2e_spsp1spsp2_spinor')
+ints_sph = mol.intor('int2e_spsp1spsp2')
+si = numpy.array([paulix * 1j, pauliy * 1j, pauliz * 1j, iden])
+# Be careful the order of the 16 components:
+# index electron 1 runs inside, index electron 2 runs outside
+ints_from_sph = lib.einsum('xypqrs,xij,ykl,ipa,jqb,krc,lsd->abcd',
+                           ints_sph.reshape(4,4,nao,nao,nao,nao).transpose(1,0,2,3,4,5),
+                           si, si, c.conj(), c, c.conj(), c)
+print(abs(ints_from_sph - ints_spinor).max())
