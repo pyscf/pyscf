@@ -835,7 +835,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'LDA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho * weight
@@ -854,7 +855,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
@@ -893,7 +895,6 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             rhotmp = weighttmp = coordstmp = None
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
@@ -917,7 +918,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'MGGA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho[0] * weight
@@ -1013,8 +1015,9 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose=verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho_a * weight
                 nelec[0,idm] += den.sum()
@@ -1035,13 +1038,13 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         ao_deriv = 1
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose=verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
                 excsum[idm] += numpy.dot(den, exc)
@@ -1067,8 +1070,9 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose=verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
@@ -1190,8 +1194,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             if fxc is None:
                 rho = make_rho0(0, ao, mask, 'LDA')
-                fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2,
-                                  verbose=verbose)[2]
+                fxc0 = ni.eval_xc(xc_code, rho, spin=0, relativity=relativity,
+                                  deriv=2, verbose=verbose)[2]
                 frr = fxc0[0]
             else:
                 frr = fxc[0][ip:ip+ngrid]
@@ -1216,7 +1220,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             else:
                 rho = numpy.asarray(rho0[:,ip:ip+ngrid], order='C')
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2,
+                vxc0, fxc0 = ni.eval_xc(xc_code, rho, spin=0,
+                                        relativity=relativity, deriv=2,
                                         verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
@@ -1277,7 +1282,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
             if fxc is None:
                 rho = make_rho0(0, ao, mask, 'LDA')
                 rho *= .5  # alpha density
-                fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[2]
+                fxc0 = ni.eval_xc(xc_code, (rho,rho), spin=1, deriv=2)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
                 if fxc[0].ndim == 1:
@@ -1307,7 +1312,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
             if vxc is None or fxc is None:
                 rho = make_rho0(0, ao, mask, 'GGA')
                 rho *= .5  # alpha density
-                vxc0, fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[1:3]
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho,rho), spin=1, deriv=2)[1:3]
 
                 vsigma = vxc0[1].T
                 u_u, u_d, d_d = fxc0[0].T  # v2rho2
@@ -1471,7 +1476,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             if fxc is None:
                 rho0a = make_rho0(0, ao, mask, xctype)
                 rho0b = make_rho0(1, ao, mask, xctype)
-                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2,
+                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), spin=1,
+                                  relativity=relativity, deriv=2,
                                   verbose=verbose)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
@@ -1506,7 +1512,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 rho0a = rho0[0][:,ip:ip+ngrid]
                 rho0b = rho0[1][:,ip:ip+ngrid]
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2,
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), spin=1,
+                                        relativity=relativity, deriv=2,
                                         verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
@@ -1894,7 +1901,8 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
             rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
             rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
-    vxc, fxc = ni.eval_xc(xc_code, rho, spin, 0, 2, 0)[1:3]
+    vxc, fxc = ni.eval_xc(xc_code, rho, spin=spin, relativity=0, deriv=2,
+                          verbose=0)[1:3]
     return rho, vxc, fxc
 
 def get_rho(ni, mol, dm, grids, max_memory=2000):
@@ -1999,7 +2007,7 @@ class NumInt(object):
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0):
         if getattr(dms, 'mo_coeff', None) is not None:
-#TODO: test whether dm.mo_coeff matching dm
+            #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -2014,7 +2022,7 @@ class NumInt(object):
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
                 dms = [dms]
             if not hermi:
-# For eval_rho when xctype==GGA, which requires hermitian DMs
+                # For eval_rho when xctype==GGA, which requires hermitian DMs
                 dms = [(dm+dm.conj().T)*.5 for dm in dms]
             nao = dms[0].shape[0]
             ndms = len(dms)

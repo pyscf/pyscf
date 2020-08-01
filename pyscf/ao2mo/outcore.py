@@ -203,6 +203,9 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
+
     time_0pass = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
 
@@ -392,6 +395,9 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
+
     intor = mol._add_suffix(intor)
     time0 = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
@@ -451,7 +457,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         fill = _ao2mo.nr_e1fill
         f_e1 = _ao2mo.nr_e1
         for istep,sh_range in enumerate(shranges):
-            log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
+            log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d',
                        istep+1, nstep, *(sh_range[:3]))
             buflen = sh_range[2]
             iobuf = numpy.ndarray((comp,buflen,nij_pair), buffer=buf2)
@@ -740,7 +746,7 @@ def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
     if max_aobuf is not None:
         max_aobuf = max(1, max_aobuf)
         def div_each_iobuf(ijstart, ijstop, buflen):
-# to fill each iobuf, AO integrals may need to be fill to aobuf several times
+            # to fill each iobuf, AO integrals may need to be fill to aobuf several times
             return (ijstart, ijstop, buflen,
                     balance_partition(dij_loc, max_aobuf, ijstart, ijstop))
         ijsh_range = [div_each_iobuf(*x) for x in ijsh_range]

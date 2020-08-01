@@ -199,6 +199,7 @@ SPHERIC_GTO_PARITY_ODD = (
 )
 
 SUBGROUP = {
+    'SO3': ('Dooh', 'Coov', 'D2h', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),
     'Dooh':('Coov', 'D2h', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),
     'Coov':('C2v', 'C2', 'C1'),
     'D2h': ('D2h', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),

@@ -25,11 +25,12 @@ mf = scf.RHF(mol).run()
 
 #
 # 1. Define points where to evaluate MEP, eg some points in a cubic box
+# Note the unit of the coordinates is atomic unit
 #
 xs = numpy.arange(-3., 3.01, .5)
 ys = numpy.arange(-3., 3.01, .5)
 zs = numpy.arange(-3., 3.01, .5)
-points = lib.cartesian_prod([xs,ys,zs])
+points = lib.cartesian_prod([xs, ys, zs])
 
 #
 # 2. Nuclear potential at given points
@@ -61,13 +62,12 @@ Vele = numpy.array(Vele)
 # functions.
 from pyscf import df
 fakemol = gto.fakemol_for_charges(points)
-Vele = np.einsum('ijp,ij->p', df.incore.aux_e2(mol, fakemol), dm)
+Vele = numpy.einsum('ijp,ij->p', df.incore.aux_e2(mol, fakemol), mf.make_rdm1())
 
 #
 # 4. MEP at each point
 #
 MEP = Vnuc - Vele
-print(MEP.shape)
 
 #
 # 5. MEP force = -d/dr MEP = -d/dr Vnuc + d/dr Vele
@@ -95,7 +95,7 @@ from pyscf import df
 fakemol = gto.fakemol_for_charges(points)
 ints = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1')
 ints = ints + ints.transpose(0,2,1,3)
-Fele = np.einsum('xijp,ij->px', ints, dm)
+Fele = numpy.einsum('xijp,ij->px', ints, dm)
 
 F_MEP = Fnuc + Fele
 print(F_MEP.shape)

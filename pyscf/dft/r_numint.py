@@ -180,7 +180,8 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, rho, 1, relativity, 1,
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=1,
+                                      relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho[0] * weight
@@ -284,6 +285,7 @@ class RNumInt(numint.NumInt):
             c1 = .5 / lib.param.LIGHT_SPEED
             dmLL = dms[:,:n2c,:n2c].copy('C')
             dmSS = dms[:,n2c:,n2c:] * c1**2
+
             def make_rho(idm, ao, non0tab, xctype):
                 rho , m  = self.eval_rho(mol, ao[:2], dmLL[idm], non0tab, xctype)
                 rhoS, mS = self.eval_rho(mol, ao[2:], dmSS[idm], non0tab, xctype)

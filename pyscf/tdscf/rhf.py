@@ -66,8 +66,9 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         if isinstance(wfnsym, str):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsym = hf_symm.get_orbsym(mol, mo_coeff) % 10
-        sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+        sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
 
     if fock_ao is None:
         #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -274,13 +275,14 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
 
     if mol.symmetry:
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-        o_sym = orbsym[mo_occ==2]
-        v_sym = orbsym[mo_occ==0]
+        orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+        o_sym = orbsym_in_d2h[mo_occ==2]
+        v_sym = orbsym_in_d2h[mo_occ==0]
         nto_o = numpy.eye(nocc)
         nto_v = numpy.eye(nvir)
         weights_o = numpy.zeros(nocc)
         weights_v = numpy.zeros(nvir)
-        for ir in set(orbsym):
+        for ir in set(orbsym_in_d2h):
             idx = numpy.where(o_sym == ir)[0]
             if idx.size > 0:
                 dm_oo = numpy.dot(cis_t1[idx], cis_t1[idx].T)
@@ -360,8 +362,9 @@ def analyze(tdobj, verbose=None):
         log.note('\n** Triplet excitation energies and oscillator strengths **')
 
     if mol.symmetry:
-        orbsym = hf_symm.get_orbsym(mol, mo_coeff) % 10
-        x_sym = (orbsym[mo_occ==2,None] ^ orbsym[mo_occ==0]).ravel()
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+        x_sym = (orbsym_in_d2h[mo_occ==2,None] ^ orbsym_in_d2h[mo_occ==0]).ravel()
     else:
         x_sym = None
 
@@ -737,8 +740,9 @@ class TDA(lib.StreamObject):
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mf.mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff) % 10
-            e_ia[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
+            orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff)
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+            e_ia[(orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym] = 1e99
 
         nov = e_ia.size
         nroot = min(nstates, nov)
@@ -838,8 +842,9 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         if isinstance(wfnsym, str):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsym = hf_symm.get_orbsym(mol, mo_coeff) % 10
-        sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+        sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
 
     #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)

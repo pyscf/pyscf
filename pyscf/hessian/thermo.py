@@ -27,6 +27,7 @@ Thermochemistry analysis.
 
 Ref:
     psi4/psi4/driver/qcdb/vib.py
+    http://gaussian.com/vib/
 '''
 
 from functools import reduce
@@ -58,8 +59,16 @@ def harmonic_analysis(mol, hess, exclude_trans=True, exclude_rot=True,
     TRspace = []
     if exclude_trans:
         TRspace.append(TR[:3])
+
     if exclude_rot:
-        TRspace.append(TR[3:])
+        rot_const = rotation_const(mass, atom_coords)
+        rotor_type = _get_rotor_type(rot_const)
+        if rotor_type == 'ATOM':
+            pass
+        elif rotor_type == 'LINEAR':  # linear molecule
+            TRspace.append(TR[3:5])
+        else:
+            TRspace.append(TR[3:])
 
     if TRspace:
         TRspace = numpy.vstack(TRspace)
@@ -162,12 +171,7 @@ def thermo(model, freq, temperature=298.15, pressure=101325):
     # Rotational part
     rot_const = rotation_const(mass, atom_coords, 'GHz')
     results['rot_const'] = (rot_const, 'GHz')
-    if numpy.all(rot_const > 1e8):
-        rotor_type = 'ATOM'
-    elif rot_const[0] > 1e8 and (rot_const[1] - rot_const[2] < 1e-3):
-        rotor_type = 'LINEAR'
-    else:
-        rotor_type = 'REGULAR'
+    rotor_type = _get_rotor_type(rot_const)
 
     sym_number = rotational_symmetry_number(mol)
     results['sym_number'] = (sym_number, '')
@@ -230,24 +234,41 @@ def _get_TR(mass, coords):
     mass_center = numpy.einsum('z,zx->x', mass, coords) / mass.sum()
     coords = coords - mass_center
     natm = coords.shape[0]
-
-    massp = mass.reshape(natm,1) ** .5
-    ex = numpy.repeat([[1, 0, 0]], natm, axis=0)
-    ey = numpy.repeat([[0, 1, 0]], natm, axis=0)
-    ez = numpy.repeat([[0, 0, 1]], natm, axis=0)
+    massp = mass ** .5
 
     # translational mode
-    Tx = ex * massp
-    Ty = ey * massp
-    Tz = ez * massp
+    Tx = numpy.einsum('m,x->mx', massp, [1, 0, 0])
+    Ty = numpy.einsum('m,x->mx', massp, [0, 1, 0])
+    Tz = numpy.einsum('m,x->mx', massp, [0, 0, 1])
+
+    im = numpy.einsum('m,mx,my->xy', mass, coords, coords)
+    im = numpy.eye(3) * im.trace() - im
+    w, paxes = numpy.linalg.eigh(im)
+    # make the z-axis be the rotation vector with the smallest moment of inertia
+    w = w[::-1]
+    paxes = paxes[:,::-1]
+    ex, ey, ez = paxes.T
 
     # rotational mode
-    Rx = massp * (ey * coords[:,2:3] - ez * coords[:,1:2])
-    Ry = massp * (ez * coords[:,0:1] - ex * coords[:,2:3])
-    Rz = massp * (ex * coords[:,1:2] - ey * coords[:,0:1])
+    coords_in_rot_frame = coords.dot(paxes)
+    cx, cy, cz = coords_in_rot_frame.T
+    Rx = massp[:,None] * (cy[:,None] * ez - cz[:,None] * ey)
+    Ry = massp[:,None] * (cz[:,None] * ex - cx[:,None] * ez)
+    Rz = massp[:,None] * (cx[:,None] * ey - cy[:,None] * ex)
 
     return (Tx.ravel(), Ty.ravel(), Tz.ravel(),
             Rx.ravel(), Ry.ravel(), Rz.ravel())
+
+
+def _get_rotor_type(rot_const):
+    if numpy.all(rot_const > 1e8):
+        rotor_type = 'ATOM'
+    elif rot_const[0] > 1e8 and (rot_const[1] - rot_const[2] < 1e-3):
+        rotor_type = 'LINEAR'
+    else:
+        rotor_type = 'REGULAR'
+    return rotor_type
+
 
 def rotational_symmetry_number(mol):
     '''Number of unique orientations of the rigid molecule that only
@@ -372,4 +393,3 @@ if __name__ == '__main__':
 
     results = thermo(mf, results['freq_au'], 298.15, 101325)
     dump_thermo(mol, results)
-

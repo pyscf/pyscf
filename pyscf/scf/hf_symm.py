@@ -739,12 +739,13 @@ class SymAdaptedROHF(rohf.ROHF):
 
             nirrep = len(mol.irrep_id)
             orbsym = get_orbsym(self.mol, mo_coeff)
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
             wfnsym = 0
             ndoccs = []
             nsoccs = []
             for k,ir in enumerate(mol.irrep_id):
-                ndoccs.append(sum(orbsym[mo_occ==2] == ir))
-                nsoccs.append(sum(orbsym[mo_occ==1] == ir))
+                ndoccs.append(sum(orbsym_in_d2h[mo_occ==2] == ir))
+                nsoccs.append(sum(orbsym_in_d2h[mo_occ==1] == ir))
                 if nsoccs[k] % 2 == 1:
                     wfnsym ^= ir
             if mol.groupname in ('SO3', 'Dooh', 'Coov'):

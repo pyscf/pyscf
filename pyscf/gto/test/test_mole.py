@@ -22,6 +22,7 @@ import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 import pyscf.lib.parameters as param
+from pyscf.lib.exceptions import BasisNotFoundError
 
 mol0 = gto.Mole()
 mol0.atom = [
@@ -786,7 +787,7 @@ O    SP
         mol1.build(False, False)
         gto.basis.load_ecp('lanl08', 'O')
         gto.format_ecp({'O':'lanl08', 1:'lanl2dz'})
-        self.assertRaises(KeyError, gto.format_ecp, {'H':'lan2ldz'})
+        self.assertRaises(BasisNotFoundError, gto.format_ecp, {'H':'lan2ldz'})
 
     def test_condense_to_shell(self):
         mol1 = mol0.copy()
@@ -962,6 +963,52 @@ H           1.00000        1.00000        0.00000
         v = mol.intor('int1e_nuc')
         self.assertAlmostEqual(abs(ref-v).max(), 0, 12)
 
+    def test_fromstring(self):
+        mol = gto.Mole()
+        mol.fromstring('2\n\nH 0 0 1\nH 0 -1 0')
+        print(mol._atom == [('H', [0.0, 0.0, 1.8897261245650618]), ('H', [0.0, -1.8897261245650618, 0.0])])
+        print(mol.atom == [('H', [0.0, 0.0, 1.0]), ('H', [0.0, -1.0, 0.0])])
+        print(mol.unit == 'Angstrom')
+
+    def test_fromfile(self):
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.xyz') as f:
+            f.write('2\n\nH 0 0 1; H 0 -1 0')
+            f.flush()
+            mol = gto.Mole()
+            mol.fromfile(f.name)
+            print(mol._atom == [('H', [0.0, 0.0, 1.8897261245650618]), ('H', [0.0, -1.8897261245650618, 0.0])])
+            print(mol.atom == [('H', [0.0, 0.0, 1.0]), ('H', [0.0, -1.0, 0.0])])
+            print(mol.unit == 'Angstrom')
+
+    def test_uncontract(self):
+        basis = gto.basis.parse('''
+H    S
+0.9  0.8  0
+0.5  0.5  0.6
+0.3  0.5  0.8
+H    S
+0.3  1
+H    P
+0.9  0.6
+0.5  0.6
+0.3  0.6
+''')
+        self.assertEqual(gto.uncontract(basis),
+                         [[0, [0.9, 1]], [0, [0.5, 1]], [0, [0.3, 1]],
+                          [1, [0.9, 1]], [1, [0.5, 1]], [1, [0.3, 1]]])
+
+        basis = [[1, 0, [0.9, .7], [0.5, .7]], [1, [0.5, .8], [0.3, .6]], [1, [0.3, 1]]]
+        self.assertEqual(gto.uncontract(basis),
+                         [[1, [0.9, 1]], [1, [0.5, 1]], [1, [0.3, 1]]])
+
+        basis = [[1, -2, [0.9, .7], [0.5, .7]], [1, [0.5, .8], [0.3, .6]], [1, [0.3, 1]]]
+        self.assertEqual(gto.uncontract(basis),
+                         [[1, -2, [0.9, 1]], [1, -2, [0.5, 1]], [1, [0.3, 1]]])
+
+        # FIXME:
+        #basis = [[1, [0.9, .7], [0.5, .7]], [1, -2, [0.5, .8], [0.3, .6]], [1, [0.3, 1]]]
+        #serl.assertEqual(gto.uncontract(basis),
+        #                 [[1, [0.9, 1]], [1, [0.5, 1]], [1, [0.3, 1]]])
 
 if __name__ == "__main__":
     print("test mole.py")

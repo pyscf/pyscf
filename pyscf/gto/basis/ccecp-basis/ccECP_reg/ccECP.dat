@@ -1,0 +1,16 @@
+# ccECP effective core potentials
+# https://pseudopotentiallibrary.org/
+ECP
+Be nelec 0
+Be ul
+1 18.44117908  4.0000000
+3 22.94121508  73.764716
+2 30.14270023 -52.330200
+2 11.32793057 -3.3600400
+Li nelec 0
+Li ul
+1 24.0000  3.000000
+3 24.0000  72.00000
+2 24.0000 -36.44394
+2 9.13679  0.780200
+END
