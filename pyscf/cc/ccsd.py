@@ -1001,7 +1001,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
         max_memory = self.max_memory - lib.current_memory()[0]
         blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir+1))))
-
         emp2 = 0
         for p0, p1 in lib.prange(0, nvir, blksize):
             eris_ovov = eris.ovov[:,p0:p1]
@@ -1444,7 +1443,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     blksize = min(nmo, max(BLKMIN, blksize))
     log.debug1('blksize %d', blksize)
     cput2 = cput1
-   
+
     fload = ao2mo.outcore._load_from_h5g
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
