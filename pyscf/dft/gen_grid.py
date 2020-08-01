@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,33 +38,33 @@ BLKSIZE = 128  # needs to be the same to lib/gto/grid_ao_drv.c
 
 # ~= (L+1)**2/3
 LEBEDEV_ORDER = {
-      0:    1,
-      3:    6,
-      5:   14,
-      7:   26,
-      9:   38,
-     11:   50,
-     13:   74,
-     15:   86,
-     17:  110,
-     19:  146,
-     21:  170,
-     23:  194,
-     25:  230,
-     27:  266,
-     29:  302,
-     31:  350,
-     35:  434,
-     41:  590,
-     47:  770,
-     53:  974,
-     59: 1202,
-     65: 1454,
-     71: 1730,
-     77: 2030,
-     83: 2354,
-     89: 2702,
-     95: 3074,
+    0  : 1   ,
+    3  : 6   ,
+    5  : 14  ,
+    7  : 26  ,
+    9  : 38  ,
+    11 : 50  ,
+    13 : 74  ,
+    15 : 86  ,
+    17 : 110 ,
+    19 : 146 ,
+    21 : 170 ,
+    23 : 194 ,
+    25 : 230 ,
+    27 : 266 ,
+    29 : 302 ,
+    31 : 350 ,
+    35 : 434 ,
+    41 : 590 ,
+    47 : 770 ,
+    53 : 974 ,
+    59 : 1202,
+    65 : 1454,
+    71 : 1730,
+    77 : 2030,
+    83 : 2354,
+    89 : 2702,
+    95 : 3074,
     101: 3470,
     107: 3890,
     113: 4334,
@@ -306,6 +306,7 @@ def get_partition(mol, atom_grids_tab,
                                            for i in range(mol.natm)
                                            for j in range(mol.natm)])
             p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
+
         def gen_grid_partition(coords):
             coords = numpy.asarray(coords, order='F')
             ngrids = coords.shape[0]
@@ -462,6 +463,7 @@ class Grids(lib.StreamObject):
         self.non0tab = None
 
         cur_mod = sys.modules[__name__]
+
         def _load_conf(mod, name, default):
             var = getattr(__config__, name, None)
             if var is None:

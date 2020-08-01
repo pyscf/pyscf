@@ -487,7 +487,7 @@ setup(
     ext_modules=extensions,
     cmdclass={'build_ext': BuildExtWithoutPlatformSuffix,
               'install': PostInstallCommand},
-    install_requires=['numpy', 'scipy', 'h5py'],
+    install_requires=['numpy>1.8,!=1.16,!=1.17', 'scipy<1.5', 'h5py>2.2'],
     extras_require={
         'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
     },

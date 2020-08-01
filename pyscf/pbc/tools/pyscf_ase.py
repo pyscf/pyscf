@@ -80,7 +80,7 @@ class PySCF(Calculator):
 
         calc_molcell = self.molcell.copy()
         calc_molcell.atom = ase_atoms_to_pyscf(atoms)
-        calc_molcell.a = atoms.cell
+        calc_molcell.a = np.asarray(atoms.cell)
         calc_molcell.build(None,None)
         self.mf = self.mf_class(calc_molcell)
         for key in self.mf_dict:

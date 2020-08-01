@@ -72,8 +72,9 @@ class TDDFTNoHybrid(TDA):
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsym = hf_symm.get_orbsym(mol, mo_coeff) % 10
-            sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
+            orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+            sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
 
         e_ia = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
         if wfnsym is not None and mol.symmetry:

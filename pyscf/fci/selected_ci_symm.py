@@ -185,9 +185,10 @@ class SelectedCI(selected_ci.SelectedCI):
             strsa, strsb = getattr(fcivec, '_strs', self._strs)
             na, nb = strsa.size, strsb.size
 
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
             airreps = numpy.zeros(na, dtype=numpy.int32)
             birreps = numpy.zeros(nb, dtype=numpy.int32)
-            for i, ir in enumerate(orbsym):
+            for i, ir in enumerate(orbsym_in_d2h):
                 airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
                 birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
 

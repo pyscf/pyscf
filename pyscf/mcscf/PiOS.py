@@ -192,14 +192,14 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
 
     # add pi-HOMOs and pi-LUMOs
     CFragOcc, CFragVir,nOccOrbExpected,nVirtOrbExpected = MakePiSystemOrbitals("Pi-System", PiAtomsList, None, Elements,Coords, CIb, Shells, S1, S12, S2, Fock, COcc, CVir)
-    if (nPiOcc==None):
+    if (nPiOcc is None):
         for i in range(1,nOccOrbExpected+1):
             CActOcc.append(CFragOcc[:,-i])
     else:
         for i in range(1,nPiOcc+1):
             CActOcc.append(CFragOcc[:,-i])
 
-    if (nPiVirt==None):
+    if (nPiVirt is None):
         for j in range(nVirtOrbExpected):
             CActVir.append(CFragVir[:,j])
     else:

@@ -19,7 +19,11 @@ set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 #set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
-  if(UNIX AND NOT APPLE)
+  # TODO: If updating to minimum requirement cmake>=3.7, use
+  # CMAKE_SHARED_LINKER_FLAGS_INIT to combine LDFLAGS options.
+  # https://cmake.org/cmake/help/v3.7/variable/CMAKE_SHARED_LINKER_FLAGS_INIT.html
+  # see also issue #661
+  if(UNIX AND NOT APPLE AND NOT DEFINED ENV{LDFLAGS})
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
 endif()
