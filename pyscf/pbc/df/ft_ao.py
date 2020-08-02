@@ -141,6 +141,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         out = out[:,0]
     return out
 
+@lib.with_doc(mol_ft_ao.__doc__)
 def ft_ao(mol, Gv, shls_slice=None, b=None,
           gxyz=None, Gvbase=None, kpt=numpy.zeros(3), verbose=None):
     if gamma_point(kpt):

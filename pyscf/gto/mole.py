@@ -2092,6 +2092,8 @@ class Mole(lib.StreamObject):
         self._symm_orig = None
         self._symm_axes = None
         self._nelectron = None
+        self._nao = None
+        self._enuc = None
         self._atom = []
         self._basis = {}
         self._ecp = {}
@@ -3120,7 +3122,16 @@ class Mole(lib.StreamObject):
     ao_loc_nr = ao_loc_nr
     ao_loc_2c = ao_loc_2c
 
-    nao = property(nao_nr)
+    @property
+    def nao(self):
+        if self._nao is None:
+            return self.nao_nr()
+        else:
+            return self._nao
+    @nao.setter
+    def nao(self, x):
+        self._nao = x
+
     ao_loc = property(ao_loc_nr)
 
     tmap = time_reversal_map = time_reversal_map
