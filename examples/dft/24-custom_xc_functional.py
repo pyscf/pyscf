@@ -53,9 +53,17 @@ mol = gto.M(
 #   contribution has been included.
 
 mf = dft.RKS(mol)
+# B3LYP can be constructed
 mf.xc = 'HF*0.2 + .08*LDA + .72*B88, .81*LYP + .19*VWN'
 e1 = mf.kernel()
 print('E = %.15g  ref = -76.3832244350081' % e1)
+
+# CAM-B3LYP can be constructed in either way below
+mf.xc = '0.65*LR_HF(0.33) + 0.19*SR_HF(0.33) + .46*ITYH +0.35*B88, VWN5*0.19 + LYP*0.81'
+mf.xc = 'RSH(0.33,0.65,-0.46) + .46*ITYH +0.35*B88, VWN5*0.19 + LYP*0.81'
+# Note 0.46*ITYH + 0.35*B88 were hard coded in xcfun functional BECKECAMX.
+# Only the value of omega can be changed.
+mf.xc = 'RSH(0.33,0.65,-0.46) + BECKECAMX + VWN5C*0.19 + LYPC*0.81'
 
 #
 # No correlation functional
