@@ -72,10 +72,13 @@ def aux_e1(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
     The same arguments as function aux_e2 can be input to aux_e1.
     '''
     out = aux_e2(mol, auxmol, intor, aosym, comp, out)
-    if out.ndim == 2:  # comp == 1
+    if out.ndim == 2:  # comp == 1, aosym == s2
         out = out.T
-    else:
-        out = out.transpose(0,2,1)
+    elif out.ndim == 3:  # aosym == s1
+        assert aosym == 's1', ''
+        out = out.transpose(1, 2, 0)
+    else:  # comp > 1 and aosym == s1
+        out = out.transpose(0, 2, 3, 1)
     return out
 
 
