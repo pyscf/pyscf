@@ -5,6 +5,7 @@ PySCF 1.7.? (2020-?-?)
   - Analytical nuclear gradients for state-average CASSCF
 * Fixed
   - Bug in Mole.fromstring
+  - ECP gradients bug when a system has two ecp atoms
 
 
 PySCF 1.7.3 (2020-6-10)
