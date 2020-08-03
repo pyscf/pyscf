@@ -93,12 +93,11 @@ def transform_integrals_outcore(myadc):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-
     cput1 = time.clock(), time.time()
     fswap = lib.H5TmpFile()
     max_memory = myadc.max_memory-lib.current_memory()[0]
     if max_memory <= 0:
-        max_memory = myadc.memorymin   
+        max_memory = myadc.memorymin  
     int2e = mol._add_suffix('int2e')
     ao2mo.outcore.half_e1(mol, (mo_coeff,occ), fswap, int2e,
                           's4', 1, max_memory=max_memory, verbose=log)
@@ -107,6 +106,7 @@ def transform_integrals_outcore(myadc):
     nao_pair = nao * (nao+1) // 2
     blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
     blksize = min(nmo, max(myadc.blkmin, blksize))
+
     log.debug1('blksize %d', blksize)
     cput2 = cput1
 
@@ -134,7 +134,7 @@ def transform_integrals_outcore(myadc):
         prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
             buf, buf_prefetch = buf_prefetch, buf
-            prefetch(buf_prefetch, nocc+p0, nmo)
+            prefetch(buf_prefetch, nocc+p1, nmo)
 
             nrow = (p1 - p0) * nocc 
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
@@ -144,7 +144,6 @@ def transform_integrals_outcore(myadc):
             cput2 = log.timer_debug1('transforming ovpp [%d:%d]'%(p0,p1), *cput2)
 
     cput1 = log.timer_debug1('transforming oppp', *cput1)
-
 
     ############### forming eris_vvvv ########################################
     
