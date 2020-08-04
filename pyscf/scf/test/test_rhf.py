@@ -523,7 +523,6 @@ H     0    0.757    0.587'''
         self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [0, 2, 0, 0, 0, 0, 2, 0, 2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 
-        mo_coeff = numpy.eye(energy.size)
         self.assertTrue(numpy.allclose(mf.get_occ(energy),
                 [0, 2, 0, 0, 0, 0, 2, 0, 2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 

@@ -120,7 +120,8 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
         # are derived from the symmetry adapted SCF calculations.
         if mo_coeff is mc._scf.mo_coeff:
             wfnsym = 0
-            for ir in orbsym[mc._scf.mo_occ == 1]:
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+            for ir in orbsym_in_d2h[mc._scf.mo_occ == 1]:
                 wfnsym ^= ir
             mc.fcisolver.wfnsym = wfnsym
             log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
@@ -129,10 +130,10 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
             s = reduce(numpy.dot, (cas_orb.conj().T, mc._scf.get_ovlp(), mc._scf.mo_coeff))
             if numpy.all(numpy.max(s, axis=1) > 1-1e-9):
                 idx = numpy.argmax(s, axis=1)
-                cas_orbsym = orbsym[ncore:nocc]
+                cas_orbsym_in_d2h = numpy.asarray(orbsym[ncore:nocc]) % 10
                 cas_occ = mc._scf.mo_occ[idx]
                 wfnsym = 0
-                for ir in cas_orbsym[cas_occ == 1]:
+                for ir in cas_orbsym_in_d2h[cas_occ == 1]:
                     wfnsym ^= ir
                 mc.fcisolver.wfnsym = wfnsym
                 log.debug('Active space are constructed from canonical SCF '

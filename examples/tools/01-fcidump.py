@@ -10,8 +10,8 @@ Writing FCIDUMP file for given integrals or SCF orbitals
 from functools import reduce
 import numpy
 from pyscf import gto, scf, ao2mo
-from pyscf import tools
 from pyscf import symm
+from pyscf.tools import fcidump
 
 mol = gto.M(
     atom = [['H', 0, 0, i] for i in range(6)],
@@ -26,14 +26,14 @@ myhf.kernel()
 #
 # Example 1: Convert an SCF object to FCIDUMP
 #
-tools.fcidump.from_scf(myhf, 'fcidump.example1')
+fcidump.from_scf(myhf, 'fcidump.example1')
 
 
 #
 # Example 2: Given a set of orbitals to transform integrals then dump the
 # integrals to FCIDUMP
 #
-tools.fcidump.from_mo(mol, 'fcidump.example2', myhf.mo_coeff)
+fcidump.from_mo(mol, 'fcidump.example2', myhf.mo_coeff)
 
 
 #
@@ -43,13 +43,13 @@ c = myhf.mo_coeff
 h1e = reduce(numpy.dot, (c.T, myhf.get_hcore(), c))
 eri = ao2mo.kernel(mol, c)
 
-tools.fcidump.from_integrals('fcidump.example3', h1e, eri, c.shape[1],
+fcidump.from_integrals('fcidump.example3', h1e, eri, c.shape[1],
                              mol.nelectron, ms=0)
 
 #
 # Exampel 4: Ignore small matrix elements in FCIDUMP
 #
-tools.fcidump.from_integrals('fcidump.example4', h1e, eri, c.shape[1],
+fcidump.from_integrals('fcidump.example4', h1e, eri, c.shape[1],
                              mol.nelectron, ms=0, tol=1e-10)
 
 #
@@ -87,5 +87,20 @@ MOLPRO_ID = {'D2h': { 'Ag' : 1,
 
 orbsym = [MOLPRO_ID[mol.groupname][i]
           for i in symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)]
-tools.fcidump.from_integrals('fcidump.example5', h1e, eri, c.shape[1],
-                             mol.nelectron, ms=0, orbsym=orbsym)
+fcidump.from_integrals('fcidump.example5', h1e, eri, c.shape[1],
+                       mol.nelectron, ms=0, orbsym=orbsym)
+
+#
+# Hamiltonians of FCIDUMP file can be load
+#
+ctx = fcidump.read('fcidump.example1')
+ctx = fcidump.read('fcidump.example5', molpro_orbsym=True)
+
+#
+# Construct an SCF object using the quantities defined in FCIDUMP
+# (pyscf-1.7.4 or newer)
+#
+mf = fcidump.to_scf('fcidump.example5', molpro_orbsym=True)
+mf.mol.verbose = 4
+mf.run()
+mf.MP2().run()

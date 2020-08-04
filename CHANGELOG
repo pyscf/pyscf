@@ -3,8 +3,23 @@ PySCF 1.7.? (2020-?-?)
 * Added
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
+  - Support SO3 symmetry
 * Fixed
   - Bug in Mole.fromstring
+
+
+PySCF 1.7.4 (2020-8-2)
+----------------------
+* Added
+  - FCIDUMP reader to load FCIDUMP and generate custom system.
+  - Natural orbitals occupations to mc.mo_occ
+  - Supporting UHF orbitals in FCI factory function
+* Improved
+  - Linear dependency treatment for basis uncontraction
+* Fixed
+  - ECP gradients bug when the system contains two or more ecp atoms
+  - CHGCAR writer
+  - Basis parser for basis in Gaussian 94 format
 
 
 PySCF 1.7.3 (2020-6-10)

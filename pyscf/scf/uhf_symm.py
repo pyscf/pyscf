@@ -53,10 +53,12 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
 
         nirrep = len(mol.irrep_id)
         ovlp_ao = mf.get_ovlp()
-        orbsyma, orbsymb = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
+        orbsyma, orbsymb = mf.get_orbsym(mo_coeff, ovlp_ao)
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
         tot_sym = 0
-        noccsa = [sum(orbsyma[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
-        noccsb = [sum(orbsymb[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
+        noccsa = [sum(orbsyma_in_d2h[mo_occ[0]>0]==ir) for ir in mol.irrep_id]
+        noccsb = [sum(orbsymb_in_d2h[mo_occ[1]>0]==ir) for ir in mol.irrep_id]
         for i, ir in enumerate(mol.irrep_id):
             if (noccsa[i]+noccsb[i]) % 2:
                 tot_sym ^= ir
@@ -203,11 +205,12 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     viridxb = ~occidxb
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
+    s = mf.get_ovlp()
 
     if (getattr(mo_coeff, 'orbsym', None) is not None or
         (getattr(mo_coeff[0], 'orbsym', None) is not None and
          getattr(mo_coeff[1], 'orbsym', None) is not None)):
-        orbsyma, orbsymb = get_orbsym(mol, mo_coeff)
+        orbsyma, orbsymb = mf.get_orbsym(mo_coeff, s)
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
@@ -226,7 +229,6 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             eig_(fock[1], mo_coeff[1], idx_ir & viridxb, mo_e[1], mo[1])
 
     else:
-        s = mf.get_ovlp()
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
@@ -240,7 +242,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
         eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
         eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
-        orbsyma, orbsymb = get_orbsym(mol, mo, s, False)
+        orbsyma, orbsymb = mf.get_orbsym(mo, s)
 
     mo = (lib.tag_array(mo[0], orbsym=orbsyma),
           lib.tag_array(mo[1], orbsym=orbsymb))
@@ -360,7 +362,7 @@ class SymAdaptedUHF(uhf.UHF):
             occidxb = mo_occ[1] > 0
             viridxa = ~occidxa
             viridxb = ~occidxb
-            orbsyma, orbsymb = get_orbsym(self.mol, mo_coeff)
+            orbsyma, orbsymb = self.get_orbsym(mo_coeff, self.get_ovlp())
             sym_forbida = orbsyma[viridxa].reshape(-1,1) != orbsyma[occidxa]
             sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
             sym_forbid = numpy.hstack((sym_forbida.ravel(),
@@ -377,7 +379,7 @@ class SymAdaptedUHF(uhf.UHF):
         if not mol.symmetry:
             return uhf.UHF.get_occ(self, mo_energy, mo_coeff)
 
-        orbsyma, orbsymb = get_orbsym(mol, mo_coeff)
+        orbsyma, orbsymb = self.get_orbsym(mo_coeff, self.get_ovlp())
 
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []
@@ -481,7 +483,7 @@ class SymAdaptedUHF(uhf.UHF):
         idxb = numpy.hstack((idxb[self.mo_occ[1]> 0][ob_sort],
                              idxb[self.mo_occ[1]==0][vb_sort]))
         self.mo_energy = (ea[idxa], eb[idxb])
-        orbsyma, orbsymb = get_orbsym(self.mol, self.mo_coeff)
+        orbsyma, orbsymb = self.get_orbsym(self.mo_coeff, self.get_ovlp())
         self.mo_coeff = (lib.tag_array(self.mo_coeff[0][:,idxa], orbsym=orbsyma[idxa]),
                          lib.tag_array(self.mo_coeff[1][:,idxb], orbsym=orbsymb[idxb]))
         self.mo_occ = (self.mo_occ[0][idxa], self.mo_occ[1][idxb])
@@ -504,12 +506,12 @@ class SymAdaptedUHF(uhf.UHF):
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
-    def get_orbsym(self, mo_coeff=None):
+    def get_orbsym(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        if mo_coeff is None:
-            raise RuntimeError('SCF object %s not initialized' % self)
-        return get_orbsym(self.mol, mo_coeff)
+        if s is None:
+            s = self.get_ovlp()
+        return get_orbsym(self.mol, mo_coeff, s)
     orbsym = property(get_orbsym)
 
     get_wfnsym = get_wfnsym

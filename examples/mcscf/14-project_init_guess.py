@@ -32,9 +32,9 @@ mo_init_guess = mf.mo_coeff
 #    the function the guess orbitals
 
 mol2 = gto.M(
-    atom = 'C 0 0 0; C 0 0 1.3',
-    basis = '6-31g',
-    verbose = 4)
+atom = 'C 0 0 0; C 0 0 1.3',
+basis = '6-31g',
+verbose = 4)
 mf = scf.RHF(mol2)
 mf.kernel()
 mc = mcscf.CASSCF(mf, 4, 4)

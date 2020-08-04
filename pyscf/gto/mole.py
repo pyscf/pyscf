@@ -1984,8 +1984,8 @@ class Mole(lib.StreamObject):
         topgroup : str
             Point group of the system.
         groupname : str
-            The supported subgroup of the point group. It can be one of Dooh,
-            Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
+            The supported subgroup of the point group. It can be one of SO3,
+            Dooh, Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
         nelectron : int
             sum of nuclear charges - :attr:`Mole.charge`
         symm_orb : a list of numpy.ndarray
@@ -2092,6 +2092,8 @@ class Mole(lib.StreamObject):
         self._symm_orig = None
         self._symm_axes = None
         self._nelectron = None
+        self._nao = None
+        self._enuc = None
         self._atom = []
         self._basis = {}
         self._ecp = {}
@@ -2218,6 +2220,7 @@ class Mole(lib.StreamObject):
     copy = copy
 
     pack = pack
+
     @lib.with_doc(unpack.__doc__)
     def unpack(self, moldic):
         return unpack(moldic)
@@ -2226,6 +2229,7 @@ class Mole(lib.StreamObject):
         return self
 
     dumps = dumps
+
     @lib.with_doc(loads.__doc__)
     def loads(self, molstr):
         return loads(molstr)
@@ -3118,7 +3122,16 @@ class Mole(lib.StreamObject):
     ao_loc_nr = ao_loc_nr
     ao_loc_2c = ao_loc_2c
 
-    nao = property(nao_nr)
+    @property
+    def nao(self):
+        if self._nao is None:
+            return self.nao_nr()
+        else:
+            return self._nao
+    @nao.setter
+    def nao(self, x):
+        self._nao = x
+
     ao_loc = property(ao_loc_nr)
 
     tmap = time_reversal_map = time_reversal_map

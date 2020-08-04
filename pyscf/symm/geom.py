@@ -276,7 +276,7 @@ def get_subgroup(gpname, axes):
         return gpname, axes
     elif gpname in ('SO3',):
         #return 'D2h', alias_axes(axes, numpy.eye(3))
-        return 'Dooh', axes
+        return 'SO3', axes
     elif gpname in ('Dooh',):
         #return 'D2h', alias_axes(axes, numpy.eye(3))
         return 'Dooh', axes
