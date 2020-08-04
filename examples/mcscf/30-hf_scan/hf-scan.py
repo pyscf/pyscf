@@ -36,7 +36,7 @@ def run(b, dm, mo):
         # initial guess for b = 0.7
         mo = mcscf.sort_mo(mc, mf.mo_coeff, [3,4,5,7,9,10])
     else:
-        mo = mcscf.project_init_guess (mc, mo)
+        mo = mcscf.project_init_guess(mc, mo)
     e1 = mc.mc1step(mo)[0]
     emc.append(e1)
     return mf.make_rdm1(), mc.mo_coeff

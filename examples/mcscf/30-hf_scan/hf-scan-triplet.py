@@ -29,7 +29,7 @@ def run(b, dm, mo):
     if mo is None:
         mo = mcscf.sort_mo(mc, m.mo_coeff, [3,4,5,6,9,10])
     else:
-        mo = mcscf.project_init_guess (mc, mo)
+        mo = mcscf.project_init_guess(mc, mo)
     e1 = mc.mc1step(mo)[0]
     emc.append(e1)
     return m.make_rdm1(), mc.mo_coeff

@@ -530,7 +530,7 @@ def as_scanner(mc):
                 mo = mf_scanner.mo_coeff
             else:
                 mo = self.mo_coeff
-            mo = project_init_guess (self, mo)
+            mo = project_init_guess(self, mo)
             e_tot = self.kernel(mo, self.ci)[0]
             return e_tot
     return CASSCF_Scanner(mc)
