@@ -250,6 +250,7 @@ def  get_vvvv_df(myadc, Lvv, p, chnk_size):
     naux = myadc._scf.with_df.get_naoaux()
 
     Lvv = Lvv.reshape(naux,nvir,nvir)
+
     if chnk_size < nvir:
         Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
     else :

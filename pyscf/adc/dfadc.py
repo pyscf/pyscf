@@ -45,5 +45,3 @@ class RADC(radc.RADC):
 class UADC(uadc.UADC):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         uadc.UADC.__init__(self, mf, frozen, mo_coeff, mo_occ)
-
-

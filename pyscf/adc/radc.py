@@ -792,6 +792,7 @@ def get_imds_ea(adc, eris=None):
             if isinstance(eris.vvvv, type(None)):
 
                 for p in range(0,nvir,chnk_size):
+
                     vvvv = radc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
                     k = vvvv.shape[0]
                     temp[a:a+k] -= lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  vvvv, optimize=True)
