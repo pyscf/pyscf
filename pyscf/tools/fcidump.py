@@ -205,7 +205,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
 
     h1e = reduce(numpy.dot, (mo_coeff.T, mf.get_hcore(), mo_coeff))
     if mf._eri is None:
-        if getattr(mf, 'exxdiv'):  # PBC system
+        if getattr(mf, 'exxdiv', None):  # PBC system
             eri = mf.with_df.ao2mo(mo_coeff)
         else:
             eri = ao2mo.full(mf.mol, mo_coeff)
