@@ -81,6 +81,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
+#@profile
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -256,6 +257,7 @@ def compute_amplitudes(myadc, eris):
 
     return t1, t2
 
+#@profile
 def compute_energy(myadc, t1, t2, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -505,17 +507,15 @@ class RADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if (self._scf._eri is None or
+        if getattr(self._scf, 'with_df', None):  
+           def df_transform():
+               return radc_ao2mo.transform_integrals_df(self)
+           self.transform_integrals = df_transform
+        elif (self._scf._eri is None or
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-    
-            if getattr(self._scf, 'with_df', None):  
-                def df_transform():
-                    return radc_ao2mo.transform_integrals_df(self)
-                self.transform_integrals = df_transform
-            else :
-                def outcore_transform():
-                    return radc_ao2mo.transform_integrals_outcore(self)
-                self.transform_integrals = outcore_transform
+           def outcore_transform():
+               return radc_ao2mo.transform_integrals_outcore(self)
+           self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals()
         
@@ -545,17 +545,15 @@ class RADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if (self._scf._eri is None or
+        if getattr(self._scf, 'with_df', None):  
+           def df_transform():
+               return radc_ao2mo.transform_integrals_df(self)
+           self.transform_integrals = df_transform
+        elif (self._scf._eri is None or
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-
-            if getattr(self._scf, 'with_df', None):  
-                def df_transform():
-                    return radc_ao2mo.transform_integrals_df(self)
-                self.transform_integrals = df_transform
-            else :
-                def outcore_transform():
-                    return radc_ao2mo.transform_integrals_outcore(self)
-                self.transform_integrals = outcore_transform
+           def outcore_transform():
+               return radc_ao2mo.transform_integrals_outcore(self)
+           self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals() 
             
@@ -588,19 +586,7 @@ class RADC(lib.StreamObject):
     def ip_adc(self, nroots=1, guess=None, eris=None):
         return RADCIP(self).kernel(nroots, guess, eris)
 
-############################################################
-#
-#    def density_fit(self, auxbasis=None, with_df=None):
-#        from pyscf.adc import dfadc
-#        myadc = dfadc.RADC(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
-#        if with_df is not None:
-#            myadc.with_df = with_df
-#        if myadc.with_df.auxbasis != auxbasis:
-#            import copy
-#            myadc.with_df = copy.copy(myadc.with_df)
-#            myadc.with_df.auxbasis = auxbasis
-#        return myadc
-###########################################################
+#@profile
 def get_imds_ea(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -806,7 +792,6 @@ def get_imds_ea(adc, eris=None):
             if isinstance(eris.vvvv, type(None)):
 
                 for p in range(0,nvir,chnk_size):
-
                     vvvv = radc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
                     k = vvvv.shape[0]
                     temp[a:a+k] -= lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  vvvv, optimize=True)
@@ -973,13 +958,23 @@ def get_imds_ip(adc, eris=None):
         M_ij -= 0.25*lib.einsum('lmde,jnde,lnmi->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
         M_ij += lib.einsum('lmde,jnde,limn->ij',t2_1 ,t2_1, eris_oooo, optimize = True)
 
-        if isinstance(eris.vvvv, list):
+        #if isinstance(eris.vvvv, list):
 
-            temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris.vvvv)
-            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris.vvvv)
+        #    temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris.vvvv)
+        #    temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris.vvvv)
 
-        else :
+        #else :
 
+        #    eris_vvvv = eris.vvvv
+        #    t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
+        #    t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
+        #    temp_t2a_vvvv = np.dot(t2_1_a_r,eris_vvvv)
+        #    temp_t2_vvvv = np.dot(t2_1_r,eris_vvvv)
+        #    temp_t2a_vvvv = temp_t2a_vvvv.reshape(nocc,nocc,nvir,nvir)
+        #    temp_t2_vvvv = temp_t2_vvvv.reshape(nocc,nocc,nvir,nvir)
+
+ 
+        if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
             eris_vvvv = eris.vvvv
             t2_1_a_r = t2_1_a.reshape(nocc*nocc,nvir*nvir)
             t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
@@ -987,6 +982,9 @@ def get_imds_ip(adc, eris=None):
             temp_t2_vvvv = np.dot(t2_1_r,eris_vvvv)
             temp_t2a_vvvv = temp_t2a_vvvv.reshape(nocc,nocc,nvir,nvir)
             temp_t2_vvvv = temp_t2_vvvv.reshape(nocc,nocc,nvir,nvir)
+        else :
+            temp_t2a_vvvv = contract_ladder_outcore(adc,t2_1_a,eris)
+            temp_t2_vvvv = contract_ladder_outcore(adc,t2_1,eris)
 
         M_ij += 0.25*lib.einsum('ilde,jlde->ij',t2_1_a, temp_t2a_vvvv, optimize = True)
         M_ij -= 0.25*lib.einsum('ilde,jled->ij',t2_1_a, temp_t2a_vvvv, optimize = True)
@@ -1074,7 +1072,8 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         if eris is None:
             eris = adc.transform_integrals()
 
-            if not isinstance(eris.vvvv, list): 
+            #if not isinstance(eris.vvvv, list): 
+            if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
 
                 eris_oovv = eris.oovv
                 eris_ovvo = eris.ovvo
@@ -1263,6 +1262,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         M_ab = adc.get_imds()
     
     #Calculate sigma vector
+    #@profile
     def sigma_(r):
 
         s = np.zeros((dim))

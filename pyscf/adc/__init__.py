@@ -65,7 +65,8 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_uhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-UADC')
+        #raise NotImplementedError('DF-UADC')
+        return dfadc.UADC(mf, frozen, mo_coeff, mo_occ)
     else:
         return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
 
@@ -83,9 +84,8 @@ def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_rhf(mf)
 
     if getattr(mf, 'with_df', None):
+        #raise NotImplementedError('DF-RADC')
         return dfadc.RADC(mf, frozen, mo_coeff, mo_occ)
-    #if getattr(mf, 'with_df', None):
-    #    raise NotImplementedError('DF-RADC')
     else:
         return radc.RADC(mf, frozen, mo_coeff, mo_occ)
 

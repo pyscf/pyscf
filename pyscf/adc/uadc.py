@@ -736,7 +736,8 @@ class UADC(lib.StreamObject):
         if (self._scf._eri is None or
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
             def outcore_transform():
-                return uadc_ao2mo.transform_integrals_outcore(self)
+                #return uadc_ao2mo.transform_integrals_outcore(self)
+                return uadc_ao2mo.transform_integrals_df(self)
             self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals() 

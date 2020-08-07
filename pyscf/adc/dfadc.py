@@ -21,6 +21,7 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf import df
 from pyscf.adc import radc
+from pyscf.adc import uadc
 from pyscf import __config__
 
 class RADC(radc.RADC):
@@ -40,3 +41,9 @@ class RADC(radc.RADC):
 #
 #    def ao2mo(self, mo_coeff=None):
 #        return _make_df_eris(self, mo_coeff)
+
+class UADC(uadc.UADC):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
+        uadc.UADC.__init__(self, mf, frozen, mo_coeff, mo_occ)
+
+
