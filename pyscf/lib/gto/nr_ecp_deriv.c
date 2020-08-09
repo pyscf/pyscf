@@ -930,10 +930,16 @@ void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
 { \
         ECPscalar_optimizer(opt, atm, natm, bas, nbas, env); \
 }
+#define make_empty_optimizer(fname) \
+void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
+                                   int *bas, int nbas, double *env) \
+{ \
+        *opt = NULL; \
+}
 make_optimizer(ignuc)
 make_optimizer(ipnuc)
-make_optimizer(iprinv)
 make_optimizer(ipipnuc)
-make_optimizer(ipiprinv)
 make_optimizer(ipnucip)
-make_optimizer(iprinvip)
+make_empty_optimizer(iprinv)
+make_empty_optimizer(ipiprinv)
+make_empty_optimizer(iprinvip)

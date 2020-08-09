@@ -874,6 +874,14 @@ To enable the solvent model for CASCI, the following code needs to be called
             self.canonicalize_(mo_coeff, self.ci,
                                sort=self.sorting_mo_energy,
                                cas_natorb=self.natorb, verbose=log)
+        elif self.natorb:
+            # FIXME (pyscf-2.0): Whether to transform natural orbitals in
+            # active space when this flag is enabled?
+            log.warn('The attribute .natorb of mcscf object affects only the '
+                     'orbital canonicalization.\n'
+                     'If you would like to get natural orbitals in active space '
+                     'without touching core and external orbitals, an explicit '
+                     'call to mc.cas_natorb_() is required')
 
         if getattr(self.fcisolver, 'converged', None) is not None:
             self.converged = numpy.all(self.fcisolver.converged)

@@ -119,7 +119,7 @@ def project_to_atomic_orbitals(mol, basname):
         ano_idx = numpy.hstack(ano_idx)
         ecp_occ = numpy.zeros(atm_ecp.nao_nr())
         ecp_occ[ecp_idx] = numpy.hstack(ecp_occ_tmp)
-        nelec_valence_left = int(gto.mole.charge(stdsymb) - nelec_core
+        nelec_valence_left = int(gto.charge(stdsymb) - nelec_core
                                  - sum(ecp_occ[ecp_idx]))
         if nelec_valence_left > 0:
             logger.warn(mol, 'Characters of %d valence electrons are not identified.\n'
@@ -178,6 +178,11 @@ def project_to_atomic_orbitals(mol, basname):
                 continue
         else:
             ecpcore = [0] * 4
+
+        # MINAO for heavier elements needs to be used with pseudo potential
+        if (basname.upper() == 'MINAO' and
+            gto.charge(stdsymb) > 36 and symb not in nelec_ecp_dic):
+            raise RuntimeError('Basis MINAO has to be used with ecp for heavy elements')
 
         ano = project_mo_nr2nr(atmp, numpy.eye(atmp.nao_nr()), atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
