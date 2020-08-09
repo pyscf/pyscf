@@ -934,7 +934,7 @@ void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
 void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
                                    int *bas, int nbas, double *env) \
 { \
-        *opt = NULL;
+        *opt = NULL; \
 }
 make_optimizer(ignuc)
 make_optimizer(ipnuc)
