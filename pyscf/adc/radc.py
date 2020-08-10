@@ -383,6 +383,78 @@ def contract_ladder_outcore(myadc,t_amp,v_list):
     return t
 
 
+def density_matrix(myadc, T=None):
+
+    if T is None:
+        T = RADCIP(myadc).get_trans_moments()
+
+    nocc = myadc._nocc
+    nvir = myadc._nvir
+
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+    ij_ind = np.tril_indices(nocc, k=-1)
+
+    s1 = 0
+    f1 = n_singles
+    s2 = f1
+    f2 = s2 + n_doubles
+
+    T_doubles = T[:,n_singles:]
+    T_doubles = T_doubles.reshape(-1,nvir,nocc,nocc)
+    T_doubles_transpose = T_doubles.transpose(0,1,3,2).copy()
+    T_bab = (2/3)*T_doubles + (1/3)*T_doubles_transpose
+
+    T_aaa = T_bab - T_bab.transpose(0,1,3,2)
+
+    T_a = T[:,s1:f1]
+    T_bab = T_bab.reshape(-1,n_doubles)
+    T_aaa = T_aaa.reshape(-1,n_doubles)
+
+    dm = 2 * np.dot(T_a,T_a.T) + np.dot(T_aaa, T_aaa.T) + 2 * np.dot(T_bab, T_bab.T)
+
+    return dm
+
+
+def density_matrix_so(myadc, T=None):
+
+    if T is None:
+        T = RADCIP(myadc).get_trans_moments()
+
+    nocc = myadc._nocc
+    nvir = myadc._nvir
+
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+    ij_ind = np.tril_indices(nocc, k=-1)
+
+    s1 = 0
+    f1 = n_singles
+    s2 = f1
+    f2 = s2 + n_doubles
+
+    T_doubles = T[:,n_singles:]
+    T_doubles = T_doubles.reshape(-1,nvir,nocc,nocc)
+    T_doubles_transpose = T_doubles.transpose(0,1,3,2).copy()
+    T_bab = (2/3)*T_doubles + (1/3)*T_doubles_transpose
+
+    T_aaa = T_bab - T_bab.transpose(0,1,3,2)
+
+    T_a = T[:,s1:f1]
+    T_b = T[:,s1:f1]
+    T_bab = T_bab.reshape(-1,n_doubles)
+    T_aba = T_bab.reshape(-1,n_doubles)
+    T_aaa = T_aaa.reshape(-1,n_doubles)
+    T_bbb = T_aaa.reshape(-1,n_doubles)
+
+    dm_a = np.dot(T_a,T_a.T) + 0.5*np.dot(T_aaa, T_aaa.T) + np.dot(T_bab, T_bab.T)
+    dm_b = np.dot(T_b,T_b.T) + 0.5*np.dot(T_bbb, T_bbb.T) + np.dot(T_aba, T_aba.T)
+
+    dm = (dm_a, dm_b)
+
+    return dm
+
+
 class RADC(lib.StreamObject):
     '''Ground state calculations
 
@@ -443,7 +515,6 @@ class RADC(lib.StreamObject):
         self.e_tot = None
         self.t1 = None
         self.t2 = None
-        self.dm = None
         self._nocc = mf.mol.nelectron//2
         self._nmo = mo_coeff.shape[1]
         self._nvir = self._nmo - self._nocc
@@ -459,7 +530,9 @@ class RADC(lib.StreamObject):
     compute_amplitudes = compute_amplitudes
     compute_energy = compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
-    
+    make_rdm1 = density_matrix    
+    make_rdm1s = density_matrix_so    
+
     def dump_flags(self, verbose=None):
         logger.info(self, '')
         logger.info(self, '******** %s ********', self.__class__)
@@ -507,9 +580,6 @@ class RADC(lib.StreamObject):
         
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_tot = self.scf_energy + self.e_corr
-
-        T = RADCIP(self).get_trans_moments()
-        self.dm = density_matrix(self,T)
 
         self._finalize()
 
@@ -1700,35 +1770,6 @@ def get_trans_moments(adc):
 
     T = np.array(T)
     return T
-
-def density_matrix(adc, T):
-
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    n_singles = nocc
-    n_doubles = nvir * nocc * nocc
-    ij_ind = np.tril_indices(nocc, k=-1)
-
-    s1 = 0
-    f1 = n_singles
-    s2 = f1
-    f2 = s2 + n_doubles
-
-    T_doubles = T[:,n_singles:]
-    T_doubles = T_doubles.reshape(-1,nvir,nocc,nocc)
-    T_doubles_transpose = T_doubles.transpose(0,1,3,2).copy()
-    T_bab = (2/3)*T_doubles + (1/3)*T_doubles_transpose
-
-    T_aaa = T_bab - T_bab.transpose(0,1,3,2)
-
-    T_a = T[:,s1:f1]
-    T_bab = T_bab.reshape(-1,n_doubles)
-    T_aaa = T_aaa.reshape(-1,n_doubles)
-
-    dm = 2 * np.dot(T_a,T_a.T) + np.dot(T_aaa, T_aaa.T) + 2 * np.dot(T_bab, T_bab.T)
-
-    return dm
 
 
 def get_spec_factors_ea(adc, T, U, nroots=1):
