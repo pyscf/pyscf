@@ -633,46 +633,6 @@ def density_matrix_so(myadc, T=None):
     T_a = np.array(T_a)
     T_b = np.array(T_b)
 
-    #nocc_a = adc._nocc[0]
-    #nocc_b = adc._nocc[1]
-    #nvir_a = adc._nmo[0] - nocc_a
-    #nvir_b = adc._nmo[1] - nocc_b
-
-    #ij_ind_a = np.tril_indices(nocc_a, k=-1)
-    #ij_ind_b = np.tril_indices(nocc_b, k=-1)
-
-    #n_singles_a = nocc_a
-    #n_singles_b = nocc_b
-    #n_doubles_aaa = nocc_a* (nocc_a - 1) * nvir_a // 2
-    #n_doubles_bab = nvir_b * nocc_a* nocc_b
-    #n_doubles_aba = nvir_a * nocc_b* nocc_a
-    #n_doubles_bbb = nocc_b* (nocc_b - 1) * nvir_b // 2
-    #s_a = 0
-    #f_a = n_singles_a
-    #s_b = f_a
-    #f_b = s_b + n_singles_b
-    #s_aaa = f_b
-    #f_aaa = s_aaa + n_doubles_aaa
-    #s_bab = f_aaa
-    #f_bab = s_bab + n_doubles_bab
-    #s_aba = f_bab
-    #f_aba = s_aba + n_doubles_aba
-    #s_bbb = f_aba
-    #f_bbb = s_bbb + n_doubles_bbb
-
-    #T_bab = T_a[:,s_bab:f_bab].reshape(-1,nvir_b,nocc_a,nocc_b)
-    #T_aaa = T_a[:,s_aaa:f_aaa].reshape(-1,nvir_a,nocc_a* (nocc_a - 1)//2)
-
-    #T_aaa_u = np.zeros_like(T_bab)
-    #T_aaa_u[:, :, ij_ind_a[0], ij_ind_a[1]] = T_aaa
-    #T_aaa_u[:, :, ij_ind_a[1], ij_ind_a[0]] = -T_aaa
-
-    #T_a = T_a[:,s_a:f_a]
-    #T_bab = T_bab.reshape(-1, n_doubles_bab)
-    #T_aaa_u = T_aaa_u.reshape(-1, n_doubles_bab)
-
-    #dm = 2 * np.dot(T_a,T_a.T) + np.dot(T_aaa_u, T_aaa_u.T) + 2 * np.dot(T_bab, T_bab.T)
-
     dm_a = np.dot(T_a, T_a.T)
     dm_b = np.dot(T_b, T_b.T)
 
