@@ -189,13 +189,22 @@ def compute_amplitudes(myadc, eris):
         eris_ovVO = eris.ovVO
 
         t2_2_temp = None
-        if isinstance(eris.vvvv_p, list):
-            t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_a,eris.vvvv_p)
-        else:
+        #if isinstance(eris.vvvv_p, list):
+        #    t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_a,eris.vvvv_p)
+        #else:
+        #    eris_vvvv = eris.vvvv_p
+        #    temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]])
+        #    t2_2_temp = np.dot(temp,eris_vvvv.T)
+        #    del eris_vvvv
+
+        if not isinstance(eris.vvvv_p, list) and not isinstance(eris.vvvv_p, type(None)):
             eris_vvvv = eris.vvvv_p
             temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]])
             t2_2_temp = np.dot(temp,eris_vvvv.T)
             del eris_vvvv
+        else : 
+            t2_2_temp = contract_ladder_antisym(myadc,t2_1_a,eris.vvvv_p, eris.Lvv)
+        exit()
 
         t2_2_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
         t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]] = t2_2_temp    
@@ -212,13 +221,20 @@ def compute_amplitudes(myadc, eris):
  
 
         t2_2_temp = None
-        if isinstance(eris.VVVV_p, list):
-            t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_b,eris.VVVV_p)
-        else:
+        #if isinstance(eris.VVVV_p, list):
+        #    t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_b,eris.VVVV_p)
+        #else:
+        #    eris_VVVV = eris.VVVV_p
+        #    temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]])
+        #    t2_2_temp = np.dot(temp,eris_VVVV.T)
+        #    del eris_VVVV
+        if not isinstance(eris.VVVV_p, list) and not isinstance(eris.VVVV_p, type(None)):
             eris_VVVV = eris.VVVV_p
             temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]])
             t2_2_temp = np.dot(temp,eris_VVVV.T)
             del eris_VVVV
+        else : 
+            t2_2_temp = contract_ladder_outcore_antisym(myadc,t2_1_b,eris)
 
         t2_2_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
         t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]] = t2_2_temp    
@@ -575,7 +591,32 @@ def compute_energy(myadc, t1, t2, eris):
     return e_corr
 
 
-def contract_ladder_outcore_antisym(myadc,t_amp,v_list):
+#def contract_ladder_outcore_antisym(myadc,t_amp,v_list):
+#
+#    nocc = t_amp.shape[0]
+#    nvir = t_amp.shape[2]
+#
+#    nv_pair = nvir  *  (nvir - 1) // 2
+#    tril_idx = np.tril_indices(nvir, k=-1)               
+#
+#    t_amp = t_amp[:,:,tril_idx[0],tril_idx[1]]
+#    t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc*nocc,-1).T)
+#
+#    t = np.zeros((nvir,nvir, nocc*nocc))
+#
+#    a = 0
+#    for dataset in v_list:
+#         k = dataset.shape[0]
+#         dataset = dataset[:].reshape(-1,nv_pair)
+#         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
+#         a += k
+#
+#    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
+#    t = t[:, :, tril_idx[0], tril_idx[1]]
+#    
+#    return t
+
+def contract_ladder_antisym(myadc,t_amp,vvvv,Lvv):
 
     nocc = t_amp.shape[0]
     nvir = t_amp.shape[2]
@@ -587,21 +628,52 @@ def contract_ladder_outcore_antisym(myadc,t_amp,v_list):
     t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc*nocc,-1).T)
 
     t = np.zeros((nvir,nvir, nocc*nocc))
+    chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
 
-    a = 0
-    for dataset in v_list:
-         k = dataset.shape[0]
-         dataset = dataset[:].reshape(-1,nv_pair)
-         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
-         a += k
+    
+    if isinstance(vvvv, list):
+        for dataset in vvvv:
+             k = dataset.shape[0]
+             dataset = dataset[:].reshape(-1,nv_pair)
+             t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
+             a += k
+    else :
+        nvir_n = Lvv.shape[1]
+        for p in range(0,nvir_n,chnk_size):
+            vvvv = uadc_ao2mo.get_vvvv_df(myadc, Lvv, p, chnk_size)
+            k = vvvv.shape[0]
+            vvvv = vvvv.reshape(-1,nvir*nvir)
+            t[a:a+k] = np.dot(vvvv,t_amp_t).reshape(-1,nvir,nocc*nocc)
+            del (vvvv)
+            a += k
 
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
     t = t[:, :, tril_idx[0], tril_idx[1]]
     
     return t
 
+#def contract_ladder_outcore(myadc,t_amp,v_list):
+#
+#    nocc_a = t_amp.shape[0]
+#    nocc_b = t_amp.shape[1]
+#    nvir_a = t_amp.shape[2]
+#    nvir_b = t_amp.shape[3]
+#
+#    t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc_a*nocc_b,-1).T)
+#    t = np.zeros((nvir_a,nvir_b, nocc_a*nocc_b))
+#
+#    a = 0
+#    for dataset in v_list:
+#         k = dataset.shape[0]
+#         dataset = dataset[:].reshape(-1,nvir_a * nvir_b)
+#         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir_b,nocc_a*nocc_b)
+#         a += k
+#
+#    t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc_a, nocc_b, nvir_a, nvir_b)
+#
+#    return t
 
-def contract_ladder_outcore(myadc,t_amp,v_list):
+def contract_ladder(myadc,t_amp,eris):
 
     nocc_a = t_amp.shape[0]
     nocc_b = t_amp.shape[1]
@@ -612,16 +684,24 @@ def contract_ladder_outcore(myadc,t_amp,v_list):
     t = np.zeros((nvir_a,nvir_b, nocc_a*nocc_b))
 
     a = 0
-    for dataset in v_list:
-         k = dataset.shape[0]
-         dataset = dataset[:].reshape(-1,nvir_a * nvir_b)
-         t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir_b,nocc_a*nocc_b)
-         a += k
+    if isinstance(eris.vvvv_p, list):
+        for dataset in eris.vvvv:
+             k = dataset.shape[0]
+             dataset = dataset[:].reshape(-1,nvir_a * nvir_b)
+             t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir_b,nocc_a*nocc_b)
+             a += k
+    else :
+        for p in range(0,nvir_a,chnk_size):
+            vvvv = uadc_ao2mo.get_vVvV_df(myadc, eris.Lvv, eris.LVV, p, chnk_size)
+            k = vvvv.shape[0]
+            vvvv = vvvv.reshape(-1,nvir_a*nvir_b)
+            t[a:a+k] = np.dot(vvvv,t_amp_t).reshape(-1,nvir_b,nocc_a*nocc_b)
+            del (vvvv)
+            a += k
 
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc_a, nocc_b, nvir_a, nvir_b)
 
     return t
-
 
 class UADC(lib.StreamObject):
     '''Ground state calculations
@@ -733,11 +813,15 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
+        if getattr(self._scf, 'with_df', None):  
+           def df_transform():
+               return uadc_ao2mo.transform_integrals_df(self)
+           self.transform_integrals = df_transform
         if (self._scf._eri is None or
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
             def outcore_transform():
-                #return uadc_ao2mo.transform_integrals_outcore(self)
-                return uadc_ao2mo.transform_integrals_df(self)
+                return uadc_ao2mo.transform_integrals_outcore(self)
+                #return uadc_ao2mo.transform_integrals_df(self)
             self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals() 

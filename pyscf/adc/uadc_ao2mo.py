@@ -443,3 +443,56 @@ def transform_integrals_df(myadc):
     eris.OVvv[:] = lib.ddot(LOV.T, Lvv_p).reshape(nocc_b,nvir_b,nvir_pair_a)
 
     return eris
+
+def calculate_chunk_size(myadc):
+
+    avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.25 
+    vvv_mem = (myadc._nvir**3) * 8/1e6
+
+    chnk_size =  int(avail_mem/vvv_mem)
+
+    if chnk_size <= 0 :
+        chnk_size = 1
+
+    return chnk_size
+
+def  get_vvvv_df(myadc, Lvv, p, nvir, chnk_size):
+
+    naux = myadc._scf.with_df.get_naoaux()
+
+    Lvv = Lvv.reshape(naux,nvir,nvir)
+    ind_vv_g = np.tril_indices(nvir, k=-1)
+
+    if chnk_size < nvir:
+        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
+    else :
+        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
+
+    Lvv = Lvv.reshape(naux,nvir*nvir)
+    vvvv = lib.ddot(Lvv_temp, Lvv)
+    #vvvv = np.dot(Lvv_temp, Lvv)
+    vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
+    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir, nvir)
+    vvvv -= np.ascontiguousarray(vvvv.transpose(0,1,3,2))
+    vvvv = vvvv[:, :, ind_vv_g[0], ind_vv_g[1]]
+
+    return vvvv    
+
+
+def  get_vVvV_df(myadc, Lvv, LVV, p, chnk_size):
+
+    naux = myadc._scf.with_df.get_naoaux()
+    nvir_1 = Lvv.shape[1]
+    nvir_2 = LVV.shape[1]
+
+    if chnk_size < nvir_1:
+        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
+    else :
+        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
+
+    LVV = LVV.reshape(naux,nvir_2*nvir_2)
+    vvvv = lib.ddot(Lvv_temp, LVV)
+
+    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir_1, nvir_2, nvir_2)
+
+    return vvvv    
