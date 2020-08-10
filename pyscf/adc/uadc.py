@@ -622,6 +622,23 @@ def contract_ladder_outcore(myadc,t_amp,v_list):
 
     return t
 
+def density_matrix_so(myadc, T=None):
+
+    if T is None:
+        T = UADCIP(myadc).get_trans_moments()
+
+    T_a = T[0]
+    T_b = T[1]
+
+    T_a = np.array(T_a)
+    T_b = np.array(T_b)
+
+    dm_a = np.dot(T_a, T_a.T)
+    dm_b = np.dot(T_b, T_b.T)
+
+    dm = (dm_a, dm_b)
+
+    return dm
 
 class UADC(lib.StreamObject):
     '''Ground state calculations
@@ -696,6 +713,7 @@ class UADC(lib.StreamObject):
     compute_amplitudes = compute_amplitudes
     compute_energy = compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
+    make_rdm1s = density_matrix_so
     
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -3257,6 +3275,7 @@ def get_spec_factors(adc, T, U, nroots=1):
     P += lib.einsum("pi,pi->i", X_b, X_b)
 
     return P
+
 
 
 class UADCEA(UADC):
