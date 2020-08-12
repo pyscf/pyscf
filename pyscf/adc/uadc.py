@@ -1273,19 +1273,27 @@ def get_imds_ea(adc, eris=None):
                 for dataset in eris.vvvv_p:
                     k = dataset.shape[0]
                     vvvv = dataset[:]
+                    eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
+                    eris_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = vvvv    
+                    eris_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -vvvv 
+                    
+                    temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
+                    temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
+                    del eris_vvvv
+                    a += k
             else: 
                 for p in range(0,nvir_a,chnk_size):
                     vvvv = uadc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, nvir_a, chnk_size) 
                     k = vvvv.shape[0]
 
-                eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
-                eris_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = vvvv    
-                eris_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -vvvv 
-                
-                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
-                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
-                del eris_vvvv
-                a += k
+                    eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
+                    eris_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = vvvv    
+                    eris_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -vvvv 
+                    
+                    temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
+                    temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
+                    del eris_vvvv
+                    a += k
             M_ab_a  += temp            
 
 
@@ -1353,19 +1361,27 @@ def get_imds_ea(adc, eris=None):
                 for dataset in eris.VVVV_p:
                     k = dataset.shape[0]
                     VVVV = dataset[:]
+                    eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
+                    eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
+                    eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
+                    
+                    temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
+                    temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
+                    del eris_VVVV
+                    a += k
             else: 
                 for p in range(0,nvir_b,chnk_size):
                     VVVV = uadc_ao2mo.get_vvvv_df(adc, eris.LVV, p, nvir_b, chnk_size) 
                     k = VVVV.shape[0]
 
-                eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
-                eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
-                eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
-                
-                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
-                temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
-                del eris_VVVV
-                a += k
+                    eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
+                    eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
+                    eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
+                    
+                    temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
+                    temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
+                    del eris_VVVV
+                    a += k
             M_ab_b  += temp            
 
 
@@ -1451,14 +1467,17 @@ def get_imds_ea(adc, eris=None):
                 for dataset in eris.vVvV_p:
                     k = dataset.shape[0]
                     eris_vVvV = dataset[:].reshape(-1,nvir_b,nvir_a,nvir_b)
+                    temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b, eris_vVvV, optimize=True)
+                    temp[a:a+k] += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_vVvV, optimize=True)
+                    a += k
             else:
                 for p in range(0,nvir_a,chnk_size):
                     eris_vVvV = uadc_ao2mo.get_vVvV_df(adc, eris.Lvv, eris.LVV, p, chnk_size) 
                     k = eris_vVvV.shape[0]
                 
-                temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b, eris_vVvV, optimize=True)
-                temp[a:a+k] += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_vVvV, optimize=True)
-                a += k
+                    temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b, eris_vVvV, optimize=True)
+                    temp[a:a+k] += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_vVvV, optimize=True)
+                    a += k
             M_ab_a  += temp    
 
             a = 0
@@ -1467,14 +1486,17 @@ def get_imds_ea(adc, eris=None):
                 for dataset in eris.VvVv_p:
                     k = dataset.shape[0]
                     eris_VvVv = dataset[:].reshape(-1,nvir_a,nvir_b,nvir_a)
+                    temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_VvVv, optimize=True)
+                    temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_VvVv, optimize=True)
+                    a += k
             else:
                 for p in range(0,nvir_b,chnk_size):
                     eris_VvVv = uadc_ao2mo.get_vVvV_df(adc, eris.LVV, eris.Lvv, p, chnk_size) 
                     k = eris_VvVv.shape[0]
 
-                temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_VvVv, optimize=True)
-                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_VvVv, optimize=True)
-                a += k
+                    temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_VvVv, optimize=True)
+                    temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_VvVv, optimize=True)
+                    a += k
             M_ab_b  += temp    
 
     M_ab = (M_ab_a, M_ab_b)
