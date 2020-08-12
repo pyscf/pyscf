@@ -385,6 +385,11 @@ def transform_integrals_df(myadc):
     Lvv_p = lib.pack_tril(eris.Lvv)
     LVV_p = lib.pack_tril(eris.LVV)
 
+    eris.vvvv_p = None
+    eris.VVVV_p = None
+    eris.vVvV_p = None
+    eris.VvVv_p = None
+
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc_a,nocc_a,nocc_a,nocc_a), 'f8')
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc_a,nocc_a,nvir_a,nvir_a), 'f8', chunks=(nocc_a,nocc_a,1,nvir_a))
@@ -447,7 +452,7 @@ def transform_integrals_df(myadc):
 def calculate_chunk_size(myadc):
 
     avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.25 
-    vvv_mem = (myadc._nvir**3) * 8/1e6
+    vvv_mem = (myadc._nvir[0]**3) * 8/1e6
 
     chnk_size =  int(avail_mem/vvv_mem)
 
@@ -491,8 +496,7 @@ def  get_vVvV_df(myadc, Lvv, LVV, p, chnk_size):
         Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
 
     LVV = LVV.reshape(naux,nvir_2*nvir_2)
-    vvvv = lib.ddot(Lvv_temp, LVV)
-
-    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir_1, nvir_2, nvir_2)
+    vvvv = lib.ddot(Lvv_temp, LVV).reshape(-1,nvir_1,nvir_2,nvir_2)
+    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir_2, nvir_1, nvir_2)
 
     return vvvv    
