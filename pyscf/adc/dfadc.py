@@ -28,6 +28,7 @@ class RADC(radc.RADC):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         radc.RADC.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
+
 #        if getattr(mf, 'with_df', None):
 #            self.with_df = mf.with_df
 #        else:

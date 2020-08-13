@@ -769,7 +769,6 @@ class UADC(lib.StreamObject):
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
             def outcore_transform():
                 return uadc_ao2mo.transform_integrals_outcore(self)
-                #return uadc_ao2mo.transform_integrals_df(self)
             self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals() 
@@ -800,12 +799,6 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        #if (self._scf._eri is None or
-        #    (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-        #    def outcore_transform():
-        #        #return uadc_ao2mo.transform_integrals_outcore(self)
-        #        return uadc_ao2mo.transform_integrals_df(self)
-        #    self.transform_integrals = outcore_transform
         if getattr(self._scf, 'with_df', None):  
            def df_transform():
                return uadc_ao2mo.transform_integrals_df(self)
@@ -814,7 +807,6 @@ class UADC(lib.StreamObject):
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
             def outcore_transform():
                 return uadc_ao2mo.transform_integrals_outcore(self)
-                #return uadc_ao2mo.transform_integrals_df(self)
             self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals() 
@@ -1593,51 +1585,68 @@ def get_imds_ip(adc, eris=None):
         M_ij_b += lib.einsum('mled,njed,mnli->ij',t2_1_ab ,t2_1_ab,eris_ooOO, optimize = True)
 
 
-        if isinstance(eris.vvvv_p,list):
+        if isinstance(eris.vvvv_p,np.ndarray):
+            eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv_p, nvir_a)
+            M_ij_a += 0.25 * lib.einsum('ilde,jlgf,gfde->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
+            del eris_vvvv
 
-            t2a_vvvv = contract_ladder_outcore_antisym(adc,t2_1_a,eris.vvvv_p)
+        elif isinstance(eris.vvvv_p,list):
+
+            t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.vvvv_p)
             temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
             temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = t2a_vvvv    
             temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2a_vvvv 
 
             M_ij_a += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2a_vvvv, t2_1_a, optimize = True)
-
+        
         else :
+   
+            t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.Lvv)
+            temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
+            temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = t2a_vvvv    
+            temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2a_vvvv 
 
-            eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv_p, nvir_a)
-            M_ij_a += 0.25 * lib.einsum('ilde,jlgf,gfde->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
-            del eris_vvvv
+            M_ij_a += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2a_vvvv, t2_1_a, optimize = True)
+           
+        if isinstance(eris.VVVV_p,np.ndarray):
+            eris_VVVV = radc_ao2mo.unpack_eri_2(eris.VVVV_p, nvir_b)
+            M_ij_b += 0.25 * lib.einsum('ilde,jlgf,gfde->ij',t2_1_b, t2_1_b, eris_VVVV, optimize = True)
+            del eris_VVVV
 
+        elif isinstance(eris.VVVV_p,list) :
+            t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.VVVV_p)
+            temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
+            temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = t2b_VVVV 
+            temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2b_VVVV 
 
-        if isinstance(eris.VVVV_p,list):
-
-            t2b_VVVV = contract_ladder_outcore_antisym(adc,t2_1_b,eris.VVVV_p)
+            M_ij_b += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2b_VVVV, t2_1_b, optimize = True)
+        else :
+            t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.LVV)
             temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
             temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = t2b_VVVV 
             temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2b_VVVV 
 
             M_ij_b += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2b_VVVV, t2_1_b, optimize = True)
 
-        else :
 
-            eris_VVVV = radc_ao2mo.unpack_eri_2(eris.VVVV_p, nvir_b)
-            M_ij_b += 0.25 * lib.einsum('ilde,jlgf,gfde->ij',t2_1_b, t2_1_b, eris_VVVV, optimize = True)
-            del eris_VVVV
-
-        if isinstance(eris.vVvV_p,list):
-
-            t2_vVvV = contract_ladder_outcore(adc,t2_1_ab,eris.vVvV_p)
-            M_ij_a +=lib.einsum('ilgf,jlgf->ij', t2_vVvV, t2_1_ab, optimize = True)
-            M_ij_b +=lib.einsum('lied,ljed->ij',t2_1_ab, t2_vVvV, optimize = True)
-
-        else :
-
+        if isinstance(eris.vVvV_p,np.ndarray):
             eris_vVvV = eris.vVvV_p
             eris_vVvV = eris_vVvV.reshape(nvir_a,nvir_b,nvir_a,nvir_b)
             M_ij_a +=lib.einsum('ilde,jlgf,gfde->ij',t2_1_ab, t2_1_ab,eris_vVvV, optimize = True)
             temp = lib.einsum('ljfg,fged->ljed',t2_1_ab,eris_vVvV, optimize = True)
             M_ij_b +=lib.einsum('lied,ljed->ij',t2_1_ab, temp, optimize = True)
             eris_vVvV = eris_vVvV.reshape(nvir_a*nvir_b,nvir_a*nvir_b)
+
+        elif isinstance(eris.vVvV_p,list):
+            t2_vVvV = contract_ladder(adc,t2_1_ab,eris.vVvV_p)
+            M_ij_a +=lib.einsum('ilgf,jlgf->ij', t2_vVvV, t2_1_ab, optimize = True)
+            M_ij_b +=lib.einsum('lied,ljed->ij',t2_1_ab, t2_vVvV, optimize = True)
+
+        else :
+            t2_vVvV = contract_ladder(adc,t2_1_ab,(eris.Lvv,eris.LVV))
+            M_ij_a +=lib.einsum('ilgf,jlgf->ij', t2_vVvV, t2_1_ab, optimize = True)
+            M_ij_b +=lib.einsum('lied,ljed->ij',t2_1_ab, t2_vVvV, optimize = True)
+
 
         M_ij_a += 0.25*lib.einsum('inde,lmde,jlnm->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
         M_ij_a -= 0.25*lib.einsum('inde,lmde,jmnl->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
