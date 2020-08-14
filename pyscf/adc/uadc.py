@@ -1140,55 +1140,18 @@ def get_imds_ea(adc, eris=None):
             temp = temp.reshape(nocc_a,nocc_a,nvir_a,nvir_a)
             M_ab_a -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_a, temp, optimize=True)
 
-        elif isinstance(eris.vvvv_p, list) :
-            t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.vvvv_p)
-            temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
-            temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = t2a_vvvv    
-            temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2a_vvvv 
-        
-            M_ab_a -= 2*0.25*lib.einsum('mlad,mlbd->ab',  temp_t2a_vvvv, t2_1_a, optimize=True)
-            M_ab_a -= 2*0.25*lib.einsum('mlaf,mlbf->ab', t2_1_a, temp_t2a_vvvv, optimize=True)
-
-            a = 0
-            temp = np.zeros((nvir_a,nvir_a))
-            for dataset in eris.vvvv_p:
-                k = dataset.shape[0]
-                vvvv = dataset[:]
-                eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
-                eris_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = vvvv    
-                eris_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -vvvv 
-                
-                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
-                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
-                del eris_vvvv
-                a += k
-            M_ab_a  += temp            
-
         else :
-            t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.Lvv)
+            if isinstance(eris.vvvv_p, list) :
+                t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.vvvv_p)
+            else :
+                t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.Lvv)
+
             temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
             temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = t2a_vvvv    
             temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2a_vvvv 
-        
+
             M_ab_a -= 2*0.25*lib.einsum('mlad,mlbd->ab',  temp_t2a_vvvv, t2_1_a, optimize=True)
             M_ab_a -= 2*0.25*lib.einsum('mlaf,mlbf->ab', t2_1_a, temp_t2a_vvvv, optimize=True)
-
-            a = 0
-            temp = np.zeros((nvir_a,nvir_a))
-            chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            for p in range(0,nvir_a,chnk_size):
-                vvvv = uadc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, nvir_a, chnk_size) 
-                k = vvvv.shape[0]
-
-                eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
-                eris_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = vvvv    
-                eris_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -vvvv 
-                
-                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
-                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
-                del eris_vvvv
-                a += k
-            M_ab_a  += temp            
 
         if isinstance(eris.VVVV_p,np.ndarray):
             eris_VVVV = radc_ao2mo.unpack_eri_2(eris.VVVV_p, nvir_b)
@@ -1202,55 +1165,18 @@ def get_imds_ea(adc, eris=None):
             temp = temp.reshape(nocc_b,nocc_b,nvir_b,nvir_b)
             M_ab_b -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_b, temp, optimize=True)
 
-        elif isinstance(eris.VVVV_p, list):
-            t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.VVVV_p)
+        else:
+            if isinstance(eris.VVVV_p, list):
+                t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.VVVV_p)
+            else:
+                t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.LVV)
+
             temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
             temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = t2b_VVVV 
             temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2b_VVVV 
         
             M_ab_b -= 2 * 0.25*lib.einsum('mlad,mlbd->ab',  temp_t2b_VVVV, t2_1_b, optimize=True)
             M_ab_b -= 2 * 0.25*lib.einsum('mlaf,mlbf->ab', t2_1_b, temp_t2b_VVVV, optimize=True)
-
-            a = 0
-            temp = np.zeros((nvir_b,nvir_b))
-            for dataset in eris.VVVV_p:
-                k = dataset.shape[0]
-                VVVV = dataset[:]
-                eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
-                eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
-                eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
-                
-                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
-                temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
-                del eris_VVVV
-                a += k
-            M_ab_b  += temp            
-        else: 
-            t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.LVV)
-            temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
-            temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = t2b_VVVV 
-            temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2b_VVVV 
-        
-            M_ab_b -= 2 * 0.25*lib.einsum('mlad,mlbd->ab',  temp_t2b_VVVV, t2_1_b, optimize=True)
-            M_ab_b -= 2 * 0.25*lib.einsum('mlaf,mlbf->ab', t2_1_b, temp_t2b_VVVV, optimize=True)
-
-            a = 0
-            temp = np.zeros((nvir_b,nvir_b))
-            chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            for p in range(0,nvir_b,chnk_size):
-                VVVV = uadc_ao2mo.get_vvvv_df(adc, eris.LVV, p, nvir_b, chnk_size) 
-                k = VVVV.shape[0]
-
-                eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
-                eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
-                eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
-                
-                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
-                temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
-                del eris_VVVV
-                a += k
-            M_ab_b  += temp            
-
 
         if isinstance(eris.vVvV_p,np.ndarray):
 
@@ -1271,12 +1197,49 @@ def get_imds_ea(adc, eris=None):
             M_ab_a -= lib.einsum('mlaf,mlbf->ab',t2_1_ab, temp, optimize=True)
             M_ab_b -= lib.einsum('mlfa,mlfb->ab',t2_1_ab, temp, optimize=True)
 
-        elif isinstance(eris.vVvV_p, list):
-            t2_vVvV = contract_ladder(adc,t2_1_ab,eris.vVvV_p)
-            M_ab_a -= lib.einsum('mlad,mlbd->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_b -= lib.einsum('mlda,mldb->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_a -= lib.einsum('mlaf,mlbf->ab',t2_1_ab, t2_vVvV, optimize=True)
-            M_ab_b -= lib.einsum('mlfa,mlfb->ab',t2_1_ab, t2_vVvV, optimize=True)
+        else: 
+           if isinstance(eris.vVvV_p, list):
+               t2_vVvV = contract_ladder(adc,t2_1_ab,eris.vVvV_p)
+           else:
+               t2_vVvV = contract_ladder(adc,t2_1_ab,(eris.Lvv,eris.LVV))
+
+           M_ab_a -= lib.einsum('mlad,mlbd->ab', t2_vVvV, t2_1_ab, optimize=True)
+           M_ab_b -= lib.einsum('mlda,mldb->ab', t2_vVvV, t2_1_ab, optimize=True)
+           M_ab_a -= lib.einsum('mlaf,mlbf->ab',t2_1_ab, t2_vVvV, optimize=True)
+           M_ab_b -= lib.einsum('mlfa,mlfb->ab',t2_1_ab, t2_vVvV, optimize=True)
+
+
+        if isinstance(eris.vvvv_p, list):
+
+            a = 0
+            temp = np.zeros((nvir_a,nvir_a))
+            for dataset in eris.vvvv_p:
+                k = dataset.shape[0]
+                vvvv = dataset[:]
+                eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
+                eris_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = vvvv    
+                eris_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -vvvv 
+                
+                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
+                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
+                del eris_vvvv
+                a += k
+            M_ab_a  += temp            
+
+            a = 0
+            temp = np.zeros((nvir_b,nvir_b))
+            for dataset in eris.VVVV_p:
+                k = dataset.shape[0]
+                VVVV = dataset[:]
+                eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
+                eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
+                eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
+                
+                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
+                temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
+                del eris_VVVV
+                a += k
+            M_ab_b  += temp            
 
             a = 0
             temp = np.zeros((nvir_a,nvir_a))
@@ -1298,12 +1261,41 @@ def get_imds_ea(adc, eris=None):
                 a += k
             M_ab_b  += temp    
 
-        else :
-            t2_vVvV = contract_ladder(adc,t2_1_ab,(eris.Lvv,eris.LVV))
-            M_ab_a -= lib.einsum('mlad,mlbd->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_b -= lib.einsum('mlda,mldb->ab', t2_vVvV, t2_1_ab, optimize=True)
-            M_ab_a -= lib.einsum('mlaf,mlbf->ab',t2_1_ab, t2_vVvV, optimize=True)
-            M_ab_b -= lib.einsum('mlfa,mlfb->ab',t2_1_ab, t2_vVvV, optimize=True)
+        elif isinstance(eris.vvvv_p, type(None)):
+
+            a = 0
+            temp = np.zeros((nvir_a,nvir_a))
+            chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
+            for p in range(0,nvir_a,chnk_size):
+                vvvv = uadc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, nvir_a, chnk_size) 
+                k = vvvv.shape[0]
+
+                eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
+                eris_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = vvvv    
+                eris_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -vvvv 
+                
+                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  eris_vvvv, optimize=True)
+                temp[a:a+k] += lib.einsum('mlfd,mled,aebf->ab',t2_1_ab, t2_1_ab, eris_vvvv, optimize=True)
+                del eris_vvvv
+                a += k
+            M_ab_a  += temp            
+
+            a = 0
+            temp = np.zeros((nvir_b,nvir_b))
+            chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
+            for p in range(0,nvir_b,chnk_size):
+                VVVV = uadc_ao2mo.get_vvvv_df(adc, eris.LVV, p, nvir_b, chnk_size) 
+                k = VVVV.shape[0]
+
+                eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
+                eris_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = VVVV   
+                eris_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -VVVV 
+                
+                temp[a:a+k]  -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b,  eris_VVVV, optimize=True)
+                temp[a:a+k]  += lib.einsum('mldf,mlde,aebf->ab',t2_1_ab, t2_1_ab, eris_VVVV, optimize=True)
+                del eris_VVVV
+                a += k
+            M_ab_b  += temp            
 
             a = 0
             temp = np.zeros((nvir_a,nvir_a))
@@ -1590,44 +1582,34 @@ def get_imds_ip(adc, eris=None):
             M_ij_a += 0.25 * lib.einsum('ilde,jlgf,gfde->ij',t2_1_a, t2_1_a, eris_vvvv, optimize = True)
             del eris_vvvv
 
-        elif isinstance(eris.vvvv_p,list):
+        else:
+            if isinstance(eris.vvvv_p,list):
+                t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.vvvv_p)
+            else :
+                t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.Lvv)
 
-            t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.vvvv_p)
             temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
             temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = t2a_vvvv    
             temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2a_vvvv 
 
             M_ij_a += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2a_vvvv, t2_1_a, optimize = True)
         
-        else :
-   
-            t2a_vvvv = contract_ladder_antisym(adc,t2_1_a,eris.Lvv)
-            temp_t2a_vvvv = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
-            temp_t2a_vvvv[:,:,ab_ind_a[0],ab_ind_a[1]] = t2a_vvvv    
-            temp_t2a_vvvv[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2a_vvvv 
-
-            M_ij_a += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2a_vvvv, t2_1_a, optimize = True)
-           
         if isinstance(eris.VVVV_p,np.ndarray):
             eris_VVVV = radc_ao2mo.unpack_eri_2(eris.VVVV_p, nvir_b)
             M_ij_b += 0.25 * lib.einsum('ilde,jlgf,gfde->ij',t2_1_b, t2_1_b, eris_VVVV, optimize = True)
             del eris_VVVV
 
-        elif isinstance(eris.VVVV_p,list) :
-            t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.VVVV_p)
+        else:
+            if isinstance(eris.VVVV_p,list) :
+                t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.VVVV_p)
+            else :
+                t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.LVV)
+
             temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
             temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = t2b_VVVV 
             temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2b_VVVV 
 
             M_ij_b += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2b_VVVV, t2_1_b, optimize = True)
-        else :
-            t2b_VVVV = contract_ladder_antisym(adc,t2_1_b,eris.LVV)
-            temp_t2b_VVVV = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
-            temp_t2b_VVVV[:,:,ab_ind_b[0],ab_ind_b[1]] = t2b_VVVV 
-            temp_t2b_VVVV[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2b_VVVV 
-
-            M_ij_b += 2*0.25 * lib.einsum('ilgf,jlgf->ij', temp_t2b_VVVV, t2_1_b, optimize = True)
-
 
         if isinstance(eris.vVvV_p,np.ndarray):
             eris_vVvV = eris.vVvV_p
@@ -1637,16 +1619,14 @@ def get_imds_ip(adc, eris=None):
             M_ij_b +=lib.einsum('lied,ljed->ij',t2_1_ab, temp, optimize = True)
             eris_vVvV = eris_vVvV.reshape(nvir_a*nvir_b,nvir_a*nvir_b)
 
-        elif isinstance(eris.vVvV_p,list):
-            t2_vVvV = contract_ladder(adc,t2_1_ab,eris.vVvV_p)
+        else:
+            if isinstance(eris.vVvV_p,list):
+                t2_vVvV = contract_ladder(adc,t2_1_ab,eris.vVvV_p)
+            else:
+                t2_vVvV = contract_ladder(adc,t2_1_ab,(eris.Lvv,eris.LVV))
+
             M_ij_a +=lib.einsum('ilgf,jlgf->ij', t2_vVvV, t2_1_ab, optimize = True)
             M_ij_b +=lib.einsum('lied,ljed->ij',t2_1_ab, t2_vVvV, optimize = True)
-
-        else :
-            t2_vVvV = contract_ladder(adc,t2_1_ab,(eris.Lvv,eris.LVV))
-            M_ij_a +=lib.einsum('ilgf,jlgf->ij', t2_vVvV, t2_1_ab, optimize = True)
-            M_ij_b +=lib.einsum('lied,ljed->ij',t2_1_ab, t2_vVvV, optimize = True)
-
 
         M_ij_a += 0.25*lib.einsum('inde,lmde,jlnm->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
         M_ij_a -= 0.25*lib.einsum('inde,lmde,jmnl->ij',t2_1_a, t2_1_a,eris_oooo, optimize = True)
@@ -2074,28 +2054,6 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     diag = -diag
     return diag
 
-
-#def ea_contract_r_vvvv_antisym(myadc,r2,v_list):
-#
-#    nocc = r2.shape[0]
-#    nvir = r2.shape[1] 
-#
-#    nv_pair = nvir  *  (nvir - 1) // 2
-#    tril_idx = np.tril_indices(nvir, k=-1)               
-#
-#    r2 = r2[:,tril_idx[0],tril_idx[1]]
-#    r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
-#
-#    r2_vvvv = np.zeros((nocc,nvir,nvir))
-#    a = 0
-#    for dataset in v_list:
-#         k = dataset.shape[0]
-#         dataset = dataset[:].reshape(-1,nv_pair)
-#         r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
-#         a += k
-#
-#    return r2_vvvv
-
 def ea_contract_r_vvvv_antisym(myadc,r2,vvvv_d):
 
     nocc = r2.shape[0]
@@ -2125,24 +2083,6 @@ def ea_contract_r_vvvv_antisym(myadc,r2,vvvv_d):
             del (vvvv)
             a += k
     return r2_vvvv
-
-#def ea_contract_r_vvvv(myadc,r2,v_list):
-#
-#    nocc_1 = r2.shape[0]
-#    nvir_1 = r2.shape[1] 
-#    nvir_2 = r2.shape[2] 
-#
-#    r2 = r2.reshape(-1,nvir_1*nvir_2)
-#    r2_vvvv = np.zeros((nocc_1,nvir_1,nvir_2))
-#
-#    a = 0
-#    for dataset in v_list:
-#         k = dataset.shape[0]
-#         dataset = dataset[:].reshape(-1,nvir_1*nvir_2)
-#         r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc_1,-1,nvir_2)
-#         a += k
-#
-#    return r2_vvvv
 
 def ea_contract_r_vvvv(myadc,r2,vvvv_d):
 
