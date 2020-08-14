@@ -5,6 +5,7 @@ PySCF 1.7.? (2020-?-?)
   - Analytical nuclear gradients for state-average CASSCF
 * Fixed
   - Bug in Mole.fromstring
+  - Buffer size bug in DHF JK builder for very small systems
 
 
 PySCF 1.7.4 (2020-8-2)
