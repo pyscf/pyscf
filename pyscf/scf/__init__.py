@@ -176,9 +176,11 @@ GHF.__doc__ = ghf.GHF.__doc__
 def DHF(mol, *args):
     if mol.nelectron == 1:
         return dhf.HF1e(mol)
+    elif dhf.zquatev and mol.spin == 0:
+        return dhf.RDHF(mol, *args)
     else:
-        return dhf.UHF(mol, *args)
-DHF.__doc__ = dhf.UHF.__doc__
+        return dhf.DHF(mol, *args)
+DHF.__doc__ = dhf.DHF.__doc__
 
 
 def X2C(mol, *args):
@@ -219,4 +221,6 @@ def GKS(mol, *args):
     from pyscf import dft
     return dft.GKS(mol, *args)
 
-
+def DKS(mol, *args):
+    from pyscf import dft
+    return dft.DKS(mol, *args)

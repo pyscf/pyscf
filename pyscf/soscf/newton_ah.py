@@ -868,7 +868,10 @@ def newton(mf):
                 return mo
         return SecondOrderGHF(mf)
 
-    elif isinstance(mf, scf.dhf.UHF):
+    elif isinstance(mf, scf.dhf.DHF):
+        raise RuntimeError('Not support Dirac-HF')
+
+    elif isinstance(mf, scf.dhf.RDHF):
         raise RuntimeError('Not support Dirac-HF')
 
     else:

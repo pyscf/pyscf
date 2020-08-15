@@ -127,14 +127,15 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 energy_elec = rks.energy_elec
 
 
-class UKS(rks.KohnShamDFT, dhf.UHF):
+class DKS(rks.KohnShamDFT, dhf.DHF):
+    '''Dirac-Kohn-Sham'''
     def __init__(self, mol, xc='LDA,VWN'):
-        dhf.UHF.__init__(self, mol)
+        dhf.DHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
         self._numint = r_numint.RNumInt()
 
     def dump_flags(self, verbose=None):
-        dhf.UHF.dump_flags(self, verbose)
+        dhf.DHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
@@ -150,8 +151,13 @@ class UKS(rks.KohnShamDFT, dhf.UHF):
         return x2chf
     x2c = x2c1e
 
-DKS = UKS
+UKS = UDKS = DKS
 
+class RDKS(DKS, dhf.RDHF):
+    '''Kramers restricted Dirac-Kohn-Sham'''
+    _eigh = dhf.RDHF._eigh
+
+RKS = RDKS
 
 if __name__ == '__main__':
     from pyscf import gto

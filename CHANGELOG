@@ -3,6 +3,7 @@ PySCF 1.7.? (2020-?-?)
 * Added
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
+  - Kramers' restricted Dirac-Hartree-Fock
 * Fixed
   - Bug in Mole.fromstring
   - Buffer size bug in DHF JK builder for very small systems

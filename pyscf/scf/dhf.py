@@ -31,6 +31,10 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
+try:
+    import zquatev
+except ImportError:
+    zquatev = None
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -350,7 +354,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     return g.ravel()
 
 
-class UHF(hf.SCF):
+class DHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for Dirac-Hartree-Fock
         with_ssss : bool, for Dirac-Hartree-Fock only
@@ -581,10 +585,10 @@ class UHF(hf.SCF):
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
 
-DHF = UHF
+UHF = UDHF = DHF
 
 
-class HF1e(UHF):
+class HF1e(DHF):
     def scf(self, *args):
         logger.info(self, '\n')
         logger.info(self, '******** 1 electron system ********')
@@ -598,24 +602,20 @@ class HF1e(UHF):
         self._finalize()
         return self.e_tot
 
-class RHF(UHF):
-    '''Dirac-RHF'''
+
+class RDHF(DHF):
+    '''Kramers restricted Dirac-Hartree-Fock'''
     def __init__(self, mol):
         if mol.nelectron.__mod__(2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
+        if zquatev is None:
+            raise RuntimeError('zquatev library is required to perform Kramers-restricted DHF')
         UHF.__init__(self, mol)
 
-    # full density matrix for RHF
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        r'''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
-        D(UHF) = \psi_i^\dag\psi_i + \psi_{Ti}^\dag\psi_{Ti}
-        RHF average the density of spin up and spin down:
-        D(RHF) = (D(UHF) + T[D(UHF)])/2
-        '''
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        if mo_occ is None: mo_occ = self.mo_occ
-        dm = make_rdm1(mo_coeff, mo_occ, **kwargs)
-        return (dm + time_reversal_matrix(self.mol, dm)) * .5
+    def _eigh(self, h, s):
+        return zquatev.geigh(h, s)
+
+RHF = RDHF
 
 
 def _jk_triu_(vj, vk, hermi):
