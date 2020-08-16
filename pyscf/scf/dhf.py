@@ -231,7 +231,7 @@ def time_reversal_matrix(mol, mat):
     tao = numpy.asarray(mol.time_reversal_map())
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
-    idx = np.asarray(abs(tao) - 1)  # -1 for C indexing convention
+    idx = abs(tao) - 1  # -1 for C indexing convention
     #:signL = [(1 if x>0 else -1) for x in tao]
     #:sign = numpy.hstack((signL, signL))
 
