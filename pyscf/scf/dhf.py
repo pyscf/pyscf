@@ -231,7 +231,7 @@ def time_reversal_matrix(mol, mat):
     tao = numpy.asarray(mol.time_reversal_map())
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
-    idx = abs(tao)-1 # -1 for C indexing convention
+    idx = np.asarray(abs(tao) - 1)  # -1 for C indexing convention
     #:signL = [(1 if x>0 else -1) for x in tao]
     #:sign = numpy.hstack((signL, signL))
 
@@ -240,12 +240,12 @@ def time_reversal_matrix(mol, mat):
     #:    for i in range(mat.__len__()):
     #:        tmat[idx[i],idx[j]] = mat[i,j] * sign[i]*sign[j]
     #:return tmat.conjugate()
-    sign_mask = tao<0
-    if mat.shape[0] == n2c*2:
+    sign_mask = tao < 0
+    if mat.shape[0] == n2c * 2:
         idx = numpy.hstack((idx, idx+n2c))
         sign_mask = numpy.hstack((sign_mask, sign_mask))
 
-    tmat = mat.take(idx,axis=0).take(idx,axis=1)
+    tmat = mat[idx[:,None], idx]
     tmat[sign_mask,:] *= -1
     tmat[:,sign_mask] *= -1
     return tmat.T
@@ -602,6 +602,12 @@ class HF1e(DHF):
         self._finalize()
         return self.e_tot
 
+    def _eigh(self, h, s):
+        if zquatev:
+            return zquatev.solve_KR_FCSCE(self.mol, h, s)
+        else:
+            return DHF._eigh(self, h, s)
+
 
 class RDHF(DHF):
     '''Kramers restricted Dirac-Hartree-Fock'''
@@ -613,7 +619,16 @@ class RDHF(DHF):
         UHF.__init__(self, mol)
 
     def _eigh(self, h, s):
-        return zquatev.geigh(h, s)
+        return zquatev.solve_KR_FCSCE(self.mol, h, s)
+
+    def x2c1e(self):
+        from pyscf.x2c import x2c
+        x2chf = x2c.RHF(self.mol)
+        x2c_keys = x2chf._keys
+        x2chf.__dict__.update(self.__dict__)
+        x2chf._keys = self._keys.union(x2c_keys)
+        return x2chf
+    x2c = x2c1e
 
 RHF = RDHF
 
