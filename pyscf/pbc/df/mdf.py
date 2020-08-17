@@ -219,7 +219,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         with lib.call_in_background(pw_contract) as compute:
             col1 = 0
             for istep, sh_range in enumerate(shranges):
-                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
+                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d',
                            istep+1, len(shranges), *sh_range)
                 bstart, bend, ncol = sh_range
                 col0, col1 = col1, col1+ncol

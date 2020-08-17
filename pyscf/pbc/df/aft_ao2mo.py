@@ -283,6 +283,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
 
     mo_pairs_G = numpy.empty((ngrids,nmoi,nmoj), dtype=numpy.complex)
+    nao = cell.nao
     for pqkR, pqkI, p0, p1 \
             in mydf.pw_loop(mydf.mesh, kpts, q,
                             max_memory=max_memory, aosym='s2'):
