@@ -1084,7 +1084,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
 
             | 'ano'   : Project GTOs to ANO basis
             | 'minao' : Project GTOs to MINAO basis
-            | 'scf'   : Fraction-averaged RHF
+            | 'scf'   : Symmetry-averaged fractional occupation atomic RHF
 
     Returns:
         A list : pop, charges
