@@ -22,17 +22,17 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.lib import param
 from pyscf.data import elements
-from pyscf.scf import hf
+from pyscf.scf import hf, rohf
 
 
 def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     atm_scf_result = {}
-    aoslices = mol.aoslice_by_atom()
 
     atm_template = copy.copy(mol)
     atm_template.charge = 0
     atm_template.symmetry = False  # TODO: enable SO3 symmetry here
     atm_template.atom = atm_template._atom = []
+    atm_template.cart = False  # AtomSphericAverageRHF does not support cartensian basis
 
     for ia, a in enumerate(mol._atom):
         element = a[0]
@@ -41,23 +41,28 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
 
         atm = atm_template
         atm._atom = [a]
-        nuc_charge = gto.charge(element)
-        atm.spin = nuc_charge % 2
         atm._atm = mol._atm[ia:ia+1]
-        ib0, ib1 = aoslices[ia,:2]
-        atm._bas = mol._bas[ib0:ib1]
+        atm._bas = mol._bas[mol._bas[:,0] == ia].copy()
+        atm._bas[:,0] = 0  # Point to the only atom
+        atm._ecpbas = mol._ecpbas[mol._ecpbas[:,0] == ia]
+        if element in mol._pseudo:
+            atm._pseudo = {element: mol._pseudo.get(element)}
+        atm.spin = atm.nelectron % 2
 
-        if nuc_charge == 0:  # GHOST
-            nao = atm.nao_nr()
+        nao = atm.nao
+        # nao == 0 for the case that no basis was assigned to an atom
+        if nao == 0 or atm.nelectron == 0:  # GHOST
             mo_occ = mo_energy = numpy.zeros(nao)
             mo_coeff = numpy.zeros((nao,nao))
             atm_scf_result[element] = (0, mo_energy, mo_coeff, mo_occ)
         else:
-            atm_hf = AtomSphericAverageRHF(atm)
-            atm_hf.atomic_configuration = atomic_configuration
-            atm_hf.verbose = 0
-            if nuc_charge > 96:
-                atm_hf.init_guess = 'hcore'
+            if atm.nelectron == 1:
+                atm_hf = rohf.HF1e(atm)
+            else:
+                atm_hf = AtomSphericAverageRHF(atm)
+                atm_hf.atomic_configuration = atomic_configuration
+
+            atm_hf.verbose = 4
             atm_hf.run()
             atm_scf_result[element] = (atm_hf.e_tot, atm_hf.mo_energy,
                                        atm_hf.mo_coeff, atm_hf.mo_occ)
