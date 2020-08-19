@@ -1084,7 +1084,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
 
             | 'ano'   : Project GTOs to ANO basis
             | 'minao' : Project GTOs to MINAO basis
-            | 'scf'   : Fraction-averaged RHF
+            | 'scf'   : Symmetry-averaged fractional occupation atomic RHF
 
     Returns:
         A list : pop, charges
@@ -1485,7 +1485,7 @@ class SCF(lib.StreamObject):
     def eig(self, h, s):
 # An intermediate call to self._eigh so that the modification to eig function
 # can be applied on different level.  Different SCF modules like RHF/UHF
-# redifine only the eig solver and leave the other modifications (like removing
+# redefine only the eig solver and leave the other modifications (like removing
 # linear dependence, sorting eigenvlaue) to low level ._eigh
         return self._eigh(h, s)
 

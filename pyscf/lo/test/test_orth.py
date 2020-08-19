@@ -79,14 +79,11 @@ class KnowValues(unittest.TestCase):
 
     def test_orth_ao(self):
         c0 = orth.pre_orth_ao(mol, method='scf')
-        self.assertAlmostEqual(numpy.linalg.norm(c0), 5.7742626195362039, 9)
-        self.assertAlmostEqual(abs(c0).sum(), 33.461490657433551, 8)
+        self.assertAlmostEqual(abs(c0).sum(), 33.48215772351, 8)
         c = orth.orth_ao(mol, 'lowdin', c0)
-        self.assertAlmostEqual(numpy.linalg.norm(c), 8.9823854843222257, 9)
-        self.assertAlmostEqual(abs(c).sum(), 94.933979307106767, 8)
+        self.assertAlmostEqual(abs(c).sum(), 94.21571091299639, 8)
         c = orth.orth_ao(mol, 'meta_lowdin', c0)
-        self.assertAlmostEqual(numpy.linalg.norm(c), 8.9823854843222257, 9)
-        self.assertAlmostEqual(abs(c).sum(), 93.029386338534394, 8)
+        self.assertAlmostEqual(abs(c).sum(), 92.15697348744733, 8)
 
     def test_ghost_atm_meta_lowdin(self):
         mol = gto.Mole()

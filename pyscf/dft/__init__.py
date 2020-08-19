@@ -43,6 +43,7 @@ from pyscf.dft import gks
 from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
 from pyscf.dft import gks_symm
+from pyscf.dft import dks
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
 from pyscf.df import density_fit
@@ -100,3 +101,10 @@ def GKS(mol, xc='LDA,VWN'):
     else:
         return gks_symm.GKS(mol, xc)
 GKS.__doc__ = gks.GKS.__doc__
+
+def DKS(mol, xc='LDA,VWN'):
+    from pyscf.scf import dhf
+    if dhf.zquatev and mol.spin == 0:
+        return dks.RDKS(mol, *args)
+    else:
+        return dks.UDKS(mol, *args)

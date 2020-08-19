@@ -336,7 +336,7 @@ def dump_thermo(mol, results):
     dump('%-28s               %s\n'
          % ('Enthalpy [J/mol]', convert('H', keys[2:], 'Eh')))
     dump('%-22s %.5f\n'
-         % ('Entropy [Eh]', results['H_tot'][0]))
+         % ('Enthalpy [Eh]', results['H_tot'][0]))
     dump('%-28s               %s\n'
          % ('Gibbs free energy [J/mol]', convert('G', keys[2:], 'Eh')))
     dump('%-22s %.5f\n'

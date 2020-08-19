@@ -102,8 +102,8 @@ class KnownValues(unittest.TestCase):
     def test_init_guess_atom(self):
         dm = mf.get_init_guess(mol, key='atom')
         self.assertEqual(dm.shape, (48,48))
-        self.assertAlmostEqual(lib.fp(dm[:24,:24])*2, 2.7458577873928842, 9)
-        self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.7458577873928842, 9)
+        self.assertAlmostEqual(lib.fp(dm[:24,:24])*2, 2.7821827416174094, 9)
+        self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.7821827416174094, 9)
 
     def test_init_guess_chk(self):
         dm = scf.ghf.GHF(mol).get_init_guess(mol, key='chkfile')
@@ -124,7 +124,7 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_huckel(self):
         dm = scf.GHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 1.1375435310601234, 9)
+        self.assertAlmostEqual(lib.fp(dm), 1.0574099243527206, 9)
 
     def test_ghf_complex(self):
         mf1 = scf.GHF(mol)

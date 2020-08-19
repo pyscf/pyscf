@@ -31,6 +31,10 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
+try:
+    import zquatev
+except ImportError:
+    zquatev = None
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -227,7 +231,7 @@ def time_reversal_matrix(mol, mat):
     tao = numpy.asarray(mol.time_reversal_map())
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
-    idx = abs(tao)-1 # -1 for C indexing convention
+    idx = abs(tao) - 1  # -1 for C indexing convention
     #:signL = [(1 if x>0 else -1) for x in tao]
     #:sign = numpy.hstack((signL, signL))
 
@@ -236,12 +240,12 @@ def time_reversal_matrix(mol, mat):
     #:    for i in range(mat.__len__()):
     #:        tmat[idx[i],idx[j]] = mat[i,j] * sign[i]*sign[j]
     #:return tmat.conjugate()
-    sign_mask = tao<0
-    if mat.shape[0] == n2c*2:
+    sign_mask = tao < 0
+    if mat.shape[0] == n2c * 2:
         idx = numpy.hstack((idx, idx+n2c))
         sign_mask = numpy.hstack((sign_mask, sign_mask))
 
-    tmat = mat.take(idx,axis=0).take(idx,axis=1)
+    tmat = mat[idx[:,None], idx]
     tmat[sign_mask,:] *= -1
     tmat[:,sign_mask] *= -1
     return tmat.T
@@ -350,7 +354,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     return g.ravel()
 
 
-class UHF(hf.SCF):
+class DHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for Dirac-Hartree-Fock
         with_ssss : bool, for Dirac-Hartree-Fock only
@@ -581,10 +585,10 @@ class UHF(hf.SCF):
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
 
-DHF = UHF
+UHF = UDHF = DHF
 
 
-class HF1e(UHF):
+class HF1e(DHF):
     def scf(self, *args):
         logger.info(self, '\n')
         logger.info(self, '******** 1 electron system ********')
@@ -598,24 +602,35 @@ class HF1e(UHF):
         self._finalize()
         return self.e_tot
 
-class RHF(UHF):
-    '''Dirac-RHF'''
+    def _eigh(self, h, s):
+        if zquatev:
+            return zquatev.solve_KR_FCSCE(self.mol, h, s)
+        else:
+            return DHF._eigh(self, h, s)
+
+
+class RDHF(DHF):
+    '''Kramers restricted Dirac-Hartree-Fock'''
     def __init__(self, mol):
         if mol.nelectron.__mod__(2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
+        if zquatev is None:
+            raise RuntimeError('zquatev library is required to perform Kramers-restricted DHF')
         UHF.__init__(self, mol)
 
-    # full density matrix for RHF
-    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        r'''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
-        D(UHF) = \psi_i^\dag\psi_i + \psi_{Ti}^\dag\psi_{Ti}
-        RHF average the density of spin up and spin down:
-        D(RHF) = (D(UHF) + T[D(UHF)])/2
-        '''
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        if mo_occ is None: mo_occ = self.mo_occ
-        dm = make_rdm1(mo_coeff, mo_occ, **kwargs)
-        return (dm + time_reversal_matrix(self.mol, dm)) * .5
+    def _eigh(self, h, s):
+        return zquatev.solve_KR_FCSCE(self.mol, h, s)
+
+    def x2c1e(self):
+        from pyscf.x2c import x2c
+        x2chf = x2c.RHF(self.mol)
+        x2c_keys = x2chf._keys
+        x2chf.__dict__.update(self.__dict__)
+        x2chf._keys = self._keys.union(x2c_keys)
+        return x2chf
+    x2c = x2c1e
+
+RHF = RDHF
 
 
 def _jk_triu_(vj, vk, hermi):
