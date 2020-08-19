@@ -64,7 +64,7 @@ def weight_orth(s, weight):
 def pre_orth_ao(mol, method=REF_BASIS):
     '''Restore AO characters.  Possible methods include the ANO/MINAO
     projection or fraction-averaged atomic RHF calculation'''
-    if method.upper() in ('ANO', 'MINAO'):
+    if isinstance(method, str) and method.upper() in ('ANO', 'MINAO'):
         # Use ANO/MINAO basis to define the strongly occupied set
         return project_to_atomic_orbitals(mol, method)
     else:
@@ -238,20 +238,20 @@ def pre_orth_ao_atm_scf(mol):
     assert(not mol.cart)
     from pyscf.scf import atom_hf
     atm_scf = atom_hf.get_atm_nrhf(mol)
-    nbf = mol.nao_nr()
-    c = numpy.zeros((nbf,nbf))
-    p0 = 0
+    aoslice = mol.aoslice_by_atom()
+    coeff = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        if symb in atm_scf:
-            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
-        else:
+        if symb not in atm_scf:
             symb = mol.atom_pure_symbol(ia)
-            e_hf, mo_e, mo_c, mo_occ = atm_scf[symb]
-        p1 = p0 + mo_e.size
-        c[p0:p1,p0:p1] = mo_c
-        p0 = p1
-    return c
+
+        if symb in atm_scf:
+            e_hf, e, c, occ = atm_scf[symb]
+        else:  # symb's basis is not specified in the input
+            nao_atm = aoslice[ia,3] - aoslice[ia,2]
+            c = numpy.zeros((nao_atm, nao_atm))
+        coeff.append(c)
+    return scipy.linalg.block_diag(*coeff)
 
 
 def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=None, scf_method=None,

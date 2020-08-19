@@ -2363,39 +2363,7 @@ class Mole(lib.StreamObject):
             self.nelec
 
         if self.symmetry:
-            from pyscf import symm
-            self.topgroup, orig, axes = symm.detect_symm(self._atom, self._basis)
-
-            if isinstance(self.symmetry, (str, unicode)):
-                self.symmetry = str(symm.std_symb(self.symmetry))
-                self.groupname, axes = symm.subgroup(self.symmetry, axes)
-                prop_atoms = self.format_atom(self._atom, orig, axes, 'Bohr')
-                if symm.check_given_symm(self.groupname, prop_atoms, self._basis):
-                    self.topgroup = self.symmetry
-                else:
-                    raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                         'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
-                                         (self.symmetry, self.topgroup,
-                                          '\n'.join([str(a) for a in prop_atoms])))
-            else:
-                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                        self.symmetry_subgroup)
-            self._symm_orig = orig
-            self._symm_axes = axes
-
-            if self.cart and self.groupname in ('Dooh', 'Coov'):
-                if self.groupname == 'Dooh':
-                    self.groupname, lgroup = 'D2h', 'Dooh'
-                else:
-                    self.groupname, lgroup = 'C2v', 'Coov'
-                logger.warn(self, 'This version does not support linear molecule '
-                            'symmetry %s for cartesian GTO basis.  Its subgroup '
-                            '%s is used', lgroup, self.groupname)
-
-            self.symm_orb, self.irrep_id = \
-                    symm.symm_adapted_basis(self, self.groupname, orig, axes)
-            self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
-                               for ir in self.irrep_id]
+            self._build_symmetry()
 
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
@@ -2408,6 +2376,46 @@ class Mole(lib.StreamObject):
         self._built = True
         return self
     kernel = build
+
+    def _build_symmetry(self):
+        '''
+        Update symmetry related attributes: topgroup, groupname, _symm_orig,
+        _symm_axes, irrep_id, irrep_name, symm_orb
+        '''
+        from pyscf import symm
+        self.topgroup, orig, axes = symm.detect_symm(self._atom, self._basis)
+
+        if isinstance(self.symmetry, (str, unicode)):
+            self.symmetry = str(symm.std_symb(self.symmetry))
+            self.groupname, axes = symm.subgroup(self.symmetry, axes)
+            prop_atoms = self.format_atom(self._atom, orig, axes, 'Bohr')
+            if symm.check_given_symm(self.groupname, prop_atoms, self._basis):
+                self.topgroup = self.symmetry
+            else:
+                raise RuntimeWarning('Unable to identify input symmetry %s.\n'
+                                     'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
+                                     (self.symmetry, self.topgroup,
+                                      '\n'.join([str(a) for a in prop_atoms])))
+        else:
+            self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                    self.symmetry_subgroup)
+        self._symm_orig = orig
+        self._symm_axes = axes
+
+        if self.cart and self.groupname in ('Dooh', 'Coov', 'SO3'):
+            if self.groupname == 'Coov':
+                self.groupname, lgroup = 'C2v', self.groupname
+            else:
+                self.groupname, lgroup = 'D2h', self.groupname
+            logger.warn(self, 'This version does not support symmetry %s '
+                        'for cartesian GTO basis. Its subgroup %s is used',
+                        lgroup, self.groupname)
+
+        self.symm_orb, self.irrep_id = \
+                symm.symm_adapted_basis(self, self.groupname, orig, axes)
+        self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
+                           for ir in self.irrep_id]
+        return self
 
     @lib.with_doc(format_atom.__doc__)
     def format_atom(self, atom, origin=0, axes=None, unit='Ang'):

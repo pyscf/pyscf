@@ -278,6 +278,10 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
+def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                  with_symmetry=True):
+    return gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao, h1e, with_symmetry)
+
 
 # Dual basis for gradients and hessian
 def project_mol(mol, dual_basis={}):
@@ -868,8 +872,43 @@ def newton(mf):
                 return mo
         return SecondOrderGHF(mf)
 
-    elif isinstance(mf, scf.dhf.UHF):
-        raise RuntimeError('Not support Dirac-HF')
+    elif isinstance(mf, scf.dhf.RDHF):
+        class SecondOrderRDHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+
+            gen_g_hop = gen_g_hop_dhf
+
+            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+                nmo = mo_occ.size
+                nocc = numpy.count_nonzero(mo_occ)
+                nvir = nmo - nocc
+                dx = dx.reshape(nvir, nocc)
+                dx_aa = dx[::2,::2]
+                dr_aa = hf.unpack_uniq_var(dx_aa.ravel, mo_occ[::2])
+                u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
+                # Allows only the rotation within the up-up space and down-down space
+                u[::2,::2] = u[1::2,1::2] = expmat(dr_aa)
+                return numpy.dot(u0, u)
+
+            def rotate_mo(self, mo_coeff, u, log=None):
+                mo = numpy.dot(mo_coeff, u)
+                return mo
+        return SecondOrderRDHF(mf)
+
+    elif isinstance(mf, scf.dhf.DHF):
+        class SecondOrderDHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+
+            gen_g_hop = gen_g_hop_dhf
+
+            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+                dr = hf.unpack_uniq_var(dx, mo_occ)
+                return numpy.dot(u0, expmat(dr))
+
+            def rotate_mo(self, mo_coeff, u, log=None):
+                mo = numpy.dot(mo_coeff, u)
+                return mo
+        return SecondOrderDHF(mf)
 
     else:
         class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
