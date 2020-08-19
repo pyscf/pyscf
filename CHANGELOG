@@ -4,6 +4,9 @@ PySCF 1.7.? (2020-?-?)
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
   - Kramers' restricted Dirac-Hartree-Fock, X2C, DHF-SOSCF
+* Improved
+  - Support pseudo potential Atomic HF
+  - Atomic HF for 1-electron system
 * Fixed
   - Bug in Mole.fromstring
   - Buffer size bug in DHF JK builder for very small systems
@@ -97,7 +100,7 @@ PySCF 1.7.1 (2020-2-29)
   - APIs for HF/KS response functions (used by TDDFT and other methods)
   - transform_ci function to allow projection between FCI wavefunction in
     different sizes
-  - The fractional-occupancy atomic HF method in SCF initial guess
+  - The fractional occupancy atomic HF method in SCF initial guess
   - Performance of non-local XC functional
   - FCI Performance
   - stability of linear equation solver in dynamic polarizability
