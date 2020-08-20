@@ -343,7 +343,8 @@ def transform_integrals_df(myadc):
 
     eris = lambda:None
     eris.vvvv = None
-    naux = myadc._scf.with_df.get_naoaux()
+    with_df = myadc.with_df 
+    naux = with_df.get_naoaux()
     Loo = np.empty((naux,nocc_a,nocc_a))
     Lov = np.empty((naux,nocc_a,nvir_a))
     Lvo = np.empty((naux,nvir_a,nocc_a))
@@ -355,7 +356,8 @@ def transform_integrals_df(myadc):
     ijslice = (0, nmo_a, 0, nmo_a)
     Lpq = None
     p1 = 0
-    for eri1 in myadc._scf.with_df.loop():
+    #for eri1 in myadc._scf.with_df.loop():
+    for eri1 in myadc.with_df.loop():
         Lpq = ao2mo._ao2mo.nr_e2(eri1, mo_coeff_a, ijslice, aosym='s2', out=Lpq).reshape(-1,nmo_a,nmo_a)
         p0, p1 = p1, p1 + Lpq.shape[0]
         Loo[p0:p1] = Lpq[:,:nocc_a,:nocc_a]
@@ -367,7 +369,8 @@ def transform_integrals_df(myadc):
     ijslice = (0, nmo_b, 0, nmo_b)
     Lpq = None
     p1 = 0
-    for eri1 in myadc._scf.with_df.loop():
+    #for eri1 in myadc._scf.with_df.loop():
+    for eri1 in myadc.with_df.loop():
         Lpq = ao2mo._ao2mo.nr_e2(eri1, mo_coeff_b, ijslice, aosym='s2', out=Lpq).reshape(-1,nmo_b,nmo_b)
         p0, p1 = p1, p1 + Lpq.shape[0]
         LOO[p0:p1] = Lpq[:,:nocc_b,:nocc_b]
@@ -461,42 +464,42 @@ def calculate_chunk_size(myadc):
 
     return chnk_size
 
-def  get_vvvv_df(myadc, Lvv, p, nvir, chnk_size):
-
-    naux = myadc._scf.with_df.get_naoaux()
-
-    Lvv = Lvv.reshape(naux,nvir,nvir)
-    ind_vv_g = np.tril_indices(nvir, k=-1)
-
-    if chnk_size < nvir:
-        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
-    else :
-        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
-
-    Lvv = Lvv.reshape(naux,nvir*nvir)
-    vvvv = lib.ddot(Lvv_temp, Lvv)
-    #vvvv = np.dot(Lvv_temp, Lvv)
-    vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
-    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir, nvir)
-    vvvv -= np.ascontiguousarray(vvvv.transpose(0,1,3,2))
-    vvvv = vvvv[:, :, ind_vv_g[0], ind_vv_g[1]]
-
-    return vvvv    
-
-
-def  get_vVvV_df(myadc, Lvv, LVV, p, chnk_size):
-
-    naux = myadc._scf.with_df.get_naoaux()
-    nvir_1 = Lvv.shape[1]
-    nvir_2 = LVV.shape[1]
-
-    if chnk_size < nvir_1:
-        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
-    else :
-        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
-
-    LVV = LVV.reshape(naux,nvir_2*nvir_2)
-    vvvv = lib.ddot(Lvv_temp, LVV).reshape(-1,nvir_1,nvir_2,nvir_2)
-    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir_2, nvir_1, nvir_2)
-
-    return vvvv    
+#def  get_vvvv_df(myadc, Lvv, p, nvir, chnk_size):
+#
+#    naux = myadc._scf.with_df.get_naoaux()
+#
+#    Lvv = Lvv.reshape(naux,nvir,nvir)
+#    ind_vv_g = np.tril_indices(nvir, k=-1)
+#
+#    if chnk_size < nvir:
+#        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
+#    else :
+#        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
+#
+#    Lvv = Lvv.reshape(naux,nvir*nvir)
+#    vvvv = lib.ddot(Lvv_temp, Lvv)
+#    #vvvv = np.dot(Lvv_temp, Lvv)
+#    vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
+#    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir, nvir)
+#    vvvv -= np.ascontiguousarray(vvvv.transpose(0,1,3,2))
+#    vvvv = vvvv[:, :, ind_vv_g[0], ind_vv_g[1]]
+#
+#    return vvvv    
+#
+#
+#def  get_vVvV_df(myadc, Lvv, LVV, p, chnk_size):
+#
+#    naux = myadc._scf.with_df.get_naoaux()
+#    nvir_1 = Lvv.shape[1]
+#    nvir_2 = LVV.shape[1]
+#
+#    if chnk_size < nvir_1:
+#        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
+#    else :
+#        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
+#
+#    LVV = LVV.reshape(naux,nvir_2*nvir_2)
+#    vvvv = lib.ddot(Lvv_temp, LVV).reshape(-1,nvir_1,nvir_2,nvir_2)
+#    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir_2, nvir_1, nvir_2)
+#
+#    return vvvv    

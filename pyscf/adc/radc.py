@@ -26,6 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 from pyscf import __config__
+from pyscf import df
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
@@ -81,7 +82,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
-#@profile
+
 def compute_amplitudes(myadc, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -259,7 +260,7 @@ def compute_amplitudes(myadc, eris):
 
     return t1, t2
 
-#@profile
+
 def compute_energy(myadc, t1, t2, eris):
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -393,7 +394,7 @@ def contract_ladder(myadc,t_amp,vvvv):
              a += k
     else :
         for p in range(0,nvir,chnk_size):
-            vvvv_p = radc_ao2mo.get_vvvv_df(myadc, vvvv, p, chnk_size)
+            vvvv_p = dfadc.get_vvvv_df(myadc, vvvv, p, chnk_size)
             k = vvvv_p.shape[0]
             vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
             t[a:a+k] = np.dot(vvvv_p,t_amp_t).reshape(-1,nvir,nocc*nocc)
@@ -472,6 +473,7 @@ class RADC(lib.StreamObject):
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
+        self.with_df = None
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -517,7 +519,12 @@ class RADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self._scf, 'with_df', None):  
+        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
+           if getattr(self, 'with_df', None): 
+               self.with_df = self.with_df
+           else :
+               self.with_df = self._scf.with_df
+
            def df_transform():
                return radc_ao2mo.transform_integrals_df(self)
            self.transform_integrals = df_transform
@@ -555,9 +562,14 @@ class RADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self._scf, 'with_df', None):  
+        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
+           if getattr(self, 'with_df', None): 
+               self.with_df = self.with_df
+           else :
+               self.with_df = self._scf.with_df
+
            def df_transform():
-               return radc_ao2mo.transform_integrals_df(self)
+              return radc_ao2mo.transform_integrals_df(self)
            self.transform_integrals = df_transform
         elif (self._scf._eri is None or
             (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
@@ -596,7 +608,18 @@ class RADC(lib.StreamObject):
     def ip_adc(self, nroots=1, guess=None, eris=None):
         return RADCIP(self).kernel(nroots, guess, eris)
 
-#@profile
+    def density_fit(self, auxbasis=None, with_df = None):
+        if with_df is None:
+            self.with_df = df.DF(self._scf.mol)
+            self.with_df.max_memory = self.max_memory
+            self.with_df.stdout = self.stdout
+            self.with_df.verbose = self.verbose
+            self.with_df.auxbasis = auxbasis
+        else :
+            self.with_df = with_df
+        return self
+
+
 def get_imds_ea(adc, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -821,7 +844,7 @@ def get_imds_ea(adc, eris=None):
 
                 for p in range(0,nvir,chnk_size):
 
-                    vvvv = radc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
+                    vvvv = dfadc.get_vvvv_df(adc, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
                     k = vvvv.shape[0]
                     temp[a:a+k] -= lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a,  vvvv, optimize=True)
                     temp[a:a+k] += 0.5*lib.einsum('mldf,mled,aefb->ab',t2_1_a, t2_1_a,  vvvv, optimize=True)
@@ -1077,8 +1100,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         if eris is None:
             eris = adc.transform_integrals()
 
-            #if not isinstance(eris.vvvv, list): 
-            if not isinstance(eris.vvvv, list) and not isinstance(eris.vvvv, type(None)):
+            if isinstance(eris.vvvv, np.ndarray):
 
                 eris_oovv = eris.oovv
                 eris_ovvo = eris.ovvo
@@ -1158,7 +1180,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
         if eris is None:
             eris = adc.transform_integrals()
 
-            if not isinstance(eris.vvvv, list): 
+            if isinstance(eris.vvvv, np.ndarray):
 
                 eris_oooo = eris.oooo
                 eris_oovv = eris.oovv
@@ -1210,7 +1232,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
              a += k
     else :
         for p in range(0,nvir,chnk_size):
-            vvvv_p = radc_ao2mo.get_vvvv_df(myadc, vvvv, p, chnk_size)
+            vvvv_p = dfadc.get_vvvv_df(myadc, vvvv, p, chnk_size)
             k = vvvv_p.shape[0]
             vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
             r2_vvvv[:,a:a+k] = np.dot(r2,vvvv_p.T).reshape(nocc,-1,nvir)
@@ -1220,8 +1242,6 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
     r2_vvvv = r2_vvvv.reshape(-1)
 
     return r2_vvvv
-
-
 
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
@@ -1267,7 +1287,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         M_ab = adc.get_imds()
     
     #Calculate sigma vector
-    #@profile
     def sigma_(r):
 
         s = np.zeros((dim))
@@ -1863,6 +1882,7 @@ class RADCEA(RADC):
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
+        self.with_df = adc.with_df
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -1958,6 +1978,7 @@ class RADCIP(RADC):
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
+        self.with_df = adc.with_df
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 

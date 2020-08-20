@@ -176,21 +176,21 @@ def transform_integrals_outcore(myadc):
           
     return eris
 
-################ DF eris ############################
-#@profile
+
+### DF integral transformation for integrals in Chemists' notation###
 def transform_integrals_df(myadc):
     cput0 = (time.clock(), time.time())
-    #log = logger.Logger(mycc.stdout, mycc.verbose)
 
     mo_coeff = np.asarray(myadc.mo_coeff, order='F')
     nocc = myadc._nocc
     nao, nmo = mo_coeff.shape
     nvir = myadc._nmo - myadc._nocc
     nvir_pair = nvir*(nvir+1)//2
-   
+    with_df = myadc.with_df
+    naux = with_df.get_naoaux()
     eris = lambda:None
     eris.vvvv = None
-    naux = myadc._scf.with_df.get_naoaux()
+    
     Loo = np.empty((naux,nocc,nocc))
     Lov = np.empty((naux,nocc,nvir))
     Lvo = np.empty((naux,nvir,nocc))
@@ -198,7 +198,8 @@ def transform_integrals_df(myadc):
     ijslice = (0, nmo, 0, nmo)
     Lpq = None
     p1 = 0
-    for eri1 in myadc._scf.with_df.loop():
+
+    for eri1 in with_df.loop():
         Lpq = ao2mo._ao2mo.nr_e2(eri1, mo_coeff, ijslice, aosym='s2', out=Lpq).reshape(-1,nmo,nmo)
         p0, p1 = p1, p1 + Lpq.shape[0]
         Loo[p0:p1] = Lpq[:,:nocc,:nocc]
@@ -228,7 +229,7 @@ def transform_integrals_df(myadc):
     eris.ovvv[:] = lib.ddot(Lov.T, Lvv_p).reshape(nocc,nvir,nvir_pair)
      
     return eris
-########################################################################
+
 
 def calculate_chunk_size(myadc):
 
@@ -241,27 +242,6 @@ def calculate_chunk_size(myadc):
         chnk_size = 1
 
     return chnk_size
-
-
-def  get_vvvv_df(myadc, Lvv, p, chnk_size):
-
-    nocc = myadc._nocc
-    nvir = myadc._nvir
-    naux = myadc._scf.with_df.get_naoaux()
-
-    Lvv = Lvv.reshape(naux,nvir,nvir)
-
-    if chnk_size < nvir:
-        Lvv_temp = np.ascontiguousarray(Lvv.T[p:p+chnk_size].reshape(-1,naux))
-    else :
-        Lvv_temp = np.ascontiguousarray(Lvv.T.reshape(-1,naux))
-
-    Lvv = Lvv.reshape(naux,nvir*nvir)
-    vvvv = lib.ddot(Lvv_temp, Lvv)
-    #vvvv = np.dot(Lvv_temp, Lvv)
-    vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
-    vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
-    return vvvv    
                    
                    
 def read_dataset(h5file, dataname):

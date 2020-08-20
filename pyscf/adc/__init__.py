@@ -44,14 +44,6 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     else :
         raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
 
-#####################################################################
-#    if getattr(mf, 'with_df', None):
-#        return dfadc.RADC(mf, frozen, mo_coeff, mo_occ)
-#    else:
-#        return adc.ADC(mf, frozen, mo_coeff, mo_occ)
-#
-#####################################################################
-
 ADC.__doc__ = uadc.UADC.__doc__
 
 
@@ -64,11 +56,7 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
 
-    if getattr(mf, 'with_df', None):
-        #raise NotImplementedError('DF-UADC')
-        return dfadc.UADC(mf, frozen, mo_coeff, mo_occ)
-    else:
-        return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
+    return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
 
 UADC.__doc__ = uadc.UADC.__doc__
 
@@ -83,10 +71,6 @@ def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.rhf.RHF):
         mf = scf.addons.convert_to_rhf(mf)
 
-    if getattr(mf, 'with_df', None):
-        #raise NotImplementedError('DF-RADC')
-        return dfadc.RADC(mf, frozen, mo_coeff, mo_occ)
-    else:
-        return radc.RADC(mf, frozen, mo_coeff, mo_occ)
+    return radc.RADC(mf, frozen, mo_coeff, mo_occ)
 
 RADC.__doc__ = radc.RADC.__doc__

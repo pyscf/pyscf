@@ -25,7 +25,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
+from pyscf.adc import dfadc
 from pyscf import __config__
+from pyscf import df
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
@@ -606,7 +608,7 @@ def contract_ladder_antisym(myadc,t_amp,vvvv_d):
              a += k
     else :
         for p in range(0,nvir,chnk_size):
-            vvvv = uadc_ao2mo.get_vvvv_df(myadc, vvvv_d, p, nvir, chnk_size)
+            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, p, nvir, chnk_size)
             k = vvvv.shape[0]
             vvvv = vvvv.reshape(-1,nv_pair)
             t[a:a+k] = np.dot(vvvv,t_amp_t).reshape(-1,nvir,nocc*nocc)
@@ -640,7 +642,7 @@ def contract_ladder(myadc,t_amp,vvvv_p):
         for p in range(0,nvir_a,chnk_size):
             Lvv = vvvv_p[0]
             LVV = vvvv_p[1]
-            vvvv = uadc_ao2mo.get_vVvV_df(myadc, Lvv, LVV, p, chnk_size)
+            vvvv = dfadc.get_vVvV_df(myadc, Lvv, LVV, p, chnk_size)
             k = vvvv.shape[0]
             vvvv = vvvv.reshape(-1,nvir_a*nvir_b)
             t[a:a+k] = np.dot(vvvv,t_amp_t).reshape(-1,nvir_b,nocc_a*nocc_b)
@@ -716,6 +718,7 @@ class UADC(lib.StreamObject):
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
+        self.with_df = None
         
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -761,7 +764,12 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self._scf, 'with_df', None):  
+        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
+           if getattr(self, 'with_df', None): 
+               self.with_df = self.with_df
+           else :
+               self.with_df = self._scf.with_df
+
            def df_transform():
                return uadc_ao2mo.transform_integrals_df(self)
            self.transform_integrals = df_transform
@@ -799,7 +807,12 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self._scf, 'with_df', None):  
+        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
+           if getattr(self, 'with_df', None): 
+               self.with_df = self.with_df
+           else :
+               self.with_df = self._scf.with_df
+
            def df_transform():
                return uadc_ao2mo.transform_integrals_df(self)
            self.transform_integrals = df_transform
@@ -839,6 +852,17 @@ class UADC(lib.StreamObject):
     
     def ip_adc(self, nroots=1, guess=None, eris=None):
         return UADCIP(self).kernel(nroots, guess, eris)
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        if with_df is None:
+            self.with_df = df.DF(self._scf.mol)
+            self.with_df.max_memory = self.max_memory
+            self.with_df.stdout = self.stdout
+            self.with_df.verbose = self.verbose
+            self.with_df.auxbasis = auxbasis
+        else :
+            self.with_df = with_df
+        return self
 
 
 def get_imds_ea(adc, eris=None):
@@ -1267,7 +1291,7 @@ def get_imds_ea(adc, eris=None):
             temp = np.zeros((nvir_a,nvir_a))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for p in range(0,nvir_a,chnk_size):
-                vvvv = uadc_ao2mo.get_vvvv_df(adc, eris.Lvv, p, nvir_a, chnk_size) 
+                vvvv = dfadc.get_vvvv_antisym_df(adc, eris.Lvv, p, nvir_a, chnk_size) 
                 k = vvvv.shape[0]
 
                 eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
@@ -1284,7 +1308,7 @@ def get_imds_ea(adc, eris=None):
             temp = np.zeros((nvir_b,nvir_b))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for p in range(0,nvir_b,chnk_size):
-                VVVV = uadc_ao2mo.get_vvvv_df(adc, eris.LVV, p, nvir_b, chnk_size) 
+                VVVV = dfadc.get_vvvv_antisym_df(adc, eris.LVV, p, nvir_b, chnk_size) 
                 k = VVVV.shape[0]
 
                 eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
@@ -1301,7 +1325,7 @@ def get_imds_ea(adc, eris=None):
             temp = np.zeros((nvir_a,nvir_a))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for p in range(0,nvir_a,chnk_size):
-                eris_vVvV = uadc_ao2mo.get_vVvV_df(adc, eris.Lvv, eris.LVV, p, chnk_size) 
+                eris_vVvV = dfadc.get_vVvV_df(adc, eris.Lvv, eris.LVV, p, chnk_size) 
                 k = eris_vVvV.shape[0]
             
                 temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_b, t2_1_b, eris_vVvV, optimize=True)
@@ -1312,7 +1336,7 @@ def get_imds_ea(adc, eris=None):
             a = 0
             temp = np.zeros((nvir_b,nvir_b))
             for p in range(0,nvir_b,chnk_size):
-                eris_VvVv = uadc_ao2mo.get_vVvV_df(adc, eris.LVV, eris.Lvv, p, chnk_size) 
+                eris_VvVv = dfadc.get_vVvV_df(adc, eris.LVV, eris.Lvv, p, chnk_size) 
                 k = eris_VvVv.shape[0]
 
                 temp[a:a+k] -= 0.5*lib.einsum('mldf,mled,aebf->ab',t2_1_a, t2_1_a, eris_VvVv, optimize=True)
@@ -1783,7 +1807,6 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         if eris is None:
             eris = adc.transform_integrals()
 
-            #if not isinstance(eris.vvvv, list): 
             if isinstance(eris.vvvv, np.ndarray): 
 
                 eris_oovv = eris.oovv
@@ -1960,7 +1983,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
         if eris is None:
             eris = adc.transform_integrals()
 
-            if not isinstance(eris.vvvv, list): 
+            if isinstance(eris.vvvv, np.ndarray): 
 
                 eris_oooo = eris.oooo
                 eris_OOOO = eris.OOOO
@@ -2054,6 +2077,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     diag = -diag
     return diag
 
+
 def ea_contract_r_vvvv_antisym(myadc,r2,vvvv_d):
 
     nocc = r2.shape[0]
@@ -2076,13 +2100,14 @@ def ea_contract_r_vvvv_antisym(myadc,r2,vvvv_d):
              a += k
     else :
         for p in range(0,nvir,chnk_size):
-            vvvv = uadc_ao2mo.get_vvvv_df(myadc, vvvv_d, p, nvir, chnk_size)
+            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, p, nvir, chnk_size)
             k = vvvv.shape[0]
             vvvv = vvvv.reshape(-1,nv_pair)
             r2_vvvv[:,a:a+k] = np.dot(r2,vvvv.T).reshape(nocc,-1,nvir)
             del (vvvv)
             a += k
     return r2_vvvv
+
 
 def ea_contract_r_vvvv(myadc,r2,vvvv_d):
 
@@ -2105,7 +2130,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv_d):
         Lvv = vvvv_d[0]
         LVV = vvvv_d[1]
         for p in range(0,nvir_1,chnk_size):
-            vvvv = uadc_ao2mo.get_vVvV_df(myadc, Lvv, LVV, p, chnk_size)
+            vvvv = dfadc.get_vVvV_df(myadc, Lvv, LVV, p, chnk_size)
             k = vvvv.shape[0]
             vvvv = vvvv.reshape(-1,nvir_1*nvir_2)
             r2_vvvv[:,a:a+k] = np.dot(r2,vvvv.T).reshape(nocc_1,-1,nvir_2)
@@ -2113,6 +2138,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv_d):
             a += k
 
     return r2_vvvv
+
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
 
@@ -3455,6 +3481,7 @@ class UADCEA(UADC):
         self.nmo_b = adc._nmo[1]
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
+        self.with_df = adc.with_df
 
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -3555,6 +3582,7 @@ class UADCIP(UADC):
         self.nmo_b = adc._nmo[1]
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
+        self.with_df = adc.with_df
 
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
