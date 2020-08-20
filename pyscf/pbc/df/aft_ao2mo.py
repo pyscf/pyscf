@@ -287,7 +287,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
     for pqkR, pqkI, p0, p1 \
             in mydf.pw_loop(mydf.mesh, kpts, q,
                             max_memory=max_memory, aosym='s2'):
-        pqk = (pqkR + pqkI*1j).reshape(nao,nao,-1)
+        pqk = lib.unpack_tril(pqkR + pqkI*1j, axis=0).reshape(nao,nao,-1)
         mo_pairs_G[p0:p1] = lib.einsum('pqk,pi,qj->kij', pqk, *mo_coeffs[:2])
     return mo_pairs_G.reshape(ngrids,nmoi*nmoj)
 

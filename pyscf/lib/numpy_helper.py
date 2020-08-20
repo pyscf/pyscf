@@ -296,7 +296,7 @@ def pack_tril(mat, axis=-1, out=None):
 
 # 1d -> 2d or 2d -> 3d, write hermitian lower triangle to upper triangle
 def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
-    '''Reverse operation of pack_tril.
+    '''Reversed operation of pack_tril.
 
     Kwargs:
         filltriu : int
