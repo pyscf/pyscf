@@ -19,7 +19,7 @@ def  get_vvvv_df(myadc, Lvv, p, chnk_size):
 
     nocc = myadc._nocc
     nvir = myadc._nvir
-    naux = myadc._scf.with_df.get_naoaux()
+    naux = myadc.with_df.get_naoaux()
 
     Lvv = Lvv.reshape(naux,nvir,nvir)
 
@@ -37,7 +37,7 @@ def  get_vvvv_df(myadc, Lvv, p, chnk_size):
 
 def  get_vvvv_antisym_df(myadc, Lvv, p, nvir, chnk_size):
 
-    naux = myadc._scf.with_df.get_naoaux()
+    naux = myadc.with_df.get_naoaux()
 
     Lvv = Lvv.reshape(naux,nvir,nvir)
     ind_vv_g = np.tril_indices(nvir, k=-1)
@@ -59,7 +59,7 @@ def  get_vvvv_antisym_df(myadc, Lvv, p, nvir, chnk_size):
 
 def  get_vVvV_df(myadc, Lvv, LVV, p, chnk_size):
 
-    naux = myadc._scf.with_df.get_naoaux()
+    naux = myadc.with_df.get_naoaux()
     nvir_1 = Lvv.shape[1]
     nvir_2 = LVV.shape[1]
 

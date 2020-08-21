@@ -26,7 +26,6 @@ Algebraic Diagrammatic Construction
 from pyscf import scf
 from pyscf.adc import uadc
 from pyscf.adc import radc
-from pyscf.adc import dfadc
 
 def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):

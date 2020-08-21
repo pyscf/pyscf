@@ -25,6 +25,7 @@ import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
+from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
 
@@ -648,7 +649,10 @@ class RADC(lib.StreamObject):
             self.with_df.max_memory = self.max_memory
             self.with_df.stdout = self.stdout
             self.with_df.verbose = self.verbose
-            self.with_df.auxbasis = auxbasis
+            if auxbasis is None:
+                self.with_df.auxbasis = self._scf.with_df.auxbasis
+            else :
+                self.with_df.auxbasis = auxbasis
         else :
             self.with_df = with_df
         return self

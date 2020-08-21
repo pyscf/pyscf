@@ -879,7 +879,10 @@ class UADC(lib.StreamObject):
             self.with_df.max_memory = self.max_memory
             self.with_df.stdout = self.stdout
             self.with_df.verbose = self.verbose
-            self.with_df.auxbasis = auxbasis
+            if auxbasis is None:
+                self.with_df.auxbasis = self._scf.with_df.auxbasis
+            else :
+                self.with_df.auxbasis = auxbasis
         else :
             self.with_df = with_df
         return self
