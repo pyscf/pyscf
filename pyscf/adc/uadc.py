@@ -3443,6 +3443,7 @@ def get_spec_factors(adc, T, U, nroots=1):
     return P
 
 
+
 class UADCEA(UADC):
     '''unrestricted ADC for EA energies and spectroscopic amplitudes
 
