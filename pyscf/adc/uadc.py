@@ -608,7 +608,7 @@ def contract_ladder_antisym(myadc,t_amp,vvvv_d):
              a += k
     else :
         for p in range(0,nvir,chnk_size):
-            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, p, nvir, chnk_size)
+            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, p, chnk_size)
             k = vvvv.shape[0]
             vvvv = vvvv.reshape(-1,nv_pair)
             t[a:a+k] = np.dot(vvvv,t_amp_t).reshape(-1,nvir,nocc*nocc)
@@ -1314,7 +1314,7 @@ def get_imds_ea(adc, eris=None):
             temp = np.zeros((nvir_a,nvir_a))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for p in range(0,nvir_a,chnk_size):
-                vvvv = dfadc.get_vvvv_antisym_df(adc, eris.Lvv, p, nvir_a, chnk_size) 
+                vvvv = dfadc.get_vvvv_antisym_df(adc, eris.Lvv, p, chnk_size) 
                 k = vvvv.shape[0]
 
                 eris_vvvv = np.zeros((k,nvir_a,nvir_a,nvir_a))   
@@ -1331,7 +1331,7 @@ def get_imds_ea(adc, eris=None):
             temp = np.zeros((nvir_b,nvir_b))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for p in range(0,nvir_b,chnk_size):
-                VVVV = dfadc.get_vvvv_antisym_df(adc, eris.LVV, p, nvir_b, chnk_size) 
+                VVVV = dfadc.get_vvvv_antisym_df(adc, eris.LVV, p, chnk_size) 
                 k = VVVV.shape[0]
 
                 eris_VVVV = np.zeros((k,nvir_b,nvir_b,nvir_b))   
@@ -2123,7 +2123,7 @@ def ea_contract_r_vvvv_antisym(myadc,r2,vvvv_d):
              a += k
     else :
         for p in range(0,nvir,chnk_size):
-            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, p, nvir, chnk_size)
+            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, p, chnk_size)
             k = vvvv.shape[0]
             vvvv = vvvv.reshape(-1,nv_pair)
             r2_vvvv[:,a:a+k] = np.dot(r2,vvvv.T).reshape(nocc,-1,nvir)

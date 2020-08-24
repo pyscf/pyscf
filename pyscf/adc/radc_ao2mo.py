@@ -180,6 +180,7 @@ def transform_integrals_outcore(myadc):
 ### DF integral transformation for integrals in Chemists' notation###
 def transform_integrals_df(myadc):
     cput0 = (time.clock(), time.time())
+    log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mo_coeff = np.asarray(myadc.mo_coeff, order='F')
     nocc = myadc._nocc
@@ -228,6 +229,7 @@ def transform_integrals_df(myadc):
     eris.ovov[:] = lib.ddot(Lov.T, Lov).reshape(nocc,nvir,nocc,nvir)
     eris.ovvv[:] = lib.ddot(Lov.T, Lvv_p).reshape(nocc,nvir,nvir_pair)
      
+    log.timer('DF-ADC integral transformation', *cput0)
     return eris
 
 
