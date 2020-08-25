@@ -114,6 +114,7 @@ class PolEmbed(lib.StreamObject):
         self.cppe_state = self._create_cppe_state(mol)
         self.potentials = self.cppe_state.potentials
         self.V_es = None
+        self.eef = False
 
         # e (the electrostatic and induction energy)
         # and v (the additional potential) are
@@ -143,6 +144,7 @@ class PolEmbed(lib.StreamObject):
             logger.info(self, output)
         cppe_state = cppe.CppeState(self.options, cppe_mol, callback)
         cppe_state.calculate_static_energies_and_fields()
+        # logger.info(self, "Static energies and fields computed")
         return cppe_state
 
     def reset(self, mol=None):
@@ -167,6 +169,24 @@ class PolEmbed(lib.StreamObject):
         self.e = e
         self.v = v
         return e, v
+    
+    def effective_dipole_operator(self):
+        """
+        Compute the derivatives of induced moments wrt each coordinate
+        and form integrals for effective dipole operator (EEF)
+        """
+        dips = self.mol.intor_symmetric('int1e_r', comp=3)
+        if self.eef:
+            logger.info(self, "Computing effective dipole operator for EEF.")
+            positions = self.cppe_state.positions_polarizable
+            n_sites = positions.shape[0]
+            induced_moments = self.cppe_state.induced_moments_eef()
+            induced_moments = induced_moments.reshape(n_sites, 3, 3)
+            fakemol = gto.fakemol_for_charges(positions)
+            j3c = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
+            V_ind = numpy.einsum('aijg,gax->xij', j3c, -induced_moments)
+            dips += V_ind + V_ind.transpose(0, 2, 1)
+        return list(dips)
 
     def _exec_cppe(self, dm, elec_only=False):
         dms = numpy.asarray(dm)
@@ -176,7 +196,15 @@ class PolEmbed(lib.StreamObject):
         dms = dms.reshape(-1,nao,nao)
         n_dm = dms.shape[0]
 
+        max_memory = self.max_memory #max(0, self.max_memory - lib.current_memory()[0])
+        max_memreq = 3 * nao**2 * len(self.potentials) * 8.0/1e6
+        n_chunks = 1
+        if max_memreq >= max_memory:
+            n_chunks = int(max_memreq // max_memory + 2)
+        # print("Chunks", n_chunks, "max_memory", max_memory, "max_memreq", max_memreq)
+
         if self.V_es is None:
+            # logger.info(self, "Computing electrostatics operator")
             positions = numpy.array([p.position for p in self.potentials])
             moments = []
             orders = []
@@ -187,26 +215,31 @@ class PolEmbed(lib.StreamObject):
                     p_moments.append(m.values)
                 orders.append(m.k)
                 moments.append(p_moments)
-            self.V_es = self._compute_multipole_potential_integrals(positions, orders, moments)
+            self.V_es = self._compute_multipole_potential_integrals(positions, orders, moments, n_chunks)
 
+        # logger.info(self, "Computing electrostatics energy")
         e_static = numpy.einsum('ij,xij->x', self.V_es, dms)
         self.cppe_state.energies["Electrostatic"]["Electronic"] = (
             e_static[0]
         )
 
-        positions = numpy.array([p.position for p in self.potentials
-                                 if p.is_polarizable])
+        positions = self.cppe_state.positions_polarizable
         n_sites = positions.shape[0]
         V_ind = numpy.zeros((n_dm, nao, nao))
 
         e_tot = []
         e_pol = []
         if n_sites > 0:
-            #:elec_fields = self._compute_field(positions, dms)
-            fakemol = gto.fakemol_for_charges(positions)
-            j3c = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
-            elec_fields = (numpy.einsum('aijg,nij->nga', j3c, dms) +
-                           numpy.einsum('aijg,nji->nga', j3c, dms))
+            # logger.info(self, "Computing field integrals")
+            chunks = numpy.array_split(positions, n_chunks)
+            elec_fields_chunk = []
+            for chunk in chunks:
+                fakemol = gto.fakemol_for_charges(chunk)
+                j3c = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
+                elf = (numpy.einsum('aijg,nij->nga', j3c, dms) +
+                       numpy.einsum('aijg,nji->nga', j3c, dms))
+                elec_fields_chunk.append(elf)
+            elec_fields = numpy.concatenate(elec_fields_chunk, axis=1)
 
             induced_moments = numpy.empty((n_dm, n_sites * 3))
             for i_dm in range(n_dm):
@@ -217,8 +250,12 @@ class PolEmbed(lib.StreamObject):
                 e_pol.append(self.cppe_state.energies["Polarization"]["Electronic"])
 
             induced_moments = induced_moments.reshape(n_dm, n_sites, 3)
-            #:V_ind = self._compute_field_integrals(positions, induced_moments)
-            V_ind = numpy.einsum('aijg,nga->nij', j3c, -induced_moments)
+            induced_moments_chunked = numpy.array_split(induced_moments, n_chunks, axis=1)
+            V_ind = 0
+            for pos_chunk, ind_chunk in zip(chunks, induced_moments_chunked):
+                fakemol = gto.fakemol_for_charges(pos_chunk)
+                j3c = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
+                V_ind += numpy.einsum('aijg,nga->nij', j3c, -ind_chunk)
             V_ind = V_ind + V_ind.transpose(0, 2, 1)
 
         if not elec_only:
@@ -231,50 +268,56 @@ class PolEmbed(lib.StreamObject):
         if is_single_dm:
             e = e[0]
             vmat = vmat[0]
+        # logger.info(self, "PE done")
         return e, vmat
 
-    def _compute_multipole_potential_integrals(self, sites, orders, moments):
-        orders = numpy.asarray(orders)
-        if numpy.any(orders > 2):
+    def _compute_multipole_potential_integrals(self, all_sites, all_orders, all_moments, n_chunks=1):
+        all_orders = numpy.asarray(all_orders)
+        if numpy.any(all_orders > 2):
             raise NotImplementedError("""Multipole potential integrals not
                                       implemented for order > 2.""")
 
-        # order 0
-        fakemol = gto.fakemol_for_charges(sites)
-        integral0 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e')
-        moments_0 = numpy.array([m[0] for m in moments])
-        op = numpy.einsum('ijg,ga->ij', integral0, moments_0 * cppe.prefactors(0))
+        chunks = numpy.array_split(all_sites, n_chunks)
+        chunks_o = numpy.array_split(all_orders, n_chunks)
+        chunks_m = numpy.array_split(all_moments, n_chunks)
+        op = 0
+        for (sites, orders, moments) in zip(chunks, chunks_o, chunks_m):
+            # order 0
+            fakemol = gto.fakemol_for_charges(sites)
+            integral0 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e')
+            moments_0 = numpy.array([m[0] for m in moments])
+            op += numpy.einsum('ijg,ga->ij', integral0, moments_0 * cppe.prefactors(0))
 
-        # order 1
-        if numpy.any(orders >= 1):
-            idx = numpy.where(orders >= 1)[0]
-            fakemol = gto.fakemol_for_charges(sites[idx])
-            integral1 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
-            moments_1 = numpy.array([moments[i][1] for i in idx])
-            v = numpy.einsum('aijg,ga,a->ij', integral1, moments_1, cppe.prefactors(1))
-            op += v + v.T
+            # order 1
+            if numpy.any(orders >= 1):
+                idx = numpy.where(orders >= 1)[0]
+                fakemol = gto.fakemol_for_charges(sites[idx])
+                integral1 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
+                moments_1 = numpy.array([moments[i][1] for i in idx])
+                v = numpy.einsum('aijg,ga,a->ij', integral1, moments_1, cppe.prefactors(1))
+                op += v + v.T
 
-        if numpy.any(orders >= 2):
-            idx = numpy.where(orders >= 2)[0]
-            fakemol = gto.fakemol_for_charges(sites[idx])
-            n_sites = idx.size
-            # moments_2 is the lower triangler of
-            # [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]] i.e.
-            # XX, XY, XZ, YY, YZ, ZZ = 0,1,2,4,5,8
-            # symmetrize it to the upper triangler part
-            # XX, YX, ZX, YY, ZY, ZZ = 0,3,6,4,7,8
-            m2 = numpy.einsum('ga,a->ga', [moments[i][2] for i in idx],
-                              cppe.prefactors(2))
-            moments_2 = numpy.zeros((n_sites, 9))
-            moments_2[:, [0, 1, 2, 4, 5, 8]]  = m2
-            moments_2[:, [0, 3, 6, 4, 7, 8]] += m2
-            moments_2 *= .5
+            if numpy.any(orders >= 2):
+                idx = numpy.where(orders >= 2)[0]
+                fakemol = gto.fakemol_for_charges(sites[idx])
+                n_sites = idx.size
+                # moments_2 is the lower triangler of
+                # [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]] i.e.
+                # XX, XY, XZ, YY, YZ, ZZ = 0,1,2,4,5,8
+                # symmetrize it to the upper triangler part
+                # XX, YX, ZX, YY, ZY, ZZ = 0,3,6,4,7,8
+                m2 = numpy.einsum('ga,a->ga', [moments[i][2] for i in idx],
+                                  cppe.prefactors(2))
+                moments_2 = numpy.zeros((n_sites, 9))
+                moments_2[:, [0, 1, 2, 4, 5, 8]]  = m2
+                moments_2[:, [0, 3, 6, 4, 7, 8]] += m2
+                moments_2 *= .5
 
-            integral2 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ipip1')
-            v = numpy.einsum('aijg,ga->ij', integral2, moments_2)
-            op += v + v.T
-            integral2 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ipvip1')
-            op += numpy.einsum('aijg,ga->ij', integral2, moments_2) * 2
+                integral2 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ipip1')
+                v = numpy.einsum('aijg,ga->ij', integral2, moments_2)
+                op += v + v.T
+                integral2 = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ipvip1')
+                op += numpy.einsum('aijg,ga->ij', integral2, moments_2) * 2
 
         return op
 
