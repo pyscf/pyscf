@@ -46,10 +46,21 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_df_gs(self):
+
+    def test_hf_dfgs(self):
+  
+        mf = scf.UHF(mol).run()
+        myadc = adc.ADC(mf)
+        myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.150979874005, 6)
+
+
+    def test_dfhs_dfgs(self):
   
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.150971806035, 6)
+
 
     def test_ea_dfadc3(self):
   
@@ -90,6 +101,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.586912661634, 6)
         self.assertAlmostEqual(p[2], 0.351125891139, 6)
       
+    def test_hf_dfadc3_ip(self):
+  
+        mf = scf.UHF(mol).run()
+        myadc = adc.ADC(mf)
+        myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
+        myadc.method = "adc(3)"
+
+        e,v,p = myadc.kernel(nroots=3)
+        e_corr = myadc.e_corr        
+
+        self.assertAlmostEqual(e_corr, -0.1633223874, 6)
+
+        self.assertAlmostEqual(e[0], 0.45707376, 6)
+        self.assertAlmostEqual(e[1], 0.46818480, 6)
+        self.assertAlmostEqual(e[2], 0.55652975, 6)
+
+        self.assertAlmostEqual(p[0], 0.93868596, 6)
+        self.assertAlmostEqual(p[1], 0.58692425, 6)
+        self.assertAlmostEqual(p[2], 0.35110754 ,6)
+
 if __name__ == "__main__":
-    print("DF-ADC calculations for different RADC methods for OH")
+    print("DF-ADC calculations for different UADC methods for OH")
     unittest.main()

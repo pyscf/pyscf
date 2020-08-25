@@ -31,25 +31,31 @@ mol.atom = [
 mol.basis = {'N':'cc-pvdz'}
 mol.verbose = 0
 mol.build()
-mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
-mf.conv_tol = 1e-12
-mf.kernel()
-myadc = adc.ADC(mf)
 
 def tearDownModule():
-    global mol, mf
-    del mol, mf
+    global mol
+    del mol
 
 class KnownValues(unittest.TestCase):
 
-
     def test_df_gs(self):
   
+        mf = scf.RHF(mol).run()
+        myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-jkfit')
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.3107267282596653, 6)
+
+    def test_dfhf_dfadc_gs(self):
+  
+        mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
+        myadc = adc.ADC(mf)
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.310726976610, 6)
 
     def test_ip_dfadc3(self):
   
+        mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
+        myadc = adc.ADC(mf)
         myadc.max_memory = 2
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
@@ -68,12 +74,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.863875684003, 6)
 
     def test_ea_dfadc2_dif_aux_basis(self):
-  
+ 
+        mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
         myadc.method = "adc(2)"
         myadc.method_type = "ea"
-        
+       
         e,v,p = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.142607731998, 6)
@@ -86,6 +93,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.926996353285, 6)
         self.assertAlmostEqual(p[3], 1.883660023372, 6)
       
+    def test_dfhf_dfadc2_ea(self):
+  
+        mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
+        myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
+        myadc.max_memory = 20
+        myadc.method = "adc(2)"
+        myadc.method_type = "ea"
+
+        e,v,p = myadc.kernel(nroots=4)
+
+        self.assertAlmostEqual(e[0], 0.14260766, 6)
+        self.assertAlmostEqual(e[1], 0.14260766, 6)
+        self.assertAlmostEqual(e[2], 0.55083845, 6)
+        self.assertAlmostEqual(e[3], 0.76736577, 6)
+
+        self.assertAlmostEqual(p[0], 1.86603796, 6)
+        self.assertAlmostEqual(p[1], 1.86603796, 6)
+        self.assertAlmostEqual(p[2], 1.92699634, 6)
+        self.assertAlmostEqual(p[3], 1.88366005, 6)
+
 if __name__ == "__main__":
     print("DF-ADC calculations for different RADC methods for nitrogen molecule")
     unittest.main()

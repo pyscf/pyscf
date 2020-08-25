@@ -393,7 +393,7 @@ def contract_ladder(myadc,t_amp,vvvv):
              dataset = dataset[:].reshape(-1,nvir*nvir)
              t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
              a += k
-    else :
+    elif getattr(myadc, 'with_df', None):
         for p in range(0,nvir,chnk_size):
             vvvv_p = dfadc.get_vvvv_df(myadc, vvvv, p, chnk_size)
             k = vvvv_p.shape[0]
@@ -401,6 +401,8 @@ def contract_ladder(myadc,t_amp,vvvv):
             t[a:a+k] = np.dot(vvvv_p,t_amp_t).reshape(-1,nvir,nocc*nocc)
             del (vvvv_p)
             a += k
+    else :
+        raise Exception("Unknown vvvv type") 
 
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
 
@@ -1268,7 +1270,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
              r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
              del (dataset)
              a += k
-    else :
+    elif getattr(myadc, 'with_df', None):
         for p in range(0,nvir,chnk_size):
             vvvv_p = dfadc.get_vvvv_df(myadc, vvvv, p, chnk_size)
             k = vvvv_p.shape[0]
@@ -1276,6 +1278,8 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
             r2_vvvv[:,a:a+k] = np.dot(r2,vvvv_p.T).reshape(nocc,-1,nvir)
             del (vvvv_p)
             a += k
+    else :
+        raise Exception("Unknown vvvv type") 
 
     r2_vvvv = r2_vvvv.reshape(-1)
 
