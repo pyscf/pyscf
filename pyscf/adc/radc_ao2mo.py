@@ -151,13 +151,8 @@ def transform_integrals_outcore(myadc):
         eris.vvvv = []
 
         cput3 = time.clock(), time.time()
-        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5
-        vvv_mem = (nvir**3) * 8/1e6
-
-        chnk_size =  int(avail_mem/vvv_mem)
-
-        if chnk_size <= 0 :
-            chnk_size = 1
+        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
+        chnk_size = calculate_chunk_size(myadc)
 
         for p in range(0,vir.shape[1],chnk_size):
 
@@ -182,6 +177,75 @@ def transform_integrals_outcore(myadc):
     return eris
 
 
+### DF integral transformation for integrals in Chemists' notation###
+def transform_integrals_df(myadc):
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(myadc.stdout, myadc.verbose)
+
+    mo_coeff = np.asarray(myadc.mo_coeff, order='F')
+    nocc = myadc._nocc
+    nao, nmo = mo_coeff.shape
+    nvir = myadc._nmo - myadc._nocc
+    nvir_pair = nvir*(nvir+1)//2
+    with_df = myadc.with_df
+    naux = with_df.get_naoaux()
+    eris = lambda:None
+    eris.vvvv = None
+    
+    Loo = np.empty((naux,nocc,nocc))
+    Lov = np.empty((naux,nocc,nvir))
+    Lvo = np.empty((naux,nvir,nocc))
+    eris.Lvv = np.empty((naux,nvir,nvir))
+    ijslice = (0, nmo, 0, nmo)
+    Lpq = None
+    p1 = 0
+
+    for eri1 in with_df.loop():
+        Lpq = ao2mo._ao2mo.nr_e2(eri1, mo_coeff, ijslice, aosym='s2', out=Lpq).reshape(-1,nmo,nmo)
+        p0, p1 = p1, p1 + Lpq.shape[0]
+        Loo[p0:p1] = Lpq[:,:nocc,:nocc]
+        Lov[p0:p1] = Lpq[:,:nocc,nocc:]
+        Lvo[p0:p1] = Lpq[:,nocc:,:nocc]
+        eris.Lvv[p0:p1] = Lpq[:,nocc:,nocc:]
+
+    Loo = Loo.reshape(naux,nocc*nocc)
+    Lov = Lov.reshape(naux,nocc*nvir)
+    Lvo = Lvo.reshape(naux,nocc*nvir)
+
+    Lvv_p = lib.pack_tril(eris.Lvv)
+
+    eris.feri1 = lib.H5TmpFile()
+    eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
+    eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
+    eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
+    eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
+    eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8')
+
+    eris.oooo[:] = lib.ddot(Loo.T, Loo).reshape(nocc,nocc,nocc,nocc)
+    eris.ovoo[:] = lib.ddot(Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)
+    eris.oovv[:] = lib.unpack_tril(lib.ddot(Loo.T, Lvv_p)).reshape(nocc,nocc,nvir,nvir)
+    eris.ovvo[:] = lib.ddot(Lov.T, Lvo).reshape(nocc,nvir,nvir,nocc)
+    eris.ovov[:] = lib.ddot(Lov.T, Lov).reshape(nocc,nvir,nocc,nvir)
+    eris.ovvv[:] = lib.ddot(Lov.T, Lvv_p).reshape(nocc,nvir,nvir_pair)
+     
+    log.timer('DF-ADC integral transformation', *cput0)
+    return eris
+
+
+def calculate_chunk_size(myadc):
+
+    avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
+    vvv_mem = (myadc._nvir**3) * 8/1e6
+
+    chnk_size =  int(avail_mem/vvv_mem)
+
+    if chnk_size <= 0 :
+        chnk_size = 1
+
+    return chnk_size
+                   
+                   
 def read_dataset(h5file, dataname):
     f5 = h5py.File(h5file, 'r')
     data = f5[dataname][:]
