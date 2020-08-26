@@ -35,7 +35,7 @@ mol.verbose = 0
 mol.symmetry = False
 mol.spin  = 1
 mol.build()
-mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-ri')
+mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
 mf.conv_tol = 1e-12
 mf.kernel()
 myadc = adc.ADC(mf)
@@ -53,32 +53,33 @@ class KnownValues(unittest.TestCase):
         myadc = adc.ADC(mf)
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.150979874005, 6)
+        self.assertAlmostEqual(e, -0.150979874, 6)
 
 
     def test_dfhs_dfgs(self):
   
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.150971806035, 6)
+        self.assertAlmostEqual(e, -0.15094533756, 6)
 
 
     def test_ea_dfadc3(self):
   
+        myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
         myadc.method = "adc(3)"
         myadc.method_type = "ea"
         
         e,v,p = myadc.kernel(nroots=4)
 
-        self.assertAlmostEqual(e[0], 0.033539067176, 6)
-        self.assertAlmostEqual(e[1], 0.172594837454, 6)
-        self.assertAlmostEqual(e[2], 0.177948387177, 6)
-        self.assertAlmostEqual(e[3], 0.202146181892, 6)
+        self.assertAlmostEqual(e[0], 0.03349588, 6)
+        self.assertAlmostEqual(e[1], 0.17178726, 6)
+        self.assertAlmostEqual(e[2], 0.17734579, 6)
+        self.assertAlmostEqual(e[3], 0.20135255, 6)
 
-        self.assertAlmostEqual(p[0], 0.936537492273, 6)
-        self.assertAlmostEqual(p[1], 0.984032111351, 6)
-        self.assertAlmostEqual(p[2], 0.779532088815, 6)
-        self.assertAlmostEqual(p[3], 0.204730732440, 6)
+        self.assertAlmostEqual(p[0], 0.9364865, 6)
+        self.assertAlmostEqual(p[1], 0.98406359, 6)
+        self.assertAlmostEqual(p[2], 0.77604385, 6)
+        self.assertAlmostEqual(p[3], 0.20823964, 6)
 
 
     def test_ip_dfadc3_dif_aux_basis(self):
@@ -89,17 +90,17 @@ class KnownValues(unittest.TestCase):
         myadc.method_type = "ip"
         
         e,v,p = myadc.kernel(nroots=3)
-        e_corr = myadc.e_corr        
+        e_corr = myadc.e_corr
 
-        self.assertAlmostEqual(e_corr, -0.163313165072, 6)
+        self.assertAlmostEqual(e_corr, -0.16330973, 6)
 
-        self.assertAlmostEqual(e[0], 0.457054316116, 6)
-        self.assertAlmostEqual(e[1], 0.468154829875, 6)
-        self.assertAlmostEqual(e[2], 0.556499969477, 6)
+        self.assertAlmostEqual(e[0], 0.45707428, 6)
+        self.assertAlmostEqual(e[1], 0.46818375, 6)
+        self.assertAlmostEqual(e[2], 0.55652918, 6)
 
-        self.assertAlmostEqual(p[0], 0.938692139911, 6)
-        self.assertAlmostEqual(p[1], 0.586912661634, 6)
-        self.assertAlmostEqual(p[2], 0.351125891139, 6)
+        self.assertAlmostEqual(p[0], 0.93869064, 6)
+        self.assertAlmostEqual(p[1], 0.58692581, 6)
+        self.assertAlmostEqual(p[2], 0.35111056, 6)
       
     def test_hf_dfadc3_ip(self):
   

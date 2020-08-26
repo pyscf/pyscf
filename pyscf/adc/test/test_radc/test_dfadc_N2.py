@@ -41,21 +41,21 @@ class KnownValues(unittest.TestCase):
     def test_df_gs(self):
   
         mf = scf.RHF(mol).run()
-        myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-jkfit')
+        myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.3107267282596653, 6)
+        self.assertAlmostEqual(e, -0.31081009625, 6)
 
     def test_dfhf_dfadc_gs(self):
   
         mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
-        myadc = adc.ADC(mf)
+        myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.310726976610, 6)
+        self.assertAlmostEqual(e, -0.3108102956, 6)
 
-    def test_ip_dfadc3(self):
+    def test_dfadc3_ip(self):
   
         mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
-        myadc = adc.ADC(mf)
+        myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 2
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
@@ -63,19 +63,19 @@ class KnownValues(unittest.TestCase):
         e,v,p = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr        
 
-        self.assertAlmostEqual(e_corr,  -0.3060064030896477, 6)
+        self.assertAlmostEqual(e_corr, -0.3061165912 , 6)
 
-        self.assertAlmostEqual(e[0], 0.556062477042, 6)
-        self.assertAlmostEqual(e[1], 0.601086700687, 6)
-        self.assertAlmostEqual(e[2], 0.601086700687, 6)
+        self.assertAlmostEqual(e[0], 0.55609388, 6)
+        self.assertAlmostEqual(e[1], 0.60109239, 6)
+        self.assertAlmostEqual(e[2], 0.60109239, 6)
 
-        self.assertAlmostEqual(p[0], 1.832574315125, 6)
-        self.assertAlmostEqual(p[1], 1.863875684003, 6)
-        self.assertAlmostEqual(p[2], 1.863875684003, 6)
+        self.assertAlmostEqual(p[0], 1.83255357, 6)
+        self.assertAlmostEqual(p[1], 1.86389642, 6)
+        self.assertAlmostEqual(p[2], 1.86389642, 6)
 
-    def test_ea_dfadc2_dif_aux_basis(self):
+    def test_hf_dfadc2_ea(self):
  
-        mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
+        mf = scf.RHF(mol).run()
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
         myadc.method = "adc(2)"
@@ -83,15 +83,15 @@ class KnownValues(unittest.TestCase):
        
         e,v,p = myadc.kernel(nroots=4)
 
-        self.assertAlmostEqual(e[0], 0.142607731998, 6)
-        self.assertAlmostEqual(e[1], 0.142607731998, 6)
-        self.assertAlmostEqual(e[2], 0.550838451444, 6)
-        self.assertAlmostEqual(e[3], 0.767365787595, 6)
+        self.assertAlmostEqual(e[0], 0.14265314, 6)
+        self.assertAlmostEqual(e[1], 0.14265314, 6)
+        self.assertAlmostEqual(e[2], 0.55092042, 6)
+        self.assertAlmostEqual(e[3], 0.76714415, 6)
 
-        self.assertAlmostEqual(p[0], 1.866037962900, 6)
-        self.assertAlmostEqual(p[1], 1.866037962900, 6)
-        self.assertAlmostEqual(p[2], 1.926996353285, 6)
-        self.assertAlmostEqual(p[3], 1.883660023372, 6)
+        self.assertAlmostEqual(p[0], 1.86604908, 6)
+        self.assertAlmostEqual(p[1], 1.86604908, 6)
+        self.assertAlmostEqual(p[2], 1.92697854, 6)
+        self.assertAlmostEqual(p[3], 1.88386011, 6)
       
     def test_dfhf_dfadc2_ea(self):
   
