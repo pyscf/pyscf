@@ -74,7 +74,7 @@ from pyscf import scf
 from pyscf import ao2mo
 
 #__path__.append(os.path.join(os.path.dirname(__file__), 'future'))
-__path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
+#__path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = __config__.DEBUG
 
