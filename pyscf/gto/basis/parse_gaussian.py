@@ -101,7 +101,7 @@ def _parse(raw_basis, optimize=True):
             elif key[0] == 'SP':
                 basis_add.append([0])
                 basis_add.append([1])
-            elif len(key)>2 and key[0][:2] in ['l=', 'L=']:
+            elif len(key[0])>2 and key[0][:2] in ['l=', 'L=']:
                 # Angular momentum defined explicitly
                 basis_add.append([int(key[0][2:])])
             else:
