@@ -342,6 +342,11 @@ int ECPscalar_iprinv_cart(double *out, int *dims, int *shls, int *atm, int natm,
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
         necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+        // Switch off opt for iprinv.
+        // iprinv requires potential on a specific atom.
+        // opt->u_ecp used by ECPrad_part was initialized as the sum of
+        // potentials on all atoms rather than a specific atom.
+        opt = NULL;
         int has_value = _cart_factory(_deriv1_cart, out, 3,
                                       dims, shls, ecpbas, necpbas,
                                       atm, natm, bas, nbas, env, opt, cache);
@@ -416,6 +421,11 @@ int ECPscalar_iprinv_sph(double *out, int *dims, int *shls, int *atm, int natm,
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
         necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+        // Switch off opt for iprinv.
+        // iprinv requires potential on a specific atom.
+        // opt->u_ecp used by ECPrad_part was initialized as the sum of
+        // potentials on all atoms rather than a specific atom.
+        opt = NULL;
         int has_value = _sph_factory(_deriv1_cart, out, 3,
                                      dims, shls, ecpbas, necpbas,
                                      atm, natm, bas, nbas, env, opt, cache);
@@ -546,6 +556,10 @@ int ECPscalar_ipiprinv_cart(double *out, int *dims, int *shls, int *atm, int nat
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
         necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
         int has_value = _cart_factory(_ipipv_cart, out, 9,
                                       dims, shls, ecpbas, necpbas,
                                       atm, natm, bas, nbas, env, opt, cache);
@@ -571,6 +585,10 @@ int ECPscalar_ipiprinv_sph(double *out, int *dims, int *shls, int *atm, int natm
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
         necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
         int has_value = _sph_factory(_ipipv_cart, out, 9,
                                      dims, shls, ecpbas, necpbas,
                                      atm, natm, bas, nbas, env, opt, cache);
@@ -752,6 +770,10 @@ int ECPscalar_iprinvip_cart(double *out, int *dims, int *shls, int *atm, int nat
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
         necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
         int has_value = _cart_factory(_ipvip_cart, out, 9,
                                       dims, shls, ecpbas, necpbas,
                                       atm, natm, bas, nbas, env, opt, cache);
@@ -777,6 +799,10 @@ int ECPscalar_iprinvip_sph(double *out, int *dims, int *shls, int *atm, int natm
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
         necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
         int has_value = _sph_factory(_ipvip_cart, out, 9,
                                      dims, shls, ecpbas, necpbas,
                                      atm, natm, bas, nbas, env, opt, cache);
@@ -904,10 +930,16 @@ void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
 { \
         ECPscalar_optimizer(opt, atm, natm, bas, nbas, env); \
 }
+#define make_empty_optimizer(fname) \
+void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
+                                   int *bas, int nbas, double *env) \
+{ \
+        *opt = NULL; \
+}
 make_optimizer(ignuc)
 make_optimizer(ipnuc)
-make_optimizer(iprinv)
 make_optimizer(ipipnuc)
-make_optimizer(ipiprinv)
 make_optimizer(ipnucip)
-make_optimizer(iprinvip)
+make_empty_optimizer(iprinv)
+make_empty_optimizer(ipiprinv)
+make_empty_optimizer(iprinvip)

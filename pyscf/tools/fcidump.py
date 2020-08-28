@@ -20,7 +20,10 @@ FCIDUMP functions (write, read) for real Hamiltonian
 import re
 from functools import reduce
 import numpy
+from pyscf import gto
+from pyscf import scf
 from pyscf import ao2mo
+from pyscf import symm
 from pyscf import __config__
 
 DEFAULT_FLOAT_FORMAT = getattr(__config__, 'fcidump_float_format', ' %.16g')
@@ -128,7 +131,6 @@ def from_chkfile(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
             convention as documented in
             https://www.molpro.net/info/current/doc/manual/node36.html
     '''
-    from pyscf import scf, symm
     mol, scf_rec = scf.chkfile.load_scf(chkfile)
     mo_coeff = numpy.array(scf_rec['mo_coeff'])
     nmo = mo_coeff.shape[1]
@@ -203,7 +205,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
 
     h1e = reduce(numpy.dot, (mo_coeff.T, mf.get_hcore(), mo_coeff))
     if mf._eri is None:
-        if getattr(mf, 'exxdiv'):  # PBC system
+        if getattr(mf, 'exxdiv', None):  # PBC system
             eri = mf.with_df.ao2mo(mo_coeff)
         else:
             eri = ao2mo.full(mf.mol, mo_coeff)
@@ -256,9 +258,9 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
             # save the point group information, the guess might be wrong if
             # the high symmetry numbering of orbitals are not presented.
             orbsym = result['ORBSYM']
-            if max(orbsym) == 8:
+            if max(orbsym) > 4:
                 result['ORBSYM'] = [ORBSYM_MAP['D2h'].index(i) for i in orbsym]
-            elif max(orbsym) == 4:
+            elif max(orbsym) > 2:
                 # Fortunately, without molecular orientation, B2 and B3 in D2
                 # are not distinguishable
                 result['ORBSYM'] = [ORBSYM_MAP['C2v'].index(i) for i in orbsym]
@@ -308,7 +310,56 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
     finp.close()
     return result
 
+def to_scf(filename, molpro_orbsym=MOLPRO_ORBSYM, mf=None, **kwargs):
+    '''Use the Hamiltonians defined by FCIDUMP to build an SCF object'''
+    ctx = read(filename, molpro_orbsym)
+    mol = gto.M()
+    mol.nelectron = ctx['NELEC']
+    mol.spin = ctx['MS2']
+    norb = mol.nao = ctx['NORB']
+    if 'ECORE' in ctx:
+        mol.energy_nuc = lambda *args: ctx['ECORE']
+    mol.incore_anyway = True
+
+    if 'ORBSYM' in ctx:
+        mol.symmetry = True
+        mol.groupname = 'N/A'
+        orbsym = numpy.asarray(ctx['ORBSYM'])
+        mol.irrep_id = list(set(orbsym))
+        mol.irrep_name = [('IR%d' % ir) for ir in mol.irrep_id]
+        so = numpy.eye(norb)
+        mol.symm_orb = []
+        for ir in mol.irrep_id:
+            mol.symm_orb.append(so[:,orbsym==ir])
+
+    if mf is None:
+        mf = mol.RHF(**kwargs)
+    else:
+        mf.mol = mol
+    h1 = ctx['H1']
+    idx, idy = numpy.tril_indices(norb, -1)
+    if h1[idx,idy].max() == 0:
+        h1[idx,idy] = h1[idy,idx]
+    else:
+        h1[idy,idx] = h1[idx,idy]
+    mf.get_hcore = lambda *args: h1
+    mf.get_ovlp = lambda *args: numpy.eye(norb)
+    mf._eri = ctx['H2']
+
+    return mf
+
+def scf_from_fcidump(mf, filename, molpro_orbsym=MOLPRO_ORBSYM):
+    '''Update the SCF object with the quantities defined in FCIDUMP file'''
+    return to_scf(filename, molpro_orbsym, mf)
+
+scf.hf.SCF.from_fcidump = scf_from_fcidump
+
 if __name__ == '__main__':
-    import sys
+    import argparse
+    parser = argparse.ArgumentParser(description='Convert chkfile to FCIDUMP')
+    parser.add_argument('chkfile', help='pyscf chkfile')
+    parser.add_argument('fcidump', help='FCIDUMP file')
+    args = parser.parse_args()
+
     # fcidump.py chkfile output
-    from_chkfile(sys.argv[2], sys.argv[1])
+    from_chkfile(args.fcidump, args.chkfile)

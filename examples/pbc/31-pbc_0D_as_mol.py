@@ -17,6 +17,7 @@ cell.basis = 'gth-dzvp'
 cell.pseudo = 'gth-pade'
 cell.a = numpy.eye(3)
 cell.dimension = 0
+cell.symmetry = True
 cell.build()
 
 mf = pbcscf.RHF(cell)

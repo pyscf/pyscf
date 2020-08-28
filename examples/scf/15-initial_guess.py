@@ -44,6 +44,11 @@ mf = scf.RHF(mol)
 mf.chkfile = chkfile_name
 mf.kernel(dm_init_guess)
 
+# If a numpy array is assigned to the attribute .init_guess, it will be used
+# as the initial guess density matrix
+mf.init_guess = dm_init_guess
+mf.kernel()
+
 #
 # Initial guess from Hcore
 #

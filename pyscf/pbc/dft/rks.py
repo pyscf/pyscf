@@ -171,6 +171,8 @@ def _dft_common_init_(mf, xc='LDA,VWN'):
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
 class KohnShamDFT(mol_ks.KohnShamDFT):
+    '''PBC-KS'''
+
     __init__ = _dft_common_init_
 
     def dump_flags(self, verbose=None):

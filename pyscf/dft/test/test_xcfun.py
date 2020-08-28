@@ -71,14 +71,14 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.xcfun.parse_xc('0.6*CAM_B3LYP+0.4*B3P86')
         self.assertTrue(numpy.allclose(hyb, [.08+0.19*.6, 0.65*.6, 0.33]))
         self.assertTrue(numpy.allclose(fn_facs,
-                                       [(9, 0.6), (3, 0.19), (16, 0.486), (0, 0.032), (6, 0.288), (46, 0.324)]))
+                                       [(8, 0.276), (6, 0.498), (3, 0.19), (16, 0.486), (0, 0.032), (46, 0.324)]))
         rsh = dft.xcfun.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
         hyb, fn_facs = dft.xcfun.parse_xc('0.4*B3P86+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.08+0.19*.6, 0.65*.6, 0.33]))
         self.assertTrue(numpy.allclose(fn_facs,
-                                       [(0, 0.032), (6, 0.288), (46, 0.324), (3, 0.19), (9, 0.6), (16, 0.486)]))
+                                       [(0, 0.032), (6, 0.498), (46, 0.324), (3, 0.19), (8, 0.276), (16, 0.486)]))
         rsh = dft.xcfun.rsh_coeff('0.4*B3P86+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 

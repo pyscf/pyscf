@@ -166,10 +166,10 @@ class KnownValues(unittest.TestCase):
             basis = 'ccpvdz',
         )
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), 2.7458577873928842, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.78218274161741, 9)
 
         dm = scf.ROHF(mol).init_guess_by_atom()
-        self.assertAlmostEqual(lib.fp(dm[0]), 2.7458577873928842/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 2.78218274161741/2, 9)
 
         mol.atom = [["O" , (0. , 0.     , 0.)],
                     ['ghost-H'   , (0. , -0.757, 0.587)],
@@ -177,14 +177,14 @@ class KnownValues(unittest.TestCase):
         mol.spin = 1
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.fp(dm), 3.0664740316337697, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.0813279501879838, 9)
 
         mol.basis = {'h': '3-21g'}
         mol.build(0, 0)
         dm = scf.hf.get_init_guess(mol, key='atom')
         self.assertEqual(dm.shape, (4, 4))
         self.assertEqual(abs(dm[:2,:2]).max(), 0)
-        self.assertAlmostEqual(lib.fp(dm), -0.5158829428177857, 9)
+        self.assertAlmostEqual(lib.fp(dm), -0.47008362287778827, 9)
 
     def test_init_guess_atom_with_ecp(self):
         s = re_ecp1.intor('int1e_ovlp')
@@ -205,10 +205,10 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_huckel(self):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 3.7771917062525509, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.348165771345748, 9)
 
         dm = scf.ROHF(mol).init_guess_by_huckel()
-        self.assertAlmostEqual(lib.fp(dm[0]), 3.7771917062525509/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 9)
 
         mol1 = gto.M(atom='Mo', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
@@ -281,7 +281,7 @@ class KnownValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
         self.assertAlmostEqual(abs(pop).sum(), 22.098274261783196, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
-        self.assertAlmostEqual(abs(pop).sum(), 22.117869619510266, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.15309316506852, 7)
 
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, [dm*.5]*2, pre_orth_method='ano')
         self.assertAlmostEqual(abs(pop).sum(), 22.048073484937646, 7)
@@ -523,7 +523,6 @@ H     0    0.757    0.587'''
         self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [0, 2, 0, 0, 0, 0, 2, 0, 2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 
-        mo_coeff = numpy.eye(energy.size)
         self.assertTrue(numpy.allclose(mf.get_occ(energy),
                 [0, 2, 0, 0, 0, 0, 2, 0, 2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 
