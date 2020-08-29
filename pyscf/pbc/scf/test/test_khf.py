@@ -273,7 +273,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -11.451118801956275, 9)
 
     def test_small_system(self):
-        mol = pgto.Cell(
+        mol = pbcgto.Cell(
             atom='He 0 0 0;',
             a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
             basis=[[0, [1, 1]]],
