@@ -1,4 +1,13 @@
 # https://docs.github.com/en/actions/language-and-framework-guides/using-python-with-github-actions
+#
+# Contributors to the evolution of this form:
+#
+#  sunqm
+#  fishjojo
+#  mjw99
+#  yangcal
+#  maxscheurer
+#
 name: CI
 
 on: [push, pull_request]
@@ -43,12 +52,12 @@ jobs:
 
 
       - name: Compile
-        run: | 
+        run: |
                 cd pyscf/lib
                 mkdir build
                 cd build
                 cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF ..
-                make 
+                make
                 cd ../..
 
       - name: Before Test
@@ -59,7 +68,7 @@ jobs:
 
       - name: Test
         working-directory: ./pyscf
-        run: > 
+        run: >
                 OMP_NUM_THREADS=1 PYTHONPATH=$(pwd):$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
                 nosetests -v --with-timer --with-coverage
                 --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
