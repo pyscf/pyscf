@@ -80,7 +80,9 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
                - np.eye(Nmo*Nk)).max() < 1e-5)
 
-    # Transform MO indices
+    # For degenerated MOs, the transformed orbitals in super cell may not be
+    # real. Construct a sub Fock matrix in super-cell to find a proper
+    # transformation that makes the transformed MOs real.
     E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
     degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
     if np.any(E_k_degen):
