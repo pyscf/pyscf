@@ -26,7 +26,7 @@ def __LINE__():
 start_time = time.time()
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
-  
+
   def __init__(self, **kw):
     from pyscf.nao.log_mesh import funct_log_mesh
     """ Constructor G0W0 class """
@@ -46,7 +46,7 @@ class gw(scf):
     self.restart_w = kw['restart_w'] if 'restart_w' in kw else False
     if sum(self.nelec) == 1:
       raise RuntimeError('Not implemented H, sorry :-) Look into scf/__init__.py for HF1e class...')
-    
+
     if self.nspin==1:
         self.nocc_0t = nocc_0t = np.array([int((self.nelec+1)/2)])
     elif self.nspin==2:
@@ -58,7 +58,7 @@ class gw(scf):
         mess = """====> Number of:
     * occupied states = {},
     * states up to fermi level= {},
-    * nspin = {}, 
+    * nspin = {},
     * magnetization = {}""".format(nocc_0t,self.nfermi,self.nspin,self.spin)
         print(__name__, mess)
 
@@ -67,7 +67,7 @@ class gw(scf):
       self.nocc = array([min(i,j) for i,j in zip(s2nocc,nocc_0t)])
     else :
       self.nocc = array([min(6,j) for j in nocc_0t])
-    
+
     if 'nvrt' in kw:
       s2nvrt = [kw['nvrt']] if type(kw['nvrt'])==int else kw['nvrt']
       self.nvrt = array([min(i,j) for i,j in zip(s2nvrt,self.norbs-nocc_0t)])
@@ -78,16 +78,16 @@ class gw(scf):
 
     #self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
     frozen_core = kw['frozen_core'] if 'frozen_core' in kw else self.frozen_core
-    if frozen_core is not None: 
+    if frozen_core is not None:
         st_fi = get_str_fin (self, algo=frozen_core, **kw)
         self.start_st, self.finish_st = st_fi[0], st_fi[1]
-    else: 
+    else:
         self.start_st = self.nocc_0t-self.nocc
         self.finish_st = self.nocc_0t+self.nvrt
     if self.verbosity>0:
       print(__name__,'\t\t====> Indices of states to be corrected start from {} to {} \n'.format(self.start_st,self.finish_st))
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
-    
+
 
     if 'nocc_conv' in kw:
       s2nocc_conv = [kw['nocc_conv']] if type(kw['nocc_conv'])==int else kw['nocc_conv']
@@ -102,12 +102,12 @@ class gw(scf):
       self.nvrt_conv = array([min(i,j) for i,j in zip(s2nvrt_conv,self.norbs-nocc_0t)])
     else :
       self.nvrt_conv = self.nvrt
-    
+
     print(__name__, __LINE__())
-    
+
     if self.rescf:
       self.kernel_scf() # here is rescf with HF functional tacitly assumed
-        
+
     print(__name__, __LINE__())
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32    #number of grid points
     self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-10
@@ -124,7 +124,7 @@ class gw(scf):
 
     self.dw_ia = self.ww_ia*(log(self.ww_ia[-1])-log(self.ww_ia[0]))/(len(self.ww_ia)-1)
     self.dw_excl = self.ww_ia[0]
-    
+
     assert self.cc_da.shape[1]==self.nprod
     self.kernel_sq = self.hkernel_den
     #self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
@@ -134,7 +134,7 @@ class gw(scf):
     if self.perform_gw: self.kernel_gw()
     self.snmw2sf_ncalls = 0
     print(__name__, __LINE__())
-    
+
   def get_h0_vh_x_expval(self):
     """
     This calculates the expectation value of Hartree-Fock Hamiltonian, when:
@@ -155,17 +155,17 @@ class gw(scf):
         mat1 = np.dot(self.mo_coeff[0,s,:,:,0], mat[s])
         expval[s] = einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
     return expval
-    
+
   def get_wmin_wmax_tmax_ia_def(self, tol):
     from numpy import log, exp, sqrt, where, amin, amax
-    """ 
-      This is a default choice of the wmin and wmax parameters for a log grid along 
-      imaginary axis. The default choice is based on the eigenvalues. 
+    """
+      This is a default choice of the wmin and wmax parameters for a log grid along
+      imaginary axis. The default choice is based on the eigenvalues.
     """
     E = self.ksn2e[0,0,:]
     E_fermi = self.fermi_energy
     E_homo = amax(E[where(E<=E_fermi)])
-    E_gap  = amin(E[where(E>E_fermi)]) - E_homo  
+    E_gap  = amin(E[where(E>E_fermi)]) - E_homo
     E_maxdiff = amax(E) - amin(E)
     d = amin(abs(E_homo-E)[where(abs(E_homo-E)>1e-4)])
     wmin_def = sqrt(tol * (d**3) * (E_gap**3)/(d**2+E_gap**2))
@@ -186,11 +186,11 @@ class gw(scf):
 
   def si_c(self, ww, use_numba_impl=False):
     from numpy.linalg import solve
-    """ 
+    r"""
     This computes the correlation part of the screened interaction W_c
-    by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K 
+    by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K
     or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
-    scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
+    scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod
     """
 
     if not hasattr(self, 'pab2v_den'):
@@ -210,7 +210,7 @@ class gw(scf):
     return si0
 
   def si_c_via_diagrpa(self, ww):
-    """ 
+    """
     This method computes the correlation part of the screened interaction W_c
     via the interacting response function. The interacting response function,
     in turn, is computed by diagonalizing RPA Hamiltonian.
@@ -221,16 +221,16 @@ class gw(scf):
     return si0
 
   def epsilon(self, ww):
-    """ 
+    r"""
     This computes the dynamic dielectric function epsilon(r,r'.\omega)=\delta(r,r') - v(r.r") * \chi_0(r",r',\omega)
     """
     rf0 = epsilon = self.rf0(ww)
-    for iw,w in enumerate(ww):                                
+    for iw,w in enumerate(ww):
       epsilon[iw,:,:] = np.eye(self.nprod)- np.dot(self.kernel_sq, rf0[iw,:,:])
     return epsilon
 
   def get_snmw2sf(self, optimize="greedy"):
-    """ 
+    r"""
     This computes a matrix elements of W_c: <\Psi\Psi | W_c |\Psi\Psi>.
     sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
     where n runs from s...f, m runs from 0...norbs, w runs from 0...nff_ia, spin=0...1 or 2.
@@ -254,19 +254,19 @@ class gw(scf):
       # This calculates nmp2xvx= X^n V_mu X^m for each side
       nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb, optimize=optimize)
       for iw,si0 in enumerate(wpq2si0):
-        # This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx 
+        # This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx
         nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx, optimize=optimize)
-      
+
       snmw2sf.append(nmw2sf)
 
       if self.write_w:
         from pyscf.nao.m_restart import write_rst_h5py
         print(write_rst_h5py(data = snmw2sf, filename= 'SCREENED_COULOMB.hdf5'))
-    
+
     return snmw2sf
 
   def gw_corr_int(self, sn2w, eps=None):
-    """
+    r"""
     This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)]
     -\frac{1}{2\pi}\int_{-\infty}^{+\infty } \sum_m \frac{I^{nm}(i\omega{'})}{E_n + i\omega{'}-E_m^0} d\omega{'}
     see eq (16) within DOI: 10.1021/acs.jctc.9b00436
@@ -304,32 +304,32 @@ class gw(scf):
     """
     v_pab = self.pb.get_ac_vertex_array()
     sn2res = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
-    
+
     for s,ww in enumerate(sn2w):    #split into spin and energies
       x = self.mo_coeff[0,s,:,:,0]
-        
-      # split into nl=counter, n=number of energy level and relevant w=mo_energy inside gw.nn 
+
+      # split into nl=counter, n=number of energy level and relevant w=mo_energy inside gw.nn
       for nl,(n,w) in enumerate(zip(self.nn[s], ww)):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)  #gives G's poles in n level with w energy
         zww = array([pole[0] for pole in lsos]) #pole[0]=energies pole[1]=state in gw.nn and pole[2]=occupation number
         #print(__name__, s,n,w, 'len lsos', len(lsos))
         si_ww = self.si_c(ww=zww) #send pole's frequency to calculate W
         xv = np.dot(v_pab,x[n])
-        
+
         for pole,si in zip(lsos, si_ww.real):
           xvx = np.dot(xv, x[pole[1]]) #XVX for x=n v= ac produvt and x=states of poles
           contr = np.dot(xvx, np.dot(si, xvx))
           #print(pole[0], pole[2], contr)
           sn2res[s][nl] += pole[2]*contr
-    
+
     return sn2res
 
   def lsofs_inside_contour(self, ee, w, eps):
-    """ 
+    r"""
       Computes number of states the eigenenergies of which are located inside an integration contour.
       The integration contour depends on w
-      z_n=E^0_n-\omega \pm i\eta 
-    """ 
+      z_n=E^0_n-\omega \pm i\eta
+    """
     nGamma_pos = 0
     nGamma_neg = 0
     for i,e in enumerate(ee):
@@ -337,7 +337,7 @@ class gw(scf):
       zi = -np.sign(e-self.fermi_energy)
       if zr>=eps and zi>0 : nGamma_pos +=1
       if abs(zr)<eps and zi>0 : nGamma_pos +=1
-    
+
       if zr<=-eps and zi<0 : nGamma_neg += 1
       if abs(zr)<eps and zi<0 : nGamma_neg += 1
 
@@ -369,7 +369,7 @@ class gw(scf):
 
     if ipol!=npol: raise RuntimeError('loop logics incompat???')
     return i2zsc
-  
+
   def g0w0_eigvals(self):
     """ This computes the G0W0 corrections to the eigenvalues """
     sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]  #self.ksn2e = self.mo_energy in range of gw.nn
@@ -379,7 +379,7 @@ class gw(scf):
     for nocc_0t,nocc_conv,nvrt_conv in zip(self.nocc_0t, self.nocc_conv, self.nvrt_conv):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
-    # iterations to converge the 
+    # iterations to converge the
     if self.verbosity>0:
       mess = """
         '='*48' G0W0 corrections of eigenvalues  '='*48
@@ -394,11 +394,11 @@ class gw(scf):
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
-      
+
       sn2eval_gw = []
       for s,(evhf,n2i,n2r,nn) in enumerate(zip(self.h0_vh_x_expval,sn2i,sn2r,self.nn)):
         sn2eval_gw.append(evhf[nn]+n2i+n2r)
-        
+
       sn2mismatch = zeros((self.nspin,self.norbs))
       for s, nn in enumerate(self.nn): sn2mismatch[s,nn] = sn2eval_gw[s][:]-sn2eval_gw_prev[s][:]
       sn2eval_gw_prev = copy(sn2eval_gw)
@@ -411,14 +411,14 @@ class gw(scf):
       if self.verbosity>1:
         #print(sn2mismatch)
         for s,n2ev in enumerate(sn2eval_gw):
-          print('Spin{}: {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))   
-      if err<self.tol_ev : 
+          print('Spin{}: {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))
+      if err<self.tol_ev :
         if self.verbosity>0: print('-'*43,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*43,'\n')
         break
       if err>=self.tol_ev and i+1==self.niter_max_ev:
         print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
-    return sn2eval_gw  
-    
+    return sn2eval_gw
+
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
@@ -427,7 +427,7 @@ class gw(scf):
     if self.verbosity>3:    self.report_mf()
 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
-    
+
     # Update mo_energy_gw, mo_coeff_gw after the computation is done
     self.mo_energy_gw = np.copy(self.mo_energy)
     self.mo_coeff_gw = np.copy(self.mo_coeff)
@@ -450,21 +450,21 @@ class gw(scf):
       if self.verbosity>2: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
- 
+
     self.xc_code = 'GW'
     if self.verbosity>4:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
-    
+
     return self.etot_gw()
-        
+
   kernel_gw = make_mo_g0w0
 
   def etot_gw(self):
     dm1 = self.make_rdm1()
     ecore = (self.get_hcore()*dm1[0,...,0]).sum()
     vh,kmat = self.get_jk()
-    
+
     if self.nspin==1:
       etot = ecore + 0.5*((vh-0.5*kmat)*dm1[0,...,0]).sum()
     elif self.nspin==2:
@@ -472,15 +472,15 @@ class gw(scf):
     else:
       print(__name__, self.nspin)
       raise RuntimeError('nspin?')
-    
+
     ecorr = 0.0
     for spin, (n2egw, m2emf, m2occ, n2m) in enumerate(zip(self.mo_energy_gw[0],self.mo_energy[0],self.mo_occ[0],self.argsort)):
       for n, m in enumerate(n2m):
         ecorr -= 0.5*m2occ[m]*(n2egw[n]-m2emf[m])
-    
+
     self.etot_gw = etot+ecorr+self.energy_nuc()
     return self.etot_gw
-    
+
   def spin_square(self):
     from pyscf.nao.mf import mf
     mo_coeff = self.mo_coeff_gw if hasattr(self, 'mo_energy_gw') else self.mo_coeff
@@ -492,7 +492,7 @@ class gw(scf):
     from pyscf.nao.m_report import report_mfx
     if dm is None: dm = self.make_rdm1()
     return report_mfx(self,dm)
-    
+
   def report_ex(self):
     """ Prints the self energy components in HF levels """
     from pyscf.nao.m_report import sigma_xc
