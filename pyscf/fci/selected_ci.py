@@ -476,7 +476,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   **kwargs)
 
 def make_rdm1s(civec_strs, norb, nelec, link_index=None):
-    '''Spin separated 1-particle density matrices.
+    r'''Spin separated 1-particle density matrices.
     The return values include two density matrices: (alpha,alpha), (beta,beta)
 
     dm1[p,q] = <q^\dagger p>

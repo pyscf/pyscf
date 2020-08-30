@@ -54,11 +54,11 @@ if use_numba:
       Blas version to speed up matrix matrix multiplication
       spped up of 7.237 compared to einsum version for C20 system
       """
-      
+
       for s in range(nspin):
         nn = list(range(0, nfermi[s], bsize)) + [nfermi[s]]
         mm = list(range(vstart[s], norbs, bsize)) + [norbs]
-        
+
         for nbs, nbf in zip(nn, nn[1:]):
 
           vx = np.zeros((pab2v_den.shape[0], pab2v_den.shape[1], nbf-nbs))
@@ -71,7 +71,7 @@ if use_numba:
 
             fmn = add_outer(-ksn2f[0,s,mbs:mbf],  ksn2f[0,s,nbs:nbf])
             emn = add_outer( ksn2e[0,s,mbs:mbf], -ksn2e[0,s,nbs:nbf])
-            
+
             #zxvx = np.zeros((nprod, mbf-mbs, nbf-nbs), dtype=rf0.dtype)
             zxvx = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
 
@@ -99,7 +99,7 @@ if use_numba:
     # np.dot(k_c.imag, kernel_sq)
     def si_correlation_numba(si0, ww, X, kernel_sq, ksn2f, ksn2e, pab2v_den, nprod,
                              norbs, bsize, nspin, nfermi, vstart):
-        """
+        r"""
         This computes the correlation part of the screened interaction W_c
         by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K
         or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
@@ -108,7 +108,7 @@ if use_numba:
 
         for iw in range(ww.size):
         #for iw in range(ww.size):
-            
+
             rf0_den_numba(si0[iw, :, :], ww[iw], X, ksn2f, ksn2e, pab2v_den,
                           nprod, norbs, bsize, nspin,
                           nfermi, vstart)
@@ -134,15 +134,15 @@ if use_numba:
         return si0
 
 def si_correlation(rf0, si0, ww, kernel_sq, nprod):
-    """
+    r"""
     This computes the correlation part of the screened interaction W_c
     by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K
     or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod
     """
-    
+
     for iw, w in enumerate(ww):
-        
+
         # divide ww into complex(w) which is along imaginary
         # axis (real=0) and grid index(iw)
 
@@ -185,19 +185,19 @@ def rf0_den(self, ww):
   Blas version to speed up matrix matrix multiplication
   spped up of 7.237 compared to einsum version for C20 system
   """
-  
+
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   if hasattr(self, 'pab2v_den'):
     v = self.pab2v_den
   else:
     self.pab2v_den = v = einsum('pab->apb', self.pb.get_ac_vertex_array())
-  
+
   zxvx = zeros((len(ww),self.nprod,self.bsize,self.bsize), dtype=self.dtypeComplex)
 
   for s in range(self.nspin):
     nn = list(range(0,self.nfermi[s],self.bsize))+[self.nfermi[s]]
     mm = list(range(self.vstart[s],self.norbs,self.bsize))+[self.norbs]
-    
+
     for nbs,nbf in zip(nn,nn[1:]):
       # replace this dot with a blas call to dgemv or zgemv
       vx = dot(v, self.x[s,nbs:nbf,:].T)
@@ -230,24 +230,24 @@ def run_blasDGEMM(alpha, A, B, **kwargs):
 
 def rf0_den_einsum(self, ww):
   """
-  Full matrix response in the basis of atom-centered product functions for 
+  Full matrix response in the basis of atom-centered product functions for
   parallel spins
-  
+
   einsum version, slow
   """
-  
+
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   if hasattr(self, 'pab2v_den'):
     v = self.pab2v_den
   else:
     self.pab2v_den = v = einsum('pab->apb', self.pb.get_ac_vertex_array())
-  
+
   zxvx = zeros((len(ww),self.nprod,self.bsize,self.bsize), dtype=self.dtypeComplex)
 
   for s in range(self.nspin):
     nn = list(range(0,self.nfermi[s],self.bsize))+[self.nfermi[s]]
     mm = list(range(self.vstart[s],self.norbs,self.bsize))+[self.norbs]
-    
+
     for nbs,nbf in zip(nn,nn[1:]):
       vx = dot(v, self.x[s,nbs:nbf,:].T)
       for mbs,mbf in zip(mm,mm[1:]):
@@ -258,9 +258,9 @@ def rf0_den_einsum(self, ww):
         zxvx.fill(0.0)
         for iw,comega in enumerate(ww):
           zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
-      
+
         rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
-  
+
   return rf0
 
 def calc_XVX(X, VX):
@@ -279,10 +279,10 @@ def rf0_cmplx_ref_blk(self, ww):
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   v = einsum('pab->apb', self.pb.get_ac_vertex_array())
   #print('v.shape', v.shape)
-  
+
   t1 = timer()
   if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
-      
+
   bsize = 40
   zxvx = zeros((len(ww), self.nprod,bsize,bsize), dtype=self.dtypeComplex)
   sn2e = self.ksn2e.reshape((self.nspin*self.norbs))
@@ -293,7 +293,7 @@ def rf0_cmplx_ref_blk(self, ww):
   #print('nn = ', nn, sn2x.shape, len(sn2x))
 
   for nbs,nbf in zip(nn,nn[1:]):
-    vx = dot(v, sn2x[nbs:nbf,:].T)      
+    vx = dot(v, sn2x[nbs:nbf,:].T)
     for mbs,mbf in zip(nn,nn[1:]):
       xvx = einsum('mb,bpn->pmn', sn2x[mbs:mbf,:],vx)
       fmn = np.add.outer(-sn2f[mbs:mbf], sn2f[nbs:nbf])
@@ -301,7 +301,7 @@ def rf0_cmplx_ref_blk(self, ww):
       zxvx.fill(0.0)
       for iw,comega in enumerate(ww):
         zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn) / (comega - emn)
-      
+
       rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
 
   t2 = timer()
@@ -313,10 +313,10 @@ def rf0_cmplx_ref(self, ww):
   """ Full matrix response in the basis of atom-centered product functions """
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   v = self.pb.get_ac_vertex_array()
-  
+
   t1 = timer()
   if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
-      
+
   zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
   for s in range(self.nspin):
     n2e = self.ksn2e[0,s,:]
@@ -329,7 +329,7 @@ def rf0_cmplx_ref(self, ww):
         for iw,comega in enumerate(ww):
           zvxx_a[iw,:] = vxx_a * (fn - fm)/ (comega - (em - en))
         rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
-  
+
   t2 = timer()
   if self.verbosity>0: print(__name__, 'rf0_ref_loop', t2-t1)
   return rf0
@@ -338,7 +338,7 @@ def rf0_cmplx_vertex_dp(self, ww):
   """ Full matrix response in the basis of atom-centered product functions """
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   v_arr = self.pb.get_dp_vertex_array()
-  
+
   zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
   for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
     vx = dot(v_arr, self.xocc[0][n,:])
@@ -354,14 +354,14 @@ def rf0_cmplx_vertex_ac(self, ww):
   """ Full matrix response in the basis of atom-centered product functions """
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   v = self.pb.get_ac_vertex_array()
-  
+
   t1 = timer()
   if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
   #print(self.ksn2e[0,0,0]-self.ksn2e)
   #print(self.ksn2f)
   #print(' abs(v).sum(), ww.sum(), self.nfermi, self.vstart ')
   #print(abs(v).sum(), ww.sum(), self.nfermi, self.vstart)
-  
+
   zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
   for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi[0]], self.ksn2f[0, 0, 0:self.nfermi[0]])):
     #if self.verbosity>1: print(__name__, 'n =', n)
