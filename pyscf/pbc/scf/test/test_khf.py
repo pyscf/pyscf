@@ -272,6 +272,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, e2, 9)
         self.assertAlmostEqual(e1, -11.451118801956275, 9)
 
+    def test_small_system(self):
+        mol = pbcgto.Cell(
+            atom='He 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KRHF(mol,kpts=[[0., 0., 0.]])
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

@@ -166,12 +166,14 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
             vir_idx = mo_occ_kpts[k] == 0
             logger.debug(mf, '  kpt %2d (%6.3f %6.3f %6.3f)',
                          k, kpt[0], kpt[1], kpt[2])
-            logger.debug(mf, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
-                         max(mo_energy_kpts[k][core_idx]),
-                         max(mo_ea_kpts[k][core_idx]), max(mo_eb_kpts[k][core_idx]))
-            logger.debug(mf, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
-                         min(mo_energy_kpts[k][vir_idx]),
-                         min(mo_ea_kpts[k][vir_idx]), min(mo_eb_kpts[k][vir_idx]))
+            if np.count_nonzero(core_idx) > 0:
+                logger.debug(mf, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
+                             max(mo_energy_kpts[k][core_idx]),
+                             max(mo_ea_kpts[k][core_idx]), max(mo_eb_kpts[k][core_idx]))
+            if np.count_nonzero(vir_idx) > 0:
+                logger.debug(mf, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
+                             min(mo_energy_kpts[k][vir_idx]),
+                             min(mo_ea_kpts[k][vir_idx]), min(mo_eb_kpts[k][vir_idx]))
             for i in np.where(open_idx)[0]:
                 logger.debug(mf, '  1-occ =         %18.15g | %18.15g | %18.15g',
                              mo_energy_kpts[k][i], mo_ea_kpts[k][i], mo_eb_kpts[k][i])

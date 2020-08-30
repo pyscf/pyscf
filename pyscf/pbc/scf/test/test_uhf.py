@@ -107,6 +107,28 @@ class KnownValues(unittest.TestCase):
         e = kmf.get_bands(kpts_bands)[0]
         self.assertAlmostEqual(lib.finger(e), -0.3020614, 6)
 
+    def test_small_system(self):
+        mol = pgto.Cell(
+            atom='H 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            spin=1,
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KUHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -0.10439957735616917, 8)
+
+        mol = pgto.Cell(
+            atom='He 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KUHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
+
 
 if __name__ == '__main__':
     print("Tests for PBC UHF and PBC KUHF")

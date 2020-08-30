@@ -115,6 +115,29 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(sum(chg), 0, 7)
         self.assertAlmostEqual(lib.finger(chg), 0.002887875601340767, 7)
 
+    def test_small_system(self):
+        # issue #686
+        mol = pgto.Cell(
+            atom='H 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            spin=1,
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KROHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -0.10439957735616917, 8)
+
+        mol = pgto.Cell(
+            atom='He 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KROHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
+
 if __name__ == '__main__':
     print("Tests for PBC ROHF and PBC KROHF")
     unittest.main()
