@@ -15,7 +15,9 @@
 cmake_minimum_required (VERSION 2.8)
 project (pyscf)
 
-set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+endif()
 #set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
