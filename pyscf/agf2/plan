@@ -26,24 +26,28 @@ pyscf/
 |    |     - RAGF2
 |    |     Functions:
 |    |     - kernel
+|    |     - get_fock_ragf2
 |    |
 |    +--- uagf2.py
 |    |     Classes:
 |    |     - UAGF2
 |    |     Functions:
 |    |     - kernel
+|    |     - get_fock_uagf2
 |    |
 |    +--- dfragf2.py
 |    |     Classes:
 |    |     - DFRAGF2
 |    |     Functions:
 |    |     - kernel
+|    |     - get_fock_dfragf2
 |    |
 |    +--- dfuagf2.py
 |    |     Classes:
 |    |     - DFUAGF2
 |    |     Functions:
 |    |     - kernel
+|    |     - get_fock_dfuagf2
 |    |
 |    +--- ragf2_slow.py
 |    |     Classes:
@@ -58,11 +62,16 @@ pyscf/
 |    |     - kernel
 |    |
 |    +--- __init__.py
-|          Functions:
-|          - RAGF2 (returns either RAGF2, DFRAGF2 or RAGF2_slow depending on arguments provided)
-|          - UAGF2 (returns either UAGF2, DFUAGF2 or UAGF2_slow depending on arguments provided)
-|          - AGF2 (returns either RAGF2, UAGF2, DFRAGF2, DFUAGF2, RAGF2_slow or UAGF2_slow depending on arguments provided)
-|          - kernel (as above)
+|    |     Functions:
+|    |     - RAGF2 (returns either RAGF2, DFRAGF2 or RAGF2_slow depending on arguments provided)
+|    |     - UAGF2 (returns either UAGF2, DFUAGF2 or UAGF2_slow depending on arguments provided)
+|    |     - AGF2 (returns either RAGF2, UAGF2, DFRAGF2, DFUAGF2, RAGF2_slow or UAGF2_slow depending on arguments provided)
+|    |     - kernel (as above)
+|    |    
+|    |    
+|    +--- test/
+|         |
+|         +--- ...
 |    
 |
 +--- lib/
