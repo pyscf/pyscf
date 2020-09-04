@@ -1,0 +1,77 @@
+pyscf/
+|
++--- agf2/
+|    |
+|    +--- chempot.py
+|    |     Functions:
+|    |     - objective
+|    |     - gradient
+|    |     - minimize_chempot (scipy.minimize with obj and grad)
+|    |     - binsearch_chempot (binary search Aufbau)
+|    |
+|    +--- fock.py
+|    |     Functions:
+|    |     - fock_loop_rhf
+|    |     - fock_loop_uhf
+|    |
+|    +--- mpi_helper.py (agnostic to succesful import of mpi4py)
+|    |     Functions:
+|    |     - reduce
+|    |     Variables:
+|    |     - size
+|    |     - rank
+|    |
+|    +--- ragf2.py
+|    |     Classes:
+|    |     - RAGF2
+|    |     Functions:
+|    |     - kernel
+|    |
+|    +--- uagf2.py
+|    |     Classes:
+|    |     - UAGF2
+|    |     Functions:
+|    |     - kernel
+|    |
+|    +--- dfragf2.py
+|    |     Classes:
+|    |     - DFRAGF2
+|    |     Functions:
+|    |     - kernel
+|    |
+|    +--- dfuagf2.py
+|    |     Classes:
+|    |     - DFUAGF2
+|    |     Functions:
+|    |     - kernel
+|    |
+|    +--- ragf2_slow.py
+|    |     Classes:
+|    |     - RAGF2_slow (general moments)
+|    |     Functions:
+|    |     - kernel
+|    |
+|    +--- uagf2_slow.py
+|    |     Classes:
+|    |     - UAGF2_slow (general moments)
+|    |     Functions:
+|    |     - kernel
+|    |
+|    +--- __init__.py
+|          Functions:
+|          - RAGF2 (returns either RAGF2, DFRAGF2 or RAGF2_slow depending on arguments provided)
+|          - UAGF2 (returns either UAGF2, DFUAGF2 or UAGF2_slow depending on arguments provided)
+|          - AGF2 (returns either RAGF2, UAGF2, DFRAGF2, DFUAGF2, RAGF2_slow or UAGF2_slow depending on arguments provided)
+|          - kernel (as above)
+|    
+|
++--- lib/
+     |
+     +--- agf2/
+          |
+          +--- agf2.c
+                Functions:
+                - build_part_loop_ragf2
+                - build_part_loop_uagf2
+                - build_part_loop_dfragf2
+                - build_part_loop_dfuagf2
