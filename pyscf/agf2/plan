@@ -2,17 +2,16 @@ pyscf/
 |
 +--- agf2/
 |    |
+|    +--- aux.py
+|    |     Classes:
+|    |     - Aux (container for energies, couplings, chemical potential and class methods)
+|    |
 |    +--- chempot.py
 |    |     Functions:
 |    |     - objective
 |    |     - gradient
 |    |     - minimize_chempot (scipy.minimize with obj and grad)
 |    |     - binsearch_chempot (binary search Aufbau)
-|    |
-|    +--- fock.py
-|    |     Functions:
-|    |     - fock_loop_rhf
-|    |     - fock_loop_uhf
 |    |
 |    +--- mpi_helper.py (agnostic to succesful import of mpi4py)
 |    |     Functions:
@@ -27,6 +26,7 @@ pyscf/
 |    |     Functions:
 |    |     - kernel
 |    |     - get_fock_ragf2
+|    |     - fock_loop_rhf
 |    |
 |    +--- uagf2.py
 |    |     Classes:
@@ -34,6 +34,7 @@ pyscf/
 |    |     Functions:
 |    |     - kernel
 |    |     - get_fock_uagf2
+|    |     - fock_loop_uhf
 |    |
 |    +--- dfragf2.py
 |    |     Classes:
