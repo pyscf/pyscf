@@ -371,7 +371,9 @@ def localizeValence(mf, mo_coeff, method="iao"):
     if (method == "iao"):
         return iao.iao(mf.mol, mo_coeff)
     elif (method == "ibo"):
-        return ibo.PM(mf.mol, mo_coeff).kernel()
+        iaos = lo.iao.iao(mf.mol, mo_coeff)
+        return lo.ibo.ibo(mf.mol, mo_coeff, locmethod='PM', iaos=iaos).kernel()
+        #return ibo.PM(mf.mol, mo_coeff).kernel()
         
         #a = iao.iao(mf.mol, mo_coeff)
         #a = lo.vec_lowdin(a, mf.get_ovlp())
@@ -400,7 +402,7 @@ def bestDetValence(mol, lmo, occ, eri, writeToFile=True):
     for i in enumerate(maxLMOContributers):
         lmoSites[numpy.searchsorted(numpy.array(atomNumAOs), i[1])].append(i[0])
 
-    bestDet = [0 for i in range(lmo.shape[1])]
+    bestDet = ['0' for i in range(lmo.shape[1])]
     def pair(i):
         return i*(i+1)//2+i
     for i in enumerate(occ):
@@ -417,7 +419,7 @@ def bestDetValence(mol, lmo, occ, eri, writeToFile=True):
             bestDet[onSiteIntegrals[i[1][0] + i[1][1] + m][0]] = 'b'
 
     bestDetStr = '  '.join(bestDet)
-    print('bestDet:  ' + bestDetStr)
+
     if writeToFile:
         fileh = open("bestDet", 'w')
         fileh.write('1.   ' + bestDetStr + '\n')
