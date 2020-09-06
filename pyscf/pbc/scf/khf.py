@@ -303,8 +303,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     log.note("KRHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
-    c = orth.restore_ao_character(cell, pre_orth_method)
-    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
+    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
 

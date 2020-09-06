@@ -85,6 +85,12 @@ class KnowValues(unittest.TestCase):
         c = orth.orth_ao(mol, 'meta_lowdin', c0)
         self.assertAlmostEqual(abs(c).sum(), 92.15697348744733, 8)
 
+        c = orth.orth_ao(mol, 'meta_lowdin', 'sto-3g')
+        self.assertAlmostEqual(abs(c).sum(), 90.12324660084619, 8)
+
+        c = orth.orth_ao(mol, 'meta_lowdin', None)
+        self.assertAlmostEqual(abs(c).sum(), 83.71349158130113, 8)
+
     def test_ghost_atm_meta_lowdin(self):
         mol = gto.Mole()
         mol.atom = [["O" , (0. , 0.     , 0.)],

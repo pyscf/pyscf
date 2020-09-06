@@ -400,6 +400,17 @@ def format_basis(basis_tab):
         [0.82454700000000003, 0.90469100000000002]],
         [0, [0.18319199999999999, 1.0]]]}
     '''
+    basis_converter = _generate_basis_converter()
+    fmt_basis = {}
+    for atom, atom_basis in basis_tab.items():
+        symb = _atom_symbol(atom)
+        fmt_basis[symb] = basis_converter(symb, atom_basis)
+
+        if len(fmt_basis[symb]) == 0:
+            raise BasisNotFoundError('Basis not found for  %s' % symb)
+    return fmt_basis
+
+def _generate_basis_converter():
     def nparray_to_list(item):
         val = []
         for x in item:
@@ -411,35 +422,29 @@ def format_basis(basis_tab):
                 val.append(x)
         return val
 
-    def convert(basis_name, symb):
+    def load(basis_name, symb):
         if basis_name.lower().startswith('unc'):
             return uncontract(basis.load(basis_name[3:], symb))
         else:
             return basis.load(basis_name, symb)
 
-    fmt_basis = {}
-    for atom, atom_basis in basis_tab.items():
-        symb = _atom_symbol(atom)
-        stdsymb = _std_symbol_without_ghost(symb)
-
-        if isinstance(atom_basis, (str, unicode)):
-            bset = convert(str(atom_basis), stdsymb)
-        elif (any(isinstance(x, (str, unicode)) for x in atom_basis)
+    def converter(symb, raw_basis):
+        if isinstance(raw_basis, (str, unicode)):
+            bset = load(str(raw_basis), _std_symbol_without_ghost(symb))
+        elif (any(isinstance(x, (str, unicode)) for x in raw_basis)
               # The first element is the basis of internal format
-              or not isinstance(atom_basis[0][0], int)):
+              or not isinstance(raw_basis[0][0], int)):
+            stdsymb = _std_symbol_without_ghost(symb)
             bset = []
-            for rawb in atom_basis:
+            for rawb in raw_basis:
                 if isinstance(rawb, (str, unicode)):
-                    bset += convert(str(rawb), stdsymb)
+                    bset += load(str(rawb), stdsymb)
                 else:
                     bset += nparray_to_list(rawb)
         else:
-            bset = nparray_to_list(atom_basis)
-        fmt_basis[symb] = bset
-
-        if len(fmt_basis[symb]) == 0:
-            raise BasisNotFoundError('Basis not found for  %s' % symb)
-    return fmt_basis
+            bset = nparray_to_list(raw_basis)
+        return bset
+    return converter
 
 def uncontracted_basis(_basis):
     '''Uncontract internal format _basis
