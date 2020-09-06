@@ -57,7 +57,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
             atm_scf_result[element] = (0, mo_energy, mo_coeff, mo_occ)
         else:
             if atm.nelectron == 1:
-                atm_hf = rohf.HF1e(atm)
+                atm_hf = AtomHF1e(atm)
             else:
                 atm_hf = AtomSphericAverageRHF(atm)
                 atm_hf.atomic_configuration = atomic_configuration
@@ -154,6 +154,11 @@ class AtomSphericAverageRHF(hf.RHF):
         kwargs['dump_chk'] = False
         return hf.RHF.scf(self, *args, **kwargs)
 
+
+class AtomHF1e(rohf.HF1e, AtomSphericAverageRHF):
+    eig = AtomSphericAverageRHF.eig
+
+
 def frac_occ(symb, l, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     nuc = gto.charge(symb)
     if l < 4 and atomic_configuration[nuc][l] > 0:
@@ -164,6 +169,7 @@ def frac_occ(symb, l, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     else:
         ndocc = frac = 0
     return ndocc, frac
+
 
 def _angular_momentum_for_each_ao(mol):
     ao_ang = numpy.zeros(mol.nao, dtype=numpy.int)
