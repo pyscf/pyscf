@@ -169,7 +169,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              dot=numpy.dot, callback=None,
              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
              follow_state=FOLLOW_STATE):
-    '''Davidson diagonalization method to solve  a c = e c.  Ref
+    r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
 
@@ -259,7 +259,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              dot=numpy.dot, callback=None,
              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
              follow_state=FOLLOW_STATE, tol_residual=None):
-    '''Davidson diagonalization method to solve  a c = e c.  Ref
+    r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
 
@@ -633,7 +633,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         dot=numpy.dot, callback=None,
         nroots=1, lessio=False, left=False, pick=pick_real_eigs,
         verbose=logger.WARN, follow_state=FOLLOW_STATE):
-    '''Davidson diagonalization to solve the non-symmetric eigenvalue problem
+    r'''Davidson diagonalization to solve the non-symmetric eigenvalue problem
 
     Args:
         aop : function([x]) => [array_like_x]
@@ -1257,7 +1257,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
            lindep=DSOLVE_LINDEP, callback=None, hermi=False,
            max_memory=MAX_MEMORY, verbose=logger.WARN):
-    '''Krylov subspace method to solve  (1+a) x = b.  Ref:
+    r'''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
     Args:

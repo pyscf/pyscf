@@ -264,6 +264,11 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=None, scf_method=None,
             | lowdin : Symmetric orthogonalization
             | meta-lowdin : Lowdin orth within core, valence, virtual space separately (JCTC, 10, 3784)
             | NAO
+
+        pre_orth_ao: numpy.ndarray
+            Coefficients to restore AO characters for arbitrary basis. If not
+            given, the coefficients are generated based on ANO basis. You can
+            skip this by setting pre_orth_ao to identity matrix, e.g.  np.eye(mol.nao).
     '''
     from pyscf.lo import nao
     mf = scf_method

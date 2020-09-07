@@ -210,12 +210,12 @@ class KnownValues(unittest.TestCase):
         dm = scf.ROHF(mol).init_guess_by_huckel()
         self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 9)
 
-        mol1 = gto.M(atom='Mo', basis='lanl2dz', ecp='lanl2dz',
+        # Initial guess Huckel is not able to handle open-shell system
+        mol1 = gto.M(atom='Mo 0 0 0; C 0 0 1', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
         dm = scf.hf.get_init_guess(mol1, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 2.1268388150553035, 9)
-        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 14, 9)
-
+        self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 20, 9)
 
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)

@@ -32,10 +32,10 @@ import sys
 #
 #
 def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
-  """
+  r"""
     Computes Coulomb overlap for an atom pair. The atom pair is given by a pair of species indices and the coordinates of the atoms.
     <a|r^-1|b> = \iint a(r)|r-r'|b(r')  dr dr'
-    Args: 
+    Args:
       self: class instance of ao_matelem_c
       sp1,sp2 : specie indices, and
       R1,R2 :   respective coordinates
@@ -95,7 +95,7 @@ def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
 if __name__ == '__main__':
   from pyscf.nao.m_system_vars import system_vars_c
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  
+
   sv = system_vars_c("siesta")
   ra = np.array([0.0, 0.1, 0.2])
   rb = np.array([0.0, 0.1, 0.0])

@@ -32,7 +32,7 @@ from pyscf.pbc.lib import kpts_helper
 #einsum = np.einsum
 einsum = lib.einsum
 
-"""
+r"""
     (ij|kl) = \int dr1 dr2 i*(r1) j(r1) v(r12) k*(r2) l(r2)
             = (ij|G) v(G) (G|kl)
 

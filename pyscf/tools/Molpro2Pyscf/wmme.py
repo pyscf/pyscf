@@ -394,7 +394,7 @@ class FIntegralContext(object):
       return Op
 
    def MakeDipoleIntegrals(self, Smh=True):
-      """calculate dipole operator matrices <\mu|w|\nu> (w=x,y,z) in
+      r"""calculate dipole operator matrices <\mu|w|\nu> (w=x,y,z) in
       main basis, for each direction. Returns nAo x nAo x 3 array."""
       Args = []
       if Smh:
