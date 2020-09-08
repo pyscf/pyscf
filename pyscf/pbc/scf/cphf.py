@@ -58,6 +58,12 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
     for k in range(nkpt):
         moloc[k+1] = moloc[k] + h1[k].size
 
+    occidx = []
+    viridx = []
+    for k in range(nkpt):
+        occidx.append(mo_occ[k] > 0)
+        viridx.append(mo_occ[k] == 0)
+
     e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
     e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
     e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
@@ -67,6 +73,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
     mo1base = np.hstack(mo1base)
 
     def vind_vo(mo1):
+        mo1 = mo1.flatten()
         tmp = []
         for k in range(nkpt):
             tmp.append(mo1[moloc[k]:moloc[k+1]].reshape(h1[k].shape))
@@ -75,8 +82,9 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
             v[k] *= e_ai[k]
             v[k] = v[k].ravel()
         return np.hstack(v)
+
     _mo1 = lib.krylov(vind_vo, mo1base,
-                     tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log)
+                     tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log).flatten()
     log.timer('krylov solver in CPHF', *t0)
     mo1 = []
     for k in range(nkpt):

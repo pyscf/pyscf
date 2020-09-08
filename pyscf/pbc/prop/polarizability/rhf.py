@@ -73,6 +73,7 @@ def polarizability(polobj, with_cphf=True):
         viridx.append(mo_occ[k] == 0)
 
     orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpt)]
+    orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpt)]
 
     with cell.with_common_orig((0., 0., 0.)):
         Z = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts, 
@@ -80,22 +81,14 @@ def polarizability(polobj, with_cphf=True):
     Zji = []
     for k in range(nkpt):
         Zji.append(lib.einsum('xpq,pi,qj->xij', Z[k], 
-                              mo_coeff[k].conj(), orbo[k]))
+                              orbv[k].conj(), orbo[k]))
 
     Ls = cell.get_lattice_Ls(discard=False)
-    #Ls = cell.get_uniform_grids()
-    #s = mf.get_ovlp(cell=cell, kpts=kpts)
-    #sg = ifft(cell, s, kpts, Ls)
-    #R = fft_k_deriv(cell, sg, kpts, Ls).reshape(3,nkpt,nao,nao)
     Rji = []
-    #for k in range(nkpt):
-    #    Rji.append(lib.einsum('xpq,pi,qj->xij', R[:,k], 
-    #                          mo_coeff[k].conj(), mo_coeff[k]))
-
     Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=True)
     for k in range(nkpt):
         Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
-                               mo_coeff[k].conj(), orbo[k]))
+                              orbv[k].conj(), orbo[k]))
 
     Zji_tilde = []
     for k in range(nkpt):
@@ -112,46 +105,35 @@ def polarizability(polobj, with_cphf=True):
     Kji = []
     for k in range(nkpt):
         Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k], 
-                              mo_coeff[k].conj(), orbo[k]))
+                              orbv[k].conj(), orbo[k]))
 
     e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
     e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
-    e_all = [mo_energy[k] for k in range(nkpt)] 
     e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-    e_ji_plus = [lib.direct_sum('a+i->ai', e_all[k], e_i[k]) for k in range(nkpt)]    
+    e_ai_plus = [lib.direct_sum('a+i->ai', e_a[k], e_i[k]) for k in range(nkpt)]    
 
-    '''
-    Qji = []
-    for k in range(nkpt):
-        Qji_k = Kji[k] - Rji[k] * e_i[k]
-        Qji_k[:,viridx[k]] *= -e_ai[k]
-        Qji_k[:,occidx[k]] = -Rji[k][:,occidx[k]] * .5
-        Qji.append(Qji_k)
-    '''
     Qji_tilde = []
     for k in range(nkpt):
-        Qji_k = 1j*(Kji[k] - 0.5 * Rji[k] * e_ji_plus[k])
-        Qji_k[:,viridx[k]] *= -e_ai[k]
-        Qji_k[:,occidx[k]] = 0.0
+        Qji_k = 1j*(Kji[k] - 0.5 * Rji[k] * e_ai_plus[k])
+        Qji_k[:] *= -e_ai[k]
         Qji_tilde.append(Qji_k)
 
     h1 = []
     s1 = []
     for k in range(nkpt):
-        #h1.append(Zji[k] + 1j*Rji[k] + 1j*Qji[k])
         h1.append(Zji_tilde[k] + Qji_tilde[k])
-        s1.append(np.zeros_like(h1[k]))
+        #s1.append(np.zeros_like(h1[k]))
     vind = polobj.gen_vind(mf, mo_coeff, mo_occ)
     if with_cphf:
-        mo1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
-                         polobj.max_cycle_cphf, polobj.conv_tol,
+        mo1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1=None,
+                         max_cycle=polobj.max_cycle_cphf, tol=polobj.conv_tol,
                          verbose=log)[0]
     else:
         raise NotImplementedError
 
     e2 = 0    
     for k in range(nkpt):
-        e2 += np.einsum('xpi,ypi->xy', h1[k], mo1[k].conj()) / nkpt
+        e2 += np.einsum('xpi,ypi->xy', h1[k].conj(), mo1[k]) / nkpt
     e2 = (e2 + e2.T.conj()) * -2
     if np.linalg.norm(e2.imag) > 1e-8:
         raise RuntimeError("Imaginary polarizability found! Something may be wrong.")
@@ -613,14 +595,16 @@ class Polarizability(mol_polar):
         '''Induced potential'''
         nkpt, nao, nmo = mo_coeff.shape
         orbo = [mo_coeff[k][:,mo_occ[k]>0] for k in range(nkpt)]
+        orbv = [mo_coeff[k][:,mo_occ[k]==0] for k in range(nkpt)]
         nocc = [orbo[k].shape[-1] for k in range(nkpt)]
+        nvir = [orbv[k].shape[-1] for k in range(nkpt)]
         vresp = mf.gen_response(hermi=1)
         def vind(mo1):
             dm1 = []
             for k in range(nkpt):
                 dm1_k = lib.einsum('xai,pa,qi->xpq', 
-                                   mo1[k].reshape(-1, nmo, nocc[k]),
-                                   mo_coeff[k], orbo[k].conj())
+                                   mo1[k].reshape(-1, nvir[k], nocc[k]),
+                                   orbv[k], orbo[k].conj())
                 dm1_k = (dm1_k + dm1_k.transpose(0,2,1).conj()) * 2
                 dm1.append(dm1_k)
             dm1 = np.asarray(dm1).transpose(1,0,2,3)
@@ -628,7 +612,7 @@ class Polarizability(mol_polar):
             v1mo = []
             for k in range(nkpt):
                 v1mo.append(lib.einsum('xpq,pi,qj->xij', v1ao[k],
-                                       mo_coeff[k].conj(), orbo[k]))
+                                       orbv[k].conj(), orbo[k]))
             return v1mo
         return vind
 
