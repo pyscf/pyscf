@@ -56,7 +56,7 @@ def fft_k_deriv(cell, fg, kpts, Ls):
         fk.append(1j*np.dot(expkL*Ls[:,beta], fg))
     return np.asarray(fk)
 
-def polarizability(polobj, with_cphf=True):
+def get_h1(polobj):
     log = logger.new_logger(polobj)
     mf = polobj._scf
     kpts = polobj.kpts
@@ -122,7 +122,18 @@ def polarizability(polobj, with_cphf=True):
     s1 = []
     for k in range(nkpt):
         h1.append(Zji_tilde[k] + Qji_tilde[k])
-        #s1.append(np.zeros_like(h1[k]))
+
+    return h1
+
+def polarizability(polobj, with_cphf=True):
+    log = logger.new_logger(polobj)
+    mf = polobj._scf
+    mo_energy = mf.mo_energy
+    mo_coeff = np.asarray(mf.mo_coeff)
+    mo_occ = mf.mo_occ
+    nkpt, nao, nmo = mo_coeff.shape
+
+    h1 = get_h1(polobj)
     vind = polobj.gen_vind(mf, mo_coeff, mo_occ)
     if with_cphf:
         mo1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1=None,
@@ -505,69 +516,12 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
 def polarizability_with_freq(polobj, freq=None):
     log = logger.new_logger(polobj)
     mf = polobj._scf
-    kpts = polobj.kpts
-    cell = mf.cell
     mo_energy = mf.mo_energy
     mo_coeff = np.asarray(mf.mo_coeff)
     mo_occ = mf.mo_occ
     nkpt, nao, nmo = mo_coeff.shape
 
-    occidx = []
-    viridx = []
-    for k in range(nkpt):
-        occidx.append(mo_occ[k] > 0)
-        viridx.append(mo_occ[k] == 0)
-
-    orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpt)]
-    orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpt)]
-
-    with cell.with_common_orig((0., 0., 0.)):
-        Z = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts,
-                           pbcopt=lib.c_null_ptr())
-    Zji = []
-    for k in range(nkpt):
-        Zji.append(lib.einsum('xpq,pi,qj->xij', Z[k],
-                              orbv[k].conj(), orbo[k]))
-
-    Ls = cell.get_lattice_Ls(discard=False)
-    Rji = []
-    Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=True)
-    for k in range(nkpt):
-        Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
-                               orbv[k].conj(), orbo[k]))
-
-    Zji_tilde = []
-    for k in range(nkpt):
-        Zji_tilde.append(Zji[k] + 1j*0.5*Rji[k])
-
-    fock = mf.get_fock()
-    fockg = ifft(cell, fock, kpts, Ls)
-    fockk = fft(cell, fockg, kpts, Ls)
-    error = np.linalg.norm(fock.flatten() - fockk.flatten())
-    if error > 1e-6:
-        log.warn("k-mesh may be too small: FFT error = %.6e", error)
-
-    Kao = fft_k_deriv(cell, fockg, kpts, Ls).reshape(3,nkpt,nao,nao)
-    Kji = []
-    for k in range(nkpt):
-        Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k],
-                              orbv[k].conj(), orbo[k]))
-
-    e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
-    e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
-    e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-    e_ai_plus = [lib.direct_sum('a+i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-
-    Qji_tilde = []
-    for k in range(nkpt):
-        Qji_k = 1j*(Kji[k] - 0.5 * Rji[k] * e_ai_plus[k])
-        Qji_k *= -e_ai[k]
-        Qji_tilde.append(Qji_k)
-
-    h1 = []
-    for k in range(nkpt):
-        h1.append(Zji_tilde[k] + Qji_tilde[k])
-
+    h1 = get_h1(polobj)
     mo1 = cphf_with_freq(mf, mo_energy, mo_occ, h1, freq,
                          polobj.max_cycle_cphf, polobj.conv_tol, verbose=log)[0]
 
