@@ -453,7 +453,7 @@ def get_monkhorst_pack_size(cell, kpts):
     return Nk
 
 
-def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
+def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
     The translation vectors can be used for the lattice summation.'''
     a = cell.lattice_vectors()
@@ -482,6 +482,8 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
                              np.arange(-nimgs[1],nimgs[1]+1),
                              np.arange(-nimgs[2],nimgs[2]+1)))
     Ls = np.dot(Ts, a)
+    if not discard:
+        return Ls
     idx = np.zeros(len(Ls), dtype=bool)
     for ax in (-a[0], 0, a[0]):
         for ay in (-a[1], 0, a[1]):
