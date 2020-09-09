@@ -118,13 +118,15 @@ def log(rec, msg, *args):
 def error(rec, msg, *args):
     if rec.verbose >= ERROR:
         flush(rec, '\nERROR: '+msg+'\n', *args)
-    sys.stderr.write('ERROR: ' + (msg%args) + '\n')
+    # NEVER WRITE TO STDERR DIRECTLY
+    # sys.stderr.write('ERROR: ' + (msg%args) + '\n')
 
 def warn(rec, msg, *args):
     if rec.verbose >= WARN:
         flush(rec, '\nWARN: '+msg+'\n', *args)
-        if rec.stdout is not sys.stdout:
-            sys.stderr.write('WARN: ' + (msg%args) + '\n')
+        # NEVER WRITE TO STDERR DIRECTLY
+        #if rec.stdout is not sys.stdout:
+        #    sys.stderr.write('WARN: ' + (msg%args) + '\n')
 
 def info(rec, msg, *args):
     if rec.verbose >= INFO:
