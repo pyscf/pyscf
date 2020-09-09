@@ -85,3 +85,36 @@ pyscf/
                 - build_part_loop_uagf2
                 - build_part_loop_dfragf2
                 - build_part_loop_dfuagf2
+
+
+RAGF2 class:
+    Arguments:
+    - dm
+    - verbose
+    - max_memory?
+    - conv_tol
+    - max_cycle
+    - diis_space
+
+    Attributes:
+    - e_1b
+    - e_2b
+    - converged
+    - se
+    - gf
+    - rdm1
+    - h1e (MO basis) <--+-- should these two be private?
+    - eri (MO basis) <--'
+
+    Methods:
+    - make_rdm1
+    - get_fock
+    - get_hcore  <-- return h1e which could just be private?
+    - ao2mo
+    - _finalize
+    - dump_flags
+    - kernel
+
+    Properties:
+    - e_corr
+    - e_tot

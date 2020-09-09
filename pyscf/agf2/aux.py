@@ -1,4 +1,3 @@
- 
 # Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Oliver Backhouse <olbackhouse@gmail.com>
+#         George Booth <george.booth@kcl.ac.uk>
 #
 
 '''
@@ -185,7 +185,7 @@ class AuxiliarySpace:
 
         return out
 
-    def eig(self, phys, chempot=None):
+    def eig(self, phys, out=None, chempot=None):
         ''' Computes the eigenvalues and eigenvectors of the array
             returned by :func:`get_array`.
 
@@ -194,6 +194,8 @@ class AuxiliarySpace:
                 Physical (1p + 1h) part of the matrix
 
         Kwargs:
+            out : 2D array
+                If provided, use to store output
             chempot : float
                 If provided, use instead of :attr:`self.chempot`
 
@@ -203,7 +205,7 @@ class AuxiliarySpace:
 
         _check_phys_shape(self, phys)
 
-        h = self.get_array(phys, chempot=chempot)
+        h = self.get_array(phys, chempot=chempot, out=out)
         w, v = np.linalg.eigh(h)
 
         return w, v
@@ -237,6 +239,23 @@ class AuxiliarySpace:
 
         return moms
 
+    def remove_uncoupled(self, tol):
+        ''' Removes poles with very low spectral weight (uncoupled
+            to the physical space) in-place.
+
+        Args:
+            tol : float
+                Threshold for the spectral weight (squared norm)
+        '''
+
+        v = self.coupling
+        w = np.linalg.norm(v, axis=0) ** 2
+
+        arg = w >= tol
+
+        self.energy = self.energy[arg]
+        self.coupling = self.coupling[:,arg]
+
     def save(self, chkfile, key=None):
         ''' Saves the auxiliaries in chkfile
 
@@ -268,9 +287,9 @@ class AuxiliarySpace:
         if key is None:
             key = 'aux'
 
-        aux = lib.chkfile.load(chkfile, key)
+        dct = lib.chkfile.load(chkfile, key)
 
-        return cls(aux['energy'], aux['coupling'], chempot=aux['chempot'])
+        return cls(dct['energy'], dct['coupling'], chempot=dct['chempot'])
 
     def copy(self):
         ''' Returns a copy of the current object.
@@ -378,13 +397,9 @@ class GreensFunction(AuxiliarySpace):
 
         return -spectrum.imag / np.pi
 
-    def make_rdm1(self, phys, chempot=None, occupancy=2):
+    def make_rdm1(self, chempot=None, occupancy=2):
         ''' Returns the first-order reduced density matrix associated
             with the Green's function.
-
-        Args:
-            phys : 2D array
-                Physical space (1p + 1h), typically the Fock matrix
 
         Kwargs:
             chempot : float
@@ -407,35 +422,35 @@ class GreensFunction(AuxiliarySpace):
                          'rather than GreensFunction.')
 
 
-def combine(*auxs):
+def combine(*auxspcs):
     ''' Combine a set of :class:`AuxiliarySpace` objects. attr:`chempot`
         is inherited from the first element.
     '''
 
-    nphys = [aux.nphys for aux in auxs]
+    nphys = [auxspc.nphys for auxspc in auxspcs]
     if not all([x == nphys[0] for x in nphys]):
         raise ValueError('Size of physical space must be the same to '
                          'combine AuxiliarySpace objects.')
     nphys = nphys[0]
 
-    naux = sum([aux.naux for aux in auxs])
-    dtype = np.result_type(*[aux.coupling for aux in auxs])
+    naux = sum([auxspc.naux for auxspc in auxspcs])
+    dtype = np.result_type(*[auxspc.coupling for auxspc in auxspcs])
 
     energy = np.zeros((naux,))
-    coupling = np.zeros((nphys[0], naux), dtype=dtype)
+    coupling = np.zeros((nphys, naux), dtype=dtype)
 
     p1 = 0
-    for aux in auxs:
-        p0, p1 = p1, p1 + aux.naux
-        energy[p0:p1] = aux.energy
-        coupling[:,p0:p1] = aux.coupling
+    for auxspc in auxspcs:
+        p0, p1 = p1, p1 + auxspc.naux
+        energy[p0:p1] = auxspc.energy
+        coupling[:,p0:p1] = auxspc.coupling
 
-    aux = auxs[0].__class__(energy, coupling, chempot=auxs[0].chempot)
+    auxspc = auxspcs[0].__class__(energy, coupling, chempot=auxspcs[0].chempot)
 
-    return aux
+    return auxspc
 
 
-def davidson(aux, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxiter=None, ntrial=None):
+def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxiter=None, ntrial=None):
     ''' Diagonalise the result of :func:`AuxiliarySpace.get_array` using
         the sparse :func:`AuxiliarySpace.dot` method, with the Davidson
         algorithm.
@@ -444,7 +459,7 @@ def davidson(aux, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxiter=N
         not extremal eigenvalues, which they are not in standard AGF2.
 
     Args:
-        aux : AuxiliarySpace or subclass
+        auxspc : AuxiliarySpace or subclass
             Auxiliary space object to solve for
         phys : 2D array
             Physical space (1p + 1h), typically the Fock matrix
@@ -474,8 +489,8 @@ def davidson(aux, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxiter=N
     '''
     #NOTE: I think a lot of this is pulled from the adc code. Can we just inherit anything?
 
-    _check_phys_shape(aux, phys)
-    dim = aux.nphys + aux.naux
+    _check_phys_shape(auxspc, phys)
+    dim = auxspc.nphys + auxspc.naux
 
     if maxiter is None:
         maxiter = 10 * dim
@@ -496,8 +511,8 @@ def davidson(aux, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxiter=N
     else:
         order = -1
 
-    matvec = lambda x: aux.dot(phys, np.asarray(x))
-    diag = np.concatenate([np.diag(phys), aux.energy])
+    matvec = lambda x: auxspc.dot(phys, np.asarray(x))
+    diag = np.concatenate([np.diag(phys), auxspc.energy])
     guess = [np.zeros((dim)) for n in range(nroots)]
 
     mask = np.argsort(abs_op(diag))[::order]
@@ -520,7 +535,7 @@ def davidson(aux, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxiter=N
     return w, v
 
 
-def _check_phys_shape(aux, phys):
-    if phys.shape != (aux.nphys, aux.nphys):
+def _check_phys_shape(auxspc, phys):
+    if phys.shape != (auxspc.nphys, auxspc.nphys):
         raise ValueError('Size of physical space must be the same as '
                          'leading dimension of couplings.')
