@@ -56,8 +56,20 @@ def fft_k_deriv(cell, fg, kpts, Ls):
         fk.append(1j*np.dot(expkL*Ls[:,beta], fg))
     return np.asarray(fk)
 
-def get_h1(polobj):
-    log = logger.new_logger(polobj)
+def get_k_deriv(cell, mat, kpts, tol=1e-6):
+    Ls = cell.get_lattice_Ls(discard=False)
+    nkpt = len(kpts)
+    nao = cell.nao
+
+    matg = ifft(cell, mat, kpts, Ls)
+    matk = fft(cell, matg, kpts, Ls)
+    error = np.linalg.norm(mat.flatten() - matk.flatten())
+    if error > tol:
+        logger.warn(cell, "k-mesh may be too small: FFT error = %.6e", error)
+    mat_dk = fft_k_deriv(cell, matg, kpts, Ls).reshape(3,nkpt,nao,nao)
+    return mat_dk
+
+def get_h1(polobj, Zao_in=None, Rao_in=None, Kao_in=None, vo_only=False):
     mf = polobj._scf
     kpts = polobj.kpts
     cell = mf.cell
@@ -73,19 +85,27 @@ def get_h1(polobj):
         viridx.append(mo_occ[k] == 0)
 
     orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpt)]
-    orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpt)]
+    if vo_only:
+        orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpt)]
+    else:
+        orbv = mo_coeff
 
-    with cell.with_common_orig((0., 0., 0.)):
-        Z = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts, 
-                           pbcopt=lib.c_null_ptr()) 
+    if Zao_in is not None:
+        Z = Zao_in
+    else:
+        with cell.with_common_orig((0., 0., 0.)):
+            Z = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts, 
+                               pbcopt=lib.c_null_ptr()) 
     Zji = []
     for k in range(nkpt):
         Zji.append(lib.einsum('xpq,pi,qj->xij', Z[k], 
                               orbv[k].conj(), orbo[k]))
 
-    Ls = cell.get_lattice_Ls(discard=False)
     Rji = []
-    Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=True)
+    if Rao_in is not None:
+        Rao = Rao_in
+    else:
+        Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=True)
     for k in range(nkpt):
         Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
                               orbv[k].conj(), orbo[k]))
@@ -94,14 +114,11 @@ def get_h1(polobj):
     for k in range(nkpt):
         Zji_tilde.append(Zji[k] + 1j*0.5*Rji[k])
 
-    fock = mf.get_fock()
-    fockg = ifft(cell, fock, kpts, Ls)
-    fockk = fft(cell, fockg, kpts, Ls)
-    error = np.linalg.norm(fock.flatten() - fockk.flatten())
-    if error > 1e-6:
-        log.warn("k-mesh may be too small: FFT error = %.6e", error)
-
-    Kao = fft_k_deriv(cell, fockg, kpts, Ls).reshape(3,nkpt,nao,nao)
+    if Kao_in is not None:
+        Kao = Kao_in
+    else:
+        fock = mf.get_fock()
+        Kao = get_k_deriv(cell, fock, kpts)
     Kji = []
     for k in range(nkpt):
         Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k], 
@@ -110,20 +127,30 @@ def get_h1(polobj):
     e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
     e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
     e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-    e_ai_plus = [lib.direct_sum('a+i->ai', e_a[k], e_i[k]) for k in range(nkpt)]    
+    if vo_only:
+        e_ai_plus = [lib.direct_sum('a+i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
+    else:
+        e_ai_plus = [lib.direct_sum('a+i->ai', mo_energy[k], e_i[k]) for k in range(nkpt)]    
 
     Qji_tilde = []
     for k in range(nkpt):
         Qji_k = 1j*(Kji[k] - 0.5 * Rji[k] * e_ai_plus[k])
-        Qji_k[:] *= -e_ai[k]
+        if vo_only:
+            Qji_k[:] *= -e_ai[k]
+        else:
+            Qji_k[:, viridx[k]] *= -e_ai[k]
+            Qji_k[:, occidx[k]] = 0.0
         Qji_tilde.append(Qji_k)
 
     h1 = []
     s1 = []
     for k in range(nkpt):
         h1.append(Zji_tilde[k] + Qji_tilde[k])
-
-    return h1
+        if not vo_only:
+            s1.append(np.zeros_like(h1[k]))
+    if vo_only:
+        s1 = None
+    return h1, s1
 
 def polarizability(polobj, with_cphf=True):
     log = logger.new_logger(polobj)
@@ -133,10 +160,10 @@ def polarizability(polobj, with_cphf=True):
     mo_occ = mf.mo_occ
     nkpt, nao, nmo = mo_coeff.shape
 
-    h1 = get_h1(polobj)
-    vind = polobj.gen_vind(mf, mo_coeff, mo_occ)
+    h1, s1 = get_h1(polobj, vo_only=True)
+    vind = polobj.gen_vind(mf, mo_coeff, mo_occ, vo_only=True)
     if with_cphf:
-        mo1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1=None,
+        mo1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
                          max_cycle=polobj.max_cycle_cphf, tol=polobj.conv_tol,
                          verbose=log)[0]
     else:
@@ -174,128 +201,71 @@ def hyper_polarizability(polobj, with_cphf=True):
         viridx.append(mo_occ[k] == 0)
 
     orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpt)]
+    orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpt)]
 
     with cell.with_common_orig((0., 0., 0.)):
-        Z = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts,
-                           pbcopt=lib.c_null_ptr())
-    Zji = []
-    for k in range(nkpt):
-        Zji.append(lib.einsum('xpq,pi,qj->xij', Z[k],
-                              mo_coeff[k].conj(), orbo[k]))
+        Zao = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts,
+                             pbcopt=lib.c_null_ptr())
 
-    Ls = cell.get_lattice_Ls(discard=False)
-    Rji = []
     Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=True)
-    for k in range(nkpt):
-        Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
-                              mo_coeff[k].conj(), orbo[k]))
-
-    Zji_tilde = []
-    for k in range(nkpt):
-        Zji_tilde.append(Zji[k] + 1j*0.5*Rji[k])
 
     fock = mf.get_fock()
-    fockg = ifft(cell, fock, kpts, Ls)
-    fockk = fft(cell, fockg, kpts, Ls)
-    error = np.linalg.norm(fock.flatten() - fockk.flatten())
-    if error > 1e-6:
-        log.warn("k-mesh may be too small: FFT error = %.6e", error)
+    Kao = get_k_deriv(cell, fock, kpts)
 
-    Kao = fft_k_deriv(cell, fockg, kpts, Ls).reshape(3,nkpt,nao,nao)
-    Kji = []
-    for k in range(nkpt):
-        Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k],
-                              mo_coeff[k].conj(), orbo[k]))
-
-    e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
-    e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
-    e_all = [mo_energy[k] for k in range(nkpt)]
-    e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-    e_ji_plus = [lib.direct_sum('a+i->ai', e_all[k], e_i[k]) for k in range(nkpt)]
-
-    Qji_tilde = []
-    for k in range(nkpt):
-        Qji_k = 1j*(Kji[k] - 0.5 * Rji[k] * e_ji_plus[k])
-        Qji_k[:,viridx[k]] *= -e_ai[k]
-        Qji_k[:,occidx[k]] = 0.0
-        Qji_tilde.append(Qji_k)
-
-    h1 = []
-    s1 = []
-    for k in range(nkpt):
-        h1.append(Zji_tilde[k] + Qji_tilde[k])
-        s1.append(np.zeros_like(h1[k]))
+    h1, s1 = get_h1(polobj, Zao_in=Zao, Rao_in=Rao, Kao_in=Kao)
     vind = polobj.gen_vind(mf, mo_coeff, mo_occ)
     if with_cphf:
         mo1, e1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
-                             polobj.max_cycle_cphf, polobj.conv_tol,
+                             max_cycle=polobj.max_cycle_cphf, tol=polobj.conv_tol,
                              verbose=log)
     else:
         raise NotImplementedError
 
-
-    mo_coeff1 = [lib.einsum('xqi,pq->xpi', mo1[k], mo_coeff[k]) for k in range(nkpt)]
+    orbo1 = [lib.einsum('xai,pa->xpi', mo1[k], mo_coeff[k]) for k in range(nkpt)]
     dm1 = []
     for k in range(nkpt):
-        dm1_k = lib.einsum('xpi,qi->xpq', mo_coeff1[k], orbo[k].conj()) * 2
+        dm1_k = lib.einsum('xpi,qi->xpq', orbo1[k], orbo[k].conj()) * 2
         dm1_k = dm1_k + dm1_k.transpose(0,2,1).conj()
         dm1.append(dm1_k)
     dm1 = np.asarray(dm1).transpose(1,0,2,3)
 
     vresp = mf.gen_response(hermi=1)
-    Bao = vresp(dm1)
-    Bao_dk = []
+    v1ao = vresp(dm1)
+    v1ao_dk = []
     for i in range(3):
-        Baog = ifft(cell, Bao[i], kpts, Ls)
-        Baok = fft(cell, Baog, kpts, Ls)
-        error = np.linalg.norm(Bao[i].flatten() - Baok.flatten())
-        if error > 1e-6:
-            log.warn("k-mesh may be too small: FFT error = %.6e", error)
-        Bao_dk.append(fft_k_deriv(cell, Baog, kpts, Ls).reshape(3,nkpt,nao,nao))
-    Bao_dk = np.asarray(Bao_dk)
+        v1ao_dk.append(get_k_deriv(cell, v1ao[i], kpts))
+    v1ao_dk = np.asarray(v1ao_dk)
 
-    v1ao = Bao.transpose(1,0,2,3)
-    v1mo = []
+    G1ao = v1ao.transpose(1,0,2,3) + Zao + 1j * 0.5 * Rao
+    G1vv = []
     for k in range(nkpt):
-        v1mo.append(lib.einsum('xpq,pi,qj->xij', v1ao[k],
-                               mo_coeff[k].conj(), mo_coeff[k]))
+        G1vv.append(lib.einsum('xpq,pa,qb->xab', G1ao[k],
+                               orbv[k].conj(), orbv[k]))
 
-    h1_all = []
+    G1 = []
     for k in range(nkpt):
-        h1_all_k = np.empty((3, nmo, nmo), dtype=np.complex128)
-        h1_all_k[:, :, occidx[k]] = h1[k]
-        mask_vv = np.outer(viridx[k], viridx[k])
-        mask = np.stack([mask_vv,]*3, axis=0)
-        h1_all_k[mask] = 0.0
-        mask_ov = np.outer(occidx[k], viridx[k])
-        mask = np.stack([mask_ov,]*3, axis=0)
-        h1_all_k[mask] = h1[k][:, viridx[k]].transpose(0,2,1).conj().flatten()
-        h1_all.append(h1_all_k) 
-    G1 = [h1_all[k] + v1mo[k] for k in range(nkpt)]
+        G1po  = h1[k]
+        G1po += lib.einsum('xpq,pi,qj->xij', v1ao[:,k],
+                           mo_coeff[k].conj(), orbo[k])
+        G1.append(G1po)
 
     ##############
     # dU/dk part #
     ##############
+    e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
+    e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
+    e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
+
     Z_dk = []
-    Z = np.asarray(Z).transpose(1,0,2,3)
+    Z_ = np.asarray(Zao).transpose(1,0,2,3)
     for i in range(3):
-        Zg = ifft(cell, Z[i], kpts, Ls)
-        Zk = fft(cell, Zg, kpts, Ls)
-        error = np.linalg.norm(Z[i].flatten() - Zk.flatten())
-        if error > 1e-6:
-            log.warn("k-mesh may be too small: FFT error = %.6e", error)
-        Z_dk.append(fft_k_deriv(cell, Zg, kpts, Ls).reshape(3,nkpt,nao,nao))
+        Z_dk.append(get_k_deriv(cell, Z_[i], kpts))
     Z_dk = np.asarray(Z_dk)
 
     R_dk = []
-    R = np.asarray(Rao).transpose(1,0,2,3)
+    R_ = np.asarray(Rao).transpose(1,0,2,3)
     for i in range(3):
-        Rg = ifft(cell, R[i], kpts, Ls)
-        Rk = fft(cell, Rg, kpts, Ls)
-        error = np.linalg.norm(R[i].flatten() - Rk.flatten())
-        if error > 1e-6:
-            log.warn("k-mesh may be too small: FFT error = %.6e", error)
-        R_dk.append(fft_k_deriv(cell, Rg, kpts, Ls).reshape(3,nkpt,nao,nao))
+        R_dk.append(get_k_deriv(cell, R_[i], kpts))
     R_dk = np.asarray(R_dk)
 
     Kji = []
@@ -329,7 +299,6 @@ def hyper_polarizability(polobj, with_cphf=True):
         dedk_k = Kji[k].diagonal(0,1,2) - Rji[k].diagonal(0,1,2) * mo_energy[k]
         dedk.append(dedk_k)
 
-    #Rji_d2k
     Rji_d2k = []
     for k in range(nkpt):
         tmp = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Rao[k], orbo[k])
@@ -342,12 +311,7 @@ def hyper_polarizability(polobj, with_cphf=True):
     ##############
     Kao_dk = []
     for i in range(3):
-        Kaog = ifft(cell, Kao[i], kpts, Ls)
-        Kaok = fft(cell, Kaog, kpts, Ls)
-        error = np.linalg.norm(Kao[i].flatten() - Kaok.flatten())
-        if error > 1e-6:
-            log.warn("k-mesh may be too small: FFT error = %.6e", error)
-        Kao_dk.append(fft_k_deriv(cell, Kaog, kpts, Ls).reshape(3,nkpt,nao,nao))
+        Kao_dk.append(get_k_deriv(cell, Kao[i], kpts))
     Kao_dk = np.asarray(Kao_dk)
 
     Kji_d2k = []
@@ -380,35 +344,37 @@ def hyper_polarizability(polobj, with_cphf=True):
     S = mf.get_ovlp(kpts=kpts)
     dUdk = []
     for k in range(nkpt):
-        tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Bao[:,k]+Z[:,k]+1j*R[:,k], orbo[k])
-        tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k].conj(), Bao[:,k]+Z[:,k]+1j*R[:,k], mo_dk[k][:,:,occidx[k]])
-        tmp += lib.einsum('up,zyuv,vi->yzpi', mo_coeff[k].conj(), Bao_dk[:,:,k]+Z_dk[:,:,k]+1j*R_dk[:,:,k], orbo[k])
-        tmp += 1j * lib.einsum('yup,zvi,uv->yzpi', mo_dk[k].conj(), mo_dk[k][:,:,occidx[k]], S[k])
-        tmp += 1j * lib.einsum('up,zvi,yuv->yzpi', mo_coeff[k].conj(), mo_dk[k][:,:,occidx[k]], Rao[k])
-        tmp += 1j * lib.einsum('up,yzvi,uv->yzpi', mo_coeff[k].conj(), mo_d2k[k], S[k])
+        v1 = v1ao[:,k] + Zao[k] + 1j*Rao[k]
+        v1_dk = v1ao_dk[:,:,k] + Z_dk[:,:,k] + 1j*R_dk[:,:,k]
 
-        tmp1 = -lib.einsum('zpi,yi->yzpi', G1[k][:,:,occidx[k]], dedk[k][:,occidx[k]])
-        tmp1 += lib.einsum('zpi,yp->yzpi', G1[k][:,:,occidx[k]], dedk[k])
-        tmp1[:,:,viridx[k]] *= -e_ai[k]
-        tmp1[:,:,occidx[k]]  = 0.0
+        tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k][:,:,viridx[k]].conj(), v1, orbo[k])
+        tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k][:,viridx[k]].conj(), v1, mo_dk[k][:,:,occidx[k]])
+        tmp += lib.einsum('up,zyuv,vi->yzpi', mo_coeff[k][:,viridx[k]].conj(), v1_dk, orbo[k])
+
+        tmp += 1j * lib.einsum('yup,zvi,uv->yzpi', mo_dk[k][:,:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], S[k])
+        tmp += 1j * lib.einsum('up,zvi,yuv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], Rao[k])
+        tmp += 1j * lib.einsum('up,yzvi,uv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_d2k[k], S[k])
+
+        tmp1 = -lib.einsum('zpi,yi->yzpi', G1[k][:,viridx[k]], dedk[k][:,occidx[k]])
+        tmp1 += lib.einsum('zpi,yp->yzpi', G1[k][:,viridx[k]], dedk[k][:,viridx[k]])
+        tmp1[:,:] *= -e_ai[k]
 
         tmp += tmp1
-        tmp[:,:,viridx[k]] *= -e_ai[k]
-        tmp[:,:,occidx[k]]  = 0.0
+        tmp[:,:] *= -e_ai[k]
         dUdk.append(tmp)
     ##############
 
     e3 = 0.
     for k in range(nkpt):
-        # *2 for double occupancy
-        e3_k  = lib.einsum('xpi,ypq,zqi->xyz', mo1[k].conj(), G1[k], mo1[k]) * 2
-        e3_k -= lib.einsum('xpi,yji,zpj->xyz', mo1[k].conj(), e1[k], mo1[k]) * 2
-        e3_k += 1j * lib.einsum('xpi,yzpi->xyz', mo1[k].conj(), dUdk[k]) * 2
+        e3_k  = lib.einsum('xai,yab,zbi->xyz', mo1[k][:,viridx[k]].conj(), G1vv[k], mo1[k][:,viridx[k]])
+        e3_k -= lib.einsum('xai,yji,zaj->xyz', mo1[k][:,viridx[k]].conj(), e1[k], mo1[k][:,viridx[k]])
+        e3_k += 1j * lib.einsum('xai,yzai->xyz', mo1[k][:,viridx[k]].conj(), dUdk[k])
         e3_k = e3_k.real
         e3_k = (e3_k + e3_k.transpose(1,2,0) + e3_k.transpose(2,0,1) +
                 e3_k.transpose(0,2,1) + e3_k.transpose(1,0,2) + e3_k.transpose(2,1,0))
-        e3 += e3_k / nkpt
-    e3 = -e3
+        e3 += e3_k
+    # *2 for double occupancy
+    e3 = -2.0 / nkpt * e3
     log.debug('Static hyper polarizability tensor\n%s', e3)
     return e3
 
@@ -431,7 +397,6 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
 
     orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpt)]
     orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpt)]
-
 
     e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
     e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
@@ -521,7 +486,7 @@ def polarizability_with_freq(polobj, freq=None):
     mo_occ = mf.mo_occ
     nkpt, nao, nmo = mo_coeff.shape
 
-    h1 = get_h1(polobj)
+    h1, s1 = get_h1(polobj, vo_only=True)
     mo1 = cphf_with_freq(mf, mo_energy, mo_occ, h1, freq,
                          polobj.max_cycle_cphf, polobj.conv_tol, verbose=log)[0]
 
@@ -545,13 +510,19 @@ class Polarizability(mol_polar):
         self.kpts = kpts
         mol_polar.__init__(self, mf)
 
-    def gen_vind(self, mf, mo_coeff, mo_occ):
+    def gen_vind(self, mf, mo_coeff, mo_occ, vo_only=False):
         '''Induced potential'''
         nkpt, nao, nmo = mo_coeff.shape
         orbo = [mo_coeff[k][:,mo_occ[k]>0] for k in range(nkpt)]
-        orbv = [mo_coeff[k][:,mo_occ[k]==0] for k in range(nkpt)]
+        if vo_only:
+            orbv = [mo_coeff[k][:,mo_occ[k]==0] for k in range(nkpt)]
+        else:
+            orbv = mo_coeff
         nocc = [orbo[k].shape[-1] for k in range(nkpt)]
-        nvir = [orbv[k].shape[-1] for k in range(nkpt)]
+        if vo_only:
+            nvir = [orbv[k].shape[-1] for k in range(nkpt)]
+        else:
+            nvir = [nmo,]*nkpt
         vresp = mf.gen_response(hermi=1)
         def vind(mo1):
             dm1 = []
