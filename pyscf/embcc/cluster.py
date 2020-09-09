@@ -1,10 +1,13 @@
+# Standard libaries
 import logging
 
+# External libaries
 import numpy as np
 import scipy
 import scipy.linalg
 from mpi4py import MPI
 
+# Internal libaries
 import pyscf
 import pyscf.lo
 import pyscf.cc
@@ -12,16 +15,16 @@ import pyscf.ci
 import pyscf.mcscf
 import pyscf.fci
 import pyscf.mp
-
 import pyscf.pbc
 import pyscf.pbc.cc
 import pyscf.pbc.mp
 import pyscf.pbc.tools
 
-#from .orbitals import Orbitals
+# Local modules
 from .util import *
 from .bath import *
 from .energy import *
+#from .embcc import VALID_SOLVERS
 
 __all__ = [
         "Cluster",
@@ -37,9 +40,8 @@ class Cluster:
 
     def __init__(self, base, cluster_id, name,
             indices, C_local, C_env,
-            #coeff=None,
             solver="CCSD",
-            bath_type="power", bath_size=None, bath_tol=1e-4,
+            bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4,
             **kwargs):
         """
         Parameters
@@ -66,12 +68,20 @@ class Cluster:
         self.C_local = C_local
         self.C_env = C_env
 
+
+        # Mean-field electrons
+        S = self.mf.get_ovlp()
+        dm = np.linalg.multi_dot((self.C_local.T, S, self.mf.make_rdm1(), S, self.C_local))
+        ne = np.trace(dm)
+        log.info("Mean-field electrons=%.5f", ne)
+
         #assert self.nlocal == len(self.indices)
-        assert self.size == len(self.indices)
+        assert (self.size == len(self.indices) or self.local_orbital_type == "NonOrth-IAO")
 
         # Options
 
-        assert solver in ("MP2", "CISD", "CCSD", "FCI")
+        if solver not in self.base.VALID_SOLVERS:
+            raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
 
         if not hasattr(bath_tol, "__getitem__"):
@@ -79,12 +89,21 @@ class Cluster:
         if not hasattr(bath_size, "__getitem__"):
             bath_size = (bath_size, bath_size)
 
-        assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
+        #assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
+        if bath_type not in self.base.VALID_BATH_TYPES:
+            raise ValueError("Unknown bath type: %s" % bath_type)
+
         self.bath_type = bath_type
         self.bath_target_size = bath_size
         self.bath_tol = bath_tol
 
+        # Other options from kwargs:
+        self.solver_options = kwargs.get("solver_options", {})
+
+        #self.mp2_correction = kwargs.get("mp2_correction", True)
         self.mp2_correction = kwargs.get("mp2_correction", True)
+        if self.mp2_correction in (True, False):
+            self.mp2_correction = (self.mp2_correction, self.mp2_correction)
 
         # Currently not in use (always on!)
         self.use_ref_orbitals_dmet = kwargs.get("use_ref_orbitals_dmet", True)
@@ -101,12 +120,21 @@ class Cluster:
         self.restart_params = kwargs.get("restart_params", {})
 
 
+        self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-8)
+
+        self.coupled_bath = kwargs.get("coupled_bath", False)
+
+        self.nelectron_target = kwargs.get("nelectron_target", None)
+
+
         #self.project_type = kwargs.get("project_type", "first-occ")
 
 
         #
-        self.occbath_eigref = kwargs.get("occbath-eigref", None)
-        self.virbath_eigref = kwargs.get("virbath-eigref", None)
+        #self.occbath_eigref = kwargs.get("occbath-eigref", None)
+        #self.virbath_eigref = kwargs.get("virbath-eigref", None)
+        self.refdata_in = kwargs.get("refdata", {})
+
 
         # Maximum number of iterations for consistency of amplitudes between clusters
         self.maxiter = kwargs.get("maxiter", 1)
@@ -125,17 +153,29 @@ class Cluster:
         #self.nfrozen = None
         self.e_delta_mp2 = 0.0
 
+        self.active = None
+        self.active_occ = None
+        self.active_vir = None
+        self.frozen = None
+        self.frozen_occ = None
+        self.frozen_vir = None
+
         # These are used by the solver
         self.mo_coeff = None
         self.mo_occ = None
-        self.frozen = None
         self.eris = None
 
         #self.ref_orbitals = None
 
         # Reference orbitals should be saved with keys
         # dmet-bath, occ-bath, vir-bath
-        self.ref_orbitals = {}
+        #self.refdata = {}
+        self.refdata_out = {}
+        #self.ref_orbitals = {}
+
+        # Local amplitudes [C1, C2] can be stored here and
+        # used by other fragments
+        self.amplitudes = {}
 
         # Orbitals sizes
         #self.nbath0 = 0
@@ -154,6 +194,8 @@ class Cluster:
         self.e_corr_full = 0.0
         self.e_corr_v = 0.0
         self.e_corr_d = 0.0
+
+        self.e_dmet = 0.0
 
     #@property
     #def nlocal(self):
@@ -181,33 +223,43 @@ class Cluster:
         return self.C_virbath.shape[-1]
 
     @property
+    def nactive(self):
+        """Number of active orbitals."""
+        return len(self.active)
+
+    @property
     def nfrozen(self):
         """Number of frozen environment orbitals."""
         return len(self.frozen)
 
-    def get_orbitals(self):
-        """Get dictionary with orbital coefficients."""
-        orbitals = {
-                "local" : self.C_local,
-                "dmet-bath" : self.C_bath,
-                "occ-bath" : self.C_occbath,
-                "vir-bath" : self.C_virbath,
-                }
-        return orbitals
+    #def get_orbitals(self):
+    #    """Get dictionary with orbital coefficients."""
+    #    orbitals = {
+    #            "local" : self.C_local,
+    #            "dmet-bath" : self.C_bath,
+    #            "occ-bath" : self.C_occbath,
+    #            "vir-bath" : self.C_virbath,
+    #            }
+    #    return orbitals
 
     def get_refdata(self):
         """Get data of reference calculation for smooth PES."""
-        refdata = {
-                "dmet-bath" : self.C_bath,
-                "occbath-eigref" : self.occbath_eigref,
-                "virbath-eigref" : self.virbath_eigref,
-                }
+        refdata = self.refdata_out
+        log.debug("Getting refdata: %r", refdata.keys())
+        #refdata = {
+        #        "dmet-bath" : self.C_bath,
+        #        "occbath-eigref" : self.occbath_eigref,
+        #        "virbath-eigref" : self.virbath_eigref,
+        #        }
         return refdata
 
     def set_refdata(self, refdata):
         log.debug("Setting refdata: %r", refdata.keys())
-        self.occbath_eigref = refdata["occbath-eigref"]
-        self.virbath_eigref = refdata["virbath-eigref"]
+        #self.refdata = refdata
+        self.refdata_in = refdata
+        #self.dmetbath_ref = refdata["dmet-bath"]
+        #self.occbath_eigref = refdata["occbath-eigref"]
+        #self.virbath_eigref = refdata["virbath-eigref"]
 
     def reset(self, keep_ref_orbitals=True):
         """Reset cluster object. By default it stores the previous orbitals, so they can be used
@@ -261,39 +313,11 @@ class Cluster:
         """Indices which are NOT in the cluster, i.e. complement to self.indices."""
         return np.asarray([i for i in np.arange(self.mol.nao_nr()) if i not in self.indices])
 
-    #def make_projector(self):
-    #    """Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b"""
-    #    S1 = self.mf.get_ovlp()
-    #    nao = self.mol.nao_nr()
-    #    S2 = S1[np.ix_(self.indices, self.indices)]
-    #    S21 = S1[self.indices]
-    #    #s2_inv = np.linalg.inv(s2)
-    #    #p_21 = np.dot(s2_inv, s21)
-    #    # Better: solve with Cholesky decomposition
-    #    # Solve: S2 * p_21 = S21 for p_21
-    #    p_21 = scipy.linalg.solve(S2, S21, assume_a="pos")
-    #    p_12 = np.eye(nao)[:,self.indices]
-    #    p = np.dot(p_12, p_21)
-    #    return p
+    @property
+    def energy_factor(self):
+        return self.symmetry_factor
 
-    #def make_projector_s121(self, indices=None):
-    #    """Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b"""
-    #    if indices is None:
-    #        indices = self.indices
-    #    S1 = self.mf.get_ovlp()
-    #    nao = self.mol.nao_nr()
-    #    S2 = S1[np.ix_(indices, indices)]
-    #    S21 = S1[indices]
-    #    #s2_inv = np.linalg.inv(s2)
-    #    #p_21 = np.dot(s2_inv, s21)
-    #    # Better: solve with Cholesky decomposition
-    #    # Solve: S2 * p_21 = S21 for p_21
-    #    p_21 = scipy.linalg.solve(S2, S21, assume_a="pos")
-    #    #p_12 = np.eye(nao)[:,self.indices]
-    #    p = np.dot(S21.T, p_21)
-    #    return p
-
-    # Methods from bath.py
+    # Register frunctions of bath.py as methods
     project_ref_orbitals = project_ref_orbitals
     make_dmet_bath = make_dmet_bath
     make_bath = make_bath
@@ -303,7 +327,7 @@ class Cluster:
     transform_mp2_eris = transform_mp2_eris
     run_mp2 = run_mp2
 
-    # Methods from energy.py
+    # Register frunctions of energy.py as methods
     get_local_amplitudes = get_local_amplitudes
     get_local_energy = get_local_energy
 
@@ -378,7 +402,7 @@ class Cluster:
         C_clst = np.dot(C_clst, R)
         nocc_clst = sum(e > 0.5)
         nvir_clst = sum(e < 0.5)
-        log.info("DMET cluster orbitals: occupied=%3d, virtual=%3d", nocc_clst, nvir_clst)
+        log.info("DMET cluster orbitals: occ=%3d, vir=%3d", nocc_clst, nvir_clst)
 
         C_occclst, C_virclst = np.hsplit(C_clst, [nocc_clst])
 
@@ -399,24 +423,55 @@ class Cluster:
         """
         C = np.hstack(C)
         F = np.linalg.multi_dot((C.T, self.mf.get_fock(), C))
-        E, R = np.linalg.eigh(F)
+        e, R = np.linalg.eigh(F)
         C = np.dot(C, R)
         return C
 
     def get_occup(self, C):
-        """Get mean-field occupation of orbitals."""
+        """Get mean-field occupation numbers (diagonal of 1-RDM) of orbitals.
+
+        Parameters
+        ----------
+        C : ndarray, shape(N, M)
+            Orbital coefficients.
+
+        Returns
+        -------
+        occ : ndarray, shape(M)
+            Occupation numbers of orbitals.
+        """
         S = self.mf.get_ovlp()
         D = np.linalg.multi_dot((C.T, S, self.mf.make_rdm1(), S, C))
         occ = np.diag(D)
         return occ
 
     def get_local_projector(self, C, kind="right", inverse=False):
-        """Projector for local energy expression."""
-        #log.debug("Making local energy projector for orbital type %s", self.local_orbital_type)
+        """Projector for one index of amplitudes local energy expression.
+
+        Parameters
+        ----------
+        C : ndarray, shape(N, M)
+            Occupied or virtual orbital coefficients.
+        kind : str ["right", "left", "center"], optional
+            Only for AO local orbitals.
+        inverse : bool, optional
+            If true, return the environment projector 1-P instead.
+
+        Return
+        ------
+        P : ndarray, shape(M, M)
+            Projection matrix.
+        """
         S = self.mf.get_ovlp()
 
+
+        # Project onto space of local (fragment) orbitals.
+        if self.local_orbital_type in ("IAO", "LAO"):
+            CSC = np.linalg.multi_dot((C.T, S, self.C_local))
+            P = np.dot(CSC, CSC.T)
+
         # Project onto space of local atomic orbitals.
-        if self.local_orbital_type == "AO":
+        elif self.local_orbital_type in ("AO", "NonOrth-IAO"):
             l = self.indices
             # This is the "natural way" to truncate in AO basis
             if kind == "right":
@@ -434,15 +489,14 @@ class Cluster:
             else:
                 raise ValueError("Unknown kind=%s" % kind)
 
-        # Project onto space of local (fragment) orbitals.
-        #elif self.local_orbital_type == "IAO":
-        elif self.local_orbital_type in ("LAO", "IAO"):
-            CSC = np.linalg.multi_dot((C.T, S, self.C_local))
-            P = np.dot(CSC, CSC.T)
-
         if inverse:
-            #log.debug("Inverting projector")
             P = (np.eye(P.shape[-1]) - P)
+
+            # DEBUG
+            CSC = np.linalg.multi_dot((C.T, S, self.C_env))
+            P2 = np.dot(CSC, CSC.T)
+            assert np.allclose(P, P2)
+
 
         return P
 
@@ -499,12 +553,16 @@ class Cluster:
         T2 = einsum("xi,yj,za,wb,ijab->xyzw", Ro, Ro, Rv, Rv, T2)
         return T1, T2
 
-    def run_solver(self, solver=None, mo_coeff=None, mo_occ=None, frozen=None, eris=None):
+
+    def run_solver(self, solver=None, mo_coeff=None, mo_occ=None, active=None, frozen=None, eris=None,
+            solver_options=None):
         solver = solver or self.solver
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
+        if active is None: active = self.active
         if frozen is None: frozen = self.frozen
         if eris is None: eris = self.eris
+        if solver_options is None: solver_options = self.solver_options
 
         self.iteration += 1
         if self.iteration > 1:
@@ -512,30 +570,49 @@ class Cluster:
 
         log.debug("Running solver %s for cluster %s on MPI process %d", solver, self.name, MPI_rank)
 
+        if len(active) == 1:
+            log.debug("Only one orbital in cluster. No correlation energy.")
+            solver = None
+
         if self.has_pbc:
             log.debug("Cell object found -> using pbc code.")
 
-        if solver == "MP2":
+        if solver is None:
+            log.debug("No solver")
+            e_corr_full = 0
+            e_corr = 0
+            converged = True
+
+        # MP2
+        # ===
+        elif solver == "MP2":
             if self.has_pbc:
                 mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
             else:
                 mp2 = pyscf.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
+            solverobj = mp2
+
             if eris is None:
                 t0 = MPI.Wtime()
                 eris = mp2.ao2mo()
                 log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
             e_corr_full, t2 = mp2.kernel(eris=eris)
             converged = True
-            e_corr_full *= self.symmetry_factor
+            e_corr_full *= self.energy_factor
             C1, C2 = None, t2
 
             e_corr = self.get_local_energy(mp2, C1, C2, eris=eris)
 
+        # CCSD
+        # ====
         elif solver == "CCSD":
             if self.has_pbc:
                 cc = pyscf.pbc.cc.CCSD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
             else:
                 cc = pyscf.cc.CCSD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
+
+            solverobj = cc
+            self.cc = cc
 
             # We want to reuse the integral for local energy
             if eris is None:
@@ -545,6 +622,7 @@ class Cluster:
             cc.max_cycle = 100
 
             # Taylored CC in iterations > 1
+            #if True:
             if self.base.tccT1 is not None:
                 log.debug("Adding tailorfunc for tailored CC.")
 
@@ -559,7 +637,10 @@ class Cluster:
                 S = self.mf.get_ovlp()
                 Ro = np.linalg.multi_dot((Co.T, S, Cmfo))
                 Rv = np.linalg.multi_dot((Cv.T, S, Cmfv))
+
                 ttcT1, ttcT2 = self.transform_amplitudes(Ro, Rv, self.base.tccT1, self.base.tccT2)
+                #ttcT1 = 0
+                #ttcT2 = 0
 
                 # Get occupied bath projector
                 #Pbath = self.get_local_projector(Co, inverse=True)
@@ -591,8 +672,13 @@ class Cluster:
                     ###_, pT2_1 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[1])
                     ###pT2 += (pT2_0 + pT2_1)/2
 
-                    #pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, inverse=True)
-                    pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, variant="democratic", inverse=True)
+                    # Inverse=True gives the non-local (bath) part
+                    pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, inverse=True)
+
+                    #pT12, pT22 = self.get_local_amplitudes(cc, pT1, pT2, inverse=True, symmetrize=False)
+                    #assert np.allclose(pT12, pT1)
+                    #assert np.allclose(pT22, pT2)
+                    #pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, variant="democratic", inverse=True)
                     # Subtract to get non-local amplitudes
                     #pT1 = dT1 - pT1
                     #pT2 = dT2 - pT2
@@ -605,6 +691,121 @@ class Cluster:
 
                 cc.tailorfunc = tailorfunc
 
+            # Use FCI amplitudes
+            #if True:
+            #if False:
+            if self.coupled_bath:
+                log.debug("Coupling bath")
+                for x in self.loop_clusters(exclude_self=True):
+                    if not x.amplitudes:
+                        continue
+                    log.debug("Coupling bath with fragment %s with solver %s", x.name, x.solver)
+
+                #act = cc.get_frozen_mask()
+                #Co = mo_coeff[:,act][:,mo_occ[act]>0]
+                #Cv = mo_coeff[:,act][:,mo_occ[act]==0]
+                #no = Co.shape[-1]
+                #nv = Cv.shape[-1]
+
+                #T1_ext = np.zeros((no, nv))
+                #T2_ext = np.zeros((no, no, nv, nv))
+                #Pl = []
+                #Po = []
+                #Pv = []
+
+                #for x in self.loop_clusters(exclude_self=True):
+                #    if not x.amplitudes:
+                #        continue
+                #    log.debug("Amplitudes found in cluster %s with solver %s", x.name, x.solver)
+                #    #C_x_occ = x.amplitudes["C_occ"]
+                #    #C_x_vir = x.amplitudes["C_vir"]
+                #    Cx_occ = x.C_occact
+                #    Cx_vir = x.C_viract
+                #    C1x = x.amplitudes["C1"]
+                #    C2x = x.amplitudes["C2"]
+
+                #    actx = x.cc.get_frozen_mask()
+                #    assert np.allclose(Cx_occ, x.cc.mo_coeff[:,actx][x.cc.mo_occ[actx]>0])
+                #    assert np.allclose(Cx_vir, x.cc.mo_coeff[:,actx][x.cc.mo_occ[actx]==0])
+
+                #    assert Cx_occ.shape[-1] == C1x.shape[0]
+                #    assert Cx_vir.shape[-1] == C1x.shape[1]
+
+                #    T1x, T2x = amplitudes_C2T(C1x, C2x)
+
+                #    # Project to local first index
+                #    Plx = x.get_local_projector(Cx_occ)
+                #    T1x = einsum("xi,ia->xa", Plx, T1x)
+                #    T2x = einsum("xi,ijab->xjab", Plx, T2x)
+
+                #    # Transform to current basis
+                #    S = self.mf.get_ovlp()
+                #    Rox = np.linalg.multi_dot((Co.T, S, Cx_occ))
+                #    Rvx = np.linalg.multi_dot((Cv.T, S, Cx_vir))
+                #    T1x, T2x = self.transform_amplitudes(Rox, Rvx, T1x, T2x)
+
+                #    T1_ext += T1x
+                #    T2_ext += T2x
+
+                #    Plx = np.linalg.multi_dot((x.C_local.T, S, Co))
+                #    Pox = np.linalg.multi_dot((x.C_occclst.T, S, Co))
+                #    Pvx = np.linalg.multi_dot((x.C_virclst.T, S, Cv))
+                #    Pl.append(Plx)
+                #    Po.append(Pox)
+                #    Pv.append(Pvx)
+
+                #Pl = np.vstack(Pl)
+                #Pl = np.dot(Pl.T, Pl)
+                #Po = np.vstack(Po)
+                #Po = np.dot(Po.T, Po)
+                #Pv = np.vstack(Pv)
+                #Pv = np.dot(Pv.T, Pv)
+
+                #def tailorfunc(T1, T2):
+                #    # Difference amplitudes
+                #    dT1 = (T1_ext - T1)
+                #    dT2 = (T2_ext - T2)
+                #    # Project to Px
+                #    #pT1 = einsum("xi,ia->xa", Pext, dT1)
+                #    #pT2 = einsum("xi,ijab->xjab", Pext, dT2)
+                #    pT1 = einsum("xi,ya,ia->xy", Pl, Pv, dT1)
+                #    pT2 = einsum("xi,yj,za,wb,ijab->xyzw", Pl, Po, Pv, Pv, dT2)
+                #    # Symmetrize pT2
+                #    pT2 = (pT2 + pT2.transpose(1,0,3,2))/2
+                #    T1 += pT1
+                #    T2 += pT2
+                #    return T1, T2
+                S = self.mf.get_ovlp()
+
+                def tailorfunc(T1, T2):
+                    T1out = T1.copy()
+                    T2out = T2.copy()
+                    for x in self.loop_clusters(exclude_self=True):
+                        if not x.amplitudes:
+                            continue
+                        C1x, C2x = x.amplitudes["C1"], x.amplitudes["C2"]
+                        T1x, T2x = amplitudes_C2T(C1x, C2x)
+
+                        # Remove double counting
+                        # Transform to x basis [note that the sizes of the active orbitals will be changed]
+                        Ro = np.linalg.multi_dot((x.C_occact.T, S, self.C_occact))
+                        Rv = np.linalg.multi_dot((x.C_viract.T, S, self.C_viract))
+                        T1x_dc, T2x_dc = self.transform_amplitudes(Ro, Rv, T1, T2)
+                        dT1x = (T1x - T1x_dc)
+                        dT2x = (T2x - T2x_dc)
+
+                        Px = x.get_local_projector(x.C_occact)
+                        pT1x = einsum("xi,ia->xa", Px, dT1x)
+                        pT2x = einsum("xi,ijab->xjab", Px, dT2x)
+
+                        # Transform back and add
+                        pT1x, pT2x = self.transform_amplitudes(Ro.T, Rv.T, pT1x, pT2x)
+                        T1out += pT1x
+                        T2out += pT2x
+
+                    return T1out, T2out
+
+                cc.tailorfunc = tailorfunc
 
             if self.restart_solver:
                 log.debug("Running CCSD starting with parameters for: %r...", self.restart_params.keys())
@@ -613,14 +814,16 @@ class Cluster:
                 log.debug("Running CCSD...")
                 cc.kernel(eris=eris)
             log.debug("CCSD done. converged: %r", cc.converged)
+
             if self.restart_solver:
                 self.restart_params["t1"] = cc.t1
                 self.restart_params["t2"] = cc.t2
 
             converged = cc.converged
-            e_corr_full = self.symmetry_factor*cc.e_corr
-            C1 = cc.t1
-            C2 = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
+            e_corr_full = self.energy_factor*cc.e_corr
+            #C1 = cc.t1
+            #C2 = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
+            C1, C2 = amplitudes_T2C(cc.t1, cc.t2)
 
             #e_corr = self.get_local_energy(cc, C1, C2, eris=eris)
 
@@ -665,51 +868,188 @@ class Cluster:
 
         elif solver == "CISD":
             # Currently not maintained
-            raise NotImplementedError()
+            #raise NotImplementedError()
+            if self.has_pbc:
+                ci = pyscf.pbc.ci.CISD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
+            else:
+                ci = pyscf.ci.CISD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
+            solverobj = ci
 
-            cc = pyscf.ci.CISD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
-            cisd.max_cycle = 100
+            # We want to reuse the integral for local energy
+            if eris is None:
+                t0 = MPI.Wtime()
+                eris = ci.ao2mo()
+                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+            ci.max_cycle = 100
+
             log.debug("Running CISD...")
-            cc.kernel()
-            log.debug("CISD done. converged: %r", cc.converged)
-            converged = cc.converged
-            e_corr_full = cc.e_corr
+            if self.nelectron_target is None:
+                ci.kernel(eris=eris)
+            else:
+                # Buggy, doesn't work
+                raise NotImplementedError()
+
+                S = self.mf.get_ovlp()
+                px = self.get_local_projector(mo_coeff)
+                b = np.linalg.multi_dot((S, self.C_local, self.C_local.T, S))
+
+                h1e = self.mf.get_hcore()
+                h1e_func = self.mf.get_hcore
+
+                cptmin = 0.0
+                cptmax = +3.0
+                #cptmin = -0.5
+                #cptmax = +0.5
+
+                ntol = 1e-6
+
+                def electron_error(chempot):
+                    nonlocal e_tot, wf
+
+                    ci._scf.get_hcore = lambda *args : h1e - chempot*b
+                    #ci._scf.get_hcore = lambda *args : h1e
+                    ci.kernel(eris=eris)
+                    dm1xx = np.linalg.multi_dot((px.T, ci.make_rdm1(), px))
+                    nx = np.trace(dm1xx)
+                    nerr = (nx - self.nelectron_target)
+                    log.debug("chempot=%16.8g, electrons=%16.8g, error=%16.8g", chempot, nx, nerr)
+                    assert ci.converged
+
+                    if abs(nerr) < ntol:
+                        log.debug("Electron error |%e| below tolerance of %e", nerr, ntol)
+                        raise StopIteration
+
+                    return nerr
+
+                try:
+                    scipy.optimize.brentq(electron_error, cptmin, cptmax)
+                except StopIteration:
+                    pass
+
+                # Reset hcore Hamiltonian
+                ci._scf.get_hcore = h1e_func
+
+            log.debug("CISD done. converged: %r", ci.converged)
+
+            converged = ci.converged
+            e_corr_full = self.energy_factor*ci.e_corr
             # Intermediate normalization
-            C0, C1, C2 = cc.cisdvec_to_amplitudes(cc.ci)
-            renorm = 1/C0
-            C1 *= renorm
-            C2 *= renorm
+            C0, C1, C2 = ci.cisdvec_to_amplitudes(ci.ci)
+            # Renormalize
+            C1 *= 1/C0
+            C2 *= 1/C0
 
-            e_corr = self.get_local_energy(cc, C1, C2, eris=eris)
+            pC1, pC2 = self.get_local_amplitudes(ci, C1, C2)
+            e_corr = self.get_local_energy(ci, pC1, pC2, eris=eris)
 
-        elif solver == "FCI":
-            # Currently not maintained
-            raise NotImplementedError()
+        #elif solver == "FCI":
+        elif solver in ("FCI-spin0", "FCI-spin1"):
 
-            nactive = mo_coeff.shape[-1] - len(frozen)
-            #nocc_active
-
-            casci = pyscf.mcscf.CASCI(self.mol, nactive, 2*nocc_active)
+            nocc_active = len(self.active_occ)
+            casci = pyscf.mcscf.CASCI(self.mf, self.nactive, 2*nocc_active)
+            solverobj = casci
+            # Solver options
+            casci.verbose = 10
             casci.canonicalization = False
-            mo_coeff_cas = pyscf.mcscf.addons.sort_mo(casci, mo_coeff=mo_coeff, caslst=active, base=0)
+            #casci.fix_spin_(ss=0)
+            # TEST SPIN
+            if solver == "FCI-spin0":
+                casci.fcisolver = pyscf.fci.direct_spin0.FCISolver(self.mol)
+            casci.fcisolver.conv_tol = 1e-9
+            casci.fcisolver.threads = 1
+            casci.fcisolver.max_cycle = 400
+            casci.fcisolver.level_shift = 5e-3
+
+            if solver_options:
+                spin = solver_options.pop("fix_spin", None)
+                if spin is not None:
+                    log.debug("Setting fix_spin to %r", spin)
+                    casci.fix_spin_(ss=spin)
+
+                for key, value in solver_options.items():
+                    log.debug("Setting solver attribute %s to value %r", key, value)
+                    setattr(casci.fcisolver, key, value)
+
+            # The sorting of the orbitals above should already have placed the CAS in the correct position
+
             log.debug("Running FCI...")
-            e_tot, e_cas, wf, mo_coeff, mo_energy = casci.kernel(mo_coeff=mo_coeff_cas)
+            if self.nelectron_target is None:
+                e_tot, e_cas, wf, *_ = casci.kernel(mo_coeff=mo_coeff)
+            # Chemical potential loop
+            else:
+
+                S = self.mf.get_ovlp()
+                px = self.get_local_projector(mo_coeff)
+                b = np.linalg.multi_dot((S, self.C_local, self.C_local.T, S))
+
+                t = np.linalg.multi_dot((S, mo_coeff, px))
+                h1e = casci.get_hcore()
+                h1e_func = casci.get_hcore
+
+                cptmin = -4
+                cptmax = 0
+                #cptmin = -0.5
+                #cptmax = +0.5
+
+                ntol = 1e-6
+                e_tot = None
+                wf = None
+
+                def electron_error(chempot):
+                    nonlocal e_tot, wf
+
+                    #casci.get_hcore = lambda *args : h1e - chempot*b
+                    casci.get_hcore = lambda *args : h1e - chempot*(S-b)
+
+                    e_tot, e_cas, wf, *_ = casci.kernel(mo_coeff=mo_coeff, ci0=wf)
+                    #e_tot, e_cas, wf, *_ = casci.kernel(mo_coeff=mo_coeff)
+                    dm1xx = np.linalg.multi_dot((t.T, casci.make_rdm1(), t))
+                    nx = np.trace(dm1xx)
+                    nerr = (nx - self.nelectron_target)
+                    log.debug("chempot=%16.8g, electrons=%16.8g, error=%16.8g", chempot, nx, nerr)
+                    assert casci.converged
+
+                    if abs(nerr) < ntol:
+                        log.debug("Electron error |%e| below tolerance of %e", nerr, ntol)
+                        raise StopIteration
+
+                    return nerr
+
+                try:
+                    scipy.optimize.brentq(electron_error, cptmin, cptmax)
+                except StopIteration:
+                    pass
+
+                # Reset hcore Hamiltonian
+                casci.get_hcore = h1e_func
+
+            #assert np.allclose(mo_coeff_casci, mo_coeff)
+            #dma, dmb = casci.make_rdm1s()
+            #log.debug("Alpha: %r", np.diag(dma))
+            #log.debug("Beta: %r", np.diag(dmb))
             log.debug("FCI done. converged: %r", casci.converged)
-            assert np.allclose(mo_coeff, mo_coeff_cas)
-            cisdvec = pyscf.ci.cisd.from_fcivec(wf, nactive, 2*nocc_active)
-            C0, C1, C2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, nactive, nocc_active)
+            #log.debug("Shape of WF: %r", list(wf.shape))
+            cisdvec = pyscf.ci.cisd.from_fcivec(wf, self.nactive, 2*nocc_active)
+            C0, C1, C2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, self.nactive, nocc_active)
             # Intermediate normalization
+            log.debug("Weight of reference determinant = %.8e", C0)
             renorm = 1/C0
             C1 *= renorm
             C2 *= renorm
 
-            self.converged = casci.converged
-            self.e_corr_full = e_tot - self.mf.e_tot
+            converged = casci.converged
+            e_corr_full = self.energy_factor*(e_tot - self.mf.e_tot)
 
             # Create fake CISD object
             cisd = pyscf.ci.CISD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
-            self.e_fci = self.get_local_energy(cisd, C1, C2)
-            self.e_corr = self.e_fci
+
+            if eris is None:
+                t0 = MPI.Wtime()
+                eris = cisd.ao2mo()
+                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+
+            pC1, pC2 = self.get_local_amplitudes(cisd, C1, C2)
+            e_corr = self.get_local_energy(cisd, pC1, pC2, eris=eris)
 
         else:
             raise ValueError("Unknown solver: %s" % solver)
@@ -717,6 +1057,22 @@ class Cluster:
         # Store integrals for iterations
         if self.maxiter > 1:
             self.eris = eris
+
+        if solver == "FCI":
+            # Store amplitudes
+            #S = self.mf.get_ovlp()
+            # Rotation from occupied to local+DMET
+            #Ro = np.linalg.multi_dot((np.hstack((self.C_local, self.C_bath)).T, S, self.C_occclst))
+            #assert Ro.shape[0] == Ro.shape[1]
+            # Rotation from virtual to local+DMET
+            #Rv = np.linalg.multi_dot((np.hstack((self.C_local, self.C_bath)).T, S, self.C_virclst))
+            #assert Rv.shape[0] == Rv.shape[1]
+            #rC1, rC2 = self.transform_amplitudes((Ro, Rv, pC1, pC2))
+            #log.debug("Transforming C2 amplitudes: %r -> %r", list(pC2.shape), list(rC2.shape))
+            #self.amplitudes["C_occ"] = mo_coeff[:,mo_occ>0]
+            #self.amplitudes["C_vir"] = mo_coeff[:,mo_occ==0]
+            self.amplitudes["C1"] = C1
+            self.amplitudes["C2"] = C2
 
         log.debug("Full cluster correlation energy = %.10g htr", e_corr_full)
         self.e_corr_full = e_corr_full
@@ -732,9 +1088,49 @@ class Cluster:
         #self.e_corr_v = e_corr_v
         #self.e_corr_d = e_corr_d
 
+        # RDM1
+        #if True:
+        if False:
+
+            #if solver != "FCI":
+            if not solver.startswith("FCI"):
+                dm1 = solverobj.make_rdm1()
+                dm2 = solverobj.make_rdm2()
+            else:
+                dm1, dm2 = pyscf.mcscf.addons.make_rdm12(solverobj, ao_repr=False)
+
+            px = self.get_local_projector(mo_coeff)
+
+            # DMET energy
+            if True:
+                dm1x = np.einsum("ai,ij->aj", px, dm1)
+                dm2x = np.einsum("ai,ijkl->ajkl", px, dm2)
+                h1e = np.einsum('pi,pq,qj->ij', mo_coeff, self.mf.get_hcore(), mo_coeff)
+                nmo = mo_coeff.shape[-1]
+                eri = pyscf.ao2mo.kernel(self.mol, mo_coeff, compact=False).reshape([nmo]*4)
+                self.e_dmet = self.energy_factor*(np.einsum('pq,qp', h1e, dm1x) + np.einsum('pqrs,pqrs', eri, dm2x) / 2)
+                log.debug("E(DMET) = %e", self.e_dmet)
+
+                # TEST full energy
+                #e_full = self.energy_factor*(np.einsum('pq,qp', h1e, dm1) + np.einsum('pqrs,pqrs', eri, dm2) / 2) + self.mol.energy_nuc()
+                #log.debug("E(full) = %16.8g htr, reference = %16.8g htr", e_full, solverobj.e_tot)
+                #assert np.isclose(e_full, solverobj.e_tot)
+
+
+            # Count fragment electrons
+            dm1xx = np.einsum("ai,ij,bj->ab", px, dm1, px)
+            n = np.trace(dm1)
+            nx = np.trace(dm1xx)
+            log.info("Number of local/total electrons: %12.8f / %12.8f ", nx, n)
+
+            self.nelectron_corr_x = nx
+
         return converged, e_corr
 
-    def run(self, solver=None, ref_orbitals=None):
+    def run(self, solver=None,
+            #ref_orbitals=None
+            refdata=None,
+            ):
         """Construct bath orbitals and run solver.
 
         Paramters
@@ -752,27 +1148,48 @@ class Cluster:
         solver = solver or self.solver
         # Orbitals from a reference calaculation (e.g. different geometry)
         # Used for recovery of orbitals via active transformation
-        ref_orbitals = ref_orbitals or self.ref_orbitals
+        refdata = refdata or self.refdata_in
+        if False:
+            ref_orbitals = ref_orbitals or self.ref_orbitals
 
-        # === Make DMET bath orbital and diagonalize DM in cluster space
-        C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=ref_orbitals.get("dmet-bath", None))
+            # === Make DMET bath orbital and diagonalize DM in cluster space
+            if ref_orbitals.get("dmet-bath", None) is not None:
+                assert np.allclose(ref_orbitals["dmet-bath"], self.refdata_in["dmet-bath"])
+
+        #C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=ref_orbitals.get("dmet-bath", None))
+        C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=refdata.get("dmet-bath", None), tol=self.dmet_bath_tol)
         C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
 
         self.C_bath = C_bath
         self.C_occclst = C_occclst
         self.C_virclst = C_virclst
 
+        self.refdata_out["dmet-bath"] = C_bath
+
         # === Additional bath orbitals
         if self.use_ref_orbitals_bath:
-            C_occref = ref_orbitals.get("occ-bath", None)
-            C_virref = ref_orbitals.get("vir-bath", None)
+            #C_occref = ref_orbitals.get("occ-bath", None)
+            #C_virref = ref_orbitals.get("vir-bath", None)
+            #if C_occref is not None:
+            #    assert np.allclose(C_occref, self.refdata_in["occ-bath"])
+            #if C_virref is not None:
+            #    assert np.allclose(C_virref, self.refdata_in["vir-bath"])
+            C_occref = refdata.get("occ-bath", None)
+            C_virref = refdata.get("vir-bath", None)
         else:
             C_occref = None
             C_virref = None
 
         # Reorder
-        occbath_eigref = self.occbath_eigref
-        virbath_eigref = self.virbath_eigref
+        #occbath_eigref = self.occbath_eigref
+        #virbath_eigref = self.virbath_eigref
+        occbath_eigref = refdata.get("occbath-eigref", None)
+        virbath_eigref = refdata.get("virbath-eigref", None)
+        #virbath_eigref = self.virbath_eigref
+
+        # TEST
+        #occbath_eigref = None
+        #virbath_eigref = None
 
         C_occbath, C_occenv, e_delta_occ, occbath_eigref = self.make_bath(
                 C_occenv, self.bath_type, "occ",
@@ -785,16 +1202,28 @@ class Cluster:
         self.C_occbath = C_occbath
         self.C_virbath = C_virbath
 
+        self.refdata_out["occ-bath"] = C_occbath
+        self.refdata_out["vir-bath"] = C_virbath
+
         # For future reorderings
-        self.occbath_eigref = occbath_eigref
-        self.virbath_eigref = virbath_eigref
+        #self.occbath_eigref = occbath_eigref
+        #self.virbath_eigref = virbath_eigref
+        self.refdata_out["occbath-eigref"] = occbath_eigref
+        self.refdata_out["virbath-eigref"] = virbath_eigref
 
         self.e_delta_mp2 = e_delta_occ + e_delta_vir
         log.debug("MP2 correction = %.8g", self.e_delta_mp2)
 
         # === Canonicalize orbitals
-        C_occact = self.canonicalize(C_occclst, C_occbath)
-        C_viract = self.canonicalize(C_virclst, C_virbath)
+        if True:
+            C_occact = self.canonicalize(C_occclst, C_occbath)
+            C_viract = self.canonicalize(C_virclst, C_virbath)
+        else:
+            C_occact = np.hstack((C_occclst, C_occbath))
+            C_viract = np.hstack((C_virclst, C_virbath))
+
+        self.C_occact = C_occact
+        self.C_viract = C_viract
 
         # Combine, important to keep occupied orbitals first
         # Put frozen (occenv, virenv) orbitals to the front and back
@@ -805,20 +1234,33 @@ class Cluster:
         No = Co.shape[-1]
         Nv = Cv.shape[-1]
         # Check occupations
-        assert np.allclose(self.get_occup(Co), 2)
-        assert np.allclose(self.get_occup(Cv), 0)
+        assert np.allclose(self.get_occup(Co), 2, atol=1e-7), "%r" % self.get_occup(Co)
+        assert np.allclose(self.get_occup(Cv), 0, atol=1e-7), "%r" % self.get_occup(Cv)
         mo_occ = np.asarray(No*[2] + Nv*[0])
+
         frozen_occ = list(range(C_occenv.shape[-1]))
-        frozen_vir = list(range(Co.shape[-1]+C_viract.shape[-1], mo_coeff.shape[-1]))
+        active_occ = list(range(C_occenv.shape[-1], No))
+        active_vir = list(range(No, No+C_viract.shape[-1]))
+        frozen_vir = list(range(No+C_viract.shape[-1], No+Nv))
+        active = active_occ + active_vir
         frozen = frozen_occ + frozen_vir
         # Run solver
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
+        self.active = active
+        self.active_occ = active_occ
+        self.active_vir = active_vir
         self.frozen = frozen
-        log.debug("Frozen orbitals=%d", self.nfrozen)
+        self.frozen_occ = frozen_occ
+        self.frozen_vir = frozen_vir
+        # Orbital numbers
+        log.debug("Orbitals")
+        log.debug("--------")
+        log.debug("Active (occ., vir., all) = %4d  %4d  %4d", C_occact.shape[-1], C_viract.shape[-1], self.nactive)
+        log.debug("Frozen (occ., vir., all) = %4d  %4d  %4d", C_occenv.shape[-1], C_virenv.shape[-1], self.nfrozen)
 
         t0 = MPI.Wtime()
-        converged, e_corr = self.run_solver(solver, mo_coeff, mo_occ, frozen)
+        converged, e_corr = self.run_solver(solver, mo_coeff, mo_occ, active=active, frozen=frozen)
         log.debug("Wall time for solver: %s", get_time_string(MPI.Wtime()-t0))
 
         #self.converged = converged

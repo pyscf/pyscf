@@ -1,28 +1,35 @@
 """Molecular systems for testing."""
 
 import logging
+import os
 import numpy as np
 
 from pyscf import gto
-from .counterpoise import mod_for_counterpoise
 
 __all__ = [
         "build_dimer",
         "build_ring",
         "build_methane",
         "build_ethanol",
+        "build_ethenol",
+        "build_ethanol_old",
         "build_chloroethanol",
         "build_ketene",
         "build_biphenyl",
         "build_H2O_NH3",
         "build_H2O_CH6",
+        "build_water_dimer",
         "build_water_borazine",
+        "build_water_boronene",
+        "build_mn_oxo_porphyrin",
+        "build_azomethane",
         ]
 
 log = logging.getLogger(__name__)
 
-def Ry(alpha):
-    alpha = np.deg2rad(alpha)
+def Ry(alpha, radians=False):
+    if not radians:
+        alpha = np.deg2rad(alpha)
     r = np.asarray([
         [1, 0, 0],
         [0, np.cos(alpha), np.sin(alpha)],
@@ -30,8 +37,10 @@ def Ry(alpha):
         ])
     return r
 
-def Rz(alpha):
-    alpha = np.deg2rad(alpha)
+def Rz(alpha, radians=False):
+    """Rotate around z axis."""
+    if not radians:
+        alpha = np.deg2rad(alpha)
     r = np.asarray([
         [np.cos(alpha), np.sin(alpha), 0],
         [-np.sin(alpha), np.cos(alpha), 0],
@@ -39,8 +48,15 @@ def Rz(alpha):
         ])
     return r
 
-def build_dimer(d, atoms, **kwargs):
-    atom = "{}1 0 0 {}; {}2 0 0 {}".format(atoms[0], -d/2, atoms[1], d/2)
+def build_dimer(d, atoms, add_labels=False, **kwargs):
+    if add_labels:
+        l0, l1 = "1", "2"
+    else:
+        l0 = l1 = ""
+
+    atom = "{}{} 0 0 {}; {}{} 0 0 {}".format(atoms[0], l0, -d/2, atoms[1], l1, d/2)
+    log.debug("atom = %s", atom)
+
     mol = gto.M(
             atom=atom,
             **kwargs)
@@ -74,9 +90,7 @@ def build_methane(dCH=1.087, **kwargs):
             **kwargs)
     return mol
 
-
-
-def build_ethanol(dOH, **kwargs):
+def build_ethanol_old(dOH, **kwargs):
     atoms = ["C1", "C2", "H1", "H2", "H3", "H4", "H5", "H6", "O1"]
     coords = np.asarray([
        ( 0.01247000,  0.02254000,  1.08262000),
@@ -130,6 +144,72 @@ def build_chloroethanol(dOH, **kwargs):
     mol = gto.M(
             atom=atom,
             **kwargs)
+    return mol
+
+def load_datafile(filename):
+    datafile = os.path.join(os.path.dirname(__file__), os.path.join("data", filename))
+    data = np.loadtxt(datafile, dtype=[("atoms", object), ("coords", np.float64, (3,))])
+    #print(data["atoms"])
+    #print(data["coords"])
+
+    return data["atoms"], data["coords"]
+
+def move_atom(coords, origin, distance):
+    v = coords - origin
+    v /= np.linalg.norm(v)
+    coords_out = origin + distance*v
+    return coords_out
+
+def build_ethanol(distance, **kwargs):
+    """Oxygen: O3, Hydrogen: H4, nearest C: C2"""
+    atoms, coords = load_datafile("ethanol.dat")
+
+    coords[3] = move_atom(coords[3], coords[2], distance)
+
+    atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
+    return mol
+
+def build_ethenol(distance, **kwargs):
+    """Oxygen: O3, Hydrogen: H7, nearest C: C2"""
+    atoms, coords = load_datafile("ethenol.dat")
+
+    coords[-1] = move_atom(coords[-1], coords[2], distance)
+
+    atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
+    return mol
+
+def build_azomethane(distance, **kwargs):
+    atoms, coords = load_datafile("azomethane.dat")
+
+    # Rotate molecule
+    theta = np.arctan(coords[0][0] / coords[0][1])
+    R = Rz(theta, radians=True)
+    coords = np.dot(coords, R)
+
+    # Move fragment
+    v_nn = coords[1] - coords[0]
+    deq = np.linalg.norm(v_nn)
+    v_nn /= deq
+    distance -= deq
+    frag = np.where(np.isin(atoms, ["N2", "C4", "H6", "H9", "H10"]))
+    for i in frag:
+        coords[i] += distance*v_nn
+
+    atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
+
+    #for a in atom:
+    #    print("%3s  %.3f  %.3f  %.3f" % (a[0], *a[1]))
+
+    #print_distances(atom, origin=0)
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
     return mol
 
 
@@ -259,7 +339,28 @@ def build_H2O_CH6(dOC, config="2-leg", **kwargs):
 
     return mol
 
-def build_water_borazine(distance, counterpoise=None, **kwargs):
+def build_water_dimer(dOH, **kwargs):
+    """Hydrogen bond is between H1 and O3.
+    Molecula A is H1, O2, H4."""
+    atoms, coords = load_datafile("water-dimer.dat")
+
+    # New position of H1
+    coords_h1 = move_atom(coords[0], coords[2], dOH)
+    shift = coords_h1 - coords[0]
+    # Move H1, O2, H4
+    coords[0] += shift
+    coords[1] += shift
+    coords[3] += shift
+
+    atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
+    #print_distances(atom, coords[2])
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
+    return mol
+
+
+def build_water_borazine(distance, **kwargs):
     """From suppl. mat. of J. Chem. Phys. 147, 044710 (2017)
 
     Water molecule are O1, H1, H2.
@@ -301,21 +402,84 @@ def build_water_borazine(distance, counterpoise=None, **kwargs):
     #    d = np.linalg.norm(atom[6][1] - a[1])
     #    print(a[0], d)
 
-    water = [a[0] for a in atom[:3]]
-    borazine = [a[0] for a in atom[3:]]
-    basis = None
-    if counterpoise == "water":
-        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), water, remove_basis=True)
-    elif counterpoise == "water-full":
-        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), water, remove_basis=False)
-    elif counterpoise == "borazine":
-        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), borazine, remove_basis=True)
-    elif counterpoise == "borazine-full":
-        atom, basis = mod_for_counterpoise(atom, kwargs.get("basis", None), borazine, remove_basis=False)
-    if basis is not None:
-        kwargs["basis"] = basis
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
+    return mol
+
+def build_water_boronene(distance, **kwargs):
+    """From suppl. mat. of J. Chem. Phys. 147, 044710 (2017)
+
+    Water molecule are O*, H*, H*.
+    Nearest nitrogen is N1.
+    Next nearest borons are B2 etc.
+
+    Distance measured from O to molecular plane.
+    """
+
+    # This data is for 3.4 A
+    datafile = os.path.join(os.path.dirname(__file__), "data/boronene.dat")
+    data = np.loadtxt(datafile, dtype=[("atoms", object), ("coords", np.float64, (3,))])
+    #data2 = np.loadtxt("data/boronene-diss.dat", dtype=[("atom", object), ("coords", np.float64, (3,))])
+
+    coords = data["coords"]
+    atoms = data["atoms"]
+
+    #i = 12 # H
+    #i = 28 # N1
+    #for j, b in enumerate(atoms):
+    #    if i == j:
+    #        continue
+
+    #    d = np.linalg.norm(coords[i] - coords[j])
+    #    print(j, b, d)
+    #1/0
+
+    # Move water molecule to distance
+    for i in range(len(atoms)):
+        if "*" in atoms[i]:
+            coords[i][2] += (distance-3.4)
+
+    atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
+
+    #for a in atom:
+    #    print(a)
 
     mol = gto.M(
         atom=atom,
         **kwargs)
     return mol
+
+def build_mn_oxo_porphyrin(distance, **kwargs):
+    atoms, coords = load_datafile("mn-oxo-porphyrin.dat")
+    dist_eq = np.linalg.norm(coords[1]-coords[0])
+    assert np.isclose(dist_eq, 1.493775)
+    coords[1][-1] = coords[1][-1] + (distance-dist_eq)
+
+    atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
+
+    #print_distances(atom, 0)
+
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
+    return mol
+
+def print_distances(atom, origin):
+    if isinstance(origin, int):
+        origin = atom[origin][1]
+    for symbol, coords in atom:
+        print("Distance to %3s: %.5g" % (symbol, np.linalg.norm(coords - origin)))
+
+
+if __name__ == "__main__":
+    #build_water_boronene(8.0)
+    #build_mn_oxo_porphyrin(4.0, charge=1)
+    #print("1")
+    #build_azomethane(1.0)
+    #print("2")
+    #build_azomethane(2.0)
+    #print("3.5")
+    #build_azomethane(3.5)
+
+    build_water_dimer(5)

@@ -4,6 +4,8 @@ import scipy
 import scipy.optimize
 
 __all__ = [
+        "amplitudes_C2T",
+        "amplitudes_T2C",
         "einsum",
         "reorder_columns",
         "get_time_string",
@@ -12,6 +14,16 @@ __all__ = [
         ]
 
 einsum = functools.partial(np.einsum, optimize=True)
+
+def amplitudes_C2T(C1, C2):
+    T1 = C1.copy()
+    T2 = C2 - einsum("ia,jb->ijab", C1, C1)
+    return T1, T2
+
+def amplitudes_T2C(T1, T2):
+    C1 = T1.copy()
+    C2 = T2 + einsum("ia,jb->ijab", T1, T1)
+    return C1, C2
 
 def reorder_columns(a, *args):
     """Reorder columns of matrix a. The new order must be specified by a list of tuples,
@@ -120,6 +132,8 @@ def eigreorder_logging(e, reorder, log):
         # General reordering
         else:
             log("Reordering eigenvalues %3d --> %3d : %+6.3g --> %+6.3g", j, i, e[j], e[i])
+
+
 
 def make_cubegen_file(mol, C, orbitals, filename, **kwargs):
     from pyscf.tools import cubegen

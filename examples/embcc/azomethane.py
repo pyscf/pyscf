@@ -9,10 +9,9 @@ from mpi4py import MPI
 import pyscf
 import pyscf.gto
 import pyscf.scf
+import pyscf.mcscf
 from pyscf import molstructures
 from pyscf import embcc
-
-from util import run_benchmarks
 
 MPI_comm = MPI.COMM_WORLD
 MPI_rank = MPI_comm.Get_rank()
@@ -21,44 +20,26 @@ MPI_size = MPI_comm.Get_size()
 log = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
-parser.add_argument("-b", "--basis", default="aug-cc-pVDZ")
-#parser.add_argument("--solver", choices=["CISD", "CCSD", "FCI"], default="CCSD")
-parser.add_argument("--benchmarks", nargs="*")
-#parser.add_argument("--tol-bath", type=float, default=1e-3)
-parser.add_argument("--distances", type=float, nargs="*",
-        default=[2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, 4.5, 5.0, 6.0, 7.0, 8.0])
-parser.add_argument("--distances-range", type=float, nargs=3, default=[2.8, 8.0, 0.2])
+parser.add_argument("--basis", default="6-31g**")
+parser.add_argument("--solver", choices=["CISD", "CCSD", "FCI"], default="FCI")
+parser.add_argument("--benchmarks", nargs="*", choices=["MP2", "CISD", "CCSD", "FCI"])
+parser.add_argument("--distances", type=float, nargs="*")
+        #default=[0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.6, 1.8, 2.0, 2.2, 2.6, 3.0, 4.0, 5.0])
+parser.add_argument("--distances-range", type=float, nargs=3, default=[1.0, 4.0, 0.1])
 parser.add_argument("--local-type", choices=["IAO", "AO", "LAO"], default="IAO")
 parser.add_argument("--bath-type", default="mp2-natorb")
-
-parser.add_argument("--bath-size", type=int, nargs=2)
-parser.add_argument("--bath-relative-size", type=float, nargs=2)
-
-parser.add_argument("--impurity", nargs="*", default=["O1", "H1", "H2", "N1"])
-#parser.add_argument("--impurity", nargs="*", default=["O1", "H1", "H2", "N1", "B1", "B3"])
-#parser.add_argument("--mp2-correction", action="store_true")
-#parser.add_argument("--use-ref-orbitals-bath", type=int, default=0)
+parser.add_argument("--bath-size", type=float, nargs=2, default=[0.0, 0.0])
+parser.add_argument("--impurity", nargs="*",
+        default=["N1", "N2"]
+        )
 parser.add_argument("--minao", default="minao")
-parser.add_argument("--mp2-correction", nargs=2, type=int, default=[1, 1])
-
-#parser.add_argument("--counterpoise", choices=["none", "water", "water-full", "borazine", "borazine-full"])
-parser.add_argument("--fragment", choices=["all", "water", "borazine"], default="all")
 parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
 
-#args.use_ref_orbitals_bath = bool(args.use_ref_orbitals_bath)
-
 if args.distances is None:
     args.distances = np.arange(args.distances_range[0], args.distances_range[1]+1e-14, args.distances_range[2])
 del args.distances_range
-
-if args.bath_size is not None:
-    bath_size = args.bath_size
-elif args.bath_relative_size is not None:
-    bath_size = args.bath_relative_size
-else:
-    bath_size = [0, 0]
 
 if MPI_rank == 0:
     log.info("Parameters")
@@ -66,7 +47,7 @@ if MPI_rank == 0:
     for name, value in sorted(vars(args).items()):
         log.info("%10s: %r", name, value)
 
-structure_builder = molstructures.build_water_borazine
+structure_builder = molstructures.build_azomethane
 
 dm0 = None
 refdata = None
@@ -77,25 +58,27 @@ for idist, dist in enumerate(args.distances):
         log.info("Distance=%.2f", dist)
         log.info("=============")
 
-    #mol = structure_builder(dist, counterpoise=args.counterpoise, basis=args.basis, verbose=4)
     mol = structure_builder(dist, basis=args.basis, verbose=4)
 
-    if args.fragment != "all":
-        water, borazine = mol.make_counterpoise_fragments([["O1", "H1", "H2"]])
-        if args.fragment == "water":
-            mol = water
-        else:
-            mol = borazine
-
     mf = pyscf.scf.RHF(mol)
-    #mf = mf.density_fit()
     t0 = MPI.Wtime()
     mf.kernel(dm0=dm0)
-    log.info("Time for mean-field: %.2g", (MPI.Wtime()-t0))
+    log.info("Time for mean-field: %.2g", MPI.Wtime()-t0)
     assert mf.converged
     dm0 = mf.make_rdm1()
 
     if args.benchmarks:
+
+        energies = []
+
+        casscf = pyscf.mcscf.CASCI(mf, 8, 8)
+        casscf.kernel()
+        energies.append(casscf.e_tot)
+
+        casscf = pyscf.mcscf.CASSCF(mf, 8, 8)
+        casscf.kernel()
+        energies.append(casscf.e_tot)
+
         #energies = []
         #for bm in args.benchmarks:
         #    t0 = MPI.Wtime()
@@ -127,32 +110,39 @@ for idist, dist in enumerate(args.distances):
         #if idist == 0:
         #    with open(args.output, "w") as f:
         #        f.write("#distance  HF  " + "  ".join(args.benchmarks) + "\n")
-        #with open(args.output, "a") as f:
-        #    f.write(("%.3f  %.8e" + (len(args.benchmarks)*"  %.8e") + "\n") % (dist, mf.e_tot, *energies))
-
-        run_benchmarks(mf, args.benchmarks, dist, "benchmarks.txt", print_header=(idist==0))
+        with open(args.output, "a") as f:
+            f.write(("%.3f  %.8e" + (len(energies)*"  %.8e") + "\n") % (dist, mf.e_tot, *energies))
 
     else:
         cc = embcc.EmbCC(mf,
                 local_type=args.local_type,
                 minao=args.minao,
-                bath_type=args.bath_type, bath_size=bath_size,
-                mp2_correction=args.mp2_correction,
-                #use_ref_orbitals_bath=args.use_ref_orbitals_bath,
+                bath_type=args.bath_type, bath_size=args.bath_size,
                 )
-        cc.make_atom_cluster(args.impurity)
+        #cc.make_atom_cluster(args.impurity, solver=args.solver)
+        #cc.make_atom_cluster(args.impurity, solver=args.solver)
+        #cc.make_custom_cluster(["N1 2p", "N2 2p"], solver=args.solver)
+        #cc.make_custom_cluster(["N1 2p"], solver=args.solver)
+        #cc.make_custom_cluster(["N2 2p"], solver=args.solver)
+        cc.make_custom_cluster(["N1 2s", "N1 2p"], solver=args.solver, symmetry_factor=2)
+        cc.make_custom_cluster(["N1 1s", "C3 1s", "C3 2s", "C3 2p"], solver="CCSD", symmetry_factor=2)
+
+        #cc.make_custom_cluster(["C3 2p x", "C3 2p y", "N1 2s", "N1 2p"], solver=args.solver, symmetry_factor=2)
+        #cc.make_custom_cluster(["N1 2s", "N2 2s", "N1 2p y", "N2 2p y"], solver=args.solver, symmetry_factor=1)
+        #cc.make_custom_cluster(["N1 2p y", "N2 2p y", "N1 2p z", "N2 2p z"], solver=args.solver, symmetry_factor=1)
+
+        #cc.make_custom_cluster(["C3 2p", "N1 2p"], solver=args.solver, symmetry_factor=2)
+        #cc.make_custom_cluster(["N1 1s", "N1 2s", "N1 2p"], solver=args.solver, symmetry_factor=2)
+        #cc.make_custom_cluster(["C3 2p", "N1 2s", "N1 2p"], solver=args.solver, symmetry_factor=2)
+        #cc.make_custom_cluster(["N1 2s", "N1 2p", "N2 2s", "N2 2p"], solver=args.solver)
+
 
         if idist == 0 and MPI_rank == 0:
             cc.print_clusters()
 
-        #if ref_orbitals is not None:
-        #    cc.set_reference_orbitals(ref_orbitals)
-
         cc.set_refdata(refdata)
         cc.run()
         refdata = cc.get_refdata()
-
-        #ref_orbitals = cc.get_orbitals()
 
         if MPI_rank == 0:
             if idist == 0:

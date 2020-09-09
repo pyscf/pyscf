@@ -674,7 +674,7 @@ class CASCI(lib.StreamObject):
     canonicalization = getattr(__config__, 'mcscf_casci_CASCI_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_casci_CASCI_sorting_mo_energy', False)
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, singlet=None):
         if isinstance(mf_or_mol, gto.Mole):
             mf = scf.RHF(mf_or_mol)
         else:
@@ -694,7 +694,8 @@ class CASCI(lib.StreamObject):
         else:
             self.nelecas = (nelecas[0],nelecas[1])
         self.ncore = ncore
-        singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
+        if singlet is None:
+            singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
                    and self.nelecas[0] == self.nelecas[1])  # leads to direct_spin1
         self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object

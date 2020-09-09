@@ -18,7 +18,8 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=True, inverse=False):
+#def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=True, inverse=False):
+def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=False, inverse=False):
     """Get local contribution of amplitudes."""
 
     if variant not in ("first-occ", "first-vir", "democratic"):
@@ -177,7 +178,7 @@ def get_local_energy(self, cc, pC1, pC2, eris):
     e2 = 2*einsum('ijab,iabj', pC2, eris_ovvo)
     e2 -=  einsum('ijab,jabi', pC2, eris_ovvo)
 
-    #log.debug("Energy components E1=%.8g, E2=%.8g", e1, e2)
+    log.debug("Energy components E1=%16.8g, E2=%16.8g", e1, e2)
 
     # Symmetry factor if fragment is repeated in molecule, (e.g. in hydrogen rings: only calculate one fragment)
     e_loc = self.symmetry_factor * (e1 + e2)

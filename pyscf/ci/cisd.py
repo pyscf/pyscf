@@ -182,9 +182,9 @@ def amplitudes_to_cisdvec(c0, c1, c2):
 
 def cisdvec_to_amplitudes(civec, nmo, nocc):
     nvir = nmo - nocc
-    c0 = civec[0]
-    c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir)
-    c2 = civec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
+    c0 = civec[0].copy()
+    c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir).copy()
+    c2 = civec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir).copy()
     return c0, c1, c2
 
 def dot(v1, v2, nmo, nocc):

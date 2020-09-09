@@ -84,8 +84,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
             t2new += (1-alpha) * t2
         t1, t2 = t1new, t2new
         t1new = t2new = None
-        t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
+        #t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
+        t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         log.info('cycle = %3d  E_corr(CCSD) = % 21.15g  dE = % 15.9g  norm(t1,t2) = %11.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)

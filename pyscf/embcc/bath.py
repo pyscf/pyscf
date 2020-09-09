@@ -36,16 +36,21 @@ def project_ref_orbitals(self, C_ref, C):
     C_ref : ndarray
         Orbital coefficients of reference orbitals.
     """
-    assert (C_ref.shape[-1] > 0)
+    nref = C_ref.shape[-1]
+    assert (nref > 0)
+    assert (C.shape[-1] > 0)
+    log.debug("Projecting %d reference orbitals into space of %d orbitals", nref, C.shape[-1])
     S = self.mf.get_ovlp()
     # Diagonalize reference orbitals among themselves (due to change in overlap matrix)
-    C_ref = pyscf.lo.vec_lowdin(C_ref, S)
+    C_ref_orth = pyscf.lo.vec_lowdin(C_ref, S)
+    assert (C_ref_orth.shape == C_ref.shape)
     # Diagonalize projector in space
-    CSC = np.linalg.multi_dot((C_ref.T, S, C))
+    CSC = np.linalg.multi_dot((C_ref_orth.T, S, C))
     P = np.dot(CSC.T, CSC)
     e, R = np.linalg.eigh(P)
     e, R = e[::-1], R[:,::-1]
     C = np.dot(C, R)
+    #log.debug("All eigenvalues:\n%r", e)
 
     return C, e
 
@@ -116,6 +121,11 @@ def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
         nref = C_ref.shape[-1]
         log.debug("%d reference DMET orbitals given.", nref)
         nmissing = nref - nbath
+
+        # DEBUG
+        _, eig = self.project_ref_orbitals(C_ref, C_bath)
+        log.debug("Eigenvalues of reference orbitals projected into DMET bath:\n%r", eig)
+
         if nmissing == 0:
             log.debug("Number of DMET orbitals equal to reference.")
         elif nmissing > 0:
@@ -141,10 +151,16 @@ def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
             C_occenv = C_occenv[:,mask_occenv].copy()
             C_virenv = C_virenv[:,mask_virenv].copy()
             nbath = C_bath.shape[-1]
+            log.debug("New number of occupied environment orbitals: %d", C_occenv.shape[-1])
+            log.debug("New number of virtual environment orbitals: %d", C_virenv.shape[-1])
             if nbath != nref:
-                log.critical("Number of DMET bath orbitals=%d not equal to reference=%d", nbath, nref)
+                err = "Number of DMET bath orbitals=%d not equal to reference=%d" % (nbath, nref)
+                log.critical(err)
+                raise RuntimeError(err)
         else:
-            log.warning("More DMET bath orbitals found than in reference!")
+            err = "More DMET bath orbitals found than in reference!"
+            log.critical(err)
+            raise RuntimeError(err)
 
     # There should never be more DMET bath orbitals than fragment orbitals
     assert nbath <= C_local.shape[-1]
@@ -202,12 +218,15 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, 
             C_bath, C_env, e_delta_mp2, eigref_out = self.make_mp2_bath(
                     self.C_occclst, self.C_virclst, C_env, kind,
                     eigref=eigref, nbath=nbath, tol=tol, **kwargs)
+        # MF type bath
         else:
             C_bath, C_env, eigref_out = self.make_mf_bath(C_env, kind, bathtype=bathtype, eigref=eigref, nbath=nbath, tol=tol,
                     **kwargs)
 
-    # MP2 correction [only of there are environment (non bath) states, else = 0.0]
-    if self.mp2_correction and C_env.shape[-1] > 0:
+    # MP2 correction [only if there are environment (non bath) states, else = 0.0]
+    #if self.mp2_correction and C_env.shape[-1] > 0:
+    kind2n = {"occ" : 0, "vir" : 1}
+    if self.mp2_correction[kind2n[kind]] and C_env.shape[-1] > 0:
         if e_delta_mp2 is None:
             if kind == "occ":
                 Co_act = np.hstack((self.C_occclst, C_bath))
@@ -219,6 +238,7 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, 
                 Cv_all = np.hstack((Cv_act, C_env))
                 Co = self.C_occclst
                 e_delta_mp2 = self.get_mp2_correction(Co, Cv_all, Co, Cv_act)
+
     else:
         e_delta_mp2 = 0.0
 
@@ -266,6 +286,9 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
         kernel = wn[np.newaxis,:] / np.add.outer(e**2, wn**2)
         B = einsum("xi,iw,ai->xaw", CSC_env, kernel, CSC_loc)
         B = B.reshape(B.shape[0], B.shape[1]*B.shape[2])
+    # For testing
+    elif bathtype == "random":
+        B = 2*np.random.rand(CSC_env.shape[0], 500)-1
     else:
         raise ValueError("Unknown bathtype: %s" % bathtype)
 
@@ -276,11 +299,11 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
     C_env = np.dot(C_env, R)
 
     # Reorder here
-    if True:
+    if False:
         with open("bath-%s-%s.txt" % (self.name, kind), "ab") as f:
             np.savetxt(f, e[np.newaxis])
 
-    ##### Here we reorder the eigenvalues
+    # Here we reorder the eigenvalues
     if True:
         if eigref is not None:
             log.debug("eigref given: performing reordering of eigenpairs.")
@@ -291,7 +314,7 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
             e = e[reorder]
             C_env = C_env[:,reorder]
 
-        if True:
+        if False:
             with open("bath-%s-%s-ordered.txt" % (self.name, kind), "ab") as f:
                 np.savetxt(f, e[np.newaxis])
 
@@ -357,6 +380,8 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=No
     t0 = MPI.Wtime()
     if eris is None:
         eris = mp2.ao2mo()
+        # Does not work for DF at the moment...
+        assert (eris.ovov is not None)
         time_ao2mo = MPI.Wtime() - t0
         log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
     # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
@@ -406,6 +431,8 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=No
 
 def transform_mp2_eris(self, eris, Co, Cv):
     """Transform OVOV kind ERIS."""
+    assert (eris is not None)
+    assert (eris.ovov is not None)
 
     S = self.mf.get_ovlp()
     Co0, Cv0 = np.hsplit(eris.mo_coeff, [eris.nocc])
@@ -486,7 +513,7 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=No
     C_env : ndarray
         Remaining MP2 natural orbitals.
     e_delta_mp2 : float
-        MP2 correction energy (0 if self.mp2_corretion == False)
+        MP2 correction energy (0 if self.mp2_correction == False)
     eigref_out : tuple(eigenvalues, eigenvectors)
         Reference eigenvalues and eigenvectors for future calculation for consistent sorting
         (see also: eigref).
@@ -529,7 +556,7 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=No
     N, R = N[::-1], R[:,::-1]
     C_no = np.dot(C_env, R)
 
-    if True:
+    if False:
         with open("MP2-natorb-%s-%s.txt" % (self.name, kind), "ab") as f:
             np.savetxt(f, N[np.newaxis])
 
@@ -543,7 +570,7 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=No
             log.debug("Optimized linear assignment cost=%.3e", cost)
             N = N[reorder]
             C_no = C_no[:,reorder]
-        if True:
+        if False:
             with open("MP2-natorb-%s-%s-ordered.txt" % (self.name, kind), "ab") as f:
                 np.savetxt(f, N[np.newaxis])
 

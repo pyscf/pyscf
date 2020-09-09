@@ -2438,9 +2438,9 @@ class Mole(lib.StreamObject):
         return gto_norm(l, expnt)
 
 
-    def dump_input(self):
+    def dump_input(self, dump_input_file=False):
         import __main__
-        if hasattr(__main__, '__file__'):
+        if dump_input_file and hasattr(__main__, '__file__'):
             try:
                 filename = os.path.abspath(__main__.__file__)
                 finput = open(filename, 'r')
@@ -2800,6 +2800,71 @@ class Mole(lib.StreamObject):
         '''Whether pseudo potential is used in the system.'''
         return len(self._ecpbas) > 0 or self._pseudo
 
+    def make_counterpoise_fragments(self, fragments, full_basis=True, add_rest_fragment=True, dump_input=True):
+        '''Make mol objects for counterpoise calculations.
+
+        Parameters
+        ----------
+        fragments : iterable
+        full_basis : bool, optional
+        add_rest_fragment : bool, optional
+
+        Returns
+        -------
+        fmols : list
+        '''
+        GHOST_PREFIX = "GHOST-"
+        atom = self.format_atom(self.atom, unit=1.0)
+        atom_symbols = [self.atom_symbol(atm_id) for atm_id in range(self.natm)]
+
+        def make_frag_mol(frag):
+            f_mask = numpy.isin(atom_symbols, frag)
+            if sum(f_mask) == 0:
+                raise ValueError("No atoms found for fragment: %r", frag)
+            fmol = self.copy()
+            fatom = []
+            for atm_id, atm in enumerate(atom):
+                sym = atm[0]
+                # Atom is in fragment
+                if f_mask[atm_id]:
+                    fatom.append(atm)
+                # Atom is NOT in fragment [only append if full basis == True]
+                elif full_basis:
+                    sym_new = GHOST_PREFIX + sym
+                    fatom.append([sym_new, atm[1]])
+                    # Change basis dictionary
+                    if isinstance(fmol.basis, dict) and (sym in fmol.basis.keys()):
+                        fmol.basis[sym_new] = fmol.basis[sym]
+                        del fmol.basis[sym]
+                # Remove from basis [not necessary, since atom is not present anymore, but cleaner]:
+                elif isinstance(fmol.basis, dict) and (sym in fmol.basis.keys()):
+                    del fmol.basis[sym]
+
+            # Rebuild fragment mol object
+            fmol.atom = fatom
+            fmol._built = False
+            fmol.build(dump_input, False)
+            return fmol
+
+        fmols = []
+        for frag in fragments:
+            fmol = make_frag_mol(frag)
+            fmols.append(fmol)
+
+        # Add fragment containing all atoms not part of any specified fragments
+        if add_rest_fragment:
+            rest_mask = numpy.full((self.natm,), True)
+            # Set all atoms to False that are part of a fragment
+            for frag in fragments:
+                rest_mask = numpy.logical_and(numpy.isin(atom_symbols, frag, invert=True), rest_mask)
+            if numpy.any(rest_mask):
+                rest_frag = numpy.asarray(atom_symbols)[rest_mask]
+                fmol = make_frag_mol(rest_frag)
+                fmols.append(fmol)
+
+        # TODO: Check that no atom is part of more than one fragments
+
+        return fmols
 
 #######################################################
 #NOTE: atm_id or bas_id start from 0
