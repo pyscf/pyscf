@@ -17,7 +17,7 @@
 #
 
 '''
-Auxiliary space class and helper functions.
+Functions for tuning the chemical potential.
 '''
 
 import time
@@ -164,7 +164,7 @@ def minimize_chempot(se, fock, nelec, occupancy=2, x0=0.0, tol=1e-6, maxiter=200
     opt = optimize.minimize(_objective, args=fargs, **kwargs)
 
     se.energy -= opt.x
-    se.chempot = binsearch_chempot(fock, se.nphys, nelec, 
-                                   occupancy=occupancy)[0]
+    se.chempot = binsearch_chempot(se.eig(fock), se.nphys, nelec,
+                                   occupancy=occupancy)[0] #FIXME se.eig chempot=0?
 
     return se, opt
