@@ -99,7 +99,7 @@ class AuxiliarySpace:
         coupling = np.copy(self.coupling[:,nocc:])
         return self.__class__(energy, coupling, chempot=self.chempot)
 
-    def get_array(self, phys, out=None, chempot=None):
+    def get_array(self, phys, out=None, chempot=0.0):
         ''' Expresses the auxiliaries as an array, i.e. the extended
             Fock matrix in AGF2 or Hamiltonian of ADC(2).
 
@@ -111,7 +111,8 @@ class AuxiliarySpace:
             out : 2D array
                 If provided, use to store output
             chempot : float
-                If provided, use instead of :attr:`self.chempot`
+                Scale energies (by default, :attr:`chempot` is not used
+                and energies retain their values). Default 0.0
 
         Returns:
             Array representing the coupling of the auxiliary space to 
@@ -120,11 +121,6 @@ class AuxiliarySpace:
         #NOTE: memory check
 
         _check_phys_shape(self, phys)
-
-        if chempot is None:
-            chempot = self.chempot
-
-        e_shifted = self.energy - chempot
 
         if out is None:
             out = np.zeros((self.nphys+self.naux,)*2)
@@ -135,11 +131,11 @@ class AuxiliarySpace:
         out[sp,sp] = phys
         out[sp,sa] = self.coupling
         out[sa,sp] = self.coupling.conj().T
-        out[sa,sa][np.diag_indices(self.naux)] = e_shifted
+        out[sa,sa][np.diag_indices(self.naux)] = self.energy - chempot
 
         return out
 
-    def dot(self, phys, vec, out=None, chempot=None):
+    def dot(self, phys, vec, out=None, chempot=0.0):
         ''' Returns the dot product of :func:`get_array` with a vector.
 
         Args:
@@ -152,16 +148,14 @@ class AuxiliarySpace:
             out : 2D array
                 If provided, use to store output
             chempot : float
-                If provided, use instead of :attr:`self.chempot`
+                Scale energies (by default, :attr:`chempot` is not used
+                and energies retain their values). Default 0.0
 
         Returns:
             ndarray with shape of :attr:`vec`
         '''
 
         _check_phys_shape(self, phys)
-
-        if chempot is None:
-            chempot = self.chempot
 
         vec = np.asarray(vec)
         input_shape = vec.shape
@@ -185,7 +179,7 @@ class AuxiliarySpace:
 
         return out
 
-    def eig(self, phys, out=None, chempot=None):
+    def eig(self, phys, out=None, chempot=0.0):
         ''' Computes the eigenvalues and eigenvectors of the array
             returned by :func:`get_array`.
 
@@ -197,7 +191,8 @@ class AuxiliarySpace:
             out : 2D array
                 If provided, use to store output
             chempot : float
-                If provided, use instead of :attr:`self.chempot`
+                Scale energies (by default, :attr:`chempot` is not used
+                and energies retain their values). Default 0.0
 
         Returns:
             tuple of ndarrays (eigenvalues, eigenvectors)
@@ -319,7 +314,7 @@ class SelfEnergy(AuxiliarySpace):
         raise ValueError('Convert SelfEnergy to GreensFunction before '
                          'building a spectrum.')
 
-    def get_greens_function(self, phys, chempot=None):
+    def get_greens_function(self, phys):
         ''' Returns a :class:`GreensFunction` by solving the Dyson
             equation.
 
@@ -327,18 +322,14 @@ class SelfEnergy(AuxiliarySpace):
             phys : 2D array
                 Physical space (1p + 1h), typically the Fock matrix
 
-        Kwargs:
-            chempot : float
-                If provided, use instead of :attr:`self.chempot`
+        Returns:
+            :class:`GreensFunction`
         '''
 
-        if chempot is None:
-            chempot = self.chempot
-
-        w, v = self.eig(phys, chempot=chempot)
+        w, v = self.eig(phys)
         v = v[:self.nphys]
 
-        return GreensFunction(w, v, chempot=chempot)
+        return GreensFunction(w, v, chempot=self.chempot)
 
     def make_rdm1(self, phys, chempot=None, occupancy=2):
         ''' Returns the first-order reduced density matrix associated
@@ -355,7 +346,7 @@ class SelfEnergy(AuxiliarySpace):
                 Occupancy of the states, i.e. 2 for RHF and 1 for UHF
         '''
 
-        gf = get_greens_function(phys, chempot=chempot)
+        gf = get_greens_function(phys)
         return gf.make_rdm1(phys, chempot=chempot, occupancy=occupancy)
 
     def compress(self, nmoms):
