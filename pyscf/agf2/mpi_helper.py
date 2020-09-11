@@ -38,7 +38,7 @@ except: #NOTE should we check for ImportError? This is OSError in python2, check
     rank = 0
 
 
-def reduce(obj, root=0, op=mpi.SUM):
+def reduce(obj, root=0, op=getattr(mpi, 'SUM', None)):
     ''' Reduce a matrix or scalar onto the root process and then
         broadcast result to all processes.
 
