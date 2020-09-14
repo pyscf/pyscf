@@ -168,7 +168,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     return se
 
 
-def _cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-14):
+def _cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
     ''' Constructs the truncated auxiliaries from :attr:`vv` and :attr:`vev`.
         Performs a Cholesky decomposition via :func:`numpy.linalg.cholesky`,
         for a positive-definite or positive-semidefinite matrix. For the
@@ -180,19 +180,28 @@ def _cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-14):
         for the virtual self-energy.
     '''
 
-    #NOTE: test this
-    #FIXME: doesn't seem to work when situation arises due to frozen core - might have to rethink this
-    if gf_occ.nphys >= (gf_occ.naux**2 * gf_vir.naux):
-        # remove the null space from vv and vev
-        zero_rows = np.all(np.absolute(vv) < eps, axis=1)
-        zero_cols = np.all(np.absolute(vv) < eps, axis=0)
-        null_space = np.logical_and(zero_rows, zero_cols)
+    ##NOTE: test this
+    ##FIXME: doesn't seem to work when situation arises due to frozen core - might have to rethink this
+    ##FIXME: won't work for UAGF2 if we use this solution (need to change naux)
+    #if gf_occ.nphys >= (gf_occ.naux**2 * gf_vir.naux):
+    #    # remove the null space from vv and vev
+    #    zero_rows = np.all(np.absolute(vv) < eps, axis=1)
+    #    zero_cols = np.all(np.absolute(vv) < eps, axis=0)
+    #    null_space = np.logical_and(zero_rows, zero_cols)
 
-        vv = vv[~null_space][:,~null_space]
-        vev = vev[~null_space][:,~null_space]
-        np.set_printoptions(precision=4, linewidth=150)
+    #    vv = vv[~null_space][:,~null_space]
+    #    vev = vev[~null_space][:,~null_space]
+    #    np.set_printoptions(precision=4, linewidth=150)
 
-    b = np.linalg.cholesky(vv).T
+    #NOTE: this seems like an unscientific solution... rescue the above?
+    try:
+        b = np.linalg.cholesky(vv).T
+    except np.linalg.LinAlgError:
+        w, v = np.linalg.eigh(b)
+        w[w < eps] = eps
+        vv_posdef = np.dot(np.dot(v, np.diag(w)), v.T.conj())
+        b = np.linalg.cholesky(vv_posdef).T
+
     b_inv = np.linalg.inv(b)
 
     m = np.dot(np.dot(b_inv.T, vev), b_inv)

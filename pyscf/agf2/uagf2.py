@@ -119,7 +119,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
             vev = lib.dot(exija_aa, xjia_aa.T, alpha=-1, beta=1, c=vev)
             vev = lib.dot(exija_ab, xija_ab.T, alpha=1, beta=1, c=vev)
 
-        e, c = ragf2._cholesky_build(vv, vev, gfo_a, gfv_a) #FIXME: this won't work for UAGF2!!!
+        e, c = ragf2._cholesky_build(vv, vev, gfo_a, gfv_a)
         se = aux.SelfEnergy(e, c, chempot=gfo_a.chempot)
         se.remove_uncoupled(tol=tol)
         
