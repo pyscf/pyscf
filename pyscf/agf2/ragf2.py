@@ -35,7 +35,7 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
 BLKMIN = getattr(__config__, 'agf2_ragf2_blkmin', 1)
 
 #TODO: warn about HOMO-LUMO gap? CCSD does this for <1e-5
-#TODO: test outcore and add incore_complete
+#TODO: test outcore and add incore_complete, also async_io??
 #TODO: do we want MPI in this?
 #TODO: test frozen!!! do we have to rediagonalise Fock matrix?
 #TODO: do we want to store RAGF2.qmo_energy, RAGF2.qmo_coeff and RAGF2.qmo_occ at the end?
@@ -57,8 +57,8 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
     if verbose is None:
         verbose = agf2.verbose
 
-    gf = agf2.format_aux(gf, obj=aux.GreensFunction)
-    se = agf2.format_aux(se, obj=aux.SelfEnergy)
+    gf = _dict_to_aux(gf, obj=aux.GreensFunction)
+    se = _dict_to_aux(se, obj=aux.SelfEnergy)
 
     if gf is None:
         gf = agf2.init_aux(eri, with_se=False)
@@ -207,19 +207,40 @@ def _cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-14):
     return e, c
 
 
-def get_jk(agf2, eri, rdm1):
+def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
     ''' Get the J/K matrices.
+
+    Args:
+        eri : ndarray or H5 dataset
+            Electronic repulsion integrals (NOT as _ChemistsERIs)
+        rdm1 : 2D array
+            Reduced density matrix
+
+    Kwargs:
+        with_j : bool
+            Whether to compute J. Default value is True
+        with_k : bool
+            Whether to compute K. Default value is True
+
+    Returns:
+        tuple of ndarrays corresponding to J and K, if either are
+        not requested then they are set to None.
     '''
 
-    if isinstance(eri.eri, np.ndarray):
-        vj, vk = _vhf.incore(eri.eri, rdm1)
+    if isinstance(eri, np.ndarray):
+        vj, vk = _vhf.incore(eri, rdm1, with_j=with_j, with_k=with_k)
 
     else:
         nmo = agf2.nmo
         npair = nmo*(nmo+1)//2
-        rdm1_tril = lib.pack_tril(rdm1 + np.tril(rdm1, k=-1))
-        vj = np.zeros_like(rdm1_tril)
-        vk = np.zeros_like(rdm1)
+        vj = vk = None
+
+        if with_j:
+            rdm1_tril = lib.pack_tril(rdm1 + np.tril(rdm1, k=-1))
+            vj = np.zeros_like(rdm1_tril)
+
+        if with_k:
+            vk = np.zeros_like(rdm1)
 
         max_memory = agf2.max_memory - lib.current_memory()[0]
         blksize = int((max_memory/8e-6) / (nmo*(npair+nmo**2)))
@@ -228,17 +249,20 @@ def get_jk(agf2, eri, rdm1):
         tril2sq = lib.square_mat_in_trilu_indices(nmo)
         for p0, p1 in lib.prange(0, nmo, blksize):
             idx = np.concatenate(tril2sq[p0:p1])
-            eri0 = eri.eri[idx]
+            eri0 = eri[idx]
 
             # vj built in tril layout with scaled rdm1_tril
-            vj[idx] = np.dot(eri0, rdm1_tril)
+            if with_j:
+                vj[idx] = np.dot(eri0, rdm1_tril)
 
-            eri0 = lib.unpack_tril(eri0, axis=-1)
-            eri0 = eri0.reshape(p1-p0, nmo, nmo, nmo)
+            if with_k:
+                eri0 = lib.unpack_tril(eri0, axis=-1)
+                eri0 = eri0.reshape(p1-p0, nmo, nmo, nmo)
 
-            vk[p0:p1] = lib.einsum('ijkl,jk->il', eri0, rdm1)
+                vk[p0:p1] = lib.einsum('ijkl,jk->il', eri0, rdm1)
 
-        vj = lib.unpack_tril(vj)
+        if with_j:
+            vj = lib.unpack_tril(vj)
 
     return vj, vk
 
@@ -268,7 +292,7 @@ def get_fock(agf2, eri, gf=None, rdm1=None):
         rdm1 = agf2.make_rdm1(gf)
     assert rdm1 is not None
 
-    vj, vk = get_jk(agf2, eri, rdm1)
+    vj, vk = get_jk(agf2, eri.eri, rdm1)
     fock = eri.h1e + vj - 0.5 * vk
 
     return fock
@@ -279,7 +303,7 @@ def fock_loop(agf2, eri, gf, se, get_fock=None):
         consistent field.
 
     Args:
-        eri : _ChemistERIS
+        eri : _ChemistERIs
             Electronic repulsion integrals
         gf : GreensFunction
             Auxiliaries of the Green's function
@@ -318,10 +342,10 @@ def fock_loop(agf2, eri, gf, se, get_fock=None):
     nqmo = nmo + naux
     buf = np.zeros((nqmo, nqmo))
     converged = False
+    opts = dict(tol=agf2.conv_tol_nelec, maxiter=agf2.max_cycle_inner)
 
     for niter1 in range(1, agf2.max_cycle_outer+1):
-        kwargs = dict(tol=agf2.conv_tol_nelec, maxiter=agf2.max_cycle_inner)
-        se, opt = minimize_chempot(se, fock, nelec, x0=se.chempot, **kwargs)
+        se, opt = minimize_chempot(se, fock, nelec, x0=se.chempot, **opts)
 
         for niter2 in range(1, agf2.max_cycle_inner+1):
             w, v = se.eig(fock, chempot=0.0, out=buf)
@@ -596,9 +620,9 @@ class RAGF2(lib.StreamObject):
         if eri is None: eri = self.ao2mo()
 
         mo_energy = _mo_energy_without_core(self, self.mo_energy)
-        mo_coeff = _mo_without_core(self, self.mo_coeff)
 
         chempot = binsearch_chempot(eri.fock, self.nmo, self.nocc*2)[0]
+
         gf = aux.GreensFunction(mo_energy, np.eye(self.nmo), chempot=chempot)
 
         if with_se:
@@ -644,7 +668,7 @@ class RAGF2(lib.StreamObject):
 
         Returns
             :class:`SelfEnergy`
-            '''
+        '''
 
         if eri is None: eri = self.ao2mo()
         if gf is None: gf = self.init_aux(eri, with_se=False)[0]
@@ -750,29 +774,13 @@ class RAGF2(lib.StreamObject):
                      'frozen': frozen,
         }
 
-        if self.gf is not None: agf2_chk['gf'] = gf.__dict__
-        if self.se is not None: agf2_chk['se'] = se.__dict__
+        if self.gf is not None: agf2_chk['gf'] = _aux_to_dict(gf)
+        if self.se is not None: agf2_chk['se'] = _aux_to_dict(se)
 
         if self._nmo is not None: agf2_chk['_nmo'] = self._nmo
         if self._nocc is not None: agf2_chk['_nocc'] = self._nocc
 
         lib.chkfile.dump(self.chkfile, 'agf2', agf2_chk)
-
-    def format_aux(self, aux, obj=aux.AuxiliarySpace):
-        ''' chkfile stores :attr:`gf` and :attr:`se` as dict, this
-            function can be called to ensure that they are converted
-            to the proper classes before use.
-        '''
-
-        if isinstance(aux, obj) or aux is None:
-            return aux
-
-        assert isinstance(aux, dict)
-
-        out = obj(None, None)
-        out.__dict__.update(aux)
-
-        return out
 
 
     def get_ip(self, gf, nroots=1):
@@ -865,6 +873,42 @@ class RAGF2(lib.StreamObject):
         return self.e_tot - self._scf.e_tot
 
 
+def _dict_to_aux(aux, obj=aux.AuxiliarySpace):
+    ''' chkfile stores :attr:`gf` and :attr:`se` as dict, this
+        function can be called to ensure that they are converted
+        to the proper classes before use.
+    '''
+
+    # for compatibility with unrestricted
+    if isinstance(aux, tuple):
+        return tuple(_dict_to_aux(a, obj=obj) for a in aux)
+
+    if isinstance(aux, obj) or aux is None:
+        return aux
+
+    assert isinstance(aux, dict)
+
+    out = obj(None, None)
+    out.__dict__.update(aux)
+
+    return out
+
+def _aux_to_dict(aux):
+    ''' Inverse of _dict_to_aux
+    '''
+
+    # for compatibility with unrestricted
+    if isinstance(aux, tuple):
+        return tuple(_aux_to_dict(a, obj=obj) for a in aux)
+
+    if isinstance(aux, dict):
+        return aux
+
+    out = aux.__dict__
+
+    return out
+
+
 class _ChemistsERIs:
     ''' (pq|rs)
     
@@ -902,13 +946,10 @@ class _ChemistsERIs:
         self.mol = agf2.mol
 
         mo_e = self.fock.diagonal()
-        try:
-            gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
-            if gap < 1e-5:
-                #TODO: what is a good value for this gap? 1e-5 from CCSD and GW
-                logger.warn(agf2, 'HOMO-LUMO gap %s too small for AGF2', gap)
-        except ValueError:
-            pass
+        gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+        if gap < 1e-5:
+            #TODO: what is a good value for this gap? 1e-5 from CCSD and GW
+            logger.warn(agf2, 'HOMO-LUMO gap %s too small for RAGF2', gap)
 
         return self
 
@@ -965,12 +1006,12 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
               gf_occ.coupling, gf_vir.coupling)
     shape = tuple(x.shape[1] for x in coeffs)
 
-    eri = ao2mo.incore.general(eri.eri, coeffs, compact=False, verbose=log)
-    eri = eri.reshape(shape)
+    qeri = ao2mo.incore.general(eri.eri, coeffs, compact=False, verbose=log)
+    qeri = qeri.reshape(shape)
 
     log.timer_debug1('QMO integral transformation', *cput0)
 
-    return eri
+    return qeri
 
 def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
     ''' Returns H5 dataset
@@ -997,7 +1038,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
     max_memory = agf2.max_memory - lib.current_memory()[0]
     blksize = int((max_memory/8e-6) / max(nmo*(npair+nj+na), (nmo+ni)*(nj+na)))
     blksize = min(nmo, max(BLKMIN, blksize))
-    log.debug1('blksize %d', blksize)
+    log.debug1('blksize = %d', blksize)
 
     #NOTE: are these stored in Fortran layout? if so this is not efficient
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
@@ -1017,6 +1058,8 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
     log.timer_debug1('QMO integral transformation', *cput0)
 
     return eri.feri['qmo']
+
+
 
 if __name__ == '__main__':
     from pyscf import gto, scf, mp
