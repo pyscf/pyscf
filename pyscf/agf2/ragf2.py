@@ -307,7 +307,7 @@ def get_fock(agf2, eri, gf=None, rdm1=None):
     return fock
 
 
-def fock_loop(agf2, eri, gf, se, get_fock=None):
+def fock_loop(agf2, eri, gf, se):
     ''' Self-consistent loop for the density matrix via the HF self-
         consistent field.
 
@@ -318,12 +318,6 @@ def fock_loop(agf2, eri, gf, se, get_fock=None):
             Auxiliaries of the Green's function
         se : SelfEnergy
             Auxiliaries of the self-energy
-
-    Kwargs:
-        get_fock : callable
-            Function to get the Fock matrix. Should be a callable in
-            the format of :func:`get_fock`. Default value is 
-            :class:`agf2.get_fock`.
 
     Returns:
         :class:`SelfEnergy`, :class:`GreensFunction` and a boolean 
@@ -337,13 +331,10 @@ def fock_loop(agf2, eri, gf, se, get_fock=None):
     cput0 = cput1 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    if get_fock is None:
-        get_fock = agf2.get_fock
-
     diis = lib.diis.DIIS(agf2)
     diis.space = agf2.diis_space
     diis.min_space = agf2.diis_min_space
-    fock = get_fock(eri, gf)
+    fock = agf2.get_fock(eri, gf)
 
     nelec = agf2.nocc * 2
     nmo = agf2.nmo
@@ -997,7 +988,9 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     nao, nmo = mo_coeff.shape
 
     eris.feri = lib.H5TmpFile()
-    ao2mo.outcore.full(mol, mo_coeff, eris.feri, dataname='mo', verbose=log)
+    #TODO: ioblk_size
+    ao2mo.outcore.full(mol, mo_coeff, eris.feri, dataname='mo', 
+                       max_memory=agf2.max_memory, verbose=log)
     eris.eri = eris.feri['mo']
 
     log.timer('MO integral transformation', *cput0)
