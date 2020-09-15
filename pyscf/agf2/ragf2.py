@@ -523,6 +523,16 @@ class RAGF2(lib.StreamObject):
             Auxiliaries of the Green's function
     '''
 
+    conv_tol = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol', 1e-7)
+    conv_tol_rdm1 = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_rdm1', 1e-6)
+    conv_tol_nelec = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_nelec', 1e-6)
+    max_cycle = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle', 50)
+    max_cycle_outer = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_outer', 20)
+    max_cycle_inner = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_inner', 50)
+    weight_tol = getattr(__config__, 'agf2_ragf2_RAGF2_weight_tol', 1e-11)
+    diis_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_space', 6)
+    diis_min_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_min_space', 1)
+
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         if mo_energy is None: mo_energy = mf.mo_energy
@@ -534,16 +544,6 @@ class RAGF2(lib.StreamObject):
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
-
-        self.conv_tol = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol', 1e-7)
-        self.conv_tol_rdm1 = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_rdm1', 1e-6)
-        self.conv_tol_nelec = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_nelec', 1e-6)
-        self.max_cycle = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle', 50)
-        self.max_cycle_outer = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_outer', 20)
-        self.max_cycle_inner = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_inner', 50)
-        self.weight_tol = getattr(__config__, 'agf2_ragf2_RAGF2_weight_tol', 1e-11)
-        self.diis_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_space', 6)
-        self.diis_min_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_min_space', 1)
 
         self.mo_energy = mo_energy
         self.mo_coeff = mo_coeff
