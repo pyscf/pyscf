@@ -563,6 +563,7 @@ class RAGF2(lib.StreamObject):
     energy_1body = energy_1body
     energy_2body = energy_2body
     fock_loop = fock_loop
+    build_se_part = build_se_part
 
     def ao2mo(self, mo_coeff=None):
         ''' Get the electronic repulsion integrals in MO basis.
@@ -676,8 +677,8 @@ class RAGF2(lib.StreamObject):
         gf_occ = gf.get_occupied()
         gf_vir = gf.get_virtual()
 
-        se_occ = build_se_part(self, eri, gf_occ, gf_vir)
-        se_vir = build_se_part(self, eri, gf_vir, gf_occ)
+        se_occ = self.build_se_part(eri, gf_occ, gf_vir)
+        se_vir = self.build_se_part(eri, gf_vir, gf_occ)
 
         se = aux.combine(se_occ, se_vir)
 

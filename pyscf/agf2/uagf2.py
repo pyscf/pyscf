@@ -439,6 +439,7 @@ class UAGF2(ragf2.RAGF2):
     energy_1body = energy_1body
     energy_2body = energy_2body
     fock_loop = fock_loop
+    build_se_part = build_se_part
 
     def ao2mo(self, mo_coeff=None):
         ''' Get the electronic repulsion integrals in MO basis.
@@ -567,8 +568,8 @@ class UAGF2(ragf2.RAGF2):
         gf_occ = (gf[0].get_occupied(), gf[1].get_occupied())
         gf_vir = (gf[0].get_virtual(), gf[1].get_virtual())
 
-        se_occ = build_se_part(self, eri, gf_occ, gf_vir)
-        se_vir = build_se_part(self, eri, gf_vir, gf_occ)
+        se_occ = self.build_se_part(eri, gf_occ, gf_vir)
+        se_vir = self.build_se_part(eri, gf_vir, gf_occ)
 
         se_a = aux.combine(se_occ[0], se_vir[0])
         se_b = aux.combine(se_occ[1], se_vir[1])
