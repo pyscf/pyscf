@@ -48,9 +48,6 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
     cput1 = cput0 = (time.clock(), time.time())
     name = agf2.__class__.__name__
 
-    if getattr(agf2._scf, 'with_df', None) is not None:
-        raise ValueError('DF integrals not supported in %s' % name)
-
     if eri is None:
         eri = agf2.ao2mo()
 
@@ -127,7 +124,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
 
     assert type(gf_occ) is aux.GreensFunction
     assert type(gf_vir) is aux.GreensFunction
-    assert type(eri) is _ChemistsERIs
 
     nmo = agf2.nmo
     tol = agf2.weight_tol  #NOTE: tol is unlikely to be met at (None,0)
@@ -135,19 +131,19 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     mem_incore = (gf_occ.nphys*gf_occ.naux**2*gf_vir.naux) * 8/1e6
     mem_now = lib.current_memory()[0]
     if (mem_incore+mem_now < agf2.max_memory):
-        eri_qmo = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
+        qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
     else:
-        eri_qmo = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir)
+        qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir)
 
-    vv = np.zeros((agf2.nmo, agf2.nmo))
-    vev = np.zeros((agf2.nmo, agf2.nmo))
+    vv = np.zeros((nmo, nmo))
+    vev = np.zeros((nmo, nmo))
 
     eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
     eja = eja.ravel()
 
     for i in range(gf_occ.naux):
-        xija = eri_qmo[:,i].reshape(nmo, -1)
-        xjia = eri_qmo[:,:,i].reshape(nmo, -1)
+        xija = qeri[:,i].reshape(nmo, -1)
+        xjia = qeri[:,:,i].reshape(nmo, -1)
 
         eija = eja + gf_occ.energy[i]
 
@@ -251,8 +247,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
         if with_k:
             vk = np.zeros_like(rdm1)
 
-        max_memory = agf2.max_memory - lib.current_memory()[0]
-        blksize = int((max_memory/8e-6) / (nmo*(npair+nmo**2)))
+        blksize = _get_blksize(agf2.max_memory, (nmo*npair, nmo**3))
         blksize = min(nmo, max(BLKMIN, blksize))
 
         tril2sq = lib.square_mat_in_trilu_indices(nmo)
@@ -295,13 +290,11 @@ def get_fock(agf2, eri, gf=None, rdm1=None):
         ndarray of physical space Fock matrix
     '''
 
-    assert type(eri) is _ChemistsERIs
-
     if gf is not None:
         rdm1 = agf2.make_rdm1(gf)
     assert rdm1 is not None
 
-    vj, vk = get_jk(agf2, eri.eri, rdm1)
+    vj, vk = agf2.get_jk(eri.eri, rdm1)
     fock = eri.h1e + vj - 0.5 * vk
 
     return fock
@@ -326,7 +319,6 @@ def fock_loop(agf2, eri, gf, se):
 
     assert type(gf) is aux.GreensFunction
     assert type(se) is aux.SelfEnergy
-    assert type(eri) is _ChemistsERIs
 
     cput0 = cput1 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
@@ -393,7 +385,6 @@ def energy_1body(agf2, eri, gf):
     '''
 
     assert type(gf) is aux.GreensFunction
-    assert type(eri) is _ChemistsERIs
 
     rdm1 = agf2.make_rdm1(gf)
     fock = agf2.get_fock(eri, gf)
@@ -564,6 +555,7 @@ class RAGF2(lib.StreamObject):
     energy_2body = energy_2body
     fock_loop = fock_loop
     build_se_part = build_se_part
+    get_jk = get_jk
 
     def ao2mo(self, mo_coeff=None):
         ''' Get the electronic repulsion integrals in MO basis.
@@ -954,6 +946,27 @@ class _ChemistsERIs:
 
         return self
 
+def _get_blksize(max_memory_total, *sizes):
+    ''' Gets a block size such that the sum of the product of 
+        :attr:`sizes` with :attr:`blksize` is less than available
+        memory.
+
+        If multiple tuples are provided, then the maximum will
+        be used.
+    '''
+    #NOTE: does pyscf have this already? if not it might be nice
+
+    if isinstance(sizes[0], tuple):
+        sum_of_sizes = max([sum(x) for x in sizes])
+    else:
+        sum_of_sizes = sum(sizes)
+
+    mem_avail = max_memory_total - lib.current_memory()[0] # in MB
+    mem_avail = mem_avail * 8e-6 # in bits
+    mem_avail = mem_avail / 64 # in 64-bit floats
+
+    return int(mem_avail / sum_of_sizes)
+
 def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
@@ -1038,8 +1051,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
 
     eri.feri.create_dataset('qmo', (nmo, ni, nj, na), 'f8')
 
-    max_memory = agf2.max_memory - lib.current_memory()[0]
-    blksize = int((max_memory/8e-6) / max(nmo*(npair+nj+na), (nmo+ni)*(nj+na)))
+    blksize = _get_blksize(agf2.max_memory, (nmo*npair, nj*na, npair), (nmo*ni, nj*na))
     blksize = min(nmo, max(BLKMIN, blksize))
     log.debug1('blksize = %d', blksize)
 
@@ -1074,7 +1086,6 @@ if __name__ == '__main__':
     rhf.run()
 
     ragf2 = RAGF2(rhf, frozen=0)
-    ragf2.max_memory = 10
 
     ragf2.run()
     ragf2.ipragf2(nroots=5)
