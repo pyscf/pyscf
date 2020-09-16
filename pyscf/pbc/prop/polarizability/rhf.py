@@ -56,7 +56,15 @@ def fft_k_deriv(cell, fg, kpts, Ls):
         fk.append(1j*np.dot(expkL*Ls[:,beta], fg))
     return np.asarray(fk)
 
-def get_k_deriv(cell, mat, kpts, tol=1e-6):
+def fft_k_deriv2(cell, fg, kpts, Ls):
+    kpts_scaled = cell.get_scaled_kpts(kpts)
+    kpts_scaled = np.mod(np.mod(kpts_scaled, 1), 1)
+    kpts = cell.get_abs_kpts(kpts_scaled)
+    expkL = np.asarray(np.exp(1j*np.dot(kpts, Ls.T)))
+    res = -lib.einsum('na,nb,kn,np->abkp', Ls, Ls, expkL, fg)
+    return res
+
+def get_k_deriv(cell, mat, kpts, deriv=1, tol=1e-6):
     Ls = cell.get_lattice_Ls(discard=False)
     nkpt = len(kpts)
     nao = cell.nao
@@ -66,7 +74,12 @@ def get_k_deriv(cell, mat, kpts, tol=1e-6):
     error = np.linalg.norm(mat.flatten() - matk.flatten())
     if error > tol:
         logger.warn(cell, "k-mesh may be too small: FFT error = %.6e", error)
-    mat_dk = fft_k_deriv(cell, matg, kpts, Ls).reshape(3,nkpt,nao,nao)
+    if deriv == 1:
+        mat_dk = fft_k_deriv(cell, matg, kpts, Ls).reshape(3,nkpt,nao,nao)
+    elif deriv == 2:
+        mat_dk = fft_k_deriv2(cell, matg, kpts, Ls).reshape(3,3,nkpt,nao,nao)
+    else:
+        raise NotImplementedError
     return mat_dk
 
 def get_h1(polobj, Zao_in=None, Rao_in=None, Kao_in=None, vo_only=False):
@@ -93,9 +106,11 @@ def get_h1(polobj, Zao_in=None, Rao_in=None, Kao_in=None, vo_only=False):
     if Zao_in is not None:
         Z = Zao_in
     else:
-        with cell.with_common_orig((0., 0., 0.)):
-            Z = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts, 
-                               pbcopt=lib.c_null_ptr()) 
+        charges = cell.atom_charges()
+        coords  = cell.atom_coords()
+        charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+        with cell.with_common_orig(charge_center):
+            Z = cell.pbc_intor('int1e_r', comp=3, kpts=kpts) 
     Zji = []
     for k in range(nkpt):
         Zji.append(lib.einsum('xpq,pi,qj->xij', Z[k], 
@@ -105,7 +120,7 @@ def get_h1(polobj, Zao_in=None, Rao_in=None, Kao_in=None, vo_only=False):
     if Rao_in is not None:
         Rao = Rao_in
     else:
-        Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=True)
+        Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1)
     for k in range(nkpt):
         Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
                               orbv[k].conj(), orbo[k]))
@@ -152,6 +167,26 @@ def get_h1(polobj, Zao_in=None, Rao_in=None, Kao_in=None, vo_only=False):
         s1 = None
     return h1, s1
 
+def dipole(polobj):
+    log = logger.new_logger(polobj)
+    mf = polobj._scf
+    mo_occ = mf.mo_occ
+    mo_coeff = np.asarray(mf.mo_coeff)
+    nkpt, nao, nmo = mo_coeff.shape
+
+    occidx = []
+    for k in range(nkpt):
+        occidx.append(mo_occ[k] > 0)
+
+    h1 = get_h1(polobj)[0]
+    dip = 0.0
+    for k in range(nkpt):
+        dip += h1[k][:,occidx[k]].diagonal(0,1,2).sum(axis=1) * -2.0 / nkpt
+    dip = dip.real
+
+    log.debug('Dipole moment\n%s', dip)
+    return dip
+
 def polarizability(polobj, with_cphf=True):
     log = logger.new_logger(polobj)
     mf = polobj._scf
@@ -171,8 +206,8 @@ def polarizability(polobj, with_cphf=True):
 
     e2 = 0    
     for k in range(nkpt):
-        e2 += np.einsum('xpi,ypi->xy', h1[k].conj(), mo1[k]) / nkpt
-    e2 = (e2 + e2.T.conj()) * -2
+        e2 += np.einsum('xpi,ypi->xy', h1[k].conj(), mo1[k])
+    e2 = -2.0 / nkpt * (e2 + e2.T.conj())
     if np.linalg.norm(e2.imag) > 1e-8:
         raise RuntimeError("Imaginary polarizability found! Something may be wrong.")
     e2 = e2.real
@@ -185,6 +220,7 @@ def polarizability(polobj, with_cphf=True):
     return e2
 
 def hyper_polarizability(polobj, with_cphf=True):
+    raise NotImplementedError("There is some unknown error in the hyper-polarizability implementation.")
     log = logger.new_logger(polobj)
     mf = polobj._scf
     kpts = polobj.kpts
@@ -203,17 +239,23 @@ def hyper_polarizability(polobj, with_cphf=True):
     orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpt)]
     orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpt)]
 
-    with cell.with_common_orig((0., 0., 0.)):
-        Zao = cell.pbc_intor('int1e_r', comp=3, hermi=0, kpts=kpts,
-                             pbcopt=lib.c_null_ptr())
+    charges = cell.atom_charges()
+    coords  = cell.atom_coords()
+    charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    with cell.with_common_orig(charge_center):
+        Zao = cell.pbc_intor('int1e_r', comp=3, kpts=kpts)
+        Z_dk = cell.pbc_intor('int1e_r', comp=3, kpts=kpts, kderiv=1).reshape(nkpt,3,3,nao,nao)
 
-    Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=True)
+    Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1)
+    R_dk = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=2).reshape(nkpt,3,3,nao,nao)
 
+    #S = mf.get_ovlp(kpts=kpts)
     fock = mf.get_fock()
     Kao = get_k_deriv(cell, fock, kpts)
+    Kao_dk = get_k_deriv(cell, fock, kpts, deriv=2)
 
     h1, s1 = get_h1(polobj, Zao_in=Zao, Rao_in=Rao, Kao_in=Kao)
-    vind = polobj.gen_vind(mf, mo_coeff, mo_occ)
+    vind = polobj.gen_vind(mf, mo_coeff, mo_occ, hermi=1)
     if with_cphf:
         mo1, e1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
                              max_cycle=polobj.max_cycle_cphf, tol=polobj.conv_tol,
@@ -221,11 +263,11 @@ def hyper_polarizability(polobj, with_cphf=True):
     else:
         raise NotImplementedError
 
-    orbo1 = [lib.einsum('xai,pa->xpi', mo1[k], mo_coeff[k]) for k in range(nkpt)]
+    orbo1 = [lib.einsum('xpi,up->xui', mo1[k], mo_coeff[k]) for k in range(nkpt)]
     dm1 = []
     for k in range(nkpt):
-        dm1_k = lib.einsum('xpi,qi->xpq', orbo1[k], orbo[k].conj()) * 2
-        dm1_k = dm1_k + dm1_k.transpose(0,2,1).conj()
+        dm1_k = lib.einsum('xui,vi->xuv', orbo1[k], orbo[k].conj())
+        dm1_k = (dm1_k + dm1_k.transpose(0,2,1).conj()) * 2
         dm1.append(dm1_k)
     dm1 = np.asarray(dm1).transpose(1,0,2,3)
 
@@ -233,21 +275,14 @@ def hyper_polarizability(polobj, with_cphf=True):
     v1ao = vresp(dm1)
     v1ao_dk = []
     for i in range(3):
-        v1ao_dk.append(get_k_deriv(cell, v1ao[i], kpts))
-    v1ao_dk = np.asarray(v1ao_dk)
+        v1ao_dk.append(get_k_deriv(cell, v1ao[i], kpts)) #(z,y,k,u,v)
+    v1ao_dk = np.asarray(v1ao_dk).transpose(2,1,0,3,4)
 
     G1ao = v1ao.transpose(1,0,2,3) + Zao + 1j * 0.5 * Rao
     G1vv = []
     for k in range(nkpt):
-        G1vv.append(lib.einsum('xpq,pa,qb->xab', G1ao[k],
-                               orbv[k].conj(), orbv[k]))
-
-    G1 = []
-    for k in range(nkpt):
-        G1po  = h1[k]
-        G1po += lib.einsum('xpq,pi,qj->xij', v1ao[:,k],
-                           mo_coeff[k].conj(), orbo[k])
-        G1.append(G1po)
+        tmp = lib.einsum('xuv,ua,vb->xab', G1ao[k], orbv[k].conj(), orbv[k])
+        G1vv.append(tmp)
 
     ##############
     # dU/dk part #
@@ -256,25 +291,14 @@ def hyper_polarizability(polobj, with_cphf=True):
     e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
     e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
 
-    Z_dk = []
-    Z_ = np.asarray(Zao).transpose(1,0,2,3)
-    for i in range(3):
-        Z_dk.append(get_k_deriv(cell, Z_[i], kpts))
-    Z_dk = np.asarray(Z_dk)
-
-    R_dk = []
-    R_ = np.asarray(Rao).transpose(1,0,2,3)
-    for i in range(3):
-        R_dk.append(get_k_deriv(cell, R_[i], kpts))
-    R_dk = np.asarray(R_dk)
+    nvir = [e_ai[k].shape[0] for k in range(nkpt)]
+    nocc = [e_ai[k].shape[1] for k in range(nkpt)]
 
     Kji = []
+    Rji = []
     for k in range(nkpt):
         Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k],
                               mo_coeff[k].conj(), mo_coeff[k]))
-
-    Rji = []
-    for k in range(nkpt):
         Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
                               mo_coeff[k].conj(), mo_coeff[k]))
 
@@ -292,75 +316,74 @@ def hyper_polarizability(polobj, with_cphf=True):
             Qji_k[i,mask_oo] = -0.5 * Rji[k][i][mask_oo].flatten()
             Qji_k[i,mask_vv] = -0.5 * Rji[k][i][mask_vv].flatten()
         Qji.append(Qji_k)
-        mo_dk.append(lib.einsum('uq,xqp->xup', mo_coeff[k], Qji_k))
+        mo_dk.append(lib.einsum('uq,xqp->xup', mo_coeff[k], Qji[k]))
 
     dedk = []
     for k in range(nkpt):
         dedk_k = Kji[k].diagonal(0,1,2) - Rji[k].diagonal(0,1,2) * mo_energy[k]
-        dedk.append(dedk_k)
+        dedk.append(dedk_k.real)
 
-    Rji_d2k = []
+    dRdk = []
     for k in range(nkpt):
-        tmp = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Rao[k], orbo[k])
-        tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k].conj(), Rao[k], mo_dk[k][:,:,occidx[k]])
-        tmp += lib.einsum('up,zyuv,vi->yzpi', mo_coeff[k].conj(), R_dk[:,:,k], orbo[k])
-        Rji_d2k.append(tmp)
+        #tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Rao[k], orbo[k])
+        #tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k].conj(), Rao[k], mo_dk[k][:,:,occidx[k]])
+        tmp  = lib.einsum('yqp,zqi->yzpi', Qji[k].conj(), Rji[k][:,:,occidx[k]])
+        tmp += lib.einsum('zpq,yqi->yzpi', Rji[k], Qji[k][:,:,occidx[k]])
+        tmp += lib.einsum('up,yzuv,vi->yzpi', mo_coeff[k].conj(), R_dk[k], orbo[k])
+        dRdk.append(tmp)
 
     ##############
     # mo_d2k
     ##############
-    Kao_dk = []
-    for i in range(3):
-        Kao_dk.append(get_k_deriv(cell, Kao[i], kpts))
-    Kao_dk = np.asarray(Kao_dk)
-
     Kji_d2k = []
     for k in range(nkpt):
-        tmp = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Kao[:,k], orbo[k])
-        tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k].conj(), Kao[:,k], mo_dk[k][:,:,occidx[k]])
-        tmp += lib.einsum('up,zyuv,vi->yzpi', mo_coeff[k].conj(), Kao_dk[:,:,k], orbo[k])
+        #tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Kao[:,k], orbo[k])
+        #tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k].conj(), Kao[:,k], mo_dk[k][:,:,occidx[k]])
+        tmp  = lib.einsum('yqp,zqi->yzpi', Qji[k].conj(), Kji[k][:,:,occidx[k]])
+        tmp += lib.einsum('zpq,yqi->yzpi', Kji[k], Qji[k][:,:,occidx[k]])
+        tmp += lib.einsum('up,yzuv,vi->yzpi', mo_coeff[k].conj(), Kao_dk[:,:,k], orbo[k])
         Kji_d2k.append(tmp)
 
     dQdk = []
     for k in range(nkpt):
-        tmp = Kji_d2k[k]
+        tmp  = Kji_d2k[k]
         tmp -= lib.einsum('zpi,yi->yzpi', Rji[k][:,:,occidx[k]], dedk[k][:,occidx[k]])
-        tmp -= Rji_d2k[k] * mo_energy[k][occidx[k]]
+        tmp -= dRdk[k] * mo_energy[k][occidx[k]]
 
         tmp -= lib.einsum('zpi,yi->yzpi', Qji[k][:,:,occidx[k]], dedk[k][:,occidx[k]])
         tmp += lib.einsum('zpi,yp->yzpi', Qji[k][:,:,occidx[k]], dedk[k])
 
         tmp[:,:,viridx[k]] *= -e_ai[k]
-        tmp[:,:,occidx[k]] = -0.5 * Rji_d2k[k][:,:,occidx[k]]
+        tmp[:,:,occidx[k]] = -0.5 * dRdk[k][:,:,occidx[k]]
         dQdk.append(tmp)
 
+    '''
     mo_d2k = []
     for k in range(nkpt):
         tmp  = lib.einsum('yup,zpi->yzui', mo_dk[k], Qji[k][:,:,occidx[k]])
         tmp += lib.einsum('up,yzpi->yzui', mo_coeff[k], dQdk[k])
         mo_d2k.append(tmp)
+    '''
     ##############
 
-    S = mf.get_ovlp(kpts=kpts)
     dUdk = []
     for k in range(nkpt):
-        v1 = v1ao[:,k] + Zao[k] + 1j*Rao[k]
-        v1_dk = v1ao_dk[:,:,k] + Z_dk[:,:,k] + 1j*R_dk[:,:,k]
+        v1 = v1ao[:,k] + Zao[k]
+        v1_dk = v1ao_dk[k] + Z_dk[k]
 
         tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k][:,:,viridx[k]].conj(), v1, orbo[k])
         tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k][:,viridx[k]].conj(), v1, mo_dk[k][:,:,occidx[k]])
-        tmp += lib.einsum('up,zyuv,vi->yzpi', mo_coeff[k][:,viridx[k]].conj(), v1_dk, orbo[k])
+        tmp += lib.einsum('up,yzuv,vi->yzpi', mo_coeff[k][:,viridx[k]].conj(), v1_dk, orbo[k])
 
-        tmp += 1j * lib.einsum('yup,zvi,uv->yzpi', mo_dk[k][:,:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], S[k])
-        tmp += 1j * lib.einsum('up,zvi,yuv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], Rao[k])
-        tmp += 1j * lib.einsum('up,yzvi,uv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_d2k[k], S[k])
+        tmp += 1j * (dRdk[k][:,:,viridx[k]] + dQdk[k][:,:,viridx[k]])
+        #tmp += 1j * lib.einsum('yup,zvi,uv->yzpi', mo_dk[k][:,:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], S[k])
+        #tmp += 1j * lib.einsum('up,zvi,yuv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], Rao[k])
+        #tmp += 1j * lib.einsum('up,yzvi,uv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_d2k[k], S[k])
 
-        tmp1 = -lib.einsum('zpi,yi->yzpi', G1[k][:,viridx[k]], dedk[k][:,occidx[k]])
-        tmp1 += lib.einsum('zpi,yp->yzpi', G1[k][:,viridx[k]], dedk[k][:,viridx[k]])
-        tmp1[:,:] *= -e_ai[k]
+        tmp -= lib.einsum('zpi,yi->yzpi', mo1[k][:,viridx[k]], dedk[k][:,occidx[k]])
+        tmp += lib.einsum('zpi,yp->yzpi', mo1[k][:,viridx[k]], dedk[k][:,viridx[k]])
 
-        tmp += tmp1
-        tmp[:,:] *= -e_ai[k]
+        tmp *= -e_ai[k]
         dUdk.append(tmp)
     ##############
 
@@ -510,7 +533,7 @@ class Polarizability(mol_polar):
         self.kpts = kpts
         mol_polar.__init__(self, mf)
 
-    def gen_vind(self, mf, mo_coeff, mo_occ, vo_only=False):
+    def gen_vind(self, mf, mo_coeff, mo_occ, hermi=1, vo_only=False):
         '''Induced potential'''
         nkpt, nao, nmo = mo_coeff.shape
         orbo = [mo_coeff[k][:,mo_occ[k]>0] for k in range(nkpt)]
@@ -523,7 +546,7 @@ class Polarizability(mol_polar):
             nvir = [orbv[k].shape[-1] for k in range(nkpt)]
         else:
             nvir = [nmo,]*nkpt
-        vresp = mf.gen_response(hermi=1)
+        vresp = mf.gen_response(hermi=hermi)
         def vind(mo1):
             dm1 = []
             for k in range(nkpt):
@@ -541,6 +564,7 @@ class Polarizability(mol_polar):
             return v1mo
         return vind
 
+    dipole = dipole
     polarizability = polarizability
     polarizability_with_freq = polarizability_with_freq
     hyper_polarizability = hyper_polarizability
