@@ -72,3 +72,32 @@ def reduce(obj, root=0, op=getattr(mpi, 'SUM', None)):
         m = m.ravel()[0]
 
     return m
+
+
+def nrange(start, stop=None, step=1):
+    if stop is None:
+        start, stop = 0, start
+
+    for i in range(start+rank, stop, step*size):
+        yield i
+
+
+def prange(start, stop, step):
+    ''' :func:`lib.prange` distributed over MPI processes. Returns
+        the range for a single MPI rank.
+    '''
+
+    if size == 1:
+        for p0, p1 in lib.prange(start, stop, step):
+            yield p0, p1
+    else:
+        blocks = []
+        for i in range(stop-start):
+            blocks.append(n // size + int(n % size > i))
+
+        if start < end:
+            start0 = start + sum(blocks[:rank])
+            stop0 = start + sum(blocks[:rank+1])
+            
+            for p0, p1 in lib.prange(start, stop, step):
+                yield p0, p1
