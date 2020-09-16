@@ -30,12 +30,10 @@ from pyscf import ao2mo
 from pyscf.scf import _vhf
 from pyscf.agf2 import aux, mpi_helper, ragf2
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
+from pyscf.agf2.ragf2 import _get_blksize
 from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_uagf2_blkmin', 1)
-
-
-kernel = ragf2.kernel
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir):
@@ -63,7 +61,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     assert type(gf_occ[1]) is aux.GreensFunction
     assert type(gf_vir[0]) is aux.GreensFunction
     assert type(gf_vir[1]) is aux.GreensFunction
-    assert type(eri) is _ChemistsERIs
 
     tol = agf2.weight_tol
 
@@ -136,8 +133,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     return (se_a, se_b)
 
 
-get_jk = ragf2.get_jk
-
 def get_fock(agf2, eri, gf=None, rdm1=None):
     ''' Computes the physical space Fock matrix in MO basis. One of
         :attr:`gf` or :attr:`rdm1` must be passed, with the latter
@@ -157,16 +152,14 @@ def get_fock(agf2, eri, gf=None, rdm1=None):
         ndarray of physical space Fock matrix
     '''
 
-    assert type(eri) is _ChemistsERIs
-
     if gf is not None:
         rdm1 = agf2.make_rdm1(gf)
     assert rdm1 is not None
 
-    vj_aa, vk_aa = get_jk(agf2, eri.eri_aa, rdm1=rdm1[0])
-    vj_bb, vk_bb = get_jk(agf2, eri.eri_bb, rdm1=rdm1[1])
-    vj_ab = get_jk(agf2, eri.eri_ab, rdm1=rdm1[1], with_k=False)[0]
-    vj_ba = get_jk(agf2, eri.eri_ba, rdm1=rdm1[0], with_k=False)[0] #NOTE: symmetric?
+    vj_aa, vk_aa = agf2.get_jk(eri.eri_aa, rdm1=rdm1[0])
+    vj_bb, vk_bb = agf2.get_jk(eri.eri_bb, rdm1=rdm1[1])
+    vj_ab = agf2.get_jk(eri.eri_ab, rdm1=rdm1[1], with_k=False)[0]
+    vj_ba = agf2.get_jk(eri.eri_ba, rdm1=rdm1[0], with_k=False)[0] #NOTE: symmetric?
 
     fock_a = eri.h1e[0] + vj_aa + vj_ab - vk_aa
     fock_b = eri.h1e[1] + vj_bb + vj_ba - vk_bb
@@ -286,7 +279,6 @@ def energy_1body(agf2, eri, gf):
 
     assert type(gf[0]) is aux.GreensFunction
     assert type(gf[1]) is aux.GreensFunction
-    assert type(eri) is _ChemistsERIs
 
     rdm1 = agf2.make_rdm1(gf)
     fock = agf2.get_fock(eri, gf)
@@ -408,33 +400,6 @@ class UAGF2(ragf2.RAGF2):
     weight_tol = getattr(__config__, 'agf2_uagf2_UAGF2_weight_tol', 1e-11)
     diis_space = getattr(__config__, 'agf2_uagf2_UAGF2_diis_space', 6)
     diis_min_space = getattr(__config__, 'agf2_uagf2_UAGF2_diis_min_space', 1)
-
-    def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
-
-        if mo_energy is None: mo_energy = mf.mo_energy
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
-
-        self.mol = mf.mol
-        self._scf = mf
-        self.verbose = self.mol.verbose
-        self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
-
-        self.mo_energy = mo_energy
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
-        self.se = None
-        self.gf = None
-        self.e_1b = mf.e_tot
-        self.e_2b = 0.0
-        self.e_mp2 = 0.0
-        self.frozen = frozen
-        self._nmo = None
-        self._nocc = None
-        self.converged = False
-        self.chkfile = mf.chkfile
-        self._keys = set(self.__dict__.keys())
 
     energy_1body = energy_1body
     energy_2body = energy_2body
@@ -805,9 +770,8 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
         eri.feri.create_dataset('qmo/aa', (nmoa, nia, nja, naa), 'f8')
         eri.feri.create_dataset('qmo/ab', (nmoa, nia, njb, nab), 'f8')
 
-        max_memory = agf2.max_memory - lib.current_memory()[0]
-        blksize = int((max_memory/8e-6) / max(nmoa**3+nmoa*nja*naa, 
-                                              nmoa*nmob**2*njb*nab))
+        blksize = _get_blksize(agf2.max_memory, (nmoa**3, nmoa*nja*naa),
+                                                (nmoa*nmob**2+nmoa*njb*nab))
         blksize = min(nmoa, max(BLKMIN, blksize))
         log.debug1('blksize = %d', blksize)
 
