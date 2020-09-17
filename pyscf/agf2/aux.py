@@ -22,9 +22,13 @@ Auxiliary space class and helper functions.
 
 import time
 import numpy as np
+import scipy.linalg.blas
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
+from pyscf.lib.parameters import MAX_MEMORY, LARGE_DENOM
+
+#TODO out-of-core auxiliaires? make this agnostic to H5 e/v
 
 
 class AuxiliarySpace:
@@ -293,7 +297,7 @@ class AuxiliarySpace:
             AuxiliarySpace
         '''
         energy = np.copy(self.energy)
-        coupling = np.copy(self.energy)
+        coupling = np.copy(self.coupling)
         return self.__class__(energy, coupling, chempot=self.chempot)
 
     @property
@@ -349,8 +353,42 @@ class SelfEnergy(AuxiliarySpace):
         gf = get_greens_function(phys)
         return gf.make_rdm1(phys, chempot=chempot, occupancy=occupancy)
 
-    def compress(self, nmoms):
-        raise NotImplementedError #TODO
+    def compress(self, phys=None, n=(None, 0), tol=1e-12):
+        ''' Compress the auxiliaries via moments of the particle and 
+            hole Green's function and self-energy. Resulting :attr:`naux`
+            depends on the chosen :attr:`n`.
+
+        Kwargs:
+            phys : 2D array or None
+                Physical space (1p + 1h), typically the Fock matrix.
+                Only required if :attr:`n[0]` is not None.
+            n : tuple of int
+                Compression level of the Green's function and
+                self-energy, respectively.
+            tol : float
+                Linear dependecy tolerance. Default value is 1e-12
+
+        Returns:
+            :class:`SelfEnergy` with reduced auxiliary dimension.
+
+        Raises:
+            MemoryError if the compression according to Green's
+            function moments will exceed the maximum allowed memory.
+        '''
+
+        ngf, nse = n
+        se = self
+
+        if nse is None and ngf is None:
+            raise ValueError('SelfEnergy.compress n=%s' % n)
+
+        if nse is not None:
+            se = compress_via_se(se, n=nse)
+
+        if ngf is not None:
+            se = compress_via_gf(se, phys, n=ngf, tol=tol)
+
+        return se
 
 
 class GreensFunction(AuxiliarySpace):
@@ -526,7 +564,211 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
     return w, v
 
 
+def _band_lanczos(se_occ, n=0, max_memory=None):
+    ''' Perform the banded Lanczos algorithm for compression of a
+        self-energy according to consistency in its separate
+        particle and hole moments.
+    '''
+
+    nblk = n+1
+    nphys, naux = se_occ.coupling.shape
+    bandwidth = nblk * nphys
+
+    q = np.zeros((bandwidth, naux))
+    t = np.zeros((bandwidth, bandwidth))
+    r = np.zeros((naux))
+
+    # cholesky qr factorisation of v.T
+    #TODO: _cholesky_build type of fallback? or we just don't allow naux<nmo compression
+    coupling = se_occ.coupling
+    x = np.dot(coupling, coupling.T)
+    v_tri = np.linalg.cholesky(x).T
+    q[:nphys] = np.dot(np.linalg.inv(v_tri).T, coupling)
+    #try:
+    #    v_tri = np.linalg.cholesky(x).T
+    #except np.linalg.LinAlgError:
+    #    w, v = np.linalg.eigh(x)
+    #    w[w < 1e-10] = 1e-10
+    #    x_posdef = np.dot(np.dot(v, np.diag(w)), v.T.conj())
+    #    v_tri = np.linalg.cholesky(x_posdef).T
+
+    for i in range(bandwidth):
+        r[:] = se_occ.energy * q[i]
+
+        start = max(i-nphys, 0)
+        if start != i:
+            r -= np.dot(t[i,start:i], q[start:i])
+
+        for j in range(i, min(i+nphys, bandwidth)):
+            t[i,j] = t[j,i] = np.dot(r, q[j])
+            # r := -t[i,j] * q[j] + r
+            scipy.linalg.blas.daxpy(q[j], r, a=-t[i,j])
+
+        if (i+nphys) < bandwidth:
+            len_r = np.linalg.norm(r)
+            t[i,i+nphys] = t[i+nphys,i] = len_r
+            q[i+nphys] = r / (len_r + 1./LARGE_DENOM)
+
+    return v_tri, t
+
+def _compress_part_via_se(se_occ, n=0):
+    ''' Compress the auxiliaries of the occupied or virtual part of
+        the self-energy according to consistency in its moments.
+    '''
+
+    if se_occ.nphys > se_occ.naux:
+        # breaks this version of the algorithm and is also pointless
+        e = se_occ.energy.copy()
+        v = se_occ.coupling.copy()
+    else:
+        v_tri, t = _band_lanczos(se_occ, n=n)
+        e, v = np.linalg.eigh(t)
+        v = np.dot(v_tri.T, v[:se_occ.nphys])
+
+    return e, v
+
+def _compress_via_se(se, n=0):
+    ''' Compress the auxiliaries of the seperate occupied and
+        virtual parts of the self-energy according to consistency
+        in its moments.
+    '''
+
+    if se.naux == 0:
+        return se
+
+    se_occ = se.get_occupied()
+    se_vir = se.get_virtual()
+
+    e = []
+    v = []
+
+    if se_occ.naux > 0:
+        e_occ, v_occ = _compress_part_via_se(se_occ, n=n)
+        e.append(e_occ)
+        v.append(v_occ)
+
+    if se_vir.naux > 0:
+        e_vir, v_vir = _compress_part_via_se(se_vir, n=n)
+        e.append(e_vir)
+        v.append(v_vir)
+
+    e = np.concatenate(e, axis=0)
+    v = np.concatenate(v, axis=-1)
+
+    return e, v
+
+def compress_via_se(se, n=0):
+    ''' Compress the auxiliaries of the seperate occupied and
+        virtual parts of the self-energy according to consistency
+        in its moments.
+
+    Args:
+        se : SelfEnergy
+            Auxiliaries of the self-energy
+
+    Kwargs:
+        n : int
+            Truncation parameter, conserves the seperate particle
+            and hole moments to order 2*n+1.
+
+    Returns:
+        :class:`SelfEnergy` with reduced auxiliary dimension
+
+    Ref:
+        [1] H. Muther, T. Taigel and T.T.S. Kuo, Nucl. Phys., 482, 
+            1988, pp. 601-616.
+        [2] D. Van Neck,  K. Piers and M. Waroquier, J. Chem. Phys.,
+            115, 2001, pp. 15-25.
+        [3] H. Muther and L.D. Skouras, Nucl. Phys., 55, 1993,
+            pp. 541-562.
+        [4] Y. Dewulf, D. Van Neck, L. Van Daele and M. Waroquier,
+            Phys. Lett. B, 396, 1997, pp. 7-14.
+    '''
+
+    e, v = _compress_via_se(se, n=n)
+    se_red = SelfEnergy(e, v, chempot=se.chempot)
+    
+    return se_red
+
+
+def _build_projector(se, phys, n=0, tol=1e-12):
+    ''' Builds the vectors which project the auxiliary space into a
+        compress one with consistency in the seperate particle and
+        hole moments up to order 2n+1.
+    '''
+
+    _check_phys_shape(se, phys)
+
+    nphys, naux = se.coupling.shape
+    w, v = se.eig(phys)
+
+    def _part(w, v, s):
+        en = e[s][None] ** np.arange(n+1)[:,None]
+        v = v[:,s]
+        p = np.einsum('xi,pi,ni->xpn', v[nphys:], v[:nphys], en)
+        return p.reshape(naux, nphys*(n+1))
+
+    p = np.hstack((_part(w, v, w < se.chempot), 
+                   _part(w, v, w >= se.chempot)))
+
+    norm = np.linalg.norm(p, axis=0, keepdims=True)
+    n[np.absolute(n) == 0] = 1./LARGE_DENOM
+
+    p /= norm
+    w, p = np.linalg.eigh(np.dot(p, p.T))
+    p = p[:, w > tol]
+
+    p = np.block([[np.eye(nphys), np.zeros((nphys, naux))],
+                  [np.zeros((naux, nphys)), p]])
+
+    return p
+
+def _compress_via_gf(se, phys, n=0, tol=1e-12):
+    ''' Compress the auxiliaries of the seperate occupied and
+        virtual parts of the self-energy according to consistency
+        in the moments of the Green's function
+    '''
+
+    nphys = se.nphys
+
+    p = _build_projector(se, phys, n=n, tol=tol)
+    h_tilde = np.dot(p.T, se.dot(phys, p))
+    p = None
+
+    e, v = util.eigh(h_tilde[nphys:,nphys:])
+    v = np.dot(h[:nphys,nphys:], v)
+
+    return e, v
+
+def compress_via_gf(se, phys, n=0, tol=1e-12):
+    ''' Compress the auxiliaries of the seperate occupied and
+        virtual parts of the self-energy according to consistency
+        in the moments of the Green's function
+
+    Args:
+        se : SelfEnergy
+            Auxiliaries of the self-energy
+        phys : 2D array
+            Physical space (1p + 1h), typically the Fock matrix
+
+    Kwargs:
+        n : int
+            Truncation parameter, conserves the seperate particle
+            and hole moments to order 2*n+1.
+        tol : float
+            Linear dependecy tolerance. Default value is 1e-12
+
+    Returns:
+        :class:`SelfEnergy` with reduced auxiliary dimension
+    '''
+
+    e, v = _compress_via_gf(se, phys, n=n, tol=tol)
+    se_red = SelfEnergy(e, v, chempot=se.chempot)
+    
+    return se_red
+
+
 def _check_phys_shape(auxspc, phys):
-    if phys.shape != (auxspc.nphys, auxspc.nphys):
+    if np.shape(phys) != (auxspc.nphys, auxspc.nphys):
         raise ValueError('Size of physical space must be the same as '
                          'leading dimension of couplings.')
