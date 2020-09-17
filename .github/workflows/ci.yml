@@ -1,0 +1,111 @@
+# https://docs.github.com/en/actions/language-and-framework-guides/using-python-with-github-actions
+#
+# Contributors to the evolution of this form:
+#
+#  sunqm
+#  fishjojo
+#  mjw99
+#  yangcal
+#  maxscheurer
+#
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  linux:
+
+    runs-on: ubuntu-18.04
+
+    strategy:
+      matrix:
+        python-version: [2.7, 3.5, 3.6, 3.7]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Resolve system dependencies
+        run: |
+                sudo apt-get -qq install gcc gfortran libgfortran3 libblas-dev cmake curl
+
+      - name: Resolve python dependencies
+        run: |
+                python -m pip install --upgrade pip
+                pip install "numpy!=1.16,!=1.17" "scipy<1.5" h5py nose nose-exclude nose-timer codecov
+                pip install pyberny geometric
+
+      - name: Resolve other dependencies (cppe)
+        # See https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+        if:  ${{matrix.python-version != 2.7 && matrix.python-version != 3.5}}
+        run: |
+                pip install git+https://github.com/maxscheurer/cppe.git
+
+      - name: Resolve other dependencies
+        run: |
+                cd ./pyscf/lib
+                curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7-deps.tar.gz | tar xzf -
+
+
+      - name: Compile
+        run: |
+                cd pyscf/lib
+                mkdir build
+                cd build
+                cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF ..
+                make
+                cd ../..
+
+      - name: Before Test
+        working-directory: ./pyscf
+        run: |
+                echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py 
+                echo "dftd3_DFTD3PATH = './lib/deps/lib'" >> pyscf_config.py
+
+      - name: Test
+        working-directory: ./pyscf
+        run: >
+                OMP_NUM_THREADS=1 PYTHONPATH=$(pwd):$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
+                nosetests -v --with-timer --with-coverage
+                --exclude-dir=dmrgscf --exclude-dir=fciqmcscf
+                --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao
+                --exclude-dir=cornell_shci --exclude-dir=pbc/grad
+                -e test_bz
+                -e h2o_vdz
+                -e test_mc2step_4o4e
+                -e test_ks_noimport
+                -e test_jk_single_kpt
+                -e test_jk_hermi0
+                -e test_j_kpts
+                -e test_k_kpts
+                -e high_cost
+                -e skip
+                -e call_in_background
+                -e libxc_cam_beta_bug
+                -e test_finite_diff_rks_eph
+                -e test_finite_diff_uks_eph
+                -I test_kuccsd_supercell_vs_kpts\.py
+                -I test_kccsd_ghf\.py
+                -I test_h_.*\.py
+                -I test_P_uadc_ea.py
+                -I test_P_uadc_ip.py
+                --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondTestSupercell3
+                --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondKSTestSupercell3
+                --exclude-test=pbc/gw/test/test_kgw_slow.DiamondTestSupercell3
+                --exclude-test=pbc/gw/test/test_kgw_slow.DiamondKSTestSupercell3
+                --exclude-test=pbc/tdscf/test/test_krhf_slow_supercell.DiamondTestSupercell3
+                --exclude-test=pbc/tdscf/test/test_kproxy_hf.DiamondTestSupercell3
+                --exclude-test=pbc/tdscf/test/test_kproxy_ks.DiamondTestSupercell3
+                --exclude-test=pbc/tdscf/test/test_kproxy_supercell_hf.DiamondTestSupercell3
+                --exclude-test=pbc/tdscf/test/test_kproxy_supercell_ks.DiamondTestSupercell3
+                -I .*_slow.*py -I .*_kproxy_.*py -I test_proxy.py # tdscf/*_slow.py gw/*_slow.py do not compatible with python3.[456] and old numpy
+
+      - name: Upload to codecov
+        uses: codecov/codecov-action@v1.0.13
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
+
