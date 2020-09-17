@@ -53,6 +53,8 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
         :class:`SelfEnergy`
     '''
     #TODO: C code
+    #TODO: incorporate memory inside loop into the decision whether to use
+    # incore integrals and/or have outcore xija_aa, xija_ab, xjia_aa?
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
@@ -134,9 +136,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
 
 
 def get_fock(agf2, eri, gf=None, rdm1=None):
-    ''' Computes the physical space Fock matrix in MO basis. One of
-        :attr:`gf` or :attr:`rdm1` must be passed, with the latter
-        prioritised if both are passed.
+    ''' Computes the physical space Fock matrix in MO basis. If :attr:`rdm1`
+        is not supplied, it is built from :attr:`gf`, which defaults to
+        the mean-field Green's function.
 
     Args:
         eri : _ChemistsERIs
@@ -152,9 +154,8 @@ def get_fock(agf2, eri, gf=None, rdm1=None):
         ndarray of physical space Fock matrix
     '''
 
-    if gf is not None:
+    if rdm1 is None:
         rdm1 = agf2.make_rdm1(gf)
-    assert rdm1 is not None
 
     vj_aa, vk_aa = agf2.get_jk(eri.eri_aa, rdm1=rdm1[0])
     vj_bb, vk_bb = agf2.get_jk(eri.eri_bb, rdm1=rdm1[1])
@@ -340,7 +341,7 @@ def energy_mp2(agf2, gf, se):
 
 
 class UAGF2(ragf2.RAGF2):
-    ''' Restricted AGF2 with canonical HF reference
+    ''' Unrestricted AGF2 with canonical HF reference
 
     Attributes:
         verbose : int
@@ -540,6 +541,21 @@ class UAGF2(ragf2.RAGF2):
         se_b = aux.combine(se_occ[1], se_vir[1])
 
         return (se_a, se_b)
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.agf2 import dfuagf2
+        myagf2 = dfuagf2.DFUAGF2(self._scf)
+        myagf2.__dict__.update(self.__dict__)
+
+        if with_df is not None:
+            myagf2.with_df = with_df
+
+        if auxbasis is not None and myagf2.with_df.auxbasis != auxbasis:
+            import copy
+            myagf2.with_df = copy.copy(myagf2.with_df)
+            myagf2.with_df.auxbasis = auxbasis
+
+        return myagf2
 
 
     def get_ip(self, gf, nroots=1):
@@ -854,24 +870,24 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
 if __name__ == '__main__':
     from pyscf import gto, scf, mp
 
-    mol = gto.M(atom='H 0 0 0; Li 0 0 1', basis='cc-pvdz', verbose=6)
-    rhf = scf.RHF(mol)
-    rhf.conv_tol = 1e-11
-    rhf.run()
-    uhf = scf.UHF(mol)
-    uhf.conv_tol = 1e-11
-    uhf.run()
+    #mol = gto.M(atom='H 0 0 0; Li 0 0 1', basis='cc-pvdz', verbose=6)
+    #rhf = scf.RHF(mol)
+    #rhf.conv_tol = 1e-11
+    #rhf.run()
+    #uhf = scf.UHF(mol)
+    #uhf.conv_tol = 1e-11
+    #uhf.run()
 
-    myragf2 = ragf2.RAGF2(rhf)
-    myragf2.run()
+    #myragf2 = ragf2.RAGF2(rhf)
+    #myragf2.run()
 
-    uagf2 = UAGF2(uhf)
-    uagf2.run()
+    #uagf2 = UAGF2(uhf)
+    #uagf2.run()
 
-    print()
-    keys = ['1b', '2b', 'mp2', 'corr', 'tot']
-    print('  '.join(['%s %16.12f' % (key, getattr(myragf2, 'e_'+key, None)) for key in keys]))
-    print('  '.join(['%s %16.12f' % (key, getattr(uagf2, 'e_'+key, None)) for key in keys]))
+    #print()
+    #keys = ['1b', '2b', 'mp2', 'corr', 'tot']
+    #print('  '.join(['%s %16.12f' % (key, getattr(myragf2, 'e_'+key, None)) for key in keys]))
+    #print('  '.join(['%s %16.12f' % (key, getattr(uagf2, 'e_'+key, None)) for key in keys]))
 
 
     mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', charge=-1, spin=1, verbose=3)
@@ -880,7 +896,11 @@ if __name__ == '__main__':
     uhf.run()
 
     uagf2 = UAGF2(uhf, frozen=0)
-    uagf2.run()
-    uagf2.ipragf2(nroots=5)
-    uagf2.earagf2(nroots=5)
 
+    uagf2.run()
+    uagf2.ipagf2(nroots=5)
+    uagf2.eaagf2(nroots=5)
+
+    
+    uagf2 = uagf2.density_fit()
+    uagf2.run()

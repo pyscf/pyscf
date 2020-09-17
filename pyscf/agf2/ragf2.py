@@ -236,7 +236,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
         vj, vk = _vhf.incore(eri, rdm1, with_j=with_j, with_k=with_k)
 
     else:
-        nmo = agf2.nmo
+        nmo = rdm1.shape[0]
         npair = nmo*(nmo+1)//2
         vj = vk = None
 
@@ -272,9 +272,9 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
 
 
 def get_fock(agf2, eri, gf=None, rdm1=None):
-    ''' Computes the physical space Fock matrix in MO basis. One of
-        :attr:`gf` or :attr:`rdm1` must be passed, with the latter
-        prioritised if both are passed.
+    ''' Computes the physical space Fock matrix in MO basis. If :attr:`rdm1`
+        is not supplied, it is built from :attr:`gf`, which defaults to
+        the mean-field Green's function.
 
     Args:
         eri : _ChemistsERIs
@@ -290,9 +290,8 @@ def get_fock(agf2, eri, gf=None, rdm1=None):
         ndarray of physical space Fock matrix
     '''
 
-    if gf is not None:
+    if rdm1 is None:
         rdm1 = agf2.make_rdm1(gf)
-    assert rdm1 is not None
 
     vj, vk = agf2.get_jk(eri.eri, rdm1)
     fock = eri.h1e + vj - 0.5 * vk
@@ -775,6 +774,21 @@ class RAGF2(lib.StreamObject):
 
         lib.chkfile.dump(self.chkfile, 'agf2', agf2_chk)
 
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.agf2 import dfragf2
+        myagf2 = dfragf2.DFRAGF2(self._scf)
+        myagf2.__dict__.update(self.__dict__)
+
+        if with_df is not None:
+            myagf2.with_df = with_df
+
+        if auxbasis is not None and myagf2.with_df.auxbasis != auxbasis:
+            import copy
+            myagf2.with_df = copy.copy(myagf2.with_df)
+            myagf2.with_df.auxbasis = auxbasis
+
+        return myagf2
+
 
     def get_ip(self, gf, nroots=1):
         gf_occ = gf.get_occupied()
@@ -833,10 +847,6 @@ class RAGF2(lib.StreamObject):
             return e_ea[0], v_ea[0]
         else:
             return e_ea, v_ea
-
-    ipragf2 = ipagf2
-    earagf2 = eaagf2
-
 
     get_nocc = get_nocc
     get_nmo = get_nmo
@@ -1088,8 +1098,8 @@ if __name__ == '__main__':
     ragf2 = RAGF2(rhf, frozen=0)
 
     ragf2.run()
-    ragf2.ipragf2(nroots=5)
-    ragf2.earagf2(nroots=5)
+    ragf2.ipagf2(nroots=5)
+    ragf2.eaagf2(nroots=5)
 
     print(mp.MP2(rhf, frozen=ragf2.frozen).run(verbose=0).e_corr)
     print(ragf2.e_mp2)
@@ -1107,8 +1117,5 @@ if __name__ == '__main__':
     #print('EA     = %16.12f' % gf2.ea[0])
     #print(gf2._energies['tot'])
 
-
-
-
-
-
+    ragf2 = ragf2.density_fit()
+    ragf2.run()
