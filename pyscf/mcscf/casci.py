@@ -295,6 +295,8 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     elif getattr(mc.fcisolver, 'states_transform_ci_for_orbital_rotation', None):
         fcivec = mc.fcisolver.states_transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
 
+    # Rerun fcisolver to get wavefunction if it cannot be transformed from
+    # existed one.
     if fcivec is None:
         log.info('FCI vector not available, call CASCI to update wavefunction')
         mocas = mo_coeff1[:,ncore:nocc]
