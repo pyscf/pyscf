@@ -534,6 +534,7 @@ class UAGF2(ragf2.RAGF2):
         '''
 
         if eri is None: eri = self.ao2mo()
+        if gf is None: gf = self.gf
         if gf is None: gf = self.init_aux(eri, with_se=False)[0]
 
         gf_occ = (gf[0].get_occupied(), gf[1].get_occupied())

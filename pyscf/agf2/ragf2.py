@@ -34,12 +34,13 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
 
 BLKMIN = getattr(__config__, 'agf2_ragf2_blkmin', 1)
 
-#TODO: warn about HOMO-LUMO gap? CCSD does this for <1e-5
 #TODO: test outcore and add incore_complete, also async_io??
 #TODO: do we want MPI in this?
 #TODO: test frozen!!! do we have to rediagonalise Fock matrix?
 #TODO: do we want to store RAGF2.qmo_energy, RAGF2.qmo_coeff and RAGF2.qmo_occ at the end?
 #TODO: do we really want to store the self-energy? if we do above we can remove both RAGF2.gf and RAGF2.se
+#TODO: scs
+#TODO: damping
 
 
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
@@ -142,6 +143,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     eja = eja.ravel()
 
     for i in range(gf_occ.naux):
+        #TODO: should we perform this differently? these are not contiguous and this slicing sucks...
         xija = qeri[:,i].reshape(nmo, -1)
         xjia = qeri[:,:,i].reshape(nmo, -1)
 
@@ -193,7 +195,7 @@ def _cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
     try:
         b = np.linalg.cholesky(vv).T
     except np.linalg.LinAlgError:
-        w, v = np.linalg.eigh(b)
+        w, v = np.linalg.eigh(vv)
         w[w < eps] = eps
         vv_posdef = np.dot(np.dot(v, np.diag(w)), v.T.conj())
         b = np.linalg.cholesky(vv_posdef).T
@@ -663,11 +665,12 @@ class RAGF2(lib.StreamObject):
             gf : GreensFunction
                 Auxiliaries of the Green's function
 
-        Returns
+        Returns:
             :class:`SelfEnergy`
         '''
 
         if eri is None: eri = self.ao2mo()
+        if gf is None: gf = self.gf
         if gf is None: gf = self.init_aux(eri, with_se=False)[0]
 
         gf_occ = gf.get_occupied()
