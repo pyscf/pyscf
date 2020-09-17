@@ -434,6 +434,7 @@ class UAGF2(ragf2.RAGF2):
             tuple of ndarray of density matrices
         '''
 
+        if gf is None: gf = self.gf
         if gf is None: gf = self.init_aux(with_se=False)[0]
 
         rdm1_a = gf[0].make_rdm1(occupancy=1)
@@ -442,7 +443,11 @@ class UAGF2(ragf2.RAGF2):
         return (rdm1_a, rdm1_b)
 
     def get_fock(self, eri=None, gf=None, rdm1=None):
+        ''' Computes the physical space Fock matrix in MO basis.
+        '''
+
         if eri is None: eri = self.ao2mo()
+        if gf is None: gf = self.gf
 
         return get_fock(self, eri, gf=gf, rdm1=rdm1)
 
