@@ -138,7 +138,7 @@ def UAGF2(mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=
     elif nmom != (None,0):
         lib.logger.warn(mf, 'AGF2 called with custom moment orders - '
                             'falling back on _slow implementations.')
-        return uagf2_slow.RAGF2(mf, nmom, frozen, mo_energy, mo_coeff, mo_occ)
+        return uagf2_slow.UAGF2(mf, nmom, frozen, mo_energy, mo_coeff, mo_occ)
 
     elif getattr(mf, 'with_df', None) is not None:
         return dfuagf2.DFUAGF2(mf, frozen, mo_energy, mo_coeff, mo_occ)
