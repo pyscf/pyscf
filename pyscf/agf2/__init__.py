@@ -17,6 +17,7 @@
 #
 
 #TODO: volume/issue for second paper
+#NOTE: I don't like using nmom as a variable in all of these methods
 
 '''
 Auxiliary second-order Green's function perturbation therory
@@ -86,7 +87,7 @@ Saved result
         Auxiliaries of the Green's function
 '''
 
-from pyscf import scf
+from pyscf import scf, lib
 from pyscf.agf2 import aux, ragf2, uagf2, dfragf2, dfuagf2, ragf2_slow, uagf2_slow
 from pyscf.agf2.aux import AuxiliarySpace, GreensFunction, SelfEnergy
 
