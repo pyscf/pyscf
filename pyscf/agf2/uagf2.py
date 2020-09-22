@@ -427,6 +427,9 @@ class UAGF2(ragf2.RAGF2):
                 (mem_incore+mem_now < self.max_memory)):
             eri = _make_mo_eris_incore(self)
         else:
+            logger.warn(self, 'MO eris are outcore - this may be very '
+                              'slow for agf2. increasing max_memory or '
+                              'using density fitting is recommended.')
             eri = _make_mo_eris_outcore(self)
 
         return eri
@@ -462,7 +465,10 @@ class UAGF2(ragf2.RAGF2):
     def energy_mp2(self, mo_energy=None, se=None):
         if mo_energy is None: mo_energy = self.mo_energy
         if se is None: se = self.build_se(gf=self.gf)
+
+        mo_energy = _mo_energy_without_core(self, self.mo_energy)
         self.e_mp2 = energy_mp2(self, mo_energy, se)
+
         return self.e_mp2
 
     def init_gf(self):
