@@ -379,8 +379,9 @@ class SelfEnergy(AuxiliarySpace):
         ngf, nse = n
         se = self
 
+        #TODO: this should probably be a copy, but may be expensive?
         if nse is None and ngf is None:
-            raise ValueError('SelfEnergy.compress n=%s' % n)
+            return se
 
         if nse is not None:
             se = compress_via_se(se, n=nse)
@@ -415,7 +416,7 @@ class GreensFunction(AuxiliarySpace):
 
         e_shifted = self.energy - self.chempot
         v = self.coupling
-        spectrum = np.zeros((grid.size, self.nphys, self.nphys), dtype=float)
+        spectrum = np.zeros((grid.size, self.nphys, self.nphys), dtype=complex)
         blksize = 240 #NOTE option for the block size?
 
         p1 = 0
@@ -555,7 +556,7 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
         v = v[:,mask]
         return w, v, 0
 
-    conv, w, v = util.davidson(matvec, guess, diag, tol=tol, nroots=nroots,
+    conv, w, v = lib.davidson1(matvec, guess, diag, tol=tol, nroots=nroots,
                                max_space=ntrial, max_cycle=maxiter, pick=pick)
 
     if not np.all(conv):
@@ -703,7 +704,7 @@ def _build_projector(se, phys, n=0, tol=1e-12):
     w, v = se.eig(phys)
 
     def _part(w, v, s):
-        en = e[s][None] ** np.arange(n+1)[:,None]
+        en = w[s][None] ** np.arange(n+1)[:,None]
         v = v[:,s]
         p = np.einsum('xi,pi,ni->xpn', v[nphys:], v[:nphys], en)
         return p.reshape(naux, nphys*(n+1))
@@ -712,13 +713,14 @@ def _build_projector(se, phys, n=0, tol=1e-12):
                    _part(w, v, w >= se.chempot)))
 
     norm = np.linalg.norm(p, axis=0, keepdims=True)
-    n[np.absolute(n) == 0] = 1./LARGE_DENOM
+    norm[np.absolute(norm) == 0] = 1./LARGE_DENOM
 
     p /= norm
     w, p = np.linalg.eigh(np.dot(p, p.T))
     p = p[:, w > tol]
+    nvec = p.shape[1]
 
-    p = np.block([[np.eye(nphys), np.zeros((nphys, naux))],
+    p = np.block([[np.eye(nphys), np.zeros((nphys, nvec))],
                   [np.zeros((naux, nphys)), p]])
 
     return p
@@ -735,8 +737,8 @@ def _compress_via_gf(se, phys, n=0, tol=1e-12):
     h_tilde = np.dot(p.T, se.dot(phys, p))
     p = None
 
-    e, v = util.eigh(h_tilde[nphys:,nphys:])
-    v = np.dot(h[:nphys,nphys:], v)
+    e, v = np.linalg.eigh(h_tilde[nphys:,nphys:])
+    v = np.dot(h_tilde[:nphys,nphys:], v)
 
     return e, v
 
