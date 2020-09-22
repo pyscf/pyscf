@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
     def test_ea_adc3(self):
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-#        self.assertAlmostEqual(e, -0.2107769014592799, 6)
+        self.assertAlmostEqual(e, -0.2107769014592799, 6)
 
         myadcip = adc.radc.RADCIP(myadc) 
         e,v,p = myadcip.kernel(nroots=4)
