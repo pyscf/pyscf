@@ -34,7 +34,7 @@ from pyscf.agf2.ragf2 import _get_blksize, _cholesky_build
 BLKMIN = getattr(__config__, 'agf2_dfragf2_blkmin', 1)
 
 
-def build_se_part(agf2, eri, gf_occ, gf_vir):
+def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ''' Builds either the auxiliaries of the occupied self-energy,
         or virtual if :attr:`gf_occ` and :attr:`gf_vir` are swapped.
 
@@ -45,6 +45,14 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
             Occupied Green's function
         gf_vir : GreensFunction
             Virtual Green's function
+
+    Kwargs:
+        os_factor : float
+            Opposite-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
+        ss_factor : float
+            Same-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
 
     Returns:
         :class:`SelfEnergy`
@@ -72,6 +80,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     vv = np.zeros((nmo, nmo))
     vev = np.zeros((nmo, nmo))
 
+    fpos = os_factor + ss_factor
+    fneg = -ss_factor
+
     eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
     eja = eja.ravel()
 
@@ -85,13 +96,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
 
         eija = eja + gf_occ.energy[i]
 
-        vv = lib.dot(xija, xija.T, alpha=2, beta=1, c=vv)
-        vv = lib.dot(xija, xjia.T, alpha=-1, beta=1, c=vv)
+        vv = lib.dot(xija, xija.T, alpha=fpos, beta=1, c=vv)
+        vv = lib.dot(xija, xjia.T, alpha=fneg, beta=1, c=vv)
 
         exija = xija * eija[None]
 
-        vev = lib.dot(exija, xija.T, alpha=2, beta=1, c=vev)
-        vev = lib.dot(exija, xjia.T, alpha=-1, beta=1, c=vev)
+        vev = lib.dot(exija, xija.T, alpha=fpos, beta=1, c=vev)
+        vev = lib.dot(exija, xjia.T, alpha=fneg, beta=1, c=vev)
 
     e, c = _cholesky_build(vv, vev, gf_occ, gf_vir)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
@@ -228,16 +239,6 @@ class DFRAGF2(ragf2.RAGF2):
         gf : GreensFunction
             Auxiliaries of the Green's function
     '''
-
-    conv_tol = getattr(__config__, 'agf2_dfragf2_DFRAGF2_conv_tol', 1e-7)
-    conv_tol_rdm1 = getattr(__config__, 'agf2_dfragf2_DFRAGF2_conv_tol_rdm1', 1e-6)
-    conv_tol_nelec = getattr(__config__, 'agf2_dfragf2_DFRAGF2_conv_tol_nelec', 1e-6)
-    max_cycle = getattr(__config__, 'agf2_dfragf2_DFRAGF2_max_cycle', 50)
-    max_cycle_outer = getattr(__config__, 'agf2_dfragf2_DFRAGF2_max_cycle_outer', 20)
-    max_cycle_inner = getattr(__config__, 'agf2_dfragf2_DFRAGF2_max_cycle_inner', 50)
-    weight_tol = getattr(__config__, 'agf2_dfragf2_DFRAGF2_weight_tol', 1e-11)
-    diis_space = getattr(__config__, 'agf2_dfragf2_DFRAGF2_diis_space', 6)
-    diis_min_space = getattr(__config__, 'agf2_dfragf2_DFRAGF2_diis_min_space', 1)
 
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         ragf2.RAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,

@@ -34,7 +34,7 @@ from pyscf.agf2.ragf2 import _get_blksize, _cholesky_build
 BLKMIN = getattr(__config__, 'agf2_dfuragf2_blkmin', 1)
 
 
-def build_se_part(agf2, eri, gf_occ, gf_vir):
+def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ''' Builds either the auxiliaries of the occupied self-energy,
         or virtual if :attr:`gf_occ` and :attr:`gf_vir` are swapped.
 
@@ -45,6 +45,14 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
             Occupied Green's function
         gf_vir : GreensFunction
             Virtual Green's function
+
+    Kwargs:
+        os_factor : float
+            Opposite-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
+        ss_factor : float
+            Same-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
 
     Returns:
         :class:`SelfEnergy`
@@ -63,6 +71,10 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     noccb, nvirb = gf_occ[1].naux, gf_vir[1].naux
     naux = agf2.with_df.get_naoaux()
     tol = agf2.weight_tol
+
+    fposa = ss_factor
+    fnega = -ss_factor
+    fposb = os_factor
 
     qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
 
@@ -106,16 +118,16 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
             eija_aa = eja_a + gfo_a.energy[i]
             eija_ab = eja_b + gfo_a.energy[i]
 
-            vv = lib.dot(xija_aa, xija_aa.T, alpha=1, beta=1, c=vv)
-            vv = lib.dot(xija_aa, xjia_aa.T, alpha=-1, beta=1, c=vv)
-            vv = lib.dot(xija_ab, xija_ab.T, alpha=1, beta=1, c=vv)
+            vv = lib.dot(xija_aa, xija_aa.T, alpha=fposa, beta=1, c=vv)
+            vv = lib.dot(xija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vv)
+            vv = lib.dot(xija_ab, xija_ab.T, alpha=fposb, beta=1, c=vv)
 
             exija_aa = xija_aa * eija_aa[None]
             exija_ab = xija_ab * eija_ab[None]
 
-            vev = lib.dot(exija_aa, xija_aa.T, alpha=1, beta=1, c=vev)
-            vev = lib.dot(exija_aa, xjia_aa.T, alpha=-1, beta=1, c=vev)
-            vev = lib.dot(exija_ab, xija_ab.T, alpha=1, beta=1, c=vev)
+            vev = lib.dot(exija_aa, xija_aa.T, alpha=fposa, beta=1, c=vev)
+            vev = lib.dot(exija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vev)
+            vev = lib.dot(exija_ab, xija_ab.T, alpha=fposb, beta=1, c=vev)
 
         e, c = _cholesky_build(vv, vev, gfo_a, gfv_a)
         se = aux.SelfEnergy(e, c, chempot=gfo_a.chempot)
@@ -186,16 +198,6 @@ class DFUAGF2(uagf2.UAGF2):
         gf : tuple of GreensFunction 
             Auxiliaries of the Green's function for each spin
     '''
-
-    conv_tol = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_conv_tol', 1e-7)
-    conv_tol_rdm1 = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_conv_tol_rdm1', 1e-6)
-    conv_tol_nelec = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_conv_tol_nelec', 1e-6)
-    max_cycle = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_max_cycle', 50)
-    max_cycle_outer = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_max_cycle_outer', 20)
-    max_cycle_inner = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_max_cycle_inner', 50)
-    weight_tol = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_weight_tol', 1e-11)
-    diis_space = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_diis_space', 6)
-    diis_min_space = getattr(__config__, 'agf2_dfuagf2_DFUAGF2_diis_min_space', 1)
 
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         uagf2.UAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,

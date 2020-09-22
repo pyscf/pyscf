@@ -36,7 +36,7 @@ from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 BLKMIN = getattr(__config__, 'agf2_uagf2_blkmin', 1)
 
 
-def build_se_part(agf2, eri, gf_occ, gf_vir):
+def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ''' Builds either the auxiliaries of the occupied self-energy,
         or virtual if :attr:`gf_occ` and :attr:`gf_vir` are swapped,
         for a single spin.
@@ -48,6 +48,14 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
             Occupied Green's function for each spin
         gf_vir : tuple of GreensFunction
             Virtual Green's function for each spin
+
+    Kwargs:
+        os_factor : float
+            Opposite-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
+        ss_factor : float
+            Same-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
 
     Returns:
         :class:`SelfEnergy`
@@ -65,6 +73,10 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     assert type(gf_vir[1]) is aux.GreensFunction
 
     tol = agf2.weight_tol
+
+    fposa = ss_factor
+    fnega = -ss_factor
+    fposb = os_factor
 
     def _build_se_part_spin(spin=0):
         ''' Perform the build for a single spin
@@ -107,16 +119,16 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
             eija_aa = eja_a + gfo_a.energy[i]
             eija_ab = eja_b + gfo_a.energy[i]
 
-            vv = lib.dot(xija_aa, xija_aa.T, alpha=1, beta=1, c=vv)
-            vv = lib.dot(xija_aa, xjia_aa.T, alpha=-1, beta=1, c=vv)
-            vv = lib.dot(xija_ab, xija_ab.T, alpha=1, beta=1, c=vv)
+            vv = lib.dot(xija_aa, xija_aa.T, alpha=fposa, beta=1, c=vv)
+            vv = lib.dot(xija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vv)
+            vv = lib.dot(xija_ab, xija_ab.T, alpha=fposb, beta=1, c=vv)
 
             exija_aa = xija_aa * eija_aa[None]
             exija_ab = xija_ab * eija_ab[None]
 
-            vev = lib.dot(exija_aa, xija_aa.T, alpha=1, beta=1, c=vev)
-            vev = lib.dot(exija_aa, xjia_aa.T, alpha=-1, beta=1, c=vev)
-            vev = lib.dot(exija_ab, xija_ab.T, alpha=1, beta=1, c=vev)
+            vev = lib.dot(exija_aa, xija_aa.T, alpha=fposa, beta=1, c=vev)
+            vev = lib.dot(exija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vev)
+            vev = lib.dot(exija_ab, xija_ab.T, alpha=fposb, beta=1, c=vev)
 
         e, c = ragf2._cholesky_build(vv, vev, gfo_a, gfv_a)
         se = aux.SelfEnergy(e, c, chempot=gfo_a.chempot)
@@ -371,6 +383,12 @@ class UAGF2(ragf2.RAGF2):
             DIIS space size for Fock loop iterations. Default value is 6.
         diis_min_space : 
             Minimum space of DIIS. Default value is 1.
+        os_factor : float
+            Opposite-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
+        ss_factor : float
+            Same-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
 
     Saved results
 
@@ -391,16 +409,6 @@ class UAGF2(ragf2.RAGF2):
         gf : tuple of GreensFunction 
             Auxiliaries of the Green's function for each spin
     '''
-
-    conv_tol = getattr(__config__, 'agf2_uagf2_UAGF2_conv_tol', 1e-7)
-    conv_tol_rdm1 = getattr(__config__, 'agf2_uagf2_UAGF2_conv_tol_rdm1', 1e-6)
-    conv_tol_nelec = getattr(__config__, 'agf2_uagf2_UAGF2_conv_tol_nelec', 1e-6)
-    max_cycle = getattr(__config__, 'agf2_uagf2_UAGF2_max_cycle', 50)
-    max_cycle_outer = getattr(__config__, 'agf2_uagf2_UAGF2_max_cycle_outer', 20)
-    max_cycle_inner = getattr(__config__, 'agf2_uagf2_UAGF2_max_cycle_inner', 50)
-    weight_tol = getattr(__config__, 'agf2_uagf2_UAGF2_weight_tol', 1e-11)
-    diis_space = getattr(__config__, 'agf2_uagf2_UAGF2_diis_space', 6)
-    diis_min_space = getattr(__config__, 'agf2_uagf2_UAGF2_diis_min_space', 1)
 
     energy_1body = energy_1body
     energy_2body = energy_2body
@@ -435,7 +443,7 @@ class UAGF2(ragf2.RAGF2):
         '''
 
         if gf is None: gf = self.gf
-        if gf is None: gf = self.init_aux(with_se=False)[0]
+        if gf is None: gf = self.init_gf()
 
         rdm1_a = gf[0].make_rdm1(occupancy=1)
         rdm1_b = gf[1].make_rdm1(occupancy=1)
@@ -451,31 +459,25 @@ class UAGF2(ragf2.RAGF2):
 
         return get_fock(self, eri, gf=gf, rdm1=rdm1)
 
-    def energy_mp2(self, gf=None, se=None):
-        if gf is None and se is None: gf, se = self.init_aux()
-        if gf is None: gf = self.init_aux(with_se=False)[0]
-        if se is None: se = self.build_se(gf=gf)
-        self.e_mp2 = energy_mp2(self, gf, se)
+    def energy_mp2(self, mo_energy=None, se=None):
+        if mo_energy is None: mo_energy = self.mo_energy
+        if se is None: se = self.build_se(gf=self.gf)
+        self.e_mp2 = energy_mp2(self, mo_energy, se)
         return self.e_mp2
 
-    def init_aux(self, eri=None, with_se=True):
+    def init_gf(self):
         ''' Builds the Hartree-Fock Green's function.
-
-        Kwargs:
-            eri : _ChemistsERIs
-                Electronic repulsion integrals
 
         Returns:
             tuple of :class:`GreensFunction`, tuple of :class:`SelfEnergy`
         '''
 
-        if eri is None: eri = self.ao2mo()
-
-        focka, fockb = eri.fock
         nmoa, nmob = self.nmo
         nocca, noccb = self.nocc
 
         mo_energy = _mo_energy_without_core(self, self.mo_energy)
+        focka = np.diag(mo_energy[0])
+        fockb = np.diag(mo_energy[1])
 
         cpt_a = binsearch_chempot(focka, nmoa, nocca, occupancy=1)[0]
         cpt_b = binsearch_chempot(fockb, nmob, noccb, occupancy=1)[1]
@@ -485,12 +487,7 @@ class UAGF2(ragf2.RAGF2):
 
         gf = (gf_a, gf_b)
 
-        if with_se:
-            se = self.build_se(eri, gf)
-        else:
-            se = None
-
-        return gf, se
+        return gf
 
     def build_gf(self, eri=None, gf=None, se=None):
         ''' Builds the auxiliaries of the Green's functions by solving
@@ -508,9 +505,9 @@ class UAGF2(ragf2.RAGF2):
             tuple of :class:`GreensFunction`
         '''
 
-        if gf is None: return self.init_aux(eri, with_se=False)[0]
-
         if eri is None: eri = self.ao2mo()
+        if gf is None: gf = self.gf
+        if gf is None: gf = self.init_gf()
         if se is None: se = self.build_se(eri, gf)
 
         focka, fockb = self.get_fock(eri, gf)
@@ -520,7 +517,7 @@ class UAGF2(ragf2.RAGF2):
 
         return (gf_a, gf_b)
 
-    def build_se(self, eri=None, gf=None):
+    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None):
         ''' Builds the auxiliaries of the self-energy.
 
         Args:
@@ -529,19 +526,31 @@ class UAGF2(ragf2.RAGF2):
             gf : tuple of GreensFunction
                 Auxiliaries of the Green's function
 
+        Kwargs:
+            os_factor : float
+                Opposite-spin factor for spin-component-scaled (SCS)
+                calculations. Default 1.0
+            ss_factor : float
+                Same-spin factor for spin-component-scaled (SCS)
+                calculations. Default 1.0
+
         Returns
             :class:`SelfEnergy`
         '''
 
         if eri is None: eri = self.ao2mo()
         if gf is None: gf = self.gf
-        if gf is None: gf = self.init_aux(eri, with_se=False)[0]
+        if gf is None: gf = self.init_gf()
 
+        if os_factor is None: os_factor = self.os_factor
+        if ss_factor is None: ss_factor = self.ss_factor
+
+        facs = dict(os_factor=os_factor, ss_factor=ss_factor)
         gf_occ = (gf[0].get_occupied(), gf[1].get_occupied())
         gf_vir = (gf[0].get_virtual(), gf[1].get_virtual())
 
-        se_occ = self.build_se_part(eri, gf_occ, gf_vir)
-        se_vir = self.build_se_part(eri, gf_vir, gf_occ)
+        se_occ = self.build_se_part(eri, gf_occ, gf_vir, **facs)
+        se_vir = self.build_se_part(eri, gf_vir, gf_occ, **facs)
 
         se_a = aux.combine(se_occ[0], se_vir[0])
         se_b = aux.combine(se_occ[1], se_vir[1])
@@ -567,7 +576,7 @@ class UAGF2(ragf2.RAGF2):
     def get_ip(self, gf, nroots=1):
         gf_occ = aux.combine(gf[0].get_occupied(), gf[1].get_occupied())
         e_ip = list(-gf_occ.energy[-nroots:])[::-1]
-        v_ip = list(gf_occ.coupling[:,-nroots:])[::-1]
+        v_ip = list(gf_occ.coupling[:,-nroots:].T)[::-1]
         return e_ip, v_ip
 
     def get_ea(self, gf, nroots=1):
@@ -686,7 +695,7 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     eris._common_init_(agf2, mo_coeff)
 
     mol = agf2.mol
-    moa = np.asarary(eris.mo_coeff[0], order='F')
+    moa = np.asarray(eris.mo_coeff[0], order='F')
     mob = np.asarray(eris.mo_coeff[1], order='F')
     nao, nmoa = moa.shape
     nao, nmob = mob.shape
@@ -703,7 +712,7 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     eris.eri_ba = eris.feri['mo/ba']
     eris.eri_bb = eris.feri['mo/bb']
 
-    eris.eri = ((eri_aa, eri_ab), (eri_ba, eri_bb))
+    eris.eri = ((eris.eri_aa, eris.eri_ab), (eris.eri_ba, eris.eri_bb))
 
     return eris
 
@@ -759,7 +768,7 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=None):
 
     return qeri
 
-def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
+def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
     ''' Returns nested tuple of H5 dataset
 
     spin = None: ((aaaa, aabb), (bbaa, bbbb))
@@ -772,7 +781,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     nmoa, nmob = agf2.nmo
-    npaira, npairb = nmo*(nmo+1)//2, nmob*(nmob+1)//2
+    npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia = cja = gf_occ[0].coupling
     cib = cjb = gf_occ[1].coupling
     caa, cab = gf_vir[0].coupling, gf_vir[1].coupling
@@ -793,7 +802,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
         eri.feri.create_dataset('qmo/ab', (nmoa, nia, njb, nab), 'f8')
 
         blksize = _get_blksize(agf2.max_memory, (nmoa**3, nmoa*nja*naa),
-                                                (nmoa*nmob**2+nmoa*njb*nab))
+                                                (nmoa*nmob**2, nmoa*njb*nab))
         blksize = min(nmoa, max(BLKMIN, blksize))
         log.debug1('blksize = %d', blksize)
 
@@ -843,7 +852,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
 
             jasym_ba, nja_ba, cja_ba, sja_ba = ao2mo.incore._conc_mos(cja, caa)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_ba, sja_ba, 's2kl', 's1')
-            buf = buf.reshape(p1-p0, nmob, njb, nab)
+            buf = buf.reshape(p1-p0, nmob, nja, naa)
 
             buf = lib.einsum('xpja,pi->xija', buf, cib)
             eri.feri['qmo/ba'][p0:p1] = np.asarray(buf, order='C')

@@ -77,7 +77,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
     
-    qeri = _make_mo_eris_incore(agf2, eri, gf_occ, gf_vir)
+    qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
 
     p1 = 0
     for i in range(nocc):
@@ -162,16 +162,6 @@ class RAGF2(ragf2.RAGF2):
             Auxiliaries of the Green's function
     '''
 
-    conv_tol = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol', 1e-7)
-    conv_tol_rdm1 = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_rdm1', 1e-6)
-    conv_tol_nelec = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_nelec', 1e-6)
-    max_cycle = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle', 50)
-    max_cycle_outer = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_outer', 20)
-    max_cycle_inner = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_inner', 50)
-    weight_tol = getattr(__config__, 'agf2_ragf2_RAGF2_weight_tol', 1e-11)
-    diis_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_space', 6)
-    diis_min_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_min_space', 1)
-
     def __init__(self, mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         ragf2.RAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,
@@ -183,7 +173,7 @@ class RAGF2(ragf2.RAGF2):
 
     build_se_part = build_se_part
 
-    def build_se(self, eri=None, gf=None):
+    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None):
         ''' Builds the auxiliaries of the self-energy.
 
         Args:
@@ -192,25 +182,41 @@ class RAGF2(ragf2.RAGF2):
             gf : GreensFunction
                 Auxiliaries of the Green's function
 
+        Kwargs:
+            os_factor : float
+                Opposite-spin factor for spin-component-scaled (SCS)
+                calculations. Default 1.0
+            ss_factor : float
+                Same-spin factor for spin-component-scaled (SCS)
+                calculations. Default 1.0
+
         Returns:
             :class:`SelfEnergy`
         '''
 
         if eri is None: eri = self.ao2mo()
         if gf is None: gf = self.gf
-        if gf is None: gf = self.init_aux(eri, with_se=False)[0]
+        if gf is None: gf = self.init_gf()
 
+        fock = None
+        if self.nmom[0] != None:
+            fock = self.get_fock(eri=eri, gf=gf)
+
+        if os_factor is None: os_factor = self.os_factor
+        if ss_factor is None: ss_factor = self.ss_factor
+
+        facs = dict(os_factor=os_factor, ss_factor=ss_factor)
         gf_occ = gf.get_occupied()
         gf_vir = gf.get_virtual()
 
-        se_occ = self.build_se_part(eri, gf_occ, gf_vir)
-        se_occ = se_occ.compress((None, self.nmom[1]))
+        se_occ = self.build_se_part(eri, gf_occ, gf_vir, **facs)
+        se_occ = se_occ.compress(n=(None, self.nmom[1]))
 
-        se_vir = self.build_se_part(eri, gf_vir, gf_occ)
-        se_vir = se_vir.compress((None, self.nmom[1]))
+        se_vir = self.build_se_part(eri, gf_vir, gf_occ, **facs)
+        se_vir = se_vir.compress(n=(None, self.nmom[1]))
 
         se = aux.combine(se_vir, se_occ)
-        se = se.compress((self.nmom[0], None))
+        se = se.compress(phys=fock, n=(self.nmom[0], None))
 
         return se
 

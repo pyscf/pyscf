@@ -41,6 +41,7 @@ BLKMIN = getattr(__config__, 'agf2_ragf2_blkmin', 1)
 #TODO: do we really want to store the self-energy? if we do above we can remove both RAGF2.gf and RAGF2.se
 #TODO: scs
 #TODO: damping
+#TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
 
 
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
@@ -49,24 +50,23 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
     cput1 = cput0 = (time.clock(), time.time())
     name = agf2.__class__.__name__
 
-    if eri is None:
-        eri = agf2.ao2mo()
-
-    if verbose is None:
-        verbose = agf2.verbose
+    if eri is None: eri = agf2.ao2mo()
+    if gf is None: gf = self.gf
+    if se is None: se = self.se
+    if verbose is None: verbose = agf2.verbose
 
     gf = _dict_to_aux(gf, obj=aux.GreensFunction)
     se = _dict_to_aux(se, obj=aux.SelfEnergy)
 
     if gf is None:
-        gf = agf2.init_aux(eri, with_se=False)
+        gf = agf2.init_gf()
 
     if se is None:
         se = agf2.build_se(eri, gf)
 
     #NOTE: should we even print/store e_mp2, or name it something else? this is
     # quite a bit off of the real E(mp2) at (None,0)...
-    e_mp2 = agf2.energy_mp2(gf, se)
+    e_mp2 = agf2.energy_mp2(agf2.mo_energy, se)
     log.info('E(MP2) = %.16g  E_corr(MP2) = %.16g', e_mp2+eri.e_hf, e_mp2)
 
     e_prev = e_1b = e_2b = 0.0
@@ -103,7 +103,7 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
     return converged, e_1b, e_2b, gf, se
 
 
-def build_se_part(agf2, eri, gf_occ, gf_vir):
+def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ''' Builds either the auxiliaries of the occupied self-energy,
         or virtual if :attr:`gf_occ` and :attr:`gf_vir` are swapped.
     
@@ -114,6 +114,14 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
             Occupied Green's function
         gf_vir : GreensFunction
             Virtual Green's function
+
+    Kwargs:
+        os_factor : float
+            Opposite-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
+        ss_factor : float
+            Same-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
 
     Returns:
         :class:`SelfEnergy`
@@ -139,6 +147,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
     vv = np.zeros((nmo, nmo))
     vev = np.zeros((nmo, nmo))
 
+    fpos = os_factor + ss_factor
+    fneg = -ss_factor
+
     eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
     eja = eja.ravel()
 
@@ -149,13 +160,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir):
 
         eija = eja + gf_occ.energy[i]
 
-        vv = lib.dot(xija, xija.T, alpha=2, beta=1, c=vv)
-        vv = lib.dot(xija, xjia.T, alpha=-1, beta=1, c=vv)
+        vv = lib.dot(xija, xija.T, alpha=fpos, beta=1, c=vv)
+        vv = lib.dot(xija, xjia.T, alpha=fneg, beta=1, c=vv)
 
         exija = xija * eija[None]
 
-        vev = lib.dot(exija, xija.T, alpha=2, beta=1, c=vev)
-        vev = lib.dot(exija, xjia.T, alpha=-1, beta=1, c=vev)
+        vev = lib.dot(exija, xija.T, alpha=fpos, beta=1, c=vev)
+        vev = lib.dot(exija, xjia.T, alpha=fneg, beta=1, c=vev)
 
     e, c = _cholesky_build(vv, vev, gf_occ, gf_vir)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
@@ -432,7 +443,7 @@ def energy_2body(agf2, gf, se):
     return np.ravel(e2b.real)[0] #NOTE: i've had some problems with some einsum implementations not returning scalars... worth doing ravel()[0]?
 
 
-def energy_mp2(agf2, gf, se):
+def energy_mp2(agf2, mo_energy, se):
     ''' Calculates the two-body energy using analytically integrated
         Galitskii-Migdal formula for an MP2 self-energy. Per the
         definition of one- and two-body partitioning in the Dyson
@@ -448,15 +459,13 @@ def energy_mp2(agf2, gf, se):
         MP2 energy
     '''
 
-    assert type(gf) is aux.GreensFunction
     assert type(se) is aux.SelfEnergy
 
-    mo = gf.energy
-    occ = mo < gf.chempot
+    occ = mo_energy < se.chempot
     se_vir = se.get_virtual()
 
     vxk = se_vir.coupling[occ]
-    dxk = lib.direct_sum('x,k->xk', mo[occ], -se_vir.energy)
+    dxk = lib.direct_sum('x,k->xk', mo_energy[occ], -se_vir.energy)
 
     emp2 = lib.einsum('xk,xk,xk->', vxk, vxk.conj(), 1./dxk)
 
@@ -494,6 +503,12 @@ class RAGF2(lib.StreamObject):
             DIIS space size for Fock loop iterations. Default value is 6.
         diis_min_space : 
             Minimum space of DIIS. Default value is 1.
+        os_factor : float
+            Opposite-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
+        ss_factor : float
+            Same-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
 
     Saved results
 
@@ -515,16 +530,6 @@ class RAGF2(lib.StreamObject):
             Auxiliaries of the Green's function
     '''
 
-    conv_tol = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol', 1e-7)
-    conv_tol_rdm1 = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_rdm1', 1e-6)
-    conv_tol_nelec = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_nelec', 1e-6)
-    max_cycle = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle', 50)
-    max_cycle_outer = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_outer', 20)
-    max_cycle_inner = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_inner', 50)
-    weight_tol = getattr(__config__, 'agf2_ragf2_RAGF2_weight_tol', 1e-11)
-    diis_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_space', 6)
-    diis_min_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_min_space', 1)
-
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         if mo_energy is None: mo_energy = mf.mo_energy
@@ -536,6 +541,18 @@ class RAGF2(lib.StreamObject):
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
+
+        self.conv_tol = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol', 1e-7)
+        self.conv_tol_rdm1 = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_rdm1', 1e-6)
+        self.conv_tol_nelec = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_nelec', 1e-6)
+        self.max_cycle = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle', 50)
+        self.max_cycle_outer = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_outer', 20)
+        self.max_cycle_inner = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_inner', 50)
+        self.weight_tol = getattr(__config__, 'agf2_ragf2_RAGF2_weight_tol', 1e-11)
+        self.diis_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_space', 6)
+        self.diis_min_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_min_space', 1)
+        self.os_factor = getattr(__config__, 'agf2_os_factor', 1.0)
+        self.ss_factor = getattr(__config__, 'agf2_ss_factor', 1.0)
 
         self.mo_energy = mo_energy
         self.mo_coeff = mo_coeff
@@ -562,6 +579,10 @@ class RAGF2(lib.StreamObject):
         ''' Get the electronic repulsion integrals in MO basis.
         '''
 
+        # happens when e.g. restarting from chkfile
+        if self._scf._eri is None and self._scf._is_mem_enough():
+            self._scf._eri = self.mol.intor('int2e', aosym='s8')
+
         mem_incore = ((self.nmo*(self.nmo+1)//2)**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
@@ -585,7 +606,7 @@ class RAGF2(lib.StreamObject):
         '''
 
         if gf is None: gf = self.gf
-        if gf is None: gf = self.init_aux(with_se=False)[0]
+        if gf is None: gf = self.init_gf()
 
         return gf.make_rdm1()
 
@@ -598,38 +619,25 @@ class RAGF2(lib.StreamObject):
 
         return get_fock(self, eri, gf=gf, rdm1=rdm1)
 
-    def energy_mp2(self, gf=None, se=None):
-        if gf is None and se is None: gf, se = self.init_aux()
-        if gf is None: gf = self.init_aux(with_se=False)[0]
-        if se is None: se = self.build_se(gf=gf)
-        self.e_mp2 = energy_mp2(self, gf, se)
+    def energy_mp2(self, mo_energy=None, se=None):
+        if mo_energy is None: mo_energy = self.mo_energy
+        if se is None: se = self.build_se(gf=self.gf)
+        self.e_mp2 = energy_mp2(self, mo_energy, se)
         return self.e_mp2
 
-    def init_aux(self, eri=None, with_se=True):
+    def init_gf(self):
         ''' Builds the Hartree-Fock Green's function.
-
-        Kwargs:
-            eri : _ChemistsERIs
-                Electronic repulsion integrals
 
         Returns:
             :class:`GreensFunction`, :class:`SelfEnergy`
         '''
 
-        if eri is None: eri = self.ao2mo()
-
         mo_energy = _mo_energy_without_core(self, self.mo_energy)
-
-        chempot = binsearch_chempot(eri.fock, self.nmo, self.nocc*2)[0]
+        chempot = binsearch_chempot(np.diag(mo_energy), self.nmo, self.nocc*2)[0]
 
         gf = aux.GreensFunction(mo_energy, np.eye(self.nmo), chempot=chempot)
 
-        if with_se:
-            se = self.build_se(eri, gf)
-        else:
-            se = None
-
-        return gf, se
+        return gf
 
     def build_gf(self, eri=None, gf=None, se=None):
         ''' Builds the auxiliaries of the Green's function by solving
@@ -647,16 +655,16 @@ class RAGF2(lib.StreamObject):
             :class:`GreensFunction`
         '''
 
-        if gf is None: return self.init_aux(eri, with_se=False)[0]
-
         if eri is None: eri = self.ao2mo()
+        if gf is None: gf = self.gf
+        if gf is None: gf = self.init_gf()
         if se is None: se = self.build_se(eri, gf)
 
         fock = self.get_fock(eri, gf)
 
         return se.get_greens_function(fock)
 
-    def build_se(self, eri=None, gf=None):
+    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None):
         ''' Builds the auxiliaries of the self-energy.
 
         Args:
@@ -665,19 +673,31 @@ class RAGF2(lib.StreamObject):
             gf : GreensFunction
                 Auxiliaries of the Green's function
 
+        Kwargs:
+            os_factor : float
+                Opposite-spin factor for spin-component-scaled (SCS)
+                calculations. Default 1.0
+            ss_factor : float
+                Same-spin factor for spin-component-scaled (SCS)
+                calculations. Default 1.0
+
         Returns:
             :class:`SelfEnergy`
         '''
 
         if eri is None: eri = self.ao2mo()
         if gf is None: gf = self.gf
-        if gf is None: gf = self.init_aux(eri, with_se=False)[0]
+        if gf is None: gf = self.init_gf()
 
+        if os_factor is None: os_factor = self.os_factor
+        if ss_factor is None: ss_factor = self.ss_factor
+
+        facs = dict(os_factor=os_factor, ss_factor=ss_factor)
         gf_occ = gf.get_occupied()
         gf_vir = gf.get_virtual()
 
-        se_occ = self.build_se_part(eri, gf_occ, gf_vir)
-        se_vir = self.build_se_part(eri, gf_vir, gf_occ)
+        se_occ = self.build_se_part(eri, gf_occ, gf_vir, **facs)
+        se_vir = self.build_se_part(eri, gf_vir, gf_occ, **facs)
 
         se = aux.combine(se_occ, se_vir)
 
@@ -737,14 +757,17 @@ class RAGF2(lib.StreamObject):
             self.check_sanity()
         self.dump_flags()
 
-        if eri is None:
-            eri = self.ao2mo()
+        if eri is None: eri = self.ao2mo()
+        if gf is None: gf = self.gf
+        if se is None: se = self.se
 
-        if gf is None and se is None:
-            gf, se = self.init_aux(eri)
-        elif gf is None:
-            gf = self.init_aux(eri, with_se=False)[0]
-        else:
+        gf = _dict_to_aux(gf, obj=aux.GreensFunction)
+        se = _dict_to_aux(se, obj=aux.SelfEnergy)
+
+        if gf is None:
+            gf = self.init_gf()
+
+        if se is None:
             se = self.build_se(eri, gf)
 
         self.converged, self.e_1b, self.e_2b, self.gf, self.se = \
@@ -754,7 +777,7 @@ class RAGF2(lib.StreamObject):
 
         return self.converged, self.e_1b, self.e_2b, self.gf, self.se
 
-    def dump_chk(self, gf=None, se=None, mo_energy=None, mo_coeff=None, mo_occ=None):
+    def dump_chk(self, gf=None, se=None, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         if not self.chkfile:
             return self
 
@@ -774,8 +797,11 @@ class RAGF2(lib.StreamObject):
                      'frozen': frozen,
         }
 
-        if self.gf is not None: agf2_chk['gf'] = _aux_to_dict(gf)
-        if self.se is not None: agf2_chk['se'] = _aux_to_dict(se)
+        if gf is None: gf = self.gf
+        if se is None: se = self.se
+
+        if gf is not None: agf2_chk['gf'] = _aux_to_dict(gf)
+        if se is not None: agf2_chk['se'] = _aux_to_dict(se)
 
         if self._nmo is not None: agf2_chk['_nmo'] = self._nmo
         if self._nocc is not None: agf2_chk['_nocc'] = self._nocc
@@ -823,7 +849,7 @@ class RAGF2(lib.StreamObject):
 
         for n, en, vn in zip(range(nroots), e_ip, v_ip):
             qpwt = np.linalg.norm(vn)**2
-            logger.info(self, 'IP root %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
+            logger.note(self, 'IP root %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
 
         if nroots == 1:
             return e_ip[0], v_ip[0]
@@ -849,7 +875,7 @@ class RAGF2(lib.StreamObject):
 
         for n, en, vn in zip(range(nroots), e_ea, v_ea):
             qpwt = np.linalg.norm(vn)**2
-            logger.info(self, 'EA root %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
+            logger.note(self, 'EA root %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
 
         if nroots == 1:
             return e_ea[0], v_ea[0]
@@ -899,8 +925,7 @@ def _dict_to_aux(aux, obj=aux.AuxiliarySpace):
 
     assert isinstance(aux, dict)
 
-    out = obj(None, None)
-    out.__dict__.update(aux)
+    out = obj(aux['energy'], aux['coupling'], chempot=aux['chempot'])
 
     return out
 
@@ -910,7 +935,7 @@ def _aux_to_dict(aux):
 
     # for compatibility with unrestricted
     if isinstance(aux, tuple):
-        return tuple(_aux_to_dict(a, obj=obj) for a in aux)
+        return tuple(_aux_to_dict(a) for a in aux)
 
     if isinstance(aux, dict):
         return aux
