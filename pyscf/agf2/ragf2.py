@@ -34,12 +34,12 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
 
 BLKMIN = getattr(__config__, 'agf2_ragf2_blkmin', 1)
 
-#TODO: test outcore and add incore_complete, also async_io??
+#TODO: test outcore and incore_complete
 #TODO: do we want MPI in this?
 #TODO: test frozen!!! do we have to rediagonalise Fock matrix?
 #TODO: do we want to store RAGF2.qmo_energy, RAGF2.qmo_coeff and RAGF2.qmo_occ at the end?
 #TODO: do we really want to store the self-energy? if we do above we can remove both RAGF2.gf and RAGF2.se
-#TODO: damping
+#TODO: damping?
 #TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
 
 
@@ -138,7 +138,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     mem_incore = (gf_occ.nphys*gf_occ.naux**2*gf_vir.naux) * 8/1e6
     mem_now = lib.current_memory()[0]
-    if (mem_incore+mem_now < agf2.max_memory):
+    if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
         qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
     else:
         qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir)
@@ -479,6 +479,8 @@ class RAGF2(lib.StreamObject):
             Print level. Default value equals to :class:`Mole.verbose`
         max_memory : float or int
             Allowed memory in MB. Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
         conv_tol : float
             Convergence threshold for AGF2 energy. Default value is 1e-7
         conv_tol_rdm1 : float
@@ -500,7 +502,7 @@ class RAGF2(lib.StreamObject):
             zero. Default 1e-11.
         diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        diis_min_space : 
+        diis_min_space : int
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)
@@ -529,6 +531,9 @@ class RAGF2(lib.StreamObject):
             Auxiliaries of the Green's function
     '''
 
+    async_io = getattr(__config__, 'agf2_async_io', True)
+    incore_complete = getattr(__config__, 'agf2_incore_complete', False)
+
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         if mo_energy is None: mo_energy = mf.mo_energy
@@ -540,16 +545,17 @@ class RAGF2(lib.StreamObject):
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
+        self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
-        self.conv_tol = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol', 1e-7)
-        self.conv_tol_rdm1 = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_rdm1', 1e-6)
-        self.conv_tol_nelec = getattr(__config__, 'agf2_ragf2_RAGF2_conv_tol_nelec', 1e-6)
-        self.max_cycle = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle', 50)
-        self.max_cycle_outer = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_outer', 20)
-        self.max_cycle_inner = getattr(__config__, 'agf2_ragf2_RAGF2_max_cycle_inner', 50)
-        self.weight_tol = getattr(__config__, 'agf2_ragf2_RAGF2_weight_tol', 1e-11)
-        self.diis_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_space', 6)
-        self.diis_min_space = getattr(__config__, 'agf2_ragf2_RAGF2_diis_min_space', 1)
+        self.conv_tol = getattr(__config__, 'agf2_conv_tol', 1e-7)
+        self.conv_tol_rdm1 = getattr(__config__, 'agf2_conv_tol_rdm1', 1e-6)
+        self.conv_tol_nelec = getattr(__config__, 'agf2_conv_tol_nelec', 1e-6)
+        self.max_cycle = getattr(__config__, 'agf2_max_cycle', 50)
+        self.max_cycle_outer = getattr(__config__, 'agf2_max_cycle_outer', 20)
+        self.max_cycle_inner = getattr(__config__, 'agf2_max_cycle_inner', 50)
+        self.weight_tol = getattr(__config__, 'agf2_weight_tol', 1e-11)
+        self.diis_space = getattr(__config__, 'agf2_diis_space', 6)
+        self.diis_min_space = getattr(__config__, 'agf2_diis_min_space', 1)
         self.os_factor = getattr(__config__, 'agf2_os_factor', 1.0)
         self.ss_factor = getattr(__config__, 'agf2_ss_factor', 1.0)
 
@@ -586,7 +592,7 @@ class RAGF2(lib.StreamObject):
         mem_now = lib.current_memory()[0]
 
         if (self._scf._eri is not None and 
-                (mem_incore+mem_now < self.max_memory)):
+                (mem_incore+mem_now < self.max_memory and not self.incore_complete)):
             eri = _make_mo_eris_incore(self)
         else:
             logger.warn(self, 'MO eris are outcore - this may be very '
@@ -956,7 +962,6 @@ class _ChemistsERIs:
     MO integrals stored in s4 symmetry, we only need QMO integrals
     in low-symmetry tensors and s4 is highest supported by _vhf
     '''
-    #NOTE: this is not exactly like rccsd._ChemistsERIs - should we rename it?
 
     def __init__(self, mol=None):
         self.mol = mol

@@ -61,8 +61,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
     #TODO: C code
-    #TODO: incorporate memory inside loop into the decision whether to use
-    # incore integrals and/or have outcore xija_aa, xija_ab, xjia_aa?
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
@@ -104,7 +102,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
         mem_incore = (nmoa*noa*(noa*nva+nob*nvb)) * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (mem_incore+mem_now < agf2.max_memory):
+        if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
             qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=spin) 
         else:
             qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=spin)
@@ -424,7 +422,7 @@ class UAGF2(ragf2.RAGF2):
         mem_now = lib.current_memory()[0]
 
         if (self._scf._eri is not None and
-                (mem_incore+mem_now < self.max_memory)):
+                (mem_incore+mem_now < self.max_memory and not self.incore_complete)):
             eri = _make_mo_eris_incore(self)
         else:
             logger.warn(self, 'MO eris are outcore - this may be very '
