@@ -221,6 +221,10 @@ class UAGF2(uagf2.UAGF2):
         if gf is None: gf = self.gf
         if gf is None: gf = self.init_gf()
 
+        focka = fockb = None
+        if self.nmom[1] != None:
+            focka, fockb = self.get_fock(eri=eri, gf=gf)
+
         if os_factor is None: os_factor = self.os_factor
         if ss_factor is None: ss_factor = self.ss_factor
 
@@ -229,18 +233,18 @@ class UAGF2(uagf2.UAGF2):
         gf_vir = (gf[0].get_virtual(), gf[1].get_virtual())
 
         se_occ = self.build_se_part(eri, gf_occ, gf_vir, **facs)
-        se_occ = (se_occ[0].compress((None, self.nmom[1])),
-                  se_occ[1].compress((None, self.nmom[1])))
+        se_occ = (se_occ[0].compress(n=(None, self.nmom[1])),
+                  se_occ[1].compress(n=(None, self.nmom[1])))
 
         se_vir = self.build_se_part(eri, gf_vir, gf_occ, **facs)
-        se_vir = (se_vir[0].compress((None, self.nmom[1])),
-                  se_vir[1].compress((None, self.nmom[1])))
+        se_vir = (se_vir[0].compress(n=(None, self.nmom[1])),
+                  se_vir[1].compress(n=(None, self.nmom[1])))
 
         se_a = aux.combine(se_occ[0], se_vir[0])
-        se_a = se_a.compress((self.nmom[0], None))
+        se_a = se_a.compress(phys=focka, n=(self.nmom[0], None))
 
         se_b = aux.combine(se_occ[1], se_vir[1])
-        se_b = se_b.compress((self.nmom[0], None))
+        se_b = se_b.compress(phys=fockb, n=(self.nmom[0], None))
 
         return (se_a, se_b)
 
