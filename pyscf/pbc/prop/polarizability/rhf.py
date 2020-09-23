@@ -220,7 +220,6 @@ def polarizability(polobj, with_cphf=True):
     return e2
 
 def hyper_polarizability(polobj, with_cphf=True):
-    raise NotImplementedError("There is some unknown error in the hyper-polarizability implementation.")
     log = logger.new_logger(polobj)
     mf = polobj._scf
     kpts = polobj.kpts
@@ -249,7 +248,6 @@ def hyper_polarizability(polobj, with_cphf=True):
     Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1)
     R_dk = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=2).reshape(nkpt,3,3,nao,nao)
 
-    #S = mf.get_ovlp(kpts=kpts)
     fock = mf.get_fock()
     Kao = get_k_deriv(cell, fock, kpts)
     Kao_dk = get_k_deriv(cell, fock, kpts, deriv=2)
@@ -290,55 +288,47 @@ def hyper_polarizability(polobj, with_cphf=True):
     e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
     e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
     e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-
-    nvir = [e_ai[k].shape[0] for k in range(nkpt)]
-    nocc = [e_ai[k].shape[1] for k in range(nkpt)]
+    e_pq = [lib.direct_sum('p-q->pq', mo_energy[k], mo_energy[k]) for k in range(nkpt)]
+    mask_pq = []
+    #NOTE states with energy difference smaller than TOL_DEG are treated as degenerate states
+    #NOTE this is temporary; whether states are degenerate should be determined by symmetry ideally
+    TOL_DEG = 1e-6
+    for k in range(nkpt):
+        mask_pq.append(abs(e_pq[k]) > TOL_DEG)
 
     Kji = []
     Rji = []
+    v1zji = []
     for k in range(nkpt):
         Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k],
                               mo_coeff[k].conj(), mo_coeff[k]))
         Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
                               mo_coeff[k].conj(), mo_coeff[k]))
+        v1zji.append(lib.einsum('xpq,pi,qj->xij', v1ao[:,k] + Zao[k],
+                                mo_coeff[k].conj(), mo_coeff[k]))
 
-    mo_dk = []
     Qji = []
     for k in range(nkpt):
         Qji_k = Kji[k] - Rji[k] * mo_energy[k]
-        mask_ov = np.outer(occidx[k], viridx[k])
-        mask_vo = np.outer(viridx[k], occidx[k])
-        mask_oo = np.outer(occidx[k], occidx[k])
-        mask_vv = np.outer(viridx[k], viridx[k])
         for i in range(3):
-            Qji_k[i,mask_vo] *= -e_ai[k].flatten()
-            Qji_k[i,mask_ov] *= e_ai[k].T.flatten()
-            Qji_k[i,mask_oo] = -0.5 * Rji[k][i][mask_oo].flatten()
-            Qji_k[i,mask_vv] = -0.5 * Rji[k][i][mask_vv].flatten()
+            Qji_k[i,mask_pq[k]] *= -1.0 / e_pq[k][mask_pq[k]].flatten()
+            Qji_k[i,~mask_pq[k]] = -0.5 * Rji[k][i][~mask_pq[k]].flatten()
         Qji.append(Qji_k)
-        mo_dk.append(lib.einsum('uq,xqp->xup', mo_coeff[k], Qji[k]))
 
     dedk = []
-    for k in range(nkpt):
+    for k,kpt in enumerate(kpts):
         dedk_k = Kji[k].diagonal(0,1,2) - Rji[k].diagonal(0,1,2) * mo_energy[k]
         dedk.append(dedk_k.real)
 
     dRdk = []
     for k in range(nkpt):
-        #tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Rao[k], orbo[k])
-        #tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k].conj(), Rao[k], mo_dk[k][:,:,occidx[k]])
         tmp  = lib.einsum('yqp,zqi->yzpi', Qji[k].conj(), Rji[k][:,:,occidx[k]])
         tmp += lib.einsum('zpq,yqi->yzpi', Rji[k], Qji[k][:,:,occidx[k]])
         tmp += lib.einsum('up,yzuv,vi->yzpi', mo_coeff[k].conj(), R_dk[k], orbo[k])
         dRdk.append(tmp)
 
-    ##############
-    # mo_d2k
-    ##############
     Kji_d2k = []
     for k in range(nkpt):
-        #tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k].conj(), Kao[:,k], orbo[k])
-        #tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k].conj(), Kao[:,k], mo_dk[k][:,:,occidx[k]])
         tmp  = lib.einsum('yqp,zqi->yzpi', Qji[k].conj(), Kji[k][:,:,occidx[k]])
         tmp += lib.einsum('zpq,yqi->yzpi', Kji[k], Qji[k][:,:,occidx[k]])
         tmp += lib.einsum('up,yzuv,vi->yzpi', mo_coeff[k].conj(), Kao_dk[:,:,k], orbo[k])
@@ -357,28 +347,14 @@ def hyper_polarizability(polobj, with_cphf=True):
         tmp[:,:,occidx[k]] = -0.5 * dRdk[k][:,:,occidx[k]]
         dQdk.append(tmp)
 
-    '''
-    mo_d2k = []
-    for k in range(nkpt):
-        tmp  = lib.einsum('yup,zpi->yzui', mo_dk[k], Qji[k][:,:,occidx[k]])
-        tmp += lib.einsum('up,yzpi->yzui', mo_coeff[k], dQdk[k])
-        mo_d2k.append(tmp)
-    '''
-    ##############
-
     dUdk = []
     for k in range(nkpt):
-        v1 = v1ao[:,k] + Zao[k]
         v1_dk = v1ao_dk[k] + Z_dk[k]
 
-        tmp  = lib.einsum('yup,zuv,vi->yzpi', mo_dk[k][:,:,viridx[k]].conj(), v1, orbo[k])
-        tmp += lib.einsum('up,zuv,yvi->yzpi', mo_coeff[k][:,viridx[k]].conj(), v1, mo_dk[k][:,:,occidx[k]])
+        tmp  = lib.einsum('yqp,zqi->yzpi', Qji[k][:,:,viridx[k]].conj(), v1zji[k][:,:,occidx[k]])
+        tmp += lib.einsum('zpq,yqi->yzpi', v1zji[k][:,viridx[k]], Qji[k][:,:,occidx[k]])
         tmp += lib.einsum('up,yzuv,vi->yzpi', mo_coeff[k][:,viridx[k]].conj(), v1_dk, orbo[k])
-
         tmp += 1j * (dRdk[k][:,:,viridx[k]] + dQdk[k][:,:,viridx[k]])
-        #tmp += 1j * lib.einsum('yup,zvi,uv->yzpi', mo_dk[k][:,:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], S[k])
-        #tmp += 1j * lib.einsum('up,zvi,yuv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_dk[k][:,:,occidx[k]], Rao[k])
-        #tmp += 1j * lib.einsum('up,yzvi,uv->yzpi', mo_coeff[k][:,viridx[k]].conj(), mo_d2k[k], S[k])
 
         tmp -= lib.einsum('zpi,yi->yzpi', mo1[k][:,viridx[k]], dedk[k][:,occidx[k]])
         tmp += lib.einsum('zpi,yp->yzpi', mo1[k][:,viridx[k]], dedk[k][:,viridx[k]])
