@@ -17,7 +17,7 @@
 #
 
 '''
-Non-relativistic static polarizability
+Non-relativistic static/dynamic polarizability
 '''
 
 import time
@@ -64,16 +64,23 @@ def fft_k_deriv2(cell, fg, kpts, Ls):
     res = -lib.einsum('na,nb,kn,np->abkp', Ls, Ls, expkL, fg)
     return res
 
-def get_k_deriv(cell, mat, kpts, deriv=1, tol=1e-6):
+def check_k_grids(cell, mat, kpts, fft_tol=1e-6):
     Ls = cell.get_lattice_Ls(discard=False)
     nkpt = len(kpts)
-    nao = cell.nao
 
     matg = ifft(cell, mat, kpts, Ls)
     matk = fft(cell, matg, kpts, Ls)
     error = np.linalg.norm(mat.flatten() - matk.flatten())
-    if error > tol:
-        logger.warn(cell, "k-mesh may be too small: FFT error = %.6e", error)
+    if error > fft_tol:
+        logger.warn(cell, "k-mesh or cell.rcut may be too small: FFT error = %.6e", error)
+
+def get_k_deriv(cell, mat, kpts, deriv=1, check_k = False, fft_tol=1e-6):
+    Ls = cell.get_lattice_Ls(discard=False)
+    nkpt = len(kpts)
+    nao = cell.nao
+
+    if check_k: check_k_grids(cell, mat, kpts, fft_tol)
+    matg = ifft(cell, mat, kpts, Ls)
     if deriv == 1:
         mat_dk = fft_k_deriv(cell, matg, kpts, Ls).reshape(3,nkpt,nao,nao)
     elif deriv == 2:
@@ -508,6 +515,7 @@ class Polarizability(mol_polar):
     def __init__(self, mf, kpts=np.zeros((1,3))):
         self.kpts = kpts
         mol_polar.__init__(self, mf)
+        check_k_grids(mf.cell, mf.get_fock(), kpts)
 
     def gen_vind(self, mf, mo_coeff, mo_occ, hermi=1, vo_only=False):
         '''Induced potential'''
