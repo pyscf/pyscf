@@ -17,7 +17,7 @@
 #
 
 '''
-Non-relativistic static/dynamic polarizability
+Non-relativistic static/dynamic polarizability and hyper-polarizability
 '''
 
 import time
@@ -215,8 +215,8 @@ def polarizability(polobj, with_cphf=True):
     for k in range(nkpt):
         e2 += np.einsum('xpi,ypi->xy', h1[k].conj(), mo1[k])
     e2 = -2.0 / nkpt * (e2 + e2.T.conj())
-    if np.linalg.norm(e2.imag) > 1e-8:
-        raise RuntimeError("Imaginary polarizability found! Something may be wrong.")
+    #if np.linalg.norm(e2.imag) > 1e-8:
+    #    log.warn("Imaginary polarizability found.")
     e2 = e2.real
     if mf.verbose >= logger.INFO:
         xx, yy, zz = e2.diagonal()
@@ -503,8 +503,8 @@ def polarizability_with_freq(polobj, freq=None):
 
     # *-1 from the definition of dipole moment. *2 for double occupancy
     e2 *= -2
-    if np.linalg.norm(e2.imag) > 1e-8:
-        raise RuntimeError("Imaginary polarizability found! Something may be wrong.")
+    #if np.linalg.norm(e2.imag) > 1e-8:
+    #    log.warn("Imaginary polarizability found.")
     e2 = e2.real
 
     log.debug('Polarizability tensor with freq %s', freq)
@@ -552,3 +552,34 @@ class Polarizability(mol_polar):
     polarizability = polarizability
     polarizability_with_freq = polarizability_with_freq
     hyper_polarizability = hyper_polarizability
+
+if __name__ == "__main__":
+    from pyscf.pbc import gto, scf
+    cell = gto.Cell()
+    cell.atom = """H  0.0 0.0 0.0
+                   F  0.9 0.0 0.0
+                """
+    cell.basis = 'sto-3g'
+    cell.a = [[2.82, 0, 0], [0, 2.82, 0], [0, 0, 2.82]]
+    cell.dimension = 1
+    cell.precision = 1e-10
+    cell.build()
+
+    kpts = cell.make_kpts([16,1,1])
+    kmf = scf.KRHF(cell, kpts=kpts, exxdiv="ewald").density_fit()
+    kmf.kernel()
+
+    #TODO implement the finite field version
+    polar = Polarizability(kmf, kpts)
+    dip = polar.dipole()
+    print(dip)
+    e2 = polar.polarizability()
+    print(e2)
+    e2 = polar.polarizability_with_freq(freq=0.)
+    print(e2)
+    e2 = polar.polarizability_with_freq(freq=0.1)
+    print(e2)
+    e2 = polar.polarizability_with_freq(freq=-0.1)
+    print(e2)
+    e3 = polar.hyper_polarizability()
+    print(e3)
