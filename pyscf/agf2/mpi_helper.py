@@ -37,6 +37,8 @@ except: #NOTE should we check for ImportError? This is OSError in python2, check
     size = 1
     rank = 0
 
+SCALE_PRANGE_STEP = False
+
 
 def reduce(obj, root=0, op=getattr(mpi, 'SUM', None)):
     ''' Reduce a matrix or scalar onto the root process and then
@@ -91,13 +93,13 @@ def prange(start, stop, step):
         for p0, p1 in lib.prange(start, stop, step):
             yield p0, p1
     else:
-        blocks = []
-        for i in range(stop-start):
-            blocks.append(n // size + int(n % size > i))
+        if SCALE_PRANGE_STEP:
+            step //= size
 
-        if start < end:
-            start0 = start + sum(blocks[:rank])
-            stop0 = start + sum(blocks[:rank+1])
-            
-            for p0, p1 in lib.prange(start, stop, step):
-                yield p0, p1
+        split = lambda x : x * (stop-start) // size
+
+        start0 = split(rank)
+        stop0 = stop if rank == (size-1) else split(rank+1)
+
+        for p0, p1 in lib.prange(start0, stop0, step):
+            yield p0, p1
