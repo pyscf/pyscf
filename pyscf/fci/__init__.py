@@ -152,7 +152,7 @@ def FCI(mol_or_mf, mo=None, singlet=False):
         norb = mo[0].shape[1]
     else:
         h1e = reduce(numpy.dot, (mo.conj().T, hcore, mo))
-        eri = ao2mo.kernel(mol, mo)
+        eri = ao2mo.kernel(eri_ao, mo)
         norb = mo.shape[1]
 
     fcisolver_class = fcisolver.__class__
