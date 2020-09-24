@@ -135,6 +135,7 @@ add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
 add_subdirectory(semiempirical)
+add_subdirectory(agf2)
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
