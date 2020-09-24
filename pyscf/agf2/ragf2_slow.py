@@ -28,9 +28,6 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf.agf2 import aux, ragf2
 
-#TODO: should we write C code and parallelise this?
-#TODO: outcore auxiliaries?
-
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ''' Builds either the auxiliaries of the occupied self-energy,
