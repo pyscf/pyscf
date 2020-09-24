@@ -89,11 +89,82 @@ def get_k_deriv(cell, mat, kpts, deriv=1, check_k = False, fft_tol=1e-6):
         raise NotImplementedError
     return mat_dk
 
-def get_h1(polobj, Zao_in=None, Rao_in=None, Kao_in=None, vo_only=False):
+def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
+    '''
+    Computes periodic version of the dipole matrix in AO basis: (u_k|z|v_k)
+    Arguments:
+        Zao : list of ndarray
+            regular dipole matrix (u|rc|v)
+        Rao : list of ndarray
+            1st order k derivative of overlap matrix
+        Kao : list of ndarray
+            1st order k derivative of Fock matrix
+        charge_center : list or tuple
+            nuclear charge center
+    '''
     mf = polobj._scf
     kpts = polobj.kpts
     cell = mf.cell
     mo_energy = mf.mo_energy
+    mo_coeff = np.asarray(mf.mo_coeff)
+    mo_occ = mf.mo_occ
+    nkpt, nao, nmo = mo_coeff.shape
+
+    if charge_center is None:
+        charges = cell.atom_charges()
+        coords  = cell.atom_coords()
+        charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    if Zao is None:
+        with cell.with_common_orig(charge_center):
+            Zao = cell.pbc_intor('int1e_r', comp=3, kpts=kpts)
+    if Rao is None:
+        Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1) 
+    if Kao is None:
+        fock = mf.get_fock()
+        Kao = get_k_deriv(cell, fock, kpts)
+
+    Kji = []
+    Rji = []
+    for k in range(nkpt):
+        Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k],
+                              mo_coeff[k].conj(), mo_coeff[k]))
+        Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
+                              mo_coeff[k].conj(), mo_coeff[k]))
+
+    e_pq = [lib.direct_sum('p-q->pq', mo_energy[k], mo_energy[k]) for k in range(nkpt)]
+    mask_pq = []
+    #NOTE states with energy difference smaller than TOL_DEG are treated as degenerate states
+    #NOTE this is temporary; whether states are degenerate should be determined by symmetry ideally
+    TOL_DEG = 1e-6
+    for k in range(nkpt):
+        mask_pq.append(abs(e_pq[k]) > TOL_DEG)
+
+    Qji = []
+    for k in range(nkpt):
+        Qji_k = Kji[k] - Rji[k] * mo_energy[k]
+        for i in range(3):
+            Qji_k[i,mask_pq[k]] *= -1.0 / e_pq[k][mask_pq[k]].flatten()
+            Qji_k[i,~mask_pq[k]] = -0.5 * Rji[k][i][~mask_pq[k]].flatten()
+        Qji.append(Qji_k)
+
+    S = mf.get_ovlp()
+    Qao = []
+    for k in range(nkpt):
+        Qao_k = lib.einsum('uv,vi,xij,sj,st->xut', S[k], mo_coeff[k], Qji[k], mo_coeff[k].conj(), S[k])
+        Qao.append(Qao_k)
+
+    Omega = []
+    for k in range(nkpt):
+        Omega.append(Zao[k] + 1j * Rao[k] + 1j * Qao[k])
+    return Omega, Qji
+
+def get_h1(polobj, Zao=None, Rao=None, Kao=None, charge_center=None, vo_only=False):
+    '''
+    Computes h1 for CPHF equations in MO basis: (p_k|h1|i_k)
+    if vo_only is True: size = nvir x nocc
+    else : size = nmo x nocc
+    '''
+    mf = polobj._scf
     mo_coeff = np.asarray(mf.mo_coeff)
     mo_occ = mf.mo_occ
     nkpt, nao, nmo = mo_coeff.shape
@@ -110,68 +181,17 @@ def get_h1(polobj, Zao_in=None, Rao_in=None, Kao_in=None, vo_only=False):
     else:
         orbv = mo_coeff
 
-    if Zao_in is not None:
-        Z = Zao_in
-    else:
-        charges = cell.atom_charges()
-        coords  = cell.atom_coords()
-        charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
-        with cell.with_common_orig(charge_center):
-            Z = cell.pbc_intor('int1e_r', comp=3, kpts=kpts) 
-    Zji = []
-    for k in range(nkpt):
-        Zji.append(lib.einsum('xpq,pi,qj->xij', Z[k], 
-                              orbv[k].conj(), orbo[k]))
-
-    Rji = []
-    if Rao_in is not None:
-        Rao = Rao_in
-    else:
-        Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1)
-    for k in range(nkpt):
-        Rji.append(lib.einsum('xpq,pi,qj->xij', Rao[k],
-                              orbv[k].conj(), orbo[k]))
-
-    Zji_tilde = []
-    for k in range(nkpt):
-        Zji_tilde.append(Zji[k] + 1j*0.5*Rji[k])
-
-    if Kao_in is not None:
-        Kao = Kao_in
-    else:
-        fock = mf.get_fock()
-        Kao = get_k_deriv(cell, fock, kpts)
-    Kji = []
-    for k in range(nkpt):
-        Kji.append(lib.einsum('xpq,pi,qj->xij', Kao[:,k], 
-                              orbv[k].conj(), orbo[k]))
-
-    e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
-    e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
-    e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-    if vo_only:
-        e_ai_plus = [lib.direct_sum('a+i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-    else:
-        e_ai_plus = [lib.direct_sum('a+i->ai', mo_energy[k], e_i[k]) for k in range(nkpt)]    
-
-    Qji_tilde = []
-    for k in range(nkpt):
-        Qji_k = 1j*(Kji[k] - 0.5 * Rji[k] * e_ai_plus[k])
-        if vo_only:
-            Qji_k[:] *= -e_ai[k]
-        else:
-            Qji_k[:, viridx[k]] *= -e_ai[k]
-            Qji_k[:, occidx[k]] = 0.0
-        Qji_tilde.append(Qji_k)
-
+    h1ao = get_z(polobj, Zao, Rao, Kao, charge_center)[0]
     h1 = []
-    s1 = []
     for k in range(nkpt):
-        h1.append(Zji_tilde[k] + Qji_tilde[k])
-        if not vo_only:
-            s1.append(np.zeros_like(h1[k]))
+        h1.append(lib.einsum('xpq,pi,qj->xij', h1ao[k],
+                              orbv[k].conj(), orbo[k]))
     if vo_only:
         s1 = None
+    else:
+        s1 = []
+        for k in range(nkpt):
+            s1.append(np.zeros_like(h1[k]))
     return h1, s1
 
 def dipole(polobj):
@@ -259,7 +279,7 @@ def hyper_polarizability(polobj, with_cphf=True):
     Kao = get_k_deriv(cell, fock, kpts)
     Kao_dk = get_k_deriv(cell, fock, kpts, deriv=2)
 
-    h1, s1 = get_h1(polobj, Zao_in=Zao, Rao_in=Rao, Kao_in=Kao)
+    h1, s1 = get_h1(polobj, Zao=Zao, Rao=Rao, Kao=Kao, charge_center=charge_center)
     vind = polobj.gen_vind(mf, mo_coeff, mo_occ, hermi=1)
     if with_cphf:
         mo1, e1 = cphf.solve(vind, mo_energy, mo_occ, h1, s1,
@@ -283,7 +303,8 @@ def hyper_polarizability(polobj, with_cphf=True):
         v1ao_dk.append(get_k_deriv(cell, v1ao[i], kpts)) #(z,y,k,u,v)
     v1ao_dk = np.asarray(v1ao_dk).transpose(2,1,0,3,4)
 
-    G1ao = v1ao.transpose(1,0,2,3) + Zao + 1j * 0.5 * Rao
+    Omega, Qji = get_z(polobj, Zao=Zao, Rao=Rao, Kao=Kao, charge_center=charge_center)
+    G1ao = v1ao.transpose(1,0,2,3) + np.asarray(Omega)
     G1vv = []
     for k in range(nkpt):
         tmp = lib.einsum('xuv,ua,vb->xab', G1ao[k], orbv[k].conj(), orbv[k])
@@ -295,13 +316,6 @@ def hyper_polarizability(polobj, with_cphf=True):
     e_a = [mo_energy[k][viridx[k]] for k in range(nkpt)]
     e_i = [mo_energy[k][occidx[k]] for k in range(nkpt)]
     e_ai = [1 / lib.direct_sum('a-i->ai', e_a[k], e_i[k]) for k in range(nkpt)]
-    e_pq = [lib.direct_sum('p-q->pq', mo_energy[k], mo_energy[k]) for k in range(nkpt)]
-    mask_pq = []
-    #NOTE states with energy difference smaller than TOL_DEG are treated as degenerate states
-    #NOTE this is temporary; whether states are degenerate should be determined by symmetry ideally
-    TOL_DEG = 1e-6
-    for k in range(nkpt):
-        mask_pq.append(abs(e_pq[k]) > TOL_DEG)
 
     Kji = []
     Rji = []
@@ -313,14 +327,6 @@ def hyper_polarizability(polobj, with_cphf=True):
                               mo_coeff[k].conj(), mo_coeff[k]))
         v1zji.append(lib.einsum('xpq,pi,qj->xij', v1ao[:,k] + Zao[k],
                                 mo_coeff[k].conj(), mo_coeff[k]))
-
-    Qji = []
-    for k in range(nkpt):
-        Qji_k = Kji[k] - Rji[k] * mo_energy[k]
-        for i in range(3):
-            Qji_k[i,mask_pq[k]] *= -1.0 / e_pq[k][mask_pq[k]].flatten()
-            Qji_k[i,~mask_pq[k]] = -0.5 * Rji[k][i][~mask_pq[k]].flatten()
-        Qji.append(Qji_k)
 
     dedk = []
     for k,kpt in enumerate(kpts):
