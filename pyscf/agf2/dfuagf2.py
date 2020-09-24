@@ -28,10 +28,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo, df
-from pyscf.agf2 import uagf2, dfragf2, aux, mpi_helper
-from pyscf.agf2.ragf2 import _get_blksize, _cholesky_build
+from pyscf.agf2 import uagf2, dfragf2, aux, mpi_helper, _agf2
 
-BLKMIN = getattr(__config__, 'agf2_dfuragf2_blkmin', 1)
+BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
@@ -71,75 +70,25 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     noccb, nvirb = gf_occ[1].naux, gf_vir[1].naux
     naux = agf2.with_df.get_naoaux()
     tol = agf2.weight_tol
-
-    fposa = ss_factor
-    fnega = -ss_factor
-    fposb = os_factor
+    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
     qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
+    (qxi_a, qja_a), (qxi_b, qja_b) = qeri
+    qxi = (qxi_a, qxi_b)
+    qja = (qja_a, qja_b)
 
-    def _build_se_part_spin(spin=0):
-        ''' Perform the build for a single spin
-
-        spin = 0: alpha
-        spin = 1: beta
-        '''
-
-        if spin == 0:
-            ab = slice(None)
-        else:
-            ab = slice(None, None, -1)
-
-        nmoa, nmob = agf2.nmo[ab]
-        gfo_a, gfo_b = gf_occ[ab]
-        gfv_a, gfv_b = gf_vir[ab]
-        noa, nob = gfo_a.naux, gfo_b.naux
-        nva, nvb = gfv_a.naux, gfv_b.naux
-
-        (qxi_a, qja_a), (qxi_b, qja_b) = qeri[ab]
-
-        vv = np.zeros((nmoa, nmoa))
-        vev = np.zeros((nmoa, nmoa))
-
-        eja_a = lib.direct_sum('j,a->ja', gfo_a.energy, -gfv_a.energy).ravel()
-        eja_b = lib.direct_sum('j,a->ja', gfo_b.energy, -gfv_b.energy).ravel()
-
-        buf = (np.zeros((nmoa, noa*nva)), 
-               np.zeros((nmoa, nob*nvb)),
-               np.zeros((nmoa*noa, nva))) 
-
-        for i in mpi_helper.nrange(noa):
-            qx_a = qxi_a.reshape(naux, nmoa, noa)[:,:,i]
-            xija_aa = lib.dot(qx_a.T, qja_a, c=buf[0])
-            xija_ab = lib.dot(qx_a.T, qja_b, c=buf[1])
-            xjia_aa = lib.dot(qxi_a.T, qja_a[:,i*nva:(i+1)*nva], c=buf[2])
-            xjia_aa = xjia_aa.reshape(nmoa, -1)
-
-            eija_aa = eja_a + gfo_a.energy[i]
-            eija_ab = eja_b + gfo_a.energy[i]
-
-            vv = lib.dot(xija_aa, xija_aa.T, alpha=fposa, beta=1, c=vv)
-            vv = lib.dot(xija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vv)
-            vv = lib.dot(xija_ab, xija_ab.T, alpha=fposb, beta=1, c=vv)
-
-            exija_aa = xija_aa * eija_aa[None]
-            exija_ab = xija_ab * eija_ab[None]
-
-            vev = lib.dot(exija_aa, xija_aa.T, alpha=fposa, beta=1, c=vev)
-            vev = lib.dot(exija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vev)
-            vev = lib.dot(exija_ab, xija_ab.T, alpha=fposb, beta=1, c=vev)
-
-        e, c = _cholesky_build(vv, vev, gfo_a, gfv_a)
-        se = aux.SelfEnergy(e, c, chempot=gfo_a.chempot)
-        se.remove_uncoupled(tol=tol)
-
-        return se
-
-    se_a = _build_se_part_spin(0)
+    vv, vev = _agf2.build_mats_dfuagf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
+    e, c = _agf2.cholesky_build(vv, vev, gf_occ[0], gf_vir[0])
+    se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
+    se_a.remove_uncoupled(tol=tol)
 
     cput0 = log.timer_debug1('se part (alpha)', *cput0)
 
-    se_b = _build_se_part_spin(1)
+    rv = np.s_[::-1]
+    vv, vev = _agf2.build_mats_dfuagf2_incore(qxi[rv], qja[rv], gf_occ[rv], gf_vir[rv], **facs)
+    e, c = _agf2.cholesky_build(vv, vev, gf_occ[1], gf_vir[1])
+    se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
+    se_b.remove_uncoupled(tol=tol)
 
     cput0 = log.timer_debug1('se part (beta)', *cput0)
 
@@ -147,7 +96,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
 
 class DFUAGF2(uagf2.UAGF2):
-    #TODO: add .density_fit() to parent method
     ''' Unrestricted AGF2 with canonical HF reference with density fitting
 
     Attributes:

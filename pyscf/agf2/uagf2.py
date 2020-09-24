@@ -28,12 +28,11 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.scf import _vhf
-from pyscf.agf2 import aux, mpi_helper, ragf2
+from pyscf.agf2 import aux, mpi_helper, ragf2, _agf2
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
-from pyscf.agf2.ragf2 import _get_blksize
 from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 
-BLKMIN = getattr(__config__, 'agf2_uagf2_blkmin', 1)
+BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
@@ -70,75 +69,46 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     assert type(gf_vir[0]) is aux.GreensFunction
     assert type(gf_vir[1]) is aux.GreensFunction
 
+    nmo = agf2.nmo
+    noa, nob = gf_occ[0].naux, gf_occ[1].naux
+    nva, nvb = gf_vir[0].naux, gf_vir[1].naux
     tol = agf2.weight_tol
+    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
-    fposa = ss_factor
-    fnega = -ss_factor
-    fposb = os_factor
+    mem_incore = (nmo[0]*noa*(noa*nva+nob*nvb)) * 8/1e6
+    mem_now = lib.current_memory()[0]
+    if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
+        qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=0)
+    else:
+        qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=0)
 
-    def _build_se_part_spin(spin=0):
-        ''' Perform the build for a single spin
-        
-        spin = 0: alpha
-        spin = 1: beta
-        '''
+    if isinstance(qeri[0], np.ndarray):
+        vv, vev = _agf2.build_mats_uagf2_incore(qeri, gf_occ, gf_vir, **facs)
+    else:
+        vv, vev = _agf2.build_mats_uagf2_outcore(qeri, gf_occ, gf_vir, **facs)
 
-        if spin == 0:
-            ab = slice(None)
-        else:
-            ab = slice(None, None, -1)
-
-        nmoa, nmob = agf2.nmo[ab]
-        gfo_a, gfo_b = gf_occ[ab]
-        gfv_a, gfv_b = gf_vir[ab]
-        noa, nob = gfo_a.naux, gfo_b.naux
-        nva, nvb = gfv_a.naux, gfv_b.naux
-
-        vv = np.zeros((nmoa, nmoa))
-        vev = np.zeros((nmoa, nmoa))
-
-        eja_a = lib.direct_sum('j,a->ja', gfo_a.energy, -gfv_a.energy).ravel()
-        eja_b = lib.direct_sum('j,a->ja', gfo_b.energy, -gfv_b.energy).ravel()
-
-        mem_incore = (nmoa*noa*(noa*nva+nob*nvb)) * 8/1e6
-        mem_now = lib.current_memory()[0]
-        if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
-            qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=spin) 
-        else:
-            qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=spin)
-
-        qeri_aa, qeri_ab = qeri
-
-        for i in range(noa):
-            xija_aa = qeri_aa[:,i].reshape(nmoa, -1)
-            xija_ab = qeri_ab[:,i].reshape(nmoa, -1)
-            xjia_aa = qeri_aa[:,:,i].reshape(nmoa, -1)
-
-            eija_aa = eja_a + gfo_a.energy[i]
-            eija_ab = eja_b + gfo_a.energy[i]
-
-            vv = lib.dot(xija_aa, xija_aa.T, alpha=fposa, beta=1, c=vv)
-            vv = lib.dot(xija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vv)
-            vv = lib.dot(xija_ab, xija_ab.T, alpha=fposb, beta=1, c=vv)
-
-            exija_aa = xija_aa * eija_aa[None]
-            exija_ab = xija_ab * eija_ab[None]
-
-            vev = lib.dot(exija_aa, xija_aa.T, alpha=fposa, beta=1, c=vev)
-            vev = lib.dot(exija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vev)
-            vev = lib.dot(exija_ab, xija_ab.T, alpha=fposb, beta=1, c=vev)
-
-        e, c = ragf2._cholesky_build(vv, vev, gfo_a, gfv_a)
-        se = aux.SelfEnergy(e, c, chempot=gfo_a.chempot)
-        se.remove_uncoupled(tol=tol)
-        
-        return se
-
-    se_a = _build_se_part_spin(0)
+    e, c = _agf2.cholesky_build(vv, vev, gf_occ[0], gf_vir[0])
+    se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
+    se_a.remove_uncoupled(tol=tol)
 
     cput0 = log.timer_debug1('se part (alpha)', *cput0)
 
-    se_b = _build_se_part_spin(1)
+    mem_incore = (nmo[1]*nob*(nob*nvb+noa*nva)) * 8/1e6
+    mem_now = lib.current_memory()[0]
+    if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
+        qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=1)
+    else:
+        qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=1)
+
+    rv = np.s_[::-1]
+    if isinstance(qeri[0], np.ndarray):
+        vv, vev = _agf2.build_mats_uagf2_incore(qeri, gf_occ[rv], gf_vir[rv], **facs)
+    else:
+        vv, vev = _agf2.build_mats_uagf2_outcore(qeri, gf_occ[rv], gf_vir[rv], **facs)
+
+    e, c = _agf2.cholesky_build(vv, vev, gf_occ[1], gf_vir[1])
+    se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
+    se_b.remove_uncoupled(tol=tol)
 
     cput0 = log.timer_debug1('se part (beta)', *cput0)
 
@@ -805,7 +775,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
         eri.feri.create_dataset('qmo/aa', (nmoa, nia, nja, naa), 'f8')
         eri.feri.create_dataset('qmo/ab', (nmoa, nia, njb, nab), 'f8')
 
-        blksize = _get_blksize(agf2.max_memory, (nmoa**3, nmoa*nja*naa),
+        blksize = _agf2.get_blksize(agf2.max_memory, (nmoa**3, nmoa*nja*naa),
                                                 (nmoa*nmob**2, nmoa*njb*nab))
         blksize = min(nmoa, max(BLKMIN, blksize))
         log.debug1('blksize = %d', blksize)

@@ -28,10 +28,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo, df
-from pyscf.agf2 import ragf2, aux, mpi_helper
-from pyscf.agf2.ragf2 import _get_blksize, _cholesky_build
+from pyscf.agf2 import ragf2, aux, mpi_helper, _agf2
 
-BLKMIN = getattr(__config__, 'agf2_dfragf2_blkmin', 1)
+BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
@@ -74,37 +73,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     nocc, nvir = gf_occ.naux, gf_vir.naux
     naux = agf2.with_df.get_naoaux()
     tol = agf2.weight_tol
+    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
     qxi, qja = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
 
-    vv = np.zeros((nmo, nmo))
-    vev = np.zeros((nmo, nmo))
+    vv, vev = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
 
-    fpos = os_factor + ss_factor
-    fneg = -ss_factor
-
-    eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
-    eja = eja.ravel()
-
-    buf = (np.zeros((nmo, nocc*nvir)), np.zeros((nmo*nocc, nvir)))
-
-    for i in mpi_helper.nrange(gf_occ.naux):
-        qx = qxi.reshape(naux, nmo, nocc)[:,:,i]
-        xija = lib.dot(qx.T, qja, c=buf[0])
-        xjia = lib.dot(qxi.T, qja[:,i*nvir:(i+1)*nvir], c=buf[1])
-        xjia = xjia.reshape(nmo, nocc*nvir)
-
-        eija = eja + gf_occ.energy[i]
-
-        vv = lib.dot(xija, xija.T, alpha=fpos, beta=1, c=vv)
-        vv = lib.dot(xija, xjia.T, alpha=fneg, beta=1, c=vv)
-
-        exija = xija * eija[None]
-
-        vev = lib.dot(exija, xija.T, alpha=fpos, beta=1, c=vev)
-        vev = lib.dot(exija, xjia.T, alpha=fneg, beta=1, c=vev)
-
-    e, c = _cholesky_build(vv, vev, gf_occ, gf_vir)
+    e, c = _agf2.cholesky_build(vv, vev, gf_occ, gf_vir)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
     se.remove_uncoupled(tol=tol)
 
@@ -153,7 +128,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
     else:
         bra = ket = eri
 
-    blksize = _get_blksize(agf2.max_memory, (npair, npair, 1, nmo**2, nmo**2))
+    blksize = _agf2.get_blksize(agf2.max_memory, (npair, npair, 1, nmo**2, nmo**2))
     blksize = min(nmo, max(BLKMIN, blksize))
     buf = (np.empty((blksize, nmo, nmo)), np.empty((blksize, nmo, nmo)))
 
@@ -188,7 +163,6 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
 
 
 class DFRAGF2(ragf2.RAGF2):
-    #TODO: add .density_fit() method to parent method
     ''' Restricted AGF2 with canonical HF reference with density fitting
 
     Attributes:

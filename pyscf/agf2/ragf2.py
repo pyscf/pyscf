@@ -27,16 +27,13 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.scf import _vhf
-from pyscf.agf2 import aux, mpi_helper
+from pyscf.agf2 import aux, mpi_helper, _agf2
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
                             _mo_without_core, _mo_energy_without_core
 
-BLKMIN = getattr(__config__, 'agf2_ragf2_blkmin', 1)
+BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
-#TODO: test outcore and incore_complete
-#TODO: do we want MPI in this?
-#TODO: test frozen!!! do we have to rediagonalise Fock matrix?
 #TODO: do we want to store RAGF2.qmo_energy, RAGF2.qmo_coeff and RAGF2.qmo_occ at the end?
 #TODO: do we really want to store the self-energy? if we do above we can remove both RAGF2.gf and RAGF2.se
 #TODO: damping?
@@ -135,6 +132,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     nmo = agf2.nmo
     tol = agf2.weight_tol  #NOTE: tol is unlikely to be met at (None,0)
+    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
     mem_incore = (gf_occ.nphys*gf_occ.naux**2*gf_vir.naux) * 8/1e6
     mem_now = lib.current_memory()[0]
@@ -143,85 +141,18 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     else:
         qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir)
 
-    vv = np.zeros((nmo, nmo))
-    vev = np.zeros((nmo, nmo))
+    if isinstance(qeri, np.ndarray):
+        vv, vev = _agf2.build_mats_ragf2_incore(qeri, gf_occ, gf_vir, **facs)
+    else:
+        vv, vev = _agf2.build_mats_ragf2_outcore(qeri, gf_occ, gf_vir, **facs)
 
-    fpos = os_factor + ss_factor
-    fneg = -ss_factor
-
-    eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
-    eja = eja.ravel()
-
-    for i in range(gf_occ.naux):
-        #TODO: should we perform this differently? these are not contiguous and this slicing sucks...
-        xija = qeri[:,i].reshape(nmo, -1)
-        xjia = qeri[:,:,i].reshape(nmo, -1)
-
-        eija = eja + gf_occ.energy[i]
-
-        vv = lib.dot(xija, xija.T, alpha=fpos, beta=1, c=vv)
-        vv = lib.dot(xija, xjia.T, alpha=fneg, beta=1, c=vv)
-
-        exija = xija * eija[None]
-
-        vev = lib.dot(exija, xija.T, alpha=fpos, beta=1, c=vev)
-        vev = lib.dot(exija, xjia.T, alpha=fneg, beta=1, c=vev)
-
-    e, c = _cholesky_build(vv, vev, gf_occ, gf_vir)
+    e, c = _agf2.cholesky_build(vv, vev, gf_occ, gf_vir)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
     se.remove_uncoupled(tol=tol)
 
     log.timer_debug1('se part', *cput0)
 
     return se
-
-
-def _cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
-    ''' Constructs the truncated auxiliaries from :attr:`vv` and :attr:`vev`.
-        Performs a Cholesky decomposition via :func:`numpy.linalg.cholesky`,
-        for a positive-definite or positive-semidefinite matrix. For the
-        latter, the null space is removed.
-
-        The :attr:`vv` matrix of :func:`build_se_part` can be positive-
-        semidefinite when :attr:`gf_occ.naux` < :attr:`gf_occ.nphys` for
-        the occupied self-energy, or :attr:`gf_vir.naux` < :attr:`gf_vir.nphys`
-        for the virtual self-energy.
-    '''
-
-    ##NOTE: test this
-    ##FIXME: doesn't seem to work when situation arises due to frozen core - might have to rethink this
-    ##FIXME: won't work for UAGF2 if we use this solution (need to change naux)
-    #if gf_occ.nphys >= (gf_occ.naux**2 * gf_vir.naux):
-    #    # remove the null space from vv and vev
-    #    zero_rows = np.all(np.absolute(vv) < eps, axis=1)
-    #    zero_cols = np.all(np.absolute(vv) < eps, axis=0)
-    #    null_space = np.logical_and(zero_rows, zero_cols)
-
-    #    vv = vv[~null_space][:,~null_space]
-    #    vev = vev[~null_space][:,~null_space]
-    #    np.set_printoptions(precision=4, linewidth=150)
-
-    #NOTE: this seems like an unscientific solution... rescue the above?
-    try:
-        b = np.linalg.cholesky(vv).T
-    except np.linalg.LinAlgError:
-        w, v = np.linalg.eigh(vv)
-        w[w < eps] = eps
-        vv_posdef = np.dot(np.dot(v, np.diag(w)), v.T.conj())
-        b = np.linalg.cholesky(vv_posdef).T
-
-    b_inv = np.linalg.inv(b)
-
-    m = np.dot(np.dot(b_inv.T, vev), b_inv)
-    e, c = np.linalg.eigh(m)
-    c = np.dot(b.T, c[:gf_occ.nphys])
-
-    if c.shape[0] < gf_occ.nphys:
-        c_full = np.zeros((gf_occ.nphys, c.shape[1]), dtype=c.dtype)
-        c_full[~null_space] = c
-        c = c_full
-
-    return e, c
 
 
 def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
@@ -259,7 +190,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
         if with_k:
             vk = np.zeros_like(rdm1)
 
-        blksize = _get_blksize(agf2.max_memory, (nmo*npair, nmo**3))
+        blksize = _agf2.get_blksize(agf2.max_memory, (nmo*npair, nmo**3))
         blksize = min(nmo, max(BLKMIN, blksize))
 
         tril2sq = lib.square_mat_in_trilu_indices(nmo)
@@ -999,27 +930,6 @@ class _ChemistsERIs:
 
         return self
 
-def _get_blksize(max_memory_total, *sizes):
-    ''' Gets a block size such that the sum of the product of 
-        :attr:`sizes` with :attr:`blksize` is less than available
-        memory.
-
-        If multiple tuples are provided, then the maximum will
-        be used.
-    '''
-    #NOTE: does pyscf have this already? if not it might be nice
-
-    if isinstance(sizes[0], tuple):
-        sum_of_sizes = max([sum(x) for x in sizes])
-    else:
-        sum_of_sizes = sum(sizes)
-
-    mem_avail = max_memory_total - lib.current_memory()[0] # in MB
-    mem_avail = mem_avail * 8e-6 # in bits
-    mem_avail = mem_avail / 64 # in 64-bit floats
-
-    return int(mem_avail / sum_of_sizes)
-
 def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
@@ -1104,7 +1014,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
 
     eri.feri.create_dataset('qmo', (nmo, ni, nj, na), 'f8')
 
-    blksize = _get_blksize(agf2.max_memory, (nmo*npair, nj*na, npair), (nmo*ni, nj*na))
+    blksize = _agf2.get_blksize(agf2.max_memory, (nmo*npair, nj*na, npair), (nmo*ni, nj*na))
     blksize = min(nmo, max(BLKMIN, blksize))
     log.debug1('blksize = %d', blksize)
 
