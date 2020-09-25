@@ -156,15 +156,13 @@ def minimize_chempot(se, fock, nelec, occupancy=2, x0=0.0, tol=1e-6, maxiter=200
     fargs = (se, fock, nelec, occupancy)
 
     options = dict(maxiter=maxiter, ftol=tol, xtol=tol, gtol=tol)
-    kwargs = dict(x0=x0, method='TNC', bounds=[(None,None)], options=options)
+    kwargs = dict(x0=x0, method='TNC', jac=jac, options=options)
+    fun = _objective if not jac else _gradient
 
-    if jac:
-        kwargs['jac'] = lambda *args: _gradient(*args)[1]
-
-    opt = optimize.minimize(_objective, args=fargs, **kwargs)
+    opt = optimize.minimize(fun, args=fargs, **kwargs)
 
     se.energy -= opt.x
     se.chempot = binsearch_chempot(se.eig(fock), se.nphys, nelec,
-                                   occupancy=occupancy)[0] #FIXME se.eig chempot=0?
+                                   occupancy=occupancy)[0]
 
     return se, opt
