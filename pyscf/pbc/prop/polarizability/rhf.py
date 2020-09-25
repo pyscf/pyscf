@@ -89,18 +89,62 @@ def get_k_deriv(cell, mat, kpts, deriv=1, check_k = False, fft_tol=1e-6):
         raise NotImplementedError
     return mat_dk
 
-def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
-    '''
-    Computes periodic version of the dipole matrix in AO basis: (u_k|z|v_k)
-    Arguments:
-        Zao : list of ndarray
-            regular dipole matrix (u|rc|v)
-        Rao : list of ndarray
-            1st order k derivative of overlap matrix
-        Kao : list of ndarray
-            1st order k derivative of Fock matrix
+def get_z_ao(cell, kpts=np.zeros((1,3)), charge_center=None):
+    r'''Computes the periodic version of the dipole matrix in AO basis.
+
+    .. math:: \Omega_{\mu\nu}(k) = (\mu(k)|i e^{ikr} \nabla_{k} e^{-ikr}|\nu(k))
+
+    Args:
+        cell : instance of Cell class
+
+    Kwargs:
+        kpts : (nkpts, 3) array
         charge_center : list or tuple
             nuclear charge center
+
+    Return:
+        (nkpts, 3, nao, nao) array
+    '''
+    if charge_center is None:
+        charges = cell.atom_charges()
+        coords  = cell.atom_coords()
+        charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    with cell.with_common_orig(charge_center):
+        Zao = cell.pbc_intor('int1e_r', comp=3, kpts=kpts)
+    Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1)
+    Omega = Zao + 1j * Rao
+    return Omega
+
+def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
+    r'''Computes the periodic version of the dipole matrix in MO basis, then
+    transformed back to AO basis. 
+
+    Note this function differs from :func:`get_z_ao` in that it contains the
+    k derivative of the MO coefficients.
+
+    .. math:: 
+
+        \Omega_{pq}(k) = (\psi_{p}(k)|i e^{ikr} \nabla_{k} e^{-ikr}|\psi_{q}(k)) \\
+        \Omega_{\mu\nu}(k) = S_{\mu\lambda}(k) C_{\lambda p}(k) \Omega_{pq}(k) C_{\sigma q}(k) S_{\sigma\nu}(k)
+
+    Args:
+        polobj : instance of Polarizability class
+
+    Kwargs:
+        Zao : list of (3, nao, nao) array
+            regular dipole matrix :math:`(\mu(k)| \|r-R\| |\nu(k))`
+        Rao : list of (3, nao, nao) array
+            1st order k derivative of overlap matrix
+        Kao : list of (3, nao, nao) array
+            1st order k derivative of Fock matrix
+        charge_center : list or tuple (3,)
+            nuclear charge center
+
+    Returns:
+        Omega : list of (3, nao, nao) array
+            :math:`\Omega_{\mu\nu}(k)`
+        Qji : list of (3, nmo, nmo) array
+            response of the MO coefficients
     '''
     mf = polobj._scf
     kpts = polobj.kpts
@@ -159,8 +203,7 @@ def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
     return Omega, Qji
 
 def get_h1(polobj, Zao=None, Rao=None, Kao=None, charge_center=None, vo_only=False):
-    '''
-    Computes h1 for CPHF equations in MO basis: (p_k|h1|i_k)
+    r'''Computes h1 for CPHF equations in MO basis :math:`(\psi_p(k)|h^1|\psi_i(k))`
     if vo_only is True: size = nvir x nocc
     else : size = nmo x nocc
     '''
