@@ -50,7 +50,7 @@ jobs:
                 cd ./pyscf/lib
                 #curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7-deps.tar.gz | tar xzf -
                 wget  https://github.com/fishjojo/pyscf-deps/raw/master/pyscf-1.7-deps.tar.gz
-                tar xvf pyscf-1.7-deps.tar.gz
+                tar xzf pyscf-1.7-deps.tar.gz
 
       - name: Compile
         run: |
