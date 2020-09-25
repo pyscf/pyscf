@@ -360,13 +360,13 @@ def energy_2body(agf2, gf, se):
 
     e2b = 0.0
 
-    for l in range(gf_occ.naux):
+    for l in mpi_helper.nrange(gf_occ.naux):
         vxl = gf_occ.coupling[:,l]
         vxk = se_vir.coupling
         dlk = gf_occ.energy[l] - se_vir.energy
 
-        e2b += lib.einsum('xk,yk,x,y,k->', vxk, vxk.conj(),
-                                           vxl, vxl.conj(), 1./dlk)
+        vv = vxk * vxl[:,None]
+        e2b += lib.einsum('xk,yk,k->', vv, vv.conj(), 1./dlk)
 
     e2b *= 2
 
