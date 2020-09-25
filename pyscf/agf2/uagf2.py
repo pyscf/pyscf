@@ -59,7 +59,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     Returns:
         :class:`SelfEnergy`
     '''
-    #TODO: C code
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
@@ -140,7 +139,7 @@ def get_fock(agf2, eri, gf=None, rdm1=None):
     vj_aa, vk_aa = agf2.get_jk(eri.eri_aa, rdm1=rdm1[0])
     vj_bb, vk_bb = agf2.get_jk(eri.eri_bb, rdm1=rdm1[1])
     vj_ab = agf2.get_jk(eri.eri_ab, rdm1=rdm1[1], with_k=False)[0]
-    vj_ba = agf2.get_jk(eri.eri_ba, rdm1=rdm1[0], with_k=False)[0] #NOTE: symmetric?
+    vj_ba = agf2.get_jk(eri.eri_ba, rdm1=rdm1[0], with_k=False)[0]
 
     fock_a = eri.h1e[0] + vj_aa + vj_ab - vk_aa
     fock_b = eri.h1e[1] + vj_bb + vj_ba - vk_bb

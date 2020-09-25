@@ -56,12 +56,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     Returns:
         :class:`SelfEnergy`
     '''
-    #NOTE: in my original implementation I transform qxi as ixq and do:
-    #    xija = np.dot(ixq[i*nmo:(i+1)*nmo], qja, out=buf[0])
-    #    xjia = np.dot(ixq, qja[:,i*nvir:(i+1)*nvir], out=buf[1])
-    #    xjia = xjia.reshape(nocc, nmo, nvir).swapaxes(0,1).reshape(nmo, -1)
-    # I need to benchmark these two versions, but this version makes
-    # the code a lot clearer
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
