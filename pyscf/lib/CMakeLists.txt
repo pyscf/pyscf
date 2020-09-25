@@ -121,7 +121,7 @@ elseif (APPLE)
 else ()
   set(CMAKE_SKIP_BUILD_RPATH  True)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
-  set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib")
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib:\$ORIGIN/deps/lib64")
 endif ()
 
 add_subdirectory(np_helper)
@@ -199,16 +199,15 @@ endif() # ENABLE_LIBXC
 if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
+    GIT_TAG 8ec13b06e06feccbc9e968665977df14d7bfdff8
     # Range seperated parameters can be set in the python code. This patch to
     # RSH omega is not needed anymore.
     #PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
-            -DXC_MAX_ORDER=3 -DENABLE_TESTALL=0
+            -DXCFUN_MAX_ORDER=3 -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DENABLE_FORTRAN_INTERFACE=OFF
   )
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)
