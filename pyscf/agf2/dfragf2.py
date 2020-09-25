@@ -329,9 +329,6 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
     qxi = qxi.reshape(naux, -1)
     qja = qja.reshape(naux, -1)
 
-    qxi = np.array(qxi, order='F')
-    qja = np.array(qja, order='F')
-
     log.timer_debug1('QMO integral transformation', *cput0)
 
     return (qxi, qja)
