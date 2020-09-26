@@ -449,8 +449,8 @@ def get_blksize(max_memory_total, *sizes):
     else:
         sum_of_sizes = sum(sizes)
 
-    mem_avail = max_memory_total - lib.current_memory()[0] # in MB
-    mem_avail = mem_avail * 8e-6 # in bits
-    mem_avail = mem_avail / 64
+    mem_avail = max_memory_total - lib.current_memory()[0]
+    mem_avail *= 8e6 # MB -> bits
+    sum_of_sizes *= 64 # 64 bits -> bits
 
     return int(mem_avail / sum_of_sizes)
