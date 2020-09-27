@@ -7,9 +7,9 @@ Python-based Simulations of Chemistry Framework
 [![Build Status](https://travis-ci.org/pyscf/pyscf.svg?branch=master)](https://travis-ci.org/pyscf/pyscf)
 [![codecov](https://codecov.io/gh/pyscf/pyscf/branch/master/graph/badge.svg)](https://codecov.io/gh/pyscf/pyscf)
 
-2020-8-2
+2020-9-27
 
-* [Stable release 1.7.4](https://github.com/pyscf/pyscf/releases/tag/v1.7.4)
+* [Stable release 1.7.5](https://github.com/pyscf/pyscf/releases/tag/v1.7.5)
 * [Previous release 1.6.6](https://github.com/pyscf/pyscf/releases/tag/v1.6.6)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
