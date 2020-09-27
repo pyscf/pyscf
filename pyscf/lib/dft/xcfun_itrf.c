@@ -54,6 +54,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
         double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd, *tau_u, *tau_d;
         const char *name;
 
+        assert(xcfun_is_compatible_library() == true);
         xcfun_t* fun = xcfun_new();
         for (i = 0; i < nfn; i++) {
                 name = xcfun_enumerate_parameters(fn_id[i]);
@@ -151,6 +152,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         output[i*outlen] /= rho_u[i] + rho_d[i] + 1e-150;
                 }
         }
+        xcfun_delete(fun);
 }
 
 /*
@@ -169,5 +171,6 @@ int XCFUN_xc_type(int fn_id)
         } else if (xcfun_is_gga(fun)) {
                 type = 1;
         }
+        xcfun_delete(fun);
         return type;
 }
