@@ -118,6 +118,7 @@ from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
+from pyscf.scf import aochf
 
 
 def HF(mol, *args):
@@ -185,10 +186,13 @@ def DHF(mol, *args):
         return dhf.UHF(mol, *args)
 
 
-def X2C(mol, *args):
+def X2C(mol, *kwargs):
     '''X2C UHF (in testing)'''
     from pyscf.x2c import x2c
-    return x2c.UHF(mol, *args)
+    return x2c.UHF(mol, *kwargs)
+
+def AOCHF(mol, *kwargs):
+    return aochf.AOCHF(mol, *kwargs)
 
 def sfx2c1e(mf):
     return mf.sfx2c1e()

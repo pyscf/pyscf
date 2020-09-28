@@ -24,6 +24,7 @@ from functools import reduce
 import ctypes
 import os
 import sys
+import re
 import struct
 import time
 import tempfile
@@ -32,10 +33,11 @@ from subprocess import check_call
 from subprocess import CalledProcessError
 
 import numpy
-import pyscf.tools
+import pyscf.tools, pyscf.shciscf
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.lib import chkfile
+from pyscf.shciscf import fcidump_rel
 from pyscf import mcscf
 ndpointer = numpy.ctypeslib.ndpointer
 
@@ -46,6 +48,7 @@ except ImportError:
     from pyscf import __config__
     settings = lambda: None
     settings.SHCIEXE = getattr(__config__, 'shci_SHCIEXE', None)
+    settings.ZSHCIEXE = getattr(__config__, 'shci_ZSHCIEXE', None)
     settings.SHCISCRATCHDIR = getattr(__config__, 'shci_SHCISCRATCHDIR', None)
     settings.SHCIRUNTIMEDIR = getattr(__config__, 'shci_SHCIRUNTIMEDIR', None)
     settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
@@ -134,6 +137,7 @@ class SHCI(pyscf.lib.StreamObject):
         nroots: int
         nPTiter: int
         DoRDM: bool
+        DoSOC: bool
         sweep_iter: [int]
         sweep_epsilon: [float]
         initialStates: [[int]]
@@ -161,6 +165,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.outputlevel = 2
 
         self.executable = settings.SHCIEXE
+        self.executableZDice2 = settings.ZSHCIEXE
         self.scratchDirectory = settings.SHCISCRATCHDIR
         self.mpiprefix = settings.MPIPREFIX
         self.memory = memory
@@ -176,6 +181,7 @@ class SHCI(pyscf.lib.StreamObject):
 
         # TODO: Organize into pyscf and SHCI parameters
         # Standard SHCI Input parameters
+        self.dets = None
         self.davidsonTol = 5.e-5
         self.epsilon2 = 1.e-7
         self.epsilon2Large = 1000.
@@ -195,6 +201,8 @@ class SHCI(pyscf.lib.StreamObject):
         self.nroots = 1
         self.nPTiter = 0
         self.DoRDM = True
+        self.DoTRDM = False
+        self.DoSOC = False
         self.sweep_iter = []
         self.sweep_epsilon = []
         self.maxIter = 6
@@ -280,10 +288,50 @@ class SHCI(pyscf.lib.StreamObject):
     #
     #   --> See various remarks in the pertinent functions below.
     # -----------------------------------------------------------------------------------------------
+        
+    def trans_rdm1(self, state_i, state_j, norb, nelec, link_index=None, **kwargs):
+        if self.DoSOC:
+            trdm1 = numpy.zeros((norb, norb), dtype=complex)
+        else:
+            trdm1 = numpy.zeros((norb, norb))
+        # assume Dice prints only i < j transition rdm.
+        if state_i > state_j:
+            tmp = state_i
+            state_i = state_j
+            state_j = tmp
 
+        filetrdm1 = os.path.join(self.scratchDirectory, "transition1RDM.%d.%d.txt" % (state_i, state_j))
+        with open(filetrdm1) as f:
+            line = f.readline()
+            file_orb = int(line.split()[0])
+            for line in f:
+                orb1 = int(line.split()[0])
+                orb2 = int(line.split()[1])
+                if self.DoSOC:
+                    val = re.split("[(,)]", line.split()[2])
+                    val = complex(float(val[1]), float(val[2]))
+                else:
+                    val  = float(line.split()[2])
+                trdm1[orb1][orb2] = val
+        return trdm1
+        
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
         # Avoid calling self.make_rdm12 because it may be overloaded
         return self.make_rdm12(state, norb, nelec, link_index, **kwargs)[0]
+
+    def make_rdm12Frombin(self, state, norb, nelec):
+        if isinstance(nelec, (int, numpy.integer)):
+            nelectrons = nelec
+        else:
+            nelectrons = nelec[0] + nelec[1]
+        f = open("%s/Dice_%d_%d.rdm2"%(self.scratchDirectory, state, state), "rb")
+        import os
+        f.seek(4, os.SEEK_SET)
+        twopdm = numpy.fromfile(f, dtype=complex)
+        #twopdm = numpy.reshape(twopdm,  (norb, norb, norb, norb))
+        twopdm = numpy.reshape(twopdm,  (norb, norb, norb, norb), order='F')
+        onepdm = numpy.einsum('ijkj->ki', twopdm)/(nelectrons-1)
+        return onepdm, twopdm 
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -320,16 +368,6 @@ class SHCI(pyscf.lib.StreamObject):
         onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons - 1)
         return onepdm, twopdm
-
-    def trans_rdm1(self,
-                   statebra,
-                   stateket,
-                   norb,
-                   nelec,
-                   link_index=None,
-                   **kwargs):
-        return self.trans_rdm12(statebra, stateket, norb, nelec, link_index,
-                                **kwargs)[0]
 
     def trans_rdm12(self,
                     statebra,
@@ -788,6 +826,11 @@ class SHCI(pyscf.lib.StreamObject):
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
+
+        if (h1e.dtype == numpy.complex and eri.dtype ==numpy.complex):
+            self.DoRDM = False
+            self.DoSpinRDM = True
+            self.extraline += ['readText']
         writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
         writeSHCIConfFile(self, nelec, fciRestart)
         if self.verbose >= logger.DEBUG1:
@@ -795,7 +838,7 @@ class SHCI(pyscf.lib.StreamObject):
             logger.debug1(self, 'SHCI Input conf')
             logger.debug1(self, open(inFile, 'r').read())
         if self.onlywriteIntegral:
-            logger.info(self, 'Only write integral')
+            Logger.info(self, 'Only write integral')
             try:
                 calc_e = readEnergy(self)
             except IOError:
@@ -806,7 +849,6 @@ class SHCI(pyscf.lib.StreamObject):
             return calc_e, roots
         if self.returnInt:
             return h1e, eri
-
         executeSHCI(self)
         if self.verbose >= logger.DEBUG1:
             outFile = os.path.join(self.runtimeDir, self.outputFile)
@@ -879,39 +921,36 @@ class SHCI(pyscf.lib.StreamObject):
         os.remove(os.path.join(self.runtimeDir, self.integralFile))
 
 
-def print1Int(h1, name):
-    with open('%s.X' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[0].shape[0])
-        for i in range(h1[0].shape[0]):
-            for j in range(h1[0].shape[0]):
-                if (abs(h1[0, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[0, i, j], i + 1, j + 1))
+def transition_dipole(mc, state_i, state_j):
+    t_dm1 = mc.fcisolver.trans_rdm1(state_i, state_j, mc.ncas, mc.nelecas)
+    ncore = mc.ncore
+    ncasorb = mc.ncas
+    mol = mc.mol
+    mo_cas = mc.mo_coeff[:, ncore:ncore+ncasorb]
+    t_dm1 = pyscf.lib.einsum('pi, ij, qj->pq', mo_cas, t_dm1, mo_cas)
+    #print(t_dm1)
+    charge_center = (numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords()) / mol.atom_charges().sum())
+    with mol.with_common_origin(charge_center):
+        t_dip = numpy.einsum('xij,ji->x', mol.intor('int1e_r'), t_dm1)
+    return t_dip
 
-    with open('%s.Y' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[1].shape[0])
-        for i in range(h1[1].shape[0]):
-            for j in range(h1[1].shape[0]):
-                if (abs(h1[1, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[1, i, j], i + 1, j + 1))
+def oscillator_strength(mc, state_i, state_j):
+    t_dip = transition_dipole(mc, state_i, state_j)
+    calc_e = readEnergy(mc.fcisolver)
+    delta_e = abs(calc_e[state_i] - calc_e[state_j])
+    return 2./3.*delta_e*sum(abs(t_dip)**2), 2./3.*delta_e*abs(t_dip)**2
 
-    with open('%s.Z' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[2].shape[0])
-        for i in range(h1[2].shape[0]):
-            for j in range(h1[2].shape[0]):
-                if (abs(h1[2, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[2, i, j], i + 1, j + 1))
-
-    with open('%sZ' % (name), 'w') as fout:
-        fout.write('%d\n' % h1[2].shape[0])
-        for i in range(h1[2].shape[0]):
-            for j in range(h1[2].shape[0]):
-                if (abs(h1[2, i, j]) > 1.e-8):
-                    fout.write(
-                        '%16.10g %4d %4d\n' % (h1[2, i, j], i + 1, j + 1))
-
+def phospherescence_lifetime(mc, s0=0, triplet_list=[1,2,3]):
+    au2wavenumber = 219470.
+    tau = numpy.zeros(len(triplet_list))
+    calc_e = readEnergy(mc.fcisolver)
+    for state in triplet_list:
+        delta_e = calc_e[state] - calc_e[s0]
+        fosc = oscillator_strength(mc, s0, state)
+        tau[triplet_list.index(state)] = 1.5/(fosc*(delta_e*au2wavenumber)**2)
+    tau_av = 3./(sum(1/tau))
+    return tau_av, tau
+    
 
 def make_sched(SHCI):
 
@@ -941,12 +980,21 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
     f.write('#system\n')
     f.write('nocc %i\n' % (nelec[0] + nelec[1]))
     if SHCI.__class__.__name__ == 'FakeCISolver':
-        for i in range(nelec[0]):
-            f.write('%i ' % (2 * i))
-        for i in range(nelec[1]):
-            f.write('%i ' % (2 * i + 1))
+        if SHCI.initialStates is not None:
+            print("write determinants")
+            for i in range(len(SHCI.initialStates)):
+                for j in SHCI.initialStates[i]:
+                    f.write('%i ' % (j))
+                if (i != len(SHCI.initialStates) - 1):
+                    f.write('\n')
+        else:
+            for i in range(nelec[0]):
+                f.write('%i ' % (2 * i))
+            for i in range(nelec[1]):
+                f.write('%i ' % (2 * i + 1))
     else:
         if SHCI.initialStates is not None:
+            print("write determinants")
             for i in range(len(SHCI.initialStates)):
                 for j in SHCI.initialStates[i]:
                     f.write('%i ' % (j))
@@ -1034,16 +1082,26 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
 
     # Miscellaneous Keywords
     f.write('\n#misc\n')
-    f.write('io \n')
+    if Restart is True:
+        f.write('noio \n')
+
     if (SHCI.scratchDirectory != ""):
         if not os.path.exists(SHCI.scratchDirectory):
             os.makedirs(SHCI.scratchDirectory)
         f.write('prefix %s\n' % (SHCI.scratchDirectory))
+    if (SHCI.DoSOC):
+        f.write('DoSOC\n')
+        SHCI.DoRDM = False
     if (SHCI.DoRDM):
         f.write('DoRDM\n')
+    if (SHCI.DoSpinRDM):
+        f.write('DoSpinRDM\n')
+    if (SHCI.nroots > 1 and (SHCI.DoRDM or SHCI.DoTRDM)):
+        f.write('DoTRDM\n')
     for line in SHCI.extraline:
         f.write('%s\n' % line)
 
+    
     f.write('\n')  # SHCI requires that there is an extra line.
     f.close()
 
@@ -1158,6 +1216,12 @@ def DinfhtoD2h(SHCI, norb, nelec):
 
 
 def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
+    if (h1eff.dtype == numpy.complex and eri_cas.dtype == numpy.complex):
+        integralFile = os.path.join(SHCI.runtimeDir, SHCI.integralFile)
+        fcidump_rel.from_integrals(filename=integralFile, h1e=h1eff, h2e=eri_cas, 
+                                   nmo=norb, nelec=nelec, ms=nelec, nuc=ecore.real, tol=1e-12)
+        return
+
     if isinstance(nelec, (int, numpy.integer)):
         neleca = nelec // 2 + nelec % 2
         nelecb = nelec - neleca
@@ -1220,10 +1284,15 @@ def executeSHCI(SHCI):
     inFile = os.path.join(SHCI.runtimeDir, SHCI.configFile)
     outFile = os.path.join(SHCI.runtimeDir, SHCI.outputFile)
     try:
-        cmd = ' '.join((SHCI.mpiprefix, SHCI.executable, inFile))
-        cmd = "%s > %s 2>&1" % (cmd, outFile)
-        check_call(cmd, shell=True)
-        #save_output(SHCI)
+        if SHCI.DoSpinRDM:
+            cmd = ' '.join((SHCI.mpiprefix, SHCI.executableZDice2, inFile))
+            cmd = "%s > %s 2>&1" % (cmd, outFile)
+            check_call(cmd, shell=True)
+        else:
+            cmd = ' '.join((SHCI.mpiprefix, SHCI.executable, inFile))
+            cmd = "%s > %s 2>&1" % (cmd, outFile)
+            check_call(cmd, shell=True)
+            #save_output(SHCI)
     except CalledProcessError as err:
         logger.error(SHCI, cmd)
         raise err
@@ -1279,204 +1348,6 @@ def SHCISCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
         if not os.path.exists(settings.SHCISCRATCHDIR):
             os.makedirs(settings.SHCISCRATCHDIR)
     return mc
-
-
-def get_hso1e(wso, x, rp):
-    nb = x.shape[0]
-    hso1e = numpy.zeros((3, nb, nb))
-    for ic in range(3):
-        hso1e[ic] = reduce(numpy.dot, (rp.T, x.T, wso[ic], x, rp))
-    return hso1e
-
-
-def get_wso(mol):
-    nb = mol.nao_nr()
-    wso = numpy.zeros((3, nb, nb))
-    for iatom in range(mol.natm):
-        zA = mol.atom_charge(iatom)
-        xyz = mol.atom_coord(iatom)
-        mol.set_rinv_orig(xyz)
-        wso += zA * mol.intor('cint1e_prinvxp_sph',
-                              3)  # sign due to integration by part
-    return wso
-
-
-def get_p(dm, x, rp):
-    pLL = rp.dot(dm.dot(rp.T))
-    pLS = pLL.dot(x.T)
-    pSS = x.dot(pLL.dot(x.T))
-    return pLL, pLS, pSS
-
-
-def get_fso2e_withkint(kint, x, rp, pLL, pLS, pSS):
-    nb = x.shape[0]
-    fso2e = numpy.zeros((3, nb, nb))
-    for ic in range(3):
-        gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint[ic], pSS)
-        gsoLS = -numpy.einsum('mlkn,lk->mn',kint[ic],pLS) \
-                -numpy.einsum('lmkn,lk->mn',kint[ic],pLS)
-        gsoSS = -2.0*numpy.einsum('mnkl,lk',kint[ic],pLL) \
-                -2.0*numpy.einsum('mnlk,lk',kint[ic],pLL) \
-                +2.0*numpy.einsum('mlnk,lk',kint[ic],pLL)
-        fso2e[ic] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
-               + x.T.dot(gsoSS.dot(x))
-        fso2e[ic] = reduce(numpy.dot, (rp.T, fso2e[ic], rp))
-    return fso2e
-
-
-def get_kint2(mol):
-    nb = mol.nao_nr()
-    kint = mol.intor('int2e_spv1spv2_spinor', comp=3)
-    return kint.reshape(3, nb, nb, nb, nb)
-
-
-def get_fso2e(mol, x, rp, pLL, pLS, pSS):
-    nb = mol.nao_nr()
-    np = nb * nb
-    nq = np * np
-    ddint = mol.intor('int2e_ip1ip2_sph', 9).reshape(3, 3, nq)
-    fso2e = numpy.zeros((3, nb, nb))
-
-    ddint[0, 0] = ddint[1, 2] - ddint[2, 1]
-    kint = ddint[0, 0].reshape(nb, nb, nb, nb)
-    gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
-    gsoLS = -numpy.einsum('mlkn,lk->mn',kint,pLS) \
-            -numpy.einsum('lmkn,lk->mn',kint,pLS)
-    gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
-            -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
-            +2.0*numpy.einsum('mlnk,lk',kint,pLL)
-    fso2e[0] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
-                + x.T.dot(gsoSS.dot(x))
-    fso2e[0] = reduce(numpy.dot, (rp.T, fso2e[0], rp))
-
-    ddint[0, 0] = ddint[2, 0] - ddint[2, 1]
-    kint = ddint[0, 0].reshape(nb, nb, nb, nb)
-    gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
-    gsoLS = -numpy.einsum('mlkn,lk->mn',kint,pLS) \
-            -numpy.einsum('lmkn,lk->mn',kint,pLS)
-    gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
-            -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
-            +2.0*numpy.einsum('mlnk,lk',kint,pLL)
-    fso2e[1] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
-                + x.T.dot(gsoSS.dot(x))
-    fso2e[1] = reduce(numpy.dot, (rp.T, fso2e[1], rp))
-
-    ddint[0, 0] = ddint[0, 1] - ddint[1, 0]
-    kint = ddint[0, 0].reshape(nb, nb, nb, nb)
-    gsoLL = -2.0 * numpy.einsum('lmkn,lk->mn', kint, pSS)
-    gsoLS = -numpy.einsum('mlkn,lk->mn',kint,pLS) \
-            -numpy.einsum('lmkn,lk->mn',kint,pLS)
-    gsoSS = -2.0*numpy.einsum('mnkl,lk',kint,pLL) \
-            -2.0*numpy.einsum('mnlk,lk',kint,pLL) \
-            +2.0*numpy.einsum('mlnk,lk',kint,pLL)
-    fso2e[2] = gsoLL + gsoLS.dot(x) + x.T.dot(-gsoLS.T) \
-                + x.T.dot(gsoSS.dot(x))
-    fso2e[2] = reduce(numpy.dot, (rp.T, fso2e[2], rp))
-    return fso2e
-
-
-def get_kint(mol):
-    nb = mol.nao_nr()
-    np = nb * nb
-    nq = np * np
-    ddint = mol.intor('int2e_ip1ip2_sph', 9).reshape(3, 3, nq)
-
-    kint = numpy.zeros((3, nq))
-    kint[0] = ddint[1, 2] - ddint[2, 1]  # x = yz - zy
-    kint[1] = ddint[2, 0] - ddint[0, 2]  # y = zx - xz
-    kint[2] = ddint[0, 1] - ddint[1, 0]  # z = xy - yx
-    return kint.reshape(3, nb, nb, nb, nb)
-
-
-def writeSOCIntegrals(mc,
-                      ncasorbs=None,
-                      rdm1=None,
-                      pictureChange1e="bp",
-                      pictureChange2e="bp",
-                      uncontract=True):
-    from pyscf.x2c import x2c, sfx2c1e
-    from pyscf.lib.parameters import LIGHT_SPEED
-    LIGHT_SPEED = 137.0359895000
-    alpha = 1.0 / LIGHT_SPEED
-
-    if (uncontract):
-        xmol, contr_coeff = x2c.X2C().get_xmol(mc.mol)
-    else:
-        xmol, contr_coeff = mc.mol, numpy.eye(mc.mo_coeff.shape[0])
-
-    rdm1ao = rdm1
-    if (rdm1 is None):
-        rdm1ao = 1. * mc.make_rdm1()
-    if len(rdm1ao.shape) > 2: rdm1ao = (rdm1ao[0] + rdm1ao[1])
-
-    if (uncontract):
-        dm = reduce(numpy.dot, (contr_coeff, rdm1ao, contr_coeff.T))
-    else:
-        dm = 1. * rdm1ao
-    np, nc = contr_coeff.shape[0], contr_coeff.shape[1]
-
-    hso1e = numpy.zeros((3, np, np))
-    h1e_1c, x, rp = sfx2c1e.SpinFreeX2C(mc.mol).get_hxr(
-        mc.mol, uncontract=uncontract)
-
-    #two electron terms
-    if (pictureChange2e == "bp"):
-        h2ao = -(alpha)**2 * 0.5 * xmol.intor(
-            'cint2e_p1vxp1_sph', comp=3, aosym='s1')
-        h2ao = h2ao.reshape(3, np, np, np, np)
-        hso1e += 1. * (numpy.einsum('ijklm,lm->ijk', h2ao, dm) - 1.5 *
-                       (numpy.einsum('ijklm, kl->ijm', h2ao, dm) +
-                        numpy.einsum('ijklm,mj->ilk', h2ao, dm)))
-    elif (pictureChange2e == "x2c"):
-        dm1 = dm / 2.
-        pLL, pLS, pSS = get_p(dm1, x, rp)
-        #kint = get_kint(xmol)
-        #hso1e += -(alpha)**2*0.5*get_fso2e_withkint(kint,x,rp,pLL,pLS,pSS)
-        hso1e += -(alpha)**2 * 0.5 * get_fso2e(xmol, x, rp, pLL, pLS, pSS)
-    elif (pictureChange2e == "none"):
-        hso1e *= 0.0
-    else:
-        print(pictureChane2e, "not a valid option")
-        exit(0)
-
-    #MF 1 electron term
-    if (pictureChange1e == "bp"):
-        hso1e += (alpha)**2 * 0.5 * get_wso(xmol)
-    elif (pictureChange1e == "x2c1"):
-        dm /= 2.
-        pLL, pLS, pSS = get_p(dm, x, rp)
-        wso = (alpha)**2 * 0.5 * get_wso(xmol)
-        hso1e += get_hso1e(wso, x, rp)
-    elif (pictureChange1e == "x2cn"):
-        h1e_2c = x2c.get_hcore(xmol)
-
-        for i in range(np):
-            for j in range(np):
-                if (abs(h1e_2c[2 * i, 2 * j + 1].imag) > 1.e-8):
-                    hso1e[0][i, j] -= h1e_2c[2 * i, 2 * j + 1].imag * 2.
-                if (abs(h1e_2c[2 * i, 2 * j + 1].real) > 1.e-8):
-                    hso1e[1][i, j] -= h1e_2c[2 * i, 2 * j + 1].real * 2.
-                if (abs(h1e_2c[2 * i, 2 * j].imag) > 1.e-8):
-                    hso1e[2][i, j] -= h1e_2c[2 * i, 2 * j].imag * 2.
-    else:
-        print(pictureChane1e, "not a valid option")
-        exit(0)
-
-    h1ao = numpy.zeros((3, nc, nc))
-    if (uncontract):
-        for ic in range(3):
-            h1ao[ic] = reduce(numpy.dot,
-                              (contr_coeff.T, hso1e[ic], contr_coeff))
-    else:
-        h1ao = 1. * hso1e
-
-    ncore, ncas = mc.ncore, mc.ncas
-    if (ncasorbs is not None):
-        ncas = ncasorbs
-    mo_coeff = mc.mo_coeff
-    h1 = numpy.einsum('xpq,pi,qj->xij', h1ao, mo_coeff,
-                      mo_coeff)[:, ncore:ncore + ncas, ncore:ncore + ncas]
-    print1Int(h1, 'SOC')
 
 
 def dryrun(mc, mo_coeff=None):
@@ -1541,41 +1412,6 @@ def runQDPT(mc, gtensor):
             logger.error(mc.fcisolver, cmd)
             raise err
 
-    else:
-        writeSHCIConfFile(mc.fcisolver, mc.nelecas, False)
-        confFile = os.path.join(mc.fcisolver.runtimeDir,
-                                mc.fcisolver.configFile)
-        outFile = os.path.join(mc.fcisolver.runtimeDir,
-                               mc.fcisolver.outputFile)
-        if (gtensor):
-            f = open(confFile, 'a')
-            f.write("dogtensor\n")
-            f.close()
-        try:
-            cmd = ' '.join((mc.fcisolver.mpiprefix,
-                            mc.fcisolver.QDPTexecutable, confFile))
-            cmd = "%s > %s 2>&1" % (cmd, outFile)
-            check_call(cmd, shell=True)
-            check_call('cat %s|grep -v "#"' % (outFile), shell=True)
-        except CalledProcessError as err:
-            logger.error(mc.fcisolver, cmd)
-            raise err
-
-
-def doSOC(mc, gtensor=False, pictureChange="bp"):
-    writeSOCIntegrals(mc, pictureChange=pictureChange)
-    dryrun(mc)
-    if (gtensor or True):
-        ncore, ncas = mc.ncore, mc.ncas
-        charge_center = numpy.einsum('z,zx->x', mc.mol.atom_charges(),
-                                     mc.mol.atom_coords())
-        h1ao = mc.mol.intor('cint1e_cg_irxp_sph', comp=3)
-        h1 = numpy.einsum(
-            'xpq,pi,qj->xij', h1ao, mc.mo_coeff,
-            mc.mo_coeff)[:, ncore:ncore + ncas, ncore:ncore + ncas]
-        print1Int(h1, 'GTensor')
-
-    runQDPT(mc, gtensor)
 
 
 if __name__ == '__main__':

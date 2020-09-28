@@ -26,6 +26,7 @@ from pyscf.scf import hf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
 from pyscf import __config__
+from pyscf.shciscf import socutils
 
 LINEAR_DEP_THRESHOLD = 1e-9
 
@@ -80,6 +81,42 @@ class X2C(lib.StreamObject):
         t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
         v = xmol.intor_symmetric('int1e_nuc_spinor')
         w = xmol.intor_symmetric('int1e_spnucsp_spinor')
+
+        # an approximate one-electron spin-orbit integral to account for two-electron effect
+        # by adding an scaling factor
+        # Q = [0,2,10,28,60,110] for [s,p,d,f,g,h] seperately
+        # 
+        if 'BOETTGER' in self.approx.upper():
+            # first construct the array sqrt(Q(l)/Z)
+            fudge_factor = numpy.zeros(xmol.nao_2c())
+            spinor_labels = xmol.spinor_labels(0)
+            atom_slices = xmol.offset_2c_by_atom()
+            for ia in range(xmol.natm):
+                Z_ia = xmol.atom_charge(ia)
+                #print(Z_ia)
+                for iorb in range(atom_slices[ia][2], atom_slices[ia][3]):
+                    label = spinor_labels[iorb]
+                    if 'S' in label[2].upper():
+                        fudge_factor[iorb] = 0./Z_ia
+                    elif 'P' in label[2].upper():
+                        #if 2 < Z_ia:
+                        fudge_factor[iorb] = 2./Z_ia
+                    elif 'D' in label[2].upper():
+                        #if 10 < Z_ia:
+                        fudge_factor[iorb] = 10./Z_ia
+                    elif 'F' in label[2].upper():
+                        #if 28 < Z_ia:
+                        fudge_factor[iorb] = 28./Z_ia
+                    elif 'G' in label[2].upper():
+                        #if 60 < Z_ia:
+                        fudge_factor[iorb] = 60./Z_ia
+                    elif 'H' in label[2].upper:
+                        #if 110 < Z_ia:
+                        fudge_factor[iorb] = 110./Z_ia
+            for iorb in range(xmol.nao_2c()):
+                for jorb in range(xmol.nao_2c()):
+                    w[iorb, jorb]*=(1.-numpy.sqrt(fudge_factor[iorb]*fudge_factor[jorb]))
+                
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
@@ -109,7 +146,16 @@ class X2C(lib.StreamObject):
             contr_coeff[0::2,0::2] = contr_coeff_nr
             contr_coeff[1::2,1::2] = contr_coeff_nr
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
-        return h1
+        hso1e = numpy.zeros((nc*2, nc*2), dtype=complex)
+        if 'AMF' in self.approx.upper():
+            # incorporate X2CAMF approximation.
+            # since 1e SOC terms are already included.
+            hso1e_atoms = socutils.get_socamf(list(set(xmol.elements)), xmol.basis)
+            atom_slices = self.mol.aoslice_2c_by_atom()
+            for ia in range(xmol.natm):
+                ish0, ish1, c0, c1 = atom_slices[ia]
+                hso1e[c0:c1,c0:c1] += hso1e_atoms[self.mol.elements[ia]]
+        return h1+hso1e
 
     def _picture_change(self, xmol, even_operator=(None, None), odd_operator=None):
         '''Picture change for even_operator + odd_operator
@@ -320,12 +366,17 @@ def get_init_guess(mol, key='minao'):
 
 
 class X2C_UHF(hf.SCF):
+    nopen = getattr(__config__, 'scf_dhf_SCF_nopen', 0)
+    nact = getattr(__config__, 'scf_dhf_SCF_nact', 0)
+    nclose = getattr(__config__, 'scf_dhf_SCF_nclose', 0)
+    h1_somf = getattr(__config__, 'scf_dhf_SCF_h1_somf', None)  
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.with_x2c = X2C(mol)
         #self.with_x2c.xuncontract = False
         self._keys = self._keys.union(['with_x2c'])
-
+         
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -360,6 +411,7 @@ class X2C_UHF(hf.SCF):
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         return self.with_x2c.get_hcore(mol)
+        
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
@@ -367,10 +419,19 @@ class X2C_UHF(hf.SCF):
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
+        nact = self.nact
+        nopen = self.nopen
         mol = self.mol
+        nclose = mol.nelectron-nact
+        assert(mol.nelectron==nclose+nact)
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[:mol.nelectron] = 1
-        if mol.nelectron < len(mo_energy):
+        if nopen is 0:
+            mo_occ[:mol.nelectron] = 1
+        else:
+            mo_occ[:nclose]=1
+            average_occ=nact/nopen
+            mo_occ[nclose:nclose+nopen]=average_occ
+        if nopen+nclose < len(mo_energy):
             logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g', \
                         mol.nelectron, mo_energy[mol.nelectron-1],
                         mo_energy[mol.nelectron])
@@ -648,6 +709,16 @@ def _x2c1e_xmatrix(t, v, w, s, c):
         cs = a[nao:,idx]
         # X = B A^{-1} = B A^T S
         x = cs.dot(cl.conj().T).dot(m)
+    return x
+
+def _x2cmf_xmatrix(h, s, c):
+    nao = s.shape[0] // 2
+    n2 = nao * 2
+    m = s
+    e, a = scipy.linalg.eigh(h, m)
+    cl = a[:nao,nao:]
+    cs = a[nao:,nao:]
+    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
     return x
 
 def _x2c1e_get_hcore(t, v, w, s, c):

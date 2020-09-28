@@ -20,15 +20,9 @@ import sys
 import time
 from functools import reduce
 import numpy
-from pyscf import lib
 from pyscf.lib import logger
-from pyscf import gto
-from pyscf import scf
-from pyscf import ao2mo
-from pyscf import fci
+from pyscf import gto, scf, ao2mo, fci, x2c, symm, __config__, lib
 from pyscf.mcscf import addons
-from pyscf import symm
-from pyscf import __config__
 import h5py
 
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
@@ -57,16 +51,19 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:ncore+ncas]
 
-    hcore = (1+0j)*casci.get_hcore()
+    hcore = casci.get_hcore()
     energy_core = casci.energy_nuc()
     if mo_core.size == 0:
         corevhf = 0
     else:
-        core_dm = numpy.dot(mo_core, mo_core.T) * 2
+        core_dm = numpy.dot(mo_core, mo_core.T.conj())
         corevhf = casci.get_veff(casci.mol, core_dm)
+
+        j,k = casci._scf.get_jk(casci.mol, core_dm)
+        print (energy_core, numpy.einsum('ij,ji', core_dm, hcore), numpy.einsum('ij,ji', j, corevhf), numpy.einsum('ij,ji', k, corevhf) )
         energy_core += numpy.einsum('ij,ji', core_dm, hcore)
         energy_core += numpy.einsum('ij,ji', core_dm, corevhf) * .5
-    h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
+    h1eff = reduce(numpy.dot, (mo_cas.T.conj(), hcore+corevhf, mo_cas))
     return h1eff, energy_core
 
 def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
@@ -512,10 +509,8 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
                            (mo_coeff.shape[1], casci.ncore, ncas))
 
     # FCI
-    import pdb
-    pdb.set_trace()
     max_memory = max(400, casci.max_memory-lib.current_memory()[0])
-    e_tot, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, (nelecas,0),
+    e_tot, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
                                            ci0=ci0, verbose=log,
                                            max_memory=max_memory,
                                            ecore=energy_core)
@@ -676,13 +671,13 @@ class GZCASCI(lib.StreamObject):
     '''
 
     natorb = getattr(__config__, 'zmcscf_gzcasci_CASCI_natorb', False)
-    canonicalization = getattr(__config__, 'zmcscf_gzcasci_CASCI_canonicalization', True)
+    canonicalization = getattr(__config__, 'zmcscf_gzcasci_CASCI_canonicalization', False)
     sorting_mo_energy = getattr(__config__, 'zmcscf_gzcasci_CASCI_sorting_mo_energy', False)
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         if isinstance(mf_or_mol, gto.Mole):
-            mf = scf.GHF(mf_or_mol)
-        elif isinstance(mf_or_mol, scf.ghf.GHF):
+            mf = scf.X2C(mf_or_mol)
+        elif isinstance(mf_or_mol, x2c.x2c.X2C) or isinstance(mf_or_mol, x2c.x2c.X2C_UHF):
             mf = mf_or_mol
         else:
             print("we need the mean field object to be of GHF type")
@@ -694,7 +689,12 @@ class GZCASCI(lib.StreamObject):
         self.stdout = mol.stdout
         self.max_memory = mf.max_memory
         self.ncas = ncas
-        self.nelecas = nelecas
+        if isinstance(nelecas, (int, numpy.integer)):
+            nelecb = (nelecas-mol.spin)//2
+            neleca = nelecas - nelecb
+            self.nelecas = (neleca, nelecb)
+        else:
+            self.nelecas = (nelecas[0],nelecas[1])
         self.ncore = ncore
         self.fcisolver = fci.solver(mol, symm=False)
 # CI solver parameters are set in fcisolver object
@@ -718,7 +718,7 @@ class GZCASCI(lib.StreamObject):
     @property
     def ncore(self):
         if self._ncore is None:
-            ncorelec = self.mol.nelectron - self.nelecas
+            ncorelec = self.mol.nelectron - sum(self.nelecas)
             return ncorelec 
         else:
             return self._ncore
@@ -734,8 +734,8 @@ class GZCASCI(lib.StreamObject):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        log.info('CAS (%de, %do), ncore = %d, nvir = %d', \
-                 self.nelecas, ncas, ncore, nvir)
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
@@ -776,23 +776,11 @@ To enable the solvent model for CASCI, the following code needs to be called
         if mol is None: mol = self.mol
         if dm is None:
             mocore = self.mo_coeff[:,:self.ncore]
-            dm = numpy.dot(mocore, mocore.T) * 2
+            dm = numpy.dot(mocore, mocore.T.conj())
 
-        nao = dm.shape[0]//2
-        vj, vk = 0.*dm, 0.*dm
-        eri_ao = (1.+0j)*mol.intor('int2e_sph', aosym='s1')
-        vj[:nao,:nao] = lib.einsum('pqrs,rs->pq', eri_ao, (dm[:nao,:nao]+dm[nao:,nao:]))
-        vj[nao:,nao:] = 1.*vj[:nao,:nao]
+        j,k = self._scf.get_jk(mol, dm)
+        return j - k 
 
-        vk[:nao,:nao] = lib.einsum('pqrs,rs->pq', eri_ao, dm[:nao,:nao])
-        vk[:nao,nao:] = lib.einsum('pqrs,rs->pq', eri_ao, dm[nao:,:nao])
-        vk[nao:,nao:] = lib.einsum('pqrs,rs->pq', eri_ao, dm[nao:,nao:])
-        vk[nao:,:nao] = lib.einsum('pqrs,rs->pq', eri_ao, dm[:nao,nao:])
-
-# don't call self._scf.get_veff because _scf might be DFT object
-
-        #vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
-        return vj - vk * .5
 
     def _eig(self, h, *args):
         return scf.hf.eig(h, None)
@@ -804,7 +792,8 @@ To enable the solvent model for CASCI, the following code needs to be called
         in which get_h2eff function returns the DF integrals while get_h2cas
         returns the regular 2-electron integrals.
         '''
-        return self.ao2mo(mo_coeff)
+        return GZCASCI.ao2mo(self,mo_coeff)
+
     def get_h2eff(self, mo_coeff=None):
         '''Computing active space two-particle Hamiltonian.
 
@@ -822,31 +811,11 @@ To enable the solvent model for CASCI, the following code needs to be called
         nao = self.mo_coeff.shape[0]//2
         if mo_coeff is None:
             ncore = self.ncore
-            mo_coeffa = self.mo_coeff[:nao,ncore:nocc]
-            mo_coeffb = self.mo_coeff[nao:,ncore:nocc]
+            mo_coeff = self.mo_coeff
 
-        elif mo_coeff.shape[1] != ncas:
-            mo_coeffa = mo_coeff[:nao,ncore:nocc]
-            mo_coeffb = mo_coeff[nao:,ncore:nocc]
-
-        eri = numpy.zeros((ncas,ncas,ncas,ncas), dtype=numpy.complex)
-        eri_ao = (1.+0j)*mol.intor('int2e_sph', aosym='s1')
-        ##the mo eri will need to be constructed in 4 steps
-        if self._scf._eri is not None:
-            eri += lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
-                              mo_coeffa.conj(), mo_coeffa, mo_coeffa.conj(), mo_coeffa)
-            eri += lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
-                              mo_coeffb.conj(), mo_coeffb, mo_coeffa.conj(), mo_coeffa)
-            eri += lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
-                              mo_coeffa.conj(), mo_coeffa, mo_coeffb.conj(), mo_coeffb)
-            eri += lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
-                              mo_coeffb.conj(), mo_coeffb, mo_coeffb.conj(), mo_coeffb)
-        else:
-            eri = ao2mo.full(self.mol, mo_coeff, verbose=self.verbose,
-                             max_memory=self.max_memory)
-        import pdb
-        pdb.set_trace()
-        return eri
+        #eri_ao_sp = mol.intor('int2e_spinor', aosym='s1')
+        eri_cas = ao2mo.kernel(self.mol, mo_coeff[:,ncore:nocc], intor='int2e_spinor')
+        return eri_cas
 
     get_h1cas = h1e_for_cas = h1e_for_cas
 
@@ -856,6 +825,7 @@ To enable the solvent model for CASCI, the following code needs to be called
 
     def casci(self, mo_coeff=None, ci0=None, verbose=None):
         return self.kernel(mo_coeff, ci0, verbose)
+
     def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         '''
         Returns:
@@ -984,8 +954,8 @@ To enable the solvent model for CASCI, the following code needs to be called
         casdm1 = self.fcisolver.make_rdm1(ci, ncas, nelecas)
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:ncore+ncas]
-        dm1 = numpy.dot(mocore, mocore.T) * 2
-        dm1 = dm1 + reduce(numpy.dot, (mocas, casdm1, mocas.T))
+        dm1 = numpy.dot(mocore, mocore.T.conj()) * 2
+        dm1 = dm1 + reduce(numpy.dot, (mocas, casdm1, mocas.T.conj()))
         return dm1
 
 
@@ -1019,12 +989,13 @@ if __name__ == '__main__':
         ['H', ( 0., 0.757 , 0.587)],]
 
     mol.basis = {'H': 'sto-3g',
-                 'O': '6-31g',}
+                 'O': 'sto-3g',}
     mol.build()
 
-    m = scf.GHF(mol)
-    ehf = m.scf()
-    mc = GZCASCI(m, 8, 4)
+    m = scf.X2C(mol)
+    ehf = m.kernel()
+    
+    mc = GZCASCI(m, 4, 4)
     from pyscf.shciscf import shci
     mc.fcisolver = shci.SHCI(mol, maxM=1.e-3)
     mc.natorb = 1
@@ -1032,45 +1003,3 @@ if __name__ == '__main__':
     print(ehf, emc, emc-ehf)
     #-75.9577817425 -75.9624554777 -0.00467373522233
     print(emc+75.9624554777)
-
-#    mc = CASCI(m, 4, (3,1))
-#    #mc.fcisolver = fci.direct_spin1
-#    mc.fcisolver = fci.solver(mol, False)
-#    emc = mc.casci()[0]
-#    print(emc - -75.439016172976)
-#
-#    mol = gto.Mole()
-#    mol.verbose = 0
-#    mol.output = "out_casci"
-#    mol.atom = [
-#        ["C", (-0.65830719,  0.61123287, -0.00800148)],
-#        ["C", ( 0.73685281,  0.61123287, -0.00800148)],
-#        ["C", ( 1.43439081,  1.81898387, -0.00800148)],
-#        ["C", ( 0.73673681,  3.02749287, -0.00920048)],
-#        ["C", (-0.65808819,  3.02741487, -0.00967948)],
-#        ["C", (-1.35568919,  1.81920887, -0.00868348)],
-#        ["H", (-1.20806619, -0.34108413, -0.00755148)],
-#        ["H", ( 1.28636081, -0.34128013, -0.00668648)],
-#        ["H", ( 2.53407081,  1.81906387, -0.00736748)],
-#        ["H", ( 1.28693681,  3.97963587, -0.00925948)],
-#        ["H", (-1.20821019,  3.97969587, -0.01063248)],
-#        ["H", (-2.45529319,  1.81939187, -0.00886348)],]
-#
-#    mol.basis = {'H': 'sto-3g',
-#                 'C': 'sto-3g',}
-#    mol.build()
-#
-#    m = scf.RHF(mol)
-#    ehf = m.scf()
-#    mc = CASCI(m, 9, 8)
-#    mc.fcisolver = fci.solver(mol)
-#    emc = mc.casci()[0]
-#    print(ehf, emc, emc-ehf)
-#    print(emc - -227.948912536)
-#
-#    mc = CASCI(m, 9, (5,3))
-#    #mc.fcisolver = fci.direct_spin1
-#    mc.fcisolver = fci.solver(mol, False)
-#    mc.fcisolver.nroots = 3
-#    emc = mc.casci()[0]
-#    print(emc[0] - -227.7674519720)

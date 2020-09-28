@@ -35,6 +35,7 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist, elements
 from pyscf import __config__
+from pyscf import x2c
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
@@ -206,6 +207,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         #fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
+        
         dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
         dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
