@@ -30,7 +30,7 @@ from pyscf import __config__
 from pyscf import ao2mo, df
 from pyscf.agf2 import uagf2, dfragf2, aux, mpi_helper, _agf2
 
-BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
+BLKMIN = getattr(__config__, 'agf2_blkmin', 100)
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
