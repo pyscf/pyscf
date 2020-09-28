@@ -75,8 +75,10 @@ void AGF2uee_vv_vev_islice(double *xija,
     double *vv_priv = calloc(nmo*nmo, sizeof(double));
     double *vev_priv = calloc(nmo*nmo, sizeof(double));
 
+    int i;
+
 #pragma omp for
-    for (int i = istart; i < iend; i++) {
+    for (i = istart; i < iend; i++) {
         // build xija
         AGF2slice_0i2(xija, nmo, noa, nja, i, xja);
 
@@ -182,8 +184,10 @@ void AGF2udf_vv_vev_islice(double *qxi,
     double *vv_priv = calloc(nmo*nmo, sizeof(double));
     double *vev_priv = calloc(nmo*nmo, sizeof(double));
 
+    int i;
+
 #pragma omp for
-    for (int i = istart; i < iend; i++) {
+    for (i = istart; i < iend; i++) {
         // build qx
         AGF2slice_01i(qxi, naux, nmo, noa, i, qx);
 

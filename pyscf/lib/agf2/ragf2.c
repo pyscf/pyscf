@@ -36,9 +36,9 @@ void AGF2sum_inplace(double *a,
                      double alpha,
                      double beta)
 {
-    //TODO: can we just use blas for this?
+    int i;
 
-    for (int i = 0; i < x; i++) {
+    for (i = 0; i < x; i++) {
         b[i] *= beta;
         b[i] += alpha * a[i];
     }
@@ -52,7 +52,9 @@ void AGF2prod_inplace(double *a,
                       double *b,
                       int x)
 {
-    for (int i = 0; i < x; i++) {
+    int i;
+
+    for (i = 0; i < x; i++) {
         b[i] *= a[i];
     }
 }
@@ -66,7 +68,9 @@ void AGF2prod_outplace(double *a,
                        int x,
                        double *c)
 {
-    for (int i = 0; i < x; i++) {
+    int i;
+
+    for (i = 0; i < x; i++) {
         c[i] = a[i] * b[i];
     }
 }
@@ -83,11 +87,12 @@ void AGF2slice_0i2(double *a,
                    double *b)
 {
     double *pa, *pb;
+    int i, k;
 
-    for (int i = 0; i < x; i++) {
+    for (i = 0; i < x; i++) {
         pb = b + i*z;
         pa = a + i*y*z + idx*z;
-        for (int k = 0; k < z; k++) {
+        for (k = 0; k < z; k++) {
             pb[k] = pa[k];
         }
     }
@@ -105,11 +110,12 @@ void AGF2slice_01i(double *a,
                    double *b)
 {
     double *pa, *pb;
+    int i, k;
 
-    for (int i = 0; i < x; i++) {
+    for (i = 0; i < x; i++) {
         pb = b + i*y;
         pa = a + i*y*z + idx;
-        for (int j = 0; j < y; j++) {
+        for (j = 0; j < y; j++) {
             pb[j] = pa[j*z];
         }
     }
@@ -127,10 +133,11 @@ void AGF2sum_inplace_ener(double a,
                   double *d)
 {
     double *pd;
+    int i, j;
 
-    for (int i = 0; i < x; i++) {
+    for (i = 0; i < x; i++) {
         pd = d + i*y;
-        for (int j = 0; j < y; j++) {
+        for (j = 0; j < y; j++) {
             pd[j] = a + b[i] - c[j];
         }
     }
@@ -146,8 +153,9 @@ void AGF2prod_inplace_ener(double *a,
                            int y)
 {
     double *pb;
+    int i;
 
-    for (int i = 0; i < x; i++) {
+    for (i = 0; i < x; i++) {
         pb = b + i*y;
         AGF2prod_inplace(a, pb, y);
     }
@@ -164,8 +172,9 @@ void AGF2prod_outplace_ener(double *a,
                             double *c)
 {
     double *pb, *pc;
+    int i;
 
-    for (int i = 0; i < x; i++) {
+    for (i = 0; i < x; i++) {
         pb = b + i*y;
         pc = c + i*y;
         AGF2prod_outplace(a, pb, y, pc);
@@ -209,8 +218,10 @@ void AGF2ee_vv_vev_islice(double *xija,
     double *vv_priv = calloc(nmo*nmo, sizeof(double));
     double *vev_priv = calloc(nmo*nmo, sizeof(double));
 
+    int i;
+
 #pragma omp for
-    for (int i = istart; i < iend; i++) {
+    for (i = istart; i < iend; i++) {
         // build xija
         AGF2slice_0i2(xija, nmo, nocc, nja, i, xja);
 
@@ -291,8 +302,10 @@ void AGF2df_vv_vev_islice(double *qxi,
     double *vv_priv = calloc(nmo*nmo, sizeof(double));
     double *vev_priv = calloc(nmo*nmo, sizeof(double));
 
+    int i;
+
 #pragma omp for
-    for (int i = istart; i < iend; i++) {
+    for (i = istart; i < iend; i++) {
         // build qx
         AGF2slice_01i(qxi, naux, nmo, nocc, i, qx);
 
@@ -328,7 +341,7 @@ void AGF2df_vv_vev_islice(double *qxi,
     free(xja);
 
 #pragma omp critical
-    for (int i = 0; i < (nmo*nmo); i++) {
+    for (i = 0; i < (nmo*nmo); i++) {
         vv[i] += vv_priv[i];
         vev[i] += vev_priv[i];
     }
