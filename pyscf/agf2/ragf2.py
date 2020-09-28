@@ -416,7 +416,7 @@ class RAGF2(lib.StreamObject):
             Convergence threshold for AGF2 energy. Default value is 1e-7
         conv_tol_rdm1 : float
             Convergence threshold for first-order reduced density matrix.
-            Default value is 1e-6.
+            Default value is 1e-8.
         conv_tol_nelec : float
             Convergence threshold for the number of electrons. Default 
             value is 1e-6.
@@ -479,7 +479,7 @@ class RAGF2(lib.StreamObject):
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
         self.conv_tol = getattr(__config__, 'agf2_conv_tol', 1e-7)
-        self.conv_tol_rdm1 = getattr(__config__, 'agf2_conv_tol_rdm1', 1e-6)
+        self.conv_tol_rdm1 = getattr(__config__, 'agf2_conv_tol_rdm1', 1e-8)
         self.conv_tol_nelec = getattr(__config__, 'agf2_conv_tol_nelec', 1e-6)
         self.max_cycle = getattr(__config__, 'agf2_max_cycle', 50)
         self.max_cycle_outer = getattr(__config__, 'agf2_max_cycle_outer', 20)

@@ -145,7 +145,7 @@ class UAGF2(uagf2.UAGF2):
             Convergence threshold for AGF2 energy. Default value is 1e-7
         conv_tol_rdm1 : float
             Convergence threshold for first-order reduced density matrix.
-            Default value is 1e-6.
+            Default value is 1e-8.
         conv_tol_nelec : float
             Convergence threshold for the number of electrons. Default 
             value is 1e-6.
@@ -164,6 +164,12 @@ class UAGF2(uagf2.UAGF2):
             DIIS space size for Fock loop iterations. Default value is 6.
         diis_min_space : 
             Minimum space of DIIS. Default value is 1.
+        os_factor : float
+            Opposite-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
+        ss_factor : float
+            Same-spin factor for spin-component-scaled (SCS)
+            calculations. Default 1.0
 
     Saved results
 

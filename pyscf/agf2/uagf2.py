@@ -331,7 +331,7 @@ class UAGF2(ragf2.RAGF2):
             Convergence threshold for AGF2 energy. Default value is 1e-7
         conv_tol_rdm1 : float
             Convergence threshold for first-order reduced density matrix.
-            Default value is 1e-6.
+            Default value is 1e-8.
         conv_tol_nelec : float
             Convergence threshold for the number of electrons. Default 
             value is 1e-6.
@@ -658,8 +658,6 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
 def _make_mo_eris_outcore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
-    #TODO: check all of these are s4 symmetry
-    #NOTE: can we just do a bit-by-bit transpose?
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
@@ -696,7 +694,6 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=None):
     spin = 0: (aaaa, aabb)
     spin = 1: (bbbb, bbaa)
     '''
-    #TODO: improve efficiency by storing half-transformed intermediates
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
@@ -748,7 +745,6 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
     spin = 0: (aaaa, aabb)
     spin = 1: (bbbb, bbaa)
     '''
-    #TODO: improve efficiency and check blksize
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
