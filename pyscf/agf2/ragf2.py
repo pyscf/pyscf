@@ -74,7 +74,8 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
 
         # two-body terms
         se = agf2.build_se(eri, gf)
-        gf = agf2.build_gf(eri, gf, se)
+        #NOTE: I used to do this in my old code.. but it's wrong
+        #gf = agf2.build_gf(eri, gf, se)
         e_2b = agf2.energy_2body(gf, se)
 
         e_tot = e_1b + e_2b

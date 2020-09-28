@@ -43,27 +43,27 @@ class KnownValues(unittest.TestCase):
         gf2.run()
         self.assertTrue(gf2.converged)
         self.assertAlmostEqual(mf.e_tot,  -76.0167894720742   , 10)
-        self.assertAlmostEqual(gf2.e_1b,  -75.89108074653284  ,  6)
-        self.assertAlmostEqual(gf2.e_2b,  -0.3323976129158455 ,  6)
+        self.assertAlmostEqual(gf2.e_1b,  -75.89108074396137  ,  6)
+        self.assertAlmostEqual(gf2.e_2b,  -0.33248785652834784,  6)
         self.assertAlmostEqual(gf2.e_mp2, -0.17330473289845347,  6)
 
         e_ip, v_ip = gf2.ipagf2(nroots=3)
         v_ip = [np.linalg.norm(v)**2 for v in v_ip]
-        self.assertAlmostEqual(e_ip[0], 0.4463033078563678, 6)
-        self.assertAlmostEqual(e_ip[1], 0.5497970633171162, 6)
-        self.assertAlmostEqual(e_ip[2], 0.6256188543981303, 6)
-        self.assertAlmostEqual(v_ip[0], 0.9690389634580812, 6)
-        self.assertAlmostEqual(v_ip[1], 0.9688865172211362, 6)
-        self.assertAlmostEqual(v_ip[2], 0.9701094049601187, 6)
+        self.assertAlmostEqual(e_ip[0], 0.45080222600137465, 6)
+        self.assertAlmostEqual(e_ip[1], 0.5543195106668687 , 6)
+        self.assertAlmostEqual(e_ip[2], 0.6299640547362962 , 6)
+        self.assertAlmostEqual(v_ip[0], 0.9704061235804103 , 6)
+        self.assertAlmostEqual(v_ip[1], 0.9702372037466642 , 6)
+        self.assertAlmostEqual(v_ip[2], 0.9713854565834782 , 6)
 
         e_ea, v_ea = gf2.eaagf2(nroots=3)
         v_ea = [np.linalg.norm(v)**2 for v in v_ea]
-        self.assertAlmostEqual(e_ea[0], 0.1572194156451459, 6)
-        self.assertAlmostEqual(e_ea[1], 0.236241405622162 , 6)
-        self.assertAlmostEqual(e_ea[2], 0.6886009727626674, 6)
-        self.assertAlmostEqual(v_ea[0], 0.9906842311023561, 6)
-        self.assertAlmostEqual(v_ea[1], 0.9903372215743906, 6)
-        self.assertAlmostEqual(v_ea[2], 0.983611496176651 , 6)
+        self.assertAlmostEqual(e_ea[0], 0.15581330758457984, 6)
+        self.assertAlmostEqual(e_ea[1], 0.2347918376963518 , 6)
+        self.assertAlmostEqual(e_ea[2], 0.686105303143818  , 6)
+        self.assertAlmostEqual(v_ea[0], 0.9903734898112396 , 6)
+        self.assertAlmostEqual(v_ea[1], 0.9901410412716749 , 6)
+        self.assertAlmostEqual(v_ea[2], 0.9827713231118138 , 6)
 
     def test_ragf2_slow_lih_3_4(self):
         # tests AGF2(3,4) for LiH/cc-pvdz
