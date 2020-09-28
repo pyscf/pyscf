@@ -110,7 +110,7 @@ void AGF2slice_01i(double *a,
                    double *b)
 {
     double *pa, *pb;
-    int i, k;
+    int i, j;
 
     for (i = 0; i < x; i++) {
         pb = b + i*y;
