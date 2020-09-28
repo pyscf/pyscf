@@ -616,19 +616,34 @@ if __name__ == "__main__":
 
     kpts = cell.make_kpts([16,1,1])
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv="ewald").density_fit()
-    kmf.kernel()
+    e0 = kmf.kernel()
 
     #TODO implement the finite field version
     polar = Polarizability(kmf, kpts)
     dip = polar.dipole()
-    print(dip)
     e2 = polar.polarizability()
-    print(e2)
-    e2 = polar.polarizability_with_freq(freq=0.)
-    print(e2)
-    e2 = polar.polarizability_with_freq(freq=0.1)
-    print(e2)
-    e2 = polar.polarizability_with_freq(freq=-0.1)
-    print(e2)
+    e2_w0 = polar.polarizability_with_freq(freq=0.)
+    e2_w1 = polar.polarizability_with_freq(freq=0.1)
+    e2_w2 = polar.polarizability_with_freq(freq=-0.1)
     e3 = polar.hyper_polarizability()
+
+    h1 = kmf.get_hcore()
+    z = get_z(polar)[0]
+    def apply_E(E):
+        kmf.get_hcore = lambda *args, **kwargs: h1 + np.einsum('x,kxij->kij', E, z)
+        e = kmf.kernel()
+        return e
+
+    h = 1e-4
+    dip_x = -(apply_E([0.5*h, 0., 0.]) - apply_E([-0.5*h, 0., 0.])) / h
+    print(dip)
+    print(dip_x)
+
+    e2_xx = -(apply_E([h, 0., 0.]) - 2*e0 + apply_E([-h, 0., 0.])) / h**2
+    print(e2)
+    print(e2_xx)
+
+    print(e2_w0)
+    print(e2_w1)
+    print(e2_w2)
     print(e3)
