@@ -124,7 +124,7 @@ void AGF2uee_vv_vev_islice(double *xija,
     free(exJA);
 
 #pragma omp critical
-    for (int i = 0; i < (nmo*nmo); i++) {
+    for (i = 0; i < (nmo*nmo); i++) {
         vv[i] += vv_priv[i];
         vev[i] += vev_priv[i];
     }
@@ -241,7 +241,7 @@ void AGF2udf_vv_vev_islice(double *qxi,
     free(exJA);
 
 #pragma omp critical
-    for (int i = 0; i < (nmo*nmo); i++) {
+    for (i = 0; i < (nmo*nmo); i++) {
         vv[i] += vv_priv[i];
         vev[i] += vev_priv[i];
     }
