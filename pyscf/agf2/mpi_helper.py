@@ -59,10 +59,11 @@ def reduce(obj, root=0, op=getattr(mpi, 'SUM', None)):
             Reduced object
     '''
 
-    is_array = isinstance(obj, np.ndarray)
-
     if size == 1:
-        return m
+        return obj
+
+    is_array = isinstance(obj, np.ndarray)
+    m = obj if is_array else np.array([obj,])
 
     m_red = np.zeros_like(m)
     comm.Reduce(np.asarray(m), m_red, op=op, root=root)

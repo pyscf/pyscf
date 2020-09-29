@@ -221,11 +221,13 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     sijb = (0, nmob, 0, nmob)
     sym = dict(aosym='s2', mosym='s2')
 
-    p1 = 0
-    for eri0 in with_df.loop():
-        p0, p1 = p1, p1 + eri0.shape[0]
+    for p0, p1 in with_df.prange():
+        eri0 = with_df._cderi[p0:p1]
         qxy_a[p0:p1] = ao2mo._ao2mo.nr_e2(eri0, moa, sija, out=qxy_a[p0:p1], **sym)
         qxy_b[p0:p1] = ao2mo._ao2mo.nr_e2(eri0, mob, sijb, out=qxy_b[p0:p1], **sym)
+
+    qxy_a = mpi_helper.reduce(qxy_a)
+    qxy_b = mpi_helper.reduce(qxy_b)
 
     eris.eri_a = qxy_a
     eris.eri_b = qxy_b
@@ -278,6 +280,11 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
         qxi_b[p0:p1] = ao2mo._ao2mo.nr_e2(bufb0, cxi_b, sxi_b, out=qxi_b[p0:p1], **sym)
         qja_a[p0:p1] = ao2mo._ao2mo.nr_e2(bufa0, cja_a, sja_a, out=qja_a[p0:p1], **sym)
         qja_b[p0:p1] = ao2mo._ao2mo.nr_e2(bufb0, cja_b, sja_b, out=qja_b[p0:p1], **sym)
+
+    qxi_a = mpi_helper.reduce(qxi_a)
+    qxi_b = mpi_helper.reduce(qxi_b)
+    qja_a = mpi_helper.reduce(qja_a)
+    qja_b = mpi_helper.reduce(qja_b)
 
     qxi_a = qxi_a.reshape(naux, -1)
     qxi_b = qxi_b.reshape(naux, -1)

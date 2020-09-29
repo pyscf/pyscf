@@ -110,7 +110,8 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
     if with_j:
         rdm1_tril = lib.pack_tril(rdm1 + np.tril(rdm1, k=-1))
         vj = np.zeros((npair,))
-    else:
+
+    if with_k:
         vk = np.zeros((nmo, nmo))
 
     fdrv = ao2mo._ao2mo.libao2mo.AO2MOnr_e2_drv
@@ -151,7 +152,11 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
             vk = lib.dot(buf1.T, buf2, c=vk, beta=1)
 
     if with_j:
+        vj = mpi_helper.reduce(vj)
         vj = lib.unpack_tril(vj)
+
+    if with_k:
+        vk = mpi_helper.reduce(vk)
     
     return vj, vk
 
@@ -256,7 +261,11 @@ class DF(df.DF):
     ''' Replaces the :class:`DF.prange` function with one which
         natively supports MPI, if used.
     '''
-    def prange(self, start, stop, step):
+    def prange(self, start=None, stop=None, step=None):
+        if start is None: start = 0
+        if stop is None: stop = self.get_naoaux()
+        if step is None: step = self.blockdim
+
         for p0, p1 in mpi_helper.prange(start, stop, step):
             yield p0, p1
 
@@ -289,10 +298,11 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     sij = (0, nmo, 0, nmo)
     sym = dict(aosym='s2', mosym='s2')
 
-    p1 = 0
-    for eri0 in with_df.loop():
-        p0, p1 = p1, p1 + eri0.shape[0]
+    for p0, p1 in with_df.prange():
+        eri0 = with_df._cderi[p0:p1]
         qxy[p0:p1] = ao2mo._ao2mo.nr_e2(eri0, mo, sij, out=qxy[p0:p1], **sym)
+
+    qxy = mpi_helper.reduce(qxy)
 
     eris.eri = eris.qxy = qxy
     
@@ -331,6 +341,9 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
 
         qxi[p0:p1] = ao2mo._ao2mo.nr_e2(buf0, cxi, sxi, out=qxi[p0:p1], **sym)
         qja[p0:p1] = ao2mo._ao2mo.nr_e2(buf0, cja, sja, out=qja[p0:p1], **sym)
+
+    qxi = mpi_helper.reduce(qxi)
+    qja = mpi_helper.reduce(qja)
 
     qxi = qxi.reshape(naux, -1)
     qja = qja.reshape(naux, -1)
