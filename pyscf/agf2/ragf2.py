@@ -152,7 +152,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
     se.remove_uncoupled(tol=tol)
 
-    log.timer_debug1('se part', *cput0)
+    log.timer('se part', *cput0)
 
     return se
 
@@ -311,6 +311,7 @@ def fock_loop(agf2, eri, gf, se):
 
     log.info('fock converged = %s  chempot = %.9g  dN = %.3g  |ddm| = %.3g',
              converged, se.chempot, nerr, derr)
+    log.timer('fock loop', *cput0)
 
     return gf, se, converged
 

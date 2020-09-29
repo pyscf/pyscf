@@ -90,7 +90,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
     se_a.remove_uncoupled(tol=tol)
 
-    cput0 = log.timer_debug1('se part (alpha)', *cput0)
+    cput0 = log.timer('se part (alpha)', *cput0)
 
     mem_incore = (nmo[1]*nob*(nob*nvb+noa*nva)) * 8/1e6
     mem_now = lib.current_memory()[0]
@@ -109,7 +109,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
     se_b.remove_uncoupled(tol=tol)
 
-    cput0 = log.timer_debug1('se part (beta)', *cput0)
+    cput0 = log.timer('se part (beta)', *cput0)
 
     return (se_a, se_b)
 
@@ -240,6 +240,7 @@ def fock_loop(agf2, eri, gf, se):
              sea.chempot, nerra, derra)
     log.info(' beta:  chempot = %.9g  dN = %.3g  |ddm| = %.3g', 
              seb.chempot, nerrb, derrb)
+    log.timer('fock loop', *cput0)
 
     return gf, se, converged
 

@@ -90,7 +90,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
     se_b.remove_uncoupled(tol=tol)
 
-    cput0 = log.timer_debug1('se part (beta)', *cput0)
+    cput0 = log.timer('se part (beta)', *cput0)
 
     return (se_a, se_b)
 

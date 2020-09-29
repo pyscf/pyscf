@@ -120,11 +120,11 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     se_a = _build_se_part_spin(0)
 
-    cput0 = log.timer_debug1('se part (alpha)', *cput0)
+    cput0 = log.timer('se part (alpha)', *cput0)
 
     se_b = _build_se_part_spin(1)
 
-    cput0 = log.timer_debug1('se part (beta)', *cput0)
+    cput0 = log.timer('se part (beta)', *cput0)
 
     return (se_a, se_b)
 
