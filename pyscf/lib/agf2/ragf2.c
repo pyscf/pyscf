@@ -317,6 +317,7 @@ void AGF2df_vv_vev_islice(double *qxi,
 
         // build xjia = xiq * qa
         dgemm_(&TRANS_N, &TRANS_T, &nvir, &nxi, &naux, &D1, qa, &nvir, qxi, &nxi, &D0, xia, &nvir);
+        //printf("%13.9f %13.9f\n", xja[10], xia[10]); fflush(stdout);
 
         // build eija = ei + ej - ea
         AGF2sum_inplace_ener(e_i[i], e_i, e_a, nocc, nvir, eja);

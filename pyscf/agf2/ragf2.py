@@ -38,6 +38,7 @@ BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 #TODO: do we really want to store the self-energy? if we do above we can remove both RAGF2.gf and RAGF2.se
 #TODO: damping?
 #TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
+#TODO: this has parallel 2body and aux build, but not get_jk/qmo transform - should we parallelise the latter for exact ERI?
 
 
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
@@ -368,6 +369,8 @@ def energy_2body(agf2, gf, se):
 
         vv = vxk * vxl[:,None]
         e2b += lib.einsum('xk,yk,k->', vv, vv.conj(), 1./dlk)
+
+    e2b = mpi_helper.reduce(e2b)
 
     e2b *= 2
 
