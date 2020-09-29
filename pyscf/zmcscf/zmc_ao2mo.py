@@ -30,12 +30,8 @@ class _ERIS(object):
             if eri is None:
                 eri = mol.intor('int2e_spinor', aosym='s8')
 
-            self.ppaa = ao2mo.kernel(eri, (mo, mo, moa, moa), 
+            self.paaa = ao2mo.kernel(eri, (mo, moa, moa, moa), 
                                      intor="int2e_spinor")
-            #self.papa = ao2mo.kernel(eri, (mo, moa, mo, moa), 
-            #intor="int2e_spinor")
-            #self.j_pc, self.k_pc, self.ppaa, self.papa = \
-                #mc_ao2mo.trans_e1_incore(eri, mo, ncore, ncas)
         else:
             import gc
             gc.collect()
@@ -45,16 +41,7 @@ class _ERIS(object):
             if max_memory < mem_basic:
                 log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                          (mem_basic+mem_now)/.9, zcasscf.max_memory)
-            self.ppaa = ao2mo.kernel(mol, (mo, mo, moa, moa), 
+            self.paaa = ao2mo.kernel(mol, (mo, moa, moa, moa), 
                                      intor="int2e_spinor")
-            self.papa = ao2mo.kernel(mol, (mo, moa, mo, moa), 
-                                     intor="int2e_spinor")
-            #self.ppcc = ao2mo.kernel(mol, (mo, mo, moc, moc), 
-            #intor="int2e_spinor")
-            #self.pcpc = ao2mo.kernel(mol, (mo, moc, mo, moc), 
-            #intor="int2e_spinor")
 
-        self.ppaa.shape = (nmo, nmo, ncas, ncas)            
-        self.papa.shape = (nmo, ncas, nmo, ncas)            
-        #self.ppcc.shape = (nmo, nmo, ncore, ncore)
-        #self.pcpc.shape = (nmo, ncore, nmo, ncore)
+        self.paaa.shape = (nmo, ncas, ncas, ncas)            

@@ -26,7 +26,8 @@ from pyscf.shciscf import shci
 from pyscf import __config__, lib, ao2mo
 #from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
-#from pyscf.mcscf import chkfile
+from pyscf.mcscf import chkfile
+from scipy.linalg import expm as expmat 
 
 from pyscf import mcscf
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
@@ -80,41 +81,12 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         casdm1, casdm2 = casscf.fcisolver.make_rdm12Frombin(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_old)
         t3m = log.timer('update CAS DM', *t3m)
-        max_cycle_micro = 1 # casscf.micro_cycle_scheduler(locals())
 
-        casscf.optimizeOrbs(mo, lambda:casdm1, lambda:casdm2, eris, r0, conv_tol_grad*0.3, log)
-        for imicro in range(max_cycle_micro):
-            rota = casscf.rotate_orb_cc(mo, lambda:fcivec, lambda:casdm1, lambda:casdm2,
-                                        eris, r0, conv_tol_grad*.3, max_stepsize, log)
-            u, g_orb, njk1, r0 = next(rota)
-            rota.close()
-            njk += njk1
-            norm_t = numpy.linalg.norm(u-numpy.eye(nmo))
-            norm_gorb = numpy.linalg.norm(g_orb)
-            if imicro == 0:
-                norm_gorb0 = norm_gorb
-            de = numpy.dot(casscf.pack_uniq_var(u), g_orb)
-            t3m = log.timer('orbital rotation', *t3m)
-
-            eris = None
-            u = u.copy()
-            g_orb = g_orb.copy()
-            mo = casscf.rotate_mo(mo, u, log)
-            eris = casscf.ao2mo(mo)
-            t3m = log.timer('update eri', *t3m)
-
-            log.debug('micro %d  ~dE=%5.3g  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
-                      imicro, de, norm_t, norm_gorb, norm_ddm)
-
-            if callable(callback):
-                callback(locals())
-
-            t2m = log.timer('micro iter %d'%imicro, *t2m)
-            if norm_t < 1e-4 or abs(de) < tol*.4 or norm_gorb < conv_tol_grad*.2:
-                break
-
+        mo, gorb, njk, norm_gorb0 = casscf.optimizeOrbs(mo, lambda:casdm1, lambda:casdm2, imacro <= 2, 
+                                        eris, r0, conv_tol_grad*0.3, log)
+        norm_gorb = numpy.linalg.norm(gorb)
+        
         totinner += njk
-        totmicro += imicro + 1
 
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t3m)
@@ -127,8 +99,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         else:
             elast = e_tot
 
-        if dump_chk:
-            casscf.dump_chk(locals())
+        ###FIX THIS###
+        #if dump_chk:
+        #casscf.dump_chk(locals())
 
         if callable(callback):
             callback(locals())
@@ -154,7 +127,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
     log.timer('2-step CASSCF', *cput0)
     return conv, e_tot, e_cas, fcivec, mo, mo_energy
-
 
 class ZCASSCF(gzcasci.GZCASCI):
     __doc__ = gzcasci.GZCASCI.__doc__ + '''CASSCF
@@ -310,6 +282,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
                      self._scf.with_solvent.__class__)
         return self
 
+
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
         '''
         Returns:
@@ -405,20 +378,41 @@ To enable the solvent model for CASSCF, the following code needs to be called
                     log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
         return e_tot, e_cas, fcivec
 
+    def dump_chk(self, envs):
+        if not self.chkfile:
+            return self
 
-    def getGrad(self, mo, casdm1, casdm2, eris):
-        nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
-        nocc = ncore+nact
+        ncore = self.ncore
+        nocc = ncore + self.ncas
+        if 'mo' in envs:
+            mo_coeff = envs['mo']
+        else:
+            mo_coeff = envs['mo_coeff']
+        mo_occ = numpy.zeros(mo_coeff.shape[1])
+        mo_occ[:ncore] = 2
+        if self.natorb:
+            occ = self._eig(-envs['casdm1'], ncore, nocc)[0]
+            mo_occ[ncore:nocc] = -occ
+        else:
+            mo_occ[ncore:nocc] = envs['casdm1'].diagonal().real
+# Note: mo_energy in active space =/= F_{ii}  (F is general Fock)
+        if 'mo_energy' in envs:
+            mo_energy = envs['mo_energy']
+        else:
+            mo_energy = 'None'
+        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
+                           mo_coeff, ncore, self.ncas, mo_occ,
+                           mo_energy, envs['e_cas'], None, envs['casdm1'],
+                           overwrite_mol=False)
+        return self
 
-        mocopy = 1j*mo
-        grad = 0.*mo[:,:nocc]
-
-        hcore = self.get_hcore()
-
-        #contribution from the core energy
-        grad[:,:ncore] = numpy.dot(numpy.transpose(hcore), numpy.conjugate(mo[:,:ncore])) 
+    def update_from_chk(self, chkfile=None):
+        if chkfile is None: chkfile = self.chkfile
+        self.__dict__.update(lib.chkfile.load(chkfile, 'mcscf'))
+        return self
+    update = update_from_chk
                          
-        '''
+    '''
     def calcGrad(self, mo, casdm1, casdm2, ERIS=None):
         #if ERIS is None: ERIS = self.ao2mo(mo)
         hcore = self._scf.get_hcore() 
@@ -473,33 +467,45 @@ To enable the solvent model for CASSCF, the following code needs to be called
         hcore = self._scf.get_hcore()
         nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
         nocc = ncore+nact
-        nuc_energy = self.energy_nuc()
 
         Grad = numpy.zeros((nmo, nocc), dtype=complex)
 
         moc, moa = mo[:,:ncore], mo[:,ncore:nocc]
-        dmcore = numpy.dot(moc, moc.conj().T)
-        dmcas = reduce(numpy.dot, (moa, casdm1(), moa.conj().T))
+        dmcore = numpy.dot(moc, moc.T.conj())
+        dmcas = reduce(numpy.dot, (moa.conj(), casdm1(), moa.T)).conj()
         j,k = self._scf.get_jk(self.mol, dm=dmcore)        
         ja,ka = self._scf.get_jk(self.mol, dm=dmcas)        
 
         
         hcore = reduce(numpy.dot, (mo.conj().T, hcore , mo))
+        #print (hcore.diagonal())
         Fc =  (hcore + reduce(numpy.dot, (mo.conj().T, (j-k), mo)))
         Grad[:,:ncore] = hcore[:,:ncore] + reduce(numpy.dot, (mo.conj().T, j + ja - k - ka, moc))
         
         Grad[:,ncore:nocc] = numpy.einsum('sp,qp->sq', Fc[:,ncore:nocc], casdm1())
-        Grad[:,ncore:nocc]+= numpy.einsum('ruvw,tvuw->rt', ERIS.ppaa[:, ncore:nocc], casdm2())
-        return 2.*Grad
+        Grad[:,ncore:nocc]+= numpy.einsum('ruvw,tvuw->rt', ERIS.paaa, casdm2())
+        return 2*Grad
+
+    def calcH_op(self, Grad, mo, x, casdm1, casdm2, ERIS):
+        x1 = casscf.unpack_uniq_var(x)
+        eps = 1.e-5
+        moxp = mo + eps*numpy.dot(mo, x)
+        Gdxp = self.calcGrad(mox, casdm1, casdm2, ERIS)
+
+        moxm = mo - eps*numpy.dot(mo, x)
+        Gdxm = self.calcGrad(mox, casdm1, casdm2, ERIS)
+
+        Hx = (Gdxp - Gdxm)/eps/2.
+        return Hx
 
     def calcE(self, mo, casdm1, casdm2, ERIS=None):
         if ERIS is None: ERIS = self.ao2mo(mo)
         hcore = self._scf.get_hcore()
-        nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
+        ncore, nact = self.ncore, self.ncas
         nocc = ncore+nact
         nuc_energy = self.energy_nuc()
         
-        moc, moa = mo[:,:ncore], mo[:,ncore:nocc]
+        moc = mo[:,:ncore]
         dmcore = numpy.dot(moc, moc.conj().T)
         j,k = self._scf.get_jk(self.mol, dm=dmcore)        
 
@@ -508,286 +514,108 @@ To enable the solvent model for CASSCF, the following code needs to be called
         Fc = ( hcore + reduce(numpy.dot, (mo.conj().T, (j-k), mo)))
         Ecore = 0.5*numpy.sum((hcore+Fc).diagonal()[:ncore]) 
 
-        
-        Ecas1 = numpy.einsum('tu, ut', Fc[ncore:nocc, ncore:nocc], casdm1())
-        Ecas2 = 0.5*numpy.einsum('tuvw, tvuw', ERIS.ppaa[ncore:nocc, ncore:nocc], casdm2())
+        Ecas1 = numpy.einsum('tu, tu', Fc[ncore:nocc, ncore:nocc], casdm1())
+        Ecas2 = 0.5*numpy.einsum('tuvw, tvuw', ERIS.paaa[ncore:nocc], casdm2())
 
         #print (Ecore, Ecas1, Ecas2, nuc_energy, "mo")
         return Ecore+Ecas1+Ecas2+nuc_energy
 
 
-    def calcEAO(self, mo, casdm1, casdm2, ERIS=None):
-        #if ERIS is None: ERIS = self.ao2mo(mo)
-        hcore = self._scf.get_hcore() 
-        nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
-        nocc = ncore+nact
-
-        moc = mo[:,:ncore]
-
-        #ecore 
-        dmcore = numpy.dot(moc, moc.conj().T)
-        j,k = self._scf.get_jk(self.mol, dm=dmcore)        
-        Ecore = numpy.einsum('xy, yx', hcore+0.5*(j-k), dmcore)  ###hcore
-        
-
-        moa = mo[:,ncore:nocc]
-        dmcas = reduce(numpy.dot, (moa, casdm1(), moa.conj().T))
-
-
-
-        ###THIS IS THE BIT WE NEED
-        eri_ao_sp = mol.intor('int2e_spinor', aosym='s1')
-        j1 = lib.einsum('wxyz, wp->pxyz', eri_ao_sp, moa.conj())
-        jaapp = lib.einsum('pxyz, xq->pqyz', j1, moa)
-        jaapp = lib.einsum('pqyz, prqs->rsyz', jaapp, casdm2())
-        ####### FOR GRADIENT
-
-
-        Ecas2 = 0.5*numpy.einsum('pqwx,wp,xq', jaapp, moa.conj(), moa)         
-        Ecas1 = numpy.einsum('xy, yx', hcore+ (j-k), dmcas)
-        nuc_energy = self.energy_nuc()
-
-        #print (Ecore, Ecas1, Ecas2, nuc_energy, "ao")
-        return Ecore+Ecas1+Ecas2+nuc_energy
-
-    def optimizeOrbs(self, mo, casdm1, casdm2, eris, r0, conv_tol, log):
+    def optimizeOrbs(self, mo, casdm1, casdm2, addnoise, eris, r0, conv_tol, log):
         #the part of mo that is relevant 
         nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
         nocc = ncore+nact
-        ERIS = self.ao2mo()
+ 
+        def GD(casscf, mo, nocc, addnoise):
+            
+            #add random noise
+            if (addnoise):
+                noise = numpy.zeros(mo.shape, dtype=complex)
+                noise = numpy.random.random(mo.shape) +\
+                    numpy.random.random(mo.shape)*1.j
+                mo = numpy.dot(mo, expmat(-0.01*(noise - noise.T.conj())))
+                S = casscf._scf.get_ovlp()
 
-        ##TEST IF THE GRADIENT IS WORKING
+            
+            '''###TEST GRAD####
+            Grad, Gradnew = 0.*mo, 0.*mo
+            ERIS = casscf.ao2mo(mo)
+            E = casscf.calcE(mo, casdm1, casdm2, ERIS).real
+            Grad[:,:nocc] = casscf.calcGrad(mo, casdm1, casdm2, ERIS)
+            T = numpy.zeros((nmo, nmo),dtype=complex)
+            eps = 1.e-5
+            for i in range(nmo):
+                for j in range(nocc):
+                    T[i,j] = eps
+                    U = mo + numpy.dot(mo, T) 
+                    Ep = casscf.calcE(U, casdm1, casdm2).real
 
-        Uk = 1.*mo
-        E = self.calcE(Uk, casdm1, casdm2, ERIS)
-        Grad = self.calcGrad(Uk, casdm1, casdm2, ERIS)
-        eps = 1.e-4
+                    T[i,j] = -eps
+                    U = mo + numpy.dot(mo, T) 
+                    Em = casscf.calcE(U, casdm1, casdm2).real
 
-        print (E, self.calcEAO(Uk, casdm1, casdm2))
-        T = numpy.zeros((nmo, nocc), dtype=complex)
-        for i in range(nmo):
-            for j in range(nocc):
-                T[i,j] = 1*eps
-                Uk[:,:nocc] = mo[:,:nocc] + numpy.dot(mo, T)                
-                Ep = self.calcE(Uk, casdm1, casdm2)
-
-                T[i,j] = -1*eps
-                Uk[:,:nocc] = mo[:,:nocc] + numpy.dot(mo, T)
-                Em = self.calcE(Uk, casdm1, casdm2)
-                g = (Ep - Em)/2./eps
-
-                #if ( abs(g - Grad[i,j].real) > 1.e-8):
-                print (i, j, Grad[i,j], g, Ep, Em)
-                T[i,j] = 0.0
-                #exit(0)
-        print ("I am done \n")
-        exit(0)
-
-        ####
-
-        S = self._scf.get_ovlp(self.mol)
-        Sinv = numpy.linalg.inv(S)
-
-
-
-        Uk = 1.*mo
-        print (self.calcE(Uk, casdm1, casdm2, ERIS))
-        #Uk[:,:nocc] = 1.*orthogonalize(mo[:,:nocc] + 0.001*numpy.random.random((nmo, nocc)))
-        print (self.calcE(Uk, casdm1, casdm2))
-        #print (self.calcE(Uk, casdm1, casdm2))
-
-        def update(Uk, Grad, tau):
-            nmo, nocc = Uk.shape[0], Uk.shape[1]
-            A = reduce(numpy.dot, (Grad, Uk.conj().T, S)) - reduce(numpy.dot, (S, Uk, Grad.conj().T))
-            Q = numpy.dot(numpy.linalg.inv(numpy.eye(nmo) + tau * numpy.dot(A, S)) , numpy.eye(nmo)-tau*numpy.dot(A, S))
-            Uk = numpy.dot(Q, Uk)
-            #print (numpy.linalg.norm( reduce(numpy.dot, (Uk.conj().T, S, Uk)) - numpy.eye(nocc)))
-            return Uk
-
-
-        def BBOptimize(Uk, Sinv, nocc):
-            tau = 0.01
-            Gold = self.calcGrad(Uk, casdm1, casdm2)
-            Uk1 = 1.*update(Uk, Gold, tau)
-            dU = 1.*(Uk1 - Uk)
-
-            for i in range(1000):
-                print (i, tau, self.calcE(Uk1, casdm1, casdm2).real, numpy.linalg.norm(Gold))
-                
-                Gradk = self.calcGrad(Uk1, casdm1, casdm2)
-
-                Uk1 = 1.*update(Uk1, Gradk, tau)
-                
-                '''
-                dG = 1.*(Gradk - Gold)
-                Gold = 1.*Gradk
-
-                dUr, dUi = dU.real, dU.imag
-                dGr, dGi = dG.real, dG.imag
-                if (i%2 == 1 ):
-                    tau = (numpy.einsum('ij,ij', dUr, dUr)+numpy.einsum('ij,ij', dUi, dUi)) \
-                          /abs(numpy.einsum('ij,ij', dGr,dUr)+numpy.einsum('ij,ij', dGi,dUi))
-                else :
-                    tau = abs(numpy.einsum('ij,ij', dUr, dGr)+numpy.einsum('ij,ij', dUi, dGi)) \
-                          /(numpy.einsum('ij,ij', dGr,dGr)+numpy.einsum('ij,ij', dGi,dGi))
-
-                #tau = 0.01
-                Uk = Uk1
-                Uk1 = update(Uk, Gradk, tau/2.)
-                dU = Uk1 - Uk
-                '''
-        BBOptimize(Uk[:,:nocc], Sinv, nocc)
-    
-    '''
-    def optimizeOrbs(self, mo, casdm1, casdm2, eris, r0, conv_tol, log):
-        #the part of mo that is relevant 
-        nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
-        nocc = ncore+nact
-
-        eri_ao_sp = mol.intor('int2e_spinor', aosym='s1')
-        hcore = self.get_hcore()
-
-        moc, moa = mo[:,:ncore], mo[:,ncore:nocc]
-        ###CORE ENERGY###
-        nuc_energy = self.energy_nuc()
-        h1mo = reduce(numpy.dot, (mo.T.conj(), hcore, mo))
-        eri_core = ao2mo.kernel(eri_ao_sp, moc, intor='int2e_spinor')
-        print (nuc_energy + numpy.sum(h1mo.diagonal()[:ncore]) + 0.5*(numpy.einsum('iijj', eri_core) - numpy.einsum('ijji', eri_core)))
-
-        ###CAS ENERGY####
-        h1cas = hcore + numpy.einsum('wxyz, yi, zi', eri_ao_sp, moc.conj(), moc) -  \
-                numpy.einsum('wzyx, yi, zi', eri_ao_sp, moc.conj(), moc)
-        eri_cas = ao2mo.kernel(eri_ao_sp, moa, intor='int2e_spinor')
-        h1casmo = reduce(numpy.dot, (moa.T.conj(), h1cas, moa))
-        print (numpy.einsum('ij,ji', h1casmo, casdm1()),  0.5*numpy.einsum('ijkl, ikjl', eri_cas, casdm2()))
-
-
-        moc = mo[:, :nocc]
-        ###GRADIENT Uxi ### (core orbitals)
-        gradC  = numpy.einsum('yz, yi->zi', hcore, moc.conj()) #numpy.dot(hcore.T, moc.conj())
-        j,k = numpy.einsum('wxyz,wi,xi->yz', eri_ao_sp, moc.conj(), moc), numpy.einsum('wxyz,wi,zi->yx', eri_ao_sp, moc.conj(), moc)
-        gradC  += numpy.einsum('yz, yi->zi', j, moc.conj()) - numpy.einsum('yz, yi->zi', k, moc.conj())
-
-        gradC2  = numpy.einsum('yz, zi->yi', hcore, moc) #numpy.dot(hcore.T, moc.conj())
-        j,k = numpy.einsum('wxyz,wi,xi->yz', eri_ao_sp, moc.conj(), moc), numpy.einsum('wxyz,wi,zi->yx', eri_ao_sp, moc.conj(), moc)
-        gradC2  += numpy.einsum('yz, zi->yi', j, moc) - numpy.einsum('yz, zi->yi', k, moc)
-
-        def calcE(moc, moconj, eri_ao_sp, nocc):
-            h1mo = reduce(numpy.dot, (moconj.conj().T, hcore, moc))
-            eri_core = ao2mo.kernel(eri_ao_sp, (moconj, moc, moconj, moc), intor='int2e_spinor')
-            E0 = numpy.sum(h1mo.diagonal()[:nocc]) + 0.5*(numpy.einsum('iijj', eri_core) - numpy.einsum('ijji', eri_core))
-            return E0
-
-        import pdb
-        pdb.set_trace()
-        moc, moconj = (1.+0j)*mo[:,:nocc], (1.+0j)*mo[:,:nocc] 
-        E0 = calcE(moc, moconj, eri_ao_sp, nocc)
-
-        GradReal, GradImag = (gradC + gradC2).real, (1.j*(gradC - gradC2)).real
-        Grad = 0.*gradC
-        Grad.real, Grad.imag = GradReal, GradImag 
-        import scipy
-        moc = moc - 0.01 * Grad
-        S = self._scf.get_ovlp(self.mol)
-        Shalf = scipy.linalg.sqrtm(S)
-        moc = numpy.dot(Shalf, moc)
-
-        [d,v] = numpy.linalg.eigh(numpy.dot(moc.conj().T, moc))
-        idx = d > 1.e-10
-        dinvsqrt = 1./numpy.sqrt(d[idx])
-        from pyscf.lo import orth
-        Sortho = orth.lowdin(S)
-
-        
-        orthoU = reduce(numpy.dot, (Sortho, moc, v, numpy.diag(dinvsqrt)))
-
-        import pdb
-        pdb.set_trace()
-        print (numpy.linalg.norm(reduce(numpy.dot, (orthoU.conj().T, S, orthoU)) - numpy.eye(nocc)))
-
-        moc = mo[:,:nocc]
-        print (calcE(orthoU, orthoU, eri_ao_sp, nocc)+nuc_energy, calcE(moc, moc, eri_ao_sp, nocc)+nuc_energy)
-        exit(0)
+                    #if (abs((Ep-Em)/2./eps - Grad[i,j].imag) > 1.e-9):
+                    print (i,j,Grad[i,j], (Ep-Em)/2./eps, (Ep-2*E+Em)/eps/eps)
+                    T[i,j] = 0.0
+                exit(0)
+            exit(0)
+            '''#############
             
 
-        print (numpy.linalg.norm(gradC))
-        ERIS = self.ao2mo(mo)
-        hxy = self.get_hcore()
-        S = self._scf.get_ovlp(self.mol)
-        Sinv = numpy.linalg.inv(S)
+            tau = 0.01
+            Grad, Gradnew = 0.*mo, 0.*mo
+            ERIS = casscf.ao2mo(mo)
+            Eold = casscf.calcE(mo, casdm1, casdm2, ERIS).real
+            Grad[:,:nocc] = casscf.calcGrad(mo, casdm1, casdm2, ERIS)
+            monew = 1.*numpy.dot(mo, expmat(-tau*(Grad-Grad.T.conj())))
+            Enew = casscf.calcE(monew, casdm1, casdm2, ERIS).real
+            ERIS = casscf.ao2mo(monew)
+
+            for iter in range(1000):
+                G = Grad - Grad.conj().T
+                if (iter == 0):
+                    normG0 = numpy.linalg.norm(G)
+                print ("%d  %6.3e  %13.7e   %13.6e   g=%6.2e"\
+                    %(iter, tau, Enew, Enew-Eold, numpy.linalg.norm(G)))
+                #print (numpy.linalg.norm(reduce(numpy.dot, (mo.conj().T, S, mo))-numpy.eye(mo.shape[0])))
+
+                if (iter == 90):
+                    Enew = casscf.calcE(monew, casdm1, casdm2, ERIS).real
+                Eold = Enew
+
+                Gradnew[:,:nocc] = casscf.calcGrad(monew, casdm1, casdm2, ERIS)
+                
+                tau = 1.0
+                mo, Grad = 1.*monew, 1.*Gradnew
+                monew = numpy.dot(mo, expmat(-tau*(Grad-Grad.T.conj())))
+                Gnorm = numpy.linalg.norm(Grad-Grad.conj().T)
+                
+                while tau > 1e-3:
+                    monew = numpy.dot(mo, expmat(-tau*(Grad-Grad.T.conj())))
+                    ERIS = casscf.ao2mo(monew)
+                    Enew = casscf.calcE(monew, casdm1, casdm2, ERIS).real
+                    
+                    if (Enew < Eold - tau*1.e-4*Gnorm):
+                        break
+                    else:
+                        tau *= 0.5
+                if (tau < 1.e-3 or Gnorm < conv_tol or abs(Enew-Eold)<1.e-9):
+                    print ("%d  %6.3e  %13.7e   %13.6e   g=%6.2e"\
+                    %(iter, tau, Enew, Enew-Eold, numpy.linalg.norm(G)))
+                    #print ("encountered small step size")
+                    break
+            return mo, Grad-Grad.T.conj(), iter, normG0
         
-        #moinvL, moinvR = numpy.dot(mo.T, S), 
-        T_mo_mo = reduce(numpy.dot, (mo.T.conj(), hxy, mo)) 
-        import pdb
-        pdb.set_trace()
-        #core energy
-        ecore =  numpy.sum(hcc.diagonal()[:ncore]) \
-                 + 0.5 *numpy.einsum('iijj', ERIS.ppcc[:ncore, :ncore]) \
-                 - 0.5 * numpy.einsum('ijji', ERIS.ppcc[:ncore, :ncore]) \
-                 +  nuc_energy
-
-        heff = T_mo_mo[ncore:nocc, ncore:nocc] \
-               + numpy.einsum('xyii', ERIS.ppaa[:ncore, :ncore]) \
-               #- numpy.einsum('xiiy', ERIS.ppaa[
-        ej = 0.0
-        for i in range(ncore):
-            for j in range(ncore):
-                ej = ej + ERIS.ppcc[i,i,j,j]
-        print (ej)
-        print ( numpy.sum(hcc.diagonal()[:ncore]) ,
-                 + numpy.einsum('iijj', ERIS.ppcc[:ncore, :ncore]) ,
-                 - numpy.einsum('ijji', ERIS.ppcc[:ncore, :ncore]))
-        h1eff, energy_core = self.get_h1eff(mo)
-
-        print (ecore, energy_core)
-        grad = self.getGrad(mo, casdm1, casdm2, eris)
-    '''
-
-    '''
-    def optimizeOrbs(self, mo, casdm1, casdm2, eris, r0, conv_tol, log):
-        #the part of mo that is relevant 
-        nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
-        nocc = ncore+nact
-
-        ERIS = self.ao2mo(mo)
-        hxy = self.get_hcore()
-        S = self._scf.get_ovlp(self.mol)
-        Sinv = numpy.linalg.inv(S)
+        return GD(self, mo, nocc, addnoise)
         
-        #moinvL, moinvR = numpy.dot(mo.T, S), 
-        T_mo_mo = reduce(numpy.dot, (mo.T.conj(), hxy, mo)) 
-        import pdb
-        pdb.set_trace()
-        #core energy
-        nuc_energy = self.energy_nuc()
-        ecore =  numpy.sum(hcc.diagonal()[:ncore]) \
-                 + 0.5 *numpy.einsum('iijj', ERIS.ppcc[:ncore, :ncore]) \
-                 - 0.5 * numpy.einsum('ijji', ERIS.ppcc[:ncore, :ncore]) \
-                 +  nuc_energy
 
-        heff = T_mo_mo[ncore:nocc, ncore:nocc] \
-               + numpy.einsum('xyii', ERIS.ppaa[:ncore, :ncore]) \
-               #- numpy.einsum('xiiy', ERIS.ppaa[
-        ej = 0.0
-        for i in range(ncore):
-            for j in range(ncore):
-                ej = ej + ERIS.ppcc[i,i,j,j]
-        print (ej)
-        print ( numpy.sum(hcc.diagonal()[:ncore]) ,
-                 + numpy.einsum('iijj', ERIS.ppcc[:ncore, :ncore]) ,
-                 - numpy.einsum('ijji', ERIS.ppcc[:ncore, :ncore]))
-        h1eff, energy_core = self.get_h1eff(mo)
-
-        print (ecore, energy_core)
-        grad = self.getGrad(mo, casdm1, casdm2, eris)
-    '''
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
 
     mol = gto.Mole()
-    mol.verbose = 1
+    mol.verbose = 4
     mol.output = None#"out_h2o"
     mol.atom = [
         ['H', ( 1.,-1.    , 0.   )],
@@ -800,7 +628,8 @@ if __name__ == '__main__':
         ['H', ( 0., 1.    , 1.   )],
     ]
 
-    mol.basis = '6-31g'
+    #mol.basis = '6-31g'
+    mol.basis = 'sto-3g'
     mol.build()
 
     '''
@@ -815,9 +644,19 @@ if __name__ == '__main__':
     #m = scf.GHF(mol)
     ehf = m.kernel()
     print (ehf)
-    mc = ZCASSCF(m, 4, 2)
-    mc.fcisolver = shci.SHCI(mol, maxM=1.e-6)
-    mc.kernel()
+    #mc = ZCASSCF(m, 16, 8)
+    mc = ZCASSCF(m, 8, 4)
+    mc.fcisolver = shci.SHCI(mol)
+    mc.fcisolver.sweep_epsilon=[1.e-5]
+    mc.fcisolver.sweep_iter=[0]
+    mc.fcisolver.davidsonTol = 1.e-6
+
+    mo = 1.*m.mo_coeff
+    noise = numpy.zeros(mo.shape, dtype=complex)
+    noise = numpy.random.random(mo.shape) +\
+                numpy.random.random(mo.shape)*1.j
+    mo = numpy.dot(mo, expmat(-0.01*(noise - noise.T.conj())))
+    emc = mc.kernel(mo)[0]
 
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
