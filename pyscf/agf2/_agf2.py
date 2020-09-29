@@ -21,8 +21,6 @@ import ctypes
 from pyscf import lib
 from pyscf.agf2 import mpi_helper
 
-#TODO: move _get_blksize etc. here
-
 libagf2 = lib.load_library('libagf2')
 
 
@@ -66,10 +64,10 @@ def cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
     e, c = np.linalg.eigh(m)
     c = np.dot(b.T, c[:gf_occ.nphys])
 
-    if c.shape[0] < gf_occ.nphys:
-        c_full = np.zeros((gf_occ.nphys, c.shape[1]), dtype=c.dtype)
-        c_full[~null_space] = c
-        c = c_full
+    #if c.shape[0] < gf_occ.nphys:
+    #    c_full = np.zeros((gf_occ.nphys, c.shape[1]), dtype=c.dtype)
+    #    c_full[~null_space] = c
+    #    c = c_full
 
     return e, c
 
