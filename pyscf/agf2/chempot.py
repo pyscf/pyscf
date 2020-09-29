@@ -56,10 +56,10 @@ def _gradient(x, se, fock, nelec, occupancy=2, buf=None):
     zai = -h1 / lib.direct_sum('i,a->ai', w[:nocc], -w[nocc:])
 
     c_occ = np.dot(v[:nphys,nocc:], zai)
-    d_rdm1 = np.dot(v[:nphys,:nocc], c_occ.conj().T) * 4 #FIXME: should this be *2*occupancy instead of *4?
+    d_rdm1 = np.dot(v[:nphys,:nocc], c_occ.conj().T) * 4
 
     ne = np.trace(d_rdm1).real
-    d = 2 * error * ne
+    d = occupancy * error * ne
 
     return error**2, d
 
