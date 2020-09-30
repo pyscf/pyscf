@@ -39,9 +39,10 @@ BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 #TODO: damping?
 #TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
 #TODO: this has parallel 2body and aux build, but not get_jk/qmo transform - should we parallelise the latter for exact ERI?
+#TODO: should we have an agf2.chkfile file? we can do dump_agf2 and load_agf2 to avoid the _aux_to_dict, _dict_to_aux and _nmom bs
 
 
-def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
+def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
 
     log = logger.new_logger(agf2, verbose)
     cput1 = cput0 = (time.clock(), time.time())
@@ -61,6 +62,9 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
     if se is None:
         se = agf2.build_se(eri, gf)
 
+    if dump_chk:
+        agf2.dump_chk(gf, se)
+
     #NOTE: should we even print/store e_mp2, or name it something else? this is
     # quite a bit off of the real E(mp2) at (None,0)...
     e_mp2 = agf2.energy_mp2(agf2.mo_energy, se)
@@ -75,9 +79,11 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
 
         # two-body terms
         se = agf2.build_se(eri, gf)
-        #NOTE: I used to do this in my old code.. but it's wrong
-        #gf = agf2.build_gf(eri, gf, se)
+        #gf = agf2.build_gf(eri, gf, se)  #NOTE: I used to do this in my old code.. but it's wrong
         e_2b = agf2.energy_2body(gf, se)
+
+        if dump_chk:
+            agf2.dump_chk(gf, se)
 
         e_tot = e_1b + e_2b
 
@@ -95,6 +101,9 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None):
             break
 
         e_prev = e_tot
+
+    if dump_chk:
+        agf2.dump_chk(gf, se)
 
     log.timer('%s'%name, *cput0)
 
@@ -676,6 +685,7 @@ class RAGF2(lib.StreamObject):
     def _finalize(self):
         ''' Hook for dumping results and clearing up the object.
         '''
+        #NOTE: if we get here, should we clean up the chkfile?
 
         if self.converged:
             logger.info(self, '%s converged', self.__class__.__name__)
@@ -699,7 +709,7 @@ class RAGF2(lib.StreamObject):
         self._scf.reset(mol)
         return self
 
-    def kernel(self, eri=None, gf=None, se=None):
+    def kernel(self, eri=None, gf=None, se=None, dump_chk=True):
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
@@ -718,7 +728,7 @@ class RAGF2(lib.StreamObject):
             se = self.build_se(eri, gf)
 
         self.converged, self.e_1b, self.e_2b, self.gf, self.se = \
-                kernel(self, eri=eri, gf=gf, se=se, verbose=self.verbose)
+                kernel(self, eri=eri, gf=gf, se=se, verbose=self.verbose, dump_chk=dump_chk)
 
         self._finalize()
 

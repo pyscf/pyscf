@@ -27,7 +27,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
-from pyscf.agf2 import aux, uagf2
+from pyscf.agf2 import aux, ragf2, uagf2
+
+#TODO: can we do a double inheritance with RAGF2_slow to make this class nicer?
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
@@ -198,7 +200,7 @@ class UAGF2(uagf2.UAGF2):
 
         self.nmom = nmom
 
-        self._keys.update(['nmom'])
+        self._keys.update(['_nmom'])
 
     build_se_part = build_se_part
 
@@ -259,7 +261,7 @@ class UAGF2(uagf2.UAGF2):
         logger.info(self, 'nmom = %s', repr(self.nmom))
         return self
 
-    def dump_chk(self, gf=None, se=None, nmom=None, mo_energy=None, mo_coeff=None, mo_occ=None):
+    def dump_chk(self, gf=None, se=None, frozen=None, nmom=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         if not self.chkfile:
             return self
 
@@ -270,6 +272,10 @@ class UAGF2(uagf2.UAGF2):
         if frozen is None: frozen = 0
         if nmom is None: nmom = self.nmom
 
+        ngf, nse = nmom
+        if ngf is None: ngf = -1
+        if nse is None: nse = -1
+
         agf2_chk = { 'e_1b': self.e_1b,
                      'e_2b': self.e_2b, 
                      'e_mp2': self.e_mp2,
@@ -278,16 +284,30 @@ class UAGF2(uagf2.UAGF2):
                      'mo_coeff': mo_coeff,
                      'mo_occ': mo_occ,
                      'frozen': frozen,
-                     'nmom': nmom,
+                     'nmom': (ngf, nse),
         }
 
-        if self.gf is not None: agf2_chk['gf'] = _aux_to_dict(gf)
-        if self.se is not None: agf2_chk['se'] = _aux_to_dict(se)
+        if gf is None: gf = self.gf
+        if se is None: se = self.se
+
+        if gf is not None: agf2_chk['gf'] = ragf2._aux_to_dict(gf)
+        if se is not None: agf2_chk['se'] = ragf2._aux_to_dict(se)
 
         if self._nmo is not None: agf2_chk['_nmo'] = self._nmo
         if self._nocc is not None: agf2_chk['_nocc'] = self._nocc
 
         lib.chkfile.dump(self.chkfile, 'agf2', agf2_chk)
+
+
+    @property
+    def nmom(self):
+        return self._nmom
+    @nmom.setter
+    def nmom(self, val):
+        ngf, nse = val
+        if ngf == -1: ngf = None
+        if nse == -1: nse = None
+        self._nmom = (ngf, nse)
 
 
 class _ChemistsERIs(uagf2._ChemistsERIs):
