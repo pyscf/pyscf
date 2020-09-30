@@ -86,6 +86,9 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
 def compute_amplitudes(myadc, eris):
 
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(myadc.stdout, myadc.verbose)
+
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
@@ -159,6 +162,8 @@ def compute_amplitudes(myadc, eris):
     D1_b = e_b[:nocc_b][:None].reshape(-1,1) - e_b[nocc_b:].reshape(-1)
     D1_a = D1_a.reshape((nocc_a,nvir_a))
     D1_b = D1_b.reshape((nocc_b,nvir_b))
+
+    cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
     # Compute second-order singles t1 (tij)
 
@@ -261,6 +266,8 @@ def compute_amplitudes(myadc, eris):
 
     t1_2_a = t1_2_a/D1_a
     t1_2_b = t1_2_b/D1_b
+
+    cput0 = log.timer_debug1("Completed t1_2 amplitude calculation", *cput0)
 
     t1_2 = (t1_2_a , t1_2_b)
     t2_2 = (None,)
@@ -369,6 +376,7 @@ def compute_amplitudes(myadc, eris):
         del (D2_ab)
 
         t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
+    cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
     if (myadc.method == "adc(3)"):
     # Compute third-order singles (tij)
@@ -672,6 +680,7 @@ def compute_amplitudes(myadc, eris):
 
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
+    cput0 = log.timer_debug1("Completed amplitude calculation", *cput0)
 
     del (D1_a, D1_b) 
 
@@ -1117,6 +1126,10 @@ class UADC(lib.StreamObject):
 
 def get_imds_ea(adc, eris=None):
 
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(adc.stdout, adc.verbose)
+    print ("Starting M_ab calculation")
+
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -1209,6 +1222,8 @@ def get_imds_ea(adc, eris=None):
     M_ab_b -= 0.5 *  lib.einsum('lmbd,lamd->ab',t2_1_b, eris_OVOV,optimize=True)
     M_ab_b += 0.5 *  lib.einsum('lmbd,ldma->ab',t2_1_b, eris_OVOV,optimize=True)
     M_ab_b -=        lib.einsum('mldb,mdla->ab',t2_1_ab, eris_ovOV,optimize=True)
+
+    cput0 = log.timer_debug1("Completed M_ab second-order terms ADC(2) calculation", *cput0)
 
     #Third-order terms
 
@@ -1323,6 +1338,8 @@ def get_imds_ea(adc, eris=None):
             M_ab_b += lib.einsum('ld,ldab->ab',t1_2_a[a:a+k], eris_ovVV,optimize=True)
             del eris_ovVV
             a += k
+
+        cput0 = log.timer_debug1("Completed M_ab ovvv ADC(3) calculation", *cput0)
 
         M_ab_a -= 0.5 *  lib.einsum('lmad,lbmd->ab',t2_2_a, eris_ovov,optimize=True)
         M_ab_a += 0.5 *  lib.einsum('lmad,ldmb->ab',t2_2_a, eris_ovov,optimize=True)
@@ -1473,6 +1490,8 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.25*lib.einsum('mlbd,noad,nmol->ab',t2_1_b, t2_1_b, eris_OOOO, optimize=True)
         M_ab_b += 0.25*lib.einsum('mlbd,noad,nlom->ab',t2_1_b, t2_1_b, eris_OOOO, optimize=True)
         M_ab_b -= lib.einsum('lmdb,onda,olnm->ab',t2_1_ab, t2_1_ab, eris_ooOO, optimize=True)
+
+        log.timer_debug1("Completed M_ab ADC(3) small integrals calculation")
 
         if isinstance(eris.vvvv_p,np.ndarray):
             eris_vvvv = radc_ao2mo.unpack_eri_2(eris.vvvv_p, nvir_a)
@@ -1676,6 +1695,7 @@ def get_imds_ea(adc, eris=None):
             del (temp)            
 
     M_ab = (M_ab_a, M_ab_b)
+    cput0 = log.timer_debug1("Completed M_ab ADC(3) calculation", *cput0)
     return M_ab
 
 
@@ -2614,7 +2634,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
             s[s_a:f_a] += 0.5*lib.einsum('icab,ibc->a',eris_ovvv, r_aaa_[a:a+k], optimize = True)
             s[s_a:f_a] -= 0.5*lib.einsum('ibac,ibc->a',eris_ovvv, r_aaa_[a:a+k], optimize = True)
-            temp[a:a+k] = lib.einsum('icab,a->ibc', eris_ovvv, r_a, optimize = True)
+            temp[a:a+k] += lib.einsum('icab,a->ibc', eris_ovvv, r_a, optimize = True)
             temp[a:a+k] -= lib.einsum('ibac,a->ibc', eris_ovvv, r_a, optimize = True)
             del eris_ovvv
             a += k
