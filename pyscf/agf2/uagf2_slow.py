@@ -27,7 +27,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
-from pyscf.agf2 import aux, ragf2, uagf2
+from pyscf.agf2 import aux, ragf2, uagf2, ragf2_slow
 
 #TODO: can we do a double inheritance with RAGF2_slow to make this class nicer?
 
@@ -262,41 +262,8 @@ class UAGF2(uagf2.UAGF2):
         return self
 
     def dump_chk(self, gf=None, se=None, frozen=None, nmom=None, mo_energy=None, mo_coeff=None, mo_occ=None):
-        if not self.chkfile:
-            return self
-
-        if mo_energy is None: mo_energy = self.mo_energy
-        if mo_coeff  is None: mo_coeff  = self.mo_coeff
-        if mo_occ    is None: mo_occ    = self.mo_occ
-        if frozen is None: frozen = self.frozen
-        if frozen is None: frozen = 0
-        if nmom is None: nmom = self.nmom
-
-        ngf, nse = nmom
-        if ngf is None: ngf = -1
-        if nse is None: nse = -1
-
-        agf2_chk = { 'e_1b': self.e_1b,
-                     'e_2b': self.e_2b, 
-                     'e_mp2': self.e_mp2,
-                     'converged': self.converged,
-                     'mo_energy': mo_energy,
-                     'mo_coeff': mo_coeff,
-                     'mo_occ': mo_occ,
-                     'frozen': frozen,
-                     'nmom': (ngf, nse),
-        }
-
-        if gf is None: gf = self.gf
-        if se is None: se = self.se
-
-        if gf is not None: agf2_chk['gf'] = ragf2._aux_to_dict(gf)
-        if se is not None: agf2_chk['se'] = ragf2._aux_to_dict(se)
-
-        if self._nmo is not None: agf2_chk['_nmo'] = self._nmo
-        if self._nocc is not None: agf2_chk['_nocc'] = self._nocc
-
-        lib.chkfile.dump(self.chkfile, 'agf2', agf2_chk)
+        ragf2_slow.RAGF2.dump_chk(self, gf=gf, se=se, frozen=frozen, nmom=nmom, 
+                                  mo_energy=mo_energy, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 
     @property
