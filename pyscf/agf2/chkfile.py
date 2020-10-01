@@ -16,21 +16,66 @@
 #         George H. Booth <george.booth@kcl.ac.uk>
 #
 
+'''
+Functions to support chkfiles with MPI
+'''
+
 import time
 import numpy as np
 import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
-from pyscf.lib.chkfile import load_mol, load
+from pyscf import gto
+from pyscf.lib import chkfile as chkutil
 from pyscf.agf2.aux import GreensFunction, SelfEnergy
+from pyscf.agf2 import mpi_helper
+
+
+def load(chkfile, key):
+    ''' Load array(s) from chkfile.
+
+    See pyscf.lib.chkfile
+    '''
+
+    if mpi_helper.rank == 0:
+        vals = chkutil.load(chkfile, key)
+    else:
+        vals = None
+
+    vals = mpi_helper.broadcast(vals)
+
+    return vals
+
+
+def load_mol(chkfile):
+    ''' Load the mol from the chkfile.
+
+    See pyscf.lib.chkfile
+    '''
+
+    if mpi_helper.rank == 0:
+        mol = chkutil.load_mol(chkfile)
+        dumps = mol.dumps()
+    else:
+        dumps = None
+
+    dumps = mpi_helper.broadcast(dumps)
+    mol = gto.loads(dumps)
+
+    return mol
 
 
 def load_agf2(chkfile):
     ''' Load the AGF2 data from the chkfile.
     '''
 
-    dic = load(chkfile, 'agf2')
+    if mpi_helper.rank == 0:
+        dic = chkutil.load(chkfile, 'agf2')
+    else:
+        dic = None
+
+    dic = mpi_helper.broadcast(dic)
 
     if 'gf' in dic:
         gf = dic['gf']
@@ -64,6 +109,10 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
               mo_energy=None, mo_coeff=None, mo_occ=None):
     ''' Save the AGF2 calculatuion to a chkfile.
     '''
+
+    if mpi_helper.rank != 0:
+        # only dump on root process
+        return agf2
 
     if chkfile is None: chkfile = agf2.chkfile
 
@@ -133,3 +182,5 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
         store('nse', nse)
 
     fh5.close()
+
+    return agf2

@@ -77,6 +77,35 @@ def reduce(obj, root=0, op=getattr(mpi, 'SUM', None)):
     return m
 
 
+def broadcast(obj, root=0):
+    ''' Broadcast an object from the root process to other processes.
+
+    Args:
+        obj : Most things
+            Object to broadcast
+
+    Kwargs:
+        root : int
+            Rank of the root process
+
+    Returns:
+        obj : Most things
+            Broadcasted object
+    '''
+
+    if size == 1:
+        return obj
+
+    is_array = isinstance(obj, np.ndarray)
+
+    if is_array:
+        obj = comm.Bcast(obj, root=root)
+    else:
+        obj = comm.bcast(obj, root=root)
+
+    return obj
+
+
 def nrange(start, stop=None, step=1):
     if stop is None:
         start, stop = 0, start

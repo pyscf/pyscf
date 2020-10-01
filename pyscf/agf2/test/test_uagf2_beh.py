@@ -85,7 +85,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(v_ea,          0.9740024912068087   , 6)
         gf2.dump_chk()
         gf2 = agf2.UAGF2(self.mf)
-        gf2.__dict__.update(lib.chkfile.load(gf2.chkfile, 'agf2'))
+        gf2.__dict__.update(agf2.chkfile.load(gf2.chkfile, 'agf2'))
         e_ip, v_ip = self.gf2.ipagf2(nroots=1)
         e_ea, v_ea = self.gf2.eaagf2(nroots=1)
         v_ip = np.linalg.norm(v_ip)**2
