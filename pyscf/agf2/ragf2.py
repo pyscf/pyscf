@@ -28,6 +28,7 @@ from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.scf import _vhf
 from pyscf.agf2 import aux, mpi_helper, _agf2
+from pyscf.agf2 import chkfile as chkutil
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
                             _mo_without_core, _mo_energy_without_core
@@ -39,7 +40,6 @@ BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 #TODO: damping?
 #TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
 #TODO: this has parallel 2body and aux build, but not get_jk/qmo transform - should we parallelise the latter for exact ERI?
-#TODO: should we have an agf2.chkfile file? we can do dump_agf2 and load_agf2 to avoid the _aux_to_dict, _dict_to_aux and _nmom bs
 
 
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
@@ -53,9 +53,6 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
     if se is None: se = self.se
     if verbose is None: verbose = agf2.verbose
 
-    gf = _dict_to_aux(gf, obj=aux.GreensFunction)
-    se = _dict_to_aux(se, obj=aux.SelfEnergy)
-
     if gf is None:
         gf = agf2.init_gf()
 
@@ -63,7 +60,7 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
         se = agf2.build_se(eri, gf)
 
     if dump_chk:
-        agf2.dump_chk(gf, se)
+        agf2.dump_chk(gf=gf, se=se)
 
     #NOTE: should we even print/store e_mp2, or name it something else? this is
     # quite a bit off of the real E(mp2) at (None,0)...
@@ -83,7 +80,7 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
         e_2b = agf2.energy_2body(gf, se)
 
         if dump_chk:
-            agf2.dump_chk(gf, se)
+            agf2.dump_chk(gf=gf, se=se)
 
         e_tot = e_1b + e_2b
 
@@ -103,7 +100,7 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
         e_prev = e_tot
 
     if dump_chk:
-        agf2.dump_chk(gf, se)
+        agf2.dump_chk(gf=gf, se=se)
 
     log.timer('%s'%name, *cput0)
 
@@ -718,9 +715,6 @@ class RAGF2(lib.StreamObject):
         if gf is None: gf = self.gf
         if se is None: se = self.se
 
-        gf = _dict_to_aux(gf, obj=aux.GreensFunction)
-        se = _dict_to_aux(se, obj=aux.SelfEnergy)
-
         if gf is None:
             gf = self.init_gf()
 
@@ -734,36 +728,22 @@ class RAGF2(lib.StreamObject):
 
         return self.converged, self.e_1b, self.e_2b, self.gf, self.se
 
-    def dump_chk(self, gf=None, se=None, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
-        if not self.chkfile:
-            return self
+    def dump_chk(self, chkfile=None, key='agf2', gf=None, se=None, frozen=None, nmom=None, mo_energy=None, mo_coeff=None, mo_occ=None):
+        chkutil.dump_agf2(self, chkfile, key, 
+                          gf, se, frozen, None, 
+                          mo_energy, mo_coeff, mo_occ)
+        return self
 
-        if mo_energy is None: mo_energy = self.mo_energy
-        if mo_coeff  is None: mo_coeff  = self.mo_coeff
-        if mo_occ    is None: mo_occ    = self.mo_occ
-        if frozen is None: frozen = self.frozen
-        if frozen is None: frozen = 0
+    def update_from_chk_(self, chkfile=None, key='agf2'):
+        if chkfile is None:
+            chkfile = self.chkfile
 
-        agf2_chk = { 'e_1b': self.e_1b,
-                     'e_2b': self.e_2b, 
-                     'e_mp2': self.e_mp2,
-                     'converged': self.converged,
-                     'mo_energy': mo_energy,
-                     'mo_coeff': mo_coeff,
-                     'mo_occ': mo_occ,
-                     'frozen': frozen,
-        }
+        mol, agf2_dict = chkutil.load_agf2(chkfile, key)
+        self.__dict__.update(agf2_dict)
 
-        if gf is None: gf = self.gf
-        if se is None: se = self.se
+        return self
 
-        if gf is not None: agf2_chk['gf'] = _aux_to_dict(gf)
-        if se is not None: agf2_chk['se'] = _aux_to_dict(se)
-
-        if self._nmo is not None: agf2_chk['_nmo'] = self._nmo
-        if self._nocc is not None: agf2_chk['_nocc'] = self._nocc
-
-        lib.chkfile.dump(self.chkfile, 'agf2', agf2_chk)
+    update = update_from_chk = update_from_chk_
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.agf2 import dfragf2
@@ -865,41 +845,6 @@ class RAGF2(lib.StreamObject):
     @property
     def e_corr(self):
         return self.e_tot - self._scf.e_tot
-
-
-def _dict_to_aux(aux, obj=aux.AuxiliarySpace):
-    ''' chkfile stores :attr:`gf` and :attr:`se` as dict, this
-        function can be called to ensure that they are converted
-        to the proper classes before use.
-    '''
-
-    # for compatibility with unrestricted
-    if isinstance(aux, tuple):
-        return tuple(_dict_to_aux(a, obj=obj) for a in aux)
-
-    if isinstance(aux, obj) or aux is None:
-        return aux
-
-    assert isinstance(aux, dict)
-
-    out = obj(aux['energy'], aux['coupling'], chempot=aux['chempot'])
-
-    return out
-
-def _aux_to_dict(aux):
-    ''' Inverse of _dict_to_aux
-    '''
-
-    # for compatibility with unrestricted
-    if isinstance(aux, tuple):
-        return tuple(_aux_to_dict(a) for a in aux)
-
-    if isinstance(aux, dict):
-        return aux
-
-    out = aux.__dict__
-
-    return out
 
 
 class _ChemistsERIs:

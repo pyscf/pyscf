@@ -200,7 +200,7 @@ class UAGF2(uagf2.UAGF2):
 
         self.nmom = nmom
 
-        self._keys.update(['_nmom'])
+        self._keys.update(['nmom'])
 
     build_se_part = build_se_part
 
@@ -260,21 +260,6 @@ class UAGF2(uagf2.UAGF2):
         uagf2.UAGF2.dump_flags(self, verbose=verbose)
         logger.info(self, 'nmom = %s', repr(self.nmom))
         return self
-
-    def dump_chk(self, gf=None, se=None, frozen=None, nmom=None, mo_energy=None, mo_coeff=None, mo_occ=None):
-        ragf2_slow.RAGF2.dump_chk(self, gf=gf, se=se, frozen=frozen, nmom=nmom, 
-                                  mo_energy=mo_energy, mo_coeff=mo_coeff, mo_occ=mo_occ)
-
-
-    @property
-    def nmom(self):
-        return self._nmom
-    @nmom.setter
-    def nmom(self, val):
-        ngf, nse = val
-        if ngf == -1: ngf = None
-        if nse == -1: nse = None
-        self._nmom = (ngf, nse)
 
 
 class _ChemistsERIs(uagf2._ChemistsERIs):
