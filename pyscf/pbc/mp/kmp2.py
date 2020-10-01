@@ -474,6 +474,51 @@ def make_rdm1(mp, t2=None, kind="compact"):
     return result
 
 
+def make_rdm2(mp, t2=None, kind="padded"):
+    r'''Two-particle density matrix
+    '''
+    if kind != "padded":
+        raise NotImplementedError
+
+    dm1 = mp.make_rdm1(t2, "padded")
+    nmo = mp.nmo
+    nocc = mp.nocc
+    nvir = nmo - nocc
+    nkpts = mp.nkpts
+    dtype = t2.dtype
+
+    dm2 = np.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo),dtype=dtype)
+
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = mp.khelper.kconserv[ki, ka, kj]
+                dovov = t2[ki, kj, ka].transpose(0,2,1,3) * 2 - t2[kj, ki, ka].transpose(1,2,0,3)
+                dovov *= 2
+                dm2[ki,ka,kj,:nocc,nocc:,:nocc,nocc:] = dovov
+                dm2[ka,ki,kb,nocc:,:nocc,nocc:,:nocc] = dovov.transpose(1,0,3,2).conj()
+
+    occidx = padding_k_idx(mp, kind="split")[0]
+    for ki in range(nkpts):
+        dm1[ki][np.ix_(occidx[ki], occidx[ki])] -= 2.
+
+    for ki in range(nkpts):
+        for kp in range(nkpts):
+            for i in range(occidx[ki]):
+                dm2[ki,ki,kp,i,i,:,:] += dm1[kp].T * 2
+                dm2[kp,kp,ki,:,:,i,i] += dm1[kp].T * 2
+                dm2[kp,ki,ki,:,i,i,:] -= dm1[kp].T
+                dm2[ki,kp,kp,i,:,:,i] -= dm1[kp]
+
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for i in range(occidx[ki]):
+                for j in range(occidx[kj]):
+                    dm2[ki,ki,kj,i,i,j,j] += 4
+                    dm2[ki,kj,kj,i,j,j,i] -= 2
+    return dm2
+
+
 def _gamma1_intermediates(mp, t2=None):
     # Memory optimization should be here
     if t2 is None:
