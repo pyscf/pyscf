@@ -474,12 +474,20 @@ def make_rdm1(mp, t2=None, kind="compact"):
     return result
 
 
-def make_rdm2(mp, t2=None, kind="padded"):
-    r'''Two-particle density matrix
-    '''
-    if kind != "padded":
-        raise NotImplementedError
+def make_rdm2(mp, t2=None, kind="compact"):
+    r'''
+    Spin-traced two-particle density matrix in MO basis
 
+    .. math::
+
+        dm2[p,q,r,s] = \sum_{\sigma,\tau} <p_\sigma^\dagger r_\tau^\dagger s_\tau q_\sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
+    if kind not in ("compact", "padded"):
+        raise ValueError("The 'kind' argument should be either 'compact' or 'padded'")
+    if t2 is None: t2 = mp.t2
     dm1 = mp.make_rdm1(t2, "padded")
     nmo = mp.nmo
     nocc = mp.nocc
@@ -488,7 +496,6 @@ def make_rdm2(mp, t2=None, kind="padded"):
     dtype = t2.dtype
 
     dm2 = np.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo),dtype=dtype)
-
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
@@ -500,11 +507,12 @@ def make_rdm2(mp, t2=None, kind="padded"):
 
     occidx = padding_k_idx(mp, kind="split")[0]
     for ki in range(nkpts):
-        dm1[ki][np.ix_(occidx[ki], occidx[ki])] -= 2.
+        for i in occidx[ki]:
+            dm1[ki][i,i] -= 2
 
     for ki in range(nkpts):
         for kp in range(nkpts):
-            for i in range(occidx[ki]):
+            for i in occidx[ki]:
                 dm2[ki,ki,kp,i,i,:,:] += dm1[kp].T * 2
                 dm2[kp,kp,ki,:,:,i,i] += dm1[kp].T * 2
                 dm2[kp,ki,ki,:,i,i,:] -= dm1[kp].T
@@ -512,12 +520,23 @@ def make_rdm2(mp, t2=None, kind="padded"):
 
     for ki in range(nkpts):
         for kj in range(nkpts):
-            for i in range(occidx[ki]):
-                for j in range(occidx[kj]):
+            for i in occidx[ki]:
+                for j in occidx[kj]:
                     dm2[ki,ki,kj,i,i,j,j] += 4
                     dm2[ki,kj,kj,i,j,j,i] -= 2
-    return dm2
 
+    if kind == "padded":
+        return dm2
+    else:
+        idx = padding_k_idx(mp, kind="joint")
+        result = []
+        for kp in range(nkpts):
+            for kq in range(nkpts):
+                for kr in range(nkpts):
+                    ks = mp.khelper.kconserv[kp, kq, kr]
+                    result.append(dm2[kp,kq,kr][np.ix_(idx[kp],idx[kq],idx[kr],idx[ks])])
+        return result
+ 
 
 def _gamma1_intermediates(mp, t2=None):
     # Memory optimization should be here
@@ -579,6 +598,7 @@ class KMP2(mp2.MP2):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
     make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
     def kernel(self, mo_energy=None, mo_coeff=None, with_t2=WITH_T2):
         if mo_energy is None:
