@@ -29,10 +29,12 @@ class KnownValues(unittest.TestCase):
         self.nocc = 20
         self.nvir = 80
         self.naux = 400
+        np.random.seed(1)
 
     @classmethod
     def tearDownClass(self):
         del self.nmo, self.nocc, self.nvir, self.naux
+        np.random.seed()
 
     def test_c_ragf2(self):
         xija = np.random.random((self.nmo, self.nocc, self.nocc, self.nvir))
