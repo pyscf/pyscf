@@ -26,6 +26,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 
+INT_MAX = 2147483647
+BLKSIZE = INT_MAX // 32 + 1
+
 try:
     from mpi4py import MPI as mpi
     comm = mpi.COMM_WORLD
@@ -40,70 +43,84 @@ except: #NOTE should we check for ImportError? This is OSError in python2, check
 SCALE_PRANGE_STEP = False
 
 
-def reduce(obj, root=0, op=getattr(mpi, 'SUM', None)):
-    ''' Reduce a matrix or scalar onto the root process and then
-        broadcast result to all processes.
-
-    Args:
-        obj : int, float or complex scalar or array
-            Object to reduce
-
-    Kwargs:
-        root : int
-            Rank of the root process
-        op : :mod:`mpi4py` operation
-            :mod:`mpi4py` operation to reduce with. Default :mod:`mpi4py.MPI.SUM`
-
-    Returns:
-        obj : int, float or complex scalar or array
-            Reduced object
-    '''
-
+def bcast(buf, root=0):
     if size == 1:
-        return obj
+        return buf
 
-    is_array = isinstance(obj, np.ndarray)
-    m = obj if is_array else np.array([obj,])
+    is_array = isinstance(buf, np.ndarray)
+    buf = np.asarray(buf, order='C')
+    shape, mpi_dtype = comm.bcast((buf.shape, buf.dtype.char))
 
-    m_red = np.zeros_like(m)
-    comm.Reduce(np.asarray(m), m_red, op=op, root=root)
+    if rank != root:
+        buf = np.empty(shape, dtype=mpi_dtype)
 
-    m = m_red
-    comm.Bcast(m, root=0)
+    buf_seg = np.ndarray(buf.size, dtype=buf.dtype, buffer=buf)
+    for p0, p1 in lib.prange(0, buf.size, BLKSIZE):
+        comm.Bcast(buf_seg[p0:p1], root)
 
-    if not is_array:
-        m = m.ravel()[0]
-
-    return m
+    return buf if is_array else buf.ravel()[0]
 
 
-def broadcast(obj, root=0):
-    ''' Broadcast an object from the root process to other processes.
-
-    Args:
-        obj : Most things
-            Object to broadcast
-
-    Kwargs:
-        root : int
-            Rank of the root process
-
-    Returns:
-        obj : Most things
-            Broadcasted object
-    '''
-
+def bcast_dict(buf, root=0):
     if size == 1:
-        return obj
+        return buf
 
-    is_array = isinstance(obj, np.ndarray)
+    buf = comm.bcast(buf, root)
 
-    if is_array:
-        obj = comm.Bcast(obj, root=root)
+    return buf
+
+
+def reduce(sendbuf, root=0, op=getattr(mpi, 'SUM', None)):
+    if size == 1:
+        return sendbuf
+
+    is_array = isinstance(sendbuf, np.ndarray)
+    sendbuf = np.asarray(sendbuf, order='C')
+    shape, mpi_dtype = comm.bcast((sendbuf.shape, sendbuf.dtype.char))
+    assert sendbuf.shape == shape and sendbuf.dtype.char == mpi_dtype
+
+    recvbuf = np.zeros_like(sendbuf)
+    send_seg = np.ndarray(sendbuf.size, dtype=sendbuf.dtype, buffer=sendbuf)
+    recv_seg = np.ndarray(recvbuf.size, dtype=recvbuf.dtype, buffer=recvbuf)
+    for p0, p1 in lib.prange(0, sendbuf.size, BLKSIZE):
+        comm.Reduce(send_seg[p0:p1], recv_seg[p0:p1], op, root)
+
+    if rank == root:
+        return recvbuf if is_array else recvbuf.ravel()[0]
     else:
-        obj = comm.bcast(obj, root=root)
+        return sendbuf if is_array else sendbuf.ravel()[0]
 
-    return obj
+
+def allreduce(sendbuf, root=0, op=getattr(mpi, 'SUM', None)):
+    if size == 1:
+        return sendbuf
+
+    is_array = isinstance(sendbuf, np.ndarray)
+    sendbuf = np.asarray(sendbuf, order='C')
+    shape, mpi_dtype = comm.bcast((sendbuf.shape, sendbuf.dtype.char))
+    assert sendbuf.shape == shape and sendbuf.dtype.char == mpi_dtype
+
+    recvbuf = np.zeros_like(sendbuf)
+    send_seg = np.ndarray(sendbuf.size, dtype=sendbuf.dtype, buffer=sendbuf)
+    recv_seg = np.ndarray(recvbuf.size, dtype=recvbuf.dtype, buffer=recvbuf)
+    for p0, p1 in lib.prange(0, sendbuf.size, BLKSIZE):
+        comm.Allreduce(send_seg[p0:p1], recv_seg[p0:p1], op)
+
+    return recvbuf if is_array else recvbuf.ravel()[0]
+
+
+def allreduce_safe_inplace(array):
+    if size == 1:
+        return array
+
+    from pyscf.pbc.mpitools.mpi_helper import safeAllreduceInPlace
+
+    safeAllreduceInPlace(comm, array)
+
+
+def barrier():
+    if comm is not None:
+        comm.Barrier()
 
 
 def nrange(start, stop=None, step=1):

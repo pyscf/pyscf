@@ -377,9 +377,10 @@ def energy_2body(agf2, gf, se):
         vv = vxk * vxl[:,None]
         e2b += lib.einsum('xk,yk,k->', vv, vv.conj(), 1./dlk)
 
-    e2b = mpi_helper.reduce(e2b)
-
     e2b *= 2
+
+    mpi_helper.barrier()
+    e2b = mpi_helper.allreduce(e2b)
 
     return np.ravel(e2b.real)[0] #NOTE: i've had some problems with some einsum implementations not returning scalars... worth doing ravel()[0]?
 

@@ -226,8 +226,9 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
         qxy_a[p0:p1] = ao2mo._ao2mo.nr_e2(eri0, moa, sija, out=qxy_a[p0:p1], **sym)
         qxy_b[p0:p1] = ao2mo._ao2mo.nr_e2(eri0, mob, sijb, out=qxy_b[p0:p1], **sym)
 
-    qxy_a = mpi_helper.reduce(qxy_a)
-    qxy_b = mpi_helper.reduce(qxy_b)
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(qxy_a)
+    mpi_helper.allreduce_safe_inplace(qxy_b)
 
     eris.eri_a = qxy_a
     eris.eri_b = qxy_b
@@ -281,10 +282,11 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
         qja_a[p0:p1] = ao2mo._ao2mo.nr_e2(bufa0, cja_a, sja_a, out=qja_a[p0:p1], **sym)
         qja_b[p0:p1] = ao2mo._ao2mo.nr_e2(bufb0, cja_b, sja_b, out=qja_b[p0:p1], **sym)
 
-    qxi_a = mpi_helper.reduce(qxi_a)
-    qxi_b = mpi_helper.reduce(qxi_b)
-    qja_a = mpi_helper.reduce(qja_a)
-    qja_b = mpi_helper.reduce(qja_b)
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(qxi_a)
+    mpi_helper.allreduce_safe_inplace(qxi_b)
+    mpi_helper.allreduce_safe_inplace(qja_a)
+    mpi_helper.allreduce_safe_inplace(qja_b)
 
     qxi_a = qxi_a.reshape(naux, -1)
     qxi_b = qxi_b.reshape(naux, -1)

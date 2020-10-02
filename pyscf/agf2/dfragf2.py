@@ -151,12 +151,16 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
 
             vk = lib.dot(buf1.T, buf2, c=vk, beta=1)
 
+
     if with_j:
-        vj = mpi_helper.reduce(vj)
+        mpi_helper.barrier()
+        mpi_helper.allreduce_safe_inplace(vj)
+        mpi_helper.barrier()
         vj = lib.unpack_tril(vj)
 
     if with_k:
-        vk = mpi_helper.reduce(vk)
+        mpi_helper.barrier()
+        mpi_helper.allreduce_safe_inplace(vk)
     
     return vj, vk
 
@@ -302,7 +306,9 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
         eri0 = with_df._cderi[p0:p1]
         qxy[p0:p1] = ao2mo._ao2mo.nr_e2(eri0, mo, sij, out=qxy[p0:p1], **sym)
 
-    qxy = mpi_helper.reduce(qxy)
+    #FIXME: this should just be gather?
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(qxy)
 
     eris.eri = eris.qxy = qxy
     
@@ -342,11 +348,12 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
         qxi[p0:p1] = ao2mo._ao2mo.nr_e2(buf0, cxi, sxi, out=qxi[p0:p1], **sym)
         qja[p0:p1] = ao2mo._ao2mo.nr_e2(buf0, cja, sja, out=qja[p0:p1], **sym)
 
-    qxi = mpi_helper.reduce(qxi)
-    qja = mpi_helper.reduce(qja)
-
     qxi = qxi.reshape(naux, -1)
     qja = qja.reshape(naux, -1)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(qxi)
+    mpi_helper.allreduce_safe_inplace(qja)
 
     log.timer_debug1('QMO integral transformation', *cput0)
 

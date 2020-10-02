@@ -43,7 +43,8 @@ def load(chkfile, key):
     else:
         vals = None
 
-    vals = mpi_helper.broadcast(vals)
+    mpi_helper.barrier()
+    vals = mpi_helper.bcast_dict(vals)
 
     return vals
 
@@ -60,7 +61,8 @@ def load_mol(chkfile):
     else:
         dumps = None
 
-    dumps = mpi_helper.broadcast(dumps)
+    mpi_helper.barrier()
+    dumps = mpi_helper.bcast_dict(dumps)
     mol = gto.loads(dumps)
 
     return mol
@@ -75,7 +77,8 @@ def load_agf2(chkfile):
     else:
         dic = None
 
-    dic = mpi_helper.broadcast(dic)
+    mpi_helper.barrier()
+    dic = mpi_helper.bcast_dict(dic)
 
     if 'gf' in dic:
         gf = dic['gf']

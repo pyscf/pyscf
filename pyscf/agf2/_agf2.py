@@ -108,11 +108,12 @@ def build_mats_ragf2_incore(qeri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
          vv.ctypes.data_as(ctypes.c_void_p),
          vev.ctypes.data_as(ctypes.c_void_p))
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
-
     vv = vv.reshape(nmo, nmo)
     vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     return vv, vev
 
@@ -150,8 +151,12 @@ def build_mats_ragf2_outcore(qeri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0)
         vev = lib.dot(exija, xija.T, alpha=fpos, beta=1, c=vev)
         vev = lib.dot(exija, xjia.T, alpha=fneg, beta=1, c=vev)
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     return vv, vev
 
@@ -197,8 +202,12 @@ def build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
          vv.ctypes.data_as(ctypes.c_void_p),
          vev.ctypes.data_as(ctypes.c_void_p))
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     vv = vv.reshape(nmo, nmo)
     vev = vev.reshape(nmo, nmo)
@@ -245,8 +254,12 @@ def build_mats_dfragf2_outcore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_facto
         vev = lib.dot(exija, xija.T, alpha=fpos, beta=1, c=vev)
         vev = lib.dot(exija, xjia.T, alpha=fneg, beta=1, c=vev)
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     return vv, vev
 
@@ -296,8 +309,12 @@ def build_mats_uagf2_incore(qeri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
          vv.ctypes.data_as(ctypes.c_void_p),
          vev.ctypes.data_as(ctypes.c_void_p))
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     vv = vv.reshape(nmo, nmo)
     vev = vev.reshape(nmo, nmo)
@@ -345,8 +362,12 @@ def build_mats_uagf2_outcore(qeri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0)
         vev = lib.dot(exija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vev)
         vev = lib.dot(exija_ab, xija_ab.T, alpha=fposb, beta=1, c=vev)
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     return vv, vev
 
@@ -404,8 +425,12 @@ def build_mats_dfuagf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
          vv.ctypes.data_as(ctypes.c_void_p),
          vev.ctypes.data_as(ctypes.c_void_p))
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     vv = vv.reshape(nmo, nmo)
     vev = vev.reshape(nmo, nmo)
@@ -460,8 +485,12 @@ def build_mats_dfuagf2_outcore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_facto
         vev = lib.dot(exija_aa, xjia_aa.T, alpha=fnega, beta=1, c=vev)
         vev = lib.dot(exija_ab, xija_ab.T, alpha=fposb, beta=1, c=vev)
 
-    vv = mpi_helper.reduce(vv)
-    vev = mpi_helper.reduce(vev)
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     return vv, vev
 
