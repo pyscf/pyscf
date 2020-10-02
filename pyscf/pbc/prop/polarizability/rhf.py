@@ -89,18 +89,62 @@ def get_k_deriv(cell, mat, kpts, deriv=1, check_k = False, fft_tol=1e-6):
         raise NotImplementedError
     return mat_dk
 
-def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
-    '''
-    Computes periodic version of the dipole matrix in AO basis: (u_k|z|v_k)
-    Arguments:
-        Zao : list of ndarray
-            regular dipole matrix (u|rc|v)
-        Rao : list of ndarray
-            1st order k derivative of overlap matrix
-        Kao : list of ndarray
-            1st order k derivative of Fock matrix
+def get_z_ao(cell, kpts=np.zeros((1,3)), charge_center=None):
+    r'''Computes the periodic version of the dipole matrix in AO basis.
+
+    .. math:: \Omega_{\mu\nu}(k) = (\mu(k)|i e^{ikr} \nabla_{k} e^{-ikr}|\nu(k))
+
+    Args:
+        cell : instance of Cell class
+
+    Kwargs:
+        kpts : (nkpts, 3) array
         charge_center : list or tuple
             nuclear charge center
+
+    Return:
+        (nkpts, 3, nao, nao) array
+    '''
+    if charge_center is None:
+        charges = cell.atom_charges()
+        coords  = cell.atom_coords()
+        charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    with cell.with_common_orig(charge_center):
+        Zao = cell.pbc_intor('int1e_r', comp=3, kpts=kpts)
+    Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1)
+    Omega = Zao + 1j * Rao
+    return Omega
+
+def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
+    r'''Computes the periodic version of the dipole matrix in MO basis, then
+    transformed back to AO basis. 
+
+    Note this function differs from :func:`get_z_ao` in that it contains the
+    k derivative of the MO coefficients.
+
+    .. math:: 
+
+        \Omega_{pq}(k) = (\psi_{p}(k)|i e^{ikr} \nabla_{k} e^{-ikr}|\psi_{q}(k)) \\
+        \Omega_{\mu\nu}(k) = S_{\mu\lambda}(k) C_{\lambda p}(k) \Omega_{pq}(k) C_{\sigma q}(k) S_{\sigma\nu}(k)
+
+    Args:
+        polobj : instance of Polarizability class
+
+    Kwargs:
+        Zao : list of (3, nao, nao) array
+            regular dipole matrix :math:`(\mu(k)| \|r-R\| |\nu(k))`
+        Rao : list of (3, nao, nao) array
+            1st order k derivative of overlap matrix
+        Kao : list of (3, nao, nao) array
+            1st order k derivative of Fock matrix
+        charge_center : list or tuple (3,)
+            nuclear charge center
+
+    Returns:
+        Omega : list of (3, nao, nao) array
+            :math:`\Omega_{\mu\nu}(k)`
+        Qji : list of (3, nmo, nmo) array
+            response of the MO coefficients
     '''
     mf = polobj._scf
     kpts = polobj.kpts
@@ -159,10 +203,9 @@ def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
     return Omega, Qji
 
 def get_h1(polobj, Zao=None, Rao=None, Kao=None, charge_center=None, vo_only=False):
-    '''
-    Computes h1 for CPHF equations in MO basis: (p_k|h1|i_k)
-    if vo_only is True: size = nvir x nocc
-    else : size = nmo x nocc
+    r'''
+    Computes h1 for CPHF equations in MO basis, :math:`(\psi_p(k)|h^1|\psi_i(k))`.
+    if vo_only is True, h1 has shape (nmo, nocc); otherwise, h1 has shape (nvir, nocc).
     '''
     mf = polobj._scf
     mo_coeff = np.asarray(mf.mo_coeff)
@@ -194,7 +237,7 @@ def get_h1(polobj, Zao=None, Rao=None, Kao=None, charge_center=None, vo_only=Fal
             s1.append(np.zeros_like(h1[k]))
     return h1, s1
 
-def dipole(polobj):
+def dip_moment(polobj):
     log = logger.new_logger(polobj)
     mf = polobj._scf
     mo_occ = mf.mo_occ
@@ -554,7 +597,7 @@ class Polarizability(mol_polar):
             return v1mo
         return vind
 
-    dipole = dipole
+    dip_moment = dip_moment
     polarizability = polarizability
     polarizability_with_freq = polarizability_with_freq
     hyper_polarizability = hyper_polarizability
@@ -573,19 +616,34 @@ if __name__ == "__main__":
 
     kpts = cell.make_kpts([16,1,1])
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv="ewald").density_fit()
-    kmf.kernel()
+    e0 = kmf.kernel()
 
     #TODO implement the finite field version
     polar = Polarizability(kmf, kpts)
-    dip = polar.dipole()
-    print(dip)
+    dip = polar.dip_moment()
     e2 = polar.polarizability()
-    print(e2)
-    e2 = polar.polarizability_with_freq(freq=0.)
-    print(e2)
-    e2 = polar.polarizability_with_freq(freq=0.1)
-    print(e2)
-    e2 = polar.polarizability_with_freq(freq=-0.1)
-    print(e2)
+    e2_w0 = polar.polarizability_with_freq(freq=0.)
+    e2_w1 = polar.polarizability_with_freq(freq=0.1)
+    e2_w2 = polar.polarizability_with_freq(freq=-0.1)
     e3 = polar.hyper_polarizability()
+
+    h1 = kmf.get_hcore()
+    z = get_z(polar)[0]
+    def apply_E(E):
+        kmf.get_hcore = lambda *args, **kwargs: h1 + np.einsum('x,kxij->kij', E, z)
+        e = kmf.kernel()
+        return e
+
+    h = 1e-4
+    dip_x = -(apply_E([0.5*h, 0., 0.]) - apply_E([-0.5*h, 0., 0.])) / h
+    print(dip)
+    print(dip_x)
+
+    e2_xx = -(apply_E([h, 0., 0.]) - 2*e0 + apply_E([-h, 0., 0.])) / h**2
+    print(e2)
+    print(e2_xx)
+
+    print(e2_w0)
+    print(e2_w1)
+    print(e2_w2)
     print(e3)
