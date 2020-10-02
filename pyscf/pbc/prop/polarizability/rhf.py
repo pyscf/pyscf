@@ -203,9 +203,9 @@ def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
     return Omega, Qji
 
 def get_h1(polobj, Zao=None, Rao=None, Kao=None, charge_center=None, vo_only=False):
-    r'''Computes h1 for CPHF equations in MO basis :math:`(\psi_p(k)|h^1|\psi_i(k))`
-    if vo_only is True: size = nvir x nocc
-    else : size = nmo x nocc
+    r'''
+    Computes h1 for CPHF equations in MO basis, :math:`(\psi_p(k)|h^1|\psi_i(k))`.
+    if vo_only is True, h1 has shape (nmo, nocc); otherwise, h1 has shape (nvir, nocc).
     '''
     mf = polobj._scf
     mo_coeff = np.asarray(mf.mo_coeff)
@@ -237,7 +237,7 @@ def get_h1(polobj, Zao=None, Rao=None, Kao=None, charge_center=None, vo_only=Fal
             s1.append(np.zeros_like(h1[k]))
     return h1, s1
 
-def dipole(polobj):
+def dip_moment(polobj):
     log = logger.new_logger(polobj)
     mf = polobj._scf
     mo_occ = mf.mo_occ
@@ -597,7 +597,7 @@ class Polarizability(mol_polar):
             return v1mo
         return vind
 
-    dipole = dipole
+    dip_moment = dip_moment
     polarizability = polarizability
     polarizability_with_freq = polarizability_with_freq
     hyper_polarizability = hyper_polarizability
@@ -620,7 +620,7 @@ if __name__ == "__main__":
 
     #TODO implement the finite field version
     polar = Polarizability(kmf, kpts)
-    dip = polar.dipole()
+    dip = polar.dip_moment()
     e2 = polar.polarizability()
     e2_w0 = polar.polarizability_with_freq(freq=0.)
     e2_w1 = polar.polarizability_with_freq(freq=0.1)
