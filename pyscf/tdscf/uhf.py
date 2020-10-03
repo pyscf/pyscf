@@ -504,8 +504,7 @@ def analyze(tdobj, verbose=None):
 
     if mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        orbsyma = orbsyma % 10
-        x_syma = (orbsyma[mo_occ[0]==1,None] ^ orbsyma[mo_occ[0]==0]).ravel()
+        x_syma = symm.direct_prod(orbsyma[mo_occ[0]==1], orbsyma[mo_occ[0]==0], mol.groupname)
     else:
         x_syma = None
 
@@ -516,8 +515,15 @@ def analyze(tdobj, verbose=None):
             log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
                      i+1, e_ev[i], wave_length[i], f_oscillator[i])
         else:
-            wfnsym_id = x_syma[abs(x[0]).argmax()]
-            wfnsym = symm.irrep_id2name(mol.groupname, wfnsym_id)
+            possible_sym = x_syma[(x[0] > 1e-7) | (x[0] < -1e-7)]
+            if numpy.all(possible_sym == symm.MULTI_IRREPS):
+                wfnsym = '???'
+            else:
+                ids = numpy.unique(possible_sym[possible_sym != symm.MULTI_IRREPS])
+                if ids.size == 1:
+                    wfnsym = symm.irrep_id2name(mol.groupname, ids[0])
+                else:
+                    wfnsym = '???'
             log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
