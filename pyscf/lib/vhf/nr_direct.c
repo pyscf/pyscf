@@ -262,7 +262,7 @@ static double *allocate_and_reorder_dm(JKOperator *op, double *dm,
         double *out = malloc(sizeof(double) * nrow*ncol);
         int ish, jsh, i0, i1, j0, j1, i, j, ij;
 
-        ij = 0; 
+        ij = 0;
         for (ish = ish0; ish < ish1; ish++) {
         for (jsh = jsh0; jsh < jsh1; jsh++) {
                 i0 = ao_loc[ish  ] - ioff;
@@ -331,7 +331,7 @@ static void assemble_v(double *vjk, JKOperator *op, JKArray *jkarray,
 }
 
 // Divide shls into subblocks with roughly equal number of AOs in each block
-static int shls_block_partition(int *block_loc, int *shls_slice, int *ao_loc)
+int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc)
 {
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
@@ -384,15 +384,26 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
-        int *block_iloc = malloc(sizeof(int) * (shls_slice[1] + shls_slice[3] +
-                                                shls_slice[5] + shls_slice[7] + 4));
-        int *block_jloc = block_iloc + shls_slice[1] + 1;
-        int *block_kloc = block_jloc + shls_slice[3] + 1;
-        int *block_lloc = block_kloc + shls_slice[5] + 1;
-        const int nblock_i = shls_block_partition(block_iloc, shls_slice+0, ao_loc);
-        const int nblock_j = shls_block_partition(block_jloc, shls_slice+2, ao_loc);
-        const int nblock_k = shls_block_partition(block_kloc, shls_slice+4, ao_loc);
-        const int nblock_l = shls_block_partition(block_lloc, shls_slice+6, ao_loc);
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+        const int ksh0 = shls_slice[4];
+        const int ksh1 = shls_slice[5];
+        const int lsh0 = shls_slice[6];
+        const int lsh1 = shls_slice[7];
+        const int nish = ish1 - ish0;
+        const int njsh = jsh1 - jsh0;
+        const int nksh = ksh1 - ksh0;
+        const int nlsh = lsh1 - lsh0;
+        int *block_iloc = malloc(sizeof(int) * (nish + njsh + nksh + nlsh + 4));
+        int *block_jloc = block_iloc + nish + 1;
+        int *block_kloc = block_jloc + njsh + 1;
+        int *block_lloc = block_kloc + nksh + 1;
+        const int nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
+        const int nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
+        const int nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
+        const int nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc);
         const int nblock_kl = nblock_k * nblock_l;
         const int nblock_jkl = nblock_j * nblock_kl;
         const int nblock_ijkl = nblock_i * nblock_jkl;

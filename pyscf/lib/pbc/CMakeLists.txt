@@ -19,5 +19,5 @@ set_target_properties(pbc PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(pbc cgto cint ${BLAS_LIBRARIES})
+target_link_libraries(pbc cgto cint cvhf ${BLAS_LIBRARIES})
 

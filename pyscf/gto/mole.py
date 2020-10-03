@@ -2673,10 +2673,14 @@ class Mole(lib.StreamObject):
     with_rinv_orig = with_rinv_origin
 
     def set_range_coulomb(self, omega):
-        '''Apply the long range part of range-separated Coulomb operator for
-        **all** 2e integrals
-        erf(omega r12) / r12
-        set omega to 0 to siwtch off the range-separated Coulomb
+        '''Switch on range-separated Coulomb operator for **all** 2e integrals
+
+        Args:
+            omega : double
+
+                | = 0 : Regular electron repulsion integral
+                | > 0 : Long-range operator  erf(omega r12) / r12
+                | < 0 : Short-range operator  erfc(omega r12) /r12
         '''
         if omega is None:
             self._env[PTR_RANGE_OMEGA] = 0
@@ -2690,9 +2694,9 @@ class Mole(lib.StreamObject):
     omega = omega.setter(set_range_coulomb)
 
     def with_range_coulomb(self, omega):
-        '''Retuen a temporary mol context which has the required parameter
-        omega for long range part of range-separated Coulomb operator.
-        If omega = None, it will be treated as the regular Coulomb operator.
+        '''Retuen a temporary mol context which sets the required parameter
+        omega for range-separated Coulomb operator.
+        If omega = None, return the context for regular Coulomb integrals.
         See also :func:`mol.set_range_coulomb`
 
         Examples:
@@ -2702,6 +2706,18 @@ class Mole(lib.StreamObject):
         '''
         omega0 = self._env[PTR_RANGE_OMEGA].copy()
         return _TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
+
+    def with_long_range_coulomb(self, omega):
+        '''Retuen a temporary mol context for long-range part of
+        range-separated Coulomb operator.
+        '''
+        return self.with_range_coulomb(abs(omega))
+
+    def with_short_range_coulomb(self, omega):
+        '''Retuen a temporary mol context for short-range part of
+        range-separated Coulomb operator.
+        '''
+        return self.with_range_coulomb(-abs(omega))
 
     def set_f12_zeta(self, zeta):
         '''Set zeta for YP exp(-zeta r12)/r12 or STG exp(-zeta r12) type integrals
