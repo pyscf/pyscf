@@ -374,15 +374,7 @@ def analyze(tdobj, verbose=None):
             log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
                      i+1, e_ev[i], wave_length[i], f_oscillator[i])
         else:
-            possible_sym = x_sym[(x > 1e-7) | (x < -1e-7)]
-            if numpy.all(possible_sym == symm.MULTI_IRREPS):
-                wfnsym = '???'
-            else:
-                ids = numpy.unique(possible_sym[possible_sym != symm.MULTI_IRREPS])
-                if ids.size == 1:
-                    wfnsym = symm.irrep_id2name(mol.groupname, ids[0])
-                else:
-                    wfnsym = '???'
+            wfnsym = analyze_wfnsym(tdobj, x_sym, x)
             log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
@@ -419,6 +411,23 @@ def analyze(tdobj, verbose=None):
             log.info('%3d    %11.4f %11.4f %11.4f',
                      i+1, m[0], m[1], m[2])
     return tdobj
+
+def analyze_wfnsym(tdobj, x_sym, x):
+    '''Guess the wfn symmetry of TDDFT X amplitude'''
+    possible_sym = x_sym[(x > 1e-7) | (x < -1e-7)]
+    if numpy.all(possible_sym == symm.MULTI_IRREPS):
+        if tdobj.wfnsym is None:
+            wfnsym = '???'
+        else:
+            wfnsym = tdobj.wfnsym
+    else:
+        ids = possible_sym[possible_sym != symm.MULTI_IRREPS]
+        ids = numpy.unique(ids)
+        if ids.size == 1:
+            wfnsym = symm.irrep_id2name(tdobj.mol.groupname, ids[0])
+        else:
+            wfnsym = '???'
+    return wfnsym
 
 
 def transition_dipole(tdobj, xy=None):
@@ -741,6 +750,7 @@ class TDA(lib.StreamObject):
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = mo_energy[viridx] - mo_energy[occidx,None]
+        e_ia_max = e_ia.max()
 
         if wfnsym is not None and mf.mol.symmetry:
             if isinstance(wfnsym, str):
@@ -753,7 +763,7 @@ class TDA(lib.StreamObject):
         nov = e_ia.size
         nstates = min(nstates, nov)
         e_ia = e_ia.ravel()
-        e_threshold = e_ia[numpy.argsort(e_ia)[nstates-1]]
+        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
         # Handle degeneracy, include all degenerated states in initial guess
         e_threshold += 1e-6
 

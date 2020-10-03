@@ -249,7 +249,7 @@ class _PhysicistsERIs:
             self.fock = numpy.diag(self.mo_energy)
             self.e_hf = mp._scf.e_tot
         else:
-            dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
+            dm = mp._scf.make_rdm1(mp_mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)

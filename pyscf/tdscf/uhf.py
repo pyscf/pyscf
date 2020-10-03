@@ -505,6 +505,7 @@ def analyze(tdobj, verbose=None):
     if mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         x_syma = symm.direct_prod(orbsyma[mo_occ[0]==1], orbsyma[mo_occ[0]==0], mol.groupname)
+        x_symb = symm.direct_prod(orbsyma[mo_occ[1]==1], orbsyma[mo_occ[1]==0], mol.groupname)
     else:
         x_syma = None
 
@@ -515,15 +516,12 @@ def analyze(tdobj, verbose=None):
             log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
                      i+1, e_ev[i], wave_length[i], f_oscillator[i])
         else:
-            possible_sym = x_syma[(x[0] > 1e-7) | (x[0] < -1e-7)]
-            if numpy.all(possible_sym == symm.MULTI_IRREPS):
-                wfnsym = '???'
+            wfnsyma = rhf.analyze_wfnsym(tdobj, x_syma, x[0])
+            wfnsymb = rhf.analyze_wfnsym(tdobj, x_symb, x[1])
+            if wfnsyma == wfnsymb:
+                wfnsym = wfnsyma
             else:
-                ids = numpy.unique(possible_sym[possible_sym != symm.MULTI_IRREPS])
-                if ids.size == 1:
-                    wfnsym = symm.irrep_id2name(mol.groupname, ids[0])
-                else:
-                    wfnsym = '???'
+                wfnsym = '???'
             log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
@@ -632,6 +630,7 @@ class TDA(rhf.TDA):
         viridxb = numpy.where(mo_occ[1]==0)[0]
         e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
         e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+        e_ia_max = max(e_ia_a.max(), e_ia_b.max())
 
         if wfnsym is not None and mol.symmetry:
             if isinstance(wfnsym, str):
@@ -646,7 +645,7 @@ class TDA(rhf.TDA):
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
         nov = e_ia.size
         nstates = min(nstates, nov)
-        e_threshold = e_ia[numpy.argsort(e_ia)[nstates-1]]
+        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
         # Handle degeneracy
         e_threshold += 1e-6
 
