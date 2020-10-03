@@ -245,6 +245,12 @@ class KnownValues(unittest.TestCase):
         mfx2c = mf.x2c().run()
         self.assertAlmostEqual(mfx2c.e_tot, -76.032703699443999, 9)
 
+    def test_h2_sto3g(self):
+        # There was a bug of cache size in lib/vhf/r_direct.c for minimal
+        # system
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='sto3g', verbose=0)
+        e = mol.DHF().kernel()
+        self.assertAlmostEqual(e, -1.066122658859047, 12)
 
 def _fill_gaunt(mol, erig):
     n2c = erig.shape[0]

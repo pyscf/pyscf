@@ -107,6 +107,30 @@ class VHFOpt(object):
         except AttributeError:
             pass
 
+    def get_q_cond(self, shape=None):
+        '''Return an array associated to q_cond. Contents of q_cond can be
+        modified through this array
+        '''
+        if shape is None:
+            nbas = self._this.contents.nbas
+            shape = (nbas, nbas)
+        data = ctypes.cast(self._this.contents.q_cond,
+                           ctypes.POINTER(ctypes.c_double))
+        return numpy.ctypeslib.as_array(data, shape=shape)
+    q_cond = property(get_q_cond)
+
+    def get_dm_cond(self, shape=None):
+        '''Return an array associated to dm_cond. Contents of dm_cond can be
+        modified through this array
+        '''
+        if shape is None:
+            nbas = self._this.contents.nbas
+            shape = (nbas, nbas)
+        data = ctypes.cast(self._this.contents.dm_cond,
+                           ctypes.POINTER(ctypes.c_double))
+        return numpy.ctypeslib.as_array(data, shape=shape)
+    dm_cond = property(get_dm_cond)
+
 class _CVHFOpt(ctypes.Structure):
     _fields_ = [('nbas', ctypes.c_int),
                 ('_padding', ctypes.c_int),
