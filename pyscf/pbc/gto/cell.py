@@ -394,6 +394,39 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
     drv = libpbc.PBCnr2c_drv
+
+    kderiv = kwargs.get('kderiv', 0)
+    if kderiv > 0:
+        hermi = 0
+        aosym = 's1'
+        mat = np.empty((nkpts,(3**kderiv)*comp,ni,nj), dtype=np.complex128)
+        if kderiv == 1:
+            fac = 1j * lib.einsum('kl,lx->xkl', expkL, Ls)
+        elif kderiv == 2:
+            fac = -lib.einsum('kl,lx,ly->xykl', expkL, Ls, Ls).reshape(-1,nkpts,len(Ls))
+        else:
+            raise NotImplementedError
+
+        for x in range(fac.shape[0]):
+            facx = np.asarray(fac[x], order='C')
+            drv(fintor, fill, out.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(len(Ls)),
+                Ls.ctypes.data_as(ctypes.c_void_p),
+                facx.ctypes.data_as(ctypes.c_void_p),
+                (ctypes.c_int*4)(i0, i1, j0, j1),
+                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+                atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
+                bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
+                env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
+
+            for k, kpt in enumerate(kpts_lst):
+                v = out[k]
+                if hermi != 0:
+                    for ic in range(comp):
+                        lib.hermi_triu(v[ic], hermi=hermi, inplace=True)
+                mat[k, x*comp:(x+1)*comp] = v.copy()
+        return mat
+
     drv(fintor, fill, out.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(len(Ls)),
         Ls.ctypes.data_as(ctypes.c_void_p),

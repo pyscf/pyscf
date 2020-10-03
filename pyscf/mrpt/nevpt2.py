@@ -637,8 +637,13 @@ class NEVPT(lib.StreamObject):
 
 
     def for_dmrg(self):
-        #TODO
-        #Some preprocess for dmrg-nevpt
+        '''Some preprocess for dmrg-nevpt'''
+        if not self._mc.natorb:
+            logger.warn(self, '''\
+DRMG-MCSCF orbitals are not natural orbitals in active space. It's recommended
+to rerun DMRG-CASCI with mc.natorb before calling DMRG-NEVPT2.
+See discussions in github issue https://github.com/pyscf/pyscf/issues/698 and
+example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
         return self
 
     def compress_approx(self,maxM=500, nevptsolver=None, tol=1e-7, stored_integral =False):
@@ -677,6 +682,7 @@ class NEVPT(lib.StreamObject):
 
         self.canonicalized = True
         self.compressed_mps = True
+        self.for_dmrg()
         return self
 
 

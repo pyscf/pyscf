@@ -32,7 +32,7 @@ set_target_properties(xc_itrf PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 target_link_libraries(xc_itrf xc)
-add_dependencies(xc_itrf libxc)
+# add_dependencies(xc_itrf libxc)
 endif()
 
 if(ENABLE_XCFUN)
@@ -42,6 +42,6 @@ set_target_properties(xcfun_itrf PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 target_link_libraries(xcfun_itrf xcfun)
-add_dependencies(xcfun_itrf libxcfun)
+# add_dependencies(xcfun_itrf libxcfun)
 endif()
 

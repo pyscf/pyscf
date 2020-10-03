@@ -630,9 +630,9 @@ class CASSCF(casci.CASCI):
             Optimized CASSCF orbitals coefficients. When canonicalization is
             specified, the returned orbitals make the general Fock matrix
             (Fock operator on top of MCSCF 1-particle density matrix)
-            diagonalized within each subspace (core, active, external).
-            If natorb (natural orbitals in active space) is specified,
-            the active segment of the mo_coeff is natural orbitls.
+            diagonalized within each subspace (core, active, external). If
+            natorb (natural orbitals in active space) is enabled, the active
+            segment of mo_coeff is transformed to natural orbitals.
         mo_energy : ndarray
             Diagonal elements of general Fock matrix (in mo_coeff
             representation).

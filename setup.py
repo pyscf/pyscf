@@ -432,7 +432,7 @@ if 1:
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
     xcfun_inc_path = search_inc_path('xcfun.h', [pyscf_lib_dir,
-                                                 os.path.join(pyscf_lib_dir, 'deps', 'include')])
+                                                 os.path.join(pyscf_lib_dir, 'deps', 'include', 'XCFun')])
     if xcfun_lib_path and xcfun_inc_path:
         print("****************************************************************")
         print("* xcfun found in %s." % xcfun_lib_path)
