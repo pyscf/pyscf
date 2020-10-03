@@ -639,11 +639,15 @@ class TDA(rhf.TDA):
 
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
         nov = e_ia.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia)
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
+        nstates = min(nstates, nov)
+        e_threshold = e_ia[numpy.argsort(e_ia)[nstates-1]]
+        # Handle degeneracy
+        e_threshold += 1e-6
+
+        idx = numpy.where(e_ia <= e_threshold)[0]
+        x0 = numpy.zeros((idx.size, nov))
+        for i, j in enumerate(idx):
+            x0[i, j] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None, nstates=None):

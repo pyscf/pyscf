@@ -745,11 +745,16 @@ class TDA(lib.StreamObject):
             e_ia[(orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym] = 1e99
 
         nov = e_ia.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia.ravel())
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # Koopmans' excitations
+        nstates = min(nstates, nov)
+        e_ia = e_ia.ravel()
+        e_threshold = e_ia[numpy.argsort(e_ia)[nstates-1]]
+        # Handle degeneracy, include all degenerated states in initial guess
+        e_threshold += 1e-6
+
+        idx = numpy.where(e_ia <= e_threshold)[0]
+        x0 = numpy.zeros((idx.size, nov))
+        for i, j in enumerate(idx):
+            x0[i, j] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None, nstates=None):
