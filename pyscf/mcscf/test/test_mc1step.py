@@ -300,15 +300,15 @@ class KnownValues(unittest.TestCase):
         cis1.spin = 2
         mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.5, .5])
         mc.run()
-        self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 7)
-        self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 5)
+        self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 5)
 
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
 
         mc.kernel(mo_coeff=mo_coeff)
-        self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 7)
-        self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 5)
+        self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 5)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
 
