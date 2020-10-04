@@ -276,9 +276,9 @@ class KnownValues(unittest.TestCase):
         mc.state_average_([0.5, 0.25, 0.25])
         mc.fcisolver.spin = 2
         mc.run()
-        self.assertAlmostEqual(mc.e_states[0], -108.7513784239438, 7)
-        self.assertAlmostEqual(mc.e_states[1], -108.6919327057737, 7)
-        self.assertAlmostEqual(mc.e_states[2], -108.6919327057737, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7513784239438, 6)
+        self.assertAlmostEqual(mc.e_states[1], -108.6919327057737, 6)
+        self.assertAlmostEqual(mc.e_states[2], -108.6919327057737, 6)
 
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
@@ -287,9 +287,9 @@ class KnownValues(unittest.TestCase):
         mc.state_average_([0.5, 0.25, 0.25])
         mc.fcisolver.spin = 2
         mc.kernel(mo_coeff=mo_coeff)
-        self.assertAlmostEqual(mc.e_states[0], -108.7513784239438, 7)
-        self.assertAlmostEqual(mc.e_states[1], -108.6919327057737, 7)
-        self.assertAlmostEqual(mc.e_states[2], -108.6919327057737, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7513784239438, 6)
+        self.assertAlmostEqual(mc.e_states[1], -108.6919327057737, 6)
+        self.assertAlmostEqual(mc.e_states[2], -108.6919327057737, 6)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         # Second and third root are degenerated
         #self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
