@@ -132,9 +132,21 @@ class KnownValues(unittest.TestCase):
     def test_gmp2_with_ao2mofn(self):
         pt = mp.GMP2(gmf)
         mf_df = mf.density_fit('weigend')
-        ao2mofn = mf_df.with_df.ao2mo
+        def ao2mofn(mo_coeffs):
+            nao = mo_coeffs[0].shape[0]
+            mo_a = [mo[:nao//2] for mo in mo_coeffs]
+            mo_b = [mo[nao//2:] for mo in mo_coeffs]
+            eri  = mf_df.with_df.ao2mo(mo_a)
+            eri += mf_df.with_df.ao2mo(mo_b)
+            eri += mf_df.with_df.ao2mo([mo_a[0], mo_a[1], mo_b[2], mo_b[3]])
+            eri += mf_df.with_df.ao2mo([mo_b[0], mo_b[1], mo_a[2], mo_a[3]])
+            return eri
         pt.ao2mo = lambda *args: mp.gmp2._make_eris_incore(pt, *args, ao2mofn=ao2mofn)
         e1 = pt.kernel()[0]
+        self.assertAlmostEqual(e1, -0.12879040729543023, 8)
+        # Should be quite close to emp2 without DF
+        self.assertAlmostEqual(e1, -0.12886859466191491, 3)
+
 #        pt = mp.GMP2(gmf.density_fit('weigend'))
 #        e2 = pt.kernel()[0]
 #        self.assertAlmostEqual(e1, e2, 9)
