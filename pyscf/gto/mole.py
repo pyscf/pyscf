@@ -1042,7 +1042,8 @@ def dumps(mol):
 
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
-        del(moldic[k])
+        if k in moldic:
+            del(moldic[k])
     for k in nparray_keys:
         if isinstance(moldic[k], numpy.ndarray):
             moldic[k] = moldic[k].tolist()
@@ -2234,6 +2235,14 @@ class Mole(lib.StreamObject):
     def loads_(self, molstr):
         self.__dict__.update(loads(molstr).__dict__)
         return self
+
+    def __getstate__(self):
+        exclude_keys = set(('stdout',))
+        d = dict(self.__dict__)
+        for k in exclude_keys:
+            if k in d:
+                del d['stdout']
+        return d
 
     def build(self, dump_input=True, parse_arg=True,
               verbose=None, output=None, max_memory=None,
