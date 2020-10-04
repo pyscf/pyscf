@@ -2241,7 +2241,7 @@ class Mole(lib.StreamObject):
         d = dict(self.__dict__)
         for k in exclude_keys:
             if k in d:
-                del d['stdout']
+                del(d[k])
         return d
 
     def build(self, dump_input=True, parse_arg=True,
