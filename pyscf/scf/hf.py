@@ -1666,10 +1666,13 @@ class SCF(lib.StreamObject):
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
-        opt = _vhf.VHFOpt(mol, 'int2e', 'CVHFnrs8_prescreen',
-                          'CVHFsetnr_direct_scf',
-                          'CVHFsetnr_direct_scf_dm')
-        opt.direct_scf_tol = self.direct_scf_tol
+        # Integrals < direct_scf_tol may be set to 0 in int2e.
+        # Higher accuracy is required for Schwartz inequality prescreening.
+        with mol.with_integral_screen(self.direct_scf_tol**2):
+            opt = _vhf.VHFOpt(mol, 'int2e', 'CVHFnrs8_prescreen',
+                              'CVHFsetnr_direct_scf',
+                              'CVHFsetnr_direct_scf_dm')
+            opt.direct_scf_tol = self.direct_scf_tol
         return opt
 
     @lib.with_doc(get_jk.__doc__)

@@ -89,11 +89,11 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v3.1.1
+    GIT_TAG v4.0.2
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
-            -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0
+    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
+            -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0 -DMIN_EXPCUTOFF=20
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -233,7 +233,7 @@ set_target_properties(tblis_einsum PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMPILE_FLAGS "-std=c++11")
 target_link_libraries(tblis_einsum tblis)
-add_dependencies(tblis_einsum libtblis)
+# add_dependencies(tblis_einsum libtblis)
 endif() # ENABLE_TBLIS
 
 
