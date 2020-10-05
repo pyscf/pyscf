@@ -33,6 +33,8 @@ import numpy
 import h5py
 import scipy.special
 import scipy.linalg
+import contextlib
+import threading
 from pyscf import lib
 from pyscf.lib import param
 from pyscf.data import elements
@@ -3686,15 +3688,16 @@ def fakemol_for_charges(coords, expnt=1e16):
     fakemol._built = True
     return fakemol
 
-class _TemporaryMoleContext(object):
-    import copy
-    def __init__(self, method, args, args_bak):
-        self.method = method
-        self.args = args
-        self.args_bak = args_bak
-    def __enter__(self):
-        self.method(*self.args)
-    def __exit__(self, type, value, traceback):
-        self.method(*self.args_bak)
+@contextlib.contextmanager
+def _TemporaryMoleContext(method, args, args_bak):
+    '''Almost every method depends on the Mole environment. Ensure the
+    modification in temporary environment threading safe
+    '''
+    with threading.Lock():
+        method(*args)
+        try:
+            yield
+        finally:
+            method(*args_bak)
 
 del(BASE)

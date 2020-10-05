@@ -5,10 +5,16 @@ PySCF 1.7.? (2020-?-?)
   - Analytical nuclear gradients for state-average CASSCF
 
 
+PySCF 1.7.6 (2020-10-03)
+------------------------
+* Improved
+  - Threading safety
+
+
 PySCF 1.7.5 (2020-9-27)
 -----------------------
 * Added
-  - Upgrade cint library to v4.0.0
+  - Upgrade cint library to v4.0.2
   - Upgrade xcfun library to v2.1.0
   - Kramers' restricted Dirac-Hartree-Fock, X2C, DHF-SOSCF
   - Heavy elements basis in MINAO
@@ -20,9 +26,10 @@ PySCF 1.7.5 (2020-9-27)
   - Check basis angular momentum in mol.intor (l < 7)
   - FCIDUMP wrapper fcidump.py
 * Fixed
-  - Bug in Mole.fromstring
+  - Bugs in Mole.fromstring
   - Buffer size bug in DHF JK builder for very small systems
   - Fix pbc-eom-eaccsd_star bug
+  - Bugs in integral screening for very tight direct_scf_tol
 
 
 PySCF 1.7.4 (2020-8-2)
