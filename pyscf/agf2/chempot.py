@@ -149,11 +149,10 @@ def minimize_chempot(se, fock, nelec, occupancy=2, x0=0.0, tol=1e-6, maxiter=200
         AuxiliarySpace object with altered :attr:`energy` and 
         :attr:`chempot`, and the SciPy :attr:`OptimizeResult` object.
     '''
-    #TODO: initialise buf and pass with fargs?
-    #TODO: add some more minimization algorithms
 
     tol = tol**2  # we minimize the squared error
-    fargs = (se, fock, nelec, occupancy)
+    buf = np.zeros((se.nphys+se.naux, se.nphys+se.naux))
+    fargs = (se, fock, nelec, occupancy, buf)
 
     options = dict(maxiter=maxiter, ftol=tol, xtol=tol, gtol=tol)
     kwargs = dict(x0=x0, method='TNC', jac=jac, options=options)

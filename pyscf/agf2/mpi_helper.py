@@ -29,12 +29,13 @@ from pyscf import __config__
 INT_MAX = 2147483647
 BLKSIZE = INT_MAX // 32 + 1
 
+# attempt to successfully load and init the MPI, else assume 1 core:
 try:
     from mpi4py import MPI as mpi
     comm = mpi.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
-except: #NOTE should we check for ImportError? This is OSError in python2, check how pyscf handles this elsewhere
+except:
     mpi = None
     comm = None
     size = 1

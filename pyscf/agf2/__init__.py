@@ -17,7 +17,6 @@
 #
 
 #TODO: volume/issue for second paper
-#NOTE: I don't like using nmom as a variable in all of these methods
 
 '''
 Auxiliary second-order Green's function perturbation therory

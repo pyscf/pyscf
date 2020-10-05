@@ -231,7 +231,6 @@ class DFRAGF2(ragf2.RAGF2):
             self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)
-            #NOTE: how do we want to build this by default? this will also be the result of RAGF2.density_fit()
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
 
         self._keys.update(['_with_df'])

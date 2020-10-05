@@ -20,8 +20,6 @@ import unittest
 import numpy as np
 from pyscf import gto, scf, agf2, lib
 
-#NOTE: uses loose tolerance comparison aganst exact-ERI results
-
 
 class KnownValues(unittest.TestCase):
 

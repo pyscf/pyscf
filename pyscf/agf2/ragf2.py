@@ -40,6 +40,12 @@ BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 #TODO: damping?
 #TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
 #TODO: this has parallel 2body and aux build, but not get_jk/qmo transform - should we parallelise the latter for exact ERI?
+#TODO: outcore really isn't optimised
+#TODO: should we even print/store e_mp2, or name it something else? this is quite a bit off of the real E(mp2) at (None,0)...
+#TODO: warn for small gaps c.f. CCSD?
+#TODO: how exactly to do positive-semidef cholesky? see _agf2.py
+#TODO: print more?
+#TODO: more tests
 
 
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
@@ -62,8 +68,6 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
     if dump_chk:
         agf2.dump_chk(gf=gf, se=se)
 
-    #NOTE: should we even print/store e_mp2, or name it something else? this is
-    # quite a bit off of the real E(mp2) at (None,0)...
     e_mp2 = agf2.energy_mp2(agf2.mo_energy, se)
     log.info('E(MP2) = %.16g  E_corr(MP2) = %.16g', e_mp2+eri.e_hf, e_mp2)
 
@@ -76,7 +80,6 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
 
         # two-body terms
         se = agf2.build_se(eri, gf)
-        #gf = agf2.build_gf(eri, gf, se)  #NOTE: I used to do this in my old code.. but it's wrong
         e_2b = agf2.energy_2body(gf, se)
 
         if dump_chk:
@@ -130,7 +133,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     Returns:
         :class:`SelfEnergy`
     '''
-    #TODO: C code
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
@@ -139,7 +141,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     assert type(gf_vir) is aux.GreensFunction
 
     nmo = agf2.nmo
-    tol = agf2.weight_tol  #NOTE: tol is unlikely to be met at (None,0)
+    tol = agf2.weight_tol
     facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
     mem_incore = (gf_occ.nphys*gf_occ.naux**2*gf_vir.naux) * 8/1e6
@@ -298,7 +300,7 @@ def fock_loop(agf2, eri, gf, se):
 
             fock = agf2.get_fock(eri, gf)
             rdm1 = agf2.make_rdm1(gf)
-            fock = diis.update(fock, xerr=None)  #NOTE: should we silence repeated linear dependence warnings since this is nested?
+            fock = diis.update(fock, xerr=None)
 
             if niter2 > 1:
                 derr = np.max(np.absolute(rdm1 - rdm1_prev))
@@ -382,7 +384,7 @@ def energy_2body(agf2, gf, se):
     mpi_helper.barrier()
     e2b = mpi_helper.allreduce(e2b)
 
-    return np.ravel(e2b.real)[0] #NOTE: i've had some problems with some einsum implementations not returning scalars... worth doing ravel()[0]?
+    return np.ravel(e2b.real)[0]
 
 
 def energy_mp2(agf2, mo_energy, se):
@@ -683,7 +685,6 @@ class RAGF2(lib.StreamObject):
     def _finalize(self):
         ''' Hook for dumping results and clearing up the object.
         '''
-        #NOTE: if we get here, should we clean up the chkfile?
 
         if self.converged:
             logger.info(self, '%s converged', self.__class__.__name__)
@@ -700,8 +701,6 @@ class RAGF2(lib.StreamObject):
         return self
 
     def reset(self, mol=None):
-        #NOTE: what is this achieving? attributes mo_coeff, mo_energy, mo_occ will not be reset
-        # if this is called...?
         if mol is not None:
             self.mol = mol
         self._scf.reset(mol)
@@ -926,7 +925,6 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     nao, nmo = mo_coeff.shape
 
     eris.feri = lib.H5TmpFile()
-    #TODO: ioblk_size
     ao2mo.outcore.full(mol, mo_coeff, eris.feri, dataname='mo', 
                        max_memory=agf2.max_memory, verbose=log)
     eris.eri = eris.feri['mo']
@@ -979,7 +977,6 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
     blksize = min(nmo, max(BLKMIN, blksize))
     log.debug1('blksize = %d', blksize)
 
-    #NOTE: are these stored in Fortran layout? if so this is not efficient
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
     for p0, p1 in lib.prange(0, nmo, blksize):
         idx = np.concatenate(tril2sq[p0:p1])
@@ -991,7 +988,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
         buf = ao2mo._ao2mo.nr_e2(buf, cja, sja, 's2kl', 's1')
         buf = buf.reshape(p1-p0, nmo, nj, na)
 
-        buf = lib.einsum('xpja,pi->xija', buf, ci)  #NOTE: better way to do this?
+        buf = lib.einsum('xpja,pi->xija', buf, ci)
         eri.feri['qmo'][p0:p1] = np.asarray(buf, order='C')
         
     log.timer_debug1('QMO integral transformation', *cput0)

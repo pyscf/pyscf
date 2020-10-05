@@ -28,8 +28,6 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf.lib.parameters import MAX_MEMORY, LARGE_DENOM
 
-#TODO out-of-core auxiliaires? make this agnostic to H5 e/v
-
 
 class AuxiliarySpace:
     ''' Simple container to hold the energies, couplings and chemical
@@ -56,16 +54,6 @@ class AuxiliarySpace:
         arg = np.argsort(self.energy)
         self.energy = self.energy[arg]
         self.coupling = self.coupling[:,arg]
-
-    def check_sanity(self):
-        ''' Perform some debugging checks.
-        '''
-        #NOTE: convert the expensive calls here to tests later
-        assert self.energy.ndim == 1
-        assert self.coupling.ndim == 2
-        assert self.coupling.shape[1] == self.energy.shape[0]
-        assert self.get_occupied().coupling.shape == self.coupling[:,self.energy<self.chempot].shape
-        assert self.get_virtual().coupling.shape == self.coupling[:,self.energy>=self.chempot].shape
 
     def real_freq_spectrum(self, *args, **kwargs):
         ''' See subclasses.
@@ -122,7 +110,6 @@ class AuxiliarySpace:
             Array representing the coupling of the auxiliary space to 
             the physical space
         '''
-        #NOTE: memory check
 
         _check_phys_shape(self, phys)
 
@@ -379,9 +366,8 @@ class SelfEnergy(AuxiliarySpace):
         ngf, nse = n
         se = self
 
-        #TODO: this should probably be a copy, but may be expensive?
         if nse is None and ngf is None:
-            return se
+            return self.copy()
 
         if nse is not None:
             se = compress_via_se(se, n=nse)
@@ -417,7 +403,7 @@ class GreensFunction(AuxiliarySpace):
         e_shifted = self.energy - self.chempot
         v = self.coupling
         spectrum = np.zeros((grid.size, self.nphys, self.nphys), dtype=complex)
-        blksize = 240 #NOTE option for the block size?
+        blksize = 240
 
         p1 = 0
         for block in range(0, grid.size, blksize):
@@ -517,7 +503,6 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
     Returns:
         tuple of ndarrays (eigenvalues, eigenvectors)
     '''
-    #NOTE: I think a lot of this is pulled from the adc code. Can we just inherit anything?
 
     _check_phys_shape(auxspc, phys)
     dim = auxspc.nphys + auxspc.naux
@@ -560,7 +545,7 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
                                max_space=ntrial, max_cycle=maxiter, pick=pick)
 
     if not np.all(conv):
-        pass #TODO: warn
+        log.warn('Davidson did not converge')
 
     return w, v
 
@@ -580,18 +565,10 @@ def _band_lanczos(se_occ, n=0, max_memory=None):
     r = np.zeros((naux))
 
     # cholesky qr factorisation of v.T
-    #TODO: _cholesky_build type of fallback? or we just don't allow naux<nmo compression
     coupling = se_occ.coupling
     x = np.dot(coupling, coupling.T)
     v_tri = np.linalg.cholesky(x).T
     q[:nphys] = np.dot(np.linalg.inv(v_tri).T, coupling)
-    #try:
-    #    v_tri = np.linalg.cholesky(x).T
-    #except np.linalg.LinAlgError:
-    #    w, v = np.linalg.eigh(x)
-    #    w[w < 1e-10] = 1e-10
-    #    x_posdef = np.dot(np.dot(v, np.diag(w)), v.T.conj())
-    #    v_tri = np.linalg.cholesky(x_posdef).T
 
     for i in range(bandwidth):
         r[:] = se_occ.energy * q[i]

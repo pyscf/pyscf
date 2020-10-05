@@ -29,8 +29,6 @@ from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.agf2 import aux, ragf2, uagf2, ragf2_slow
 
-#TODO: can we do a double inheritance with RAGF2_slow to make this class nicer?
-
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ''' Builds either the auxiliaries of the occupied self-energy,
