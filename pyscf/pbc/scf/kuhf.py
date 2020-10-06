@@ -80,7 +80,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         shifta, shiftb = level_shift_factor
     else:
         shifta = shiftb = level_shift_factor
-    if isinstance(damp_factor, (tuple, list, numpy.ndarray)):
+    if isinstance(damp_factor, (tuple, list, np.ndarray)):
         dampa, dampb = damp_factor
     else:
         dampa = dampb = damp_factor
