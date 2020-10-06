@@ -11,6 +11,7 @@ __all__ = [
         "get_time_string",
         "eigassign",
         "eigreorder_logging",
+        "make_cubegen_file",
         ]
 
 einsum = functools.partial(np.einsum, optimize=True)
@@ -135,16 +136,31 @@ def eigreorder_logging(e, reorder, log):
 
 
 
-def make_cubegen_file(mol, C, orbitals, filename, **kwargs):
+#def make_cubegen_file(mol, C, orbitals, filename, **kwargs):
+#    """
+#
+#    Paramters
+#    ---------
+#
+#    """
+#    from pyscf.tools import cubegen
+#
+#    orbital_labels = np.asarray(mol.ao_labels(None))[orbitals]
+#    orbital_labels = ["-".join(x) for x in orbital_labels]
+#
+#    for idx, orb in enumerate(orbitals):
+#        filename_orb = "%s-%s" % (filename, orbital_labels[idx])
+#        cubegen.orbital(mol, filename_orb, C[:,orb], **kwargs)
+
+
+def make_cubegen_file(mol, C, filename, **kwargs):
+    """
+    Parameters
+    ---------
+
+    """
     from pyscf.tools import cubegen
-
-    orbital_labels = np.asarray(mol.ao_labels(None))[orbitals]
-    orbital_labels = ["-".join(x) for x in orbital_labels]
-
-    for idx, orb in enumerate(orbitals):
-        filename_orb = "%s-%s" % (filename, orbital_labels[idx])
-        cubegen.orbital(mol, filename_orb, C[:,orb], **kwargs)
-
+    cubegen.orbital(mol, filename, C, **kwargs)
 
 
 def _test():

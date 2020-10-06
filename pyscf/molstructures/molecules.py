@@ -8,6 +8,7 @@ from pyscf import gto
 
 __all__ = [
         "build_dimer",
+        "build_two_dimers",
         "build_ring",
         "build_methane",
         "build_ethanol",
@@ -61,6 +62,24 @@ def build_dimer(d, atoms, add_labels=False, **kwargs):
             atom=atom,
             **kwargs)
     return mol
+
+def build_two_dimers(d, atoms, separation, add_labels=False, **kwargs):
+    if add_labels:
+        l0, l1, l2, l3 = "1", "2", "3", "4"
+    else:
+        l0 = l1 = l2 = l3 = ""
+
+    sep = separation / 2
+
+    atom = "{}{} 0 {} {}; {}{} 0 {} {};".format(atoms[0], l0, -sep, -d/2, atoms[1], l1, -sep, d/2)
+    atom += " {}{} 0 {} {}; {}{} 0 {} {}".format(atoms[0], l2, sep, -d/2, atoms[1], l3, sep, d/2)
+    log.debug("atom = %s", atom)
+
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
+
 
 def build_ring(d, atoms, **kwargs):
     natom = len(atoms)
@@ -365,7 +384,10 @@ def build_water_borazine(distance, **kwargs):
 
     Water molecule are O1, H1, H2.
     Nearest nitrogen is N1.
+    Nearest hydrogen is H1.
     Next nearest borons are B1, B3.
+
+    H on N1: H4
 
     Distance measured from O to molecular plane?
     """
@@ -373,8 +395,8 @@ def build_water_borazine(distance, **kwargs):
     # At 3.32 A
     eq = [
         ["O1", [6.07642824900005, 5.45929539300001, 3.88230000000000]],
-        ["H1", [5.29230349199999, 4.92565706249998, 4.09910000000000]],
-        ["H2", [6.08425933200003, 5.49983635649998, 2.90580000000000]],
+        ["H1", [6.08425933200003, 5.49983635649998, 2.90580000000000]],
+        ["H2", [5.29230349199999, 4.92565706249998, 4.09910000000000]],
         ["B1", [5.00435273549996, 6.44422098149999, 0.55828330799997]],
         ["B2", [3.72565904700004, 4.27443283650000, 0.41692162499995]],
         ["B3", [6.24820422149998, 4.24146091050005, 0.45255167849998]],
@@ -402,6 +424,11 @@ def build_water_borazine(distance, **kwargs):
     #    d = np.linalg.norm(atom[6][1] - a[1])
     #    print(a[0], d)
 
+    #for a in atom[3:]:
+    #    d = np.linalg.norm(atom[6][1] - a[1])
+    #    print(a[0], d)
+
+
     mol = gto.M(
         atom=atom,
         **kwargs)
@@ -410,8 +437,9 @@ def build_water_borazine(distance, **kwargs):
 def build_water_boronene(distance, **kwargs):
     """From suppl. mat. of J. Chem. Phys. 147, 044710 (2017)
 
-    Water molecule are O*, H*, H*.
+    Water molecule are O2, H1, H3.
     Nearest nitrogen is N1.
+    Nearest hydrogen is H1.
     Next nearest borons are B2 etc.
 
     Distance measured from O to molecular plane.
@@ -437,7 +465,8 @@ def build_water_boronene(distance, **kwargs):
 
     # Move water molecule to distance
     for i in range(len(atoms)):
-        if "*" in atoms[i]:
+        #if "*" in atoms[i]:
+        if atoms[i] in ("H1", "O2", "H3"):
             coords[i][2] += (distance-3.4)
 
     atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
@@ -482,4 +511,5 @@ if __name__ == "__main__":
     #print("3.5")
     #build_azomethane(3.5)
 
-    build_water_dimer(5)
+    #build_water_dimer(5)
+    build_water_borazine(5)

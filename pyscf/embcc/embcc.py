@@ -176,7 +176,11 @@ class EmbCC:
         C_local = self.C_iao[:,iao_indices]
         #not_indices = np.asarray([i for i in np.arange(len(iao_indices)) if i not in iao_indices])
         not_indices = np.asarray([i for i in np.arange(self.C_iao.shape[-1]) if i not in iao_indices])
-        C_env = np.hstack((self.C_iao[:,not_indices], self.C_env))
+
+        if len(not_indices) > 0:
+            C_env = np.hstack((self.C_iao[:,not_indices], self.C_env))
+        else:
+            C_env = self.C_env
 
         return C_local, C_env
 

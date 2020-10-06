@@ -38,6 +38,9 @@ log = logging.getLogger(__name__)
 
 class Cluster:
 
+    TOL_CLUSTER_OCC = 1e-3
+    TOL_OCC = 1e-3
+
     def __init__(self, base, cluster_id, name,
             indices, C_local, C_env,
             solver="CCSD",
@@ -396,13 +399,14 @@ class Cluster:
         C_clst = np.hstack((self.C_local, C_bath))
         D_clst = np.linalg.multi_dot((C_clst.T, S, self.mf.make_rdm1(), S, C_clst)) / 2
         e, R = np.linalg.eigh(D_clst)
-        if not np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=1e-6, rtol=0):
+        tol = self.dmet_bath_tol
+        if not np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=tol, rtol=0):
             raise RuntimeError("Error while diagonalizing cluster DM: eigenvalues not all close to 0 or 1:\n%s", e)
         e, R = e[::-1], R[:,::-1]
         C_clst = np.dot(C_clst, R)
         nocc_clst = sum(e > 0.5)
         nvir_clst = sum(e < 0.5)
-        log.info("DMET cluster orbitals: occ=%3d, vir=%3d", nocc_clst, nvir_clst)
+        log.info("Number of fragment + DMET-bath orbitals: occ=%3d, vir=%3d", nocc_clst, nvir_clst)
 
         C_occclst, C_virclst = np.hsplit(C_clst, [nocc_clst])
 
@@ -841,14 +845,15 @@ class Cluster:
             #if False:
             #if True:
             if self.maxiter > 1:
+                log.debug("Maxiter=%3d, storing amplitudes.", self.maxiter)
                 if self.base.T1 is None:
                     No = sum(self.mf.mo_occ > 0)
                     Nv = len(self.mf.mo_occ) - No
                     self.base.T1 = np.zeros((No, Nv))
                     self.base.T2 = np.zeros((No, No, Nv, Nv))
 
-                #pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2)
-                pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2, variant="democratic")
+                pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2)
+                #pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2, variant="democratic")
 
                 # Transform to HF MO basis
                 act = cc.get_frozen_mask()
@@ -958,7 +963,7 @@ class Cluster:
             casci.fcisolver.conv_tol = 1e-9
             casci.fcisolver.threads = 1
             casci.fcisolver.max_cycle = 400
-            casci.fcisolver.level_shift = 5e-3
+            #casci.fcisolver.level_shift = 5e-3
 
             if solver_options:
                 spin = solver_options.pop("fix_spin", None)
@@ -1089,8 +1094,8 @@ class Cluster:
         #self.e_corr_d = e_corr_d
 
         # RDM1
-        #if True:
-        if False:
+        #if False:
+        if True and solver:
 
             #if solver != "FCI":
             if not solver.startswith("FCI"):
@@ -1214,6 +1219,16 @@ class Cluster:
         self.e_delta_mp2 = e_delta_occ + e_delta_vir
         log.debug("MP2 correction = %.8g", self.e_delta_mp2)
 
+        # FULL MP2 correction [TESTING]
+        #if True:
+        if False:
+            Co1 = np.hstack((C_occclst, C_occenv))
+            Cv1 = np.hstack((C_virclst, C_virenv))
+            Co2 = np.hstack((C_occclst, C_occbath))
+            Cv2 = np.hstack((C_virclst, C_virbath))
+            self.e_delta_mp2 = self.get_mp2_correction(Co1, Cv1, Co2, Cv2)
+            log.debug("Full MP2 correction = %.8g", self.e_delta_mp2)
+
         # === Canonicalize orbitals
         if True:
             C_occact = self.canonicalize(C_occclst, C_occbath)
@@ -1234,8 +1249,8 @@ class Cluster:
         No = Co.shape[-1]
         Nv = Cv.shape[-1]
         # Check occupations
-        assert np.allclose(self.get_occup(Co), 2, atol=1e-7), "%r" % self.get_occup(Co)
-        assert np.allclose(self.get_occup(Cv), 0, atol=1e-7), "%r" % self.get_occup(Cv)
+        assert np.allclose(self.get_occup(Co), 2, atol=2*self.dmet_bath_tol), "%r" % self.get_occup(Co)
+        assert np.allclose(self.get_occup(Cv), 0, atol=2*self.dmet_bath_tol), "%r" % self.get_occup(Cv)
         mo_occ = np.asarray(No*[2] + Nv*[0])
 
         frozen_occ = list(range(C_occenv.shape[-1]))
@@ -1258,6 +1273,33 @@ class Cluster:
         log.debug("--------")
         log.debug("Active (occ., vir., all) = %4d  %4d  %4d", C_occact.shape[-1], C_viract.shape[-1], self.nactive)
         log.debug("Frozen (occ., vir., all) = %4d  %4d  %4d", C_occenv.shape[-1], C_virenv.shape[-1], self.nfrozen)
+
+        # Write Cubegen files
+        #if True:
+        if False:
+            orbitals = {
+                "F" : self.C_local,
+                "BD" : self.C_bath,
+                "BO" : self.C_occbath,
+                "BV" : self.C_virbath,
+                "EO" : C_occenv,
+                "EV" : C_virenv,
+                }
+
+            if False:
+                for orbkind, C in orbitals.items():
+                    for j in range(C.shape[-1]):
+                        filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
+                        make_cubegen_file(self.mol, C[:,j], filename)
+            else:
+                from pyscf.tools import molden
+                for orbkind, C in orbitals.items():
+                    with open("C%d-%s.molden" % (self.id, orbkind), "w") as f:
+                        molden.header(self.mol, f)
+                        molden.orbital_coeff(self.mol, f, C)
+
+
+            raise SystemExit()
 
         t0 = MPI.Wtime()
         converged, e_corr = self.run_solver(solver, mo_coeff, mo_occ, active=active, frozen=frozen)

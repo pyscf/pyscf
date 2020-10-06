@@ -28,19 +28,34 @@ parser.add_argument("--basis", default="cc-pVDZ")
 parser.add_argument("--local-type", choices=["IAO", "AO", "LAO"], default="IAO")
 parser.add_argument("--minao", default="minao")
 parser.add_argument("--bath-type", default="mp2-natorb")
-parser.add_argument("--bath-size", type=float, nargs=2)
+parser.add_argument("--bath-size", type=float, nargs=2) # If float -> relative size
+parser.add_argument("--bath-tol", type=float, nargs=2)
+parser.add_argument("--dmet-bath-tol", type=float, default=1e-8)
 
+parser.add_argument("--number-C", type=int)
+
+parser.add_argument("--impurity", nargs="*")
 #parser.add_argument("--impurity", nargs="*", default=["F1", "H1", "C1"])
-parser.add_argument("--impurity", nargs="*", default=["F1", "H1", "C1", "H2", "C2"])
+#parser.add_argument("--impurity", nargs="*", default=["F1", "H1", "C1", "H2", "C2"])
 #parser.add_argument("--impurity", nargs="*", default=["F1", "H1", "C1", "H2", "C2", "H3", "C3"])
+
+parser.add_argument("--impurity-number", type=int, default=1)
 
 #parser.add_argument("--mp2-correction", action="store_true")
 
 parser.add_argument("--ircs", type=int, nargs="*", default=[0, 1, 2, 3, 4, 5, 6, 7, 8])
-parser.add_argument("--benchmarks", nargs="*", choices=["MP2", "CISD", "CCSD", "FCI"])
+parser.add_argument("--benchmarks", nargs="*")
+parser.add_argument("--use-refdata", action="store_true")
 parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
+
+if args.impurity is None:
+    args.impurity = ["F1", "H1", "C1"]
+    if args.impurity_number > 1:
+        args.impurity += ["H2", "C2"]
+    if args.impurity_number > 2:
+        args.impurity += ["H3", "C3"]
 
 if MPI_rank == 0:
     log.info("Parameters")
@@ -49,14 +64,13 @@ if MPI_rank == 0:
         log.info("%10s: %r", name, value)
 
 dm0 = None
-#ref_orbitals = None
 refdata = None
 
 for ircidx, irc in enumerate(args.ircs):
     if MPI_rank == 0:
         log.info("IRC=%.2f", irc)
 
-    mol = sn2_struct.structure(irc, args.basis, args.basis)
+    mol = sn2_struct.structure(irc, args.basis, args.basis, nC=args.number_C)
 
     mf = pyscf.scf.RHF(mol)
     t0 = MPI.Wtime()
@@ -66,15 +80,16 @@ for ircidx, irc in enumerate(args.ircs):
     dm0 = mf.make_rdm1()
 
     if args.benchmarks:
-        run_benchmarks(mf, args.benchmarks, irc, "benchmarks-"+args.output, ircidx==0)
+        run_benchmarks(mf, args.benchmarks, irc, "benchmarks-"+args.output, (ircidx==0))
 
     else:
         cc = embcc.EmbCC(mf,
                 local_type=args.local_type,
                 minao=args.minao,
-                bath_type=args.bath_type, bath_size=args.bath_size,
+                bath_type=args.bath_type, bath_size=args.bath_size, bath_tol=args.bath_tol,
                 #mp2_correction=args.mp2_correction,
-                dmet_bath_tol=1e-9,
+                #dmet_bath_tol=1e-9,
+                dmet_bath_tol=args.dmet_bath_tol,
                 )
 
         cc.make_atom_cluster(args.impurity)
@@ -84,9 +99,11 @@ for ircidx, irc in enumerate(args.ircs):
         #if ref_orbitals is not None:
         #    cc.set_reference_orbitals(ref_orbitals)
 
-        cc.set_refdata(refdata)
+        if args.use_refdata:
+            cc.set_refdata(refdata)
         cc.run()
-        refdata = cc.get_refdata()
+        if args.use_refdata:
+            refdata = cc.get_refdata()
 
         #ref_orbitals = cc.get_orbitals()
 

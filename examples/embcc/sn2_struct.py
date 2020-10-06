@@ -19,8 +19,9 @@
 
 #import qcdmet_paths
 from pyscf import gto
+import numpy as np
 
-def structure( number, thebasis1, thebasis2 ):
+def structure(number, thebasis1, thebasis2, nC=None):
 
     irc = None
     mol = gto.Mole()
@@ -421,9 +422,40 @@ H12        0.431011   -9.195078    0.005201
 H12       -0.872887   -8.391452    0.878121
 '''
 
+    if nC:
+        atom_new = ""
+        term_C = None
+        dCH = 0.0
+        for line in mol.atom.split("\n"):
+            if not line:
+                continue
+            if int(line[1:3]) == (nC) and line[0] == "C":
+                term_C = np.asarray([float(x) for x in line[3:].split()])
+            if int(line[1:3]) == (nC) and line[0] == "H":
+                term_H = np.asarray([float(x) for x in line[3:].split()])
+                dCH += np.linalg.norm(term_H - term_C)
+            if int(line[1:3]) <= nC:
+                atom_new += line + "\n"
+            elif int(line[1:3]) == (nC + 1) and line[0] == "C":
+                assert term_C is not None
+                next_C = np.asarray([float(x) for x in line[3:].split()])
+                vCC = next_C - term_C
+                dCC = np.linalg.norm(vCC)
+                vCH = (dCH/2.0)/dCC * vCC
+                next_H = term_C + vCH
+                atom_new += "H%d    % .8f   % .8f   % .8f\n" % (nC, *next_H)
+
+        mol.atom = atom_new
+
+
     mol.basis = { 'H': thebasis1, 'C': thebasis1, 'F': thebasis2 }
     mol.charge = -1
     mol.spin = 0
     mol.verbose = 4
     mol.build()
     return mol
+
+if __name__ == "__main__":
+    m = structure(0, "cc-pVDZ", "cc-pVDZ", nC=2)
+    print(m.atom)
+

@@ -54,7 +54,7 @@ def project_ref_orbitals(self, C_ref, C):
 
     return C, e
 
-def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
+def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8, warntol=1e-10):
     """Calculate DMET bath, occupied environment and virtual environment orbitals.
 
     If C_ref is not None, complete DMET orbital space using active transformation of reference orbitals.
@@ -89,18 +89,26 @@ def make_dmet_bath(self, C_ref=None, tol=1e-8, reftol=0.8):
     e, R = np.linalg.eigh(D_env)
     e, R = e[::-1], R[:,::-1]
 
-    warntol = 1e-10
     if not (np.all(e > -warntol) and np.all(e < 1+warntol)):
         log.error("Eigenvalues of environment DM not strictly in [0,1].")
         log.error("Eigenvalues < 0: %s", e[e < -warntol])
         log.error("Eigenvalues > 1: %s", e[e > 1+warntol])
 
-
     C_env = np.dot(C_env, R)
-    mask_bath = np.logical_and(e >= tol, e <= 1-tol)
-    mask_occenv = e > 1-tol
-    mask_virenv = e < tol
-    nbath = sum(mask_bath)
+
+    if nbath is not None:
+        #mask_bath = np.argsort(abs(e-0.5))[:nbath]
+        #b0 = min
+        # We can assume e is sorted:
+        #mask_occenv = np.asarray(
+        raise NotImplementedError()
+
+    else:
+        mask_bath = np.logical_and(e >= tol, e <= 1-tol)
+        mask_occenv = e > 1-tol
+        mask_virenv = e < tol
+        nbath = sum(mask_bath)
+
     noccenv = sum(mask_occenv)
     nvirenv = sum(mask_virenv)
     assert (nbath + noccenv + nvirenv == C_env.shape[-1])

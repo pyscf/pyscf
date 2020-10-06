@@ -58,6 +58,7 @@ if MPI_rank == 0:
         log.info("%10s: %r", name, value)
 
 structure_builder = functools.partial(molstructures.build_dimer, atoms=args.atoms, add_labels=True)
+#structure_builder = functools.partial(molstructures.build_two_dimers, atoms=args.atoms, separation=20.0, add_labels=True)
 #structure_builder = functools.partial(molstructures.build_dimer, atoms=args.atoms, add_labels=False)
 basis = args.basis
 
@@ -103,15 +104,20 @@ for idist, dist in enumerate(args.distances):
 
     if args.benchmarks:
 
-        #cas_size = (6, 6)
-        cas_size = (8, 8)
+        #cas_size = (4, 4)
+        cas_size = (6, 6)
+        #cas_size = (8, 8)
         #cas_size = (10, 10)
-        #cas_space = {'A1g' : 1 , 'A1u' : 1, 'E1gx' : 1, "E1gy" : 1, 'E1ux' : 1, "E1uy" : 1}
-        #core_space = {'A1g' : 2 , 'A1u' : 2}
+        cas_space = {'A1g' : 1 , 'A1u' : 1, 'E1gx' : 1, "E1gy" : 1, 'E1ux' : 1, "E1uy" : 1}
+        #cas_space = {'E1gx' : 1, "E1gy" : 1, 'E1ux' : 1, "E1uy" : 1}
+        core_space = {'A1g' : 2 , 'A1u' : 2}
+        #core_space = {'A1g' : 3 , 'A1u' : 2}
+
+        #cas_size = (2, 2)
 
         run_benchmarks(mf, args.benchmarks, dist, "benchmarks.txt", print_header=(idist==0),
-                #cas_size=cas_size, cas_space=cas_space, core_space=core_space)
-                cas_size=cas_size)
+                cas_size=cas_size, cas_space=cas_space, core_space=core_space)
+                #cas_size=cas_size)
 
     #if not args.no_embcc:
     else:
@@ -120,30 +126,55 @@ for idist, dist in enumerate(args.distances):
                 minao=args.minao,
                 bath_type=args.bath_type, bath_size=args.bath_size,
                 solver=args.solver,
+                maxiter=10,
                 #mp2_correction=args.mp2_correction,
                 #use_ref_orbitals_bath=args.use_ref_orbitals_bath,
                 )
         #cc.make_atom_cluster(args.impurity, symmetry_factor=2)
 
-        solver_opts = {}
-        #solver_opts = {"fix_spin" : 0}
+        #solver_opts = {}
+        solver_opts = {"fix_spin" : 0}
 
-        if True:
-            #impurity = ["N1 2p"]
-            #cc.make_custom_cluster(impurity, symmetry_factor=2.0, solver_options=solver_opts)
-            #impurity = ["N2 2p"]
-            #cc.make_custom_cluster(impurity, symmetry_factor=1.0, solver_options=solver_opts)
 
-            impurity = ["Li1 2s"]
-            cc.make_custom_cluster(impurity, solver_options=solver_opts)
-            impurity = ["F2 2s", "F2 2p"]
-            cc.make_custom_cluster(impurity, solver_options=solver_opts)
+        cc.make_all_atom_clusters(solver_options=solver_opts)
 
-        else:
-            if args.electron_target is not None:
-                cc.make_all_atom_clusters(nelectron_target=args.electron_target, solver_options=solver_opts)
-            else:
-                cc.make_all_atom_clusters(solver_options=solver_opts)
+        #cc.make_atom_cluster("H1", symmetry_factor=2.0, solver_options=solver_opts)
+        #cc.make_atom_cluster("H2", solver=None)
+
+        #cc.make_atom_cluster("F1", symmetry_factor=2.0, solver_options=solver_opts)
+        #cc.make_atom_cluster("F2", solver=None)
+
+
+        #if True:
+        #    pass
+        #    #impurity = ["N1 2pz"]
+        #    #impurity = ["N1 2p"]
+        #    #impurity = ["N1 2px", "N1 2py"]
+        #    ##impurity = ["N1 2p"]
+        #    #cc.make_custom_cluster(impurity, symmetry_factor=2.0, solver_options=solver_opts)
+        #    #impurity = ["N1 2pz"]
+        #    #cc.make_custom_cluster(impurity, symmetry_factor=2.0, solver_options=solver_opts)
+
+        #    #impurity = ["N1 2p"]
+        #    #cc.make_custom_cluster(impurity, symmetry_factor=2.0, solver_options=solver_opts)
+        #    #impurity = ["N2 2p"]
+        #    #cc.make_custom_cluster(impurity, symmetry_factor=1.0, solver_options=solver_opts)
+
+        #    #impurity = ["Li1 2s"]
+        #    #cc.make_custom_cluster(impurity, solver_options=solver_opts)
+        #    #impurity = ["F2 2s", "F2 2p"]
+        #    #cc.make_custom_cluster(impurity, solver_options=solver_opts)
+
+        #    #impurity = ["Li1 2s", "Li1 2pz"]
+        #    #cc.make_custom_cluster(impurity, solver_options=solver_opts)
+        #    #impurity = ["H2 1s"]
+        #    #cc.make_custom_cluster(impurity, solver_options=solver_opts)
+
+        #else:
+        #    if args.electron_target is not None:
+        #        cc.make_all_atom_clusters(nelectron_target=args.electron_target, solver_options=solver_opts)
+        #    else:
+        #        cc.make_all_atom_clusters(solver_options=solver_opts)
 
 
         if idist == 0 and MPI_rank == 0:
@@ -161,6 +192,6 @@ for idist, dist in enumerate(args.distances):
             with open(args.output, "a") as f:
                 f.write(("%3f" + 6*"  %12.8e" + "\n") % (dist, mf.e_tot, cc.e_dmet, cc.e_tot, cc.e_delta_mp2, cc.e_tot+cc.e_delta_mp2, mf.e_tot+cc.e_corr_full))
 
-            with open("nelectron.txt", "a") as f:
-                f.write("%3f  %.8e\n" % (dist, cc.get_nelectron_total()))
+            #with open("nelectron.txt", "a") as f:
+            #    f.write("%3f  %.8e\n" % (dist, cc.get_nelectron_total()))
 

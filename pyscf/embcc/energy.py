@@ -22,6 +22,9 @@ log = logging.getLogger(__name__)
 def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=False, inverse=False):
     """Get local contribution of amplitudes."""
 
+    #variant = "democratic"
+    #variant = "first-vir"
+
     if variant not in ("first-occ", "first-vir", "democratic"):
         raise ValueError("Unknown variant: %s", variant)
 
