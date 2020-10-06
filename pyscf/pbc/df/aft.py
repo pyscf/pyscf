@@ -93,6 +93,18 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     Ecut = max(Ecut, .5)
     return Ecut
 
+# \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 exp(-k^2/(4 omega^2)) rho(k) < precision
+# ~ 16 pi^2 int_cutoff^infty exp(-k^2/(4*omega^2)) dk
+# = 16 pi^{5/2} omega erfc(sqrt(ke_cutoff/(2*omega^2)))
+# ~ 16 pi^2 exp(-ke_cutoff/(2*omega^2)))
+def estimate_ke_cutoff_for_omega(cell, omega):
+    ke_cutoff = -2*omega**2 * numpy.log(cell.precision / (16*numpy.pi**2))
+    return ke_cutoff
+
+def estimate_omega_for_ke_cutoff(cell, ke_cutoff):
+    omega = (-.5 * ke_cutoff / numpy.log(cell.precision / (16*numpy.pi**2)))**.5
+    return omega
+
 def get_nuc(mydf, kpts=None):
     # Pseudopotential is ignored when computing just the nuclear attraction
     with lib.temporary_env(mydf.cell, _pseudo={}):
@@ -284,7 +296,6 @@ class AFTDF(lib.StreamObject):
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
         # The following attributes are not input options.
-        self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 

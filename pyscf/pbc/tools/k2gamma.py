@@ -33,25 +33,35 @@ from pyscf.pbc import tools
 from pyscf.pbc import scf
 
 
-def get_phase(cell, kpts, kmesh=None):
-    '''
-    The unitary transformation that transforms the supercell basis k-mesh
-    adapted basis.
-    '''
+def kpts_to_kmesh(cell, kpts):
+    '''Guess kmesh'''
+    scaled_k = cell.get_scaled_kpts(kpts).round(8)
+    kmesh = (len(np.unique(scaled_k[:,0])),
+             len(np.unique(scaled_k[:,1])),
+             len(np.unique(scaled_k[:,2])))
+    return kmesh
 
+def translation_vectors_for_kmesh(cell, kmesh):
+    '''
+    Translation vectors to construct super-cell of which the gamma point is
+    identical to the k-point mesh of primitive cell
+    '''
     latt_vec = cell.lattice_vectors()
-    if kmesh is None:
-        # Guess kmesh
-        scaled_k = cell.get_scaled_kpts(kpts).round(8)
-        kmesh = (len(np.unique(scaled_k[:,0])),
-                 len(np.unique(scaled_k[:,1])),
-                 len(np.unique(scaled_k[:,2])))
-
     R_rel_a = np.arange(kmesh[0])
     R_rel_b = np.arange(kmesh[1])
     R_rel_c = np.arange(kmesh[2])
     R_vec_rel = lib.cartesian_prod((R_rel_a, R_rel_b, R_rel_c))
     R_vec_abs = np.einsum('nu, uv -> nv', R_vec_rel, latt_vec)
+    return R_vec_abs
+
+def get_phase(cell, kpts, kmesh=None):
+    '''
+    The unitary transformation that transforms the supercell basis k-mesh
+    adapted basis.
+    '''
+    if kmesh is None:
+        kmesh = kpts_to_kmesh(cell, kpts)
+    R_vec_abs = translation_vectors_for_kmesh(cell, kmesh)
 
     NR = len(R_vec_abs)
     phase = np.exp(1j*np.einsum('Ru, ku -> Rk', R_vec_abs, kpts))

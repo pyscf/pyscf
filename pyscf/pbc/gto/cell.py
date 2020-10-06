@@ -24,9 +24,9 @@ import warnings
 import numpy as np
 import scipy.linalg
 try:
-  from scipy.special import factorial2
+    from scipy.special import factorial2
 except:
-  from scipy.misc import factorial2
+    from scipy.misc import factorial2
 from scipy.special import erf, erfc
 import scipy.optimize
 import pyscf.lib.parameters as param

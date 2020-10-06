@@ -150,8 +150,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         #bufR = numpy.empty((blksize*nao**2))
         #bufI = numpy.empty((blksize*nao**2))
         # Use DF object to mimic KRHF/KUHF object in function get_coulG
-        mydf.exxdiv = exxdiv
-        vkcoulG = mydf.weighted_coulG(kpt, True, mesh)
+        vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh)
         kptjs = kpts[kptj_idx]
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
         #buf1R = numpy.empty((blksize*nao**2))
@@ -261,8 +260,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         vjR = numpy.zeros((nset,nao,nao))
         vjI = numpy.zeros((nset,nao,nao))
     if with_k:
-        mydf.exxdiv = exxdiv
-        vkcoulG = mydf.weighted_coulG(kpt_allow, True, mesh)
+        vkcoulG = mydf.weighted_coulG(kpt_allow, exxdiv, mesh)
         vkR = numpy.zeros((nset,nao,nao))
         vkI = numpy.zeros((nset,nao,nao))
     dmsR = numpy.asarray(dms.real.reshape(nset,nao,nao), order='C')

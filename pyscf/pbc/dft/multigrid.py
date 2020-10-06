@@ -1544,6 +1544,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
     rcuts_pgto, kecuts_pgto = _primitive_gto_cutoff(cell)
     ao_loc = cell.ao_loc_nr()
 
+    # cell that needs dense integration grids
     def make_cell_dense_exp(shls_dense, ke0, ke1):
         cell_dense = copy.copy(cell)
         cell_dense._bas = cell._bas.copy()
@@ -1575,6 +1576,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         cell_dense.rcut = max(rcut_atom)
         return cell_dense, ao_idx, ke_cutoff, rcut_atom
 
+    # cell that needs sparse integration grids
     def make_cell_sparse_exp(shls_sparse, ke0, ke1):
         cell_sparse = copy.copy(cell)
         cell_sparse._bas = cell._bas.copy()
@@ -1662,10 +1664,11 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
             break
     return tasks
 
-def _primitive_gto_cutoff(cell):
+def _primitive_gto_cutoff(cell, precision=None):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
-    precision = cell.precision * EXTRA_PREC
+    if precision is None:
+        precision = cell.precision * EXTRA_PREC
     log_prec = numpy.log(precision)
 
     rcut = []

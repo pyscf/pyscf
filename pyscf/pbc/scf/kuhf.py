@@ -367,7 +367,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -455,8 +455,16 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        vhf = vj[0] + vj[1] - vk
+        if self.rsjk and self.direct_scf:
+            if dm_kpts is None:
+                dm_kpts = self.make_rdm1()
+            ddm = dm_kpts - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
         return vhf
 
 

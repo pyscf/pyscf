@@ -30,6 +30,9 @@ class VHFOpt(object):
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
         '''If function "qcondname" is presented, the qcond (sqrt(integrals))
         and will be initialized in __init__.
+
+        prescreen, qcondname, dmcondname can be either function pointers or
+        names of C functions defined in libcvhf module
         '''
         intor = mol._add_suffix(intor)
         self._this = ctypes.POINTER(_CVHFOpt)()
@@ -48,13 +51,19 @@ class VHFOpt(object):
             self.init_cvhf_direct(mol, intor, qcondname)
 
     def init_cvhf_direct(self, mol, intor, qcondname):
+        '''qcondname can be the function pointer or the name of a C function
+        defined in libcvhf module
+        '''
         intor = mol._add_suffix(intor)
         if intor == self._intor:
             cintopt = self._cintopt
         else:
             cintopt = lib.c_null_ptr()
         ao_loc = make_loc(mol._bas, intor)
-        fsetqcond = getattr(libcvhf, qcondname)
+        if isinstance(qcondname, ctypes._CFuncPtr):
+            fsetqcond = qcondname
+        else:
+            fsetqcond = getattr(libcvhf, qcondname)
         natm = ctypes.c_int(mol.natm)
         nbas = ctypes.c_int(mol.nbas)
         fsetqcond(self._this, getattr(libcvhf, intor), cintopt,
@@ -75,10 +84,9 @@ class VHFOpt(object):
         return self._this.contents.fprescreen
     @prescreen.setter
     def prescreen(self, v):
-        if isinstance(v, int):
-            self._this.contents.fprescreen = v
-        else:
-            self._this.contents.fprescreen = _fpointer(v)
+        if isinstance(v, str):
+            v = _fpointer(v)
+        self._this.contents.fprescreen = v
 
     def set_dm(self, dm, atm, bas, env):
         if self._dmcondname is not None:
@@ -93,7 +101,10 @@ class VHFOpt(object):
                 n_dm = len(dm)
             dm = numpy.asarray(dm, order='C')
             ao_loc = make_loc(c_bas, self._intor)
-            fsetdm = getattr(libcvhf, self._dmcondname)
+            if isinstance(self._dmcondname, ctypes._CFuncPtr):
+                fsetdm = self._dmcondname
+            else:
+                fsetdm = getattr(libcvhf, self._dmcondname)
             fsetdm(self._this,
                    dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
                    ao_loc.ctypes.data_as(ctypes.c_void_p),

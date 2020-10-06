@@ -57,6 +57,7 @@ from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
+LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
@@ -698,7 +699,13 @@ class GDF(aft.AFTDF):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+            if omega < LONGRANGE_AFT_TURNOVER_THRESHOLD:
+                mydf = aft.AFTDF(self.cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(self.cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+            else:
+                mydf = self
+            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
                                with_j, with_k, omega, exxdiv)
 
         if kpts is None:

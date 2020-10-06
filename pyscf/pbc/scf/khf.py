@@ -40,6 +40,7 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
+from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -447,7 +448,7 @@ class KSCF(pbchf.SCF):
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -461,9 +462,11 @@ class KSCF(pbchf.SCF):
         self.exxdiv = exxdiv
         self.kpts = kpts
         self.conv_tol = cell.precision * 10
+        # Range separation JK builder
+        self.rsjk = None
 
         self.exx_built = False
-        self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])
+        self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
     def kpts(self):
@@ -527,12 +530,21 @@ class KSCF(pbchf.SCF):
         return self
 
     def build(self, cell=None):
+        if cell is None:
+            cell = self.cell
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
         if 'kpts' in self.__dict__:
             # To handle the attribute kpts loaded from chkfile
             self.kpts = self.__dict__.pop('kpts')
+
+        if self.rsjk:
+            if not (isinstance(self.rsjk, RangeSeparationJKBuilder)
+                    and np.all(self.rsjk.kpts != self.kpts)):
+                self.rsjk = RangeSeparationJKBuilder(cell, self.kpts)
+            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return self
@@ -607,8 +619,12 @@ class KSCF(pbchf.SCF):
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
-        vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                     with_j, with_k, omega, exxdiv=self.exxdiv)
+        if self.rsjk:
+            vj, vk = self.jk_builder.get_jk(dm_kpts, hermi, kpts, kpts_band,
+                                            with_j, with_k, omega, self.exxdiv)
+        else:
+            vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
+                                         with_j, with_k, omega, self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -617,8 +633,16 @@ class KSCF(pbchf.SCF):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
         '''
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        return vj - vk * .5
+        if self.rsjk and self.direct_scf:
+            if dm_kpts is None:
+                dm_kpts = self.make_rdm1()
+            # Enable direct-SCF for real space JK builder
+            ddm = dm_kpts - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
+            return vhf_last + vj - vk * .5
+        else:
+            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+            return vj - vk * .5
 
     def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
                 **kwargs):
@@ -731,6 +755,35 @@ class KSCF(pbchf.SCF):
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
+
+    def jk_method(J='FFTDF', K=None):
+        '''
+        Set up the schemes to evaluate Coulomb and exchange matrix
+
+        FFTDF: planewave density fitting using Fast Fourier Transform
+        AFTDF: planewave density fitting using analytic Fourier Transform
+        GDF: Gaussian density fitting
+        MDF: Gaussian and planewave mix density fitting
+        RS: range-separation JK builder
+        RSDF: range-separation density fitting
+        '''
+        if K is None:
+            K = J
+
+        if J != K:
+            raise NotImplementedError('J != K')
+
+        if 'DF' in J or 'DF' in K:
+            if 'DF' in J and 'DF' in K:
+                assert J == K
+            else:
+                df_method = J if 'DF' in J else K
+                self.with_df = getattr(df, df_method)(self.cell)
+
+        if 'RS' in J or 'RS' in K:
+            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
+
+        return self
 
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),

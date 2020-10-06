@@ -392,7 +392,13 @@ class MDF(df.DF):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+            if omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD:
+                mydf = aft.AFTDF(self.cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(self.cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+            else:
+                mydf = self
+            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
                                with_j, with_k, omega, exxdiv)
 
         if kpts is None:
