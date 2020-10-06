@@ -7,6 +7,7 @@
 An example of AGF2 for higher moment consistency
 '''
 
+from __future__ import print_function
 from pyscf import gto, scf, agf2, mp
 
 mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='6-31g', verbose=0)

@@ -29,7 +29,7 @@ from pyscf import __config__
 from pyscf.lib.parameters import MAX_MEMORY, LARGE_DENOM
 
 
-class AuxiliarySpace:
+class AuxiliarySpace(object):
     ''' Simple container to hold the energies, couplings and chemical
         potential associated with an auxiliary space.
 
@@ -487,10 +487,10 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
             Number of roots to solve for. Default 1.
         which : str
             Which eigenvalues to solve for. Options are:
-             ‘LM’ : Largest (in magnitude) eigenvalues.
-             ‘SM’ : Smallest (in magnitude) eigenvalues.
-             ‘LA’ : Largest (algebraic) eigenvalues.
-             ‘SA’ : Smallest (algebraic) eigenvalues.
+             `LM` : Largest (in magnitude) eigenvalues.
+             `SM` : Smallest (in magnitude) eigenvalues.
+             `LA` : Largest (algebraic) eigenvalues.
+             `SA` : Smallest (algebraic) eigenvalues.
             Default 'SM'.
         tol : float
             Convergence threshold
@@ -545,7 +545,7 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
                                max_space=ntrial, max_cycle=maxiter, pick=pick)
 
     if not np.all(conv):
-        log.warn('Davidson did not converge')
+        logger.warn('Davidson did not converge')
 
     return w, v
 
