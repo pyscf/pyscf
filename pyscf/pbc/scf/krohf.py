@@ -72,6 +72,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     dm_sf = dm_kpts[0] + dm_kpts[1]
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
+        raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_sf, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:

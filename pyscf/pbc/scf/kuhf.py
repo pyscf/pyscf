@@ -80,7 +80,18 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         shifta, shiftb = level_shift_factor
     else:
         shifta = shiftb = level_shift_factor
+    if isinstance(damp_factor, (tuple, list, numpy.ndarray)):
+        dampa, dampb = damp_factor
+    else:
+        dampa = dampb = damp_factor
 
+    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
+        f_a = []
+        f_b = []
+        for k, s1e in enumerate(s_kpts):
+            f_a.append(mol_hf.damping(s1e, dm_kpts[0][k], f_kpts[0][k], dampa))
+            f_b.append(mol_hf.damping(s1e, dm_kpts[1][k], f_kpts[1][k], dampb))
+        f_kpts = [f_a, f_b]
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
