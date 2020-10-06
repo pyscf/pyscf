@@ -205,7 +205,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
 
         tril2sq = lib.square_mat_in_trilu_indices(nmo)
         for p0, p1 in lib.prange(0, nmo, blksize):
-            idx = np.concatenate(tril2sq[p0:p1])
+            idx = list(np.concatenate(tril2sq[p0:p1]))
             eri0 = eri[idx]
 
             # vj built in tril layout with scaled rdm1_tril
@@ -979,7 +979,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
     for p0, p1 in lib.prange(0, nmo, blksize):
-        idx = np.concatenate(tril2sq[p0:p1])
+        idx = list(np.concatenate(tril2sq[p0:p1]))
 
         buf = eri.eri[idx] # (blk, nmo, npair)
         buf = buf.reshape((p1-p0)*nmo, -1) # (blk*nmo, npair)

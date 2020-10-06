@@ -778,7 +778,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
 
         tril2sq = lib.square_mat_in_trilu_indices(nmoa)
         for p0, p1 in lib.prange(0, nmoa, blksize):
-            idx = np.concatenate(tril2sq[p0:p1])
+            idx = list(np.concatenate(tril2sq[p0:p1]))
 
             # aa
             buf = eri.eri_aa[idx] # (blk, nmoa, npaira)
@@ -814,7 +814,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
 
         tril2sq = lib.square_mat_in_trilu_indices(nmob)
         for p0, p1 in lib.prange(0, nmob, blksize):
-            idx = np.concatenate(tril2sq[p0:p1])
+            idx = list(np.concatenate(tril2sq[p0:p1]))
 
             # ba
             buf = eri.eri_ba[idx] # (blk, nmob, npaira)
