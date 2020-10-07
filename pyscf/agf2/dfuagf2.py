@@ -82,6 +82,8 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     himem_required *= lib.num_threads()
 
     if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory:
+        log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
+                  'low-memory version.')
         build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_lowmem
     else:
         build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_incore
@@ -91,7 +93,18 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
     se_a.remove_uncoupled(tol=tol)
 
-    cput0 = log.timer_debug1('se part (alpha)', *cput0)
+    cput0 = log.timer('se part (alpha)', *cput0)
+
+    himem_required = naux*(nvirb+nmob) + (noccb*nvirb+nocca*nvira)*(1+2*nmob) + (2*nmob**2)
+    himem_required *= 8e-6
+    himem_required *= lib.num_threads()
+
+    if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory:
+        log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
+                  'low-memory version.')
+        build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_lowmem
+    else:
+        build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_incore
 
     rv = np.s_[::-1]
     vv, vev = build_mats_dfuagf2(qxi[rv], qja[rv], gf_occ[rv], gf_vir[rv], **facs)
@@ -302,7 +315,7 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
     qja_a = qja_a.reshape(naux, -1)
     qja_b = qja_b.reshape(naux, -1)
 
-    log.timer_debug1('QMO integral transformation', *cput0)
+    log.timer('QMO integral transformation', *cput0)
 
     return ((qxi_a, qja_a), (qxi_b, qja_b))
 

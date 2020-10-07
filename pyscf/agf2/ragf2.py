@@ -202,6 +202,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
 
         blksize = _agf2.get_blksize(agf2.max_memory, (nmo*npair, nmo**3))
         blksize = min(nmo, max(BLKMIN, blksize))
+        logger.debug1(agf2, 'blksize (ragf2.get_jk) = %d' % blksize)
 
         tril2sq = lib.square_mat_in_trilu_indices(nmo)
         for p0, p1 in lib.prange(0, nmo, blksize):
@@ -786,7 +787,7 @@ class RAGF2(lib.StreamObject):
 
         for n, en, vn in zip(range(nroots), e_ip, v_ip):
             qpwt = np.linalg.norm(vn)**2
-            logger.note(self, 'IP root %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
+            logger.note(self, 'IP energy level %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
 
         if nroots == 1:
             return e_ip[0], v_ip[0]
@@ -812,7 +813,7 @@ class RAGF2(lib.StreamObject):
 
         for n, en, vn in zip(range(nroots), e_ea, v_ea):
             qpwt = np.linalg.norm(vn)**2
-            logger.note(self, 'EA root %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
+            logger.note(self, 'EA energy level %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
 
         if nroots == 1:
             return e_ea[0], v_ea[0]
@@ -947,7 +948,7 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
     qeri = ao2mo.incore.general(eri.eri, coeffs, compact=False, verbose=log)
     qeri = qeri.reshape(shape)
 
-    log.timer_debug1('QMO integral transformation', *cput0)
+    log.timer('QMO integral transformation', *cput0)
 
     return qeri
 
@@ -975,7 +976,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
 
     blksize = _agf2.get_blksize(agf2.max_memory, (nmo*npair, nj*na, npair), (nmo*ni, nj*na))
     blksize = min(nmo, max(BLKMIN, blksize))
-    log.debug1('blksize = %d', blksize)
+    log.debug1('blksize (ragf2._make_qmo_eris_outcore) = %d', blksize)
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
     for p0, p1 in lib.prange(0, nmo, blksize):
@@ -991,7 +992,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
         buf = lib.einsum('xpja,pi->xija', buf, ci)
         eri.feri['qmo'][p0:p1] = np.asarray(buf, order='C')
         
-    log.timer_debug1('QMO integral transformation', *cput0)
+    log.timer('QMO integral transformation', *cput0)
 
     return eri.feri['qmo']
 

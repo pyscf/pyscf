@@ -735,7 +735,7 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=None):
     elif spin == 1:
         qeri = (qeri_bb, qeri_ba)
 
-    log.timer_debug1('QMO integral transformation', *cput0)
+    log.timer('QMO integral transformation', *cput0)
 
     return qeri
 
@@ -774,7 +774,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
         blksize = _agf2.get_blksize(agf2.max_memory, (nmoa**3, nmoa*nja*naa),
                                                 (nmoa*nmob**2, nmoa*njb*nab))
         blksize = min(nmoa, max(BLKMIN, blksize))
-        log.debug1('blksize = %d', blksize)
+        log.debug1('blksize (uagf2._make_qmo_eris_outcore) = %d', blksize)
 
         tril2sq = lib.square_mat_in_trilu_indices(nmoa)
         for p0, p1 in lib.prange(0, nmoa, blksize):
@@ -810,7 +810,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
         blksize = int((max_memory/8e-6) / max(nmob**3+nmob*njb*nab, 
                                               nmob*nmoa**2*nja*naa))
         blksize = min(nmob, max(BLKMIN, blksize))
-        log.debug1('blksize = %d', blksize)
+        log.debug1('blksize (uagf2._make_qmo_eris_outcore) = %d', blksize)
 
         tril2sq = lib.square_mat_in_trilu_indices(nmob)
         for p0, p1 in lib.prange(0, nmob, blksize):
@@ -846,7 +846,7 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
     elif spin == 1:
         qeri = (eri.feri['qmo/bb'], eri.feri['qmo/ba'])
 
-    log.timer_debug1('QMO integral transformation', *cput0)
+    log.timer('QMO integral transformation', *cput0)
 
     return qeri
 

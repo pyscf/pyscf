@@ -76,6 +76,8 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     himem_required *= lib.num_threads()
 
     if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory:
+        log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
+                  'low-memory version.')
         vv, vev = _agf2.build_mats_dfragf2_lowmem(qxi, qja, gf_occ, gf_vir, **facs)
     else:
         vv, vev = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
@@ -132,6 +134,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
 
     blksize = _agf2.get_blksize(agf2.max_memory, (npair, npair, 1, nmo**2, nmo**2))
     blksize = min(nmo, max(BLKMIN, blksize))
+    logger.debug1(agf2, 'blksize (dfragf2.get_jk) = %d' % blksize)
     buf = (np.empty((blksize, nmo, nmo)), np.empty((blksize, nmo, nmo)))
 
     for p0, p1 in mpi_helper.prange(0, naux, blksize):
@@ -361,7 +364,7 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
     mpi_helper.allreduce_safe_inplace(qxi)
     mpi_helper.allreduce_safe_inplace(qja)
 
-    log.timer_debug1('QMO integral transformation', *cput0)
+    log.timer('QMO integral transformation', *cput0)
 
     return (qxi, qja)
 
