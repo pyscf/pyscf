@@ -18,7 +18,7 @@ mf.run()
 # Run an AGF2 calculation
 gf2 = agf2.AGF2(mf)
 gf2.conv_tol = 1e-7
-gf2.run()
+gf2.run(verbose=4)
 
 # Print the first 3 ionization potentials
 gf2.ipagf2(nroots=3)
