@@ -698,6 +698,7 @@ class RAGF2(lib.StreamObject):
         logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
                     self.__class__.__name__, self.e_tot, self.e_corr)
         logger.note(self, 'IP = %.16g  EA = %.16g', ip, ea)
+        logger.note(self, 'Quasiparticle gap = %.16g', ip+ea)
 
         return self
 
