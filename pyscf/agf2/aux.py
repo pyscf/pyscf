@@ -411,7 +411,7 @@ class GreensFunction(AuxiliarySpace):
             denom = grid[p0:p1,None] - (e_shifted + eta*1.0j)[None]
             spectrum[p0:p1] = lib.einsum('xk,yk,wk->wxy', v, v.conj(), 1./denom)
 
-        return -spectrum.imag / np.pi
+        return -1/np.pi * np.trace(spectrum.imag, axis1=1, axis2=2)
 
     def make_rdm1(self, chempot=None, occupancy=2):
         ''' Returns the first-order reduced density matrix associated

@@ -32,5 +32,12 @@ grid = numpy.arange(-10.0, 10.0, 1000)
 eta = 0.02
 spectrum = gf.real_freq_spectrum(grid, eta=eta)
 
-# The array `spectrum` is now a (nfreq x nmo x nmo) array of the
-# spectral function -1/pi * G(\omega + i\eta).
+# The array `spectrum` is now a length nfreq array of the
+# spectral function -1/pi * Tr[Im[G(\omega + i\eta)]].
+
+# We can also build the self-energy on the real-frequency axis
+# by accessing the poles:
+e = gf2.se.energy - gf2.se.chempot
+v = gf2.se.coupling
+denom = grid[:,None] - (e + np.sign(e)*eta*1.0j)[None]
+se = numpy.einsum('xk,yk,wk->wxy', v, v.conj(), 1./denom)
