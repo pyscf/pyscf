@@ -45,7 +45,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot,  -76.0167894720742   , 10)
         self.assertAlmostEqual(gf2.e_1b,  -75.89108074396137  ,  6)
         self.assertAlmostEqual(gf2.e_2b,  -0.33248785652834784,  6)
-        self.assertAlmostEqual(gf2.e_mp2, -0.17330473289845347,  6)
+        self.assertAlmostEqual(gf2.e_init, -0.17330473289845347,  6)
 
         e_ip, v_ip = gf2.ipagf2(nroots=3)
         v_ip = [np.linalg.norm(v)**2 for v in v_ip]
@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
         gf2.conv_tol = 1e-7
         gf2.run()
         self.assertTrue(gf2.converged)
-        self.assertAlmostEqual(gf2.e_mp2, -0.029669047726821392, 4)
+        self.assertAlmostEqual(gf2.e_init, -0.029669047726821392, 4)
         #TODO
 
     def test_moments(self):

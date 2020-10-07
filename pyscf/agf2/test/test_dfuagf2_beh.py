@@ -43,7 +43,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(self.mf.e_tot,  -15.0910903300424    , 4)
         self.assertAlmostEqual(self.gf2.e_1b,  -15.069681001221705  , 4)
         self.assertAlmostEqual(self.gf2.e_2b,  -0.049461593728309786, 4)
-        self.assertAlmostEqual(self.gf2.e_mp2, -0.025198374705580943, 4)
+        self.assertAlmostEqual(self.gf2.e_init, -0.025198374705580943, 4)
 
     def test_dfuagf2_beh_ip(self):
         # tests the AGF2 ionization potentials for BeH/cc-pvdz

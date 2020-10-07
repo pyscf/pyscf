@@ -77,8 +77,8 @@ Saved result
         One-body part of :attr:`e_tot`
     e_2b : float
         Two-body part of :attr:`e_tot`
-    e_mp2 : float
-        MP2 correlation energy
+    e_init : float
+        Initial correlation energy (truncated MP2)
     converged : bool
         Whether convergence was successful
     se : SelfEnergy

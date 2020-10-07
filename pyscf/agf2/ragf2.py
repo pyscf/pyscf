@@ -41,7 +41,7 @@ BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 #TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
 #TODO: this has parallel 2body and aux build, but not get_jk/qmo transform - should we parallelise the latter for exact ERI?
 #TODO: outcore really isn't optimised
-#TODO: should we even print/store e_mp2, or name it something else? this is quite a bit off of the real E(mp2) at (None,0)...
+#TODO: should we even print/store e_init, or name it something else? this is quite a bit off of the real E(mp2) at (None,0)...
 #TODO: warn for small gaps c.f. CCSD?
 #TODO: how exactly to do positive-semidef cholesky? see _agf2.py
 #TODO: print more?
@@ -68,8 +68,8 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
     if dump_chk:
         agf2.dump_chk(gf=gf, se=se)
 
-    e_mp2 = agf2.energy_mp2(agf2.mo_energy, se)
-    log.info('E(MP2) = %.16g  E_corr(MP2) = %.16g', e_mp2+eri.e_hf, e_mp2)
+    e_init = agf2.energy_mp2(agf2.mo_energy, se)
+    log.info('E(init) = %.16g  E_corr(init) = %.16g', e_init+eri.e_hf, e_init)
 
     e_prev = e_1b = e_2b = 0.0
     converged = False
@@ -467,8 +467,8 @@ class RAGF2(lib.StreamObject):
             One-body part of :attr:`e_tot`
         e_2b : float
             Two-body part of :attr:`e_tot`
-        e_mp2 : float
-            MP2 correlation energy
+        e_init : float
+            Initial correlation energy (truncated MP2)
         converged : bool
             Whether convergence was successful
         se : SelfEnergy
@@ -512,7 +512,7 @@ class RAGF2(lib.StreamObject):
         self.gf = None
         self.e_1b = mf.e_tot
         self.e_2b = 0.0
-        self.e_mp2 = 0.0
+        self.e_init = 0.0
         self.frozen = frozen
         self._nmo = None
         self._nocc = None
@@ -578,9 +578,9 @@ class RAGF2(lib.StreamObject):
         if se is None: se = self.build_se(gf=self.gf)
 
         mo_energy = _mo_energy_without_core(self, self.mo_energy)
-        self.e_mp2 = energy_mp2(self, mo_energy, se)
+        self.e_init = energy_mp2(self, mo_energy, se)
 
-        return self.e_mp2
+        return self.e_init
 
     def init_gf(self):
         ''' Builds the Hartree-Fock Green's function.
@@ -1014,13 +1014,13 @@ if __name__ == '__main__':
     ragf2.eaagf2(nroots=5)
 
     print(mp.MP2(rhf, frozen=ragf2.frozen).run(verbose=0).e_corr)
-    print(ragf2.e_mp2)
+    print(ragf2.e_init)
 
     #print()
     #import auxgf
     #kwargs = dict(etol=ragf2.conv_tol, dtol=ragf2.conv_tol_rdm1, maxiter=ragf2.max_cycle, fock_maxiter=ragf2.max_cycle_inner, fock_maxruns=ragf2.max_cycle_outer, diis_space=ragf2.diis_space, wtol=ragf2.weight_tol, damping=0)
     #gf2 = auxgf.agf2.RAGF2(auxgf.hf.RHF.from_pyscf(rhf), nmom=(None,0), verbose=False, **kwargs).run()
-    #print('E(mp2) = %16.12f' % gf2.e_mp2)
+    #print('E(mp2) = %16.12f' % gf2.e_init)
     #print('E(1b)  = %16.12f' % gf2.e_1body)
     #print('E(2b)  = %16.12f' % gf2.e_2body)
     #print('E(cor) = %16.12f' % gf2.e_corr)

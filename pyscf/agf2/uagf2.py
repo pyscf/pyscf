@@ -368,8 +368,8 @@ class UAGF2(ragf2.RAGF2):
             One-body part of :attr:`e_tot`
         e_2b : float
             Two-body part of :attr:`e_tot`
-        e_mp2 : float
-            MP2 correlation energy
+        e_init : float
+            Initial correlation energy (truncated MP2)
         converged : bool
             Whether convergence was successful
         se : tuple of SelfEnergy
@@ -435,9 +435,9 @@ class UAGF2(ragf2.RAGF2):
         if se is None: se = self.build_se(gf=self.gf)
 
         mo_energy = _mo_energy_without_core(self, self.mo_energy)
-        self.e_mp2 = energy_mp2(self, mo_energy, se)
+        self.e_init = energy_mp2(self, mo_energy, se)
 
-        return self.e_mp2
+        return self.e_init
 
     def init_gf(self):
         ''' Builds the Hartree-Fock Green's function.

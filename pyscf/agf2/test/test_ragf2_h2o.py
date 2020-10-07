@@ -43,7 +43,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(self.mf.e_tot,  -76.0167894720742   , 10)
         self.assertAlmostEqual(self.gf2.e_1b,  -75.89108074396137  ,  6)
         self.assertAlmostEqual(self.gf2.e_2b,  -0.33248785652834784,  6)
-        self.assertAlmostEqual(self.gf2.e_mp2, -0.17330473289845347,  6)
+        self.assertAlmostEqual(self.gf2.e_init, -0.17330473289845347,  6)
 
     def test_ragf2_h2o_ip(self):
         # tests the AGF2 ionization potentials for H2O/cc-pvdz

@@ -142,7 +142,7 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
 
     store('e_1b', agf2.e_1b)
     store('e_2b', agf2.e_2b)
-    store('e_mp2', agf2.e_mp2)
+    store('e_init', agf2.e_init)
     store('converged', agf2.converged)
     store('mo_energy', mo_energy)
     store('mo_coeff', mo_coeff)
