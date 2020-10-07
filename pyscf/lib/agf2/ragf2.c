@@ -351,3 +351,157 @@ void AGF2df_vv_vev_islice(double *qxi,
     free(vev_priv);
 }
 }
+
+
+/*
+ *  Removes an index from DGEMM and into a for loop to reduce the
+ *  thread-private memory overhead, at the cost of serial speed
+ */
+void AGF2df_vv_vev_islice_lowmem(double *qxi,
+                                 double *qja,
+                                 double *e_i,
+                                 double *e_a,
+                                 double os_factor,
+                                 double ss_factor,
+                                 int nmo,
+                                 int nocc,
+                                 int nvir,
+                                 int naux,
+                                 int start,
+                                 int end,
+                                 double *vv,
+                                 double *vev)
+{
+    const double D0 = 0.0;
+    const double D1 = 1.0;
+    const char TRANS_T = 'T';
+    const char TRANS_N = 'N';
+    const int one = 1;
+
+    const double fpos = os_factor + ss_factor;
+    const double fneg = -1.0 * ss_factor;
+    
+//#pragma omp parallel
+//{
+//    double *xj = calloc(nmo*nocc, sizeof(double));
+//    double *xi = calloc(nmo*nocc, sizeof(double));
+//    double *qx = calloc(naux*nmo, sizeof(double));
+//    double *qj = calloc(naux*nocc, sizeof(double));
+//    double *ej = calloc(nocc, sizeof(double));
+//
+//    double *vv_priv = calloc(nmo*nmo, sizeof(double));
+//    double *vev_priv = calloc(nmo*nmo, sizeof(double));
+//
+//    int i, a, ia;
+//
+//#pragma omp for
+//    for (ia = start; ia < end; ia++) {
+//        i = ia / nvir;
+//        a = ia % nvir;
+//
+//        // build qx
+//        AGF2slice_01i(qxi, naux, nmo, nocc, i, qx);
+//
+//        // build qj
+//        AGF2slice_01i(qja, naux, nocc, nvir, a, qj);
+//
+//        // build xj = xq * qj
+//        dgemm_(&TRANS_N, &TRANS_T, &nocc, &nmo, &naux, &D1, qj, &nocc, qx, &nmo, &D0, xj, &nocc);
+//
+//        // build xi = xiq * q    is this slow without incx=1?
+//        dgemv_(&TRANS_N, &nxi, &naux, &D1, qxi, &nxi, &(qja[i*nvir+a]), &nja, &D0, xi, &one);
+//
+//        // build eija = ei + ej - ea
+//        AGF2sum_inplace_ener(e_i[i], e_i, &(e_a[a]), nocc, one, ej);
+//
+//        // inplace xi = 2 * xj - xi
+//        AGF2sum_inplace(xi, xj, nxi, fpos, fneg);
+//
+//        // vv_xy += xj * (2 * yj - yi)
+//        dgemm_(&TRANS_T, &TRANS_N, &nmo, &nmo, &nocc, &D1, xi, &nocc, xj, &nocc, &D1, vv_priv, &nmo);
+//
+//        // inplace xj = ej * xj
+//        AGF2prod_inplace_ener(ej, xj, nmo, nocc);
+//
+//        // vev_xy += xj * ej * (2 * yj - yi)
+//        dgemm_(&TRANS_T, &TRANS_N, &nmo, &nmo, &nocc, &D1, xi, &nocc, xj, &nocc, &D1, vev_priv, &nmo);
+//    }
+//
+//    free(xj);
+//    free(xi);
+//    free(qx);
+//    free(qj);
+//    free(ej);
+
+#pragma omp parallel
+{
+    double *qx_i = calloc(naux*nmo, sizeof(double));
+    double *qx_j = calloc(naux*nmo, sizeof(double));
+    double *qa_i = calloc(naux*nvir, sizeof(double));
+    double *qa_j = calloc(naux*nvir, sizeof(double));
+    double *xa_i = calloc(nmo*nvir, sizeof(double));
+    double *xa_j = calloc(nmo*nvir, sizeof(double));
+    double *ea = calloc(nvir, sizeof(double));
+
+    double *vv_priv = calloc(nmo*nmo, sizeof(double));
+    double *vev_priv = calloc(nmo*nmo, sizeof(double));
+
+    int i, j, ij;
+
+#pragma omp for
+    for (ij = start; ij < end; ij++) {
+        i = ij / nocc;
+        j = ij % nocc;
+
+        // build qx_i
+        AGF2slice_01i(qxi, naux, nmo, nocc, i, qx_i);
+
+        // build qx_j
+        AGF2slice_01i(qxi, naux, nmo, nocc, j, qx_j);
+
+        // build qa_i
+        AGF2slice_0i2(qja, naux, nocc, nvir, i, qa_i);
+
+        // build qa_j
+        AGF2slice_0i2(qja, naux, nocc, nvir, j, qa_j);
+
+        // build xija
+        dgemm_(&TRANS_N, &TRANS_T, &nvir, &nmo, &naux, &D1, qa_i, &nvir, qx_j, &nmo, &D0, xa_i, &nvir);
+
+        // build xjia
+        dgemm_(&TRANS_N, &TRANS_T, &nvir, &nmo, &naux, &D1, qa_j, &nvir, qx_i, &nmo, &D0, xa_j, &nvir);
+
+        // build eija = ei + ej - ea
+        AGF2sum_inplace_ener(e_i[i], &(e_i[j]), e_a, one, nvir, ea);
+
+        // inplace xjia = 2 * xija - xjia
+        AGF2sum_inplace(xa_j, xa_i, nmo*nvir, fpos, fneg);
+
+        // vv_xy += xija * (2 * yija - yjia)
+        dgemm_(&TRANS_T, &TRANS_N, &nmo, &nmo, &nvir, &D1, xa_j, &nvir, xa_i, &nvir, &D1, vv_priv, &nmo);
+
+        // inplace xija = eija * xija
+        AGF2prod_inplace_ener(ea, xa_i, nmo, nvir);
+
+        // vv_xy += xija * (2 * yija - yjia)
+        dgemm_(&TRANS_T, &TRANS_N, &nmo, &nmo, &nvir, &D1, xa_j, &nvir, xa_i, &nvir, &D1, vev_priv, &nmo);
+    }
+
+    free(qx_i);
+    free(qx_j);
+    free(qa_i);
+    free(qa_j);
+    free(xa_i);
+    free(xa_j);
+    free(ea);
+
+#pragma omp critical
+    for (i = 0; i < (nmo*nmo); i++) {
+        vv[i] += vv_priv[i];
+        vev[i] += vev_priv[i];
+    }
+
+    free(vv_priv);
+    free(vev_priv);
+}
+}

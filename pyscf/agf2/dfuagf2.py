@@ -77,7 +77,16 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     qxi = (qxi_a, qxi_b)
     qja = (qja_a, qja_b)
 
-    vv, vev = _agf2.build_mats_dfuagf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
+    himem_required = naux*(nvira+nmoa) + (nocca*nvira+noccb*nvirb)*(1+2*nmoa) + (2*nmoa**2)
+    himem_required *= 8e-6
+    himem_required *= lib.num_threads()
+
+    if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory:
+        build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_lowmem
+    else:
+        build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_incore
+
+    vv, vev = build_mats_dfuagf2(qxi, qja, gf_occ, gf_vir, **facs)
     e, c = _agf2.cholesky_build(vv, vev, gf_occ[0], gf_vir[0])
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
     se_a.remove_uncoupled(tol=tol)
@@ -85,7 +94,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     cput0 = log.timer_debug1('se part (alpha)', *cput0)
 
     rv = np.s_[::-1]
-    vv, vev = _agf2.build_mats_dfuagf2_incore(qxi[rv], qja[rv], gf_occ[rv], gf_vir[rv], **facs)
+    vv, vev = build_mats_dfuagf2(qxi[rv], qja[rv], gf_occ[rv], gf_vir[rv], **facs)
     e, c = _agf2.cholesky_build(vv, vev, gf_occ[1], gf_vir[1])
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
     se_b.remove_uncoupled(tol=tol)

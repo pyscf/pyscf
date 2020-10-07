@@ -176,6 +176,7 @@ def build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
     nmo = gf_occ.nphys
     nocc = gf_occ.naux
     nvir = gf_vir.naux
+    rank, size = mpi_helper.rank, mpi_helper.size
 
     assert qxi.size == (naux * nmo * nocc)
     assert qja.size == (naux * nocc * nvir)
@@ -183,9 +184,8 @@ def build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
     vv = np.zeros((nmo*nmo))
     vev = np.zeros((nmo*nmo))
 
-    rank, size = mpi_helper.rank, mpi_helper.size
-    istart = rank * nocc // size
-    iend = nocc if rank == (size-1) else (rank+1) * nocc // size
+    start = rank * nocc // size
+    end = nocc if rank == (size-1) else (rank+1) * nocc // size
 
     fdrv(qxi.ctypes.data_as(ctypes.c_void_p),
          qja.ctypes.data_as(ctypes.c_void_p),
@@ -197,8 +197,8 @@ def build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
          ctypes.c_int(nocc),
          ctypes.c_int(nvir),
          ctypes.c_int(naux),
-         ctypes.c_int(istart),
-         ctypes.c_int(iend),
+         ctypes.c_int(start),
+         ctypes.c_int(end),
          vv.ctypes.data_as(ctypes.c_void_p),
          vev.ctypes.data_as(ctypes.c_void_p))
 
@@ -209,8 +209,56 @@ def build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
     mpi_helper.allreduce_safe_inplace(vv)
     mpi_helper.allreduce_safe_inplace(vev)
 
+    return vv, vev
+
+
+def build_mats_dfragf2_lowmem(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
+    ''' Wrapper for AGF2df_vv_vev_islice_lowmem
+    '''
+
+    fdrv = getattr(libagf2, 'AGF2df_vv_vev_islice_lowmem')
+
+    qxi = np.asarray(qxi, order='C')
+    qja = np.asarray(qja, order='C')
+    e_i = np.asarray(gf_occ.energy, order='C') 
+    e_a = np.asarray(gf_vir.energy, order='C')
+
+    naux = qxi.shape[0]
+    nmo = gf_occ.nphys
+    nocc = gf_occ.naux
+    nvir = gf_vir.naux
+    rank, size = mpi_helper.rank, mpi_helper.size
+
+    assert qxi.size == (naux * nmo * nocc)
+    assert qja.size == (naux * nocc * nvir)
+
+    vv = np.zeros((nmo*nmo))
+    vev = np.zeros((nmo*nmo))
+
+    start = rank * (nocc * nocc) // size
+    end = nocc*nocc if rank == (size-1) else (rank+1) * (nocc*nocc) // size
+
+    fdrv(qxi.ctypes.data_as(ctypes.c_void_p),
+         qja.ctypes.data_as(ctypes.c_void_p),
+         e_i.ctypes.data_as(ctypes.c_void_p),
+         e_a.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_double(os_factor),
+         ctypes.c_double(ss_factor),
+         ctypes.c_int(nmo),
+         ctypes.c_int(nocc),
+         ctypes.c_int(nvir),
+         ctypes.c_int(naux),
+         ctypes.c_int(start),
+         ctypes.c_int(end),
+         vv.ctypes.data_as(ctypes.c_void_p),
+         vev.ctypes.data_as(ctypes.c_void_p))
+
     vv = vv.reshape(nmo, nmo)
     vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
 
     return vv, vev
 
@@ -422,6 +470,73 @@ def build_mats_dfuagf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
          ctypes.c_int(naux),
          ctypes.c_int(istart),
          ctypes.c_int(iend),
+         vv.ctypes.data_as(ctypes.c_void_p),
+         vev.ctypes.data_as(ctypes.c_void_p))
+
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(vv)
+    mpi_helper.allreduce_safe_inplace(vev)
+
+    vv = vv.reshape(nmo, nmo)
+    vev = vev.reshape(nmo, nmo)
+
+    return vv, vev
+
+    
+def build_mats_dfuagf2_lowmem(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
+    ''' Wrapper for AGF2udf_vv_vev_islice_lowmem
+    '''
+
+    fdrv = getattr(libagf2, 'AGF2udf_vv_vev_islice_lowmem')
+
+    qxi_a, qxi_b = qxi
+    qja_a, qja_b = qja
+
+    qxi = np.asarray(qxi_a, order='C')
+    qja = np.asarray(qja_a, order='C')
+    qJA = np.asarray(qja_b, order='C')
+    e_i = np.asarray(gf_occ[0].energy, order='C')
+    e_I = np.asarray(gf_occ[1].energy, order='C')
+    e_a = np.asarray(gf_vir[0].energy, order='C')
+    e_A = np.asarray(gf_vir[1].energy, order='C')
+
+    nmo = gf_occ[0].nphys
+    noa, nob = gf_occ[0].naux, gf_occ[1].naux
+    nva, nvb = gf_vir[0].naux, gf_vir[1].naux
+    naux = qxi.shape[0]
+
+    assert qxi.size == (naux * nmo * noa)
+    assert qja.size == (naux * noa * nva)
+    assert qJA.size == (naux * nob * nvb)
+
+    vv = np.zeros((nmo*nmo))
+    vev = np.zeros((nmo*nmo))
+
+    rank, size = mpi_helper.rank, mpi_helper.size
+    nomax = max(noa, nob)
+    start = rank * (noa*nomax) // size
+    end = (noa*nomax) if rank == (size-1) else (rank+1) * (noa*nomax) // size
+
+    fdrv(qxi.ctypes.data_as(ctypes.c_void_p),
+         qja.ctypes.data_as(ctypes.c_void_p),
+         qJA.ctypes.data_as(ctypes.c_void_p),
+         e_i.ctypes.data_as(ctypes.c_void_p),
+         e_I.ctypes.data_as(ctypes.c_void_p),
+         e_a.ctypes.data_as(ctypes.c_void_p),
+         e_A.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_double(os_factor),
+         ctypes.c_double(ss_factor),
+         ctypes.c_int(nmo),
+         ctypes.c_int(noa),
+         ctypes.c_int(nob),
+         ctypes.c_int(nva),
+         ctypes.c_int(nvb),
+         ctypes.c_int(naux),
+         ctypes.c_int(start),
+         ctypes.c_int(end),
          vv.ctypes.data_as(ctypes.c_void_p),
          vev.ctypes.data_as(ctypes.c_void_p))
 

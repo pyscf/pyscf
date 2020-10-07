@@ -71,7 +71,14 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     qxi, qja = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
 
-    vv, vev = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
+    himem_required = naux*(nvir+nmo) + (nocc*nvir)*(2*nmo+1) + (2*nmo**2)
+    himem_required *= 8e-6
+    himem_required *= lib.num_threads()
+
+    if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory:
+        vv, vev = _agf2.build_mats_dfragf2_lowmem(qxi, qja, gf_occ, gf_vir, **facs)
+    else:
+        vv, vev = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
 
     e, c = _agf2.cholesky_build(vv, vev, gf_occ, gf_vir)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
