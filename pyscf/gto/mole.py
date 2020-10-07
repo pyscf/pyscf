@@ -2237,14 +2237,6 @@ class Mole(lib.StreamObject):
         self.__dict__.update(loads(molstr).__dict__)
         return self
 
-    def __getstate__(self):
-        exclude_keys = set(('stdout',))
-        d = dict(self.__dict__)
-        for k in exclude_keys:
-            if k in d:
-                del(d[k])
-        return d
-
     def build(self, dump_input=True, parse_arg=True,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
