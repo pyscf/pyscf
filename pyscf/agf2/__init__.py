@@ -92,17 +92,17 @@ from pyscf.agf2.aux import AuxiliarySpace, GreensFunction, SelfEnergy
 
 
 def AGF2(mf, nmom=(None,0), frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
-    if isinstance(mf, scf.rhf.RHF):
-        return RAGF2(mf, nmom, frozen, mo_energy, mo_coeff, mo_occ)
-
-    elif isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         return UAGF2(mf, nmom, frozen, mo_energy, mo_coeff, mo_occ)
 
-    elif isinstance(mf, scf.rhf.ROHF):
+    elif isinstance(mf, scf.rohf.ROHF):
         lib.logger.warn(mf, 'RAGF2 method does not support ROHF reference. '
                             'Converting to UHF and using UAGF2.')
         mf = scf.addons.convert_to_uhf(mf)
         return UAGF2(mf, nmom, frozen, mo_energy, mo_coeff, mo_occ)
+
+    elif isinstance(mf, scf.rhf.RHF):
+        return RAGF2(mf, nmom, frozen, mo_energy, mo_coeff, mo_occ)
 
     else:
         raise RuntimeError('AGF2 code only supports RHF, ROHF and UHF references')
