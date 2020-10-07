@@ -364,9 +364,6 @@ def build_mats_uagf2_incore(qeri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     mpi_helper.allreduce_safe_inplace(vv)
     mpi_helper.allreduce_safe_inplace(vev)
 
-    vv = vv.reshape(nmo, nmo)
-    vev = vev.reshape(nmo, nmo)
-
     return vv, vev
 
 
@@ -480,9 +477,6 @@ def build_mats_dfuagf2_incore(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
     mpi_helper.allreduce_safe_inplace(vv)
     mpi_helper.allreduce_safe_inplace(vev)
 
-    vv = vv.reshape(nmo, nmo)
-    vev = vev.reshape(nmo, nmo)
-
     return vv, vev
 
     
@@ -546,9 +540,6 @@ def build_mats_dfuagf2_lowmem(qxi, qja, gf_occ, gf_vir, os_factor=1.0, ss_factor
     mpi_helper.barrier()
     mpi_helper.allreduce_safe_inplace(vv)
     mpi_helper.allreduce_safe_inplace(vev)
-
-    vv = vv.reshape(nmo, nmo)
-    vev = vev.reshape(nmo, nmo)
 
     return vv, vev
 
