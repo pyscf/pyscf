@@ -768,7 +768,7 @@ class RAGF2(lib.StreamObject):
         v_ip = list(gf_occ.coupling[:,-nroots:].T)[::-1]
         return e_ip, v_ip
 
-    def ipagf2(self, nroots=1):
+    def ipagf2(self, nroots=5):
         ''' Find the (N-1)-electron charged excitations, corresponding
             to the largest :attr:`nroots` poles of the occupied
             Green's function.
@@ -794,7 +794,7 @@ class RAGF2(lib.StreamObject):
         else:
             return e_ip, v_ip
 
-    def get_ea(self, gf, nroots=1):
+    def get_ea(self, gf, nroots=5):
         gf_vir = gf.get_virtual()
         e_ea = list(gf_vir.energy[:nroots])
         v_ea = list(gf_vir.coupling[:,:nroots].T)
