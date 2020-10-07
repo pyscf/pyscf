@@ -36,20 +36,6 @@ def cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
         for the virtual self-energy.
     '''
 
-    ##NOTE: test this
-    ##FIXME: doesn't seem to work when situation arises due to frozen core - might have to rethink this
-    ##FIXME: won't work for UAGF2 if we use this solution (need to change naux)
-    #if gf_occ.nphys >= (gf_occ.naux**2 * gf_vir.naux):
-    #    # remove the null space from vv and vev
-    #    zero_rows = np.all(np.absolute(vv) < eps, axis=1)
-    #    zero_cols = np.all(np.absolute(vv) < eps, axis=0)
-    #    null_space = np.logical_and(zero_rows, zero_cols)
-
-    #    vv = vv[~null_space][:,~null_space]
-    #    vev = vev[~null_space][:,~null_space]
-    #    np.set_printoptions(precision=4, linewidth=150)
-
-    #NOTE: this seems like an unscientific solution... rescue the above?
     try:
         b = np.linalg.cholesky(vv).T
     except np.linalg.LinAlgError:
@@ -63,11 +49,6 @@ def cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
     m = np.dot(np.dot(b_inv.T, vev), b_inv)
     e, c = np.linalg.eigh(m)
     c = np.dot(b.T, c[:gf_occ.nphys])
-
-    #if c.shape[0] < gf_occ.nphys:
-    #    c_full = np.zeros((gf_occ.nphys, c.shape[1]), dtype=c.dtype)
-    #    c_full[~null_space] = c
-    #    c = c_full
 
     return e, c
 
