@@ -16,11 +16,12 @@
 #         George Booth <george.booth@kcl.ac.uk>
 #
 
-#TODO: volume/issue for second paper
-
 '''
 Auxiliary second-order Green's function perturbation therory
 ============================================================
+
+The AGF2 method permits the computation of quasiparticle excitations and 
+ground-state properties at the AGF2(None,0) level. 
 
 When using results of this code for publications, please cite the follow papers:
 "Wave function perspective and efficient truncation of renormalized second-order perturbation theory", O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 2 (2020).
