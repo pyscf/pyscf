@@ -10,6 +10,10 @@ AGF2 in the zeroth iteration with no compression is equivalent
 to ADC(2). AGF2 is not recommended as a practical solver for
 ADC(2), this is mostly to demonstrate the link between the
 methods.
+
+AGF2 corresponds to the AGF2(None,0) method outlined in the papers:
+  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 2 (2020).
+  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., X, X (2020).
 '''
 
 import numpy
