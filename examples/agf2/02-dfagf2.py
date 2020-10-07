@@ -4,10 +4,11 @@
 #
 
 '''
-An example of restricted AGF2 with density fitting.
+An example of restricted AGF2 with density fitting and get the 1RDM
 '''
 
 from pyscf import gto, scf, agf2
+import numpy as np
 
 mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz')
 
@@ -25,3 +26,8 @@ gf2.ipagf2(nroots=3)
 
 # Print the first 3 electron affinities
 gf2.eaagf2(nroots=3)
+
+# Get the density matrix and calculate dipole moments:
+dm = gf2.make_rdm1()
+mol.set_common_origin([0,0,0])
+dipole = np.einsum('xij,ji->x', mol.intor('int1e_r'), dm)
