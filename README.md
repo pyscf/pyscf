@@ -35,7 +35,7 @@ Installation
 
   Note during the compilation, external libraries (libcint, libxc, xcfun) will
   be downloaded and installed.  If you want to disable the automatic
-  downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
+  downloading, this [document](http://pyscf.org/pyscf/install.html#installation-without-network)
   shows how to manually build these packages and PySCF C libraries.
 
 * To export PySCF to Python, you need to set environment variable `PYTHONPATH`.
@@ -74,14 +74,14 @@ Installation
 
 Tutorials
 ---------
-* A user-guide written in Ipython notebook can be found in https://github.com/nmardirossian/PySCF_Tutorial.
+* A user-guide written in Ipython notebook can be found in https://github.com/pyscf/PySCF_Tutorial.
   This repository documents the basic structure of PySCF input script and the
   use of regular methods which were routinely executed in most quantum chemistry
   packages.  It also provides an implementation to drive PySCF program in a
   simple manner.
 * Developer's tutorial can be found in the online documentation
-  http://sunqm.github.io/pyscf/tutorial.html#tutorial and the repository above
-  https://github.com/nmardirossian/PySCF_Tutorial/blob/master/dev_guide.ipynb
+  http://pyscf.org/pyscf/tutorial.html#tutorial and the repository above
+  https://github.com/pyscf/PySCF_Tutorial/blob/master/dev_guide.ipynb
 
 
 Citing PySCF
@@ -91,11 +91,11 @@ The following paper should be cited in publications utilizing the PySCF program 
 [PySCF: the Python‐based simulations of chemistry framework](https://onlinelibrary.wiley.com/doi/abs/10.1002/wcms.1340),
 Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S. Guo, Z. Li, J. Liu,
 J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan (2018),
-WIREs Comput. Mol. Sci., 8: e1340. doi:[10.1002/wcms.1340](https://onlinelibrary.wiley.com/doi/abs/10.1002/wcms.1340)
+*WIREs Comput. Mol. Sci.*, **8**: e1340. doi:[10.1002/wcms.1340](https://onlinelibrary.wiley.com/doi/abs/10.1002/wcms.1340)
 
 [Recent developments in the PySCF program package](https://aip.scitation.org/doi/10.1063/5.0006074),
 Qiming Sun, Xing Zhang, Samragni Banerjee, Peng Bao, Marc Barbry, Nick S. Blunt, Nikolay A. Bogdanov, George H. Booth, Jia Chen, Zhi-Hao Cui, Janus J. Eriksen, Yang Gao, Sheng Guo, Jan Hermann, Matthew R. Hermes, Kevin Koh, Peter Koval, Susi Lehtola, Zhendong Li, Junzi Liu, Narbe Mardirossian, James D. McClain, Mario Motta, Bastien Mussard, Hung Q. Pham, Artem Pulkin, Wirawan Purwanto, Paul J. Robinson, Enrico Ronca, Elvira R. Sayfutyarova, Maximilian Scheurer, Henry F. Schurkus, James E. T. Smith, Chong Sun, Shi-Ning Sun, Shiv Upadhyay, Lucas K. Wagner, Xiao Wang, Alec White, James Daniel Whitfield, Mark J. Williamson, Sebastian Wouters, Jun Yang, Jason M. Yu, Tianyu Zhu, Timothy C. Berkelbach, Sandeep Sharma, Alexander Yu. Sokolov, and Garnet Kin-Lic Chan,
-J. Chem. Phys., 153, 024109 (2020). doi:[10.1063/5.0006074](https://aip.scitation.org/doi/10.1063/5.0006074)
+*J. Chem. Phys.*, **153**, 024109 (2020). doi:[10.1063/5.0006074](https://aip.scitation.org/doi/10.1063/5.0006074)
 
 
 Bug reports and feature requests
