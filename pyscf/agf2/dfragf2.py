@@ -78,7 +78,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory \
             and agf2.allow_lowmem_build:
         log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
-                  'low-memory version.')
+                  'low-memory version.', himem_required)
         vv, vev = _agf2.build_mats_dfragf2_lowmem(qxi, qja, gf_occ, gf_vir, **facs)
     else:
         vv, vev = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
