@@ -75,7 +75,8 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     himem_required *= 8e-6
     himem_required *= lib.num_threads()
 
-    if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory:
+    if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory \
+            and agf2.allow_lowmem_build:
         log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
                   'low-memory version.')
         vv, vev = _agf2.build_mats_dfragf2_lowmem(qxi, qja, gf_occ, gf_vir, **facs)
@@ -183,6 +184,11 @@ class DFRAGF2(ragf2.RAGF2):
             Print level. Default value equals to :class:`Mole.verbose`
         max_memory : float or int
             Allowed memory in MB. Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
+        allow_lowmem_build : bool
+            Allow the self-energy build to switch to a serially slower
+            code with loweer thread-private memory overhead if needed.
         conv_tol : float
             Convergence threshold for AGF2 energy. Default value is 1e-7
         conv_tol_rdm1 : float
@@ -243,7 +249,9 @@ class DFRAGF2(ragf2.RAGF2):
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
 
-        self._keys.update(['_with_df'])
+        self.allow_lowmem_build = True
+
+        self._keys.update(['_with_df', 'allow_lowmem_build'])
 
     build_se_part = build_se_part
     get_jk = get_jk

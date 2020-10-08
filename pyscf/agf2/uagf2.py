@@ -328,6 +328,8 @@ class UAGF2(ragf2.RAGF2):
             Print level. Default value equals to :class:`Mole.verbose`
         max_memory : float or int
             Allowed memory in MB. Default value equals to :class:`Mole.max_memory`
+        incore_complete : bool
+            Avoid all I/O. Default is False.
         conv_tol : float
             Convergence threshold for AGF2 energy. Default value is 1e-7
         conv_tol_rdm1 : float
