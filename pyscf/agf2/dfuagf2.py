@@ -72,6 +72,11 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     tol = agf2.weight_tol
     facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
+    ci_a, ei_a = gf_occ[0].coupling, gf_occ[0].energy
+    ci_b, ei_b = gf_occ[1].coupling, gf_occ[1].energy
+    ca_a, ea_a = gf_vir[0].coupling, gf_vir[0].energy
+    ca_b, ea_b = gf_vir[1].coupling, gf_vir[1].energy
+
     qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
     (qxi_a, qja_a), (qxi_b, qja_b) = qeri
     qxi = (qxi_a, qxi_b)
@@ -89,7 +94,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     else:
         build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_incore
 
-    vv, vev = build_mats_dfuagf2(qxi, qja, gf_occ, gf_vir, **facs)
+    vv, vev = build_mats_dfuagf2(qxi, qja, (ei_a, ei_b), (ea_a, ea_b), **facs)
     e, c = _agf2.cholesky_build(vv, vev)
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
     se_a.remove_uncoupled(tol=tol)
@@ -109,7 +114,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_incore
 
     rv = np.s_[::-1]
-    vv, vev = build_mats_dfuagf2(qxi[rv], qja[rv], gf_occ[rv], gf_vir[rv], **facs)
+    vv, vev = build_mats_dfuagf2(qxi[rv], qja[rv], (ei_b, ei_a), (ea_b, ea_a), **facs)
     e, c = _agf2.cholesky_build(vv, vev)
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
     se_b.remove_uncoupled(tol=tol)

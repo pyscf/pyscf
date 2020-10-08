@@ -40,8 +40,8 @@ class KnownValues(unittest.TestCase):
         xija = np.random.random((self.nmo, self.nocc, self.nocc, self.nvir))
         gf_occ = aux.GreensFunction(np.random.random(self.nocc), np.eye(self.nmo, self.nocc))
         gf_vir = aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir))
-        vv1, vev1 = _agf2.build_mats_ragf2_outcore(xija, gf_occ, gf_vir)
-        vv2, vev2 = _agf2.build_mats_ragf2_incore(xija, gf_occ, gf_vir)
+        vv1, vev1 = _agf2.build_mats_ragf2_outcore(xija, gf_occ.energy, gf_vir.energy)
+        vv2, vev2 = _agf2.build_mats_ragf2_incore(xija, gf_occ.energy, gf_vir.energy)
         self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
         self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
 
@@ -50,8 +50,8 @@ class KnownValues(unittest.TestCase):
         qja = np.random.random((self.naux, self.nocc*self.nvir)) / self.naux
         gf_occ = aux.GreensFunction(np.random.random(self.nocc), np.eye(self.nmo, self.nocc))
         gf_vir = aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir))
-        vv1, vev1 = _agf2.build_mats_dfragf2_outcore(qxi, qja, gf_occ, gf_vir)
-        vv2, vev2 = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir)
+        vv1, vev1 = _agf2.build_mats_dfragf2_outcore(qxi, qja, gf_occ.energy, gf_vir.energy)
+        vv2, vev2 = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ.energy, gf_vir.energy)
         self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
         self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
 
@@ -61,8 +61,8 @@ class KnownValues(unittest.TestCase):
                   aux.GreensFunction(np.random.random(self.nocc), np.eye(self.nmo, self.nocc)))
         gf_vir = (aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir)),
                   aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir)))
-        vv1, vev1 = _agf2.build_mats_uagf2_outcore(xija, gf_occ, gf_vir)
-        vv2, vev2 = _agf2.build_mats_uagf2_incore(xija, gf_occ, gf_vir)
+        vv1, vev1 = _agf2.build_mats_uagf2_outcore(xija, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
+        vv2, vev2 = _agf2.build_mats_uagf2_incore(xija, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
         self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
         self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
 
@@ -73,8 +73,8 @@ class KnownValues(unittest.TestCase):
                   aux.GreensFunction(np.random.random(self.nocc), np.eye(self.nmo, self.nocc)))
         gf_vir = (aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir)),
                   aux.GreensFunction(np.random.random(self.nvir), np.eye(self.nmo, self.nvir)))
-        vv1, vev1 = _agf2.build_mats_dfuagf2_outcore(qxi, qja, gf_occ, gf_vir)
-        vv2, vev2 = _agf2.build_mats_dfuagf2_incore(qxi, qja, gf_occ, gf_vir)
+        vv1, vev1 = _agf2.build_mats_dfuagf2_outcore(qxi, qja, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
+        vv2, vev2 = _agf2.build_mats_dfuagf2_incore(qxi, qja, (gf_occ[0].energy, gf_occ[1].energy), (gf_vir[0].energy, gf_vir[1].energy))
         self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 10)
         self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 10)
 

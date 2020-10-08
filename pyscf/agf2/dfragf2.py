@@ -69,6 +69,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     tol = agf2.weight_tol
     facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
+    ei, ci = gf_occ.energy, gf_occ.coupling
+    ea, ca = gf_vir.energy, gf_vir.coupling
+
     qxi, qja = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
 
     himem_required = naux*(nvir+nmo) + (nocc*nvir)*(2*nmo+1) + (2*nmo**2)
@@ -79,9 +82,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
             and agf2.allow_lowmem_build:
         log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
                   'low-memory version.', himem_required)
-        vv, vev = _agf2.build_mats_dfragf2_lowmem(qxi, qja, gf_occ, gf_vir, **facs)
+        vv, vev = _agf2.build_mats_dfragf2_lowmem(qxi, qja, ei, ea, **facs)
     else:
-        vv, vev = _agf2.build_mats_dfragf2_incore(qxi, qja, gf_occ, gf_vir, **facs)
+        vv, vev = _agf2.build_mats_dfragf2_incore(qxi, qja, ei, ea, **facs)
 
     e, c = _agf2.cholesky_build(vv, vev)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)

@@ -74,6 +74,11 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     tol = agf2.weight_tol
     facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
+    ci_a, ei_a = gf_occ[0].coupling, gf_occ[0].energy
+    ci_b, ei_b = gf_occ[1].coupling, gf_occ[1].energy
+    ca_a, ea_a = gf_vir[0].coupling, gf_vir[0].energy
+    ca_b, ea_b = gf_vir[1].coupling, gf_vir[1].energy
+
     mem_incore = (nmo[0]*noa*(noa*nva+nob*nvb)) * 8/1e6
     mem_now = lib.current_memory()[0]
     if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
@@ -82,9 +87,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=0)
 
     if isinstance(qeri[0], np.ndarray):
-        vv, vev = _agf2.build_mats_uagf2_incore(qeri, gf_occ, gf_vir, **facs)
+        vv, vev = _agf2.build_mats_uagf2_incore(qeri, (ei_a, ei_b), (ea_a, ea_b), **facs)
     else:
-        vv, vev = _agf2.build_mats_uagf2_outcore(qeri, gf_occ, gf_vir, **facs)
+        vv, vev = _agf2.build_mats_uagf2_outcore(qeri, (ei_a, ei_b), (ea_a, ea_b), **facs)
 
     e, c = _agf2.cholesky_build(vv, vev)
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
@@ -101,9 +106,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     rv = np.s_[::-1]
     if isinstance(qeri[0], np.ndarray):
-        vv, vev = _agf2.build_mats_uagf2_incore(qeri, gf_occ[rv], gf_vir[rv], **facs)
+        vv, vev = _agf2.build_mats_uagf2_incore(qeri, (ei_b, ei_a), (ea_b, ea_a), **facs)
     else:
-        vv, vev = _agf2.build_mats_uagf2_outcore(qeri, gf_occ[rv], gf_vir[rv], **facs)
+        vv, vev = _agf2.build_mats_uagf2_outcore(qeri, (ei_b, ei_a), (ea_b, ea_a), **facs)
 
     e, c = _agf2.cholesky_build(vv, vev)
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)

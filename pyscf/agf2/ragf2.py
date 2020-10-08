@@ -144,6 +144,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     tol = agf2.weight_tol
     facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
+    ci, ei = gf_occ.coupling, gf_occ.energy
+    ca, ea = gf_vir.coupling, gf_vir.energy
+
     mem_incore = (gf_occ.nphys*gf_occ.naux**2*gf_vir.naux) * 8/1e6
     mem_now = lib.current_memory()[0]
     if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
@@ -152,9 +155,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir)
 
     if isinstance(qeri, np.ndarray):
-        vv, vev = _agf2.build_mats_ragf2_incore(qeri, gf_occ, gf_vir, **facs)
+        vv, vev = _agf2.build_mats_ragf2_incore(qeri, ei, ea, **facs)
     else:
-        vv, vev = _agf2.build_mats_ragf2_outcore(qeri, gf_occ, gf_vir, **facs)
+        vv, vev = _agf2.build_mats_ragf2_outcore(qeri, ei, ea, **facs)
 
     e, c = _agf2.cholesky_build(vv, vev)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
