@@ -24,7 +24,7 @@ from pyscf.agf2 import mpi_helper
 libagf2 = lib.load_library('libagf2')
 
 
-def cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
+def cholesky_build(vv, vev, eps=1e-20):
     ''' Constructs the truncated auxiliaries from :attr:`vv` and :attr:`vev`.
         Performs a Cholesky decomposition via :func:`numpy.linalg.cholesky`,
         for a positive-definite or positive-semidefinite matrix. For the
@@ -35,6 +35,8 @@ def cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
         the occupied self-energy, or :attr:`gf_vir.naux` < :attr:`gf_vir.nphys`
         for the virtual self-energy.
     '''
+
+    nmo = vv.shape[0]
 
     try:
         b = np.linalg.cholesky(vv).T
@@ -48,7 +50,7 @@ def cholesky_build(vv, vev, gf_occ, gf_vir, eps=1e-20):
 
     m = np.dot(np.dot(b_inv.T, vev), b_inv)
     e, c = np.linalg.eigh(m)
-    c = np.dot(b.T, c[:gf_occ.nphys])
+    c = np.dot(b.T, c[:nmo])
 
     return e, c
 

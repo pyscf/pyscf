@@ -86,7 +86,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     else:
         vv, vev = _agf2.build_mats_uagf2_outcore(qeri, gf_occ, gf_vir, **facs)
 
-    e, c = _agf2.cholesky_build(vv, vev, gf_occ[0], gf_vir[0])
+    e, c = _agf2.cholesky_build(vv, vev)
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
     se_a.remove_uncoupled(tol=tol)
 
@@ -105,7 +105,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     else:
         vv, vev = _agf2.build_mats_uagf2_outcore(qeri, gf_occ[rv], gf_vir[rv], **facs)
 
-    e, c = _agf2.cholesky_build(vv, vev, gf_occ[1], gf_vir[1])
+    e, c = _agf2.cholesky_build(vv, vev)
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
     se_b.remove_uncoupled(tol=tol)
 
