@@ -93,7 +93,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         eja_a = lib.direct_sum('j,a->ja', gfo_a.energy, -gfv_a.energy)
         eja_b = lib.direct_sum('j,a->ja', gfo_b.energy, -gfv_b.energy)
 
-        qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=spin)
+        ca = (gf_occ[0].coupling, gf_occ[0].coupling, gf_vir[0].coupling)
+        cb = (gf_occ[1].coupling, gf_occ[1].coupling, gf_vir[1].coupling)
+        qeri = _make_qmo_eris_incore(agf2, eri, ca, cb, spin=spin)
         qeri_aa, qeri_ab = qeri
 
         p1 = 0

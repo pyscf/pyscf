@@ -150,9 +150,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     mem_incore = (gf_occ.nphys*gf_occ.naux**2*gf_vir.naux) * 8/1e6
     mem_now = lib.current_memory()[0]
     if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
-        qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
+        qeri = _make_qmo_eris_incore(agf2, eri, (ci, ci, ca))
     else:
-        qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir)
+        qeri = _make_qmo_eris_outcore(agf2, eri, (ci, ci, ca))
 
     if isinstance(qeri, np.ndarray):
         vv, vev = _agf2.build_mats_ragf2_incore(qeri, ei, ea, **facs)
@@ -938,15 +938,14 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
 
     return eris
 
-def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
+def _make_qmo_eris_incore(agf2, eri, coeffs):
     ''' Returns ndarray
     '''
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    coeffs = (np.eye(agf2.nmo), gf_occ.coupling,
-              gf_occ.coupling, gf_vir.coupling)
+    coeffs = (np.eye(agf2.nmo),) + coeffs
     shape = tuple(x.shape[1] for x in coeffs)
 
     qeri = ao2mo.incore.general(eri.eri, coeffs, compact=False, verbose=log)
@@ -956,17 +955,17 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
 
     return qeri
 
-def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir):
+def _make_qmo_eris_outcore(agf2, eri, coeffs):
     ''' Returns H5 dataset
     '''
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    ci = cj = gf_occ.coupling
-    ca = gf_vir.coupling
-    ni = nj = gf_occ.naux
-    na = gf_vir.naux
+    ci, cj, ca = coeffs
+    ni = ci.shape[1]
+    nj = cj.shape[1]
+    na = ca.shape[1]
     nmo = agf2.nmo
     npair = nmo*(nmo+1)//2
 

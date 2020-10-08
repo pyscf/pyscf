@@ -72,7 +72,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ei, ci = gf_occ.energy, gf_occ.coupling
     ea, ca = gf_vir.energy, gf_vir.coupling
 
-    qxi, qja = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
+    qxi, qja = _make_qmo_eris_incore(agf2, eri, (ci, ci, ca))
 
     himem_required = naux*(nvir+nmo) + (nocc*nvir)*(2*nmo+1) + (2*nmo**2)
     himem_required *= 8e-6
@@ -336,7 +336,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
 
     return eris
 
-def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
+def _make_qmo_eris_incore(agf2, eri, coeffs):
     ''' Returns tuple of ndarray
     '''
     
@@ -349,8 +349,7 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
     naux = with_df.get_naoaux()
 
     cx = np.eye(nmo)
-    ci = cj = gf_occ.coupling
-    ca = gf_vir.coupling
+    ci, cj, ca = coeffs
 
     xisym, nxi, cxi, sxi = ao2mo.incore._conc_mos(cx, ci, compact=False)
     jasym, nja, cja, sja = ao2mo.incore._conc_mos(cj, ca, compact=False)

@@ -77,7 +77,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ca_a, ea_a = gf_vir[0].coupling, gf_vir[0].energy
     ca_b, ea_b = gf_vir[1].coupling, gf_vir[1].energy
 
-    qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
+    qeri = _make_qmo_eris_incore(agf2, eri, (ci_a, ci_a, ca_a), (ci_b, ci_b, ca_b))
     (qxi_a, qja_a), (qxi_b, qja_b) = qeri
     qxi = (qxi_a, qxi_b)
     qja = (qja_a, qja_b)
@@ -278,7 +278,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
 
     return eris
 
-def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
+def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b):
     ''' Returns nested tuple of ndarray
     '''
 
@@ -290,9 +290,8 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir):
     with_df = agf2.with_df
     naux = with_df.get_naoaux()
     cxa, cxb = np.eye(nmoa), np.eye(nmob)
-    cia = cja = gf_occ[0].coupling
-    cib = cjb = gf_occ[1].coupling
-    caa, cab = gf_vir[0].coupling, gf_vir[1].coupling
+    cia, cja, caa = coeffs_a
+    cib, cjb, cab = coeffs_b
 
     xisym_a, nxi_a, cxi_a, sxi_a = ao2mo.incore._conc_mos(cxa, cia, compact=False)
     jasym_a, nja_a, cja_a, sja_a = ao2mo.incore._conc_mos(cja, caa, compact=False)

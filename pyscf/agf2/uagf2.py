@@ -82,9 +82,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     mem_incore = (nmo[0]*noa*(noa*nva+nob*nvb)) * 8/1e6
     mem_now = lib.current_memory()[0]
     if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
-        qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=0)
+        qeri = _make_qmo_eris_incore(agf2, eri, (ci_a, ci_a, ca_a), (ci_b, ci_b, ca_b), spin=0)
     else:
-        qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=0)
+        qeri = _make_qmo_eris_outcore(agf2, eri, (ci_a, ci_a, ca_a), (ci_b, ci_b, ca_b), spin=0)
 
     if isinstance(qeri[0], np.ndarray):
         vv, vev = _agf2.build_mats_uagf2_incore(qeri, (ei_a, ei_b), (ea_a, ea_b), **facs)
@@ -100,9 +100,9 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     mem_incore = (nmo[1]*nob*(nob*nvb+noa*nva)) * 8/1e6
     mem_now = lib.current_memory()[0]
     if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
-        qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=1)
+        qeri = _make_qmo_eris_incore(agf2, eri, (ci_a, ci_a, ca_a), (ci_b, ci_b, ca_b), spin=1)
     else:
-        qeri = _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=1)
+        qeri = _make_qmo_eris_outcore(agf2, eri, (ci_a, ci_a, ca_a), (ci_b, ci_b, ca_b), spin=1)
 
     rv = np.s_[::-1]
     if isinstance(qeri[0], np.ndarray):
@@ -695,7 +695,7 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
 
     return eris
 
-def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=None):
+def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     ''' Returns nested tuple of ndarray
 
     spin = None: ((aaaa, aabb), (bbaa, bbbb))
@@ -708,12 +708,10 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=None):
 
     nmoa, nmob = agf2.nmo
     npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
-    cia = cja = gf_occ[0].coupling
-    cib = cjb = gf_occ[1].coupling
-    caa, cab = gf_vir[0].coupling, gf_vir[1].coupling
-    nia = nja = gf_occ[0].naux
-    nib = njb = gf_occ[1].naux
-    naa, nab = gf_vir[0].naux, gf_vir[1].naux
+    cia, cja, caa = coeffs_a
+    cib, cjb, cab = coeffs_b
+    nia, nja, naa = [x.shape[1] for x in coeffs_a]
+    nib, njb, nab = [x.shape[1] for x in coeffs_b]
 
     if spin is None or spin == 0:
         c_aa = (np.eye(nmoa), cia, cja, caa)
@@ -746,7 +744,7 @@ def _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir, spin=None):
 
     return qeri
 
-def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
+def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     ''' Returns nested tuple of H5 dataset
 
     spin = None: ((aaaa, aabb), (bbaa, bbbb))
@@ -759,12 +757,10 @@ def _make_qmo_eris_outcore(agf2, eri, gf_occ, gf_vir, spin=None):
 
     nmoa, nmob = agf2.nmo
     npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
-    cia = cja = gf_occ[0].coupling
-    cib = cjb = gf_occ[1].coupling
-    caa, cab = gf_vir[0].coupling, gf_vir[1].coupling
-    nia = nja = gf_occ[0].naux
-    nib = njb = gf_occ[1].naux
-    naa, nab = gf_vir[0].naux, gf_vir[1].naux
+    cia, cja, caa = coeffs_a
+    cib, cjb, cab = coeffs_b
+    nia, nja, naa = [x.shape[1] for x in coeffs_a]
+    nib, njb, nab = [x.shape[1] for x in coeffs_b]
 
     # possible to have incore MO, outcore QMO
     if getattr(eri, 'feri', None) is None:

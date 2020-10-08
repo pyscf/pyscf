@@ -74,7 +74,8 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
     
-    qeri = _make_qmo_eris_incore(agf2, eri, gf_occ, gf_vir)
+    coeffs = (gf_occ.coupling, gf_occ.coupling, gf_vir.coupling)
+    qeri = _make_qmo_eris_incore(agf2, eri, coeffs)
 
     p1 = 0
     for i in range(nocc):
