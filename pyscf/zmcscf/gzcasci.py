@@ -60,7 +60,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
         corevhf = casci.get_veff(casci.mol, core_dm)
 
         j,k = casci._scf.get_jk(casci.mol, core_dm)
-        print (energy_core, numpy.einsum('ij,ji', core_dm, hcore), numpy.einsum('ij,ji', j, corevhf), numpy.einsum('ij,ji', k, corevhf) )
+        #print (energy_core, numpy.einsum('ij,ji', core_dm, hcore), numpy.einsum('ij,ji', j, corevhf), numpy.einsum('ij,ji', k, corevhf) )
         energy_core += numpy.einsum('ij,ji', core_dm, hcore)
         energy_core += numpy.einsum('ij,ji', core_dm, corevhf) * .5
     h1eff = reduce(numpy.dot, (mo_cas.T.conj(), hcore+corevhf, mo_cas))

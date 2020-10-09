@@ -9,8 +9,9 @@ from pyscf import ao2mo
 
 
 
-# level = 1: ppaa, papa and vhf, jpc, kpc
-# level = 2: ppaa, papa, vhf,  jpc=0, kpc=0
+
+# level = 1: aaaa
+# level = 2: paaa
 class _ERIS(object):
     def __init__(self, zcasscf, mo, method='incore', level=1):
         mol = zcasscf.mol
@@ -23,15 +24,26 @@ class _ERIS(object):
         mem_incore, mem_outcore, mem_basic = mc_ao2mo._mem_usage(ncore, ncas, nmo)
         mem_now = lib.current_memory()[0]
         eri = zcasscf._scf._eri
-        moc, moa = mo[:,:ncore], mo[:,ncore:nocc]
+        moc, moa, moo = mo[:,:ncore], mo[:,ncore:nocc], mo[:,:nocc]
         if (method == 'incore' and eri is not None and
             (mem_incore+mem_now < zcasscf.max_memory*.9) or
             mol.incore_anyway):
             if eri is None:
                 eri = mol.intor('int2e_spinor', aosym='s8')
 
-            self.paaa = ao2mo.kernel(eri, (mo, moa, moa, moa), 
-                                     intor="int2e_spinor")
+            if level == 1:
+                self.aaaa = ao2mo.kernel(eri, moa, intor="int2e_spinor")
+            elif level == 2:   
+                self.paaa = ao2mo.kernel(eri, (mo, moa, moa, moa), 
+                                         intor="int2e_spinor")
+            elif level == 3:
+                self.ppoo = ao2mo.kernel(eri, (mo, moa, moa, moa), 
+                                         intor="int2e_spinor")
+                self.papa = ao2mo.kernel(eri, (mo, moa, moa, moa), 
+                                         intor="int2e_spinor")
+                self.paaa = ao2mo.kernel(eri, (mo, moa, moa, moa), 
+                                         intor="int2e_spinor")
+
         else:
             import gc
             gc.collect()
@@ -41,7 +53,15 @@ class _ERIS(object):
             if max_memory < mem_basic:
                 log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                          (mem_basic+mem_now)/.9, zcasscf.max_memory)
-            self.paaa = ao2mo.kernel(mol, (mo, moa, moa, moa), 
-                                     intor="int2e_spinor")
+            if level == 1:
+                self.aaaa = ao2mo.kernel(mol, moa, intor="int2e_spinor")
+            else:   
+                self.paaa = ao2mo.kernel(mol, (mo, moa, moa, moa), 
+                                         intor="int2e_spinor")
 
-        self.paaa.shape = (nmo, ncas, ncas, ncas)            
+                    
+        if (level == 1):
+            self.aaaa.shape = (ncas, ncas, ncas, ncas)            
+        else:
+            self.paaa.shape = (nmo, ncas, ncas, ncas)
+            self.aaaa = self.paaa[ncore:nocc]            
