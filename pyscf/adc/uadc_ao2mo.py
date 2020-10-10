@@ -27,6 +27,9 @@ import tempfile
 ### Integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(myadc.stdout, myadc.verbose)
+
     occ_a = myadc.mo_coeff[0][:,:myadc._nocc[0]]
     occ_b = myadc.mo_coeff[1][:,:myadc._nocc[1]]
     vir_a = myadc.mo_coeff[0][:,myadc._nocc[0]:]
@@ -86,6 +89,8 @@ def transform_integrals_incore(myadc):
         eris.vVvV_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_b, vir_b), compact=False).reshape(nvir_a, nvir_a, nvir_b, nvir_b)
         eris.vVvV_p = np.ascontiguousarray(eris.vVvV_p.transpose(0,2,1,3)) 
         eris.vVvV_p = eris.vVvV_p.reshape(nvir_a*nvir_b, nvir_a*nvir_b) 
+
+    log.timer('ADC integral transformation', *cput0)
 
     return eris
 
