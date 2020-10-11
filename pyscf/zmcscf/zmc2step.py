@@ -46,7 +46,30 @@ def derivOfExp(a,dA, maxT=50):
 
     return deriv
 
-def get_jk_df(cderi, dm, with_j=True, with_k=True):
+def conjugateGradient(A, b, x, max_iter=5, conv=1.e-4):
+    r = b - A(x)
+    p = 1*r
+    rsold = numpy.dot(r,r)
+
+    for i in range(max_iter):
+        Ap = A(p)
+        alpha = rsold / numpy.dot(p, Ap)
+        x += alpha * p
+        r -= alpha * Ap
+        rsnew = numpy.dot(r,r)
+        if (rsnew)**0.5 < conv:
+              break
+        p = r + (rsnew / rsold) * p
+        #print ("cg, ", i, rsnew**0.5)
+        if (i == 5):
+            #reset it
+            r = b - A(x)
+            p = 1*r
+            rsnew = numpy.dot(r,r)
+        rsold = rsnew
+    return x, rsnew**0.5
+    
+def get_jk_df(mol, cderi, dm, with_j=True, with_k=True):
     if (with_j):
         j1 = lib.einsum('Lij,ji->L', cderi, dm)
         j = lib.einsum('Lij,L->ij', cderi, j1)
@@ -796,6 +819,9 @@ To enable the solvent model for CASSCF, the following code needs to be called
                 
             x = 0*G
             x0 = 1.*G
+            x, norm = conjugateGradient(hop, -G, x0)
+            return x, norm
+            '''
             index = 0
             imic = 0
             ikf = 0
@@ -850,15 +876,15 @@ To enable the solvent model for CASSCF, the following code needs to be called
                         norm_gorb < norm_gkf/casscf.kf_trust_region):
                         ikf = 0
                         return x, norm_gorb
-
+            '''
             return x, norm_gorb #numpy.linalg.norm(G)
+            
 
-
-        imicro, nmicro, T, Grad = 0, 2, numpy.zeros_like(mo), 0.*mo
+        imicro, nmicro, T, Grad = 0, 5, numpy.zeros_like(mo), 0.*mo
         Enew = 0.
         #Eold = self.calcE(mo, casdm1, casdm2).real
         Grad, Eold = self.calcGrad(mo, casdm1, casdm2)
-        Eolddf = self.calcEDF(mo, casdm1, casdm2).real
+        Eolddf = self.calcE(mo, casdm1, casdm2).real
         while True:
             gnorm = numpy.linalg.norm(Grad-Grad.conj().T)
 
@@ -873,20 +899,27 @@ To enable the solvent model for CASSCF, the following code needs to be called
  
             ###do line search along the AH direction
             tau = 1.0
+            '''
+            monew = numpy.dot(mo, expmat(tau*(T) ))
+            Grad, Enew = self.calcGrad(monew, casdm1, casdm2)
+            print ("%d  %6.3e  %18.12g   %13.6e   g=%6.2e"\
+                %(imicro, tau, Enew, Enew-Eold, gnorm))
+            Eold = Enew
+            mo = 1.*monew
+            '''
             while tau > 1e-3:
                 monew = numpy.dot(mo, expmat(tau*(T) ))
-                Enewdf = self.calcEDF(monew, casdm1, casdm2).real
-
+                Enewdf = self.calcE(monew, casdm1, casdm2).real
+                #print ("line search ", Enewdf, Eolddf)
                 if (Enewdf < Eolddf):# - tau * 1e-4*gnorm):
                     Grad, Enew = self.calcGrad(monew, casdm1, casdm2)
-                    print ("%d  %6.3e  %13.7e   %13.6e   g=%6.2e"\
+                    print ("%d  %6.3e  %18.12g   %13.6e   g=%6.2e"\
                     %(imicro, tau, Enew, Enew-Eold, gnorm))
                     Eold = Enew
                     Eolddf = Enewdf
                     mo = 1.*monew
                     break
                 tau = tau/2.    
-
             imicro += 1
         exit(0)
 
@@ -913,8 +946,8 @@ if __name__ == '__main__':
         ['H', ( 0., 1.    , 1.   )],
     ]
 
-    mol.basis = 'cc-pvtz'
-    #mol.basis = 'sto-3g'
+    #mol.basis = 'cc-pvtz'
+    mol.basis = '6-31g'
     mol.build()
 
     '''
@@ -924,6 +957,7 @@ if __name__ == '__main__':
     mc = mcscf.CASSCF(m, 6,6)
     emc = mc.kernel()[0]
     print (emc)
+    '''
     '''
     m = scf.X2C(mol)
     #m = scf.GHF(mol)
@@ -937,7 +971,7 @@ if __name__ == '__main__':
     mc.fcisolver.davidsonTol = 1.e-6
 
     mo = 1.*m.mo_coeff
-    
+    '''
     #numpy.random.seed(5)
     #noise = numpy.zeros(mo.shape, dtype=complex)
     #noise = numpy.random.random(mo.shape) +\
@@ -947,22 +981,31 @@ if __name__ == '__main__':
     #import cProfile
     #cProfile.run('mc.kernel(mo)')
     #exit(0)
+
+    '''
     emc = mc.kernel(mo)[0]
     exit(0)
     print(ehf, emc, emc-ehf)
     print(emc - -3.22013929407)
     exit(0)
-
+    '''
     mol.atom = [
         ['O', ( 0., 0.    , 0.   )],
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'cc-pvdz',
-                 'O': 'cc-pvdz',}
+    mol.basis = {'H': 'cc-pvtz',
+                 'O': 'cc-pvtz',}
     mol.build()
 
-    m = scf.RHF(mol)
+    m = scf.DHF(mol)
     ehf = m.scf()
+
+    from pyscf.df import density_fit
+    m2 = density_fit(m, "cc-pvtz-jkfit")
+    energy = m2.scf()
+    print (ehf, energy)
+    exit(0)
+
     mc = mc1step.CASSCF(m, 6, 4)
     mc.verbose = 5
     mo = m.mo_coeff.copy()
