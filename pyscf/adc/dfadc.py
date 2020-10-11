@@ -15,6 +15,47 @@
 
 import numpy as np
 
+def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
+
+    nocc = myadc._nocc
+    nvir = myadc._nvir
+    naux = myadc.with_df.get_naoaux()
+
+    Lvv = Lvv.reshape(naux,nvir*nvir)
+    Lov = Lov.reshape(naux,nocc,nvir)
+
+    if chnk_size < nocc:
+        Lov_temp = np.ascontiguousarray(Lov.transpose(1,2,0)[p:p+chnk_size].reshape(-1,naux))
+    else :
+        Lov_temp = np.ascontiguousarray(Lov.transpose(1,2,0).reshape(-1,naux))
+
+    ovvv = np.dot(Lov_temp, Lvv)
+    ovvv = ovvv.reshape(-1, nvir, nvir, nvir)
+    return ovvv    
+
+
+def  get_ovvv_a_df(myadc, Lov, Lvv, p, chnk_size):
+
+    norb_1 = Lov.shape[1]
+    norb_2 = Lov.shape[2]
+    norb_3 = Lvv.shape[1]
+    naux = myadc.with_df.get_naoaux()
+
+    Lvv = Lvv.reshape(naux,norb_3*norb_3)
+    Lov = Lov.reshape(naux,norb_1,norb_2)
+
+    if chnk_size < norb_1:
+        #Lov_temp = np.ascontiguousarray(Lov.T[:,p:p+chnk_size,:].reshape(-1,naux))
+        Lov_temp = np.ascontiguousarray(Lov.transpose(1,2,0)[p:p+chnk_size].reshape(-1,naux))
+    else :
+        Lov_temp = np.ascontiguousarray(Lov.transpose(1,2,0).reshape(-1,naux))
+
+    ovvv = np.dot(Lov_temp, Lvv)
+    ovvv = ovvv.reshape(-1, norb_2, norb_3, norb_3)
+    #vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
+    return ovvv    
+
+
 def  get_vvvv_df(myadc, Lvv, p, chnk_size):
 
     nocc = myadc._nocc
