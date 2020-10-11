@@ -644,7 +644,6 @@ class RADC(lib.StreamObject):
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.e_corr = None
-        self.e_tot = None
         self.t1 = None
         self.t2 = None
         self._nocc = mf.mol.nelectron//2
@@ -655,7 +654,7 @@ class RADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-        self.get_mpn_energy = True
+        self.compute_mpn_energy = True
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -719,14 +718,12 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals()
         
-        if self.get_mpn_energy == True:
+        if self.compute_mpn_energy == True:
             self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+            self._finalize()
         else:
             self.t1, self.t2 = compute_amplitudes(self, eris=eris)
-            self.e_corr = 0.0
-
-        self.e_tot = self.scf_energy + self.e_corr
-        self._finalize()
+            self.e_corr = None
 
         return self.e_corr, self.t1, self.t2
 
@@ -766,14 +763,12 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals() 
             
-        if self.get_mpn_energy == True:
+        if self.compute_mpn_energy == True:
             self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+            self._finalize()
         else:
             self.t1, self.t2 = compute_amplitudes(self, eris=eris)
-            self.e_corr = 0.0
-
-        self.e_tot = self.scf_energy + self.e_corr
-        self._finalize()
+            self.e_corr = None
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
@@ -789,8 +784,8 @@ class RADC(lib.StreamObject):
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
-        logger.note(self, 'E_corr = %.8f  E_tot = %.8f',
-                    self.e_corr, self.e_tot)
+        logger.note(self, 'E_corr = %.8f',
+                    self.e_corr)
         return self
     
     def ea_adc(self, nroots=1, guess=None, eris=None):
@@ -818,7 +813,6 @@ def get_imds_ea(adc, eris=None):
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
-    #print ("Starting M_ab calculation")
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -1213,7 +1207,6 @@ def get_imds_ip(adc, eris=None):
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
-    #print ("Starting M_ij calculation")
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -1723,7 +1716,6 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
 
-    #print("Starting sigma vector calculation")
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -2482,7 +2474,7 @@ class RADCEA(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.get_mpn_energy = True
+        self.compute_mpn_energy = True
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -2579,7 +2571,7 @@ class RADCIP(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.get_mpn_energy = True
+        self.compute_mpn_energy = True
 
         keys = set(('conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 

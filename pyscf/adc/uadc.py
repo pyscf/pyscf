@@ -874,7 +874,6 @@ class UADC(lib.StreamObject):
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.e_corr = None
-        self.e_tot = None
         self.t1 = None
         self.t2 = None
         self._nocc = mf.nelec
@@ -886,7 +885,7 @@ class UADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-        self.get_mpn_energy = True
+        self.compute_mpn_energy = True
         
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -950,14 +949,12 @@ class UADC(lib.StreamObject):
 
         eris = self.transform_integrals() 
 
-        if self.get_mpn_energy == True:
+        if self.compute_mpn_energy == True:
             self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+            self._finalize()
         else:
             self.t1, self.t2 = compute_amplitudes(self, eris=eris)
-            self.e_corr = 0.0
-
-        self.e_tot = self.scf_energy + self.e_corr
-        self._finalize()
+            self.e_corr = None
 
         return self.e_corr, self.t1, self.t2
 
@@ -997,14 +994,12 @@ class UADC(lib.StreamObject):
 
         eris = self.transform_integrals() 
 
-        if self.get_mpn_energy == True:
+        if self.compute_mpn_energy == True:
             self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+            self._finalize()
         else:
             self.t1, self.t2 = compute_amplitudes(self, eris=eris)
-            self.e_corr = 0.0
-
-        self.e_tot = self.scf_energy + self.e_corr
-        self._finalize()
+            self.e_corr = None
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
@@ -1020,8 +1015,8 @@ class UADC(lib.StreamObject):
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
-        logger.note(self, 'E_corr = %.8f  E_tot = %.8f',
-                    self.e_corr, self.e_tot)
+        logger.note(self, 'E_corr = %.8f',
+                    self.e_corr)
         return self
     
     def ea_adc(self, nroots=1, guess=None, eris=None):
@@ -3959,7 +3954,7 @@ class UADCEA(UADC):
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.get_mpn_energy = True
+        self.compute_mpn_energy = True
 
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -4061,7 +4056,7 @@ class UADCIP(UADC):
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.get_mpn_energy = True
+        self.compute_mpn_energy = True
 
         keys = set(('conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
