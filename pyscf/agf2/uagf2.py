@@ -882,7 +882,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
         tril2sq = lib.square_mat_in_trilu_indices(nmob)
         for p0, p1 in lib.prange(0, nmob, blksize):
             inds = np.arange(p0, p1)[mask[1][p0:p1]]
-            idx = list(np.concatnate(tril2sq[inds]))
+            idx = list(np.concatenate(tril2sq[inds]))
 
             # ba
             buf = eri.eri_ba[idx] # (blk, nmob, npaira)
