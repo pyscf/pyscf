@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -144,7 +144,6 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
         de[k] += numpy.einsum('xij,ij->x', h1ao, casci_dm1)
         de[k] += numpy.einsum('xij,ij->x', h1ao, zvec_ao)
 
-        vhf1 = numpy.zeros((3,nao,nao))
         q1 = 0
         for b0, b1, nf in _shell_prange(mol, 0, mol.nbas, blksize):
             q0, q1 = q1, q1 + nf

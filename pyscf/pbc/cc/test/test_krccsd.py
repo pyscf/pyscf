@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -260,7 +260,7 @@ class KnownValues(unittest.TestCase):
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
-        mycc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=0)
+        mycc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=None)
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.05
         mycc.max_cycle = max_cycle
@@ -352,6 +352,7 @@ class KnownValues(unittest.TestCase):
 
         check_gamma = False  # Turn me on to run the supercell calculation!
 
+        nk = [1,1,2]
         if check_gamma:
             from pyscf.pbc.tools.pbc import super_cell
             supcell = super_cell(cell, nk)
@@ -603,12 +604,12 @@ class KnownValues(unittest.TestCase):
         khf = pbcscf.KRHF(cell)
         khf.__dict__.update(kks.__dict__)
 
-        mycc = pbcc.KGCCSD(khf, frozen=0)
+        mycc = pbcc.KGCCSD(khf, frozen=None)
         eris = mycc.ao2mo()
         ekgcc, t1, t2 = mycc.kernel(eris=eris)
         ekgcc_t = mycc.ccsd_t(eris=eris)
 
-        mycc = pbcc.KRCCSD(khf, frozen=0)
+        mycc = pbcc.KRCCSD(khf, frozen=None)
         eris = mycc.ao2mo()
         ekrcc, t1, t2 = mycc.kernel(eris=eris)
         ekrcc_t = mycc.ccsd_t(eris=eris)
@@ -634,12 +635,12 @@ class KnownValues(unittest.TestCase):
         khf = pbcscf.KRHF(cell)
         khf.__dict__.update(kks.__dict__)
 
-        mycc = pbcc.KGCCSD(khf, frozen=0)
+        mycc = pbcc.KGCCSD(khf, frozen=None)
         eris = mycc.ao2mo()
         ekgcc, t1, t2 = mycc.kernel(eris=eris)
         ekgcc_t = mycc.ccsd_t(eris=eris)
 
-        mycc = pbcc.KRCCSD(khf, frozen=0)
+        mycc = pbcc.KRCCSD(khf, frozen=None)
         eris = mycc.ao2mo()
         ekrcc, t1, t2 = mycc.kernel(eris=eris)
         ekrcc_t = mycc.ccsd_t(eris=eris)

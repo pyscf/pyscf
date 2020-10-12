@@ -28,9 +28,9 @@ from pyscf.dft import rks
 
 class SymAdaptedUKS(uhf_symm.UHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         uhf_symm.UHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         uhf_symm.UHF.dump_flags(self, verbose)
@@ -38,7 +38,12 @@ class SymAdaptedUKS(uhf_symm.UHF, rks.KohnShamDFT):
         return self
 
     get_veff = uks.get_veff
+    get_vsap = uks.get_vsap
     energy_elec = uks.energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
+
+    reset = rks.KohnShamDFT.reset
 
     def nuc_grad_method(self):
         from pyscf.grad import uks

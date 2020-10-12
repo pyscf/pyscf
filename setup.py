@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ MAINTAINER_EMAIL = 'osirpt.sun@gmail.com'
 DESCRIPTION      = 'PySCF: Python-based Simulations of Chemistry Framework'
 #LONG_DESCRIPTION = ''
 URL              = 'http://www.pyscf.org'
-DOWNLOAD_URL     = 'http://github.com/sunqm/pyscf'
+DOWNLOAD_URL     = 'http://github.com/pyscf/pyscf'
 LICENSE          = 'Apache License 2.0'
 AUTHOR           = 'Qiming Sun'
 AUTHOR_EMAIL     = 'osirpt.sun@gmail.com'
@@ -280,7 +280,7 @@ def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir
             soname = pkg_name.split('.')[-1]
             extra_link_flags = extra_link_flags + ['-install_name', '@loader_path/'+soname+so_ext]
             runtime_library_dirs = []
-        if sys.platform.startswith('aix') or sys.platform.startswith('os400'):
+        elif sys.platform.startswith('aix') or sys.platform.startswith('os400'):
             extra_compile_flags = extra_compile_flags + ['-fopenmp']
             extra_link_flags = extra_link_flags + ['-lblas', '-lgomp', '-Wl,-brtl']
             runtime_library_dirs = ['$ORIGIN', '.']
@@ -401,7 +401,7 @@ if 1:
     libxc_lib_path = search_lib_path('libxc'+so_ext, [pyscf_lib_dir,
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
-                                     version='4.0.0')
+                                     version='5')
     libxc_inc_path = search_inc_path('xc.h', [pyscf_lib_dir,
                                               os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libxc_lib_path and libxc_inc_path:
@@ -417,7 +417,7 @@ if 1:
     else:
         print("****************************************************************")
         print("*** WARNING: libxc library not found.")
-        print("* You can download libxc library from http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz")
+        print("* You can download libxc library from http://www.tddft.org/programs/libxc/down.php?file=4.3.4/libxc-4.3.4.tar.gz")
         print("* libxc library needs to be compiled with the flag --enable-shared")
         print("* May need to set PYSCF_INC_DIR if libxc library was not installed in the")
         print("* system standard install path (/usr, /usr/local, etc). Eg")
@@ -432,7 +432,7 @@ if 1:
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
     xcfun_inc_path = search_inc_path('xcfun.h', [pyscf_lib_dir,
-                                                 os.path.join(pyscf_lib_dir, 'deps', 'include')])
+                                                 os.path.join(pyscf_lib_dir, 'deps', 'include', 'XCFun')])
     if xcfun_lib_path and xcfun_inc_path:
         print("****************************************************************")
         print("* xcfun found in %s." % xcfun_lib_path)
@@ -477,7 +477,7 @@ setup(
     author_email=AUTHOR_EMAIL,
     platforms=PLATFORMS,
     #package_dir={'pyscf': 'pyscf'},  # packages are under directory pyscf
-    #include *.so *.dat files. They are now placed in MAINTAINER.in
+    #include *.so *.dat files. They are now placed in MANIFEST.in
     #package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']},
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*dmrgscf*', '*fciqmcscf*', '*icmpspt*',
@@ -487,7 +487,10 @@ setup(
     ext_modules=extensions,
     cmdclass={'build_ext': BuildExtWithoutPlatformSuffix,
               'install': PostInstallCommand},
-    install_requires=['numpy', 'scipy', 'h5py'],
+    install_requires=['numpy>1.8,!=1.16,!=1.17', 'scipy<1.5', 'h5py>2.2'],
+    extras_require={
+        'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
+    },
     setup_requires = ['numpy'],
 )
 

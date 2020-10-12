@@ -28,7 +28,7 @@ def system_vars_gpaw(self, **kw):
   from pyscf.lib.parameters import ELEMENTS as chemical_symbols
   from pyscf.nao.m_gpaw_wfsx import gpaw_wfsx_c
   from pyscf.nao.m_gpaw_hsx import gpaw_hsx_c
-  from pyscf.nao.m_ao_log import ao_log_c
+  from pyscf.nao.ao_log import ao_log
   import ase.units as units
 
   #gpaw=calc, label="gpaw", chdir='.', **kvargs
@@ -37,7 +37,7 @@ def system_vars_gpaw(self, **kw):
   self.chdir = kw['cd'] if 'cd' in kw else '.'
   self.verbose = logger.NOTE
   
-  self.ao_log = ao_log_c().init_ao_log_gpaw(calc.setups)
+  self.ao_log = ao_log(setups=calc.setups, **kw)
   self.atom2coord = calc.get_atoms().get_positions()/units.Bohr
   self.natm = self.natoms = len(self.atom2coord)
   

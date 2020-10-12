@@ -80,6 +80,12 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int1e_ggkin"                     (.5 \| g g p dot p \| \)
             "int1e_ggnuc"                     ( \| g g nuc \| \)
             "int1e_grjxp"                     ( \| g r cross p \| \)
+            "ECPscalar"                       AREP ECP integrals, similar to int1e_nuc
+            "ECPscalar_ipnuc"                 (nabla i | ECP | ), similar to int1e_ipnuc
+            "ECPscalar_iprinv"                similar to int1e_iprinv for a specific atom
+            "ECPscalar_ignuc"                 similar to int1e_ignuc
+            "ECPscalar_iprinvip"              similar to int1e_iprinvip
+            "ECPso"                           < | Spin-orbit ECP | >
             "int1e_ovlp_spinor"               ( \| \)
             "int1e_nuc_spinor"                ( \| nuc \|\)
             "int1e_srsr_spinor"               (sigma dot r \| sigma dot r\)
@@ -162,6 +168,12 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int3c2e_ip2_spinor"              ( \, \| nabla\)
             "int3c2e_ipspsp1_spinor"          (nabla sigma dot p \, sigma dot p \| \)
             "int3c2e_spsp1ip2_spinor"         (sigma dot p \, sigma dot p \| nabla \)
+            "ECPscalar_spinor"                AREP ECP integrals, similar to int1e_nuc
+            "ECPscalar_ipnuc_spinor"          (nabla i | ECP | ), similar to int1e_ipnuc
+            "ECPscalar_iprinv_spinor"         similar to int1e_iprinv for a specific atom
+            "ECPscalar_ignuc_spinor"          similar to int1e_ignuc
+            "ECPscalar_iprinvip_spinor"       similar to int1e_iprinvip
+            "ECPso_spinor"                    < | sigam dot Spin-orbit ECP | >
             ================================  =============
 
         atm : int32 ndarray
@@ -209,6 +221,8 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
       [-0.48176097 -0.10289944]]]
     '''
     intor_name, comp = _get_intor_and_comp(intor_name, comp)
+    if any(bas[:,ANG_OF] > 12):
+        raise NotImplementedError('cint library does not support high angular (l>12) GTOs')
 
     if (intor_name.startswith('int1e') or
         intor_name.startswith('ECP') or
@@ -416,7 +430,7 @@ _INTOR_FUNCTIONS = {
     'ECPscalar'                 : (1, None),
     'ECPscalar_ipnuc'           : (3, None),
     'ECPscalar_iprinv'          : (3, None),
-    'ECPscalar_igrinv'          : (3, None),
+    'ECPscalar_ignuc'           : (3, None),
     'ECPscalar_iprinvip'        : (9, None),
     'ECPso'                     : (3, 1),
 }
@@ -543,6 +557,9 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
 
 def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
+    if shls_slice is None and any(bas[:,ANG_OF] > 6):
+        raise NotImplementedError('Two-electron integrals for high angular (l>=7) GTOs')
+
     aosym = _stand_sym_code(aosym)
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -783,10 +800,16 @@ def make_cintopt(atm, bas, env, intor):
         return ctypes.cast(cintopt, _cintoptHandler)
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
-        libcgto.CINTdel_optimizer(ctypes.byref(self))
+        try:
+            libcgto.CINTdel_optimizer(ctypes.byref(self))
+        except AttributeError:
+            pass
 class _ecpoptHandler(ctypes.c_void_p):
     def __del__(self):
-        libcgto.ECPdel_optimizer(ctypes.byref(self))
+        try:
+            libcgto.ECPdel_optimizer(ctypes.byref(self))
+        except AttributeError:
+            pass
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):

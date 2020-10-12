@@ -32,6 +32,7 @@ from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
+from pyscf import __config__
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -122,16 +123,17 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
 def get_rho(mf, dm=None, grids=None, kpts=None):
     from pyscf.pbc.dft import krks
     if dm is None:
-        dm = self.make_rdm1()
+        dm = mf.make_rdm1()
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
-class KUKS(kuhf.KUHF, rks.KohnShamDFT):
+class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3))):
-        kuhf.KUHF.__init__(self, cell, kpts)
-        rks.KohnShamDFT.__init__(self)
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        kuhf.KUHF.__init__(self, cell, kpts, exxdiv=exxdiv)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         kuhf.KUHF.dump_flags(self, verbose)
@@ -144,6 +146,9 @@ class KUKS(kuhf.KUHF, rks.KohnShamDFT):
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import kuks
+        return kuks.Gradients(self)
 
 
 if __name__ == '__main__':

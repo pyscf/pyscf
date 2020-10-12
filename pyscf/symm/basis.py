@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -79,8 +79,7 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
         op_coords = numpy.einsum('x,nxy->ny', r0, ops)
 # Using ops to generate other atoms from atom_ids[0]
         coords0 = atom_coords[atom_ids]
-        natm = len(atom_ids)
-        dc = abs(op_coords.reshape(-1,1,3) - coords0).sum(axis=2)
+        dc = abs(op_coords.reshape(-1,1,3) - coords0).max(axis=2)
         op_relate_idx = numpy.argwhere(dc < geom.TOLERANCE)[:,1]
         ao_loc = numpy.array([aoslice[atom_ids[i],2] for i in op_relate_idx])
 

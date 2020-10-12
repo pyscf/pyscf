@@ -20,9 +20,9 @@
 Non-relativistic RHF spin-spin coupling (SSC) constants
 
 Ref.
-Chem. Rev., 99, 293
-JCP, 113, 3530
-JCP, 113, 9402
+Chem. Rev. 99, 293 (1999); DOI:10.1021/cr960017t
+JCP 113, 3530 (2000); DOI:10.1063/1.1286806
+JCP 113, 9402 (2000); DOI:10.1063/1.1321296
 '''
 
 
@@ -34,9 +34,9 @@ from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
 from pyscf.scf import cphf
+from pyscf.scf import _response_functions  # noqa
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
-from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 
@@ -145,7 +145,6 @@ def make_fc(sscobj, nuc_pair=None):
 def solve_mo1_fc(sscobj, h1):
     cput1 = (time.clock(), time.time())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
-    mol = sscobj.mol
     mo_energy = sscobj._scf.mo_energy
     mo_coeff = sscobj._scf.mo_coeff
     mo_occ = sscobj._scf.mo_occ
@@ -161,7 +160,7 @@ def solve_mo1_fc(sscobj, h1):
     nvir = orbv.shape[1]
     nmo = nocc + nvir
 
-    vresp = _gen_rhf_response(sscobj._scf, singlet=False, hermi=1)
+    vresp = sscobj._scf.gen_response(singlet=False, hermi=1)
     mo_v_o = numpy.asarray(numpy.hstack((orbv,orbo)), order='F')
     def vind(mo1):
         dm1 = _dm1_mo2ao(mo1.reshape(nset,nvir,nocc), orbv, orbo*2)  # *2 for double occupancy
@@ -297,7 +296,7 @@ def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential associated with h1_PSO'''
-    vresp = _gen_rhf_response(mf, singlet=True, hermi=2)
+    vresp = mf.gen_response(singlet=True, hermi=2)
     occidx = mo_occ > 0
     orbo = mo_coeff[:, occidx]
     orbv = mo_coeff[:,~occidx]
@@ -407,7 +406,7 @@ class SpinSpinCoupling(lib.StreamObject):
             for k, (i, j) in enumerate(self.nuc_pair):
                 ktensor[i,j] = ktensor[j,i] = iso_ssc[k]
                 if self.verbose >= logger.DEBUG:
-                    _write(self.stdout, ssc_dia[k]+ssc_para[k],
+                    _write(self.stdout, e11[k],
                            '\nSSC E11 between %d %s and %d %s' \
                            % (i, self.mol.atom_symbol(i),
                               j, self.mol.atom_symbol(j)))
@@ -431,11 +430,11 @@ class SpinSpinCoupling(lib.StreamObject):
 
     def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
              nuc_pair=None):
-        ssc_para = self.make_pso(mol, mo1, mo_coeff, mo_occ)
+        ssc_para = self.make_pso(mol, mo10, mo_coeff, mo_occ)
         if self.with_fcsd:
-            ssc_para += self.make_fcsd(mol, mo1, mo_coeff, mo_occ)
+            ssc_para += self.make_fcsd(mol, mo10, mo_coeff, mo_occ)
         elif self.with_fc:
-            ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
+            ssc_para += self.make_fc(mol, mo10, mo_coeff, mo_occ)
         return ssc_para
 
     solve_mo1 = solve_mo1
@@ -447,8 +446,6 @@ scf.hf.RHF.SSC = scf.hf.RHF.SpinSpinCoupling = lib.class_as_method(SSC)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None

@@ -85,6 +85,7 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.casci_symm.CASCI(m, 4, (2, 0))
         mc.fcisolver.nroots = 2
         mc.kernel()[0]
+        self.assertTrue(len(mc.e_tot) == 1)
         ss = mc.fcisolver.spin_square(mc.ci[0], mc.ncas, mc.nelecas)
         self.assertAlmostEqual(ss[0], 2, 9)
 
@@ -93,6 +94,13 @@ class KnownValues(unittest.TestCase):
         mc.kernel()[0]
         ss = mc.fcisolver.spin_square(mc.ci[1], mc.ncas, mc.nelecas)
         self.assertAlmostEqual(ss[0], 2, 9)
+
+    def test_guess_wfnsym(self):
+        self.assertEqual(cis.guess_wfnsym(norb, nelec), 0)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0), 2)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym=0), 0)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym='B2'), 3)
+        self.assertRaises(RuntimeError, cis.guess_wfnsym, norb, nelec, numpy.zeros_like(ci0), wfnsym=1)
 
 
 if __name__ == "__main__":

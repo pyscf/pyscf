@@ -27,7 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import cphf
-from pyscf.soscf.newton_ah import _gen_rhf_response
+from pyscf.scf import _response_functions  # noqa
 
 
 def dipole(mf):
@@ -46,7 +46,7 @@ def polarizability(polobj, with_cphf=True):
     mo_occ = mf.mo_occ
     occidx = mo_occ > 0
     orbo = mo_coeff[:, occidx]
-    orbv = mo_coeff[:,~occidx]
+    #orbv = mo_coeff[:,~occidx]
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -87,7 +87,7 @@ def hyper_polarizability(polobj, with_cphf=True):
     mo_occ = mf.mo_occ
     occidx = mo_occ > 0
     orbo = mo_coeff[:, occidx]
-    orbv = mo_coeff[:,~occidx]
+    #orbv = mo_coeff[:,~occidx]
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -107,7 +107,7 @@ def hyper_polarizability(polobj, with_cphf=True):
 
     dm1 = lib.einsum('xpi,qi->xpq', mo1, orbo) * 2
     dm1 = dm1 + dm1.transpose(0,2,1)
-    vresp = _gen_rhf_response(mf, hermi=1)
+    vresp = mf.gen_response(hermi=1)
     h1ao = int_r + vresp(dm1)
     # *2 for double occupancy
     e3  = lib.einsum('xpq,ypi,zqi->xyz', h1ao, mo1, mo1) * 2
@@ -122,7 +122,11 @@ def hyper_polarizability(polobj, with_cphf=True):
 # Solve the frequency-dependent CPHF problem
 # [A-wI, B   ] [X] + [h1] = [0]
 # [B   , A+wI] [Y]   [h1]   [0]
-def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
+
+# TODO: new solver with Arnoldi iteration.
+# The krylov solver in this implementation often fails. see
+# https://github.com/pyscf/pyscf/issues/507
+def __FIXME_cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
                    max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
     log = logger.new_logger(verbose=verbose)
     t0 = (time.clock(), time.time())
@@ -151,7 +155,7 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
                            -h1/diag[1]), axis=1)
     mo1base = mo1base.reshape(ncomp,nocc*nvir*2)
 
-    vresp = _gen_rhf_response(mf, hermi=0)
+    vresp = mf.gen_response(hermi=0)
     def vind(xys):
         nz = len(xys)
         dms = numpy.empty((nz,nao,nao))
@@ -193,9 +197,78 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
     mo1 = (mo1[:,0], mo1[:,1])
     return mo1, mo_e1
 
+def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
+                   max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
+    # lib.krylov often fails, newton_krylov solver from relatively new scipy
+    # library is needed.
+    from scipy.optimize import newton_krylov
+    log = logger.new_logger(verbose=verbose)
+    t0 = (time.clock(), time.time())
+
+    occidx = mo_occ > 0
+    viridx = mo_occ == 0
+    e_ai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
+
+    # e_ai - freq may produce very small elements which can cause numerical
+    # issue in krylov solver
+    LEVEL_SHIF = 0.1
+    diag = (e_ai - freq,
+            e_ai + freq)
+    diag[0][diag[0] < LEVEL_SHIF] += LEVEL_SHIF
+    diag[1][diag[1] < LEVEL_SHIF] += LEVEL_SHIF
+
+    nvir, nocc = e_ai.shape
+    mo_coeff = mf.mo_coeff
+    nao, nmo = mo_coeff.shape
+    orbv = mo_coeff[:,viridx]
+    orbo = mo_coeff[:,occidx]
+    h1 = h1.reshape(-1,nvir,nocc)
+    ncomp = h1.shape[0]
+
+    rhs = numpy.stack((-h1, -h1), axis=1)
+    rhs = rhs.reshape(ncomp,nocc*nvir*2)
+    mo1base = numpy.stack((-h1/diag[0],
+                           -h1/diag[1]), axis=1)
+    mo1base = mo1base.reshape(ncomp,nocc*nvir*2)
+
+    vresp = mf.gen_response(hermi=0)
+    def vind(xys):
+        nz = len(xys)
+        dms = numpy.empty((nz,nao,nao))
+        for i in range(nz):
+            x, y = xys[i].reshape(2,nvir,nocc)
+            # *2 for double occupancy
+            dmx = reduce(numpy.dot, (orbv, x  *2, orbo.T))
+            dmy = reduce(numpy.dot, (orbo, y.T*2, orbv.T))
+            dms[i] = dmx + dmy  # AX + BY
+
+        v1ao = vresp(dms)
+        v1vo = lib.einsum('xpq,pi,qj->xij', v1ao, orbv, orbo)  # ~c1
+        v1ov = lib.einsum('xpq,pi,qj->xji', v1ao, orbo, orbv)  # ~c1^T
+
+        for i in range(nz):
+            x, y = xys[i].reshape(2,nvir,nocc)
+            v1vo[i] += (e_ai - freq) * x
+            v1ov[i] += (e_ai + freq) * y
+        v = numpy.stack((v1vo, v1ov), axis=1)
+        return v.reshape(nz,-1) - rhs
+
+    mo1 = newton_krylov(vind, mo1base, f_tol=tol)
+    mo1 = mo1.reshape(-1,2,nvir,nocc)
+    log.timer('krylov solver in CPHF', *t0)
+
+    dms = numpy.empty((ncomp,nao,nao))
+    for i in range(ncomp):
+        x, y = mo1[i]
+        dmx = reduce(numpy.dot, (orbv, x  *2, orbo.T))
+        dmy = reduce(numpy.dot, (orbo, y.T*2, orbv.T))
+        dms[i] = dmx + dmy
+    mo_e1 = lib.einsum('xpq,pi,qj->xij', vresp(dms), orbo, orbo)
+    mo1 = (mo1[:,0], mo1[:,1])
+    return mo1, mo_e1
+
 
 def polarizability_with_freq(polobj, freq=None):
-    from pyscf.prop.nmr import rhf as rhf_nmr
     log = logger.new_logger(polobj)
     mf = polobj._scf
     mol = mf.mol
@@ -243,7 +316,7 @@ class Polarizability(lib.StreamObject):
 
     def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
-        vresp = _gen_rhf_response(mf, hermi=1)
+        vresp = mf.gen_response(hermi=1)
         occidx = mo_occ > 0
         orbo = mo_coeff[:, occidx]
         nocc = orbo.shape[1]

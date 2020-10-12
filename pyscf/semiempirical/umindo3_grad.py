@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
-from pyscf import scf
 from pyscf.grad import uhf as uhf_grad
-from pyscf.data.elements import _symbol
 from pyscf.semiempirical import mopac_param
 from pyscf.semiempirical import mindo3
 from pyscf.semiempirical import rmindo3_grad
@@ -32,7 +29,7 @@ class Gradients(uhf_grad.Gradients):
     def grad_elec(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         with lib.temporary_env(self, mol=self.base._mindo_mol):
             return uhf_grad.grad_elec(self, mo_energy, mo_coeff, mo_occ,
-                                      atmlst)
+                                      atmlst) * lib.param.BOHR
 
 Grad = Gradients
 
@@ -65,4 +62,4 @@ if __name__ == '__main__':
     g1 = mfs.nuc_grad_method().kernel()
     e1 = mfs(mol1)
     e2 = mfs(mol2)
-    print(abs((e1-e2)/0.0002 - g1[0,2]))
+    print(abs((e1-e2)/0.0002*lib.param.BOHR - g1[0,2]))

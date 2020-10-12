@@ -22,7 +22,6 @@ Non-relativistic rotational g-tensor for DFT
 
 
 import time
-import numpy
 from pyscf.prop.nmr import rks as rks_nmr
 from pyscf.prop.rotational_gtensor import rhf as rhf_g
 from pyscf.prop.magnetizability import rks as rks_mag
@@ -38,7 +37,7 @@ def dia(magobj, gauge_orig=None):
     if gauge_orig is None:
         mol = magobj.mol
         im, mass_center = rhf_g.inertia_tensor(mol)
-        # Eq. (35) of JCP, 105, 2804
+        # Eq. (35) of JCP 105, 2804 (1996); DOI:10.1063/1.472143
         e2 = rks_mag.dia(magobj, gauge_orig)
         e2 -= rks_mag.dia(magobj, mass_center)
         e2 = rhf_g._safe_solve(im, e2)

@@ -1,4 +1,4 @@
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,17 +22,16 @@ from pyscf.mp import dfmp2
 from pyscf.mp import ump2
 from pyscf.mp import gmp2
 
-def MP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    __doc__ = mp2.MP2.__doc__
+def MP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.uhf.UHF):
         return UMP2(mf, frozen, mo_coeff, mo_occ)
     elif isinstance(mf, scf.ghf.GHF):
         return GMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return RMP2(mf, frozen, mo_coeff, mo_occ)
+MP2.__doc__ = mp2.MP2.__doc__
 
-def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    __doc__ = mp2.RMP2.__doc__
+def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf import lib
     from pyscf.soscf import newton_ah
 
@@ -44,34 +43,35 @@ def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
         return UMP2(mf, frozen, mo_coeff, mo_occ)
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
-        mf = scf.addons.convert_to_rhf(mf)
+        mf = mf.to_rhf()
 
     if getattr(mf, 'with_df', None):
         return dfmp2.DFMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return mp2.RMP2(mf, frozen, mo_coeff, mo_occ)
+RMP2.__doc__ = mp2.RMP2.__doc__
 
-def UMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    __doc__ = ump2.UMP2.__doc__
+def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = mf.to_uhf()
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-UMP2')
+        #raise NotImplementedError('DF-UMP2')
+        return ump2.UMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return ump2.UMP2(mf, frozen, mo_coeff, mo_occ)
+UMP2.__doc__ = ump2.UMP2.__doc__
 
-def GMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    __doc__ = gmp2.GMP2.__doc__
+def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
-        mf = scf.addons.convert_to_ghf(mf)
+        mf = mf.to_ghf()
 
     if getattr(mf, 'with_df', None):
         raise NotImplementedError('DF-GMP2')
     else:
         return gmp2.GMP2(mf, frozen, mo_coeff, mo_occ)
-
+GMP2.__doc__ = gmp2.GMP2.__doc__

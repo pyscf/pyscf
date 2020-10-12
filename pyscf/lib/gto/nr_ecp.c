@@ -4908,8 +4908,9 @@ int ECPrad_part(double *ur, double *rs, int rs_off, int nrs, int inc,
         double ubuf[nrs];
         double r2[nrs];
         double *ak, *ck, *u_ecp;
+        double s;
         int npk;
-        int ish, i, kp;
+        int ish, i, kp, n;
         int nrs_now;
         int nrs_max = 0;
 
@@ -4926,10 +4927,11 @@ int ECPrad_part(double *ur, double *rs, int rs_off, int nrs, int inc,
                         ck = env + ecpbas[ish*BAS_SLOTS+PTR_COEFF];
 
                         for (i = 0; i < nrs; i++) {
-                                ubuf[i] = ck[0] * exp(-ak[0]*r2[i]);
+                                s = ck[0] * exp(-ak[0]*r2[i]);
                                 for (kp = 1; kp < npk; kp++) {
-                                        ubuf[i] += ck[kp] * exp(-ak[kp]*r2[i]);
+                                        s += ck[kp] * exp(-ak[kp]*r2[i]);
                                 }
+                                ubuf[i] = s;
                                 if (i > 2 &&
                                     fabs(ubuf[i]) < SIM_ZERO &&
                                     fabs(ubuf[i-1]) < SIM_ZERO) {
@@ -4962,6 +4964,12 @@ int ECPrad_part(double *ur, double *rs, int rs_off, int nrs, int inc,
                         for (i = 0; i < nrs_now; i++) {
                                 ubuf[i] *= r2[i] * rs[i*inc];
                         }
+                        break;
+                default:
+                        for (i = 0; i < nrs_now; i++) {
+                        for (n = 0; n < ecpbas[ish*BAS_SLOTS+RADI_POWER]; n++) {
+                                ubuf[i] *= rs[i*inc];
+                        } }
                         break;
                 }
 
@@ -5557,7 +5565,17 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const char TRANS_T = 'T';
         double common_fac = CINTcommon_fac_sp(li) *
                             CINTcommon_fac_sp(lj) * 16 * M_PI * M_PI;
-        common_fac *= .5; // s = 1/2 Pauli matrix
+        // be careful with the factor 1/2 for the spin operator  s = 1/2 Pauli matrix
+        // The ECPso_cart and ECPso_sph integral code evaluates the integrals
+        // <i|H^{SO}|j> as shown in NWChem ECP doc
+        //   http://www.nwchem-sw.org/index.php/ECP
+        // Note when calling ECPso_spinor function to evaluate the integrals in
+        // spinor basis pyscf evaluates the expression like
+        //      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_sph, ui.conj(), uj)
+        // A factor of 1/2 needs to be multiplied for <H^{SO}> integrals in spinor basis.
+        // See also the discussion in https://github.com/pyscf/pyscf/issues/378
+        //common_fac *= .5; // 1/2 was applied in old implementation.
+
         int atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq, jfmq;
         int i, j, n, ic, jc;
         int d2, d3;
@@ -5748,7 +5766,7 @@ void type1_rad_part(double *rad_all, int lmax, double k, double aij,
         double rur[nrs];
         double bval[nrs*lmax1];
         int lab, i, n;
-        double kaij, fac, tmp;
+        double kaij, fac, tmp, s;
         double *prad;
 
         kaij = k / (2*aij);
@@ -5781,9 +5799,11 @@ void type1_rad_part(double *rad_all, int lmax, double k, double aij,
                 }
                 prad = rad_all + lab * lmax1;
                 for (i = lab%2; i <= lmax; i+=2) {
+                        s = prad[i];
                         for (n = 0; n < nrs; n++) {
-                                prad[i] += rur[n] * bval[n*lmax1+i];
+                                s += rur[n] * bval[n*lmax1+i];
                         }
+                        prad[i] = s;
                 }
         }
 }
@@ -6137,7 +6157,7 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
         if (has_value) {
                 int i;
                 for (i = 0; i < dij; i++) {
-                        buf1[i] = buf1[i] + buf2[i];
+                        buf1[i] += buf2[i];
                 }
                 ECPscalar_distribute(out, buf1, dims, 1, di, dj);
         } else {
@@ -6184,7 +6204,7 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
         if (has_value) {
                 int i;
                 for (i = 0; i < dij; i++) {
-                        buf1[i] = buf1[i] + buf2[i];
+                        buf1[i] += buf2[i];
                 }
                 ECPscalar_distribute(out, buf1, dims, 1, di, dj);
         } else {
@@ -6281,7 +6301,7 @@ void ECPscalar_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, d
         int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)(env[AS_NECPBAS]);
 
-        double r2;
+        double r2, s;
         double *ak, *ck, *uk;
         int npk;
         int i, ib, kp;
@@ -6296,9 +6316,11 @@ void ECPscalar_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, d
                 for (i = 0; i < (1 << LEVEL_MAX); i++) {
                         r2 = rs_gauss_chebyshev2047[i]*rs_gauss_chebyshev2047[i];
                         uk[i] = ck[0] * exp(-ak[0]*r2);
+                        s = uk[i];
                         for (kp = 1; kp < npk; kp++) {
-                                uk[i] += ck[kp] * exp(-ak[kp]*r2);
+                                s += ck[kp] * exp(-ak[kp]*r2);
                         }
+                        uk[i] = s;
                 }
                 uk += (1 << LEVEL_MAX);
         }
@@ -6324,9 +6346,9 @@ void ECPdel_optimizer(ECPOpt **opt)
 
 
 /*
- * <i| i/2 l U(r)|j>
- * Transforming to the integrals in spinor basis
- *      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_cart, ui.conj(), uj)
+ * <i| l U(r)|j>
+ * H^{SO} integrals in spinor basis can be evaluated
+ *      .5 * einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_cart, ui.conj(), uj)
  */
 int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
                int *bas, int nbas, double *env, ECPOpt *opt, double *cache)

@@ -168,6 +168,12 @@ class RMINDO3(scf.hf.RHF):
         self._mindo_mol = _make_mindo_mol(mol)
         self._keys.update(['e_heat_formation'])
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+            self._mindo_mol = _make_mindo_mol(mol)
+        return self
+
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
@@ -216,7 +222,7 @@ class RMINDO3(scf.hf.RHF):
     x2c = x2c1e = sfx2c1e = None
 
     def nuc_grad_method(self):
-        import rmindo3_grad
+        from . import rmindo3_grad
         return rmindo3_grad.Gradients(self)
 
 
@@ -279,7 +285,7 @@ class UMINDO3(scf.uhf.UHF):
     x2c = x2c1e = sfx2c1e = None
 
     def nuc_grad_method(self):
-        import umindo3_grad
+        from . import umindo3_grad
         return umindo3_grad.Gradients(self)
 
 

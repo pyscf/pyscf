@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 import numpy
 
 from pyscf import lib
-from pyscf.lib import logger
-
 from pyscf.cc import rccsd
 from pyscf.cc import uccsd
 from pyscf.cc import gccsd
@@ -123,6 +121,9 @@ class GCCSD(gccsd.GCCSD):
                 eri += eri1.T
                 eri = eri.reshape([nmo]*4)
             else:
+                # If GHF orbitals have orbspin labels, alpha and beta orbitals
+                # occupy different columns. Here merging them into one set of
+                # orbitals then zero out spin forbidden MO integrals
                 mo = mo_a + mo_b
                 eri  = with_df.ao2mo(mo, kpt, compact=False).reshape([nmo]*4)
                 sym_forbid = (orbspin[:,None] != orbspin)

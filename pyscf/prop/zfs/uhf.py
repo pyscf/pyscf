@@ -21,9 +21,9 @@ Non-relativistic unrestricted Hartree-Fock zero-field splitting
 (In testing)
 
 Refs:
-    JCP, 134, 194113
-    PRB, 60, 9566
-    JCP, 127, 164112
+    JCP 134, 194113 (2011); DOI:10.1063/1.3590362
+    PRB 60, 9566 (1999); DOI:10.1103/PhysRevB.60.9566
+    JCP 127, 164112 (2007); 10.1063/1.2772857
 '''
 
 import time
@@ -31,10 +31,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.gto import mole
 from pyscf.ao2mo import _ao2mo
-from pyscf.soscf.newton_ah import _gen_uhf_response
-from pyscf.prop.nmr import uhf as uhf_nmr
+from pyscf.scf import _response_functions  # noqa
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.data import nist
 
@@ -54,12 +52,15 @@ def koseki_charge(z):
         return z * (.3 + z * .05)
     elif z <= 18:
         return z * (1.05 - z * .0125)
+    elif z <= 30:
+        return z * ( 0.385 + 0.025 * (z - 18 - 2) ) # Jia: J. Phys. Chem. A 1998, 102, 10430
+    elif z < 48:
+        return z * ( 4.680 + 0.060 * (z - 36 - 2) )
     else:
         return z
 
 
 def direct_spin_spin(zfsobj, mol, dm0, verbose=None):
-    log = logger.new_logger(zfsobj, verbose)
     if isinstance(dm0, numpy.ndarray) and dm0.ndim == 2: # RHF DM
         return numpy.zeros((3,3))
 
@@ -190,7 +191,7 @@ def make_soc2e(zfsobj, mo_coeff, mo_occ):
 def solve_mo1(sscobj, h1):
     cput1 = (time.clock(), time.time())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
-    mol = sscobj.mol
+
     mo_energy = sscobj._scf.mo_energy
     mo_coeff = sscobj._scf.mo_coeff
     mo_occ = sscobj._scf.mo_occ
@@ -233,7 +234,7 @@ def solve_mo1(sscobj, h1):
                         mo1[2].reshape(nset,-1),
                         mo1[3].reshape(nset,-1)))
 
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp = mf.gen_response(with_j=False, hermi=0)
     mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
     mo_va_ob = numpy.asarray(numpy.hstack((orbva,orbob)), order='F')
     mo_vb_oa = numpy.asarray(numpy.hstack((orbvb,orboa)), order='F')

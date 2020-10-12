@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ from pyscf.cc import gccsd_rdm
 from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf.ci import cisd
 from pyscf.ci import ucisd
-from pyscf.fci import cistring
 
 
 def make_diagonal(myci, eris):
@@ -128,7 +127,7 @@ def from_ucisdvec(civec, nocc, orbspin):
         noccb = numpy.count_nonzero(orbspin[:nocc] == 1)
     else:
         nocca, noccb = nocc
-    nvira, nvirb = nmoa-nocca, nmob-noccb
+    nvira = nmoa - nocca
 
     if civec.size == nocca*nvira + (nocca*nvira)**2 + 1:  # RCISD
         c0, c1, c2 = cisd.cisdvec_to_amplitudes(civec, nmoa, nocca)
@@ -156,12 +155,14 @@ def to_ucisdvec(civec, nmo, nocc, orbspin):
                       'norm(UCISD) = %s' % unorm)
     return ucisdvec
 
-def to_fcivec(cisdvec, nelec, orbspin, frozen=0):
+def to_fcivec(cisdvec, nelec, orbspin, frozen=None):
     assert(numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
     norb = len(orbspin)
     frozen_mask = numpy.zeros(norb, dtype=bool)
-    if isinstance(frozen, (int, numpy.integer)):
+    if frozen is None:
+        pass
+    elif isinstance(frozen, (int, numpy.integer)):
         frozen_mask[:frozen] = True
     else:
         frozen_mask[frozen] = True
@@ -175,17 +176,20 @@ def to_fcivec(cisdvec, nelec, orbspin, frozen=0):
     ucisdvec = to_ucisdvec(cisdvec, nmo, nocc, orbspin)
     return ucisd.to_fcivec(ucisdvec, norb//2, nelec, frozen)
 
-def from_fcivec(ci0, nelec, orbspin, frozen=0):
+def from_fcivec(ci0, nelec, orbspin, frozen=None):
+    if not (frozen is None or frozen == 0):
+        raise NotImplementedError
+
     assert(numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
     norb = len(orbspin)
     frozen_mask = numpy.zeros(norb, dtype=bool)
-    if isinstance(frozen, (int, numpy.integer)):
+    if frozen is None:
+        pass
+    elif isinstance(frozen, (int, numpy.integer)):
         frozen_mask[:frozen] = True
     else:
         frozen_mask[frozen] = True
-    if frozen is not 0:
-        raise NotImplementedError
     #frozen = (numpy.where(frozen_mask[orbspin == 0])[0],
     #          numpy.where(frozen_mask[orbspin == 1])[0])
     nelec = (numpy.count_nonzero(orbspin[:nelec] == 0),
@@ -213,7 +217,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return gccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     Two-particle density matrix in the molecular spin-orbital representation
 
@@ -229,7 +233,8 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
-    return gccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return gccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
@@ -297,7 +302,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     norm = numpy.dot(cibra, ciket)
     dm1[numpy.diag_indices(nocc)] += norm
 
-    if not (myci.frozen is 0 or myci.frozen is None):
+    if myci.frozen is not None:
         nmo = myci.mo_occ.size
         nocc = numpy.count_nonzero(myci.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
@@ -372,10 +377,10 @@ class GCISD(cisd.CISD):
     make_diagonal = make_diagonal
     _dot = None
 
-    def to_fcivec(self, cisdvec, nelec, orbspin, frozen=0):
+    def to_fcivec(self, cisdvec, nelec, orbspin, frozen=None):
         return to_fcivec(cisdvec, nelec, orbspin, frozen)
 
-    def from_fcivec(self, fcivec, nelec, orbspin, frozen=0):
+    def from_fcivec(self, fcivec, nelec, orbspin, frozen=None):
         return from_fcivec(fcivec, nelec, orbspin, frozen)
 
     make_rdm1 = make_rdm1
@@ -434,7 +439,6 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
-    from pyscf.cc.addons import spatial2spin
 
     mol = gto.Mole()
     mol.verbose = 0

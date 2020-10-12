@@ -28,8 +28,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ucphf
-from pyscf.soscf.newton_ah import _gen_uhf_response
-from pyscf.prop.polarizability import rhf as rhf_polarizability
+from pyscf.scf import _response_functions  # noqa
 
 
 def dipole(mf):
@@ -50,9 +49,9 @@ def polarizability(polobj, with_cphf=True):
     occidxb = mo_occ[1] > 0
     mo0a, mo0b = mo_coeff
     orboa = mo0a[:, occidxa]
-    orbva = mo0a[:,~occidxa]
     orbob = mo0b[:, occidxb]
-    orbvb = mo0b[:,~occidxb]
+    #orbva = mo0a[:,~occidxa]
+    #orbvb = mo0b[:,~occidxb]
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -98,9 +97,9 @@ def hyper_polarizability(polobj, with_cphf=True):
     occidxb = mo_occ[1] > 0
     mo0a, mo0b = mo_coeff
     orboa = mo0a[:, occidxa]
-    orbva = mo0a[:,~occidxa]
     orbob = mo0b[:, occidxb]
-    orbvb = mo0b[:,~occidxb]
+    #orbva = mo0a[:,~occidxa]
+    #orbvb = mo0b[:,~occidxb]
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
@@ -126,7 +125,7 @@ def hyper_polarizability(polobj, with_cphf=True):
     dm1b = lib.einsum('xpi,qi->xpq', mo1b, orbob)
     dm1a = dm1a + dm1a.transpose(0,2,1)
     dm1b = dm1b + dm1b.transpose(0,2,1)
-    vresp = _gen_uhf_response(mf, hermi=1)
+    vresp = mf.gen_response(hermi=1)
     h1ao = int_r + vresp(numpy.stack((dm1a, dm1b)))
     s0 = mf.get_ovlp()
     e3  = lib.einsum('xpq,ypi,zqi->xyz', h1ao[0], mo1a, mo1a)
@@ -170,7 +169,6 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
 
     mo0a, mo0b = mf.mo_coeff
     nao, nmoa = mo0a.shape
-    nmob = mo0b.shape
     orbva = mo0a[:,viridxa]
     orbvb = mo0b[:,viridxb]
     orboa = mo0a[:,occidxa]
@@ -189,7 +187,7 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
                             -h1b/diag[3]))
 
     offsets = numpy.cumsum((nocca*nvira, noccb*nvirb, nocca*nvira))
-    vresp = _gen_uhf_response(mf, hermi=0)
+    vresp = mf.gen_response(hermi=0)
     def vind(xys):
         nz = len(xys)
         dm1a = numpy.empty((nz,nao,nao))
@@ -253,7 +251,6 @@ def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
 
 
 def polarizability_with_freq(polobj, freq=None):
-    from pyscf.prop.nmr import rhf as rhf_nmr
     log = logger.new_logger(polobj)
     mf = polobj._scf
     mol = mf.mol
@@ -308,7 +305,7 @@ class Polarizability(lib.StreamObject):
 
     def gen_vind(self, mf, mo_coeff, mo_occ):
         '''Induced potential'''
-        vresp = _gen_uhf_response(mf, hermi=1)
+        vresp = mf.gen_response(hermi=1)
         occidxa = mo_occ[0] > 0
         occidxb = mo_occ[1] > 0
         mo0a, mo0b = mo_coeff

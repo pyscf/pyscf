@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@
 import numpy
 from pyscf import lib
 from pyscf.ao2mo import _ao2mo
-from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
+from pyscf.ao2mo.incore import _conc_mos
 from pyscf.pbc.df.fft_ao2mo import _format_kpts
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df import aft_ao2mo
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
+from pyscf.pbc.lib.kpts_helper import gamma_point, unique
 from pyscf import __config__
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,7 +42,6 @@ from pyscf.pbc.mpitools import mpi_load_balancer, mpi
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd_rhf
-from pyscf.pbc.cc.kccsd_rhf import padded_mo_coeff
 from pyscf.pbc.cc.eom_kccsd_rhf_ea import mask_frozen as mask_frozen_ea
 from pyscf.pbc.cc.eom_kccsd_rhf_ip import mask_frozen as mask_frozen_ip
 
@@ -1013,7 +1012,7 @@ def _update_procs_mf(mf):
 
 class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = _update_procs_mf(mf)
         pyscf.pbc.cc.kccsd_rhf.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)
@@ -1123,7 +1122,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         mo_e_v = [e[nocc:] for e in eris.mo_energy]
 
         # Get location of padded elements in occupied and virtual space
-        nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
         kconserv = self.kconserv
         for ki in range(nkpts):

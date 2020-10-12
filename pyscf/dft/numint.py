@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,9 +19,8 @@
 import warnings
 import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
+from pyscf.dft.sap import sap_effective_charge
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):
@@ -29,7 +28,6 @@ except (ImportError, OSError):
         from pyscf.dft import xcfun
         libxc = xcfun
     except (ImportError, OSError):
-        import warnings
         warnings.warn('XC functional libraries (libxc or XCfun) are not available.')
         from pyscf.dft import xc
         libxc = xc
@@ -343,10 +341,6 @@ def _vv10nlc(rho,coords,vvrho,vvweight,vvcoords,nlc_pars):
     Gz=rho[3,:][threshind]
     G=Gx**2.+Gy**2.+Gz**2.
 
-    #threshed output
-    excthresh=numpy.zeros(R.size)
-    vxcthresh=numpy.zeros([2,R.size])
-
     #inner grid needs threshing
     innerthreshind=vvrho[0,:]>=thresh
     vvcoords=vvcoords[innerthreshind]
@@ -380,28 +374,41 @@ def _vv10nlc(rho,coords,vvrho,vvweight,vvcoords,nlc_pars):
     K=Kvv*(R**(1./6.))
     dKdR=(1./6.)*K
 
-    for i in range(R.size):
-        DX=vvcoords[:,0]-coords[i,0]
-        DY=vvcoords[:,1]-coords[i,1]
-        DZ=vvcoords[:,2]-coords[i,2]
-        R2=DX*DX+DY*DY+DZ*DZ
-        gp=R2*W0p+Kp
-        g=R2*W0[i]+K[i]
-        gt=g+gp
-        T=RpW/(g*gp*gt)
-        F=numpy.sum(T)
-        T*=(1./g+1./gt)
-        U=numpy.sum(T)
-        W=numpy.sum(T*R2)
-        F*=-1.5
-        #excthresh is multiplied by Rho later
-        excthresh[i]=Beta+0.5*F
-        vxcthresh[0,i]=Beta+F+1.5*(U*dKdR[i]+W*dW0dR[i])
-        vxcthresh[1,i]=1.5*W*dW0dG[i]
-    exc[threshind]=excthresh
-    vxc[0,threshind]=vxcthresh[0,:]
-    vxc[1,threshind]=vxcthresh[1,:]
-
+    vvcoords = numpy.asarray(vvcoords, order='C')
+    coords = numpy.asarray(coords, order='C')
+    F = numpy.empty_like(R)
+    U = numpy.empty_like(R)
+    W = numpy.empty_like(R)
+    #for i in range(R.size):
+    #    DX=vvcoords[:,0]-coords[i,0]
+    #    DY=vvcoords[:,1]-coords[i,1]
+    #    DZ=vvcoords[:,2]-coords[i,2]
+    #    R2=DX*DX+DY*DY+DZ*DZ
+    #    gp=R2*W0p+Kp
+    #    g=R2*W0[i]+K[i]
+    #    gt=g+gp
+    #    T=RpW/(g*gp*gt)
+    #    F=numpy.sum(T)
+    #    T*=(1./g+1./gt)
+    #    U=numpy.sum(T)
+    #    W=numpy.sum(T*R2)
+    #    F*=-1.5
+    libdft.VXC_vv10nlc(F.ctypes.data_as(ctypes.c_void_p),
+                       U.ctypes.data_as(ctypes.c_void_p),
+                       W.ctypes.data_as(ctypes.c_void_p),
+                       vvcoords.ctypes.data_as(ctypes.c_void_p),
+                       coords.ctypes.data_as(ctypes.c_void_p),
+                       W0p.ctypes.data_as(ctypes.c_void_p),
+                       W0.ctypes.data_as(ctypes.c_void_p),
+                       K.ctypes.data_as(ctypes.c_void_p),
+                       Kp.ctypes.data_as(ctypes.c_void_p),
+                       RpW.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_int(vvcoords.shape[0]),
+                       ctypes.c_int(coords.shape[0]))
+    #exc is multiplied by Rho later
+    exc[threshind] = Beta+0.5*F
+    vxc[0,threshind] = Beta+F+1.5*(U*dKdR+W*dW0dR)
+    vxc[1,threshind] = 1.5*W*dW0dG
     return exc,vxc
 
 def eval_mat(mol, ao, weight, rho, vxc,
@@ -501,8 +508,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
         aow = _scale_ao(ao[:4], wv)
         mat = _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
 
-# JCP, 138, 244108
-# JCP, 112, 7002
+# JCP 138, 244108 (2013); DOI:10.1063/1.4811270
+# JCP 112, 7002 (2000); DOI:10.1063/1.481298
     if xctype == 'MGGA':
         vlapl, vtau = vxc[2:]
 
@@ -704,6 +711,68 @@ def nr_vxc(mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     return ni.nr_vxc(mol, grids, xc_code, dms, spin, relativity,
                      hermi, max_memory, verbose)
 
+def nr_sap_vxc(ni, mol, grids, max_memory=2000, verbose=None):
+    '''Calculate superposition of atomic potentials matrix on given meshgrids.
+
+    Args:
+        ni : an instance of :class:`NumInt`
+
+        mol : an instance of :class:`Mole`
+
+        grids : an instance of :class:`Grids`
+            grids.coords and grids.weights are needed for coordinates and weights of meshgrids.
+
+    Kwargs:
+        max_memory : int or float
+            The maximum size of cache to use (in MB).
+
+    Returns:
+        vmat is the XC potential matrix in 2D array of shape (nao,nao)
+        where nao is the number of AO functions.
+
+    Examples:
+    >>> import numpy
+    >>> from pyscf import gto, dft
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
+    >>> grids = dft.gen_grid.Grids(mol)
+    >>> ni = dft.numint.NumInt()
+    >>> vsap = ni.nr_sap(mol, grids)
+    '''
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
+    nao = mol.nao
+    vmat = numpy.zeros((nao,nao))
+    aow = None
+    vxcw = None
+    ao_deriv = 0
+
+    atom_coords = mol.atom_coords()
+    atom_charges = mol.atom_charges()
+    eps = numpy.finfo(float).eps
+
+    for ao, mask, weight, coords in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+        aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
+        vxc = numpy.ndarray(coords.shape[0], buffer=vxcw)
+        vxc.fill(0.0)
+        # Form potential
+        for igrid in range(vxc.size):
+            for iatom in range(len(mol._atm)):
+                # Distance from nucleus
+                rnuc = numpy.linalg.norm(atom_coords[iatom,:] - coords[igrid,:])
+                if rnuc > eps:
+                    # Zeff(R)
+                    Zeff = sap_effective_charge(atom_charges[iatom], rnuc)
+                    vxc[igrid] -= Zeff/rnuc
+
+        # *.5 because vmat + vmat.T
+        #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho, out=aow)
+        aow = _scale_ao(ao, .5*weight*vxc, out=aow)
+        vmat += _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
+        vxc = None
+
+    vmat = vmat + vmat.conj().T
+    return vmat
+
 def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
            max_memory=2000, verbose=None):
     '''Calculate RKS XC functional and potential matrix on given meshgrids
@@ -719,7 +788,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         xc_code : str
             XC functional description.
             See :func:`parse_xc` of pyscf/dft/libxc.py for more details.
-        dms : 2D array a list of 2D arrays
+        dms : 2D array or a list of 2D arrays
             Density matrix or multiple density matrices
 
     Kwargs:
@@ -754,7 +823,10 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
 
     nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
-    vmat = numpy.zeros((nset,nao,nao))
+    if isinstance(dms, numpy.ndarray):
+        vmat = numpy.zeros((nset,nao,nao), dtype=dms.dtype)
+    else:
+        vmat = numpy.zeros((nset,nao,nao), dtype=numpy.result_type(*dms))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -763,7 +835,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'LDA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho * weight
@@ -782,7 +855,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
@@ -821,7 +895,6 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             rhotmp = weighttmp = coordstmp = None
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
@@ -842,11 +915,11 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'MGGA')
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho[0] * weight
@@ -865,14 +938,14 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], mask, shls_slice, ao_loc)
                 vmat[idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], mask, shls_slice, ao_loc)
 
-                rho = exc = vxc = vrho = vsigma = wv = None
+                rho = exc = vxc = vrho = wv = None
 
     for i in range(nset):
-        vmat[i] = vmat[i] + vmat[i].T
+        vmat[i] = vmat[i] + vmat[i].conj().T
     if nset == 1:
         nelec = nelec[0]
         excsum = excsum[0]
-        vmat = vmat.reshape(nao,nao)
+        vmat = vmat[0]
     return nelec, excsum, vmat
 
 def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
@@ -932,7 +1005,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
 
     nelec = numpy.zeros((2,nset))
     excsum = numpy.zeros(nset)
-    vmat = numpy.zeros((2,nset,nao,nao))
+    vmat = numpy.zeros((2,nset,nao,nao), dtype=numpy.result_type(dma, dmb))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -942,8 +1015,9 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose=verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho_a * weight
                 nelec[0,idm] += den.sum()
@@ -964,13 +1038,13 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         ao_deriv = 1
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose=verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
                 excsum[idm] += numpy.dot(den, exc)
@@ -992,13 +1066,13 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-            ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho_a = make_rhoa(idm, ao, mask, xctype)
                 rho_b = make_rhob(idm, ao, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose=verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 vrho, vsigma, vlapl, vtau = vxc[:4]
                 den = rho_a[0]*weight
                 nelec[0,idm] += den.sum()
@@ -1025,11 +1099,11 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[1,idm] += _dot_ao_ao(mol, ao[1], wv*ao[1], mask, shls_slice, ao_loc)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], mask, shls_slice, ao_loc)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], mask, shls_slice, ao_loc)
-                rho_a = rho_b = exc = vxc = vrho = vsigma = wva = wvb = None
+                rho_a = rho_b = exc = vxc = vrho = wva = wvb = None
 
     for i in range(nset):
-        vmat[0,i] = vmat[0,i] + vmat[0,i].T
-        vmat[1,i] = vmat[1,i] + vmat[1,i].T
+        vmat[0,i] = vmat[0,i] + vmat[0,i].conj().T
+        vmat[1,i] = vmat[1,i] + vmat[1,i].conj().T
     if isinstance(dma, numpy.ndarray) and dma.ndim == 2:
         vmat = vmat[:,0]
         nelec = nelec.reshape(2)
@@ -1106,7 +1180,10 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    vmat = numpy.zeros((nset,nao,nao))
+    if isinstance(dms, numpy.ndarray):
+        vmat = numpy.zeros((nset,nao,nao), dtype=dms.dtype)
+    else:
+        vmat = numpy.zeros((nset,nao,nao), dtype=numpy.result_type(*dms))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1117,8 +1194,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             if fxc is None:
                 rho = make_rho0(0, ao, mask, 'LDA')
-                fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2,
-                                  verbose=verbose)[2]
+                fxc0 = ni.eval_xc(xc_code, rho, spin=0, relativity=relativity,
+                                  deriv=2, verbose=verbose)[2]
                 frr = fxc0[0]
             else:
                 frr = fxc[0][ip:ip+ngrid]
@@ -1143,7 +1220,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             else:
                 rho = numpy.asarray(rho0[:,ip:ip+ngrid], order='C')
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2,
+                vxc0, fxc0 = ni.eval_xc(xc_code, rho, spin=0,
+                                        relativity=relativity, deriv=2,
                                         verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
@@ -1156,7 +1234,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 aow = _scale_ao(ao, wv, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                rho1 = sigma1 = None
+                rho1 = None
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()
@@ -1189,7 +1267,10 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    vmat = numpy.zeros((nset,nao,nao))
+    if isinstance(dms_alpha, numpy.ndarray):
+        vmat = numpy.zeros((nset,nao,nao), dtype=dms_alpha.dtype)
+    else:
+        vmat = numpy.zeros((nset,nao,nao), dtype=numpy.result_type(*dms_alpha))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1201,7 +1282,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
             if fxc is None:
                 rho = make_rho0(0, ao, mask, 'LDA')
                 rho *= .5  # alpha density
-                fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[2]
+                fxc0 = ni.eval_xc(xc_code, (rho,rho), spin=1, deriv=2)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
                 if fxc[0].ndim == 1:
@@ -1211,10 +1292,6 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
                 ip += ngrid
             if singlet:
                 frho = u_u + u_d
-                if 0:
-                    rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'LDA')
-                    fxc_test = ni.eval_xc(xc_code, rho, 0, deriv=2)[2]
-                    assert(numpy.linalg.norm(fxc_test[0]*2-frho) < 1e-4)
             else:
                 frho = u_u - u_d
 
@@ -1235,7 +1312,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
             if vxc is None or fxc is None:
                 rho = make_rho0(0, ao, mask, 'GGA')
                 rho *= .5  # alpha density
-                vxc0, fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[1:3]
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho,rho), spin=1, deriv=2)[1:3]
 
                 vsigma = vxc0[1].T
                 u_u, u_d, d_d = fxc0[0].T  # v2rho2
@@ -1272,7 +1349,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
                 #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 aow = _scale_ao(ao, wv, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                rho1 = sigma1 = None
+                rho1 = None
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].T.conj()
@@ -1387,7 +1464,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
-    vmat = numpy.zeros((2,nset,nao,nao))
+    vmat = numpy.zeros((2,nset,nao,nao), dtype=numpy.result_type(dma, dmb))
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1399,7 +1476,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             if fxc is None:
                 rho0a = make_rho0(0, ao, mask, xctype)
                 rho0b = make_rho0(1, ao, mask, xctype)
-                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2,
+                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), spin=1,
+                                  relativity=relativity, deriv=2,
                                   verbose=verbose)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
@@ -1434,7 +1512,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 rho0a = rho0[0][:,ip:ip+ngrid]
                 rho0b = rho0[1][:,ip:ip+ngrid]
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2,
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), spin=1,
+                                        relativity=relativity, deriv=2,
                                         verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
@@ -1822,7 +1901,8 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
             rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
             rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
-    vxc, fxc = ni.eval_xc(xc_code, rho, spin, 0, 2, 0)[1:3]
+    vxc, fxc = ni.eval_xc(xc_code, rho, spin=spin, relativity=0, deriv=2,
+                          verbose=0)[1:3]
     return rho, vxc, fxc
 
 def get_rho(ni, mol, dm, grids, max_memory=2000):
@@ -1840,8 +1920,9 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
 
 
 class NumInt(object):
+    libxc = libxc
+
     def __init__(self):
-        self.libxc = libxc
         self.omega = None  # RSH paramter
 
     @lib.with_doc(nr_vxc.__doc__)
@@ -1864,8 +1945,13 @@ class NumInt(object):
             return self.nr_uks_fxc(mol, grids, xc_code, dm0, dms, relativity,
                                    hermi, rho0, vxc, fxc, max_memory, verbose)
 
+        #@lib.with_doc(nr_sap.__doc__)
+    def nr_sap(self, mol, grids, max_memory=2000, verbose=None):
+        return self.nr_sap_vxc(mol, grids, max_memory, verbose)
+
     nr_rks = nr_rks
     nr_uks = nr_uks
+    nr_sap_vxc = nr_sap_vxc
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
@@ -1890,12 +1976,14 @@ class NumInt(object):
     def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         return eval_rho(mol, ao, dm, non0tab, xctype, hermi, verbose)
 
-    def block_loop(self, mol, grids, nao, deriv=0, max_memory=2000,
+    def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None):
         '''Define this macro to loop over grids by blocks.
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
+        if nao is None:
+            nao = mol.nao
         ngrids = grids.coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
@@ -1919,7 +2007,7 @@ class NumInt(object):
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0):
         if getattr(dms, 'mo_coeff', None) is not None:
-#TODO: test whether dm.mo_coeff matching dm
+            #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
@@ -1934,7 +2022,7 @@ class NumInt(object):
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
                 dms = [dms]
             if not hermi:
-# For eval_rho when xctype==GGA, which requires hermitian DMs
+                # For eval_rho when xctype==GGA, which requires hermitian DMs
                 dms = [(dm+dm.conj().T)*.5 for dm in dms]
             nao = dms[0].shape[0]
             ndms = len(dms)

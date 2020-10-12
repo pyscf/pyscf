@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -203,6 +203,9 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
+
     time_0pass = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
 
@@ -298,7 +301,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
               nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
               iobuflen*nkl_pair*8/1e6)
 
-    klaoblks = len(fswap['0'])
+    #klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
     ao_loc = mol.ao_loc_nr('_cart' in intor)
     ti0 = time_1pass
@@ -391,6 +394,9 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
+
     intor = mol._add_suffix(intor)
     time0 = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
@@ -427,7 +433,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     else:
         fswap = lib.H5TmpFile(swapfile)
     for icomp in range(comp):
-        g = fswap.create_group(str(icomp)) # for h5py old version
+        fswap.create_group(str(icomp)) # for h5py old version
 
     log.debug('step1: tmpfile %s  %.8g MB', fswap.filename, nij_pair*nao_pair*8/1e6)
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
@@ -450,7 +456,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         fill = _ao2mo.nr_e1fill
         f_e1 = _ao2mo.nr_e1
         for istep,sh_range in enumerate(shranges):
-            log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
+            log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d',
                        istep+1, nstep, *(sh_range[:3]))
             buflen = sh_range[2]
             iobuf = numpy.ndarray((comp,buflen,nij_pair), buffer=buf2)
@@ -739,7 +745,7 @@ def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
     if max_aobuf is not None:
         max_aobuf = max(1, max_aobuf)
         def div_each_iobuf(ijstart, ijstop, buflen):
-# to fill each iobuf, AO integrals may need to be fill to aobuf several times
+            # to fill each iobuf, AO integrals may need to be fill to aobuf several times
             return (ijstart, ijstop, buflen,
                     balance_partition(dij_loc, max_aobuf, ijstart, ijstop))
         ijsh_range = [div_each_iobuf(*x) for x in ijsh_range]
@@ -773,7 +779,6 @@ del(MAX_MEMORY)
 
 if __name__ == '__main__':
     from pyscf import scf
-    from pyscf import gto
     from pyscf.ao2mo import addons
     mol = gto.Mole()
     mol.verbose = 5

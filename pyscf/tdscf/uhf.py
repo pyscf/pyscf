@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,17 +17,15 @@
 #
 
 import time
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import symm
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
+from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
@@ -69,10 +67,10 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsyma = orbsyma % 10
-        orbsymb = orbsymb % 10
-        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
-        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+        sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
@@ -80,33 +78,30 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     e_ia = hdiag = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
-    mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
-    mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(zs):
-        nz = len(zs)
+        zs = numpy.asarray(zs)
         if wfnsym is not None and mol.symmetry:
             zs = numpy.copy(zs)
             zs[:,sym_forbid] = 0
-        dmov = numpy.empty((2,nz,nao,nao))
-        for i, z in enumerate(zs):
-            za = z[:nocca*nvira].reshape(nocca,nvira)
-            zb = z[nocca*nvira:].reshape(noccb,nvirb)
-            dmov[0,i] = reduce(numpy.dot, (orboa, za, orbva.conj().T))
-            dmov[1,i] = reduce(numpy.dot, (orbob, zb, orbvb.conj().T))
 
-        v1ao = vresp(dmov)
-        v1a = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo)).reshape(-1,nocca,nvira)
-        v1b = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo)).reshape(-1,noccb,nvirb)
-        for i, z in enumerate(zs):
-            za = z[:nocca*nvira].reshape(nocca,nvira)
-            zb = z[nocca*nvira:].reshape(noccb,nvirb)
-            v1a[i] += numpy.einsum('ia,ia->ia', e_ia_a, za)
-            v1b[i] += numpy.einsum('ia,ia->ia', e_ia_b, zb)
+        za = zs[:,:nocca*nvira].reshape(-1,nocca,nvira)
+        zb = zs[:,nocca*nvira:].reshape(-1,noccb,nvirb)
+        dmova = lib.einsum('xov,po,qv->xpq', za, orboa, orbva.conj())
+        dmovb = lib.einsum('xov,po,qv->xpq', zb, orbob, orbvb.conj())
+
+        v1ao = vresp(numpy.asarray((dmova,dmovb)))
+
+        v1a = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
+        v1b = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+        v1a += numpy.einsum('xia,ia->xia', za, e_ia_a)
+        v1b += numpy.einsum('xia,ia->xia', zb, e_ia_b)
+
+        nz = zs.shape[0]
         hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
         if wfnsym is not None and mol.symmetry:
             hx[:,sym_forbid] = 0
@@ -184,8 +179,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b_ab += numpy.einsum('iajb->iajb', eri_ab[:nocc_a,nocc_a:,:nocc_b,nocc_b:])
 
     if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
-        from pyscf.dft import rks
-        from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -511,8 +504,8 @@ def analyze(tdobj, verbose=None):
 
     if mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        orbsyma = orbsyma % 10
-        x_syma = (orbsyma[mo_occ[0]==1,None] ^ orbsyma[mo_occ[0]==0]).ravel()
+        x_syma = symm.direct_prod(orbsyma[mo_occ[0]==1], orbsyma[mo_occ[0]==0], mol.groupname)
+        x_symb = symm.direct_prod(orbsymb[mo_occ[1]==1], orbsymb[mo_occ[1]==0], mol.groupname)
     else:
         x_syma = None
 
@@ -523,8 +516,12 @@ def analyze(tdobj, verbose=None):
             log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
                      i+1, e_ev[i], wave_length[i], f_oscillator[i])
         else:
-            wfnsym_id = x_syma[abs(x[0]).argmax()]
-            wfnsym = symm.irrep_id2name(mol.groupname, wfnsym_id)
+            wfnsyma = rhf.analyze_wfnsym(tdobj, x_syma, x[0])
+            wfnsymb = rhf.analyze_wfnsym(tdobj, x_symb, x[1])
+            if wfnsyma == wfnsymb:
+                wfnsym = wfnsyma
+            else:
+                wfnsym = '???'
             log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
@@ -573,10 +570,6 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     orbv_a = mo_coeff[0][:,mo_occ[0]==0]
     orbo_b = mo_coeff[1][:,mo_occ[1]==1]
     orbv_b = mo_coeff[1][:,mo_occ[1]==0]
-    nocc_a = orbo_a.shape[1]
-    nvir_a = orbv_a.shape[1]
-    nocc_b = orbo_b.shape[1]
-    nvir_b = orbv_b.shape[1]
 
     ints_a = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_a.conj(), orbv_a)
     ints_b = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_b.conj(), orbv_b)
@@ -637,24 +630,29 @@ class TDA(rhf.TDA):
         viridxb = numpy.where(mo_occ[1]==0)[0]
         e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
         e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+        e_ia_max = max(e_ia_a.max(), e_ia_b.max())
 
         if wfnsym is not None and mol.symmetry:
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mf.mo_coeff)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsyma = orbsyma % 10
-            orbsymb = orbsymb % 10
-            e_ia_a[(orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym] = 1e99
-            e_ia_b[(orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym] = 1e99
+            orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+            orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+            e_ia_a[(orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym] = 1e99
+            e_ia_b[(orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym] = 1e99
 
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
         nov = e_ia.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia)
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
+        nstates = min(nstates, nov)
+        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
+        # Handle degeneracy
+        e_threshold += 1e-6
+
+        idx = numpy.where(e_ia <= e_threshold)[0]
+        x0 = numpy.zeros((idx.size, nov))
+        for i, j in enumerate(idx):
+            x0[i, j] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None, nstates=None):
@@ -744,10 +742,10 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsyma = orbsyma % 10
-        orbsymb = orbsymb % 10
-        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
-        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+        sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
@@ -756,53 +754,51 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
-    mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
-    mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(xys):
         nz = len(xys)
+        xys = numpy.asarray(xys).reshape(nz,2,-1)
         if wfnsym is not None and mol.symmetry:
             # shape(nz,2,-1): 2 ~ X,Y
-            xys = numpy.copy(xys).reshape(nz,2,-1)
+            xys = numpy.copy(xys)
             xys[:,:,sym_forbid] = 0
-        dms = numpy.empty((2,nz,nao,nao)) # 2 ~ alpha,beta
-        for i in range(nz):
-            x, y = xys[i].reshape(2,-1)
-            xa = x[:nocca*nvira].reshape(nocca,nvira)
-            xb = x[nocca*nvira:].reshape(noccb,nvirb)
-            ya = y[:nocca*nvira].reshape(nocca,nvira)
-            yb = y[nocca*nvira:].reshape(noccb,nvirb)
-            dmx = reduce(numpy.dot, (orboa, xa, orbva.T))
-            dmy = reduce(numpy.dot, (orbva, ya.T, orboa.T))
-            dms[0,i] = dmx + dmy  # AX + BY
-            dmx = reduce(numpy.dot, (orbob, xb, orbvb.T))
-            dmy = reduce(numpy.dot, (orbvb, yb.T, orbob.T))
-            dms[1,i] = dmx + dmy  # AX + BY
 
-        v1ao  = vresp(dms)
-        v1avo = _ao2mo.nr_e2(v1ao[0], mo_a, (nocca,nmo,0,nocca))
-        v1bvo = _ao2mo.nr_e2(v1ao[1], mo_b, (noccb,nmo,0,noccb))
-        v1aov = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo))
-        v1bov = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo))
-        hx = numpy.empty((nz,2,nvira*nocca+nvirb*noccb), dtype=v1avo.dtype)
-        for i in range(nz):
-            x, y = xys[i].reshape(2,-1)
-            hx[i,0,:nvira*nocca] = v1aov[i].ravel()
-            hx[i,0,nvira*nocca:] = v1bov[i].ravel()
-            hx[i,0]+= e_ia * x  # AX
-            hx[i,1,:nvira*nocca] =-v1avo[i].reshape(nvira,nocca).T.ravel()
-            hx[i,1,nvira*nocca:] =-v1bvo[i].reshape(nvirb,noccb).T.ravel()
-            hx[i,1]-= e_ia * y  #-AY
+        xs, ys = xys.transpose(1,0,2)
+        xa = xs[:,:nocca*nvira].reshape(nz,nocca,nvira)
+        xb = xs[:,nocca*nvira:].reshape(nz,noccb,nvirb)
+        ya = ys[:,:nocca*nvira].reshape(nz,nocca,nvira)
+        yb = ys[:,nocca*nvira:].reshape(nz,noccb,nvirb)
+        # dms = AX + BY
+        dmsa  = lib.einsum('xov,po,qv->xpq', xa, orboa, orbva.conj())
+        dmsa += lib.einsum('xov,pv,qo->xpq', ya, orbva, orboa.conj())
+        dmsb  = lib.einsum('xov,po,qv->xpq', xb, orbob, orbvb.conj())
+        dmsb += lib.einsum('xov,pv,qo->xpq', yb, orbvb, orbob.conj())
 
+        v1ao = vresp(numpy.asarray((dmsa,dmsb)))
+
+        v1aov = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
+        v1bov = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+        v1avo = lib.einsum('xpq,pv,qo->xov', v1ao[0], orbva.conj(), orboa)
+        v1bvo = lib.einsum('xpq,pv,qo->xov', v1ao[1], orbvb.conj(), orbob)
+
+        v1ov = xs * e_ia  # AX
+        v1vo = ys * e_ia  # AY
+        v1ov[:,:nocca*nvira] += v1aov.reshape(nz,-1)
+        v1vo[:,:nocca*nvira] += v1avo.reshape(nz,-1)
+        v1ov[:,nocca*nvira:] += v1bov.reshape(nz,-1)
+        v1vo[:,nocca*nvira:] += v1bvo.reshape(nz,-1)
         if wfnsym is not None and mol.symmetry:
-            hx[:,:,sym_forbid] = 0
-        return hx.reshape(nz,-1)
+            v1ov[:,sym_forbid] = 0
+            v1vo[:,sym_forbid] = 0
+        hx = numpy.hstack((v1ov, -v1vo))
+        return hx
 
     return vind, hdiag
+
 
 class TDHF(TDA):
     @lib.with_doc(gen_tdhf_operation.__doc__)

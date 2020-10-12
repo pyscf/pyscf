@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -330,6 +330,26 @@ void FCIaxpy2d(double *out, double *in, size_t count, size_t no, size_t ni)
         }
 }
 
+static void _reduce(double *out, double **in, size_t count, size_t no, size_t ni)
+{
+        unsigned int nthreads = omp_get_num_threads();
+        unsigned int thread_id = omp_get_thread_num();
+        size_t blksize = (count + nthreads - 1) / nthreads;
+        size_t start = thread_id * blksize;
+        size_t end = MIN(start + blksize, count);
+        double *src;
+        size_t it, i, j;
+
+        for (it = 0; it < nthreads; it++) {
+                src = in[it];
+                for (i = start; i < end; i++) {
+                        for (j = 0; j < ni; j++) {
+                                out[i*no+j] += src[i*ni+j];
+                        }
+                }
+        }
+}
+
 /*
  * nlink = nocc*nvir, num. all possible strings that a string can link to
  * link_index[str0] == linking map between str0 and other strings
@@ -366,9 +386,11 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                                        strk, ib, norb, na, na, nlink, nlink,
                                        clink, clink);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
+#pragma omp barrier
+                _reduce(ci1+ib, ci1bufs, na, na, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_rhf2e_kern
 #pragma omp barrier
@@ -408,9 +430,11 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
+                _reduce(ci1+ib, ci1bufs, na, nb, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_rhf2e_kern
 #pragma omp barrier
@@ -492,9 +516,11 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
+                _reduce(ci1+ib, ci1bufs, na, nb, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_uhf2e_kern
 #pragma omp barrier
@@ -787,9 +813,11 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
                                            nnorb, nb_intermediate, na, nb,
                                            nlinka, nlinkb, clinka, clinkb);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
+                _reduce(ci1aa+ib, ci1bufs, na, nb, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_rhf2esym_kern1
 #pragma omp barrier

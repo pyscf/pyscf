@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ J. Chem. Phys. 147, 164119 (2017)
 
 import copy
 import numpy
+from pyscf.lib import logger
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import aft_jk
 
@@ -73,6 +74,10 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
+    if exxdiv is not None and exxdiv != 'ewald':
+        logger.warn(mydf, 'MDF does not support exxdiv %s. '
+                    'exxdiv needs to be "ewald" or None', exxdiv)
+        raise RuntimeError('GDF does not support exxdiv %s' % exxdiv)
     vk_kpts = aft_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, exxdiv)
     vk_kpts += df_jk.get_k_kpts(mydf, dm_kpts, hermi, kpts, kpts_band, None)
     return vk_kpts

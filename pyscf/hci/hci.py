@@ -25,6 +25,7 @@ Simple usage::
 
 '''
 
+import sys
 import numpy
 import time
 import ctypes
@@ -299,10 +300,9 @@ def excitation_level(string, nelec=None):
     return tn
 
 def find1(s):
-    return [i for i,x in enumerate(bin(s)[2:][::-1]) if x is '1']
+    return [i for i,x in enumerate(bin(s)[2:][::-1]) if x == '1']
 
 def toggle_bit(s, place):
-    nset = len(s)
     g, b = place//64, place%64
     s[-1-g] ^= numpy.uint64(1<<b)
     return s
@@ -641,8 +641,8 @@ def from_fci(fcivec, ci_strs, norb, nelec):
     na = len(stradic)
     nb = len(strbdic)
     fcivec = fcivec.reshape(na,nb)
-    ta = [excitation_level(s, neleca) for s in strsa.reshape(-1,1)]
-    tb = [excitation_level(s, nelecb) for s in strsb.reshape(-1,1)]
+    #ta = [excitation_level(s, neleca) for s in strsa.reshape(-1,1)]
+    #tb = [excitation_level(s, nelecb) for s in strsb.reshape(-1,1)]
     ndet = len(ci_strs)
     civec = numpy.zeros(ndet)
     for idet, (stra, strb) in enumerate(ci_strs.reshape(ndet,2,-1)):

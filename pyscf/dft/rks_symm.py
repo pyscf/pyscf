@@ -20,7 +20,6 @@
 Non-relativistic Restricted Kohn-Sham
 '''
 
-from pyscf.lib import logger
 from pyscf.scf import hf_symm
 from pyscf.dft import rks
 from pyscf.dft import uks
@@ -28,9 +27,9 @@ from pyscf.dft import uks
 
 class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         hf_symm.RHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         hf_symm.RHF.dump_flags(self, verbose)
@@ -38,7 +37,12 @@ class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
         return self
 
     get_veff = rks.get_veff
+    get_vsap = rks.get_vsap
     energy_elec = rks.energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
+
+    reset = rks.KohnShamDFT.reset
 
     def nuc_grad_method(self):
         from pyscf.grad import rks
@@ -49,9 +53,9 @@ RKS = SymAdaptedRKS
 
 class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         hf_symm.ROHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         hf_symm.ROHF.dump_flags(self, verbose)
@@ -59,7 +63,12 @@ class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
         return self
 
     get_veff = uks.get_veff
+    get_vsap = rks.get_vsap
     energy_elec = uks.energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
+
+    reset = rks.KohnShamDFT.reset
 
     def nuc_grad_method(self):
         from pyscf.grad import roks

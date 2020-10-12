@@ -37,7 +37,7 @@ from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
 from pyscf import __config__
@@ -154,6 +154,9 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if s_kpts is None: s_kpts = mf.get_ovlp()
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
+        f_kpts = [mol_hf.damping(s1e, dm_kpts[k] * 0.5, f_kpts[k], \
+                damp_factor) for k, s1e in enumerate(s_kpts)]
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -271,9 +274,6 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
-    from pyscf.lo import orth
-    from pyscf.tools import dump_mat
-
     mf.dump_scf_summary(verbose)
 
     mo_occ = mf.mo_occ
@@ -367,7 +367,7 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
     if grids is None:
         grids = gen_grid.UniformGrids(cell)
     if rho is None:
-        rho = numint.KNumInt().get_rho(cell, dm, grids, kpts, cell.max_memory)
+        rho = numint.KNumInt().get_rho(cell, dm_kpts, grids, kpts, cell.max_memory)
     return pbchf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
 
 def get_rho(mf, dm=None, grids=None, kpts=None):
@@ -385,6 +385,58 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
         kpts = mf.kpts
     ni = numint.KNumInt()
     return ni.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
+
+def as_scanner(mf):
+    import copy
+    if isinstance(mf, lib.SinglePointScanner):
+        return mf
+
+    logger.info(mf, 'Create scanner for %s', mf.__class__)
+
+    class SCF_Scanner(mf.__class__, lib.SinglePointScanner):
+        def __init__(self, mf_obj):
+            self.__dict__.update(mf_obj.__dict__)
+
+        def __call__(self, cell_or_geom, **kwargs):
+            from pyscf.pbc import gto
+            if isinstance(cell_or_geom, gto.Cell):
+                cell = cell_or_geom
+            else:
+                cell = self.cell.set_geom_(cell_or_geom, inplace=False)
+
+            # Cleanup intermediates associated to the pervious mol object
+            self.reset(cell)
+
+            if 'dm0' in kwargs:
+                dm0 = kwargs.pop('dm0')
+            elif self.mo_coeff is None:
+                dm0 = None
+            elif self.chkfile and h5py.is_hdf5(self.chkfile):
+                dm0 = self.from_chk(self.chkfile)
+            else:
+                dm0 = self.make_rdm1()
+                # dm0 form last calculation cannot be used in the current
+                # calculation if a completely different system is given.
+                # Obviously, the systems are very different if the number of
+                # basis functions are different.
+                # TODO: A robust check should include more comparison on
+                # various attributes between current `mol` and the `mol` in
+                # last calculation.
+                if dm0.shape[-1] != cell.nao_nr():
+                    #TODO:
+                    #from pyscf.scf import addons
+                    #if numpy.any(last_mol.atom_charges() != mol.atom_charges()):
+                    #    dm0 = None
+                    #elif non-relativistic:
+                    #    addons.project_dm_nr2nr(last_mol, dm0, last_mol)
+                    #else:
+                    #    addons.project_dm_r2r(last_mol, dm0, last_mol)
+                    dm0 = None
+            self.mo_coeff = None  # To avoid last mo_coeff being used by SOSCF
+            e_tot = self.kernel(dm0=dm0, **kwargs)
+            return e_tot
+
+    return SCF_Scanner(mf)
 
 
 class KSCF(pbchf.SCF):
@@ -712,6 +764,8 @@ class KSCF(pbchf.SCF):
         '''Convert the input mean-field object to a KGHF/KGKS object'''
         return addons.convert_to_ghf(mf)
 
+    as_scanner = as_scanner
+
 
 class KRHF(KSCF, pbchf.RHF):
     def check_sanity(self):
@@ -725,6 +779,10 @@ class KRHF(KSCF, pbchf.RHF):
         '''Convert given mean-field object to KRHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import krhf
+        return krhf.Gradients(self)
 
 del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
@@ -744,4 +802,3 @@ if __name__ == '__main__':
     mf = KRHF(cell, [2,1,1])
     mf.kernel()
     mf.analyze()
-

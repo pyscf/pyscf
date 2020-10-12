@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,15 +120,15 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
     (80, 80)
 
     '''
-    log = logger.new_logger(sys, verbose)
-
     nao = mo_coeffs[0].shape[0]
-    nao_pair = nao*(nao+1)//2
 
     if eri_ao.size == nao**4:
         return lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
                           mo_coeffs[0].conj(), mo_coeffs[1],
                           mo_coeffs[2].conj(), mo_coeffs[3])
+
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
 
 # transform e1
     eri1 = half_e1(eri_ao, mo_coeffs, compact)
@@ -187,6 +187,9 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     >>> print(eri1.shape)
     (55, 28)
     '''
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
+
     eri_ao = numpy.asarray(eri_ao, order='C')
     nao, nmoi = mo_coeffs[0].shape
     nmoj = mo_coeffs[1].shape[1]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,11 +47,67 @@ n2sym = gto.M(
     basis = 'cc-pvdz')
 n2mf = scf.RHF(n2sym).set(conv_tol=1e-10).run()
 
+re_basis = '''
+Re    S
+     30.4120000              0.0229870             -0.0072090              0.0008190             -0.0059360
+     19.0142000             -0.1976360              0.0645740              0.0437380             -0.0062770
+     11.8921000              0.5813760             -0.1963520             -0.1772190              0.0754730
+      7.4336100             -0.3840040              0.1354270              0.0197240              0.0512310
+      4.1811300             -0.6002800              0.2175540              0.5658650             -0.5040200
+      1.1685700              0.8264270             -0.3902690             -1.1960450              1.6252170
+      0.5539770              0.5102290             -0.3723360             -0.0926010             -1.6511890
+      0.1707810              0.0365510              0.2672200              2.2639340              0.1479060
+      0.0792870             -0.0087660              0.6716710             -1.0605870              0.9643860
+Re    S
+      1.5774000              1.0000000
+Re    P
+     18.3488000             -0.0168770              0.0046080              0.0073690              0.0150340
+     11.4877000              0.0929150             -0.0268720             -0.0437140             -0.0837840
+      5.4325600             -0.2914010              0.0889710              0.1463200              0.2804860
+      1.3785900              0.4982270             -0.1794810             -0.3009630             -0.8342650
+      0.6887660              0.4796070             -0.2111050             -0.4000020             -0.4202230
+      0.3380830              0.1752920             -0.0043780              0.1900900              1.7104440
+      0.1491600              0.0173410              0.3822050              0.7604950             -0.3011560
+      0.0643210              0.0013480              0.5438540              0.2562560             -0.7920800
+Re    P
+      2.0752000              1.0000000
+Re    D
+     13.8248000             -0.0010140              0.0014410             -0.0008920
+      8.6358600              0.0200690             -0.0233020              0.0318260
+      5.3969500             -0.0709260              0.0813920             -0.1289560
+      1.4943200              0.2136340             -0.2826220              0.6891180
+      0.7134790              0.3740960             -0.4844350              0.2530110
+      0.3249100              0.3691180              0.0772300             -1.1068680
+      0.1398360              0.2324990              0.6339580              0.1625610
+Re    D
+      2.5797000              1.0000000
+Re    F
+      1.6543000              1.0000000
+Re    G
+      1.8871000              1.0000000
+      '''
+re_ecp1 = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = 'Re',
+    spin = None,
+    ecp = 'lanl2dz',
+    basis = re_basis)
+re_ecp2 = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = 'Re',
+    spin = None,
+    ecp = {'Re': gto.basis.load_ecp('lanl2dz', 'Zn')},
+    basis = re_basis)
+
 def tearDownModule():
-    global mol, mf, n2sym, n2mf
+    global mol, mf, n2sym, n2mf, re_ecp1, re_ecp2
     mol.stdout.close()
+    re_ecp1.stdout.close()
+    re_ecp2.stdout.close()
     n2sym.stdout.close()
-    del mol, mf, n2sym, n2mf
+    del mol, mf, n2sym, n2mf, re_ecp1, re_ecp2
 
 
 class KnownValues(unittest.TestCase):
@@ -66,20 +122,38 @@ class KnownValues(unittest.TestCase):
             basis = 'ccpvdz',
         )
         dm = scf.hf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 2.5912875957299684, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 9)
 
         mol1 = gto.M(atom='Mo', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
         dm = scf.hf.get_init_guess(mol1, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 1.5371195992125495, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.0674886928183507, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 14, 9)
 
         mol1.basis = 'sto3g'
         mol1.build(0, 0)
         dm = scf.hf.get_init_guess(mol1, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 1.8936729909734513, 9)
-        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 13.4787347477, 7)
+        self.assertAlmostEqual(lib.fp(dm), 1.3085066548762425, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 13.60436071945, 7)
         mol1.stdout.close()
+
+        mol.atom = [["O" , (0. , 0.     , 0.)],
+                    ['ghost-H'   , (0. , -0.757, 0.587)],
+                    [1   , (0. , 0.757 , 0.587)] ]
+        mol.spin = 1
+        mol.build(0, 0)
+        dm = scf.hf.get_init_guess(mol, key='minao')
+        self.assertAlmostEqual(lib.fp(dm), 2.9572305128956238, 9)
+
+    def test_init_guess_minao_with_ecp(self):
+        s = re_ecp1.intor('int1e_ovlp')
+        dm = scf.hf.get_init_guess(re_ecp1, key='minao')
+        self.assertAlmostEqual(lib.fp(dm), -8.0310571101329202, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 15, 9)
+
+        dm = scf.hf.get_init_guess(re_ecp2, key='minao')
+        self.assertAlmostEqual(lib.fp(dm), -9.0532680910696772, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 31.804465975542513, 9)
 
     def test_init_guess_atom(self):
         mol = gto.M(
@@ -92,17 +166,56 @@ class KnownValues(unittest.TestCase):
             basis = 'ccpvdz',
         )
         dm = scf.hf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.finger(dm), 2.7458577873928842, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.78218274161741, 9)
 
         dm = scf.ROHF(mol).init_guess_by_atom()
-        self.assertAlmostEqual(lib.finger(dm[0]), 2.7458577873928842/2, 9)
+        self.assertAlmostEqual(lib.fp(dm[0]), 2.78218274161741/2, 9)
+
+        mol.atom = [["O" , (0. , 0.     , 0.)],
+                    ['ghost-H'   , (0. , -0.757, 0.587)],
+                    [1   , (0. , 0.757 , 0.587)] ]
+        mol.spin = 1
+        mol.build(0, 0)
+        dm = scf.hf.get_init_guess(mol, key='atom')
+        self.assertAlmostEqual(lib.fp(dm), 3.0813279501879838, 9)
+
+        mol.basis = {'h': '3-21g'}
+        mol.build(0, 0)
+        dm = scf.hf.get_init_guess(mol, key='atom')
+        self.assertEqual(dm.shape, (4, 4))
+        self.assertEqual(abs(dm[:2,:2]).max(), 0)
+        self.assertAlmostEqual(lib.fp(dm), -0.47008362287778827, 9)
+
+    def test_init_guess_atom_with_ecp(self):
+        s = re_ecp1.intor('int1e_ovlp')
+        dm = scf.hf.get_init_guess(re_ecp1, key='atom')
+        self.assertAlmostEqual(lib.fp(dm), -4.822111004225718, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 15, 9)
+
+        dm = scf.hf.get_init_guess(re_ecp2, key='atom')
+        self.assertAlmostEqual(lib.fp(dm), -14.083500177270547, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 57, 9)
 
     def test_init_guess_chk(self):
         dm = scf.hf.SCF(mol).get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.finger(dm), 2.5912875957299684, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 9)
 
         dm = mf.get_init_guess(mol, key='chkfile')
-        self.assertAlmostEqual(lib.finger(dm), 3.2111753674560535, 9)
+        self.assertAlmostEqual(lib.fp(dm), 3.2111753674560535, 9)
+
+    def test_init_guess_huckel(self):
+        dm = scf.hf.RHF(mol).get_init_guess(mol, key='huckel')
+        self.assertAlmostEqual(lib.fp(dm), 3.348165771345748, 9)
+
+        dm = scf.ROHF(mol).init_guess_by_huckel()
+        self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 9)
+
+        # Initial guess Huckel is not able to handle open-shell system
+        mol1 = gto.M(atom='Mo 0 0 0; C 0 0 1', basis='lanl2dz', ecp='lanl2dz',
+                     verbose=7, output='/dev/null')
+        dm = scf.hf.get_init_guess(mol1, key='huckel')
+        self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 20, 9)
 
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
@@ -168,7 +281,7 @@ class KnownValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='minao')
         self.assertAlmostEqual(abs(pop).sum(), 22.098274261783196, 7)
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='scf')
-        self.assertAlmostEqual(abs(pop).sum(), 22.117869619510266, 7)
+        self.assertAlmostEqual(abs(pop).sum(), 22.15309316506852, 7)
 
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, [dm*.5]*2, pre_orth_method='ano')
         self.assertAlmostEqual(abs(pop).sum(), 22.048073484937646, 7)
@@ -202,6 +315,32 @@ class KnownValues(unittest.TestCase):
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+    def test_scf_negative_spin(self):
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.ROHF(mol).run(conv_tol=1e-10)
+        self.assertAlmostEqual(mf.mo_occ[4], 1, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.723654936331599, 9)
+
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            symmetry = 1,
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.ROHF(mol).set(conv_tol=1e-10)
+        mf.irrep_nelec = {'A1': (2, 3)}
+        mf.run()
+        self.assertAlmostEqual(mf.mo_occ[4], 1, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.561433366671935, 9)
 
     def test_nr_rhf_cart(self):
         pmol = mol.copy()
@@ -267,7 +406,7 @@ H     0    0.757    0.587'''
 
         vhf4 = mf1.get_veff(pmol, dm, hermi=0)
         self.assertEqual(vhf4.ndim, 4)
-        self.assertAlmostEqual(lib.finger(vhf4), 4.9026999849223287, 12)
+        self.assertAlmostEqual(lib.fp(vhf4), 4.9026999849223287, 12)
         self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
 
     def test_hf_symm(self):
@@ -384,7 +523,6 @@ H     0    0.757    0.587'''
         self.assertTrue(numpy.allclose(mf.get_occ(energy, mo_coeff),
                 [0, 2, 0, 0, 0, 0, 2, 0, 2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 
-        mo_coeff = numpy.eye(energy.size)
         self.assertTrue(numpy.allclose(mf.get_occ(energy),
                 [0, 2, 0, 0, 0, 0, 2, 0, 2, 2, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2]))
 
@@ -453,6 +591,21 @@ H     0    0.757    0.587'''
         mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
         self.assertRaises(ValueError, mf.build)
 
+        mf.irrep_nelec = {'A1g':(4,2), 'A1u': (2, 4)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(4,2), 'A1u': (3, 2)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(4,6)}
+        self.assertRaises(ValueError, mf.build)
+
+        pmol.spin = -2
+        mf.irrep_nelec = {'A1g':(4,2), 'A1u': (2, 4)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(2,4), 'A1u': (2, 3)}
+        self.assertRaises(ValueError, mf.build)
+        mf.irrep_nelec = {'A1g':(6,4)}
+        self.assertRaises(ValueError, mf.build)
+
     def test_rhf_dip_moment(self):
         dip = mf.dip_moment(unit='au')
         self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
@@ -504,10 +657,10 @@ H     0    0.757    0.587'''
         mf1 = scf.RHF(mol)
         mf1.chkfile = None
         mf1.newton().kernel()
-        mf1.apply('CISD').run()
-        mf1.apply('CCSD').run()
+        #mf1.apply('CISD').run()
+        #mf1.apply('CCSD').run()
         mf1.apply('TDHF').run()
-        mf1.apply('CASSCF', 2, 2).run()
+        #mf1.apply('CASSCF', 2, 2).run()
         mf1.nuc_grad_method().run()
 
     def test_as_scanner(self):
@@ -540,7 +693,7 @@ H     0    0.757    0.587'''
         for i in range(3):
             mf._eri[i,i,i,i] = .2
         dm = mf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(lib.finger(dm), 2., 9)
+        self.assertAlmostEqual(lib.fp(dm), 2., 9)
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, 0.2, 9)
 
@@ -625,7 +778,7 @@ H     0    0.757    0.587'''
         n2_rohf.irrep_nelec['E2ux'] = 0
         n2_rohf.irrep_nelec['E2uy'] = 0
         self.assertRaises(ValueError, n2_rohf.build)
-        n2_rohf.irrep_nelec['A1g'] = (4,2)
+        n2_rohf.irrep_nelec['A1g'] = (2,0)
         self.assertRaises(ValueError, n2_rohf.build)
         n2_rohf.irrep_nelec['A1g'] = (0,2)
         self.assertRaises(ValueError, n2_rohf.build)
@@ -663,7 +816,7 @@ H     0    0.757    0.587'''
         mf1.opt.prescreen = 'CVHFnoscreen'
         self.assertEqual(mf1.opt.prescreen, scf._vhf._fpointer('CVHFnoscreen').value)
 
-    def test_get_vk(self):
+    def test_get_vk_direct_scf(self):
         numpy.random.seed(1)
         nao = mol.nao
         dm = numpy.random.random((nao,nao))
@@ -671,9 +824,9 @@ H     0    0.757    0.587'''
 
         mf1 = scf.RHF(mol)
         mf1.max_memory = 0
-        vk2 = mf1.get_k(mol, dm)
+        vk2 = mf1.get_k(mol, dm, hermi=0)
         self.assertAlmostEqual(abs(vk1 - vk2).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vk1), -12.365527167710301, 12)
+        self.assertAlmostEqual(lib.fp(vk1), -12.365527167710301, 12)
 
     def test_get_vj_lr(self):
         numpy.random.seed(1)
@@ -685,7 +838,7 @@ H     0    0.757    0.587'''
         mf1.max_memory = 0
         vj2 = mf1.get_j(mol, dm, omega=1.5)
         self.assertAlmostEqual(abs(vj1 - vj2).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vj1), -10.015956161068031, 12)
+        self.assertAlmostEqual(lib.fp(vj1), -10.015956161068031, 12)
 
     def test_get_vk_lr(self):
         numpy.random.seed(1)
@@ -697,9 +850,49 @@ H     0    0.757    0.587'''
         mf1.max_memory = 0
         vk2 = mf1.get_k(mol, dm, hermi=0, omega=1.5)
         self.assertAlmostEqual(abs(vk1 - vk2).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vk1), -11.399103957754445, 12)
+        self.assertAlmostEqual(lib.fp(vk1), -11.399103957754445, 12)
+
+    def test_reset(self):
+        mf = scf.RHF(mol).density_fit().x2c().newton()
+        mf.reset(n2sym)
+        self.assertTrue(mf.mol is n2sym)
+        self.assertTrue(mf._scf.mol is n2sym)
+        self.assertTrue(mf.with_df.mol is n2sym)
+        self.assertTrue(mf.with_x2c.mol is n2sym)
+        self.assertTrue(mf._scf.with_df.mol is n2sym)
+        self.assertTrue(mf._scf.with_x2c.mol is n2sym)
+
+    def test_schwarz_condition(self):
+        mol = gto.M(atom='''
+                    H    0   0   0
+                    H    0   0   4.
+                    ''', unit='B',
+                    basis = [[0, (2.7, 1)], [0, (1e2, 1)]])
+        mf = scf.RHF(mol)
+        mf.direct_scf_tol = 1e-18
+        opt = mf.init_direct_scf()
+        shls = i, j, k, l = 0, 2, 3, 3
+        q = opt.q_cond
+        self.assertTrue(mol.intor_by_shell('int2e', shls).ravel()[0] < q[i,j] * q[k,l])
+
+        mol = gto.M(atom='''
+                    H    0   0   0
+                    H    0   0   6
+                    ''', unit='B',
+                    basis = [[0, (.6, 1)], [0, (1e3, 1)]])
+        omega = 5.
+        with mol.with_short_range_coulomb(5.):
+            mf = scf.RHF(mol)
+            mf.direct_scf_tol = 1e-18
+            opt = mf.init_direct_scf()
+            shls = i, j, k, l = 2, 0, 1, 1
+            q = opt.q_cond
+            eri = mol.intor('int2e')
+            self.assertTrue(eri[shls] < q[i,j] * q[k,l])
+            self.assertTrue(eri[shls] < eri[i,i,k,k]**.5 * eri[j,j,l,l]**.5)
+            self.assertTrue(eri[shls] < eri[i,i,l,l]**.5 * eri[j,j,k,k]**.5)
+
 
 if __name__ == "__main__":
     print("Full Tests for rhf")
     unittest.main()
-

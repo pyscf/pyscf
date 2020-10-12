@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,12 +29,11 @@ import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc import kintermediates_rhf as imdk
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-from pyscf.lib import linalg_helper
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -63,8 +62,8 @@ def update_amps(cc, t1, t2, eris):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:]
-    foo = fock[:, :nocc, :nocc]
-    fvv = fock[:, nocc:, nocc:]
+    #foo = fock[:, :nocc, :nocc]
+    #fvv = fock[:, nocc:, nocc:]
 
     kconserv = cc.khelper.kconserv
 
@@ -497,7 +496,7 @@ def kconserve_pmatrix(nkpts, kconserv):
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
@@ -505,7 +504,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.ip_partition = None
         self.ea_partition = None
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
-        
+
         ##################################################
         # don't modify the following attributes, unless you know what you are doing
         self.keep_exxdiv = False
@@ -610,11 +609,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         if mbpt2:
-            cctyp = 'MBPT2'
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
 
-        cctyp = 'CCSD'
         self.converged, self.e_corr, self.t1, self.t2 = \
             kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                    tol=self.conv_tol, tolnormt=self.conv_tol_normt,
@@ -714,7 +711,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
         cput0 = (time.clock(), time.time())
-        moidx = get_frozen_mask(cc)
         cell = cc._scf.cell
         kpts = cc.kpts
         nkpts = cc.nkpts
@@ -738,10 +734,12 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         with lib.temporary_env(cc._scf, exxdiv=exxdiv):
             # _scf.exxdiv affects eris.fock. HF exchange correction should be
             # excluded from the Fock matrix.
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+            vhf = cc._scf.get_veff(cell, dm)
+        fockao = cc._scf.get_hcore() + vhf
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
-        
+        self.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
+
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
 
         if not cc.keep_exxdiv:
@@ -944,7 +942,7 @@ def _init_df_eris(cc, eris):
 
     kpts = cc.kpts
     nkpts = len(kpts)
-    naux = cc._scf.with_df.get_naoaux()
+    #naux = cc._scf.with_df.get_naoaux()
     if gamma_point(kpts):
         dtype = np.double
     else:
@@ -1098,13 +1096,12 @@ def _mem_usage(nkpts, nocc, nvir):
     return incore * 16 / 1e6, outcore * 16 / 1e6, basic * 16 / 1e6
 
 
-from pyscf.pbc import scf
 scf.khf.KRHF.CCSD = lib.class_as_method(KRCCSD)
 scf.krohf.KROHF.CCSD = None
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto, cc
 
     cell = gto.Cell()
     cell.atom = '''

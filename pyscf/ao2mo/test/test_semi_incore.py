@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,6 +69,12 @@ class KnowValues(unittest.TestCase):
         io_size = nao**2*4e-5
 
         semi_incore.general(eri, [mo]*4, tmpfile.name, ioblk_size=io_size)
+        with ao2mo.load(tmpfile) as eri_mo:
+            self.assertAlmostEqual(abs(eriref - eri_mo.value).max(), 0, 9)
+
+        io_size = nao**2*4e-5
+        eri_4fold = ao2mo.restore(4, eri, nao)
+        semi_incore.general(eri_4fold, [mo]*4, tmpfile.name, ioblk_size=io_size)
         with ao2mo.load(tmpfile) as eri_mo:
             self.assertAlmostEqual(abs(eriref - eri_mo.value).max(), 0, 9)
 

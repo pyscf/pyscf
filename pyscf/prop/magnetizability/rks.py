@@ -27,10 +27,8 @@ Refs:
 
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.scf import jk
 from pyscf.dft import numint
-from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.nmr import rks as rks_nmr
 from pyscf.prop.magnetizability import rhf as rhf_mag
 
@@ -96,7 +94,7 @@ def dia(magobj, gauge_orig=None):
 
             aow = numpy.einsum('npxi,np->pxi', r_ao, wv)
             vmat += lib.einsum('pxi,pyj->xyij', r_ao[0], aow)
-            rho = vxc = vrho = vsigma = wv = aow = None
+            rho = vxc = vrho = wv = aow = None
 
         vmat = vmat + vmat.transpose(0,1,3,2)
 

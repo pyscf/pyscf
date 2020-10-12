@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import sys
 import copy
 from functools import reduce
 import numpy
@@ -27,6 +26,7 @@ import scipy.optimize
 from pyscf import lib
 from pyscf.pbc import gto as pbcgto
 from pyscf.lib import logger
+from pyscf.scf import addons as mol_addons
 from pyscf import __config__
 
 SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
@@ -56,9 +56,12 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
 def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
     '''Fermi-Dirac or Gaussian smearing'''
     from pyscf.scf import uhf
+    from pyscf.scf import ghf
     from pyscf.pbc.scf import khf
     mf_class = mf.__class__
     is_uhf = isinstance(mf, uhf.UHF)
+    is_ghf = isinstance(mf, ghf.GHF)
+    is_rhf = (not is_uhf) and (not is_ghf)
     is_khf = isinstance(mf, khf.KSCF)
 
     def fermi_smearing_occ(m, mo_energy_kpts, sigma):
@@ -67,7 +70,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
         return occ
     def gaussian_smearing_occ(m, mo_energy_kpts, sigma):
-        return .5 - .5*scipy.special.erf((mo_energy_kpts-m)/sigma)
+        return 0.5 * scipy.special.erfc((mo_energy_kpts - m) / sigma)
 
     def partition_occ(mo_occ, mo_energy_kpts):
         mo_occ_kpts = []
@@ -84,7 +87,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         This is a k-point version of scf.hf.SCF.get_occ
         '''
         mo_occ_kpts = mf_class.get_occ(mf, mo_energy_kpts, mo_coeff_kpts)
-        if mf.sigma == 0 or not mf.sigma or not mf.smearing_method:
+        if (mf.sigma == 0) or (not mf.sigma) or (not mf.smearing_method):
             return mo_occ_kpts
 
         if is_khf:
@@ -96,6 +99,9 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             nocc = nelectron
             mo_es = numpy.append(numpy.hstack(mo_energy_kpts[0]),
                                  numpy.hstack(mo_energy_kpts[1]))
+        elif is_ghf:
+            nocc = nelectron
+            mo_es = numpy.hstack(mo_energy_kpts)
         else:
             nocc = nelectron // 2
             mo_es = numpy.hstack(mo_energy_kpts)
@@ -113,7 +119,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         if mu0 is None:
             def nelec_cost_fn(m):
                 mo_occ_kpts = f_occ(m, mo_es, sigma)
-                if not is_uhf:
+                if is_rhf:
                     mo_occ_kpts *= 2
                 return (mo_occ_kpts.sum() - nelectron)**2
             res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
@@ -131,7 +137,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         else:
             mf.entropy = (numpy.exp(-((mo_es-mu)/mf.sigma)**2).sum()
                           / (2*numpy.sqrt(numpy.pi)) / nkpts)
-        if not is_uhf:
+        if is_rhf:
             mo_occs *= 2
             mf.entropy *= 2
 
@@ -144,7 +150,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
                               partition_occ(mo_occs[nao_tot:], mo_energy_kpts[1]))
             else:
                 mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
-        else:
+        else: # rhf and ghf
             if is_khf:
                 mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
             else:
@@ -171,7 +177,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             return f_mo[numpy.tril_indices(nmo, -1)]
 
     def get_grad(mo_coeff_kpts, mo_occ_kpts, fock=None):
-        if mf.sigma == 0 or not mf.sigma or not mf.smearing_method:
+        if (mf.sigma == 0) or (not mf.sigma) or (not mf.smearing_method):
             return mf_class.get_grad(mf, mo_coeff_kpts, mo_occ_kpts, fock)
         if fock is None:
             dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
@@ -180,7 +186,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             ga = get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
             gb = get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
             return numpy.hstack((ga,gb))
-        else:
+        else: # rhf and ghf
             return get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
 
     def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
@@ -256,7 +262,6 @@ def convert_to_uhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding unrestricted
     HF/KS object
     '''
-    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
     from pyscf.pbc import dft
 
@@ -278,7 +283,9 @@ def convert_to_uhf(mf, out=None):
                          dft.roks.ROKS  : dft.uks.UKS  ,
                          scf.hf.RHF     : scf.uhf.UHF  ,
                          scf.rohf.ROHF  : scf.uhf.UHF  ,}
-            out = mol_addons._object_without_soscf(mf, known_cls, False)
+            # .with_df should never be removed or changed during the conversion.
+            # It is needed to compute JK matrix in all pbc SCF objects
+            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
     else:
         assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
         if isinstance(mf, scf.khf.KSCF):
@@ -286,13 +293,16 @@ def convert_to_uhf(mf, out=None):
         else:
             assert(not isinstance(out, scf.khf.KSCF))
 
-    return mol_addons.convert_to_uhf(mf, out, False)
+    out = mol_addons.convert_to_uhf(mf, out, False)
+    # Manually update .with_df because this attribute may not be passed to the
+    # output object correctly in molecular convert function
+    out.with_df = mf.with_df
+    return out
 
 def convert_to_rhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding restricted
     HF/KS object
     '''
-    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
     from pyscf.pbc import dft
 
@@ -338,9 +348,15 @@ def convert_to_rhf(mf, out=None):
                              scf.kuhf.KUHF : scf.khf.KROHF ,
                              dft.uks.UKS   : dft.rks.ROKS  ,
                              scf.uhf.UHF   : scf.hf.ROHF   }
-            out = mol_addons._object_without_soscf(mf, known_cls, False)
+            # .with_df should never be removed or changed during the conversion.
+            # It is needed to compute JK matrix in all pbc SCF objects
+            out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
 
-    return mol_addons.convert_to_rhf(mf, out, False)
+    out = mol_addons.convert_to_rhf(mf, out, False)
+    # Manually update .with_df because this attribute may not be passed to the
+    # output object correctly in molecular convert function
+    out.with_df = mf.with_df
+    return out
 
 def convert_to_ghf(mf, out=None):
     '''Convert the given mean-field object to the generalized HF/KS object
@@ -351,7 +367,6 @@ def convert_to_ghf(mf, out=None):
     Returns:
         An generalized SCF object
     '''
-    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
 
     if out is not None:
@@ -423,12 +438,35 @@ def convert_to_ghf(mf, out=None):
     else:
         if out is None:
             out = scf.ghf.GHF(mf.cell)
-        return mol_addons.convert_to_ghf(mf, out, False)
+        out = mol_addons.convert_to_ghf(mf, out, remove_df=False)
+        # Manually update .with_df because this attribute may not be passed to the
+        # output object correctly in molecular convert function
+        out.with_df = mf.with_df
+        return out
 
 def convert_to_khf(mf, out=None):
     '''Convert gamma point SCF object to k-point SCF object
     '''
-    raise NotImplementedError
+    from pyscf.pbc import scf, dft
+    if not isinstance(mf, scf.khf.KSCF):
+        known_cls = {dft.uks.UKS   : dft.kuks.KUKS,
+                     scf.uhf.UHF   : scf.kuhf.KUHF,
+                     dft.rks.RKS   : dft.krks.KRKS,
+                     scf.hf.RHF    : scf.khf.KRHF,
+                     dft.roks.ROKS : dft.kroks.KROKS,
+                     scf.rohf.ROHF : scf.krohf.KROHF,
+                     #TODO: dft.gks.GKS   : dft.kgks.KGKS,
+                     scf.ghf.GHF   : scf.kghf.KGHF}
+        # Keep the attribute with_df
+        with_df = mf.with_df
+        mf = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
+        mf.with_df = with_df
+
+    if out is None:
+        return mf
+    else:
+        out.__dict__.update(mf.__dict__)
+        return out
 
 del(SMEARING_METHOD)
 

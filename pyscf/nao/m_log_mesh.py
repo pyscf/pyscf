@@ -99,7 +99,9 @@ def log_mesh(nr, rmin, rmax, kmax=None):
 #
 #
 class log_mesh_c():
-  ''' Constructor of the log grid used with NAOs.'''
+  '''
+  Constructor of the log grid used with NAOs.
+  '''
   def __init__(self):
     self.state = 'call an initialize method...'
     return

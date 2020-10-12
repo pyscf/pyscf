@@ -33,6 +33,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
+from pyscf import __config__
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -128,12 +129,13 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return rho
 
 
-class KRKS(khf.KRHF, rks.KohnShamDFT):
+class KRKS(rks.KohnShamDFT, khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3))):
-        khf.KRHF.__init__(self, cell, kpts)
-        rks.KohnShamDFT.__init__(self)
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        khf.KRHF.__init__(self, cell, kpts, exxdiv=exxdiv)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         khf.KRHF.dump_flags(self, verbose)
@@ -161,6 +163,10 @@ class KRKS(khf.KRHF, rks.KohnShamDFT):
 
     density_fit = rks._patch_df_beckegrids(khf.KRHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(khf.KRHF.mix_density_fit)
+
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import krks
+        return krks.Gradients(self)
 
 
 if __name__ == '__main__':

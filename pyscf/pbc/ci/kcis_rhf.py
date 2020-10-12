@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,15 +23,13 @@ import numpy as np
 import h5py
 
 from pyscf import lib
-import pyscf.ao2mo
 from pyscf.lib import logger
 from pyscf import __config__
 
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx, 
+from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx,
                                padded_mo_coeff, get_frozen_mask)
-from pyscf.pbc.tdscf.krhf import _get_e_ia
 
 from pyscf.pbc import df
 from pyscf.pbc import tools
@@ -43,21 +41,21 @@ direct_sum = lib.direct_sum
 
 def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
     """CIS excitation energy with k-point sampling.
-    
+
     Arguments:
         cis {KCIS} -- A KCIS instance
-    
+
     Keyword Arguments:
         nroots {int} -- Number of requested excitation energies (default: {1})
-        eris {_CIS_ERIS} -- Depending on cis.direct, eris may 
-            contain 4-center (cis.direct=False) or 3-center (cis.direct=True) 
-            electron repulsion integrals (default: {None})            
-        kptlist {list} -- A list of indices for k-shift, i.e. the exciton momentum. 
-            Available k-shift indices depend on the k-point mesh. For example, 
+        eris {_CIS_ERIS} -- Depending on cis.direct, eris may
+            contain 4-center (cis.direct=False) or 3-center (cis.direct=True)
+            electron repulsion integrals (default: {None})
+        kptlist {list} -- A list of indices for k-shift, i.e. the exciton momentum.
+            Available k-shift indices depend on the k-point mesh. For example,
             a 2 by 2 by 2 k-point mesh allows at most 8 k-shift values, which can
             be targeted by [0, 1, 2, 3, 4, 5, 6, 7]. When kptlist=None, all k-shift
             will be computed. (default: {None})
-    
+
     Returns:
         tuple -- A tuple of excitation energies and corresponding eigenvectors
     """
@@ -98,12 +96,12 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
                 return r/(e0-diag+1e-12)
 
             eig = lib.davidson_nosym1
-            conv, eigval, eigvec = eig(matvec, guess, precond, tol=cis.conv_tol, 
-                                       max_cycle=cis.max_cycle, max_space=cis.max_space, 
+            conv, eigval, eigvec = eig(matvec, guess, precond, tol=cis.conv_tol,
+                                       max_cycle=cis.max_cycle, max_space=cis.max_space,
                                        max_memory=cis.max_memory, nroots=nroots, verbose=cis.verbose)
 
         else:
-            # Exact diagonalization            
+            # Exact diagonalization
             if not cis.build_full_H:
                 H = np.zeros([r_size, r_size], dtype=dtype)
                 for col in range(r_size):
@@ -130,24 +128,24 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
 
 def cis_matvec_singlet(cis, vector, kshift, eris=None):
     """Compute matrix-vector product of the Hamiltonion matrix and a CIS c
-    oefficient vector, in the space of single excitation. 
-    
+    oefficient vector, in the space of single excitation.
+
     Arguments:
         cis {KCIS} -- A KCIS instance
         vector {1D array} -- CIS coefficient vector
-        kshift {int} -- k-shift index. A k-shift vector is an exciton momentum. 
-            Available k-shift indices depend on the k-point mesh. For example, 
+        kshift {int} -- k-shift index. A k-shift vector is an exciton momentum.
+            Available k-shift indices depend on the k-point mesh. For example,
             a 2 by 2 by 2 k-point mesh allows at most 8 k-shift values, which can
             be targeted by 0, 1, 2, 3, 4, 5, 6, or 7.
-    
+
     Keyword Arguments:
-        eris {_CIS_ERIS} -- Depending on cis.direct, eris may 
-            contain 4-center (cis.direct=False) or 3-center (cis.direct=True) 
-            electron repulsion integrals (default: {None})            
-    
+        eris {_CIS_ERIS} -- Depending on cis.direct, eris may
+            contain 4-center (cis.direct=False) or 3-center (cis.direct=True)
+            electron repulsion integrals (default: {None})
+
     Returns:
-        1D array -- matrix-vector product of the Hamiltonion matrix and the 
-            input vector. 
+        1D array -- matrix-vector product of the Hamiltonion matrix and the
+            input vector.
     """
     if eris is None:
         eris = cis.ao2mo()
@@ -159,13 +157,13 @@ def cis_matvec_singlet(cis, vector, kshift, eris=None):
 
     # Should use Fock diagonal elements to build (e_a - e_i) matrix
     epsilons = [eris.fock[k].diagonal().real for k in range(nkpts)]
-        
+
     Hr = np.zeros_like(r)
     for ki in range(nkpts):
         ka = kconserv_r[ki]
         Hr[ki] += einsum('ia,a->ia', r[ki], epsilons[ka][nocc:])
         Hr[ki] -= einsum('ia,i->ia', r[ki], epsilons[ki][:nocc])
-        
+
     if not cis.direct:
         for ki in range(nkpts):
             ka = kconserv_r[ki]
@@ -180,7 +178,7 @@ def cis_matvec_singlet(cis, vector, kshift, eris=None):
                 # r_ia <- 2 r_jb (ai|jb) = 2 r_jb B^L_jb B^L_ai
                 L = 2.0 * einsum("jb,Ljb->L", r[kj], eris.Lpq_mo[kj,kb][:, :nocc, nocc:])
                 tmp = einsum("L,Lai->ia", L, eris.Lpq_mo[ka,ki][:, nocc:, :nocc])
-        
+
                 # r_ia <- - r_jb (ab|ji) = -r_jb B^L_ab B^L_ji
                 Lja = -1.0 * einsum("jb,Lab->Lja", r[kj], eris.Lpq_mo[ka,kb][:, nocc:, nocc:])
                 tmp += einsum("Lja,Lji->ia", Lja, eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
@@ -190,25 +188,25 @@ def cis_matvec_singlet(cis, vector, kshift, eris=None):
     return vector
 
 def cis_H(cis, kshift, eris=None):
-    """Build full Hamiltonian matrix in the space of single excitation, 
+    """Build full Hamiltonian matrix in the space of single excitation,
     i.e. CIS Hamiltonian.
-    
+
     Arguments:
         cis {KCIS} -- A KCIS instance
-        kshift {int} -- k-shift index. A k-shift vector is an exciton momentum. 
-            Available k-shift indices depend on the k-point mesh. For example, 
+        kshift {int} -- k-shift index. A k-shift vector is an exciton momentum.
+            Available k-shift indices depend on the k-point mesh. For example,
             a 2 by 2 by 2 k-point mesh allows at most 8 k-shift values, which can
             be targeted by 0, 1, 2, 3, 4, 5, 6, or 7.
-    
+
     Keyword Arguments:
-        eris {_CIS_ERIS} -- Depending on cis.direct, eris may 
-            contain 4-center (cis.direct=False) or 3-center (cis.direct=True) 
-            electron repulsion integrals (default: {None})            
-    
+        eris {_CIS_ERIS} -- Depending on cis.direct, eris may
+            contain 4-center (cis.direct=False) or 3-center (cis.direct=True)
+            electron repulsion integrals (default: {None})
+
     Raises:
         MemoryError: MemoryError will be raise if there is not enough space to
             store the full Hamiltonian matrix, which scales as Nk^2 O^2 V^2
-    
+
     Returns:
         2D array -- the Hamiltonian matrix reshaped into (ki,i,a) by (kj,j,b)
     """
@@ -264,30 +262,30 @@ def cis_H(cis, kshift, eris=None):
                 tmp -= einsum("Lab,Lji->iajb", eris.Lpq_mo[ka,kb][:, nocc:, nocc:], eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
                 tmp *= 1. / nkpts
                 H[ki, kj] += tmp.reshape(nov, nov)
-    
+
     H = H.reshape(nkpts, nkpts, nocc, nvir, nocc, nvir).transpose(0,2,3,1,4,5).reshape(r_size, r_size)
     log.timer("build full CIS Hamiltonian", *cpu0)
     return H
 
 def cis_diag(cis, kshift, eris=None):
     """Diagonal elements of CIS Hamiltonian.
-    
+
     Arguments:
         cis {KCIS} -- A KCIS instance
-        kshift {int} -- k-shift index. A k-shift vector is an exciton momentum. 
-            Available k-shift indices depend on the k-point mesh. For example, 
+        kshift {int} -- k-shift index. A k-shift vector is an exciton momentum.
+            Available k-shift indices depend on the k-point mesh. For example,
             a 2 by 2 by 2 k-point mesh allows at most 8 k-shift values, which can
             be targeted by 0, 1, 2, 3, 4, 5, 6, or 7.
-    
+
     Keyword Arguments:
-        eris {_CIS_ERIS} -- Depending on cis.direct, eris may 
-            contain 4-center (cis.direct=False) or 3-center (cis.direct=True) 
-            electron repulsion integrals (default: {None})            
-     
+        eris {_CIS_ERIS} -- Depending on cis.direct, eris may
+            contain 4-center (cis.direct=False) or 3-center (cis.direct=True)
+            electron repulsion integrals (default: {None})
+
     Returns:
         1D array -- an array formed by diagonal elements of CIS Hamiltonian
     """
-    if eris is None: 
+    if eris is None:
         eris = cis.ao2mo()
     nkpts = cis.nkpts
     nocc = cis.nocc
@@ -318,7 +316,7 @@ def cis_diag(cis, kshift, eris=None):
 
 
 class KCIS(lib.StreamObject):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert isinstance(mf, scf.khf.KSCF)
 
         if mo_coeff is None:
@@ -351,21 +349,18 @@ class KCIS(lib.StreamObject):
         self.voov = None
         self.ovov = None
 
-    def dump_flags(self):
-        logger.info(self, "")
-        logger.info(self, "******** %s ********", self.__class__)
-        logger.info(self, "nkpts = %d", self.nkpts)
-        logger.info(self, "CIS nocc = %d, nmo = %d", self.nocc, self.nmo)
-        if self.frozen is not 0:
-            logger.info(self, "frozen orbitals = %s", self.frozen)
-        logger.info(
-            self,
-            "max_memory %d MB (current use %d MB)",
-            self.max_memory,
-            lib.current_memory()[0],
-        )
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info("")
+        log.info("******** %s ********", self.__class__)
+        log.info("nkpts = %d", self.nkpts)
+        log.info("CIS nocc = %d, nmo = %d", self.nocc, self.nmo)
+        if self.frozen is not None:
+            log.info("frozen orbitals = %s", self.frozen)
+        log.info("max_memory %d MB (current use %d MB)",
+                 self.max_memory, lib.current_memory()[0])
         if self.direct:
-            logger.info(self, "cis.direct = True; voov and ovov will not be computed")
+            log.info("cis.direct = True; voov and ovov will not be computed")
         return self
 
     @property
@@ -411,7 +406,7 @@ class KCIS(lib.StreamObject):
         return _CIS_ERIS(self, mo_coeff)
 
     def gen_matvec(self, kshift, eris=None, **kwargs):
-        if eris is None: 
+        if eris is None:
             eris = self.ao2mo()
         diag = self.get_diag(kshift, eris)
         matvec = lambda xs: [self.matvec(x, kshift, eris) for x in xs]
@@ -430,7 +425,7 @@ class KCIS(lib.StreamObject):
         return guess
 
     def get_kconserv_r(self, kshift):
-        """Get the momentum conservation array for a set of k-points.
+        r"""Get the momentum conservation array for a set of k-points.
 
         Given k-point index m the array kconserv_r1[m] returns the index n that
         satisfies momentum conservation,
@@ -441,12 +436,12 @@ class KCIS(lib.StreamObject):
         R_{m k_m}^{n k_n} is zero unless n satisfies the above.
 
         Note that this method is adapted from `kpts_helper.get_kconserv()`.
-        
+
         Arguments:
-            kshift {int} -- index of momentum vector. It can be chosen as any of the available 
-            k-point index based on the specified kpt mesh. 
+            kshift {int} -- index of momentum vector. It can be chosen as any of the available
+            k-point index based on the specified kpt mesh.
             E.g. int from 0 to 7 can be chosen for a [2,2,2] grid.
-        
+
         Returns:
             list -- a list of k(n) corresponding to k(m) that ranges from 0 to max_k_index
         """
@@ -462,7 +457,6 @@ class _CIS_ERIS:
         log = logger.Logger(cis.stdout, cis.verbose)
         cput0 = (time.clock(), time.time())
 
-        moidx = get_frozen_mask(cis)
         cell = cis._scf.cell
         nocc = cis.nocc
         nmo = cis.nmo
@@ -529,7 +523,7 @@ class _CIS_ERIS:
         if cis.direct and type(cis._scf.with_df) is not df.GDF:
             raise ValueError("CIS direct method must be used with GDF")
 
-        if (cis.direct and type(cis._scf.with_df) is df.GDF 
+        if (cis.direct and type(cis._scf.with_df) is df.GDF
             and cell.dimension != 2):
             # cis._scf.with_df needs to be df.GDF only (not MDF)
             _init_cis_df_eris(cis, self)
@@ -612,14 +606,14 @@ class _CIS_ERIS:
 
 def _init_cis_df_eris(cis, eris):
     """Add 3-center electron repulsion integrals, i.e. (L|pq), in `eris`,
-    where `L` denotes DF auxiliary basis functions and `p` and `q` canonical 
-    crystalline orbitals. Note that `p` and `q` contain kpt indices `kp` and `kq`, 
-    and the third kpt index `kL` is determined by the conservation of momentum.  
-    
+    where `L` denotes DF auxiliary basis functions and `p` and `q` canonical
+    crystalline orbitals. Note that `p` and `q` contain kpt indices `kp` and `kq`,
+    and the third kpt index `kL` is determined by the conservation of momentum.
+
     Arguments:
         cis {KCIS} -- A KCIS instance
         eris {_CIS_ERIS} -- A _CIS_ERIS instance to which we want to add 3c ints
-        
+
     Returns:
         _CIS_ERIS -- A _CIS_ERIS instance with 3c ints
     """
@@ -656,7 +650,7 @@ def _init_cis_df_eris(cis, eris):
     cput0 = (time.clock(), time.time())
 
     with h5py.File(cis._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'].value 
+        kptij_lst = f['j3c-kptij'].value
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):
@@ -681,7 +675,7 @@ def _init_cis_df_eris(cis, eris):
 
 
 if __name__ == "__main__":
-    from pyscf.pbc import gto, scf, ci
+    from pyscf.pbc import gto, ci
 
     cell = gto.Cell()
     cell.atom = """

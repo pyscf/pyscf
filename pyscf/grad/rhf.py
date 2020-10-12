@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,12 @@ from pyscf.scf import _vhf
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+    '''
+    Electronic part of RHF/RKS gradients
+
+    Args:
+        mf_grad : grad.rhf.Gradients or grad.rks.Gradients object
+    '''
     mf = mf_grad.base
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
@@ -68,6 +74,11 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     return de
 
 def _write(dev, mol, de, atmlst):
+    '''Format output of nuclear gradients.
+    
+    Args:
+        dev : lib.logger.Logger object
+    '''
     if atmlst is None:
         atmlst = range(mol.natm)
     dev.stdout.write('         x                y                z\n')
@@ -77,6 +88,9 @@ def _write(dev, mol, de, atmlst):
 
 
 def grad_nuc(mol, atmlst=None):
+    '''
+    Derivatives of nuclear repulsion energy wrt nuclear coordinates
+    '''
     gs = numpy.zeros((mol.natm,3))
     for j in range(mol.natm):
         q2 = mol.atom_charge(j)
@@ -119,7 +133,7 @@ def hcore_generator(mf, mol=None):
         h1 = mf.get_hcore(mol)
         def hcore_deriv(atm_id):
             shl0, shl1, p0, p1 = aoslices[atm_id]
-            with mol.with_rinv_as_nucleus(atm_id):
+            with mol.with_rinv_at_nucleus(atm_id):
                 vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
                 vrinv *= -mol.atom_charge(atm_id)
                 if with_ecp and atm_id in ecp_atoms:
@@ -242,6 +256,12 @@ def as_scanner(mf_grad):
             mf_scanner = self.base
             e_tot = mf_scanner(mol)
             self.mol = mol
+
+            # If second integration grids are created for RKS and UKS
+            # gradients
+            if getattr(self, 'grids', None):
+                self.grids.reset(mol)
+
             de = self.kernel(**kwargs)
             return e_tot, de
     return SCF_GradScanner(mf_grad)
@@ -257,6 +277,7 @@ class GradientsBasics(lib.StreamObject):
         self.mol = method.mol
         self.base = method
         self.max_memory = self.mol.max_memory
+        self.unit = 'au'
 
         self.atmlst = None
         self.de = None
@@ -270,6 +291,10 @@ class GradientsBasics(lib.StreamObject):
                      self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
+        if 'ANG' in self.unit.upper():
+            raise NotImplementedError('unit Eh/Ang is not supported')
+        else:
+            log.info('unit = Eh/Bohr')
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self
@@ -411,7 +436,6 @@ scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0

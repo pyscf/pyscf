@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,11 +22,9 @@ Automated construction of molecular active spaces from atomic valence orbitals.
 Ref. arXiv:1701.07862 [physics.chem-ph]
 '''
 
-import re
 from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf.lib import logger
@@ -83,8 +81,6 @@ def kernel(mf, aolabels, threshold=THRESHOLD, minao=MINAO, with_iao=WITH_IAO,
     >>> ncas, nelecas, mo = avas.avas(mf, ['Cr 3d', 'Cr 4s'])
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(mo)
     '''
-    from pyscf.tools import mo_mapping
-
     if isinstance(verbose, logger.Logger):
         log = verbose
     elif verbose is not None:
@@ -177,6 +173,7 @@ def kernel(mf, aolabels, threshold=THRESHOLD, minao=MINAO, with_iao=WITH_IAO,
 
     if canonicalize:
         from pyscf.mcscf import dmet_cas
+
         def trans(c):
             if c.shape[1] == 0:
                 return c
@@ -186,9 +183,9 @@ def kernel(mf, aolabels, threshold=THRESHOLD, minao=MINAO, with_iao=WITH_IAO,
                 e, u = scipy.linalg.eigh(fock)
                 return dmet_cas.symmetrize(mol, e, numpy.dot(c, u), ovlp, log)
         if ncore > 0:
-           mo = numpy.hstack([trans(mofreeze), trans(mocore), trans(mocas), trans(movir)])
+            mo = numpy.hstack([trans(mofreeze), trans(mocore), trans(mocas), trans(movir)])
         else:
-           mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
+            mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
     else:
         mo = numpy.hstack((mocore, mocas, movir))
     return ncas, nelecas, mo
@@ -198,8 +195,6 @@ del(THRESHOLD, MINAO, WITH_IAO, OPENSHELL_OPTION, CANONICALIZE)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     from pyscf import mcscf
 
     mol = gto.M(

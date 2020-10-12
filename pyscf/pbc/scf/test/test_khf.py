@@ -272,6 +272,38 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, e2, 9)
         self.assertAlmostEqual(e1, -11.451118801956275, 9)
 
+    def test_small_system(self):
+        mol = pbcgto.Cell(
+            atom='He 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KRHF(mol,kpts=[[0., 0., 0.]])
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
+
+    def test_damping(self):
+        nao = cell.nao
+        np.random.seed(1)
+        s = kmf.get_ovlp()
+        d = np.random.random((len(kpts),nao,nao))
+        d = (d + d.transpose(0,2,1)) * 2
+        vhf = 0
+        f = khf.get_fock(kmf, kmf.get_hcore(), s, vhf, d, cycle=0,
+                             diis_start_cycle=2, damp_factor=0.5)
+        self.assertAlmostEqual(np.linalg.norm(f[0]), 95.32749551722966, 9)
+        self.assertAlmostEqual(np.linalg.norm(f[1]), 73.9231303798864, 9)
+        self.assertAlmostEqual(np.linalg.norm(f[2]), 58.973290554565196, 9)
+
+        vhf = np.zeros((2,len(kpts),nao,nao))
+        d1 = np.asarray([d/2, d/2])
+        f1 = kuhf.get_fock(kumf, kumf.get_hcore(), s, vhf, d1, cycle=0,
+                             diis_start_cycle=2, damp_factor=0.5)
+        for k in range(len(kpts)):
+            self.assertAlmostEqual(np.linalg.norm(f[k]), np.linalg.norm(f1[0,k]),9)
+            self.assertAlmostEqual(np.linalg.norm(f[k]), np.linalg.norm(f1[1,k]),9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

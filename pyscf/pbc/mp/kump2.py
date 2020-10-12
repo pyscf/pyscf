@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -196,7 +196,11 @@ def get_nocc(mp, per_kpoint=False):
     if mp._nocc is not None:
         return mp._nocc
 
-    if isinstance(mp.frozen, (int, np.integer)):
+    elif mp.frozen is None:
+        nocc = [[np.count_nonzero(mp.mo_occ[0][k] > 0) for k in range(mp.nkpts)],
+                [np.count_nonzero(mp.mo_occ[1][k] > 0) for k in range(mp.nkpts)]]
+
+    elif isinstance(mp.frozen, (int, np.integer)):
         nocc = [0]*2
         for spin in [0,1]:
             nocc[spin] = [(np.count_nonzero(mp.mo_occ[spin][k] > 0) - mp.frozen) for k in range(mp.nkpts)]
@@ -277,6 +281,10 @@ def get_nmo(mp, per_kpoint=False):
         for spin in [0,1]:
             nmo[spin] = [len(mp.mo_occ[spin][k]) - mp.frozen for k in range(mp.nkpts)]
 
+    elif mp.frozen is None:
+        nmo = [[len(mp.mo_occ[0][k]) for k in range(mp.nkpts)],
+               [len(mp.mo_occ[1][k]) for k in range(mp.nkpts)]]
+
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
         assert(len(mp.frozen) == 2)
@@ -330,7 +338,11 @@ def get_frozen_mask(mp):
 
     '''
     moidx = [[np.ones(x.size, dtype=np.bool) for x in mp.mo_occ[s]] for s in [0,1]]
-    if isinstance(mp.frozen, (int, np.integer)):
+
+    if mp.frozen is None:
+        pass
+
+    elif isinstance(mp.frozen, (int, np.integer)):
         for spin in [0,1]:
             for idx in moidx[spin]:
                 idx[:mp.frozen] = False
@@ -364,12 +376,8 @@ def get_frozen_mask(mp):
 
 def _add_padding(mp, mo_coeff, mo_energy):
     raise NotImplementedError("Implementation needs to be checked first")
-    from pyscf.pbc import tools
-    from pyscf.pbc.cc.ccsd import _adjust_occ
     nmo = mp.nmo
     nocc = mp.nocc
-    nvir = nmo - nocc
-    nkpts = mp.nkpts
 
     # Check if these are padded mo coefficients and energies
     if not np.all([x.shape[0] == nmo for x in mo_coeff]):
@@ -407,30 +415,3 @@ class KUMP2(kmp2.KMP2):
 
 from pyscf.pbc import scf
 scf.kuhf.KUHF.MP2 = lib.class_as_method(KUMP2)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, mp
-
-    #cell = gto.Cell()
-    #cell.atom='''
-    #C 0.000000000000   0.000000000000   0.000000000000
-    #C 1.685068664391   1.685068664391   1.685068664391
-    #'''
-    #cell.basis = 'gth-szv'
-    #cell.pseudo = 'gth-pade'
-    #cell.a = '''
-    #0.000000000, 3.370137329, 3.370137329
-    #3.370137329, 0.000000000, 3.370137329
-    #3.370137329, 3.370137329, 0.000000000'''
-    #cell.unit = 'B'
-    #cell.verbose = 5
-    #cell.build()
-
-    ## Running HF and MP2 with 1x1x2 Monkhorst-Pack k-point mesh
-    #kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2]), exxdiv=None)
-    #ehf = kmf.kernel()
-
-    #mymp = mp.KMP2(kmf)
-    #emp2, t2 = mymp.kernel()
-    #print(emp2 - -0.204721432828996)

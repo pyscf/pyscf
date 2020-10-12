@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ from pyscf import gto, scf
 from pyscf.lib import finger
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
-from pyscf.pbc.ao2mo import eris
 import pyscf.pbc.tools
 
 import pyscf.pbc.cc as pbcc
@@ -278,7 +277,7 @@ class KnownValues(unittest.TestCase):
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
-        mycc = pbcc.KGCCSD(kmf, frozen=0)
+        mycc = pbcc.KGCCSD(kmf, frozen=None)
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle

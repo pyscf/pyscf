@@ -114,11 +114,19 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 rho[i*2+0] = rho_u[i];
                                 rho[i*2+1] = rho_d[i];
                         }
+#if XC_MAJOR_VERSION >= 5
+                        xc_lda_exc_vxc_fxc_kxc(func_x, np, rho, ex, vxc, fxc, kxc);
+#else
                         xc_lda(func_x, np, rho, ex, vxc, fxc, kxc);
+#endif
                         free(rho);
                 } else {
                         rho = rho_u;
+#if XC_MAJOR_VERSION >= 5
+                        xc_lda_exc_vxc_fxc_kxc(func_x, np, rho, ex, vxc, fxc, kxc);
+#else
                         xc_lda(func_x, np, rho, ex, vxc, fxc, kxc);
+#endif
                 }
                 break;
         case XC_FAMILY_GGA:
@@ -157,8 +165,12 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
 #if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
                         xc_gga(func_x, np, rho, sigma, ex,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2);
-#else
+#elif XC_MAJOR_VERSION < 5
                         xc_gga(func_x, np, rho, sigma, ex,
+                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
+                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+#else
+                        xc_gga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, ex,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2,
                                kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
 #endif
@@ -188,10 +200,15 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
 #if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
                         xc_gga(func_x, np, rho, sigma, ex,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2);
-#else
+#elif XC_MAJOR_VERSION < 5
                         xc_gga(func_x, np, rho, sigma, ex,
                                vxc, vsigma, fxc, v2rhosigma, v2sigma2,
                                kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+#else
+                        xc_gga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, ex,
+                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
+                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+
 #endif
                         free(sigma);
                 }
@@ -242,10 +259,17 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 v2sigmalapl = v2lapltau   + np * 4;
                                 v2sigmatau  = v2sigmalapl + np * 6; // np*6
                         }
+#if XC_MAJOR_VERSION >=5
+                        xc_mgga_exc_vxc_fxc(func_x, np, rho, sigma, lapl, tau, ex,
+                                vxc, vsigma, vlapl, vtau,
+                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+#else
                         xc_mgga(func_x, np, rho, sigma, lapl, tau, ex,
                                 vxc, vsigma, vlapl, vtau,
                                 fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
                                 v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+#endif
                         free(rho);
                         free(sigma);
                         free(lapl);
@@ -277,10 +301,17 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 v2sigmalapl = v2lapltau   + np;
                                 v2sigmatau  = v2sigmalapl + np;
                         }
+#if XC_MAJOR_VERSION >= 5
+                        xc_mgga_exc_vxc_fxc(func_x, np, rho, sigma, lapl, tau, ex,
+                                vxc, vsigma, vlapl, vtau,
+                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+#else
                         xc_mgga(func_x, np, rho, sigma, lapl, tau, ex,
                                 vxc, vsigma, vlapl, vtau,
                                 fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
                                 v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+#endif
                         free(sigma);
                 }
                 break;

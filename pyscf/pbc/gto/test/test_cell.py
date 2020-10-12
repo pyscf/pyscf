@@ -20,6 +20,8 @@ import unittest
 import ctypes
 import numpy
 import numpy as np
+from pyscf import gto
+from pyscf import lib
 from pyscf.pbc import gto as pgto
 
 
@@ -43,10 +45,6 @@ cl1.build(a = numpy.random.random((3,3)).T,
                    He .1 .3 .2''',
           basis = 'ccpvdz')
 
-def finger(a):
-    w = numpy.cos(numpy.arange(a.size))
-    return numpy.dot(a.ravel(), w)
-
 class KnownValues(unittest.TestCase):
     def test_nimgs(self):
         self.assertTrue(list(cl.get_nimgs(9e-1)), [1,1,1])
@@ -57,16 +55,16 @@ class KnownValues(unittest.TestCase):
 
     def test_Gv(self):
         a = cl1.get_Gv()
-        self.assertAlmostEqual(finger(a), -99.791927068519939, 10)
+        self.assertAlmostEqual(lib.fp(a), -99.791927068519939, 10)
 
     def test_SI(self):
         a = cl1.get_SI()
-        self.assertAlmostEqual(finger(a), (16.506917823339265+1.6393578329869585j), 10)
+        self.assertAlmostEqual(lib.fp(a), (16.506917823339265+1.6393578329869585j), 10)
 
         np.random.seed(2)
         Gv = np.random.random((5,3))
         a = cl1.get_SI(Gv)
-        self.assertAlmostEqual(finger(a), (0.65237631847195221-1.5736011413431059j), 10)
+        self.assertAlmostEqual(lib.fp(a), (0.65237631847195221-1.5736011413431059j), 10)
 
     def test_mixed_basis(self):
         cl = pgto.Cell()
@@ -233,13 +231,13 @@ class KnownValues(unittest.TestCase):
         kpts[0] = 0
         self.assertEqual(list(cl1.nimgs), [32,21,19])
         s0 = cl1.pbc_intor('int1e_ovlp_sph', hermi=0, kpts=kpts)
-        self.assertAlmostEqual(finger(s0[0]), 492.30658304804126, 4)
-        self.assertAlmostEqual(finger(s0[1]), 37.812956255000756-28.972806230140314j, 4)
-        self.assertAlmostEqual(finger(s0[2]),-26.113285893260819-34.448501789693566j, 4)
-        self.assertAlmostEqual(finger(s0[3]), 186.58921213429491+123.90133823378201j, 4)
+        self.assertAlmostEqual(lib.fp(s0[0]), 492.30658304804126, 4)
+        self.assertAlmostEqual(lib.fp(s0[1]), 37.812956255000756-28.972806230140314j, 4)
+        self.assertAlmostEqual(lib.fp(s0[2]),-26.113285893260819-34.448501789693566j, 4)
+        self.assertAlmostEqual(lib.fp(s0[3]), 186.58921213429491+123.90133823378201j, 4)
 
         s1 = cl1.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts[0])
-        self.assertAlmostEqual(finger(s1), 492.30658304804126, 4)
+        self.assertAlmostEqual(lib.fp(s1), 492.30658304804126, 4)
 
     def test_ecp_pseudo(self):
         from pyscf.pbc.gto import ecp
@@ -350,6 +348,41 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFTNoHybrid)
         self.assertRaises(AttributeError, lambda: cell.xyz)
         self.assertRaises(AttributeError, lambda: cell.TDxyz)
+
+    def test_ghost(self):
+        cell = pgto.Cell(
+            atom = 'C 0 0 0; ghost 0 0 2',
+            basis = {'C': 'sto3g', 'ghost': gto.basis.load('sto3g', 'H')},
+            a = np.eye(3) * 3,
+            pseudo = 'gth-pade',
+        ).run()
+        self.assertEqual(cell.nao_nr(), 6)
+
+        cell = pgto.M(atom='''
+        ghost-O     0.000000000     0.000000000     2.500000000
+        X_H        -0.663641000    -0.383071000     3.095377000
+        ghost.H     0.663588000     0.383072000     3.095377000
+        O     1.000000000     0.000000000     2.500000000
+        H    -1.663641000    -0.383071000     3.095377000
+        H     1.663588000     0.383072000     3.095377000
+        ''',
+        a=np.eye(3) * 3,
+        pseudo={'default': 'gth-pade', 'ghost-O': 'gth-pade'},
+        basis='gth-dzv')
+        self.assertEqual(cell.nao_nr(), 24)  # 8 + 2 + 2 + 8 + 2 + 2
+        self.assertTrue(len(cell._pseudo) == 3) # O, H, ghost-O in ecp
+
+        cell = pgto.M(atom='''
+        ghost-O     0.000000000     0.000000000     2.500000000
+        X_H        -0.663641000    -0.383071000     3.095377000
+        ghost.H     0.663588000     0.383072000     3.095377000
+        O     1.000000000     0.000000000     2.500000000
+        ''',
+        a=np.eye(3) * 3,
+        pseudo='gth-pade',
+        basis={'H': 'gth-dzv', 'o': 'gth-dzvp', 'ghost-O': 'gth-szv'})
+        self.assertEqual(cell.nao_nr(), 21) # 4 + 2 + 2 + 13
+        self.assertTrue(len(cell._pseudo) == 1)  # only O in ecp
 
 
 if __name__ == '__main__':

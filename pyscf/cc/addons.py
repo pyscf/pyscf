@@ -129,7 +129,7 @@ def convert_to_uccsd(mycc):
     ucc._scf = mf
     ucc.mo_coeff = mf.mo_coeff
     ucc.mo_occ = mf.mo_occ
-    if not isinstance(mycc.frozen, (int, numpy.integer)):
+    if not (mycc.frozen is None or isinstance(mycc.frozen, (int, numpy.integer))):
         raise NotImplementedError
     ucc.t1, ucc.t2 = uccsd.amplitudes_from_rccsd(mycc.t1, mycc.t2)
     return ucc
@@ -150,7 +150,7 @@ def convert_to_gccsd(mycc):
     gcc.mo_occ = mf.mo_occ
     if isinstance(mycc.frozen, (int, numpy.integer)):
         gcc.frozen = mycc.frozen * 2
-    else:
+    elif not (mycc.frozen is None or mycc.frozen == 0):
         raise NotImplementedError
     gcc.t1 = spatial2spin(mycc.t1, mf.mo_coeff.orbspin)
     gcc.t2 = spatial2spin(mycc.t2, mf.mo_coeff.orbspin)

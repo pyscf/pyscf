@@ -20,6 +20,7 @@ import numpy
 import unittest
 from pyscf import gto
 from pyscf import scf
+from pyscf import lib
 from pyscf.x2c import x2c
 
 mol = gto.M(
@@ -69,6 +70,126 @@ class KnownValues(unittest.TestCase):
         myx2c.with_x2c.approx = 'ATOM1E'
         e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.07543183416206, 9)
+
+    def test_picture_change(self):
+        c = lib.param.LIGHT_SPEED
+        myx2c = x2c.UHF(mol)
+        myx2c.with_x2c.xuncontract = False
+
+        def tv(with_x2c):
+            xmol = with_x2c.get_xmol()[0]
+            t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
+            #v = xmol.intor_symmetric('int1e_nuc_spinor')
+            w = xmol.intor_symmetric('int1e_spnucsp_spinor')
+            return t, 'int1e_nuc_spinor', w
+
+        t, v, w = tv(myx2c.with_x2c)
+        h1 = myx2c.with_x2c.picture_change((v, w*(.5/c)**2-t), t)
+        href = myx2c.with_x2c.get_hcore()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 10)
+
+        myx2c.with_x2c.xuncontract = True
+        t, v, w = tv(myx2c.with_x2c)
+        h1 = myx2c.with_x2c.picture_change((v, w*(.5/c)**2-t), t)
+        href = myx2c.with_x2c.get_hcore()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 10)
+
+        myx2c.with_x2c.basis = 'unc-sto3g'
+        t, v, w = tv(myx2c.with_x2c)
+        h1 = myx2c.with_x2c.picture_change((v, w*(.5/c)**2-t), t)
+        href = myx2c.with_x2c.get_hcore()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 10)
+
+    def test_sfx2c1e_picture_change(self):
+        c = lib.param.LIGHT_SPEED
+        myx2c = scf.RHF(mol).sfx2c1e()
+        myx2c.with_x2c.xuncontract = False
+
+        def tv(with_x2c):
+            xmol = with_x2c.get_xmol()[0]
+            t = xmol.intor_symmetric('int1e_kin')
+            w = xmol.intor_symmetric('int1e_pnucp')
+            return t, 'int1e_nuc', w
+
+        t, v, w = tv(myx2c.with_x2c)
+        h1 = myx2c.with_x2c.picture_change((v, w*(.5/c)**2-t), t)
+        href = myx2c.with_x2c.get_hcore()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 10)
+
+        myx2c.with_x2c.xuncontract = True
+        t, v, w = tv(myx2c.with_x2c)
+        h1 = myx2c.with_x2c.picture_change((v, w*(.5/c)**2-t), t)
+        href = myx2c.with_x2c.get_hcore()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 10)
+
+        myx2c.with_x2c.basis = 'unc-sto3g'
+        t, v, w = tv(myx2c.with_x2c)
+        h1 = myx2c.with_x2c.picture_change((v, w*(.5/c)**2-t), t)
+        href = myx2c.with_x2c.get_hcore()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 10)
+
+    def test_lindep_xbasis(self):
+        mol = gto.M(atom='C', basis='''
+C     S 
+    0.823600000E+04    0.677199997E-03
+    0.123500000E+04    0.427849998E-02
+    0.280800000E+03    0.213575999E-01
+    0.792700000E+02    0.821857997E-01
+    0.255900000E+02    0.235071499E+00
+    0.899700000E+01    0.434261298E+00
+    0.331900000E+01    0.345733299E+00
+    0.905900000E+00    0.392976999E-01
+    0.364300000E+00   -0.895469997E-02
+    0.128500000E+00    0.237739999E-02
+C     S 
+    0.823600000E+04   -0.144499989E-03
+    0.123500000E+04   -0.915599933E-03
+    0.280800000E+03   -0.460309966E-02
+    0.792700000E+02   -0.182283987E-01
+    0.255900000E+02   -0.558689959E-01
+    0.899700000E+01   -0.126988891E+00
+    0.331900000E+01   -0.170104988E+00
+    0.905900000E+00    0.140976590E+00
+    0.364300000E+00    0.598675956E+00
+    0.128500000E+00    0.394868571E+00
+C     S 
+    0.905900000E+00    0.100000000E+01
+C     S 
+    0.128500000E+00    0.100000000E+01
+C     P 
+    0.187100000E+02    0.140738004E-01
+    0.413300000E+01    0.869016023E-01
+    0.120000000E+01    0.290201608E+00
+    0.382700000E+00    0.500903913E+00
+    0.120900000E+00    0.343523809E+00
+C     P 
+    0.382700000E+00    0.100000000E+01
+C     P 
+    0.120900000E+00    0.100000000E+01
+C     D 
+    0.109700000E+01    0.100000000E+01
+C     D 
+    0.318000000E+00    0.100000000E+01
+C     F 
+    0.761000000E+00    0.100000000E+01
+''')
+        xmol, c = x2c.X2C(mol).get_xmol(mol)
+        self.assertEqual(xmol.nbas, 18)
+        self.assertEqual(xmol.nao, 42)
+        self.assertAlmostEqual(lib.finger(c), -5.480689638416739, 12)
+
+    def test_get_hcore(self):
+        myx2c = scf.RHF(mol).sfx2c1e()
+        myx2c.with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao, xmol.nao))
+        h1 = myx2c.with_x2c.get_hcore()
+        ref = mol.intor('int1e_nuc')
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+
+        with_x2c = x2c.X2C(mol)
+        with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao_2c(), xmol.nao_2c()))
+        h1 = with_x2c.get_hcore()
+        ref = mol.intor('int1e_nuc_spinor')
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
 
 
 if __name__ == "__main__":

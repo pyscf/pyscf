@@ -68,7 +68,6 @@ cell.build(unit = 'B',
            pseudo = pseudo,
            verbose = 7,
            precision = 1e-6,
-           low_dim_ft_type='analytic_2d_1',
            basis='gth-szv')
 t0 = time.time()
 mf = pbchf.KRHF(cell, exxdiv='ewald')

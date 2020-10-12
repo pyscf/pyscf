@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ def get_gth_pp(mol):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, scf
+    from pyscf import scf
     from pyscf.pbc import gto as pbcgto
     from pyscf.pbc import scf as pbcscf
     from pyscf.pbc import df

@@ -30,7 +30,7 @@ from pyscf.dft import numint
 
 
 # import pyscf.grad.rks to activate nuc_grad_method method
-from pyscf.grad import rks
+from pyscf.grad import rks  # noqa
 
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -47,13 +47,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
-    nocc = mocc.shape[1]
     dm0 = numpy.dot(mocc, mocc.T) * 2
-    # Energy weighted density matrix
-    dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[mo_occ>0]) * 2
-
-    hcore_deriv = hessobj.hcore_generator(mol)
-    s1aa, s1ab, s1a = rhf_hess.get_ovlp(mol)
 
     if mf.nlc != '':
         raise NotImplementedError
@@ -101,7 +95,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                                        shls_slice=shls_slice)[0]
             veff -= (alpha-hyb)*.5 * vk1.transpose(0,2,1).reshape(3,3,nao,nao)
             t1 = log.timer_debug1('range-separated int2e_ipvip1 for atom %d'%ia, *t1)
-            vj1 = vk1 = vk2 = None
+            vk1 = vk2 = None
 
         de2[i0,i0] += numpy.einsum('xypq,pq->xy', veff_diag[:,:,p0:p1], dm0[p0:p1])*2
         for j0, ja in enumerate(atmlst[:i0+1]):

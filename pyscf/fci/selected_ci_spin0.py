@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -168,10 +168,7 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
     from pyscf.fci import direct_spin0
-    from pyscf.fci import spin_op
-    from pyscf.fci import addons
 
     mol = gto.Mole()
     mol.verbose = 0

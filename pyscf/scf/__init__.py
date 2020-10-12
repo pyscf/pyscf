@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -121,22 +121,21 @@ from pyscf.scf.addons import *
 
 
 def HF(mol, *args):
-    __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or UHF\n
-    ''' + hf.SCF.__doc__
     if mol.nelectron == 1 or mol.spin == 0:
         return RHF(mol, *args)
     else:
         return UHF(mol, *args)
+HF.__doc__ = '''
+A wrap function to create SCF class (RHF or UHF).\n
+''' + hf.SCF.__doc__
 
 def RHF(mol, *args):
-    __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or ROHF\n
-    ''' + hf.RHF.__doc__
     if mol.nelectron == 1:
         if mol.symmetry:
             return rhf_symm.HF1e(mol)
         else:
             return rohf.HF1e(mol)
-    elif not mol.symmetry or mol.groupname is 'C1':
+    elif not mol.symmetry or mol.groupname == 'C1':
         if mol.spin > 0:
             return rohf.ROHF(mol, *args)
         else:
@@ -146,43 +145,42 @@ def RHF(mol, *args):
             return rhf_symm.ROHF(mol, *args)
         else:
             return rhf_symm.RHF(mol, *args)
+RHF.__doc__ = hf.RHF.__doc__
 
 def ROHF(mol, *args):
-    __doc__ = '''This is a wrap function to decide which ROHF class to use.\n
-    ''' + rohf.ROHF.__doc__
-    if not mol.symmetry or mol.groupname is 'C1':
+    if not mol.symmetry or mol.groupname == 'C1':
         return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)
+ROHF.__doc__ = rohf.ROHF.__doc__
 
 def UHF(mol, *args):
-    __doc__ = '''This is a wrap function to decide which UHF class to use.\n
-    ''' + uhf.UHF.__doc__
     if mol.nelectron == 1:
-        if not mol.symmetry or mol.groupname is 'C1':
+        if not mol.symmetry or mol.groupname == 'C1':
             return uhf.HF1e(mol, *args)
         else:
             return uhf_symm.HF1e(mol, *args)
-    elif not mol.symmetry or mol.groupname is 'C1':
+    elif not mol.symmetry or mol.groupname == 'C1':
         return uhf.UHF(mol, *args)
     else:
         return uhf_symm.UHF(mol, *args)
+UHF.__doc__ = uhf.UHF.__doc__
 
 def GHF(mol, *args):
-    __doc__ = '''Non-relativistic generalized Hartree-Fock class.\n
-    ''' + ghf.GHF.__doc__
-    if not mol.symmetry or mol.groupname is 'C1':
+    if not mol.symmetry or mol.groupname == 'C1':
         return ghf.GHF(mol, *args)
     else:
         return ghf_symm.GHF(mol, *args)
+GHF.__doc__ = ghf.GHF.__doc__
 
 def DHF(mol, *args):
-    '''This is a wrap function to decide which Dirac-Hartree-Fock class to use.\n
-    ''' + dhf.UHF.__doc__
     if mol.nelectron == 1:
         return dhf.HF1e(mol)
+    elif dhf.zquatev and mol.spin == 0:
+        return dhf.RDHF(mol, *args)
     else:
-        return dhf.UHF(mol, *args)
+        return dhf.DHF(mol, *args)
+DHF.__doc__ = dhf.DHF.__doc__
 
 
 def X2C(mol, *args):
@@ -223,4 +221,6 @@ def GKS(mol, *args):
     from pyscf import dft
     return dft.GKS(mol, *args)
 
-
+def DKS(mol, *args):
+    from pyscf import dft
+    return dft.DKS(mol, *args)

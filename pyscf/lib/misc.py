@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,18 +17,15 @@
 #
 
 '''
-Some hacky functions
+Some helper functions
 '''
 
 import os, sys
 import warnings
 import imp
 import tempfile
-import shutil
 import functools
 import itertools
-import math
-import types
 import ctypes
 import numpy
 import h5py
@@ -419,6 +416,7 @@ class omnimethod(object):
         return functools.partial(self.func, instance)
 
 
+SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject(object):
     '''For most methods, there are three stream functions to pipe computing stream:
 
@@ -481,12 +479,15 @@ class StreamObject(object):
         self.kernel(*args)
         return self
 
-    def set(self, **kwargs):
+    def set(self, *args, **kwargs):
         '''
         Update the attributes of the current object.  The return value of
         method set is the object itself.  This allows a series of
         functions/methods to be executed in pipe.
         '''
+        if args:
+            warnings.warn('method set() only supports keyword arguments.\n'
+                          'Arguments %s are ignored.' % args)
         #if getattr(self, '_keys', None):
         #    for k,v in kwargs.items():
         #        setattr(self, k, v)
@@ -521,7 +522,8 @@ class StreamObject(object):
         return value of method set is the object itself.  This allows a series
         of functions/methods to be executed in pipe.
         '''
-        if (self.verbose > 0 and  # logger.QUIET
+        if (SANITY_CHECK and
+            self.verbose > 0 and  # logger.QUIET
             getattr(self, '_keys', None)):
             check_sanity(self, self._keys, self.stdout)
         return self
@@ -628,57 +630,6 @@ def class_as_method(cls):
     fn.__name__ = cls.__name__
     fn.__module__ = cls.__module__
     return fn
-
-def import_as_method(fn, default_keys=None):
-    '''
-    The statement "fn1 = import_as_method(fn, default_keys=['a','b'])"
-    in a class is equivalent to define the following method in the class:
-
-    .. code-block:: python
-        def fn1(self, ..., a=None, b=None, ...):
-            if a is None: a = self.a
-            if b is None: b = self.b
-            return fn(..., a, b, ...)
-    '''
-    code_obj = fn.__code__
-# Add the default_keys as kwargs in CodeType is very complicated
-#    new_code_obj = types.CodeType(code_obj.co_argcount+1,
-#                                  code_obj.co_nlocals,
-#                                  code_obj.co_stacksize,
-#                                  code_obj.co_flags,
-#                                  code_obj.co_code,
-#                                  code_obj.co_consts,
-#                                  code_obj.co_names,
-## As a class method, the first argument should be self
-#                                  ('self',) + code_obj.co_varnames,
-#                                  code_obj.co_filename,
-#                                  code_obj.co_name,
-#                                  code_obj.co_firstlineno,
-#                                  code_obj.co_lnotab,
-#                                  code_obj.co_freevars,
-#                                  code_obj.co_cellvars)
-#    clsmethod = types.FunctionType(new_code_obj, fn.__globals__)
-#    clsmethod.__defaults__ = fn.__defaults__
-
-    # exec is a bad solution here.  But I didn't find a better way to
-    # implement this for now.
-    nargs = code_obj.co_argcount
-    argnames = code_obj.co_varnames[:nargs]
-    defaults = fn.__defaults__
-    new_code_str = 'def clsmethod(self, %s):\n' % (', '.join(argnames))
-    if default_keys is not None:
-        for k in default_keys:
-            new_code_str += '    if %s is None: %s = self.%s\n' % (k, k, k)
-        if defaults is None:
-            defaults = (None,) * nargs
-        else:
-            defaults = (None,) * (nargs-len(defaults)) + defaults
-    new_code_str += '    return %s(%s)\n' % (fn.__name__, ', '.join(argnames))
-    exec(new_code_str, fn.__globals__, locals())
-
-    clsmethod.__name__ = fn.__name__
-    clsmethod.__defaults__ = defaults
-    return clsmethod
 
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''
@@ -906,24 +857,28 @@ class H5TmpFile(h5py.File):
     >>> from pyscf import lib
     >>> ftmp = lib.H5TmpFile()
     '''
-    def __init__(self, filename=None, *args, **kwargs):
+    def __init__(self, filename=None, mode='a', *args, **kwargs):
         if filename is None:
             tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
             filename = tmpfile.name
-        h5py.File.__init__(self, filename, *args, **kwargs)
+        h5py.File.__init__(self, filename, mode, *args, **kwargs)
 #FIXME: Does GC flush/close the HDF5 file when releasing the resource?
 # To make HDF5 file reusable, file has to be closed or flushed
     def __del__(self):
         try:
             self.close()
+        except AttributeError:  # close not defined in old h5py
+            pass
         except ValueError:  # if close() is called twice
+            pass
+        except ImportError:  # exit program before de-referring the object
             pass
 
 def fingerprint(a):
     '''Fingerprint of numpy array'''
     a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
-finger = fingerprint
+finger = fp = fingerprint
 
 
 def ndpointer(*args, **kwargs):

@@ -105,7 +105,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 get_rho = pbchf.get_rho
 
 
-class UHF(mol_uhf.UHF, pbchf.SCF):
+class UHF(pbchf.SCF, mol_uhf.UHF):
     '''UHF class for PBCs.
     '''
 
@@ -115,6 +115,8 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None
+        self.init_guess_breaksym = None
+        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):
@@ -140,18 +142,15 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    build = pbchf.SCF.build
-    check_sanity = pbchf.SCF.check_sanity
-    get_hcore = pbchf.SCF.get_hcore
-    get_ovlp = pbchf.SCF.get_ovlp
-    get_jk = pbchf.SCF.get_jk
-    get_j = pbchf.SCF.get_j
-    get_k = pbchf.SCF.get_k
-    get_jk_incore = pbchf.SCF.get_jk_incore
-    energy_tot = pbchf.SCF.energy_tot
-    _finalize = pbchf.SCF._finalize
+    get_rho = get_rho
+
+    eig = mol_uhf.UHF.eig
+
+    get_fock = mol_uhf.UHF.get_fock
+    get_grad = mol_uhf.UHF.get_grad
+    get_occ = mol_uhf.UHF.get_occ
     make_rdm1 = mol_uhf.UHF.make_rdm1
-    get_rho = pbchf.SCF.get_rho
+    energy_elec = mol_uhf.UHF.energy_elec
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
@@ -231,20 +230,20 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
         if kpt is None: kpt = self.kpt
         return init_guess_by_chkfile(self.cell, chk, project, kpt)
 
-    dump_chk = pbchf.SCF.dump_chk
-    _is_mem_enough = pbchf.SCF._is_mem_enough
+    init_guess_by_minao  = mol_uhf.UHF.init_guess_by_minao
+    init_guess_by_atom   = mol_uhf.UHF.init_guess_by_atom
+    init_guess_by_huckel = mol_uhf.UHF.init_guess_by_huckel
 
-    density_fit = pbchf.SCF.density_fit
-    # mix_density_fit inherits from hf.SCF.mix_density_fit
-
-    x2c = x2c1e = sfx2c1e = pbchf.SCF.sfx2c1e
+    analyze = mol_uhf.UHF.analyze
+    mulliken_pop = mol_uhf.UHF.mulliken_pop
+    mulliken_meta = mol_uhf.UHF.mulliken_meta
+    spin_square = mol_uhf.UHF.spin_square
+    canonicalize = mol_uhf.UHF.canonicalize
+    stability = mol_uhf.UHF.stability
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_uhf(mf, self)
         return self
 
-    stability = mol_uhf.UHF.stability
-
-    nuc_grad_method = None
 

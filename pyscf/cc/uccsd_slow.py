@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ get_frozen_mask = ump2.get_frozen_mask
 
 class UCCSD(ccsd.CCSD):
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
@@ -617,14 +617,13 @@ def uspatial2spin(cc, moidx, mo_coeff):
     nocc = cc.nocc
     nao = cc.mo_coeff[0].shape[0]
     nmo = cc.nmo
-    nvir = nmo - nocc
     so_coeff = np.zeros((nao, nmo), dtype=mo_coeff[0].dtype)
     nocc_a = int(sum(cc.mo_occ[0]*moidx[0]))
     nocc_b = int(sum(cc.mo_occ[1]*moidx[1]))
     nmo_a = fockab[0].shape[0]
     nmo_b = fockab[1].shape[0]
     nvir_a = nmo_a - nocc_a
-    nvir_b = nmo_b - nocc_b
+    #nvir_b = nmo_b - nocc_b
     oa = range(0,nocc_a)
     ob = range(nocc_a,nocc)
     va = range(nocc,nocc+nvir_a)

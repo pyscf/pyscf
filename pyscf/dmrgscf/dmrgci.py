@@ -38,7 +38,6 @@ from pyscf.dmrgscf import dmrg_sym
 from pyscf import __config__
 
 # Libraries
-import pyscf.lib
 libunpack = lib.load_library('libicmpspt')
 
 # Settings
@@ -54,7 +53,6 @@ except ImportError:
     settings.MPIPREFIX = getattr(__config__, 'dmrgscf_MPIPREFIX', None)
     settings.BLOCKVERSION = getattr(__config__, 'dmrgscf_BLOCKVERSION', None)
     if (settings.BLOCKEXE is None or settings.BLOCKSCRATCHDIR is None):
-        import sys
         sys.stderr.write('settings.py not found for module dmrgci.  Please create %s\n'
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
@@ -443,14 +441,17 @@ class DMRGCI(lib.StreamObject):
 
         return onepdm, twopdm, threepdm
 
-    def make_rdm3(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
+    def make_rdm3(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, restart=False, **kwargs):
         import os
 
         if self.has_threepdm == False:
             self.twopdm = False
-            self.extraline.append('threepdm\n')
+            if restart == True:
+                self.extraline.append('restart_threepdm')
+            else:
+                self.extraline.append('threepdm')
+            writeDMRGConfFile(self, nelec, restart)
 
-            writeDMRGConfFile(self, nelec, False)
             if self.verbose >= logger.DEBUG1:
                 inFile = self.configFile
                 #inFile = os.path.join(self.scratchDirectory,self.configFile)
@@ -488,7 +489,7 @@ class DMRGCI(lib.StreamObject):
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE3(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
-            E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E3 = numpy.fromfile(fnameout, dtype=numpy.float64)
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
           else:
             print('Reading binary 3RDM from BLOCK')
@@ -518,16 +519,21 @@ class DMRGCI(lib.StreamObject):
         print('')
         return E3
 
-    def make_rdm4(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
+    def make_rdm4(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, restart=False, **kwargs):
         import os
 
         if self.has_fourpdm == False:
             self.twopdm = False
             self.threepdm = False
-            self.extraline.append('threepdm')
-            self.extraline.append('fourpdm')
+            self.twopdm = False
+            if restart == True:
+                self.extraline.append('restart_threepdm')
+                self.extraline.append('restart_fourpdm')
+            else:
+                self.extraline.append('threepdm')
+                self.extraline.append('fourpdm')
+            writeDMRGConfFile(self, nelec, restart)
 
-            writeDMRGConfFile(self, nelec, False)
             if self.verbose >= logger.DEBUG1:
               inFile = self.configFile
               #inFile = os.path.join(self.scratchDirectory,self.configFile)
@@ -567,7 +573,7 @@ class DMRGCI(lib.StreamObject):
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE4(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
-            E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E4 = numpy.fromfile(fnameout, dtype=numpy.float64)
             E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
           else:
             print('Reading binary 4RDM from BLOCK')
@@ -1009,7 +1015,6 @@ def block_version(blockexe):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import mcscf
     settings.MPIPREFIX =''
     b = 1.4
     mol = gto.Mole()

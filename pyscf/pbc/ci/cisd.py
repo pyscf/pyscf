@@ -19,7 +19,7 @@ from pyscf.ci import gcisd
 from pyscf.pbc import mp
 
 class RCISD(cisd.RCISD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -42,7 +42,7 @@ class RCISD(cisd.RCISD):
         return eris
 
 class UCISD(ucisd.UCISD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -68,7 +68,7 @@ class UCISD(ucisd.UCISD):
         return eris
 
 class GCISD(gcisd.GCISD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
         gcisd.GCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)

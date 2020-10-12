@@ -18,11 +18,11 @@ import numpy
 from pyscf import lib
 from pyscf import gto, scf
 from pyscf.scf import ucphf
+from pyscf.scf import _response_functions
 from pyscf.prop.hfc import uhf as uhf_hfc
 from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.ao2mo import _ao2mo
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 
@@ -95,7 +95,7 @@ def solve_mo1_pso(hfcobj, hfc_nuc=None, with_cphf=None):
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential'''
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp = mf.gen_response(with_j=False, hermi=0)
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0
     orboa = mo_coeff[0][:, occidxa]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ class SpinFreeX2C(X2C):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xcell.intor('int1e_kin', shls_slice=shls_slice)
                 s1 = xcell.intor('int1e_ovlp', shls_slice=shls_slice)
-                with xcell.with_rinv_as_nucleus(ia):
+                with xcell.with_rinv_at_nucleus(ia):
                     z = -xcell.atom_charge(ia)
                     v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
                     w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
@@ -186,7 +186,7 @@ class SpinFreeX2C(X2C):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xcell.intor('int1e_kin', shls_slice=shls_slice)
                 s1 = xcell.intor('int1e_ovlp', shls_slice=shls_slice)
-                with xcell.with_rinv_as_nucleus(ia):
+                with xcell.with_rinv_at_nucleus(ia):
                     z = -xcell.atom_charge(ia)
                     v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
                     w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
@@ -209,7 +209,7 @@ def get_pnucp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = t0 = (time.clock(), time.time())
+    t1 = (time.clock(), time.time())
 
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()

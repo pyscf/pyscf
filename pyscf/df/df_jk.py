@@ -64,7 +64,6 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''
     from pyscf import df
     from pyscf.scf import dhf
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
@@ -81,15 +80,12 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 
     if isinstance(mf, _DFHF):
         if mf.with_df is None:
-            mf = mf_class(mf, with_df, auxbasis)
-        elif mf.with_df.auxbasis != auxbasis:
-            if (isinstance(mf, newton_ah._CIAH_SOSCF) and
-                isinstance(mf._scf, _DFHF)):
-                mf.with_df = copy.copy(mf.with_df)
-                mf.with_df.auxbasis = auxbasis
-            else:
-                raise RuntimeError('DF has been initialized. '
-                                   'It cannot be initialized twice.')
+            mf.with_df = with_df
+        elif getattr(mf.with_df, 'auxbasis', None) != auxbasis:
+            #logger.warn(mf, 'DF might have been initialized twice.')
+            mf = copy.copy(mf)
+            mf.with_df = with_df
+            mf.only_dfj = only_dfj
         return mf
 
     class DFHF(_DFHF, mf_class):
@@ -106,13 +102,16 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 
         See also the documents of class %s for other SCF attributes.
         ''' % mf_class
-        def __init__(self, mf, df, auxbasis):
+        def __init__(self, mf, df, only_dfj):
             self.__dict__.update(mf.__dict__)
             self._eri = None
-            self.auxbasis = auxbasis
             self.with_df = df
             self.only_dfj = only_dfj
-            self._keys = self._keys.union(['auxbasis', 'with_df', 'only_dfj'])
+            self._keys = self._keys.union(['with_df', 'only_dfj'])
+
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return mf_class.reset(self, mol)
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                    omega=None):
@@ -140,7 +139,11 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
         def _cderi(self, x):
             self.with_df._cderi = x
 
-    return DFHF(mf, with_df, auxbasis)
+        @property
+        def auxbasis(self):
+            return getattr(self.with_df, 'auxbasis', None)
+
+    return DFHF(mf, with_df, only_dfj)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
@@ -186,8 +189,14 @@ class _DFHF(object):
     MP2 = method_not_implemented
     CISD = method_not_implemented
     CCSD = method_not_implemented
-    CASCI = method_not_implemented
-    CASSCF = method_not_implemented
+
+    def CASCI(self, ncas, nelecas, auxbasis=None, ncore=None):
+        from pyscf import mcscf
+        return mcscf.DFCASCI(self, ncas, nelecas, auxbasis, ncore)
+
+    def CASSCF(self, ncas, nelecas, auxbasis=None, ncore=None, frozen=None):
+        from pyscf import mcscf
+        return mcscf.DFCASSCF(self, ncas, nelecas, auxbasis, ncore, frozen)
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):

@@ -1,0 +1,9 @@
+[flake8]
+# https://flake8.pycqa.org/en/2.5.5/warnings.html#error-codes
+ignore = E127, E129, E201, E202, E203, E225, E226, E231, E241, E261, E262, \
+         E265, E266, E301, E302, E303, E305, E401, E701, W391, W504, C901, \
+         F401, E228, E126, W503, E731, E211, E221, E222, E741, E251, E402, \
+         E306
+
+exclude = test, .git, __pycache__, build, dist, __init__.py .eggs, *.egg
+max-line-length = 120

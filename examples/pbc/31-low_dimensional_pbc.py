@@ -13,13 +13,18 @@ DF uses one center Gaussian functions to expand the orbital pair products.
 For all-electron problem (regardless of the boundary conditions) DF is more
 accurate than AFTDF and less accurate than MDF, in most scenario.
 
-MDF is a combination of DF and AFTDF. It uses one center gaussian with the
+MDF is a combination of DF and AFTDF. It uses one center Gaussian with the
 planewaves to expand the orbital pair products.  Typically, it has better
-accuracy but worse performance than DF.  If the auxiliary gaussians in DF
+accuracy but worse performance than DF.  If the auxiliary Gaussians in DF
 have good quality, the DF scheme may have better accuracy than MDF due to
 the linear dependency between Gaussian and planewaves.  So choose DF or MDF
 based on your needs.
 
+You may see warnings for vacuum size in the 2D calculations. When evaluating
+integrals, truncated Coulomb interactions were used by default for 2D system.
+This requires a proper vacuum to remove the Coulomb interactions between
+slabs. Large errors may be observed if the vacuum size is too small.
+See also the discussions in issue #558
 '''
 
 import numpy
@@ -122,7 +127,7 @@ cell.build(unit = 'B',
            verbose = 0,
            basis='sto3g')
 
-mf = pbchf.KRHF(cell.copy().set(low_dim_ft_type='analytic_2d_1'))
+mf = pbchf.KRHF(cell.copy())
 mf.kpts = cell.make_kpts([4,4,1])
 e.append(mf.kernel())
 

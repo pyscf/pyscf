@@ -33,7 +33,7 @@ from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import chkfile  # noqa
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -80,7 +80,18 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         shifta, shiftb = level_shift_factor
     else:
         shifta = shiftb = level_shift_factor
+    if isinstance(damp_factor, (tuple, list, np.ndarray)):
+        dampa, dampb = damp_factor
+    else:
+        dampa = dampb = damp_factor
 
+    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
+        f_a = []
+        f_b = []
+        for k, s1e in enumerate(s_kpts):
+            f_a.append(mol_hf.damping(s1e, dm_kpts[0][k], f_kpts[0][k], dampa))
+            f_b.append(mol_hf.damping(s1e, dm_kpts[1][k], f_kpts[1][k], dampb))
+        f_kpts = [f_a, f_b]
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -149,21 +160,34 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
             logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
         else:
             logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
+    else:
+        for mo_e in mo_energy_kpts[1]:
+            mo_occ_kpts[1].append(np.zeros_like(mo_e))
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
         logger.debug(mf, '     k-point                  alpha mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
-                         k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[0][k][mo_occ_kpts[0][k]> 0],
-                         mo_energy_kpts[0][k][mo_occ_kpts[0][k]==0])
+            if (np.count_nonzero(mo_occ_kpts[0][k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[0][k] == 0) > 0):
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                             k, kpt[0], kpt[1], kpt[2],
+                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]> 0],
+                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]==0])
+            else:
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[0][k])
         logger.debug(mf, '     k-point                  beta  mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
-                         k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[1][k][mo_occ_kpts[1][k]> 0],
-                         mo_energy_kpts[1][k][mo_occ_kpts[1][k]==0])
+            if (np.count_nonzero(mo_occ_kpts[1][k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[1][k] == 0) > 0):
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                             k, kpt[0], kpt[1], kpt[2],
+                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]> 0],
+                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]==0])
+            else:
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1][k])
         np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
@@ -350,7 +374,7 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
 get_rho = khf.get_rho
 
 
-class KUHF(pbcuhf.UHF, khf.KSCF):
+class KUHF(khf.KSCF, pbcuhf.UHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
@@ -361,6 +385,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.nelec = None
+        self.init_guess_breaksym = None
+        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):
@@ -387,9 +413,6 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    build = khf.KSCF.build
-    check_sanity = khf.KSCF.check_sanity
-
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None:
             cell = self.cell
@@ -413,7 +436,6 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
             dm = self.init_guess_by_minao(cell)
 
         if dm_kpts is None:
-            nao = dm[0].shape[-1]
             nkpts = len(self.kpts)
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
             dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
@@ -436,17 +458,12 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
             dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
-    get_hcore = khf.KSCF.get_hcore
-    get_ovlp = khf.KSCF.get_ovlp
-    get_jk = khf.KSCF.get_jk
-    get_j = khf.KSCF.get_j
-    get_k = khf.KSCF.get_k
     get_fock = get_fock
     get_fermi = get_fermi
     get_occ = get_occ
     energy_elec = energy_elec
 
-    get_rho = khf.KSCF.get_rho
+    get_rho = get_rho
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
@@ -522,6 +539,11 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
+    init_guess_by_1e     = pbcuhf.UHF.init_guess_by_1e
+    init_guess_by_minao  = pbcuhf.UHF.init_guess_by_minao
+    init_guess_by_atom   = pbcuhf.UHF.init_guess_by_atom
+    init_guess_by_huckel = pbcuhf.UHF.init_guess_by_huckel
+
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
@@ -571,14 +593,6 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
 
     canonicalize = canonicalize
 
-    dump_chk = khf.KSCF.dump_chk
-
-    density_fit = khf.KSCF.density_fit
-    # mix_density_fit inherits from khf.KSCF.mix_density_fit
-
-    newton = khf.KSCF.newton
-    x2c = x2c1e = sfx2c1e = khf.KSCF.sfx2c1e
-
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
                   external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
@@ -590,6 +604,10 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         '''Convert given mean-field object to KUHF'''
         addons.convert_to_uhf(mf, self)
         return self
+
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import kuhf
+        return kuhf.Gradients(self)
 
 del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
@@ -609,4 +627,3 @@ if __name__ == '__main__':
     mf = KUHF(cell, [2,1,1])
     mf.kernel()
     mf.analyze()
-

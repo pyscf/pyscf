@@ -17,6 +17,7 @@
 Interface to geomeTRIC library https://github.com/leeping/geomeTRIC
 '''
 
+import os
 import tempfile
 import numpy
 import geometric
@@ -24,7 +25,7 @@ import geometric.molecule
 #from geometric import molecule
 from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
-                                  symmetrize)
+                                  symmetrize)  # noqa
 from pyscf import __config__
 from pyscf.grad.rhf import GradientsBasics
 
@@ -99,7 +100,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
            include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
            maxsteps=100, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 
@@ -142,6 +143,11 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     if engine.mol.symmetry:
         engine.mol.symmetry = engine.mol.topgroup
 
+    # geomeTRIC library on pypi requires to provide config file log.ini.
+    if not os.path.exists(os.path.abspath(
+            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))):
+        kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
+
     engine.assert_convergence = assert_convergence
     try:
         m = geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
@@ -157,7 +163,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
              maxsteps=100, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 
@@ -173,7 +179,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
         newmol = geometric_solver.optimize(method, **conv_params)
     '''
     # MRH, 07/23/2019: name all explicit kwargs for forward compatibility
-    return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost, 
+    return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost,
             constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
 
 class GeometryOptimizer(lib.StreamObject):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import addons
+from pyscf.gto.moleintor import getints
 from pyscf import __config__
 
 
@@ -45,7 +46,6 @@ def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None,
 
             cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     '''
-    from pyscf.gto.moleintor import getints, make_cintopt
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
 
     # Extract the call of the two lines below
@@ -72,10 +72,13 @@ def aux_e1(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
     The same arguments as function aux_e2 can be input to aux_e1.
     '''
     out = aux_e2(mol, auxmol, intor, aosym, comp, out)
-    if out.ndim == 2:  # comp == 1
+    if out.ndim == 2:  # comp == 1, aosym == s2
         out = out.T
-    else:
-        out = out.transpose(0,2,1)
+    elif out.ndim == 3:  # aosym == s1
+        assert aosym == 's1', ''
+        out = out.transpose(1, 2, 0)
+    else:  # comp > 1 and aosym == s1
+        out = out.transpose(0, 2, 3, 1)
     return out
 
 

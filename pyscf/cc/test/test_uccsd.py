@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 import unittest
 import copy
 import numpy
+import h5py
 from functools import reduce
 
 from pyscf import gto, lib
@@ -653,6 +654,47 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(mycc.t1[1].size, 0)
         self.assertEqual(mycc.t2[1].size, 0)
         self.assertEqual(mycc.t2[2].size, 0)
+
+    def test_reset(self):
+        mycc = cc.CCSD(scf.UHF(mol).newton())
+        mycc.reset(mol_s2)
+        self.assertTrue(mycc.mol is mol_s2)
+        self.assertTrue(mycc._scf.mol is mol_s2)
+
+    def test_ao2mo(self):
+        mycc = uccsd.UCCSD(mf)
+        numpy.random.seed(2)
+        nao = mol.nao
+        mo = numpy.random.random((2, nao, nao))
+        eri_incore = mycc.ao2mo(mo)
+        mycc.max_memory = 0
+        eri_outcore = mycc.ao2mo(mo)
+        self.assertTrue(isinstance(eri_outcore.oovv, h5py.Dataset))
+        self.assertAlmostEqual(abs(eri_incore.oooo - eri_outcore.oooo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.oovv - eri_outcore.oovv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovoo - eri_outcore.ovoo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovvo - eri_outcore.ovvo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovov - eri_outcore.ovov).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovvv - eri_outcore.ovvv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.vvvv - eri_outcore.vvvv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OOOO - eri_outcore.OOOO).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OOVV - eri_outcore.OOVV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OVOO - eri_outcore.OVOO).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OVVO - eri_outcore.OVVO).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OVOV - eri_outcore.OVOV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OVVV - eri_outcore.OVVV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.VVVV - eri_outcore.VVVV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ooOO - eri_outcore.ooOO).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ooVV - eri_outcore.ooVV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovOO - eri_outcore.ovOO).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovVO - eri_outcore.ovVO).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovOV - eri_outcore.ovOV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovVV - eri_outcore.ovVV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.vvVV - eri_outcore.vvVV).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OOvv - eri_outcore.OOvv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OVoo - eri_outcore.OVoo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OVvo - eri_outcore.OVvo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.OVvv - eri_outcore.OVvv).max(), 0, 12)
 
 
 if __name__ == "__main__":

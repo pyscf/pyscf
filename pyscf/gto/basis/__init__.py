@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ if sys.version_info < (2,7):
 else:
     import importlib
 from pyscf.gto.basis import parse_nwchem
+from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf import __config__
 
 ALIAS = {
@@ -152,16 +153,18 @@ ALIAS = {
     'def2qzvppd' : 'def2-qzvppd.dat',
     'def2qzvpp'  : 'def2-qzvpp.dat' ,
     'def2qzvp'   : 'def2-qzvp.dat'  ,
-    'def2svpjfit'    : 'def2-svp-jfit.dat'   ,
-    'def2svpjkfit'   : 'def2-svp-jkfit.dat'  ,
-    'def2tzvpjfit'   : 'def2-tzvp-jfit.dat'  ,
-    'def2tzvpjkfit'  : 'def2-tzvp-jkfit.dat' ,
-    'def2tzvppjfit'  : 'def2-tzvpp-jfit.dat' ,
-    'def2tzvppjkfit' : 'def2-tzvpp-jkfit.dat',
-    'def2qzvpjfit'   : 'def2-qzvp-jfit.dat'  ,
-    'def2qzvpjkfit'  : 'def2-qzvp-jkfit.dat' ,
-    'def2qzvppjfit'  : 'def2-qzvpp-jfit.dat' ,
-    'def2qzvppjkfit' : 'def2-qzvpp-jkfit.dat',
+    'def2svpjfit'    : 'def2-universal-jfit.dat',
+    'def2svpjkfit'   : 'def2-universal-jkfit.dat',
+    'def2tzvpjfit'   : 'def2-universal-jfit.dat',
+    'def2tzvpjkfit'  : 'def2-universal-jkfit.dat',
+    'def2tzvppjfit'  : 'def2-universal-jfit.dat',
+    'def2tzvppjkfit' : 'def2-universal-jkfit.dat',
+    'def2qzvpjfit'   : 'def2-universal-jfit.dat',
+    'def2qzvpjkfit'  : 'def2-universal-jkfit.dat',
+    'def2qzvppjfit'  : 'def2-universal-jfit.dat',
+    'def2qzvppjkfit' : 'def2-universal-jkfit.dat',
+    'def2universaljfit'  : 'def2-universal-jfit.dat',
+    'def2universaljkfit' : 'def2-universal-jkfit.dat',
     'def2svpri'      : 'def2-svp-ri.dat'     ,
     'def2svpdri'     : 'def2-svpd-ri.dat'    ,
     'def2tzvpri'     : 'def2-tzvp-ri.dat'    ,
@@ -172,9 +175,11 @@ ALIAS = {
     'def2qzvppri'    : 'def2-qzvpp-ri.dat'   ,
     'def2qzvppdri'   : 'def2-qzvppd-ri.dat'  ,
     'tzv'        : 'tzv.dat'        ,
-    'weigend'    : 'weigend_cfit.dat',
-    'weigend+etb': 'weigend_cfit.dat',
-    'weigendcfit': 'weigend_cfit.dat',
+    'weigend'     : 'def2-universal-jfit.dat',
+    'weigend+etb' : 'def2-universal-jfit.dat',
+    'weigendcfit' : 'def2-universal-jfit.dat',
+    'weigendjfit' : 'def2-universal-jfit.dat',
+    'weigendjkfit': 'def2-universal-jkfit.dat',
     'demon'      : 'demon_cfit.dat' ,
     'demoncfit'  : 'demon_cfit.dat' ,
     'ahlrichs'   : 'ahlrichs_cfit.dat',
@@ -293,6 +298,40 @@ ALIAS = {
     'pobtzvp'       :  'pob-tzvp.dat',
     'pobtzvpp'      :  'pob-tzvpp.dat',
     'crystalccpvdz' :  'crystal-cc-pvdz.dat',
+# ccECP 
+    'ccecp'         : join('ccecp-basis', 'ccECP', 'ccECP.dat'   ),
+    'ccecpccpvdz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVDZ.dat'),
+    'ccecpccpvtz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVTZ.dat'),
+    'ccecpccpvqz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVQZ.dat'),
+    'ccecpccpv5z'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pV5Z.dat'),
+    'ccecpccpv6z'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pV6Z.dat'),
+    'ccecpaugccpvdz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVDZ.dat'),
+    'ccecpaugccpvtz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVTZ.dat'),
+    'ccecpaugccpvqz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVQZ.dat'),
+    'ccecpaugccpv5z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV5Z.dat'),
+    'ccecpaugccpv6z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV6Z.dat'),
+# ccECP_He_core 
+    'ccecphe'         : join('ccecp-basis', 'ccECP_He_core', 'ccECP.dat'   ),
+    'ccecpheccpvdz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVDZ.dat'),
+    'ccecpheccpvtz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVTZ.dat'),
+    'ccecpheccpvqz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVQZ.dat'),
+    'ccecpheccpv5z'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pV5Z.dat'),
+    'ccecpheccpv6z'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pV6Z.dat'),
+    'ccecpheaugccpvdz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVDZ.dat'),
+    'ccecpheaugccpvtz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVTZ.dat'),
+    'ccecpheaugccpvqz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVQZ.dat'),
+    'ccecpheaugccpv5z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV5Z.dat'),
+    'ccecpheaugccpv6z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV6Z.dat'),
+# ccECP_reg
+    'ccecpreg'         : join('ccecp-basis', 'ccECP_reg', 'ccECP.dat'   ),
+    'ccecpregccpvdz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVDZ.dat'),
+    'ccecpregccpvtz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVTZ.dat'),
+    'ccecpregccpvqz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVQZ.dat'),
+    'ccecpregccpv5z'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pV5Z.dat'),
+    'ccecpregaugccpvdz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVDZ.dat'),
+    'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
+    'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
+    'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
 }
 
 def _is_pople_basis(basis):
@@ -314,8 +353,7 @@ def _parse_pople_basis(basis, symb):
     # 6-31G, 6-311G etc.
     basename = mbas[0] + '-' + mbas[1:].upper()
     basename = basename.replace('+', '').replace('*', '')
-    pathtmp = join('pople-basis',
-                            basename + '-polarization-%s.dat')
+    pathtmp = join('pople-basis', basename + '-polarization-%s.dat')
     def convert(s):
         if len(s) == 0:
             return []
@@ -417,7 +455,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         # read basis from given file
         try:
             return parse_nwchem.load(filename_or_basisname, symb, optimize)
-        except RuntimeError:
+        except BasisNotFoundError:
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse(fin.read(), symb)
 
@@ -433,20 +471,20 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
-        except KeyError:
+        except BasisNotFoundError:
             try:
                 return parse_nwchem.parse(filename_or_basisname)
             except IndexError:
-                raise KeyError('Invalid basis name %s' % filename_or_basisname)
+                raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
-            raise KeyError('Basis %s not found' % filename_or_basisname)
+            raise BasisNotFoundError(filename_or_basisname)
 
     if name in ALIAS:
         basmod = ALIAS[name]
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
     else:
-        raise RuntimeError('Basis %s not found' % filename_or_basisname)
+        raise BasisNotFoundError(filename_or_basisname)
 
     if 'dat' in basmod:
         b = parse_nwchem.load(join(_BASIS_DIR, basmod), symb, optimize)
@@ -476,7 +514,7 @@ def load_ecp(filename_or_basisname, symb):
         # read basis from given file
         try:
             return parse_nwchem.load_ecp(filename_or_basisname, symb)
-        except RuntimeError:
+        except BasisNotFoundError:
             with open(filename_or_basisname, 'r') as fin:
                 return parse_ecp(fin.read(), symb)
 

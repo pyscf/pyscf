@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -138,7 +138,6 @@ def contract_ep(g, fcivec, nsite, nelec, nphonon):
     na, nb = cishape[:2]
     ci0 = fcivec.reshape(cishape)
     fcinew = numpy.zeros(cishape)
-    nbar = float(neleca+nelecb) / nsite
 
     phonon_cre = numpy.sqrt(numpy.arange(1,nphonon+1))
     for i in range(nsite):

@@ -28,9 +28,9 @@ from pyscf.dft import rks
 
 class GKS(ghf_symm.GHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         ghf_symm.GHF.__init__(self, mol)
-        rks.KohnShamDFT.__init__(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         ghf_symm.GHF.dump_flags(self, verbose)

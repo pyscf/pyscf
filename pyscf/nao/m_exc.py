@@ -33,5 +33,5 @@ def exc(sv, dm, xc_code, **kvargs):
   grid = sv.build_3dgrid_pp(**kvargs)
   dens = sv.dens_elec(grid.coords, dm)
   exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, dens.T, spin=sv.nspin-1, deriv=0)
-  nelec = np.dot(dens[:,0]*exc, grid.weights)
+  nelec = np.einsum('sx,x->',dens.T*exc, grid.weights)
   return nelec

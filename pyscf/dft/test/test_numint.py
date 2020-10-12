@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -378,6 +378,63 @@ class KnownValues(unittest.TestCase):
         wv = dft.numint._rks_gga_wv2(rho0[0]+rho0[1], rho1[0]+rho1[1], fxc, kxc, weight)
         self.assertAlmostEqual(abs(1 - wv/wva).max(), 0, 12)
         self.assertAlmostEqual(abs(1 - wv/wvb).max(), 0, 12)
+
+    def test_complex_dm(self):
+        mf = dft.RKS(h2o)
+        mf.xc = 'b3lyp'
+        nao = h2o.nao
+        numpy.random.seed(1)
+        dm = (numpy.random.random((nao,nao)) +
+              numpy.random.random((nao,nao))*1j)
+        dm = dm + dm.conj().T
+        v = mf.get_veff(h2o, dm)
+        self.assertAlmostEqual(finger(v), 30.543789621782576-0.23207622637751305j, 9)
+
+    def test_rsh_omega(self):
+        rho0 = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        ni = dft.numint.NumInt()
+        ni.omega = 0.4
+        omega = 0.2
+        exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, 0, 0, 1, omega)
+        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+
+        exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, 0, 0, 1)
+        self.assertAlmostEqual(float(exc), -0.5406095865415561, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.772123720263471, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.00301639097170439, 7)
+
+    def test_cache_xc_kernel(self):
+        mf = dft.RKS(h2o)
+        mf.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        mf.run()
+
+        mf.xc = 'WB97XD'
+        mf.omega = 0.9
+        rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
+        self.assertAlmostEqual(rho[0].dot(mf.grids.weights), 10, 4)
+        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho   ), 81.0427569, 4)
+        self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], vxc[0]), -5.9013868, 4)
+        self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], vxc[1]),  0.3874269, 4)
+        self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], fxc[0]), -15.939767, 1)
+        #self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], fxc[1]), 15889.0167, 2)
+
+        #mf.xc = 'camb3lyp'
+        #mf.omega = 0.9
+        #rho1, vxc1, fxc1 = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
+
+        #mf.xc = 'camb3lyp'
+        #mf._numint.libxc = dft.xcfun
+        #mf.omega = 0.9
+        #rho2, vxc2, fxc2 = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
+
+        #self.assertAlmostEqual(abs(rho1 - rho2).max(), 0, 4)
+        #self.assertAlmostEqual(abs(vxc1[0] - vxc2[0]), 0, 4)
+        #self.assertAlmostEqual(abs(vxc1[1] - vxc2[1]), 0, 4)
+        #self.assertAlmostEqual(abs(fxc1[0] - fxc2[0]), 0, 4)
+        #self.assertAlmostEqual(abs(fxc1[1] - fxc2[1]), 0, 0)
+        #self.assertAlmostEqual(abs(fxc1[2] - fxc2[2]), 0, 0)
 
 
 if __name__ == "__main__":

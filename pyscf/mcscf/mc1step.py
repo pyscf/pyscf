@@ -30,14 +30,14 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import gto
-from pyscf import fci
+from pyscf import scf
 from pyscf.soscf import ciah
 from pyscf import __config__
 
 WITH_MICRO_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_micro_scheduler', False)
 WITH_STEPSIZE_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_stepsize_scheduler', True)
 
-# ref. JCP, 82, 5053;  JCP, 73, 2342
+# ref. JCP, 82, 5053 (1985); DOI: 10.1063/1.448627 and JCP 73, 2342 (1980); DOI:10.1063/1.440384
 
 # gradients, hessian operator and hessian diagonal
 def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
@@ -66,8 +66,8 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         kbuf = eris.papa[i]
         if i < nocc:
             jkcaa[i] = numpy.einsum('ik,ik->i', 6*kbuf[:,i]-2*jbuf[i], casdm1)
-        vhf_a[i] =(numpy.einsum('quv,uv->q', jbuf, casdm1)
-                 - numpy.einsum('uqv,uv->q', kbuf, casdm1) * .5)
+        vhf_a[i] =(numpy.einsum('quv,uv->q', jbuf, casdm1) -
+                   numpy.einsum('uqv,uv->q', kbuf, casdm1) * .5)
         jtmp = lib.dot(jbuf.reshape(nmo,-1), casdm2.reshape(ncas*ncas,-1))
         jtmp = jtmp.reshape(nmo,ncas,ncas)
         ktmp = lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2tmp)
@@ -185,13 +185,13 @@ def gen_g_hop(casscf, mo, u, casdm1, casdm2, eris):
         # part1
         x2[:,ncore:nocc] += numpy.einsum('purv,rv->pu', hdm2, x1[:,ncore:nocc])
 
+        # part4, part5, part6
         if ncore > 0:
-            # part4, part5, part6
-# Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-#    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
-# x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
-# x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
-# x2[:ncore] += H' * x1[:ncore]
+            # Due to x1_rs [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
+            #    == -x1_sr [4(pq|sr) + 4(pq|rs) - 2(pr|sq) - 2(ps|rq)] for r>s p>q,
+            # x2[:,:ncore] += H * x1[:,:ncore] => (becuase x1=-x1.T) =>
+            # x2[:,:ncore] += -H' * x1[:ncore] => (becuase x2-x2.T) =>
+            # x2[:ncore] += H' * x1[:ncore]
             va, vc = casscf.update_jk_in_ah(mo, x1, casdm1, eris)
             x2[ncore:nocc] += va
             x2[:ncore,ncore:] += vc
@@ -212,7 +212,6 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
     u = 1
     g_orb, gorb_update, h_op, h_diag = \
             casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
-    ngorb = g_orb.size
     g_kf = g_orb
     norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
     log.debug('    |g|=%5.3g', norm_gorb)
@@ -282,8 +281,9 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
                 break
 
             elif (ikf >= max(casscf.kf_interval, -numpy.log(norm_dr+1e-7)) or
-# Insert keyframe if the keyframe and the esitimated grad are too different
-                   norm_gorb < norm_gkf/casscf.kf_trust_region):
+                  # Insert keyframe if the keyframe and the esitimated grad
+                  # are very different
+                  norm_gorb < norm_gkf/casscf.kf_trust_region):
                 ikf = 0
                 u = casscf.update_rotate_matrix(dr, u)
                 t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
@@ -344,18 +344,19 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     ncore = casscf.ncore
     ncas = casscf.ncas
     nocc = ncore + ncas
-    #TODO: lazy evaluate eris, to leave enough memory for FCI solver
+
     eris = casscf.ao2mo(mo)
     e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
-    if ncas == nmo and not casscf.internal_rotation:
-        if casscf.canonicalization:
-            log.debug('CASSCF canonicalization')
-            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
-                                                        casscf.sorting_mo_energy,
-                                                        casscf.natorb, verbose=log)
-        else:
-            mo_energy = None
-        return True, e_tot, e_cas, fcivec, mo, mo_energy
+# macro iterations are needed when added solvent model
+#    if ncas == nmo and not casscf.internal_rotation:
+#        if casscf.canonicalization:
+#            log.debug('CASSCF canonicalization')
+#            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
+#                                                        casscf.sorting_mo_energy,
+#                                                        casscf.natorb, verbose=log)
+#        else:
+#            mo_energy = None
+#        return True, e_tot, e_cas, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
@@ -465,6 +466,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = numpy.diag(-occ)
     else:
+        if casscf.natorb:
+            # FIXME (pyscf-2.0): Whether to transform natural orbitals in
+            # active space when this flag is enabled?
+            log.warn('The attribute natorb of mcscf object affects only the '
+                     'orbital canonicalization.\n'
+                     'If you would like to get natural orbitals in active space '
+                     'without touching core and external orbitals, an explicit '
+                     'call to mc.cas_natorb_() is required')
         mo_energy = None
 
     if dump_chk:
@@ -505,6 +514,7 @@ def as_scanner(mc):
         def __init__(self, mc):
             self.__dict__.update(mc.__dict__)
             self._scf = mc._scf.as_scanner()
+
         def __call__(self, mol_or_geom, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
@@ -578,7 +588,7 @@ class CASSCF(casci.CASCI):
             can affect the accuracy and performance of CASSCF solver.  Lower
             ``ah_conv_tol`` and ``ah_lindep`` might improve the accuracy of CASSCF
             optimization, but decrease the performance.
-            
+
             >>> from pyscf import gto, scf, mcscf
             >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='ccpvdz', verbose=0)
             >>> mf = scf.UHF(mol)
@@ -620,9 +630,9 @@ class CASSCF(casci.CASCI):
             Optimized CASSCF orbitals coefficients. When canonicalization is
             specified, the returned orbitals make the general Fock matrix
             (Fock operator on top of MCSCF 1-particle density matrix)
-            diagonalized within each subspace (core, active, external).
-            If natorb (natural orbitals in active space) is specified,
-            the active segment of the mo_coeff is natural orbitls.
+            diagonalized within each subspace (core, active, external). If
+            natorb (natural orbitals in active space) is enabled, the active
+            segment of mo_coeff is transformed to natural orbitals.
         mo_energy : ndarray
             Diagonal elements of general Fock matrix (in mo_coeff
             representation).
@@ -728,7 +738,7 @@ class CASSCF(casci.CASCI):
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
-        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
+        log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
         assert(nvir >= 0 and ncore >= 0 and ncas >= 0)
         if self.frozen is not None:
@@ -766,9 +776,9 @@ class CASSCF(casci.CASCI):
 
         if (getattr(self._scf, 'with_solvent', None) and
             not getattr(self, 'with_solvent', None)):
-            log.warn('''Solvent model %s was found in SCF object.
-It is not applied to the CASSCF object. The CASSCF result is not affected by the SCF solvent model.
-To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs be called
+            log.warn('''Solvent model %s was found at SCF level but not applied to the CASSCF object.
+The SCF solvent model will not be applied to the current CASSCF calculation.
+To enable the solvent model for CASSCF, the following code needs to be called
         from pyscf import solvent
         mc = mcscf.CASSCF(...)
         mc = solvent.ddCOSMO(mc)
@@ -947,10 +957,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         return casci.CASCI.ao2mo(self, mo_coeff)
 
     def update_jk_in_ah(self, mo, r, casdm1, eris):
-# J3 = eri_popc * pc + eri_cppo * cp
-# K3 = eri_ppco * pc + eri_pcpo * cp
-# J4 = eri_pcpa * pa + eri_appc * ap
-# K4 = eri_ppac * pa + eri_papc * ap
+        # J3 = eri_popc * pc + eri_cppo * cp
+        # K3 = eri_ppco * pc + eri_pcpo * cp
+        # J4 = eri_pcpa * pa + eri_appc * ap
+        # K4 = eri_ppac * pa + eri_papc * ap
         ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
@@ -985,7 +995,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         if self.with_dep4:
             mo1 = numpy.dot(mo, u)
             mo1_cas = mo1[:,ncore:nocc]
-            dm_core  = numpy.dot(mo1[:,:ncore], mo1[:,:ncore].T) * 2
+            dm_core = numpy.dot(mo1[:,:ncore], mo1[:,:ncore].T) * 2
             vj, vk = self._scf.get_jk(self.mol, dm_core)
             h1 =(reduce(numpy.dot, (ua.T, h1e_mo, ua)) +
                  reduce(numpy.dot, (mo1_cas.T, vj-vk*.5, mo1_cas)))
@@ -999,8 +1009,8 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             for i in range(nmo):
                 jbuf = eris.ppaa[i]
                 kbuf = eris.papa[i]
-                jk +=(numpy.einsum('quv,q->uv', jbuf, ddm[i])
-                    - numpy.einsum('uqv,q->uv', kbuf, ddm[i]) * .5)
+                jk += (numpy.einsum('quv,q->uv', jbuf, ddm[i]) -
+                       numpy.einsum('uqv,q->uv', kbuf, ddm[i]) * .5)
                 p1aa[i] = lib.dot(ua.T, jbuf.reshape(nmo,-1))
                 paa1[i] = lib.dot(kbuf.transpose(0,2,1).reshape(-1,nmo), ra)
             h1 = reduce(numpy.dot, (ua.T, h1e_mo, ua)) + jk
@@ -1017,8 +1027,8 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         # pure core response
         # response of (1/2 dm * vhf * dm) ~ ddm*vhf
 # Should I consider core response as a part of CI gradients?
-        ecore =(numpy.einsum('pq,pq->', h1e_mo, ddm)
-              + numpy.einsum('pq,pq->', eris.vhf_c, ddm))
+        ecore =(numpy.einsum('pq,pq->', h1e_mo, ddm) +
+                numpy.einsum('pq,pq->', eris.vhf_c, ddm))
         ### hessian_co part end ###
 
         ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_cas, envs)
@@ -1039,8 +1049,6 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         '''
         ncas = self.ncas
         nelecas = self.nelecas
-        ncore = self.ncore
-        nocc = ncore + ncas
         if 'norm_gorb' in envs:
             tol = max(self.conv_tol, envs['norm_gorb']**2*.1)
         else:
@@ -1067,6 +1075,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0)
         else:
             wfnsym = None
+
         def contract_2e(c):
             if wfnsym is None:
                 hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
@@ -1085,8 +1094,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ecore=ecore,
                                            ci0=ci0, tol=tol, max_memory=max_memory)
         else:
-            nd = min(max(self.ci_response_space, 2), ci0.size)
-            logger.debug(self, 'CI step by %dD subspace response', nd)
+            nd = self.ci_response_space
             xs = [ci0.ravel()]
             ax = [hc]
             heff = numpy.empty((nd,nd))
@@ -1094,19 +1102,20 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
             for i in range(1, nd):
-                xs.append(ax[i-1] - xs[i-1] * e_cas)
+                dx = ax[i-1] - xs[i-1] * e_cas
+                if numpy.linalg.norm(dx) < 1e-6:
+                    break
+                xs.append(dx)
                 ax.append(contract_2e(xs[i]))
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-            e, v = lib.safe_eigh(heff, seff)[:2]
+            nd = len(xs)
+            e, v = lib.safe_eigh(heff[:nd,:nd], seff[:nd,:nd])[:2]
             ci1 = xs[0] * v[0,0]
-            for i in range(1,nd):
+            for i in range(1, nd):
                 ci1 += xs[i] * v[i,0]
         return ci1, g
-
-    def get_jk(self, mol, dm, hermi=1):
-        return self._scf.get_jk(mol, dm, hermi=1)
 
     def get_grad(self, mo_coeff=None, casdm1_casdm2=None, eris=None):
         '''Orbital gradients'''
@@ -1254,11 +1263,10 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         mc1.max_cycle_micro = 10
         # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
         from pyscf.mcscf.addons import StateAverageMCSCFSolver
-        if isinstance (self, StateAverageMCSCFSolver):
+        if isinstance(self, StateAverageMCSCFSolver):
             mc1 = mc1.state_average_(self.weights)
         return mc1
 
-from pyscf import scf
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
 scf.uhf.UHF.CASSCF = None
 

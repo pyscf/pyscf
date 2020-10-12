@@ -73,13 +73,6 @@ def as_scanner(grad_ci, state=0):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
 
-            # cache eris. It is used multiple times when calculating gradients
-            g_ao2mo = g.base.__class__.ao2mo
-            def _save_eris(self, *args, **kwargs):
-                self._eris = g_ao2mo(self, *args, **kwargs)
-                return self._eris
-            self.base.__class__.ao2mo = _save_eris
-
         def __call__(self, mol_or_geom, state=state, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom
@@ -90,8 +83,17 @@ def as_scanner(grad_ci, state=0):
             if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
                 raise ValueError('State ID greater than the number of CISD roots')
 
+            mf_scanner = ci_scanner._scf
+            mf_scanner(mol)
+            ci_scanner.mo_coeff = mf_scanner.mo_coeff
+            ci_scanner.mo_occ = mf_scanner.mo_occ
+
+            if getattr(ci_scanner.ci, 'size', 0) != ci_scanner.vector_size():
+                ci_scanner.ci = None
+            eris = ci_scanner.ao2mo(ci_scanner.mo_coeff)
+            ci_scanner.kernel(ci0=ci_scanner.ci, eris=eris)
+
 # TODO: Check root flip
-            ci_scanner(mol)
             if ci_scanner.nroots > 1:
                 e_tot = ci_scanner.e_tot[state]
                 civec = ci_scanner.ci[state]
@@ -100,8 +102,7 @@ def as_scanner(grad_ci, state=0):
                 civec = ci_scanner.ci
 
             self.mol = mol
-            de = self.kernel(civec, eris=ci_scanner._eris, **kwargs)
-            ci_scanner._eris = None  # release the resources occupied by .eris
+            de = self.kernel(civec, eris=eris, **kwargs)
             return e_tot, de
         @property
         def converged(self):
@@ -111,6 +112,15 @@ def as_scanner(grad_ci, state=0):
             else:
                 ci_conv = ci_scanner.converged
             return all((ci_scanner._scf.converged, ci_conv))
+
+    # cache eris object in CCSD base class. eris object is used many times
+    # when calculating gradients
+    g_ao2mo = grad_ci.base.__class__.ao2mo
+    def _save_eris(self, *args, **kwargs):
+        self._eris = g_ao2mo(self, *args, **kwargs)
+        return self._eris
+    grad_ci.base.__class__.ao2mo = _save_eris
+
     return CISD_GradScanner(grad_ci)
 
 class Gradients(rhf_grad.GradientsBasics):
@@ -189,8 +199,6 @@ cisd.CISD.Gradients = lib.class_as_method(Gradients)
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
-    from pyscf import grad
 
     mol = gto.M(
         atom = [

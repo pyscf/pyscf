@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ from pyscf.dft import gks
 from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
 from pyscf.dft import gks_symm
+from pyscf.dft import dks
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
 from pyscf.df import density_fit
@@ -53,45 +54,57 @@ from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
         treutler_atomic_radii_adjust, becke_atomic_radii_adjust
 
 
-def KS(mol, *args):
-    __doc__ = '''This is a wrap function to decide which DFT class to use, RKS or UKS\n
-    ''' + rks.RKS.__doc__
+def KS(mol, xc='LDA,VWN'):
     if mol.spin == 0:
-        return RKS(mol, *args)
+        return RKS(mol, xc)
     else:
-        return UKS(mol, *args)
+        return UKS(mol, xc)
+KS.__doc__ = '''
+A wrap function to create DFT object (RKS or UKS).\n
+''' + rks.RKS.__doc__
 DFT = KS
 
-def RKS(mol, *args):
+def RKS(mol, xc='LDA,VWN'):
     if mol.nelectron == 1:
         return uks.UKS(mol)
-    elif not mol.symmetry or mol.groupname is 'C1':
+    elif not mol.symmetry or mol.groupname == 'C1':
         if mol.spin > 0:
-            return roks.ROKS(mol, *args)
+            return roks.ROKS(mol, xc)
         else:
-            return rks.RKS(mol, *args)
+            return rks.RKS(mol, xc)
     else:
         if mol.spin > 0:
-            return rks_symm.ROKS(mol, *args)
+            return rks_symm.ROKS(mol, xc)
         else:
-            return rks_symm.RKS(mol, *args)
+            return rks_symm.RKS(mol, xc)
+RKS.__doc__ = rks.RKS.__doc__
 
-def ROKS(mol, *args):
+def ROKS(mol, xc='LDA,VWN'):
     if mol.nelectron == 1:
         return uks.UKS(mol)
-    elif not mol.symmetry or mol.groupname is 'C1':
-        return roks.ROKS(mol, *args)
+    elif not mol.symmetry or mol.groupname == 'C1':
+        return roks.ROKS(mol, xc)
     else:
-        return rks_symm.ROKS(mol, *args)
+        return rks_symm.ROKS(mol, xc)
+ROKS.__doc__ = roks.ROKS.__doc__
 
-def UKS(mol, *args):
-    if not mol.symmetry or mol.groupname is 'C1':
-        return uks.UKS(mol, *args)
+def UKS(mol, xc='LDA,VWN'):
+    if not mol.symmetry or mol.groupname == 'C1':
+        return uks.UKS(mol, xc)
     else:
-        return uks_symm.UKS(mol, *args)
+        return uks_symm.UKS(mol, xc)
+UKS.__doc__ = uks.UKS.__doc__
 
-def GKS(mol, *args):
-    if not mol.symmetry or mol.groupname is 'C1':
-        return gks.GKS(mol, *args)
+def GKS(mol, xc='LDA,VWN'):
+    if not mol.symmetry or mol.groupname == 'C1':
+        return gks.GKS(mol, xc)
     else:
-        return gks_symm.GKS(mol, *args)
+        return gks_symm.GKS(mol, xc)
+GKS.__doc__ = gks.GKS.__doc__
+
+def DKS(mol, xc='LDA,VWN'):
+    from pyscf.scf import dhf
+    if dhf.zquatev and mol.spin == 0:
+        return dks.RDKS(mol, *args)
+    else:
+        return dks.UDKS(mol, *args)

@@ -50,12 +50,12 @@ class KnownValues(unittest.TestCase):
 
     def test_ibo_PM(self):
         mf = scf.RHF(mol).run()
-        b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=4).kernel()
+        b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], locmethod='PM', exponent=4).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
         self.assertAlmostEqual(z, 3.9201797890974261, 5)
 
-        b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2).kernel()
+        b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], locmethod='PM', exponent=2).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
         self.assertAlmostEqual(z, 3.9201797890974261, 5)

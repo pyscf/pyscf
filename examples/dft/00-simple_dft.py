@@ -28,6 +28,7 @@ mf = mol.KS()
 #mf.xc = 'pbe0'
 #mf.xc = 'b3p86'
 #mf.xc = 'wb97x'
+#mf.xc = '' or mf.xc = None # Hartree term only, without exchange
 mf.xc = 'b3lyp'
 mf.kernel()
 

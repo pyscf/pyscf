@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ class KnownValues(unittest.TestCase):
         method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 8)
         g = method.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.finger(g), -0.035648772973075241, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.035648772973075241, 6)
 
     def test_nr_b3lypg_direct(self):
         method = dft.RKS(h2o)
@@ -132,7 +132,7 @@ class KnownValues(unittest.TestCase):
         method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 8)
         g = method.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.finger(g), -0.035648777277847155, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.035648777277847155, 6)
 
     def test_nr_uks_lsda(self):
         method = dft.UKS(h2osym_cation)
@@ -182,7 +182,7 @@ class KnownValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.926526046608529, 8)
         g = method.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.finger(g), -0.10184251826412283, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.10184251826412283, 6)
 
     def test_nr_roks_b3lypg_direct(self):
         method = dft.ROKS(h2o_cation)
@@ -340,12 +340,12 @@ class KnownValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (20, 50), "O": (20, 50),}
         method.dump_flags()
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767504283729778, 8)
 
         method._eri = None
         method.max_memory = 0
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767504283729778, 8)
 
     def test_nr_uks_vv10(self):
         method = dft.UKS(h2o)
@@ -359,37 +359,37 @@ class KnownValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (20, 50), "O": (20, 50),}
         method.dump_flags()
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 22.767504283729778, 8)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767504283729778, 8)
 
         method._eri = None
         method.max_memory = 0
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 22.767504283729778, 8)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767504283729778, 8)
 
     def test_nr_rks_rsh(self):
         method = dft.RKS(h2o)
         dm = method.get_init_guess()
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.759558596896344, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.759558596896344, 8)
 
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 23.058813088809824, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 23.058813088809824, 8)
 
     def test_nr_rks_rsh_cart(self):
         mol1 = h2o.copy()
@@ -407,27 +407,27 @@ class KnownValues(unittest.TestCase):
         dm = (dm[0], dm[0])
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 22.759558596896344, 8)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.759558596896344, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 22.759558596896344, 8)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.759558596896344, 8)
 
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 23.058813088809824, 8)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.058813088809824, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 23.058813088809824, 8)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.058813088809824, 8)
 
     def test_nr_gks_rsh(self):
         method = dft.GKS(h2o)
@@ -436,23 +436,23 @@ class KnownValues(unittest.TestCase):
         dm = dm + dm.conj().T
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 3.1818982731583274+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 3.1818982731583274+0j, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc), 3.1818982731583274+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 3.1818982731583274+0j, 8)
 
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.finger(vxc), 2.0131447223203565+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 2.0131447223203565+0j, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.finger(vxc), 2.0131447223203565+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 2.0131447223203565+0j, 8)
 
     def test_nr_rks_vv10_high_cost(self):
         method = dft.RKS(h2o)
@@ -491,6 +491,24 @@ class KnownValues(unittest.TestCase):
         mf2.kernel()
         self.assertAlmostEqual(mf1.e_tot, -76.36649222362115, 9)
 
+    def test_reset(self):
+        mf = dft.RKS(h2o).newton()
+        mf.reset(h2osym)
+        self.assertTrue(mf.mol is h2osym)
+        self.assertTrue(mf.grids.mol is h2osym)
+        self.assertTrue(mf.nlcgrids.mol is h2osym)
+
+    def test_init_guess_by_vsap(self):
+        dm = dft.RKS(h2o).get_init_guess(key='vsap')
+        self.assertAlmostEqual(lib.fp(dm), 1.7285100188309719, 9)
+
+        dm = dft.ROKS(h2osym).get_init_guess(key='vsap')
+        self.assertEqual(dm.ndim, 3)
+        self.assertAlmostEqual(lib.fp(dm), 1.9698972986009409, 9)
+
+        dm = dft.UKS(h2osym).init_guess_by_vsap()
+        self.assertEqual(dm.ndim, 3)
+        self.assertAlmostEqual(lib.fp(dm), 1.9698972986009409, 9)
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

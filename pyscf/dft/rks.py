@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import scf
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import jk
@@ -36,7 +37,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional
 
     .. note::
-        This function will change the ks object.
+        This function will modify the input ks object.
 
     Args:
         ks : an instance of :class:`RKS`
@@ -142,6 +143,60 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
+def get_vsap(ks, mol=None):
+    '''Superposition of atomic potentials
+
+    S. Lehtola, Assessment of initial guesses for self-consistent
+    field calculations. Superposition of Atomic Potentials: simple yet
+    efficient, J. Chem. Theory Comput. 15, 1593 (2019). DOI:
+    10.1021/acs.jctc.8b01089. arXiv:1810.11659.
+
+    This function evaluates the effective charge of a neutral atom,
+    given by exchange-only LDA on top of spherically symmetric
+    unrestricted Hartree-Fock calculations as described in
+
+    S. Lehtola, L. Visscher, E. Engel, Efficient implementation of the
+    superposition of atomic potentials initial guess for electronic
+    structure calculations in Gaussian basis sets, J. Chem. Phys., in
+    press (2020).
+
+    The potentials have been calculated for the ground-states of
+    spherically symmetric atoms at the non-relativistic level of theory
+    as described in
+
+    S. Lehtola, "Fully numerical calculations on atoms with fractional
+    occupations and range-separated exchange functionals", Phys. Rev. A
+    101, 012516 (2020). DOI: 10.1103/PhysRevA.101.012516
+
+    using accurate finite-element calculations as described in
+
+    S. Lehtola, "Fully numerical Hartree-Fock and density functional
+    calculations. I. Atoms", Int. J. Quantum Chem. e25945 (2019).
+    DOI: 10.1002/qua.25945
+
+    .. note::
+        This function will modify the input ks object.
+
+    Args:
+        ks : an instance of :class:`RKS`
+            XC functional are controlled by ks.xc attribute.  Attribute
+            ks.grids might be initialized.
+
+    Returns:
+        matrix Vsap = Vnuc + J + Vxc.
+    '''
+    if mol is None: mol = ks.mol
+    t0 = (time.clock(), time.time())
+
+    if ks.grids.coords is None:
+        ks.grids.build(with_non0tab=True)
+        t0 = logger.timer(ks, 'setting up grids', *t0)
+
+    ni = ks._numint
+    max_memory = ks.max_memory - lib.current_memory()[0]
+    vsap = ni.nr_sap(mol, ks.grids, max_memory=max_memory)
+    return vsap
+
 # The vhfopt of standard Coulomb operator can be used here as an approximate
 # opt since long-range part Coulomb is always smaller than standard Coulomb.
 # It's safe to prescreen LR integrals with the integral estimation from
@@ -221,8 +276,8 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return ks
 
 
-def _dft_common_init_(mf):
-    mf.xc = 'LDA,VWN'
+def _dft_common_init_(mf, xc='LDA,VWN'):
+    mf.xc = xc
     mf.nlc = ''
     mf.grids = gen_grid.Grids(mf.mol)
     mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
@@ -317,21 +372,125 @@ class KohnShamDFT(object):
 
     define_xc_ = define_xc_
 
+    def to_rhf(self):
+        '''Convert the input mean-field object to a RHF/ROHF object.
 
-class RKS(hf.RHF, KohnShamDFT):
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.RHF(self.mol)
+        mf.__dict__.update(self.to_rks().__dict__)
+        mf.converged = False
+        return mf
+
+    def to_uhf(self):
+        '''Convert the input mean-field object to a UHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.UHF(self.mol)
+        mf.__dict__.update(self.to_uks().__dict__)
+        mf.converged = False
+        return mf
+
+    def to_ghf(self):
+        '''Convert the input mean-field object to a GHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.GHF(self.mol)
+        mf.__dict__.update(self.to_gks().__dict__)
+        mf.converged = False
+        return mf
+
+    def to_rks(self, xc=None):
+        '''Convert the input mean-field object to a RKS/ROKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.addons.convert_to_rhf(self)
+        if xc is not None:
+            mf.xc = xc
+        if xc != self.xc or not isinstance(self, RKS):
+            mf.converged = False
+        return mf
+
+    def to_uks(self, xc=None):
+        '''Convert the input mean-field object to a UKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.addons.convert_to_uhf(self)
+        if xc is not None:
+            mf.xc = xc
+        if xc != self.xc:
+            mf.converged = False
+        return mf
+
+    def to_gks(self, xc=None):
+        '''Convert the input mean-field object to a GKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = scf.addons.convert_to_ghf(self)
+        if xc is not None:
+            mf.xc = xc
+        if xc != self.xc:
+            mf.converged = False
+        return mf
+
+    def reset(self, mol=None):
+        hf.SCF.reset(self, mol)
+        self.grids.reset(mol)
+        self.nlcgrids.reset(mol)
+        return self
+
+
+def init_guess_by_vsap(mf, mol=None):
+    '''Form SAP guess'''
+    if mol is None: mol = mf.mol
+
+    vsap = mf.get_vsap()
+    t = mol.intor_symmetric('int1e_kin')
+    s = mf.get_ovlp(mol)
+    hsap = t + vsap
+
+    # Form guess orbitals
+    mo_energy, mo_coeff = mf.eig(hsap, s)
+    logger.debug(mf, 'VSAP mo energies\n{}'.format(mo_energy))
+
+    # and guess density
+    mo_occ = mf.get_occ(mo_energy, mo_coeff)
+    return mf.make_rdm1(mo_coeff, mo_occ)
+
+
+class RKS(KohnShamDFT, hf.RHF):
     __doc__ = '''Restricted Kohn-Sham\n''' + hf.SCF.__doc__ + KohnShamDFT.__doc__
 
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         hf.RHF.__init__(self, mol)
-        KohnShamDFT.__init__(self)
+        KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         hf.RHF.dump_flags(self, verbose)
-        KohnShamDFT.dump_flags(self, verbose)
-        return self
+        return KohnShamDFT.dump_flags(self, verbose)
 
     get_veff = get_veff
+    get_vsap = get_vsap
     energy_elec = energy_elec
+
+    init_guess_by_vsap = init_guess_by_vsap
 
     def nuc_grad_method(self):
         from pyscf.grad import rks as rks_grad

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,12 +20,9 @@
 Edmiston-Ruedenberg localization
 '''
 
-import sys
-import time
 import numpy
 from functools import reduce
 
-from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.lo import boys
 
@@ -54,6 +51,7 @@ class EdmistonRuedenberg(boys.Boys):
         h_diag = -self.pack_uniq_var(h_diag) * 2
 
         g0 = g0 + g0.T
+
         def h_op(x):
             x = self.unpack_uniq_var(x)
             hx = numpy.einsum('iq,qp->pi', g0, x)

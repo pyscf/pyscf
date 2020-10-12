@@ -3398,6 +3398,12 @@ END
 #
 # SO-ECP parameters are downloaded from
 # https://people.clarkson.edu/~pchristi/elements/
+# Coefficients are extracted from the file xxx.f . They are different to the
+# coefficients reported in the paper (in xxx.html). The factor 2/l was included
+# in xxx.f.
+#   C(xxx.f) = 2/l * C(xxx.html)
+# the coefficients listed here follow NWChem convention
+# http://www.nwchem-sw.org/index.php/ECP
 #
 
 

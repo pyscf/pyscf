@@ -28,7 +28,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
-from pyscf.soscf.newton_ah import _gen_rhf_response
+from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
 
 
@@ -231,7 +231,7 @@ def get_fock(nmrobj, dm0=None, gauge_orig=None):
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential'''
-    vresp = _gen_rhf_response(mf, singlet=True, hermi=2)
+    vresp = mf.gen_response(singlet=True, hermi=2)
     occidx = mo_occ > 0
     orbo = mo_coeff[:,occidx]
     nocc = orbo.shape[1]

@@ -16,19 +16,31 @@
 import unittest
 from pyscf import lib
 from pyscf import gto, scf
-from pyscf.geomopt import geometric_solver
 
+try:
+    from pyscf.geomopt import geometric_solver
+except ImportError:
+    geometric_solver = False
+
+mol = gto.M(atom='''
+    O  0.   0.       0.
+    H  0.   -0.757   0.587
+    H  0.   0.757    0.587
+            ''', symmetry=True, verbose=0)
+
+def tearDownModule():
+    global mol
+    del mol
+
+@unittest.skipIf(not geometric_solver, "geomeTRIC library not found.")
 class KnownValues(unittest.TestCase):
     def test_optimize(self):
-        mol = gto.M(atom='''
-            O  0.   0.       0.
-            H  0.   -0.757   0.587
-            H  0.   0.757    0.587
-                    ''',
-                    symmetry=True, verbose=0)
-        mol1 = geometric_solver.optimize(scf.RHF(mol))
-        self.assertAlmostEqual(lib.finger(mol1.atom_coords()),
-                               3.038506469458414, 4)
+        conv_params = {
+            'convergence_grms': 1e-5,
+            'convergence_gmax': 1e-5,
+        }
+        mol1 = scf.RHF(mol).Gradients().optimizer(solver='geometric').kernel(params=conv_params)
+        self.assertAlmostEqual(lib.fp(mol1.atom_coords()), 2.19943732625887, 3)
         self.assertEqual(mol1.symmetry, 'C2v')
 
     def test_optimize_high_cost(self):

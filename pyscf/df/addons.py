@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 import sys
 import copy
 import numpy
-from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
@@ -169,8 +168,8 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][0]
                 if auxb is not None and gto.basis.load(auxb, k):
                     auxbasis[k] = auxb
-                    logger.debug(mol, 'Default auxbasis %s is used for %s %s',
-                                 auxb, k, _basis[k])
+                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS

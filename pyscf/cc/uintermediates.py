@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 import numpy as np
 from pyscf import lib
 from pyscf import ao2mo
-from pyscf.cc.rintermediates import _get_vvvv
+from pyscf.cc.rintermediates import _get_vvvv  # noqa
 from pyscf.cc.ccsd import BLKMIN
 
 # Ref: Gauss and Stanton, J. Chem. Phys. 103, 3561 (1995) Table III
@@ -411,11 +411,6 @@ def Wovvo(t1, t2, eris):
     wOvVo = np.zeros((noccb,nvira,nvirb,nocca), dtype=dtype)
     wOvvO = np.zeros((noccb,nvira,nvira,noccb), dtype=dtype)
 
-    wovoo = np.zeros((nocca,nvira,nocca,nocca), dtype=dtype)
-    wOVOO = np.zeros((noccb,nvirb,noccb,noccb), dtype=dtype)
-    woVoO = np.zeros((nocca,nvirb,nocca,noccb), dtype=dtype)
-    wOvOo = np.zeros((noccb,nvira,noccb,nocca), dtype=dtype)
-
     tauaa, tauab, taubb = make_tau(t2, t1, t1)
     #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocca*nvira,-1)).reshape(nocca,nvira,nvira,nvira)
     #:ovvv = eris_ovvv - eris_ovvv.transpose(0,3,2,1)
@@ -502,7 +497,7 @@ def Wovvo(t1, t2, eris):
     wOvVo -= lib.einsum('nb,MEnj->MbEj', t1a, eris_OVoo)
     woVVo += lib.einsum('NB,NEmj->mBEj', t1b, eris_OVoo)
     wOvvO += lib.einsum('nb,neMJ->MbeJ', t1a, eris_ovOO)
-    eris_ooov = eris_OOOV = eris_OOov = eris_ooOV = None
+    eris_ovoo = eris_OVOO = eris_ovOO = eris_OVoo = None
 
     eris_ovvo = np.asarray(eris.ovvo)
     eris_OVVO = np.asarray(eris.OVVO)
@@ -534,7 +529,6 @@ def Wvvov(t1, t2, eris):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
-    dtype = np.result_type(t1a, t1b, t2aa, t2ab, t2bb)
 
     #:Wamef = einsum('na,nmef->amef', -t1, eris.oovv)
     #:Wamef -= np.asarray(eris.ovvv).transpose(1,0,2,3)

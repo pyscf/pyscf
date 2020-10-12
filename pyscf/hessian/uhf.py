@@ -26,13 +26,14 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ucphf
-from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.hessian import rhf as rhf_hess
 _get_jk = rhf_hess._get_jk
 _make_vhfopt = rhf_hess._make_vhfopt
 
+# import _response_functions to load gen_response methods in SCF class
+from pyscf.scf import _response_functions  # noqa
 # import pyscf.grad.uhf to activate nuc_grad_method method
-from pyscf.grad import uhf
+from pyscf.grad import uhf  # noqa
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -153,7 +154,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     vj1_diag = vj1_diag.reshape(3,3,nao,nao)
     vk1a_diag = vk1a_diag.reshape(3,3,nao,nao)
     vk1b_diag = vk1b_diag.reshape(3,3,nao,nao)
-    vj1a = vj1b = None
     t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
 
     ip1ip2_opt = _make_vhfopt(mol, dm0, 'ip1ip2', 'int2e_ip1ip2')
@@ -187,12 +187,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         vk1a = vk1a.reshape(3,3,nao,nao)
         vk1b = vk1b.reshape(3,3,nao,nao)
 
-        s1ao = numpy.zeros((3,nao,nao))
-        s1ao[:,p0:p1] += s1a[:,p0:p1]
-        s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
-        s1ooa = numpy.einsum('xpq,pi,qj->xij', s1ao, mocca, mocca)
-        s1oob = numpy.einsum('xpq,pi,qj->xij', s1ao, moccb, moccb)
-
         ej[i0,i0] += numpy.einsum('xypq,pq->xy', vj1_diag[:,:,p0:p1], dm0[p0:p1])*2
         ek[i0,i0] += numpy.einsum('xypq,pq->xy', vk1a_diag[:,:,p0:p1], dm0a[p0:p1])*2
         ek[i0,i0] += numpy.einsum('xypq,pq->xy', vk1b_diag[:,:,p0:p1], dm0b[p0:p1])*2
@@ -217,7 +211,6 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return e1, ej, ek
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
-    time0 = t1 = (time.clock(), time.time())
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -344,7 +337,7 @@ def gen_vind(mf, mo_coeff, mo_occ):
     nocca = mocca.shape[1]
     noccb = moccb.shape[1]
 
-    vresp = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
+    vresp = mf.gen_response(mo_coeff, mo_occ, hermi=1)
     def fx(mo1):
         mo1 = mo1.reshape(-1,nmoa*nocca+nmob*noccb)
         nset = len(mo1)

@@ -46,6 +46,25 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eks4, -126.03378903205831, 9)
         mol.stdout.close()
 
+    def test_dks_lda_omega(self):
+        mol = gto.Mole()
+        mol.atom = [['Ne',(0.,0.,0.)]]
+        mol.basis = 'uncsto3g'
+        mol.verbose = 7
+        mol.output = '/dev/null'
+        mol.build()
+        mf = dks.DKS(mol)
+        mf.xc = 'lda + .2*HF'
+        eks4 = mf.kernel()
+        self.assertAlmostEqual(eks4, -126.51704683045618, 9)
+
+        mf = dks.DKS(mol)
+        mf.xc = 'lda + .2*HF'
+        mf.omega = .5
+        eks4 = mf.kernel()
+        self.assertAlmostEqual(eks4, -126.41264813604408, 9)
+        mol.stdout.close()
+
 
 if __name__ == "__main__":
     print("Test DKS")

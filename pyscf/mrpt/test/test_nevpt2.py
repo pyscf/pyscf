@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -60,7 +60,10 @@ h2e = ao2mo.restore(1, h2e, norb).transpose(0,2,1,3)
 dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
                                          mc.ci, mc.ci, norb, nelec)
 hdm1 = 2.0*numpy.eye(dm1.shape[0])-dm1.T
-eris = nevpt2._ERIS(mc, mc.mo_coeff)
+# Test integral transformation incore algorithm
+eris = nevpt2._ERIS(mc, mc.mo_coeff, method='incore')
+# Test integral transformation outcore algorithm
+eris = nevpt2._ERIS(mc, mc.mo_coeff, method='outcore')
 dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4}
 
 class KnowValues(unittest.TestCase):
@@ -118,6 +121,13 @@ class KnowValues(unittest.TestCase):
         mc.kernel()
         e = nevpt2.NEVPT(mc).kernel()
         self.assertAlmostEqual(e, -0.16978532268234559, 6)
+
+    def test_reset(self):
+        mol1 = gto.M(atom='C')
+        pt = nevpt2.NEVPT(mc)
+        pt.reset(mol1)
+        self.assertTrue(pt.mol is mol1)
+        self.assertTrue(pt._mc.mol is mol1)
 
 
 if __name__ == "__main__":

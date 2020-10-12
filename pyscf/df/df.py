@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -207,15 +207,15 @@ class DF(lib.StreamObject):
                     def load(b0, b1, prefetch):
                         prefetch[0] = numpy.asarray(feri[b0:b1])
 
+                dat = [None]
+                prefetch = [None]
                 with lib.call_in_background(load) as bload:
-                    prefetch = [None]
-                    load(0, min(blksize, naoaux), prefetch)
+                    bload(0, min(blksize, naoaux), prefetch)
                     for b0, b1 in self.prange(blksize, naoaux, blksize):
-                        dat = prefetch[0]
+                        dat, prefetch = prefetch, dat
                         bload(b0, b1, prefetch)
-                        yield dat
-                    dat = prefetch[0]
-                    yield dat
+                        yield dat[0]
+                yield prefetch[0]
 
     def prange(self, start, end, step):
         for i in range(start, end, step):
@@ -278,6 +278,8 @@ class DF(lib.StreamObject):
         return mo_eri
     get_mo_eri = ao2mo
 
+GDF = DF
+
 
 class DF4C(DF):
     '''Relativistic 4-component'''
@@ -332,3 +334,4 @@ class DF4C(DF):
     def ao2mo(self, mo_coeffs):
         raise NotImplementedError
 
+GDF4C = DF4C

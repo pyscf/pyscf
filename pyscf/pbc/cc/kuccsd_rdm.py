@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,8 @@
 #         Jun Yang <junyang4711@gmail.com>
 #
 
-import time
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
-from pyscf import ao2mo
 import itertools
 
 #einsum = numpy.einsum
@@ -119,7 +116,6 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     nmob = noccb + nvirb
 
     dtype = np.result_type(doo, dOO, dov, dOV, dvo, dVO, dvv, dVV)
-    kconserv = mycc.khelper.kconserv
 
     dm1a = numpy.empty((nkpts,nmoa,nmoa), dtype=dtype)
     dm1a[:,:nocca,:nocca] = doo + doo.conj().transpose(0,2,1)
@@ -139,7 +135,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     for k in range(nkpts):
         dm1b[k][numpy.diag_indices(noccb)] +=1
 
-    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         raise NotImplementedError
         _, nmoa = mycc.mo_occ[0].size
         _, nmob = mycc.mo_occ[1].size
@@ -159,8 +155,8 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
 
     if ao_repr:
         mo_a, mo_b = mycc.mo_coeff
-        dm1a = lib.einsum('xpi,xij,xqj->xpq', mo_a, dm1a, mo_a)
-        dm1b = lib.einsum('xpi,xij,xqj->xpq', mo_b, dm1b, mo_b)
+        dm1a = lib.einsum('xpi,xij,xqj->xpq', mo_a, dm1a, mo_a.conj())
+        dm1b = lib.einsum('xpi,xij,xqj->xpq', mo_b, dm1b, mo_b.conj())
     return dm1a, dm1b
 
 
@@ -168,7 +164,6 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
 if __name__ == '__main__':
 
     import numpy as np
-    from pyscf     import scf as molscf
     from pyscf.pbc import gto
     from pyscf.pbc import scf,cc
     from pyscf import lib

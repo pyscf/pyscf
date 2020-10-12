@@ -22,24 +22,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <xcfun.h>
+#include <XCFun/xcfun.h>
 #include "config.h"
 
-static int eval_xc(xc_functional fun, int deriv, enum xc_vars vars,
+static int eval_xc(xcfun_t* fun, int deriv, xcfun_vars vars,
                    int np, int ncol, double *rho, double *output)
 {
-        xc_eval_setup(fun, vars, XC_PARTIAL_DERIVATIVES, deriv);
-        assert(ncol == xc_input_length(fun));
-        int outlen = xc_output_length(fun);
+        xcfun_eval_setup(fun, vars, XC_PARTIAL_DERIVATIVES, deriv);
+        assert(ncol == xcfun_input_length(fun));
+        int outlen = xcfun_output_length(fun);
 
-        //xc_eval_vec(fun, np, rho, ncol, output, outlen);
+        //xcfun_eval_vec(fun, np, rho, ncol, output, outlen);
 #pragma omp parallel default(none) \
         shared(fun, rho, output, np, ncol, outlen)
 {
         int i;
 #pragma omp for nowait schedule(static)
         for (i=0; i < np; i++) {
-                xc_eval(fun, rho+i*ncol, output+i*outlen);
+                xcfun_eval(fun, rho+i*ncol, output+i*outlen);
         }
 }
         return outlen;
@@ -54,20 +54,21 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
         double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd, *tau_u, *tau_d;
         const char *name;
 
-        xc_functional fun = xc_new_functional();
+        assert(xcfun_is_compatible_library() == true);
+        xcfun_t* fun = xcfun_new();
         for (i = 0; i < nfn; i++) {
-                name = xc_enumerate_parameters(fn_id[i]);
-                xc_set(fun, name, fac[i]);
+                name = xcfun_enumerate_parameters(fn_id[i]);
+                xcfun_set(fun, name, fac[i]);
 
                 if (omega[i] != 0) {
-                        xc_set(fun, "RANGESEP_MU", omega[i]);
+                        xcfun_set(fun, "RANGESEP_MU", omega[i]);
                 }
-                //xc_set(fun, "CAM_ALPHA", val);
-                //xc_set(fun, "CAM_BETA", val);
+                //xcfun_set(fun, "CAM_ALPHA", val);
+                //xcfun_set(fun, "CAM_BETA", val);
         }
 
         if (spin == 0) {
-                if (xc_is_metagga(fun)) {
+                if (xcfun_is_metagga(fun)) {
                         rho = malloc(sizeof(double) * np*3);
                         gxu = rho_u + np;
                         gyu = rho_u + np * 2;
@@ -80,7 +81,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         }
                         outlen = eval_xc(fun, deriv, XC_N_GNN_TAUN, np, 3, rho, output);
                         free(rho);
-                } else if (xc_is_gga(fun)) {
+                } else if (xcfun_is_gga(fun)) {
                         rho = malloc(sizeof(double) * np*2);
                         gxu = rho_u + np;
                         gyu = rho_u + np * 2;
@@ -100,7 +101,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         output[i*outlen] /= rho_u[i] + 1e-150;
                 }
         } else {
-                if (xc_is_metagga(fun)) {
+                if (xcfun_is_metagga(fun)) {
                         rho = malloc(sizeof(double) * np*7);
                         gxu = rho_u + np;
                         gyu = rho_u + np * 2;
@@ -121,7 +122,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         }
                         outlen = eval_xc(fun, deriv, XC_A_B_GAA_GAB_GBB_TAUA_TAUB, np, 7, rho, output);
                         free(rho);
-                } else if (xc_is_gga(fun)) {
+                } else if (xcfun_is_gga(fun)) {
                         rho = malloc(sizeof(double) * np*5);
                         gxu = rho_u + np;
                         gyu = rho_u + np * 2;
@@ -151,7 +152,7 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         output[i*outlen] /= rho_u[i] + rho_d[i] + 1e-150;
                 }
         }
-        xc_free_functional(fun);
+        xcfun_delete(fun);
 }
 
 /*
@@ -161,15 +162,15 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
  */
 int XCFUN_xc_type(int fn_id)
 {
-        xc_functional fun = xc_new_functional();
-        const char *name = xc_enumerate_parameters(fn_id);
-        xc_set(fun, name, 1.);
+        xcfun_t* fun = xcfun_new();
+        const char *name = xcfun_enumerate_parameters(fn_id);
+        xcfun_set(fun, name, 1.);
         int type = 0;
-        if (xc_is_metagga(fun)) {
+        if (xcfun_is_metagga(fun)) {
                 type = 2;
-        } else if (xc_is_gga(fun)) {
+        } else if (xcfun_is_gga(fun)) {
                 type = 1;
         }
-        xc_free_functional(fun);
+        xcfun_delete(fun);
         return type;
 }

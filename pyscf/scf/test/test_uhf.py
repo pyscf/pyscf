@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -77,20 +77,26 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_1e(self):
         dm1 = scf.uhf.init_guess_by_1e(mol, breaksym=False)
-        self.assertAlmostEqual(lib.finger(dm1), -0.17065579929349839, 9)
+        self.assertAlmostEqual(lib.fp(dm1), -0.17065579929349839, 9)
         dm2 = scf.uhf.get_init_guess(mol, key='hcore')
-        self.assertAlmostEqual(lib.finger(dm2), 0.69685247431623965, 9)
+        self.assertAlmostEqual(lib.fp(dm2), 0.69685247431623965, 9)
         self.assertAlmostEqual(abs(dm1[0]-dm2[0]).max(), 0, 9)
 
     def test_init_guess_atom(self):
         dm1 = mf.init_guess_by_atom(mol, breaksym=False)
-        self.assertAlmostEqual(lib.finger(dm1), 0.049712575204034937, 9)
+        self.assertAlmostEqual(lib.fp(dm1), 0.05094548752961081, 9)
         dm2 = scf.uhf.get_init_guess(mol, key='atom')
-        self.assertAlmostEqual(lib.finger(dm2), 0.053542055104367631, 9)
+        self.assertAlmostEqual(lib.fp(dm2), 0.054774967429943755, 9)
         self.assertAlmostEqual(abs(dm1[1]-dm2[1]).max(), 0, 9)
 
+    def test_init_guess_huckel(self):
+        dm1 = mf.init_guess_by_huckel(mol, breaksym=False)
+        self.assertAlmostEqual(lib.fp(dm1), 0.6442338252028256, 9)
+        dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='huckel')
+        self.assertAlmostEqual(lib.fp(dm2), 0.6174062069308063, 9)
+
     def test_1e(self):
-        mf = scf.UHF(gto.M(atom='H', spin=1))
+        mf = scf.UHF(gto.M(atom='H', spin=-1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
         mf = scf.UHF(gto.M(atom='H', spin=1, symmetry=1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
@@ -117,8 +123,41 @@ class KnownValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop_meta_lowdin_ao(mol, dm, pre_orth_method='ano')
         self.assertAlmostEqual(numpy.linalg.norm(pop), 12.322626374896178, 9)
 
+    def test_mulliken_spin_pop(self):
+        Ms_true = [0.990027, 0.504987, 0.504987]
+        _, Ms = mf2.mulliken_spin_pop()
+        self.assertAlmostEqual(Ms[0], Ms_true[0],5)
+        self.assertAlmostEqual(Ms[1], Ms_true[1],5)
+        self.assertAlmostEqual(Ms[2], Ms_true[2],5)
+
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+    def test_scf_negative_spin(self):
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.UHF(mol).run(conv_tol=1e-10)
+        self.assertAlmostEqual(mf.mo_occ[1].sum(), 6, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.726396909036637, 9)
+
+        mol = gto.M(atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            symmetry = 1,
+            basis = '6-31g',
+            spin = -2,
+        )
+        mf = scf.UHF(mol).set(conv_tol=1e-10)
+        mf.irrep_nelec = {'B1': (1, 2), 'B2': (1, 0)}
+        mf.run()
+        self.assertAlmostEqual(mf.mo_occ[1].sum(), 6, 14)
+        self.assertAlmostEqual(mf.e_tot, -75.224503772055755, 9)
 
     def test_nr_uhf_cart(self):
         pmol = mol.copy()
@@ -308,7 +347,7 @@ H     0    0.757    0.587'''
         vhf4 = mf1.get_veff(pmol, dm, hermi=0)
         self.assertEqual(vhf4.ndim, 4)
         self.assertAlmostEqual(abs(vhf4-vhf3).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vhf4), -9.9614575705134953, 12)
+        self.assertAlmostEqual(lib.fp(vhf4), -9.9614575705134953, 12)
 
     def test_natm_eq_0(self):
         mol = gto.M()
@@ -334,7 +373,7 @@ H     0    0.757    0.587'''
         e, c = n2_uhf.canonicalize(n2mf.mo_coeff, n2mf.mo_occ)
         self.assertAlmostEqual(abs(e - n2mf.mo_energy).max(), 0, 6)
 
-    def test_energy_tot(self):
+    def test_energy_tot1(self):
         e = n2mf.energy_tot(n2mf.make_rdm1())
         self.assertAlmostEqual(e, n2mf.e_tot, 9)
 
@@ -388,13 +427,27 @@ H     0    0.757    0.587'''
         n2_uhf.irrep_nelec['E2ux'] = 0
         n2_uhf.irrep_nelec['E2uy'] = 0
         self.assertRaises(ValueError, n2_uhf.build)
-        n2_uhf.irrep_nelec['A1g'] = (4,2)
+        n2_uhf.irrep_nelec['A1g'] = (2,0)
         self.assertRaises(ValueError, n2_uhf.build)
-        n2_uhf.irrep_nelec['A1g'] = (0,2)
+        n2_uhf.irrep_nelec['A1g'] = (0,1)
         self.assertRaises(ValueError, n2_uhf.build)
+
+        n2_uhf.irrep_nelec.pop('E2ux')
+        n2_uhf.irrep_nelec['A1g'] = (0,0)
+        self.assertRaises(ValueError, n2_uhf.build)
+
+    def test_max_cycle0(self):
+        mf = scf.UHF(mol)
+        mf.max_cycle = 0
+        dm = mf.get_init_guess()
+        mf.kernel(dm)
+        self.assertAlmostEqual(mf.e_tot, -75.799022820714526, 9)
+
+        dm = mf.make_rdm1()
+        mf.kernel(dm)
+        self.assertAlmostEqual(mf.e_tot, -75.983602246415373, 9)
 
 
 if __name__ == "__main__":
     print("Full Tests for uhf")
     unittest.main()
-

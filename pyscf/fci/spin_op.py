@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ctypes
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.fci import cistring
-from pyscf.fci import rdm
 from pyscf.fci.addons import _unpack_nelec
 
 librdm = lib.load_library('libfci')
@@ -43,8 +41,8 @@ librdm = lib.load_library('libfci')
 #       <p|s+s-|q> \gammabeta_qp = trace(\gammabeta) = nelecb
 # 2) different electrons
 #       = <ij|s-s+|kl>Gamma_{ik,jl} = <ibja|s-s+|kalb>Gamma_{ibka,jalb}
-#       = <ib|s+|ka><ja|s-|lb>Gamma_{ibka,jalb}
-# <CI|S-*S+|CI> = nelecb + <ib|s+|ka><ja|s-|lb>Gamma_{ibka,jalb}
+#       = <ib|s-|ka><ja|s+|lb>Gamma_{ibka,jalb}
+# <CI|S-*S+|CI> = nelecb + <ib|s-|ka><ja|s+|lb>Gamma_{ibka,jalb}
 #
 # Sz*Sz = Msz^2 = (neleca-nelecb)^2
 # 1) same electron
@@ -57,7 +55,7 @@ librdm = lib.load_library('libfci')
 # set aolst for local spin expectation value, which is defined as
 #       <CI|ao><ao|S^2|CI>
 # For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
-def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
+def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
     r'''General spin square operator.
 
     ... math::
@@ -74,12 +72,9 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     function can compute the expectation value spin square operator for
     UHF-FCI wavefunction
     '''
-    from pyscf.fci import direct_spin1
 
     if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
         mo_coeff = (mo_coeff, mo_coeff)
-    elif mo_coeff is None:
-        mo_coeff = (numpy.eye(norb),) * 2
 
 # projected overlap matrix elements for partial trace
     if isinstance(ovlp, numpy.ndarray):
@@ -94,8 +89,6 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
         ovlpba = numpy.dot(mo_coeff[1].T, mo_coeff[0])
 
     # if ovlp=1, ssz = (neleca-nelecb)**2 * .25
-    (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
-            direct_spin1.make_rdm12s(fcivec, norb, nelec)
     ssz =(numpy.einsum('ijkl,ij,kl->', dm2aa, ovlpaa, ovlpaa)
         - numpy.einsum('ijkl,ij,kl->', dm2ab, ovlpaa, ovlpbb)
         + numpy.einsum('ijkl,ij,kl->', dm2bb, ovlpbb, ovlpbb)
@@ -114,6 +107,17 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     s = numpy.sqrt(ss+.25) - .5
     multip = s*2+1
     return ss, multip
+
+@lib.with_doc(spin_square_general.__doc__)
+def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
+    from pyscf.fci import direct_spin1
+    if mo_coeff is None:
+        mo_coeff = (numpy.eye(norb),) * 2
+
+    (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
+            direct_spin1.make_rdm12s(fcivec, norb, nelec)
+
+    return spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp)
 
 def spin_square0(fcivec, norb, nelec):
     '''Spin square for RHF-FCI CI wfn only (obtained from spin-degenerated
@@ -252,7 +256,6 @@ def contract_ss(fcivec, norb, nelec):
 
 
 if __name__ == '__main__':
-    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo

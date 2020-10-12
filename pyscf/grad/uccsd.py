@@ -36,7 +36,7 @@ from pyscf.grad import ccsd as ccsd_grad
 
 #
 # Note: only works with canonical orbitals
-# Non-canonical formula refers to JCP, 95, 2639
+# Non-canonical formula refers to JCP 95, 2639 (1991); DOI:10.1063/1.460916
 #
 def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
               d1=None, d2=None, verbose=logger.INFO):
@@ -71,9 +71,9 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     nmob = mo_b.shape[1]
     nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
     noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    with_frozen = not ((mycc.frozen is None)
+                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
+                       or (len(mycc.frozen) == 0))
     moidx = mycc.get_frozen_mask()
     OA_a, VA_a, OF_a, VF_a = ccsd_grad._index_frozen_active(moidx[0], mycc.mo_occ[0])
     OA_b, VA_b, OF_b, VF_b = ccsd_grad._index_frozen_active(moidx[1], mycc.mo_occ[1])
@@ -248,7 +248,9 @@ def _response_dm1(mycc, Xvo, eris=None):
     nmoa = nocca + nvira
     nmob = noccb + nvirb
     nova = nocca * nvira
-    with_frozen = not (mycc.frozen is None or mycc.frozen is 0)
+    with_frozen = not ((mycc.frozen is None)
+                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
+                       or (len(mycc.frozen) == 0))
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
         mo_occ = mycc.mo_occ
@@ -363,7 +365,6 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
         buf1[:,noccb:,noccb:] = lib.unpack_tril(dvvVV[p0:p1] * .5)
         buf1[:,:noccb,:] = dvvOP[p0:p1] * .5
         v_ba[:,p0:p1] = _trans(buf1, mo_b, (0,nmob,0,nmob)).T
-    dvvOO = dvvOV = None
 
     blksize_b = int(max_memory*.9e6/8/(nao_pair+nmob**2))
     blksize_b = min(nvirb_pair, max(ccsd.BLKMIN, blksize_b))

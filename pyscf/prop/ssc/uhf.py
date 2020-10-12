@@ -25,14 +25,11 @@ import time
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
 from pyscf.scf import ucphf
-from pyscf.ao2mo import _ao2mo
+from pyscf.scf import _response_functions
 from pyscf.dft import numint
-from pyscf.soscf.newton_ah import _gen_uhf_response
-from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
 from pyscf.data import nist
@@ -106,7 +103,7 @@ def make_fc(sscobj, nuc_pair=None):
         # explicitly considered as below. However, it is inconsistent to RHF
         # results for closed shell systems. To make UHF and RHF code
         # consistent, only z-component is considered.
-        # (See Eq. (19) of JCP, 113, 3530)
+        # [See Eq. (19) of JCP 113, 3530 (2000); DOI:10.1063/1.1286806]
         if ZZ_ONLY:
             ez  = numpy.einsum('ij,ij', h1aa[at1], mo1aa[at2]) * 2  # *2 for +c.c.
             ez += numpy.einsum('ij,ij', h1bb[at1], mo1bb[at2]) * 2
@@ -152,8 +149,7 @@ def solve_mo1_fc(sscobj, h1):
     nvira = orbva.shape[1]
     noccb = orbob.shape[1]
     nvirb = orbvb.shape[1]
-    nao = mol.nao
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=1)
+    vresp = mf.gen_response(with_j=False, hermi=1)
 
     if ZZ_ONLY:
         # To make UHF/UKS and RHF/RKS code consistent, only z-component is
@@ -311,7 +307,6 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
     orbva = mo_coeff[0][:,mo_occ[0]==0]
     orbob = mo_coeff[1][:,mo_occ[1]> 0]
     orbvb = mo_coeff[1][:,mo_occ[1]==0]
-    nao = mo_coeff[0].shape[0]
     h1aa = []
     h1ab = []
     h1ba = []
@@ -363,7 +358,7 @@ def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential associated with h1_PSO'''
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    vresp = mf.gen_response(with_j=False, hermi=0)
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0
     orboa = mo_coeff[0][:, occidxa]
@@ -433,7 +428,7 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
             for k, (i, j) in enumerate(self.nuc_pair):
                 ktensor[i,j] = ktensor[j,i] = iso_ssc[k]
                 if self.verbose >= logger.DEBUG:
-                    _write(self.stdout, ssc_dia[k]+ssc_para[k],
+                    _write(self.stdout, e11[k],
                            '\nSSC E11 between %d %s and %d %s' \
                            % (i, self.mol.atom_symbol(i),
                               j, self.mol.atom_symbol(j)))
@@ -457,11 +452,11 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
 
     def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
              nuc_pair=None):
-        ssc_para = self.make_pso(mol, mo1, mo_coeff, mo_occ)
+        ssc_para = self.make_pso(mol, mo10, mo_coeff, mo_occ)
         if self.with_fcsd:
-            ssc_para += self.make_fcsd(mol, mo1, mo_coeff, mo_occ)
+            ssc_para += self.make_fcsd(mol, mo10, mo_coeff, mo_occ)
         elif self.with_fc:
-            ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
+            ssc_para += self.make_fc(mol, mo10, mo_coeff, mo_occ)
         return ssc_para
 
     solve_mo1 = solve_mo1
@@ -474,7 +469,6 @@ scf.uhf.UHF.SSC = scf.uhf.UHF.SpinSpinCoupling = lib.class_as_method(SSC)
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None

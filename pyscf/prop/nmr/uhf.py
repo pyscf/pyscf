@@ -25,10 +25,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import _vhf
 from pyscf.scf import ucphf
-from pyscf.ao2mo import _ao2mo
-from pyscf.soscf.newton_ah import _gen_uhf_response
+from pyscf.scf import _response_functions  # noqa
 from pyscf.prop.nmr import rhf as rhf_nmr
 
 
@@ -184,7 +182,7 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential'''
-    vresp = _gen_uhf_response(mf, hermi=2)
+    vresp = mf.gen_response(hermi=2)
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0
     orboa = mo_coeff[0][:,occidxa]
@@ -192,7 +190,6 @@ def gen_vind(mf, mo_coeff, mo_occ):
     nocca = orboa.shape[1]
     noccb = orbob.shape[1]
     nao, nmo = mo_coeff[0].shape
-    nvira = nmo - nocca
     def vind(mo1):
         mo1a = mo1.reshape(3,-1)[:,:nocca*nmo].reshape(3,nmo,nocca)
         mo1b = mo1.reshape(3,-1)[:,nocca*nmo:].reshape(3,nmo,noccb)

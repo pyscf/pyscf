@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#         Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
@@ -28,7 +29,6 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import rccsd
 from pyscf.ao2mo import _ao2mo
 from pyscf.mp import ump2
 from pyscf import scf
@@ -158,7 +158,7 @@ def update_amps(cc, t1, t2, eris):
     woVvO += 0.5*lib.einsum('nJfB,menf->mBeJ', t2ab, ovov)
     tmpaa = lib.einsum('jf,menf->mnej', t1a, ovov)
     wovvo -= lib.einsum('nb,mnej->mbej', t1a, tmpaa)
-    eirs_ovov = ovov = tmpaa = tilaa = None
+    eris_ovov = ovov = tmpaa = tilaa = None
 
     eris_OVOV = np.asarray(eris.OVOV)
     eris_OVOO = np.asarray(eris.OVOO)
@@ -269,7 +269,7 @@ def update_amps(cc, t1, t2, eris):
     tmp1ab = lib.einsum('ie,meBJ->mBiJ', t1a, eris_ovVO)
     tmp1ab+= lib.einsum('IE,mjBE->mBjI', t1b, eris_ooVV)
     u2ab -= lib.einsum('ma,mBiJ->iJaB', t1a, tmp1ab)
-    eris_ooVV = eris_ovVo = tmp1ab = None
+    eris_ooVV = eris_ovVO = tmp1ab = None
 
     eris_OOvv = np.asarray(eris.OOvv)
     eris_OVvo = np.asarray(eris.OVvo)
@@ -279,7 +279,7 @@ def update_amps(cc, t1, t2, eris):
     tmp1ba = lib.einsum('IE,MEbj->MbIj', t1b, eris_OVvo)
     tmp1ba+= lib.einsum('ie,MJbe->MbJi', t1a, eris_OOvv)
     u2ab -= lib.einsum('MA,MbIj->jIbA', t1b, tmp1ba)
-    eris_OOvv = eris_OVvO = tmp1ba = None
+    eris_OOvv = eris_OVvo = tmp1ba = None
 
     u2aa += 2*lib.einsum('imae,mbej->ijab', t2aa, wovvo)
     u2aa += 2*lib.einsum('iMaE,MbEj->ijab', t2ab, wOvVo)
@@ -543,7 +543,7 @@ class UCCSD(ccsd.CCSD):
 # * One list : Same alpha and beta orbital indices to be frozen
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert isinstance(mf, scf.uhf.UHF)
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
@@ -609,7 +609,6 @@ class UCCSD(ccsd.CCSD):
             self.t1 = (np.zeros((nocca,nvira)), np.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
 
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
         return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
@@ -647,7 +646,7 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''2-particle density matrix in spin-oribital basis.
         '''
         from pyscf.cc import uccsd_rdm
@@ -656,7 +655,19 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+        return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
+
+    def spin_square(self, mo_coeff=None, s=None):
+        from pyscf.fci.spin_op import spin_square_general
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if s is None:
+            s = self._scf.get_ovlp()
+
+        dma,dmb        = self.make_rdm1()
+        dmaa,dmab,dmbb = self.make_rdm2()
+
+        return spin_square_general(dma,dmb,dmaa,dmab,dmbb,mo_coeff,s)
 
     def ao2mo(self, mo_coeff=None):
         nmoa, nmob = self.get_nmo()
@@ -793,10 +804,12 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
                 (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
         self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         nocca, noccb = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
@@ -862,7 +875,6 @@ def _get_ovvv_base(ovvv, *slices):
         return ovvv
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
-    cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
@@ -942,7 +954,6 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
@@ -1215,8 +1226,6 @@ def _fp(nocc, nmo):
 
 
 if __name__ == '__main__':
-    import copy
-    from pyscf import scf
     from pyscf import gto
 
     mol = gto.Mole()

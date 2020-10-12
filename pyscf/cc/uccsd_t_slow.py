@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 
 import numpy
 from pyscf import lib
-from pyscf import ao2mo
 from pyscf.cc import uccsd
 
 '''
@@ -41,8 +40,6 @@ def kernel(mcc, eris, t1=None, t2=None):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb = t2ab.shape[:2]
-    nmoa = eris.focka.shape[0]
-    nmob = eris.fockb.shape[0]
     mo_ea = eris.focka.diagonal().real
     mo_eb = eris.fockb.diagonal().real
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]

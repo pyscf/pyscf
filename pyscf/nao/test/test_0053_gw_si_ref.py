@@ -11,7 +11,7 @@ class KnowValues(unittest.TestCase):
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
     gw = gw_c(mf=gto_mf, gto=mol)
-    ww = [0.0+1j*4.0, 1.0+1j*0.1, -2.0-1j*0.1]
+    ww = np.array([0.0+1j*4.0, 1.0+1j*0.1, -2.0-1j*0.1])
 
     si0_fm = gw.si_c(ww)
 

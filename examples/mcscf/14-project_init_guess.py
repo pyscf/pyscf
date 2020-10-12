@@ -27,7 +27,7 @@ mo_init_guess = mf.mo_coeff
 #
 #############################################################
 mol2 = gto.M(
-    atom = 'O 0 0 0; O 0 0 1.2',
+    atom = 'C 0 0 0; C 0 0 1.2',
     basis = 'ccpvdz',
     spin = 2)
 mf = scf.RHF(mol2)

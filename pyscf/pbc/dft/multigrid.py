@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +18,10 @@
 
 '''Multigrid to compute DFT integrals'''
 
-import time
 import ctypes
 import copy
 import numpy
 import scipy.linalg
-from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger
@@ -34,7 +32,7 @@ from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.dft import numint, gen_grid
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df import fft
 from pyscf.pbc.df import ft_ao
 from pyscf import __config__
@@ -123,6 +121,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
         lattice_type = '_nonorth'
     eval_fn = 'NUMINTeval_' + xctype.lower() + lattice_type
     drv = libdft.NUMINT_fill2c
+
     def make_mat(weights):
         if comp == 1:
             mat = numpy.zeros((nimgs,naoj,naoi))
@@ -232,6 +231,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
         shape = (comp, numpy.prod(submesh))
     eval_fn = 'NUMINTrho_' + xctype.lower() + lattice_type
     drv = libdft.NUMINT_rho_drv
+
     def make_rho_(rho, dm):
         drv(getattr(libdft, eval_fn),
             rho.ctypes.data_as(ctypes.c_void_p),
@@ -277,8 +277,9 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
                 has_imag = (hermi == 0 and abs(dmI).max() > 1e-8)
                 if (has_imag and xctype == 'LDA' and
                     naoi == naoj and
-# For hermitian density matrices, the anti-symmetry character of the imaginary
-# part of the density matrices can be found by rearranging the repeated images.
+                    # For hermitian density matrices, the anti-symmetry
+                    # character of the imaginary part of the density matrices
+                    # can be found by rearranging the repeated images.
                     abs(dmI + dmI[::-1].transpose(0,2,1)).max() < 1e-8):
                     has_imag = False
             dm_i = None
@@ -356,6 +357,7 @@ def get_pp(mydf, kpts=None):
 
     # buf for SPG_lmi upto l=0..3 and nl=3
     buf = numpy.empty((48,ngrids), dtype=numpy.complex128)
+
     def vppnl_by_k(kpt):
         Gk = Gv + kpt
         G_rad = lib.norm(Gk, axis=1)
@@ -481,7 +483,6 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
 
     ignore_imag = (hermi == 1)
 
-    ni = mydf._numint
     nx, ny, nz = mydf.mesh
     rhoG = numpy.zeros((nset*rhodim,nx,ny,nz), dtype=numpy.complex128)
     for grids_dense, grids_sparse in tasks:
@@ -770,7 +771,6 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
     else:
         vj_kpts = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
 
-    ni = mydf._numint
     for grids_dense, grids_sparse in tasks:
         mesh = grids_dense.mesh
         ngrids = numpy.prod(mesh)
@@ -800,7 +800,7 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         else:
             idx_h = grids_dense.ao_idx
             idx_l = grids_sparse.ao_idx
-            idx_t = numpy.append(idx_h, idx_l)
+            # idx_t = numpy.append(idx_h, idx_l)
             naoh = len(idx_h)
 
             h_cell = grids_dense.cell
@@ -878,7 +878,7 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         else:
             idx_h = grids_dense.ao_idx
             idx_l = grids_sparse.ao_idx
-            idx_t = numpy.append(idx_h, idx_l)
+            # idx_t = numpy.append(idx_h, idx_l)
             naoh = len(idx_h)
 
             h_cell = grids_dense.cell
@@ -938,7 +938,6 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    nband = len(kpts_band)
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
@@ -967,7 +966,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
     for i in range(nset):
-        exc, vxc = ni.eval_xc(xc_code, rhoR[i], 0, deriv=1)[:2]
+        exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=0, deriv=1)[:2]
         if xctype == 'LDA':
             wv = vxc[0].reshape(1,ngrids) * weight
         elif xctype == 'GGA':
@@ -1039,7 +1038,6 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     nset, nkpts, nao = dms.shape[:3]
     assert(nset == 2)
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    nband = len(kpts_band)
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
@@ -1068,7 +1066,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     nelec = numpy.zeros((2))
     excsum = 0
 
-    exc, vxc = ni.eval_xc(xc_code, rhoR, 1, deriv=1)[:2]
+    exc, vxc = ni.eval_xc(xc_code, rhoR, spin=1, deriv=1)[:2]
     if xctype == 'LDA':
         vrho = vxc[0]
         wva = vrho[:,0].reshape(1,ngrids) * weight
@@ -1348,12 +1346,11 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_rhf_response
     '''
     #assert(isinstance(mf, dft.krks.KRKS))
-    cell = mf.cell
     if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
-    ni = mf._numint
+
     if singlet is None:  # for newton solver
         rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 0, kpts)
     else:
@@ -1380,12 +1377,11 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_uhf_response
     '''
     #assert(isinstance(mf, dft.kuks.KUKS))
-    cell = mf.cell
     if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
-    ni = mf._numint
+
     rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 1, kpts)
     dm0 = None
 
@@ -1495,7 +1491,7 @@ def multi_grids_tasks_for_rcut(cell, fft_mesh=None, verbose=None):
                       numpy.append(rcut_delimeter, 0)):
         # shells which have high exps (small rcut)
         shls_dense = [ib for ib, rc in enumerate(rcuts_pgto)
-                     if numpy.any((r1 <= rc) & (rc < r0))]
+                      if numpy.any((r1 <= rc) & (rc < r0))]
         if len(shls_dense) == 0:
             continue
         cell_dense, ao_idx_dense, ke_cutoff, rcut_atom = \
@@ -1614,17 +1610,14 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         ke1 *= KE_RATIO
         ke_delimeter.append(ke1)
 
-    print(kecuts_pgto)
-    print(ke_delimeter)
     tasks = []
     for ke0, ke1 in zip(ke_delimeter[:-1], ke_delimeter[1:]):
         # shells which have high exps (small rcut)
         shls_dense = [ib for ib, ke in enumerate(kecuts_pgto)
-                     if numpy.any((ke0 < ke) & (ke <= ke1))]
+                      if numpy.any((ke0 < ke) & (ke <= ke1))]
         if len(shls_dense) == 0:
             continue
 
-        print(ke0, ke1, shls_dense)
         mesh = tools.cutoff_to_mesh(a, ke1)
         if TO_EVEN_GRIDS:
             mesh = (mesh+1)//2 * 2  # to the nearest even number
@@ -1673,9 +1666,8 @@ def _primitive_gto_cutoff(cell):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
     precision = cell.precision * EXTRA_PREC
-
     log_prec = numpy.log(precision)
-    b = cell.reciprocal_vectors(norm_to=1)
+
     rcut = []
     ke_cutoff = []
     for ib in range(cell.nbas):
@@ -1704,6 +1696,11 @@ class MultiGridFFTDF(fft.FFTDF):
 
     def build(self):
         self.tasks = multi_grids_tasks(self.cell, self.mesh, self.verbose)
+        return self
+
+    def reset(self, cell=None):
+        self.tasks = None
+        return fft.FFTDF.reset(cell)
 
     get_pp = get_pp
     get_nuc = get_nuc
@@ -1745,7 +1742,6 @@ def multigrid(mf):
     '''Use MultiGridFFTDF to replace the default FFTDF integration method in
     the DFT object.
     '''
-    from pyscf.pbc import dft
     mf.with_df, old_df = MultiGridFFTDF(mf.cell), mf.with_df
     keys = mf.with_df._keys
     mf.with_df.__dict__.update(old_df.__dict__)
@@ -1808,9 +1804,7 @@ def _takebak_5d(out, a, indices):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, dft
-    from pyscf.pbc import df
-    from pyscf.pbc.df import fft_jk
+    from pyscf.pbc import gto, dft
     numpy.random.seed(22)
     cell = gto.M(
         a = numpy.eye(3)*3.5668,

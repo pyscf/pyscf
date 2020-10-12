@@ -19,7 +19,7 @@ from pyscf.mp import ump2
 from pyscf.mp import gmp2
 
 class RMP2(mp2.RMP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -32,7 +32,7 @@ class RMP2(mp2.RMP2):
         return eris
 
 class UMP2(ump2.UMP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -45,7 +45,7 @@ class UMP2(ump2.UMP2):
         return eris
 
 class GMP2(gmp2.GMP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
         gmp2.GMP2.__init__(self, mf, frozen, mo_coeff, mo_occ)

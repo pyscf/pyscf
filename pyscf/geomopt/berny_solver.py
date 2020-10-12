@@ -14,25 +14,30 @@
 # limitations under the License.
 
 '''
-Interface to geometry optimizer pyberny https://github.com/azag0/pyberny
+Interface to geometry optimizer pyberny https://github.com/jhrmnn/pyberny
 '''
 
 from __future__ import absolute_import
+import pkg_resources
 try:
-    from berny import Berny, geomlib, Logger, coords
-except ImportError:
-    msg = ('Geometry optimizer pyberny not found.\npyberny library '
-           'can be found on github https://github.com/azag0/pyberny.\n'
-           'You can install pyberny with "pip install pyberny"')
+    dist = pkg_resources.get_distribution('pyberny')
+except pkg_resources.DistributionNotFound:
+    dist = None
+if dist is None or [int(x) for x in dist.version.split('.')] < [0, 6, 2]:
+    msg = ('Geometry optimizer Pyberny not found or outdated. Install or update '
+           'with:\n\n\tpip install -U pyberny')
     raise ImportError(msg)
 
 import time
 import numpy
+import logging
 from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
-                                  symmetrize)
+                                  symmetrize)  # noqa
 from pyscf import __config__
 from pyscf.grad.rhf import GradientsBasics
+
+from berny import Berny, geomlib, coords
 
 # Overwrite pyberny's atomic unit
 coords.angstrom = 1./lib.param.BOHR
@@ -74,11 +79,14 @@ def _geom_to_atom(mol, geom, include_ghost):
 def to_berny_log(pyscf_log):
     '''Adapter to allow pyberny to use pyscf.logger
     '''
-    class BernyLogger(Logger):
-        def __call__(self, msg, level=0):
-            if level >= -self.verbosity:
-                pyscf_log.info('%d %s', self.n, msg)
-    return BernyLogger()
+    class PyscfHandler(logging.Handler):
+        def emit(self, record):
+            pyscf_log.info(record.getMessage())
+
+    log = logging.getLogger('{}.{}'.format(__name__, id(pyscf_log)))
+    log.addHandler(PyscfHandler())
+    log.setLevel('INFO')
+    return log
 
 
 def kernel(method, assert_convergence=ASSERT_CONV,
@@ -90,10 +98,10 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     .. code-block:: python
         conv_params = {  # They are default settings
-            'gradientmax': 0.45e-3,  # Eh/Angstrom
-            'gradientrms': 0.15e-3,  # Eh/Angstrom
-            'stepmax': 1.8e-3,       # Angstrom
-            'steprms': 1.2e-3,       # Angstrom
+            'gradientmax': 0.45e-3,  # Eh/[Bohr|rad]
+            'gradientrms': 0.15e-3,  # Eh/[Bohr|rad]
+            'stepmax': 1.8e-3,       # [Bohr|rad]
+            'steprms': 1.2e-3,       # [Bohr|rad]
         }
         from pyscf.geomopt import berny_solver
         opt = berny_solver.GeometryOptimizer(method)
@@ -131,7 +139,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 # temporary interface, taken from berny.py optimize function
     berny_log = to_berny_log(log)
     geom = to_berny_geom(mol, include_ghost)
-    optimizer = Berny(geom, log=berny_log, **kwargs)
+    optimizer = Berny(geom, logger=berny_log, **kwargs)
 
     t1 = t0
     e_last = 0
@@ -168,10 +176,10 @@ def optimize(method, assert_convergence=ASSERT_CONV,
 
     .. code-block:: python
         conv_params = {  # They are default settings
-            'gradientmax': 0.45e-3,  # Eh/Angstrom
-            'gradientrms': 0.15e-3,  # Eh/Angstrom
-            'stepmax': 1.8e-3,       # Angstrom
-            'steprms': 1.2e-3,       # Angstrom
+            'gradientmax': 0.45e-3,  # Eh/[Bohr|rad]
+            'gradientrms': 0.15e-3,  # Eh/[Bohr|rad]
+            'stepmax': 1.8e-3,       # [Bohr|rad]
+            'steprms': 1.2e-3,       # [Bohr|rad]
         }
         from pyscf.geomopt import berny_solver
         newmol = berny_solver.optimize(method, **conv_params)
@@ -229,10 +237,10 @@ H       -0.0227 1.1812  -0.8852
 
     mf = scf.RHF(mol)
     conv_params = {
-        'gradientmax': 6e-3,  # Eh/AA
-        'gradientrms': 2e-3,  # Eh/AA
-        'stepmax': 2e-2,      # AA
-        'steprms': 1.5e-2,    # AA
+        'gradientmax': 6e-3,  # Eh/Bohr
+        'gradientrms': 2e-3,  # Eh/Bohr
+        'stepmax': 2e-2,      # Bohr
+        'steprms': 1.5e-2,    # Bohr
     }
     mol1 = optimize(mf, **conv_params)
     print(mf.kernel() - -153.219208484874)

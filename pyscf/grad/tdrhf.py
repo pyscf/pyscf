@@ -29,11 +29,18 @@ from pyscf.scf import cphf
 from pyscf import __config__
 
 
-#
-# Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
-#
 def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
               max_memory=2000, verbose=logger.INFO):
+    '''
+    Electronic part of TDA, TDHF nuclear gradients
+
+    Args:
+        td_grad : grad.tdrhf.Gradients or grad.tdrks.Gradients object.
+
+        x_y : a two-element list of numpy arrays
+            TDDFT X and Y amplitudes. If Y is set to 0, this function computes
+            TDA energy gradients.
+    '''
     log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
@@ -53,12 +60,12 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
 
     dvv = numpy.einsum('ai,bi->ab', xpy, xpy) + numpy.einsum('ai,bi->ab', xmy, xmy)
     doo =-numpy.einsum('ai,aj->ij', xpy, xpy) - numpy.einsum('ai,aj->ij', xmy, xmy)
-    dmzvop = reduce(numpy.dot, (orbv, xpy, orbo.T))
-    dmzvom = reduce(numpy.dot, (orbv, xmy, orbo.T))
+    dmxpy = reduce(numpy.dot, (orbv, xpy, orbo.T))
+    dmxmy = reduce(numpy.dot, (orbv, xmy, orbo.T))
     dmzoo = reduce(numpy.dot, (orbo, doo, orbo.T))
     dmzoo+= reduce(numpy.dot, (orbv, dvv, orbv.T))
 
-    vj, vk = mf.get_jk(mol, (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T), hermi=0)
+    vj, vk = mf.get_jk(mol, (dmzoo, dmxpy+dmxpy.T, dmxmy-dmxmy.T), hermi=0)
     veff0doo = vj[0] * 2 - vk[0]
     wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
     if singlet:
@@ -72,10 +79,13 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     veff0mom = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
     wvo -= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy) * 2
     wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
+
+    # set singlet=None, generate function for CPHF type response kernel
+    vresp = mf.gen_response(singlet=None, hermi=1)
     def fvind(x):  # For singlet, closed shell ground state
-        dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc), orbo.T))
-        vj, vk = mf.get_jk(mol, (dm+dm.T))
-        return reduce(numpy.dot, (orbv.T, vj*2-vk, orbo)).ravel()
+        dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc)*2, orbo.T))
+        v1ao = vresp(dm+dm.T)
+        return reduce(numpy.dot, (orbv.T, v1ao, orbo)).ravel()
     z1 = cphf.solve(fvind, mo_energy, mo_occ, wvo,
                     max_cycle=td_grad.cphf_max_cycle,
                     tol=td_grad.cphf_conv_tol)[0]
@@ -83,8 +93,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     time1 = log.timer('Z-vector using CPHF solver', *time0)
 
     z1ao = reduce(numpy.dot, (orbv, z1, orbo.T))
-    vj, vk = mf.get_jk(mol, z1ao, hermi=0)
-    veff = vj * 2 - vk
+    veff = vresp(z1ao+z1ao.T)
 
     im0 = numpy.zeros((nmo,nmo))
     im0[:nocc,:nocc] = reduce(numpy.dot, (orbo.T, veff0doo+veff, orbo))
@@ -113,8 +122,8 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
 
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
-    vj, vk = td_grad.get_jk(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T,
-                                  dmzvom-dmzvom.T))
+    vj, vk = td_grad.get_jk(mol, (oo0, dmz1doo+dmz1doo.T, dmxpy+dmxpy.T,
+                                  dmxmy-dmxmy.T))
     vj = vj.reshape(-1,3,nao,nao)
     vk = vk.reshape(-1,3,nao,nao)
     if singlet:
@@ -142,10 +151,10 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
         de[k] -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
 
         de[k] += numpy.einsum('xij,ij->x', vhf1[1,:,p0:p1], oo0[p0:p1])
-        de[k] += numpy.einsum('xij,ij->x', vhf1[2,:,p0:p1], dmzvop[p0:p1,:]) * 2
-        de[k] += numpy.einsum('xij,ij->x', vhf1[3,:,p0:p1], dmzvom[p0:p1,:]) * 2
-        de[k] += numpy.einsum('xji,ij->x', vhf1[2,:,p0:p1], dmzvop[:,p0:p1]) * 2
-        de[k] -= numpy.einsum('xji,ij->x', vhf1[3,:,p0:p1], dmzvom[:,p0:p1]) * 2
+        de[k] += numpy.einsum('xij,ij->x', vhf1[2,:,p0:p1], dmxpy[p0:p1,:]) * 2
+        de[k] += numpy.einsum('xij,ij->x', vhf1[3,:,p0:p1], dmxmy[p0:p1,:]) * 2
+        de[k] += numpy.einsum('xji,ij->x', vhf1[2,:,p0:p1], dmxpy[:,p0:p1]) * 2
+        de[k] -= numpy.einsum('xji,ij->x', vhf1[3,:,p0:p1], dmxmy[:,p0:p1]) * 2
 
     log.timer('TDHF nuclear gradients', *time0)
     return de
@@ -219,7 +228,6 @@ class Gradients(rhf_grad.GradientsBasics):
         self.stdout = td.stdout
         self.mol = td.mol
         self.base = td
-        self._scf = td._scf  # needed by hcore_generator
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
         self.state = 1  # of which the gradients to be computed.
@@ -307,7 +315,6 @@ tdscf.rhf.TDA.Gradients = tdscf.rhf.TDHF.Gradients = lib.class_as_method(Gradien
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import dft
     from pyscf import tddft
     mol = gto.Mole()
     mol.verbose = 0
@@ -328,7 +335,7 @@ if __name__ == '__main__':
     #tdg.verbose = 5
     g1 = tdg.kernel(z[0])
     print(g1)
-    print(lib.finger(g1) - 0.18686561181358813)
+    print(lib.fp(g1) - 0.18686561181358813)
 #[[ 0  0  -2.67023832e-01]
 # [ 0  0   2.67023832e-01]]
     td_solver = td.as_scanner()
@@ -343,7 +350,7 @@ if __name__ == '__main__':
     tdg = td.Gradients()
     g1 = tdg.kernel(state=1)
     print(g1)
-    print(lib.finger(g1) - 0.18967687762609461)
+    print(lib.fp(g1) - 0.18967687762609461)
 # [[ 0  0  -2.71041021e-01]
 #  [ 0  0   2.71041021e-01]]
     td_solver = td.as_scanner()
@@ -359,7 +366,7 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=1)
     print(g1)
-    print(lib.finger(g1) - 0.19667995802487931)
+    print(lib.fp(g1) - 0.19667995802487931)
 # [[ 0  0  -2.81048403e-01]
 #  [ 0  0   2.81048403e-01]]
     td_solver = td.as_scanner()
@@ -375,7 +382,7 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=1)
     print(g1)
-    print(lib.finger(g1) - 0.20032088639558535)
+    print(lib.fp(g1) - 0.20032088639558535)
 # [[ 0  0  -2.86250870e-01]
 #  [ 0  0   2.86250870e-01]]
     td_solver = td.as_scanner()

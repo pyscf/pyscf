@@ -300,7 +300,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         double complex *v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);
         memset(v_priv, 0, sizeof(double complex)*nao*nao*n_dm*ncomp);
         int bufsize = di*di*di*di*ncomp;
-        bufsize = bufsize + MAX(bufsize, cache_size/2);
+        bufsize = bufsize + MAX(bufsize, (cache_size+1)/2);  // /2 for double complex
         double complex *buf = malloc(sizeof(double complex) * bufsize);
 #pragma omp for nowait schedule(dynamic)
         for (ij = 0; ij < nbas*nbas; ij++) {

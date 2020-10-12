@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ General JK contraction function for
 * arbitrary basis subset for the 4 indices
 '''
 
-import time
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -125,7 +124,8 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
             shls_slice = numpy.array([(0, mol.nbas) for mol in mols])
         else:
             shls_slice = numpy.asarray(shls_slice).reshape(4,2)
-# concatenate unique mols and build corresponding shls_slice
+
+        # concatenate unique mols and build corresponding shls_slice
         mol_ids = [id(mol) for mol in mols]
         atm, bas, env = mols[0]._atm, mols[0]._bas, mols[0]._env
         bas_start = numpy.zeros(4, dtype=int)
@@ -148,6 +148,17 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     single_script = isinstance(scripts, str)
     if single_script:
         scripts = [scripts]
+    # Check if letters other than ijkl were provided.
+    if set(''.join(scripts[:4])).difference('ijkl,->'):
+        # Translate these letters to ijkl if possible
+        scripts = [script.translate({ord(script[0]): 'i',
+                                     ord(script[1]): 'j',
+                                     ord(script[2]): 'k',
+                                     ord(script[3]): 'l'})
+                   for script in scripts]
+        if set(''.join(scripts[:4])).difference('ijkl,->'):
+            raise RuntimeError('Scripts unsupported %s' % scripts)
+
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = [dms]
     assert(len(scripts) == len(dms))

@@ -91,4 +91,4 @@ def laplace_am(self, sp1, R1, sp2, R2):
         self.c2r_( l1,l2, self.jmx,cS,rS,cmat)
         overlaps[s1:f1,s2:f2] = rS[-l1+j:l1+j+1,-l2+j:l2+j+1]
 
-  return overlaps
+  return -overlaps

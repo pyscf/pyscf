@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,10 +24,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
-from pyscf.pbc.dft import numint
-from pyscf.pbc.scf.newton_ah import _gen_rhf_response
+from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
@@ -50,8 +48,6 @@ class TDA(rhf.TDA):
 
     def gen_vind(self, mf):
         singlet = self.singlet
-        cell = mf.cell
-        kpts = mf.kpts
 
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
@@ -71,8 +67,7 @@ class TDA(rhf.TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
-                                  max_memory=max_memory)
+        vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
@@ -143,8 +138,6 @@ class TDHF(TDA):
         [-B* -A*][Y]
         '''
         singlet = self.singlet
-        cell = mf.cell
-        kpts = mf.kpts
 
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
@@ -162,8 +155,7 @@ class TDHF(TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
-                                  max_memory=max_memory)
+        vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)

@@ -33,7 +33,7 @@ def kernel(hobj):
     atmlst = numpy.where(atom_charges != 0)[0]  # Exclude ghost atoms
     natm = len(atmlst)
     mass = numpy.array([elements.MASSES[atom_charges[i]] for i in atmlst])
-    reduced_mass = 1./(1./mass).sum()
+    #reduced_mass = 1./(1./mass).sum()
 
     if hobj.nroots is None:
         h = hobj.hess(atmlst=atmlst)

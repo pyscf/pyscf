@@ -13,10 +13,10 @@
 # limitations under the License.
 
 from __future__ import division, print_function
+import numpy as np
 from pyscf.nao.m_ao_matelem import build_3dgrid
 from pyscf.nao.m_dens_libnao import dens_libnao
 from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
-import scipy.linalg.blas as blas
 from pyscf.dft import libxc
 
 #
@@ -34,22 +34,28 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
       matrix of orbital overlaps
     The procedure uses the numerical integration in coordinate space.
   """
+
   grids = build_3dgrid(me, sp1, R1, sp2, R2, **kw)
   rho = dens_libnao(grids.coords, me.sv.nspin)
-  exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, rho.T, spin=me.sv.nspin-1, deriv=deriv)
 
+  THRS = 1e-12 
+  if me.sv.nspin==1: 
+    rho[rho<THRS] = 0.0
+  elif me.sv.nspin==2:
+    msk = np.logical_or(rho[:,0]<THRS, rho[:,1]<THRS)
+    rho[msk,0],rho[msk,1] = 0.0,0.0
+
+  exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, rho.T, spin=me.sv.nspin-1, deriv=deriv)
   ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
  
   if deriv==1 :
-    #print(' vxc[0].shape ', vxc[0].shape)
-    ao1 = ao1 * grids.weights * vxc[0]
+    xq = vxc[0] if vxc[0].ndim>1 else vxc[0].reshape((vxc[0].size,1))
   elif deriv==2:
-    ao1 = ao1 * grids.weights * fxc[0]
+    xq = fxc[0] if fxc[0].ndim>1 else fxc[0].reshape((fxc[0].size,1))
   else:
     print(' deriv ', deriv)
     raise RuntimeError('!deriv!')
 
+  ao1 = np.einsum('ax,x,xq->qax', ao1, grids.weights, xq)
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
-  overlaps = blas.dgemm(1.0, ao1, ao2.T)
-
-  return overlaps
+  return np.einsum('qax,bx->qab', ao1, ao2)

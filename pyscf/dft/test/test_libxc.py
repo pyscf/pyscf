@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
         self.assertEqual(fn_facs, [(106, 1), (1, -0.5)])
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.25*B3LYP')
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP\n+0.25*B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
         hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
         self.assertAlmostEqual(hyb, .15, 12)
@@ -191,6 +191,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(rho[0],f[2]), 0, 8)
         self.assertAlmostEqual(abs(f[2]).sum(), 0, 3)
 
+    #def test_tpss(self):
+    #    #FIXME: raised numerical error
+    #    rho_a = numpy.array([[3.67808547e-08,-2.02358682e-08, 2.16729780e-07, 2.27036045e-07,-1.47795869e-07,-1.45668997e-09]]).T
+    #    e, v = dft.libxc.eval_xc('tpss,', rho_a, spin=0, deriv=1)[:2]
+    #    rho_b = numpy.array([[4.53272893e-06, 4.18968775e-06,-2.83034672e-06, 2.61832978e-06, 5.63360737e-06, 8.97541777e-07]]).T
+    #    e, v = dft.libxc.eval_xc('tpss,', (rho_a, rho_b), spin=1, deriv=1)[:2]
+
     def test_define_xc(self):
         def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
             # A fictitious XC functional to demonstrate the usage
@@ -255,6 +262,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
         self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
         self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
+
+    def test_ityh(self):
+        rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('ityh,', rho, 0, deriv=1)
+        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+        self.assertEqual(dft.libxc.rsh_coeff('ityh,'), [0.2, 0.0, 0.0])
 
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))

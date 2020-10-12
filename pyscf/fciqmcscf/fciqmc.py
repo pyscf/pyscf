@@ -35,14 +35,6 @@ except ImportError:
 ''' % os.path.join(os.path.dirname(__file__), 'settings.py')
     sys.stderr.write(msg)
 
-try:
-    import settings
-except ImportError:
-    import os, sys
-    msg = '''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py')
-    sys.stderr.write(msg)
-
 IRREP_MAP = {'D2h': (1,         # Ag
                      4,         # B1g
                      6,         # B2g
@@ -542,6 +534,8 @@ def execute_fciqmc(fciqmcci):
         logger.info(fciqmcci, 'Waiting for density matrices and output file '
                               'to be returned.')
         try:
+            if sys.version_info[0] >= 3:
+                raw_input = input
             raw_input("Press Enter to continue with calculation...")
         except:
             input("Press Enter to continue with calculation...")

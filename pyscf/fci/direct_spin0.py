@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,10 +39,8 @@ slower but more robust than direct_spin0 especially when combining to energy
 penalty method (:func:`fix_spin_`)
 '''
 
-import sys
 import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
@@ -337,7 +335,7 @@ def _check_(c):
     c *= .5
     norm = numpy.linalg.norm(c)
     if abs(norm-1) > 1e-6:
-        raise ValueError('State not singlet %g' % abs(numpy.linalg.norm(c)-1))
+        raise ValueError('State not singlet %g' % (norm - 1))
     return c/norm
 
 

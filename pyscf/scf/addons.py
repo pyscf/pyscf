@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# -*- coding: utf-8 -*-
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +16,7 @@
 #
 # Authors: Qiming Sun <osirpt.sun@gmail.com>
 #          Junzi Liu <latrix1247@gmail.com>
-#
+#          Susi Lehtola <susi.lehtola@gmail.com>
 
 import copy
 from functools import reduce
@@ -28,6 +29,7 @@ from pyscf.scf import hf
 from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
+CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
 def frac_occ_(mf, tol=1e-3):
@@ -300,13 +302,13 @@ def project_mo_nr2nr(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('int1e_ovlp')
     s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
     if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
-        return lib.cho_solve(s22, numpy.dot(s21, mo1))
+        return lib.cho_solve(s22, numpy.dot(s21, mo1), strict_sym_pos=False)
     else:
-        return [lib.cho_solve(s22, numpy.dot(s21, x)) for x in mo1]
+        return [lib.cho_solve(s22, numpy.dot(s21, x), strict_sym_pos=False)
+                for x in mo1]
 
+@lib.with_doc(project_mo_nr2nr.__doc__)
 def project_mo_nr2r(mol1, mo1, mol2):
-    __doc__ = project_mo_nr2nr.__doc__
-
     assert(not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
@@ -317,20 +319,20 @@ def project_mo_nr2r(mol1, mo1, mol2):
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
     if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
         mo2 = numpy.dot(s21, mo1)
-        return lib.cho_solve(s22, mo2)
+        return lib.cho_solve(s22, mo2, strict_sym_pos=False)
     else:
-        return [lib.cho_solve(s22, numpy.dot(s21, x)) for x in mo1]
+        return [lib.cho_solve(s22, numpy.dot(s21, x), strict_sym_pos=False)
+                for x in mo1]
 
+@lib.with_doc(project_mo_nr2nr.__doc__)
 def project_mo_r2r(mol1, mo1, mol2):
-    __doc__ = project_mo_nr2nr.__doc__
-
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     t22 = mol2.intor_symmetric('int1e_spsp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
     t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
     n2c = s21.shape[1]
-    pl = lib.cho_solve(s22, s21)
-    ps = lib.cho_solve(t22, t21)
+    pl = lib.cho_solve(s22, s21, strict_sym_pos=False)
+    ps = lib.cho_solve(t22, t21, strict_sym_pos=False)
     if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
         return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
                              numpy.dot(ps, mo1[n2c:])))
@@ -359,15 +361,14 @@ def project_dm_nr2nr(mol1, dm1, mol2):
     '''
     s22 = mol2.intor_symmetric('int1e_ovlp')
     s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
-    p21 = lib.cho_solve(s22, s21)
+    p21 = lib.cho_solve(s22, s21, strict_sym_pos=False)
     if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
         return reduce(numpy.dot, (p21, dm1, p21.conj().T))
     else:
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
+@lib.with_doc(project_dm_nr2nr.__doc__)
 def project_dm_nr2r(mol1, dm1, mol2):
-    __doc__ = project_dm_nr2nr.__doc__
-
     assert(not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
@@ -376,31 +377,83 @@ def project_dm_nr2r(mol1, dm1, mol2):
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
-    p21 = lib.cho_solve(s22, s21)
+    p21 = lib.cho_solve(s22, s21, strict_sym_pos=False)
     if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
         return reduce(numpy.dot, (p21, dm1, p21.conj().T))
     else:
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
+@lib.with_doc(project_dm_nr2nr.__doc__)
 def project_dm_r2r(mol1, dm1, mol2):
-    __doc__ = project_dm_nr2nr.__doc__
-
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     t22 = mol2.intor_symmetric('int1e_spsp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
     t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
-    n2c = s21.shape[1]
-    pl = lib.cho_solve(s22, s21)
-    ps = lib.cho_solve(t22, t21)
+    pl = lib.cho_solve(s22, s21, strict_sym_pos=False)
+    ps = lib.cho_solve(t22, t21, strict_sym_pos=False)
     p21 = scipy.linalg.block_diag(pl, ps)
     if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
         return reduce(numpy.dot, (p21, dm1, p21.conj().T))
     else:
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
+def canonical_orth_(S, thr=1e-7):
+    '''Löwdin's canonical orthogonalization'''
+    # Ensure the basis functions are normalized (symmetry-adapted ones are not!)
+    normlz = numpy.power(numpy.diag(S), -0.5)
+    Snorm = numpy.dot(numpy.diag(normlz), numpy.dot(S, numpy.diag(normlz)))
+    # Form vectors for normalized overlap matrix
+    Sval, Svec = numpy.linalg.eigh(Snorm)
+    X = Svec[:,Sval>=thr] / numpy.sqrt(Sval[Sval>=thr])
+    # Plug normalization back in
+    X = numpy.dot(numpy.diag(normlz), X)
+    return X
+
+def partial_cholesky_orth_(S, cholthr=1e-9, canthr=1e-7):
+    '''Partial Cholesky orthogonalization for curing overcompleteness.
+
+    References:
+
+    Susi Lehtola, Curing basis set overcompleteness with pivoted
+    Cholesky decompositions, J. Chem. Phys. 151, 241102 (2019),
+    doi:10.1063/1.5139948.
+
+    Susi Lehtola, Accurate reproduction of strongly repulsive
+    interatomic potentials, Phys. Rev. A 101, 032504 (2020),
+    doi:10.1103/PhysRevA.101.032504.
+    '''
+    # Ensure the basis functions are normalized
+    normlz = numpy.power(numpy.diag(S), -0.5)
+    Snorm = numpy.dot(numpy.diag(normlz), numpy.dot(S, numpy.diag(normlz)))
+
+    # Sort the basis functions according to the Gershgorin circle
+    # theorem so that the Cholesky routine is well-initialized
+    odS = numpy.abs(Snorm)
+    numpy.fill_diagonal(odS, 0.0)
+    odSs = numpy.sum(odS, axis=0)
+    sortidx = numpy.argsort(odSs)
+
+    # Run the pivoted Cholesky decomposition
+    Ssort = Snorm[numpy.ix_(sortidx, sortidx)].copy()
+    pstrf = scipy.linalg.lapack.get_lapack_funcs('pstrf')
+    c, piv, r_c, info = pstrf(Ssort, tol=cholthr)
+    # The functions we're going to use are given by the pivot as
+    idx = sortidx[piv[:r_c]-1]
+
+    # Get the (un-normalized) sub-basis
+    Ssub = S[numpy.ix_(idx, idx)].copy()
+    # Orthogonalize sub-basis
+    Xsub = canonical_orth_(Ssub, thr=canthr)
+
+    # Full X
+    X = numpy.zeros((S.shape[0], Xsub.shape[1]))
+    X[idx,:] = Xsub
+
+    return X
 
 def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
-                       lindep=LINEAR_DEP_TRIGGER):
+                       lindep=LINEAR_DEP_TRIGGER,
+                       cholesky_threshold=CHOLESKY_THRESHOLD):
     '''
     Args:
         threshold : float
@@ -415,25 +468,37 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     if cond < 1./lindep:
         return mf
 
-    logger.info(mf, 'Applying remove_linear_dep_ on SCF obejct.')
+    logger.info(mf, 'Applying remove_linear_dep_ on SCF object.')
     logger.debug(mf, 'Overlap condition number %g', cond)
-    def eigh(h, s):
-        d, t = numpy.linalg.eigh(s)
-        x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
-        xhx = reduce(numpy.dot, (x.T.conj(), h, x))
-        e, c = numpy.linalg.eigh(xhx)
-        c = numpy.dot(x, c)
-        return e, c
-    mf._eigh = eigh
+    if(cond < 1./numpy.finfo(s.dtype).eps):
+        logger.info(mf, 'Using canonical orthogonalization')
+        def eigh(h, s):
+            x = canonical_orth_(s, threshold)
+            xhx = reduce(numpy.dot, (x.T.conj(), h, x))
+            e, c = numpy.linalg.eigh(xhx)
+            c = numpy.dot(x, c)
+            return e, c
+        mf._eigh = eigh
+    else:
+        logger.info(mf, 'Using partial Cholesky orthogonalization '
+                    '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
+        def eigh(h, s):
+            x = partial_cholesky_orth_(s, threshold, cholesky_threshold)
+            xhx = reduce(numpy.dot, (x.T.conj(), h, x))
+            e, c = numpy.linalg.eigh(xhx)
+            c = numpy.dot(x, c)
+            return e, c
+        mf._eigh = eigh
     return mf
 remove_linear_dep = remove_linear_dep_
 
 def convert_to_uhf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the unrestricted HF/KS object
 
-    Note if mf is an second order SCF object, the second order object will not
-    be converted (in other words, only the underlying SCF object will be
-    converted)
+    Note this conversion only changes the class of the mean-field object.
+    The total energy and wave-function are the same as them in the input
+    mf object. If mf is an second order SCF (SOSCF) object, the SOSCF layer
+    will be discarded. Its underlying SCF object mf._scf will be converted.
 
     Args:
         mf : SCF object
@@ -448,7 +513,6 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to UHF', mf.__class__)
@@ -504,6 +568,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     return update_mo_(mf, out)
 
 def _object_without_soscf(mf, known_class, remove_df=False):
+    from pyscf.soscf import newton_ah
     sub_classes = []
     obj = None
     for i, cls in enumerate(mf.__class__.__mro__):
@@ -519,24 +584,39 @@ def _object_without_soscf(mf, known_class, remove_df=False):
             "`known_class` type.\n\nmf = '%s'\n\nknown_class = '%s'" %
             (mf.__class__.__mro__, known_class))
 
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        remove_df = (remove_df or
+                     # The main SCF object is not a DFHF object
+                     not getattr(mf._scf, 'with_df', None))
+
 # Mimic the initialization procedure to restore the Hamiltonian
     for cls in reversed(sub_classes):
-        if (not remove_df) and 'DFHF' in cls.__name__:
-            obj = obj.density_fit()
-        elif 'SecondOrder' in cls.__name__:
-# SOSCF is not a necessary part
-            # obj = obj.newton()
-            remove_df = remove_df or (not getattr(mf._scf, 'with_df', None))
-        elif 'SFX2C1E' in cls.__name__:
-            obj = obj.sfx2c1e()
+        class_name = cls.__name__
+        if '_DFHF' in class_name:
+            if not remove_df:
+                obj = obj.density_fit()
+        elif '_SGXHF' in class_name:
+            if not remove_df:
+                obj = obj.COSX()
+        elif '_X2C_SCF' in class_name:
+            obj = obj.x2c()
+        elif 'WithSolvent' in class_name:
+            obj = obj.ddCOSMO(mf.with_solvent)
+        elif 'QMMM' in class_name and getattr(mf, 'mm_mol', None):
+            from pyscf.qmmm.itrf import qmmm_for_scf
+            obj = qmmm_for_scf(obj, mf.mm_mol)
+        elif '_DFTD3' in class_name:
+            from pyscf.dftd3.itrf import dftd3
+            obj = dftd3(obj)
     return _update_mf_without_soscf(mf, obj, remove_df)
 
 def _update_mf_without_soscf(mf, out, remove_df=False):
+    from pyscf.soscf import newton_ah
     mf_dic = dict(mf.__dict__)
 
-    # For SOSCF, avoid the old _scf to be copied to the new object
-    if '_scf' in mf_dic:
-        mf_dic.pop('_scf')
+    # if mf is SOSCF object, avoid to overwrite the with_df method
+    # FIXME: it causes bug when converting pbc-SOSCF.
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
         mf_dic.pop('with_df', None)
 
     out.__dict__.update(mf_dic)
@@ -548,9 +628,10 @@ def _update_mf_without_soscf(mf, out, remove_df=False):
 def convert_to_rhf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the restricted HF/KS object
 
-    Note if mf is an second order SCF object, the second order object will not
-    be converted (in other words, only the underlying SCF object will be
-    converted)
+    Note this conversion only changes the class of the mean-field object.
+    The total energy and wave-function are the same as them in the input
+    mf object. If mf is an second order SCF (SOSCF) object, the SOSCF layer
+    will be discarded. Its underlying SCF object mf._scf will be converted.
 
     Args:
         mf : SCF object
@@ -565,7 +646,6 @@ def convert_to_rhf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to RHF', mf.__class__)
@@ -629,9 +709,10 @@ def convert_to_rhf(mf, out=None, remove_df=False):
 def convert_to_ghf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the generalized HF/KS object
 
-    Note if mf is an second order SCF object, the second order object will not
-    be converted (in other words, only the underlying SCF object will be
-    converted)
+    Note this conversion only changes the class of the mean-field object.
+    The total energy and wave-function are the same as them in the input
+    mf object. If mf is an second order SCF (SOSCF) object, the SOSCF layer
+    will be discarded. Its underlying SCF object mf._scf will be converted.
 
     Args:
         mf : SCF object
@@ -646,7 +727,6 @@ def convert_to_ghf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to GHF', mf.__class__)

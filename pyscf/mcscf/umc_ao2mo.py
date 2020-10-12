@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 MO integrals for UCASSCF methods
 '''
 
-import sys
 import ctypes
 import time
 import numpy
@@ -50,7 +49,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
             _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)
     jC_PP, jC_pp, kC_PP, ICVCV = \
             _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_buf)[:4]
-    erib = tmp = None
+    erib = None
 
     eria = ao2mo.incore.half_e1(eri_ao, (mo[0][:,:nocc[0]],mo[0]),
                                 compact=False)
@@ -80,6 +79,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
                           verbose=log, compact=False)
 
     klaoblks = len(fswap['0'])
+
     def load_bufa(bfn_id):
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('between load_buf', *tuple(time1))
@@ -93,6 +93,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('load_buf', *tuple(time1))
         return buf
+
     time0 = log.timer('halfe1-beta', *time0)
     time1 = [time.clock(), time.time()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
@@ -104,7 +105,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
             _trans_cvcv_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_bufa,
                          ao_loc)[:4]
     time0 = log.timer('trans_CVCV', *time0)
-    tmp = None
 
     ###########################
 
@@ -113,6 +113,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
                           verbose=log, compact=False)
 
     klaoblks = len(fswap['0'])
+
     def load_bufb(bfn_id):
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('between load_buf', *tuple(time1))
@@ -126,6 +127,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         if log.verbose >= logger.DEBUG1:
             time1[:] = log.timer('load_buf', *tuple(time1))
         return buf
+
     time0 = log.timer('halfe1-alpha', *time0)
     time1 = [time.clock(), time.time()]
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
@@ -145,8 +147,6 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
 def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo[0].shape[1]
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
-    c_nmo = ctypes.c_int(nmo)
-
     klshape = (0, nmo, 0, nmo)
 
     japcv = numpy.empty((ncas,nmo,ncore[0],nmo-ncore[0]))
@@ -178,8 +178,6 @@ def _trans_aapp_(mo, ncore, ncas, fload, ao_loc=None):
 
 def _trans_cvcv_(mo, ncore, ncas, fload, ao_loc=None):
     nmo = mo[0].shape[1]
-    c_nmo = ctypes.c_int(nmo)
-
     jc_pp = numpy.empty((ncore[0],nmo,nmo))
     jc_PP = numpy.zeros((nmo,nmo))
     kc_pp = numpy.empty((ncore[0],nmo,nmo))

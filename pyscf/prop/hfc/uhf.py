@@ -20,8 +20,8 @@
 Non-relativistic unrestricted Hartree-Fock hyperfine coupling tensor
 
 Refs:
-    JCP, 120, 2127
-    JCP, 118, 3939
+    JCP 120, 2127 (2004); DOI:10.1063/1.1636720
+    JCP 118, 3939 (2002); DOI:10.1063/1.1540619
 '''
 
 import time
@@ -29,8 +29,6 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.dft import numint
-from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge

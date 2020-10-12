@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2018-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +20,12 @@
 Pseudo-spectral methods (COSX, PS, SN-K)
 '''
 
-import time
 import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
+from pyscf import scf
+from pyscf import mcscf
 from pyscf.scf import _vhf
 from pyscf.lib import logger
 from pyscf.sgx import sgx_jk
@@ -61,9 +62,6 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
     >>> mf.scf()
     -100.00978770951018
     '''
-    from pyscf import scf
-    from pyscf import df
-    from pyscf.soscf import newton_ah
     assert(isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
@@ -79,13 +77,9 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         if mf.with_df is None:
             mf = mf_class(mf, with_df, auxbasis)
         elif mf.with_df.auxbasis != auxbasis:
-            if (isinstance(mf, newton_ah._CIAH_SOSCF) and
-                isinstance(mf._scf, _SGXHF)):
-                mf.with_df = copy.copy(mf.with_df)
-                mf.with_df.auxbasis = auxbasis
-            else:
-                raise RuntimeError('SGX has been initialized. '
-                                   'It cannot be initialized twice.')
+            #logger.warn(mf, 'DF might have been initialized twice.')
+            mf = copy.copy(mf)
+            mf.with_df = with_df
         return mf
 
     class SGXHF(_SGXHF, mf_class):
@@ -105,10 +99,14 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
 
         def build(self, mol=None, **kwargs):
             if self.direct_scf:
-                self.with_df.build(self.with_df.grids_level_f)
+                self.with_df.build(level=self.with_df.grids_level_f)
             else:
-                self.with_df.build(self.with_df.grids_level_i)
+                self.with_df.build(level=self.with_df.grids_level_i)
             return mf_class.build(self, mol, **kwargs)
+
+        def reset(self, mol=None):
+            self.with_df.reset(mol)
+            return mf_class.reset(self, mol)
 
         def pre_kernel(self, envs):
             self._in_scf = True
@@ -123,7 +121,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             if self._in_scf and not self.direct_scf:
                 if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd:
                     logger.debug(self, 'Switching SGX grids')
-                    with_df.build(with_df.grids_level_f)
+                    with_df.build(level=with_df.grids_level_f)
                     self._in_scf = False
                     self._last_dm = 0
                 else:
@@ -156,6 +154,9 @@ class _SGXHF(object):
     CCSD = method_not_implemented
     CASCI = method_not_implemented
     CASSCF = method_not_implemented
+
+scf.hf.SCF.COSX = sgx_fit
+mcscf.casci.CASCI.COSX = sgx_fit
 
 
 def _make_opt(mol):
@@ -210,8 +211,8 @@ class SGX(lib.StreamObject):
             self._auxbasis = x
             self.auxmol = None
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('******** %s ********', self.__class__)
         log.info('max_memory = %s', self.max_memory)
         log.info('grids_level_i = %s', self.grids_level_i)
@@ -289,7 +290,6 @@ class SGX(lib.StreamObject):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
     mol.build(

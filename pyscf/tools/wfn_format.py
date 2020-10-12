@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 GAMESS WFN File format
 '''
 
-from functools import reduce
 from pyscf import gto
 from pyscf import lib
 import numpy
@@ -92,6 +91,15 @@ TYPE_MAP = [
     [56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36],  # H
 ]
 def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
+    if mol.cart:
+        raise NotImplementedError('Cartesian basis not available')
+
+    #FIXME: Duplicated primitives may lead to problems.  x2c._uncontract_mol
+    # is the workaround at the moment to remove duplicated primitives.
+    from pyscf.x2c import x2c
+    mol, ctr = x2c._uncontract_mol(mol, True, 0.)
+    mo_coeff = numpy.dot(ctr, mo_coeff)
+
     nmo = mo_coeff.shape[1]
     mo_cart = []
     centers = []
@@ -184,8 +192,7 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
         fout.write('%18.10E %s %s\n' % (fcivec[addra,addrb], ' '.join(idxa), ' '.join(idxb)))
 
 if __name__ == '__main__':
-    import sys
-    from pyscf import gto, scf, mcscf, symm
+    from pyscf import scf, mcscf, symm
     from pyscf.tools import molden
     mol = gto.M(atom='N 0 0 0; N 0 0 2.88972599', 
                 unit='B', basis='ccpvtz', verbose=4, 

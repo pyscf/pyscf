@@ -20,6 +20,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto, scf, ao2mo
 from pyscf.tools import fcidump
+import tempfile
 
 mol = gto.Mole()
 mol.atom = '''
@@ -27,8 +28,7 @@ N  0.0000000000   0.0000000000   0.0000000000
 N  0.0000000000   0.0000000000   1.0977000000
            '''
 mol.basis = 'sto-3g'
-mol.symmetry = 1
-mol.symmetry_subgroup = 'D2h'
+mol.symmetry = 'D2h'
 mol.charge = 0
 mol.spin = 0 #2*S; multiplicity-1
 mol.verbose = 0
@@ -43,7 +43,8 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_from_chkfile(self):
         tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15)
+        fcidump.from_chkfile(tmpfcidump.name, mf.chkfile, tol=1e-15,
+                             molpro_orbsym=True)
 
     def test_from_integral(self):
         tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -51,6 +52,46 @@ class KnownValues(unittest.TestCase):
         h2 = ao2mo.full(mf._eri, mf.mo_coeff)
         fcidump.from_integrals(tmpfcidump.name, h1, h2, h1.shape[0],
                                mol.nelectron, tol=1e-15)
+
+    def test_read(self):
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''&FCI NORB=4,
+NELEC=4, MS2=0, ISYM=1,
+ORBSYM=1,2,3,4,
+&END
+0.42 1 1 1 1
+0.33 1 1 2 2
+0.07 1 1 3 1
+0.46 1 1 0 0
+0.13 1 2 0 0
+1.1  0 0 0 0
+''')
+            f.flush()
+            result = fcidump.read(f.name)
+        self.assertEqual(result['ISYM'], 1)
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''&FCI NORB=4, NELEC=4, MS2=0, ISYM=1,ORBSYM=1,2,3,4, &END
+0.42 1 1 1 1
+0.33 1 1 2 2
+0.07 1 1 3 1
+0.46 1 1 0 0
+0.13 1 2 0 0
+1.1  0 0 0 0
+''')
+            f.flush()
+            result = fcidump.read(f.name)
+        self.assertEqual(result['MS2'], 0)
+
+    def test_to_scf(self):
+        '''Test from_scf and to_scf'''
+        tmpfcidump = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        fcidump.from_scf(mf, tmpfcidump.name)
+        mf1 = fcidump.to_scf(tmpfcidump.name)
+        mf1.init_guess = mf.make_rdm1()
+        mf1.kernel()
+        self.assertTrue(abs(mf1.e_tot - mf.e_tot).max() < 1e-9)
+        self.assertTrue(numpy.array_equal(mf.orbsym, mf1.orbsym))
 
 if __name__ == "__main__":
     print("Full Tests for fcidump")

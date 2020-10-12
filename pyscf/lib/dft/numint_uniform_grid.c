@@ -1495,7 +1495,7 @@ int NUMINTeval_gga_nonorth(double *weights, double *out, int comp,
 }
 
 static void _apply_ints(int (*eval_ints)(), double *weights, double *mat,
-                        int *dims, int comp, double fac,
+                        size_t *dims, int comp, double fac,
                         double log_prec, int dimension, double *a, double *b,
                         int *offset, int *submesh, int *mesh, int *shls,
                         int *atm, int *bas, double *env, double *cache)
@@ -1530,8 +1530,8 @@ static void _apply_ints(int (*eval_ints)(), double *weights, double *mat,
                                  fac, log_prec, dimension, a, b,
                                  offset, submesh, mesh, cache);
         if (value != 0) {
-                int naoi = dims[0];
-                int naoj = dims[1];
+                size_t naoi = dims[0];
+                size_t naoj = dims[1];
                 int i, j, ic;
                 for (ic = 0; ic < comp; ic++) {
                         for (j = 0; j < dj; j++) {
@@ -1597,8 +1597,8 @@ void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
         const int jsh1 = shls_slice[3];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
-        const int naoi = ao_loc[ish1] - ao_loc[ish0];
-        const int naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
+        const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
         const int cache_size = _max_cache_size(_nonorth_cache_size, shls_slice,
                                                bas, mesh);
         if (dimension == 0) {
@@ -1606,10 +1606,11 @@ void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
         }
 #pragma omp parallel
 {
-        int ncij = comp * naoi * naoj;
-        int nijsh = nish * njsh;
-        int dims[] = {naoi, naoj};
-        int ish, jsh, ij, ijm, m, mm, i0, j0, ic;
+        size_t ncij = comp * naoi * naoj;
+        size_t nijsh = nish * njsh;
+        size_t dims[] = {naoi, naoj};
+        size_t ijm;
+        int ish, jsh, ij, m, mm, i0, j0, ic;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);
@@ -1844,7 +1845,7 @@ static void _orth_rho(double *rho, double *dm_xyz,
         }
 }
 
-static void _dm_vrr6d(double *dm_cart, double *dm, int naoi,
+static void _dm_vrr6d(double *dm_cart, double *dm, size_t naoi,
                       int li, int lj, double *ri, double *rj, double *cache)
 {
         int di = _LEN_CART[li];
@@ -1859,7 +1860,7 @@ static void _dm_vrr6d(double *dm_cart, double *dm, int naoi,
         GTOreverse_vrr2d_ket(dm_cart, dm_6d, li, lj, ri, rj);
 }
 
-void NUMINTrho_lda_orth(double *rho, double *dm, int comp, int naoi,
+void NUMINTrho_lda_orth(double *rho, double *dm, int comp, size_t naoi,
                         int li, int lj, double ai, double aj,
                         double *ri, double *rj, double fac, double log_prec,
                         int dimension, double *a, double *b,
@@ -1893,7 +1894,7 @@ void NUMINTrho_lda_orth(double *rho, double *dm, int comp, int naoi,
                   img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 }
 
-void NUMINTrho_gga_orth(double *rho, double *dm, int comp, int naoi,
+void NUMINTrho_gga_orth(double *rho, double *dm, int comp, size_t naoi,
                         int li, int lj, double ai, double aj,
                         double *ri, double *rj, double fac, double log_prec,
                         int dimension, double *a, double *b,
@@ -2382,7 +2383,7 @@ if (nimgz == 1) {
         }
 }
 
-void NUMINTrho_lda_nonorth(double *rho, double *dm, int comp, int naoi,
+void NUMINTrho_lda_nonorth(double *rho, double *dm, int comp, size_t naoi,
                            int li, int lj, double ai, double aj,
                            double *ri, double *rj, double fac, double log_prec,
                            int dimension, double *a, double *b,
@@ -2434,7 +2435,7 @@ static void _merge_dm_xyz_updown(double *dm_xyz, double *dm_xyz1, int l1)
         } } }
 }
 
-void NUMINTrho_gga_nonorth(double *rho, double *dm, int comp, int naoi,
+void NUMINTrho_gga_nonorth(double *rho, double *dm, int comp, size_t naoi,
                            int li, int lj, double ai, double aj,
                            double *ri, double *rj, double fac, double log_prec,
                            int dimension, double *a, double *b,
@@ -2561,13 +2562,13 @@ void NUMINTrho_gga_nonorth(double *rho, double *dm, int comp, int naoi,
 }
 
 static void _apply_rho(void (*eval_rho)(), double *rho, double *dm,
-                       int *dims, int comp,
+                       size_t *dims, int comp,
                        double log_prec, int dimension, double *a, double *b,
                        int *offset, int *submesh, int *mesh, int *shls,
                        int *atm, int natm, int *bas, int nbas, double *env,
                        double *cache)
 {
-        const int naoi = dims[0];
+        const size_t naoi = dims[0];
         const int i_sh = shls[0];
         const int j_sh = shls[1];
         const int li = bas(ANG_OF, i_sh);
@@ -2624,8 +2625,8 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
         const int jsh1 = shls_slice[3];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
-        const int naoi = ao_loc[ish1] - ao_loc[ish0];
-        const int naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
+        const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
 
         int lmax = 0;
         int ib;
@@ -2641,10 +2642,11 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
         double *rhobufs[MAX_THREADS];
 #pragma omp parallel
 {
-        int ncij = naoi * naoj;
-        int nijsh = nish * njsh;
-        int dims[] = {naoi, naoj};
-        int ish, jsh, ij, ijm, m, mm, i0, j0;
+        size_t ncij = naoi * naoj;
+        size_t nijsh = nish * njsh;
+        size_t dims[] = {naoi, naoj};
+        size_t ijm;
+        int ish, jsh, ij, m, mm, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);

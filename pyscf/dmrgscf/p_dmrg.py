@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,20 +21,13 @@ Perturbation for DMRG with small bond dimensions.
 '''
 
 import os
-import sys
 import struct
-import time
-import tempfile
-from subprocess import check_call, CalledProcessError
+from subprocess import check_call, Popen, PIPE
 import numpy
-from pyscf import lib
 from pyscf.lib import logger
-from pyscf import mcscf
 from pyscf import dmrgscf
 from pyscf.dmrgscf import dmrgci
 from dmrgci import DMRGCI
-from pyscf.dmrgscf import dmrg_sym
-from subprocess import *
 
 
 class PDMRG(DMRGCI):
@@ -106,22 +99,21 @@ class PDMRG(DMRGCI):
                       fout.write(line)
               fout.write('fullrestart')
 
-    import os
-    block_path = os.path.dirname(self.executable)
-    check_call(["%s %s/OH oh.conf wavenum > oh.out"%(self.mpiprefix,block_path)], shell=True)
-    with open('oh.out','r') as f:
+      block_path = os.path.dirname(self.executable)
+      check_call(["%s %s/OH oh.conf wavenum > oh.out"%(self.mpiprefix,block_path)], shell=True)
+      with open('oh.out','r') as f:
         H0 = float(f.readlines()[-4])
-    H0 -=self.core_energy
-    E0  = self.E_dmrg*self.H0factor + H0*(1.0-self.H0factor)
+      H0 -=self.core_energy
+      E0  = self.E_dmrg*self.H0factor + H0*(1.0-self.H0factor)
 
-    check_call(["head -n -1 %s > tmpfile"%self.H0_file], shell=True)
-    check_call(["cp tmpfile %s"%self.H0_file], shell=True)
-    with open('%s'%self.H0_file,'a') as f:
+      check_call(["head -n -1 %s > tmpfile"%self.H0_file], shell=True)
+      check_call(["cp tmpfile %s"%self.H0_file], shell=True)
+      with open('%s'%self.H0_file,'a') as f:
         f.write('%s 0 0 0 0\n'%(-E0))
 
-    check_call(["head -n -1 %s > tmpfile"%self.H1_file], shell=True)
-    check_call(["cp tmpfile %s"%self.H1_file], shell=True)
-    with open('%s'%self.H1_file,'a') as f:
+      check_call(["head -n -1 %s > tmpfile"%self.H1_file], shell=True)
+      check_call(["cp tmpfile %s"%self.H1_file], shell=True)
+      with open('%s'%self.H1_file,'a') as f:
         f.write('%s 0 0 0 0\n'%(-self.E_dmrg))
 
   def compress(self):
@@ -187,9 +179,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import mcscf
-    from pyscf import dmrgscf
 
-    import os
     from pyscf.dmrgscf import settings
     settings.MPIPREFIX =''
 

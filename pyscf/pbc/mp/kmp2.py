@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ t2 and eris are never stored in full, only a partial
 eri of size (nkpts,nocc,nocc,nvir,nvir)
 '''
 
-import time
 import numpy as np
 from scipy.linalg import block_diag
 import h5py
@@ -383,7 +382,7 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
     '''
     frozen = np.array(frozen)
     nocc = np.count_nonzero(mo_occ > 0)
-    nvir = len(mo_occ) - nocc
+
     assert nocc, 'No occupied orbitals?\n\nnocc = %s\nmo_occ = %s' % (nocc, mo_occ)
     all_frozen_unique = (len(frozen) - len(np.unique(frozen))) == 0
     if not all_frozen_unique:
@@ -418,7 +417,9 @@ def get_nocc(mp, per_kpoint=False):
                                "this".format(i, moocc))
     if mp._nocc is not None:
         return mp._nocc
-    if isinstance(mp.frozen, (int, np.integer)):
+    elif mp.frozen is None:
+        nocc = [np.count_nonzero(mp.mo_occ[ikpt]) for ikpt in range(mp.nkpts)]
+    elif isinstance(mp.frozen, (int, np.integer)):
         nocc = [(np.count_nonzero(mp.mo_occ[ikpt]) - mp.frozen) for ikpt in range(mp.nkpts)]
     elif isinstance(mp.frozen[0], (int, np.integer)):
         [_frozen_sanity_check(mp.frozen, mp.mo_occ[ikpt], ikpt) for ikpt in range(mp.nkpts)]
@@ -476,7 +477,9 @@ def get_nmo(mp, per_kpoint=False):
     if mp._nmo is not None:
         return mp._nmo
 
-    if isinstance(mp.frozen, (int, np.integer)):
+    if mp.frozen is None:
+        nmo = [len(mp.mo_occ[ikpt]) for ikpt in range(mp.nkpts)]
+    elif isinstance(mp.frozen, (int, np.integer)):
         nmo = [len(mp.mo_occ[ikpt]) - mp.frozen for ikpt in range(mp.nkpts)]
     elif isinstance(mp.frozen[0], (int, np.integer)):
         [_frozen_sanity_check(mp.frozen, mp.mo_occ[ikpt], ikpt) for ikpt in range(mp.nkpts)]
@@ -520,7 +523,9 @@ def get_frozen_mask(mp):
 
     '''
     moidx = [np.ones(x.size, dtype=np.bool) for x in mp.mo_occ]
-    if isinstance(mp.frozen, (int, np.integer)):
+    if mp.frozen is None:
+        pass
+    elif isinstance(mp.frozen, (int, np.integer)):
         for idx in moidx:
             idx[:mp.frozen] = False
     elif isinstance(mp.frozen[0], (int, np.integer)):
@@ -543,12 +548,8 @@ def get_frozen_mask(mp):
 
 
 def _add_padding(mp, mo_coeff, mo_energy):
-    from pyscf.pbc import tools
-    from pyscf.pbc.cc.ccsd import _adjust_occ
     nmo = mp.nmo
     nocc = mp.nocc
-    nvir = nmo - nocc
-    nkpts = mp.nkpts
 
     # Check if these are padded mo coefficients and energies
     if not np.all([x.shape[0] == nmo for x in mo_coeff]):
@@ -560,7 +561,7 @@ def _add_padding(mp, mo_coeff, mo_energy):
 
 
 def make_rdm1(mp, t2=None, kind="compact"):
-    """
+    r"""
     Spin-traced one-particle density matrix in the MO basis representation.
     The occupied-virtual orbital response is not included.
 
@@ -594,6 +595,70 @@ def make_rdm1(mp, t2=None, kind="compact"):
     return result
 
 
+def make_rdm2(mp, t2=None, kind="compact"):
+    r'''
+    Spin-traced two-particle density matrix in MO basis
+
+    .. math::
+
+        dm2[p,q,r,s] = \sum_{\sigma,\tau} <p_\sigma^\dagger r_\tau^\dagger s_\tau q_\sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
+    if kind not in ("compact", "padded"):
+        raise ValueError("The 'kind' argument should be either 'compact' or 'padded'")
+    if t2 is None: t2 = mp.t2
+    dm1 = mp.make_rdm1(t2, "padded")
+    nmo = mp.nmo
+    nocc = mp.nocc
+    nvir = nmo - nocc
+    nkpts = mp.nkpts
+    dtype = t2.dtype
+
+    dm2 = np.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo),dtype=dtype)
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = mp.khelper.kconserv[ki, ka, kj]
+                dovov = t2[ki, kj, ka].transpose(0,2,1,3) * 2 - t2[kj, ki, ka].transpose(1,2,0,3)
+                dovov *= 2
+                dm2[ki,ka,kj,:nocc,nocc:,:nocc,nocc:] = dovov
+                dm2[ka,ki,kb,nocc:,:nocc,nocc:,:nocc] = dovov.transpose(1,0,3,2).conj()
+
+    occidx = padding_k_idx(mp, kind="split")[0]
+    for ki in range(nkpts):
+        for i in occidx[ki]:
+            dm1[ki][i,i] -= 2
+
+    for ki in range(nkpts):
+        for kp in range(nkpts):
+            for i in occidx[ki]:
+                dm2[ki,ki,kp,i,i,:,:] += dm1[kp].T * 2
+                dm2[kp,kp,ki,:,:,i,i] += dm1[kp].T * 2
+                dm2[kp,ki,ki,:,i,i,:] -= dm1[kp].T
+                dm2[ki,kp,kp,i,:,:,i] -= dm1[kp]
+
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for i in occidx[ki]:
+                for j in occidx[kj]:
+                    dm2[ki,ki,kj,i,i,j,j] += 4
+                    dm2[ki,kj,kj,i,j,j,i] -= 2
+
+    if kind == "padded":
+        return dm2
+    else:
+        idx = padding_k_idx(mp, kind="joint")
+        result = []
+        for kp in range(nkpts):
+            for kq in range(nkpts):
+                for kr in range(nkpts):
+                    ks = mp.khelper.kconserv[kp, kq, kr]
+                    result.append(dm2[kp,kq,kr][np.ix_(idx[kp],idx[kq],idx[kr],idx[ks])])
+        return result
+ 
+
 def _gamma1_intermediates(mp, t2=None):
     # Memory optimization should be here
     if t2 is None:
@@ -622,7 +687,7 @@ def _gamma1_intermediates(mp, t2=None):
 
 
 class KMP2(mp2.MP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
         if mo_occ    is None: mo_occ    = mf.mo_occ
@@ -648,6 +713,7 @@ class KMP2(mp2.MP2):
         self._nocc = None
         self._nmo = None
         self.e_corr = None
+        self.e_hf = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
@@ -655,6 +721,7 @@ class KMP2(mp2.MP2):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
     make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
     def dump_flags(self):
         logger.info(self, "")
@@ -686,6 +753,9 @@ class KMP2(mp2.MP2):
             raise RuntimeError
 
         mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
+
+        # TODO: compute e_hf for non-canonical SCF
+        self.e_hf = self._scf.e_tot
 
         self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
