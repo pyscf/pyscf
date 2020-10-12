@@ -87,8 +87,8 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     himem_required *= 8e-6
     himem_required *= lib.num_threads()
 
-    if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory \
-            and agf2.allow_lowmem_build:
+    if ((himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory
+            and agf2.allow_lowmem_build) or agf2.allow_lowmem_build == 'force':
         log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
                   'low-memory version.', himem_required)
         build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_lowmem
@@ -113,8 +113,8 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     himem_required *= 8e-6
     himem_required *= lib.num_threads()
 
-    if (himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory \
-            and agf2.allow_lowmem_build:
+    if ((himem_required*1.05 + lib.current_memory()[0]) > agf2.max_memory
+            and agf2.allow_lowmem_build) or agf2.allow_lowmem_build == 'force':
         log.debug('Thread-private memory overhead %.3f exceeds max_memory, using '
                   'low-memory version.', himem_required)
         build_mats_dfuagf2 = _agf2.build_mats_dfuagf2_lowmem
@@ -151,7 +151,8 @@ class DFUAGF2(uagf2.UAGF2):
             Avoid all I/O. Default is False.
         allow_lowmem_build : bool
             Allow the self-energy build to switch to a serially slower
-            code with loweer thread-private memory overhead if needed.
+            code with lower thread-private memory overhead if needed. One
+            of True, False or 'force'. Default value is True.
         conv_tol : float
             Convergence threshold for AGF2 energy. Default value is 1e-7
         conv_tol_rdm1 : float
