@@ -184,6 +184,8 @@ class UAGF2(uagf2.UAGF2):
         ss_factor : float
             Same-spin factor for spin-component-scaled (SCS)
             calculations. Default 1.0
+        damping : float
+            Damping factor for the self-energy. Default value is 0.0
 
     Saved results
 
@@ -216,7 +218,7 @@ class UAGF2(uagf2.UAGF2):
 
     build_se_part = build_se_part
 
-    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None):
+    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None, se_prev=None):
         ''' Builds the auxiliaries of the self-energy.
 
         Args:
@@ -232,6 +234,8 @@ class UAGF2(uagf2.UAGF2):
             ss_factor : float
                 Same-spin factor for spin-component-scaled (SCS)
                 calculations. Default 1.0
+            se_prev : SelfEnergy
+                Previous self-energy for damping. Default value is None
 
         Returns
             :class:`SelfEnergy`
@@ -265,6 +269,17 @@ class UAGF2(uagf2.UAGF2):
 
         se_b = aux.combine(se_occ[1], se_vir[1])
         se_b = se_b.compress(phys=fockb, n=(self.nmom[0], None))
+
+        if se_prev is not None and self.damping != 0.0:
+            se_a_prev, se_b_prev = se_prev
+            se_a.coupling *= np.sqrt(1.0-self.damping)
+            se_b.coupling *= np.sqrt(1.0-self.damping)
+            se_a_prev.coupling *= np.sqrt(self.damping)
+            se_b_prev.coupling *= np.sqrt(self.damping)
+            se_a = aux.combine(se_a, se_a_prev)
+            se_b = aux.combine(se_b, se_b_prev)
+            se_a = se_a.compress(n=(None,0))
+            se_b = se_b.compress(n=(None,0))
 
         return (se_a, se_b)
 

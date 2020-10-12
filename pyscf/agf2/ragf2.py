@@ -22,6 +22,7 @@ Auxiliary second-order Green's function perturbation theory
 
 import time
 import numpy as np
+import copy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
@@ -35,9 +36,6 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
-#TODO: damping?
-#TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
-#TODO: this has parallel 2body and aux build, but not get_jk/qmo transform - should we parallelise the latter for exact ERI?
 #TODO: outcore really isn't optimised
 #TODO: print more?
 #TODO: more tests
@@ -70,14 +68,18 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
     e_2b = e_init
 
     e_prev = 0.0
+    se_prev = None
     converged = False
     for niter in range(1, agf2.max_cycle+1):
+        if agf2.damping != 0.0:
+            se_prev = copy.deepcopy(se)
+
         # one-body terms
         gf, se, fock_conv = agf2.fock_loop(eri, gf, se)
         e_1b = agf2.energy_1body(eri, gf)
 
         # two-body terms
-        se = agf2.build_se(eri, gf)
+        se = agf2.build_se(eri, gf, se_prev=se_prev)
         e_2b = agf2.energy_2body(gf, se)
 
         if dump_chk:
@@ -464,6 +466,8 @@ class RAGF2(lib.StreamObject):
         ss_factor : float
             Same-spin factor for spin-component-scaled (SCS)
             calculations. Default 1.0
+        damping : float
+            Damping factor for the self-energy. Default value is 0.0
 
     Saved results
 
@@ -512,6 +516,7 @@ class RAGF2(lib.StreamObject):
         self.diis_min_space = getattr(__config__, 'agf2_diis_min_space', 1)
         self.os_factor = getattr(__config__, 'agf2_os_factor', 1.0)
         self.ss_factor = getattr(__config__, 'agf2_ss_factor', 1.0)
+        self.damping = getattr(__config__, 'agf2_damping', 0.0)
 
         self.mo_energy = mo_energy
         self.mo_coeff = mo_coeff
@@ -631,7 +636,7 @@ class RAGF2(lib.StreamObject):
 
         return se.get_greens_function(fock)
 
-    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None):
+    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None, se_prev=None):
         ''' Builds the auxiliaries of the self-energy.
 
         Args:
@@ -647,6 +652,8 @@ class RAGF2(lib.StreamObject):
             ss_factor : float
                 Same-spin factor for spin-component-scaled (SCS)
                 calculations. Default 1.0
+            se_prev : SelfEnergy
+                Previous self-energy for damping. Default value is None
 
         Returns:
             :class:`SelfEnergy`
@@ -667,6 +674,12 @@ class RAGF2(lib.StreamObject):
         se_vir = self.build_se_part(eri, gf_vir, gf_occ, **facs)
 
         se = aux.combine(se_occ, se_vir)
+
+        if se_prev is not None and self.damping != 0.0:
+            se.coupling *= np.sqrt(1.0-self.damping)
+            se_prev.coupling *= np.sqrt(self.damping)
+            se = aux.combine(se, se_prev)
+            se = se.compress(n=(None,0))
 
         return se
 

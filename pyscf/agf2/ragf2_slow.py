@@ -156,6 +156,8 @@ class RAGF2(ragf2.RAGF2):
         ss_factor : float
             Same-spin factor for spin-component-scaled (SCS)
             calculations. Default 1.0
+        damping : float
+            Damping factor for the self-energy. Default value is 0.0
 
     Saved results
 
@@ -188,7 +190,7 @@ class RAGF2(ragf2.RAGF2):
 
     build_se_part = build_se_part
 
-    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None):
+    def build_se(self, eri=None, gf=None, os_factor=None, ss_factor=None, se_prev=None):
         ''' Builds the auxiliaries of the self-energy.
 
         Args:
@@ -204,6 +206,8 @@ class RAGF2(ragf2.RAGF2):
             ss_factor : float
                 Same-spin factor for spin-component-scaled (SCS)
                 calculations. Default 1.0
+            se_prev : SelfEnergy
+                Previous self-energy for damping. Default value is None
 
         Returns:
             :class:`SelfEnergy`
@@ -232,6 +236,12 @@ class RAGF2(ragf2.RAGF2):
 
         se = aux.combine(se_vir, se_occ)
         se = se.compress(phys=fock, n=(self.nmom[0], None))
+
+        if se_prev is not None and self.damping != 0.0:
+            se.coupling *= np.sqrt(1.0-self.damping)
+            se_prev.coupling *= np.sqrt(self.damping)
+            se = aux.combine(se, se_prev)
+            se = se.compress(n=self.nmom)
 
         return se
 

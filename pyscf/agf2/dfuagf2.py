@@ -181,6 +181,8 @@ class DFUAGF2(uagf2.UAGF2):
         ss_factor : float
             Same-spin factor for spin-component-scaled (SCS)
             calculations. Default 1.0
+        damping : float
+            Damping factor for the self-energy. Default value is 0.0
 
     Saved results
 
