@@ -35,15 +35,10 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
-#TODO: do we want to store RAGF2.qmo_energy, RAGF2.qmo_coeff and RAGF2.qmo_occ at the end?
-#TODO: do we really want to store the self-energy? if we do above we can remove both RAGF2.gf and RAGF2.se
 #TODO: damping?
 #TODO: should we use conv_tol and max_cycle to automatically assign the _nelec and _rdm1 ones?
 #TODO: this has parallel 2body and aux build, but not get_jk/qmo transform - should we parallelise the latter for exact ERI?
 #TODO: outcore really isn't optimised
-#TODO: should we even print/store e_init, or name it something else? this is quite a bit off of the real E(mp2) at (None,0)...
-#TODO: warn for small gaps c.f. CCSD?
-#TODO: how exactly to do positive-semidef cholesky? see _agf2.py
 #TODO: print more?
 #TODO: more tests
 
@@ -862,6 +857,20 @@ class RAGF2(lib.StreamObject):
     def e_corr(self):
         return self.e_tot - self._scf.e_tot
 
+    @property
+    def qmo_energy(self):
+        return self.gf.energy
+
+    @property
+    def qmo_coeff(self):
+        ''' Gives the couplings in AO basis '''
+        return np.dot(self.mo_coeff, self.gf.coupling)
+
+    @property
+    def qmo_occ(self):
+        coeff = self.gf.get_occupied().coupling
+        return 2.0 * np.linalg.norm(coeff, axis=0) ** 2
+
 
 class _ChemistsERIs:
     ''' (pq|rs)
@@ -901,7 +910,6 @@ class _ChemistsERIs:
         mo_e = self.fock.diagonal()
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
         if gap < 1e-5:
-            #TODO: what is a good value for this gap? 1e-5 from CCSD and GW
             logger.warn(agf2, 'HOMO-LUMO gap %s too small for RAGF2', gap)
 
         return self

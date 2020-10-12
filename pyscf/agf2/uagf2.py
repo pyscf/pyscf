@@ -600,6 +600,22 @@ class UAGF2(ragf2.RAGF2):
     def nmo(self, val):
         self._nmo = val
 
+    @property
+    def qmo_energy(self):
+        return (self.gf[0].energy, self.gf[1].energy)
+
+    @property
+    def qmo_coeff(self):
+        ''' Gives the couplings in AO basis '''
+        return (np.dot(self.mo_coeff[0], self.gf[0].coupling),
+                np.dot(self.mo_coeff[1], self.gf[1].coupling))
+
+    @property
+    def qmo_occ(self):
+        coeff_a = self.gf[0].get_occupied().coupling
+        coeff_b = self.gf[1].get_occupied().coupling
+        return (np.linalg.norm(coeff_a, axis=0)**2, np.linalg.norm(coeff_b, axis=0)**2)
+
 
 class _ChemistsERIs:
     ''' (pq|rs)
