@@ -29,6 +29,7 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo, df
 from pyscf.agf2 import uagf2, dfragf2, aux, mpi_helper, _agf2
+from pyscf.mp.ump2 import get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 100)
 
@@ -99,6 +100,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
     se_a.remove_uncoupled(tol=tol)
 
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        coupling = np.zeros((nmoa, se_a.naux))
+        coupling[mask[0]] = se_a.coupling
+        se_a = aux.SelfEnergy(se_a.energy, coupling, chempot=se_a.chempot)
+
     cput0 = log.timer('se part (alpha)', *cput0)
 
     himem_required = naux*(nvirb+nmob) + (noccb*nvirb+nocca*nvira)*(1+2*nmob) + (2*nmob**2)
@@ -118,6 +126,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     e, c = _agf2.cholesky_build(vv, vev)
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
     se_b.remove_uncoupled(tol=tol)
+
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        coupling = np.zeros((nmoa, se_b.naux))
+        coupling[mask[1]] = se_b.coupling
+        se_b = aux.SelfEnergy(se_b.energy, coupling, chempot=se_b.chempot)
 
     cput0 = log.timer('se part (beta)', *cput0)
 
@@ -285,11 +300,17 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
+    cxa, cxb = np.eye(agf2.nmo[0]), np.eye(agf2.nmo[1])
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        cxa = cxa[:,mask[0]]
+        cxb = cxb[:,mask[1]]
+
     nmoa, nmob = agf2.nmo
     npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     with_df = agf2.with_df
     naux = with_df.get_naoaux()
-    cxa, cxb = np.eye(nmoa), np.eye(nmob)
     cia, cja, caa = coeffs_a
     cib, cjb, cab = coeffs_b
 

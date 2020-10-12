@@ -29,6 +29,7 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo, df
 from pyscf.agf2 import ragf2, aux, mpi_helper, _agf2
+from pyscf.mp.mp2 import get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 100)
 
@@ -89,6 +90,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     e, c = _agf2.cholesky_build(vv, vev)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
     se.remove_uncoupled(tol=tol)
+
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        coupling = np.zeros((nmo, se.naux))
+        coupling[mask] = se.coupling
+        se = aux.SelfEnergy(se.energy, coupling, chempot=se.chempot)
 
     log.timer('se part', *cput0)
 
@@ -343,12 +351,16 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
+    cx = np.eye(agf2.nmo)
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        cx = cx[:,mask]
+
     nmo = eri.fock.shape[0]
     npair = nmo*(nmo+1)//2
     with_df = agf2.with_df
     naux = with_df.get_naoaux()
-
-    cx = np.eye(nmo)
     ci, cj, ca = coeffs
 
     xisym, nxi, cxi, sxi = ao2mo.incore._conc_mos(cx, ci, compact=False)

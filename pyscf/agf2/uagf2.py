@@ -95,6 +95,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_a = aux.SelfEnergy(e, c, chempot=gf_occ[0].chempot)
     se_a.remove_uncoupled(tol=tol)
 
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        coupling = np.zeros((nmo[0], se_a.naux))
+        coupling[mask[0]] = se_a.coupling
+        se_a = aux.SelfEnergy(se_a.energy, coupling, chempot=se_a.chempot)
+
     cput0 = log.timer('se part (alpha)', *cput0)
 
     mem_incore = (nmo[1]*nob*(nob*nvb+noa*nva)) * 8/1e6
@@ -113,6 +120,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     e, c = _agf2.cholesky_build(vv, vev)
     se_b = aux.SelfEnergy(e, c, chempot=gf_occ[1].chempot)
     se_b.remove_uncoupled(tol=tol)
+
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        coupling = np.zeros((nmo[1], se_b.naux))
+        coupling[mask[1]] = se_b.coupling
+        se_b = aux.SelfEnergy(se_b.energy, coupling, chempot=se_b.chempot)
 
     cput0 = log.timer('se part (beta)', *cput0)
 
@@ -441,7 +455,6 @@ class UAGF2(ragf2.RAGF2):
         if mo_energy is None: mo_energy = self.mo_energy
         if se is None: se = self.build_se(gf=self.gf)
 
-        mo_energy = _mo_energy_without_core(self, self.mo_energy)
         self.e_init = energy_mp2(self, mo_energy, se)
 
         return self.e_init
@@ -456,15 +469,18 @@ class UAGF2(ragf2.RAGF2):
         nmoa, nmob = self.nmo
         nocca, noccb = self.nocc
 
-        mo_energy = _mo_energy_without_core(self, self.mo_energy)
+        with lib.temporary_env(self, _nmo=None, _nocc=None):
+            mask = get_frozen_mask(self)
+
+        mo_energy = self.mo_energy
         focka = np.diag(mo_energy[0])
         fockb = np.diag(mo_energy[1])
 
         cpt_a = binsearch_chempot(focka, nmoa, nocca, occupancy=1)[0]
         cpt_b = binsearch_chempot(fockb, nmob, noccb, occupancy=1)[1]
 
-        gf_a = aux.GreensFunction(mo_energy[0], np.eye(nmoa), chempot=cpt_a)
-        gf_b = aux.GreensFunction(mo_energy[1], np.eye(nmob), chempot=cpt_b)
+        gf_a = aux.GreensFunction(mo_energy[0][mask[0]], np.eye(nmoa)[:,mask[0]], chempot=cpt_a)
+        gf_b = aux.GreensFunction(mo_energy[1][mask[1]], np.eye(nmob)[:,mask[1]], chempot=cpt_b)
 
         gf = (gf_a, gf_b)
 
@@ -553,7 +569,6 @@ class UAGF2(ragf2.RAGF2):
 
         return myagf2
 
-
     def get_ip(self, gf, nroots=1):
         gf_occ = aux.combine(gf[0].get_occupied(), gf[1].get_occupied())
         e_ip = list(-gf_occ.energy[-nroots:])[::-1]
@@ -566,22 +581,24 @@ class UAGF2(ragf2.RAGF2):
         v_ea = list(gf_vir.coupling[:,:nroots].T)
         return e_ea, v_ea
 
-    get_nocc = get_nocc
-    get_nmo = get_nmo
-    get_frozen_mask = get_frozen_mask
+    
+    @property
+    def nocc(self):
+        if self._nocc is None:
+            self._nocc = (np.sum(self.mo_occ[0] > 0), np.sum(self.mo_occ[1] > 0))
+        return self._nocc
+    @nocc.setter
+    def nocc(self, val):
+        self._nocc = val
 
-
-def _mo_energy_without_core(agf2, mo_energy):
-    maska, maskb = agf2.get_frozen_mask()
-    emo_a = mo_energy[0][maska]
-    emo_b = mo_energy[1][maskb]
-    return (emo_a, emo_b)
-
-def _mo_without_core(agf2, mo_coeff):
-    maska, maskb = agf2.get_frozen_mask()
-    mo_a = mo_coeff[0][:,maska]
-    mo_b = mo_coeff[1][:,maskb]
-    return (mo_a, mo_b)
+    @property
+    def nmo(self):
+        if self._nmo is None:
+            self._nmo = (self.mo_occ[0].size, self.mo_occ[1].size)
+        return self._nmo
+    @nmo.setter
+    def nmo(self, val):
+        self._nmo = val
 
 
 class _ChemistsERIs:
@@ -605,7 +622,7 @@ class _ChemistsERIs:
         if mo_coeff is None:
             mo_coeff = agf2.mo_coeff
 
-        self.mo_coeff = mo_coeff = _mo_without_core(agf2, mo_coeff)
+        self.mo_coeff = mo_coeff
 
         dm = agf2._scf.make_rdm1(agf2.mo_coeff, agf2.mo_occ)
         h1e_ao = agf2._scf.get_hcore()
@@ -706,6 +723,14 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
+    cxa = np.eye(agf2.nmo[0])
+    cxb = np.eye(agf2.nmo[1])
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        cxa = cxa[:,mask[0]]
+        cxb = cxb[:,mask[1]]
+
     nmoa, nmob = agf2.nmo
     npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
@@ -714,24 +739,24 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     nib, njb, nab = [x.shape[1] for x in coeffs_b]
 
     if spin is None or spin == 0:
-        c_aa = (np.eye(nmoa), cia, cja, caa)
-        c_ab = (np.eye(nmoa), cia, cjb, cab)
+        c_aa = (cxa, cia, cja, caa)
+        c_ab = (cxa, cia, cjb, cab)
 
         qeri_aa = ao2mo.incore.general(eri.eri_aa, c_aa, compact=False, verbose=log)
         qeri_ab = ao2mo.incore.general(eri.eri_ab, c_ab, compact=False, verbose=log)
 
-        qeri_aa = qeri_aa.reshape(nmoa, nia, nja, naa)
-        qeri_ab = qeri_ab.reshape(nmoa, nia, njb, nab)
+        qeri_aa = qeri_aa.reshape(cxa.shape[1], nia, nja, naa)
+        qeri_ab = qeri_ab.reshape(cxa.shape[1], nia, njb, nab)
 
     if spin is None or spin == 1:
-        c_bb = (np.eye(nmob), cib, cjb, cab)
-        c_ba = (np.eye(nmob), cib, cja, caa)
+        c_bb = (cxb, cib, cjb, cab)
+        c_ba = (cxb, cib, cja, caa)
 
         qeri_bb = ao2mo.incore.general(eri.eri_bb, c_bb, compact=False, verbose=log)
         qeri_ba = ao2mo.incore.general(eri.eri_ba, c_ba, compact=False, verbose=log)
 
-        qeri_bb = qeri_bb.reshape(nmob, nib, njb, nab)
-        qeri_ba = qeri_ba.reshape(nmob, nib, nja, naa)
+        qeri_bb = qeri_bb.reshape(cxb.shape[1], nib, njb, nab)
+        qeri_ba = qeri_ba.reshape(cxb.shape[1], nib, nja, naa)
 
     if spin is None:
         qeri = ((qeri_aa, qeri_ab), (qeri_ba, qeri_bb))
@@ -755,6 +780,13 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
+    cxa = np.eye(agf2.nmo[0])
+    cxb = np.eye(agf2.nmo[1])
+    with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+        mask = get_frozen_mask(agf2)
+    frozena = np.sum(~mask[0])
+    frozenb = np.sum(~mask[1])
+
     nmoa, nmob = agf2.nmo
     npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
@@ -771,8 +803,8 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
                 del eri.feri['qmo/%s'%key]
 
     if spin is None or spin == 0:
-        eri.feri.create_dataset('qmo/aa', (nmoa, nia, nja, naa), 'f8')
-        eri.feri.create_dataset('qmo/ab', (nmoa, nia, njb, nab), 'f8')
+        eri.feri.create_dataset('qmo/aa', (nmoa-frozena, nia, nja, naa), 'f8')
+        eri.feri.create_dataset('qmo/ab', (nmoa-frozena, nia, njb, nab), 'f8')
 
         blksize = _agf2.get_blksize(agf2.max_memory, (nmoa**3, nmoa*nja*naa),
                                                 (nmoa*nmob**2, nmoa*njb*nab))
@@ -781,33 +813,34 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
 
         tril2sq = lib.square_mat_in_trilu_indices(nmoa)
         for p0, p1 in lib.prange(0, nmoa, blksize):
-            idx = list(np.concatenate(tril2sq[p0:p1]))
+            inds = np.arange(p0, p1)[mask[0][p0:p1]]
+            idx = list(np.concatenate(tril2sq[inds]))
 
             # aa
             buf = eri.eri_aa[idx] # (blk, nmoa, npaira)
-            buf = buf.reshape((p1-p0)*nmoa, -1) # (blk*nmoa, npaira)
+            buf = buf.reshape((len(inds))*nmoa, -1) # (blk*nmoa, npaira)
 
             jasym_aa, nja_aa, cja_aa, sja_aa = ao2mo.incore._conc_mos(cja, caa)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_aa, sja_aa, 's2kl', 's1')
-            buf = buf.reshape(p1-p0, nmoa, nja, naa)
+            buf = buf.reshape(len(inds), nmoa, nja, naa)
 
             buf = lib.einsum('xpja,pi->xija', buf, cia)
-            eri.feri['qmo/aa'][p0:p1] = np.asarray(buf, order='C')
+            eri.feri['qmo/aa'][inds] = np.asarray(buf, order='C')
 
             # ab
             buf = eri.eri_ab[idx] # (blk, nmoa, npairb)
-            buf = buf.reshape((p1-p0)*nmob, -1) # (blk*nmoa, npairb)
+            buf = buf.reshape((len(inds))*nmob, -1) # (blk*nmoa, npairb)
 
             jasym_ab, nja_ab, cja_ab, sja_ab = ao2mo.incore._conc_mos(cjb, cab)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_ab, sja_ab, 's2kl', 's1')
-            buf = buf.reshape(p1-p0, nmoa, njb, nab)
+            buf = buf.reshape(len(inds), nmoa, njb, nab)
 
             buf = lib.einsum('xpja,pi->xija', buf, cia)
-            eri.feri['qmo/ab'][p0:p1] = np.asarray(buf, order='C')
+            eri.feri['qmo/ab'][inds] = np.asarray(buf, order='C')
 
     if spin is None or spin == 1:
-        eri.feri.create_dataset('qmo/ba', (nmob, nib, nja, naa), 'f8')
-        eri.feri.create_dataset('qmo/bb', (nmob, nib, njb, nab), 'f8')
+        eri.feri.create_dataset('qmo/ba', (nmob-frozenb, nib, nja, naa), 'f8')
+        eri.feri.create_dataset('qmo/bb', (nmob-frozenb, nib, njb, nab), 'f8')
 
         max_memory = agf2.max_memory - lib.current_memory()[0]
         blksize = int((max_memory/8e-6) / max(nmob**3+nmob*njb*nab, 
@@ -817,29 +850,30 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
 
         tril2sq = lib.square_mat_in_trilu_indices(nmob)
         for p0, p1 in lib.prange(0, nmob, blksize):
-            idx = list(np.concatenate(tril2sq[p0:p1]))
+            inds = np.arange(p0, p1)[mask[1][p0:p1]]
+            idx = list(np.concatnate(tril2sq[inds]))
 
             # ba
             buf = eri.eri_ba[idx] # (blk, nmob, npaira)
-            buf = buf.reshape((p1-p0)*nmob, -1) # (blk*nmob, npaira)
+            buf = buf.reshape((len(inds))*nmob, -1) # (blk*nmob, npaira)
 
             jasym_ba, nja_ba, cja_ba, sja_ba = ao2mo.incore._conc_mos(cja, caa)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_ba, sja_ba, 's2kl', 's1')
-            buf = buf.reshape(p1-p0, nmob, nja, naa)
+            buf = buf.reshape(len(inds), nmob, nja, naa)
 
             buf = lib.einsum('xpja,pi->xija', buf, cib)
-            eri.feri['qmo/ba'][p0:p1] = np.asarray(buf, order='C')
+            eri.feri['qmo/ba'][inds] = np.asarray(buf, order='C')
 
             # bb
             buf = eri.eri_bb[idx] # (blk, nmob, npairb)
-            buf = buf.reshape((p1-p0)*nmob, -1) # (blk*nmob, npairb)
+            buf = buf.reshape((len(inds))*nmob, -1) # (blk*nmob, npairb)
 
             jasym_bb, nja_bb, cja_bb, sja_bb = ao2mo.incore._conc_mos(cjb, cab)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_bb, sja_bb, 's2kl', 's1')
-            buf = buf.reshape(p1-p0, nmob, njb, nab)
+            buf = buf.reshape(len(inds), nmob, njb, nab)
 
             buf = lib.einsum('xpja,pi->xija', buf, cib)
-            eri.feri['qmo/bb'][p0:p1] = np.asarray(buf, order='C')
+            eri.feri['qmo/bb'][inds] = np.asarray(buf, order='C')
 
     if spin is None:
         qeri = ((eri.feri['qmo/aa'], eri.feri['qmo/ab']), 

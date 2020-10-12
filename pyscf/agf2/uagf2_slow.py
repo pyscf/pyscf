@@ -28,6 +28,7 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.agf2 import aux, ragf2, uagf2, ragf2_slow
+from pyscf.mp.ump2 import get_frozen_mask
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
@@ -84,6 +85,12 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         nva, nvb = gfv_a.naux, gfv_b.naux
         naux = nva*noa*(noa-1)//2 + nvb*noa*nob
 
+        if not (agf2.frozen is None or agf2.frozen == 0):
+            with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+                mask = get_frozen_mask(agf2)
+            nmoa -= np.sum(~mask[ab][0])
+            nmob -= np.sum(~mask[ab][1])
+
         e = np.zeros((naux))
         v = np.zeros((nmoa, naux))
 
@@ -115,8 +122,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
             e[p0:p1] = eija_ab.ravel()
             v[:,p0:p1] = fbeta * xija_ab
 
-        se = aux.SelfEnergy(e, v, chempot=gf_occ[0].chempot)
+        se = aux.SelfEnergy(e, v, chempot=gfo_a.chempot)
         se.remove_uncoupled(tol=tol)
+
+        if not (agf2.frozen is None or agf2.frozen == 0):
+            coupling = np.zeros((agf2.nmo[ab][0], se.naux))
+            coupling[mask[ab][0]] = se.coupling
+            se = aux.SelfEnergy(se.energy, coupling, chempot=gfo_a.chempot)
 
         return se
 

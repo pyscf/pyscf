@@ -71,7 +71,10 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
     e_init = agf2.energy_mp2(agf2.mo_energy, se)
     log.info('E(init) = %.16g  E_corr(init) = %.16g', e_init+eri.e_hf, e_init)
 
-    e_prev = e_1b = e_2b = 0.0
+    e_1b = eri.e_hf
+    e_2b = e_init
+
+    e_prev = 0.0
     converged = False
     for niter in range(1, agf2.max_cycle+1):
         # one-body terms
@@ -162,6 +165,13 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     e, c = _agf2.cholesky_build(vv, vev)
     se = aux.SelfEnergy(e, c, chempot=gf_occ.chempot)
     se.remove_uncoupled(tol=tol)
+
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        coupling = np.zeros((nmo, se.naux))
+        coupling[mask] = se.coupling
+        se = aux.SelfEnergy(se.energy, coupling, chempot=se.chempot)
 
     log.timer('se part', *cput0)
 
@@ -580,7 +590,6 @@ class RAGF2(lib.StreamObject):
         if mo_energy is None: mo_energy = self.mo_energy
         if se is None: se = self.build_se(gf=self.gf)
 
-        mo_energy = _mo_energy_without_core(self, self.mo_energy)
         self.e_init = energy_mp2(self, mo_energy, se)
 
         return self.e_init
@@ -592,10 +601,13 @@ class RAGF2(lib.StreamObject):
             :class:`GreensFunction`, :class:`SelfEnergy`
         '''
 
-        mo_energy = _mo_energy_without_core(self, self.mo_energy)
+        with lib.temporary_env(self, _nmo=None, _nocc=None):
+            mask = get_frozen_mask(self)
+
+        mo_energy = self.mo_energy
         chempot = binsearch_chempot(np.diag(mo_energy), self.nmo, self.nocc*2)[0]
 
-        gf = aux.GreensFunction(mo_energy, np.eye(self.nmo), chempot=chempot)
+        gf = aux.GreensFunction(mo_energy[mask], np.eye(self.nmo)[:,mask], chempot=chempot)
 
         return gf
 
@@ -804,7 +816,7 @@ class RAGF2(lib.StreamObject):
         v_ea = list(gf_vir.coupling[:,:nroots].T)
         return e_ea, v_ea
 
-    def eaagf2(self, nroots=1):
+    def eaagf2(self, nroots=5):
         ''' Find the (N+1)-electron charged excitations, corresponding
             to the smallest :attr:`nroots` poles of the virtual
             Green's function.
@@ -824,24 +836,23 @@ class RAGF2(lib.StreamObject):
         else:
             return e_ea, v_ea
 
-    get_nocc = get_nocc
-    get_nmo = get_nmo
-    get_frozen_mask = get_frozen_mask
-
-
-    @property
-    def nmo(self):
-        return self.get_nmo()
-    @nmo.setter
-    def nmo(self, val):
-        self._nmo = val
-        
     @property
     def nocc(self):
-        return self.get_nocc()
+        if self._nocc is None:
+            self._nocc = np.sum(self.mo_occ > 0)
+        return self._nocc
     @nocc.setter
     def nocc(self, val):
         self._nocc = val
+
+    @property
+    def nmo(self):
+        if self._nmo is None:
+            self._nmo = self.mo_occ.size
+        return self._nmo
+    @nmo.setter
+    def nmo(self, val):
+        self._nmo = val
 
     @property
     def e_tot(self):
@@ -873,7 +884,7 @@ class _ChemistsERIs:
         if mo_coeff is None:
             mo_coeff = agf2.mo_coeff
 
-        self.mo_coeff = mo_coeff = _mo_without_core(agf2, mo_coeff)
+        self.mo_coeff = mo_coeff
 
         dm = agf2._scf.make_rdm1(agf2.mo_coeff, agf2.mo_occ)
         h1e_ao = agf2._scf.get_hcore()
@@ -945,7 +956,13 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    coeffs = (np.eye(agf2.nmo),) + coeffs
+    cx = np.eye(agf2.nmo)
+    if not (agf2.frozen is None or agf2.frozen == 0):
+        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+            mask = get_frozen_mask(agf2)
+        cx = cx[:,mask]
+
+    coeffs = (cx,) + coeffs
     shape = tuple(x.shape[1] for x in coeffs)
 
     qeri = ao2mo.incore.general(eri.eri, coeffs, compact=False, verbose=log)
@@ -962,6 +979,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
+    cx = np.eye(agf2.nmo)
     ci, cj, ca = coeffs
     ni = ci.shape[1]
     nj = cj.shape[1]
@@ -969,13 +987,17 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     nmo = agf2.nmo
     npair = nmo*(nmo+1)//2
 
+    with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+        mask = get_frozen_mask(agf2)
+    frozen = np.sum(~mask)
+
     # possible to have incore MO, outcore QMO
     if getattr(eri, 'feri', None) is None:
         eri.feri = lib.H5TmpFile()
     elif 'qmo' in eri.feri: 
         del eri.feri['qmo']
 
-    eri.feri.create_dataset('qmo', (nmo, ni, nj, na), 'f8')
+    eri.feri.create_dataset('qmo', (nmo-frozen, ni, nj, na), 'f8')
 
     blksize = _agf2.get_blksize(agf2.max_memory, (nmo*npair, nj*na, npair), (nmo*ni, nj*na))
     blksize = min(nmo, max(BLKMIN, blksize))
@@ -983,17 +1005,18 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
     for p0, p1 in lib.prange(0, nmo, blksize):
-        idx = list(np.concatenate(tril2sq[p0:p1]))
+        inds = np.arange(p0, p1)[mask[p0:p1]]
+        idx = list(np.concatenate(tril2sq[inds]))
 
         buf = eri.eri[idx] # (blk, nmo, npair)
-        buf = buf.reshape((p1-p0)*nmo, -1) # (blk*nmo, npair)
+        buf = buf.reshape((len(inds))*nmo, -1) # (blk*nmo, npair)
 
         jasym, nja, cja, sja = ao2mo.incore._conc_mos(cj, ca, compact=True)
         buf = ao2mo._ao2mo.nr_e2(buf, cja, sja, 's2kl', 's1')
-        buf = buf.reshape(p1-p0, nmo, nj, na)
+        buf = buf.reshape(len(inds), nmo, nj, na)
 
         buf = lib.einsum('xpja,pi->xija', buf, ci)
-        eri.feri['qmo'][p0:p1] = np.asarray(buf, order='C')
+        eri.feri['qmo'][inds] = np.asarray(buf, order='C')
         
     log.timer('QMO integral transformation', *cput0)
 
