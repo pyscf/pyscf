@@ -29,6 +29,7 @@ eri of size (nkpts,nocc,nocc,nvir,nvir)
 import numpy as np
 from scipy.linalg import block_diag
 import h5py
+import time
 
 from pyscf import lib
 from pyscf.lib import logger, einsum
