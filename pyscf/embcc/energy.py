@@ -19,14 +19,16 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 #def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=True, inverse=False):
-def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=False, inverse=False):
+def get_local_amplitudes(self, cc, C1, C2, part=None, symmetrize=False, inverse=False):
     """Get local contribution of amplitudes."""
 
-    #variant = "democratic"
-    #variant = "first-vir"
+    # By default inherit from base object
+    if part is None:
+        part = self.base.energy_part
+    log.debug("Amplitude partitioning = %s", part)
+    if part not in ("first-occ", "first-vir", "democratic"):
+        raise ValueError("Unknown partitioning of amplitudes: %s", part)
 
-    if variant not in ("first-occ", "first-vir", "democratic"):
-        raise ValueError("Unknown variant: %s", variant)
 
     act = cc.get_frozen_mask()
     occ = cc.mo_occ[act] > 0
@@ -45,22 +47,22 @@ def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=False
     Rv = self.get_local_projector(Cv, inverse=True)
 
     if C1 is not None:
-        if variant == "first-occ":
+        if part == "first-occ":
             pC1 = einsum("xi,ia->xa", Lo, C1)
-        elif variant == "first-vir":
+        elif part == "first-vir":
             pC1 = einsum("ia,xa->ix", C1, Lv)
-        elif variant == "democratic":
+        elif part == "democratic":
             pC1 = einsum("xi,ia,ya->xy", Lo, C1, Lv)
             pC1 += einsum("xi,ia,ya->xy", Lo, C1, Rv) / 2.0
             pC1 += einsum("xi,ia,ya->xy", Ro, C1, Lv) / 2.0
     else:
         pC1 = None
 
-    if variant == "first-occ":
+    if part == "first-occ":
         pC2 = einsum("xi,ijab->xjab", Lo, C2)
-    elif variant == "first-vir":
+    elif part == "first-vir":
         pC2 = einsum("ijab,xa->ijxb", C2, Lv)
-    elif variant == "democratic":
+    elif part == "democratic":
 
         def project_C2(P1, P2, P3, P4):
             pC2 = einsum("xi,yj,ijab,za,wb->xyzw", P1, P2, C2, P3, P4)
@@ -129,7 +131,7 @@ def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=False
 
     # Note that the energy should be invariant to symmetrization
     if symmetrize:
-        pC2 = (pC2 + pC2.transpose(1,0,3,2))/2
+        pC2 = (pC2 + pC2.transpose(1,0,3,2)) / 2
 
     if inverse:
         if pC1 is not None:

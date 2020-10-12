@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 class EmbCC:
     """What should this be named?"""
 
+    VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
     VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "FCI-spin0", "FCI-spin1"]
     VALID_BATH_TYPES = [None, "power", "matsubara", "mp2-natorb", "full", "random"]
 
@@ -44,9 +45,12 @@ class EmbCC:
             ]
 
     def __init__(self, mf,
-            local_type="IAO",
+            local_type="IAO",       # TODO: rename, fragment_type?
             solver="CCSD",
-            bath_type="mp2-natorb", bath_size=None, bath_tol=1e-3,
+            #bath_type="mp2-natorb",
+            bath_type=None,
+            bath_size=None,
+            bath_tol=1e-3,
             minao="minao",
             use_ref_orbitals_dmet=True,
             #use_ref_orbitals_bath=True,
@@ -55,6 +59,8 @@ class EmbCC:
             mp2_correction=True,
             maxiter=1,
             dmet_bath_tol=1e-8,
+            energy_part="first-occ",
+            localize_fragment=False,
             ):
         """
         Parameters
@@ -63,17 +69,20 @@ class EmbCC:
             Converged mean-field object.
         minao :
             Minimal basis for intrinsic atomic orbitals (IAO).
+        dmet_bath_tol : float, optional
+            Tolerance for DMET bath orbitals; orbitals with occupation larger than `dmet_bath_tol`,
+            or smaller than 1-`dmet_bath_tol` are included as bath orbitals.
         """
 
-        # Check input
+        # --- Check input
         if not mf.converged:
             raise ValueError("Mean-field calculation not converged.")
+
         # Local orbital types:
         # AO : Atomic orbitals non-orthogonal wrt to non-fragment AOs
         # IAO : Intrinstric atom-orbitals
         # LAO : Lowdin orthogonalized AOs
-
-        if local_type not in ("AO", "IAO", "LAO", "NonOrth-IAO"):
+        if local_type not in self.VALID_LOCAL_TYPES:
             raise ValueError("Unknown local_type: %s" % local_type)
         if solver not in self.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
@@ -85,17 +94,9 @@ class EmbCC:
         self.local_orbital_type = local_type
         self.minao = minao
 
-        if self.local_orbital_type == "IAO":
-            self.C_iao, self.C_env, self.iao_labels = self.make_iao(minao=self.minao)
-            log.debug("IAO labels:")
-            for ao in self.iao_labels:
-                log.debug("%r", ao)
-        elif self.local_orbital_type == "LAO":
-            self.C_lao, self.lao_labels = self.make_lowdin_ao()
-            #self.C_lao, self.lao_labels = self.make_meta_lowdin_ao()
-            #self.C_lao, self.lao_labels = self.make_lowdin_ao_per_atom()
-
         self.maxiter = maxiter
+        self.energy_part = energy_part
+
         # Options
         self.solver = solver
 
@@ -106,6 +107,27 @@ class EmbCC:
         self.use_ref_orbitals_bath = use_ref_orbitals_bath
         self.mp2_correction = mp2_correction
         self.dmet_bath_tol = dmet_bath_tol
+        self.localize_fragment = localize_fragment
+
+        # Prepare fragments
+        if self.local_orbital_type in ("IAO", "LAO"):
+            if self.local_orbital_type == "IAO":
+                self.C_ao, self.C_env, self.iao_labels = self.make_iao(minao=self.minao)
+                log.debug("IAO labels:")
+                for ao in self.iao_labels:
+                    log.debug("%r", ao)
+            elif self.local_orbital_type == "LAO":
+                self.C_ao, self.lao_labels = self.make_lowdin_ao()
+                #self.C_lao, self.lao_labels = self.make_meta_lowdin_ao()
+                #self.C_lao, self.lao_labels = self.make_lowdin_ao_per_atom()
+
+            log.debug("Localize fragment=%r", self.localize_fragment)
+            if self.localize_fragment == "PM":
+                log.debug("Localizing fragment using PM")
+                #C_lao = pyscf.lo.BF(self.mol).kernel(C_lao, verbose=4)
+                #C_lao = pyscf.lo.ER(self.mol).kernel(C_lao, verbose=4)
+                self.C_ao = pyscf.lo.PM(self.mol).kernel(self.C_ao, verbose=4)
+
 
         self.clusters = []
 
@@ -122,6 +144,11 @@ class EmbCC:
         self.tccT1 = None
         self.tccT2 = None
 
+        # Building the HF-Fock matrix is expensive (why?) only do it once
+        t0 = MPI.Wtime()
+        self.fock = self.mf.get_fock()
+        log.debug("Time for Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
+
     @property
     def mol(self):
         return self.mf.mol
@@ -133,10 +160,13 @@ class EmbCC:
 
     @property
     def e_tot(self):
+        """Total energy."""
         return self.mf.e_tot + self.e_corr
 
+    # -------------------------------------------------------------------------------------------- #
+
     def make_ao_projector(self, ao_indices):
-        """Create projetor into AO subspace
+        """Create projector into AO subspace.
 
         Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b
 
@@ -158,6 +188,83 @@ class EmbCC:
         assert np.allclose(P, P.T)
         return P
 
+    def make_ao_projector_general(self, ao_indices, ao_labels=None, basis2=None):
+        """Create projector into AO space.
+
+        Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b
+
+        Parameters
+        ----------
+        ao_indices : list
+            Indices of AOs in space 2.
+        ao_labels : list, optional
+            Labels for AOs in space 2. If not None, `ao_indices` is ignored.
+        basis2 : str, optional
+            Basis of space 2. If none, the same basis is used.
+
+        Returns
+        -------
+        P : ndarray
+            Projector into AO space.
+        """
+        mol1 = self.mol
+        if basis2 is not None:
+            mol2 = mol1.copy()
+            if getattr(mol2, 'rcut', None) is not None:
+                mol2.rcut = None
+            mol2.build(False, False, basis=basis2)
+
+            if getattr(mol1, 'pbc_intor', None):  # cell object has pbc_intor method
+                #from pyscf.pbc import gto as pbcgto
+                # At the moment: Gamma point only
+                kpts = None
+                s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
+                s2 = np.asarray(mol2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
+                s12 = np.asarray(pyscf.pbc.gto.cell.intor_cross('int1e_ovlp', mol1, mol2, kpts=kpts))
+                assert s1.ndim == 2
+                #s1, s2, s12 = s1[0], s2[0], s12[0]
+            else:
+                s1 = mol1.intor_symmetric('int1e_ovlp')
+                s2 = mol2.intor_symmetric('int1e_ovlp')
+                s12 = pyscf.gto.mole.intor_cross('int1e_ovlp', mol1, mol2)
+        else:
+            mol2 = mol1
+            if getattr(mol1, 'pbc_intor', None):  # cell object has pbc_intor method
+                s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=None))
+            else:
+                s1 = mol1.intor_symmetric('int1e_ovlp')
+            s2 = s1.copy()
+            s12 = s1.copy()
+
+        # Convert AO labels to AO indices
+        if ao_labels is not None:
+            log.debug("AO labels:\n%r", ao_labels)
+            ao_indices = mol2.search_ao_label(ao_labels)
+        assert (ao_indices == np.sort(ao_indices)).all()
+        log.debug("Basis 2 contains AOs:\n%r", np.asarray(mol2.ao_labels())[ao_indices])
+
+        #assert np.allclose(s1, mol1.get_ovlp())
+        #log.debug("s1.shape: %r", list(s1.shape))
+        #log.debug("ovlp.shape: %r", list(self.mf.get_ovlp().shape))
+        #log.debug("norm: %e", np.linalg.norm(s1 - self.mf.get_ovlp()))
+        assert np.allclose(s1, self.mf.get_ovlp())
+        # Restrict basis function of space 2
+        s2 = s2[np.ix_(ao_indices, ao_indices)]
+        s12 = s12[:,ao_indices]
+        s21 = s12.T.conj()
+
+        p21 = scipy.linalg.solve(s2, s21, assume_a="pos")
+        p = np.dot(s21.T, p21)
+        assert np.allclose(p, p.T)
+
+        # TESTING
+        if basis2 is None:
+            p_test = self.make_ao_projector(ao_indices)
+            assert np.allclose(p, p_test)
+
+        return p
+
+
     def make_local_ao_orbitals(self, ao_indices):
         S = self.mf.get_ovlp()
         nao = S.shape[-1]
@@ -173,39 +280,40 @@ class EmbCC:
         return C_local, C_env
 
     def make_local_iao_orbitals(self, iao_indices):
-        C_local = self.C_iao[:,iao_indices]
+        C_local = self.C_ao[:,iao_indices]
         #not_indices = np.asarray([i for i in np.arange(len(iao_indices)) if i not in iao_indices])
-        not_indices = np.asarray([i for i in np.arange(self.C_iao.shape[-1]) if i not in iao_indices])
+        not_indices = np.asarray([i for i in np.arange(self.C_ao.shape[-1]) if i not in iao_indices])
 
         if len(not_indices) > 0:
-            C_env = np.hstack((self.C_iao[:,not_indices], self.C_env))
+            C_env = np.hstack((self.C_ao[:,not_indices], self.C_env))
         else:
             C_env = self.C_env
 
         return C_local, C_env
 
     def make_local_lao_orbitals(self, lao_indices):
-        C_local = self.C_lao[:,lao_indices]
-        not_indices = np.asarray([i for i in np.arange(self.C_lao.shape[-1]) if i not in lao_indices])
-        C_env = self.C_lao[:,not_indices]
+        # TODO: combine with IAO?
+        C_local = self.C_ao[:,lao_indices]
+        not_indices = np.asarray([i for i in np.arange(self.C_ao.shape[-1]) if i not in lao_indices])
+        C_env = self.C_ao[:,not_indices]
 
         return C_local, C_env
 
     def make_local_nonorth_iao_orbitals(self, ao_indices, minao="minao"):
         C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
-        C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
+        C_ao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
 
         ao_labels = np.asarray(self.mol.ao_labels())[ao_indices]
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
         iao_labels = refmol.ao_labels()
-        assert len(iao_labels) == C_iao.shape[-1]
+        assert len(iao_labels) == C_ao.shape[-1]
 
         loc = np.isin(iao_labels, ao_labels)
         log.debug("Local NonOrth IAOs: %r", (np.asarray(iao_labels)[loc]).tolist())
         nlocal = np.count_nonzero(loc)
         log.debug("Number of local IAOs=%3d", nlocal)
 
-        C_local = C_iao[:,loc]
+        C_local = C_ao[:,loc]
         # Orthogonalize locally
         S = self.mf.get_ovlp()
         C_local = pyscf.lo.vec_lowdin(C_local, S)
@@ -230,7 +338,8 @@ class EmbCC:
 
         return C_local, C_env
 
-    def make_cluster(self, name, indices, C_local, C_env, **kwargs):
+    #def make_cluster(self, name, indices, C_local, C_env, **kwargs):
+    def make_cluster(self, name, C_local, C_env, **kwargs):
         """Create cluster object and add to list.
 
         Parameters
@@ -247,7 +356,7 @@ class EmbCC:
         cluster : Cluster
             Cluster object
         """
-        assert len(indices) > 0
+        #assert len(indices) > 0
         # Get new ID
         cluster_id = len(self.clusters)
         # Check that ID and name are unique
@@ -261,8 +370,9 @@ class EmbCC:
         # Symmetry factor, if symmetry related clusters exist in molecule (e.g. hydrogen rings)
         kwargs["symmetry_factor"] = kwargs.get("symmetry_factor", 1.0)
         #cluster = Cluster(self, cluster_id=cluster_id, name=name, C_local=C_local, C_env=C_env, **kwargs)
-        cluster = Cluster(self, cluster_id=cluster_id, name=name, indices=indices, C_local=C_local,
-                C_env=C_env, **kwargs)
+        cluster = Cluster(self, cluster_id=cluster_id, name=name,
+                #indices=indices,
+                C_local=C_local, C_env=C_env, **kwargs)
         self.clusters.append(cluster)
         return cluster
 
@@ -310,7 +420,8 @@ class EmbCC:
         else:
             raise NotImplementedError()
 
-        cluster = self.make_cluster(name, indices, C_local, C_env, **kwargs)
+        #cluster = self.make_cluster(name, indices, C_local, C_env, **kwargs)
+        cluster = self.make_cluster(name, C_local, C_env, **kwargs)
         return cluster
 
     def make_atom_cluster(self, atoms, name=None, **kwargs):
@@ -362,8 +473,47 @@ class EmbCC:
             indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
             C_local, C_env = self.make_local_nonorth_iao_orbitals(indices, minao=self.minao)
 
+        # Projected molecular orbitals
+        # (AVAS paper)
+        elif self.local_orbital_type == "PMO":
+            #ao_atoms = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
+            #indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
+
+            # Use atom labels as AO labels
+            log.debug("Making occupied projector.")
+            Po = self.make_ao_projector_general(None, ao_labels=atoms, basis2=kwargs.pop("basis_proj_occ", None))
+            log.debug("Making virtual projector.")
+            Pv = self.make_ao_projector_general(None, ao_labels=atoms, basis2=kwargs.pop("basis_proj_vir", None))
+            log.debug("Done.")
+
+            o = (self.mf.mo_occ > 0)
+            v = (self.mf.mo_occ == 0)
+            C = self.mf.mo_coeff
+            So = np.linalg.multi_dot((C[:,o].T, Po, C[:,o]))
+            Sv = np.linalg.multi_dot((C[:,v].T, Pv, C[:,v]))
+            eo, Vo = np.linalg.eigh(So)
+            ev, Vv = np.linalg.eigh(Sv)
+            rev = np.s_[::-1]
+            eo, Vo = eo[rev], Vo[:,rev]
+            ev, Vv = ev[rev], Vv[:,rev]
+            log.debug("Non-zero occupied eigenvalues:\n%r", eo[eo>1e-10])
+            log.debug("Non-zero virtual eigenvalues:\n%r", ev[ev>1e-10])
+            #tol = 1e-8
+            tol = 0.1
+            lo = eo > tol
+            lv = ev > tol
+            Co = np.dot(C[:,o], Vo)
+            Cv = np.dot(C[:,v], Vv)
+            C_local = np.hstack((Co[:,lo], Cv[:,lv]))
+            C_env = np.hstack((Co[:,~lo], Cv[:,~lv]))
+            log.debug("Number of local orbitals: %d", C_local.shape[-1])
+            log.debug("Number of environment orbitals: %d", C_env.shape[-1])
+
         #cluster = self.make_cluster(name, C_local, C_env, indices=indices, **kwargs)
-        cluster = self.make_cluster(name, indices, C_local, C_env, **kwargs)
+        #indices = None
+        #indices = list(range(C_local.shape[-1]))
+        #cluster = self.make_cluster(name, indices, C_local, C_env, **kwargs)
+        cluster = self.make_cluster(name, C_local, C_env, **kwargs)
         return cluster
 
     def make_all_atom_clusters(self, **kwargs):
@@ -483,6 +633,7 @@ class EmbCC:
         S = self.mf.get_ovlp()
         C_lao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
         lao_labels = self.mol.ao_labels(None)
+
         return C_lao, lao_labels
 
     def make_lowdin_ao_per_atom(self):

@@ -1,10 +1,12 @@
 """Molecular systems for testing."""
 
 import logging
-import os
+#import os
 import numpy as np
 
 from pyscf import gto
+
+from util import *
 
 __all__ = [
         "build_dimer",
@@ -28,26 +30,26 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-def Ry(alpha, radians=False):
-    if not radians:
-        alpha = np.deg2rad(alpha)
-    r = np.asarray([
-        [1, 0, 0],
-        [0, np.cos(alpha), np.sin(alpha)],
-        [0, -np.sin(alpha), np.cos(alpha)],
-        ])
-    return r
-
-def Rz(alpha, radians=False):
-    """Rotate around z axis."""
-    if not radians:
-        alpha = np.deg2rad(alpha)
-    r = np.asarray([
-        [np.cos(alpha), np.sin(alpha), 0],
-        [-np.sin(alpha), np.cos(alpha), 0],
-        [0, 0, 1],
-        ])
-    return r
+#def Ry(alpha, radians=False):
+#    if not radians:
+#        alpha = np.deg2rad(alpha)
+#    r = np.asarray([
+#        [1, 0, 0],
+#        [0, np.cos(alpha), np.sin(alpha)],
+#        [0, -np.sin(alpha), np.cos(alpha)],
+#        ])
+#    return r
+#
+#def Rz(alpha, radians=False):
+#    """Rotate around z axis."""
+#    if not radians:
+#        alpha = np.deg2rad(alpha)
+#    r = np.asarray([
+#        [np.cos(alpha), np.sin(alpha), 0],
+#        [-np.sin(alpha), np.cos(alpha), 0],
+#        [0, 0, 1],
+#        ])
+#    return r
 
 def build_dimer(d, atoms, add_labels=False, **kwargs):
     if add_labels:
@@ -165,19 +167,19 @@ def build_chloroethanol(dOH, **kwargs):
             **kwargs)
     return mol
 
-def load_datafile(filename):
-    datafile = os.path.join(os.path.dirname(__file__), os.path.join("data", filename))
-    data = np.loadtxt(datafile, dtype=[("atoms", object), ("coords", np.float64, (3,))])
-    #print(data["atoms"])
-    #print(data["coords"])
-
-    return data["atoms"], data["coords"]
-
-def move_atom(coords, origin, distance):
-    v = coords - origin
-    v /= np.linalg.norm(v)
-    coords_out = origin + distance*v
-    return coords_out
+#def load_datafile(filename):
+#    datafile = os.path.join(os.path.dirname(__file__), os.path.join("data", filename))
+#    data = np.loadtxt(datafile, dtype=[("atoms", object), ("coords", np.float64, (3,))])
+#    #print(data["atoms"])
+#    #print(data["coords"])
+#
+#    return data["atoms"], data["coords"]
+#
+#def move_atom(coords, origin, distance):
+#    v = coords - origin
+#    v /= np.linalg.norm(v)
+#    coords_out = origin + distance*v
+#    return coords_out
 
 def build_ethanol(distance, **kwargs):
     """Oxygen: O3, Hydrogen: H4, nearest C: C2"""
@@ -494,11 +496,11 @@ def build_mn_oxo_porphyrin(distance, **kwargs):
         **kwargs)
     return mol
 
-def print_distances(atom, origin):
-    if isinstance(origin, int):
-        origin = atom[origin][1]
-    for symbol, coords in atom:
-        print("Distance to %3s: %.5g" % (symbol, np.linalg.norm(coords - origin)))
+#def print_distances(atom, origin):
+#    if isinstance(origin, int):
+#        origin = atom[origin][1]
+#    for symbol, coords in atom:
+#        print("Distance to %3s: %.5g" % (symbol, np.linalg.norm(coords - origin)))
 
 
 if __name__ == "__main__":

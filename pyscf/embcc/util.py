@@ -54,6 +54,16 @@ def get_time_string(seconds):
         tstr = "%.2f s" % s
     return tstr
 
+def atom_labels_to_ao_indices(mol, atom_labels):
+    """Convert atom labels to AO indices of mol object."""
+    atom_labels_mol = np.asarray([ao[1] for ao in mol.ao_labels(None)])
+    ao_indices = np.nonzero(np.isin(atom_labels_mol, atom_labels))[0]
+    return ao_indices
+
+#def ao_labels_to_ao_indices(mol, ao_labels):
+#    ao_labels_mol = mol.ao_labels(None):
+
+
 
 def eigassign(e1, v1, e2, v2, b=None, cost_matrix="e^2/v"):
     """

@@ -94,6 +94,7 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8, warntol=1
         log.error("Eigenvalues < 0: %s", e[e < -warntol])
         log.error("Eigenvalues > 1: %s", e[e > 1+warntol])
 
+
     C_env = np.dot(C_env, R)
 
     if nbath is not None:
@@ -117,12 +118,25 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8, warntol=1
     C_virenv = C_env[:,mask_virenv].copy()
 
     log.debug("Found %d DMET bath orbitals. Eigenvalues:\n%s", nbath, e[mask_bath])
-    log.debug("Found %d occupied orbitals.", noccenv)
     if noccenv > 0:
-        log.debug("Smallest eigenvalue: %.3g", min(e[mask_occenv]))
-    log.debug("Found %d virtual orbitals.", nvirenv)
+        log.debug("Found %3d occupied environment orbitals. Smallest eigenvalue: %.6g", noccenv, min(e[mask_occenv]))
+    else:
+        log.debug("No occupied environment orbitals found.")
     if nvirenv > 0:
-        log.debug("Largest eigenvalue: %.3g", max(e[mask_virenv]))
+        log.debug("Found %3d virtual environment orbitals. Largest eigenvalue: %.6g", nvirenv, max(e[mask_virenv]))
+    else:
+        log.debug("No virtual environment orbitals found.")
+    # Calculate entanglement entropy
+    entropy = np.sum(e * (1-e))
+    entropy_bath = np.sum(e[mask_bath] * (1-e[mask_bath]))
+    log.info("Entanglement entropy full=%.6e, bath=%.6e", entropy, entropy_bath)
+
+    # TEST
+    #p = np.linalg.multi_dot((C_local.T, S, self.mf.make_rdm1(), S, C_local)) / 2
+    #l, u = np.linalg.eigh(p)
+    #log.info("Eigenvalues of occupied fragment space: %r", l)
+    #entropy = np.sum(l * (1-l))
+    #log.info("Entanglement entropy fragment=%.6e", entropy)
 
     # Complete DMET orbital space using reference orbitals
     if C_ref is not None:
@@ -237,17 +251,20 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, 
     if self.mp2_correction[kind2n[kind]] and C_env.shape[-1] > 0:
         if e_delta_mp2 is None:
             if kind == "occ":
+                log.debug("Calculating occupied MP2 correction.")
                 Co_act = np.hstack((self.C_occclst, C_bath))
                 Co_all = np.hstack((Co_act, C_env))
                 Cv = self.C_virclst
                 e_delta_mp2 = self.get_mp2_correction(Co_all, Cv, Co_act, Cv)
             elif kind == "vir":
+                log.debug("Calculating virtual MP2 correction.")
                 Cv_act = np.hstack((self.C_virclst, C_bath))
                 Cv_all = np.hstack((Cv_act, C_env))
                 Co = self.C_occclst
                 e_delta_mp2 = self.get_mp2_correction(Co, Cv_all, Co, Cv_act)
 
     else:
+        log.debug("No MP2 correction.")
         e_delta_mp2 = 0.0
 
     return C_bath, C_env, e_delta_mp2, eigref_out
@@ -360,7 +377,8 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
 def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=None):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
 
-    F = self.mf.get_fock()
+    #F = self.mf.get_fock()
+    F = self.base.fock
     Fo = np.linalg.multi_dot((Co.T, F, Co))
     Fv = np.linalg.multi_dot((Cv.T, F, Cv))
     # Canonicalization [optional]

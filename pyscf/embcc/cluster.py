@@ -1,5 +1,6 @@
 # Standard libaries
 import logging
+from collections import OrderedDict
 
 # External libaries
 import numpy as np
@@ -42,7 +43,9 @@ class Cluster:
     TOL_OCC = 1e-3
 
     def __init__(self, base, cluster_id, name,
-            indices, C_local, C_env,
+            #indices, C_local, C_env,
+            C_local, C_env,
+            ao_indices=None,
             solver="CCSD",
             bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4,
             **kwargs):
@@ -65,9 +68,13 @@ class Cluster:
         self.id = cluster_id
         self.name = name
         log.debug("Making cluster %d: %s with local orbital type %s", self.id, self.name, self.local_orbital_type)
-        self.indices = indices
+        #self.indices = indices
+        self.ao_indices = ao_indices
 
         # NEW: local and environment orbitals
+        if C_local.shape[-1] == 0:
+            raise ValueError("No local orbitals in cluster %d:%s" % (self.id, self.name))
+
         self.C_local = C_local
         self.C_env = C_env
 
@@ -79,7 +86,7 @@ class Cluster:
         log.info("Mean-field electrons=%.5f", ne)
 
         #assert self.nlocal == len(self.indices)
-        assert (self.size == len(self.indices) or self.local_orbital_type == "NonOrth-IAO")
+        #assert (self.size == len(self.indices) or self.local_orbital_type in ("NonOrth-IAO", "PMO"))
 
         # Options
 
@@ -132,6 +139,10 @@ class Cluster:
 
         #self.project_type = kwargs.get("project_type", "first-occ")
 
+        # Orbital coefficents added to this dictionary can be written as an orbital file
+        #self.orbitals = {"Fragment" : self.C_local}
+        self.orbitals = OrderedDict()
+        self.orbitals["Fragment"] = self.C_local
 
         #
         #self.occbath_eigref = kwargs.get("occbath-eigref", None)
@@ -311,10 +322,10 @@ class Cluster:
     def local_orbital_type(self):
         return self.base.local_orbital_type
 
-    @property
-    def not_indices(self):
-        """Indices which are NOT in the cluster, i.e. complement to self.indices."""
-        return np.asarray([i for i in np.arange(self.mol.nao_nr()) if i not in self.indices])
+    #@property
+    #def not_indices(self):
+    #    """Indices which are NOT in the cluster, i.e. complement to self.indices."""
+    #    return np.asarray([i for i in np.arange(self.mol.nao_nr()) if i not in self.indices])
 
     @property
     def energy_factor(self):
@@ -412,7 +423,7 @@ class Cluster:
 
         return C_occclst, C_virclst
 
-    def canonicalize(self, *C):
+    def canonicalize(self, *C, eigenvalues=False):
         """Diagonalize Fock matrix within subspace.
 
         Parameters
@@ -426,9 +437,12 @@ class Cluster:
             Canonicalized orbital coefficients.
         """
         C = np.hstack(C)
-        F = np.linalg.multi_dot((C.T, self.mf.get_fock(), C))
+        #F = np.linalg.multi_dot((C.T, self.mf.get_fock(), C))
+        F = np.linalg.multi_dot((C.T, self.base.fock, C))
         e, R = np.linalg.eigh(F)
         C = np.dot(C, R)
+        if eigenvalues:
+            return C, e
         return C
 
     def get_occup(self, C):
@@ -470,13 +484,16 @@ class Cluster:
 
 
         # Project onto space of local (fragment) orbitals.
-        if self.local_orbital_type in ("IAO", "LAO"):
+        #if self.local_orbital_type in ("IAO", "LAO"):
+        if self.local_orbital_type in ("IAO", "LAO", "PMO"):
             CSC = np.linalg.multi_dot((C.T, S, self.C_local))
             P = np.dot(CSC, CSC.T)
 
         # Project onto space of local atomic orbitals.
+        #elif self.local_orbital_type in ("AO", "NonOrth-IAO", "PMO"):
         elif self.local_orbital_type in ("AO", "NonOrth-IAO"):
-            l = self.indices
+            #l = self.indices
+            l = self.ao_indices
             # This is the "natural way" to truncate in AO basis
             if kind == "right":
                 P = np.linalg.multi_dot((C.T, S[:,l], C[l]))
@@ -497,9 +514,9 @@ class Cluster:
             P = (np.eye(P.shape[-1]) - P)
 
             # DEBUG
-            CSC = np.linalg.multi_dot((C.T, S, self.C_env))
-            P2 = np.dot(CSC, CSC.T)
-            assert np.allclose(P, P2)
+            #CSC = np.linalg.multi_dot((C.T, S, self.C_env))
+            #P2 = np.dot(CSC, CSC.T)
+            #assert np.allclose(P, P2)
 
 
         return P
@@ -605,7 +622,8 @@ class Cluster:
             e_corr_full *= self.energy_factor
             C1, C2 = None, t2
 
-            e_corr = self.get_local_energy(mp2, C1, C2, eris=eris)
+            pC1, pC2 = self.get_local_amplitudes(mp2, C1, C2)
+            e_corr = self.get_local_energy(mp2, pC1, pC2, eris=eris)
 
         # CCSD
         # ====
@@ -1094,8 +1112,8 @@ class Cluster:
         #self.e_corr_d = e_corr_d
 
         # RDM1
-        #if False:
-        if True and solver:
+        if False:
+        #if True and solver:
 
             #if solver != "FCI":
             if not solver.startswith("FCI"):
@@ -1161,13 +1179,30 @@ class Cluster:
             if ref_orbitals.get("dmet-bath", None) is not None:
                 assert np.allclose(ref_orbitals["dmet-bath"], self.refdata_in["dmet-bath"])
 
+        t0_bath = MPI.Wtime()
+
+        t0 = MPI.Wtime()
         #C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=ref_orbitals.get("dmet-bath", None))
         C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=refdata.get("dmet-bath", None), tol=self.dmet_bath_tol)
         C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
+        log.debug("Time for DMET bath: %s", get_time_string(MPI.Wtime()-t0))
 
         self.C_bath = C_bath
+
+        # Canonicalize cluster
+        if False:
+            C_occclst, e = self.canonicalize(C_occclst, eigenvalues=True)
+            log.debug("Occupied cluster Fock eigenvalues: %r", e)
+            C_virclst, e = self.canonicalize(C_virclst, eigenvalues=True)
+            log.debug("Virtual cluster Fock eigenvalues: %r", e)
+
         self.C_occclst = C_occclst
         self.C_virclst = C_virclst
+
+        # For orbital plotting
+        self.orbitals["DMET-bath"] = C_bath
+        self.orbitals["Occ.-Cluster"] = C_occclst
+        self.orbitals["Vir.-Cluster"] = C_virclst
 
         self.refdata_out["dmet-bath"] = C_bath
 
@@ -1196,6 +1231,7 @@ class Cluster:
         #occbath_eigref = None
         #virbath_eigref = None
 
+        t0 = MPI.Wtime()
         C_occbath, C_occenv, e_delta_occ, occbath_eigref = self.make_bath(
                 C_occenv, self.bath_type, "occ",
                 C_ref=C_occref, eigref=occbath_eigref,
@@ -1204,8 +1240,17 @@ class Cluster:
                 C_virenv, self.bath_type, "vir",
                 C_ref=C_virref, eigref=virbath_eigref,
                 nbath=self.bath_target_size[1], tol=self.bath_tol[1])
+        log.debug("Time for %r bath: %s", self.bath_type, get_time_string(MPI.Wtime()-t0))
         self.C_occbath = C_occbath
         self.C_virbath = C_virbath
+        self.C_occenv = C_occenv
+        self.C_virenv = C_virenv
+
+        # For orbital ploting
+        self.orbitals["Occ.-bath"] = C_occbath
+        self.orbitals["Vir.-bath"] = C_virbath
+        self.orbitals["Occ.-env."] = C_occenv
+        self.orbitals["Vir.-env."] = C_virenv
 
         self.refdata_out["occ-bath"] = C_occbath
         self.refdata_out["vir-bath"] = C_virbath
@@ -1231,8 +1276,10 @@ class Cluster:
 
         # === Canonicalize orbitals
         if True:
+            t0 = MPI.Wtime()
             C_occact = self.canonicalize(C_occclst, C_occbath)
             C_viract = self.canonicalize(C_virclst, C_virbath)
+            log.debug("Time for canonicalization: %s", get_time_string(MPI.Wtime()-t0))
         else:
             C_occact = np.hstack((C_occclst, C_occbath))
             C_viract = np.hstack((C_virclst, C_virbath))
@@ -1274,32 +1321,34 @@ class Cluster:
         log.debug("Active (occ., vir., all) = %4d  %4d  %4d", C_occact.shape[-1], C_viract.shape[-1], self.nactive)
         log.debug("Frozen (occ., vir., all) = %4d  %4d  %4d", C_occenv.shape[-1], C_virenv.shape[-1], self.nfrozen)
 
+        log.debug("Wall time for bath: %s", get_time_string(MPI.Wtime()-t0_bath))
+
         # Write Cubegen files
         #if True:
-        if False:
-            orbitals = {
-                "F" : self.C_local,
-                "BD" : self.C_bath,
-                "BO" : self.C_occbath,
-                "BV" : self.C_virbath,
-                "EO" : C_occenv,
-                "EV" : C_virenv,
-                }
+        #if False:
+        #    orbitals = {
+        #        "F" : self.C_local,
+        #        "BD" : self.C_bath,
+        #        "BO" : self.C_occbath,
+        #        "BV" : self.C_virbath,
+        #        "EO" : C_occenv,
+        #        "EV" : C_virenv,
+        #        }
 
-            if False:
-                for orbkind, C in orbitals.items():
-                    for j in range(C.shape[-1]):
-                        filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
-                        make_cubegen_file(self.mol, C[:,j], filename)
-            else:
-                from pyscf.tools import molden
-                for orbkind, C in orbitals.items():
-                    with open("C%d-%s.molden" % (self.id, orbkind), "w") as f:
-                        molden.header(self.mol, f)
-                        molden.orbital_coeff(self.mol, f, C)
+        #    if False:
+        #        for orbkind, C in orbitals.items():
+        #            for j in range(C.shape[-1]):
+        #                filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
+        #                make_cubegen_file(self.mol, C[:,j], filename)
+        #    else:
+        #        from pyscf.tools import molden
+        #        for orbkind, C in orbitals.items():
+        #            with open("C%d-%s.molden" % (self.id, orbkind), "w") as f:
+        #                molden.header(self.mol, f)
+        #                molden.orbital_coeff(self.mol, f, C)
 
 
-            raise SystemExit()
+        #    raise SystemExit()
 
         t0 = MPI.Wtime()
         converged, e_corr = self.run_solver(solver, mo_coeff, mo_occ, active=active, frozen=frozen)
@@ -1310,3 +1359,68 @@ class Cluster:
         #self.e_corr_dmp2 = e_corr + e_delta_mp2
 
         return converged, e_corr
+
+    def create_orbital_file(self, filename, filetype="molden"):
+        if filetype not in ("cube", "molden"):
+            raise ValueError("Unknown file type: %s" % filetype)
+
+        ext = {"molden" : "molden", "cube" : "cube"}
+        filename = "%s-c%d.%s" % (filename, self.id, ext[filetype])
+
+        if filetype == "molden":
+            from pyscf.tools import molden
+
+            orb_labels = {
+                    "Fragment" : "F",
+                    "DMET-bath" : "D",
+                    "Occ.-Cluster" : "O",
+                    "Vir.-Cluster" : "V",
+                    "Occ.-Bath" : "P",
+                    "Vir.-Bath" : "Q",
+                    "Occ.-Env." : "R",
+                    "Vir.-Env." : "S",
+                    }
+
+            with open(filename, "w") as f:
+                molden.header(self.mol, f)
+                labels = []
+                coeffs = []
+                for name, C in self.orbitals.items():
+                    labels += C.shape[-1]*[name]
+                    coeffs.append(C)
+                coeffs = np.hstack(coeffs)
+                molden.orbital_coeff(self.mol, f, coeffs, symm=labels)
+
+                #for name, C in self.orbitals.items():
+                    #symm = orb_labels.get(name, "?")
+                    #symm = C.shape[-1] * [name]
+                    #molden.orbital_coeff(self.mol, f, C)
+                    #molden.orbital_coeff(self.mol, f, C, symm=symm)
+        elif filetype == "cube":
+            raise NotImplementedError()
+            for orbkind, C in self.orbitals.items():
+                for j in range(C.shape[-1]):
+                    filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
+                    make_cubegen_file(self.mol, C[:,j], filename)
+
+        #orbitals = {
+        #    "F" : self.C_local,
+        #    "BD" : self.C_bath,
+        #    "BO" : self.C_occbath,
+        #    "BV" : self.C_virbath,
+        #    "EO" : C_occenv,
+        #    "EV" : C_virenv,
+        #    }
+
+        #if filetype == "molden":
+        #    from pyscf.tools import molden
+        #    for orbkind, C in orbitals.items():
+        #        with open("C%d-%s.molden" % (self.id, orbkind), "w") as f:
+        #            molden.header(self.mol, f)
+        #            molden.orbital_coeff(self.mol, f, C)
+        #elif filetype == "cube":
+        #    for orbkind, C in orbitals.items():
+        #        for j in range(C.shape[-1]):
+        #            filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
+        #            make_cubegen_file(self.mol, C[:,j], filename)
+

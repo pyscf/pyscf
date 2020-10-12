@@ -28,8 +28,9 @@ parser.add_argument("--benchmarks", nargs="*")
 #parser.add_argument("--tol-bath", type=float, default=1e-3)
 parser.add_argument("--distances", type=float, nargs="*")
 parser.add_argument("--distances-range", type=float, nargs=3, default=[0.4, 5.0, 0.1])
-parser.add_argument("--local-type", choices=["IAO", "AO", "LAO", "NonOrth-IAO"], default="IAO")
-parser.add_argument("--bath-type", default="mp2-natorb")
+parser.add_argument("--local-type", default="IAO")
+#parser.add_argument("--bath-type", default="mp2-natorb")
+parser.add_argument("--bath-type")
 parser.add_argument("--bath-size", type=float, nargs=2)
 parser.add_argument("--impurity", nargs="*", default=["H1"])
 parser.add_argument("--atoms", nargs=2, default=["H", "H"])
@@ -38,6 +39,7 @@ parser.add_argument("--atoms", nargs=2, default=["H", "H"])
 parser.add_argument("--minao", default="minao")
 parser.add_argument("--no-embcc", action="store_true")
 parser.add_argument("--electron-target", type=float)
+parser.add_argument("--mp2-correction", type=int, nargs=2)
 
 #parser.add_argument("--counterpoise", choices=["none", "water", "water-full", "borazine", "borazine-full"])
 parser.add_argument("--fragment", choices=["all", "water", "boronene"], default="all")
@@ -126,19 +128,18 @@ for idist, dist in enumerate(args.distances):
                 minao=args.minao,
                 bath_type=args.bath_type, bath_size=args.bath_size,
                 solver=args.solver,
-                maxiter=10,
-                #mp2_correction=args.mp2_correction,
+                #maxiter=10,
+                #maxiter=10,
+                mp2_correction=args.mp2_correction,
                 #use_ref_orbitals_bath=args.use_ref_orbitals_bath,
                 )
         #cc.make_atom_cluster(args.impurity, symmetry_factor=2)
 
-        #solver_opts = {}
-        solver_opts = {"fix_spin" : 0}
+        solver_opts = {}
+        #solver_opts = {"fix_spin" : 0}
+        #cc.make_all_atom_clusters(solver_options=solver_opts)
 
-
-        cc.make_all_atom_clusters(solver_options=solver_opts)
-
-        #cc.make_atom_cluster("H1", symmetry_factor=2.0, solver_options=solver_opts)
+        cc.make_atom_cluster(args.impurity, symmetry_factor=2.0, solver_options=solver_opts)
         #cc.make_atom_cluster("H2", solver=None)
 
         #cc.make_atom_cluster("F1", symmetry_factor=2.0, solver_options=solver_opts)
