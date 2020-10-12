@@ -567,7 +567,15 @@ def _band_lanczos(se_occ, n=0, max_memory=None):
     # cholesky qr factorisation of v.T
     coupling = se_occ.coupling
     x = np.dot(coupling, coupling.T)
-    v_tri = np.linalg.cholesky(x).T
+
+    try:
+        v_tri = np.linalg.cholesky(x).T
+    except np.linalg.LinAlgError:
+        w, v = np.linalg.eigh(x)
+        w[w < 1e-20] = 1e-20
+        x_posdef = np.dot(np.dot(v, np.diag(w)), v.T)
+        v_tri = np.linalg.cholesky(x_posdef).T
+
     q[:nphys] = np.dot(np.linalg.inv(v_tri).T, coupling)
 
     for i in range(bandwidth):
@@ -612,7 +620,7 @@ def _compress_via_se(se, n=0):
     '''
 
     if se.naux == 0:
-        return se
+        return se.energy, se.coupling
 
     se_occ = se.get_occupied()
     se_vir = se.get_virtual()
