@@ -9,22 +9,22 @@ from pyscf.nao.m_pack2den import pack2den_u
 class bse_iter(gw):
 
   def __init__(self, **kw):
-    """ 
-      Iterative BSE a la PK, DF, OC JCTC 
+    r"""
+      Iterative BSE a la PK, DF, OC JCTC
       additionally to the fields from tddft_iter_c, we add the dipole matrix elements dab[ixyz][a,b]
-      which is constructed as list of numpy arrays 
+      which is constructed as list of numpy arrays
        $ d_i = \int f^a(r) r_i f^b(r) dr $
     """
     xc_code_kw = kw['xc_code'] if 'xc_code' in kw else None
     gw.__init__(self, **kw)
-    
+
     self.l0_ncalls = 0
     self.dip_ab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
 
-    self.xc_code = self.xc_code if xc_code_kw is None else xc_code_kw 
+    self.xc_code = self.xc_code if xc_code_kw is None else xc_code_kw
     xc = self.xc_code.split(',')[0].upper()
-    if self.verbosity>0: 
+    if self.verbosity>0:
       print(__name__, '     xc_code_mf ', self.xc_code_mf)
       print(__name__, ' xc_code_kernel ', self.xc_code_kernel)
       print(__name__, '    xc_code_scf ', self.xc_code_scf)
@@ -39,7 +39,7 @@ class bse_iter(gw):
     if xc in ['CIS','HF']: self.q2xk = self.q2hk
     elif xc in ['GW']: self.q2xk = zeros((1,p,p),dtype=dtype)
     else: self.q2xk = None
-      
+
     # Computation of kernels in the product basis...
     for fh in self.q2hk: fh[:,:]=pack2den_u(self.kernel)
     if xc in ['LDA', 'GGA']:
@@ -52,19 +52,19 @@ class bse_iter(gw):
     if xc in ['LDA','GGA']:
       self.q2k_4p = zeros((2*ns-1,n*n,n*n),dtype=dtype)
     elif xc in ['HF', 'CIS', 'GW']: # 1 or 2? Examples of UHF+TD of H2O and H2B(spin=3): 158, 159
-      self.q2k_4p = zeros((1, n*n, n*n),dtype=dtype) 
+      self.q2k_4p = zeros((1, n*n, n*n),dtype=dtype)
     elif xc in ['RPA']:
       self.q2k_4p = zeros((1, n*n, n*n),dtype=dtype)
     else:
       raise RuntimeError('Unknown funct: '+xc)
-      
+
     q2k_4p = self.q2k_4p # q2k_4p is now alias to the  self.q2k_4p
-    
+
     # Computation of the four-point interaction kernel...
-    for q,fhxc in enumerate(self.q2hk): # Start with Hartree interaction kernel 
+    for q,fhxc in enumerate(self.q2hk): # Start with Hartree interaction kernel
       q2k_4p[q] = (((v_dab.T*(cc_da*fhxc))*cc_da.T)*v_dab).reshape([n*n,n*n])
-      
-    if xc in ['CIS', 'HF', 'GW']: # Add Fock-like (exchange) interaction kernel 
+
+    if xc in ['CIS', 'HF', 'GW']: # Add Fock-like (exchange) interaction kernel
       w_xc_4p = (((v_dab.T*(cc_da* self.q2xk[0] ))*cc_da.T)*v_dab).reshape([n*n,n*n])
       q2k_4p[0] -= 0.5*einsum('abcd->bcad', w_xc_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
 
@@ -110,7 +110,7 @@ class bse_iter(gw):
     else:
       ksn2f = self.ksn2f_l0 = self.mo_occ.reshape((self.nspin,self.norbs))
 
-    self.x_l0 = np.copy(mo_coeff).reshape((self.nspin,self.norbs,self.norbs)) 
+    self.x_l0 = np.copy(mo_coeff).reshape((self.nspin,self.norbs,self.norbs))
 
     tol = self.nfermi_tol
     self.nfermi_l0 = array([argmax(ksn2f[s]<tol) for s in range(self.nspin)], dtype=int)
@@ -122,37 +122,37 @@ class bse_iter(gw):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
     assert sab.size==(self.nspin*self.norbs2)
     self.l0_ncalls+=1
-    
+
     sab = sab.reshape((self.nspin, self.norbs,self.norbs))
     ab2v = np.zeros_like(sab, dtype=self.dtypeComplex)
-    
+
     for s,(ab,xv,xo,x,n2e,n2f) in enumerate(zip(
       sab,self.xvrt_l0,self.xocc_l0,self.x_l0,self.ksn2e_l0,self.ksn2f_l0)):
-        
+
       nm2v = zeros((self.norbs,self.norbs), self.dtypeComplex)
       nm2v[self.vstart_l0[s]:, :self.nfermi_l0[s]] = blas.cgemm(1.0, dot(xv,ab),xo.T)
       nm2v[:self.nfermi_l0[s], self.vstart_l0[s]:] = blas.cgemm(1.0, dot(xo,ab),xv.T)
-    
+
       for n,(en,fn) in enumerate(zip(n2e,n2f)):
         for m,(em,fm) in enumerate(zip(n2e,n2f)):
           nm2v[n,m] = nm2v[n,m] * (fn-fm) / (comega - (em - en))
 
       nb2v = blas.cgemm(1.0, nm2v, x)
       ab2v[s] += blas.cgemm(1.0, x.T, nb2v)
-      
+
     return ab2v.reshape(-1)
 
   def apply_l0_ref(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
     assert sab.size==(self.nspin*self.norbs2)
     self.l0_ncalls+=1
-        
+
     sab = sab.reshape((self.nspin,self.norbs,self.norbs))
     ab2v = np.zeros_like(sab, dtype=self.dtypeComplex)
     for s in range(self.nspin):
       nb2v = dot(self.x_l0[s], sab[s])
       nm2v = blas.cgemm(1.0, nb2v, self.x_l0[s].T)
-    
+
       for n,[en,fn] in enumerate(zip(self.ksn2e_l0[s,:],self.ksn2f_l0[s,:])):
         for m,[em,fm] in enumerate(zip(self.ksn2e_l0[s,:],self.ksn2f_l0[s,:])):
           nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
@@ -165,14 +165,14 @@ class bse_iter(gw):
     """ The definition of L0 which is not spin-diagonal even for parallel-spin references"""
     assert sab.size==(self.nspin*self.norbs2)
     self.l0_ncalls+=1
-        
+
     sab = sab.reshape((self.nspin,self.norbs,self.norbs))
     ab2v = np.zeros_like(sab, dtype=self.dtypeComplex)
     for ns in range(self.nspin):
       for ms in range(self.nspin):
         nb2v = dot(self.x_l0[ns], sab[ns])
         nm2v = blas.cgemm(1.0, nb2v, self.x_l0[ms].T)
-    
+
         for n,[en,fn] in enumerate(zip(self.ksn2e_l0[ns,:],self.ksn2f_l0[ns,:])):
           for m,[em,fm] in enumerate(zip(self.ksn2e_l0[ms,:],self.ksn2f_l0[ms,:])):
             nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
@@ -186,16 +186,16 @@ class bse_iter(gw):
         L = L0 (1 - K L0)^-1
         We want therefore an effective X_eff for a given X_ext
         X_eff = (1 - K L0)^-1 X_ext   or   we need to solve linear equation
-        (1 - K L0) X_eff = X_ext  
+        (1 - K L0) X_eff = X_ext
 
         The operator (1 - K L0) is named self.sext2seff_matvec """
-    
+
     from scipy.sparse.linalg import LinearOperator
     from scipy.sparse.linalg import lgmres as gmres_alias
     #from spipy.sparse.linalg import gmres as gmres_alias
     nsnn = self.nspin*self.norbs2
     assert sext.size==nsnn
-    
+
     self.comega_current = comega
     op = LinearOperator((nsnn,nsnn), matvec=self.sext2seff_matvec, dtype=self.dtypeComplex)
     sext_shape = np.require(sext.reshape(nsnn), dtype=self.dtypeComplex, requirements='C')
@@ -203,9 +203,9 @@ class bse_iter(gw):
     return (resgm.reshape(-1),info)
 
   def sext2seff_matvec(self, sab):
-    """ This is operator which we effectively want to have inverted (1 - K L0) and find the action of it's 
+    """ This is operator which we effectively want to have inverted (1 - K L0) and find the action of it's
     inverse by solving a linear equation with a GMRES method. See the method seff(...)"""
-    self.matvec_ncalls+=1 
+    self.matvec_ncalls+=1
     kl0v = self.apply_kernel4p( self.apply_l0(sab, self.comega_current) )
     return sab - kl0v
 
@@ -220,7 +220,7 @@ class bse_iter(gw):
   def apply_kernel4p_nspin1(self, ddm):
     reim = require(ddm.real, dtype=self.dtype, requirements=["A","O"]) # real part
     mv_real = dot(self.ss2kernel_4p[0][0], reim)
-    
+
     reim = require(ddm.imag, dtype=self.dtype, requirements=["A","O"]) # imaginary
     mv_imag = dot(self.ss2kernel_4p[0][0], reim)
     return mv_real+1j*mv_imag

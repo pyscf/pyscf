@@ -326,7 +326,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         with lib.call_in_background(pw_contract) as compute:
             col1 = 0
             for istep, sh_range in enumerate(shranges):
-                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
+                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d',
                            istep+1, len(shranges), *sh_range)
                 bstart, bend, ncol = sh_range
                 col0, col1 = col1, col1+ncol
@@ -532,11 +532,15 @@ class GDF(aft.AFTDF):
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
                                          self.exp_to_discard)
 
+        # Remove duplicated k-points. Duplicated kpts may lead to a buffer
+        # located in incore.wrap_int3c larger than necessary. Integral code
+        # only fills necessary part of the buffer, leaving some space in the
+        # buffer unfilled.
+        uniq_idx = unique(self.kpts)[1]
+        kpts = numpy.asarray(self.kpts)[uniq_idx]
         if self.kpts_band is None:
-            kpts = self.kpts
             kband_uniq = numpy.zeros((0,3))
         else:
-            kpts = self.kpts
             kband_uniq = [k for k in self.kpts_band if len(member(k, kpts))==0]
         if j_only is None:
             j_only = self._j_only

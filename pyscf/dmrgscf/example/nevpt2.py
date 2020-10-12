@@ -98,6 +98,7 @@ mc = mcscf.CASCI(m, 4, 4)
 # ~ 50 active orbitals.
 #
 mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=200)
+mc.natorb = True
 mc.fcisolver.nroots = 2
 #
 # Passing mc_orb to CASCI kernel function so that the CASCI calculation is

@@ -32,74 +32,84 @@ from pyscf.dft.xc.utils import remove_dup, format_xc_code
 _itrf = lib.load_library('libxcfun_itrf')
 
 XC = XC_CODES = {
-'SLATERX'       :  0,  # Slater LDA exchange
-'PW86X'         :  1,  # PW86 exchange
-'VWN3C'         :  2,  # VWN3 LDA Correlation functional
-'VWN5C'         :  3,  # VWN5 LDA Correlation functional
-'PBEC'          :  4,  # PBE correlation functional
-'PBEX'          :  5,  # PBE Exchange Functional
-'BECKEX'        :  6,  # Becke 88 exchange
-'BECKECORRX'    :  7,  # Becke 88 exchange correction
-'BECKESRX'      :  8,  # Short range Becke 88 exchange
-'BECKECAMX'     :  9,  # CAM Becke 88 exchange
-'BRX'           : 10,  # Becke-Roussells exchange with jp dependence
-'BRC'           : 11,  # Becke-Roussells correlation with jp dependence
-'BRXC'          : 12,  # Becke-Roussells correlation with jp dependence
-'LDAERFX'       : 13,  # Short-range spin-dependent LDA exchange functional
-'LDAERFC'       : 14,  # Short-range spin-dependent LDA correlation functional
-'LDAERFC_JT'    : 15,  # Short-range spin-unpolarized LDA correlation functional
-'LYPC'          : 16,  # LYP correlation
-'OPTX'          : 17,  # OPTX Handy & Cohen exchange
-'OPTXCORR'      : 18,  # OPTX Handy & Cohen exchange -- correction part only
-'REVPBEX'       : 19,  # Revised PBE Exchange Functional
-'RPBEX'         : 20,  # RPBE Exchange Functional
-'SPBEC'         : 21,  # sPBE correlation functional
-'VWN_PBEC'      : 22,  # PBE correlation functional using VWN LDA correlation.
-'KTX'           : 23,  # KT exchange GGA correction
-'TFK'           : 24,  # Thomas-Fermi Kinetic Energy Functional
-'TW'            : 25,  # von Weizsacker Kinetic Energy Functional
-'PW91X'         : 26,  # Perdew-Wang 1991 GGA Exchange Functional
-'PW91K'         : 27,  # PW91 GGA Kinetic Energy Functional
-'PW92C'         : 28,  # PW92 LDA correlation
-'M05X'          : 29,  # M05 exchange
-'M05X2X'        : 30,  # M05-2X exchange
-'M06X'          : 31,  # M06 exchange
-'M06X2X'        : 32,  # M06-2X exchange
-'M06LX'         : 33,  # M06-L exchange
-'M06HFX'        : 34,  # M06-HF exchange
-'M05X2C'        : 35,  # M05-2X Correlation
-'M05C'          : 36,  # M05 Correlation
-'M06C'          : 37,  # M06 Correlation
-'M06HFC'        : 38,  # M06-HF Correlation
-'M06LC'         : 39,  # M06-L Correlation
-'M06X2C'        : 40,  # M06-2X Correlation
-'TPSSC'         : 41,  # TPSS original correlation functional
-'TPSSX'         : 42,  # TPSS original exchange functional
-'REVTPSSC'      : 43,  # Revised TPSS correlation functional
-'REVTPSSX'      : 44,  # Reviewed TPSS exchange functional
-'PZ81C'         : 45,  # PZ81 LDA correlation
-'P86C'          : 46,  # P86C GGA correlation
-'P86CORRC'      : 47,  # P86C GGA correlation
-'BTK'           : 48,  # Borgoo-Tozer TS
-'VWK'           : 49,  # von Weizsaecker kinetic energy
-'B97X'          : 50,  # B97 exchange
-'B97C'          : 51,  # B97 correlation
-'B97_1X'        : 52,  # B97-1 exchange
-'B97_1C'        : 53,  # B97-1 correlation
-'B97_2X'        : 54,  # B97-2 exchange
-'B97_2C'        : 55,  # B97-2 correlation
-'CSC'           : 56,  # Colle-Salvetti correlation functional
-'APBEC'         : 57,  # APBE correlation functional.
-'APBEX'         : 58,  # APBE Exchange Functional
-'ZVPBESOLC'     : 59,  # zvPBEsol correlation Functional
-'BLOCX'         : 60,  # BLOC exchange functional
-'PBEINTC'       : 61,  # PBEint correlation Functional
-'PBEINTX'       : 62,  # PBEint Exchange Functional
-'PBELOCC'       : 63,  # PBEloc correlation functional.
-'PBESOLX'       : 64,  # PBEsol Exchange Functional
-'TPSSLOCC'      : 65,  # TPSSloc correlation functional
-'ZVPBEINTC'     : 66,  # zvPBEint correlation Functional
-'PW91C'         : 67,  # PW91 Correlation
+'SLATERX'       :  0,  #Slater LDA exchange
+'PW86X'         :  1,  #PW86 exchange
+'VWN3C'         :  2,  #VWN3 LDA Correlation functional
+'VWN5C'         :  3,  #VWN5 LDA Correlation functional
+'PBEC'          :  4,  #PBE correlation functional
+'PBEX'          :  5,  #PBE Exchange Functional
+'BECKEX'        :  6,  #Becke 88 exchange
+'BECKECORRX'    :  7,  #Becke 88 exchange correction
+'BECKESRX'      :  8,  #Short range Becke 88 exchange
+'BECKECAMX'     :  9,  #CAM Becke 88 exchange
+'BRX'           : 10,  #Becke-Roussells exchange with jp dependence
+'BRC'           : 11,  #Becke-Roussells correlation with jp dependence
+'BRXC'          : 12,  #Becke-Roussells correlation with jp dependence
+'LDAERFX'       : 13,  #Short-range spin-dependent LDA exchange functional
+'LDAERFC'       : 14,  #Short-range spin-dependent LDA correlation functional
+'LDAERFC_JT'    : 15,  #Short-range spin-unpolarized LDA correlation functional
+'LYPC'          : 16,  #LYP correlation
+'OPTX'          : 17,  #OPTX Handy & Cohen exchange
+'OPTXCORR'      : 18,  #OPTX Handy & Cohen exchange -- correction part only
+'REVPBEX'       : 19,  #Revised PBE Exchange Functional
+'RPBEX'         : 20,  #RPBE Exchange Functional
+'SPBEC'         : 21,  #sPBE correlation functional
+'VWN_PBEC'      : 22,  #PBE correlation functional using VWN LDA correlation.
+'KTX'           : 23,  #KT exchange GGA correction
+'TFK'           : 24,  #Thomas-Fermi Kinetic Energy Functional
+'TW'            : 25,  #von Weizsacker Kinetic Energy Functional
+'PW91X'         : 26,  #Perdew-Wang 1991 GGA Exchange Functional
+'PW91K'         : 27,  #PW91 GGA Kinetic Energy Functional
+'PW92C'         : 28,  #PW92 LDA correlation
+'M05X'          : 29,  #M05 exchange
+'M05X2X'        : 30,  #M05-2X exchange
+'M06X'          : 31,  #M06 exchange
+'M06X2X'        : 32,  #M06-2X exchange
+'M06LX'         : 33,  #M06-L exchange
+'M06HFX'        : 34,  #M06-HF exchange
+'M05X2C'        : 35,  #M05-2X Correlation
+'M05C'          : 36,  #M05 Correlation
+'M06C'          : 37,  #M06 Correlation
+'M06HFC'        : 38,  #M06-HF Correlation
+'M06LC'         : 39,  #M06-L Correlation
+'M06X2C'        : 40,  #M06-2X Correlation
+'TPSSC'         : 41,  #TPSS original correlation functional
+'TPSSX'         : 42,  #TPSS original exchange functional
+'REVTPSSC'      : 43,  #Revised TPSS correlation functional
+'REVTPSSX'      : 44,  #Reviewed TPSS exchange functional
+'SCANC'         : 45,  #SCAN correlation functional
+'SCANX'         : 46,  #SCAN exchange functional
+'RSCANC'        : 47,  #rSCAN correlation functional
+'RSCANX'        : 48,  #rSCAN exchange functional
+'RPPSCANC'      : 49,  #r++SCAN correlation functional
+'RPPSCANX'      : 50,  #r++SCAN exchange functional
+'R2SCANC'       : 51,  #r2SCAN correlation functional
+'R2SCANX'       : 52,  #r2SCAN exchange functional
+'R4SCANC'       : 53,  #r4SCAN correlation functional
+'R4SCANX'       : 54,  #r4SCAN exchange functional
+'PZ81C'         : 55,  #PZ81 LDA correlation
+'P86C'          : 56,  #P86C GGA correlation
+'P86CORRC'      : 57,  #P86C GGA correlation
+'BTK'           : 58,  #Borgoo-Tozer TS
+'VWK'           : 59,  #von Weizsaecker kinetic energy
+'B97X'          : 60,  #B97 exchange
+'B97C'          : 61,  #B97 correlation
+'B97_1X'        : 62,  #B97-1 exchange
+'B97_1C'        : 63,  #B97-1 correlation
+'B97_2X'        : 64,  #B97-2 exchange
+'B97_2C'        : 65,  #B97-2 correlation
+'CSC'           : 66,  #Colle-Salvetti correlation functional
+'APBEC'         : 67,  #APBE correlation functional.
+'APBEX'         : 68,  #APBE Exchange Functional
+'ZVPBESOLC'     : 69,  #zvPBEsol correlation Functional
+'BLOCX'         : 70,  #BLOC exchange functional
+'PBEINTC'       : 71,  #PBEint correlation Functional
+'PBEINTX'       : 72,  #PBEint Exchange Functional
+'PBELOCC'       : 73,  #PBEloc correlation functional.
+'PBESOLX'       : 74,  #PBEsol Exchange Functional
+'TPSSLOCC'      : 75,  #TPSSloc correlation functional
+'ZVPBEINTC'     : 76,  #zvPBEint correlation Functional
+'PW91C'         : 77,  #PW91 Correlation
 #
 # alias
 #
@@ -109,9 +119,9 @@ XC = XC_CODES = {
 'VWN5'          : 3,  # VWN5C
 'VWN3'          : 2,  # VWN3C
 'SVWN'          : 'SLATERX + VWN5',
-'B88'           : 6,  # BECKECORRX
+'B88'           : 6,  # BECKEX
 'LYP'           : 16,
-'P86'           : 46,
+'P86'           : 56,
 'M052XX'        : 30,  # M05-2X exchange
 'M062XX'        : 32,  # M06-2X exchange
 'M052XC'        : 35,  # M05-2X Correlation
@@ -146,7 +156,7 @@ XC = XC_CODES = {
 'X3LYPG'        : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN3C',
 # Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
 # Note default mu of xcfun is 0.4. It can cause discrepancy for CAMB3LYP
-'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
+'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + 0.46*BECKESRX + 0.35*B88 + VWN5C*0.19 + LYPC*0.81',
 'CAM_B3LYP'     : 'CAMB3LYP',
 'LDAERF'        : 'LDAERFX + LDAERFC',  # Short-range exchange and correlation LDA functional
 'B97XC'         : 'B97X + B97C + HF*0.1943',
@@ -173,7 +183,7 @@ XC_ALIAS = {
 #    'PKZB'              : 'PKZB,PKZB',
     'TPSS'              : 'TPSS,TPSS',
     'REVTPSS'           : 'REVTPSS,REVTPSS',
-#    'SCAN'              : 'SCAN,SCAN',
+    'SCAN'              : 'SCAN,SCAN',
 #    'SOGGA'             : 'SOGGA,PBE',
     'BLOC'              : 'BLOC,TPSSLOC',
     'OLYP'              : 'OPTX,LYP',
@@ -215,12 +225,14 @@ XC_ALIAS = {
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 
-LDA_IDS = set([0, 2, 3, 13, 14, 15, 24, 28, 45])
+'''
+LDA_IDS = set([0, 2, 3, 13, 14, 15, 24, 28, 55])
 GGA_IDS = set([1, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26,
-               27, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 59, 61,
-               62, 63, 64, 66, 67])
+               27, 44, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 68, 69, 71,
+               72, 73, 74, 76, 77])
 MGGA_IDS =set([10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
-               42, 43, 56, 60, 65])
+               42, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 66, 70, 75])
+'''
 HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
               'B3PW91G' , 'B3P86G'  , 'B3LYPG'  , 'O3LYP'   , 'CAMB3LYP',
               'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,
@@ -248,9 +260,9 @@ def xc_type(xc_code):
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
     if not fn_facs:
         return 'HF'
-    elif all(xid in LDA_IDS for xid, val in fn_facs):
+    elif all(_itrf.XCFUN_xc_type(ctypes.c_int(xid)) == 0 for xid, val in fn_facs):
         return 'LDA'
-    elif any(xid in MGGA_IDS for xid, val in fn_facs):
+    elif any(_itrf.XCFUN_xc_type(ctypes.c_int(xid)) == 2 for xid, val in fn_facs):
         return 'MGGA'
     else:
         # all((xid in GGA_IDS or xid in LDA_IDS for xid, val in fn_fns)):
@@ -787,6 +799,10 @@ XC_D0000021 = 117
 XC_D0000012 = 118
 XC_D0000003 = 119
 
+#SCAN functionals have problems when sigma is small
+#https://github.com/dftlibs/xcfun/issues/144
+SINGULAR_IDS = set((45,46,47,48,49,50,51,52,53,54))
+
 def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv < 4)
     if spin == 0:
@@ -797,10 +813,10 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(rho_u.dtype == numpy.double)
     assert(rho_d.dtype == numpy.double)
 
-    if rho_u.ndim == 2:
-        ngrids = rho_u.shape[1]
-    else:
-        ngrids = len(rho_u)
+    if rho_u.ndim == 1:
+        rho_u = rho_u.reshape(1,-1)
+        rho_d = rho_d.reshape(1,-1)
+    ngrids = rho_u.shape[1]
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
@@ -811,6 +827,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         omega = [0] * len(facs)
 
+    fn_ids_set = set(fn_ids)
     n = len(fn_ids)
     if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
         all((is_lda(x) for x in fn_ids))):  # LDA
@@ -830,7 +847,20 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-    outbuf = numpy.zeros((ngrids,outlen))
+
+    if SINGULAR_IDS.intersection(fn_ids_set) and deriv > 0:
+        if spin == 0:
+            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
+            non0idx = sigma_uu > 1e-16
+        else:
+            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
+            sigma_dd = rho_d[1]*rho_d[1] + rho_d[2]*rho_d[2] + rho_d[3]*rho_d[3]
+            non0idx = (sigma_uu > 1e-16) & (sigma_dd > 1e-16)
+        rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
+        rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
+        outbuf = numpy.zeros((non0idx.sum(),outlen))
+    else:
+        outbuf = numpy.zeros((ngrids,outlen))
 
     if n > 0:
         _itrf.XCFUN_eval_xc(ctypes.c_int(n),
@@ -838,10 +868,15 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                             (ctypes.c_double*n)(*facs),
                             (ctypes.c_double*n)(*omega),
                             ctypes.c_int(spin),
-                            ctypes.c_int(deriv), ctypes.c_int(ngrids),
+                            ctypes.c_int(deriv), ctypes.c_int(rho_u.shape[1]),
                             rho_u.ctypes.data_as(ctypes.c_void_p),
                             rho_d.ctypes.data_as(ctypes.c_void_p),
                             outbuf.ctypes.data_as(ctypes.c_void_p))
+
+    if outbuf.shape[0] != ngrids:
+        out = numpy.zeros((ngrids,outlen))
+        out[non0idx,:] = outbuf
+        outbuf = out
 
     outbuf = outbuf.T
     exc = outbuf[0]

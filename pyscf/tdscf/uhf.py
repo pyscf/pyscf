@@ -67,10 +67,10 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsyma = orbsyma % 10
-        orbsymb = orbsymb % 10
-        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
-        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+        sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
@@ -504,8 +504,8 @@ def analyze(tdobj, verbose=None):
 
     if mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        orbsyma = orbsyma % 10
-        x_syma = (orbsyma[mo_occ[0]==1,None] ^ orbsyma[mo_occ[0]==0]).ravel()
+        x_syma = symm.direct_prod(orbsyma[mo_occ[0]==1], orbsyma[mo_occ[0]==0], mol.groupname)
+        x_symb = symm.direct_prod(orbsymb[mo_occ[1]==1], orbsymb[mo_occ[1]==0], mol.groupname)
     else:
         x_syma = None
 
@@ -516,8 +516,12 @@ def analyze(tdobj, verbose=None):
             log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
                      i+1, e_ev[i], wave_length[i], f_oscillator[i])
         else:
-            wfnsym_id = x_syma[abs(x[0]).argmax()]
-            wfnsym = symm.irrep_id2name(mol.groupname, wfnsym_id)
+            wfnsyma = rhf.analyze_wfnsym(tdobj, x_syma, x[0])
+            wfnsymb = rhf.analyze_wfnsym(tdobj, x_symb, x[1])
+            if wfnsyma == wfnsymb:
+                wfnsym = wfnsyma
+            else:
+                wfnsym = '???'
             log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
@@ -626,24 +630,29 @@ class TDA(rhf.TDA):
         viridxb = numpy.where(mo_occ[1]==0)[0]
         e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
         e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+        e_ia_max = max(e_ia_a.max(), e_ia_b.max())
 
         if wfnsym is not None and mol.symmetry:
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mf.mo_coeff)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsyma = orbsyma % 10
-            orbsymb = orbsymb % 10
-            e_ia_a[(orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym] = 1e99
-            e_ia_b[(orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym] = 1e99
+            orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+            orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+            e_ia_a[(orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym] = 1e99
+            e_ia_b[(orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym] = 1e99
 
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
         nov = e_ia.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia)
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
+        nstates = min(nstates, nov)
+        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
+        # Handle degeneracy
+        e_threshold += 1e-6
+
+        idx = numpy.where(e_ia <= e_threshold)[0]
+        x0 = numpy.zeros((idx.size, nov))
+        for i, j in enumerate(idx):
+            x0[i, j] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None, nstates=None):
@@ -733,10 +742,10 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        orbsyma = orbsyma % 10
-        orbsymb = orbsymb % 10
-        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
-        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
+        orbsyma_in_d2h = numpy.asarray(orbsyma) % 10
+        orbsymb_in_d2h = numpy.asarray(orbsymb) % 10
+        sym_forbida = (orbsyma_in_d2h[occidxa,None] ^ orbsyma_in_d2h[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T

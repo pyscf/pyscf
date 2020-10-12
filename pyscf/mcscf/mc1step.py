@@ -466,6 +466,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = numpy.diag(-occ)
     else:
+        if casscf.natorb:
+            # FIXME (pyscf-2.0): Whether to transform natural orbitals in
+            # active space when this flag is enabled?
+            log.warn('The attribute natorb of mcscf object affects only the '
+                     'orbital canonicalization.\n'
+                     'If you would like to get natural orbitals in active space '
+                     'without touching core and external orbitals, an explicit '
+                     'call to mc.cas_natorb_() is required')
         mo_energy = None
 
     if dump_chk:
@@ -622,9 +630,9 @@ class CASSCF(casci.CASCI):
             Optimized CASSCF orbitals coefficients. When canonicalization is
             specified, the returned orbitals make the general Fock matrix
             (Fock operator on top of MCSCF 1-particle density matrix)
-            diagonalized within each subspace (core, active, external).
-            If natorb (natural orbitals in active space) is specified,
-            the active segment of the mo_coeff is natural orbitls.
+            diagonalized within each subspace (core, active, external). If
+            natorb (natural orbitals in active space) is enabled, the active
+            segment of mo_coeff is transformed to natural orbitals.
         mo_energy : ndarray
             Diagonal elements of general Fock matrix (in mo_coeff
             representation).

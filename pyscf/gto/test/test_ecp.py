@@ -279,6 +279,47 @@ Na F
                            mol.intor('ECPso'), u.conj(), u)
         self.assertAlmostEqual(abs(ref-mat).max(), 0, 11)
 
+    def test_ecp_grad1(self):
+        mol = gto.M(atom='Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.050',
+                    basis='lanl2dz', ecp = 'lanl2dz', unit='B')
+        with mol.with_rinv_at_nucleus(0):
+            iprinv0 = mol.intor('ECPscalar_iprinv')
+        with mol.with_rinv_at_nucleus(1):
+            iprinv1 = mol.intor('ECPscalar_iprinv')
+        ipnuc = mol.intor('ECPscalar_ipnuc')
+        self.assertAlmostEqual(abs(iprinv0 + iprinv1 - ipnuc).max(), 0, 12)
+
+        aoslices = mol.aoslice_by_atom()
+        atm_id = 1
+        shl0, shl1, p0, p1 = aoslices[atm_id]
+        mat0 = iprinv1
+        mat0[:,p0:p1] -= ipnuc[:,p0:p1]
+        mat0 = mat0 + mat0.transpose(0,2,1)
+
+        mat1 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.049').intor('ECPscalar')
+        mat2 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.051').intor('ECPscalar')
+        self.assertAlmostEqual(abs(mat0[2] - (mat2 - mat1) / 0.002).max(), 0, 6)
+
+    def test_ecp_hessian1(self):
+        mol = gto.M(atom='Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.050',
+                    basis='lanl2dz', ecp = 'lanl2dz', unit='B')
+        with mol.with_rinv_at_nucleus(1):
+            rinv1 = mol.intor('ECPscalar_ipiprinv', comp=9)
+            rinv1+= mol.intor('ECPscalar_iprinvip', comp=9)
+        ipipnuc = mol.intor('ECPscalar_ipipnuc', comp=9)
+        ipnucip = mol.intor('ECPscalar_ipnucip', comp=9)
+
+        aoslices = mol.aoslice_by_atom()
+        atm_id = 1
+        shl0, shl1, p0, p1 = aoslices[atm_id]
+        mat0 = rinv1
+        mat0[:,p0:p1] -= ipipnuc[:,p0:p1]
+        mat0[:,:,p0:p1] -= ipnucip[:,:,p0:p1]
+
+        nao = mol.nao
+        mat1 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.049').intor('ECPscalar_ipnuc')
+        mat2 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.051').intor('ECPscalar_ipnuc')
+        self.assertAlmostEqual(abs(mat0.reshape(3,3,nao,nao)[:,2] - (mat2 - mat1) / 0.002).max(), 0, 5)
 
 
 if __name__ == '__main__':

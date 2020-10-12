@@ -95,15 +95,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -25.4437866823, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 2, 9)
 
-        # Note: OMP parallelization may change the results due to round-off
-        # instability.
+        # Note: the symmetry required by direct_spin0 (c = c.T) may cause
+        # numerical issue for difficult spin systems. In this test, we have to
+        # decrease the convergence tolerance. Otherwise the davidson solver
+        # may produce vectors that break the symmetry required by direct_spin0.
         nelec = (5,5)
         fci.addons.fix_spin_(fci.direct_spin0)
         na = fci.cistring.num_strings(norb, nelec[0])
         c0 = numpy.zeros((na,na))
         c0[0,0] = 1
         c0[-1,-1] = 1e-4
-        e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
+        e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0,
+                                         conv_tol=1e-8)
+
         fci.direct_spin0.contract_2e = bak0
         fci.direct_spin1.contract_2e = bak1
         self.assertAlmostEqual(e, -25.4095560762, 7)

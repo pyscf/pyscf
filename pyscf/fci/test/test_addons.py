@@ -80,6 +80,9 @@ class KnownValues(unittest.TestCase):
         c1 = fci.FCI(m, singlet=True)
         self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)
 
+        c1 = fci.FCI(mol.UHF().run())
+        self.assertAlmostEqual(c1.kernel()[0], -2.8227809167209683, 9)
+
     def test_init_triplet(self):
         ci1 = fci.addons.initguess_triplet(norb, nelec, '0b1011')
         self.assertAlmostEqual(abs(ci1 + ci1.T).sum(), 0)

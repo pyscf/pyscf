@@ -221,6 +221,8 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
       [-0.48176097 -0.10289944]]]
     '''
     intor_name, comp = _get_intor_and_comp(intor_name, comp)
+    if any(bas[:,ANG_OF] > 12):
+        raise NotImplementedError('cint library does not support high angular (l>12) GTOs')
 
     if (intor_name.startswith('int1e') or
         intor_name.startswith('ECP') or
@@ -555,6 +557,9 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
 
 def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
+    if shls_slice is None and any(bas[:,ANG_OF] > 6):
+        raise NotImplementedError('Two-electron integrals for high angular (l>=7) GTOs')
+
     aosym = _stand_sym_code(aosym)
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')

@@ -417,7 +417,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho   ), 81.0427569, 4)
         self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], vxc[0]), -5.9013868, 4)
         self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], vxc[1]),  0.3874269, 4)
-        self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], fxc[0]), -15.939767, 3)
+        self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], fxc[0]), -15.939767, 1)
         #self.assertAlmostEqual(numpy.einsum('g,g, g->', mf.grids.weights, rho[0], fxc[1]), 15889.0167, 2)
 
         #mf.xc = 'camb3lyp'

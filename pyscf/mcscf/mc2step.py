@@ -137,6 +137,16 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         if casscf.natorb and dump_chk: # dump_chk may save casdm1
             occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = numpy.diag(-occ)
+    else:
+        if casscf.natorb:
+            # FIXME (pyscf-2.0): Whether to transform natural orbitals in
+            # active space when this flag is enabled?
+            log.warn('The attribute natorb of mcscf object affects only the '
+                     'orbital canonicalization.\n'
+                     'If you would like to get natural orbitals in active space '
+                     'without touching core and external orbitals, an explicit '
+                     'call to mc.cas_natorb_() is required')
+        mo_energy = None
 
     if dump_chk:
         casscf.dump_chk(locals())

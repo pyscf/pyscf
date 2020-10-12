@@ -3,8 +3,40 @@ PySCF 1.7.? (2020-?-?)
 * Added
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
+
+
+PySCF 1.7.5 (2020-9-27)
+-----------------------
+* Added
+  - Upgrade cint library to v4.0.0
+  - Upgrade xcfun library to v2.1.0
+  - Kramers' restricted Dirac-Hartree-Fock, X2C, DHF-SOSCF
+  - Heavy elements basis in MINAO
+  - Coulomb integrals of short range part for attenuated Coulomb
+  - Polarizability and hyperpolarizability under PBC
+* Improved
+  - Support pseudo potential Atomic HF
+  - Atomic HF for 1-electron system
+  - Check basis angular momentum in mol.intor (l < 7)
+  - FCIDUMP wrapper fcidump.py
 * Fixed
   - Bug in Mole.fromstring
+  - Buffer size bug in DHF JK builder for very small systems
+  - Fix pbc-eom-eaccsd_star bug
+
+
+PySCF 1.7.4 (2020-8-2)
+----------------------
+* Added
+  - FCIDUMP reader to load FCIDUMP and generate custom system.
+  - Natural orbitals occupations to mc.mo_occ
+  - Supporting UHF orbitals in FCI factory function
+* Improved
+  - Linear dependency treatment for basis uncontraction
+* Fixed
+  - ECP gradients bug when the system contains two or more ecp atoms
+  - CHGCAR writer
+  - Basis parser for basis in Gaussian 94 format
 
 
 PySCF 1.7.3 (2020-6-10)
@@ -81,7 +113,7 @@ PySCF 1.7.1 (2020-2-29)
   - APIs for HF/KS response functions (used by TDDFT and other methods)
   - transform_ci function to allow projection between FCI wavefunction in
     different sizes
-  - The fractional-occupancy atomic HF method in SCF initial guess
+  - The fractional occupancy atomic HF method in SCF initial guess
   - Performance of non-local XC functional
   - FCI Performance
   - stability of linear equation solver in dynamic polarizability

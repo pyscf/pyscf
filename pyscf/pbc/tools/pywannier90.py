@@ -454,7 +454,7 @@ class W90:
         win_file.close()
 
     def get_M_mat(self):
-        '''
+        r'''
         Construct the ovelap matrix: M_{m,n}^{(\mathbf{k,b})}
         Equation (25) in MV, Phys. Rev. B 56, 12847
         '''
@@ -476,7 +476,7 @@ class W90:
         return M_matrix_loc
 
     def get_A_mat(self):
-        '''
+        r'''
         Construct the projection matrix: A_{m,n}^{\mathbf{k}}
         Equation (62) in MV, Phys. Rev. B 56, 12847 or equation (22) in SMV, Phys. Rev. B 65, 035109
         '''
@@ -608,7 +608,7 @@ class W90:
             unk_file.close()
 
     def export_AME(self, grid = [50,50,50]):
-        '''
+        r'''
         Export A_{m,n}^{\mathbf{k}} and M_{m,n}^{(\mathbf{k,b})} and \epsilon_{n}^(\mathbf{k})
         '''
 

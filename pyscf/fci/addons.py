@@ -352,10 +352,12 @@ def _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym=0):
     ci = ci.reshape(strsa.size,strsb.size)
     airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
     birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
-    for i, ir in enumerate(orbsym):
+    orbsym_in_d2h = numpy.asarray(orbsym) % 10
+    wfnsym_in_d2h = wfnsym % 10
+    for i, ir in enumerate(orbsym_in_d2h):
         airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
         birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
-    mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
+    mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym_in_d2h
     ci1 = numpy.zeros_like(ci)
     ci1[mask] = ci[mask]
     ci1 *= 1/numpy.linalg.norm(ci1)
@@ -393,10 +395,10 @@ def _guess_wfnsym(ci, strsa, strsb, orbsym):
     stra = strsa[idx // nb]
     strb = strsb[idx % nb ]
 
-    orbsym = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+    orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
     airrep = 0
     birrep = 0
-    for i, ir in enumerate(orbsym):
+    for i, ir in enumerate(orbsym_in_d2h):
         if (stra & (1<<i)):
             airrep ^= ir
         if (strb & (1<<i)):

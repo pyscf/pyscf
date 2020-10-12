@@ -159,7 +159,7 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
         vj_kpts = np.zeros((3,nset,nband,nao,nao))
     else:
         vj_kpts = np.zeros((3,nset,nband,nao,nao), dtype=np.complex128)
-    rho = None
+
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band, deriv=1):
         ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
         for i in range(nset):
@@ -355,8 +355,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/3/ngrids/nao)))
     lib.logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
                       max_memory, blksize)
-    ao1_dtype = np.result_type(*ao1_kpts)
-    ao2_dtype = np.result_type(*ao2_kpts)
+
     vR_dm = np.empty((3,nset,nao,ngrids), dtype=vk_kpts.dtype)
 
     t1 = (time.clock(), time.time())

@@ -81,6 +81,8 @@ import sys
 import time
 if sys.version_info >= (3,6):
     time.clock = time.process_time
+    if sys.version_info >= (3,8):
+        time.time = time.perf_counter
 
 from pyscf.lib import parameters as param
 import pyscf.__config__

@@ -62,7 +62,7 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_huckel(self):
         dm = scf.dhf.DHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), (-0.47093452171132982-0.031705662333958599j), 9)
+        self.assertAlmostEqual(lib.fp(dm), (-0.6090467376579871-0.08968155321478456j), 9)
 
     def test_get_hcore(self):
         h = mf.get_hcore()
@@ -91,21 +91,22 @@ class KnownValues(unittest.TestCase):
         g = mf.get_grad(mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(abs(g).max(), 0, 5)
 
-    def test_rhf(self):
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = '''
-                O     0    0        0
-                H     0    -0.757   0.587
-                H     0    0.757    0.587''',
-            basis = '631g',
-        )
-        mf = scf.dhf.RHF(mol)
-        mf.with_ssss = False
-        mf.conv_tol_grad = 1e-5
-        self.assertAlmostEqual(mf.scf(), -76.038524807447857, 8)
-        mol.stdout.close()
+    if scf.dhf.zquatev:
+        def test_rhf(self):
+            mol = gto.M(
+                verbose = 5,
+                output = '/dev/null',
+                atom = '''
+                    O     0    0        0
+                    H     0    -0.757   0.587
+                    H     0    0.757    0.587''',
+                basis = '631g',
+            )
+            mf = scf.dhf.RHF(mol)
+            mf.with_ssss = False
+            mf.conv_tol_grad = 1e-5
+            self.assertAlmostEqual(mf.scf(), -76.038524807447857, 8)
+            mol.stdout.close()
 
     def test_get_veff(self):
         n4c = mol.nao_2c() * 2
@@ -180,7 +181,7 @@ class KnownValues(unittest.TestCase):
         vj0 = numpy.einsum('ijkl,xlk->xij', eri0, dm)
         vk0 = numpy.einsum('ijkl,xjk->xil', eri0, dm)
 
-        mf = scf.dhf.RHF(h4)
+        mf = scf.dhf.DHF(h4)
         mf.with_gaunt = True
         vj1, vk1 = mf.get_jk(h4, dm, hermi=1)
         self.assertTrue(numpy.allclose(vj0, vj1))
@@ -244,6 +245,12 @@ class KnownValues(unittest.TestCase):
         mfx2c = mf.x2c().run()
         self.assertAlmostEqual(mfx2c.e_tot, -76.032703699443999, 9)
 
+    def test_h2_sto3g(self):
+        # There was a bug of cache size in lib/vhf/r_direct.c for minimal
+        # system
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='sto3g', verbose=0)
+        e = mol.DHF().kernel()
+        self.assertAlmostEqual(e, -1.066122658859047, 12)
 
 def _fill_gaunt(mol, erig):
     n2c = erig.shape[0]
