@@ -148,6 +148,11 @@ class EmbCC:
         t0 = MPI.Wtime()
         self.fock = self.mf.get_fock()
         log.debug("Time for Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
+        t0 = MPI.Wtime()
+        self.hcore = self.mf.get_hcore()
+        log.debug("Time for hcore matrix: %s", get_time_string(MPI.Wtime()-t0))
+
+
 
     @property
     def mol(self):

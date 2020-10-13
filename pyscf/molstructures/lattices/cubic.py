@@ -13,8 +13,9 @@ __all__ = [
 
 def make_cubic_unit_cell(a, c, atomtypes, supercell=None):
 
-    a_matrix = a * np.eye(3)
-    a_matrix[2] = np.asarray((0, 0, c))
+    #a_matrix = a * np.eye(3)
+    #a_matrix[2] = np.asarray((0, 0, c))
+    a_matrix = np.diag([a, a, c])
 
     # Internal coordinates
     icoords = np.asarray([

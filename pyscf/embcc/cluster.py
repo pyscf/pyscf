@@ -609,14 +609,44 @@ class Cluster:
         elif solver == "MP2":
             if self.has_pbc:
                 mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
+
+                #mp2_test = pyscf.pbc.mp.MP2(self.mf)
+                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff)
+                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_occ=self.mf.mo_occ)
+                mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=self.mf.mo_coeff.copy())
+                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ)
+                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=self.mf.mo_coeff)
             else:
                 mp2 = pyscf.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
             solverobj = mp2
 
+            log.debug("has with_df: %r", hasattr(self.mf, "with_df"))
+            log.debug("has with_df: %r", hasattr(mp2._scf, "with_df"))
+
             if eris is None:
                 t0 = MPI.Wtime()
+                print("trafo1")
                 eris = mp2.ao2mo()
                 log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+                print("trafo2")
+
+                # TEST
+                t0 = MPI.Wtime()
+                #eris2 = self.mf.with_df.ao2mo(mo_coeffs, kpt, compact=False)
+                o = mo_occ > 0
+                v = mo_occ == 0
+                co = mo_coeff[:,o]
+                cv = mo_coeff[:,v]
+                eris2 = self.mf.with_df.ao2mo((co, cv, co, cv), compact=True)
+                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+
+                t0 = MPI.Wtime()
+                print("trafo-comp")
+                eris_test = mp2_test.ao2mo()
+                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+
+                log.debug("Difference ERI: %g", np.linalg.norm(eris.ovov - eris2))
+
             e_corr_full, t2 = mp2.kernel(eris=eris)
             converged = True
             e_corr_full *= self.energy_factor

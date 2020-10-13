@@ -190,7 +190,7 @@ def setup_cell(distance, args, **kwargs):
             pseudo=args.pseudopot,
             dimension=args.dimension,
             precision=args.precision,
-            verbose=4, **kwargs)
+            verbose=10, **kwargs)
 
     #if args.ke_cutoff is not None:
     #    cell.ke_cutoff = args.ke_cutoff
@@ -219,6 +219,8 @@ for icalc, distance in enumerate(args.distances):
         log.info("distance=%.2f", distance)
 
     cell = setup_cell(distance, args)
+
+    log.info("incore_anyway? %r", cell.incore_anyway)
 
     # Counterpoise
     #if args.fragment != "all":
@@ -288,9 +290,11 @@ for icalc, distance in enumerate(args.distances):
 
     t0 = MPI.Wtime()
     mf.kernel(dm0=dm0)
-    log.info("Time for mean-field: %.2g", MPI.Wtime()-t0)
+    log.info("Time for mean-field: %.4g", (MPI.Wtime()-t0))
     dm0 = mf.make_rdm1()
     assert mf.converged
+
+    log.info("type(mf._eri) = %r", type(mf._eri))
 
     if args.benchmarks:
         energies = []
@@ -323,13 +327,19 @@ for icalc, distance in enumerate(args.distances):
             log.info("Time for %s: %.2g", bm, MPI.Wtime()-t0)
 
         if icalc == 0:
-            with open(args.output, "w") as f:
+            with open(args.output + ".bench", "w") as f:
                 f.write("#distance  HF  " + "  ".join(args.benchmarks) + "\n")
-        with open(args.output, "a") as f:
+        with open(args.output + ".bench", "a") as f:
             f.write(("%.3f  %.8e" + (len(args.benchmarks)*"  %.8e") + "\n") % (distance, mf.e_tot, *energies))
 
+    #t0 = MPI.Wtime()
+    #mp2.ao2mo()
+    #log.info("Time for ao2mo: %.2g", MPI.Wtime()-t0)
+    #1/0
+
     #elif not args.no_embcc:
-    else:
+    #else:
+    if True:
         cc = embcc.EmbCC(mf,
                 local_type=args.local_type,
                 minao=args.minao,

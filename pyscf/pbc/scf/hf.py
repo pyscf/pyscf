@@ -558,6 +558,9 @@ class SCF(mol_hf.SCF):
         return self
 
     def get_hcore(self, cell=None, kpt=None):
+        #if hasattr(self, "_hcore"):
+        #    return self._hcore
+
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
         if cell.pseudo:
@@ -566,7 +569,10 @@ class SCF(mol_hf.SCF):
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
             nuc += ecp.ecp_int(cell, kpt)
-        return nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
+        h = nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
+        #self._hcore = h
+        return h
+
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
