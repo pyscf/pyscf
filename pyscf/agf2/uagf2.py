@@ -30,7 +30,7 @@ from pyscf import ao2mo
 from pyscf.scf import _vhf
 from pyscf.agf2 import aux, ragf2, _agf2
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
-from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
+from pyscf.mp.ump2 import get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
@@ -471,8 +471,8 @@ class UAGF2(ragf2.RAGF2):
         nmoa, nmob = self.nmo
         nocca, noccb = self.nocc
 
-        with lib.temporary_env(self, _nmo=None, _nocc=None):
-            mask = get_frozen_mask(self)
+        #with lib.temporary_env(self, _nmo=None, _nocc=None):
+        #    mask = get_frozen_mask(self)
 
         mo_energy = self.mo_energy
         focka = np.diag(mo_energy[0])
@@ -481,8 +481,10 @@ class UAGF2(ragf2.RAGF2):
         cpt_a = binsearch_chempot(focka, nmoa, nocca, occupancy=1)[0]
         cpt_b = binsearch_chempot(fockb, nmob, noccb, occupancy=1)[1]
 
-        gf_a = aux.GreensFunction(mo_energy[0][mask[0]], np.eye(nmoa)[:,mask[0]], chempot=cpt_a)
-        gf_b = aux.GreensFunction(mo_energy[1][mask[1]], np.eye(nmob)[:,mask[1]], chempot=cpt_b)
+        #gf_a = aux.GreensFunction(mo_energy[0][mask[0]], np.eye(nmoa)[:,mask[0]], chempot=cpt_a)
+        #gf_b = aux.GreensFunction(mo_energy[1][mask[1]], np.eye(nmob)[:,mask[1]], chempot=cpt_b)
+        gf_a = aux.GreensFunction(mo_energy[0], np.eye(nmoa), chempot=cpt_a)
+        gf_b = aux.GreensFunction(mo_energy[1], np.eye(nmob), chempot=cpt_b)
 
         gf = (gf_a, gf_b)
 
@@ -922,26 +924,6 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
 
 if __name__ == '__main__':
     from pyscf import gto, scf, mp
-
-    #mol = gto.M(atom='H 0 0 0; Li 0 0 1', basis='cc-pvdz', verbose=6)
-    #rhf = scf.RHF(mol)
-    #rhf.conv_tol = 1e-11
-    #rhf.run()
-    #uhf = scf.UHF(mol)
-    #uhf.conv_tol = 1e-11
-    #uhf.run()
-
-    #myragf2 = ragf2.RAGF2(rhf)
-    #myragf2.run()
-
-    #uagf2 = UAGF2(uhf)
-    #uagf2.run()
-
-    #print()
-    #keys = ['1b', '2b', 'mp2', 'corr', 'tot']
-    #print('  '.join(['%s %16.12f' % (key, getattr(myragf2, 'e_'+key, None)) for key in keys]))
-    #print('  '.join(['%s %16.12f' % (key, getattr(uagf2, 'e_'+key, None)) for key in keys]))
-
 
     mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', charge=-1, spin=1, verbose=3)
     uhf = scf.UHF(mol)

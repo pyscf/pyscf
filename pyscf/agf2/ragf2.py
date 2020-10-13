@@ -31,14 +31,11 @@ from pyscf.scf import _vhf
 from pyscf.agf2 import aux, mpi_helper, _agf2
 from pyscf.agf2 import chkfile as chkutil
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
-from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, \
-                            _mo_without_core, _mo_energy_without_core
+from pyscf.mp.mp2 import get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
-#TODO: outcore really isn't optimised
 #TODO: print more?
-#TODO: more tests
 
 
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
@@ -90,7 +87,7 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
         ip = agf2.get_ip(gf, nroots=1)[0][0]
         ea = agf2.get_ea(gf, nroots=1)[0][0]
 
-        log.info('cycle = %d  E(%s) = %.15g  E_corr(%s) = %.15g  dE = %.9g',
+        log.info('cycle = %3d  E(%s) = %.15g  E_corr(%s) = %.15g  dE = %.9g',
                  niter, name, e_tot, name, e_tot-eri.e_hf, e_tot-e_prev)
         log.info('E_1b = %.15g  E_2b = %.15g', e_1b, e_2b)
         log.info('IP = %.15g  EA = %.15g', ip, ea)
@@ -601,13 +598,15 @@ class RAGF2(lib.StreamObject):
             :class:`GreensFunction`, :class:`SelfEnergy`
         '''
 
-        with lib.temporary_env(self, _nmo=None, _nocc=None):
-            mask = get_frozen_mask(self)
+        #with lib.temporary_env(self, _nmo=None, _nocc=None):
+        #    mask = get_frozen_mask(self)
 
         mo_energy = self.mo_energy
         chempot = binsearch_chempot(np.diag(mo_energy), self.nmo, self.nocc*2)[0]
 
-        gf = aux.GreensFunction(mo_energy[mask], np.eye(self.nmo)[:,mask], chempot=chempot)
+        #gf = aux.GreensFunction(mo_energy[mask], np.eye(self.nmo)[:,mask], chempot=chempot)
+        coupling = np.eye(self.nmo)
+        gf = aux.GreensFunction(mo_energy, coupling, chempot=chempot)
 
         return gf
 
@@ -700,6 +699,8 @@ class RAGF2(lib.StreamObject):
         log.info('weight_tol = %g' % self.weight_tol)
         log.info('diis_space = %d' % self.diis_space)
         log.info('diis_min_space = %d', self.diis_min_space)
+        log.info('nmo = %d', self.nmo)
+        log.info('nocc = %d', self.nocc)
         if self.frozen is not None:
             log.info('frozen orbitals = %s', self.frozen)
         log.info('max_memory %d MB (current use %d MB)',
@@ -1049,7 +1050,6 @@ if __name__ == '__main__':
     from pyscf import gto, scf, mp
 
     mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=3)
-    #mol = gto.M(atom='Li 0 0 0; Li 0 0 1', basis='sto6g', verbose=5)
     rhf = scf.RHF(mol)
     rhf.conv_tol = 1e-11
     rhf.run()
@@ -1062,19 +1062,6 @@ if __name__ == '__main__':
 
     print(mp.MP2(rhf, frozen=ragf2.frozen).run(verbose=0).e_corr)
     print(ragf2.e_init)
-
-    #print()
-    #import auxgf
-    #kwargs = dict(etol=ragf2.conv_tol, dtol=ragf2.conv_tol_rdm1, maxiter=ragf2.max_cycle, fock_maxiter=ragf2.max_cycle_inner, fock_maxruns=ragf2.max_cycle_outer, diis_space=ragf2.diis_space, wtol=ragf2.weight_tol, damping=0)
-    #gf2 = auxgf.agf2.RAGF2(auxgf.hf.RHF.from_pyscf(rhf), nmom=(None,0), verbose=False, **kwargs).run()
-    #print('E(mp2) = %16.12f' % gf2.e_init)
-    #print('E(1b)  = %16.12f' % gf2.e_1body)
-    #print('E(2b)  = %16.12f' % gf2.e_2body)
-    #print('E(cor) = %16.12f' % gf2.e_corr)
-    #print('E(tot) = %16.12f' % gf2.e_tot)
-    #print('IP     = %16.12f' % gf2.ip[0])
-    #print('EA     = %16.12f' % gf2.ea[0])
-    #print(gf2._energies['tot'])
 
     ragf2 = ragf2.density_fit()
     ragf2.run()
