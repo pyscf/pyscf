@@ -53,7 +53,15 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
         gf = agf2.init_gf()
 
     if se is None:
-        se = agf2.build_se(eri, gf)
+        if not (agf2.frozen == 0 or agf2.frozen is None):
+            with lib.temporary_env(agf2, _nmo=None, _nocc=None):
+                mask = get_frozen_mask(agf2)
+            gf_froz = gf.copy()
+            gf_froz.energy = gf.energy[mask]
+            gf_froz.coupling = gf.coupling[:,mask]
+            se = agf2.build_se(eri, gf_froz)
+        else:
+            se = agf2.build_se(eri, gf)
 
     if dump_chk:
         agf2.dump_chk(gf=gf, se=se)
@@ -598,15 +606,10 @@ class RAGF2(lib.StreamObject):
             :class:`GreensFunction`, :class:`SelfEnergy`
         '''
 
-        #with lib.temporary_env(self, _nmo=None, _nocc=None):
-        #    mask = get_frozen_mask(self)
-
         mo_energy = self.mo_energy
         chempot = binsearch_chempot(np.diag(mo_energy), self.nmo, self.nocc*2)[0]
 
-        #gf = aux.GreensFunction(mo_energy[mask], np.eye(self.nmo)[:,mask], chempot=chempot)
-        coupling = np.eye(self.nmo)
-        gf = aux.GreensFunction(mo_energy, coupling, chempot=chempot)
+        gf = aux.GreensFunction(mo_energy, np.eye(self.nmo), chempot=chempot)
 
         return gf
 

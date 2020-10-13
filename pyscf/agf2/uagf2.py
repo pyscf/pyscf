@@ -471,9 +471,6 @@ class UAGF2(ragf2.RAGF2):
         nmoa, nmob = self.nmo
         nocca, noccb = self.nocc
 
-        #with lib.temporary_env(self, _nmo=None, _nocc=None):
-        #    mask = get_frozen_mask(self)
-
         mo_energy = self.mo_energy
         focka = np.diag(mo_energy[0])
         fockb = np.diag(mo_energy[1])
@@ -481,8 +478,6 @@ class UAGF2(ragf2.RAGF2):
         cpt_a = binsearch_chempot(focka, nmoa, nocca, occupancy=1)[0]
         cpt_b = binsearch_chempot(fockb, nmob, noccb, occupancy=1)[1]
 
-        #gf_a = aux.GreensFunction(mo_energy[0][mask[0]], np.eye(nmoa)[:,mask[0]], chempot=cpt_a)
-        #gf_b = aux.GreensFunction(mo_energy[1][mask[1]], np.eye(nmob)[:,mask[1]], chempot=cpt_b)
         gf_a = aux.GreensFunction(mo_energy[0], np.eye(nmoa), chempot=cpt_a)
         gf_b = aux.GreensFunction(mo_energy[1], np.eye(nmob), chempot=cpt_b)
 
