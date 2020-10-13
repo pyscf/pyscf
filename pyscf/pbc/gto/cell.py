@@ -1632,7 +1632,14 @@ class Cell(mole.Mole):
     get_SI = get_SI
 
     ewald = ewald
-    energy_nuc = ewald
+    #energy_nuc = ewald
+
+    def energy_nuc(self):
+        if hasattr(self.energy_nuc, "value"):
+            return self.energy_nuc.value
+        e = ewald()
+        self.energy_nuc.value = e
+        return e
 
     gen_uniform_grids = get_uniform_grids = get_uniform_grids
 
