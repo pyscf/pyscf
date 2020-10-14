@@ -14,6 +14,7 @@
    
  *
  *  Author: Oliver J. Backhouse <olbackhouse@gmail.com>
+ *          Alejandro Santana-Bonilla <alejandro.santana_bonilla@kcl.ac.uk>
  *          George H. Booth <george.booth@kcl.ac.uk>
  */
 
