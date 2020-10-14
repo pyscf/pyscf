@@ -438,7 +438,8 @@ class Cluster:
         """
         C = np.hstack(C)
         #F = np.linalg.multi_dot((C.T, self.mf.get_fock(), C))
-        F = np.linalg.multi_dot((C.T, self.base.fock, C))
+        #F = np.linalg.multi_dot((C.T, self.base.fock, C))
+        F = np.linalg.multi_dot((C.T, self.base.get_fock(), C))
         e, R = np.linalg.eigh(F)
         C = np.dot(C, R)
         if eigenvalues:
@@ -609,43 +610,31 @@ class Cluster:
         elif solver == "MP2":
             if self.has_pbc:
                 mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
-
-                #mp2_test = pyscf.pbc.mp.MP2(self.mf)
-                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff)
-                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_occ=self.mf.mo_occ)
-                mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=self.mf.mo_coeff.copy())
-                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ)
-                #mp2_test = pyscf.pbc.mp.MP2(self.mf, mo_coeff=self.mf.mo_coeff)
             else:
                 mp2 = pyscf.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
             solverobj = mp2
 
-            log.debug("has with_df: %r", hasattr(self.mf, "with_df"))
-            log.debug("has with_df: %r", hasattr(mp2._scf, "with_df"))
-
             if eris is None:
                 t0 = MPI.Wtime()
-                print("trafo1")
                 eris = mp2.ao2mo()
                 log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
-                print("trafo2")
 
-                # TEST
-                t0 = MPI.Wtime()
-                #eris2 = self.mf.with_df.ao2mo(mo_coeffs, kpt, compact=False)
-                o = mo_occ > 0
-                v = mo_occ == 0
-                co = mo_coeff[:,o]
-                cv = mo_coeff[:,v]
-                eris2 = self.mf.with_df.ao2mo((co, cv, co, cv), compact=True)
-                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+                ## TEST
+                #t0 = MPI.Wtime()
+                ##eris2 = self.mf.with_df.ao2mo(mo_coeffs, kpt, compact=False)
+                #o = mo_occ > 0
+                #v = mo_occ == 0
+                #co = mo_coeff[:,o]
+                #cv = mo_coeff[:,v]
+                #eris2 = self.mf.with_df.ao2mo((co, cv, co, cv), compact=True)
+                #log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
 
-                t0 = MPI.Wtime()
-                print("trafo-comp")
-                eris_test = mp2_test.ao2mo()
-                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+                #t0 = MPI.Wtime()
+                #print("trafo-comp")
+                #eris_test = mp2_test.ao2mo()
+                #log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
 
-                log.debug("Difference ERI: %g", np.linalg.norm(eris.ovov - eris2))
+                #log.debug("Difference ERI: %g", np.linalg.norm(eris.ovov - eris2))
 
             e_corr_full, t2 = mp2.kernel(eris=eris)
             converged = True
@@ -1158,7 +1147,8 @@ class Cluster:
             if True:
                 dm1x = np.einsum("ai,ij->aj", px, dm1)
                 dm2x = np.einsum("ai,ijkl->ajkl", px, dm2)
-                h1e = np.einsum('pi,pq,qj->ij', mo_coeff, self.mf.get_hcore(), mo_coeff)
+                #h1e = np.einsum('pi,pq,qj->ij', mo_coeff, self.mf.get_hcore(), mo_coeff)
+                h1e = np.einsum('pi,pq,qj->ij', mo_coeff, self.base.get_hcore(), mo_coeff)
                 nmo = mo_coeff.shape[-1]
                 eri = pyscf.ao2mo.kernel(self.mol, mo_coeff, compact=False).reshape([nmo]*4)
                 self.e_dmet = self.energy_factor*(np.einsum('pq,qp', h1e, dm1x) + np.einsum('pqrs,pqrs', eri, dm2x) / 2)
@@ -1353,33 +1343,6 @@ class Cluster:
 
         log.debug("Wall time for bath: %s", get_time_string(MPI.Wtime()-t0_bath))
 
-        # Write Cubegen files
-        #if True:
-        #if False:
-        #    orbitals = {
-        #        "F" : self.C_local,
-        #        "BD" : self.C_bath,
-        #        "BO" : self.C_occbath,
-        #        "BV" : self.C_virbath,
-        #        "EO" : C_occenv,
-        #        "EV" : C_virenv,
-        #        }
-
-        #    if False:
-        #        for orbkind, C in orbitals.items():
-        #            for j in range(C.shape[-1]):
-        #                filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
-        #                make_cubegen_file(self.mol, C[:,j], filename)
-        #    else:
-        #        from pyscf.tools import molden
-        #        for orbkind, C in orbitals.items():
-        #            with open("C%d-%s.molden" % (self.id, orbkind), "w") as f:
-        #                molden.header(self.mol, f)
-        #                molden.orbital_coeff(self.mol, f, C)
-
-
-        #    raise SystemExit()
-
         t0 = MPI.Wtime()
         converged, e_corr = self.run_solver(solver, mo_coeff, mo_occ, active=active, frozen=frozen)
         log.debug("Wall time for solver: %s", get_time_string(MPI.Wtime()-t0))
@@ -1390,67 +1353,34 @@ class Cluster:
 
         return converged, e_corr
 
-    def create_orbital_file(self, filename, filetype="molden"):
+    def create_orbital_file(self, filetype="molden"):
         if filetype not in ("cube", "molden"):
             raise ValueError("Unknown file type: %s" % filetype)
-
         ext = {"molden" : "molden", "cube" : "cube"}
-        filename = "%s-c%d.%s" % (filename, self.id, ext[filetype])
-
-        if filetype == "molden":
-            from pyscf.tools import molden
-
-            orb_labels = {
-                    "Fragment" : "F",
-                    "DMET-bath" : "D",
-                    "Occ.-Cluster" : "O",
-                    "Vir.-Cluster" : "V",
-                    "Occ.-Bath" : "P",
-                    "Vir.-Bath" : "Q",
-                    "Occ.-Env." : "R",
-                    "Vir.-Env." : "S",
-                    }
-
-            with open(filename, "w") as f:
-                molden.header(self.mol, f)
-                labels = []
-                coeffs = []
-                for name, C in self.orbitals.items():
-                    labels += C.shape[-1]*[name]
-                    coeffs.append(C)
-                coeffs = np.hstack(coeffs)
-                molden.orbital_coeff(self.mol, f, coeffs, symm=labels)
-
-                #for name, C in self.orbitals.items():
-                    #symm = orb_labels.get(name, "?")
-                    #symm = C.shape[-1] * [name]
-                    #molden.orbital_coeff(self.mol, f, C)
-                    #molden.orbital_coeff(self.mol, f, C, symm=symm)
-        elif filetype == "cube":
-            raise NotImplementedError()
-            for orbkind, C in self.orbitals.items():
-                for j in range(C.shape[-1]):
-                    filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
-                    make_cubegen_file(self.mol, C[:,j], filename)
-
-        #orbitals = {
-        #    "F" : self.C_local,
-        #    "BD" : self.C_bath,
-        #    "BO" : self.C_occbath,
-        #    "BV" : self.C_virbath,
-        #    "EO" : C_occenv,
-        #    "EV" : C_virenv,
-        #    }
+        filename = "cluster-%d.%s" % (self.id, ext[filetype])
+        create_orbital_file(self.mol, filename, self.orbitals, filetype=filetype)
 
         #if filetype == "molden":
         #    from pyscf.tools import molden
-        #    for orbkind, C in orbitals.items():
-        #        with open("C%d-%s.molden" % (self.id, orbkind), "w") as f:
-        #            molden.header(self.mol, f)
-        #            molden.orbital_coeff(self.mol, f, C)
+
+        #    with open(filename, "w") as f:
+        #        molden.header(self.mol, f)
+        #        labels = []
+        #        coeffs = []
+        #        for name, C in orbitals.items():
+        #            labels += C.shape[-1]*[name]
+        #            coeffs.append(C)
+        #        coeffs = np.hstack(coeffs)
+        #        molden.orbital_coeff(self.mol, f, coeffs, symm=labels)
+
+        #        #for name, C in self.orbitals.items():
+        #            #symm = orb_labels.get(name, "?")
+        #            #symm = C.shape[-1] * [name]
+        #            #molden.orbital_coeff(self.mol, f, C)
+        #            #molden.orbital_coeff(self.mol, f, C, symm=symm)
         #elif filetype == "cube":
-        #    for orbkind, C in orbitals.items():
+        #    raise NotImplementedError()
+        #    for orbkind, C in self.orbitals.items():
         #        for j in range(C.shape[-1]):
         #            filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
         #            make_cubegen_file(self.mol, C[:,j], filename)
-

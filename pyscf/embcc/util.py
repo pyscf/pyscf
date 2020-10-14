@@ -1,4 +1,6 @@
 import functools
+import os
+
 import numpy as np
 import scipy
 import scipy.optimize
@@ -11,7 +13,8 @@ __all__ = [
         "get_time_string",
         "eigassign",
         "eigreorder_logging",
-        "make_cubegen_file",
+        #"make_cubegen_file",
+        "create_orbital_file",
         ]
 
 einsum = functools.partial(np.einsum, optimize=True)
@@ -163,15 +166,54 @@ def eigreorder_logging(e, reorder, log):
 #        cubegen.orbital(mol, filename_orb, C[:,orb], **kwargs)
 
 
-def make_cubegen_file(mol, C, filename, **kwargs):
-    """
-    Parameters
-    ---------
+#def make_cubegen_file(mol, C, filename, **kwargs):
+#    """
+#    Parameters
+#    ---------
+#
+#    """
+#    from pyscf.tools import cubegen
+#    cubegen.orbital(mol, filename, C, **kwargs)
 
-    """
-    from pyscf.tools import cubegen
-    cubegen.orbital(mol, filename, C, **kwargs)
+def create_orbital_file(mol, filename, coeffs, names=None, directory="orbitals", filetype="molden", **kwargs):
+    if filetype not in ("cube", "molden"):
+        raise ValueError("Unknown file type: %s" % filetype)
+    if coeffs.ndim == 1:
+        coeffs = coeffs[:,np.newaxis]
+    norb = coeffs.shape[-1]
+    if names is None:
+        names = ["orbital-%d" % i for i in range(1, norb+1)]
+    if directory is not None:
+        os.makedirs(directory, exist_ok=True)
+        path = directory
+    else:
+        path = "."
 
+    if filetype == "molden":
+        from pyscf.tools import molden
+
+        fname = filename + ".cube"
+        fname = os.path.join(path, fname)
+        with open(fname, "w") as f:
+            molden.header(mol, f)
+            #labels = []
+            #coeffs = []
+            #for name, C in orbitals.items():
+            #    labels += C.shape[-1]*[name]
+            #    coeffs.append(C)
+            #coeffs = np.hstack(coeffs)
+            #molden.orbital_coeff(mol, f, coeffs, symm=labels, **kwargs)
+            molden.orbital_coeff(mol, f, coeffs, symm=names, **kwargs)
+
+    elif filetype == "cube":
+        from pyscf.tools import cubegen
+        #for name, C in orbitals.items():
+        # separate cube files need to be generated for each orbital
+        for i in range(norb)
+            #for i in range(C.shape[-1]):
+            fname = "%s-%s.cube" % (filename, names[i])
+            fname = os.path.join(path, fname)
+            cubegen.orbital(mol, fname, coeffs[:,i], **kwargs)
 
 def _test():
 

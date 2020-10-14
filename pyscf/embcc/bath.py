@@ -378,7 +378,8 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=No
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
 
     #F = self.mf.get_fock()
-    F = self.base.fock
+    #F = self.base.fock
+    F = self.base.get_fock()
     Fo = np.linalg.multi_dot((Co.T, F, Co))
     Fv = np.linalg.multi_dot((Cv.T, F, Cv))
     # Canonicalization [optional]

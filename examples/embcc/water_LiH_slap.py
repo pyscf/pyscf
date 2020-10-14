@@ -64,6 +64,7 @@ parser.add_argument("--layers", type=int, default=1)
 parser.add_argument("--pseudopot", default="gth-pade", help="Pseudo potential.")
 parser.add_argument("--minao", default="gth-szv", help="Basis set for IAOs.")
 
+parser.add_argument("--localize-fragment")
 parser.add_argument("--impurity-index", type=int, default=1)
 parser.add_argument("--impurity-atoms", nargs="*")
         #default=["H*2", "O*1", "H*0", "N#0"],
@@ -94,6 +95,7 @@ parser.add_argument("--preconverge-mf", action="store_true")
 parser.add_argument("--xc")
 
 parser.add_argument("--exxdiv", default="ewald")
+parser.add_argument("--verbose", type=int, default=4)
 
 # Counterpoise
 parser.add_argument("--fragment", choices=["all", "water", "surface"], default="all")
@@ -190,7 +192,7 @@ def setup_cell(distance, args, **kwargs):
             pseudo=args.pseudopot,
             dimension=args.dimension,
             precision=args.precision,
-            verbose=10, **kwargs)
+            verbose=args.verbose, **kwargs)
 
     #if args.ke_cutoff is not None:
     #    cell.ke_cutoff = args.ke_cutoff
@@ -342,6 +344,7 @@ for icalc, distance in enumerate(args.distances):
     if True:
         cc = embcc.EmbCC(mf,
                 local_type=args.local_type,
+                localize_fragment=args.localize_fragment,
                 minao=args.minao,
                 solver=args.solver,
                 dmet_bath_tol=args.dmet_bath_tol,

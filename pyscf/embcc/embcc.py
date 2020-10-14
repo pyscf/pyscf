@@ -60,6 +60,7 @@ class EmbCC:
             maxiter=1,
             dmet_bath_tol=1e-8,
             energy_part="first-occ",
+            # Perform numerical localization on fragment orbitals
             localize_fragment=False,
             ):
         """
@@ -109,26 +110,6 @@ class EmbCC:
         self.dmet_bath_tol = dmet_bath_tol
         self.localize_fragment = localize_fragment
 
-        # Prepare fragments
-        if self.local_orbital_type in ("IAO", "LAO"):
-            if self.local_orbital_type == "IAO":
-                self.C_ao, self.C_env, self.iao_labels = self.make_iao(minao=self.minao)
-                log.debug("IAO labels:")
-                for ao in self.iao_labels:
-                    log.debug("%r", ao)
-            elif self.local_orbital_type == "LAO":
-                self.C_ao, self.lao_labels = self.make_lowdin_ao()
-                #self.C_lao, self.lao_labels = self.make_meta_lowdin_ao()
-                #self.C_lao, self.lao_labels = self.make_lowdin_ao_per_atom()
-
-            log.debug("Localize fragment=%r", self.localize_fragment)
-            if self.localize_fragment == "PM":
-                log.debug("Localizing fragment using PM")
-                #C_lao = pyscf.lo.BF(self.mol).kernel(C_lao, verbose=4)
-                #C_lao = pyscf.lo.ER(self.mol).kernel(C_lao, verbose=4)
-                self.C_ao = pyscf.lo.PM(self.mol).kernel(self.C_ao, verbose=4)
-
-
         self.clusters = []
 
         # Correlation energy and MP2 correction
@@ -144,19 +125,78 @@ class EmbCC:
         self.tccT1 = None
         self.tccT2 = None
 
-        # Building the HF-Fock matrix is expensive (why?) only do it once
+        # Mean-field attributes
         t0 = MPI.Wtime()
-        self.fock = self.mf.get_fock()
+        self._ovlp = self.mf.get_ovlp()
+        self._hcore = self.mf.get_hcore()
+        #log.debug("Time for overlap/hcore/Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
+        log.debug("Time for overlap/hcore matrix: %s", get_time_string(MPI.Wtime()-t0))
+        t0 = MPI.Wtime()
+        # These two fock matrices are different for loose values of cell.precision
+        # Which should be used?
+        if True:
+            self._fock = self.mf.get_fock()
+        else:
+            cs = np.dot(self.mf.mo_coeff.T, self._ovlp)
+            self_fock = np.einsum("ia,i,ib->ab", cs, self.mf.mo_energy, cs)
         log.debug("Time for Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
-        t0 = MPI.Wtime()
-        self.hcore = self.mf.get_hcore()
-        log.debug("Time for hcore matrix: %s", get_time_string(MPI.Wtime()-t0))
 
+        # Prepare fragments
+        if self.local_orbital_type in ("IAO", "LAO"):
+            self.init_fragments()
+
+    def init_fragments(self):
+        if self.local_orbital_type == "IAO":
+            self.C_ao, self.C_env, self.iao_labels = self.make_iao(minao=self.minao)
+            log.debug("IAO labels:")
+            for ao in self.iao_labels:
+                log.debug("%r", ao)
+            self.ao_labels = self.iao_labels
+        elif self.local_orbital_type == "LAO":
+            self.C_ao, self.lao_labels = self.make_lowdin_ao()
+            self.ao_labels = self.lao_labels
+
+        if self.localize_fragment:
+            log.debug("Localize fragment orbitals with %s method", self.localize_fragment)
+
+            orbs = {self.ao_labels[i] : self.C_ao[:,i:i+1] for i in range(self.C_ao.shape[-1])}
+            #orbs = {"A" : self.C_ao}
+            create_orbital_file(self.mol, "%s.molden" % self.local_orbital_type, orbs)
+
+            if self.localize_fragment in ("BF", "ER", "PM"):
+                #locfunc = getattr(pyscf.lo, self.localize_fragment)
+                localizer = getattr(pyscf.lo, self.localize_fragment)(self.mol)
+                localizer.init_guess = None
+                localizer.pop_method = "lowdin"
+            t0 = MPI.Wtime()
+            #C_loc = locfunc(self.mol).kernel(self.C_ao, verbose=4)
+            C_loc = localizer.kernel(self.C_ao, verbose=4)
+            log.debug("Time for orbital localization: %s", get_time_string(MPI.Wtime()-t0))
+            # Check that all orbitals kept their fundamental character
+            chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
+            log.info("Diagonal of AO-Loc(AO) overlap: %r", chi)
+            log.info("Smallest value: %.3g" % np.amin(chi))
+            #assert np.all(chi > 0.5)
+            self.C_ao = C_loc
+
+            #orbs = {"A" : self.C_ao}
+            #orbs = {self.ao_labels[i] : self.C_ao[:,i:i+1] for i in range(self.C_ao.shape[-1])}
+            create_orbital_file(self.mol, "%s-local.molden" % self.local_orbital_type, orbs)
+            #raise SystemExit()
 
 
     @property
     def mol(self):
         return self.mf.mol
+
+    def get_ovlp(self):
+        return self._ovlp
+
+    def get_hcore(self):
+        return self._hcore
+
+    def get_fock(self):
+        return self._fock
 
     @property
     def nclusters(self):
@@ -185,7 +225,8 @@ class EmbCC:
         P : ndarray
             Projector into AO subspace.
         """
-        S1 = self.mf.get_ovlp()
+        #S1 = self.mf.get_ovlp()
+        S1 = self.get_ovlp()
         S2 = S1[np.ix_(ao_indices, ao_indices)]
         S21 = S1[ao_indices]
         P21 = scipy.linalg.solve(S2, S21, assume_a="pos")
@@ -252,7 +293,8 @@ class EmbCC:
         #log.debug("s1.shape: %r", list(s1.shape))
         #log.debug("ovlp.shape: %r", list(self.mf.get_ovlp().shape))
         #log.debug("norm: %e", np.linalg.norm(s1 - self.mf.get_ovlp()))
-        assert np.allclose(s1, self.mf.get_ovlp())
+        #assert np.allclose(s1, self.mf.get_ovlp())
+        assert np.allclose(s1, self.get_ovlp())
         # Restrict basis function of space 2
         s2 = s2[np.ix_(ao_indices, ao_indices)]
         s12 = s12[:,ao_indices]
@@ -271,7 +313,8 @@ class EmbCC:
 
 
     def make_local_ao_orbitals(self, ao_indices):
-        S = self.mf.get_ovlp()
+        #S = self.mf.get_ovlp()
+        S = self.get_ovlp()
         nao = S.shape[-1]
         P = self.make_ao_projector(ao_indices)
         e, C = scipy.linalg.eigh(P, b=S)
@@ -320,7 +363,8 @@ class EmbCC:
 
         C_local = C_ao[:,loc]
         # Orthogonalize locally
-        S = self.mf.get_ovlp()
+        #S = self.mf.get_ovlp()
+        S = self.get_ovlp()
         C_local = pyscf.lo.vec_lowdin(C_local, S)
 
         # Add remaining space
@@ -594,7 +638,8 @@ class EmbCC:
         log.debug("Total number of IAOs=%3d", niao)
 
         # Orthogonalize IAO
-        S = self.mf.get_ovlp()
+        #S = self.mf.get_ovlp()
+        S = self.get_ovlp()
         C_iao = pyscf.lo.vec_lowdin(C_iao, S)
 
         # Add remaining virtual space
@@ -625,7 +670,8 @@ class EmbCC:
 
         # Get base atoms of IAOs
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
-        iao_labels = refmol.ao_labels(None)
+        #iao_labels = refmol.ao_labels(None)
+        iao_labels = refmol.ao_labels()
         assert len(iao_labels) == C_iao.shape[-1]
 
         # Test orthogonality
@@ -635,14 +681,17 @@ class EmbCC:
         return C_iao, C_env, iao_labels
 
     def make_lowdin_ao(self):
-        S = self.mf.get_ovlp()
+        #S = self.mf.get_ovlp()
+        S = self.get_ovlp()
         C_lao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
-        lao_labels = self.mol.ao_labels(None)
+        #lao_labels = self.mol.ao_labels(None)
+        lao_labels = self.mol.ao_labels()
 
         return C_lao, lao_labels
 
     def make_lowdin_ao_per_atom(self):
-        S = self.mf.get_ovlp()
+        #S = self.mf.get_ovlp()
+        S = self.get_ovlp()
         C_lao = np.zeros_like(S)
         aorange = self.mol.aoslice_by_atom()
         for atomid in range(self.mol.natm):
@@ -659,7 +708,8 @@ class EmbCC:
     def make_meta_lowdin_ao(self):
         raise NotImplementedError()
 
-        S = self.mf.get_ovlp()
+        #S = self.mf.get_ovlp()
+        S = self.get_ovlp()
         C_lao = np.zeros_like(S)
         # 1s
         mask_1 = [0,5]

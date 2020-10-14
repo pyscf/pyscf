@@ -503,6 +503,8 @@ class SCF(mol_hf.SCF):
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
 
+        self._cache = {}
+
     @property
     def kpt(self):
         if 'kpt' in self.__dict__:
@@ -562,8 +564,13 @@ class SCF(mol_hf.SCF):
         if kpt is None: kpt = self.kpt
 
         # Memoized hcore
-        if hasattr(self.get_hcore, "values") and kpt in self.get_hcore.values:
-            return self.get_hcore.values[kpt]
+        #kptastuple = tuple(map(tuple, kpt))
+        if "get_hcore" in self._cache:
+            #if kptastuple in self.get_hcore.values:
+                #return self.get_hcore.values[kptastuple]
+            return self._cache["get_hcore"]
+        #else:
+        #    self.get_hcore.__dict__["values
 
         if cell.pseudo:
             nuc = self.with_df.get_pp(kpt)
@@ -573,7 +580,7 @@ class SCF(mol_hf.SCF):
             nuc += ecp.ecp_int(cell, kpt)
         h = nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
         # Memoize
-        self.get_hcore.values[kpt] = h
+        self._cache["get_hcore"] = h
         return h
 
     def get_ovlp(self, cell=None, kpt=None):

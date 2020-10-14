@@ -1096,6 +1096,8 @@ class Cell(mole.Mole):
         self._keys = self._keys.union(self.__dict__).union(keys)
         self.__dict__.update(kwargs)
 
+        self._cache = {}
+
     @property
     def mesh(self):
         return self._mesh
@@ -1635,10 +1637,10 @@ class Cell(mole.Mole):
     #energy_nuc = ewald
 
     def energy_nuc(self):
-        if hasattr(self.energy_nuc, "value"):
-            return self.energy_nuc.value
-        e = ewald()
-        self.energy_nuc.value = e
+        if "energy_nuc" in self._cache:
+            return self._cache["energy_nuc"]
+        e = self.ewald()
+        self._cache["energy_nuc"] = e
         return e
 
     gen_uniform_grids = get_uniform_grids = get_uniform_grids
