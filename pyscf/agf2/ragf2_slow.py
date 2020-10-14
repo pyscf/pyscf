@@ -27,7 +27,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf.agf2 import aux, ragf2
-from pyscf.mp.mp2 import get_frozen_mask
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
@@ -67,8 +66,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     tol = agf2.weight_tol
 
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = ragf2.get_frozen_mask(agf2)
         nmo -= np.sum(~mask)
 
     e = np.zeros((naux))

@@ -11,11 +11,11 @@ AGF2 corresponds to the AGF2(None,0) method outlined in the papers:
   - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., X, X (2020).
 '''
 
-from pyscf import gto, scf, agf2
+from pyscf import gto, scf, agf2, mp
 
 mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz')
 
-mf = scf.UHF(mol)
+mf = scf.RHF(mol)
 mf.conv_tol = 1e-12
 mf.run()
 
@@ -30,3 +30,20 @@ gf2.ipagf2(nroots=3)
 
 # Print the first 3 electron affinities
 gf2.eaagf2(nroots=3)
+
+
+# Check that a high-moment calculation is equal to MP2 in the first iteration
+mol = gto.M(atom='H 0 0 0; Li 0 0 1', basis='cc-pvdz')
+
+mf = scf.RHF(mol)
+mf.run()
+
+mp2 = mp.MP2(mf)
+mp2.run()
+
+gf2 = agf2.AGF2(mf, nmom=(5,6))
+gf2.frozen = mp2.frozen
+gf2.run(max_cycle=1)
+
+print(mp2.e_corr)
+print(gf2.e_init)

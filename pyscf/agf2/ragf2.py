@@ -31,11 +31,9 @@ from pyscf.scf import _vhf
 from pyscf.agf2 import aux, mpi_helper, _agf2
 from pyscf.agf2 import chkfile as chkutil
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
-from pyscf.mp.mp2 import get_frozen_mask
+from pyscf.mp.mp2 import get_frozen_mask as _get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
-
-#TODO: print more?
 
 
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
@@ -51,17 +49,12 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
 
     if gf is None:
         gf = agf2.init_gf()
+        gf_froz = agf2.init_gf(frozen=True)
+    else:
+        gf_froz = gf
 
     if se is None:
-        if not (agf2.frozen == 0 or agf2.frozen is None):
-            with lib.temporary_env(agf2, _nmo=None, _nocc=None):
-                mask = get_frozen_mask(agf2)
-            gf_froz = gf.copy()
-            gf_froz.energy = gf.energy[mask]
-            gf_froz.coupling = gf.coupling[:,mask]
-            se = agf2.build_se(eri, gf_froz)
-        else:
-            se = agf2.build_se(eri, gf)
+        se = agf2.build_se(eri, gf_froz)
 
     if dump_chk:
         agf2.dump_chk(gf=gf, se=se)
@@ -169,8 +162,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se.remove_uncoupled(tol=tol)
 
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = get_frozen_mask(agf2)
         coupling = np.zeros((nmo, se.naux))
         coupling[mask] = se.coupling
         se = aux.SelfEnergy(se.energy, coupling, chempot=se.chempot)
@@ -599,17 +591,24 @@ class RAGF2(lib.StreamObject):
 
         return self.e_init
 
-    def init_gf(self):
+    def init_gf(self, frozen=False):
         ''' Builds the Hartree-Fock Green's function.
 
         Returns:
             :class:`GreensFunction`, :class:`SelfEnergy`
         '''
 
-        mo_energy = self.mo_energy
-        chempot = binsearch_chempot(np.diag(mo_energy), self.nmo, self.nocc*2)[0]
+        energy = self.mo_energy
+        coupling = np.eye(self.nmo)
 
-        gf = aux.GreensFunction(mo_energy, np.eye(self.nmo), chempot=chempot)
+        chempot = binsearch_chempot(np.diag(energy), self.nmo, self.nocc*2)[0]
+
+        if frozen:
+            mask = get_frozen_mask(self)
+            energy = energy[mask]
+            coupling = coupling[:,mask]
+
+        gf = aux.GreensFunction(energy, coupling, chempot=chempot)
 
         return gf
 
@@ -672,10 +671,14 @@ class RAGF2(lib.StreamObject):
         gf_occ = gf.get_occupied()
         gf_vir = gf.get_virtual()
 
-        se_occ = self.build_se_part(eri, gf_occ, gf_vir, **facs)
-        se_vir = self.build_se_part(eri, gf_vir, gf_occ, **facs)
-
-        se = aux.combine(se_occ, se_vir)
+        if gf_occ.naux == 0 or gf_vir.naux == 0:
+            logger.warn(self, 'Attempting to build a self-energy with '
+                              'no (i,j,a) or (a,b,i) configurations.')
+            se = aux.SelfEnergy([], [[],]*self.nmo, chempot=gf.chempot)
+        else:
+            se_occ = self.build_se_part(eri, gf_occ, gf_vir, **facs)
+            se_vir = self.build_se_part(eri, gf_vir, gf_occ, **facs)
+            se = aux.combine(se_occ, se_vir)
 
         if se_prev is not None and self.damping != 0.0:
             se.coupling *= np.sqrt(1.0-self.damping)
@@ -702,8 +705,8 @@ class RAGF2(lib.StreamObject):
         log.info('weight_tol = %g' % self.weight_tol)
         log.info('diis_space = %d' % self.diis_space)
         log.info('diis_min_space = %d', self.diis_min_space)
-        log.info('nmo = %d', self.nmo)
-        log.info('nocc = %d', self.nocc)
+        log.info('nmo = %s', self.nmo)
+        log.info('nocc = %s', self.nocc)
         if self.frozen is not None:
             log.info('frozen orbitals = %s', self.frozen)
         log.info('max_memory %d MB (current use %d MB)',
@@ -746,9 +749,12 @@ class RAGF2(lib.StreamObject):
 
         if gf is None:
             gf = self.init_gf()
+            gf_froz = self.init_gf(frozen=True)
+        else:
+            gf_froz = gf
 
         if se is None:
-            se = self.build_se(eri, gf)
+            se = self.build_se(eri, gf_froz)
 
         self.converged, self.e_1b, self.e_2b, self.gf, self.se = \
                 kernel(self, eri=eri, gf=gf, se=se, verbose=self.verbose, dump_chk=dump_chk)
@@ -889,6 +895,11 @@ class RAGF2(lib.StreamObject):
         return 2.0 * np.linalg.norm(coeff, axis=0) ** 2
 
 
+def get_frozen_mask(agf2):
+    with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+        return _get_frozen_mask(agf2)
+
+
 class _ChemistsERIs:
     ''' (pq|rs)
     
@@ -983,8 +994,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
 
     cx = np.eye(agf2.nmo)
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = get_frozen_mask(agf2)
         cx = cx[:,mask]
 
     coeffs = (cx,) + coeffs
@@ -1012,8 +1022,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     nmo = agf2.nmo
     npair = nmo*(nmo+1)//2
 
-    with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-        mask = get_frozen_mask(agf2)
+    mask = get_frozen_mask(agf2)
     frozen = np.sum(~mask)
 
     # possible to have incore MO, outcore QMO

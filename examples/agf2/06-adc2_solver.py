@@ -56,6 +56,6 @@ gf2 = agf2.AGF2(mf, nmom=(None, None))
 se = gf2.build_se()
 se = se.get_occupied() # 2p1h/1p2h -> 2p1h
 se.coupling = se.coupling[:gf2.nocc] # 1p/1h -> 1p
-e_ip = agf2.aux.davidson(se, h_1p, nroots=1)[0]
+e_ip = agf2.aux.davidson(se, h_1p, nroots=1)[1]
 print('IP-ADC(2) using the AGF2_slow solver:')
 print(-e_ip[-1])

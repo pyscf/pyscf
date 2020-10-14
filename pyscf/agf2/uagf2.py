@@ -30,7 +30,7 @@ from pyscf import ao2mo
 from pyscf.scf import _vhf
 from pyscf.agf2 import aux, ragf2, _agf2
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
-from pyscf.mp.ump2 import get_frozen_mask
+from pyscf.mp.ump2 import get_frozen_mask as _get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
@@ -96,8 +96,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_a.remove_uncoupled(tol=tol)
 
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = get_frozen_mask(agf2)
         coupling = np.zeros((nmo[0], se_a.naux))
         coupling[mask[0]] = se_a.coupling
         se_a = aux.SelfEnergy(se_a.energy, coupling, chempot=se_a.chempot)
@@ -122,8 +121,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_b.remove_uncoupled(tol=tol)
 
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = get_frozen_mask(agf2)
         coupling = np.zeros((nmo[1], se_b.naux))
         coupling[mask[1]] = se_b.coupling
         se_b = aux.SelfEnergy(se_b.energy, coupling, chempot=se_b.chempot)
@@ -461,7 +459,7 @@ class UAGF2(ragf2.RAGF2):
 
         return self.e_init
 
-    def init_gf(self):
+    def init_gf(self, frozen=False):
         ''' Builds the Hartree-Fock Green's function.
 
         Returns:
@@ -471,15 +469,22 @@ class UAGF2(ragf2.RAGF2):
         nmoa, nmob = self.nmo
         nocca, noccb = self.nocc
 
-        mo_energy = self.mo_energy
-        focka = np.diag(mo_energy[0])
-        fockb = np.diag(mo_energy[1])
+        energy = self.mo_energy
+        coupling = (np.eye(nmoa), np.eye(nmob))
+
+        focka = np.diag(energy[0])
+        fockb = np.diag(energy[1])
 
         cpt_a = binsearch_chempot(focka, nmoa, nocca, occupancy=1)[0]
         cpt_b = binsearch_chempot(fockb, nmob, noccb, occupancy=1)[1]
 
-        gf_a = aux.GreensFunction(mo_energy[0], np.eye(nmoa), chempot=cpt_a)
-        gf_b = aux.GreensFunction(mo_energy[1], np.eye(nmob), chempot=cpt_b)
+        if frozen:
+            mask = get_frozen_mask(self)
+            energy = (energy[0][mask[0]], energy[1][mask[1]])
+            coupling = (coupling[0][:,mask[0]], coupling[1][:,mask[1]])
+
+        gf_a = aux.GreensFunction(energy[0], coupling[0], chempot=cpt_a)
+        gf_b = aux.GreensFunction(energy[1], coupling[1], chempot=cpt_b)
 
         gf = (gf_a, gf_b)
 
@@ -629,6 +634,11 @@ class UAGF2(ragf2.RAGF2):
         return (np.linalg.norm(coeff_a, axis=0)**2, np.linalg.norm(coeff_b, axis=0)**2)
 
 
+def get_frozen_mask(agf2):
+    with lib.temporary_env(agf2, _nocc=None, _nmo=None):
+        return _get_frozen_mask(agf2)
+
+
 class _ChemistsERIs:
     ''' (pq|rs)
 
@@ -754,8 +764,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     cxa = np.eye(agf2.nmo[0])
     cxb = np.eye(agf2.nmo[1])
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = get_frozen_mask(agf2)
         cxa = cxa[:,mask[0]]
         cxb = cxb[:,mask[1]]
 
@@ -810,8 +819,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
 
     cxa = np.eye(agf2.nmo[0])
     cxb = np.eye(agf2.nmo[1])
-    with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-        mask = get_frozen_mask(agf2)
+    mask = get_frozen_mask(agf2)
     frozena = np.sum(~mask[0])
     frozenb = np.sum(~mask[1])
 

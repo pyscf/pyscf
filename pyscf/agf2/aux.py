@@ -26,7 +26,7 @@ import scipy.linalg.blas
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
-from pyscf.lib.parameters import MAX_MEMORY, LARGE_DENOM
+from pyscf.lib.parameters import LARGE_DENOM
 
 
 class AuxiliarySpace(object):
@@ -544,10 +544,7 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
     conv, w, v = lib.davidson1(matvec, guess, diag, tol=tol, nroots=nroots,
                                max_space=ntrial, max_cycle=maxiter, pick=pick)
 
-    if not np.all(conv):
-        logger.warn('Davidson did not converge')
-
-    return w, v
+    return conv, w, v
 
 
 def _band_lanczos(se_occ, n=0, max_memory=None):

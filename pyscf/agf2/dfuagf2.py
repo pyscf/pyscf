@@ -29,7 +29,6 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo, df
 from pyscf.agf2 import uagf2, dfragf2, aux, mpi_helper, _agf2
-from pyscf.mp.ump2 import get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 100)
 
@@ -101,8 +100,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_a.remove_uncoupled(tol=tol)
 
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = uagf2.get_frozen_mask(agf2)
         coupling = np.zeros((nmoa, se_a.naux))
         coupling[mask[0]] = se_a.coupling
         se_a = aux.SelfEnergy(se_a.energy, coupling, chempot=se_a.chempot)
@@ -128,8 +126,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se_b.remove_uncoupled(tol=tol)
 
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = uagf2.get_frozen_mask(agf2)
         coupling = np.zeros((nmoa, se_b.naux))
         coupling[mask[1]] = se_b.coupling
         se_b = aux.SelfEnergy(se_b.energy, coupling, chempot=se_b.chempot)
@@ -305,8 +302,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b):
 
     cxa, cxb = np.eye(agf2.nmo[0]), np.eye(agf2.nmo[1])
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = uagf2.get_frozen_mask(agf2)
         cxa = cxa[:,mask[0]]
         cxb = cxb[:,mask[1]]
 
@@ -385,6 +381,3 @@ if __name__ == '__main__':
     uagf2.ipagf2(nroots=5)
     uagf2.eaagf2(nroots=5)
 
-    print()
-    keys = ['1b', '2b', 'mp2', 'corr', 'tot']
-    print('  '.join(['%s %16.12f' % (key, getattr(uagf2, 'e_'+key, None)) for key in keys]))

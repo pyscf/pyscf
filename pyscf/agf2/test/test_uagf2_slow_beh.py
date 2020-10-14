@@ -77,7 +77,6 @@ class KnownValues(unittest.TestCase):
         gf2.run()
         self.assertTrue(gf2.converged)
         self.assertAlmostEqual(gf2.e_init, -0.0153603737842962, 4)
-        #TODO
 
 
 if __name__ == '__main__':

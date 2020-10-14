@@ -29,7 +29,6 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo, df
 from pyscf.agf2 import ragf2, aux, mpi_helper, _agf2
-from pyscf.mp.mp2 import get_frozen_mask
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 100)
 
@@ -92,8 +91,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     se.remove_uncoupled(tol=tol)
 
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = ragf2.get_frozen_mask(agf2)
         coupling = np.zeros((nmo, se.naux))
         coupling[mask] = se.coupling
         se = aux.SelfEnergy(se.energy, coupling, chempot=se.chempot)
@@ -337,7 +335,6 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
         eri0 = with_df._cderi[p0:p1]
         qxy[p0:p1] = ao2mo._ao2mo.nr_e2(eri0, mo, sij, out=qxy[p0:p1], **sym)
 
-    #FIXME: this should just be gather?
     mpi_helper.barrier()
     mpi_helper.allreduce_safe_inplace(qxy)
 
@@ -356,8 +353,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
 
     cx = np.eye(agf2.nmo)
     if not (agf2.frozen is None or agf2.frozen == 0):
-        with lib.temporary_env(agf2, _nocc=None, _nmo=None):
-            mask = get_frozen_mask(agf2)
+        mask = ragf2.get_frozen_mask(agf2)
         cx = cx[:,mask]
 
     nmo = eri.fock.shape[0]

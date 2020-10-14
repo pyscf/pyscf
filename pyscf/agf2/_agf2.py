@@ -13,8 +13,8 @@
 # limitations under the License.
 #
 # Author: Oliver J. Backhouse <olbackhouse@gmail.com>
-#         George H. Booth <george.booth@kcl.ac.uk>
 #         Alejandro Santana-Bonilla <alejandro.santana_bonilla@kcl.ac.uk>
+#         George H. Booth <george.booth@kcl.ac.uk>
 #
 
 import numpy as np
@@ -25,7 +25,7 @@ from pyscf.agf2 import mpi_helper
 libagf2 = lib.load_library('libagf2')
 
 
-def cholesky_build(vv, vev, eps=1e-20):
+def cholesky_build(vv, vev, eps=1e-16):
     ''' Constructs the truncated auxiliaries from :attr:`vv` and :attr:`vev`.
         Performs a Cholesky decomposition via :func:`numpy.linalg.cholesky`,
         for a positive-definite or positive-semidefinite matrix. For the
