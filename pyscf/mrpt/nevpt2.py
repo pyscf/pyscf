@@ -323,7 +323,8 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
         +  numpy.einsum('ipqr,rpqa,ia->i',h2e_v,dm2,h1e_v)*2.0\
         +  numpy.einsum('ip,pa,ia->i',h1e_v,dm1,h1e_v)
 
-    return _norm_to_energy(norm, ener, mc.mo_energy[nocc:])
+    return _norm_to_energy(norm, ener, mc.mo_energy[nocc:],
+                           log=logger.Logger(mc.stdout, logger.WARN))
 
 def Si(mc, ci, dms, eris=None, verbose=None):
     #Subspace S_i^{(1)}
@@ -372,7 +373,8 @@ def Si(mc, ci, dms, eris=None, verbose=None):
         +  numpy.einsum('qpir,rpqa,ai->i',h2e_v,dm2_h,h1e_v)*2.0\
         +  numpy.einsum('pi,pa,ai->i',h1e_v,dm1_h,h1e_v)
 
-    return _norm_to_energy(norm, ener, -mc.mo_energy[:ncore])
+    return _norm_to_energy(norm, ener, -mc.mo_energy[:ncore],
+                           log=logger.Logger(mc.stdout, logger.WARN))
 
 
 def Sijrs(mc, eris, verbose=None):
@@ -433,7 +435,8 @@ def Sijr(mc, dms, eris, verbose=None):
 
     diff = mc.mo_energy[nocc:,None,None] - mc.mo_energy[None,:ncore,None] - mc.mo_energy[None,None,:ncore]
 
-    return _norm_to_energy(norm, h, diff)
+    return _norm_to_energy(norm, h, diff,
+                           log=logger.Logger(mc.stdout, logger.WARN))
 
 def Srsi(mc, dms, eris, verbose=None):
     #Subspace S_ijr^{(1)}
@@ -459,7 +462,8 @@ def Srsi(mc, dms, eris, verbose=None):
     h = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,k27)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,k27)
     diff = mc.mo_energy[nocc:,None,None] + mc.mo_energy[None,nocc:,None] - mc.mo_energy[None,None,:ncore]
-    return _norm_to_energy(norm, h, diff)
+    return _norm_to_energy(norm, h, diff,
+                           log=logger.Logger(mc.stdout, logger.WARN))
 
 def Srs(mc, dms, eris=None, verbose=None):
     #Subspace S_rs^{(-2)}
@@ -487,7 +491,8 @@ def Srs(mc, dms, eris=None, verbose=None):
     norm = 0.5*numpy.einsum('rsqp,rsba,pqba->rs',h2e_v,h2e_v,rm2)
     h = 0.5*numpy.einsum('rsqp,rsba,pqab->rs',h2e_v,h2e_v,a7)
     diff = mc.mo_energy[nocc:,None] + mc.mo_energy[None,nocc:]
-    return _norm_to_energy(norm, h, diff)
+    return _norm_to_energy(norm, h, diff,
+                           log=logger.Logger(mc.stdout, logger.WARN))
 
 def Sij(mc, dms, eris, verbose=None):
     #Subspace S_ij^{(-2)}
@@ -528,7 +533,8 @@ def Sij(mc, dms, eris, verbose=None):
     norm = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,hdm2)
     h = 0.5*numpy.einsum('qpij,baij,pqab->ij',h2e_v,h2e_v,a9)
     diff = mc.mo_energy[:ncore,None] + mc.mo_energy[None,:ncore]
-    return _norm_to_energy(norm, h, -diff)
+    return _norm_to_energy(norm, h, -diff,
+                           log=logger.Logger(mc.stdout, logger.WARN))
 
 
 def Sir(mc, dms, eris, verbose=None):
@@ -572,7 +578,8 @@ def Sir(mc, dms, eris, verbose=None):
          - numpy.einsum('rpqi,raib,pqab->ir',h2e_v2,h2e_v1,a12)\
          + numpy.einsum('rpqi,rabi,pqab->ir',h2e_v2,h2e_v2,a13)
     diff = mc.mo_energy[:ncore,None] - mc.mo_energy[None,nocc:]
-    return _norm_to_energy(norm, h, -diff)
+    return _norm_to_energy(norm, h, -diff,
+                           log=logger.Logger(mc.stdout, logger.WARN))
 
 
 class NEVPT(lib.StreamObject):
@@ -680,6 +687,7 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
         self.tol = tol
         self.stored_integral = stored_integral
 
+        # self.canonicalized = self.canonicalization
         self.canonicalized = True
         self.compressed_mps = True
         self.for_dmrg()
@@ -711,6 +719,7 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
         #For SC-NEVPT based on compressed MPS perturber functions, the _mc was already canonicalized.
         if (not self.canonicalized):
             self.mo_coeff,_, self.mo_energy = self.canonicalize(self.mo_coeff,ci=self.load_ci(),verbose=self.verbose)
+            logger.info(self, 'Inactive and virtual orbitals were pseudo-canonicalized for NEVPT2')
 
         if getattr(self.fcisolver, 'nevpt_intermediate', None):
             logger.info(self, 'DMRG-NEVPT')
@@ -867,10 +876,19 @@ def _extract_orbs(mc, mo_coeff):
     return mo_core, mo_cas, mo_vir
 
 
-def _norm_to_energy(norm, h, diff):
-    idx = abs(norm) > NUMERICAL_ZERO
+def _norm_to_energy(norm, h, diff, log=None):
+    # idx = abs(norm) > NUMERICAL_ZERO
+    idx = norm > NUMERICAL_ZERO
+    negative_idx = norm < -NUMERICAL_ZERO
+    negative_norm = norm[negative_idx]
+    if negative_norm.shape[0] > 0 and log is not None:
+        n_negative = negative_norm.shape[0]
+        log.warn("{} perturber states have negative norm".format(n_negative) +
+                 "\nLargest negative norm is {}".format(negative_norm.min()) +
+                 "\nSum of negative norms is {}".format(negative_norm.sum()))
     ener_t = -(norm[idx] / (diff[idx] + h[idx]/norm[idx])).sum()
-    norm_t = norm.sum()
+    # norm_t = norm.sum()
+    norm_t = norm[idx].sum()
     return norm_t, ener_t
 
 def _ERIS(mc, mo, method='incore'):
