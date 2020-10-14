@@ -4,7 +4,7 @@
 #
 
 '''
-An example of ways to restart an AGF2 calculation.
+An example of restarting an AGF2 calculation.
 
 The agf2.chkfile module provides similar functionality to the existing
 chkfile utilities in pyscf, but prevents failure during MPI runs.

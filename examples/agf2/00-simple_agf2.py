@@ -6,9 +6,9 @@
 '''
 A simple example of restricted AGF2.
 
-AGF2 corresponds to the AGF2(None,0) method outlined in the papers:
-  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 2 (2020).
-  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., X, X (2020).
+Default AGF2 corresponds to the AGF2(1,0) method outlined in the papers:
+  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 1090 (2020).
+  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., 16, 6294 (2020).
 '''
 
 from pyscf import gto, scf, agf2

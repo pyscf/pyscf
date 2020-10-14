@@ -9,7 +9,7 @@ so this example is almost identical to 02-dfagf2.py).
 
 AGF2 corresponds to the AGF2(None,0) method outlined in the papers:
   - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 2 (2020).
-  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., X, X (2020).
+  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., 16, 6294 (2020).
 '''
 
 from pyscf import gto, scf, agf2

@@ -4,15 +4,16 @@
 #
 
 '''
-An example of restricted AGF2 with density fitting and get the 1RDM
+An example of restricted AGF2 with density fitting, obtaining the 1RDM and dipole moment
 
-AGF2 corresponds to the AGF2(None,0) method outlined in the papers:
-  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 2 (2020).
-  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., X, X (2020).
+Default AGF2 corresponds to the AGF2(1,0) method outlined in the papers:
+  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 1090 (2020).
+  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., 16, 6294 (2020).
 '''
 
 from pyscf import gto, scf, agf2
 import numpy as np
+from functools import reduce
 
 mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz')
 
@@ -31,7 +32,19 @@ gf2.ipagf2(nroots=3)
 # Print the first 3 electron affinities
 gf2.eaagf2(nroots=3)
 
-# Get the density matrix and calculate dipole moments:
+# Get the MO-basis density matrix and calculate dipole moments:
 dm = gf2.make_rdm1()
+
+dipole = [0.0, 0.0, 0.0]
+# Transform dipole moment integrals into MO basis
 mol.set_common_origin([0,0,0])
-dipole = np.einsum('xij,ji->x', mol.intor('int1e_r'), dm)
+r_ints_ao = mol.intor('cint1e_r_sph', comp=3)
+r_ints_mo = np.empty_like(r_ints_ao)
+for i in range(3):
+    r_ints_mo[i] = reduce(np.dot,(mf.mo_coeff.T, r_ints_ao[i], mf.mo_coeff))
+    dipole[i] = -np.trace(np.dot(dm, r_ints_mo[i]))
+    # Add nuclear component
+    for j in range(mol.natm):
+        dipole[i] += mol.atom_charge(j) * mol.atom_coord(j)[i]
+
+print('Dipole moment from AGF2: {} {} {}'.format(dipole[0], dipole[1], dipole[2]))
