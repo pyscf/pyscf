@@ -39,6 +39,7 @@ mf = scf.RHF(mol)
 mf.run()
 
 mp2 = mp.MP2(mf)
+mp2.frozen = 1
 mp2.run()
 
 gf2 = agf2.AGF2(mf, nmom=(5,6))
