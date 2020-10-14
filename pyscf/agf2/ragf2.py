@@ -938,7 +938,7 @@ class _ChemistsERIs:
         mo_e = self.fock.diagonal()
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
         if gap < 1e-5:
-            logger.warn(agf2, 'HOMO-LUMO gap %s too small for RAGF2', gap)
+            logger.warn(agf2, 'HOMO-LUMO gap %s may be too small for AGF2', gap)
 
         return self
 
