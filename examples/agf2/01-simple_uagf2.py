@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 # Author: Oliver J. Backhouse <olbackhouse@gmail.com>
+#         George H. Booth <george.booth@kcl.ac.uk>
 #
 
 '''

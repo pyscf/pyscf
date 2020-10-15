@@ -5,7 +5,7 @@
 #
 
 '''
-A simple example of restricted AGF2.
+An example of generating Dyson orbitals from an AGF2 calculation.
 
 Default AGF2 corresponds to the AGF2(1,0) method outlined in the papers:
   - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 1090 (2020).
@@ -25,8 +25,9 @@ gf2 = agf2.AGF2(mf)
 gf2.conv_tol = 1e-7
 gf2.run(verbose=4)
 
-# Print the first 3 ionization potentials
-gf2.ipagf2(nroots=3)
+# Access the Dyson orbitals (vectors in AO basis):
+dyson_orbitals = gf2.qmo_coeff
 
-# Print the first 3 electron affinities
-gf2.eaagf2(nroots=3)
+# Find the Dyson orbital corresponding to the HOMO and LUMO:
+dyson_homo = gf2.qmo_coeff[:,gf2.qmo_occ > 0][:,-1]
+dyson_lumo = gf2.qmo_coeff[:,gf2.qmo_occ == 0][:,0]

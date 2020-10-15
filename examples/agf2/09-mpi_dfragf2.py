@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 #
 # Author: Oliver J. Backhouse <olbackhouse@gmail.com>
+#         George H. Booth <george.booth@kcl.ac.uk>
 #
 
 '''
-An example of DFRAGF2 with MPI (the MPI support is very transparent,
-so this example is almost identical to 02-dfagf2.py).
+An example of Density-fitted AGF2 with MPI (the MPI support is very transparent,
+so this example is almost identical to 02-dfagf2.py). 
 
-AGF2 corresponds to the AGF2(None,0) method outlined in the papers:
-  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 2 (2020).
+MPI support is provided by mpi4py module. The implementation is also hybrid 
+parallelized, and therefore may benefit from a combination of OMP threads 
+and MPI processes. OMP threads will automatically be used if OMP_NUM_THREADS
+is appropriately set.
+
+Default AGF2 corresponds to the AGF2(1,0) method outlined in the papers:
+  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 1090 (2020).
   - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., 16, 6294 (2020).
 '''
 

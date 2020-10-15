@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 # Author: Oliver J. Backhouse <olbackhouse@gmail.com>
+#         George H. Booth <george.booth@kcl.ac.uk>
 #
 
 '''
@@ -32,6 +33,9 @@ eta = 0.02
 spectrum = gf.real_freq_spectrum(grid, eta=eta)
 # The array `spectrum` is now a length nfreq array of the
 # spectral function -1/pi * Tr[Im[G(\omega + i\eta)]].
+# Note that for UHF AGF2 calculations, the individual gf 
+# elements can be passed to real_freq_spectrum in order 
+# to obtain the spin-resolved spectra.
 
 # We can also build the self-energy on the real-frequency axis
 # by accessing the renormalized auxiliary states:

@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 #
 # Author: Oliver J. Backhouse <olbackhouse@gmail.com>
+#         George H. Booth <george.booth@kcl.ac.uk>
 #
 
 '''
-An example of SCS-AGF2 calculation.
-
-AGF2 corresponds to the AGF2(None,0) method outlined in the papers:
-  - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 2 (2020).
-  - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., 16, 6294 (2020).
+An example of Spin-Component-Scaled-AGF2 calculation.
 '''
 
 from pyscf import gto, scf, agf2
