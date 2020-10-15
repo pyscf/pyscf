@@ -631,7 +631,13 @@ class UAGF2(ragf2.RAGF2):
     def qmo_occ(self):
         coeff_a = self.gf[0].get_occupied().coupling
         coeff_b = self.gf[1].get_occupied().coupling
-        return (np.linalg.norm(coeff_a, axis=0)**2, np.linalg.norm(coeff_b, axis=0)**2)
+        occ_a = np.linalg.norm(coeff_a, axis=0) ** 2
+        occ_b = np.linalg.norm(coeff_b, axis=0) ** 2
+        vir_a = np.zeros_like(self.gf[0].get_virtual().energy)
+        vir_b = np.zeros_like(self.gf[1].get_virtual().energy)
+        qmo_occ_a = np.concatenate([occ_a, vir_a])
+        qmo_occ_b = np.concatenate([occ_b, vir_b])
+        return qmo_occ_a, qmo_occ_b
 
 
 def get_frozen_mask(agf2):
