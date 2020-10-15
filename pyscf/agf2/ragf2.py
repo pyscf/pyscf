@@ -138,7 +138,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     assert type(gf_occ) is aux.GreensFunction
     assert type(gf_vir) is aux.GreensFunction
 
-    nmo = agf2.nmo
+    nmo = eri.nmo
     tol = agf2.weight_tol
     facs = dict(os_factor=os_factor, ss_factor=ss_factor)
 
@@ -208,7 +208,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
             vk = np.zeros_like(rdm1)
 
         blksize = _agf2.get_blksize(agf2.max_memory, (nmo*npair, nmo**3))
-        blksize = min(nmo, max(BLKMIN, blksize))
+        blksize = min(1, max(BLKMIN, blksize))
         logger.debug1(agf2, 'blksize (ragf2.get_jk) = %d' % blksize)
 
         tril2sq = lib.square_mat_in_trilu_indices(nmo)
@@ -288,8 +288,8 @@ def fock_loop(agf2, eri, gf, se):
     diis.min_space = agf2.diis_min_space
     fock = agf2.get_fock(eri, gf)
 
-    nelec = agf2.nocc * 2
-    nmo = agf2.nmo
+    nelec = eri.nocc * 2
+    nmo = eri.nmo
     naux = se.naux
     nqmo = nmo + naux
     buf = np.zeros((nqmo, nqmo))
@@ -892,7 +892,10 @@ class RAGF2(lib.StreamObject):
     @property
     def qmo_occ(self):
         coeff = self.gf.get_occupied().coupling
-        return 2.0 * np.linalg.norm(coeff, axis=0) ** 2
+        occ = 2.0 * np.linalg.norm(coeff, axis=0) ** 2
+        vir = np.zeros_like(self.gf.get_virtual().energy)
+        qmo_occ = np.concatenate([occ, vir])
+        return qmo_occ
 
 
 def get_frozen_mask(agf2):
@@ -910,6 +913,7 @@ class _ChemistsERIs:
     def __init__(self, mol=None):
         self.mol = mol
         self.mo_coeff = None
+        self.nmo = None
         self.nocc = None
 
         self.fock = None
@@ -932,6 +936,7 @@ class _ChemistsERIs:
 
         self.e_hf = agf2._scf.e_tot
 
+        self.nmo = agf2.nmo
         self.nocc = agf2.nocc
         self.mol = agf2.mol
 
@@ -951,10 +956,9 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
 
     eris = _ChemistsERIs()
     eris._common_init_(agf2, mo_coeff)
-    nmo = eris.fock.shape[0]
 
     eri = ao2mo.incore.full(agf2._scf._eri, eris.mo_coeff, verbose=log)
-    eri = ao2mo.addons.restore('s4', eri, agf2.nmo)
+    eri = ao2mo.addons.restore('s4', eri, eris.nmo)
 
     eris.eri = eri
 
@@ -974,7 +978,6 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
 
     mol = agf2.mol
     mo_coeff = np.asarray(eris.mo_coeff, order='F')
-    nao, nmo = mo_coeff.shape
 
     eris.feri = lib.H5TmpFile()
     ao2mo.outcore.full(mol, mo_coeff, eris.feri, dataname='mo', 
@@ -992,7 +995,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    cx = np.eye(agf2.nmo)
+    cx = np.eye(eri.nmo)
     if not (agf2.frozen is None or agf2.frozen == 0):
         mask = get_frozen_mask(agf2)
         cx = cx[:,mask]
@@ -1014,12 +1017,12 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    cx = np.eye(agf2.nmo)
+    nmo = eri.nmo
+    cx = np.eye(nmo)
     ci, cj, ca = coeffs
     ni = ci.shape[1]
     nj = cj.shape[1]
     na = ca.shape[1]
-    nmo = agf2.nmo
     npair = nmo*(nmo+1)//2
 
     mask = get_frozen_mask(agf2)

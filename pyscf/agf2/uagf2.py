@@ -68,7 +68,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     assert type(gf_vir[0]) is aux.GreensFunction
     assert type(gf_vir[1]) is aux.GreensFunction
 
-    nmo = agf2.nmo
+    nmo = eri.nmo
     noa, nob = gf_occ[0].naux, gf_occ[1].naux
     nva, nvb = gf_vir[0].naux, gf_vir[1].naux
     tol = agf2.weight_tol
@@ -199,7 +199,7 @@ def fock_loop(agf2, eri, gf, se):
     gfa, gfb = gf
 
     nalph, nbeta = agf2.nocc
-    nmoa, nmob = agf2.nmo
+    nmoa, nmob = eri.nmo
     nauxa, nauxb = sea.naux, seb.naux
     nqmoa, nqmob = nauxa+nmoa, nauxb+nmob
     bufa, bufb = np.zeros((nqmoa, nqmoa)), np.zeros((nqmob, nqmob))
@@ -650,6 +650,7 @@ class _ChemistsERIs:
         self.mol = mol
         self.mo_coeff = None
         self.nocc = None
+        self.nmo = None
 
         self.fock = None
         self.h1e = None
@@ -674,6 +675,7 @@ class _ChemistsERIs:
 
         self.e_hf = agf2._scf.e_tot
 
+        self.nmo = agf2.nmo
         nocca, noccb = self.nocc = agf2.nocc
         self.mol = agf2.mol
 
@@ -696,7 +698,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     eris = _ChemistsERIs()
     eris._common_init_(agf2, mo_coeff)
     moa, mob = eris.mo_coeff
-    nmoa, nmob = moa.shape[1], mob.shape[1]
+    nmoa, nmob = eris.nmo
 
     eri_aa = ao2mo.incore.full(agf2._scf._eri, moa, verbose=log)
     eri_bb = ao2mo.incore.full(agf2._scf._eri, mob, verbose=log)
@@ -731,8 +733,8 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     mol = agf2.mol
     moa = np.asarray(eris.mo_coeff[0], order='F')
     mob = np.asarray(eris.mo_coeff[1], order='F')
-    nao, nmoa = moa.shape
-    nao, nmob = mob.shape
+    naoa, naob = moa.shape[0], mob.shape[0]
+    nmoa, nmob = eris.nmo
 
     eris.feri = lib.H5TmpFile()
 
@@ -761,14 +763,16 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    cxa = np.eye(agf2.nmo[0])
-    cxb = np.eye(agf2.nmo[1])
+    nmo = eri.nmo
+    nmoa, nmob = nmo
+
+    cxa = np.eye(nmoa)
+    cxb = np.eye(nmob)
     if not (agf2.frozen is None or agf2.frozen == 0):
         mask = get_frozen_mask(agf2)
         cxa = cxa[:,mask[0]]
         cxb = cxb[:,mask[1]]
 
-    nmoa, nmob = agf2.nmo
     npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
     cib, cjb, cab = coeffs_b
@@ -817,13 +821,15 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
-    cxa = np.eye(agf2.nmo[0])
-    cxb = np.eye(agf2.nmo[1])
+    nmo = eri.nmo
+    nmoa, nmob = nmo
+
+    cxa = np.eye(nmoa)
+    cxb = np.eye(nmob)
     mask = get_frozen_mask(agf2)
     frozena = np.sum(~mask[0])
     frozenb = np.sum(~mask[1])
 
-    nmoa, nmob = agf2.nmo
     npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
     cib, cjb, cab = coeffs_b

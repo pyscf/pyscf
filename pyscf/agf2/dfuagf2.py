@@ -65,7 +65,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     assert type(gf_vir[0]) is aux.GreensFunction
     assert type(gf_vir[1]) is aux.GreensFunction
 
-    nmoa, nmob = agf2.nmo
+    nmoa, nmob = eri.nmo
     nocca, nvira = gf_occ[0].naux, gf_vir[0].naux
     noccb, nvirb = gf_occ[1].naux, gf_vir[1].naux
     naux = agf2.with_df.get_naoaux()
