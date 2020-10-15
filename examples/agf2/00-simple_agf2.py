@@ -14,7 +14,7 @@ Default AGF2 corresponds to the AGF2(1,0) method outlined in the papers:
 
 from pyscf import gto, scf, agf2
 
-mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=5)
+mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz')
 
 mf = scf.RHF(mol)
 mf.conv_tol = 1e-12
