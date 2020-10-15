@@ -796,7 +796,7 @@ class RAGF2(lib.StreamObject):
         return myagf2
 
 
-    def get_ip(self, gf, nroots=1):
+    def get_ip(self, gf, nroots=5):
         gf_occ = gf.get_occupied()
         e_ip = list(-gf_occ.energy[-nroots:])[::-1]
         v_ip = list(gf_occ.coupling[:,-nroots:].T)[::-1]
@@ -821,7 +821,7 @@ class RAGF2(lib.StreamObject):
 
         for n, en, vn in zip(range(nroots), e_ip, v_ip):
             qpwt = np.linalg.norm(vn)**2
-            logger.note(self, 'IP energy level %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
+            logger.note(self, 'IP energy level %d E = %.16g  QP weight = %0.6g', n, en, qpwt)
 
         if nroots == 1:
             return e_ip[0], v_ip[0]
@@ -847,7 +847,7 @@ class RAGF2(lib.StreamObject):
 
         for n, en, vn in zip(range(nroots), e_ea, v_ea):
             qpwt = np.linalg.norm(vn)**2
-            logger.note(self, 'EA energy level %d E = %.16g  qpwt = %0.6g', n, en, qpwt)
+            logger.note(self, 'EA energy level %d E = %.16g  QP weight = %0.6g', n, en, qpwt)
 
         if nroots == 1:
             return e_ea[0], v_ea[0]

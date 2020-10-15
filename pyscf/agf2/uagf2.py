@@ -586,17 +586,57 @@ class UAGF2(ragf2.RAGF2):
 
         return myagf2
 
-    def get_ip(self, gf, nroots=1):
-        gf_occ = aux.combine(gf[0].get_occupied(), gf[1].get_occupied())
-        e_ip = list(-gf_occ.energy[-nroots:])[::-1]
-        v_ip = list(gf_occ.coupling[:,-nroots:].T)[::-1]
-        return e_ip, v_ip
+    def get_ip(self, gf, nroots=5):
+        gf_occ = (gf[0].get_occupied(), gf[1].get_occupied())
+        spin = np.array([0,]*gf_occ[0].naux + [1,]*gf_occ[1].naux)
+        e_ip = np.concatenate([gf_occ[0].energy, gf_occ[1].energy], axis=0)
+        v_ip = np.concatenate([gf_occ[0].coupling, gf_occ[1].coupling], axis=1)
 
-    def get_ea(self, gf, nroots=1):
-        gf_vir = aux.combine(gf[0].get_virtual(), gf[1].get_virtual())
-        e_ea = list(gf_vir.energy[:nroots])
-        v_ea = list(gf_vir.coupling[:,:nroots].T)
-        return e_ea, v_ea
+        mask = np.argsort(e_ip)
+        spin = list(spin[mask][-nroots:])[::-1]
+        e_ip = list(-e_ip[mask][-nroots:])[::-1]
+        v_ip = list(v_ip[:,mask][:,-nroots:].T)[::-1]
+
+        return e_ip, v_ip, spin
+
+    def ipagf2(self, nroots=5):
+        e_ip, v_ip, spin = self.get_ip(self.gf, nroots=nroots)
+
+        for n, en, vn, sn in zip(range(nroots), e_ip, v_ip, spin):
+            qpwt = np.linalg.norm(vn)**2
+            tag = ['alpha', 'beta'][sn]
+            logger.note(self, 'IP energy level %d E = %.16g  QP weight = %0.6g  (%s)', n, en, qpwt, tag)
+
+        if nroots == 1:
+            return e_ip[0], v_ip[0]
+        else:
+            return e_ip, v_ip
+
+    def get_ea(self, gf, nroots=5):
+        gf_vir = (gf[0].get_virtual(), gf[1].get_virtual())
+        spin = np.array([0,]*gf_vir[0].naux + [1,]*gf_vir[1].naux)
+        e_ea = np.concatenate([gf_vir[0].energy, gf_vir[1].energy], axis=0)
+        v_ea = np.concatenate([gf_vir[0].coupling, gf_vir[1].coupling], axis=1)
+
+        mask = np.argsort(e_ea)
+        spin = list(spin[mask][:nroots])
+        e_ea = list(e_ea[mask][:nroots])
+        v_ea = list(v_ea[:,mask][:,:nroots].T)
+
+        return e_ea, v_ea, spin
+
+    def eaagf2(self, nroots=5):
+        e_ea, v_ea, spin = self.get_ea(self.gf, nroots=nroots)
+
+        for n, en, vn, sn in zip(range(nroots), e_ea, v_ea, spin):
+            qpwt = np.linalg.norm(vn)**2
+            tag = ['alpha', 'beta'][sn]
+            logger.note(self, 'EA energy level %d E = %.16g  QP weight = %0.6g  (%s)', n, en, qpwt, tag)
+
+        if nroots == 1:
+            return e_ea[0], v_ea[0]
+        else:
+            return e_ea, v_ea
 
     
     @property
