@@ -5,7 +5,9 @@
 #
 
 '''
-A simple example of restricted AGF2.
+A simple example of restricted AGF2. AGF2 will compute correlation energies, one-particle
+properties and charged excitations / energy levels via an iterated, renormalized perturbation
+theory.
 
 Default AGF2 corresponds to the AGF2(1,0) method outlined in the papers:
   - O. J. Backhouse, M. Nusspickel and G. H. Booth, J. Chem. Theory Comput., 16, 1090 (2020).
@@ -26,6 +28,7 @@ gf2.conv_tol = 1e-7
 gf2.run(verbose=4)
 
 # Print the first 3 ionization potentials
+# Note that there is no additional cost to write out larger numbers of excitations.
 gf2.ipagf2(nroots=3)
 
 # Print the first 3 electron affinities
