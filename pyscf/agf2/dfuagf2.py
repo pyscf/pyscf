@@ -224,7 +224,7 @@ class DFUAGF2(uagf2.UAGF2):
             MO basis.
         '''
 
-        eri = _make_mo_eris_incore(self)
+        eri = _make_mo_eris_incore(self, mo_coeff)
 
         return eri
 

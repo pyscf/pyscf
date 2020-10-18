@@ -414,12 +414,12 @@ class UAGF2(ragf2.RAGF2):
 
         if (self._scf._eri is not None and
                 (mem_incore+mem_now < self.max_memory and not self.incore_complete)):
-            eri = _make_mo_eris_incore(self)
+            eri = _make_mo_eris_incore(self, mo_coeff)
         else:
             logger.warn(self, 'MO eris are outcore - this may be very '
                               'slow for agf2. increasing max_memory or '
                               'using density fitting is recommended.')
-            eri = _make_mo_eris_outcore(self)
+            eri = _make_mo_eris_outcore(self, mo_coeff)
 
         return eri
 

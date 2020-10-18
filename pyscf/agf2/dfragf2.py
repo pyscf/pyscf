@@ -273,7 +273,7 @@ class DFRAGF2(ragf2.RAGF2):
             MO basis.
         '''
 
-        eri = _make_mo_eris_incore(self)
+        eri = _make_mo_eris_incore(self, mo_coeff)
 
         return eri
 
