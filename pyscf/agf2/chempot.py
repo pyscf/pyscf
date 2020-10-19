@@ -151,7 +151,8 @@ def minimize_chempot(se, fock, nelec, occupancy=2, x0=0.0, tol=1e-6, maxiter=200
     '''
 
     tol = tol**2  # we minimize the squared error
-    buf = np.zeros((se.nphys+se.naux, se.nphys+se.naux))
+    dtype = np.result_type(se.energy.dtype, se.coupling.dtype, fock.dtype)
+    buf = np.zeros((se.nphys+se.naux, se.nphys+se.naux), dtype=dtype)
     fargs = (se, fock, nelec, occupancy, buf)
 
     options = dict(maxiter=maxiter, ftol=tol, xtol=tol, gtol=tol)

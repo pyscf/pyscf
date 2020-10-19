@@ -113,8 +113,10 @@ class AuxiliarySpace(object):
 
         _check_phys_shape(self, phys)
 
+        dtype = np.result_type(phys.dtype, self.energy.dtype, self.coupling.dtype)
+
         if out is None:
-            out = np.zeros((self.nphys+self.naux,)*2)
+            out = np.zeros((self.nphys+self.naux,)*2, dtype=dtype)
 
         sp = slice(None, self.nphys)
         sa = slice(self.nphys, None)
