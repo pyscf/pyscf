@@ -69,7 +69,7 @@ def conjugateGradient(A, b, x, max_iter=5, conv=1.e-4):
         rsold = rsnew
     return x, rsnew**0.5
     
-def get_jk_df(mol, cderi, dm, with_j=True, with_k=True):
+def get_jk_df(cderi, dm, with_j=True, with_k=True):
     if (with_j):
         j1 = lib.einsum('Lij,ji->L', cderi, dm)
         j = lib.einsum('Lij,L->ij', cderi, j1)
@@ -505,8 +505,8 @@ To enable the solvent model for CASSCF, the following code needs to be called
         dmcas = reduce(numpy.dot, (moa.conj(), casdm1(), moa.T)).conj()
         dmcore = numpy.dot(moc, moc.conj().T)
 
-        jc,kc = self._scf.get_jk(self.mol, dm=dmcore)        
-        ja,ka = self._scf.get_jk(self.mol, dm=dmcas)        
+        jc,kc = self._scf.get_jk(self.cderi, dm=dmcore)        
+        ja,ka = self._scf.get_jk(self.cderi, dm=dmcas)        
         
         gradC2[:,:ncore] = numpy.dot( (hcore + (jc-kc)+ja-ka) , moc)  
 
@@ -958,7 +958,7 @@ if __name__ == '__main__':
     emc = mc.kernel()[0]
     print (emc)
     '''
-    '''
+    
     m = scf.X2C(mol)
     #m = scf.GHF(mol)
     ehf = m.kernel()
@@ -971,13 +971,13 @@ if __name__ == '__main__':
     mc.fcisolver.davidsonTol = 1.e-6
 
     mo = 1.*m.mo_coeff
-    '''
-    #numpy.random.seed(5)
-    #noise = numpy.zeros(mo.shape, dtype=complex)
-    #noise = numpy.random.random(mo.shape) +\
-    #            numpy.random.random(mo.shape)*1.j
-    #mo = numpy.dot(mo, expmat(-0.01*(noise - noise.T.conj())))
     
+    numpy.random.seed(5)
+    noise = numpy.zeros(mo.shape, dtype=complex)
+    noise = numpy.random.random(mo.shape) +\
+                numpy.random.random(mo.shape)*1.j
+    mo = numpy.dot(mo, expmat(-0.01*(noise - noise.T.conj())))
+    mc.kernel(mo)
     #import cProfile
     #cProfile.run('mc.kernel(mo)')
     #exit(0)
