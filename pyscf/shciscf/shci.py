@@ -330,7 +330,7 @@ class SHCI(pyscf.lib.StreamObject):
         twopdm = numpy.fromfile(f, dtype=complex)
         #twopdm = numpy.reshape(twopdm,  (norb, norb, norb, norb))
         twopdm = numpy.reshape(twopdm,  (norb, norb, norb, norb), order='F')
-        onepdm = numpy.einsum('ijkj->ki', twopdm)/(nelectrons-1)
+        onepdm = numpy.einsum('ijkj->ik', twopdm)/(nelectrons-1)
         return onepdm, twopdm 
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
