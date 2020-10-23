@@ -180,7 +180,7 @@ def _init_mp_df_eris(mp):
     nvir = nmo - nocc
     nao = cell.nao_nr()
 
-    mo_coeff = mp._scf.mo_coeff
+    mo_coeff = _add_padding(mp, mp.mo_coeff, mp.mo_energy)[0]
     kpts = mp.kpts
     nkpts = len(kpts)
     if gamma_point(kpts):
