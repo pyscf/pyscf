@@ -413,7 +413,7 @@ class UAGF2(ragf2.RAGF2):
         mem_now = lib.current_memory()[0]
 
         if (self._scf._eri is not None and
-                (mem_incore+mem_now < self.max_memory and not self.incore_complete)):
+                (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             eri = _make_mo_eris_incore(self, mo_coeff)
         else:
             logger.warn(self, 'MO eris are outcore - this may be very '
