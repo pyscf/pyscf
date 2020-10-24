@@ -18,7 +18,6 @@ import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
-from pyscf.pbc import df as pdf
 import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
 
@@ -126,18 +125,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(emp2, -0.022416773725207319, 6)
 
     def test_h4_fcc_k2_frozen_df_nocc(self):
-        '''Metallic hydrogen fcc lattice.  Test diff. nocc at k points.
-
-        NOTE: different versions of the davidson may converge to a different
-        solution for the k-point IP/EA eom.  If you're getting the wrong
-        root, check to see if it's contained in the supercell set of
-        eigenvalues.'''
+        '''Metallic hydrogen fcc, test different nocc at k points.'''
         cell = build_h_cell()
 
         nmp = [2, 1, 1]
 
-        kmf = pbcscf.KRHF(cell)
-        kmf.with_df = pdf.GDF(cell)
+        kmf = pbcscf.KRHF(cell).density_fit()
         kmf.kpts = cell.make_kpts(nmp, scaled_center=[0.0,0.0,0.0])
         e = kmf.kernel()
 
