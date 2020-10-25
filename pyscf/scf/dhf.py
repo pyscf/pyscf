@@ -32,6 +32,8 @@ from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
 try:
+    # Install zquatev with
+    # pip install git+https://github.com/sunqm/zquatev
     import zquatev
 except ImportError:
     zquatev = None
