@@ -147,7 +147,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
     mem_incore = (gf_occ.nphys*gf_occ.naux**2*gf_vir.naux) * 8/1e6
     mem_now = lib.current_memory()[0]
-    if (mem_incore+mem_now < agf2.max_memory) and not agf2.incore_complete:
+    if (mem_incore+mem_now < agf2.max_memory) or agf2.incore_complete:
         qeri = _make_qmo_eris_incore(agf2, eri, (ci, ci, ca))
     else:
         qeri = _make_qmo_eris_outcore(agf2, eri, (ci, ci, ca))
