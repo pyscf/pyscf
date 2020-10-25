@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include <complex.h>
 #include "cint.h"
@@ -42,6 +43,11 @@
 #define K_TAB_ENTRIES   400
 #define K_TAB_INTERVAL  (16./K_TAB_ENTRIES)    // [0,16], interval 0.04
 #define MAX(X,Y)        (X)>(Y)?(X):(Y)
+#define MALLOC_INSTACK(var, n) \
+                var = (void *)cache; \
+                cache = (void *)(((uintptr_t)(var + n) + 7) & (-(uintptr_t)8));
+#define MARK_STACK      cache0 = cache;
+#define RESTORE_STACK   cache = cache0;
 
 // Held in env, to get *ecpbas, necpbas
 #define AS_ECPBAS_OFFSET        18
@@ -5162,8 +5168,12 @@ void type2_facs_ang(double *facs, int li, int lc, double *ri)
 
 void type2_facs_rad(double *facs, int ish, int lc, double rca,
                     double *rs, int nrs, int inc,
-                    int *atm, int natm, int *bas, int nbas, double *env)
+                    int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
+        if (nrs == 0) {
+                return;
+        }
+
         const int li = bas[ANG_OF  +ish*BAS_SLOTS];
         const int np = bas[NPRIM_OF+ish*BAS_SLOTS];
         const int nc = bas[NCTR_OF +ish*BAS_SLOTS];
@@ -5172,8 +5182,9 @@ void type2_facs_rad(double *facs, int ish, int lc, double rca,
         const int lilc1 = li + lc + 1;
         int ip, i, j;
         double ka;
-        double r2[nrs];
-        double buf[np*nrs*lilc1];
+        double *r2, *buf;
+        MALLOC_INSTACK(r2, nrs);
+        MALLOC_INSTACK(buf, np*nrs*lilc1);
         double t1, ar2;
         double *pbuf = buf;
 
@@ -5364,6 +5375,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         if (necpbas == 0) {
                 return 0;
         }
+        double *cache0;
         const int ish = shls[0];
         const int jsh = shls[1];
         const int li = bas[ANG_OF+ish*BAS_SLOTS];
@@ -5376,35 +5388,48 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int ngctr = nci * ncj * nfi * nfj;
         const double *ri = env + atm[PTR_COORD+bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
         const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
-
-        int nrs = 1 << LEVEL_MAX;
-        int ecploc[necpbas+1];
-        int nslots = _loc_ecpbas(ecploc, ecpbas, necpbas);
-        int *ecpshls;
-        int iloc;
-
         const double D0 = 0;
         const double D1 = 1;
         const char TRANS_N = 'N';
         const char TRANS_T = 'T';
         const double common_fac = CINTcommon_fac_sp(li) *
                                   CINTcommon_fac_sp(lj) * 16 * M_PI * M_PI;
+
+        int nrs = 1 << LEVEL_MAX;
         int atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq;
         int i, j, n, ic, jc;
         int d2, d3;
-        double ur[nrs];
-        double rur[nrs*(li+lj+1)];
-        double radi[nci*(li+ECP_LMAX+1)*nrs];
-        double radj[ncj*(lj+ECP_LMAX+1)*nrs];
-        double angi[(li+1)*nfi*(ECP_LMAX*2+1)*(li+ECP_LMAX+1)];
-        double angj[(lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)];
-        double rad_all[nci*ncj*(li+lj+1)*(li+ECP_LMAX+1)*(lj+ECP_LMAX+1)];
-        double rca[3];
-        double rcb[3];
-        double buf[nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)];
         double dca, dcb, s;
         double *rc, *pradi, *pradj, *prur;
+        double rca[3];
+        double rcb[3];
         int has_value = 0;
+        int *ecploc;
+        MALLOC_INSTACK(ecploc, necpbas+1);
+        int nslots = _loc_ecpbas(ecploc, ecpbas, necpbas);
+        int *ecpshls;
+        int iloc;
+
+        double *ur, *rur, *radi, *radj, *angi, *angj, *rad_all;
+        double *prad, *plast;
+        MALLOC_INSTACK(rad_all, nci*ncj*(li+lj+1)*(li+ECP_LMAX+1)*(lj+ECP_LMAX+1));
+        MARK_STACK;
+        MALLOC_INSTACK(angi, (li+1)*nfi*(ECP_LMAX*2+1)*(li+ECP_LMAX+1));
+        MALLOC_INSTACK(angj, (lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1));
+        double *buf = cache;
+
+        RESTORE_STACK;
+        MALLOC_INSTACK(ur, nrs);
+        MALLOC_INSTACK(rur, nrs*(li+lj+1));
+        MALLOC_INSTACK(radi, nci*(li+ECP_LMAX+1)*nrs);
+        MALLOC_INSTACK(radj, ncj*(lj+ECP_LMAX+1)*nrs);
+        lilj1 = li + lj + 1;
+        lilc1 = li + ECP_LMAX + 1;
+        ljlc1 = lj + ECP_LMAX + 1;
+        d2 = lilj1 * lilj1;
+        MALLOC_INSTACK(plast, d2);
+        char *converged;
+        MALLOC_INSTACK(converged, nci*ncj*lilj1);
 
         for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
 
@@ -5421,7 +5446,6 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         if (!check_3c_overlap(shls, atm, bas, env, rc, ecpshls, ecpbas)) {
                 continue;
         }
-
         has_value = 1;
         rca[0] = rc[0] - ri[0];
         rca[1] = rc[1] - ri[1];
@@ -5433,7 +5457,6 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         dcb = sqrt(SQUARE(rcb));
 
         dlc = lc * 2 + 1;
-        lilj1 = li + lj + 1;
         lilc1 = li + lc + 1;
         ljlc1 = lj + lc + 1;
         d2 = lilc1 * ljlc1;
@@ -5443,9 +5466,6 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
         int level, nrs0, start, step, ijl;
         double wtscale;
-        double *prad;
-        double plast[d2];
-        char converged[nci*ncj*lilj1];
         char all_conv;
         double *rs = rs_gauss_chebyshev2047;
         double *ws = ws_gauss_chebyshev2047;
@@ -5467,9 +5487,9 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 }
 
                 type2_facs_rad(radi, ish, lc, dca, rs+start, nrs, step,
-                               atm, natm, bas, nbas, env);
+                               atm, natm, bas, nbas, env, cache);
                 type2_facs_rad(radj, jsh, lc, dcb, rs+start, nrs, step,
-                               atm, natm, bas, nbas, env);
+                               atm, natm, bas, nbas, env, cache);
                 all_conv = 1;
                 for (ijl = 0, ic = 0; ic < nci; ic++) {
                 for (jc = 0; jc < ncj; jc++) {
@@ -5671,9 +5691,9 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 }
 
                 type2_facs_rad(radi, ish, lc, dca, rs+start, nrs, step,
-                               atm, natm, bas, nbas, env);
+                               atm, natm, bas, nbas, env, cache);
                 type2_facs_rad(radj, jsh, lc, dcb, rs+start, nrs, step,
-                               atm, natm, bas, nbas, env);
+                               atm, natm, bas, nbas, env, cache);
                 all_conv = 1;
                 for (ijl = 0, ic = 0; ic < nci; ic++) {
                 for (jc = 0; jc < ncj; jc++) {
@@ -5762,6 +5782,10 @@ static void scale_coeff(double *cei, const double *ci, const double *ai,
 void type1_rad_part(double *rad_all, int lmax, double k, double aij,
                     double *ur, double *rs, int nrs, int inc)
 {
+        if (nrs == 0) {
+                return;
+        }
+
         const int lmax1 = lmax + 1;
         double rur[nrs];
         double bval[nrs*lmax1];
@@ -5910,6 +5934,9 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         for (level = LEVEL0; level <= LEVEL_MAX; level++) {
                 nrs = ECPrad_part(ur, rs, start, nrs0, step, ecpshls, ecpbas,
                                   atm, natm, bas, nbas, env, opt);
+                if (nrs == 0) {
+                        break;
+                }
                 for (n = 0; n < nrs; n++) {
                         ur[n] *= ws[start+n*step] * wtscale;
                 }
@@ -5998,9 +6025,42 @@ int ECPscalar_cache_size(int comp, int *shls,
         const int lj = bas[ANG_OF+jsh*BAS_SLOTS];
         const int nfi = (li+1) * (li+2) / 2;
         const int nfj = (lj+1) * (lj+2) / 2;
+        const int npi = bas[NPRIM_OF+ish*BAS_SLOTS];
+        const int npj = bas[NPRIM_OF+jsh*BAS_SLOTS];
         const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
         const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
-        int size = nfi*nfj*(nci*ncj*3+1) * comp;
+        const int lilj1 = li + lj + 1;
+        const int lilc1 = li + ECP_LMAX + 1;
+        const int ljlc1 = lj + ECP_LMAX + 1;
+        const int d1 = lilj1;
+        const int d2 = d1 * d1;
+        const int d3 = d2 * d1;
+        const int di1 = li + 1;
+        const int di2 = di1 * di1;
+        const int di3 = di2 * di1;
+        const int dj1 = lj + 1;
+        const int dj2 = dj1 * dj1;
+        const int dj3 = dj2 * dj1;
+        const int nrs =  1 << LEVEL_MAX;
+        int size1 = nci*ncj*(li+lj+1)*((li+ECP_LMAX+1)*(lj+ECP_LMAX+1) + 1);
+        size1 += ((li+1)*nfi*(ECP_LMAX*2+1)*(li+ECP_LMAX+1) +
+                 (lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1));
+        size1 += nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1);
+        int size2 = nrs * (li+lj+1 + 2 +
+                           nci*(li+ECP_LMAX+1) +
+                           ncj*(lj+ECP_LMAX+1) +
+                           MAX(npi*lilc1, npj*ljlc1));
+        size2 += lilc1 * ljlc1;
+        int size = nfi*nfj*(nci*ncj*4+1) * comp;
+        size += MAX(size1, size2);
+        size += nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1);
+        size += npi*npj*d2;
+        size += d3;
+        size += nci*ncj*d3;
+        size += nfi*di3;
+        size += nfj*dj3;
+        size += npi*nci;
+        size += npj*ncj;
         return size;
 }
 
@@ -6127,19 +6187,15 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
         const int dij = di * dj;
 
         if (out == NULL) {
-                const int nfi = (li+1) * (li+2) / 2;
-                const int nfj = (lj+1) * (lj+2) / 2;
-                const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
-                const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
-                return dij*2 + nfi*nfj*nci*ncj*2;
+                int cache_size = ECPscalar_cache_size(1, shls,
+                                                      atm, natm, bas, nbas, env);
+                return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                const int nfi = (li+1) * (li+2) / 2;
-                const int nfj = (lj+1) * (lj+2) / 2;
-                const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
-                const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
-                stack = malloc(sizeof(double) * (dij*2+nfi*nfj*nci*ncj*2));
+                int cache_size = ECPscalar_cache_size(1, shls,
+                                                      atm, natm, bas, nbas, env);
+                stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
         }
 
@@ -6182,11 +6238,15 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
         const int dij = di * dj;
 
         if (out == NULL) {
-                return dij * 2;
+                int cache_size = ECPscalar_cache_size(1, shls,
+                                                      atm, natm, bas, nbas, env);
+                return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                stack = malloc(sizeof(double) * dij * 2);
+                int cache_size = ECPscalar_cache_size(1, shls,
+                                                      atm, natm, bas, nbas, env);
+                stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
         }
 
@@ -6363,11 +6423,15 @@ int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
         const int comp = 4;
 
         if (out == NULL) {
-                return dij * comp;
+                int cache_size = ECPscalar_cache_size(comp, shls,
+                                                      atm, natm, bas, nbas, env);
+                return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                stack = malloc(sizeof(double) * dij * comp);
+                int cache_size = ECPscalar_cache_size(comp, shls,
+                                                      atm, natm, bas, nbas, env);
+                stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
         }
 
@@ -6398,8 +6462,6 @@ int ECPso_sph(double *out, int *dims, int *shls, int *atm, int natm,
         const int jsh = shls[1];
         const int li = bas[ANG_OF+ish*BAS_SLOTS];
         const int lj = bas[ANG_OF+jsh*BAS_SLOTS];
-        const int nfi = (li+1) * (li+2) / 2;
-        const int nfj = (lj+1) * (lj+2) / 2;
         const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
         const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
         const int di = (li*2+1) * nci;
@@ -6408,11 +6470,15 @@ int ECPso_sph(double *out, int *dims, int *shls, int *atm, int natm,
         const int comp = 4;
 
         if (out == NULL) {
-                return dij*comp + nfi*nfj*nci*ncj*comp*2;
+                int cache_size = ECPscalar_cache_size(comp, shls,
+                                                      atm, natm, bas, nbas, env);
+                return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                stack = malloc(sizeof(double) * (dij*comp+nfi*nfj*nci*ncj*comp*2));
+                int cache_size = ECPscalar_cache_size(comp, shls,
+                                                      atm, natm, bas, nbas, env);
+                stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
         }
 
@@ -6454,11 +6520,15 @@ int ECPso_spinor(double complex *out, int *dims, int *shls, int *atm, int natm,
         const int dj = CINTcgto_spinor(shls[1], bas);
 
         if (out == NULL) {
-                return ngctr*4 + nfi*nfj*8*OF_CMPLX;
+                int cache_size = ECPscalar_cache_size(1, shls,
+                                                      atm, natm, bas, nbas, env);
+                return cache_size + nfi*nfj*8*OF_CMPLX;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                stack = malloc(sizeof(double) * (ngctr*4 + nfi*nfj*8*OF_CMPLX));
+                int cache_size = ECPscalar_cache_size(1, shls,
+                                                      atm, natm, bas, nbas, env);
+                stack = malloc(sizeof(double) * (cache_size + nfi*nfj*8*OF_CMPLX));
                 cache = stack;
         }
 
