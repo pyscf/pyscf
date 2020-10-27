@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     #TODO implement the finite field version
     polar = Polarizability(kmf, kpts)
-    dip = polar.dipole()
+    dip = polar.dip_moment()
     print(dip)
     e2 = polar.polarizability()
     print(e2)
