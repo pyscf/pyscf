@@ -109,7 +109,7 @@ class RangeSeparationJKBuilder(object):
             self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
             self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
 
-        logger.info(self, 'omega = %f  ke_cutoff = %s  mesh = %s',
+        logger.info(self, 'omega = %.15g  ke_cutoff = %s  mesh = %s',
                     self.omega, self.ke_cutoff, self.mesh)
 
         kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
@@ -121,7 +121,7 @@ class RangeSeparationJKBuilder(object):
         bvkcell_dense = k2gamma.get_phase(cell_dense, kpts, kmesh)[0]
         bvkcell_sparse = k2gamma.get_phase(cell_sparse, kpts, kmesh)[0]
         # Ls is the translation vectors to mimic periodicity of a cell
-        Ls = bvkcell.get_lattice_Ls(rcut=cell.rcut)
+        Ls = bvkcell.get_lattice_Ls(rcut=cell.rcut+10, discard=False)
         self.supmol_Ls = Ls = Ls[np.linalg.norm(Ls, axis=1).argsort()]
         self.supmol_dense = supmol1 = _make_extended_mole(cell_dense, bvkcell_dense, Ls, Ks)
         self.supmol_sparse = supmol2 = _make_extended_mole(cell_sparse, bvkcell_sparse, Ls, Ks)
@@ -158,7 +158,7 @@ class RangeSeparationJKBuilder(object):
 
         if direct_scf_tol is None:
             direct_scf_tol = cell.precision * 1e-2
-            logger.debug(self, 'Set direct_scf_tol %f', direct_scf_tol)
+            logger.debug(self, 'Set direct_scf_tol %g', direct_scf_tol)
 
         supmol.omega = -self.omega  # Set short range coulomb
         with supmol.with_integral_screen(direct_scf_tol**2):
@@ -382,6 +382,10 @@ def _make_extended_mole(cell, bvkcell, Ls, bvkmesh_Ls):
     a = cell.lattice_vectors()
     rcuts = np.array([cell.bas_rcut(ib, cell.precision)
                       for ib in range(cell.nbas)])
+    # FIXME: determine the trucation distance, based on omega and most
+    # diffused functions
+    #rcuts += 6
+    #rcuts*=2
     bas_mask = np.zeros((nimgs, nk, cell.nbas), dtype=bool)
     bas_mask[0] = True  # The main sup-cell (image-0) needs to be entirely included
     for ax in (-a[0], 0, a[0]):
@@ -471,6 +475,7 @@ def _split_cell(cell, ke_cut):
             ke_cutoff = max(ke_cutoff, ke[dense_mask].max())
             dense_cell_rcut = max(dense_cell_rcut, rcuts[ib][dense_mask].max())
     log.debug1('rcut for steep functions %g', dense_cell_rcut)
+    log.debug1('rcut for smooth functions %g', cell_sparse.rcut)
     log.debug1('ke_cutoff for steep functions %g', ke_cutoff)
 
     cell_dense._bas = np.asarray(dense_bas, dtype=np.int32, order='C').reshape(-1, gto.BAS_SLOTS)
@@ -493,17 +498,17 @@ if __name__ == '__main__':
     cell.atom = '''He     0.      0.      0.
                    He     0.4917  0.4917  0.4917
                 '''
-    cell.basis = {'He': [[0, [1.1, 1],
-                             [0.2, 1]
+    cell.basis = {'He': [[0, [2.1, 1],
+                             [0.1, 1]
                          ],
-                         [1, [0.3, 1]],
-                         [1, [1.5, 1]],
+                         #[1, [0.3, 1]],
+                         #[1, [1.5, 1]],
                         ]}
-    cell.verbose = 5
     cell.build()
-    #cells.append(cell)
+    cell.verbose = 6
+    cells.append(cell)
 
-    if 1:
+    if 0:
         cell = Cell().build(a = '''
 0.000000000, 3.370137329, 3.370137329
 3.370137329, 0.000000000, 3.370137329
@@ -515,20 +520,20 @@ C 1.685068664391   1.685068664391   1.685068664391''',
                             basis='''
 C S
 4.3362376436      0.1490797872
-1.2881838513      -0.0292640031
-0.4037767149      -0.688204051
+#1.2881838513      -0.0292640031
+#0.4037767149      -0.688204051
 0.1187877657      -0.3964426906
 C P
 4.3362376436      -0.0878123619
-1.2881838513      -0.27755603
-0.4037767149      -0.4712295093
+#1.2881838513      -0.27755603
+#0.4037767149      -0.4712295093
 0.1187877657      -0.4058039291
-''',
-                            verbose=5)
+''')
+        cell.verbose = 6
         cells.append(cell)
 
     for cell in cells:
-        kpts = cell.make_kpts([1,1,1])
+        kpts = cell.make_kpts([2,1,1])
         mf = cell.KRHF(kpts=kpts)#.run()
         #dm = mf.make_rdm1()
         np.random.seed(1)

@@ -620,8 +620,8 @@ class KSCF(pbchf.SCF):
         if dm_kpts is None: dm_kpts = self.make_rdm1()
         cpu0 = (time.clock(), time.time())
         if self.rsjk:
-            vj, vk = self.jk_builder.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                            with_j, with_k, omega, self.exxdiv)
+            vj, vk = self.rsjk.get_jk(dm_kpts, hermi, kpts, kpts_band,
+                                      with_j, with_k, omega, self.exxdiv)
         else:
             vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
                                          with_j, with_k, omega, self.exxdiv)
