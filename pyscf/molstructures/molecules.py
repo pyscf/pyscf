@@ -6,7 +6,8 @@ import numpy as np
 
 from pyscf import gto
 
-from util import *
+#from util import *
+from .util import *
 
 __all__ = [
         "build_dimer",
@@ -26,6 +27,7 @@ __all__ = [
         "build_water_boronene",
         "build_mn_oxo_porphyrin",
         "build_azomethane",
+        "build_propane",
         ]
 
 log = logging.getLogger(__name__)
@@ -448,12 +450,7 @@ def build_water_boronene(distance, **kwargs):
     """
 
     # This data is for 3.4 A
-    datafile = os.path.join(os.path.dirname(__file__), "data/boronene.dat")
-    data = np.loadtxt(datafile, dtype=[("atoms", object), ("coords", np.float64, (3,))])
-    #data2 = np.loadtxt("data/boronene-diss.dat", dtype=[("atom", object), ("coords", np.float64, (3,))])
-
-    coords = data["coords"]
-    atoms = data["atoms"]
+    atoms, coords = load_datafile("boronene.dat")
 
     #i = 12 # H
     #i = 28 # N1
@@ -501,6 +498,14 @@ def build_mn_oxo_porphyrin(distance, **kwargs):
 #        origin = atom[origin][1]
 #    for symbol, coords in atom:
 #        print("Distance to %3s: %.5g" % (symbol, np.linalg.norm(coords - origin)))
+
+def build_propane(**kwargs):
+    atoms, coords = load_datafile("propane.dat")
+    atom = [[atoms[i], coords[i]] for i in range(len(atoms))]
+    mol = gto.M(
+        atom=atom,
+        **kwargs)
+    return mol
 
 
 if __name__ == "__main__":

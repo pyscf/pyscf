@@ -76,14 +76,14 @@ parser.add_argument("--benchmarks", nargs="*")
 parser.add_argument("--max-memory", type=int, default=1e5)
 parser.add_argument("-o", "--output", default="energies.txt")
 
-parser.add_argument("--bath-type")
 #parser.add_argument("--local-type", choices=["IAO", "LAO", "AO"], default="IAO")
 parser.add_argument("--local-type", default="IAO")
 parser.add_argument("--dmet-bath-tol", type=float, default=1e-8)
+parser.add_argument("--bath-type")
 parser.add_argument("--bath-tol", type=float, nargs=2)
 parser.add_argument("--bath-size", type=int, nargs=2)
 parser.add_argument("--bath-relative-size", type=float, nargs=2)
-parser.add_argument("--mp2-correction", type=int, nargs=2)
+parser.add_argument("--mp2-correction", type=int, nargs=2, default=[True, True])
 # Load and restore DF integrals
 parser.add_argument("--cderi-name", default="cderi-%.2f")
 parser.add_argument("--cderi-load", action="store_true")
@@ -262,6 +262,14 @@ for icalc, distance in enumerate(args.distances):
     elif args.cderi_save:
         log.debug("Saving DF integrals in file %s", cderi_name)
         mf.with_df._cderi_to_save = cderi_name
+
+    # For optimization
+    h1e = mf.get_hcore()
+    s1e = mf.get_ovlp()
+    enuc = mf.energy_nuc()
+    mf.get_hcore = lambda *_ : h1e
+    mf.get_ovlp = lambda *_ : s1e
+    mf.energy_nuc = lambda *_ : enuc
 
     # Start from HF in reduced basis
     #if dm0 is None and args.preconverge_mf:

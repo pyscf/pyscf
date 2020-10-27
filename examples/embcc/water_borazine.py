@@ -21,8 +21,9 @@ MPI_size = MPI_comm.Get_size()
 log = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
+#parser.add_argument("--basis", default="borazine", choices=["borazine", "boronene"])
 #parser.add_argument("--basis", default="cc-pVDZ")
-parser.add_argument("--basis", nargs=2, default=["cc-pVDZ", "cc-pVDZ"])
+parser.add_argument("--basis", nargs="*", default=["cc-pVDZ", "cc-pVDZ"])
 #parser.add_argument("--solver", choices=["CISD", "CCSD", "FCI"], default="CCSD")
 parser.add_argument("--benchmarks", nargs="*")
 #parser.add_argument("--tol-bath", type=float, default=1e-3)
@@ -43,10 +44,11 @@ parser.add_argument("--impurity-number", type=int, default=1)
 #parser.add_argument("--mp2-correction", action="store_true")
 #parser.add_argument("--use-ref-orbitals-bath", type=int, default=0)
 parser.add_argument("--minao", default="minao")
-#parser.add_argument("--mp2-correction", nargs=2, type=int, default=[1, 1])
+parser.add_argument("--mp2-correction", nargs=2, type=int, default=[1, 1])
 
 #parser.add_argument("--counterpoise", choices=["none", "water", "water-full", "borazine", "borazine-full"])
-parser.add_argument("--fragment", choices=["all", "water", "borazine"], default="all")
+#parser.add_argument("--fragment", choices=["all", "water", "borazine"], default="all")
+parser.add_argument("--fragment", choices=["all", "water", "surface"], default="all")
 parser.add_argument("-o", "--output", default="energies.txt")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
@@ -56,6 +58,9 @@ sys.argv[1:] = restargs
 if args.distances is None:
     args.distances = np.arange(args.distances_range[0], args.distances_range[1]+1e-14, args.distances_range[2])
 del args.distances_range
+
+if len(args.basis) == 1:
+    args.basis = 2*args.basis
 
 if args.impurity is None:
     args.impurity = ["O1", "H1", "H2"]
@@ -124,7 +129,7 @@ for idist, dist in enumerate(args.distances):
                 minao=args.minao,
                 dmet_bath_tol=args.dmet_bath_tol,
                 bath_type=args.bath_type, bath_size=args.bath_size, bath_tol=args.bath_tol,
-                #mp2_correction=args.mp2_correction,
+                mp2_correction=args.mp2_correction,
                 #use_ref_orbitals_bath=args.use_ref_orbitals_bath,
                 )
         cc.make_atom_cluster(args.impurity)

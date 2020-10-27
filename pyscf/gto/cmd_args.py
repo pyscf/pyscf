@@ -23,14 +23,14 @@ from mpi4py import MPI
 MPI_comm = MPI.COMM_WORLD
 MPI_rank = MPI_comm.Get_rank()
 
-base_output = "pyscf.log"
-default_output = base_output
-idx = 0
-while os.path.isfile(default_output):
-    idx += 1
-    default_output = base_output + ".%d" % idx
-# Make sure all MPI ranks agree on the latest logfile
-MPI_comm.Barrier()
+#base_output = "pyscf.log"
+#default_output = base_output
+#idx = 0
+#while os.path.isfile(default_output):
+#    idx += 1
+#    default_output = base_output + ".%d" % idx
+## Make sure all MPI ranks agree on the latest logfile
+#MPI_comm.Barrier()
 
 if sys.version_info >= (2,7):
 
@@ -49,7 +49,8 @@ if sys.version_info >= (2,7):
                             help='be very quiet')
         parser.add_argument('-o', '--output',
                             dest='output', metavar='FILE', help='write output to FILE',
-                            default=default_output)
+                            #default=default_output)
+                            default="pyscf.log")
         parser.add_argument('-m', '--max-memory',
                             action='store', dest='max_memory', metavar='NUM',
                             help='maximum memory to use (in MB)')
@@ -58,7 +59,10 @@ if sys.version_info >= (2,7):
 
         # Append MPI rank to output file
         if opts.output is not None and MPI_rank > 0:
-            opts.output += ".mpi%d" % MPI_rank
+            logname, ext = opts.output.rsplit(".", 1)
+            opts.output = logname + (".mpi%d" % MPI_rank)
+            if ext:
+                opts.output += (".%s" % ext)
 
         if opts.quite:
             opts.verbose = pyscf.lib.logger.QUIET

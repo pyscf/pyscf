@@ -12,6 +12,7 @@ import pyscf.lo
 
 from .util import *
 from .cluster import Cluster
+from .localao import localize_ao
 
 __all__ = [
         "EmbCC",
@@ -30,7 +31,11 @@ class EmbCC:
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
     VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "FCI-spin0", "FCI-spin1"]
-    VALID_BATH_TYPES = [None, "power", "matsubara", "mp2-natorb", "full", "random"]
+    VALID_BATH_TYPES = [
+            None, "power", "matsubara",
+            "mp2-natorb", "mp2-natorb-2", "mp2-natorb-3",
+            "mp2-natorb-4",
+            "full", "random"]
 
     default_options = [
             "solver",
@@ -126,11 +131,11 @@ class EmbCC:
         self.tccT2 = None
 
         # Mean-field attributes
-        t0 = MPI.Wtime()
-        self._ovlp = self.mf.get_ovlp()
-        self._hcore = self.mf.get_hcore()
-        #log.debug("Time for overlap/hcore/Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
-        log.debug("Time for overlap/hcore matrix: %s", get_time_string(MPI.Wtime()-t0))
+        #t0 = MPI.Wtime()
+        #self._ovlp = self.mf.get_ovlp()
+        #self._hcore = self.mf.get_hcore()
+        ##log.debug("Time for overlap/hcore/Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
+        #log.debug("Time for overlap/hcore matrix: %s", get_time_string(MPI.Wtime()-t0))
         t0 = MPI.Wtime()
         # These two fock matrices are different for loose values of cell.precision
         # Which should be used?
@@ -159,19 +164,30 @@ class EmbCC:
         if self.localize_fragment:
             log.debug("Localize fragment orbitals with %s method", self.localize_fragment)
 
-            orbs = {self.ao_labels[i] : self.C_ao[:,i:i+1] for i in range(self.C_ao.shape[-1])}
+            #orbs = {self.ao_labels[i] : self.C_ao[:,i:i+1] for i in range(self.C_ao.shape[-1])}
             #orbs = {"A" : self.C_ao}
-            create_orbital_file(self.mol, "%s.molden" % self.local_orbital_type, orbs)
+            #create_orbital_file(self.mol, "%s.molden" % self.local_orbital_type, orbs)
+            coeffs = self.C_ao
+            names = [("%d-%s-%s-%s" % l).rstrip("-") for l in self.ao_labels]
+            #create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment")
+            create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment", filetype="cube")
 
+            t0 = MPI.Wtime()
             if self.localize_fragment in ("BF", "ER", "PM"):
                 #locfunc = getattr(pyscf.lo, self.localize_fragment)
                 localizer = getattr(pyscf.lo, self.localize_fragment)(self.mol)
                 localizer.init_guess = None
-                localizer.pop_method = "lowdin"
-            t0 = MPI.Wtime()
+                #localizer.pop_method = "lowdin"
+                C_loc = localizer.kernel(self.C_ao, verbose=4)
+            elif self.localize_fragment == "LAO":
+                #centers = [l[0] for l in self.mol.ao_labels(None)]
+                centers = [l[0] for l in self.ao_labels]
+                log.debug("Atom centers: %r", centers)
+                C_loc = localize_ao(self.mol, self.C_ao, centers)
+
             #C_loc = locfunc(self.mol).kernel(self.C_ao, verbose=4)
-            C_loc = localizer.kernel(self.C_ao, verbose=4)
             log.debug("Time for orbital localization: %s", get_time_string(MPI.Wtime()-t0))
+            assert C_loc.shape == self.C_ao.shape
             # Check that all orbitals kept their fundamental character
             chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
             log.info("Diagonal of AO-Loc(AO) overlap: %r", chi)
@@ -181,19 +197,23 @@ class EmbCC:
 
             #orbs = {"A" : self.C_ao}
             #orbs = {self.ao_labels[i] : self.C_ao[:,i:i+1] for i in range(self.C_ao.shape[-1])}
-            create_orbital_file(self.mol, "%s-local.molden" % self.local_orbital_type, orbs)
+            #create_orbital_file(self.mol, "%s-local.molden" % self.local_orbital_type, orbs)
             #raise SystemExit()
 
+            coeffs = self.C_ao
+            names = [("%d-%s-%s-%s" % l).rstrip("-") for l in self.ao_labels]
+            #create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized")
+            create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized", filetype="cube")
 
     @property
     def mol(self):
         return self.mf.mol
 
-    def get_ovlp(self):
-        return self._ovlp
+    def get_ovlp(self, *args, **kwargs):
+        return self.mf.get_ovlp(*args, **kwargs)
 
-    def get_hcore(self):
-        return self._hcore
+    def get_hcore(self, *args, **kwargs):
+        return self.mf.get_hcore(*args, **kwargs)
 
     def get_fock(self):
         return self._fock
@@ -441,18 +461,6 @@ class EmbCC:
         # Orthogonal intrinsic AOs
         if self.local_orbital_type == "IAO":
 
-            # OUTDATED
-            #indices = []
-            #for idx, iao in enumerate(self.iao_labels):
-            #    iao_sym = " ".join([str(iao[0]), *iao[1:]])
-            #    add_iao = False
-            #    for ao in aos:
-            #        if np.all([s in iao_sym for s in ao]):
-            #            add_iao = True
-            #            break
-            #    if add_iao:
-            #        indices.append(idx)
-
             indices = []
             refmol = pyscf.lo.iao.reference_mol(self.mol, minao=self.minao)
             for ao in ao_labels:
@@ -670,8 +678,8 @@ class EmbCC:
 
         # Get base atoms of IAOs
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
-        #iao_labels = refmol.ao_labels(None)
-        iao_labels = refmol.ao_labels()
+        iao_labels = refmol.ao_labels(None)
+        #iao_labels = refmol.ao_labels()
         assert len(iao_labels) == C_iao.shape[-1]
 
         # Test orthogonality
@@ -684,8 +692,10 @@ class EmbCC:
         #S = self.mf.get_ovlp()
         S = self.get_ovlp()
         C_lao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
-        #lao_labels = self.mol.ao_labels(None)
-        lao_labels = self.mol.ao_labels()
+        lao_labels = self.mol.ao_labels(None)
+        #lao_labels = self.mol.ao_labels()
+        #lao_labels = self.mol.ao_labels("%d-%s-%s-%s")
+        #lao_labels = [s.rstrip("-") for s in lao_labels]
 
         return C_lao, lao_labels
 

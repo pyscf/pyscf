@@ -8,8 +8,10 @@ import pyscf
 import pyscf.mp
 import pyscf.pbc
 import pyscf.pbc.mp
+import pyscf.ao2mo
 
 from .util import *
+from .tests import *
 
 __all__ = [
         "project_ref_orbitals",
@@ -18,6 +20,7 @@ __all__ = [
         "make_mf_bath",
         "transform_mp2_eris",
         "run_mp2",
+        "run_mp2_general",
         "get_mp2_correction",
         "make_mp2_bath",
         ]
@@ -94,6 +97,10 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8, warntol=1
         log.error("Eigenvalues < 0: %s", e[e < -warntol])
         log.error("Eigenvalues > 1: %s", e[e > 1+warntol])
 
+    # Entanglement spectrum
+    if False:
+        np.savetxt("dmet-spectrum.txt", e)
+        raise SystemExit()
 
     C_env = np.dot(C_env, R)
 
@@ -191,7 +198,10 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8, warntol=1
 
 # ================================================================================================ #
 
-def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, tol=None, **kwargs):
+def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, tol=None,
+        # For new MP2 bath:
+        C_occenv=None, C_virenv=None,
+        **kwargs):
     """Make additional bath (beyond DMET bath) orbitals.
 
     Parameters
@@ -236,10 +246,22 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None, nbath=None, 
         C_bath, C_env = np.hsplit(C_env, [nref])
     # Make new bath orbitals
     else:
-        if bathtype == "mp2-natorb":
+        if bathtype.startswith("mp2"):
+            if bathtype == "mp2-natorb":
+                version = 1
+            elif bathtype == "mp2-natorb-2":
+                version = 2
+            elif bathtype == "mp2-natorb-3":
+                version = 3
+            elif bathtype == "mp2-natorb-4":
+                version = 4
+            log.debug("MP2 natural bath orbital version = %d", version)
             C_bath, C_env, e_delta_mp2, eigref_out = self.make_mp2_bath(
                     self.C_occclst, self.C_virclst, C_env, kind,
-                    eigref=eigref, nbath=nbath, tol=tol, **kwargs)
+                    C_occenv=C_occenv, C_virenv=C_virenv,
+                    eigref=eigref, nbath=nbath, tol=tol,
+                    version=version,
+                    **kwargs)
         # MF type bath
         else:
             C_bath, C_env, eigref_out = self.make_mf_bath(C_env, kind, bathtype=bathtype, eigref=eigref, nbath=nbath, tol=tol,
@@ -375,6 +397,8 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
 # ================================================================================================ #
 
 def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=None):
+#def run_mp2(self, Co, Cv, make_dm=False, canon_occ=False, canon_vir=True, eris=None):
+#def run_mp2(self, Co, Cv, make_dm=False, canon_occ=False, canon_vir=False, eris=None):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
 
     #F = self.mf.get_fock()
@@ -423,7 +447,8 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=No
     eris.nocc = mp2.nocc
 
     # T2 amplitudes
-    e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris)
+    #e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris)
+    e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris, hf_reference="legacy")
     e_mp2_full *= self.symmetry_factor
     log.debug("Full MP2 energy = %12.8g htr", e_mp2_full)
 
@@ -447,12 +472,326 @@ def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=No
             Doo = np.linalg.multi_dot((Ro, Doo, Ro.T))
         if canon_vir:
             Dvv = np.linalg.multi_dot((Rv, Dvv, Rv.T))
-
-        return e_mp2, eris, Doo, Dvv
     else:
         Doo = Dvv = None
 
-    return e_mp2, eris, Doo, Dvv
+    # Rotate T2 back
+    T2 = einsum("ijab,ki,lj,ca,db->klcd", T2, Ro, Ro, Rv, Rv)
+
+    #return e_mp2, eris, Doo, Dvv
+    return e_mp2, eris, Doo, Dvv, T2
+
+
+def run_mp2_new(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True, eris=None):
+    """Select virtual space from MP2 natural orbitals (NOs) according to occupation number.
+
+    Parameters
+    ----------
+    c_occ : ndarray
+        Active occupied orbitals.
+    c_vir : ndarray
+        Active virtual orbitals.
+    c_occenv : ndarray, optional
+        Frozen occupied orbitals.
+    c_virenv : ndarray, optional
+        Frozen virtual orbitals.
+    canonicalize : bool, tuple(2), optional
+        Canonicalize occupied/virtual active orbitals.
+    eris: TODO
+
+    Returns
+    -------
+    TODO
+    """
+
+    # Canonicalization [optional]
+    if canonicalize in (True, False):
+        canonicalize = 2*[canonicalize]
+    f = self.base.get_fock()
+    fo = np.linalg.multi_dot((c_occ.T, f, c_occ))
+    fv = np.linalg.multi_dot((c_vir.T, f, c_vir))
+    if canonicalize[0]:
+        fo, ro = np.linalg.eigh(fo)
+        c_occ = np.dot(c_occ, ro)
+    else:
+        fo = np.diag(fo)
+    if canonicalize[1]:
+        fv, rv = np.linalg.eigh(fv)
+        c_vir = np.dot(c_vir, rv)
+    else:
+        fv = np.diag(fv)
+
+    # Setup MP2 object
+    nao = c_occ.shape[0]
+    if c_occenv is None:
+        c_occenv = np.zeros((nao, 0))
+    if c_virenv is None:
+        c_virenv = np.zeros((nao, 0))
+    coeffs = np.hstack((c_occenv, c_occ, c_vir, c_virenv))
+    norb = coeffs.shape[-1]
+    noccenv = c_occenv.shape[-1]
+    nvirenv = c_virenv.shape[-1]
+    frozen = list(range(noccenv)) + list(range(norb-nvirenv, norb))
+    #log.debug("Active orbitals: %d occupied and %d virtual", c_occ.shape[-1], c_vir.shape[-1])
+    #log.debug("Freezing %d occupied and %d virtual orbitals with indices:\n%r", noccenv, nvirenv, frozen)
+    if self.has_pbc:
+        cls = pyscf.pbc.mp.MP2
+    else:
+        cls = pyscf.mp.MP2
+    mp2 = cls(self.mf, mo_coeff=coeffs, frozen=frozen)
+
+    # Integral transformation
+    t0 = MPI.Wtime()
+    if eris is None:
+        eris = mp2.ao2mo()
+        # Does not work for DF at the moment...
+        assert (eris.ovov is not None)
+        time_ao2mo = MPI.Wtime() - t0
+        log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
+    # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
+    else:
+        raise NotImplementedError()
+        eris = self.transform_mp2_eris(eris, Co, Cv)
+        #eris2 = mp2.ao2mo()
+        #log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
+        #assert np.allclose(eris.ovov, eris2.ovov)
+        time_mo2mo = MPI.Wtime() - t0
+        log.debug("Time for MO->MO: %s", get_time_string(time_mo2mo))
+
+    #eris.nocc = mp2.nocc
+
+    t0 = MPI.Wtime()
+    #e_mp2_full, t2 = mp2.kernel(eris=eris)
+    e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference="legacy")
+    log.debug("Time for MP2 kernel: %s", get_time_string(MPI.Wtime()-t0))
+    e_mp2_full *= self.symmetry_factor
+    log.debug("Full MP2 energy = %12.8g htr", e_mp2_full)
+
+    no, nv = t2.shape[0], t2.shape[2]
+
+    # Bild T2 manually [testing]
+    #t2_man = np.zeros_like(t2)
+    #eris_ovov = np.asarray(eris.ovov).reshape(no,nv,no,nv)
+    #for i in range(no):
+    #    gi = eris_ovov[i].transpose(1, 0, 2)
+    #    ei = fo[i] + np.subtract.outer(fo, np.add.outer(fv, fv))
+    #    assert (gi.shape == ei.shape)
+    #    t2i = - gi**2 / ei
+    #    t2_man[i] = t2i
+    ##assert np.allclose(t2, t2_man)
+    ##1/0
+
+    # Calculate local energy
+    # Project first occupied index onto local space
+    _, t2_loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=False)
+    e_mp2 = self.symmetry_factor * mp2.energy(t2_loc, eris)
+
+    # MP2 density matrix
+    do, dv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
+    do, dv = -2*do, 2*dv
+
+    # Local DM
+    do_loc = (2*einsum("ijab,iajb->ij", t2, t2)
+              - einsum("ijab,ibja->ij", t2, t2))
+    dv_loc = (2*einsum("ijab,iajb->ab", t2, t2)
+              - einsum("ijab,ibja->ab", t2, t2))
+    do_loc, dv_loc = -2*do_loc, 2*dv_loc
+    assert np.allclose(do, do_loc)
+    assert np.allclose(dv, dv_loc)
+
+    # Rotate back to input coeffients (undo canonicalization)
+    if canonicalize[0]:
+        do = np.linalg.multi_dot((ro, do, ro.T))
+        t2 = einsum("ijab,xi,yj->xyab", t2, ro, ro)
+    if canonicalize[1]:
+        dv = np.linalg.multi_dot((rv, dv, rv.T))
+        t2 = einsum("ijab,xa,yb->ijxy", t2, rv, rv)
+
+    return t2, eris, do, dv, e_mp2
+
+def run_mp2_general(self, coeffs, kind, canonicalize=True, eris=None):
+    """Select virtual space from MP2 natural orbitals (NOs) according to occupation number.
+
+    coeffs:
+        Order occ, occ, vir, vir
+
+    """
+
+    if canonicalize in (True, False):
+        canonicalize = 4*[canonicalize]
+    if kind == "occupied":
+        assert coeffs[0] is coeffs[1]
+        assert canonicalize[0] == canonicalize[1]
+    if kind == "virtual":
+        assert coeffs[2] is coeffs[3]
+        assert canonicalize[2] == canonicalize[3]
+
+    # Different fock matrix for PBC with exxdiv?
+    fock = self.base.get_fock()
+    energies = []
+    coeffs_canon = []
+    rotations = []
+    for i in range(4):
+        f = np.linalg.multi_dot((coeffs[i].T, fock, coeffs[i]))
+        if canonicalize[i]:
+            if i > 0 and (coeffs[i-1] is coeffs[i]):
+                e, r = energies[-1], rotations[-1]
+            else:
+                e, r = np.linalg.eigh(f)
+            energies.append(e)
+            rotations.append(r)
+            coeffs_canon.append(np.dot(coeffs[i], r))
+        else:
+            energies.append(np.diag(f))
+            rotations.append(None)
+            coeffs_canon.append(coeffs[i])
+    coeffs = coeffs_canon
+    sizes = [c.shape[-1] for c in coeffs]
+
+    #log.debug("Sizes %r", sizes)
+    #for i in range(4):
+    #    log.debug("Energies %d:\n%r", i, energies[i])
+
+    oovv2ovov = lambda x: (x[0], x[2], x[1], x[3])
+
+    # Integral transformation
+    if eris is None:
+        # Does not work for DF at the moment...
+        #assert (eris.ovov is not None)
+        # TEST
+        t0 = MPI.Wtime()
+        if getattr(self.mf, "with_df", False):
+            g_ovov = self.mf.with_df.ao2mo(oovv2ovov(coeffs))
+        elif self.mf._eri is not None:
+            g_ovov = pyscf.ao2mo.general(self.mf._eri, oovv2ovov(coeffs))
+        else:
+            # Out core
+            #raise NotImplementedError()
+            g_ovov = pyscf.ao2mo.general(self.mol, oovv2ovov(coeffs))
+
+        g_ovov = g_ovov.reshape(oovv2ovov(sizes))
+        time_ao2mo = MPI.Wtime() - t0
+        log.debug("Time for ERI AO->MO transformation: %s", get_time_string(time_ao2mo))
+    # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
+    else:
+        raise NotImplementedError()
+        #eris = self.transform_mp2_eris(eris, Co, Cv)
+        ##eris2 = mp2.ao2mo()
+        ##log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
+        ##assert np.allclose(eris.ovov, eris2.ovov)
+        #time_mo2mo = MPI.Wtime() - t0
+        #log.debug("Time for MO->MO: %s", get_time_string(time_mo2mo))
+
+    # Make T2 amplitudes and energy
+    e2_full = 0.0
+    t2 = np.zeros(sizes)
+    # TODO:
+    #loopidx = 0
+    #restidx = [i for i in range(4) if i != loopidx]
+    #log.debug("indices %r %r", loopidx, restidx)
+    for i in range(sizes[0]):
+    #for i in range(sizes[loopidx]):
+        gi = g_ovov[i].transpose(1, 0, 2)
+        #gi = g_oovv[i]
+        ei = energies[0][i] + np.subtract.outer(energies[1], np.add.outer(energies[2], energies[3]))
+        assert gi.shape == ei.shape
+        t2i = gi / ei
+        t2[i] = t2i
+        #e2_full += (2*einsum("jab,jab", t2i, gi)
+        #            - einsum("jab,jba", t2i, gi))
+
+    # TEST T2
+    #den = np.add.outer(energies[0], np.add.outer(energies[1], np.add.outer(-energies[2], -energies[3])))
+    ## Smallset denom
+    #log.info("Smallest value in energy denominator: %e", den.flatten()[np.argmin(abs(den))])
+    #t2b = g_oovv / den
+    ##assert np.allclose(t2b, t2)
+
+    e2_full *= self.symmetry_factor
+    log.debug("Full MP2 energy = %12.8g htr", e2_full)
+
+    # Calculate local energy
+    # Project first occupied index onto local space
+    #_, pT2 = self.get_local_amplitudes(mp2, None, T2, symmetrize=False)
+    #_, pT2 = self.get_local_amplitudes(mp2, None, T2, variant="democratic")
+    #e_mp2 = self.symmetry_factor * mp2.energy(pT2, eris)
+
+    # MP2 density matrix
+    # In order to get a symmetric DM in the end we calculate it twice ASSUMING the normal symmetry of T2
+    # (In reality it does not have this symmetry)
+    # This is different to symmetrizing the DM at the end (i.e. dm2 is not dm.T).
+    # Idealy, we would symmetrize T2 itself, but this is not possible here, since the dimensions to not match...
+    # Is what is done here still equivalent?
+    if kind == "occupied":
+        dm = 2*(2*einsum("ikab,jkab->ij", t2, t2)
+                - einsum("ikab,kjab->ij", t2, t2))
+        dm2 = 2*(2*einsum("kiab,kjab->ij", t2, t2)
+                 - einsum("kiab,jkab->ij", t2, t2))
+        dm = (dm + dm2)/2
+
+        r = rotations[0]
+    elif kind == "virtual":
+        dm = 2*(2*einsum("ijac,ijbc->ab", t2, t2)
+                - einsum("ijac,ijcb->ab", t2, t2))
+        dm2 = 2*(2*einsum("ijca,ijcb->ab", t2, t2)
+                 - einsum("ijca,ijbc->ab", t2, t2))
+        dm = (dm + dm2)/2
+
+        r = rotations[3]
+    assert dm.shape[0] == dm.shape[1]
+
+    # Undo canonicalization
+    if r is not None:
+        dm = np.linalg.multi_dot((r, dm, r.T))
+
+    # Determine symmetry
+    dm_sym = (dm + dm.T)
+    dm_anti = (dm - dm.T)
+    norm_sym = np.linalg.norm(dm_sym)
+    norm_anti = np.linalg.norm(dm_anti)
+    sym = (norm_sym - norm_anti) / (norm_sym + norm_anti)
+    log.info("Symmetry of DM = %.4g", sym)
+    # Ignore antisymmetric part:
+    dm = dm_sym
+    assert np.allclose(dm, dm.T)
+
+    #return e_mp2, eris, Doo, Dvv
+    return dm, t2
+
+# ================================================================================================ #
+
+#def transform_mp2_eris(self, eris, Co, Cv):
+#    """Transform OVOV kind ERIS."""
+#    assert (eris is not None)
+#    assert (eris.ovov is not None)
+#
+#    S = self.mf.get_ovlp()
+#    Co0, Cv0 = np.hsplit(eris.mo_coeff, [eris.nocc])
+#    no0 = Co0.shape[-1]
+#    nv0 = Cv0.shape[-1]
+#    no = Co.shape[-1]
+#    nv = Cv.shape[-1]
+#
+#    transform_occ = (no != no0 or not np.allclose(Co, Co0))
+#    transform_vir = (nv != nv0 or not np.allclose(Cv, Cv0))
+#    if transform_occ:
+#        Ro = np.linalg.multi_dot((Co.T, S, Co0))
+#    if transform_vir:
+#        Rv = np.linalg.multi_dot((Cv.T, S, Cv0))
+#
+#    #govov = eris.ovov.reshape((no0, nv0, no0, nv0))
+#    # eris.ovov may be hfd5 dataset on disk -> allocate in memory with [:]
+#    govov = eris.ovov[:].reshape((no0, nv0, no0, nv0))
+#    if transform_occ and transform_vir:
+#        govov = einsum("xi,ya,zj,wb,iajb->xyzw", Ro, Rv, Ro, Rv, govov)
+#    elif transform_occ:
+#        govov = einsum("xi,zj,iajb->xazb", Ro, Ro, govov)
+#    elif transform_vir:
+#        govov = einsum("ya,wb,iajb->iyjw", Rv, Rv, govov)
+#    eris.ovov = govov.reshape((no*nv, no*nv))
+#    eris.mo_coeff = None
+#    eris.mo_energy = None
+#    return eris
 
 # ================================================================================================ #
 
@@ -489,6 +828,7 @@ def transform_mp2_eris(self, eris, Co, Cv):
     eris.mo_energy = None
     return eris
 
+
 # ================================================================================================ #
 
 def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
@@ -502,7 +842,11 @@ def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
 
 # ================================================================================================ #
 
-def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=None, tol=None):
+def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind,
+        # For new MP2 bath:
+        C_occenv=None, C_virenv=None,
+        eigref=None, nbath=None, tol=None,
+        version=1):
     """Select occupied or virtual bath space from MP2 natural orbitals.
 
     The natural orbitals are calculated only including the local virtual (occupied)
@@ -554,20 +898,130 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=No
     else:
         kind = "virtual"
 
-    # Combine occupied cluster orbitals with all occupied environment orbitals
-    # but use only the virtual cluster orbitals
-    if kind == "occupied":
-        Co = np.hstack((C_occclst, C_env))
-        Cv = C_virclst
-    # Use only the occupied cluster orbitals
-    # but combine virtual custer orbitals with all virtual environment orbitals
-    elif kind == "virtual":
-        Co = C_occclst
-        Cv = np.hstack((C_virclst, C_env))
+    #if version == 1:
+    if version in (1, 3, 4):
+        # Combine occupied cluster orbitals with all occupied environment orbitals
+        # but use only the virtual cluster orbitals
+        if kind == "occupied":
+            #Co = np.hstack((C_occclst, C_env))
+            #Co = C_env # TEST
+            #Cv = C_virclst
+            #Co, Cv = co, cv
 
-    # Run MP2 calculation to get locally projected energy, ERIs, and occupied
-    # and virtual correction of the density-matrix
-    e_mp2_all, eris, Do, Dv = self.run_mp2(Co, Cv, make_dm=True)
+            c_occ = np.hstack((C_occclst, C_occenv))
+            c_vir = C_virclst
+            c_occenv = None
+            c_virenv = C_virenv
+
+        # Use only the occupied cluster orbitals
+        # but combine virtual custer orbitals with all virtual environment orbitals
+        elif kind == "virtual":
+            #Co = C_occclst
+            #Cv = np.hstack((C_virclst, C_env))
+            #Cv = C_env # TEST
+            #Co, Cv = co, cv
+
+            c_occ = C_occclst
+            c_vir = np.hstack((C_virclst, C_virenv))
+            c_occenv = C_occenv
+            c_virenv = None
+
+        # Run MP2 calculation to get locally projected energy, ERIs, and occupied
+        # and virtual correction of the density-matrix
+        #e_mp2_all, eris, Do, Dv = self.run_mp2(Co, Cv, make_dm=True)
+        #e_mp2_all, eris, Do, Dv, T2 = self.run_mp2(Co, Cv, make_dm=True)
+
+        #_, eris, do, dv, t2 = self.run_mp2_new(c_occ, c_vir, c_occenv, c_virenv)
+        t2, eris, do, dv, e_mp2_all = run_mp2_new(
+                self, c_occ, c_vir, c_occenv=c_occenv, c_virenv=c_virenv)
+        #assert np.allclose(Do, do)
+        #assert np.allclose(Dv, dv)
+        #assert np.allclose(T2, t2)
+        #assert np.allclose(e_mp2_all, e_mp2_all2)
+
+        if version == 3:
+            #Do = np.sum(abs(T2), axis=(2, 3))
+            #Dv = np.sum(abs(T2), axis=(0, 1))
+
+            #Do = np.einsum("ijaa->ij", abs(T2))
+            #Dv = np.einsum("iiab->ab", abs(T2))
+
+            # MP2
+            #Do = einsum("ikab,jkab->ij", T2, T2)
+            #Dv = einsum("ijac,ijbc->ab", T2, T2)
+
+            #Do = einsum("ikab,jkab->ij", T2, T2)
+            #Dv = einsum("iiac,iicb->ab", T2, T2)
+            #Dv = einsum("iiab->ab", T2**2)
+
+            # Projector onto local space
+            P = self.get_local_projector(Co)
+            w = np.diag(P)
+            log.info("diagonal of local P: %r", w)
+
+            Dv = np.zeros_like(Dv)
+            for i in range(T2.shape[0]):
+                #d = T2[i,i]
+                d = einsum("ix,ijab->xjab", P, t2)[i,i]
+                d = (d + d.T)/2
+                assert np.allclose(d, d.T)
+                e, v = np.linalg.eigh(d)
+                log.debug("eigenvalues at i=%d: %r", i, e)
+                d = einsum("ai,i,bi->ab", v, abs(e), v)
+                Dv += d
+                #Dv += w[i]*d
+                #Dv += (w[i]**2)*d
+
+            #for i in range(T2.shape[0]):
+            #    for j in range(i+1):
+            #        if i == j:
+            #            d = T2[i,i]
+            #        else:
+            #            d = (T2[i,j] + T2[j,i])
+            #        assert np.allclose(d, d.T)
+            #        e, v = np.linalg.eigh(d)
+            #        log.debug("eigenvalues at i,j=%d,%d: %r", i, j, e)
+            #        d = np.einsum("ai,i,bi->ab", v, abs(e), v)
+            #        Dv += d
+
+
+            assert np.allclose(Dv, Dv.T)
+            #Dv = einsum("iiab->ab", abs(T2))
+            #Dv = np.random.rand(*Dv.shape)
+        if version == 4:
+            pass
+            #Do = eo
+            #Dv = ev
+            #if kind == "virtual":
+            #    no, nv = t2.shape[0], t2.shape[2]
+            #    eris_ovov = np.asarray(eris.ovov).reshape(no,nv,no,nv)
+            #    e_ab = (2*einsum("ijab,iajb->ab", t2, eris_ovov)
+            #            - einsum("ijab,ibja->ab", t2, eris_ovov))
+            #    log.info("Sum of E_ab: %g", np.sum(e_ab))
+            #    #assert np.allclose(e_ab, e_ab.T)
+            #    #e, v = np.linalg.eigh(e_ab)
+            #    #print(e)
+            #    #1/0
+            #    Dv = -e_ab
+
+
+    # TEST NEW
+    elif version == 2:
+        co = np.hstack((C_occclst, C_occenv))
+        cv = np.hstack((C_virclst, C_virenv))
+        if kind == "occupied":
+            #coeffs = (co, co, C_virclst, C_virclst)
+            coeffs = (co, co, C_virclst, cv)
+            #coeffs = (co, co, cv, cv)
+        elif kind == "virtual":
+            #coeffs = (C_occclst, C_occclst, cv, cv)
+            coeffs = (C_occclst, co, cv, cv)
+            #coeffs = (co, co, cv, cv)
+        #g_ovov, dmo, dmv, t2 = self.run_mp2_general(coeffs)
+        dm, t2 = self.run_mp2_general(coeffs, kind=kind)
+
+        Do = Dv = dm
+        assert is_definite(dm)
 
     # Diagonalize environment-environment block of MP2 DM correction
     # and rotate into natural orbital basis, with the orbitals sorted
@@ -575,11 +1029,16 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=No
     # [Note that Do is minus the change of the occupied DM]
     if kind == "occupied":
         env = np.s_[C_occclst.shape[-1]:]
+        #env = np.s_[:]
         D = Do[env,env]
     elif kind == "virtual":
         env = np.s_[C_virclst.shape[-1]:]
+        #env = np.s_[:]
         D = Dv[env,env]
+
     N, R = np.linalg.eigh(D)
+    if np.any(N < -1e-12):
+        raise RuntimeError("Negative occupation values detected: %r" % N[N < -1e-12])
     N, R = N[::-1], R[:,::-1]
     C_no = np.dot(C_env, R)
 
@@ -592,7 +1051,7 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=No
         if eigref is not None:
             log.debug("eigref given: performing reordering of eigenpairs.")
             # Get reordering array
-            S = self.mf.get_ovlp()
+            S = self.base.get_ovlp()
             reorder, cost = eigassign(eigref[0], eigref[1], N, C_no, b=S, cost_matrix="er/v")
             log.debug("Optimized linear assignment cost=%.3e", cost)
             N = N[reorder]
@@ -649,10 +1108,13 @@ def make_mp2_bath(self, C_occclst, C_virclst, C_env, kind, eigref=None, nbath=No
     if nbath < len(N):
         log.info("%3d environment orbitals: largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
                 len(N)-nbath, max(N[nbath:]), min(N[nbath:]), np.mean(N[nbath:]))
+    log.debug("All:\n%r", N)
 
     # Delta MP2 correction
     # No correction if all natural orbitals are already included (0 environment orbitals)
-    if self.mp2_correction and C_env.shape[-1] > 0:
+    kind2int = {"occupied" : 0, "virtual" : 1}
+    #if self.mp2_correction and C_env.shape[-1] > 0:
+    if self.mp2_correction[kind2int[kind]] and C_env.shape[-1] > 0:
         S = self.mf.get_ovlp()
         if kind == "occupied":
             Co_act = np.hstack((C_occclst, C_bath))

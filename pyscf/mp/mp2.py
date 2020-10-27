@@ -74,14 +74,15 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
 
 # Iteratively solve MP2 if non-canonical HF is provided
-def _iterative_kernel(mp, eris, verbose=None):
+def _iterative_kernel(mp, eris, verbose=None, diis=True):
     cput1 = cput0 = (time.clock(), time.time())
     log = logger.new_logger(mp, verbose)
 
     emp2, t2 = mp.init_amps(eris=eris)
     log.info('Init E(MP2) = %.15g', emp2)
 
-    adiis = lib.diis.DIIS(mp)
+    if diis:
+        adiis = lib.diis.DIIS(mp)
 
     conv = False
     for istep in range(mp.max_cycle):
@@ -90,7 +91,8 @@ def _iterative_kernel(mp, eris, verbose=None):
         if isinstance(t2new, numpy.ndarray):
             normt = numpy.linalg.norm(t2new - t2)
             t2 = None
-            t2new = adiis.update(t2new)
+            if diis:
+                t2new = adiis.update(t2new)
         else: # UMP2
             normt = numpy.linalg.norm([numpy.linalg.norm(t2new[i] - t2[i])
                                        for i in range(3)])
@@ -531,7 +533,7 @@ class MP2(lib.StreamObject):
     def e_tot(self):
         return (self.e_hf or self._scf.e_tot) + self.e_corr
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, hf_reference="auto"):
         '''
         Args:
             with_t2 : bool
@@ -548,7 +550,14 @@ class MP2(lib.StreamObject):
         if self.e_hf is None:
             self.e_hf = self._scf.e_tot
 
-        if self._scf.converged:
+        if hasattr(hf_reference, "lower"):
+            if hf_reference.lower() == "auto":
+                hf_reference = (self._scf.converged and numpy.allclose(eris.fock, numpy.diag(eris.mo_energy)))
+            elif hf_reference.lower() == "legacy":
+                hf_reference = self._scf.converged
+            else:
+                raise ValueError("Unknown value for argument hf_reference: %s" % hf_reference)
+        if hf_reference:
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
         else:
             self.converged, self.e_corr, self.t2 = _iterative_kernel(self, eris)

@@ -180,6 +180,7 @@ def create_orbital_file(mol, filename, coeffs, names=None, directory="orbitals",
         raise ValueError("Unknown file type: %s" % filetype)
     if coeffs.ndim == 1:
         coeffs = coeffs[:,np.newaxis]
+    filename = filename.replace(" ", "_")
     norb = coeffs.shape[-1]
     if names is None:
         names = ["orbital-%d" % i for i in range(1, norb+1)]
@@ -192,7 +193,7 @@ def create_orbital_file(mol, filename, coeffs, names=None, directory="orbitals",
     if filetype == "molden":
         from pyscf.tools import molden
 
-        fname = filename + ".cube"
+        fname = filename + ".molden"
         fname = os.path.join(path, fname)
         with open(fname, "w") as f:
             molden.header(mol, f)
@@ -209,7 +210,7 @@ def create_orbital_file(mol, filename, coeffs, names=None, directory="orbitals",
         from pyscf.tools import cubegen
         #for name, C in orbitals.items():
         # separate cube files need to be generated for each orbital
-        for i in range(norb)
+        for i in range(norb):
             #for i in range(C.shape[-1]):
             fname = "%s-%s.cube" % (filename, names[i])
             fname = os.path.join(path, fname)

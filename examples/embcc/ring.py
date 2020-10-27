@@ -35,8 +35,10 @@ parser.add_argument("--bath-size", type=float, nargs=2)
 parser.add_argument("--maxiter", type=int, default=1)
 parser.add_argument("--local-type", default="IAO")
 parser.add_argument("-o", "--output", default="energies.txt")
-parser.add_argument("--benchmarks", nargs="*", default=["MP2", "FCI"])
+#parser.add_argument("--benchmarks", nargs="*", default=["MP2", "FCI"])
+parser.add_argument("--benchmarks", nargs="*")
 parser.add_argument("--check-stable", action="store_true")
+parser.add_argument("--localize-fragment")
 #parser.add_argument("--check-stable", action="store_true")
 args, restargs = parser.parse_known_args()
 sys.argv[1:] = restargs
@@ -93,25 +95,28 @@ for icalc, distance in enumerate(args.distances):
                 #energy_part="first-vir",
                 #energy_part="democratic",
                 #solver="CCSD"
+                localize_fragment=args.localize_fragment,
                 )
         #cc.make_all_atom_clusters()
         #cc.make_all_atom_clusters(nelectron_target=1.0)
         #cc.make_all_atom_clusters(solver_options={"fix_spin" : 0.0})
 
         cc.make_atom_cluster("H1", symmetry_factor=args.size)
+
+        raise SystemExit()
         # Add HF fragment
         #rest = ["H%d" % i for i in range(2, args.size+1)]
         #cc.make_atom_cluster(rest, solver=None)
 
-        if icalc == 0:
-            cc.print_clusters()
+        #if icalc == 0:
+        #    cc.print_clusters()
 
         #if refdata is not None:
         #    cc.set_refdata(refdata)
 
-        cc.run()
+        #cc.run()
 
-        cc.clusters[0].create_orbital_file("dist-%.1f" % distance)
+        #cc.clusters[0].create_orbital_file("dist-%.1f" % distance)
 
         #refdata = cc.get_refdata()
 

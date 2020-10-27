@@ -340,6 +340,7 @@ class Cluster:
     get_mp2_correction = get_mp2_correction
     transform_mp2_eris = transform_mp2_eris
     run_mp2 = run_mp2
+    run_mp2_general = run_mp2_general
 
     # Register frunctions of energy.py as methods
     get_local_amplitudes = get_local_amplitudes
@@ -482,7 +483,6 @@ class Cluster:
             Projection matrix.
         """
         S = self.mf.get_ovlp()
-
 
         # Project onto space of local (fragment) orbitals.
         #if self.local_orbital_type in ("IAO", "LAO"):
@@ -1252,15 +1252,20 @@ class Cluster:
         #virbath_eigref = None
 
         t0 = MPI.Wtime()
-        C_occbath, C_occenv, e_delta_occ, occbath_eigref = self.make_bath(
+        C_occbath, C_occenv2, e_delta_occ, occbath_eigref = self.make_bath(
                 C_occenv, self.bath_type, "occ",
                 C_ref=C_occref, eigref=occbath_eigref,
+                # NEW:
+                C_occenv=C_occenv, C_virenv=C_virenv,
                 nbath=self.bath_target_size[0], tol=self.bath_tol[0])
-        C_virbath, C_virenv, e_delta_vir, virbath_eigref = self.make_bath(
+        C_virbath, C_virenv2, e_delta_vir, virbath_eigref = self.make_bath(
                 C_virenv, self.bath_type, "vir",
                 C_ref=C_virref, eigref=virbath_eigref,
+                # NEW:
+                C_occenv=C_occenv, C_virenv=C_virenv,
                 nbath=self.bath_target_size[1], tol=self.bath_tol[1])
         log.debug("Time for %r bath: %s", self.bath_type, get_time_string(MPI.Wtime()-t0))
+        C_occenv, C_virenv = C_occenv2, C_virenv2
         self.C_occbath = C_occbath
         self.C_virbath = C_virbath
         self.C_occenv = C_occenv
