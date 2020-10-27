@@ -52,7 +52,7 @@ def type1_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
-    cache = numpy.empty(buf.size*5)
+    cache = numpy.empty(buf.size*10000)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
@@ -75,7 +75,7 @@ def type2_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
-    cache = numpy.empty(buf.size*5)
+    cache = numpy.empty(buf.size*10000)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),

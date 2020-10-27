@@ -18,7 +18,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <math.h>
 #include <complex.h>
 #include "cint.h"
@@ -43,7 +42,7 @@
 #define K_TAB_COL       24      // >= (7*2+1+K_TAYLOR_MAX)
 #define K_TAB_ENTRIES   400
 #define K_TAB_INTERVAL  (16./K_TAB_ENTRIES)    // [0,16], interval 0.04
-#define MAX(X,Y)        (X)>(Y)?(X):(Y)
+#define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 #define MALLOC_INSTACK(var, n) \
                 var = (void *)cache; \
                 cache = (void *)(((uintptr_t)(var + (n)) + 7) & (-(uintptr_t)8));
@@ -6065,7 +6064,7 @@ int ECPscalar_cache_size(int comp, int *shls,
         const int nrs =  1 << LEVEL_MAX;
         int size1 = nci*ncj*(li+lj+1);
         size1 += ((li+1)*nfi*(ECP_LMAX*2+1)*(li+ECP_LMAX+1) +
-                 (lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1));
+                  (lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1));
         size1 += nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1);
         size1 += (lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)*3;
         int size2 = nrs * (li+lj+1 + 1 +
@@ -6074,7 +6073,7 @@ int ECPscalar_cache_size(int comp, int *shls,
                            MAX(npi*lilc1, npj*ljlc1));
         size2 += lilc1 * ljlc1;
         size2 += MAX(di1*di1*di1*lilc1, dj1*dj1*dj1*ljlc1) * (ECP_LMAX*2 + 1);
-        int size = nfi*nfj*(nci*ncj*4+1) * comp;
+        int size = nfi*nfj*(nci*ncj+2) * comp;
         size += nci*ncj*(li+lj+1)*(li+ECP_LMAX+1)*(lj+ECP_LMAX+1);
         size += MAX(size1, size2);
         size += nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1);
@@ -6113,8 +6112,7 @@ int ECPscalar_c2s_factory(Function_cart fcart, double *gctr, int comp, int *shls
         int dji = di * (lj*2+1);
         int nij = (li*2+1) * (lj*2+1) * nci * ncj;
         double *gcart, *gtmp;
-        gcart = cache;
-        cache = gcart + nfi*nfj*nci*ncj * comp;
+        MALLOC_INSTACK(gcart, nfi*nfj*nci*ncj * comp);
         gtmp = cache;
         int has_value = fcart(gcart, shls, ecpbas, necpbas,
                               atm, natm, bas, nbas, env, opt, cache);
@@ -6211,15 +6209,16 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
         const int di = (li*2+1) * bas[NCTR_OF+ish*BAS_SLOTS];
         const int dj = (lj*2+1) * bas[NCTR_OF+jsh*BAS_SLOTS];
         const int dij = di * dj;
+        const int comp = 1;
 
         if (out == NULL) {
-                int cache_size = ECPscalar_cache_size(1, shls,
+                int cache_size = ECPscalar_cache_size(comp, shls,
                                                       atm, natm, bas, nbas, env);
                 return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                int cache_size = ECPscalar_cache_size(1, shls,
+                int cache_size = ECPscalar_cache_size(comp, shls,
                                                       atm, natm, bas, nbas, env);
                 stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
@@ -6227,9 +6226,9 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)(env[AS_NECPBAS]);
-        double *buf1 = cache;
-        double *buf2 = cache + dij;
-        cache += dij * 2;
+        double *buf1, *buf2;
+        MALLOC_INSTACK(buf1, dij * comp);
+        MALLOC_INSTACK(buf2, dij * comp);
         int has_value;
         has_value = ECPtype1_sph(buf1, shls, ecpbas, necpbas,
                                  atm, natm, bas, nbas, env, opt, cache);
@@ -6262,15 +6261,16 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
         const int di = (li+1) * (li+2) / 2 * bas[NCTR_OF+ish*BAS_SLOTS];
         const int dj = (lj+1) * (lj+2) / 2 * bas[NCTR_OF+jsh*BAS_SLOTS];
         const int dij = di * dj;
+        const int comp = 1;
 
         if (out == NULL) {
-                int cache_size = ECPscalar_cache_size(1, shls,
+                int cache_size = ECPscalar_cache_size(comp, shls,
                                                       atm, natm, bas, nbas, env);
                 return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                int cache_size = ECPscalar_cache_size(1, shls,
+                int cache_size = ECPscalar_cache_size(comp, shls,
                                                       atm, natm, bas, nbas, env);
                 stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
@@ -6278,9 +6278,9 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)env[AS_NECPBAS];
-        double *buf1 = cache;
-        double *buf2 = cache + dij;
-        cache += dij * 2;
+        double *buf1, *buf2;
+        MALLOC_INSTACK(buf1, dij * comp);
+        MALLOC_INSTACK(buf2, dij * comp);
         int has_value;
         has_value = ECPtype1_cart(buf1, shls, ecpbas, necpbas,
                                   atm, natm, bas, nbas, env, opt, cache);
@@ -6355,8 +6355,9 @@ static void cart2spinor(double complex *opij, double *gctr, int *dims,
         double *gc_y = gc_x + nf * i_ctr * j_ctr;
         double *gc_z = gc_y + nf * i_ctr * j_ctr;
         double *gc_1 = gc_z + nf * i_ctr * j_ctr;
-        double complex *tmp1 = (double complex *)cache;
-        double complex *tmp2 = (double complex *)cache + nf2i*nf2j;
+        double complex *tmp1, *tmp2;
+        MALLOC_INSTACK(tmp1, nf2i*nf2j);
+        MALLOC_INSTACK(tmp2, nf2i*nf2j);
 
         for (jc = 0; jc < j_ctr; jc++) {
         for (ic = 0; ic < i_ctr; ic++) {
@@ -6463,8 +6464,8 @@ int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)env[AS_NECPBAS];
-        double *buf1 = cache;
-        cache += dij * comp;
+        double *buf1;
+        MALLOC_INSTACK(buf1, dij * comp);
         int has_value = ECPtype_so_cart(buf1, shls, ecpbas, necpbas,
                                         atm, natm, bas, nbas, env, opt, cache);
 
@@ -6510,8 +6511,8 @@ int ECPso_sph(double *out, int *dims, int *shls, int *atm, int natm,
 
         int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)(env[AS_NECPBAS]);
-        double *buf1 = cache;
-        cache += dij * comp;
+        double *buf1;
+        MALLOC_INSTACK(buf1, dij * comp);
         int has_value = ECPscalar_c2s_factory(ECPtype_so_cart, buf1, comp,
                                               shls, ecpbas, necpbas,
                                               atm, natm, bas, nbas, env, opt, cache);
@@ -6544,24 +6545,25 @@ int ECPso_spinor(double complex *out, int *dims, int *shls, int *atm, int natm,
         const int ngctr = nfi * nfj * nci * ncj;
         const int di = CINTcgto_spinor(shls[0], bas);
         const int dj = CINTcgto_spinor(shls[1], bas);
+        const int comp = 4;
 
         if (out == NULL) {
-                int cache_size = ECPscalar_cache_size(1, shls,
+                int cache_size = ECPscalar_cache_size(comp, shls,
                                                       atm, natm, bas, nbas, env);
-                return cache_size + nfi*nfj*8*OF_CMPLX;
+                return cache_size + ngctr*8*OF_CMPLX;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                int cache_size = ECPscalar_cache_size(1, shls,
+                int cache_size = ECPscalar_cache_size(comp, shls,
                                                       atm, natm, bas, nbas, env);
-                stack = malloc(sizeof(double) * (cache_size + nfi*nfj*8*OF_CMPLX));
+                stack = malloc(sizeof(double) * (cache_size + ngctr*8*OF_CMPLX));
                 cache = stack;
         }
 
         int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int necpbas = (int)(env[AS_NECPBAS]);
-        double *buf1 = cache;
-        cache += ngctr * 4;
+        double *buf1;
+        MALLOC_INSTACK(buf1, ngctr * comp);
         int has_value = ECPtype_so_cart(buf1, shls, ecpbas, necpbas,
                                         atm, natm, bas, nbas, env, opt, cache);
         int counts[2] = {di, dj};
