@@ -83,7 +83,6 @@ def load_agf2(chkfile):
     if 'gf' in dic:
         gf = dic['gf']
         dic['gf'] = GreensFunction(gf['energy'], gf['coupling'], chempot=gf['chempot'])
-        del(dic['gf'])
     elif 'gfa' in dic:
         gfa, gfb = dic['gfa'], dic['gfb']
         dic['gf'] = (GreensFunction(gfa['energy'], gfa['coupling'], chempot=gfa['chempot']),
@@ -93,7 +92,6 @@ def load_agf2(chkfile):
     if 'se' in dic:
         se = dic['se']
         dic['se'] = SelfEnergy(se['energy'], se['coupling'], chempot=se['chempot'])
-        del(dic['se'])
     elif 'sea' in dic:
         sea, seb = dic['sea'], dic['seb']
         dic['se'] = (SelfEnergy(sea['energy'], sea['coupling'], chempot=sea['chempot']),

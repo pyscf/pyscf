@@ -35,7 +35,6 @@ mf = scf.RHF(mol)
 mf.__dict__.update(agf2.chkfile.load('agf2.chk', 'scf'))
 
 # Restore the AGF2 calculation
-dic = agf2.chkfile.load_agf2('agf2.chk')
 gf2a = agf2.AGF2(mf)
 gf2a.__dict__.update(agf2.chkfile.load_agf2('agf2.chk')[1])
 gf2a.max_cycle = 50
