@@ -218,9 +218,16 @@ class DFRAGF2(ragf2.RAGF2):
         weight_tol : float
             Threshold in spectral weight of auxiliaries to be considered
             zero. Default 1e-11.
+        diis : bool or lib.diis.DIIS
+            Whether to use DIIS, can also be a lib.diis.DIIS object. Default
+            value is True.
         diis_space : int
+            DIIS space size. Default value is 8.
+        diis_min_space : int
+            Minimum space of DIIS. Default value is 1.
+        fock_diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        diis_min_space : 
+        fock_diis_min_space : 
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)

@@ -144,9 +144,9 @@ class RAGF2(ragf2.RAGF2):
         weight_tol : float
             Threshold in spectral weight of auxiliaries to be considered
             zero. Default 1e-11.
-        diis_space : int
+        fock_diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        diis_min_space : 
+        fock_diis_min_space : 
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)
@@ -247,6 +247,9 @@ class RAGF2(ragf2.RAGF2):
         ragf2.RAGF2.dump_flags(self, verbose=verbose)
         logger.info(self, 'nmom = %s', repr(self.nmom))
         return self
+
+    def run_diis(self, se, diis=None):
+        return se
 
 
 class _ChemistsERIs(ragf2._ChemistsERIs):

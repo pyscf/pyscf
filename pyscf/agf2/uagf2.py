@@ -192,8 +192,8 @@ def fock_loop(agf2, eri, gf, se):
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     diis = lib.diis.DIIS(agf2)
-    diis.space = agf2.diis_space
-    diis.min_space = agf2.diis_min_space
+    diis.space = agf2.fock_diis_space
+    diis.min_space = agf2.fock_diis_min_space
     focka, fockb = agf2.get_fock(eri, gf)
     sea, seb = se
     gfa, gfb = gf
@@ -366,9 +366,16 @@ class UAGF2(ragf2.RAGF2):
         weight_tol : float
             Threshold in spectral weight of auxiliaries to be considered
             zero. Default 1e-11.
+        diis : bool or lib.diis.DIIS
+            Whether to use DIIS, can also be a lib.diis.DIIS object. Default
+            value is True.
         diis_space : int
+            DIIS space size. Default value is 8.
+        diis_min_space : int
+            Minimum space of DIIS. Default value is 1.
+        fock_diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        diis_min_space : 
+        fock_diis_min_space : 
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)
@@ -538,7 +545,7 @@ class UAGF2(ragf2.RAGF2):
                 Previous self-energy for damping. Default value is None
 
         Returns
-            :class:`SelfEnergy`
+            tuple of :class:`SelfEnergy`
         '''
 
         if eri is None: eri = self.ao2mo()
@@ -570,6 +577,50 @@ class UAGF2(ragf2.RAGF2):
             se_b = se_b.compress(n=(None,0))
 
         return (se_a, se_b)
+
+    def run_diis(self, se, diis=None):
+        ''' Runs the direct inversion of the iterative subspace for the
+            self-energy.
+
+        Args:
+            se : SelfEnergy
+                Auxiliaries of the self-energy
+            diis : lib.diis.DIIS
+                DIIS object
+
+        Returns:
+            tuple of :class:`SelfEnergy`
+        '''
+
+        if diis is None:
+            return se
+
+        se_occ_a, se_occ_b = (se[0].get_occupied(), se[1].get_occupied())
+        se_vir_a, se_vir_b = (se[0].get_virtual(), se[1].get_virtual())
+
+        vv_occ_a = np.dot(se_occ_a.coupling, se_occ_a.coupling.T)
+        vv_occ_b = np.dot(se_occ_b.coupling, se_occ_b.coupling.T)
+        vv_vir_a = np.dot(se_vir_a.coupling, se_vir_a.coupling.T)
+        vv_vir_b = np.dot(se_vir_b.coupling, se_vir_b.coupling.T)
+
+        vev_occ_a = np.dot(se_occ_a.coupling * se_occ_a.energy[None], se_occ_a.coupling.T)
+        vev_occ_b = np.dot(se_occ_b.coupling * se_occ_b.energy[None], se_occ_b.coupling.T)
+        vev_vir_a = np.dot(se_vir_a.coupling * se_vir_a.energy[None], se_vir_a.coupling.T)
+        vev_vir_b = np.dot(se_vir_b.coupling * se_vir_b.energy[None], se_vir_b.coupling.T)
+
+        dat = np.array([vv_occ_a, vv_vir_a, vev_occ_a, vev_vir_a,
+                        vv_occ_b, vv_vir_b, vev_occ_b, vev_vir_b])
+        dat = diis.update(dat)
+        vv_occ_a, vv_vir_a, vev_occ_a, vev_vir_a, \
+                vv_occ_b, vv_vir_b, vev_occ_b, vev_vir_b = dat
+
+        se_occ_a = aux.SelfEnergy(*_agf2.cholesky_build(vv_occ_a, vev_occ_a), chempot=se[0].chempot)
+        se_vir_a = aux.SelfEnergy(*_agf2.cholesky_build(vv_vir_a, vev_vir_a), chempot=se[0].chempot)
+        se_occ_b = aux.SelfEnergy(*_agf2.cholesky_build(vv_occ_b, vev_occ_b), chempot=se[1].chempot)
+        se_vir_b = aux.SelfEnergy(*_agf2.cholesky_build(vv_vir_b, vev_vir_b), chempot=se[1].chempot)
+        se = (aux.combine(se_occ_a, se_vir_a), aux.combine(se_occ_b, se_vir_b))
+
+        return se
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.agf2 import dfuagf2
