@@ -46,6 +46,8 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import df
 from pyscf.solvent import _attach_solvent
+from pyscf.data import elements
+
 
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def pe_for_scf(mf, solvent_obj, dm=None):
@@ -81,6 +83,63 @@ def pe_for_tdscf(method, solvent_obj, dm=None):
     return _attach_solvent._for_tdscf(method, solvent_obj, dm)
 
 
+# data from https://doi.org/10.1021/acs.jctc.9b01162
+_pe_ecps = [
+    ("X1", gto.parse_ecp(
+        """
+        X1 nelec 0
+        X1 ul
+        2      1.000000000000      0.000000000000
+        X1 S
+        2      0.509800000000      2.420000000000
+        X1 P
+        2      0.491650000000     -0.435900000000
+        """)),
+    ("X2", gto.parse_ecp(
+        """
+        X2 nelec 0
+        X2 ul
+        2      1.000000000000      0.000000000000
+        X2 S
+        2      2.047500000000     54.510000000000
+        X2 P
+        2      0.448150000000      1.465000000000
+        X2 D
+        2      0.492050000000     -0.838000000000
+        """)),
+    ("X3", gto.parse_ecp(
+        """
+        X3 nelec 0
+        X3 ul
+        2      1.000000000000      0.000000000000
+        X3 S
+        2      1.641000000000    275.000000000000
+        X3 P
+        2      0.273300000000      1.900000000000
+        X3 D
+        2      0.440000000000     -3.400000000000
+        """))
+]
+
+
+def _get_element_row(symbol):
+    """
+    Helper function to determine the row of an element
+    for choosing the correct ECP for PE(ECP)
+    """
+    nucchg = elements.charge(symbol)
+    if nucchg <= 2:
+        element_row = 0
+    elif nucchg <= 10:
+        element_row = 1
+    elif nucchg <= 18:
+        element_row = 2
+    else:
+        raise NotImplementedError("PE(ECP) only implemented for first, "
+                                    "second, and third row elements")
+    return element_row
+
+
 class PolEmbed(lib.StreamObject):
     def __init__(self, mol, options_or_potfile):
         self.mol = mol
@@ -111,10 +170,29 @@ class PolEmbed(lib.StreamObject):
             raise TypeError("Options should be a dictionary.")
 
         self.options = options
+        # use PE(ECP) repulsive potentials
+        self.do_ecp = self.options.pop("ecp", False)
+        # use effective external field (EEF)
+        self.eef = self.options.pop("eef", False)
         self.cppe_state = self._create_cppe_state(mol)
         self.potentials = self.cppe_state.potentials
         self.V_es = None
-        self.eef = False
+
+        if self.do_ecp:
+            # Use ECPs in the environment as repulsive potentials
+            # with parameters from https://doi.org/10.1021/acs.jctc.9b01162
+            ecpatoms = []
+            # one set of parameters for each row of elements (first 3 rows supported)
+            for p in self.potentials:
+                if p.element == "X":
+                    continue
+                element_row = _get_element_row(p.element)
+                ecp_label, _ = _pe_ecps[element_row]
+                ecpatoms.append([ecp_label, p.x, p.y, p.z])
+            self.ecpmol = gto.M(atom=ecpatoms, ecp={l: k for (l, k) in _pe_ecps},
+                                basis={}, unit="Bohr")
+            # add the normal mol to compute integrals
+            self.ecpmol += self.mol
 
         # e (the electrostatic and induction energy)
         # and v (the additional potential) are
@@ -131,6 +209,7 @@ class PolEmbed(lib.StreamObject):
         option_keys = cppe.valid_option_keys
         logger.info(self, 'frozen = %s'       , self.frozen)
         logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
+        logger.info(self, 'pe(ecp) repulsive potentials = %s', self.do_ecp)
         for key in option_keys:
             logger.info(self, "cppe.%s = %s", key, options[key])
         return self
@@ -169,7 +248,7 @@ class PolEmbed(lib.StreamObject):
         self.e = e
         self.v = v
         return e, v
-    
+
     def effective_dipole_operator(self):
         """
         Compute the derivatives of induced moments wrt each coordinate
@@ -196,15 +275,14 @@ class PolEmbed(lib.StreamObject):
         dms = dms.reshape(-1,nao,nao)
         n_dm = dms.shape[0]
 
-        max_memory = self.max_memory #max(0, self.max_memory - lib.current_memory()[0])
+        #max(0, self.max_memory - lib.current_memory()[0])
+        max_memory = self.max_memory
         max_memreq = 3 * nao**2 * len(self.potentials) * 8.0/1e6
         n_chunks = 1
         if max_memreq >= max_memory:
             n_chunks = int(max_memreq // max_memory + 2)
-        # print("Chunks", n_chunks, "max_memory", max_memory, "max_memreq", max_memreq)
 
         if self.V_es is None:
-            # logger.info(self, "Computing electrostatics operator")
             positions = numpy.array([p.position for p in self.potentials])
             moments = []
             orders = []
@@ -216,12 +294,17 @@ class PolEmbed(lib.StreamObject):
                 orders.append(m.k)
                 moments.append(p_moments)
             self.V_es = self._compute_multipole_potential_integrals(positions, orders, moments, n_chunks)
+            if self.do_ecp:
+                self.V_ecp = self.ecpmol.intor("ECPscalar")
 
-        # logger.info(self, "Computing electrostatics energy")
         e_static = numpy.einsum('ij,xij->x', self.V_es, dms)
         self.cppe_state.energies["Electrostatic"]["Electronic"] = (
             e_static[0]
         )
+        
+        e_ecp = 0.0
+        if self.do_ecp:
+            e_ecp = numpy.einsum('ij,xij->x', self.V_ecp, dms)[0]
 
         positions = self.cppe_state.positions_polarizable
         n_sites = positions.shape[0]
@@ -230,7 +313,6 @@ class PolEmbed(lib.StreamObject):
         e_tot = []
         e_pol = []
         if n_sites > 0:
-            # logger.info(self, "Computing field integrals")
             chunks = numpy.array_split(positions, n_chunks)
             elec_fields_chunk = []
             for chunk in chunks:
@@ -246,20 +328,25 @@ class PolEmbed(lib.StreamObject):
                 self.cppe_state.update_induced_moments(elec_fields[i_dm].ravel(), elec_only)
                 induced_moments[i_dm] = numpy.array(self.cppe_state.get_induced_moments())
 
-                e_tot.append(self.cppe_state.total_energy)
+                e_tot.append(self.cppe_state.total_energy + e_ecp)
                 e_pol.append(self.cppe_state.energies["Polarization"]["Electronic"])
 
             induced_moments = induced_moments.reshape(n_dm, n_sites, 3)
             induced_moments_chunked = numpy.array_split(induced_moments, n_chunks, axis=1)
-            V_ind = 0
             for pos_chunk, ind_chunk in zip(chunks, induced_moments_chunked):
                 fakemol = gto.fakemol_for_charges(pos_chunk)
                 j3c = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
                 V_ind += numpy.einsum('aijg,nga->nij', j3c, -ind_chunk)
             V_ind = V_ind + V_ind.transpose(0, 2, 1)
+        else:
+            for i_dm in range(n_dm):
+                e_tot.append(self.cppe_state.total_energy + e_ecp)
+                e_pol.append(0.0)
 
         if not elec_only:
             vmat = self.V_es + V_ind
+            if self.do_ecp:
+                vmat += self.V_ecp
             e = numpy.array(e_tot)
         else:
             vmat = V_ind
@@ -268,7 +355,6 @@ class PolEmbed(lib.StreamObject):
         if is_single_dm:
             e = e[0]
             vmat = vmat[0]
-        # logger.info(self, "PE done")
         return e, vmat
 
     def _compute_multipole_potential_integrals(self, all_sites, all_orders, all_moments, n_chunks=1):
