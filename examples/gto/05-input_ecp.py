@@ -53,7 +53,7 @@ mol = gto.M(atom='Na 0. 0. 0.; H 0 0 2.',
 #  https://people.clarkson.edu/~pchristi/reps.html 
 #  http://www.nwchem-sw.org/index.php/ECP
 #
-# Note the SOC factor 2/(2l+1) has been included in the SO coefficients
+# Note the SOC factor 2/(2l+1) has been multiplied in the SO coefficients
 #
 mol = gto.M(atom='Cu 0. 0. 0.; H 0 0 2.',
             basis={'Cu':'crenbl', 'H':'ccpvdz'},
