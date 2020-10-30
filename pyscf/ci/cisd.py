@@ -543,8 +543,8 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
 def _gamma2_intermediates(myci, civec, nmo, nocc, compress_vvvv=False):
     f = lib.H5TmpFile()
     _gamma2_outcore(myci, civec, nmo, nocc, f, compress_vvvv)
-    d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
-          f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
+    d2 = (f['dovov'][:], f['dvvvv'][:], f['doooo'][:], f['doovv'][:],
+          f['dovvo'][:], None,          f['dovvv'][:], f['dooov'][:])
     return d2
 
 def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
