@@ -508,9 +508,9 @@ class RAGF2(lib.StreamObject):
 
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
-        if mo_energy is None: mo_energy = mf.mo_energy
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
+        if mo_energy is None: mo_energy = mpi_helper.bcast(mf.mo_energy)
+        if mo_coeff  is None: mo_coeff  = mpi_helper.bcast(mf.mo_coeff)
+        if mo_occ    is None: mo_occ    = mpi_helper.bcast(mf.mo_occ)
 
         self.mol = mf.mol
         self._scf = mf
@@ -940,7 +940,8 @@ class RAGF2(lib.StreamObject):
 
     @property
     def e_corr(self):
-        return self.e_tot - self._scf.e_tot
+        e_hf = mpi_helper.bcast(self._scf.e_tot)
+        return self.e_tot - e_hf
 
     @property
     def qmo_energy(self):
@@ -996,7 +997,10 @@ class _ChemistsERIs:
         self.h1e = np.dot(np.dot(mo_coeff.conj().T, h1e_ao), mo_coeff)
         self.fock = np.dot(np.dot(mo_coeff.conj().T, fock_ao), mo_coeff)
 
-        self.e_hf = agf2._scf.e_tot
+        self.h1e = mpi_helper.bcast(self.h1e)
+        self.fock = mpi_helper.bcast(self.fock)
+
+        self.e_hf = mpi_helper.bcast(agf2._scf.e_tot)
 
         self.nmo = agf2.nmo
         self.nocc = agf2.nocc

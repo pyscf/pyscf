@@ -28,7 +28,7 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.scf import _vhf
-from pyscf.agf2 import aux, ragf2, _agf2
+from pyscf.agf2 import aux, ragf2, _agf2, mpi_helper
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
 from pyscf.mp.ump2 import get_frozen_mask as _get_frozen_mask
 
@@ -770,7 +770,10 @@ class _ChemistsERIs:
         self.fock = (np.dot(np.dot(mo_coeff[0].conj().T, fock_ao[0]), mo_coeff[0]),
                      np.dot(np.dot(mo_coeff[1].conj().T, fock_ao[1]), mo_coeff[1]))
 
-        self.e_hf = agf2._scf.e_tot
+        self.h1e = (mpi_helper.bcast(self.h1e[0]), mpi_helper.bcast(self.h1e[1]))
+        self.fock = (mpi_helper.bcast(self.fock[0]), mpi_helper.bcast(self.fock[1]))
+
+        self.e_hf = mpi_helper.bcast(agf2._scf.e_tot)
 
         self.nmo = agf2.nmo
         nocca, noccb = self.nocc = agf2.nocc
