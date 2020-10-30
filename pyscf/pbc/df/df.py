@@ -882,7 +882,7 @@ class _load3c(object):
                 raise KeyError('Key "%s" not found' % self.label)
 
         kpti_kptj = numpy.asarray(self.kpti_kptj)
-        kptij_lst = self.feri[self.kptij_label].value
+        kptij_lst = self.feri[self.kptij_label][:]
         return _getitem(self.feri, self.label, kpti_kptj, kptij_lst,
                         self.ignore_key_error)
 

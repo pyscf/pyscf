@@ -108,7 +108,8 @@ class tddft_iter(chi0_matvec):
           import h5py
           if kernel_path_hdf5 is None:
               raise ValueError("kernel_path_hdf5 not set while trying to read kernel from hdf5 file.")
-          self.kernel = h5py.File(kernel_fname, "r")[kernel_path_hdf5].value
+          with h5py.File(kernel_fname, "r") as f:
+              self.kernel = f[kernel_path_hdf5][:]
       else:
           raise ValueError("Wrong format for loading kernel, must be: npy, txt or hdf5, got " + kernel_format)
 

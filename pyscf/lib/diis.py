@@ -301,7 +301,7 @@ class DIIS(object):
 
         else:
             for key in diis_keys:
-                self._store(key, fdiis[key].value)
+                self._store(key, fdiis[key][:])
 
             if 'xprev' in diis_keys:
                 self._store('xprev', numpy.asarray(fdiis['xprev']))
