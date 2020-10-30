@@ -119,16 +119,19 @@ def _parse(raw_basis, optimize=True):
             else:
                 basis_add.append([MAPSPDF[key]])
         else:
+            dat = dat.replace('D','e').split()
             try:
-                line = [float(x) for x in dat.replace('D','e').split()]
+                dat = [float(x) for x in dat]
+            except ValueError:
+                dat = list(eval(','.join(dat)))
             except Exception as e:
                 raise BasisNotFoundError('\n' + str(e) +
                                          '\nor the required basis file not existed.')
             if key == 'SP':
-                basis_add[-2].append([line[0], line[1]])
-                basis_add[-1].append([line[0], line[2]])
+                basis_add[-2].append([dat[0], dat[1]])
+                basis_add[-1].append([dat[0], dat[2]])
             else:
-                basis_add[-1].append(line)
+                basis_add[-1].append(dat)
     basis_sorted = []
     for l in range(MAXL):
         basis_sorted.extend([b for b in basis_add if b[0] == l])
@@ -189,7 +192,11 @@ def _parse_ecp(raw_ecp):
         else:
             line = dat.replace('D','e').split()
             l = int(line[0])
-            by_ang[l].append([float(x) for x in line[1:]])
+            try:
+                coef = [float(x) for x in line[1:]]
+            except ValueError:
+                coef = list(eval(','.join(line[1:])))
+            by_ang[l].append(coef)
 
     if nelec is None:
         return []

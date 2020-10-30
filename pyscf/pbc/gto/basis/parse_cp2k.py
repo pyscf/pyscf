@@ -49,7 +49,11 @@ def _parse(blines, optimize=False):
         n, lmin, lmax, nexps, ncontractions = comp[0], comp[1], comp[2], comp[3], comp[4:]
         basis_n = [[l] for l in range(lmin,lmax+1)]
         for nexp in range(nexps):
-            bfun = [float(x) for x in blines.pop(0).split()]
+            dat = blines.pop(0).split()
+            try:
+                bfun = [float(x) for x in dat]
+            except ValueError:
+                bfun = eval(','.join(dat))
             exp = bfun.pop(0)
             for i,l in enumerate(range(lmin,lmax+1)):
                 cl = [exp]
