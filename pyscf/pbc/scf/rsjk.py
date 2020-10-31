@@ -44,7 +44,7 @@ class RangeSeparationJKBuilder(object):
         self.mesh = None
         self.kpts = kpts
 
-        self.omega = 0.8
+        self.omega = 0.6
         self.cell_dense = None
         self.cell_sparse = None
         # Born-von Karman supercell
@@ -167,7 +167,7 @@ class RangeSeparationJKBuilder(object):
         supmol_only_s = supmol.copy()
         supmol_only_s._bas[:,gto.ANG_OF] = 0
         # Note: some basis has negative contraction coefficients.
-        ovlp_mask = abs(supmol_only_s.intor_symmetric('int1e_ovlp')) > direct_scf_tol*1e-1
+        ovlp_mask = abs(supmol_only_s.intor_symmetric('int1e_ovlp')) > direct_scf_tol
         ovlp_mask = ovlp_mask.astype(np.int8)
         ovlp_mask[smooth_mask[:,None] & smooth_mask] = 2
         self.ovlp_mask = ovlp_mask
@@ -386,8 +386,6 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, precision=None):
     s0 = supmol_only_s.intor('int1e_ovlp', shls_slice=(0, nbas, 0, supmol.nbas))
     # Note: some basis has negative contraction coefficients
     s0max = abs(s0).max(axis=0)
-    # FIXME: How to estimate the cutoff threshold for the products of diffused
-    # and compact basis
     bas_mask = s0max > precision
     supmol._bas = supmol._bas[bas_mask]
     supmol.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask]
@@ -543,7 +541,6 @@ C P
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv)
         print(abs(vj - jref).max())
         print(abs(vk - kref).max())
-        print('vj_ref', ej, 'vk_ref', ek)
-        print(np.einsum('kij,kji->', vj, dm).real,
-              np.einsum('kij,kji->', vk, dm).real * .5)
-
+        print('ej_ref', ej, 'ek_ref', ek)
+        print('ej', np.einsum('kij,kji->', vj, dm).real,
+              'ek', np.einsum('kij,kji->', vk, dm).real * .5)

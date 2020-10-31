@@ -756,7 +756,7 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
 
-    def jk_method(J='FFTDF', K=None):
+    def jk_method(self, J='FFTDF', K=None):
         '''
         Set up the schemes to evaluate Coulomb and exchange matrix
 
