@@ -30,6 +30,7 @@ import time
 import json
 import ctypes
 import numpy
+import numpy as np
 import h5py
 import scipy.special
 import scipy.linalg
@@ -2856,7 +2857,7 @@ class Mole(lib.StreamObject):
         return self.update_from_chk(chkfile)
     def update_from_chk(self, chkfile):
         with h5py.File(chkfile, 'r') as fh5:
-            mol = loads(fh5['mol'][:])
+            mol = loads(fh5['mol'][()])
             self.__dict__.update(mol.__dict__)
         return self
 

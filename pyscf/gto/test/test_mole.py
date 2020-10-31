@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
         mol1.unit = 'Ang'
         mol1.atom = '''
                 1    0  1  .5*2
-                O    0  0  0
+                O    0  0  0*np.exp(0)
                 h    1  1  0'''
         mol1.basis = {'O': gto.basis.parse('''
 C    S
@@ -608,13 +608,12 @@ O    SP
 
     def test_dump_loads_skip(self):
         import json
-        tmpfile = tempfile.NamedTemporaryFile()
-        lib.chkfile.save_mol(mol0, tmpfile.name)
-        mol1 = gto.Mole()
-        mol1.update(tmpfile.name)
-        # dumps() may produce different orders in different runs
-        self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
-        tmpfile = None
+        with tempfile.NamedTemporaryFile() as tmpfile:
+            lib.chkfile.save_mol(mol0, tmpfile.name)
+            mol1 = gto.Mole()
+            mol1.update(tmpfile.name)
+            # dumps() may produce different orders in different runs
+            self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
         mol1.loads(mol1.dumps())
         mol1.loads_(mol0.dumps())
         mol1.unpack(mol1.pack())

@@ -90,6 +90,17 @@ mol.build()
 # will convert mol.atom to the internal format
 #
 
+#
+# Simple arithmetic expressions can be specified in the geometry description
+#
+mol = gto.M(atom='''
+O 0 0 0
+H 0 1 0
+H 0 0 1
+O 0+1.5 0 0
+H 0+1.5 1 0
+H 0+1.5 0 1
+''')
 
 
 #
