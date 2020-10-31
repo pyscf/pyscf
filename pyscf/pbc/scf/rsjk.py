@@ -29,7 +29,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.pbc.df import aft
-from pyscf.pbc.tools import k2gamma
 from pyscf.pbc import tools as pbctools
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
@@ -87,6 +86,7 @@ class RangeSeparationJKBuilder(object):
         return self
 
     def build(self, omega=None, direct_scf_tol=None):
+        from pyscf.pbc.tools import k2gamma
         cpu0 = (time.clock(), time.time())
         cell = self.cell
         kpts = self.kpts
@@ -112,53 +112,49 @@ class RangeSeparationJKBuilder(object):
         logger.info(self, 'omega = %.15g  ke_cutoff = %s  mesh = %s',
                     self.omega, self.ke_cutoff, self.mesh)
 
+        if direct_scf_tol is None:
+            direct_scf_tol = cell.precision * 1e-3
+            logger.debug(self, 'Set direct_scf_tol %g', direct_scf_tol)
+
         kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
-        self.bvkmesh_Ls = Ks = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
-        cell_dense, cell_sparse, ke_cutoff = _split_cell(cell, self.ke_cutoff)
-        self.cell_dense = cell_dense
-        self.cell_sparse = cell_sparse
         bvkcell, phase = k2gamma.get_phase(cell, kpts, kmesh)
-        bvkcell_dense = k2gamma.get_phase(cell_dense, kpts, kmesh)[0]
-        bvkcell_sparse = k2gamma.get_phase(cell_sparse, kpts, kmesh)[0]
-        # Ls is the translation vectors to mimic periodicity of a cell
-        Ls = bvkcell.get_lattice_Ls(rcut=cell.rcut+10, discard=False)
-        self.supmol_Ls = Ls = Ls[np.linalg.norm(Ls, axis=1).argsort()]
-        self.supmol_dense = supmol1 = _make_extended_mole(cell_dense, bvkcell_dense, Ls, Ks)
-        self.supmol_sparse = supmol2 = _make_extended_mole(cell_sparse, bvkcell_sparse, Ls, Ks)
-
-        nkpts = len(kpts)
-        def relocate_kcell_shl_id(bvkcell_shl_id, bas_idx):
-            # bas_idx wrt bvkcell
-            kbas_idx = bas_idx + np.arange(nkpts)[:,None] * cell.nbas
-            return kbas_idx.ravel()[bvkcell_shl_id]
-
-        kdense_shl_id = relocate_kcell_shl_id(supmol1.bvkcell_shl_id, cell_dense._bas_idx)
-        ksparse_shl_id = relocate_kcell_shl_id(supmol2.bvkcell_shl_id, cell_sparse._bas_idx)
-        bvkcell_shl_id = np.asarray(np.append(kdense_shl_id, ksparse_shl_id), dtype=np.int32)
-        supmol = supmol1 + supmol2
-        idx1, idx_rest1, idx2, idx_rest2 = np.split(np.arange(supmol.nbas),
-                                                    [cell_dense.nbas, supmol1.nbas,
-                                                     supmol1.nbas+cell_sparse.nbas])
-        merged_bas_idx = np.hstack([idx1, idx2, idx_rest1, idx_rest2])
-        supmol._bas = supmol._bas[merged_bas_idx]
-        self.supmol = supmol
+        self.bvkmesh_Ls = Ks = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
         self.bvkcell = bvkcell
         self.phase = phase
-        self.bvkcell_shl_id = bvkcell_shl_id[merged_bas_idx]
+
+        # Ls is the translation vectors to mimic periodicity of a cell
+        Ls = bvkcell.get_lattice_Ls(rcut=cell.rcut+10)
+        self.supmol_Ls = Ls = Ls[np.linalg.norm(Ls, axis=1).argsort()]
+        nimgs = len(Ls)
+
+        cell_dense, cell_sparse, ke_cutoff = _split_cell(cell, self.ke_cutoff)
+        cell_merged = cell_dense + cell_sparse
+        supmol = _make_extended_mole(cell_merged, Ls, Ks, direct_scf_tol)
+        self.cell_dense = cell_dense
+        self.cell_sparse = cell_sparse
+        self.supmol = supmol
+
+        bas_mask = supmol.bas_mask
+        nkpts = len(kpts)
+        bas_idx = np.append(cell_dense._bas_idx, cell_sparse._bas_idx)
+        kbas_idx = bas_idx + np.arange(nkpts)[:,None] * cell.nbas
+        bvkcell_shl_id = np.repeat(kbas_idx.reshape(1, -1), nimgs, axis=0)
+        self.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask].astype(np.int32)
+
+        smooth_mask = np.zeros((nkpts*nimgs, cell_merged.nbas), dtype=bool)
+        smooth_mask[:,cell_dense.nbas:] = True
+        smooth_mask = smooth_mask.ravel()[bas_mask]
+        nbas_smooth = np.count_nonzero(smooth_mask)
+        nbas_steep = supmol.nbas - nbas_smooth
+
         logger.info(self, 'sup-mol nbas = %d cGTO = %d pGTO = %d',
                     supmol.nbas, supmol.nao, supmol.npgto_nr())
         logger.debug(self, 'Steep basis in each cell nbas = %d cGTOs = %d pGTOs = %d',
                      cell_dense.nbas, cell_dense.nao, cell_dense.npgto_nr())
         logger.debug(self, 'Smooth basis in each cell nbas = %d cGTOs = %d pGTOs = %d',
                      cell_sparse.nbas, cell_sparse.nao, cell_sparse.npgto_nr())
-        logger.debug(self, 'Steep basis in sup-mol nbas = %d cGTOs = %d pGTOs = %d',
-                     supmol1.nbas, supmol1.nao, supmol1.npgto_nr())
-        logger.debug(self, 'Smooth basis in sup-mol nbas = %d cGTOs = %d pGTOs = %d',
-                     supmol2.nbas, supmol2.nao, supmol2.npgto_nr())
-
-        if direct_scf_tol is None:
-            direct_scf_tol = cell.precision * 1e-2
-            logger.debug(self, 'Set direct_scf_tol %g', direct_scf_tol)
+        logger.debug(self, 'Steep basis in sup-mol %d, smooth basis in sup-mol %d',
+                     nbas_steep, nbas_smooth)
 
         supmol.omega = -self.omega  # Set short range coulomb
         with supmol.with_integral_screen(direct_scf_tol**2):
@@ -168,14 +164,12 @@ class RangeSeparationJKBuilder(object):
         self.vhfopt = vhfopt
         cpu1 = logger.timer(self, 'initializing vhfopt', *cpu0)
 
-        nbas1 = supmol1.nbas
         supmol_only_s = supmol.copy()
         supmol_only_s._bas[:,gto.ANG_OF] = 0
-        ovlp_mask = supmol_only_s.intor_symmetric('int1e_ovlp') > direct_scf_tol
+        # Note: some basis has negative contraction coefficients.
+        ovlp_mask = abs(supmol_only_s.intor_symmetric('int1e_ovlp')) > direct_scf_tol*1e-1
         ovlp_mask = ovlp_mask.astype(np.int8)
-        cell0_nbas = cell_dense.nbas + cell_sparse.nbas
-        sparse_bas_idx = np.append(np.arange(cell_dense.nbas, cell0_nbas), idx_rest2)
-        ovlp_mask[sparse_bas_idx[:,None],sparse_bas_idx] = 2
+        ovlp_mask[smooth_mask[:,None] & smooth_mask] = 2
         self.ovlp_mask = ovlp_mask
 
         self.lr_aft = lr_aft = _LongRangeAFT(cell, kpts, self.omega)
@@ -375,32 +369,28 @@ class _ShortRangeAFT(aft.AFTDF):
         coulG *= kws
         return coulG
 
-def _make_extended_mole(cell, bvkcell, Ls, bvkmesh_Ls):
+def _make_extended_mole(cell, Ls, bvkmesh_Ls, precision=None):
+    if precision is None:
+        precision = cell.precision * 1e-2
     LKs = Ls[:,None,:] + bvkmesh_Ls
     nimgs, nk = LKs.shape[:2]
 
-    a = cell.lattice_vectors()
-    rcuts = np.array([cell.bas_rcut(ib, cell.precision)
-                      for ib in range(cell.nbas)])
-    # FIXME: determine the trucation distance, based on omega and most
-    # diffused functions
-    #rcuts += 6
-    #rcuts*=2
-    bas_mask = np.zeros((nimgs, nk, cell.nbas), dtype=bool)
-    bas_mask[0] = True  # The main sup-cell (image-0) needs to be entirely included
-    for ax in (-a[0], 0, a[0]):
-        for ay in (-a[1], 0, a[1]):
-            for az in (-a[2], 0, a[2]):
-                bas_mask |= lib.norm(LKs+(ax+ay+az), axis=2)[:,:,None] < rcuts
+    nbas = cell.nbas
+    bvkcell_shl_id = np.repeat(np.arange(nk*nbas).reshape(1,nk,nbas), nimgs, axis=0)
 
-    bvkcell_shl_id = np.repeat(np.arange(bvkcell.nbas).reshape(1,nk,cell.nbas), nimgs, axis=0)
-    bvkcell_shl_id = np.asarray(bvkcell_shl_id[bas_mask], dtype=np.int32)
-
-    LKs = LKs.reshape(nimgs*nk, 3)
     supmol = cell.to_mol()
-    supmol = pbctools.pbc._build_supcell_(supmol, cell, LKs)
-    supmol._bas = supmol._bas[bas_mask.ravel()]
-    supmol.bvkcell_shl_id = bvkcell_shl_id
+    supmol = pbctools.pbc._build_supcell_(supmol, cell, LKs.reshape(nimgs*nk, 3))
+
+    supmol_only_s = supmol.copy()
+    supmol_only_s._bas[:,gto.ANG_OF] = 0
+    s0 = supmol_only_s.intor('int1e_ovlp', shls_slice=(0, nbas, 0, supmol.nbas))
+    # Note: some basis has negative contraction coefficients
+    s0max = abs(s0).max(axis=0)
+    # FIXME: How to estimate the cutoff threshold for the products of diffused
+    # and compact basis
+    bas_mask = s0max > precision
+    supmol._bas = supmol._bas[bas_mask]
+    supmol.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask]
     supmol.bas_mask = bas_mask
     return supmol
 
@@ -499,20 +489,21 @@ if __name__ == '__main__':
                    He     0.4917  0.4917  0.4917
                 '''
     cell.basis = {'He': [[0, [2.1, 1],
-                             [0.1, 1]
+                             [0.1, .2]
                          ],
-                         #[1, [0.3, 1]],
+                         [1, [0.3, 1]],
                          #[1, [1.5, 1]],
                         ]}
     cell.build()
     cell.verbose = 6
     cells.append(cell)
 
-    if 0:
+    if 1:
         cell = Cell().build(a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000''',
+3.370137329, 0.000000000, 0.000000000
+0.000000000, 3.370137329, 0.000000000
+0.000000000, 0.000000000, 3.370137329
+                            ''',
                             unit = 'B',
                             atom = '''
 C 0.000000000000   0.000000000000   0.000000000000
@@ -520,20 +511,20 @@ C 1.685068664391   1.685068664391   1.685068664391''',
                             basis='''
 C S
 4.3362376436      0.1490797872
-#1.2881838513      -0.0292640031
-#0.4037767149      -0.688204051
+1.2881838513      -0.0292640031
+0.4037767149      -0.688204051
 0.1187877657      -0.3964426906
 C P
 4.3362376436      -0.0878123619
-#1.2881838513      -0.27755603
-#0.4037767149      -0.4712295093
+1.2881838513      -0.27755603
+0.4037767149      -0.4712295093
 0.1187877657      -0.4058039291
 ''')
         cell.verbose = 6
         cells.append(cell)
 
     for cell in cells:
-        kpts = cell.make_kpts([2,1,1])
+        kpts = cell.make_kpts([1,1,1])
         mf = cell.KRHF(kpts=kpts)#.run()
         #dm = mf.make_rdm1()
         np.random.seed(1)

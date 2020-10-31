@@ -43,31 +43,32 @@ int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc);
         CINTOpt *cintopt = envs->cintopt; \
         const int *ao_loc = envs->ao_loc; \
         const int *shls_slice = envs->shls_slice; \
-        const int njsh = shls_slice[3] - shls_slice[2]; \
-        const int nlsh = shls_slice[7] - shls_slice[6]; \
-        const int knbas = nbas0 * nkpts; \
-        const int kn = nao * nkpts; \
-        const int bn = nao * nbands; \
-        const int knn = kn * nao; \
-        const int bnn = bn * nao; \
-        const int kknn = knn * nkpts; \
-        const int ish0 = ishls[0]; \
-        const int ish1 = ishls[1]; \
-        const int jsh0 = jshls[0]; \
-        const int jsh1 = jshls[1]; \
-        const int ksh0 = kshls[0]; \
-        const int ksh1 = kshls[1]; \
-        const int lsh0 = lshls[0]; \
-        const int lsh1 = lshls[1]; \
+        const size_t Nbas = nbas; \
+        const size_t njsh = shls_slice[3] - shls_slice[2]; \
+        const size_t nlsh = shls_slice[7] - shls_slice[6]; \
+        const size_t knbas = nbas0 * nkpts; \
+        const size_t kn = nao * nkpts; \
+        const size_t bn = nao * nbands; \
+        const size_t knn = kn * nao; \
+        const size_t bnn = bn * nao; \
+        const size_t kknn = knn * nkpts; \
+        const size_t ish0 = ishls[0]; \
+        const size_t ish1 = ishls[1]; \
+        const size_t jsh0 = jshls[0]; \
+        const size_t jsh1 = jshls[1]; \
+        const size_t ksh0 = kshls[0]; \
+        const size_t ksh1 = kshls[1]; \
+        const size_t lsh0 = lshls[0]; \
+        const size_t lsh1 = lshls[1]; \
         int shls[4]; \
-        int i, j, k, l, ijkl; \
-        int i0, j0, k0, l0; \
-        int i1, j1, k1, l1; \
-        int ish, jsh, ksh, lsh, idm; \
-        int ishp, jshp, kshp, lshp; \
+        size_t i, j, k, l, ijkl; \
+        size_t i0, j0, k0, l0; \
+        size_t i1, j1, k1, l1; \
+        size_t ish, jsh, ksh, lsh, idm; \
+        size_t ishp, jshp, kshp, lshp; \
         char mask_ij, mask_kl; \
         double *q_cond_ijij = vhfopt->q_cond; \
-        double *q_cond_iijj = vhfopt->q_cond + nbas*nbas; \
+        double *q_cond_iijj = vhfopt->q_cond + Nbas*Nbas; \
         double *dm_cond = vhfopt->dm_cond; \
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff; \
         double qijkl, q1, q2, q3;
@@ -97,15 +98,15 @@ int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc);
                                         if (mask_ij & mask_kl & SKIP_SMOOTH_BLOCK) { \
                                                 continue; \
                                         } \
-                                        q1 = q_cond_ijij[ish*nbas+jsh] * q_cond_ijij[ksh*nbas+lsh]; \
+                                        q1 = q_cond_ijij[ish*Nbas+jsh] * q_cond_ijij[ksh*Nbas+lsh]; \
                                         if (q1 < direct_scf_cutoff) { \
                                                 continue; \
                                         } \
-                                        q2 = q_cond_iijj[ish*nbas+ksh] * q_cond_iijj[jsh*nbas+lsh]; \
+                                        q2 = q_cond_iijj[ish*Nbas+ksh] * q_cond_iijj[jsh*Nbas+lsh]; \
                                         if (q2 < direct_scf_cutoff) { \
                                                 continue; \
                                         } \
-                                        q3 = q_cond_iijj[ish*nbas+lsh] * q_cond_iijj[jsh*nbas+ksh]; \
+                                        q3 = q_cond_iijj[ish*Nbas+lsh] * q_cond_iijj[jsh*Nbas+ksh]; \
                                         if (q3 < direct_scf_cutoff) { \
                                                 continue; \
                                         } \
@@ -131,32 +132,33 @@ void PBCVHF_contract_k_s1(double *vk, double *dms, double *buf, double *cache,
         CINTOpt *cintopt = envs->cintopt;
         const int *ao_loc = envs->ao_loc;
         const int *shls_slice = envs->shls_slice;
-        const int njsh = shls_slice[3] - shls_slice[2];
-        const int nlsh = shls_slice[7] - shls_slice[6];
-        const int knbas = nbas0 * nkpts;
-        const int kn = nao * nkpts;
-        const int bn = nao * nbands;
-        const int knn = kn * nao;
-        const int bnn = bn * nao;
-        const int kknn = knn * nkpts;
-        const int ish0 = ishls[0];
-        const int ish1 = ishls[1];
-        const int jsh0 = jshls[0];
-        const int jsh1 = jshls[1];
-        const int ksh0 = kshls[0];
-        const int ksh1 = kshls[1];
-        const int lsh0 = lshls[0];
-        const int lsh1 = lshls[1];
+        const size_t Nbas = nbas;
+        const size_t njsh = shls_slice[3] - shls_slice[2];
+        const size_t nlsh = shls_slice[7] - shls_slice[6];
+        const size_t knbas = nbas0 * nkpts;
+        const size_t kn = nao * nkpts;
+        const size_t bn = nao * nbands;
+        const size_t knn = kn * nao;
+        const size_t bnn = bn * nao;
+        const size_t kknn = knn * nkpts;
+        const size_t ish0 = ishls[0];
+        const size_t ish1 = ishls[1];
+        const size_t jsh0 = jshls[0];
+        const size_t jsh1 = jshls[1];
+        const size_t ksh0 = kshls[0];
+        const size_t ksh1 = kshls[1];
+        const size_t lsh0 = lshls[0];
+        const size_t lsh1 = lshls[1];
         int shls[4];
-        int i, j, k, l, ijkl;
-        int i0, j0, k0, l0;
-        int i1, j1, k1, l1;
-        int ish, jsh, ksh, lsh, idm;
-        int ishp, jshp, kshp;
+        size_t i, j, k, l, ijkl;
+        size_t i0, j0, k0, l0;
+        size_t i1, j1, k1, l1;
+        size_t ish, jsh, ksh, lsh, idm;
+        size_t ishp, jshp, kshp;
         char mask_ij, mask_kl;
 
         double *q_cond_ijij = vhfopt->q_cond;
-        double *q_cond_iijj = vhfopt->q_cond + nbas*nbas;
+        double *q_cond_iijj = vhfopt->q_cond + Nbas*Nbas;
         double *dm_cond = vhfopt->dm_cond;
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff;
         double qijkl, q1, q2, q3, sjk;
@@ -182,19 +184,20 @@ void PBCVHF_contract_k_s1(double *vk, double *dms, double *buf, double *cache,
                                         if (!mask_kl) {
                                                 continue;
                                         }
+                                        // skip if all the four shells are smooth functions
                                         if (mask_ij & mask_kl & SKIP_SMOOTH_BLOCK) {
                                                 continue;
                                         }
 
-                                        q1 = q_cond_ijij[ish*nbas+jsh] * q_cond_ijij[ksh*nbas+lsh];
+                                        q1 = q_cond_ijij[ish*Nbas+jsh] * q_cond_ijij[ksh*Nbas+lsh];
                                         if (q1 < direct_scf_cutoff) {
                                                 continue;
                                         }
-                                        q2 = q_cond_iijj[ish*nbas+ksh] * q_cond_iijj[jsh*nbas+lsh];
+                                        q2 = q_cond_iijj[ish*Nbas+ksh] * q_cond_iijj[jsh*Nbas+lsh];
                                         if (q2 < direct_scf_cutoff) {
                                                 continue;
                                         }
-                                        q3 = q_cond_iijj[ish*nbas+lsh] * q_cond_iijj[jsh*nbas+ksh];
+                                        q3 = q_cond_iijj[ish*Nbas+lsh] * q_cond_iijj[jsh*Nbas+ksh];
                                         if (q3 < direct_scf_cutoff) {
                                                 continue;
                                         }
@@ -635,17 +638,44 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         int *block_jloc = block_iloc + nish + 1;
         int *block_kloc = block_jloc + njsh + 1;
         int *block_lloc = block_kloc + nksh + 1;
-        const int nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
-        const int nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
-        const int nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
-        const int nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc);
-        const int nblock_kl = nblock_k * nblock_l;
-        const int nblock_jkl = nblock_j * nblock_kl;
-        const int nblock_ijkl = nblock_i * nblock_jkl;
+        const size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
+        const size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
+        const size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
+        const size_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc);
+        const size_t nblock_kl = nblock_k * nblock_l;
+        const size_t nblock_jkl = nblock_j * nblock_kl;
+        const size_t nblock_ijkl = nblock_i * nblock_jkl;
+
+        char *block_mask = calloc(nblock_kl, sizeof(char));
+        char has_type2;
+        int kb, lb, ks0, ks1, ls0, ls1, ks, ls;
+        for (kb = 0; kb < nblock_k; kb++) {
+        for (lb = 0; lb < nblock_l; lb++) {
+                ks0 = block_kloc[kb];
+                ls0 = block_lloc[lb];
+                ks1 = block_lloc[kb+1];
+                ls1 = block_lloc[lb+1];
+                has_type2 = 0;
+                for (ks = ks0; ks < ks1; ks++) {
+                for (ls = ls0; ls < ls1; ls++) {
+                        if (ovlp_mask[ks * nbas + ls] == 1) {
+                                // any ovlp_mask is type 1
+                                block_mask[kb * nblock_l + lb] = 1;
+                                goto next_block;
+                        } else {
+                                // any ovlp_mask is type 2 and none is type 1
+                                has_type2 |= ovlp_mask[ks * nbas + ls] == 2;
+                        }
+                } }
+                if (has_type2) {
+                        block_mask[kb * nblock_l + lb] = 2;
+                }
+next_block:;
+        } }
 
 #pragma omp parallel
 {
-        int i, j, k, l, r, blk_id;
+        size_t i, j, k, l, r, n, blk_id;
         size_t size = n_dm * nao * nao * nbands;
         if (fdot == &PBCVHF_contract_jk_s2kl || fdot == &PBCVHF_contract_jk_s1) {
                 size *= 2;
@@ -653,21 +683,35 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         double *v_priv = calloc(size, sizeof(double));
         double *buf = malloc(sizeof(double) * (di*di*di*di + cache_size));
         double *cache = buf + di*di*di*di;
-#pragma omp for nowait schedule(dynamic, 1)
+        char mask_ij, mask_kl;
+#pragma omp for nowait schedule(dynamic, 8)
         for (blk_id = 0; blk_id < nblock_ijkl; blk_id++) {
                 // dispatch blk_id to sub-block indices (i, j, k, l)
                 r = blk_id;
                 i = r / nblock_jkl; r = r - i * nblock_jkl;
                 j = r / nblock_kl ; r = r - j * nblock_kl;
+                mask_ij = block_mask[i * nblock_j + j];
+                if (mask_ij == 0) {
+                        continue;
+                }
+
                 k = r / nblock_l  ; r = r - k * nblock_l;
                 l = r;
+                mask_kl = block_mask[k * nblock_l + l];
+                if (mask_kl == 0) {
+                        continue;
+                }
+
+                if (mask_ij & mask_kl & SKIP_SMOOTH_BLOCK) {
+                        continue;
+                }
+
                 (*fdot)(v_priv, dms, buf, cache, n_dm, nao, nkpts, nbands, nbas0,
                         block_iloc+i, block_jloc+j, block_kloc+k, block_lloc+l,
                         bvkcell_shl_id, bands_ao_loc, ovlp_mask, vhfopt, &envs);
         }
 #pragma omp critical
         {
-                size_t n;
                 for (n = 0; n < size; n++) {
                         out[n] += v_priv[n];
                 }
@@ -676,6 +720,7 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         free(v_priv);
 }
         free(block_iloc);
+        free(block_mask);
 }
 
 /************************************************/
