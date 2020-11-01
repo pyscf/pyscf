@@ -199,8 +199,9 @@ endif() # ENABLE_LIBXC
 #    ENABLE_XCFUN AND BUILD_XCFUN)
 if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
-    GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG 8ec13b06e06feccbc9e968665977df14d7bfdff8
+    GIT_REPOSITORY https://github.com/sunqm/xcfun.git
+    # copy of v2.1.0, downgrade to cmake 3.5
+    GIT_TAG cmake-3.5
     # Range seperated parameters can be set in the python code. This patch to
     # RSH omega is not needed anymore.
     #PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
