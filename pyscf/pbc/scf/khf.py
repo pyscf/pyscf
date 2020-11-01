@@ -782,6 +782,7 @@ class KSCF(pbchf.SCF):
 
         if 'RS' in J or 'RS' in K:
             self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
+            self.rsjk.verbose = self.verbose
 
         return self
 

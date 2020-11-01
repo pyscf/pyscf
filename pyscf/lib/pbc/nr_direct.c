@@ -602,26 +602,21 @@ void PBCVHF_contract_jk_s2kl(double *jk, double *dms, double *buf, double *cache
         }
 }
 
-// nbas0 is the number of basis in primitive cell
+/*
+ * shls_slice refers to the shells of entire sup-mol.
+ * bvk_ao_loc has only the information of bvk-cell.
+ * nbas0 is the number of basis in primitive cell
+ */
 void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
                        int n_dm, int nao, int nkpts, int nbands, int nbas0,
-                       int *shls_slice, int *ao_loc,
+                       int *shls_slice, int *bvk_ao_loc,
                        int *bvkcell_shl_id, int *bands_ao_loc,
                        char *ovlp_mask, CINTOpt *cintopt, CVHFOpt *vhfopt,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc,
+        IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, bvk_ao_loc,
                 NULL, cintopt, 1};
 
-        // Note: shls_slice refers to the shells of entire sup-mol. ao_loc has
-        // only the information of a subset of the sup-mol. Since bases of
-        // supmol are extended from primitive cell. di can be generated in terms
-        // of the primitive cell (cell0)
-        int cell0_shls_slice[2] = {0, nbas0};
-        const int di = GTOmax_shell_dim(ao_loc, cell0_shls_slice, 1);
-
-        const int cache_size = GTOmax_cache_size(int2e_sph, shls_slice, 4,
-                                                 atm, natm, bas, nbas, env);
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
@@ -634,10 +629,22 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         const int njsh = jsh1 - jsh0;
         const int nksh = ksh1 - ksh0;
         const int nlsh = lsh1 - lsh0;
-        int *block_iloc = malloc(sizeof(int) * (nish + njsh + nksh + nlsh + 4));
+        int *ao_loc = malloc(sizeof(int) * (nbas + nish + njsh + nksh + nlsh + 5));
+        int *block_iloc = ao_loc + nbas + 1;
         int *block_jloc = block_iloc + nish + 1;
         int *block_kloc = block_jloc + njsh + 1;
         int *block_lloc = block_kloc + nksh + 1;
+        size_t kb, lb, ks0, ks1, ls0, ls1, ks, ls;
+        ao_loc[0] = 0;
+        for (ls = 0; ls < nbas; ls++) {
+                ks = bvkcell_shl_id[ls];
+                ks0 = bvk_ao_loc[ks];
+                ks1 = bvk_ao_loc[ks+1];
+                ao_loc[ls+1] = ao_loc[ls] + (ks1 - ks0);
+        }
+        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 1);
+        const int cache_size = GTOmax_cache_size(int2e_sph, shls_slice, 4,
+                                                 atm, natm, bas, nbas, env);
         const size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
         const size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
         const size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
@@ -648,7 +655,6 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
 
         char *block_mask = calloc(nblock_kl, sizeof(char));
         char has_type2;
-        int kb, lb, ks0, ks1, ls0, ls1, ks, ls;
         for (kb = 0; kb < nblock_k; kb++) {
         for (lb = 0; lb < nblock_l; lb++) {
                 ks0 = block_kloc[kb];
@@ -659,11 +665,11 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
                 for (ks = ks0; ks < ks1; ks++) {
                 for (ls = ls0; ls < ls1; ls++) {
                         if (ovlp_mask[ks * nbas + ls] == 1) {
-                                // any ovlp_mask is type 1
+                                // any ovlp_mask == type 1
                                 block_mask[kb * nblock_l + lb] = 1;
                                 goto next_block;
                         } else {
-                                // any ovlp_mask is type 2 and none is type 1
+                                // any ovlp_mask == type 2 and none is type 1
                                 has_type2 |= ovlp_mask[ks * nbas + ls] == 2;
                         }
                 } }
@@ -678,13 +684,13 @@ next_block:;
         size_t i, j, k, l, r, n, blk_id;
         size_t size = n_dm * nao * nao * nbands;
         if (fdot == &PBCVHF_contract_jk_s2kl || fdot == &PBCVHF_contract_jk_s1) {
-                size *= 2;
+                size *= 2;  // vj and vk
         }
         double *v_priv = calloc(size, sizeof(double));
         double *buf = malloc(sizeof(double) * (di*di*di*di + cache_size));
         double *cache = buf + di*di*di*di;
         char mask_ij, mask_kl;
-#pragma omp for nowait schedule(dynamic, 8)
+#pragma omp for schedule(dynamic, 8)
         for (blk_id = 0; blk_id < nblock_ijkl; blk_id++) {
                 // dispatch blk_id to sub-block indices (i, j, k, l)
                 r = blk_id;
@@ -695,8 +701,8 @@ next_block:;
                         continue;
                 }
 
-                k = r / nblock_l  ; r = r - k * nblock_l;
-                l = r;
+                k = r / nblock_l;
+                l = r - k * nblock_l;
                 mask_kl = block_mask[k * nblock_l + l];
                 if (mask_kl == 0) {
                         continue;
@@ -719,7 +725,7 @@ next_block:;
         free(buf);
         free(v_priv);
 }
-        free(block_iloc);
+        free(ao_loc);
         free(block_mask);
 }
 

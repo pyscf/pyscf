@@ -97,12 +97,20 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
 # ~ 16 pi^2 int_cutoff^infty exp(-k^2/(4*omega^2)) dk
 # = 16 pi^{5/2} omega erfc(sqrt(ke_cutoff/(2*omega^2)))
 # ~ 16 pi^2 exp(-ke_cutoff/(2*omega^2)))
-def estimate_ke_cutoff_for_omega(cell, omega):
-    ke_cutoff = -2*omega**2 * numpy.log(cell.precision / (16*numpy.pi**2))
+def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
+    '''Energy cutoff to converge attenuated Coulomb in moment space
+    '''
+    if precision is None:
+        precision = cell.precision
+    ke_cutoff = -2*omega**2 * numpy.log(precision / (16*numpy.pi**2))
     return ke_cutoff
 
-def estimate_omega_for_ke_cutoff(cell, ke_cutoff):
-    omega = (-.5 * ke_cutoff / numpy.log(cell.precision / (16*numpy.pi**2)))**.5
+def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
+    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''
+    if precision is None:
+        precision = cell.precision
+    omega = (-.5 * ke_cutoff / numpy.log(precision / (16*numpy.pi**2)))**.5
     return omega
 
 def get_nuc(mydf, kpts=None):

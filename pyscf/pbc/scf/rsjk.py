@@ -44,7 +44,7 @@ class RangeSeparationJKBuilder(object):
         self.mesh = None
         self.kpts = kpts
 
-        self.omega = 0.6
+        self.omega = 0.5
         self.cell_dense = None
         self.cell_sparse = None
         # Born-von Karman supercell
@@ -100,10 +100,6 @@ class RangeSeparationJKBuilder(object):
             # integrals
             self.ke_cutoff = min(pbctools.mesh_to_cutoff(cell.lattice_vectors(),
                                                          self.mesh[:cell.dimension]))
-            # TODO: tune omega. aft.estimate_omega_for_ke_cutoff seems too strict
-            # FIXME: why error is decreased for larger omega while
-            # ke_cutoff/mesh is not changed. Errors should be enlarged for
-            # larger omega?
             self.omega = aft.estimate_omega_for_ke_cutoff(cell, self.ke_cutoff)
         else:
             self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
@@ -122,8 +118,37 @@ class RangeSeparationJKBuilder(object):
         self.bvkcell = bvkcell
         self.phase = phase
 
+        # Given ke_cutoff, eta corresponds to the most steep Gaussian basis
+        # of which the Coulomb integrals can be accurately computed in moment
+        # space. cell_sparse is the cell of smooth functions. Their exponents
+        # are ~< eta.
+        eta = aft.estimate_eta_for_ke_cutoff(cell, self.ke_cutoff,
+                                             precision=direct_scf_tol)
+        # * Assuming the most smooth function in cell_dense has exponent eta,
+        # with attenuation parameter omega, rcut_sr is the distance of which
+        # the value of attenuated Coulomb integrals of four shells |eta> is
+        # smaller than the required precision.
+        # * The attenuated coulomb integrals between four s-type Gaussians
+        # (2*a/pi)^{3/4}exp(-a*r^2) is
+        #   (erfc(omega*a^0.5/(omega^2+a)^0.5*R) - erfc(a^0.5*R)) / R
+        # if two Gaussians on one center and the other two on another center
+        # and the distance between the two centers are R.
+        # * The attenuated coulomb integrals between two spherical charge
+        # distributions is
+        #   ~(pi/eta)^3/2 (erfc(tau*(eta/2)^0.5*R) - erfc((eta/2)^0.5*R)) / R
+        #       tau = omega/sqrt(omega^2 + eta/2)
+        # if the spherical charge distribution is the product of above s-type
+        # Gaussian with exponent eta and a very smooth function.
+        # When R is large, the attenuated Coulomb integral is
+        #   ~= (pi/eta)^3/2 erfc(tau*(eta/2)^0.5*R) / R
+        #   ~= pi/(tau*eta^2*R^2) exp(-tau^2*eta*R^2/2)
+        tau = self.omega / (self.omega**2 + eta/2)**.5
+        rcut_sr = 10  # initial guess
+        rcut_sr = (-np.log(direct_scf_tol * tau * (eta * rcut_sr)**2/np.pi) / (tau**2*eta/2))**.5
+        logger.debug(self, 'eta = %g  rcut_sr = %g', eta, rcut_sr)
+
         # Ls is the translation vectors to mimic periodicity of a cell
-        Ls = bvkcell.get_lattice_Ls(rcut=cell.rcut+10)
+        Ls = bvkcell.get_lattice_Ls(rcut=cell.rcut+rcut_sr)
         self.supmol_Ls = Ls = Ls[np.linalg.norm(Ls, axis=1).argsort()]
         nimgs = len(Ls)
 
@@ -214,7 +239,7 @@ class RangeSeparationJKBuilder(object):
 
         sm_nbas = supmol.nbas
         if kpts_band is None:
-            ao_loc = bvkcell.ao_loc
+            bvk_ao_loc = bvkcell.ao_loc
             bands_ao_loc = bvkcell.ao_loc[self.bvkcell_shl_id]
             nbands = nkpts
 
@@ -258,7 +283,7 @@ class RangeSeparationJKBuilder(object):
             sc_dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
             ctypes.c_int(cell.nao), ctypes.c_int(nkpts), ctypes.c_int(nbands),
             ctypes.c_int(cell.nbas), (ctypes.c_int*8)(*shls_slice),
-            ao_loc.ctypes.data_as(ctypes.c_void_p),
+            bvk_ao_loc.ctypes.data_as(ctypes.c_void_p),
             self.bvkcell_shl_id.ctypes.data_as(ctypes.c_void_p),
             bands_ao_loc.ctypes.data_as(ctypes.c_void_p),
             self.ovlp_mask.ctypes.data_as(ctypes.c_void_p),
