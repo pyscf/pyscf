@@ -383,7 +383,7 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
         gsave[p0:p1] = buf2
     time1 = log.timer_debug1('_rdm2_mo2ao pass 3', *time1)
     if incore:
-        return fsave['dm2'].value
+        return fsave['dm2'][:]
     else:
         return fsave
 

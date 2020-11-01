@@ -8,7 +8,10 @@ PySCF 1.7.? (2020-?-?)
 PySCF 1.7.6 (2020-10-03)
 ------------------------
 * Improved
-  - Threading safety
+  - Threading safety in Mole temporary context
+  - Basis parser to support arithmetic expressions in basis data
+* Fixed
+  - stack overflow in ecp integral code
 
 
 PySCF 1.7.5 (2020-9-27)

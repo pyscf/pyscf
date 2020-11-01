@@ -21,7 +21,8 @@ class KnowValues(unittest.TestCase):
     self.assertEqual(td.xvrt[0].shape[0], 19)
 
     # run TDDFT
-    omegas = h5py.File(dname+"/tddft_iter_output_water_ref.hdf5", "r")["polarizability/frequency"].value/Ha + 1j*td.eps
+    with h5py.File(dname+"/tddft_iter_output_water_ref.hdf5", "r") as f:
+        omegas = f["polarizability/frequency"][:]/Ha + 1j*td.eps
     td.comp_dens_inter_along_Eext(omegas, Eext=np.array([1.0, 1.0, 1.0]))
     np.save("density_change_pyscf.npy", td.dn)
     np.save("frequency.npy", omegas.real)
@@ -34,7 +35,7 @@ class KnowValues(unittest.TestCase):
     for ireim, reim in enumerate(["re", "im"]):
         for i in range(3):
             for j in range(3):
-                mbpt = ref["dipol_inter_iter_krylov_"+reim].value[j, i, :]
+                mbpt = ref["dipol_inter_iter_krylov_"+reim][j, i, :]
                 if ireim == 0:
                     py = -pyscf[i, j, :].real
                 elif ireim == 1:
@@ -55,8 +56,8 @@ class KnowValues(unittest.TestCase):
     spd.get_spatial_density(8.35/Ha, Eext=np.array([1.0, 1.0, 1.0]))
 
     ref = h5py.File(dname+"/tddft_iter_output_water_ref.hdf5", "r")
-    dn_mbpt = ref["field_spatial_dir_0.58_0.58_0.58_freq_8.35_inter/dens_re"].value +\
-            1.0j*ref["field_spatial_dir_0.58_0.58_0.58_freq_8.35_inter/dens_im"].value
+    dn_mbpt = ref["field_spatial_dir_0.58_0.58_0.58_freq_8.35_inter/dens_re"][:] +\
+            1.0j*ref["field_spatial_dir_0.58_0.58_0.58_freq_8.35_inter/dens_im"][:]
 
     Np = spd.dn_spatial.shape[1]//2
     Nm = dn_mbpt.shape[1]//2

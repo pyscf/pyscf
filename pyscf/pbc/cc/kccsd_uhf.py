@@ -1088,7 +1088,7 @@ def _make_df_eris(cc, mo_coeff=None):
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
     eris.LPV = LPV = np.empty((nkpts,nkpts), dtype=object)
     with h5py.File(thisdf._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'].value
+        kptij_lst = f['j3c-kptij'][:]
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):

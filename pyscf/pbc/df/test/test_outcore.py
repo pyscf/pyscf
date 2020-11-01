@@ -51,9 +51,9 @@ class KnowValues(unittest.TestCase):
             nao = cell.nao_nr()
             idx = numpy.tril_indices(nao)
             idx = idx[0] * nao + idx[1]
-            self.assertTrue(numpy.allclose(refk[0,idx], f['eri_mo/0'].value.T))
-            self.assertTrue(numpy.allclose(refk[1], f['eri_mo/1'].value.T))
-            self.assertTrue(numpy.allclose(refk[2], f['eri_mo/2'].value.T))
+            self.assertTrue(numpy.allclose(refk[0,idx], f['eri_mo/0'][:].T))
+            self.assertTrue(numpy.allclose(refk[1], f['eri_mo/1'][:].T))
+            self.assertTrue(numpy.allclose(refk[2], f['eri_mo/2'][:].T))
 
 if __name__ == '__main__':
     print("Full Tests for pbc.df.outcore")

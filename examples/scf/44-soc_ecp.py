@@ -3,6 +3,8 @@
 '''
 SCF module currently does not apply SO-ECP automatically. SO-ECP contributions
 can be added to GHF/GKS core Hamiltonian by overwriding the method get_hcore.
+
+See also examples/gto/20-soc_ecp.py
 '''
 
 import numpy

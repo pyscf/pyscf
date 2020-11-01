@@ -26,8 +26,8 @@ from pyscf import lib
 
 hfile = os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.h5'))
 with h5py.File(hfile, 'r') as f:
-    h1 = lib.unpack_tril(f['h1'].value)
-    h2 = f['h2'].value
+    h1 = lib.unpack_tril(f['h1'][:])
+    h2 = f['h2'][:]
 
 norb = 10
 nelec = (5,5)

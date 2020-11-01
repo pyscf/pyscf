@@ -30,6 +30,7 @@ import time
 import json
 import ctypes
 import numpy
+import numpy as np
 import h5py
 import scipy.special
 import scipy.linalg
@@ -320,8 +321,13 @@ def format_atom(atoms, origin=0, axes=None,
     '''
     def str2atm(line):
         dat = line.split()
-        assert(len(dat) == 4)
-        return [_atom_symbol(dat[0]), [float(x) for x in dat[1:4]]]
+        try:
+            coords = [float(x) for x in dat[1:4]]
+        except ValueError:
+            coords = list(eval(','.join(dat[1:4])))
+        if len(coords) != 3:
+            raise ValueError('Coordinates error in %s' % line)
+        return [_atom_symbol(dat[0]), coords]
 
     if isinstance(atoms, (str, unicode)):
         # The input atoms points to a geometry file
@@ -2851,7 +2857,7 @@ class Mole(lib.StreamObject):
         return self.update_from_chk(chkfile)
     def update_from_chk(self, chkfile):
         with h5py.File(chkfile, 'r') as fh5:
-            mol = loads(fh5['mol'].value)
+            mol = loads(fh5['mol'][()])
             self.__dict__.update(mol.__dict__)
         return self
 
@@ -3530,27 +3536,29 @@ def from_zmatrix(atomstr):
     '''
     from pyscf.symm import rotation_mat
     atomstr = atomstr.replace(';','\n').replace(',',' ')
-    symb = []
+    symbols = []
     coord = []
     min_items_per_line = 1
-    for line in atomstr.splitlines():
+    for line_id, line in enumerate(atomstr.splitlines()):
         line = line.strip()
         if line and line[0] != '#':
             rawd = line.split()
-            assert(len(rawd) >= min_items_per_line)
+            if len(rawd) < min_items_per_line:
+                raise ValueError('Zmatrix format error at L%d %s' % (line_id, line))
 
-            symb.append(rawd[0])
+            symbols.append(rawd[0])
             if len(rawd) < 3:
                 coord.append(numpy.zeros(3))
                 min_items_per_line = 3
             elif len(rawd) == 3:
-                coord.append(numpy.array((float(rawd[2]), 0, 0)))
+                coord.append(numpy.array((eval(rawd[2]), 0, 0)))
                 min_items_per_line = 5
             elif len(rawd) == 5:
-                bonda = int(rawd[1]) - 1
-                bond  = float(rawd[2])
-                anga  = int(rawd[3]) - 1
-                ang   = float(rawd[4])/180*numpy.pi
+                vals = eval(','.join(rawd[1:]))
+                bonda = int(vals[0]) - 1
+                bond  = float(vals[1])
+                anga  = int(vals[2]) - 1
+                ang   = float(vals[3])/180*numpy.pi
                 assert(ang >= 0)
                 v1 = coord[anga] - coord[bonda]
                 if not numpy.allclose(v1[:2], 0):
@@ -3562,10 +3570,12 @@ def from_zmatrix(atomstr):
                 coord.append(coord[bonda]+c)
                 min_items_per_line = 7
             else:
-                bonda = int(rawd[1]) - 1
-                bond  = float(rawd[2])
-                anga  = int(rawd[3]) - 1
-                ang   = float(rawd[4])/180*numpy.pi
+                vals = eval(','.join(rawd[1:]))
+                print(rawd, vals)
+                bonda = int(vals[0]) - 1
+                bond  = float(vals[1])
+                anga  = int(vals[2]) - 1
+                ang   = float(vals[3])/180*numpy.pi
                 assert(ang >= 0 and ang <= numpy.pi)
                 v1 = coord[anga] - coord[bonda]
                 v1 /= numpy.linalg.norm(v1)
@@ -3574,8 +3584,8 @@ def from_zmatrix(atomstr):
                 elif numpy.pi-ang < 1e-7:
                     c = -v1 * bond
                 else:
-                    diha  = int(rawd[5]) - 1
-                    dih   = float(rawd[6])/180*numpy.pi
+                    diha  = int(vals[4]) - 1
+                    dih   = float(vals[5])/180*numpy.pi
                     v2 = coord[diha] - coord[anga]
                     vecn = numpy.cross(v2, -v1)
                     vecn_norm = numpy.linalg.norm(vecn)
@@ -3592,7 +3602,7 @@ def from_zmatrix(atomstr):
                         rmat = rotation_mat(vecn, ang)
                         c = numpy.dot(rmat, v1) * bond
                 coord.append(coord[bonda]+c)
-    atoms = list(zip([_atom_symbol(x) for x in symb], coord))
+    atoms = list(zip([_atom_symbol(x) for x in symbols], coord))
     return atoms
 zmat2cart = zmat = from_zmatrix
 
