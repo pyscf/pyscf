@@ -24,7 +24,7 @@ Code:        10.5281/zenodo.3345696
 Publication: https://doi.org/10.1021/acs.jctc.9b00758
 
 The CPPE library can be installed via:
-pip install git+https://github.com/maxscheurer/cppe.git
+pip install cppe
 
 The potential file required by CPPE library needs to be generated from the
 PyFraME library  https://gitlab.com/FraME-projects/PyFraME
@@ -159,7 +159,7 @@ class PolEmbed(lib.StreamObject):
         else:
             options = options_or_potfile
 
-        min_version = "0.2.0"
+        min_version = "0.3.1"
         if parse_version(cppe.__version__) < parse_version(min_version):
             raise ModuleNotFoundError("cppe version {} is required at least. "
                                       "Version {}"
@@ -301,7 +301,7 @@ class PolEmbed(lib.StreamObject):
         self.cppe_state.energies["Electrostatic"]["Electronic"] = (
             e_static[0]
         )
-        
+
         e_ecp = 0.0
         if self.do_ecp:
             e_ecp = numpy.einsum('ij,xij->x', self.V_ecp, dms)[0]
