@@ -32,10 +32,14 @@
  *     return out
  */
 
-void NPcondense(double (*op)(), double *out, double *a, int *loc, int nloc)
+void NPcondense(double (*op)(double *, int, int, int),
+                double *out, double *a, int *loc, int nloc)
+{
+        int ni = loc[nloc];
+#pragma omp parallel
 {
         int i, j, i0, j0, di, dj;
-        int ni = loc[nloc];
+#pragma omp for
         for (i = 0; i < nloc; i++) {
                 i0 = loc[i];
                 di = loc[i+1] - i0;
@@ -45,6 +49,7 @@ void NPcondense(double (*op)(), double *out, double *a, int *loc, int nloc)
                         out[i*nloc+j] = op(a+i0*ni+j0, ni, di, dj);
                 }
         }
+}
 }
 
 double NP_sum(double *a, int nd, int di, int dj)

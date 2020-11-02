@@ -1018,14 +1018,17 @@ def condense(opname, a, locs):
                 out[i,j] = op(a[i0:i1,j0:j1])
         return out
     '''
-    assert(a.flags.c_contiguous)
     assert(a.dtype == numpy.double)
     if not opname.startswith('NP_'):
         opname = 'NP_' + opname
     op = getattr(_np_helper, opname)
     locs = numpy.asarray(locs, numpy.int32)
     nloc = locs.size - 1
-    out = numpy.empty((nloc,nloc))
+    if a.flags.f_contiguous:
+        out = numpy.empty((nloc, nloc), order='F')
+    else:
+        a = numpy.asarray(a, order='C')
+        out = numpy.empty((nloc, nloc))
     _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
                           a.ctypes.data_as(ctypes.c_void_p),
                           locs.ctypes.data_as(ctypes.c_void_p),

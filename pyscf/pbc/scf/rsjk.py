@@ -109,7 +109,7 @@ class RangeSeparationJKBuilder(object):
                     self.omega, self.ke_cutoff, self.mesh)
 
         if direct_scf_tol is None:
-            direct_scf_tol = cell.precision * 1e-3
+            direct_scf_tol = cell.precision**1.5
             logger.debug(self, 'Set direct_scf_tol %g', direct_scf_tol)
 
         kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
@@ -123,7 +123,7 @@ class RangeSeparationJKBuilder(object):
         # space. cell_sparse is the cell of smooth functions. Their exponents
         # are ~< eta.
         eta = aft.estimate_eta_for_ke_cutoff(cell, self.ke_cutoff,
-                                             precision=direct_scf_tol)
+                                             precision=cell.precision)
         # * Assuming the most smooth function in cell_dense has exponent eta,
         # with attenuation parameter omega, rcut_sr is the distance of which
         # the value of attenuated Coulomb integrals of four shells |eta> is
@@ -192,8 +192,9 @@ class RangeSeparationJKBuilder(object):
         supmol_only_s = supmol.copy()
         supmol_only_s._bas[:,gto.ANG_OF] = 0
         # Note: some basis has negative contraction coefficients.
-        ovlp_mask = abs(supmol_only_s.intor_symmetric('int1e_ovlp')) > direct_scf_tol
-        ovlp_mask = ovlp_mask.astype(np.int8)
+        s0 = supmol_only_s.intor_symmetric('int1e_ovlp')
+        s0 = supmol_only_s.condense_to_shell(s0, 'NP_absmax')
+        ovlp_mask = (s0 > direct_scf_tol).astype(np.int8)
         ovlp_mask[smooth_mask[:,None] & smooth_mask] = 2
         self.ovlp_mask = ovlp_mask
 
@@ -260,7 +261,7 @@ class RangeSeparationJKBuilder(object):
 
         # Cannot initialize dm_cond with vhfopt.set_dm(sc_dm, bvkcell._atm, bvkcell._bas, bvkcell._env)
         # because vhfopt.dm_cond requires shape == (sm_nbas, sm_nbas)
-        dm_cond = [bvkcell.condense_to_shell(abs(d), np.max) for d in sc_dm]
+        dm_cond = [bvkcell.condense_to_shell(d, 'NP_absmax') for d in sc_dm]
         dm_cond = np.max(dm_cond, axis=0)
         libpbc.CVHFset_dm_cond(vhfopt._this,
                                dm_cond.ctypes.data_as(ctypes.c_void_p), dm_cond.size)
@@ -411,7 +412,10 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, precision=None):
     s0 = supmol_only_s.intor('int1e_ovlp', shls_slice=(0, nbas, 0, supmol.nbas))
     # Note: some basis has negative contraction coefficients
     s0max = abs(s0).max(axis=0)
-    bas_mask = s0max > precision
+    ao_loc = supmol_only_s.ao_loc_nr()
+    s0max = [s0max[i0:i1].max() for i0, i1 in zip(ao_loc[:-1], ao_loc[1:])]
+    bas_mask = np.array(s0max) > precision
+
     supmol._bas = supmol._bas[bas_mask]
     supmol.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask]
     supmol.bas_mask = bas_mask
