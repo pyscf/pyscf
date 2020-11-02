@@ -22,6 +22,9 @@ parse CP2K format
 
 import re
 from pyscf.gto.basis import parse_nwchem
+from pyscf import __config__
+
+DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
 MAXL = 8
 
@@ -49,11 +52,15 @@ def _parse(blines, optimize=False):
         n, lmin, lmax, nexps, ncontractions = comp[0], comp[1], comp[2], comp[3], comp[4:]
         basis_n = [[l] for l in range(lmin,lmax+1)]
         for nexp in range(nexps):
-            dat = blines.pop(0).split()
+            line = blines.pop(0)
+            dat = line.split()
             try:
                 bfun = [float(x) for x in dat]
             except ValueError:
-                bfun = eval(','.join(dat))
+                if DISABLE_EVAL:
+                    raise ValueError('Failed to parse basis %s' % line)
+                else:
+                    bfun = eval(','.join(dat))
             exp = bfun.pop(0)
             for i,l in enumerate(range(lmin,lmax+1)):
                 cl = [exp]

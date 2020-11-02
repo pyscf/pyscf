@@ -30,6 +30,9 @@ import numpy as np
 import scipy.linalg
 from pyscf.data.elements import _std_symbol
 from pyscf.lib.exceptions import BasisNotFoundError
+from pyscf import __config__
+
+DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
 MAXL = 10
 SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M')
@@ -125,7 +128,10 @@ def _parse(raw_basis, optimize=True):
             try:
                 dat = [float(x) for x in dat]
             except ValueError:
-                dat = list(eval(','.join(dat)))
+                if DISABLE_EVAL:
+                    raise ValueError('Failed to parse basis %s' % line)
+                else:
+                    dat = list(eval(','.join(dat)))
             except Exception as e:
                 raise BasisNotFoundError('\n' + str(e) +
                                          '\nor the required basis file not existed.')
@@ -198,7 +204,10 @@ def _parse_ecp(raw_ecp):
             try:
                 coef = [float(x) for x in line[1:]]
             except ValueError:
-                coef = list(eval(','.join(line[1:])))
+                if DISABLE_EVAL:
+                    raise ValueError('Failed to parse ecp %s' % line)
+                else:
+                    coef = list(eval(','.join(line[1:])))
             by_ang[l].append(coef)
 
     if nelec is None:
