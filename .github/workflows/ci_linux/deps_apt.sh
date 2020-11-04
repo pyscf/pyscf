@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-apt-get -qq install \
+sudo apt-get -qq install \
     gcc \
     gfortran \
     libgfortran3 \
