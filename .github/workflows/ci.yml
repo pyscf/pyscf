@@ -14,9 +14,10 @@ on: [push, pull_request]
 
 jobs:
   build_ubuntu:
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-18.04]
         python-version: [2.7, 3.5, 3.6, 3.7, 3.8]
     steps:
       - uses: actions/checkout@v2
@@ -24,15 +25,8 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Resolve system dependencies
-        run: sudo ./.github/workflows/ci_ubuntu/deps_apt.sh 
-      - name: Resolve python dependencies
-        run: ./.github/workflows/ci_ubuntu/python_deps.sh
-      - name: Build PySCF
-        run: ./.github/workflows/ci_ubuntu/build_pyscf.sh
-      - name: Test
-        working-directory: ./pyscf
-        run: ../.github/workflows/ci_ubuntu/run_tests.sh
+      - name: Install and Test
+        run: ./.github/workflows/run_ci.sh
       - name: Upload to codecov
         uses: codecov/codecov-action@v1.0.13
         with:
