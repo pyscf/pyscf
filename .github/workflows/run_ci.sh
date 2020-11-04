@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 if [ "$RUNNER_OS" == "Linux" ]; then
     os='linux'
-#elif [ "$RUNNER_OS" == "macOS" ]; then
-#    os='macos'
+elif [ "$RUNNER_OS" == "macOS" ]; then
+    os='macos'
 else
     echo "$RUNNER_OS not supported"
     exit 1
