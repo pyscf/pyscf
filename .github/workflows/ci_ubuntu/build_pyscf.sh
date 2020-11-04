@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 cd ./pyscf/lib
 curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7.5-deps.tar.gz | tar xzf -
 mkdir build; cd build

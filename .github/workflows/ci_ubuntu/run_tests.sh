@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
 echo "dftd3_DFTD3PATH = './lib/deps/lib'" >> pyscf_config.py
 

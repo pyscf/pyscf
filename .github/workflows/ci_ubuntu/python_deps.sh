@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 python -m pip install --upgrade pip
 pip install "numpy!=1.16,!=1.17" "scipy<1.5" h5py nose nose-exclude nose-timer codecov
 pip install pyberny geometric
