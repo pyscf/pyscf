@@ -13,7 +13,7 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  build_ubuntu:
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
