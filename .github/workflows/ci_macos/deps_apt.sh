@@ -1,4 +1,3 @@
 #!/usr/bin/env bash
-brew install \
-    cmake \
-    gcc \
+#need libgfortran from gcc
+brew install gcc

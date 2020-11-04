@@ -6,7 +6,7 @@ cd ./pyscf
 echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './lib/deps/lib'" >> .pyscf_conf.py
 
-nosetests -v --with-timer --with-coverage \
+nosetests -v --with-timer \
     --exclude-dir=dmrgscf --exclude-dir=fciqmcscf \
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao \
     --exclude-dir=cornell_shci --exclude-dir=pbc/grad \
