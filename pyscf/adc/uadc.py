@@ -589,6 +589,10 @@ def compute_amplitudes(myadc, eris):
 
         t1_3 = (t1_3_a, t1_3_b)
 
+    print (np.linalg.norm(t2_1[1]))
+    print (np.linalg.norm(t2_2[1]))
+    exit()
+
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
     cput0 = log.timer_debug1("Completed amplitude calculation", *cput0)
