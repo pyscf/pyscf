@@ -90,7 +90,7 @@ def transform_integrals_incore(myadc):
         eris.vVvV_p = np.ascontiguousarray(eris.vVvV_p.transpose(0,2,1,3)) 
         eris.vVvV_p = eris.vVvV_p.reshape(nvir_a*nvir_b, nvir_a*nvir_b) 
 
-    log.timer('ADC integral transformation', *cput0)
+    log.timer('ADC incore integral transformation', *cput0)
 
     return eris
 
@@ -231,6 +231,8 @@ def transform_integrals_outcore(myadc):
         if chnk_size <= 0 :
             chnk_size = 1
 
+        chnk_size = 10
+
         for p in range(0,vir_a.shape[1],chnk_size):
 
             if chnk_size < vir_a.shape[1] :
@@ -314,7 +316,7 @@ def transform_integrals_outcore(myadc):
     
         cput2 = logger.timer_debug1(myadc, 'transforming vvvv', *cput2)
 
-    log.timer('ADC integral transformation', *cput0)
+    log.timer('ADC outcore integral transformation', *cput0)
     return eris
 
 

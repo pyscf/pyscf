@@ -35,7 +35,7 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
         return RADC(mf, frozen, mo_coeff, mo_occ)
     elif isinstance(mf, scf.uhf.UHF):
         return UADC(mf, frozen, mo_coeff, mo_occ)
-    elif isinstance(mf, scf.rhf.ROHF):
+    elif isinstance(mf, scf.rohf.ROHF):
         lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
                         'is converted to UHF object and UADC method is called.')
         mf = scf.addons.convert_to_uhf(mf)
