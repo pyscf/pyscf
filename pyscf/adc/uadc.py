@@ -589,10 +589,6 @@ def compute_amplitudes(myadc, eris):
 
         t1_3 = (t1_3_a, t1_3_b)
 
-    print (np.linalg.norm(t2_1[1]))
-    print (np.linalg.norm(t2_2[1]))
-    exit()
-
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
     cput0 = log.timer_debug1("Completed amplitude calculation", *cput0)
@@ -3909,16 +3905,16 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_a:
-                T[s_a:f_a] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_a[:,orb,:,:], t2_2_a, optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1_ab[orb,:,:,:], t2_2_ab, optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1_ab[orb,:,:,:], t2_2_ab, optimize = True)
+                T[s_a:f_a] += 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_a[:,orb,:,:]), t2_2_a, optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_ab[orb,:,:,:]), t2_2_ab, optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('kcd,ikcd->i',np.ascontiguousarray(t2_1_ab[orb,:,:,:]), t2_2_ab, optimize = True)
 
-                T[s_a:f_a] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_a, t2_2_a[:,orb,:,:],optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1_ab, t2_2_ab[orb,:,:,:],optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1_ab, t2_2_ab[orb,:,:,:],optimize = True)
+                T[s_a:f_a] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_a,  np.ascontiguousarray(t2_2_a[:,orb,:,:]),optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[orb,:,:,:]),optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[orb,:,:,:]),optimize = True)
             else:
-                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_a[:,:,(orb-nocc_a),:], t1_2_a,optimize = True)
-                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_ab[:,:,(orb-nocc_a),:], t1_2_b,optimize = True)
+                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',np.ascontiguousarray(t2_1_a[:,:,(orb-nocc_a),:]), t1_2_a,optimize = True)
+                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',np.ascontiguousarray(t2_1_ab[:,:,(orb-nocc_a),:]), t1_2_b,optimize = True)
                 T[s_a:f_a] += t1_3_a[:,(orb-nocc_a)]
 
 ######## spin = beta  ############################################
@@ -3927,9 +3923,9 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
         if orb < nocc_b:
             T[s_b:f_b] = idn_occ_b[orb, :]
-            T[s_b:f_b]+= 0.25*lib.einsum('kdc,ikdc->i',t2_1_b[:,orb,:,:], t2_1_b, optimize = True)
-            T[s_b:f_b]-= 0.25*lib.einsum('kdc,kidc->i',t2_1_ab[:,orb,:,:], t2_1_ab, optimize = True)
-            T[s_b:f_b]-= 0.25*lib.einsum('kcd,kicd->i',t2_1_ab[:,orb,:,:], t2_1_ab, optimize = True)
+            T[s_b:f_b]+= 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_b[:,orb,:,:]), t2_1_b, optimize = True)
+            T[s_b:f_b]-= 0.25*lib.einsum('kdc,kidc->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_1_ab, optimize = True)
+            T[s_b:f_b]-= 0.25*lib.einsum('kcd,kicd->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_1_ab, optimize = True)
         else :
             T[s_b:f_b] += t1_2_b[:,(orb-nocc_b)]
 
@@ -3964,16 +3960,16 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_b:
-                T[s_b:f_b] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_b[:,orb,:,:], t2_2_b, optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kdc,kidc->i',t2_1_ab[:,orb,:,:], t2_2_ab, optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kcd,kicd->i',t2_1_ab[:,orb,:,:], t2_2_ab, optimize = True)
+                T[s_b:f_b] += 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_b[:,orb,:,:]), t2_2_b, optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kdc,kidc->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_2_ab, optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kcd,kicd->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_2_ab, optimize = True)
 
-                T[s_b:f_b] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_b, t2_2_b[:,orb,:,:],optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kicd,kcd->i',t2_1_ab, t2_2_ab[:,orb,:,:],optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kidc,kdc->i',t2_1_ab, t2_2_ab[:,orb,:,:],optimize = True)
+                T[s_b:f_b] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_b, np.ascontiguousarray(t2_2_b[:,orb,:,:]),optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kicd,kcd->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[:,orb,:,:]),optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kidc,kdc->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[:,orb,:,:]),optimize = True)
             else:
-                T[s_b:f_b] += 0.5*lib.einsum('ikc,kc->i',t2_1_b[:,:,(orb-nocc_b),:], t1_2_b,optimize = True)
-                T[s_b:f_b] += 0.5*lib.einsum('kic,kc->i',t2_1_ab[:,:,:,(orb-nocc_b)], t1_2_a,optimize = True)
+                T[s_b:f_b] += 0.5*lib.einsum('ikc,kc->i',np.ascontiguousarray(t2_1_b[:,:,(orb-nocc_b),:]), t1_2_b,optimize = True)
+                T[s_b:f_b] += 0.5*lib.einsum('kic,kc->i',np.ascontiguousarray(t2_1_ab[:,:,:,(orb-nocc_b)]), t1_2_a,optimize = True)
                 T[s_b:f_b] += t1_3_b[:,(orb-nocc_b)]
 
     return T
@@ -4004,7 +4000,6 @@ def get_trans_moments(adc):
 
    
 def get_spec_factors(adc, T, U, nroots=1):
-
 
 
     T_a = T[0]
