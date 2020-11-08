@@ -291,9 +291,9 @@ def _parse_core(lines, envs):
                          'ECP information was lost when saving to molden format.\n\n')
     return mol.ecp
 
-_SEC_PARSER = {'GTO'      : _parse_gto,
-               'N_ATOMS'  : _parse_natoms,
+_SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
                'ATOMS'    : _parse_atoms,
+               'GTO'      : _parse_gto,
                'CHARGE'   : _parse_charge,
                'MO'       : _parse_mo,
                'CORE'     : _parse_core,
@@ -303,6 +303,7 @@ _SEC_PARSER = {'GTO'      : _parse_gto,
 def load(moldenfile, verbose=0):
     '''Extract mol and orbitals from molden file
     '''
+    sections = {}
     with open(moldenfile, 'r') as f:
         mol = gto.Mole()
         mol.cart = True
@@ -312,7 +313,6 @@ def load(moldenfile, verbose=0):
                   'atoms' : None,
                   'basis' : None,
                  }
-        mo_section_count = 0
 
         while True:
             lines = _read_one_section(f)
@@ -321,21 +321,11 @@ def load(moldenfile, verbose=0):
                 break
 
             sec_title = sec_title[1:sec_title.index(']')].upper()
-            if sec_title == 'MO':
-                res = _parse_mo(lines, tokens)
-                if mo_section_count == 0:  # Alpha orbitals
-                    mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = res
+            if sec_title in _SEC_PARSER:
+                if sec_title not in sections:
+                    sections.update({sec_title : [lines]})
                 else:
-                    mo_energy    = mo_energy   , res[1]
-                    mo_coeff     = mo_coeff    , res[2]
-                    mo_occ       = mo_occ      , res[3]
-                    irrep_labels = irrep_labels, res[4]
-                    spins        = spins       , res[5]
-
-                mo_section_count += 1
-
-            elif sec_title in _SEC_PARSER:
-                _SEC_PARSER[sec_title.upper()](lines, tokens)
+                    sections[sec_title].append(lines)
 
             elif sec_title[:2] in ('5D', '7F', '9G'):
                 mol.cart = False
@@ -346,7 +336,25 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
-    if mo_section_count == 0:
+        for section in _SEC_PARSER:
+            if section in sections:
+                for n in range(len(sections[section])):
+                    if section == 'MO':
+
+                        res = _parse_mo(sections['MO'][n], tokens)
+                        if n == 0:  # alpha orbitals
+                            mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = res
+                        else:
+                            mo_energy    = mo_energy   , res[1]
+                            mo_coeff     = mo_coeff    , res[2]
+                            mo_occ       = mo_occ      , res[3]
+                            irrep_labels = irrep_labels, res[4]
+                            spins        = spins       , res[5]
+
+                    else:
+                        _SEC_PARSER[section](sections[section][n], tokens)
+
+    if 'mo' not in sections:
         if spins[-1][0] == 'B':  # If including beta orbitals
             offset = spins.index(spins[-1])
             mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
