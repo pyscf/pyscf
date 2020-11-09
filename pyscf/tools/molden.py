@@ -300,6 +300,8 @@ _SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
                'MOLDEN FORMAT' : lambda *args: None,
               }
 
+_SEC_ORDER = ['N_ATOMS', 'ATOMS', 'GTO', 'CHARGE', 'MO', 'CORE', 'MOLDEN FORMAT']
+
 def load(moldenfile, verbose=0):
     '''Extract mol and orbitals from molden file
     '''
@@ -336,7 +338,7 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
-    for sec_kind in _SEC_PARSER:
+    for sec_kind in _SEC_ORDER:
         if sec_kind in sec_kinds:
             secs_of_kind = len(sec_kinds[sec_kind])
             for n in range(secs_of_kind):
