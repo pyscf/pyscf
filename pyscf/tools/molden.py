@@ -303,7 +303,7 @@ _SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
 def load(moldenfile, verbose=0):
     '''Extract mol and orbitals from molden file
     '''
-    sections = {}
+    sec_kinds = {} # found sections and their lines are stored in this dic
     with open(moldenfile, 'r') as f:
         mol = gto.Mole()
         mol.cart = True
@@ -322,10 +322,10 @@ def load(moldenfile, verbose=0):
 
             sec_title = sec_title[1:sec_title.index(']')].upper()
             if sec_title in _SEC_PARSER:
-                if sec_title not in sections:
-                    sections.update({sec_title : [lines]})
+                if sec_title not in sec_kinds:
+                    sec_kinds.update({sec_title : [lines]})
                 else:
-                    sections[sec_title].append(lines)
+                    sec_kinds[sec_title].append(lines)
 
             elif sec_title[:2] in ('5D', '7F', '9G'):
                 mol.cart = False
@@ -337,13 +337,14 @@ def load(moldenfile, verbose=0):
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
         for section in _SEC_PARSER:
-            if section in sections:
-                for n in range(len(sections[section])):
+            if section in sec_kinds:
+                for n in range(len(sec_kinds[section])):
                     if section == 'MO':
 
-                        res = _parse_mo(sections['MO'][n], tokens)
+                        res = _parse_mo(sec_kinds['MO'][n], tokens)
                         if n == 0:  # alpha orbitals
-                            mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = res
+                            mol, mo_energy, mo_coeff, mo_occ, irrep_labels, \
+                            spins = res
                         else:
                             mo_energy    = mo_energy   , res[1]
                             mo_coeff     = mo_coeff    , res[2]
@@ -352,9 +353,9 @@ def load(moldenfile, verbose=0):
                             spins        = spins       , res[5]
 
                     else:
-                        _SEC_PARSER[section](sections[section][n], tokens)
+                        _SEC_PARSER[section](sec_kinds[section][n], tokens)
 
-    if 'mo' not in sections:
+    if 'mo' not in sec_kinds:
         if spins[-1][0] == 'B':  # If including beta orbitals
             offset = spins.index(spins[-1])
             mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
