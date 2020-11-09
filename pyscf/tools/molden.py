@@ -297,7 +297,7 @@ _SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
                'CHARGE'   : _parse_charge,
                'MO'       : _parse_mo,
                'CORE'     : _parse_core,
-               'MOLDEN FORMAT' : lambda *args: None
+               'MOLDEN FORMAT' : lambda *args: None,
               }
 
 def load(moldenfile, verbose=0):
