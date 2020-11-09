@@ -356,7 +356,7 @@ def load(moldenfile, verbose=0):
                     else:
                         _SEC_PARSER[sec_kind](sec_kinds[sec_kind][n], tokens)
 
-    if 'mo' not in sec_kinds:
+    if 'MO' not in sec_kinds:
         if spins[-1][0] == 'B':  # If including beta orbitals
             offset = spins.index(spins[-1])
             mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
