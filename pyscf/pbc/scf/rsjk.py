@@ -44,16 +44,13 @@ class RangeSeparationJKBuilder(object):
         self.mesh = None
         self.kpts = kpts
 
-        self.omega = 0.5
-        self.cell_dense = None
-        self.cell_sparse = None
+        self.omega = 0.6
+        self.cell_fat = None
         # Born-von Karman supercell
         self.bvkcell = None
         self.bvkmesh_Ls = None
         self.phase = None
         self.supmol = None
-        self.supmol_dense = None
-        self.supmol_sparse = None
         # For shells in the supmol, bvkcell_shl_id is the shell ID in bvkcell 
         self.bvkcell_shl_id = None
         self.ovlp_mask = None
@@ -120,11 +117,11 @@ class RangeSeparationJKBuilder(object):
 
         # Given ke_cutoff, eta corresponds to the most steep Gaussian basis
         # of which the Coulomb integrals can be accurately computed in moment
-        # space. cell_sparse is the cell of smooth functions. Their exponents
+        # space. cell_smooth is the cell of smooth functions. Their exponents
         # are ~< eta.
         eta = aft.estimate_eta_for_ke_cutoff(cell, self.ke_cutoff,
                                              precision=cell.precision)
-        # * Assuming the most smooth function in cell_dense has exponent eta,
+        # * Assuming the most steep function in cell_smooth has exponent eta,
         # with attenuation parameter omega, rcut_sr is the distance of which
         # the value of attenuated Coulomb integrals of four shells |eta> is
         # smaller than the required precision.
@@ -152,34 +149,18 @@ class RangeSeparationJKBuilder(object):
         self.supmol_Ls = Ls = Ls[np.linalg.norm(Ls, axis=1).argsort()]
         nimgs = len(Ls)
 
-        cell_dense, cell_sparse, ke_cutoff = _split_cell(cell, self.ke_cutoff)
-        cell_merged = cell_dense + cell_sparse
-        supmol = _make_extended_mole(cell_merged, Ls, Ks, direct_scf_tol)
-        self.cell_dense = cell_dense
-        self.cell_sparse = cell_sparse
+        cell_fat, cell_smooth = _reorder_cell(cell, self.ke_cutoff)
+        self.cell_fat = cell_fat
+        supmol = _make_extended_mole(cell_fat, Ls, Ks, self.omega, direct_scf_tol)
         self.supmol = supmol
-
-        bas_mask = supmol.bas_mask
-        nkpts = len(kpts)
-        bas_idx = np.append(cell_dense._bas_idx, cell_sparse._bas_idx)
-        kbas_idx = bas_idx + np.arange(nkpts)[:,None] * cell.nbas
-        bvkcell_shl_id = np.repeat(kbas_idx.reshape(1, -1), nimgs, axis=0)
-        self.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask].astype(np.int32)
-
-        smooth_mask = np.zeros((nkpts*nimgs, cell_merged.nbas), dtype=bool)
-        smooth_mask[:,cell_dense.nbas:] = True
-        smooth_mask = smooth_mask.ravel()[bas_mask]
-        nbas_smooth = np.count_nonzero(smooth_mask)
-        nbas_steep = supmol.nbas - nbas_smooth
-
         logger.info(self, 'sup-mol nbas = %d cGTO = %d pGTO = %d',
                     supmol.nbas, supmol.nao, supmol.npgto_nr())
-        logger.debug(self, 'Steep basis in each cell nbas = %d cGTOs = %d pGTOs = %d',
-                     cell_dense.nbas, cell_dense.nao, cell_dense.npgto_nr())
-        logger.debug(self, 'Smooth basis in each cell nbas = %d cGTOs = %d pGTOs = %d',
-                     cell_sparse.nbas, cell_sparse.nao, cell_sparse.npgto_nr())
-        logger.debug(self, 'Steep basis in sup-mol %d, smooth basis in sup-mol %d',
-                     nbas_steep, nbas_smooth)
+
+        bas_mask = supmol._bas_mask
+        nkpts = len(kpts)
+        kbas_idx = cell_fat._bas_idx + np.arange(nkpts)[:,None] * cell.nbas
+        bvkcell_shl_id = np.repeat(kbas_idx.reshape(1, -1), nimgs, axis=0)
+        self.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask].astype(np.int32)
 
         supmol.omega = -self.omega  # Set short range coulomb
         with supmol.with_integral_screen(direct_scf_tol**2):
@@ -195,6 +176,7 @@ class RangeSeparationJKBuilder(object):
         s0 = supmol_only_s.intor_symmetric('int1e_ovlp')
         s0 = supmol_only_s.condense_to_shell(s0, 'NP_absmax')
         ovlp_mask = (s0 > direct_scf_tol).astype(np.int8)
+        smooth_mask = supmol._bas_type == 0
         ovlp_mask[smooth_mask[:,None] & smooth_mask] = 2
         self.ovlp_mask = ovlp_mask
 
@@ -202,9 +184,8 @@ class RangeSeparationJKBuilder(object):
         lr_aft.ke_cutoff = self.ke_cutoff
         lr_aft.mesh = self.mesh
 
-        # FIXME: if cell_sparse.nbas == 0
-        if cell_sparse.nbas > 0:
-            self.sr_aft = sr_aft = _ShortRangeAFT(cell_sparse, kpts, self.omega)
+        if cell_smooth.nbas > 0:
+            self.sr_aft = sr_aft = _ShortRangeAFT(cell_smooth, kpts, self.omega)
             sr_aft.ke_cutoff = self.ke_cutoff
             sr_aft.mesh = self.mesh
         return self
@@ -278,8 +259,7 @@ class RangeSeparationJKBuilder(object):
             fdot = libpbc.PBCVHF_contract_k_s2kl
             vs = np.zeros((1, n_sc_dm, nao, nkpts, nao))
 
-        cell0_nbas = self.cell_dense.nbas + self.cell_sparse.nbas
-        shls_slice = (0, cell0_nbas, 0, sm_nbas, 0, sm_nbas, 0, sm_nbas)
+        shls_slice = (0, self.cell_fat.nbas, 0, sm_nbas, 0, sm_nbas, 0, sm_nbas)
         drv(fdot, vs.ctypes.data_as(ctypes.c_void_p),
             sc_dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
             ctypes.c_int(cell.nao), ctypes.c_int(nkpts), ctypes.c_int(nbands),
@@ -395,9 +375,9 @@ class _ShortRangeAFT(aft.AFTDF):
         coulG *= kws
         return coulG
 
-def _make_extended_mole(cell, Ls, bvkmesh_Ls, precision=None):
+def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=None):
     if precision is None:
-        precision = cell.precision * 1e-2
+        precision = cell.precision * 1e-4
     LKs = Ls[:,None,:] + bvkmesh_Ls
     nimgs, nk = LKs.shape[:2]
 
@@ -407,100 +387,145 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, precision=None):
     supmol = cell.to_mol()
     supmol = pbctools.pbc._build_supcell_(supmol, cell, LKs.reshape(nimgs*nk, 3))
 
+    # For remotely separated smooth functions |i> and |l>, the eri-type
+    # (ij|kl) can have small contributions if |j> and |k> are steep functions
+    # and close in real space. Since we are focusing on the SR attenuated
+    # Coulomb integrals, we don't have to consider the steep functions j and k
+    # remotely separated since SR integrals decays exponently wrt their
+    # separation. Assuming all four shells are primitive s functions, roughly
+    # (ij|kl) ~= exp(-eij-ekl) where
+    #       eij = ai*aj/(ai+aj) |Ri-Rj|
+    # and the overlap integral <i|l> ~= exp(-eil)
+    # It's not safe to say (ij|kl) < <i|l> for all cases, but generally
+    # (ij|kl) would not be a magnitude order larger than the overlap <i|l>.
+    # Using <i|l> to estimate the farthest |l> that contributes to (ij|kl) is
+    # reasonable approximation.
     supmol_only_s = supmol.copy()
     supmol_only_s._bas[:,gto.ANG_OF] = 0
-    s0 = supmol_only_s.intor('int1e_ovlp', shls_slice=(0, nbas, 0, supmol.nbas))
-    # Note: some basis has negative contraction coefficients
-    s0max = abs(s0).max(axis=0)
     ao_loc = supmol_only_s.ao_loc_nr()
+    s0 = supmol_only_s.intor('int1e_ovlp', shls_slice=(0, nbas, 0, supmol.nbas))
+    s0max = abs(s0).max(axis=0)  # Note: some basis has negative contraction coefficients
     s0max = [s0max[i0:i1].max() for i0, i1 in zip(ao_loc[:-1], ao_loc[1:])]
-    bas_mask = np.array(s0max) > precision
+    bas_mask = np.array(s0max) > precision * 1e-1
+
+#    supmol_only_s.omega = -omega
+#    v0 = supmol_only_s.intor('int2c2e', shls_slice=(0, nbas, 0, supmol.nbas))
+#    v0max = abs(v0).max(axis=0)
+#    v0max = [v0max[i0:i1].max() for i0, i1 in zip(ao_loc[:-1], ao_loc[1:])]
+#    bas_mask &= np.array(v0max) > precision * 1e-1
+
+    # All basis in primitive cell should be preserved
+    bas_mask[:nbas] = True
 
     supmol._bas = supmol._bas[bas_mask]
     supmol.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask]
-    supmol.bas_mask = bas_mask
+    supmol._bas_mask = bas_mask
+
+    if hasattr(cell, '_nbas_each_set'):
+        n_compact, n_local, n_diffused = cell._nbas_each_set
+        bas_type = np.zeros((nimgs * nk, cell.nbas), dtype=int)
+        bas_type[:,:n_compact] = 2
+        bas_type[:,n_compact:n_compact+n_local] = 1
+        supmol._bas_type = bas_type = bas_type.ravel()[bas_mask]
+
+        log = logger.new_logger(cell, verbose)
+        log.debug('Compact basis in sup-mol %d', np.count_nonzero(bas_type==2))
+        log.debug('Local basis in sup-mol %d', np.count_nonzero(bas_type==1))
+        log.debug('Diffused basis in sup-mol %d', np.count_nonzero(bas_type==0))
     return supmol
 
-def _split_cell(cell, ke_cut):
+# Threshold of compact bases and local bases
+_RCUT_THRESHOLD = 4.
+
+def _reorder_cell(cell, ke_cut_threshold, verbose=None):
     from pyscf.gto import NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF, ATOM_OF
     from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
-    log = logger.new_logger(cell)
+    log = logger.new_logger(cell, verbose)
 
     # Split shells based on rcut
     rcuts, kecuts = _primitive_gto_cutoff(cell, cell.precision)
     ao_loc = cell.ao_loc_nr()
 
-    # cell that needs dense/sparse integration grids
-    cell_dense = copy.copy(cell)
-    cell_sparse = copy.copy(cell)
+    cell_fat = copy.copy(cell)
+    cell_smooth = copy.copy(cell)
 
     _env = cell._env.copy()
-    dense_bas = []
-    sparse_bas = []
-    # dense_bas_idx and sparse_bas_idx maps the shells in cell_dense and
-    # cell_sparse to the original cell
-    dense_bas_idx = []
-    sparse_bas_idx = []
-    dense_cell_rcut = 0
+    compact_bas = []
+    local_bas = []
+    smooth_bas = []
+    # xxx_bas_idx maps the shells in the new cell to the original cell
+    compact_bas_idx = []
+    local_bas_idx = []
+    smooth_bas_idx = []
+
     ke_cutoff = 0
     for ib, orig_bas in enumerate(cell._bas):
         nprim = orig_bas[NPRIM_OF]
         nctr = orig_bas[NCTR_OF]
         ke = kecuts[ib]
-        dense_mask = ke > ke_cut
-        np1 = np.count_nonzero(dense_mask)
-        if np1 == 0:
-            sparse_bas.append(orig_bas)
-            sparse_bas_idx.append(ib)
-            log.debug1('bas %d, %d smooth functions', ib, nprim)
 
-        elif np1 == nprim:
-            dense_bas.append(orig_bas)
-            dense_bas_idx.append(ib)
-            ke_cutoff = max(ke_cutoff, ke.max())
-            dense_cell_rcut = max(dense_cell_rcut, rcuts[ib].max())
-            log.debug1('bas %d, %d steep functions', ib, nprim)
+        compact_mask = rcuts[ib] < _RCUT_THRESHOLD
+        smooth_mask = ke < ke_cut_threshold
+        local_mask = (~compact_mask) & (~smooth_mask)
 
-        else:
-            es = cell.bas_exp(ib)
-            cs = cell._libcint_ctr_coeff(ib)
-            e1 = es[dense_mask]
-            e2 = es[~dense_mask]
-            c1 = cs[dense_mask]
-            c2 = cs[~dense_mask]
-            pexp = orig_bas[PTR_EXP]
-            pcoeff = orig_bas[PTR_COEFF]
-            _env[pcoeff:pcoeff+nprim*nctr] = np.append(c1.T.ravel(), c2.T.ravel())
-            _env[pexp:pexp+nprim] = np.append(e1, e2)
+        pexp = orig_bas[PTR_EXP]
+        pcoeff = orig_bas[PTR_COEFF]
+        es = cell.bas_exp(ib)
+        cs = cell._libcint_ctr_coeff(ib)
 
-            bas1 = orig_bas.copy()
-            bas2 = orig_bas.copy()
-            bas1[NPRIM_OF] = np1
-            bas2[NPRIM_OF] = nprim - np1
-            bas1[PTR_EXP] = pexp
-            bas2[PTR_EXP] = pexp + e1.size
-            bas1[PTR_COEFF] = pcoeff
-            bas2[PTR_COEFF] = pcoeff + c1.size
+        c_compact = cs[compact_mask]
+        c_local = cs[local_mask]
+        c_smooth = cs[smooth_mask]
+        _env[pcoeff:pcoeff+nprim*nctr] = np.hstack([
+            c_compact.T.ravel(),
+            c_local.T.ravel(),
+            c_smooth.T.ravel(),
+        ])
+        _env[pexp:pexp+nprim] = np.hstack([
+            es[compact_mask],
+            es[local_mask],
+            es[smooth_mask],
+        ])
 
-            dense_bas.append(bas1)
-            dense_bas_idx.append(ib)
-            sparse_bas.append(bas2)
-            sparse_bas_idx.append(ib)
-            log.debug1('bas %d, %d steep functions, %d smooth functions',
-                       ib, np1, nprim - np1)
+        if c_compact.size > 0:
+            bas = orig_bas.copy()
+            bas[NPRIM_OF] = c_compact.shape[0]
+            bas[PTR_EXP] = pexp
+            bas[PTR_COEFF] = pcoeff
+            compact_bas.append(bas)
+            compact_bas_idx.append(ib)
 
-            ke_cutoff = max(ke_cutoff, ke[dense_mask].max())
-            dense_cell_rcut = max(dense_cell_rcut, rcuts[ib][dense_mask].max())
-    log.debug1('rcut for steep functions %g', dense_cell_rcut)
-    log.debug1('rcut for smooth functions %g', cell_sparse.rcut)
-    log.debug1('ke_cutoff for steep functions %g', ke_cutoff)
+        if c_local.size > 0:
+            bas = orig_bas.copy()
+            bas[NPRIM_OF] = c_local.shape[0]
+            bas[PTR_EXP] = pexp + c_compact.shape[0]
+            bas[PTR_COEFF] = pcoeff + c_compact.size
+            local_bas.append(bas)
+            local_bas_idx.append(ib)
 
-    cell_dense._bas = np.asarray(dense_bas, dtype=np.int32, order='C').reshape(-1, gto.BAS_SLOTS)
-    cell_dense.rcut = dense_cell_rcut
-    cell_dense._bas_idx = np.asarray(dense_bas_idx, dtype=np.int32)
-    cell_sparse._bas = np.asarray(sparse_bas, dtype=np.int32, order='C').reshape(-1, gto.BAS_SLOTS)
-    cell_sparse._bas_idx = np.asarray(sparse_bas_idx, dtype=np.int32)
-    return cell_dense, cell_sparse, ke_cutoff
+        if c_smooth.size > 0:
+            bas = orig_bas.copy()
+            bas[NPRIM_OF] = c_smooth.shape[0]
+            bas[PTR_EXP] = pexp + c_compact.shape[0] + c_local.shape[0]
+            bas[PTR_COEFF] = pcoeff + c_compact.size + c_local.size
+            smooth_bas.append(bas)
+            smooth_bas_idx.append(ib)
+            ke_cutoff = max(ke_cutoff, ke[smooth_mask].max())
+
+    cell_fat._bas = np.asarray(compact_bas + local_bas + smooth_bas,
+                               dtype=np.int32, order='C').reshape(-1, gto.BAS_SLOTS)
+    cell_fat._bas_idx = np.asarray(compact_bas_idx + local_bas_idx + smooth_bas_idx,
+                                   dtype=np.int32)
+    cell_fat._nbas_each_set = (len(compact_bas_idx), len(local_bas_idx),
+                               len(smooth_bas_idx))
+    log.debug('No. compact_bas %d', len(compact_bas_idx))
+    log.debug('No. local_bas %d', len(local_bas_idx))
+    log.debug('No. smooth_bas %d', len(smooth_bas_idx))
+
+    cell_smooth._bas = np.asarray(smooth_bas,
+                                    dtype=np.int32, order='C').reshape(-1, gto.BAS_SLOTS)
+    cell_smooth._bas_idx = np.asarray(smooth_bas_idx, dtype=np.int32)
+    return cell_fat, cell_smooth
 
 def _fpointer(name):
     import _ctypes
@@ -523,7 +548,7 @@ if __name__ == '__main__':
                         ]}
     cell.build()
     cell.verbose = 6
-    cells.append(cell)
+    #cells.append(cell)
 
     if 1:
         cell = Cell().build(a = '''
