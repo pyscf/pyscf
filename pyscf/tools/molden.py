@@ -344,8 +344,8 @@ def load(moldenfile, verbose=0):
 
                     res = _parse_mo(sec_kinds['MO'][n], tokens)
                     if n == 0:  # alpha orbitals
-                        mol, mo_energy, mo_coeff, mo_occ, irrep_labels, \
-                        spins = res
+                        (mol, mo_energy, mo_coeff, mo_occ, irrep_labels,
+                        spins) = res
                     else:
                         mo_energy    = mo_energy   , res[1]
                         mo_coeff     = mo_coeff    , res[2]
