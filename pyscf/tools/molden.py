@@ -336,10 +336,11 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
-        for section in _SEC_PARSER:
-            if section in sec_kinds:
-                for n in range(len(sec_kinds[section])):
-                    if section == 'MO':
+        for sec_kind in _SEC_PARSER:
+            if sec_kind in sec_kinds:
+                secs_of_kind = len(sec_kinds[sec_kind])
+                for n in range(secs_of_kind):
+                    if sec_kind == 'MO':
 
                         res = _parse_mo(sec_kinds['MO'][n], tokens)
                         if n == 0:  # alpha orbitals
@@ -353,7 +354,7 @@ def load(moldenfile, verbose=0):
                             spins        = spins       , res[5]
 
                     else:
-                        _SEC_PARSER[section](sec_kinds[section][n], tokens)
+                        _SEC_PARSER[sec_kind](sec_kinds[sec_kind][n], tokens)
 
     if 'mo' not in sec_kinds:
         if spins[-1][0] == 'B':  # If including beta orbitals
