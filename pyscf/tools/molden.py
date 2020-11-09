@@ -336,25 +336,25 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
-        for sec_kind in _SEC_PARSER:
-            if sec_kind in sec_kinds:
-                secs_of_kind = len(sec_kinds[sec_kind])
-                for n in range(secs_of_kind):
-                    if sec_kind == 'MO':
+    for sec_kind in _SEC_PARSER:
+        if sec_kind in sec_kinds:
+            secs_of_kind = len(sec_kinds[sec_kind])
+            for n in range(secs_of_kind):
+                if sec_kind == 'MO':
 
-                        res = _parse_mo(sec_kinds['MO'][n], tokens)
-                        if n == 0:  # alpha orbitals
-                            mol, mo_energy, mo_coeff, mo_occ, irrep_labels, \
-                            spins = res
-                        else:
-                            mo_energy    = mo_energy   , res[1]
-                            mo_coeff     = mo_coeff    , res[2]
-                            mo_occ       = mo_occ      , res[3]
-                            irrep_labels = irrep_labels, res[4]
-                            spins        = spins       , res[5]
-
+                    res = _parse_mo(sec_kinds['MO'][n], tokens)
+                    if n == 0:  # alpha orbitals
+                        mol, mo_energy, mo_coeff, mo_occ, irrep_labels, \
+                        spins = res
                     else:
-                        _SEC_PARSER[sec_kind](sec_kinds[sec_kind][n], tokens)
+                        mo_energy    = mo_energy   , res[1]
+                        mo_coeff     = mo_coeff    , res[2]
+                        mo_occ       = mo_occ      , res[3]
+                        irrep_labels = irrep_labels, res[4]
+                        spins        = spins       , res[5]
+
+                else:
+                    _SEC_PARSER[sec_kind](sec_kinds[sec_kind][n], tokens)
 
     if 'MO' not in sec_kinds:
         if spins[-1][0] == 'B':  # If including beta orbitals
