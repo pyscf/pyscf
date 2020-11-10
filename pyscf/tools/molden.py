@@ -265,7 +265,7 @@ def _parse_mo(lines, envs):
 
     orb_list = []
     for orb_prim_data in mo_coeff_prim:
-        orb_list.extend(list(orb))
+        orb_list.extend(list(orb_prim_data))
     number_of_aos = max(orb_list)
     number_of_mos = len(mo_coeff_prim)
 
