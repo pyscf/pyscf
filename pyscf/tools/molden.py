@@ -247,12 +247,13 @@ def _parse_mo(lines, envs):
     spins = []
     mo_occ = []
     mo_coeff = []
+    mo_coeff_prim = [] # primary data, will be reworked for missing values
     for line in lines[1:]:
         line = line.upper()
         if 'SYM' in line:
             irrep_labels.append(line.split('=')[1].strip())
-            orb = []
-            mo_coeff.append(orb)
+            orb_prim = {}
+            mo_coeff_prim.append(orb_prim)
         elif 'ENE' in line:
             mo_energy.append(float(_d2e(line).split('=')[1].strip()))
         elif 'SPIN' in line:
@@ -260,7 +261,22 @@ def _parse_mo(lines, envs):
         elif 'OCC' in line:
             mo_occ.append(float(_d2e(line.split('=')[1].strip())))
         else:
-            orb.append(float(_d2e(line.split()[1])))
+            orb.update({int(line.split()[0]) : float(_d2e(line.split()[1]))})
+
+    orb_list = []
+    for orb_prim_data in mo_coeff_prim:
+        orb_list.extend(list(orb))
+    number_of_aos = max(orb_list)
+    number_of_mos = len(mo_coeff_prim)
+
+    for n in range(number_of_mos):
+        orb = []
+        mo_coeff.append(orb)
+        for m in range(number_of_aos):
+            try:
+                orb.append(mo_coeff_prim[n][m+1])
+            except KeyError:
+                orb.append(0)
 
     mo_energy = numpy.array(mo_energy)
     mo_occ = numpy.array(mo_occ)
