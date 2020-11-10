@@ -127,10 +127,24 @@ class DFMP2(mp2.MP2):
             Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
             yield Lov
 
-    def ao2mo(self, mo_coeff=None):
+    def ao2mo(self, mo_coeff=None, store_eris=False):
         eris = mp2._ChemistsERIs()
         # Initialize only the mo_coeff and 
         eris._common_init_(self, mo_coeff)
+
+        if store_eris:
+            nocc = self.nocc
+            nvir = self.nmo - nocc
+            naux = self.with_df.get_naoaux()
+            Lov = numpy.empty((naux, nocc*nvir))
+            p1 = 0
+            for istep, qov in enumerate(self.loop_ao2mo(eris.mo_coeff, nocc)):
+                logger.debug(self, 'Load cderi step %d', istep)
+                p0, p1 = p1, p1 + qov.shape[0]
+                Lov[p0:p1] = qov
+            Lov = Lov.reshape(naux, nocc, nvir)
+            eris.ovov = numpy.einsum("Qia,Qjb->iajb", Lov, Lov, optimize=True)
+
         return eris
 
     def make_rdm1(self, t2=None, ao_repr=False):

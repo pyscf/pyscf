@@ -47,7 +47,7 @@ class Cluster:
             C_local, C_env,
             ao_indices=None,
             solver="CCSD",
-            bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4,
+            bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4, bath_energy_tol=None,
             **kwargs):
         """
         Parameters
@@ -78,12 +78,11 @@ class Cluster:
         self.C_local = C_local
         self.C_env = C_env
 
-
         # Mean-field electrons
         S = self.mf.get_ovlp()
         dm = np.linalg.multi_dot((self.C_local.T, S, self.mf.make_rdm1(), S, self.C_local))
         ne = np.trace(dm)
-        log.info("Mean-field electrons=%.5f", ne)
+        log.info("Mean-field electrons in fragment space=%.5f", ne)
 
         #assert self.nlocal == len(self.indices)
         #assert (self.size == len(self.indices) or self.local_orbital_type in ("NonOrth-IAO", "PMO"))
@@ -94,10 +93,15 @@ class Cluster:
             raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
 
-        if not hasattr(bath_tol, "__getitem__"):
-            bath_tol = (bath_tol, bath_tol)
-        if not hasattr(bath_size, "__getitem__"):
+        #if not hasattr(bath_size, "__getitem__"):
+        if not has_length(bath_size, 2):
             bath_size = (bath_size, bath_size)
+        #if not hasattr(bath_tol, "__getitem__"):
+        if not has_length(bath_tol, 2):
+            bath_tol = (bath_tol, bath_tol)
+        #if not hasattr(bath_energy_tol, "__getitem__"):
+        if not has_length(bath_energy_tol, 2):
+            bath_energy_tol = (bath_energy_tol, bath_energy_tol)
 
         #assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
         if bath_type not in self.base.VALID_BATH_TYPES:
@@ -106,18 +110,22 @@ class Cluster:
         self.bath_type = bath_type
         self.bath_target_size = bath_size
         self.bath_tol = bath_tol
+        self.bath_energy_tol = bath_energy_tol
+
+        assert len(self.bath_target_size) == 2
+        assert len(self.bath_tol) == 2
+        assert len(self.bath_energy_tol) == 2
 
         # Other options from kwargs:
         self.solver_options = kwargs.get("solver_options", {})
 
-        #self.mp2_correction = kwargs.get("mp2_correction", True)
         self.mp2_correction = kwargs.get("mp2_correction", True)
-        if self.mp2_correction in (True, False):
+        # Make MP2 correction tuple for (occupied, virtual) bath
+        if not hasattr(self.mp2_correction, "__getitem__"):
             self.mp2_correction = (self.mp2_correction, self.mp2_correction)
 
         # Currently not in use (always on!)
         self.use_ref_orbitals_dmet = kwargs.get("use_ref_orbitals_dmet", True)
-
         #self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", True)
         self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", False)
 
@@ -130,7 +138,7 @@ class Cluster:
         self.restart_params = kwargs.get("restart_params", {})
 
 
-        self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-8)
+        self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-4)
 
         self.coupled_bath = kwargs.get("coupled_bath", False)
 
@@ -344,6 +352,7 @@ class Cluster:
 
     # Register frunctions of energy.py as methods
     get_local_amplitudes = get_local_amplitudes
+    get_local_amplitudes_general = get_local_amplitudes_general
     get_local_energy = get_local_energy
 
     def analyze_orbitals(self, orbitals=None, sort=True):
@@ -616,7 +625,10 @@ class Cluster:
 
             if eris is None:
                 t0 = MPI.Wtime()
-                eris = mp2.ao2mo()
+                if hasattr(mp2, "with_df"):
+                    eris = mp2.ao2mo(store_eris=True)
+                else:
+                    eris = mp2.ao2mo()
                 log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
 
                 ## TEST
@@ -636,7 +648,8 @@ class Cluster:
 
                 #log.debug("Difference ERI: %g", np.linalg.norm(eris.ovov - eris2))
 
-            e_corr_full, t2 = mp2.kernel(eris=eris)
+            #e_corr_full, t2 = mp2.kernel(eris=eris)
+            e_corr_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
             converged = True
             e_corr_full *= self.energy_factor
             C1, C2 = None, t2
@@ -1255,15 +1268,15 @@ class Cluster:
         C_occbath, C_occenv2, e_delta_occ, occbath_eigref = self.make_bath(
                 C_occenv, self.bath_type, "occ",
                 C_ref=C_occref, eigref=occbath_eigref,
-                # NEW:
+                # New for MP2 bath:
                 C_occenv=C_occenv, C_virenv=C_virenv,
-                nbath=self.bath_target_size[0], tol=self.bath_tol[0])
+                nbath=self.bath_target_size[0], tol=self.bath_tol[0], energy_tol=self.bath_energy_tol[0])
         C_virbath, C_virenv2, e_delta_vir, virbath_eigref = self.make_bath(
                 C_virenv, self.bath_type, "vir",
                 C_ref=C_virref, eigref=virbath_eigref,
-                # NEW:
+                # New for MP2 bath:
                 C_occenv=C_occenv, C_virenv=C_virenv,
-                nbath=self.bath_target_size[1], tol=self.bath_tol[1])
+                nbath=self.bath_target_size[1], tol=self.bath_tol[1], energy_tol=self.bath_energy_tol[1])
         log.debug("Time for %r bath: %s", self.bath_type, get_time_string(MPI.Wtime()-t0))
         C_occenv, C_virenv = C_occenv2, C_virenv2
         self.C_occbath = C_occbath

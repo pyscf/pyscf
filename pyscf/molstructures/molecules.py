@@ -6,14 +6,17 @@ import numpy as np
 
 from pyscf import gto
 
-#from util import *
-from .util import *
+if __name__ == "__main__":
+    from util import *
+else:
+    from .util import *
 
 __all__ = [
         "build_dimer",
         "build_two_dimers",
         "build_ring",
         "build_methane",
+        "build_alkane",
         "build_ethanol",
         "build_ethenol",
         "build_ethanol_old",
@@ -112,6 +115,52 @@ def build_methane(dCH=1.087, **kwargs):
             atom=atom,
             **kwargs)
     return mol
+
+def build_alkane(n, dCH=1.09, dCC=1.54, **kwargs):
+
+    atom = []
+    phi = np.arccos(-1.0/3)
+    cph = 1/np.sqrt(3.0)
+    sph = np.sin(phi/2.0)
+
+    dcy = dCC * cph
+    dcz = dCC * sph
+    dchs = dCH * sph
+    dchc = dCH * cph
+
+    k = 0
+    for i in range(n):
+        # Carbon atoms
+        sign = (-1)**i
+        x = 0.0
+        y = sign * dcy/2
+        z = i*dcz
+        atom.append(["C%d" % k, [x, y, z]])
+        k += 1
+        # Hydrogen atoms on side
+        dy = sign * dchc
+        atom.append(["H%d" % k, [x+dchs, y+dy, z]])
+        k += 1
+        atom.append(["H%d" % k, [x-dchs, y+dy, z]])
+        k += 1
+        # Terminal Hydrogen atoms
+        if (i == 0):
+            atom.append(["H%d" % k, [0.0, y-dchc, z-dchs]])
+            k += 1
+        # Not elif, if n == 1 (Methane)
+        if (i == n-1):
+            atom.append(["H%d" % k, [0.0, y-sign*dchc, z+dchs]])
+            k += 1
+
+    mol = gto.M(
+            atom=atom,
+            **kwargs)
+    return mol
+
+
+
+
+
 
 def build_ethanol_old(dOH, **kwargs):
     atoms = ["C1", "C2", "H1", "H2", "H3", "H4", "H5", "H6", "O1"]
@@ -519,4 +568,8 @@ if __name__ == "__main__":
     #build_azomethane(3.5)
 
     #build_water_dimer(5)
-    build_water_borazine(5)
+    #build_water_borazine(5)
+
+    mol = build_alkane(4)
+    visualize_atoms(mol.atom)
+

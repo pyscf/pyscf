@@ -6,6 +6,7 @@ import scipy
 import scipy.optimize
 
 __all__ = [
+        "has_length",
         "amplitudes_C2T",
         "amplitudes_T2C",
         "einsum",
@@ -18,6 +19,13 @@ __all__ = [
         ]
 
 einsum = functools.partial(np.einsum, optimize=True)
+
+def has_length(a, length=2):
+    try:
+        return (len(a) == length)
+    except TypeError:
+        return False
+
 
 def amplitudes_C2T(C1, C2):
     T1 = C1.copy()

@@ -73,10 +73,13 @@ def print_distances(atom, origin, a_matrix=None):
     #    print("Distance to %3s: %.6g" % (symbol, np.linalg.norm(coords - origin)))
 
     symbols = np.asarray([a[0] for a in atom])
+    coords = np.asarray([a[1] for a in atom])
     if a_matrix is not None:
-        distances = np.asarray([get_min_distance_pbc(a[1], origin, a_matrix) for a in atom])
+        #distances = np.asarray([get_min_distance_pbc(a[1], origin, a_matrix) for a in atom])
+        distances = np.asarray([get_min_distance_pbc(c, origin, a_matrix) for c in coords])
     else:
-        distances = np.asarray([np.linalg.norm(a[1] - origin) for a in atom])
+        #distances = np.asarray([np.linalg.norm(a[1] - origin) for a in atom])
+        distances = np.asarray([np.linalg.norm(c - origin) for c in coords])
 
     sort = np.argsort(distances)
     for i, symbol in enumerate(symbols[sort]):
@@ -143,6 +146,13 @@ def visualize_atoms(atoms, a_matrix=None, size=20, indices=False, atom_colors=No
     color = [atom_colors.get(s, "black") for s in sym]
 
     ax.scatter(x, y, z, s=size, color=color, depthshade=False, edgecolor="black")
+    #ax.set_box_aspect((1,1,1))
+    ax.set_aspect("equal")
+    maxdist = np.amax((x, y, z))
+
+    for i, j, k in itertools.product([-1, 1], repeat=3):
+        ax.scatter(i*maxdist, j*maxdist, k*maxdist, color="w")
+
 
     if indices:
         offset = [0, 0, 1]

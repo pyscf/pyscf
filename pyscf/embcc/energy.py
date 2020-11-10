@@ -13,13 +13,26 @@ from .util import *
 
 __all__ = [
         "get_local_amplitudes",
+        "get_local_amplitudes_general",
         "get_local_energy",
         ]
 
 log = logging.getLogger(__name__)
 
-#def get_local_amplitudes(self, cc, C1, C2, variant="first-occ", symmetrize=True, inverse=False):
-def get_local_amplitudes(self, cc, C1, C2, part=None, symmetrize=False, inverse=False):
+def get_local_amplitudes(self, cc, C1, C2, **kwargs):
+    """Wrapper for get_local_amplitudes, where the mo coefficients are extracted from a MP2 or CC object."""
+
+    act = cc.get_frozen_mask()
+    occ = cc.mo_occ[act] > 0
+    vir = cc.mo_occ[act] == 0
+    c = cc.mo_coeff[:,act]
+    c_occ = c[:,occ]
+    c_vir = c[:,vir]
+
+    return get_local_amplitudes_general(self, C1, C2, c_occ, c_vir, **kwargs)
+
+
+def get_local_amplitudes_general(self, C1, C2, c_occ, c_vir, part=None, symmetrize=False, inverse=False):
     """Get local contribution of amplitudes."""
 
     # By default inherit from base object
@@ -29,22 +42,15 @@ def get_local_amplitudes(self, cc, C1, C2, part=None, symmetrize=False, inverse=
     if part not in ("first-occ", "first-vir", "democratic"):
         raise ValueError("Unknown partitioning of amplitudes: %s", part)
 
-
-    act = cc.get_frozen_mask()
-    occ = cc.mo_occ[act] > 0
-    vir = cc.mo_occ[act] == 0
-    # Projector to local, occupied region
-    S = self.mf.get_ovlp()
-    C = cc.mo_coeff[:,act]
-    Co = C[:,occ]
-    Cv = C[:,vir]
-
     # Projectors into local occupied and virtual space
-    Lo = self.get_local_projector(Co)
-    Lv = self.get_local_projector(Cv)
+    if part in ("first-occ", "democratic"):
+        Lo = self.get_local_projector(c_occ)
+    if part in ("first-vir", "democratic"):
+        Lv = self.get_local_projector(c_vir)
     # Projectors into non-local occupied and virtual space
-    Ro = self.get_local_projector(Co, inverse=True)
-    Rv = self.get_local_projector(Cv, inverse=True)
+    if part == "democratic":
+        Ro = self.get_local_projector(c_occ, inverse=True)
+        Rv = self.get_local_projector(c_vir, inverse=True)
 
     if C1 is not None:
         if part == "first-occ":
@@ -179,7 +185,8 @@ def get_local_energy(self, cc, pC1, pC2, eris):
     # These are actually different integrals though ?!
     else:
         no, nv = pC2.shape[1:3]
-        eris_ovvo = eris.ovov.reshape(no,nv,no,nv).transpose(0, 1, 3, 2)
+        #eris_ovvo = eris.ovov.reshape(no,nv,no,nv).transpose(0, 1, 3, 2)
+        eris_ovvo = eris.ovov[:].reshape(no,nv,no,nv).transpose(0, 1, 3, 2)
     e2 = 2*einsum('ijab,iabj', pC2, eris_ovvo)
     e2 -=  einsum('ijab,jabi', pC2, eris_ovvo)
 

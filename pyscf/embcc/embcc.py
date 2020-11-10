@@ -33,15 +33,17 @@ class EmbCC:
     VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "FCI-spin0", "FCI-spin1"]
     VALID_BATH_TYPES = [
             None, "power", "matsubara",
-            "mp2-natorb", "mp2-natorb-2", "mp2-natorb-3",
-            "mp2-natorb-4",
+            "mp2-natorb",
+            #"mp2-natorb-2", "mp2-natorb-3",
+            #"mp2-natorb-4",
             "full", "random"]
 
     default_options = [
             "solver",
             "bath_type",
-            "bath_tol",
             "bath_size",
+            "bath_tol",
+            "bath_energy_tol",
             "use_ref_orbitals_dmet",
             "use_ref_orbitals_bath",
             "mp2_correction",
@@ -55,7 +57,10 @@ class EmbCC:
             #bath_type="mp2-natorb",
             bath_type=None,
             bath_size=None,
-            bath_tol=1e-3,
+            #bath_tol=1e-3,
+            bath_tol=None,
+            #bath_energy_tol=None,
+            bath_energy_tol=1e-3,
             minao="minao",
             use_ref_orbitals_dmet=True,
             #use_ref_orbitals_bath=True,
@@ -107,8 +112,9 @@ class EmbCC:
         self.solver = solver
 
         self.bath_type = bath_type
-        self.bath_tol = bath_tol
         self.bath_size = bath_size
+        self.bath_tol = bath_tol
+        self.bath_energy_tol = bath_energy_tol
         self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
         self.use_ref_orbitals_bath = use_ref_orbitals_bath
         self.mp2_correction = mp2_correction
@@ -481,7 +487,7 @@ class EmbCC:
         cluster = self.make_cluster(name, C_local, C_env, **kwargs)
         return cluster
 
-    def make_atom_cluster(self, atoms, name=None, **kwargs):
+    def make_atom_cluster(self, atoms, name=None, check_atoms=True, **kwargs):
         """
         Parameters
         ---------
@@ -495,9 +501,10 @@ class EmbCC:
             atoms = [atoms]
         # Check if atoms are valid labels of molecule
         atom_symbols = [self.mol.atom_symbol(atomid) for atomid in range(self.mol.natm)]
-        for atom in atoms:
-            if atom not in atom_symbols:
-                raise ValueError("Atom %s not in molecule." % atom)
+        if check_atoms:
+            for atom in atoms:
+                if atom not in atom_symbols:
+                    raise ValueError("Atom %s not in molecule." % atom)
         if name is None:
             name = ",".join(atoms)
         log.debug("Making atom cluster with name=%s", name)
@@ -756,9 +763,14 @@ class EmbCC:
             if MPI_rank != (idx % MPI_size):
                 continue
 
-            log.debug("Running cluster %s on MPI process=%d...", cluster.name, MPI_rank)
+            if MPI_size > 1:
+                mpi_info = " on MPI process %3d" % MPI_rank
+            else:
+                mpi_info = ""
+            msg = "Now running cluster %3d: %s%s." % (cluster.id, cluster.name, mpi_info)
+            log.info(msg + "\n" + len(msg)*"-")
             cluster.run(**kwargs)
-            log.debug("Cluster %s on MPI process=%d is done.", cluster.name, MPI_rank)
+            log.info("Cluster %d: %s%s is done.", cluster.id, cluster.name, mpi_info)
 
         #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
         results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_dmet", "e_corr_full", "e_corr_v", "e_corr_d")

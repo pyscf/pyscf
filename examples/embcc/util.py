@@ -19,7 +19,9 @@ def run_benchmarks(mf, benchmarks, irc, filename, print_header=True,
         # For MCSCF:
         cas_size=None, cas_space=None, core_space=None,
         # For AVAS:
-        avas_ao_labels=None):
+        avas_ao_labels=None,
+        factor=1.0,
+        total_energy=False):
     assert mf.converged
     energies = []
     for bm in benchmarks:
@@ -28,7 +30,10 @@ def run_benchmarks(mf, benchmarks, irc, filename, print_header=True,
             import pyscf.mp
             mp2 = pyscf.mp.MP2(mf)
             mp2.kernel()
-            energies.append(mf.e_tot + mp2.e_corr)
+            if total_energy:
+                energies.append(mf.e_tot + mp2.e_corr)
+            else:
+                energies.append(mp2.e_corr)
         elif bm == "CISD":
             import pyscf.ci
             ci = pyscf.ci.CISD(mf)
@@ -44,7 +49,10 @@ def run_benchmarks(mf, benchmarks, irc, filename, print_header=True,
             cc.kernel()
             #assert cc.converged
             if cc.converged:
-                energies.append(mf.e_tot + cc.e_corr)
+                if total_energy:
+                    energies.append(mf.e_tot + cc.e_corr)
+                else:
+                    energies.append(cc.e_corr)
             else:
                 energies.append(np.nan)
         elif bm == "FCI":
@@ -86,7 +94,7 @@ def run_benchmarks(mf, benchmarks, irc, filename, print_header=True,
                 nevpt2.kernel()
                 energies.append(cas.e_tot + nevpt2.e_corr)
 
-        log.info("Time for %s: %.2g", bm, MPI.Wtime()-t0)
+        log.info("Time for %s (s): %.3f", bm, (MPI.Wtime()-t0))
 
     if print_header:
         titles = [t.split("@")[::-1] for t in benchmarks]
@@ -94,5 +102,7 @@ def run_benchmarks(mf, benchmarks, irc, filename, print_header=True,
         titles = ["HF"] + titles
         with open(filename, "w") as f:
             f.write("#IRC  " + "  ".join(titles) + "\n")
+
+    energies = [factor*x for x in energies]
     with open(filename, "a") as f:
-        f.write(("%.3f" + ((len(energies)+1)*"  %.8e") + "\n") % (irc, mf.e_tot, *energies))
+        f.write(("%.3f" + ((len(energies)+1)*"  %.12e") + "\n") % (irc, factor*mf.e_tot, *energies))
