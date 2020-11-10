@@ -52,7 +52,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
         myadcip = adc.radc.RADCIP(myadc) 
-        e,v,p = myadcip.kernel(nroots=3)
+        e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.4034634878946100, 6)
         self.assertAlmostEqual(e[1], 0.4908881395275673, 6)
@@ -68,7 +68,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
         myadcip = adc.radc.RADCIP(myadc) 
-        e,v,p = myadcip.kernel(nroots=3)
+        e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.4085610789192171, 6)
         self.assertAlmostEqual(e[1], 0.4949784593692911, 6)
@@ -84,7 +84,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2107769014592799, 6)
 
         myadcip = adc.radc.RADCIP(myadc) 
-        e,v,p = myadcip.kernel(nroots=4)
+        e,v,p,x = myadcip.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.4481211042230935, 6)
         self.assertAlmostEqual(e[1], 0.5316292617891758, 6)

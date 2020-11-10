@@ -804,20 +804,20 @@ def compute_energy(myadc, t1, t2, eris):
     eris_OVOV = eris.OVOV
     eris_ovOV = eris.ovOV
 
-    t2_1_a, t2_1_ab, t2_1_b  = t2[0]
+    t2_a, t2_ab, t2_b  = t2[0]
 
     if (myadc.method == "adc(3)"):
        t2_2 = t2[1]
-       t2_1_a += t2_2[0]
-       t2_1_ab += t2_2[1]
-       t2_1_b += t2_2[2]
+       t2_a += t2_2[0]
+       t2_ab += t2_2[1]
+       t2_b += t2_2[2]
 
     #Compute MP2 correlation energy
-    e_mp2 = 0.25 * lib.einsum('ijab,iajb', t2_1_a, eris_ovov)
-    e_mp2 -= 0.25 * lib.einsum('ijab,ibja', t2_1_a, eris_ovov)
-    e_mp2 += lib.einsum('ijab,iajb', t2_1_ab, eris_ovOV)
-    e_mp2 += 0.25 * lib.einsum('ijab,iajb', t2_1_b, eris_OVOV)
-    e_mp2 -= 0.25 * lib.einsum('ijab,ibja', t2_1_b, eris_OVOV)
+    e_mp2 = 0.25 * lib.einsum('ijab,iajb', t2_a, eris_ovov)
+    e_mp2 -= 0.25 * lib.einsum('ijab,ibja', t2_a, eris_ovov)
+    e_mp2 += lib.einsum('ijab,iajb', t2_ab, eris_ovOV)
+    e_mp2 += 0.25 * lib.einsum('ijab,iajb', t2_b, eris_OVOV)
+    e_mp2 -= 0.25 * lib.einsum('ijab,ibja', t2_b, eris_OVOV)
 
     cput0 = log.timer_debug1("Completed energy calculation", *cput0)
 

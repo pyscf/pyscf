@@ -56,7 +56,7 @@ class KnownValues(unittest.TestCase):
 
         
         myadcea = adc.radc.RADCEA(myadc) 
-        e,v,p = myadcea.kernel(nroots=3)
+        e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0287675413010661, 6)
         self.assertAlmostEqual(e[1], 0.0553475511361251, 6)
@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2263968409281272, 6)
 
         myadcea = adc.radc.RADCEA(myadc) 
-        e,v,p = myadcea.kernel(nroots=4)
+        e,v,p,x = myadcea.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.0277406670820452, 6)
         self.assertAlmostEqual(e[1], 0.0551456657778995, 6)
@@ -89,22 +89,22 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 1.9743650630026532, 6)
 
 
-#    def test_ip_adc3(self):
-#  
-#        myadc.method = "adc(3)"
-#        myadc.method_type = "ip"
-#        myadc.incore_complete = False
-#        myadc.max_memory = 10
-#
-#        e,v,p = myadc.kernel(nroots=3)
-#      
-#        self.assertAlmostEqual(e[0], 0.4777266577555, 6)
-#        self.assertAlmostEqual(e[1], 0.5619000705967, 6)
-#        self.assertAlmostEqual(e[2], 0.7119986982840, 6)
-#
-#        self.assertAlmostEqual(p[0], 1.8482158265750, 6)
-#        self.assertAlmostEqual(p[1], 1.8499506292187, 6)
-#        self.assertAlmostEqual(p[2], 1.8653509527805, 6)
+    def test_ip_adc3(self):
+  
+        myadc.method = "adc(3)"
+        myadc.method_type = "ip"
+        myadc.incore_complete = False
+        myadc.max_memory = 10
+
+        e,v,p,x = myadc.kernel(nroots=3)
+      
+        self.assertAlmostEqual(e[0], 0.4777266577555, 6)
+        self.assertAlmostEqual(e[1], 0.5619000705967, 6)
+        self.assertAlmostEqual(e[2], 0.7119986982840, 6)
+
+        self.assertAlmostEqual(p[0], 1.8482158265750, 6)
+        self.assertAlmostEqual(p[1], 1.8499506292187, 6)
+        self.assertAlmostEqual(p[2], 1.8653509527805, 6)
 
 if __name__ == "__main__":
     print("Out-of-core EA and IP  calculations for different RADC methods for water molecule")
