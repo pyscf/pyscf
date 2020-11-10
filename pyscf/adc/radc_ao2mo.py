@@ -261,21 +261,6 @@ def write_dataset(data):
     return f.create_dataset('data', data=data)
 
 
-def empty_dataset(shape):
-    _, fname = tempfile.mkstemp()
-    f = h5py.File(fname, mode='w')
-    return f.create_dataset('data', shape)
-
-
-def dataset(data):
-    _, fname = tempfile.mkstemp()
-    f = h5py.File(fname, mode='w')
-    return f.create_dataset('data', data=data)
-
-
-def remove_dataset(dataset):
-    os.remove(dataset.file.filename)
-
 def unpack_eri_1(eri, norb):
 
     n_oo = norb * (norb + 1) // 2
