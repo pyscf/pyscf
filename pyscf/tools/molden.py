@@ -261,7 +261,7 @@ def _parse_mo(lines, envs):
         elif 'OCC' in line:
             mo_occ.append(float(_d2e(line.split('=')[1].strip())))
         else:
-            orb.update({int(line.split()[0]) : float(_d2e(line.split()[1]))})
+            orb_prim.update({int(line.split()[0]) : float(_d2e(line.split()[1]))})
 
     orb_list = []
     for orb_prim_data in mo_coeff_prim:
