@@ -2179,9 +2179,9 @@ def ip_compute_trans_moments(adc, orb):
 
     method = adc.method
 
-    t2_1 = adc.t2[0]
-    t1_2 = adc.t1[0]
-    t2_1_a = t2_1 - t2_1.transpose(1,0,2,3).copy()
+    t2_1 = adc.t2[0][:]
+    t1_2 = adc.t1[0][:]
+    #t2_1_a = t2_1 - t2_1.transpose(1,0,2,3).copy()
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -2208,7 +2208,11 @@ def ip_compute_trans_moments(adc, orb):
 
     if orb < nocc:
         T[s1:f1]  = idn_occ[orb, :]
-        T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_a[:,orb,:,:], t2_1_a, optimize = True)
+        #T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_a[:,orb,:,:], t2_1_a, optimize = True)
+        T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
+        T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
+        T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_1, optimize = True)
+        T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_1, optimize = True)
         T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1, optimize = True)
         T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1, optimize = True)
     else :
@@ -2224,8 +2228,8 @@ def ip_compute_trans_moments(adc, orb):
 
     if(method=='adc(2)-x'or method=='adc(3)'):
 
-        t2_2 = adc.t2[1]
-        t2_2_a = t2_2 - t2_2.transpose(1,0,2,3).copy()
+        t2_2 = adc.t2[1][:]
+        #t2_2_a = t2_2 - t2_2.transpose(1,0,2,3).copy()
 
         if orb >= nocc:
             t2_2_t = t2_2.transpose(2,3,1,0).copy()
@@ -2239,15 +2243,25 @@ def ip_compute_trans_moments(adc, orb):
         t1_3 = adc.t1[1]
 
         if orb < nocc:
-            T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_a[:,orb,:,:], t2_2_a, optimize = True)
+            #T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_a[:,orb,:,:], t2_2_a, optimize = True)
+            T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_2, optimize = True)
+            T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_2, optimize = True)
+            T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_2, optimize = True)
+            T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_2, optimize = True)
             T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_2, optimize = True)
             T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_2, optimize = True)
 
-            T[s1:f1] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_a, t2_2_a[:,orb,:,:],optimize = True)
+            #T[s1:f1] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_a, t2_2_a[:,orb,:,:],optimize = True)
+            T[s1:f1] += 0.25*lib.einsum('ikdc,kdc->i',t2_1, t2_2[:,orb,:,:],optimize = True)
+            T[s1:f1] -= 0.25*lib.einsum('ikcd,kdc->i',t2_1, t2_2[:,orb,:,:],optimize = True)
+            T[s1:f1] -= 0.25*lib.einsum('ikdc,kcd->i',t2_1, t2_2[:,orb,:,:],optimize = True)
+            T[s1:f1] += 0.25*lib.einsum('ikcd,kcd->i',t2_1, t2_2[:,orb,:,:],optimize = True)
             T[s1:f1] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1, t2_2[orb,:,:,:],optimize = True)
             T[s1:f1] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1, t2_2[orb,:,:,:],optimize = True)
         else:
-            T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_a[:,:,(orb-nocc),:], t1_2,optimize = True)
+            #T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_a[:,:,(orb-nocc),:], t1_2,optimize = True)
+            T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
+            T[s1:f1] -= 0.5*lib.einsum('kic,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
             T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
             T[s1:f1] += t1_3[:,(orb-nocc)]
 
@@ -2319,6 +2333,17 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
     P = 2.0*lib.einsum("pi,pi->i", X, X)
 
     return P,X
+
+
+def analyze(adc, T, U, nroots=1):
+
+    myadc.eigenvector_analyze(adc, U, nroots=1)
+    myadc.spec_analyze(adc, T, U, nroots=1)
+
+def eigenvector_analyze(adc, U, nroots=1):
+
+
+def spec_analyze(adc, T, U, nroots=1):
 
 
 class RADCEA(RADC):
@@ -2488,6 +2513,7 @@ class RADCIP(RADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ip
+    analyze = analyze
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
