@@ -54,27 +54,45 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     U = np.array(U)
 
-    T = adc.get_trans_moments()
+    if adc.compute_spec == True:
+        T = adc.get_trans_moments()
+        spec_factors,X = adc.get_spec_factors(T, U, nroots)
+    else:
+        T = None
+        spec_factors = None
+        X = None
 
-    spec_factors,X = adc.get_spec_factors(T, U, nroots)
-   
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
         print ("*************************************************************")
         print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
         print ("*************************************************************")
 
-    if adc.verbose >= logger.INFO:
-        if nroots == 1:
-            logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-                         adc.method, 0, E, E*27.2114, spec_factors, conv)
-        else :
-            for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
+    if adc.compute_spec == True:
+
+        if adc.verbose >= logger.INFO:
+            if nroots == 1:
                 logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-                          adc.method, n, en, en*27.2114, pn, convn)
+                             adc.method, 0, E, E*27.2114, spec_factors, conv)
+            else :
+                for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
+                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+                              adc.method, n, en, en*27.2114, pn, convn)
+
+    else : 
+
+        if adc.verbose >= logger.INFO:
+            if nroots == 1:
+                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    conv = %s',
+                             adc.method, 0, E, E*27.2114, conv)
+            else :
+                for n, en, convn in zip(range(nroots), E, conv):
+                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f  conv = %s',
+                              adc.method, n, en, en*27.2114, convn)
     log.timer('ADC', *cput0)
 
     return E, U, spec_factors, X
+
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -193,7 +211,6 @@ def compute_amplitudes(myadc, eris):
 
         t2_2 = t2_2/D2
         del (D2)
-
 
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
         
@@ -581,6 +598,7 @@ class RADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
+        self.compute_spec = True
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -2069,6 +2087,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
     return sigma_
 
+
 def ea_compute_trans_moments(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -2171,7 +2190,7 @@ def ea_compute_trans_moments(adc, orb):
 
     return T
 
-
+@profile
 def ip_compute_trans_moments(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -2220,7 +2239,8 @@ def ip_compute_trans_moments(adc, orb):
 
 ######## ADC(2) 2h-1p  part  ############################################
 
-        t2_1_t = t2_1.transpose(2,3,1,0).copy()
+        #t2_1_t = t2_1.transpose(2,3,1,0).copy()
+        t2_1_t = t2_1.transpose(2,3,1,0)
 
         T[s2:f2] = t2_1_t[(orb-nocc),:,:,:].reshape(-1)
 
@@ -2232,7 +2252,8 @@ def ip_compute_trans_moments(adc, orb):
         #t2_2_a = t2_2 - t2_2.transpose(1,0,2,3).copy()
 
         if orb >= nocc:
-            t2_2_t = t2_2.transpose(2,3,1,0).copy()
+            #t2_2_t = t2_2.transpose(2,3,1,0).copy()
+            t2_2_t = t2_2.transpose(2,3,1,0)
 
             T[s2:f2] += t2_2_t[(orb-nocc),:,:,:].reshape(-1)
 
@@ -2335,15 +2356,21 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
     return P,X
 
 
-def analyze(adc, T, U, nroots=1):
+def dyson_orb(adc, X):
 
-    myadc.eigenvector_analyze(adc, U, nroots=1)
-    myadc.spec_analyze(adc, T, U, nroots=1)
+    dyson_mo = np.dot(adc.mo_coeff,X)
 
-def eigenvector_analyze(adc, U, nroots=1):
+    return dyson_mo
+
+#def analyze(adc, T, U, nroots=1):
+#
+#    myadc.eigenvector_analyze(adc, U, nroots=1)
+#    myadc.spec_analyze(adc, T, U, nroots=1)
+
+#def eigenvector_analyze(adc, U, nroots=1):
 
 
-def spec_analyze(adc, T, U, nroots=1):
+#def spec_analyze(adc, T, U, nroots=1):
 
 
 class RADCEA(RADC):
@@ -2404,6 +2431,7 @@ class RADCEA(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.compute_spec = adc.compute_spec
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -2416,7 +2444,8 @@ class RADCEA(RADC):
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ea
-    
+    compute_dyson_orb = dyson_orb    
+
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
            diag = self.ea_adc_diag()
@@ -2501,6 +2530,7 @@ class RADCIP(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.compute_spec = adc.compute_spec
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -2513,7 +2543,8 @@ class RADCIP(RADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ip
-    analyze = analyze
+    #analyze = analyze
+    dyson_orb = dyson_orb
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
