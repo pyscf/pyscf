@@ -2125,7 +2125,8 @@ def ea_compute_trans_moments(adc, orb):
 
         T[s1:f1] = -t1_2[orb,:]
 
-        t2_1_t = -t2_1.transpose(1,0,2,3).copy()
+        #t2_1_t = -t2_1.transpose(1,0,2,3).copy()
+        t2_1_t = -t2_1.transpose(1,0,2,3)
 
         T[s2:f2] += t2_1_t[:,orb,:,:].reshape(-1)
 
@@ -2148,7 +2149,8 @@ def ea_compute_trans_moments(adc, orb):
 
         if orb < nocc:
 
-            t2_2_t = -t2_2.transpose(1,0,2,3).copy()
+            #t2_2_t = -t2_2.transpose(1,0,2,3).copy()
+            t2_2_t = -t2_2.transpose(1,0,2,3)
 
             T[s2:f2] += t2_2_t[:,orb,:,:].reshape(-1)
 
@@ -2190,7 +2192,7 @@ def ea_compute_trans_moments(adc, orb):
 
     return T
 
-@profile
+#@profile
 def ip_compute_trans_moments(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):

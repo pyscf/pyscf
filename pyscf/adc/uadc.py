@@ -3529,7 +3529,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_a:f_a] = -t1_2_a[orb,:]
 
             t2_1_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]].copy()
-            t2_1_ab_t = -t2_1_ab.transpose(1,0,2,3).copy()
+            t2_1_ab_t = -t2_1_ab.transpose(1,0,2,3)
 
             T[s_aaa:f_aaa] += t2_1_t[:,orb,:].reshape(-1)
             T[s_bab:f_bab] += t2_1_ab_t[:,orb,:,:].reshape(-1)
@@ -3549,7 +3549,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             if orb < nocc_a:
 
                 t2_2_t = t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]].copy()
-                t2_2_ab_t = -t2_2_ab.transpose(1,0,2,3).copy()
+                t2_2_ab_t = -t2_2_ab.transpose(1,0,2,3)
 
                 T[s_aaa:f_aaa] += t2_2_t[:,orb,:].reshape(-1)
                 T[s_bab:f_bab] += t2_2_ab_t[:,orb,:,:].reshape(-1)
@@ -3587,7 +3587,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_b:f_b] = -t1_2_b[orb,:]
 
             t2_1_t = t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]].copy()
-            t2_1_ab_t = -t2_1_ab.transpose(0,1,3,2).copy()
+            t2_1_ab_t = -t2_1_ab.transpose(0,1,3,2)
 
             T[s_bbb:f_bbb] += t2_1_t[:,orb,:].reshape(-1)
             T[s_aba:f_aba] += t2_1_ab_t[:,orb,:,:].reshape(-1)
@@ -3608,7 +3608,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             if orb < nocc_b:
 
                 t2_2_t = t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]].copy()
-                t2_2_ab_t = -t2_2_ab.transpose(0,1,3,2).copy()
+                t2_2_ab_t = -t2_2_ab.transpose(0,1,3,2)
 
                 T[s_bbb:f_bbb] += t2_2_t[:,orb,:].reshape(-1)
                 T[s_aba:f_aba] += t2_2_ab_t[:,orb,:,:].reshape(-1)
@@ -3701,8 +3701,8 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 ######## ADC(2) 2h-1p  part  ############################################
 
             t2_1_t = t2_1_a[ij_ind_a[0],ij_ind_a[1],:,:].copy()
-            t2_1_t_a = t2_1_t.transpose(2,1,0).copy()
-            t2_1_t_ab = t2_1_ab.transpose(2,3,1,0).copy()
+            t2_1_t_a = t2_1_t.transpose(2,1,0)
+            t2_1_t_ab = t2_1_ab.transpose(2,3,1,0)
 
             T[s_aaa:f_aaa] = t2_1_t_a[(orb-nocc_a),:,:].reshape(-1)
             T[s_bab:f_bab] = t2_1_t_ab[(orb-nocc_a),:,:,:].reshape(-1)
@@ -3715,8 +3715,8 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
             if orb >= nocc_a:
                 t2_2_t = t2_2_a[ij_ind_a[0],ij_ind_a[1],:,:].copy()
-                t2_2_t_a = t2_2_t.transpose(2,1,0).copy()
-                t2_2_t_ab = t2_2_ab.transpose(2,3,1,0).copy()
+                t2_2_t_a = t2_2_t.transpose(2,1,0)
+                t2_2_t_ab = t2_2_ab.transpose(2,3,1,0)
 
                 T[s_aaa:f_aaa] += t2_2_t_a[(orb-nocc_a),:,:].reshape(-1)
                 T[s_bab:f_bab] += t2_2_t_ab[(orb-nocc_a),:,:,:].reshape(-1)
@@ -3755,8 +3755,8 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 ######## ADC(2) 2h-1p part  ############################################
 
             t2_1_t = t2_1_b[ij_ind_b[0],ij_ind_b[1],:,:].copy()
-            t2_1_t_b = t2_1_t.transpose(2,1,0).copy()
-            t2_1_t_ab = t2_1_ab.transpose(2,3,0,1).copy()
+            t2_1_t_b = t2_1_t.transpose(2,1,0)
+            t2_1_t_ab = t2_1_ab.transpose(2,3,0,1)
 
             T[s_bbb:f_bbb] = t2_1_t_b[(orb-nocc_b),:,:].reshape(-1)
             T[s_aba:f_aba] = t2_1_t_ab[:,(orb-nocc_b),:,:].reshape(-1)
@@ -3769,9 +3769,9 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
             if orb >= nocc_b:
                 t2_2_t = t2_2_b[ij_ind_b[0],ij_ind_b[1],:,:].copy()
-                t2_2_t_b = t2_2_t.transpose(2,1,0).copy()
+                t2_2_t_b = t2_2_t.transpose(2,1,0)
 
-                t2_2_t_ab = t2_2_ab.transpose(2,3,0,1).copy()
+                t2_2_t_ab = t2_2_ab.transpose(2,3,0,1)
 
                 T[s_bbb:f_bbb] += t2_2_t_b[(orb-nocc_b),:,:].reshape(-1)
                 T[s_aba:f_aba] += t2_2_t_ab[:,(orb-nocc_b),:,:].reshape(-1)
