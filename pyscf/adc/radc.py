@@ -53,17 +53,18 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     conv, E, U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
     U = np.array(U)
-
+    
     T = adc.get_trans_moments()
 
     spec_factors,X = adc.get_spec_factors(T, U, nroots)
-   
+    F = adc.eigenvector_analyze(U, nroots)
+  
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
         print ("*************************************************************")
         print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
         print ("*************************************************************")
-
+    
     if adc.verbose >= logger.INFO:
         if nroots == 1:
             logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
@@ -2335,15 +2336,66 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
     return P,X
 
 
-def analyze(adc, T, U, nroots=1):
+#def analyze(adc, T, U, nroots=1):
 
-    myadc.eigenvector_analyze(adc, U, nroots=1)
-    myadc.spec_analyze(adc, T, U, nroots=1)
+    #F = adc.eigenvector_analyze(adc, U, nroots=1)
+    #adc.spec_analyze(adc, T, U, nroots=1)
+
+    #return F
 
 def eigenvector_analyze(adc, U, nroots=1):
+    
+    nocc = adc._nocc
+    nvir = adc._nvir
+    U_thresh = 0.01
+    
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+    
+    
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+        U1dotU1 = np.dot(U1, U1) 
+        U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+       
+        U_sq = U[I,:].copy()**2
+        ind_idx = np.argsort(-U_sq)
+        U_sq = U_sq[ind_idx] 
+        U_sorted = U[I,ind_idx].copy()
+        
+                   
+        U_sorted = U_sorted[U_sq > U_thresh**2]
+        ind_idx = ind_idx[U_sq > U_thresh**2]
+        
+          
+        singles_idx = []
+        orb_doubles = []
+        for orb in ind_idx:
+            if orb < n_singles:
+               singles_idx.append(orb)
+            if orb >= n_singles:
+               orb_doubles.append(orb)
 
+        def index(array, item):
+            for idx, val in np.ndenumerate(array):
+                if val == item:
+                    return idx
 
-def spec_analyze(adc, T, U, nroots=1):
+        doubles_U = []
+        doubles_idx = []
+        for ind_d in orb_doubles:
+            doubles_U.append(U[I,ind_d]) 
+        for U2_val in doubles_U:
+            doubles_idx.append(index(U2, U2_val))
+        
+        
+          
+    return U
+
+    
+
+#def spec_analyze(adc, T, U, nroots=1):
 
 
 class RADCEA(RADC):
@@ -2513,7 +2565,7 @@ class RADCIP(RADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ip
-    analyze = analyze
+    eigenvector_analyze = eigenvector_analyze
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
