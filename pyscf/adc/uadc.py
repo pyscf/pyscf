@@ -3700,7 +3700,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######## ADC(2) 2h-1p  part  ############################################
 
-            t2_1_t = t2_1_a[ij_ind_a[0],ij_ind_a[1],:,:].copy()
+            t2_1_t = t2_1_a[ij_ind_a[0],ij_ind_a[1],:,:]
             t2_1_t_a = t2_1_t.transpose(2,1,0)
             t2_1_t_ab = t2_1_ab.transpose(2,3,1,0)
 
@@ -3714,7 +3714,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
 
             if orb >= nocc_a:
-                t2_2_t = t2_2_a[ij_ind_a[0],ij_ind_a[1],:,:].copy()
+                t2_2_t = t2_2_a[ij_ind_a[0],ij_ind_a[1],:,:]
                 t2_2_t_a = t2_2_t.transpose(2,1,0)
                 t2_2_t_ab = t2_2_ab.transpose(2,3,1,0)
 
@@ -3754,7 +3754,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######## ADC(2) 2h-1p part  ############################################
 
-            t2_1_t = t2_1_b[ij_ind_b[0],ij_ind_b[1],:,:].copy()
+            t2_1_t = t2_1_b[ij_ind_b[0],ij_ind_b[1],:,:]
             t2_1_t_b = t2_1_t.transpose(2,1,0)
             t2_1_t_ab = t2_1_ab.transpose(2,3,0,1)
 
@@ -3768,7 +3768,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
 
             if orb >= nocc_b:
-                t2_2_t = t2_2_b[ij_ind_b[0],ij_ind_b[1],:,:].copy()
+                t2_2_t = t2_2_b[ij_ind_b[0],ij_ind_b[1],:,:]
                 t2_2_t_b = t2_2_t.transpose(2,1,0)
 
                 t2_2_t_ab = t2_2_ab.transpose(2,3,0,1)
