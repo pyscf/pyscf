@@ -913,10 +913,13 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     else:
         orbsym = []
         eri_cas = ao2mo.restore(8, eri_cas, ncas)
-    if not os.path.exists(DMRGCI.scratchDirectory):
+    # The following checks for scratch on node0 only but it can be missing on node1 etc.
+    # The previous WF could have been copied to node0.
+    # Comment out the if for now.
+    # if not os.path.exists(DMRGCI.scratchDirectory):
         # os.makedirs(DMRGCI.scratchDirectory)
-        cmd = ' '.join((DMRGCI.mpiprefix, "mkdir -p", DMRGCI.scratchDirectory))
-        check_call(cmd, shell=True)
+    cmd = ' '.join((DMRGCI.mpiprefix, "mkdir -p", DMRGCI.scratchDirectory))
+    check_call(cmd, shell=True)
     if not os.path.exists(DMRGCI.runtimeDir):
         os.makedirs(DMRGCI.runtimeDir)
 
