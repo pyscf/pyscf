@@ -45,17 +45,17 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     naux = mp.with_df.get_naoaux()
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
+    if with_t2:
+        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
+    else:
+        t2 = None
+
     Lov = numpy.empty((naux, nocc*nvir))
     p1 = 0
     for istep, qov in enumerate(mp.loop_ao2mo(mo_coeff, nocc)):
         logger.debug(mp, 'Load cderi step %d', istep)
         p0, p1 = p1, p1 + qov.shape[0]
         Lov[p0:p1] = qov
-
-    if with_t2:
-        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
-    else:
-        t2 = None
 
     emp2 = 0
 
