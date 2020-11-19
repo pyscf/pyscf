@@ -210,6 +210,8 @@ def _parse_gto(lines, envs):
 # * Do not use iter() here. Python 2 and 3 are different in iter()
     def read_one_bas(lsym, nb, fac=1):
         fac = float(fac)
+        if fac == float(0):
+            fac = float(1)
         bas = [lib.param.ANGULARMAP[lsym.lower()],]
         for i in range(int(nb)):
             dat = _d2e(next(lines_iter)).split()
