@@ -2347,7 +2347,7 @@ def eigenvector_analyze(adc, U, nroots=1):
     
     nocc = adc._nocc
     nvir = adc._nvir
-    U_thresh = 0.01
+    U_thresh = 0.06
     
     n_singles = nocc
     n_doubles = nvir * nocc * nocc
@@ -2367,35 +2367,39 @@ def eigenvector_analyze(adc, U, nroots=1):
                    
         U_sorted = U_sorted[U_sq > U_thresh**2]
         ind_idx = ind_idx[U_sq > U_thresh**2]
-        
-          
+      
+        temp_doubles_idx = [0,0,0]  
         singles_idx = []
-        orb_doubles = []
+        doubles_idx = []
         for orb in ind_idx:
             if orb < n_singles:
-               singles_idx.append(orb)
+                orb_s = orb + 1
+                singles_idx.append(orb_s)
             if orb >= n_singles:
-               orb_doubles.append(orb)
-
-        def index(array, item):
-            for idx, val in np.ndenumerate(array):
-                if val == item:
-                    return idx
-
-        doubles_U = []
-        doubles_idx = []
-        for ind_d in orb_doubles:
-            doubles_U.append(U[I,ind_d]) 
-        for U2_val in doubles_U:
-            doubles_idx.append(index(U2, U2_val))
-        
-        
+                orb_d = orb - n_singles + 1     
+                nvir_rem = orb_d % (nocc*nocc)
+                nvir_idx = (orb_d - nvir_rem)/(nocc*nocc)
+                temp_doubles_idx[0] = int(nvir_idx + 1)
+                orb_d = nvir_rem
+                nocc1_rem = orb_d % nocc
+                nocc1_idx = (orb_d - nocc1_rem)/nocc
+                temp_doubles_idx[1] = int(nocc1_idx + 1)
+                temp_doubles_idx[2] = int(nocc1_rem + 1)
+                doubles_idx.append(temp_doubles_idx)
+                temp_doubles_idx = [0,0,0]
           
+                
+        print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
+        print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
+        print( "Singles block: ") 
+        for print_singles in singles_idx:
+            print("Occupied orbital #:", print_singles)
+        print("Doubles block: ")
+        for print_doubles in doubles_idx:
+            print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2])
+    
     return U
 
-    
-
-#def spec_analyze(adc, T, U, nroots=1):
 
 
 class RADCEA(RADC):

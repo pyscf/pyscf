@@ -4018,6 +4018,63 @@ def get_spec_factors(adc, T, U, nroots=1):
     return P
 
 
+def eigenvector_analyze(adc, U, nroots=1):
+    
+    nocc = adc._nocc
+    nvir = adc._nvir
+    U_thresh = 0.06
+    
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+    
+    
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+        U1dotU1 = np.dot(U1, U1) 
+        U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+       
+        U_sq = U[I,:].copy()**2
+        ind_idx = np.argsort(-U_sq)
+        U_sq = U_sq[ind_idx] 
+        U_sorted = U[I,ind_idx].copy()
+        
+                   
+        U_sorted = U_sorted[U_sq > U_thresh**2]
+        ind_idx = ind_idx[U_sq > U_thresh**2]
+      
+        temp_doubles_idx = [0,0,0]  
+        singles_idx = []
+        doubles_idx = []
+        for orb in ind_idx:
+            if orb < n_singles:
+                orb_s = orb + 1
+                singles_idx.append(orb_s)
+            if orb >= n_singles:
+                orb_d = orb - n_singles + 1     
+                nvir_rem = orb_d % (nocc*nocc)
+                nvir_idx = (orb_d - nvir_rem)/(nocc*nocc)
+                temp_doubles_idx[0] = int(nvir_idx + 1)
+                orb_d = nvir_rem
+                nocc1_rem = orb_d % nocc
+                nocc1_idx = (orb_d - nocc1_rem)/nocc
+                temp_doubles_idx[1] = int(nocc1_idx + 1)
+                temp_doubles_idx[2] = int(nocc1_rem + 1)
+                doubles_idx.append(temp_doubles_idx)
+                temp_doubles_idx = [0,0,0]
+          
+                
+        print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
+        print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
+        print( "Singles block: ") 
+        for print_singles in singles_idx:
+            print("Occupied orbital #:", print_singles)
+        print("Doubles block: ")
+        for print_doubles in doubles_idx:
+            print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2])
+    
+    return U
+
 
 class UADCEA(UADC):
     '''unrestricted ADC for EA energies and spectroscopic amplitudes
