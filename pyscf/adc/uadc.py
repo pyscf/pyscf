@@ -56,6 +56,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     T = adc.get_trans_moments()
 
     spec_factors = adc.get_spec_factors(T, U, nroots)
+    F = adc.eigenvector_analyze(U, nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
@@ -4020,19 +4021,42 @@ def get_spec_factors(adc, T, U, nroots=1):
 
 def eigenvector_analyze(adc, U, nroots=1):
     
-    nocc = adc._nocc
-    nvir = adc._nvir
     U_thresh = 0.06
-    
-    n_singles = nocc
-    n_doubles = nvir * nocc * nocc
-    
-    
+     
+
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+
+    ij_ind_a = np.tril_indices(nocc_a, k=-1)
+    ij_ind_b = np.tril_indices(nocc_b, k=-1)
+
+    n_singles_a = nocc_a
+    n_singles_b = nocc_b
+    n_doubles_aaa = nocc_a* (nocc_a - 1) * nvir_a // 2
+    n_doubles_bab = nvir_b * nocc_a* nocc_b
+    n_doubles_aba = nvir_a * nocc_b* nocc_a
+    n_doubles_bbb = nocc_b* (nocc_b - 1) * nvir_b // 2
+
+    s_a = 0
+    f_a = n_singles_a
+    s_b = f_a
+    f_b = s_b + n_singles_b
+    s_aaa = f_b
+    f_aaa = s_aaa + n_doubles_aaa
+    s_bab = f_aaa
+    f_bab = s_bab + n_doubles_bab
+    s_aba = f_bab
+    f_aba = s_aba + n_doubles_aba
+    s_bbb = f_aba
+    f_bbb = s_bbb + n_doubles_bbb
+
     for I in range(U.shape[0]):
-        U1 = U[I, :n_singles]
-        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+        U1 = U[I, :f_b]
+        U2 = U[I, s_aaa:]
         U1dotU1 = np.dot(U1, U1) 
-        U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        U2dotU2 = np.dot(U2, U2)
        
         U_sq = U[I,:].copy()**2
         ind_idx = np.argsort(-U_sq)
@@ -4042,16 +4066,24 @@ def eigenvector_analyze(adc, U, nroots=1):
                    
         U_sorted = U_sorted[U_sq > U_thresh**2]
         ind_idx = ind_idx[U_sq > U_thresh**2]
-      
+        ind_idx = [x+1 for x in ind_idx]
+        
         temp_doubles_idx = [0,0,0]  
-        singles_idx = []
-        doubles_idx = []
+        singles_a_idx = []
+        singles_b_idx = []
+        doubles_aaa_idx = []
+        doubles_bab_idx = []
+        doubles_aba_idx = []
+        doubles_bbb_idx = []  
         for orb in ind_idx:
-            if orb < n_singles:
-                orb_s = orb + 1
-                singles_idx.append(orb_s)
-            if orb >= n_singles:
-                orb_d = orb - n_singles + 1     
+            if orb in range(s_a,f_a):
+                orb_s_a = orb
+                singles_a_idx.append(orb_s_a)
+            if orb in range(s_b,f_b):
+                orb_s_b = orb
+                singles_b_idx.append(orb_s_b)
+            if orb in range(s_aaa,faaa):
+                orb_d = orb - n_singles      
                 nvir_rem = orb_d % (nocc*nocc)
                 nvir_idx = (orb_d - nvir_rem)/(nocc*nocc)
                 temp_doubles_idx[0] = int(nvir_idx + 1)
@@ -4255,7 +4287,7 @@ class UADCIP(UADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors
-
+    eigenvector_analyze = eigenvector_analyze
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
             diag = self.ip_adc_diag()
