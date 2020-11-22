@@ -30,7 +30,6 @@ import numpy as np
 import scipy.linalg
 from pyscf import lib
 from pyscf.pbc import tools
-from pyscf.pbc import scf
 
 
 def kpts_to_kmesh(cell, kpts):
@@ -127,7 +126,7 @@ def k2gamma(kmf, kmesh=None):
          C_{\nu ' n'} = C_{\vecR\mu, \veck m} = \frac{1}{\sqrt{N_{\UC}}}
          \e^{\ii \veck\cdot\vecR} C^{\veck}_{\mu  m}
     '''
-
+    from pyscf.pbc import scf
     def transform(mo_energy, mo_coeff, mo_occ):
         scell, E_g, C_gamma = mo_k2gamma(kmf.cell, mo_energy, mo_coeff,
                                          kmf.kpts, kmesh)[:3]

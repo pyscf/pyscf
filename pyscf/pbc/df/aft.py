@@ -102,7 +102,7 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    ke_cutoff = -2*omega**2 * numpy.log(precision / (16*numpy.pi**2))
+    ke_cutoff = -2*omega**2 * numpy.log(precision / (32*omega**2*numpy.pi**2))
     return ke_cutoff
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
@@ -110,7 +110,7 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    omega = (-.5 * ke_cutoff / numpy.log(precision / (16*numpy.pi**2)))**.5
+    omega = (-.5 * ke_cutoff / numpy.log(precision / (32*numpy.pi**2)))**.5
     return omega
 
 def get_nuc(mydf, kpts=None):
@@ -418,9 +418,9 @@ class AFTDF(lib.StreamObject):
         for p0, p1 in self.prange(0, ngrids, blksize):
             #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
             #                       b, Gvbase, gxyz[p0:p1], mesh, (kpti, kptj), q)
-            aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                         b, gxyz[p0:p1], Gvbase, q,
-                                         kptj.reshape(1,3), intor, comp, out=buf)[0]
+            aoao = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                        b, gxyz[p0:p1], Gvbase, q,
+                                        kptj.reshape(1,3), intor, comp, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
@@ -475,9 +475,9 @@ class AFTDF(lib.StreamObject):
         buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
 
         for p0, p1 in self.prange(0, ngrids, blksize):
-            dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                        b, gxyz[p0:p1], Gvbase, q, kpts,
-                                        intor, comp, out=buf)
+            dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                       b, gxyz[p0:p1], Gvbase, q, kpts,
+                                       intor, comp, out=buf)
             yield dat, p0, p1
 
     weighted_coulG = weighted_coulG
