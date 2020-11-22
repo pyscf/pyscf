@@ -298,7 +298,7 @@ class RangeSeparationJKBuilder(object):
             expRk = np.exp(1j*np.dot(self.bvkmesh_Ls, kpts.T))
 
         if with_j:
-            vj = lib.einsum('nuRv,Rk->nkuv', vj, expRk)
+            vj = np.asarray(lib.einsum('nuRv,Rk->nkuv', vj, expRk), order='C')
             for i_dm in range(n_dm):
                 for ik in range(nkpts):
                     lib.takebak_2d(vj[i_dm,ik], vj1[i_dm,ik], ao_idx, ao_idx, False)
@@ -306,7 +306,7 @@ class RangeSeparationJKBuilder(object):
                 vj = vj[0]
 
         if with_k:
-            vk = lib.einsum('nuRv,Rk->nkuv', vk, expRk)
+            vk = np.asarray(lib.einsum('nuRv,Rk->nkuv', vk, expRk), order='C')
             for i_dm in range(n_dm):
                 for ik in range(nkpts):
                     lib.takebak_2d(vk[i_dm,ik], vk1[i_dm,ik], ao_idx, ao_idx, False)
@@ -517,8 +517,10 @@ class _LongRangeAFT(aft.AFTDF):
         cell = self.cell
         nbas_smooth = cell._nbas_each_set[2]
         nao_steep = cell.ao_loc[cell.nbas-nbas_smooth]
+        bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         for dat, p0, p1 in aft.AFTDF.ft_loop(self, mesh, q, kpts, shls_slice,
-                                             max_memory, aosym, intor, comp):
+                                             max_memory, aosym, intor, comp,
+                                             bvk_kmesh=bvk_kmesh):
             yield dat, p0, p1
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
@@ -891,21 +893,6 @@ class _LongRangeAFT(aft.AFTDF):
             _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
 
         return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
-
-#def _estimate_overlap(supmol):
-#    exps = numpy.array([cell.bas_exp(ib).min() for ib in range(cell.nbas)])
-#    atom_coords = cell.atom_coords()
-#    bas_coords = atom_coords[cell._bas[:,gto.ATOM_OF]]
-#    aij = exps[:,None] * exps / (exps[:,None] + exps)
-#    rij = bas_coords[:,None,:] - bas_coords
-#    dijL = numpy.linalg.norm(rij[:,:,None,:] - Ls, axis=-1)
-#    vol = cell.vol
-#    vol_rad = vol**(1./3)
-#    fac = (4 * aij / (exps[:,None] + exps))**.75
-#    s = fac[:,:,None] * numpy.exp(-aij[:,:,None] * (dijL - vol_rad/2)**2)
-#    fac = 2*numpy.pi/vol * abs(dijL - vol_rad/2) / aij[:,:,None]
-#    fac[fac < 1] = 1
-#    return fac * s
 
 if __name__ == '__main__':
     from pyscf.pbc.gto import Cell

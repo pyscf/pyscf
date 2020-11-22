@@ -374,7 +374,7 @@ class AFTDF(lib.StreamObject):
 # TODO: Put Gv vector in the arguments
     def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None,
-                intor='GTO_ft_ovlp', comp=1):
+                intor='GTO_ft_ovlp', comp=1, bvk_kmesh=None):
         '''
         Fourier transform iterator for AO pair
         '''
@@ -420,7 +420,8 @@ class AFTDF(lib.StreamObject):
             #                       b, Gvbase, gxyz[p0:p1], mesh, (kpti, kptj), q)
             aoao = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                         b, gxyz[p0:p1], Gvbase, q,
-                                        kptj.reshape(1,3), intor, comp, out=buf)[0]
+                                        kptj.reshape(1,3), intor, comp,
+                                        bvk_kmesh=bvk_kmesh, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
@@ -438,7 +439,8 @@ class AFTDF(lib.StreamObject):
                 yield (pqkR, pqkI, p0+i0, p0+i1)
 
     def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
-                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1):
+                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1,
+                bvk_kmesh=None):
         '''
         Fourier transform iterator for all kpti which satisfy
             2pi*N = (kpts - kpti - q)*a,  N = -1, 0, 1
@@ -477,7 +479,7 @@ class AFTDF(lib.StreamObject):
         for p0, p1 in self.prange(0, ngrids, blksize):
             dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                        b, gxyz[p0:p1], Gvbase, q, kpts,
-                                       intor, comp, out=buf)
+                                       intor, comp, bvk_kmesh=bvk_kmesh, out=buf)
             yield dat, p0, p1
 
     weighted_coulG = weighted_coulG
