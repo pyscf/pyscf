@@ -4029,8 +4029,8 @@ def eigenvector_analyze(adc, U, nroots=1):
     nvir_a = adc.nvir_a
     nvir_b = adc.nvir_b
 
-    ij_ind_a = np.tril_indices(nocc_a, k=-1)
-    ij_ind_b = np.tril_indices(nocc_b, k=-1)
+    ij_a = np.tril_indices(nocc_a, k=-1)
+    ij_b = np.tril_indices(nocc_b, k=-1)
 
     n_singles_a = nocc_a
     n_singles_b = nocc_b
@@ -4056,19 +4056,45 @@ def eigenvector_analyze(adc, U, nroots=1):
         U1 = U[I, :f_b]
         U2 = U[I, s_aaa:]
         U1dotU1 = np.dot(U1, U1) 
-        U2dotU2 = np.dot(U2, U2)
-       
+        U2dotU2 = np.dot(U2, U2) 
+           
+        temp_aaa = np.zeros((nvir_a, nocc_a, nocc_a))
+        temp_aaa[:,ij_a[0],ij_a[1]] =  U[I,s_aaa:f_aaa].reshape(nvir_a,-1).copy()
+        temp_aaa[:,ij_a[1],ij_a[0]] = -U[I,s_aaa:f_aaa].reshape(nvir_a,-1).copy()
+        U_aaa = temp_aaa.reshape(-1).copy()
+
+        temp_bbb = np.zeros((nvir_b, nocc_b, nocc_b))
+        temp_bbb[:,ij_b[0],ij_b[1]] =  U[I,s_bbb:f_bbb].reshape(nvir_b,-1).copy()
+        temp_bbb[:,ij_b[1],ij_b[0]] = -U[I,s_bbb:f_bbb].reshape(nvir_b,-1).copy()
+        U_bbb = temp_bbb.reshape(-1).copy()
+
+
         U_sq = U[I,:].copy()**2
         ind_idx = np.argsort(-U_sq)
         U_sq = U_sq[ind_idx] 
         U_sorted = U[I,ind_idx].copy()
-        
-                   
+
+        U_sq_aaa = U_aaa.copy()**2
+        U_sq_bbb = U_bbb.copy()**2
+        ind_idx_aaa = np.argsort(-U_sq_aaa)
+        ind_idx_bbb = np.argsort(-U_sq_bbb)
+        U_sq_aaa = U_sq_aaa[ind_idx_aaa]
+        U_sq_bbb = U_sq_bbb[ind_idx_bbb]
+        U_sorted_aaa = U_aaa[ind_idx_aaa].copy()
+        U_sorted_bbb = U_bbb[ind_idx_bbb].copy()
+
         U_sorted = U_sorted[U_sq > U_thresh**2]
         ind_idx = ind_idx[U_sq > U_thresh**2]
-        ind_idx = [x+1 for x in ind_idx]
+        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > U_thresh**2]
+        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > U_thresh**2]
+        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > U_thresh**2]
+        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > U_thresh**2]
+        #ind_idx = [x+1 for x in ind_idx]
         
-        temp_doubles_idx = [0,0,0]  
+        temp_doubles_aaa_idx = [0,0,0]  
+        temp_doubles_aba_idx = [0,0,0]  
+        temp_doubles_bab_idx = [0,0,0]  
+        temp_doubles_bbb_idx = [0,0,0]  
         singles_a_idx = []
         singles_b_idx = []
         doubles_aaa_idx = []
@@ -4076,34 +4102,84 @@ def eigenvector_analyze(adc, U, nroots=1):
         doubles_aba_idx = []
         doubles_bbb_idx = []  
         for orb in ind_idx:
+
             if orb in range(s_a,f_a):
-                orb_s_a = orb
-                singles_a_idx.append(orb_s_a)
+                orb_a = orb + 1
+                singles_a_idx.append(orb_a)
+           
             if orb in range(s_b,f_b):
-                orb_s_b = orb
-                singles_b_idx.append(orb_s_b)
-            if orb in range(s_aaa,faaa):
-                orb_d = orb - n_singles      
-                nvir_rem = orb_d % (nocc*nocc)
-                nvir_idx = (orb_d - nvir_rem)/(nocc*nocc)
-                temp_doubles_idx[0] = int(nvir_idx + 1)
-                orb_d = nvir_rem
-                nocc1_rem = orb_d % nocc
-                nocc1_idx = (orb_d - nocc1_rem)/nocc
-                temp_doubles_idx[1] = int(nocc1_idx + 1)
-                temp_doubles_idx[2] = int(nocc1_rem + 1)
-                doubles_idx.append(temp_doubles_idx)
-                temp_doubles_idx = [0,0,0]
+                orb_b = orb - s_b + 1
+                singles_b_idx.append(orb_b)
+
+            if orb in range(s_bab,f_bab):
+                orb_bab = orb - s_bab + 1      
+                nvir_rem = orb_bab % (nocc_a*nocc_b)
+                nvir_idx = (orb_bab - nvir_rem)/(nocc_a*nocc_b)
+                temp_doubles_bab_idx[0] = int(nvir_idx + 1)
+                orb_bab = nvir_rem
+                nocc_a_rem = orb_bab % nocc_b
+                nocc_a_idx = (orb_bab - nocc_a_rem)/nocc_b
+                temp_doubles_bab_idx[1] = int(nocc_a_idx + 1)
+                temp_doubles_bab_idx[2] = int(nocc_a_rem + 1)
+                doubles_bab_idx.append(temp_doubles_bab_idx)
+                temp_doubles_bab_idx = [0,0,0]
           
-                
+            if orb in range(s_aba,f_aba):
+                orb_aba = orb - s_aba + 1     
+                nvir_rem = orb_aba % (nocc_b*nocc_a)
+                nvir_idx = (orb_aba - nvir_rem)/(nocc_b*nocc_a)
+                temp_doubles_aba_idx[0] = int(nvir_idx + 1)
+                orb_aba = nvir_rem
+                nocc_b_rem = orb_aba % nocc_a
+                nocc_b_idx = (orb_aba - nocc_b_rem)/nocc_a
+                temp_doubles_bab_idx[1] = int(nocc_b_idx + 1)
+                temp_doubles_bab_idx[2] = int(nocc_b_rem + 1)
+                doubles_bab_idx.append(temp_doubles_bab_idx)
+                temp_doubles_bab_idx = [0,0,0]
+
+        for orb in ind_idx_aaa:              
+            orb_d = orb + 1     
+            nvir_rem = orb_d % (nocc_a*nocc_a)
+            nvir_idx = (orb_d - nvir_rem)/(nocc_a*nocc_a)
+            temp_doubles_aaa_idx[0] = int(nvir_idx + 1)
+            orb_d = nvir_rem
+            nocc1_rem = orb_d % nocc_a
+            nocc1_idx = (orb_d - nocc1_rem)/nocc_a
+            temp_doubles_aaa_idx[1] = int(nocc1_idx + 1)
+            temp_doubles_aaa_idx[2] = int(nocc1_rem + 1)
+            doubles_aaa_idx.append(temp_doubles_aaa_idx)
+            temp_doubles_aaa_idx = [0,0,0]
+
+        for orb in ind_idx_bbb:              
+            orb_d = orb + 1     
+            nvir_rem = orb_d % (nocc_b*nocc_b)
+            nvir_idx = (orb_d - nvir_rem)/(nocc_b*nocc_b)
+            temp_doubles_bbb_idx[0] = int(nvir_idx + 1)
+            orb_d = nvir_rem
+            nocc1_rem = orb_d % nocc_b
+            nocc1_idx = (orb_d - nocc1_rem)/nocc_b
+            temp_doubles_bbb_idx[1] = int(nocc1_idx + 1)
+            temp_doubles_bbb_idx[2] = int(nocc1_rem + 1)
+            doubles_bbb_idx.append(temp_doubles_bbb_idx)
+            temp_doubles_bbb_idx = [0,0,0]
+
         print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
         print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
         print( "Singles block: ") 
-        for print_singles in singles_idx:
-            print("Occupied orbital #:", print_singles)
+        for print_singles_a in singles_a_idx:
+            print("Occupied alpha orbital #:", print_singles_a)
+        for print_singles_b in singles_b_idx:
+            print("Occupied beta orbital #:", print_singles_b)
         print("Doubles block: ")
-        for print_doubles in doubles_idx:
-            print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2])
+        for d_va,d_oa,d_oa in doubles_aaa_idx:
+            print("Virtual alpha Orbital #:", d_va, " Occupied alpha orbital #:",d_oa, " Occupied alpha orbital", d_oa)
+        for d_vb,d_oa,d_ob in doubles_bab_idx:
+            print("Virtual beta Orbital #:", d_vb, " Occupied alpha orbital #:",d_oa, " Occupied beta orbital", d_ob)
+        for d_va,d_ob,d_oa in doubles_aba_idx:
+            print("Virtual alpha Orbital #:", d_va, " Occupied beta orbital #:",d_oa, " Occupied alpha orbital", d_oa)
+        for d_vb,d_ob,d_ob in doubles_bbb_idx:
+            print("Virtual beta Orbital #:", d_vb, " Occupied beta orbital #:",d_ob, " Occupied beta orbital", d_ob)
+
     
     return U
 

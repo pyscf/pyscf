@@ -2368,7 +2368,7 @@ def eigenvector_analyze(adc, U, nroots=1):
         U_sorted = U_sorted[U_sq > U_thresh**2]
         ind_idx = ind_idx[U_sq > U_thresh**2]
       
-        ind_idx = [x+1 for x in ind_idx]
+        #ind_idx = [x+1 for x in ind_idx]
 
         temp_doubles_idx = [0,0,0]  
         singles_idx = []
