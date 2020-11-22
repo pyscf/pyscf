@@ -89,11 +89,12 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v4.0.1
+    GIT_TAG v4.0.6
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
             -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0 -DMIN_EXPCUTOFF=20
+            -DKEEP_GOING=1
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -198,8 +199,9 @@ endif() # ENABLE_LIBXC
 #    ENABLE_XCFUN AND BUILD_XCFUN)
 if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
-    GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG 8ec13b06e06feccbc9e968665977df14d7bfdff8
+    GIT_REPOSITORY https://github.com/sunqm/xcfun.git
+    # copy of v2.1.0, downgrade to cmake 3.5
+    GIT_TAG cmake-3.5
     # Range seperated parameters can be set in the python code. This patch to
     # RSH omega is not needed anymore.
     #PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch

@@ -225,12 +225,14 @@ XC_ALIAS = {
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 
+'''
 LDA_IDS = set([0, 2, 3, 13, 14, 15, 24, 28, 55])
 GGA_IDS = set([1, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26,
                27, 44, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 68, 69, 71,
                72, 73, 74, 76, 77])
 MGGA_IDS =set([10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
                42, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 66, 70, 75])
+'''
 HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
               'B3PW91G' , 'B3P86G'  , 'B3LYPG'  , 'O3LYP'   , 'CAMB3LYP',
               'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,
@@ -258,9 +260,9 @@ def xc_type(xc_code):
         fn_facs = [(xc_code, 1)]  # mimic fn_facs
     if not fn_facs:
         return 'HF'
-    elif all(xid in LDA_IDS for xid, val in fn_facs):
+    elif all(_itrf.XCFUN_xc_type(ctypes.c_int(xid)) == 0 for xid, val in fn_facs):
         return 'LDA'
-    elif any(xid in MGGA_IDS for xid, val in fn_facs):
+    elif any(_itrf.XCFUN_xc_type(ctypes.c_int(xid)) == 2 for xid, val in fn_facs):
         return 'MGGA'
     else:
         # all((xid in GGA_IDS or xid in LDA_IDS for xid, val in fn_fns)):
@@ -797,6 +799,10 @@ XC_D0000021 = 117
 XC_D0000012 = 118
 XC_D0000003 = 119
 
+#SCAN functionals have problems when sigma is small
+#https://github.com/dftlibs/xcfun/issues/144
+SINGULAR_IDS = set((45,46,47,48,49,50,51,52,53,54))
+
 def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv < 4)
     if spin == 0:
@@ -807,10 +813,10 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(rho_u.dtype == numpy.double)
     assert(rho_d.dtype == numpy.double)
 
-    if rho_u.ndim == 2:
-        ngrids = rho_u.shape[1]
-    else:
-        ngrids = len(rho_u)
+    if rho_u.ndim == 1:
+        rho_u = rho_u.reshape(1,-1)
+        rho_d = rho_d.reshape(1,-1)
+    ngrids = rho_u.shape[1]
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
@@ -821,6 +827,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         omega = [0] * len(facs)
 
+    fn_ids_set = set(fn_ids)
     n = len(fn_ids)
     if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
         all((is_lda(x) for x in fn_ids))):  # LDA
@@ -840,7 +847,20 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-    outbuf = numpy.zeros((ngrids,outlen))
+
+    if SINGULAR_IDS.intersection(fn_ids_set) and deriv > 0:
+        if spin == 0:
+            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
+            non0idx = sigma_uu > 1e-16
+        else:
+            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
+            sigma_dd = rho_d[1]*rho_d[1] + rho_d[2]*rho_d[2] + rho_d[3]*rho_d[3]
+            non0idx = (sigma_uu > 1e-16) & (sigma_dd > 1e-16)
+        rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
+        rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
+        outbuf = numpy.zeros((non0idx.sum(),outlen))
+    else:
+        outbuf = numpy.zeros((ngrids,outlen))
 
     if n > 0:
         _itrf.XCFUN_eval_xc(ctypes.c_int(n),
@@ -848,10 +868,15 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                             (ctypes.c_double*n)(*facs),
                             (ctypes.c_double*n)(*omega),
                             ctypes.c_int(spin),
-                            ctypes.c_int(deriv), ctypes.c_int(ngrids),
+                            ctypes.c_int(deriv), ctypes.c_int(rho_u.shape[1]),
                             rho_u.ctypes.data_as(ctypes.c_void_p),
                             rho_d.ctypes.data_as(ctypes.c_void_p),
                             outbuf.ctypes.data_as(ctypes.c_void_p))
+
+    if outbuf.shape[0] != ngrids:
+        out = numpy.zeros((ngrids,outlen))
+        out[non0idx,:] = outbuf
+        outbuf = out
 
     outbuf = outbuf.T
     exc = outbuf[0]

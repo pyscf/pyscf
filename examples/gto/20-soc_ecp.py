@@ -5,6 +5,9 @@
 
 '''
 SO-ECP Integrals
+
+See also examples/scf/44-soc_ecp.py how to include SO-ECP in a mean-field
+calculation
 '''
 
 import numpy
@@ -28,9 +31,9 @@ mat_sph = mol.intor('ECPso')
 # the code as below.  Note the SOC Hamiltonian is defined ~  < s dot l U >,
 # the factor 1/2 in spin operator (s = 1/2 Pauli matrix). See also the
 # discussions in https://github.com/pyscf/pyscf/issues/378
+s = .5 * lib.PauliMatrices
 u = mol.sph2spinor_coeff()
-mat_spinor = numpy.einsum('sxy,spq,xpi,yqj->ij',
-                          .5 * lib.PauliMatrices, mat_sph, u.conj(), u)
+mat_spinor = numpy.einsum('sxy,spq,xpi,yqj->ij', s, mat_sph, u.conj(), u)
 
 #
 # Evaluating the integrals in spinor basis directly

@@ -505,7 +505,7 @@ def analyze(tdobj, verbose=None):
     if mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
         x_syma = symm.direct_prod(orbsyma[mo_occ[0]==1], orbsyma[mo_occ[0]==0], mol.groupname)
-        x_symb = symm.direct_prod(orbsyma[mo_occ[1]==1], orbsyma[mo_occ[1]==0], mol.groupname)
+        x_symb = symm.direct_prod(orbsymb[mo_occ[1]==1], orbsymb[mo_occ[1]==0], mol.groupname)
     else:
         x_syma = None
 

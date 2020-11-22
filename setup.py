@@ -319,7 +319,7 @@ if 1:
     libcint_lib_path = search_lib_path('libcint'+so_ext, [pyscf_lib_dir,
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
-                                       version='3.0')
+                                       version='4')
     libcint_inc_path = search_inc_path('cint.h', [pyscf_lib_dir,
                                                   os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libcint_lib_path and libcint_inc_path:

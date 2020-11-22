@@ -57,22 +57,22 @@ class KnownValues(unittest.TestCase):
         mol1.symmetry = True
         mol1.unit = 'Ang'
         mol1.atom = '''
-                1    0  1  1
-                O    0  0  0
+                1    0  1  .5*2
+                O    0  0  0*np.exp(0)
                 h    1  1  0'''
         mol1.basis = {'O': gto.basis.parse('''
 C    S
-   3047.5249000              0.0018347        
-    457.3695100              0.0140373        
-    103.9486900              0.0688426        
-     29.2101550              0.2321844        
-      9.2866630              0.4679413        
-      3.1639270              0.3623120        
+   3047.5249000              0.0018347*1.0
+    457.3695100              0.0140373*1.0
+    103.9486900              0.0688426*1.0
+     29.2101550              0.2321844*1.0
+      9.2866630              0.4679413*1.0
+      3.1639270              0.3623120*1.0
 #     1.                     0.1
 C    SP
-      7.8682724             -0.1193324              0.0689991        
-      1.8812885             -0.1608542              0.3164240        
-      0.5442493              1.1434564              0.7443083        
+      7.8682724             -0.1193324*1.0          0.0689991        
+      1.8812885             -0.1608542*1.0          0.3164240        
+      0.5442493              1.1434564*1.0          0.7443083        
 C    SP
       0.1687144              1.0000000              1.0000000'''),
                       'H': '6-31g'}
@@ -608,13 +608,12 @@ O    SP
 
     def test_dump_loads_skip(self):
         import json
-        tmpfile = tempfile.NamedTemporaryFile()
-        lib.chkfile.save_mol(mol0, tmpfile.name)
-        mol1 = gto.Mole()
-        mol1.update(tmpfile.name)
-        # dumps() may produce different orders in different runs
-        self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
-        tmpfile = None
+        with tempfile.NamedTemporaryFile() as tmpfile:
+            lib.chkfile.save_mol(mol0, tmpfile.name)
+            mol1 = gto.Mole()
+            mol1.update(tmpfile.name)
+            # dumps() may produce different orders in different runs
+            self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
         mol1.loads(mol1.dumps())
         mol1.loads_(mol0.dumps())
         mol1.unpack(mol1.pack())

@@ -268,7 +268,9 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     if callable(ao2mofn):
         orbo = eris.mo_coeff[:,:nocc]
         orbv = eris.mo_coeff[:,nocc:]
-        orbo = lib.tag_array(orbo, orbspin=orbspin)
+        if orbspin is not None:
+            orbo = lib.tag_array(orbo, orbspin=orbspin[:nocc])
+            orbv = lib.tag_array(orbv, orbspin=orbspin[nocc:])
         eri = ao2mofn((orbo,orbv,orbo,orbv)).reshape(nocc,nvir,nocc,nvir)
     else:
         orboa = eris.mo_coeff[:nao//2,:nocc]

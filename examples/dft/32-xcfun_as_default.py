@@ -21,6 +21,9 @@ mf.xc = 'b88,lyp'
 mf.kernel()
 mf.nuc_grad_method().run()
 
+mf.xc = 'scan'
+mf.kernel()
+
 #
 # Scheme 2: Change the default XC library globally.  All DFT calculations will
 # call xcfun for XC functional values.
@@ -30,3 +33,6 @@ mf = dft.RKS(mol)
 mf.xc = 'b88,lyp'
 mf.kernel()
 mf.nuc_grad_method().run()
+
+mf.xc = 'scan'
+mf.kernel()

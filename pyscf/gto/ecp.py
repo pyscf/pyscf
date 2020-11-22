@@ -39,6 +39,7 @@ from pyscf import lib
 from pyscf.gto import moleintor
 
 libecp = moleintor.libcgto
+libecp.ECPscalar_cache_size.restype = ctypes.c_int
 
 def type1_by_shell(mol, shls, cart=False):
     li = mol.bas_angular(shls[0])
@@ -51,8 +52,14 @@ def type1_by_shell(mol, shls, cart=False):
         fn = libecp.ECPtype1_sph
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
+    cache_size = libecp.ECPscalar_cache_size(
+        ctypes.c_int(1), (ctypes.c_int*2)(*shls),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    cache = numpy.empty(cache_size)
     buf = numpy.empty((di,dj), order='F')
-    cache = numpy.empty(buf.size*5)
+
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
@@ -74,8 +81,14 @@ def type2_by_shell(mol, shls, cart=False):
         fn = libecp.ECPtype2_sph
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
+    cache_size = libecp.ECPscalar_cache_size(
+        ctypes.c_int(1), (ctypes.c_int*2)(*shls),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    cache = numpy.empty(cache_size)
     buf = numpy.empty((di,dj), order='F')
-    cache = numpy.empty(buf.size*5)
+
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
