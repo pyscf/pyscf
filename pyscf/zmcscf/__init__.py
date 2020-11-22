@@ -38,5 +38,4 @@ def ZCASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     mc = zmc2step.ZCASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
-RCASSCF = CASSCF
 

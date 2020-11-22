@@ -46,7 +46,43 @@ def derivOfExp(a,dA, maxT=50):
 
     return deriv
 
-def conjugateGradient(A, b, x, max_iter=5, conv=1.e-4):
+def arnoldi(A, Q, H, k):
+    Q[:,k+1] = A(Q[:,k])
+    for i in range(k+1):
+        H[i, k] = numpy.dot(Q[:,i], Q[:,k+1])
+        Q[:,k+1] = Q[:,k+1] - H[i,k] * Q[:,i]
+
+    H[k+1,k] = numpy.linalg.norm(Q[:,k+1])
+    Q[:,k+1] = Q[:,k+1]/H[k+1,k]
+
+def GMRES(A, b, x, max_iter=20, conv=1.e-5):
+    from numpy.linalg import norm
+    m, n = max_iter, b.shape[0]
+
+    r = b - A(x)
+    b_norm, r_norm = norm(b), norm(r)
+    error = r_norm/b_norm
+
+    e1 = numpy.zeros((m+1,)) 
+    e1[0] = r_norm
+
+    Q, H = numpy.zeros((n,m)), numpy.zeros((m+1,m))
+    Q[:,0] = r/r_norm
+    beta = r_norm * e1
+
+    for k in range(max_iter-1):
+        arnoldi(A, Q, H, k)
+
+        result = numpy.linalg.lstsq(H, e1, rcond=None)[0]
+        err = norm(numpy.dot(H,result)-e1)
+        #print (k, err)
+        x = numpy.dot(Q, result)
+
+    #print (norm(A(x)-b))
+    return x, err
+
+   
+def conjugateGradient(A, b, x, max_iter=10, conv=1.e-4):
     r = b - A(x)
     p = 1*r
     rsold = numpy.dot(r,r)
@@ -60,7 +96,7 @@ def conjugateGradient(A, b, x, max_iter=5, conv=1.e-4):
         if (rsnew)**0.5 < conv:
               break
         p = r + (rsnew / rsold) * p
-        #print ("cg, ", i, rsnew**0.5)
+        print ("cg, ", i, rsnew**0.5)
         if (i == 5):
             #reset it
             r = b - A(x)
@@ -68,8 +104,30 @@ def conjugateGradient(A, b, x, max_iter=5, conv=1.e-4):
             rsnew = numpy.dot(r,r)
         rsold = rsnew
     return x, rsnew**0.5
-    
-def get_jk_df(cderi, dm, with_j=True, with_k=True):
+def _sqrt(a, tol=1e-14):
+    e, v = numpy.linalg.eigh(a)
+    idx = e > tol
+    return numpy.dot(v[:,idx]*numpy.sqrt(e[idx]), v[:,idx].T.conj())
+
+def get_jk_df(cderi, mo_coeff,dm=None, with_j=True, with_k=True):
+    norb = mo_coeff.shape[1]
+    mo = mo_coeff
+
+    if dm is None:
+        dm_ao = numpy.dot(mo, mo.T.conj())
+    else:
+        dm_sqrt = _sqrt(dm)
+        dm_ao = reduce(numpy.dot, (mo.conj(), dm, mo.T)).conj()
+        mo = lib.einsum('ij,jk->ik', mo_coeff, dm_sqrt)
+
+    if (with_j):
+        j1 = lib.einsum('Lij,ji->L', cderi, dm_ao)
+        j = lib.einsum('Lij,L->ij', cderi, j1)
+    if (with_k):
+        cderi_half_trans = lib.einsum('pij,jk->pik', cderi, mo)
+        k = lib.einsum('pik,pkj->ij', cderi_half_trans, cderi_half_trans.transpose(0,2,1).conj())
+    return j,k
+    '''
     if (with_j):
         j1 = lib.einsum('Lij,ji->L', cderi, dm)
         j = lib.einsum('Lij,L->ij', cderi, j1)
@@ -77,7 +135,7 @@ def get_jk_df(cderi, dm, with_j=True, with_k=True):
         kint = lib.einsum('Lij,ja->Lia', cderi, dm)
         k = lib.einsum('Laj,Lia->ij', cderi, kint)
     return j,k
-
+    '''
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):
     if verbose is None:
@@ -278,7 +336,7 @@ class ZCASSCF(gzcasci.GZCASCI):
     canonicalization = getattr(__config__, 'zmcscf_zmc2step_ZCASSCF_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'zmcscf_zmc2step_ZCASSCF_sorting_mo_energy', False)
 
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+    def __init__(self, mf_or_mol, ncas, nelecas, auxbasis = 'weigend+etb', ncore=None, frozen=None):
         gzcasci.GZCASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
@@ -301,9 +359,9 @@ class ZCASSCF(gzcasci.GZCASCI):
         self._max_stepsize = None
 
         #calculate the integrals
-        self.cderi = pyscf.df.r_incore.cholesky_eri(mol, int3c='int3c2e_spinor')
+        self.cderi = pyscf.df.r_incore.cholesky_eri(self.mol, auxbasis=auxbasis, int3c='int3c2e_spinor')
         self.cderi.shape = (self.cderi.shape[0], self.mo_coeff.shape[0], self.mo_coeff.shape[1])
-
+        print ("shape", self.cderi.shape)
         keys = set(('max_cycle_macro',
                     'conv_tol', 'conv_tol_grad',
                     'bb_conv_tol', 'bb_max_cycle', 
@@ -540,6 +598,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
        
 
     def calcGradDF(self, mo, casdm1, casdm2):
+        #return self.calcGrad(mo, casdm1, casdm2)
         hcore = self._scf.get_hcore()
 
         nmo, ncore, nact = mo.shape[0], self.ncore, self.ncas
@@ -550,8 +609,8 @@ To enable the solvent model for CASSCF, the following code needs to be called
         moc, moa = mo[:,:ncore], mo[:,ncore:nocc]
         dmcore = numpy.dot(moc, moc.T.conj())
         dmcas = reduce(numpy.dot, (moa.conj(), casdm1(), moa.T)).conj()
-        j,k=get_jk_df(self.cderi, dmcore)
-        ja,ka=get_jk_df(self.cderi, dmcas)
+        j,k=get_jk_df(self.cderi, moc)
+        ja,ka=get_jk_df(self.cderi, moa, dm= casdm1())
 
         hcore = reduce(numpy.dot, (mo.conj().T, hcore , mo))
         Fc =  (hcore + reduce(numpy.dot, (mo.conj().T, (j-k), mo)))
@@ -568,6 +627,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         E = nuc_energy + 0.5*numpy.sum((hcore+Fc).diagonal()[:ncore]) 
         E += numpy.einsum('tu, tu', Fc[ncore:nocc, ncore:nocc], casdm1())
         E += 0.5*lib.einsum('ruvw,rvuw', paaa[ncore:nocc], casdm2())
+    
         return 2*Grad, E
 
     def calcEDF(self, mo, casdm1, casdm2):
@@ -581,8 +641,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         moc, moa = mo[:,:ncore], mo[:,ncore:nocc]
         dmcore = numpy.dot(moc, moc.T.conj())
         dmcas = reduce(numpy.dot, (moa.conj(), casdm1(), moa.T)).conj()
-        j,k=get_jk_df(self.cderi, dmcore)
-        ja,ka=get_jk_df(self.cderi, dmcas)
+        j,k=get_jk_df(self.cderi, moc)
 
         hcore = reduce(numpy.dot, (mo.conj().T, hcore , mo))
         Fc =  (hcore + reduce(numpy.dot, (mo.conj().T, (j-k), mo)))
@@ -621,14 +680,10 @@ To enable the solvent model for CASSCF, the following code needs to be called
         Grad[:,ncore:nocc] = numpy.einsum('sp,qp->sq', Fc[:,ncore:nocc], casdm1())
         Grad[:,ncore:nocc]+= numpy.einsum('ruvw,tvuw->rt', ERIS.paaa, casdm2())
 
-        ###Make the lower traingular zero
-        #for i in range(ncore,nocc):
-        #    for j in range(i+1,nocc):
-        #        Grad[i,j] = 0.0
-        #Grad = Grad-Grad.conj().T
         Ecore = 0.5*numpy.sum((hcore+Fc).diagonal()[:ncore]) 
         Ecas1 = numpy.einsum('tu, tu', Fc[ncore:nocc, ncore:nocc], casdm1())
         Ecas2 = 0.5*numpy.einsum('tuvw, tvuw', ERIS.paaa[ncore:nocc], casdm2())
+
 
         return 2*Grad, (Ecore+Ecas1+Ecas2+nuc_energy).real
     
@@ -800,7 +855,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
                 Hx = (Gnewp - G0)/eps
                 '''
                 monew = numpy.dot(mo, expmat(-Kappa))
-                Gradnewm = casscf.calcGradDF(monew, casdm1, casdm2)
+                Gradnewm,e = casscf.calcGradDF(monew, casdm1, casdm2)
                 f = numpy.dot(Kappa.conj().T, Gradnewm)
                 h = numpy.dot(Gradnewm, Kappa.conj().T)
                 Gradnewm = Gradnewm -0.5*(f-h) #- Gtemp.conj().T - 0.5*(f-f.conj().T+h-h.conj().T)
@@ -812,85 +867,27 @@ To enable the solvent model for CASSCF, the following code needs to be called
                 #print ("hop")
                 return Hx
 
-            ##we don't have diagonal elements
-            def precond(x, y):
-                return x
 
                 
             x = 0*G
-            x0 = 1.*G
-            x, norm = conjugateGradient(hop, -G, x0)
+            x0 = 0.*G
+            x, norm = GMRES(hop, -G, x0)
+            #x, stat = scipy.sparse.linalg.gmres(hop, -G, x0,maxiter = 10)
             return x, norm
-            '''
-            index = 0
-            imic = 0
-            ikf = 0
-            g_op = lambda : G
-            g_orb = 1.*G
-            max_stepsize = 0.02
-            norm_gkf = norm_gorb = numpy.linalg.norm(g_orb)
-
-            for ah_end, ihop, w, dxi, hdxi, residual, seig \
-                    in ciah.davidson_cc(hop, g_op, precond, x0,
-                                        tol=casscf.ah_conv_tol, max_cycle=casscf.ah_max_cycle,
-                                        lindep=casscf.ah_lindep, verbose=log):
-                # residual = v[0] * (g+(h-e)x) ~ v[0] * grad
-                norm_residual = numpy.linalg.norm(residual)
-
-                if (ah_end or ihop == casscf.ah_max_cycle or # make sure to use the last step
-                    ((norm_residual < casscf.ah_start_tol) and (ihop >= casscf.ah_start_cycle)) or
-                    (seig < casscf.ah_lindep)):
-                    imic += 1
-                    dxmax = numpy.max(abs(dxi))
-                    if dxmax > max_stepsize:
-                        scale = max_stepsize / dxmax
-                        log.debug1('... scale rotation size %g', scale)
-                        dxi *= scale
-                        hdxi *= scale
-                    else:
-                        scale = None
-
-                    g_orb = g_orb + hdxi
-                    x = x + dxi
-                    norm_gorb = numpy.linalg.norm(g_orb)
-                    norm_dxi = numpy.linalg.norm(dxi)
-                    norm_dr = numpy.linalg.norm(x)
-                    log.debug('    imic %d(%d)  |g[o]|=%5.3g  |dxi|=%5.3g  '
-                            'max(|x|)=%5.3g  |dr|=%5.3g  eig=%5.3g  seig=%5.3g',
-                            imic, ihop, norm_gorb, norm_dxi,
-                            dxmax, norm_dr, w, seig)
-
-                    ikf += 1
-                    if ikf > 1 and norm_gorb > norm_gkf*casscf.ah_grad_trust_region:
-                        g_orb = g_orb - hdxi
-                        x -= dxi
-                        #norm_gorb = numpy.linalg.norm(g_orb)
-                        log.debug('|g| >> keyframe, Restore previouse step')
-                        break
-
-                    elif (norm_gorb < 1e-4*.3):
-                        break
-
-                    elif (ikf >= max(casscf.kf_interval, -numpy.log(norm_dr+1e-7)) or
-        # Insert keyframe if the keyframe and the esitimated grad are too different
-                        norm_gorb < norm_gkf/casscf.kf_trust_region):
-                        ikf = 0
-                        return x, norm_gorb
-            '''
-            return x, norm_gorb #numpy.linalg.norm(G)
             
 
         imicro, nmicro, T, Grad = 0, 5, numpy.zeros_like(mo), 0.*mo
         Enew = 0.
         #Eold = self.calcE(mo, casdm1, casdm2).real
         Grad, Eold = self.calcGrad(mo, casdm1, casdm2)
-        Eolddf = self.calcE(mo, casdm1, casdm2).real
+        Eolddf = self.calcEDF(mo, casdm1, casdm2).real
         while True:
+            tau = 1.0
             gnorm = numpy.linalg.norm(Grad-Grad.conj().T)
 
             #if gradient is converged then exit
-            if ( gnorm < conv_tol or imicro >= nmicro ):               
-                return mo, Grad, imicro, gnorm
+            if ( gnorm < conv_tol or imicro >= nmicro or tau <= 1.e-2):      
+                return mo, Grad-Grad.conj().T, imicro, gnorm
                 
 
             #find the newton step direction
@@ -898,20 +895,11 @@ To enable the solvent model for CASSCF, the following code needs to be called
             T = self.unpack_vars(x)
  
             ###do line search along the AH direction
-            tau = 1.0
-            '''
-            monew = numpy.dot(mo, expmat(tau*(T) ))
-            Grad, Enew = self.calcGrad(monew, casdm1, casdm2)
-            print ("%d  %6.3e  %18.12g   %13.6e   g=%6.2e"\
-                %(imicro, tau, Enew, Enew-Eold, gnorm))
-            Eold = Enew
-            mo = 1.*monew
-            '''
-            while tau > 1e-3:
+            while tau > 1e-2:
                 monew = numpy.dot(mo, expmat(tau*(T) ))
-                Enewdf = self.calcE(monew, casdm1, casdm2).real
+                Enewdf = self.calcEDF(monew, casdm1, casdm2).real
                 #print ("line search ", Enewdf, Eolddf)
-                if (Enewdf < Eolddf):# - tau * 1e-4*gnorm):
+                if (Enewdf < Eolddf or tau/2 <= 1.e-3):# - tau * 1e-4*gnorm):
                     Grad, Enew = self.calcGrad(monew, casdm1, casdm2)
                     print ("%d  %6.3e  %18.12g   %13.6e   g=%6.2e"\
                     %(imicro, tau, Enew, Enew-Eold, gnorm))
@@ -921,7 +909,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
                     break
                 tau = tau/2.    
             imicro += 1
-        exit(0)
+        
 
         
         
@@ -931,6 +919,32 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
 
+
+    mol = gto.Mole()
+    mol = gto.M(
+    atom = [["N"   , (0. , 0. , 0.)],
+            ["N"  , (0. , 0. , 1.2)] ],
+    basis = "cc-pvtz",
+    verbose = 4)
+    mf = scf.X2C(mol)#.density_fit(auxbasis='cc-pvtz-jkfit')
+    #mf.max_cycle = 10                                                                                                                      
+    mf.kernel()                                                                                                                            
+
+    from pyscf import mcscf, zmcscf
+    from pyscf.shciscf import shci
+    mf2c = scf.X2C(mol) #.density_fit(auxbasis='cc-pvtz-jkfit')                                                                             
+    #mf2c.get_jk = functools.partial(get_jk, mf2c)                                                                                          
+    #mf2c.max_cycle = 5                                                                                                                     
+    mf2c.chkfile = "scf.chk"
+    #mf2c.init_guess = 'chkfile'                                                                                                            
+    mf2c.kernel()
+
+    mc2c = zmcscf.zmc2step.ZCASSCF(mf2c, 16, 10, auxbasis='cc-pvtz-jkfit')
+    mc2c.fcisolver = shci.SHCI(mol)
+    mc2c.fcisolver.sweep_epsilon = [1e-5]
+    mc2c.fcisolver.sweep_iter = [0]
+    mc2c.kernel()
+    exit(0)
     mol = gto.Mole()
     mol.verbose = 4
     mol.memory=20000
