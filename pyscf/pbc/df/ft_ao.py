@@ -187,6 +187,9 @@ def ft_ao(mol, Gv, shls_slice=None, b=None,
         return mol_ft_ao(mol, kG, shls_slice, None, None, None, verbose)
 
 def _estimate_overlap(cell, Ls):
+    '''Consider the lattice sum in overlap when estimating the ss-type overlap
+    integrals for each traslation vector
+    '''
     exps = numpy.array([cell.bas_exp(ib).min() for ib in range(cell.nbas)])
     atom_coords = cell.atom_coords()
     bas_coords = atom_coords[cell._bas[:,gto.ATOM_OF]]
@@ -197,7 +200,7 @@ def _estimate_overlap(cell, Ls):
     vol_rad = vol**(1./3)
     fac = (4 * aij / (exps[:,None] + exps))**.75
     s = fac[:,:,None] * numpy.exp(-aij[:,:,None] * (dijL - vol_rad/2)**2)
-    fac = 2*numpy.pi/vol * abs(dijL - vol_rad/2) / aij[:,:,None]
+    fac = 2*numpy.pi/vol / aij[:,:,None] * abs(dijL - vol_rad/2)
     fac[fac < 1] = 1
     return fac * s
 

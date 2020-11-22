@@ -500,7 +500,7 @@ def take_2d(a, idx, idy, out=None):
        ctypes.c_int(idx.size), ctypes.c_int(idy.size))
     return out
 
-def takebak_2d(out, a, idx, idy):
+def takebak_2d(out, a, idx, idy, thread_safe=True):
     '''Reverse operation of take_2d.  Equivalent to out[idx[:,None],idy] += a
     for a 2D array.
 
@@ -514,21 +514,27 @@ def takebak_2d(out, a, idx, idy):
     '''
     assert(out.flags.c_contiguous)
     a = numpy.asarray(a, order='C')
-    idx = numpy.asarray(idx, dtype=numpy.int32)
-    idy = numpy.asarray(idy, dtype=numpy.int32)
-    if a.dtype == numpy.double:
+    if out.dtype != a.dtype:
+        a = a.astype(out.dtype)
+    if out.dtype == numpy.double:
         fn = _np_helper.NPdtakebak_2d
-    elif a.dtype == numpy.complex:
+    elif out.dtype == numpy.complex:
         fn = _np_helper.NPztakebak_2d
     else:
-        out[idx[:,None], idy] += a
+        if thread_safe:
+            out[idx[:,None], idy] += a
+        else:
+            raise NotImplementedError
         return out
+    idx = numpy.asarray(idx, dtype=numpy.int32)
+    idy = numpy.asarray(idy, dtype=numpy.int32)
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        idx.ctypes.data_as(ctypes.c_void_p),
        idy.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(out.shape[1]), ctypes.c_int(a.shape[1]),
-       ctypes.c_int(idx.size), ctypes.c_int(idy.size))
+       ctypes.c_int(idx.size), ctypes.c_int(idy.size),
+       ctypes.c_int(thread_safe))
     return out
 
 def transpose(a, axes=None, inplace=False, out=None):

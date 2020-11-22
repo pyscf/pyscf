@@ -30,7 +30,10 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.pbc.df import aft
 from pyscf.pbc import tools as pbctools
-from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.tools import k2gamma
+from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0
+from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
 libpbc = lib.load_library('libpbc')
@@ -55,7 +58,6 @@ class RangeSeparationJKBuilder(object):
         self.bvkcell_shl_id = None
         self.ovlp_mask = None
         self.lr_aft = None
-        self.sr_aft = None
         self.ke_cutoff = None
         self.vhfopt = None
 
@@ -83,7 +85,6 @@ class RangeSeparationJKBuilder(object):
         return self
 
     def build(self, omega=None, direct_scf_tol=None):
-        from pyscf.pbc.tools import k2gamma
         cpu0 = (time.clock(), time.time())
         cell = self.cell
         kpts = self.kpts
@@ -152,6 +153,7 @@ class RangeSeparationJKBuilder(object):
         cell_fat, cell_smooth = _reorder_cell(cell, self.ke_cutoff)
         self.cell_fat = cell_fat
         supmol = _make_extended_mole(cell_fat, Ls, Ks, self.omega, direct_scf_tol)
+        cpu1 = logger.timer(self, 'initializing supmol', *cpu0)
         self.supmol = supmol
         logger.info(self, 'sup-mol nbas = %d cGTO = %d pGTO = %d',
                     supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -177,17 +179,14 @@ class RangeSeparationJKBuilder(object):
         s0 = supmol_only_s.condense_to_shell(s0, 'NP_absmax')
         ovlp_mask = (s0 > direct_scf_tol).astype(np.int8)
         smooth_mask = supmol._bas_type == 0
-        ovlp_mask[smooth_mask[:,None] & smooth_mask] = 2
+        ovlp_mask[smooth_mask[:,None] & smooth_mask] = 0
         self.ovlp_mask = ovlp_mask
 
-        self.lr_aft = lr_aft = _LongRangeAFT(cell, kpts, self.omega)
+        # mute rcut_threshold, divide basis into two sets only
+        cell_lr_aft = _reorder_cell(cell, self.ke_cutoff, -1, verbose=0)[0]
+        self.lr_aft = lr_aft = _LongRangeAFT(cell_lr_aft, kpts, self.omega)
         lr_aft.ke_cutoff = self.ke_cutoff
         lr_aft.mesh = self.mesh
-
-        if cell_smooth.nbas > 0:
-            self.sr_aft = sr_aft = _ShortRangeAFT(cell_smooth, kpts, self.omega)
-            sr_aft.ke_cutoff = self.ke_cutoff
-            sr_aft.mesh = self.mesh
         return self
 
     def get_jk(self, dm_kpts, hermi=1, kpts=None, kpts_band=None,
@@ -284,98 +283,41 @@ class RangeSeparationJKBuilder(object):
             vj, vk = None, vs[0]
         cpu1 = logger.timer(self, 'short range part vj and vk', *cpu0)
 
-        if self.sr_aft is not None:
-            sr_cell = self.sr_aft.cell
-            bas_idx = sr_cell._bas_idx
-            ao_loc = cell.ao_loc
-            sr_ao_idx = np.hstack([np.arange(ao_loc[i], ao_loc[i+1]) for i in bas_idx])
-            sr_dm = dm[:,:,sr_ao_idx[:,None],sr_ao_idx]
-            vj2, vk2 = self.sr_aft.get_jk(sr_dm, hermi, kpts, kpts_band,
-                                          with_j, with_k, exxdiv=exxdiv)
-            cpu1 = logger.timer(self, 'smooth GTO vj and vk', *cpu1)
-
-        vj1, vk1 = self.lr_aft.get_jk(dm_kpts, hermi, kpts, kpts_band,
+        # For rho product other than diffused-diffused block, construct LR
+        # parts in terms of full ERIs and SR ERIs
+        bas_idx = self.lr_aft.cell._bas_idx
+        ao_loc = self.lr_aft.cell.ao_loc
+        ao_idx = np.hstack([np.arange(ao_loc[i], ao_loc[i+1]) for i in bas_idx])
+        lr_dm = dm[:,:,ao_idx[:,None], ao_idx]
+        vj1, vk1 = self.lr_aft.get_jk(lr_dm, hermi, kpts, kpts_band,
                                       with_j, with_k, exxdiv=exxdiv)
+        cpu1 = logger.timer(self, 'smooth GTO vj and vk', *cpu1)
 
         # expRk is almost the same to phase, except a normalization factor
         if kpts_band is None:
             expRk = np.exp(1j*np.dot(self.bvkmesh_Ls, kpts.T))
+
         if with_j:
             vj = lib.einsum('nuRv,Rk->nkuv', vj, expRk)
-            if self.sr_aft is not None:
-                vj[:,:,sr_ao_idx[:,None],sr_ao_idx] += vj2
+            for i_dm in range(n_dm):
+                for ik in range(nkpts):
+                    lib.takebak_2d(vj[i_dm,ik], vj1[i_dm,ik], ao_idx, ao_idx, False)
             if dm_kpts.ndim == 3:  # KRHF
                 vj = vj[0]
-            vj += vj1
 
         if with_k:
             vk = lib.einsum('nuRv,Rk->nkuv', vk, expRk)
-            if self.sr_aft is not None:
-                vk[:,:,sr_ao_idx[:,None],sr_ao_idx] += vk2
+            for i_dm in range(n_dm):
+                for ik in range(nkpts):
+                    lib.takebak_2d(vk[i_dm,ik], vk1[i_dm,ik], ao_idx, ao_idx, False)
             if dm_kpts.ndim == 3:  # KRHF
                 vk = vk[0]
-            vk += vk1
 
         cpu1 = logger.timer(self, 'long range part vj and vk', *cpu1)
         return vj, vk
 
-class _LongRangeAFT(aft.AFTDF):
-    def __init__(self, cell, kpts=np.zeros((1,3)), omega=None):
-        self.omega = omega
-        aft.AFTDF.__init__(self, cell, kpts)
-
-    def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None):
-        cell = self.cell
-        if mesh is None:
-            mesh = self.mesh
-        if cell.omega != 0:
-            raise RuntimeError('RangeSeparationJKBuilder cannot be used to evaluate '
-                               'the long-range HF exchange in RSH functional')
-
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        coulG = pbctools.get_coulG(cell, kpt, exx, self, mesh, Gv,
-                                   omega=self.omega)
-
-        # Removing the G=0 contributions in the short-range exchange matrix.
-        # This leads to exxdiv=None treatment. Without removing this term, it's
-        # more or less vcut_ws exx correction.
-        if not exx or exx == 'ewald':
-            if gamma_point(kpt):
-                gamma_idx = np.all((Gv == 0), axis=1)
-                coulG[gamma_idx] -= np.pi/self.omega**2
-
-        coulG *= kws
-        return coulG
-
-class _ShortRangeAFT(aft.AFTDF):
-    def __init__(self, cell, kpts=np.zeros((1,3)), omega=None):
-        self.omega = omega
-        aft.AFTDF.__init__(self, cell, kpts)
-
-    def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None):
-        cell = self.cell
-        if mesh is None:
-            mesh = self.mesh
-        if cell.omega != 0:
-            raise RuntimeError('RangeSeparationJKBuilder cannot be used to evaluate '
-                               'the long-range HF exchange in RSH functional')
-
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        coulG = pbctools.get_coulG(cell, kpt, None, self, mesh, Gv,
-                                   omega=-self.omega)
-
-        # Removing the G=0 contributions in the short-range exchange matrix.
-        # This leads to exxdiv=None treatment. Without removing this term, it's
-        # more or less vcut_ws exx correction.
-        if not exx or exx == 'ewald':
-            if gamma_point(kpt):
-                gamma_idx = np.all((Gv == 0), axis=1)
-                coulG[gamma_idx] += np.pi/self.omega**2
-
-        coulG *= kws
-        return coulG
-
 def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=None):
+    from pyscf.pbc.df.ft_ao import _estimate_overlap
     if precision is None:
         precision = cell.precision * 1e-4
     LKs = Ls[:,None,:] + bvkmesh_Ls
@@ -387,32 +329,47 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=Non
     supmol = cell.to_mol()
     supmol = pbctools.pbc._build_supcell_(supmol, cell, LKs.reshape(nimgs*nk, 3))
 
-    # For remotely separated smooth functions |i> and |l>, the eri-type
-    # (ij|kl) can have small contributions if |j> and |k> are steep functions
-    # and close in real space. Since we are focusing on the SR attenuated
-    # Coulomb integrals, we don't have to consider the steep functions j and k
-    # remotely separated since SR integrals decays exponently wrt their
-    # separation. Assuming all four shells are primitive s functions, roughly
-    # (ij|kl) ~= exp(-eij-ekl) where
-    #       eij = ai*aj/(ai+aj) |Ri-Rj|
-    # and the overlap integral <i|l> ~= exp(-eil)
-    # It's not safe to say (ij|kl) < <i|l> for all cases, but generally
-    # (ij|kl) would not be a magnitude order larger than the overlap <i|l>.
-    # Using <i|l> to estimate the farthest |l> that contributes to (ij|kl) is
-    # reasonable approximation.
-    supmol_only_s = supmol.copy()
-    supmol_only_s._bas[:,gto.ANG_OF] = 0
-    ao_loc = supmol_only_s.ao_loc_nr()
-    s0 = supmol_only_s.intor('int1e_ovlp', shls_slice=(0, nbas, 0, supmol.nbas))
-    s0max = abs(s0).max(axis=0)  # Note: some basis has negative contraction coefficients
-    s0max = [s0max[i0:i1].max() for i0, i1 in zip(ao_loc[:-1], ao_loc[1:])]
-    bas_mask = np.array(s0max) > precision * 1e-1
+    n_steep, n_local, n_diffused = cell._nbas_each_set
+    n_compact = n_steep + n_local
 
-#    supmol_only_s.omega = -omega
-#    v0 = supmol_only_s.intor('int2c2e', shls_slice=(0, nbas, 0, supmol.nbas))
-#    v0max = abs(v0).max(axis=0)
-#    v0max = [v0max[i0:i1].max() for i0, i1 in zip(ao_loc[:-1], ao_loc[1:])]
-#    bas_mask &= np.array(v0max) > precision * 1e-1
+    exps = np.array([cell.bas_exp(ib).min() for ib in range(nbas)])
+    aij = exps[:,None] * exps / (exps[:,None] + exps)
+    s0 = _estimate_overlap(cell, LKs.reshape(nimgs*nk, 3))
+    s0max = (2 * (aij[:,:,None]/np.pi)**.5 * s0).max(axis=0)
+
+    if n_diffused > 0 and n_compact > 0:
+        # For remotely separated smooth functions |i> and |l>, the eri-type
+        # (ij|kl) can have small contributions if |j> and |k> are steep functions
+        # and close in real space. Since we are focusing on the SR attenuated
+        # Coulomb integrals, we don't have to consider the steep functions j and k
+        # remotely separated since SR integrals decays exponently wrt their
+        # separation.
+        atom_coords = cell.atom_coords()
+        bas_coords = atom_coords[cell._bas[:,gto.ATOM_OF]]
+        exps_d = exps[n_compact:]  # diffused
+        exps_c_min = exps[:n_compact].min()
+        aij_min = aij[:n_compact,n_compact:].min(axis=0)
+        rij_dd = bas_coords[n_compact:,None,:] - bas_coords[n_compact:]
+        dijL = np.linalg.norm(rij_dd[:,:,None,:] - LKs.reshape(nimgs*nk,3), axis=-1)
+        fac = 16/(2*np.pi)**.5/(exps_d + exps_c_min) * aij_min**1.5
+        eri_dcdc = fac[:,None,None] * np.exp(-.5*aij_min[:,None,None] * dijL**2)
+        s0max[n_compact:] = eri_dcdc.max(axis=1)
+
+    if n_diffused == 0:
+        # When diffused functions exist, ranges of compact functions are
+        # determined by the diffused functions. Without diffused functions,
+        # assuming two charge distributions are well separated, their
+        # interactions are erfc(omega*r12)/r12
+        exps_c = exps[:n_compact]
+        r2_LKs = np.einsum('lkx,lkx->lk', LKs, LKs).ravel()
+        # Exclude cell 0
+        r2_LKs = r2_LKs[1:]
+        fac = -omega**2*exps_c/(2*omega**2+exps_c)
+        upper_bounds = np.exp(fac[:,None] * r2_LKs) / (2*omega*r2_LKs)
+        s0max[:n_compact,1:] = np.max([s0max[:n_compact,1:], upper_bounds], axis=0)
+
+    s0max = s0max.T.ravel()
+    bas_mask = np.array(s0max) > precision
 
     # All basis in primitive cell should be preserved
     bas_mask[:nbas] = True
@@ -421,23 +378,21 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=Non
     supmol.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask]
     supmol._bas_mask = bas_mask
 
-    if hasattr(cell, '_nbas_each_set'):
-        n_compact, n_local, n_diffused = cell._nbas_each_set
-        bas_type = np.zeros((nimgs * nk, cell.nbas), dtype=int)
-        bas_type[:,:n_compact] = 2
-        bas_type[:,n_compact:n_compact+n_local] = 1
-        supmol._bas_type = bas_type = bas_type.ravel()[bas_mask]
+    bas_type = np.zeros((nimgs * nk, cell.nbas), dtype=int)
+    bas_type[:,:n_steep] = 2
+    bas_type[:,n_steep:n_steep+n_local] = 1
+    supmol._bas_type = bas_type = bas_type.ravel()[bas_mask]
 
-        log = logger.new_logger(cell, verbose)
-        log.debug('Compact basis in sup-mol %d', np.count_nonzero(bas_type==2))
-        log.debug('Local basis in sup-mol %d', np.count_nonzero(bas_type==1))
-        log.debug('Diffused basis in sup-mol %d', np.count_nonzero(bas_type==0))
+    log = logger.new_logger(cell, verbose)
+    log.debug('Steep basis in sup-mol %d', np.count_nonzero(bas_type==2))
+    log.debug('Local basis in sup-mol %d', np.count_nonzero(bas_type==1))
+    log.debug('Diffused basis in sup-mol %d', np.count_nonzero(bas_type==0))
     return supmol
 
-# Threshold of compact bases and local bases
+# Threshold of steep bases and local bases
 _RCUT_THRESHOLD = 4.
 
-def _reorder_cell(cell, ke_cut_threshold, verbose=None):
+def _reorder_cell(cell, ke_cut_threshold, rcut_threshold=_RCUT_THRESHOLD, verbose=None):
     from pyscf.gto import NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF, ATOM_OF
     from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
     log = logger.new_logger(cell, verbose)
@@ -450,11 +405,11 @@ def _reorder_cell(cell, ke_cut_threshold, verbose=None):
     cell_smooth = copy.copy(cell)
 
     _env = cell._env.copy()
-    compact_bas = []
+    steep_bas = []
     local_bas = []
     smooth_bas = []
     # xxx_bas_idx maps the shells in the new cell to the original cell
-    compact_bas_idx = []
+    steep_bas_idx = []
     local_bas_idx = []
     smooth_bas_idx = []
 
@@ -464,61 +419,60 @@ def _reorder_cell(cell, ke_cut_threshold, verbose=None):
         nctr = orig_bas[NCTR_OF]
         ke = kecuts[ib]
 
-        compact_mask = rcuts[ib] < _RCUT_THRESHOLD
+        steep_mask = rcuts[ib] < rcut_threshold
         smooth_mask = ke < ke_cut_threshold
-        local_mask = (~compact_mask) & (~smooth_mask)
+        local_mask = (~steep_mask) & (~smooth_mask)
 
         pexp = orig_bas[PTR_EXP]
         pcoeff = orig_bas[PTR_COEFF]
         es = cell.bas_exp(ib)
         cs = cell._libcint_ctr_coeff(ib)
 
-        c_compact = cs[compact_mask]
+        c_steep = cs[steep_mask]
         c_local = cs[local_mask]
         c_smooth = cs[smooth_mask]
         _env[pcoeff:pcoeff+nprim*nctr] = np.hstack([
-            c_compact.T.ravel(),
+            c_steep.T.ravel(),
             c_local.T.ravel(),
             c_smooth.T.ravel(),
         ])
         _env[pexp:pexp+nprim] = np.hstack([
-            es[compact_mask],
+            es[steep_mask],
             es[local_mask],
             es[smooth_mask],
         ])
 
-        if c_compact.size > 0:
+        if c_steep.size > 0:
             bas = orig_bas.copy()
-            bas[NPRIM_OF] = c_compact.shape[0]
+            bas[NPRIM_OF] = c_steep.shape[0]
             bas[PTR_EXP] = pexp
             bas[PTR_COEFF] = pcoeff
-            compact_bas.append(bas)
-            compact_bas_idx.append(ib)
+            steep_bas.append(bas)
+            steep_bas_idx.append(ib)
 
         if c_local.size > 0:
             bas = orig_bas.copy()
             bas[NPRIM_OF] = c_local.shape[0]
-            bas[PTR_EXP] = pexp + c_compact.shape[0]
-            bas[PTR_COEFF] = pcoeff + c_compact.size
+            bas[PTR_EXP] = pexp + c_steep.shape[0]
+            bas[PTR_COEFF] = pcoeff + c_steep.size
             local_bas.append(bas)
             local_bas_idx.append(ib)
 
         if c_smooth.size > 0:
             bas = orig_bas.copy()
             bas[NPRIM_OF] = c_smooth.shape[0]
-            bas[PTR_EXP] = pexp + c_compact.shape[0] + c_local.shape[0]
-            bas[PTR_COEFF] = pcoeff + c_compact.size + c_local.size
+            bas[PTR_EXP] = pexp + c_steep.shape[0] + c_local.shape[0]
+            bas[PTR_COEFF] = pcoeff + c_steep.size + c_local.size
             smooth_bas.append(bas)
             smooth_bas_idx.append(ib)
             ke_cutoff = max(ke_cutoff, ke[smooth_mask].max())
 
-    cell_fat._bas = np.asarray(compact_bas + local_bas + smooth_bas,
+    cell_fat._bas = np.asarray(steep_bas + local_bas + smooth_bas,
                                dtype=np.int32, order='C').reshape(-1, gto.BAS_SLOTS)
-    cell_fat._bas_idx = np.asarray(compact_bas_idx + local_bas_idx + smooth_bas_idx,
+    cell_fat._bas_idx = np.asarray(steep_bas_idx + local_bas_idx + smooth_bas_idx,
                                    dtype=np.int32)
-    cell_fat._nbas_each_set = (len(compact_bas_idx), len(local_bas_idx),
-                               len(smooth_bas_idx))
-    log.debug('No. compact_bas %d', len(compact_bas_idx))
+    cell_fat._nbas_each_set = (len(steep_bas_idx), len(local_bas_idx), len(smooth_bas_idx))
+    log.debug('No. steep_bas %d', len(steep_bas_idx))
     log.debug('No. local_bas %d', len(local_bas_idx))
     log.debug('No. smooth_bas %d', len(smooth_bas_idx))
 
@@ -527,9 +481,431 @@ def _reorder_cell(cell, ke_cut_threshold, verbose=None):
     cell_smooth._bas_idx = np.asarray(smooth_bas_idx, dtype=np.int32)
     return cell_fat, cell_smooth
 
-def _fpointer(name):
-    import _ctypes
-    return ctypes.c_void_p(_ctypes.dlsym(libpbc._handle, name))
+class _LongRangeAFT(aft.AFTDF):
+    def __init__(self, cell, kpts=np.zeros((1,3)), omega=None):
+        self.omega = omega
+        aft.AFTDF.__init__(self, cell, kpts)
+
+    def weighted_coulG_LR(self, kpt=np.zeros(3), exx=False, mesh=None):
+        cell = self.cell
+        if mesh is None:
+            mesh = self.mesh
+        if cell.omega != 0:
+            raise RuntimeError('RangeSeparationJKBuilder cannot be used to evaluate '
+                               'the long-range HF exchange in RSH functional')
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+        coulG = pbctools.get_coulG(cell, kpt, False, self, mesh, Gv,
+                                   omega=self.omega)
+        coulG *= kws
+        return coulG
+
+    def weighted_coulG_SR(self, kpt=np.zeros(3), exx=False, mesh=None):
+        cell = self.cell
+        if mesh is None:
+            mesh = self.mesh
+        if cell.omega != 0:
+            raise RuntimeError('RangeSeparationJKBuilder cannot be used to evaluate '
+                               'the long-range HF exchange in RSH functional')
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+        coulG = pbctools.get_coulG(cell, kpt, False, self, mesh, Gv,
+                                   omega=-self.omega)
+        coulG *= kws
+        return coulG
+
+    def ft_loop(self, mesh=None, q=np.zeros(3), kpts=None, shls_slice=None,
+                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1):
+        cell = self.cell
+        nbas_smooth = cell._nbas_each_set[2]
+        nao_steep = cell.ao_loc[cell.nbas-nbas_smooth]
+        for dat, p0, p1 in aft.AFTDF.ft_loop(self, mesh, q, kpts, shls_slice,
+                                             max_memory, aosym, intor, comp):
+            yield dat, p0, p1
+
+    def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
+               with_j=True, with_k=True, omega=None, exxdiv=None):
+        if omega is not None:  # J/K for RSH functionals
+            raise NotImplementedError
+
+        if kpts is None:
+            if np.all(self.kpts == 0):
+                # Gamma-point calculation by default
+                kpts = np.zeros(3)
+            else:
+                kpts = self.kpts
+        kpts = np.asarray(kpts)
+
+        is_single_kpt = kpts.ndim == 1
+        if is_single_kpt:
+            kpts = kpts.reshape(1,3)
+
+        vj = vk = None
+        if with_k:
+            vk = self.get_k_kpts(dm, hermi, kpts, kpts_band, exxdiv)
+            if is_single_kpt:
+                vk = vk[...,0,:,:]
+        if with_j:
+            vj = self.get_j_kpts(dm, hermi, kpts, kpts_band)
+            if is_single_kpt:
+                vj = vj[...,0,:,:]
+        return vj, vk
+
+    def get_j_kpts(self, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
+        '''
+        C ~ compact basis, D ~ diffused basis
+
+        Compute J matrix with coulG_LR:
+        (CC|CC) (CC|CD) (CC|DC) (CD|CC) (CD|CD) (CD|DC) (DC|CC) (DC|CD) (DC|DC)
+
+        Compute J matrix with full coulG:
+        (CC|DD) (CD|DD) (DC|DD) (DD|CC) (DD|CD) (DD|DC) (DD|DD)
+        '''
+        if kpts_band is not None:
+            return self.get_j_for_bands(dm_kpts, hermi, kpts, kpts_band)
+
+        cell = self.cell
+        dm_kpts = lib.asarray(dm_kpts, order='C')
+        dms = _format_dms(dm_kpts, kpts)
+        nset, nkpts, nao = dms.shape[:3]
+
+        n_diffused = cell._nbas_each_set[2]
+        nao_compact = cell.ao_loc[cell.nbas-n_diffused]
+        nao_smooth = nao - nao_compact
+
+        vj_kpts = np.zeros((nset,nkpts,nao,nao), dtype=np.complex128)
+        kpt_allow = np.zeros(3)
+        mesh = self.mesh
+        coulG = self.weighted_coulG(kpt_allow, False, mesh)
+        coulG_LR = self.weighted_coulG_LR(kpt_allow, False, mesh)
+        coulG_SR = coulG - coulG_LR
+        max_memory = (self.max_memory - lib.current_memory()[0]) * .8
+        weight = 1./len(kpts)
+        dmsC = dms.conj()
+        for aoaoks, p0, p1 in self.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
+            vG_LR = [0] * nset
+            vG_SR = [0] * nset
+            vG_SR1 = [0] * nset
+            #:rho = np.einsum('lkL,lk->L', pqk.conj(), dm)
+            for k, aoao in enumerate(aoaoks):
+                aoao = aoao.reshape(-1,nao,nao)
+                for i in range(nset):
+                    rho = np.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                    vG_LR[i] += rho * coulG_LR[p0:p1]
+                    if nao_compact < nao:
+                        vG_SR[i] += rho * coulG_SR[p0:p1]
+                        vG_SR1[i] += np.einsum('ij,Lij,L->L',
+                                               dmsC[i,k,nao_compact:,nao_compact:],
+                                               aoao[:,nao_compact:,nao_compact:],
+                                               coulG_SR[p0:p1]).conj()
+            for i in range(nset):
+                vG_LR[i] *= weight
+            for k, aoao in enumerate(aoaoks):
+                aoao = aoao.reshape(-1,nao,nao)
+                for i in range(nset):
+                    vj_kpts[i,k] += np.einsum('L,Lij->ij', vG_LR[i], aoao)
+                    if nao_compact < nao:
+                        vj_dd = np.einsum('L,Lij->ij', vG_SR[i],
+                                          aoao[:,nao_compact:,nao_compact:])
+                        vj_kpts[i,k,nao_compact:,nao_compact:] += vj_dd
+
+                        vj0 = np.einsum('L,Lij->ij', vG_SR1[i], aoao)
+                        vj0[nao_compact:,nao_compact:] = 0
+                        vj_kpts[i,k] += vj0
+        aoao = aoaoks = p0 = p1 = None
+
+        # G=0 associated to 2e integrals in real-space
+        ovlp = cell.pbc_intor('int1e_ovlp', hermi=1)
+        ovlp[nao_compact:,nao_compact:] = 0
+        kws = cell.get_Gv_weights(mesh)[2]
+        G0_weight = kws[0] if isinstance(kws, np.ndarray) else kws
+        vj_G0 = lib.einsum('ij,nji,kl->nkl', ovlp, dm_kpts.sum(axis=1), ovlp)
+        vj_kpts[:,:] -= np.pi/self.omega**2 / nkpts * G0_weight * vj_G0[:,None,:,:]
+
+        if gamma_point(kpts):
+            vj_kpts = vj_kpts.real.copy()
+        return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts)
+
+    def get_j_for_bands(self, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
+        log = logger.Logger(self.stdout, self.verbose)
+        t1 = (time.clock(), time.time())
+
+        cell = self.cell
+        dm_kpts = lib.asarray(dm_kpts, order='C')
+        dms = _format_dms(dm_kpts, kpts)
+        nset, nkpts, nao = dms.shape[:3]
+
+        n_diffused = cell._nbas_each_set[2]
+        nao_compact = cell.ao_loc[cell.nbas-n_diffused]
+        nao_smooth = nao - nao_compact
+
+        kpt_allow = np.zeros(3)
+        mesh = self.mesh
+        coulG = self.weighted_coulG(kpt_allow, False, mesh)
+        coulG_LR = self.weighted_coulG_LR(kpt_allow, False, mesh)
+        coulG_SR = coulG - coulG_LR
+        ngrids = len(coulG)
+        vG_LR = np.zeros((nset,ngrids), dtype=np.complex128)
+        vG_SR = np.zeros((nset,ngrids), dtype=np.complex128)
+        vG_SR1 = np.zeros((nset,ngrids), dtype=np.complex128)
+        max_memory = (self.max_memory - lib.current_memory()[0]) * .8
+
+        dmsC = dms.conj()
+        for aoaoks, p0, p1 in self.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
+            #:rho = np.einsum('lkL,lk->L', pqk.conj(), dm)
+            for k, aoao in enumerate(aoaoks):
+                aoao = aoao.reshape(-1,nao,nao)
+                for i in range(nset):
+                    rho = np.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                    vG_LR[i,p0:p1] += rho * coulG_LR[p0:p1]
+                    if nao_compact < nao:
+                        vG_SR[i,p0:p1] += rho * coulG_SR[p0:p1]
+                        vG_SR1[i,p0:p1] += np.einsum('ij,Lij,L->L',
+                                                  dmsC[i,k,nao_compact:,nao_compact:],
+                                                  aoao[:,nao_compact:,nao_compact:],
+                                                  coulG_SR[p0:p1]).conj()
+        aoao = aoaoks = p0 = p1 = None
+        weight = 1./len(kpts)
+        vG_LR *= weight
+        vG_SR *= weight
+        vG_SR1 *= weight
+        t1 = log.timer_debug1('get_j pass 1 to compute J(G)', *t1)
+
+        kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+        nband = len(kpts_band)
+        vj_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
+        for aoaoks, p0, p1 in self.ft_loop(mesh, kpt_allow, kpts_band,
+                                            max_memory=max_memory):
+            for k, aoao in enumerate(aoaoks):
+                aoao = aoao.reshape(-1,nao,nao)
+                for i in range(nset):
+                    vj_kpts[i,k] += np.einsum('L,Lij->ij', vG_LR[i,p0:p1], aoao)
+                    if nao_compact < nao:
+                        vj_dd = np.einsum('L,Lij->ij', vG_SR[i],
+                                          aoao[:,nao_compact:,nao_compact:])
+                        vj_kpts[i,k,nao_compact:,nao_compact:] += vj_dd
+
+                        vj0 = np.einsum('L,Lij->ij', vG_SR1[i], aoao)
+                        vj0[nao_compact:,nao_compact:] = 0
+                        vj_kpts[i,k] += vj0
+        aoao = aoaoks = p0 = p1 = None
+
+        # G=0 associated to 2e integrals in real-space
+        ovlp = cell.pbc_intor('int1e_ovlp', hermi=1)
+        ovlp[nao_compact:,nao_compact:] = 0
+        kws = cell.get_Gv_weights(mesh)[2]
+        G0_weight = kws[0] if isinstance(kws, np.ndarray) else kws
+        vj_G0 = lib.einsum('ij,nji,kl->nkl', ovlp, dm_kpts.sum(axis=1), ovlp)
+        vj_kpts[:,:] -= np.pi/self.omega**2 / nkpts * G0_weight * vj_G0[:,None,:,:]
+
+        if gamma_point(kpts_band):
+            vj_kpts = vj_kpts.real.copy()
+        t1 = log.timer_debug1('get_j pass 2', *t1)
+        return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
+
+    def get_k_kpts(self, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
+                   exxdiv=None):
+        '''
+        C ~ compact basis, D ~ diffused basis
+
+        Compute K matrix with coulG_LR:
+        (CC|CC) (CC|CD) (CC|DC) (CD|CC) (CD|CD) (CD|DC) (DC|CC) (DC|CD) (DC|DC)
+
+        Compute K matrix with full coulG:
+        (CC|DD) (CD|DD) (DC|DD) (DD|CC) (DD|CD) (DD|DC) (DD|DD)
+        '''
+        cell = self.cell
+        log = logger.Logger(self.stdout, self.verbose)
+        t1 = (time.clock(), time.time())
+
+        mesh = self.mesh
+        dm_kpts = lib.asarray(dm_kpts, order='C')
+        dms = _format_dms(dm_kpts, kpts)
+        nset, nkpts, nao = dms.shape[:3]
+
+        swap_2e = (kpts_band is None)
+        kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+        nband = len(kpts_band)
+        kk_table = kpts_band.reshape(-1,1,3) - kpts.reshape(1,-1,3)
+        kk_todo = np.ones(kk_table.shape[:2], dtype=bool)
+        vkR = np.zeros((nset,nband,nao,nao))
+        vkI = np.zeros((nset,nband,nao,nao))
+        dmsR = np.asarray(dms.real, order='C')
+        dmsI = np.asarray(dms.imag, order='C')
+
+        n_diffused = cell._nbas_each_set[2]
+        nao_compact = cell.ao_loc[cell.nbas-n_diffused]
+        nao_smooth = nao - nao_compact
+
+        if nao_compact < nao:
+            dmsR_ds = dmsR[:,:,nao_compact:,:].copy()
+            dmsI_ds = dmsI[:,:,nao_compact:,:].copy()
+            dmsR_sd = dmsR[:,:,:,nao_compact:].copy()
+            dmsI_sd = dmsI[:,:,:,nao_compact:].copy()
+
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, (self.max_memory - mem_now)) * .8
+        log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
+        # K_pq = ( p{k1} i{k2} | i{k2} q{k1} )
+        def make_kpt(kpt):  # kpt = kptj - kpti
+            # search for all possible ki and kj that has ki-kj+kpt=0
+            kk_match = np.einsum('ijx->ij', abs(kk_table + kpt)) < 1e-9
+            kpti_idx, kptj_idx = np.where(kk_todo & kk_match)
+            nkptj = len(kptj_idx)
+            log.debug1('kpt = %s', kpt)
+            log.debug2('kpti_idx = %s', kpti_idx)
+            log.debug2('kptj_idx = %s', kptj_idx)
+            kk_todo[kpti_idx,kptj_idx] = False
+            if swap_2e and not is_zero(kpt):
+                kk_todo[kptj_idx,kpti_idx] = False
+
+            max_memory1 = max_memory * (nkptj+1)/(nkptj+5)
+            #blksize = max(int(max_memory1*4e6/(nkptj+5)/16/nao**2), 16)
+
+            #bufR = np.empty((blksize*nao**2))
+            #bufI = np.empty((blksize*nao**2))
+            # Use DF object to mimic KRHF/KUHF object in function get_coulG
+            vkcoulG = self.weighted_coulG(kpt, exxdiv, mesh)
+            coulG_SR = self.weighted_coulG_SR(kpt, False, mesh)
+            coulG_LR = vkcoulG - coulG_SR
+            kptjs = kpts[kptj_idx]
+            # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
+            #buf1R = np.empty((blksize*nao**2))
+            #buf1I = np.empty((blksize*nao**2))
+            for aoaoks, p0, p1 in self.ft_loop(mesh, kpt, kptjs, max_memory=max_memory1):
+                nG = p1 - p0
+                bufR = np.empty((nG*nao**2))
+                bufI = np.empty((nG*nao**2))
+                buf1R = np.empty((nG*nao**2))
+                buf1I = np.empty((nG*nao**2))
+
+                for k, aoao in enumerate(aoaoks):
+                    ki = kpti_idx[k]
+                    kj = kptj_idx[k]
+
+# case 1: k_pq = (pi|iq)
+#:v4 = np.einsum('ijL,lkL->ijkl', pqk, pqk.conj())
+#:vk += np.einsum('ijkl,jk->il', v4, dm)
+                    pLqR = np.ndarray((nao,nG,nao), buffer=bufR)
+                    pLqI = np.ndarray((nao,nG,nao), buffer=bufI)
+                    pLqR[:] = aoao.real.reshape(nG,nao,nao).transpose(1,0,2)
+                    pLqI[:] = aoao.imag.reshape(nG,nao,nao).transpose(1,0,2)
+                    iLkR = np.ndarray((nao,nG,nao), buffer=buf1R)
+                    iLkI = np.ndarray((nao,nG,nao), buffer=buf1I)
+                    if nao_compact < nao:
+                        pLqR0 = pLqR.copy()
+                        pLqI0 = pLqI.copy()
+                        pLqR0[nao_compact:,:,nao_compact:] = 0
+                        pLqI0[nao_compact:,:,nao_compact:] = 0
+
+                    for i in range(nset):
+                        zdotNN(pLqR.reshape(-1,nao), pLqI.reshape(-1,nao),
+                               dmsR[i,kj], dmsI[i,kj], 1,
+                               iLkR.reshape(-1,nao), iLkI.reshape(-1,nao))
+                        if nao_compact < nao:
+                            dLdR = pLqR[nao_compact:,:,nao_compact:] * coulG_SR[None,p0:p1,None]
+                            dLdI = pLqI[nao_compact:,:,nao_compact:] * coulG_SR[None,p0:p1,None]
+                            kR_sd, kI_sd = zdotNC(iLkR[:,:,nao_compact:].reshape(nao,-1),
+                                                  iLkI[:,:,nao_compact:].reshape(nao,-1),
+                                                  dLdR.reshape(nao_smooth,-1).T,
+                                                  dLdI.reshape(nao_smooth,-1).T)
+                            vkR[i,ki,:,nao_compact:] += kR_sd
+                            vkI[i,ki,:,nao_compact:] += kI_sd
+
+                            dLsR, dLsI = zdotNN(dLdR.reshape(-1,nao_smooth),
+                                                dLdI.reshape(-1,nao_smooth),
+                                                dmsR_ds[i,kj], dmsI_ds[i,kj])
+                            kR_ds, kI_ds = zdotNC(dLsR.reshape(nao_smooth,-1),
+                                                  dLsI.reshape(nao_smooth,-1),
+                                                  pLqR0.reshape(nao,-1).T,
+                                                  pLqI0.reshape(nao,-1).T)
+                            vkR[i,ki,nao_compact:] += kR_ds
+                            vkI[i,ki,nao_compact:] += kI_ds
+
+                        iLkR *= coulG_LR[p0:p1].reshape(1,nG,1)
+                        iLkI *= coulG_LR[p0:p1].reshape(1,nG,1)
+                        zdotNC(iLkR.reshape(nao,-1), iLkI.reshape(nao,-1),
+                               pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
+                               1, vkR[i,ki], vkI[i,ki], 1)
+
+# case 2: k_pq = (iq|pi)
+#:v4 = np.einsum('iLj,lLk->ijkl', pqk, pqk.conj())
+#:vk += np.einsum('ijkl,li->kj', v4, dm)
+                    if swap_2e and not is_zero(kpt):
+                        for i in range(nset):
+                            zdotNN(dmsR[i,ki], dmsI[i,ki], pLqR.reshape(nao,-1),
+                                   pLqI.reshape(nao,-1), 1,
+                                   iLkR.reshape(nao,-1), iLkI.reshape(nao,-1))
+
+                            if nao_compact < nao:
+                                dLdR = pLqR[nao_compact:,:,nao_compact:] * coulG_SR[None,p0:p1,None]
+                                dLdI = pLqI[nao_compact:,:,nao_compact:] * coulG_SR[None,p0:p1,None]
+                                kR_ds, kI_ds = zdotCN(dLdR.reshape(-1,nao_smooth).T,
+                                                      dLdI.reshape(-1,nao_smooth).T,
+                                                      iLkR[nao_compact:].reshape(-1,nao),
+                                                      iLkI[nao_compact:].reshape(-1,nao))
+                                vkR[i,ki,nao_compact:] += kR_ds
+                                vkI[i,ki,nao_compact:] += kI_ds
+
+                                sLdR, sLdI = zdotNN(dmsR_sd[i,ki], dmsI_sd[i,ki],
+                                                    dLdR.reshape(nao_smooth,-1),
+                                                    dLdI.reshape(nao_smooth,-1))
+                                kR_sd, kI_sd = zdotCN(pLqR0.reshape(-1,nao).T,
+                                                      pLqI0.reshape(-1,nao).T,
+                                                      sLdR.reshape(-1,nao_smooth),
+                                                      sLdI.reshape(-1,nao_smooth))
+                                vkR[i,ki,:,nao_compact:] += kR_sd
+                                vkI[i,ki,:,nao_compact:] += kI_sd
+
+                            iLkR *= coulG_LR[p0:p1].reshape(1,nG,1)
+                            iLkI *= coulG_LR[p0:p1].reshape(1,nG,1)
+                            zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
+                                   iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
+                                   1, vkR[i,kj], vkI[i,kj], 1)
+
+        for ki, kpti in enumerate(kpts_band):
+            for kj, kptj in enumerate(kpts):
+                if kk_todo[ki,kj]:
+                    make_kpt(kptj-kpti)
+            t1 = log.timer_debug1('get_k_kpts: make_kpt (%d,*)'%ki, *t1)
+
+        if (gamma_point(kpts) and gamma_point(kpts_band) and
+            not np.iscomplexobj(dm_kpts)):
+            vk_kpts = vkR
+        else:
+            vk_kpts = vkR + vkI * 1j
+        vk_kpts *= 1./nkpts
+
+        # G=0 associated to 2e integrals in real-space
+        if not exxdiv or exxdiv == 'ewald':
+            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1)
+            ovlp[nao_compact:,nao_compact:] = 0
+            kws = cell.get_Gv_weights(mesh)[2]
+            G0_weight = kws[0] if isinstance(kws, np.ndarray) else kws
+            vk_G0 = lib.einsum('ij,njk,kl->nil', ovlp, dm_kpts.sum(axis=1), ovlp)
+            vk_kpts[:,:] -= np.pi/self.omega**2 / nkpts * G0_weight * vk_G0[:,None,:,:]
+
+        # Add ewald_exxdiv contribution because G=0 was not included in the
+        # non-uniform grids
+        if (exxdiv == 'ewald' and
+            (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
+             (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
+            _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
+
+        return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
+
+#def _estimate_overlap(supmol):
+#    exps = numpy.array([cell.bas_exp(ib).min() for ib in range(cell.nbas)])
+#    atom_coords = cell.atom_coords()
+#    bas_coords = atom_coords[cell._bas[:,gto.ATOM_OF]]
+#    aij = exps[:,None] * exps / (exps[:,None] + exps)
+#    rij = bas_coords[:,None,:] - bas_coords
+#    dijL = numpy.linalg.norm(rij[:,:,None,:] - Ls, axis=-1)
+#    vol = cell.vol
+#    vol_rad = vol**(1./3)
+#    fac = (4 * aij / (exps[:,None] + exps))**.75
+#    s = fac[:,:,None] * numpy.exp(-aij[:,:,None] * (dijL - vol_rad/2)**2)
+#    fac = 2*numpy.pi/vol * abs(dijL - vol_rad/2) / aij[:,:,None]
+#    fac[fac < 1] = 1
+#    return fac * s
 
 if __name__ == '__main__':
     from pyscf.pbc.gto import Cell
@@ -538,17 +914,25 @@ if __name__ == '__main__':
     cell = Cell()
     cell.a = np.eye(3)*1.8
     cell.atom = '''He     0.      0.      0.
-                   He     0.4917  0.4917  0.4917
-                '''
-    cell.basis = {'He': [[0, [2.1, 1],
-                             [0.1, .2]
-                         ],
-                         [1, [0.3, 1]],
-                         #[1, [1.5, 1]],
-                        ]}
+                   He     0.4917  0.4917  0.4917'''
+    cell.basis = {'He': [[0, [2.5, 1]]]}
     cell.build()
-    cell.verbose = 6
-    #cells.append(cell)
+    cells.append(cell)
+
+    if 1:
+        cell = Cell()
+        cell.a = np.eye(3)*1.8
+        cell.atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917'''
+        cell.basis = {'He': [[0, [2.1, 1],
+                                 [0.2, .2]
+                             ],
+                             #[1, [0.3, 1]],
+                             #[1, [1.5, 1]],
+                            ]}
+        cell.build()
+        cell.verbose = 6
+        cells.append(cell)
 
     if 1:
         cell = Cell().build(a = '''

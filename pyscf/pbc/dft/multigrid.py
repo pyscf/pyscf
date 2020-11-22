@@ -1622,7 +1622,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
 
         mesh = tools.cutoff_to_mesh(a, ke1)
         if TO_EVEN_GRIDS:
-            mesh = (mesh+1)//2 * 2  # to the nearest even number
+            mesh = int((mesh+1)//2) * 2  # to the nearest even number
 
         if numpy.all(mesh >= fft_mesh):
             # Including all rest shells
