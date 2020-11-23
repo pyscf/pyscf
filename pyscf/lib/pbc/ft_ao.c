@@ -174,7 +174,7 @@ static void _ft_fill_nk1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)()
  */
 static void _ft_bvk_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                       void (*fsort)(), double complex *out,
-                      int nkpts, int comp, int nimgs, int blksize,
+                      int nkpts, int comp, int nimgs, int bvk_nimgs, int blksize,
                       int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
                       double complex *buf, double *env_loc, double *Ls,
                       double complex *expkL, int *shls_slice, int *ao_loc,
@@ -209,7 +209,7 @@ static void _ft_bvk_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                 gs1 = MIN(gs0+blksize, nGv);
                 dg = gs1 - gs0;
                 dijg = dij * dg * comp;
-                for (i = 0; i < dijg*nkpts; i++) {
+                for (i = 0; i < dijg*bvk_nimgs; i++) {
                         bufL[i] = 0;
                 }
 
@@ -230,8 +230,8 @@ static void _ft_bvk_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                         }
                 }
 
-                zgemm_(&TRANS_N, &TRANS_N, &dijg, &nkpts, &nkpts,
-                       &Z1, bufL, &dijg, expkL, &nkpts, &Z0, buf, &dijg);
+                zgemm_(&TRANS_N, &TRANS_N, &dijg, &nkpts, &bvk_nimgs,
+                       &Z1, bufL, &dijg, expkL, &bvk_nimgs, &Z0, buf, &dijg);
 
                 (*fsort)(out, buf, shls_slice, ao_loc,
                          nkpts, comp, nGv, ish, jsh, gs0, gs1);
@@ -248,7 +248,7 @@ static void _ft_bvk_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
  */
 static void _ft_bvk_nk1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                         void (*fsort)(), double complex *out,
-                        int nkpts, int comp, int nimgs, int blksize,
+                        int nkpts, int comp, int nimgs, int bvk_nimgs, int blksize,
                         int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
                         double complex *buf, double *env_loc, double *Ls,
                         double complex *expkL, int *shls_slice, int *ao_loc,
@@ -524,23 +524,25 @@ void PBC_ft_fill_nk1s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
 }
 
 void PBC_ft_bvk_ks1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                    double complex *out, int nkpts, int comp, int nimgs, int blksize,
-                    int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
+                    double complex *out, int nkpts, int comp, int nimgs,
+                    int bvk_nimgs, int blksize, int ish, int jsh,
+                    int *cell_loc_bvk, char *ovlp_mask,
                     double complex *buf, double *env_loc, double *Ls,
                     double complex *expkL, int *shls_slice, int *ao_loc,
                     double *sGv, double *b, int *sgxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         _ft_bvk_k(intor, eval_aopair, eval_gz, &sort_s1,
-                  out, nkpts, comp, nimgs, blksize,
+                  out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                   ish, jsh, cell_loc_bvk, ovlp_mask,
                   buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                   sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
 }
 
 void PBC_ft_bvk_ks2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                    double complex *out, int nkpts, int comp, int nimgs, int blksize,
-                    int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
+                    double complex *out, int nkpts, int comp, int nimgs,
+                    int bvk_nimgs, int blksize, int ish, int jsh,
+                    int *cell_loc_bvk, char *ovlp_mask,
                     double complex *buf, double *env_loc, double *Ls,
                     double complex *expkL, int *shls_slice, int *ao_loc,
                     double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -550,13 +552,13 @@ void PBC_ft_bvk_ks2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
         int jp = jsh + shls_slice[2] - nbas;
         if (ip > jp) {
                 _ft_bvk_k(intor, eval_aopair, eval_gz, &sort_s2_igtj,
-                          out, nkpts, comp, nimgs, blksize,
+                          out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                           ish, jsh, cell_loc_bvk, ovlp_mask,
                           buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                           sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
         } else if (ip == jp) {
                 _ft_bvk_k(intor, eval_aopair, eval_gz, &sort_s2_ieqj,
-                          out, nkpts, comp, nimgs, blksize,
+                          out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                           ish, jsh, cell_loc_bvk, ovlp_mask,
                           buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                           sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
@@ -564,23 +566,25 @@ void PBC_ft_bvk_ks2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
 }
 
 void PBC_ft_bvk_nk1s1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                      double complex *out, int nkpts, int comp, int nimgs, int blksize,
-                      int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
+                      double complex *out, int nkpts, int comp, int nimgs,
+                      int bvk_nimgs, int blksize, int ish, int jsh,
+                      int *cell_loc_bvk, char *ovlp_mask,
                       double complex *buf, double *env_loc, double *Ls,
                       double complex *expkL, int *shls_slice, int *ao_loc,
                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s1,
-                    out, nkpts, comp, nimgs, blksize,
+                    out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                     ish, jsh, cell_loc_bvk, ovlp_mask,
                     buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                     sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
 }
 
 void PBC_ft_bvk_nk1s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                           double complex *out, int nkpts, int comp, int nimgs, int blksize,
-                           int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
+                           double complex *out, int nkpts, int comp, int nimgs,
+                           int bvk_nimgs, int blksize, int ish, int jsh,
+                           int *cell_loc_bvk, char *ovlp_mask,
                            double complex *buf, double *env_loc, double *Ls,
                            double complex *expkL, int *shls_slice, int *ao_loc,
                            double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -590,7 +594,7 @@ void PBC_ft_bvk_nk1s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)
         int jp = jsh + shls_slice[2] - nbas;
         if (ip >= jp) {
                 _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s1,
-                            out, nkpts, comp, nimgs, blksize,
+                            out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                             ish, jsh, cell_loc_bvk, ovlp_mask,
                             buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                             sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
@@ -598,8 +602,9 @@ void PBC_ft_bvk_nk1s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)
 }
 
 void PBC_ft_bvk_nk1s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
-                      double complex *out, int nkpts, int comp, int nimgs, int blksize,
-                      int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
+                      double complex *out, int nkpts, int comp, int nimgs,
+                      int bvk_nimgs, int blksize, int ish, int jsh,
+                      int *cell_loc_bvk, char *ovlp_mask,
                       double complex *buf, double *env_loc, double *Ls,
                       double complex *expkL, int *shls_slice, int *ao_loc,
                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -609,13 +614,13 @@ void PBC_ft_bvk_nk1s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
         int jp = jsh + shls_slice[2] - nbas;
         if (ip > jp) {
                 _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s2_igtj,
-                            out, nkpts, comp, nimgs, blksize,
+                            out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                             ish, jsh, cell_loc_bvk, ovlp_mask,
                             buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                             sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
         } else if (ip == jp) {
                 _ft_bvk_nk1(intor, eval_aopair, eval_gz, &sort_s2_ieqj,
-                            out, nkpts, comp, nimgs, blksize,
+                            out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                             ish, jsh, cell_loc_bvk, ovlp_mask,
                             buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                             sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);
@@ -717,8 +722,9 @@ void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
 
 void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
                     double complex *out, int nkpts, int comp, int nimgs,
-                    double *Ls, double complex *expkL, int *shls_slice,
-                    int *ao_loc, int *cell_loc_bvk, char *ovlp_mask,
+                    int bvk_nimgs, double *Ls, double complex *expkL,
+                    int *shls_slice, int *ao_loc,
+                    int *cell_loc_bvk, char *ovlp_mask,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -747,13 +753,14 @@ void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
-        double complex *buf = malloc(sizeof(double complex)*2*nkpts*INTBUFMAX*comp);
+        size_t count = nkpts + bvk_nimgs;
+        double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
                 j = ij % njsh;
                 (*fill)(intor, eval_aopair, eval_gz,
-                        out, nkpts, comp, nimgs, blksize,
+                        out, nkpts, comp, nimgs, bvk_nimgs, blksize,
                         i, j, cell_loc_bvk, ovlp_mask,
                         buf, env_loc, Ls, expkL, shls_slice, ao_loc,
                         sGv, b, sgxyz, gs, nGv, atm, natm, bas, nbas, env);

@@ -543,9 +543,8 @@ class KSCF(pbchf.SCF):
             self.kpts = self.__dict__.pop('kpts')
 
         if self.rsjk:
-            if not (isinstance(self.rsjk, RangeSeparationJKBuilder)
-                    and np.all(self.rsjk.kpts != self.kpts)):
-                self.rsjk = RangeSeparationJKBuilder(cell, self.kpts)
+            if not np.all(self.rsjk.kpts == self.kpts):
+                self.rsjk = self.rsjk.__class__(cell, self.kpts)
             self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
 
         if self.verbose >= logger.WARN:

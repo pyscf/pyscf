@@ -97,7 +97,6 @@ def ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     if bvk_kmesh is None:
         expkL = numpy.exp(1j * numpy.dot(kptjs, Ls.T))
     else:
-        assert numpy.prod(bvk_kmesh) == nkpts
         ovlp_mask = _estimate_overlap(cell, Ls) > cell.precision
         ovlp_mask = numpy.asarray(ovlp_mask, dtype=numpy.int8, order='C')
 
@@ -159,7 +158,8 @@ def ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
             fill = getattr(libpbc, 'PBC_ft_bvk_k'+aosym)
         drv = libpbc.PBC_ft_bvk_drv
         drv(cintor, eval_gz, fill, out.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(nimgs),
+            ctypes.c_int(nkpts), ctypes.c_int(comp),
+            ctypes.c_int(nimgs), ctypes.c_int(expkL.shape[1]),
             Ls.ctypes.data_as(ctypes.c_void_p), expkL.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*4)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
             cell_loc_bvk.ctypes.data_as(ctypes.c_void_p),
@@ -199,10 +199,10 @@ def _estimate_overlap(cell, Ls):
     vol = cell.vol
     vol_rad = vol**(1./3)
     fac = (4 * aij / (exps[:,None] + exps))**.75
-    s = fac[:,:,None] * numpy.exp(-aij[:,:,None] * (dijL - vol_rad/2)**2)
+    s = fac[:,:,None] * numpy.exp(-aij[:,:,None] * dijL**2)
+    s_cum = fac[:,:,None] * numpy.exp(-aij[:,:,None] * (dijL - vol_rad/2)**2)
     fac = 2*numpy.pi/vol / aij[:,:,None] * abs(dijL - vol_rad/2)
-    fac[fac < 1] = 1
-    return fac * s
+    return numpy.max([fac * s_cum, s], axis=0)
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto
