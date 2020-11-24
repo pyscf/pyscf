@@ -98,7 +98,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
         if not numpy.all(mask):
             ao = ao[mask]
             wao = wao[mask]
-            fg = fg[:,mask]
+            fg = fg[:,mask].copy()
             coords = coords[mask]
 
         if sgx.debug:
@@ -194,7 +194,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             mask |= numpy.any(fg[i]<-gthrd, axis=1)
         if not numpy.all(mask):
             ao = ao[mask]
-            fg = fg[:,mask]
+            fg = fg[:,mask].copy()
             coords = coords[mask]
 
         if with_j:
