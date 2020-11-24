@@ -98,7 +98,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
         if not numpy.all(mask):
             ao = ao[mask]
             wao = wao[mask]
-            fg = fg[:,mask].copy()
+            fg = fg[:,mask]
             coords = coords[mask]
 
         if sgx.debug:
@@ -112,7 +112,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
             gbn = None
         else:
             tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
-            jg, gv = batch_jk(mol, coords, dms, fg)
+            jg, gv = batch_jk(mol, coords, dms, fg.copy())
             tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
 
         if with_j:
@@ -194,7 +194,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             mask |= numpy.any(fg[i]<-gthrd, axis=1)
         if not numpy.all(mask):
             ao = ao[mask]
-            fg = fg[:,mask].copy()
+            fg = fg[:,mask]
             coords = coords[mask]
 
         if with_j:
@@ -213,7 +213,8 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             gbn = None
         else:
             tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
-            jpart, gv = batch_jk(mol, coords, rhog, fg)
+            if with_j: rhog = rhog.copy()
+            jpart, gv = batch_jk(mol, coords, rhog, fg.copy())
             tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
 
         if with_j:
