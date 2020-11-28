@@ -1011,34 +1011,36 @@ def direct_sum(subscripts, *operands):
     out.flags.writeable = True  # old numpy has this issue
     return out
 
-def condense(opname, a, locs):
+def condense(opname, a, loc_x, loc_y=None):
     '''
     .. code-block:: python
 
-        nd = loc[-1]
-        out = numpy.empty((nd,nd))
-        for i,i0 in enumerate(loc):
-            i1 = loc[i+1]
-            for j,j0 in enumerate(loc):
-                j1 = loc[j+1]
+        for i,i0 in enumerate(loc_x):
+            i1 = loc_x[i+1]
+            for j,j0 in enumerate(loc_y):
+                j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1,j0:j1])
-        return out
     '''
     assert(a.dtype == numpy.double)
     if not opname.startswith('NP_'):
         opname = 'NP_' + opname
     op = getattr(_np_helper, opname)
-    locs = numpy.asarray(locs, numpy.int32)
-    nloc = locs.size - 1
+    if loc_y is None:
+        loc_y = loc_x
+    loc_x = numpy.asarray(loc_x, numpy.int32)
+    loc_y = numpy.asarray(loc_y, numpy.int32)
+    nloc_x = loc_x.size - 1
+    nloc_y = loc_y.size - 1
     if a.flags.f_contiguous:
-        out = numpy.empty((nloc, nloc), order='F')
+        out = numpy.empty((nloc_x, nloc_y), order='F')
     else:
         a = numpy.asarray(a, order='C')
-        out = numpy.empty((nloc, nloc))
+        out = numpy.empty((nloc_x, nloc_y))
     _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
                           a.ctypes.data_as(ctypes.c_void_p),
-                          locs.ctypes.data_as(ctypes.c_void_p),
-                          ctypes.c_int(nloc))
+                          loc_x.ctypes.data_as(ctypes.c_void_p),
+                          loc_y.ctypes.data_as(ctypes.c_void_p),
+                          ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
     return out
 
 def expm(a):

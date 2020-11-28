@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import unittest
+import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto, scf
 from pyscf.pbc.tools import k2gamma
@@ -51,6 +52,23 @@ class KnownValues(unittest.TestCase):
         popa, popb = k2gamma.k2gamma(mf).mulliken_meta()[0]
         self.assertAlmostEqual(lib.finger(popa), 0.8007278745, 7)
         self.assertAlmostEqual(lib.finger(popb), 0.8007278745, 7)
+
+    def test_double_translation_indices(self):
+        idx2 = k2gamma.translation_map(2)
+        idx3 = k2gamma.translation_map(3)
+        idx4 = k2gamma.translation_map(4)
+
+        ref = np.empty((2, 3, 4, 2, 3, 4), dtype=int)
+        for ix in range(2):
+            for iy in range(3):
+                for iz in range(4):
+                    for jx in range(2):
+                        for jy in range(3):
+                            for jz in range(4):
+                                ref[ix,iy,iz,jx,jy,jz] = idx2[ix,jx] * 12 + idx3[iy,jy] * 4 + idx4[iz,jz]
+
+        result = k2gamma.double_translation_indices([2,3,4])
+        self.assertEqual(abs(ref.reshape(24,24) - result).max(), 0)
 
 
 if __name__ == '__main__':

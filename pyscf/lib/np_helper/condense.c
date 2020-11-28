@@ -32,21 +32,21 @@
  *     return out
  */
 
-void NPcondense(double (*op)(double *, int, int, int),
-                double *out, double *a, int *loc, int nloc)
+void NPcondense(double (*op)(double *, int, int, int), double *out, double *a,
+                int *loc_x, int *loc_y, int nloc_x, int nloc_y)
 {
-        int ni = loc[nloc];
+        const int nj = loc_y[nloc_y];
 #pragma omp parallel
 {
         int i, j, i0, j0, di, dj;
 #pragma omp for
-        for (i = 0; i < nloc; i++) {
-                i0 = loc[i];
-                di = loc[i+1] - i0;
-                for (j = 0; j < nloc; j++) {
-                        j0 = loc[j];
-                        dj = loc[j+1] - j0;
-                        out[i*nloc+j] = op(a+i0*ni+j0, ni, di, dj);
+        for (i = 0; i < nloc_x; i++) {
+                i0 = loc_x[i];
+                di = loc_x[i+1] - i0;
+                for (j = 0; j < nloc_y; j++) {
+                        j0 = loc_y[j];
+                        dj = loc_y[j+1] - j0;
+                        out[i*nloc_y+j] = op(a+i0*nj+j0, nj, di, dj);
                 }
         }
 }

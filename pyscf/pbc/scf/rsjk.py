@@ -53,10 +53,13 @@ class RangeSeparationJKBuilder(object):
         # Born-von Karman supercell
         self.bvkcell = None
         self.bvkmesh_Ls = None
+        self.bvk_kmesh = None
         self.phase = None
         self.supmol = None
-        # For shells in the supmol, bvkcell_shl_id is the shell ID in bvkcell 
-        self.bvkcell_shl_id = None
+        # For shells in the supmol, cell0_shl_id is the shell ID in cell0
+        self.cell0_shl_id = None
+        # bvk_cell_id is the Id of image in BvK supercell
+        self.bvk_cell_id = None
         self.ovlp_mask = None
         self.lr_aft = None
         self.ke_cutoff = None
@@ -108,7 +111,7 @@ class RangeSeparationJKBuilder(object):
             direct_scf_tol = cell.precision**1.5
             logger.debug(self, 'Set direct_scf_tol %g', direct_scf_tol)
 
-        kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         bvkcell, phase = k2gamma.get_phase(cell, kpts, kmesh)
         self.bvkmesh_Ls = Ks = k2gamma.translation_vectors_for_kmesh(cell, kmesh)
         self.bvkcell = bvkcell
@@ -158,9 +161,11 @@ class RangeSeparationJKBuilder(object):
 
         bas_mask = supmol._bas_mask
         nkpts = len(kpts)
-        kbas_idx = cell_fat._bas_idx + np.arange(nkpts)[:,None] * cell.nbas
-        bvkcell_shl_id = np.repeat(kbas_idx.reshape(1, -1), nimgs, axis=0)
-        self.bvkcell_shl_id = bvkcell_shl_id.ravel()[bas_mask].astype(np.int32)
+        bas_idx = np.repeat(cell_fat._bas_idx[None,:].astype(np.int32), nkpts*nimgs, axis=0)
+        self.cell0_shl_id = bas_idx.ravel()[bas_mask].astype(np.int32)
+        bvk_cell_idx = np.repeat(np.arange(nkpts).astype(np.int32), cell_fat.nbas)
+        bvk_cell_idx = np.repeat(bvk_cell_idx[None,:], nimgs, axis=0)
+        self.bvk_cell_id = bvk_cell_idx.ravel()[bas_mask].astype(np.int32)
 
         supmol.omega = -self.omega  # Set short range coulomb
         with supmol.with_integral_screen(direct_scf_tol**2):
@@ -182,7 +187,8 @@ class RangeSeparationJKBuilder(object):
 
         # mute rcut_threshold, divide basis into two sets only
         cell_lr_aft = _reorder_cell(cell, self.ke_cutoff, -1, verbose=0)[0]
-        self.lr_aft = lr_aft = _LongRangeAFT(cell_lr_aft, kpts, self.omega)
+        self.lr_aft = lr_aft = _LongRangeAFT(cell_lr_aft, kpts,
+                                             self.omega, self.bvk_kmesh)
         lr_aft.ke_cutoff = self.ke_cutoff
         lr_aft.mesh = self.mesh
         return self
@@ -219,7 +225,8 @@ class RangeSeparationJKBuilder(object):
         sm_nbas = supmol.nbas
         if kpts_band is None:
             bvk_ao_loc = bvkcell.ao_loc
-            bands_ao_loc = bvkcell.ao_loc[self.bvkcell_shl_id]
+            bvkcell_shl_id = self.bvk_cell_id * cell.nbas + self.cell0_shl_id
+            bands_ao_loc = bvk_ao_loc[bvkcell_shl_id]
             nbands = nkpts
 
         if dm_kpts.ndim != 4:
@@ -228,7 +235,10 @@ class RangeSeparationJKBuilder(object):
             dm = dm_kpts
         n_dm = dm.shape[0]
 
-        sc_dm = lib.einsum('Rk,nkuv,Sk->nRuSv', phase, dm, phase.conj())
+        # Utilized symmetry sc_dm[R,S] = sc_dm[S-R] = sc_dm[(S-R)%N]
+        #:sc_dm = lib.einsum('Rk,nkuv,Sk->nRuSv', phase, dm, phase.conj())
+        sc_dm = lib.einsum('k,Sk,nkuv->nSuv', phase[0], phase.conj(), dm)
+        dm_translation = k2gamma.double_translation_indices(self.bvk_kmesh).astype(np.int32)
         dm_imag_max = abs(sc_dm.imag).max()
         is_complex_dm = dm_imag_max > 1e-6
         if is_complex_dm:
@@ -238,13 +248,13 @@ class RangeSeparationJKBuilder(object):
             sc_dm = np.vstack([sc_dm.real, sc_dm.imag])
         else:
             sc_dm = sc_dm.real
-        sc_dm = np.asarray(sc_dm.reshape(-1, k_nao, k_nao), order='C')
+        sc_dm = np.asarray(sc_dm.reshape(-1, nkpts, nao, nao), order='C')
         n_sc_dm = sc_dm.shape[0]
 
         # Cannot initialize dm_cond with vhfopt.set_dm(sc_dm, bvkcell._atm, bvkcell._bas, bvkcell._env)
         # because vhfopt.dm_cond requires shape == (sm_nbas, sm_nbas)
-        dm_cond = [bvkcell.condense_to_shell(d, 'NP_absmax') for d in sc_dm]
-        dm_cond = np.max(dm_cond, axis=0)
+        dm_cond = [lib.condense('NP_absmax', d, bvk_ao_loc, bvk_ao_loc[:cell.nbas+1]) for d in sc_dm]
+        dm_cond = np.asarray(np.max(dm_cond, axis=0), order='C')
         libpbc.CVHFset_dm_cond(vhfopt._this,
                                dm_cond.ctypes.data_as(ctypes.c_void_p), dm_cond.size)
         dm_cond = None
@@ -263,11 +273,13 @@ class RangeSeparationJKBuilder(object):
         shls_slice = (0, self.cell_fat.nbas, 0, sm_nbas, 0, sm_nbas, 0, sm_nbas)
         drv(fdot, vs.ctypes.data_as(ctypes.c_void_p),
             sc_dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
-            ctypes.c_int(cell.nao), ctypes.c_int(nkpts), ctypes.c_int(nbands),
+            ctypes.c_int(nao), ctypes.c_int(nkpts), ctypes.c_int(nbands),
             ctypes.c_int(cell.nbas), (ctypes.c_int*8)(*shls_slice),
             bvk_ao_loc.ctypes.data_as(ctypes.c_void_p),
-            self.bvkcell_shl_id.ctypes.data_as(ctypes.c_void_p),
+            self.cell0_shl_id.ctypes.data_as(ctypes.c_void_p),
+            self.bvk_cell_id.ctypes.data_as(ctypes.c_void_p),
             bands_ao_loc.ctypes.data_as(ctypes.c_void_p),
+            dm_translation.ctypes.data_as(ctypes.c_void_p),
             self.ovlp_mask.ctypes.data_as(ctypes.c_void_p),
             vhfopt._cintopt, vhfopt._this,
             supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
@@ -498,8 +510,9 @@ class _LongRangeAFT(aft.AFTDF):
     Regular Coulomb metric for (DD|DD), (DD|CD), (DD|CC)
     Short-range Coulomb metric for (CD|CD), (CD|CC), (CC|CC)
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), omega=None):
+    def __init__(self, cell, kpts=np.zeros((1,3)), omega=None, bvk_kmesh=None):
         self.omega = omega
+        self.bvk_kmesh = bvk_kmesh
         aft.AFTDF.__init__(self, cell, kpts)
 
     def weighted_coulG_LR(self, kpt=np.zeros(3), exx=False, mesh=None):
@@ -531,10 +544,9 @@ class _LongRangeAFT(aft.AFTDF):
     def ft_loop(self, mesh=None, q=np.zeros(3), kpts=None, shls_slice=None,
                 max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1):
         cell = self.cell
-        bvk_kmesh = k2gamma.kpts_to_kmesh(cell, self.kpts)
         for dat, p0, p1 in aft.AFTDF.ft_loop(self, mesh, q, kpts, shls_slice,
                                              max_memory, aosym, intor, comp,
-                                             bvk_kmesh=bvk_kmesh):
+                                             bvk_kmesh=self.bvk_kmesh):
             yield dat, p0, p1
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
@@ -815,7 +827,7 @@ if __name__ == '__main__':
 
     cell = Cell()
     cell.a = np.eye(3)*1.8
-    cell.atom = '''He     0.      0.      0.
+    cell.atom = '''#He     0.      0.      0.
                    He     0.4917  0.4917  0.4917'''
     cell.basis = {'He': [[0, [2.5, 1]]]}
     cell.build()
@@ -824,7 +836,7 @@ if __name__ == '__main__':
     if 1:
         cell = Cell()
         cell.a = np.eye(3)*2.4
-        cell.atom = '''He     0.      0.      0.
+        cell.atom = '''#He     0.      0.      0.
                        He     0.4917  0.4917  0.4917'''
         cell.basis = {'He': [[0, [2.1, 1],
                                  [0.2, .2]
@@ -836,13 +848,13 @@ if __name__ == '__main__':
         cell.verbose = 6
         cells.append(cell)
 
-    if 1:
+    if 0:
         cell = Cell().build(a = '''
 3.370137329, 0.000000000, 0.000000000
 0.000000000, 3.370137329, 0.000000000
 0.000000000, 0.000000000, 3.370137329
                             ''',
-                            unit = 'B',
+                            unit = 'Ang',
                             atom = '''
 C 0.000000000000   0.000000000000   0.000000000000
 C 1.685068664391   1.685068664391   1.685068664391''',

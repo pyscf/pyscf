@@ -70,6 +70,41 @@ def get_phase(cell, kpts, kmesh=None):
     scell = tools.super_cell(cell, kmesh)
     return scell, phase
 
+def double_translation_indices(kmesh):
+    '''Indices to utilize the translation symmetry in the 2D matrix.
+
+    D[M,N] = D[N-M]
+
+    The return index maps the 2D subscripts to 1D subscripts.
+
+    D2 = D1[double_translation_indices()]
+
+    D1 holds all the symmetry unique elements in D2
+    '''
+
+    tx = translation_map(kmesh[0])
+    ty = translation_map(kmesh[1])
+    tz = translation_map(kmesh[2])
+    idx = np.ravel_multi_index([tx[:,None,None,:,None,None],
+                                ty[None,:,None,None,:,None],
+                                tz[None,None,:,None,None,:]], kmesh)
+    nk = np.prod(kmesh)
+    return idx.reshape(nk, nk)
+
+def translation_map(nk):
+    ''' Generate
+    [0    1 .. n  ]
+    [n    0 .. n-1]
+    [n-1  n .. n-2]
+    [...  ...  ...]
+    [1    2 .. 0  ]
+    '''
+    idx = np.repeat(np.arange(nk)[None,:], nk-1, axis=0)
+    strides = idx.strides
+    t_map = np.ndarray((nk, nk), strides=(strides[0]-strides[1], strides[1]),
+                       dtype=int, buffer=np.append(idx.ravel(), 0))
+    return t_map
+
 def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     scell, phase = get_phase(cell, kpts, kmesh)
 
@@ -194,6 +229,18 @@ if __name__ == '__main__':
     cell.a = np.eye(3) * 4.
     cell.unit='B'
     cell.build()
+    #print(double_pahse_indices([3,1,2]))
+    kmesh = [3, 1, 2]
+    kpts = cell.make_kpts(kmesh)
+    scell, phase = get_phase(cell, kpts)
+    dph = np.einsum('Rk,Sk->RSk', phase.conj(), phase)
+    np.random.seed(3)
+    samples = np.random.random(len(kpts))
+    dphs = np.einsum('RSk,k->RS', dph, samples).ravel()
+    print(double_pahse_indices(kmesh, False))
+    #(array([5, 4, 4, 3, 2, 2, 1, 0, 0, 1, 0, 0, 1, 0, 0]),
+    # array([0, 0, 1, 0, 0, 1, 0, 0, 1, 2, 2, 3, 4, 4, 5]))
+    exit()
 
     kmesh = [2, 2, 1]
     kpts = cell.make_kpts(kmesh)

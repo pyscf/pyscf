@@ -26,7 +26,7 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, name))
 
 class VHFOpt(object):
-    def __init__(self, mol, intor,
+    def __init__(self, mol, intor=None,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
         '''If function "qcondname" is presented, the qcond (sqrt(integrals))
         and will be initialized in __init__.
@@ -34,11 +34,16 @@ class VHFOpt(object):
         prescreen, qcondname, dmcondname can be either function pointers or
         names of C functions defined in libcvhf module
         '''
-        intor = mol._add_suffix(intor)
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
+
         self._intor = intor
-        self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
+        if intor is None:
+            self._cintopt = lib.c_null_ptr()
+        else:
+            intor = mol._add_suffix(intor)
+            self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
+
         self._dmcondname = dmcondname
         natm = ctypes.c_int(mol.natm)
         nbas = ctypes.c_int(mol.nbas)
@@ -47,7 +52,7 @@ class VHFOpt(object):
                                    mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
                                    mol._env.ctypes.data_as(ctypes.c_void_p))
         self.prescreen = prescreen
-        if qcondname is not None:
+        if qcondname is not None and intor is not None:
             self.init_cvhf_direct(mol, intor, qcondname)
 
     def init_cvhf_direct(self, mol, intor, qcondname):
