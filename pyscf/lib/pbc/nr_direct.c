@@ -635,14 +635,13 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         const int di = GTOmax_shell_dim(bvk_ao_loc, shls_slice, 1);
         const int cache_size = _max_cache_size(int2e_sph, shls_slice, images_loc,
                                                atm, natm, bas, nbas, env);
-        const size_t nkl = nksh * nlsh;
-        const size_t njkl = njsh * nkl;
-        const size_t nijkl = nish * njkl;
+        const size_t nij = nish * njsh;
         const int naop = bvk_ao_loc[nbasp];
 
 #pragma omp parallel
 {
-        size_t i, j, k, l, r, ijkl;
+        size_t ij, n;
+        int i, j, k, l;
         size_t size = n_dm * naop * naop * nbands;
         if (fdot == &PBCVHF_contract_jk_s2kl || fdot == &PBCVHF_contract_jk_s1) {
                 size *= 2;  // vj and vk
@@ -651,28 +650,27 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         double *buf = malloc(sizeof(double) * (di*di*di*di*2 + cache_size));
 
 #pragma omp for schedule(dynamic, 1)
-        for (ijkl = 0; ijkl < nijkl; ijkl++) {
-                r = ijkl;
-                i = r / njkl; r = r % njkl;
-                j = r / nkl ; r = r % nkl;
+        for (ij = 0; ij < nij; ij++) {
+                i = ij / njsh;
+                j = ij % njsh;
                 if (!ovlp_mask[i*njsh+j]) {
                         continue;
                 }
 
-                k = r / nlsh;
-                l = r % nlsh;
-                if (!ovlp_mask[k*nlsh+l]) {
-                        continue;
-                }
-
-                (*fdot)(v_priv, dms, buf, n_dm, nkpts, nbands, nbasp,
-                        i, j, k, l, bvk_cell_id, cell0_shl_id, images_loc,
-                        bands_ao_loc, dm_translation, vhfopt, &envs);
+                for (k = 0; k < nksh; k++) {
+                for (l = 0; l < nlsh; l++) {
+                        if (!ovlp_mask[k*nlsh+l]) {
+                                continue;
+                        }
+                        (*fdot)(v_priv, dms, buf, n_dm, nkpts, nbands, nbasp,
+                                i, j, k, l, bvk_cell_id, cell0_shl_id, images_loc,
+                                bands_ao_loc, dm_translation, vhfopt, &envs);
+                } }
         }
 #pragma omp critical
         {
-                for (i = 0; i < size; i++) {
-                        out[i] += v_priv[i];
+                for (n = 0; n < size; n++) {
+                        out[n] += v_priv[n];
                 }
         }
         free(buf);

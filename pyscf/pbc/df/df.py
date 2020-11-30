@@ -428,6 +428,7 @@ class GDF(aft.AFTDF):
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             eta_cell = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
             eta_guess = estimate_eta(cell, cell.precision)
+            logger.debug3(self, 'eta_guess = %g', eta_guess)
             if eta_cell < eta_guess:
                 self.eta = eta_cell
                 self.mesh = cell.mesh

@@ -400,17 +400,16 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int *block_jloc = block_iloc + nish + 1;
         int *block_kloc = block_jloc + njsh + 1;
         int *block_lloc = block_kloc + nksh + 1;
-        const int nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
-        const int nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
-        const int nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
-        const int nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc);
-        const int nblock_kl = nblock_k * nblock_l;
-        const int nblock_jkl = nblock_j * nblock_kl;
-        const int nblock_ijkl = nblock_i * nblock_jkl;
+        const size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
+        const size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
+        const size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
+        const size_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc);
+        const size_t nblock_kl = nblock_k * nblock_l;
+        const size_t nblock_jkl = nblock_j * nblock_kl;
 
 #pragma omp parallel
 {
-        int i, j, k, l, r, blk_id;
+        size_t i, j, k, l, r, blk_id;
         JKArray *v_priv[n_dm];
         for (i = 0; i < n_dm; i++) {
                 v_priv[i] = allocate_JKArray(jkop[i], shls_slice, ao_loc, ncomp);
@@ -418,16 +417,16 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         double *buf = malloc(sizeof(double) * (di*di*di*di*ncomp + cache_size));
         double *cache = buf + di*di*di*di*ncomp;
 #pragma omp for nowait schedule(dynamic, 1)
-        for (blk_id = 0; blk_id < nblock_ijkl; blk_id++) {
-                // dispatch blk_id to sub-block indices (i, j, k, l)
+        for (blk_id = 0; blk_id < nblock_jkl; blk_id++) {
                 r = blk_id;
-                i = r / nblock_jkl; r = r - i * nblock_jkl;
-                j = r / nblock_kl ; r = r - j * nblock_kl;
-                k = r / nblock_l  ; r = r - k * nblock_l;
+                j = r / nblock_kl ; r = r % nblock_kl;
+                k = r / nblock_l  ; r = r % nblock_l;
                 l = r;
-                (*fdot)(intor, jkop, v_priv, tile_dms, buf, cache, n_dm,
-                        block_iloc+i, block_jloc+j, block_kloc+k, block_lloc+l,
-                        vhfopt, &envs);
+                for (i = 0; i < nblock_i; i++) {
+                        (*fdot)(intor, jkop, v_priv, tile_dms, buf, cache, n_dm,
+                                block_iloc+i, block_jloc+j, block_kloc+k, block_lloc+l,
+                                vhfopt, &envs);
+                }
         }
 #pragma omp critical
         {

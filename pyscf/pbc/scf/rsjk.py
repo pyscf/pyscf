@@ -37,6 +37,10 @@ from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
+# Threshold of steep bases and local bases
+RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 3.2)
+
+
 libpbc = lib.load_library('libpbc')
 
 class RangeSeparationJKBuilder(object):
@@ -49,7 +53,7 @@ class RangeSeparationJKBuilder(object):
         self.kpts = kpts
         self.purify = True
 
-        self.omega = 0.5
+        self.omega = 0.6
         self.cell_rs = None
         # Born-von Karman supercell
         self.bvkcell = None
@@ -80,6 +84,8 @@ class RangeSeparationJKBuilder(object):
         logger.info(self, 'omega = %s', self.omega)
         #logger.info(self, 'len(kpts) = %d', len(self.kpts))
         #logger.debug1(self, '    kpts = %s', self.kpts)
+        if self.lr_aft is not None:
+            self.lr_aft.dump_flags(verbose)
         return self
 
     def reset(self, cell=None):
@@ -196,6 +202,7 @@ class RangeSeparationJKBuilder(object):
                                              self.omega, self.bvk_kmesh)
         lr_aft.ke_cutoff = self.ke_cutoff
         lr_aft.mesh = self.mesh
+        lr_aft.eta = eta
         return self
 
     def get_jk(self, dm_kpts, hermi=1, kpts=None, kpts_band=None,
@@ -418,10 +425,7 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=Non
     log.debug('Diffused basis in sup-mol %d', np.count_nonzero(bas_mask[:,n_compact:,:]))
     return supmol
 
-# Threshold of steep bases and local bases
-_RCUT_THRESHOLD = 2.5
-
-def _re_contract_cell(cell, ke_cut_threshold, rcut_threshold=_RCUT_THRESHOLD, verbose=None):
+def _re_contract_cell(cell, ke_cut_threshold, rcut_threshold=RCUT_THRESHOLD, verbose=None):
     from pyscf.gto import NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF, ATOM_OF
     from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
     log = logger.new_logger(cell, verbose)

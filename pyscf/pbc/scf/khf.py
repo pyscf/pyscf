@@ -780,12 +780,18 @@ class KSCF(pbchf.SCF):
                 assert J == K
             else:
                 df_method = J if 'DF' in J else K
-                self.with_df = getattr(df, df_method)(self.cell)
+                self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:
             self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
+        # For nuclear attraction
+        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
+            self.with_df = df.GDF(self.cell, self.kpts)
+
+        nuc = self.with_df.__class__.__name__
+        logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
         return self
 
     def stability(self,

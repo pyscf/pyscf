@@ -115,8 +115,11 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
 
 def get_nuc(mydf, kpts=None):
     # Pseudopotential is ignored when computing just the nuclear attraction
+    t0 = (time.clock(), time.time())
     with lib.temporary_env(mydf.cell, _pseudo={}):
-        return get_pp_loc_part1(mydf, kpts)
+        nuc = get_pp_loc_part1(mydf, kpts)
+    logger.timer(mydf, 'get_nuc', *t0)
+    return nuc
 
 def get_pp_loc_part1(mydf, kpts=None):
     cell = mydf.cell
@@ -252,6 +255,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
+    t0 = (time.clock(), time.time())
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -260,13 +264,17 @@ def get_pp(mydf, kpts=None):
     nkpts = len(kpts_lst)
 
     vloc1 = get_pp_loc_part1(mydf, kpts_lst)
+    t1 = log.timer_debug1('get_pp_loc_part1', *t0)
     vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
+    t1 = log.timer_debug1('get_pp_loc_part2', *t1)
     vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
     for k in range(nkpts):
         vpp[k] += vloc1[k] + vloc2[k]
+    t1 = log.timer_debug1('get_pp_nl', *t1)
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
+    logger.timer(mydf, 'get_pp', *t0)
     return vpp
 
 def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None):
