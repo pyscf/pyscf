@@ -29,10 +29,10 @@ cell = Cell().build(
 cell1 = Cell().build(
       a = np.eye(3)*2.6,
       atom = '''He     0.4917  0.4917  0.4917''',
-      basis = {'He': [[0, [3.8, 1],
-                         [2.1, .3],
-                         [0.2, .2]],
-                      [1, [0.2, 1]],]})
+      basis = {'He': [[0, [4.8, 1, -.1],
+                          [1.1, .3, .5],
+                          [0.15, .2, .8]],
+                      [1, [0.8, 1]],]})
 
 class KnowValues(unittest.TestCase):
     def test_get_jk(self):
