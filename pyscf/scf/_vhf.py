@@ -37,11 +37,11 @@ class VHFOpt(object):
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
 
-        self._intor = intor
         if intor is None:
+            self._intor = intor
             self._cintopt = lib.c_null_ptr()
         else:
-            intor = mol._add_suffix(intor)
+            self._intor = mol._add_suffix(intor)
             self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
 
         self._dmcondname = dmcondname

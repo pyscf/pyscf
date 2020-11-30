@@ -18,7 +18,7 @@ import numpy as np
 import scipy.linalg
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.tools import k2gamma
-from pyscf.pbc.scf import rsjk_o5 as rsjk
+from pyscf.pbc.scf import rsjk
 
 cell = Cell().build(
      a = np.eye(3)*1.8,
@@ -52,6 +52,7 @@ class KnowValues(unittest.TestCase):
         ek = np.einsum('kij,kji->', kref, dm) * .5
 
         jk_builder = rsjk.RangeSeparationJKBuilder(cell, kpts)
+        jk_builder.omega = 0.5
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv)
         self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
         self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
@@ -89,6 +90,7 @@ class KnowValues(unittest.TestCase):
         ek = np.einsum('kij,kji->', kref, dm) * .5
 
         jk_builder = rsjk.RangeSeparationJKBuilder(cell1, kpts)
+        jk_builder.omega = 0.5
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv)
         self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
         self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)

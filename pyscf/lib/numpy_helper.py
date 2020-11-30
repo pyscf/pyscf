@@ -1032,10 +1032,10 @@ def condense(opname, a, loc_x, loc_y=None):
     nloc_x = loc_x.size - 1
     nloc_y = loc_y.size - 1
     if a.flags.f_contiguous:
-        out = numpy.empty((nloc_x, nloc_y), order='F')
+        out = numpy.zeros((nloc_x, nloc_y), order='F')
     else:
         a = numpy.asarray(a, order='C')
-        out = numpy.empty((nloc_x, nloc_y))
+        out = numpy.zeros((nloc_x, nloc_y))
     _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
                           a.ctypes.data_as(ctypes.c_void_p),
                           loc_x.ctypes.data_as(ctypes.c_void_p),

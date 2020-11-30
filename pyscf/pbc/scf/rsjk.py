@@ -53,7 +53,7 @@ class RangeSeparationJKBuilder(object):
         self.kpts = kpts
         self.purify = True
 
-        self.omega = 0.6
+        self.omega = None
         self.cell_rs = None
         # Born-von Karman supercell
         self.bvkcell = None
@@ -62,6 +62,8 @@ class RangeSeparationJKBuilder(object):
         self.phase = None
         self.supmol = None
         self.supmol_Ls = None
+        # bvk_bas_mask[bvk_cell_id, bas_id]: if basis in bvkcell presented in supmol
+        self.bvk_bas_mask = None
         # For shells in the supmol, cell0_shl_id is the shell ID in cell0
         self.cell0_shl_id = None
         # bvk_cell_id is the Id of image in BvK supercell
@@ -102,7 +104,7 @@ class RangeSeparationJKBuilder(object):
         if omega is not None:
             self.omega = omega
 
-        if self.omega is None:
+        if self.omega is None and self.mesh is not None:
             # Search a proper range-separation parameter omega that can balance the
             # computational cost between the real space integrals and moment space
             # integrals
@@ -110,6 +112,8 @@ class RangeSeparationJKBuilder(object):
                                                          self.mesh[:cell.dimension]))
             self.omega = aft.estimate_omega_for_ke_cutoff(cell, self.ke_cutoff)
         else:
+            if self.omega is None:
+                self.omega = _guess_omega(cell, kpts)
             self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
             self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
 
@@ -168,11 +172,18 @@ class RangeSeparationJKBuilder(object):
         n_compact = n_steep + n_local
         bas_mask = supmol._bas_mask
 
-        bvk_bas_mask = bas_mask.any(axis=2)
+        self.bvk_bas_mask = bvk_bas_mask = bas_mask.any(axis=2)
+        # Some basis in bvk-cell are not presented in the supmol. They can be
+        # skipped when computing SR integrals
+        self.bvkcell._bas = bvkcell._bas[bvk_bas_mask.ravel()]
+
+        # Record the mapping between the decimated bvkcell basis and the
+        # original bvkcell basis
         bvk_cell_idx = np.repeat(np.arange(nkpts)[:,None], nbas, axis=1)
         self.bvk_cell_id = bvk_cell_idx[bvk_bas_mask].astype(np.int32)
         cell0_shl_idx = np.repeat(np.arange(nbas)[None,:], nkpts, axis=0)
         self.cell0_shl_id = cell0_shl_idx[bvk_bas_mask].astype(np.int32)
+
         cpu1 = logger.timer(self, 'initializing supmol', *cpu0)
         logger.info(self, 'sup-mol nbas = %d cGTO = %d pGTO = %d',
                     supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -190,10 +201,11 @@ class RangeSeparationJKBuilder(object):
         bvk_q_cond = lib.condense('NP_absmax', q_cond, idx, idx)
         ovlp_mask = bvk_q_cond > direct_scf_tol
         # Remove diffused-diffused block
-        diffused_mask = np.zeros_like(bvk_bas_mask)
-        diffused_mask[:,n_compact:] = True
-        diffused_mask = diffused_mask[bvk_bas_mask]
-        ovlp_mask[diffused_mask[:,None]&diffused_mask] = False
+        if n_diffused > 0:
+            diffused_mask = np.zeros_like(bvk_bas_mask)
+            diffused_mask[:,n_compact:] = True
+            diffused_mask = diffused_mask[bvk_bas_mask]
+            ovlp_mask[diffused_mask[:,None]&diffused_mask] = False
         self.ovlp_mask = ovlp_mask.astype(np.int8)
 
         # mute rcut_threshold, divide basis into two sets only
@@ -235,11 +247,15 @@ class RangeSeparationJKBuilder(object):
         orig_ao_loc = self.cell.ao_loc
         orig_nao = self.cell.nao
 
-        sm_nbas = supmol.nbas
         if kpts_band is None:
+            # * bvkcell.ao_loc are the AOs which appear in supmol (some basis
+            # are removed)
+            # * bands_ao_loc has dimension (Nk,nbas), corresponding to the
+            # bvkcell with all basis
             bvk_ao_loc = bvkcell.ao_loc
-            bands_ao_loc = bvk_ao_loc
             nbands = nkpts
+            bands_ao_loc = nao * np.arange(nbands)[:,None] + cell.ao_loc[:-1]
+            bands_ao_loc = np.append(bands_ao_loc.ravel(), nao * nbands).astype(np.int32)
 
         if dm_kpts.ndim != 4:
             dm = dm_kpts.reshape(-1, nkpts, orig_nao, orig_nao)
@@ -265,7 +281,7 @@ class RangeSeparationJKBuilder(object):
         sc_dm = np.asarray(sc_dm.reshape(-1, nkpts, nao, nao), order='C')
         n_sc_dm = sc_dm.shape[0]
 
-        dm_cond = [lib.condense('NP_absmax', d, bvk_ao_loc, bvk_ao_loc[:cell.nbas+1]) for d in sc_dm]
+        dm_cond = [lib.condense('NP_absmax', d, bands_ao_loc, bands_ao_loc[:cell.nbas+1]) for d in sc_dm]
         dm_cond = np.asarray(np.max(dm_cond, axis=0), order='C')
         libpbc.CVHFset_dm_cond(vhfopt._this,
                                dm_cond.ctypes.data_as(ctypes.c_void_p), dm_cond.size)
@@ -333,6 +349,8 @@ class RangeSeparationJKBuilder(object):
             vj += lib.einsum('nkpq,pi,qj->nkij', vj1, lr_c_coeff, lr_c_coeff)
             if self.purify and kpts_band is None:
                 vj = _purify(vj, phase)
+            if hermi:
+                vj = (vj + vj.conj().transpose(0,1,3,2)) * .5
             if dm_kpts.ndim == 3:  # KRHF
                 vj = vj[0]
 
@@ -341,6 +359,8 @@ class RangeSeparationJKBuilder(object):
             vk += lib.einsum('nkpq,pi,qj->nkij', vk1, lr_c_coeff, lr_c_coeff)
             if self.purify and kpts_band is None:
                 vk = _purify(vk, phase)
+            if hermi:
+                vk = (vk + vk.conj().transpose(0,1,3,2)) * .5
             if dm_kpts.ndim == 3:  # KRHF
                 vk = vk[0]
 
@@ -415,7 +435,9 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=Non
     supmol._bas = np.asarray(_bas_reordered[bas_mask], dtype=np.int32, order='C')
 
     images_count = np.count_nonzero(bas_mask, axis=2)
-    images_loc = np.append(0, np.cumsum(images_count.ravel()))
+    # Some bases are completely local inside the bvk-cell. Exclude them from
+    # lattice sum.
+    images_loc = np.append(0, np.cumsum(images_count[images_count != 0]))
     supmol._images_loc = images_loc.astype(np.int32)
     supmol._bas_mask = bas_mask
 
@@ -539,6 +561,21 @@ def _re_contract_cell(cell, ke_cut_threshold, rcut_threshold=RCUT_THRESHOLD, ver
     log.debug('No. smooth_bas %d', len(smooth_bas))
     return cell_rs
 
+def _guess_mesh(cell, kpts):
+    nao = cell.nao
+    if nao < 150:
+        nkpts = len(kpts)
+        nkk = (nkpts**(1./3) * 2 - 1) ** 3
+        mesh = [int((2.5e8 / nao**2 / nkk) ** (1./3) + 3)] * 3
+    else:
+        mesh = [7, 7, 7]
+    return mesh
+
+def _guess_omega(cell, kpts):
+    ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, 0.35, cell.precision)
+    omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+    return omega
+
 class _LongRangeAFT(aft.AFTDF):
     '''
     Regular Coulomb metric for (DD|DD), (DD|CD), (DD|CC)
@@ -655,7 +692,8 @@ class _LongRangeAFT(aft.AFTDF):
         # G=0 contribution, associated to 2e integrals in real-space
         if cell.dimension >= 2:
             ovlp = np.asarray(cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
-            ovlp[:,nao_compact:,nao_compact:] = 0
+            if nao_compact < nao:
+                ovlp[:,nao_compact:,nao_compact:] = 0
             kws = cell.get_Gv_weights(mesh)[2]
             G0_weight = kws[0] if isinstance(kws, np.ndarray) else kws
             vj_G0 = lib.einsum('kpq,nkqp,lrs->nlrs', ovlp, dm_kpts, ovlp)
@@ -926,7 +964,7 @@ C P
         ek = np.einsum('kij,kji->', kref, dm) * .5
 
         jk_builder = RangeSeparationJKBuilder(cell, kpts)
-        #jk_builder.build(omega=0.8)
+        jk_builder.build(omega=0.5)
         #jk_builder.mesh = [6,6,6]
         #print(jk_builder.omega, jk_builder.mesh)
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv)

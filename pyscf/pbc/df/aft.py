@@ -264,13 +264,13 @@ def get_pp(mydf, kpts=None):
     nkpts = len(kpts_lst)
 
     vloc1 = get_pp_loc_part1(mydf, kpts_lst)
-    t1 = log.timer_debug1('get_pp_loc_part1', *t0)
+    t1 = logger.timer_debug1(mydf, 'get_pp_loc_part1', *t0)
     vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
-    t1 = log.timer_debug1('get_pp_loc_part2', *t1)
+    t1 = logger.timer_debug1(mydf, 'get_pp_loc_part2', *t1)
     vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
     for k in range(nkpts):
         vpp[k] += vloc1[k] + vloc2[k]
-    t1 = log.timer_debug1('get_pp_nl', *t1)
+    t1 = logger.timer_debug1(mydf, 'get_pp_nl', *t1)
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
