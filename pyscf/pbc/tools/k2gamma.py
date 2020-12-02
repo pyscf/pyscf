@@ -229,18 +229,6 @@ if __name__ == '__main__':
     cell.a = np.eye(3) * 4.
     cell.unit='B'
     cell.build()
-    #print(double_pahse_indices([3,1,2]))
-    kmesh = [3, 1, 2]
-    kpts = cell.make_kpts(kmesh)
-    scell, phase = get_phase(cell, kpts)
-    dph = np.einsum('Rk,Sk->RSk', phase.conj(), phase)
-    np.random.seed(3)
-    samples = np.random.random(len(kpts))
-    dphs = np.einsum('RSk,k->RS', dph, samples).ravel()
-    print(double_pahse_indices(kmesh, False))
-    #(array([5, 4, 4, 3, 2, 2, 1, 0, 0, 1, 0, 0, 1, 0, 0]),
-    # array([0, 0, 1, 0, 0, 1, 0, 0, 1, 2, 2, 3, 4, 4, 5]))
-    exit()
 
     kmesh = [2, 2, 1]
     kpts = cell.make_kpts(kmesh)

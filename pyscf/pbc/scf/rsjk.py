@@ -104,16 +104,12 @@ class RangeSeparationJKBuilder(object):
         if omega is not None:
             self.omega = omega
 
-        if self.omega is None and self.mesh is not None:
+        if self.omega is None:
             # Search a proper range-separation parameter omega that can balance the
             # computational cost between the real space integrals and moment space
             # integrals
-            self.ke_cutoff = min(pbctools.mesh_to_cutoff(cell.lattice_vectors(),
-                                                         self.mesh[:cell.dimension]))
-            self.omega = aft.estimate_omega_for_ke_cutoff(cell, self.ke_cutoff)
+            self.omega, self.mesh, self.ke_cutoff = _guess_omega(cell, kpts, self.mesh)
         else:
-            if self.omega is None:
-                self.omega = _guess_omega(cell, kpts)
             self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
             self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
 
@@ -177,8 +173,8 @@ class RangeSeparationJKBuilder(object):
         # skipped when computing SR integrals
         self.bvkcell._bas = bvkcell._bas[bvk_bas_mask.ravel()]
 
-        # Record the mapping between the decimated bvkcell basis and the
-        # original bvkcell basis
+        # Record the mapping between the dense bvkcell basis and the
+        # original sparse bvkcell basis
         bvk_cell_idx = np.repeat(np.arange(nkpts)[:,None], nbas, axis=1)
         self.bvk_cell_id = bvk_cell_idx[bvk_bas_mask].astype(np.int32)
         cell0_shl_idx = np.repeat(np.arange(nbas)[None,:], nkpts, axis=0)
@@ -247,15 +243,14 @@ class RangeSeparationJKBuilder(object):
         orig_ao_loc = self.cell.ao_loc
         orig_nao = self.cell.nao
 
-        if kpts_band is None:
-            # * bvkcell.ao_loc are the AOs which appear in supmol (some basis
-            # are removed)
-            # * bands_ao_loc has dimension (Nk,nbas), corresponding to the
-            # bvkcell with all basis
-            bvk_ao_loc = bvkcell.ao_loc
-            nbands = nkpts
-            bands_ao_loc = nao * np.arange(nbands)[:,None] + cell.ao_loc[:-1]
-            bands_ao_loc = np.append(bands_ao_loc.ravel(), nao * nbands).astype(np.int32)
+        # * dense_bvk_ao_loc are the AOs which appear in supmol (some basis
+        # are removed)
+        # * sparse_ao_loc has dimension (Nk,nbas), corresponding to the
+        # bvkcell with all basis
+        dense_bvk_ao_loc = bvkcell.ao_loc
+        sparse_ao_loc = nao * np.arange(nkpts)[:,None] + cell.ao_loc[:-1]
+        sparse_ao_loc = np.append(sparse_ao_loc.ravel(), nao * nkpts)
+        nbands = nkpts
 
         if dm_kpts.ndim != 4:
             dm = dm_kpts.reshape(-1, nkpts, orig_nao, orig_nao)
@@ -281,7 +276,8 @@ class RangeSeparationJKBuilder(object):
         sc_dm = np.asarray(sc_dm.reshape(-1, nkpts, nao, nao), order='C')
         n_sc_dm = sc_dm.shape[0]
 
-        dm_cond = [lib.condense('NP_absmax', d, bands_ao_loc, bands_ao_loc[:cell.nbas+1]) for d in sc_dm]
+        dm_cond = [lib.condense('NP_absmax', d, sparse_ao_loc, sparse_ao_loc[:cell.nbas+1])
+                   for d in sc_dm]
         dm_cond = np.asarray(np.max(dm_cond, axis=0), order='C')
         libpbc.CVHFset_dm_cond(vhfopt._this,
                                dm_cond.ctypes.data_as(ctypes.c_void_p), dm_cond.size)
@@ -313,8 +309,7 @@ class RangeSeparationJKBuilder(object):
             self.cell0_shl_id.ctypes.data_as(ctypes.c_void_p),
             supmol._images_loc.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*8)(*shls_slice),
-            bvk_ao_loc.ctypes.data_as(ctypes.c_void_p),
-            bands_ao_loc.ctypes.data_as(ctypes.c_void_p),
+            dense_bvk_ao_loc.ctypes.data_as(ctypes.c_void_p),
             dm_translation.ctypes.data_as(ctypes.c_void_p),
             vhfopt._cintopt, vhfopt._this,
             supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
@@ -367,11 +362,11 @@ class RangeSeparationJKBuilder(object):
         return vj, vk
 
 def _purify(mat_kpts, phase):
-    #:mat_bvk = np.einsum('RSk,nkij->nRSij', phase, mat_kpts, phase.conj())
-    #:mat = np.einsum('Rk,nRSij,Sk->nkij', phase.conj(), mat_bvk.real, phase)
-    pp = np.einsum('Rk,Sk->RSk', phase, phase.conj())
-    mat_bvk = lib.einsum('RSk,nkij->nRSij', pp, mat_kpts)
-    return lib.einsum('RSk,nRSij->nkij', pp.conj(), mat_bvk.real)
+    #:mat_bvk = np.einsum('Rk,nkij,Sk->nRSij', phase, mat_kpts, phase.conj())
+    #:return np.einsum('Rk,nRSij,Sk->nkij', phase.conj(), mat_bvk.real, phase)
+    nkpts = phase.shape[1]
+    mat_bvk = lib.einsum('k,Sk,nkuv->nSuv', phase[0], phase.conj(), mat_kpts)
+    return lib.einsum('S,Sk,nSuv->nkuv', nkpts*phase[:,0].conj(), phase, mat_bvk.real)
 
 def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=None):
     from pyscf.pbc.df.ft_ao import _estimate_overlap
@@ -561,20 +556,15 @@ def _re_contract_cell(cell, ke_cut_threshold, rcut_threshold=RCUT_THRESHOLD, ver
     log.debug('No. smooth_bas %d', len(smooth_bas))
     return cell_rs
 
-def _guess_mesh(cell, kpts):
+def _guess_omega(cell, kpts, mesh=None):
     nao = cell.nao
-    if nao < 150:
-        nkpts = len(kpts)
-        nkk = (nkpts**(1./3) * 2 - 1) ** 3
-        mesh = [int((2.5e8 / nao**2 / nkk) ** (1./3) + 3)] * 3
-    else:
-        mesh = [7, 7, 7]
-    return mesh
-
-def _guess_omega(cell, kpts):
-    ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, 0.35, cell.precision)
-    omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
-    return omega
+    nkpts = len(kpts)
+    nkk = nkpts**(1./3) * 2 - 1
+    if mesh is None:
+        mesh = [max(5, int(.85 * cell.rcut * nao ** (1./3) / nkk + 0.5))] * 3
+    ke_cutoff = min(pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh[:cell.dimension]))
+    omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff)
+    return omega, mesh, ke_cutoff
 
 class _LongRangeAFT(aft.AFTDF):
     '''
