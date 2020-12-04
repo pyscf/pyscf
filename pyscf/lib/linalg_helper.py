@@ -1324,7 +1324,10 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         x1[i] *= rmat[i,i]
 
     innerprod = [dot(xi.conj(), xi).real for xi in x1]
-    max_innerprod = max(innerprod)
+    if innerprod:
+        max_innerprod = max(innerprod)
+    else:
+        max_innerprod = 0
     if max_innerprod < lindep or max_innerprod < tol**2:
         if x0 is None:
             return numpy.zeros_like(b)

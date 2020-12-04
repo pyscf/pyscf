@@ -96,6 +96,7 @@ NUC_ECP = 4  # atoms with pseudo potential
 
 BASE = getattr(__config__, 'BASE', 0)
 NORMALIZE_GTO = getattr(__config__, 'NORMALIZE_GTO', True)
+DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -324,7 +325,10 @@ def format_atom(atoms, origin=0, axes=None,
         try:
             coords = [float(x) for x in dat[1:4]]
         except ValueError:
-            coords = list(eval(','.join(dat[1:4])))
+            if DISABLE_EVAL:
+                raise ValueError('Failed to parse geometry %s' % line)
+            else:
+                coords = list(eval(','.join(dat[1:4])))
         if len(coords) != 3:
             raise ValueError('Coordinates error in %s' % line)
         return [_atom_symbol(dat[0]), coords]
@@ -3551,10 +3555,16 @@ def from_zmatrix(atomstr):
                 coord.append(numpy.zeros(3))
                 min_items_per_line = 3
             elif len(rawd) == 3:
-                coord.append(numpy.array((eval(rawd[2]), 0, 0)))
+                if DISABLE_EVAL:
+                    coord.append(numpy.array((float(rawd[2]), 0, 0)))
+                else:
+                    coord.append(numpy.array((eval(rawd[2]), 0, 0)))
                 min_items_per_line = 5
             elif len(rawd) == 5:
-                vals = eval(','.join(rawd[1:]))
+                if DISABLE_EVAL:
+                    vals = rawd[1:]
+                else:
+                    vals = eval(','.join(rawd[1:]))
                 bonda = int(vals[0]) - 1
                 bond  = float(vals[1])
                 anga  = int(vals[2]) - 1
@@ -3570,8 +3580,10 @@ def from_zmatrix(atomstr):
                 coord.append(coord[bonda]+c)
                 min_items_per_line = 7
             else:
-                vals = eval(','.join(rawd[1:]))
-                print(rawd, vals)
+                if DISABLE_EVAL:
+                    vals = rawd[1:]
+                else:
+                    vals = eval(','.join(rawd[1:]))
                 bonda = int(vals[0]) - 1
                 bond  = float(vals[1])
                 anga  = int(vals[2]) - 1

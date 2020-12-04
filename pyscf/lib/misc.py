@@ -442,11 +442,6 @@ class StreamObject(object):
     stdout = sys.stdout
     _keys = set(['verbose', 'stdout'])
 
-    def __getstate__(self):
-        d = dict(self.__dict__)
-        d.pop('stdout', None)
-        return d
-
     def kernel(self, *args, **kwargs):
         '''
         Kernel function is the main driver of a method.  Every method should
