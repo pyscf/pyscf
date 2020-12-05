@@ -19,7 +19,7 @@
 '''
 Pipek-Mezey localization
 
-ref. JCTC, 10, 642 (2014); DOI:10.1021/ct401016x
+ref. JCTC 10, 642 (2014); DOI:10.1021/ct401016x
 '''
 
 import numpy
@@ -119,8 +119,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
 
 
 class PipekMezey(boys.Boys):
-    '''
-    The Pipek-Mezey localization optimizer that maximizes the orbital
+    '''The Pipek-Mezey localization optimizer that maximizes the orbital
     population
 
     Args:
@@ -164,9 +163,16 @@ class PipekMezey(boys.Boys):
             to 'atomic', atomic orbitals will be used as initial guess.
             Default 'atomic'
         pop_method : str
-            How the orbital population is calculated. By default, meta-lowdin
-            population (JCTC, 10, 3784) is used. It can be set to 'mulliken',
-            or 'lowdin' for other population definition
+            How the orbital population is calculated, see JCTC 10, 642
+            (2014) for discussion. Options are:
+            - 'meta-lowdin' (default) as defined in JCTC 10, 3784 (2014)
+            - 'mulliken' original Pipek-Mezey scheme, JCP 90, 4916 (1989)
+            - 'lowdin' Lowdin charges, JCTC 10, 642 (2014)
+            - 'iao' or 'ibo' intrinsic atomic orbitals, JCTC 9, 4384 (2013)
+            - 'becke' Becke charges, JCTC 10, 642 (2014)
+            The IAO and Becke charges do not depend explicitly on the
+            basis set, and have a complete basis set limit [JCTC 10,
+            642 (2014)].
         exponent : int
             The power to define norm. It can be 2 or 4. Default 2.
 
