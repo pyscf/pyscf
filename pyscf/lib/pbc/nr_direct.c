@@ -656,7 +656,7 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         double *v_priv = calloc(size, sizeof(double));
         double *buf = malloc(sizeof(double) * (di*di*di*di*2 + cache_size));
 
-#pragma omp for schedule(dynamic, 4)
+#pragma omp for schedule(dynamic, 1)
         for (ij = 0; ij < nij; ij++) {
                 i = ij / njsh;
                 j = ij % njsh;
