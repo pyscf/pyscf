@@ -22,7 +22,10 @@ Some helper functions
 
 import os, sys
 import warnings
-import imp
+if sys.version_info >= (3,):
+    import importlib as imp
+else:
+    import imp
 import tempfile
 import functools
 import itertools

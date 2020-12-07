@@ -17,7 +17,10 @@
 #
 
 import os, sys
-import imp
+if sys.version_info >= (3,):
+    import importlib as imp
+else:
+    import imp
 import numpy
 import pyscf.ao2mo
 
