@@ -1,0 +1,8 @@
+1. python 2 to python 3
+2. release pipeline
+  * static analysis and code style check
+  * pip, conda, docker releases
+  * Automatically update documents and homepage
+3. Documents
+4. Remove deprecated packages
+5. setup examples for contributing libraries
