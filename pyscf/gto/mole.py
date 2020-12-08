@@ -2582,9 +2582,12 @@ class Mole(lib.StreamObject):
                     else:
                         kappa = 0
                         b_coeff = b[1:]
+                    nprim = len(b_coeff)
+                    nctr = len(b_coeff[0])-1
+                    if nprim < nctr:
+                        logger.warn(self, 'num. primitives smaller than num. contracted basis')
                     self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  '
-                                      % (b[0], kappa, b_coeff.__len__(),
-                                         b_coeff[0].__len__()-1))
+                                      % (b[0], kappa, nprim, nprim, nctr))
                     for k, x in enumerate(b_coeff):
                         if k == 0:
                             self.stdout.write('%-15.12g  ' % x[0])
