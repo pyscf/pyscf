@@ -23,7 +23,11 @@ __all__ = ["MPIPool", "MPIPoolException"]
 
 import os
 import sys
-import imp
+if sys.version_info >= (3,):
+    import importlib as imp
+else:
+    import imp
+
 import types
 import marshal
 #import traceback
