@@ -2,10 +2,11 @@
 export OMP_NUM_THREADS=1 
 export PYTHONPATH=$(pwd):$PYTHONPATH 
 
+cd ./pyscf
 echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './lib/deps/lib'" >> .pyscf_conf.py
 
-nosetests ./pyscf -v --with-timer --with-coverage \
+nosetests -v --with-timer --with-coverage \
     --exclude-dir=dmrgscf --exclude-dir=fciqmcscf \
     --exclude-dir=icmpspt --exclude-dir=shciscf --exclude-dir=examples --exclude-dir=nao \
     --exclude-dir=cornell_shci --exclude-dir=pbc/grad \
