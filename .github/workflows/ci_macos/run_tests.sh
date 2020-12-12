@@ -29,7 +29,7 @@ nosetests -v --with-timer \
     -I test_h_.*\.py \
     -I test_P_uadc_ea.py \
     -I test_P_uadc_ip.py \
-    --exclued-test=df/test/test_df_jk.test_dhf \
+    --exclude-test=df/test/test_df_jk.test_dhf \
     --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondTestSupercell3 \
     --exclude-test=pbc/gw/test/test_kgw_slow_supercell.DiamondKSTestSupercell3 \
     --exclude-test=pbc/gw/test/test_kgw_slow.DiamondTestSupercell3 \
