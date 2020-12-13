@@ -33,6 +33,15 @@ CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
 def frac_occ_(mf, tol=1e-3):
+    '''
+    Addons for SCF methods to assign fractional occupancy for degenerated
+    occpupied HOMOs.
+
+    Examples::
+        >>> mf = gto.M(atom='O 0 0 0; O 0 0 1', verbose=4).RHF()
+        >>> mf = scf.addons.frac_occ(mf)
+        >>> mf.run()
+    '''
     from pyscf.scf import uhf, rohf
     old_get_occ = mf.get_occ
     mol = mf.mol
