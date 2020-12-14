@@ -6,3 +6,15 @@
 3. Documents
 4. Remove deprecated packages
 5. setup examples for contributing libraries
+
+12/14
+static analysis: pyflake
+ - annotations
+
+Reach out to Mark re: packaging
+
+Decide what to move to addons?
+- only modules not currently tested?
+- balance ease of maintenance with ease of development
+
+Docs: Xing finish HF outline 
