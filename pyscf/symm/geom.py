@@ -95,9 +95,15 @@ def householder(vec):
 
 def closest_axes(axes, ref):
     xcomp, ycomp, zcomp = numpy.einsum('ix,jx->ji', axes, ref)
-    z_id = numpy.argmax(abs(zcomp))
+    zmax = numpy.amax(abs(zcomp))
+    zmax_idx = numpy.where(abs(abs(zcomp)-zmax)<TOLERANCE)[0]
+    z_id = numpy.amax(zmax_idx)
+    #z_id = numpy.argmax(abs(zcomp))
     xcomp[z_id] = ycomp[z_id] = 0       # remove z
-    x_id = numpy.argmax(abs(xcomp))
+    xmax = numpy.amax(abs(xcomp))
+    xmax_idx = numpy.where(abs(abs(xcomp)-xmax)<TOLERANCE)[0]
+    x_id = numpy.amax(xmax_idx)
+    #x_id = numpy.argmax(abs(xcomp))
     ycomp[x_id] = 0                     # remove x
     y_id = numpy.argmax(abs(ycomp))
     return x_id, y_id, z_id
