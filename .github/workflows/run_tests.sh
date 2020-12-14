@@ -3,7 +3,7 @@ export OMP_NUM_THREADS=1
 export PYTHONPATH=$(pwd):$PYTHONPATH 
 
 echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
-echo "dftd3_DFTD3PATH = './lib/deps/lib'" >> .pyscf_conf.py
+echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
 
 nosetests pyscf/ -v --with-timer --with-cov --cov-report xml --cov-report annotate --cov-config .coveragerc --cov pyscf \
     --exclude-dir=pyscf/dmrgscf --exclude-dir=pyscf/fciqmcscf \
