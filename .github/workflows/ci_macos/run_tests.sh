@@ -24,7 +24,6 @@ nosetests -v --with-timer --with-coverage \
     -e libxc_cam_beta_bug \
     -e test_finite_diff_rks_eph \
     -e test_finite_diff_uks_eph \
-    -e test_dhf \
     -I test_kuccsd_supercell_vs_kpts\.py \
     -I test_kccsd_ghf\.py \
     -I test_h_.*\.py \
