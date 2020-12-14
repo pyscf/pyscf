@@ -11,5 +11,4 @@ fi
 ./.github/workflows/ci_"$os"/deps_apt.sh
 ./.github/workflows/ci_"$os"/python_deps.sh
 ./.github/workflows/ci_"$os"/build_pyscf.sh
-./.github/workflows/ci_"$os"/test_libxc.sh
-#./.github/workflows/ci_"$os"/run_tests.sh
+./.github/workflows/ci_"$os"/run_tests.sh
