@@ -12,6 +12,7 @@ omit = */dmrgscf/*
     */rt/*
     */semiempirical/*
     */extras/*
+    */future/*
     */gen_*_param.py
 disable_warnings = include-ignored
 
