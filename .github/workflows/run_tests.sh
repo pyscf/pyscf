@@ -24,6 +24,7 @@ nosetests pyscf/ -v --with-timer --with-cov --cov-report xml --cov-report term -
     -e libxc_cam_beta_bug \
     -e test_finite_diff_rks_eph \
     -e test_finite_diff_uks_eph \
+    -e test_pipek \
     -I test_kuccsd_supercell_vs_kpts\.py \
     -I test_kccsd_ghf\.py \
     -I test_h_.*\.py \
