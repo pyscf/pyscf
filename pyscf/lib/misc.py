@@ -22,7 +22,6 @@ Some helper functions
 
 import os, sys
 import warnings
-import imp
 import tempfile
 import functools
 import itertools
@@ -782,7 +781,12 @@ class call_in_background(object):
             handlers = self.handlers
             ntasks = len(self.fns)
 
-            if self.sync or imp.lock_held():
+            global_import_lock = False
+            if sys.version_info < (3, 4):
+                import imp
+                global_import_lock = imp.lock_held()
+
+            if self.sync or global_import_lock:
 # Some modules like nosetests, coverage etc
 #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
 # hang when Python multi-threading was used in the import stage due to (Python

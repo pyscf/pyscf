@@ -149,14 +149,14 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     if single_script:
         scripts = [scripts]
     # Check if letters other than ijkl were provided.
-    if set(''.join(scripts[:4])).difference('ijkl,->'):
+    if set(''.join(scripts[:4])).difference('ijkl,->as12'):
         # Translate these letters to ijkl if possible
         scripts = [script.translate({ord(script[0]): 'i',
                                      ord(script[1]): 'j',
                                      ord(script[2]): 'k',
                                      ord(script[3]): 'l'})
                    for script in scripts]
-        if set(''.join(scripts[:4])).difference('ijkl,->'):
+        if set(''.join(scripts[:4])).difference('ijkl,->as12'):
             raise RuntimeError('Scripts unsupported %s' % scripts)
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
