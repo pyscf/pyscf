@@ -145,7 +145,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
 
     p1 = 0
     for istep, sh_range in enumerate(shranges):
-        log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
+        log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d',
                   istep+1, len(shranges), *sh_range)
         bstart, bend, nrow = sh_range
         shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)

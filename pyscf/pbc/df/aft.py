@@ -160,8 +160,8 @@ def get_pp_loc_part1(mydf, kpts=None):
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2'):
         for k, aoao in enumerate(aoaoks):
-# rho_ij(G) nuc(-G) / G^2
-# = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
+            # rho_ij(G) nuc(-G) / G^2
+            # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
             if gamma_point(kpts_lst[k]):
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
@@ -186,7 +186,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     cell = mydf.cell
     nkpts = len(kpts)
 
-# Use the 3c2e code with steep s gaussians to mimic nuclear density
+    # Use the 3c2e code with steep s gaussians to mimic nuclear density
     fakenuc = _fake_nuc(cell)
     fakenuc._atm, fakenuc._bas, fakenuc._env = \
             gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,

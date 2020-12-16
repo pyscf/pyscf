@@ -268,6 +268,21 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def map_with_prefetch(func, *iterables):
+    '''
+    Apply function to an task and prefetch the next task
+    '''
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = None
+        for task in zip(*iterables):
+            if future is None:
+                future = executor.submit(func, *task)
+            else:
+                result = future.result()
+                future = executor.submit(func, *task)
+                yield result
+        if future is not None:
+            yield future.result()
 
 def index_tril_to_pair(ij):
     '''Given tril-index ij, compute the pair indices (i,j) which satisfy
