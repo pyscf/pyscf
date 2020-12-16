@@ -335,11 +335,11 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
         nelec = float(sum(self.nelec))
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %g', ne/nkpts, nelec/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %g', ne/nkpts, nelec/nkpts)
             dm_kpts *= nelec / ne
         return dm_kpts
 

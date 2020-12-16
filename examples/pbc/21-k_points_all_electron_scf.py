@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 '''
-Hartree-Fock/DFT with k-points sampling for all-electron calculation
-MDF (mixed density fitting) can also be used in k-points sampling.
+Hartree-Fock/DFT with k-points sampling for all-electron calculations
+
+GDF (Gassuaing desnity fitting), MDF (mixed density fitting) or RS-JK builder
+can be used in all electron calculations. They are more efficient than the
+default SCF JK builder.
 '''
 
 import numpy
@@ -25,6 +28,9 @@ cell = gto.M(
 nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total
 kpts = cell.make_kpts(nk)
 
+#
+# Mixed density fitting
+#
 kmf = scf.KRHF(cell, kpts).mix_density_fit()
 # In the MDF scheme, modifying the default mesh for PWs to reduce the cost
 # The default mesh for PWs is a very dense-grid scheme which is automatically
@@ -33,8 +39,17 @@ kmf = scf.KRHF(cell, kpts).mix_density_fit()
 kmf.with_df.mesh = [10,10,10]
 kmf.kernel()
 
+#
+# Density fitting
+#
 kmf = dft.KRKS(cell, kpts).density_fit(auxbasis='weigend')
 kmf.xc = 'bp86'
+kmf.kernel()
+
+#
+# RS-JK builder is efficient for large number of k-points
+#
+kmf = dft.KRHF(cell, kpts).jk_method('RS')
 kmf.kernel()
 
 #
@@ -45,4 +60,3 @@ kmf.kernel()
 mf = scf.KRHF(cell, kpts).density_fit()
 mf = mf.newton()
 mf.kernel()
-

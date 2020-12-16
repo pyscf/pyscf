@@ -118,7 +118,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
 
 
 def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
-          omega=None, **kwargs):
+           omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -156,8 +156,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
-        f_kpts = [mol_hf.damping(s1e, dm_kpts[k] * 0.5, f_kpts[k], \
-                damp_factor) for k, s1e in enumerate(s_kpts)]
+        f_kpts = [mol_hf.damping(s1e, dm_kpts[k] * 0.5, f_kpts[k], damp_factor)
+                  for k, s1e in enumerate(s_kpts)]
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -583,11 +583,11 @@ class KSCF(pbchf.SCF):
         nelectron = float(self.cell.tot_electrons(nkpts))
         if abs(ne - nelectron) > 1e-7*nkpts:
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %s', ne/nkpts, nelectron/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne/nkpts, nelectron/nkpts)
             dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 

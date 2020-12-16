@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@
 
 '''
 Range separation JK builder
+
+Ref:
+    Q. Sun, arXiv:2012.07929
 '''
 
 import time
@@ -180,7 +183,7 @@ class RangeSeparationJKBuilder(object):
         cell0_shl_idx = np.repeat(np.arange(nbas)[None,:], nkpts, axis=0)
         self.cell0_shl_id = cell0_shl_idx[bvk_bas_mask].astype(np.int32)
 
-        cpu1 = logger.timer(self, 'initializing supmol', *cpu0)
+        logger.timer_debug1(self, 'initializing supmol', *cpu0)
         logger.info(self, 'sup-mol nbas = %d cGTO = %d pGTO = %d',
                     supmol.nbas, supmol.nao, supmol.npgto_nr())
 
@@ -190,7 +193,7 @@ class RangeSeparationJKBuilder(object):
                                  qcondname=libpbc.PBCVHFsetnr_direct_scf)
         vhfopt.direct_scf_tol = direct_scf_tol
         self.vhfopt = vhfopt
-        cpu1 = logger.timer(self, 'initializing vhfopt', *cpu0)
+        logger.timer(self, 'initializing vhfopt', *cpu0)
 
         q_cond = vhfopt.get_q_cond((supmol.nbas, supmol.nbas))
         idx = supmol._images_loc
@@ -201,7 +204,7 @@ class RangeSeparationJKBuilder(object):
             diffused_mask = np.zeros_like(bvk_bas_mask)
             diffused_mask[:,n_compact:] = True
             diffused_mask = diffused_mask[bvk_bas_mask]
-            ovlp_mask[diffused_mask[:,None]&diffused_mask] = False
+            ovlp_mask[diffused_mask[:,None] & diffused_mask] = False
         self.ovlp_mask = ovlp_mask.astype(np.int8)
 
         # mute rcut_threshold, divide basis into two sets only
@@ -224,9 +227,7 @@ class RangeSeparationJKBuilder(object):
             raise RuntimeError('kpts error')
         kpts = self.kpts
 
-        if kpts_band is None:
-            kpts_lst = kpts
-        else:
+        if kpts_band is not None:
             raise NotImplementedError
 
         cpu0 = (time.clock(), time.time())
@@ -240,7 +241,6 @@ class RangeSeparationJKBuilder(object):
         phase = self.phase
         cell = self.cell_rs
         nao = cell.nao
-        orig_ao_loc = self.cell.ao_loc
         orig_nao = self.cell.nao
 
         # * dense_bvk_ao_loc are the AOs which appear in supmol (some basis
@@ -494,8 +494,8 @@ def _re_contract_cell(cell, ke_cut_threshold, rcut_threshold=RCUT_THRESHOLD, ver
         nctr = orig_bas[NCTR_OF]
         ke = kecuts[ib]
 
-        steep_mask = rcuts[ib] < rcut_threshold
         smooth_mask = ke < ke_cut_threshold
+        steep_mask = (~smooth_mask) & (rcuts[ib] < rcut_threshold)
         local_mask = (~steep_mask) & (~smooth_mask)
         if log.verbose >= logger.DEBUG3:
             log.debug3('bas %d rcuts %s', ib, rcuts)
@@ -557,11 +557,12 @@ def _re_contract_cell(cell, ke_cut_threshold, rcut_threshold=RCUT_THRESHOLD, ver
     return cell_rs
 
 def _guess_omega(cell, kpts, mesh=None):
-    nao = cell.nao
+    nao = cell.npgto_nr()
     nkpts = len(kpts)
     nkk = nkpts**(1./3) * 2 - 1
     if mesh is None:
-        mesh = [max(5, int(.85 * cell.rcut * nao ** (1./3) / nkk + 0.5))] * 3
+        mesh = [max(5, int(cell.rcut * nao ** (1./3) / nkk + 1))] * 3
+        mesh = np.min([cell.mesh, mesh], axis=0)
     ke_cutoff = min(pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh[:cell.dimension]))
     omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff)
     return omega, mesh, ke_cutoff
@@ -604,7 +605,6 @@ class _LongRangeAFT(aft.AFTDF):
 
     def ft_loop(self, mesh=None, q=np.zeros(3), kpts=None, shls_slice=None,
                 max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1):
-        cell = self.cell
         for dat, p0, p1 in aft.AFTDF.ft_loop(self, mesh, q, kpts, shls_slice,
                                              max_memory, aosym, intor, comp,
                                              bvk_kmesh=self.bvk_kmesh):
@@ -658,7 +658,6 @@ class _LongRangeAFT(aft.AFTDF):
 
         n_diffused = cell._nbas_each_set[2]
         nao_compact = cell.ao_loc[cell.nbas-n_diffused]
-        nao_smooth = nao - nao_compact
 
         vj_kpts = np.zeros((n_dm,nkpts,nao,nao), dtype=np.complex128)
         kpt_allow = np.zeros(3)
@@ -704,7 +703,6 @@ class _LongRangeAFT(aft.AFTDF):
 
         n_diffused = cell._nbas_each_set[2]
         nao_compact = cell.ao_loc[cell.nbas-n_diffused]
-        nao_smooth = nao - nao_compact
 
         kpt_allow = np.zeros(3)
         mesh = self.mesh
@@ -805,13 +803,6 @@ class _LongRangeAFT(aft.AFTDF):
 
         n_diffused = cell._nbas_each_set[2]
         nao_compact = cell.ao_loc[cell.nbas-n_diffused]
-        nao_smooth = nao - nao_compact
-
-        if nao_compact < nao:
-            dmsR_ds = dmsR[:,:,nao_compact:,:].copy()
-            dmsI_ds = dmsI[:,:,nao_compact:,:].copy()
-            dmsR_sd = dmsR[:,:,:,nao_compact:].copy()
-            dmsI_sd = dmsI[:,:,:,nao_compact:].copy()
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, (self.max_memory - mem_now)) * .8

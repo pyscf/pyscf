@@ -90,9 +90,9 @@ def _rotate_mo(mo_coeff, mo_occ, dx):
         mo.append(numpy.dot(mo_coeff[k], scipy.linalg.expm(dr)))
     return mo
 
-def _gen_hop_rhf_external(mf, verbose=None):
 #FIXME: numerically unstable with small mesh?
 #TODO: Add a warning message for small mesh.
+def _gen_hop_rhf_external(mf, verbose=None):
     from pyscf.pbc.scf.newton_ah import _unpack
     cell = mf.cell
 

@@ -449,11 +449,11 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         nelec = np.asarray(self.nelec)
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
             dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
