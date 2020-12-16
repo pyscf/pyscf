@@ -42,9 +42,9 @@ except ImportError:
     settings.DFTD3PATH = getattr(__config__, 'dftd3_DFTD3PATH', os.environ.get('DFTD3PATH'))
 
 if settings.DFTD3PATH:
-    libdftd3 = numpy.ctypeslib.load_library('libdftd3.so', settings.DFTD3PATH)
+    libdftd3 = numpy.ctypeslib.load_library('libdftd3', settings.DFTD3PATH)
 else:
-    raise ImportError('library libdftd3.so not found')
+    raise ImportError('library libdftd3 not found')
 
 
 # For code compatibility in python-2 and python-3

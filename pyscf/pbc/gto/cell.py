@@ -212,7 +212,8 @@ def dumps(cell):
 
     celldic = dict(cell.__dict__)
     for k in exclude_keys:
-        del(celldic[k])
+        if k in celldic:
+            del(celldic[k])
     for k in celldic:
         if isinstance(celldic[k], np.ndarray):
             celldic[k] = celldic[k].tolist()
