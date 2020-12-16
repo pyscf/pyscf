@@ -4023,7 +4023,6 @@ def eigenvector_analyze(adc, U, nroots=1):
     
     U_thresh = 0.06
      
-
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
     nvir_a = adc.nvir_a
@@ -4138,7 +4137,7 @@ def eigenvector_analyze(adc, U, nroots=1):
                 temp_doubles_bab_idx = [0,0,0]
 
         for orb in ind_idx_aaa:              
-            orb_d = orb + 1     
+            orb_d = orb      
             nvir_rem = orb_d % (nocc_a*nocc_a)
             nvir_idx = (orb_d - nvir_rem)/(nocc_a*nocc_a)
             temp_doubles_aaa_idx[0] = int(nvir_idx + 1)
@@ -4151,7 +4150,7 @@ def eigenvector_analyze(adc, U, nroots=1):
             temp_doubles_aaa_idx = [0,0,0]
 
         for orb in ind_idx_bbb:              
-            orb_d = orb + 1     
+            orb_d = orb      
             nvir_rem = orb_d % (nocc_b*nocc_b)
             nvir_idx = (orb_d - nvir_rem)/(nocc_b*nocc_b)
             temp_doubles_bbb_idx[0] = int(nvir_idx + 1)
@@ -4172,13 +4171,13 @@ def eigenvector_analyze(adc, U, nroots=1):
             print("Occupied beta orbital #:", print_singles_b)
         print("Doubles block: ")
         for d_va,d_oa,d_oa in doubles_aaa_idx:
-            print("Virtual alpha Orbital #:", d_va, " Occupied alpha orbital #:",d_oa, " Occupied alpha orbital", d_oa)
+            print("Virtual alpha Orbital-aaa #:", d_va, " Occupied alpha orbital #:",d_oa, " Occupied alpha orbital", d_oa)
         for d_vb,d_oa,d_ob in doubles_bab_idx:
             print("Virtual beta Orbital #:", d_vb, " Occupied alpha orbital #:",d_oa, " Occupied beta orbital", d_ob)
         for d_va,d_ob,d_oa in doubles_aba_idx:
             print("Virtual alpha Orbital #:", d_va, " Occupied beta orbital #:",d_oa, " Occupied alpha orbital", d_oa)
         for d_vb,d_ob,d_ob in doubles_bbb_idx:
-            print("Virtual beta Orbital #:", d_vb, " Occupied beta orbital #:",d_ob, " Occupied beta orbital", d_ob)
+            print("Virtual beta Orbital-bbb #:", d_vb, " Occupied beta orbital #:",d_ob, " Occupied beta orbital", d_ob)
 
     
     return U
