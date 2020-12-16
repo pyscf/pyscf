@@ -1826,15 +1826,18 @@ def atom_mass_list(mol, isotope_avg=False):
 
     return numpy.array(mass)
 
-def condense_to_shell(mol, mat, compressor=numpy.max):
+def condense_to_shell(mol, mat, compressor='max'):
     '''The given matrix is first partitioned to blocks, based on AO shell as
-    delimiter.  Then call compressor function to abstract each block.
+    delimiter. Then call compressor function to abstract each block.
     '''
     ao_loc = mol.ao_loc_nr()
-    abstract = numpy.empty((mol.nbas,mol.nbas))
-    for i, i0 in enumerate(ao_loc[:mol.nbas]):
-        for j, j0 in enumerate(ao_loc[:mol.nbas]):
-            abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    if callable(compressor):
+        abstract = numpy.empty((mol.nbas, mol.nbas))
+        for i, i0 in enumerate(ao_loc[:mol.nbas]):
+            for j, j0 in enumerate(ao_loc[:mol.nbas]):
+                abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    else:
+        abstract = lib.condense(compressor, mat, ao_loc)
     return abstract
 
 
