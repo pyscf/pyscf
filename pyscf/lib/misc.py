@@ -271,17 +271,32 @@ def map_with_prefetch(func, *iterables):
     '''
     Apply function to an task and prefetch the next task
     '''
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = None
-        for task in zip(*iterables):
-            if future is None:
-                future = executor.submit(func, *task)
-            else:
-                result = future.result()
-                future = executor.submit(func, *task)
-                yield result
-        if future is not None:
-            yield future.result()
+    if ThreadPoolExecutor is not None:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = None
+            for task in zip(*iterables):
+                if future is None:
+                    future = executor.submit(func, *task)
+                else:
+                    result = future.result()
+                    future = executor.submit(func, *task)
+                    yield result
+            if future is not None:
+                yield future.result()
+    else:
+        def func_with_buf(_output_buf, *args):
+            _output_buf[0] = func(*args)
+        with call_in_background(func_with_buf) as f_prefetch:
+            buf0, buf1 = [None], [None]
+            for istep, task in enumerate(zip(*iterables)):
+                if istep == 0
+                    f_prefetch(buf0, *task)
+                else:
+                    buf0, buf1 = buf1, buf0
+                    f_prefetch(buf0, *task)
+                    yield buf1[0]
+        if buf0[0] is not None:
+            yield buf0[0]
 
 def index_tril_to_pair(ij):
     '''Given tril-index ij, compute the pair indices (i,j) which satisfy
