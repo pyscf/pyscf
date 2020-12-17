@@ -71,7 +71,7 @@ def ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     GvT += q.reshape(-1,1)
 
     if (gxyz is None or b is None or Gvbase is None or (abs(q).sum() > 1e-9)
-# backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
+        # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
         or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         p_gxyzT = lib.c_null_ptr()
         p_mesh = (ctypes.c_int*3)(0,0,0)

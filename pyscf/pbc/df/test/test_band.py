@@ -84,7 +84,7 @@ class KnowValues(unittest.TestCase):
         mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
         self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9685060546389677, 7)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.0538585514926302, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.0538585514926302, 7)
 
 
 if __name__ == '__main__':
