@@ -21,14 +21,25 @@ def run_benchmarks(mf, benchmarks, irc, filename, print_header=True,
         # For AVAS:
         avas_ao_labels=None,
         factor=1.0,
-        total_energy=False):
+        total_energy=False,
+        pbc=False,
+        k_points=False):
     assert mf.converged
     energies = []
     for bm in benchmarks:
         t0 = MPI.Wtime()
         if bm == "MP2":
-            import pyscf.mp
-            mp2 = pyscf.mp.MP2(mf)
+            if pbc:
+                import pyscf.pbc
+                module = pyscf.pbc.mp
+            else:
+                import pyscf.mp
+                module = pyscf.mp
+
+            if k_points:
+                mp2 = module.KMP2(mf)
+            else:
+                mp2 = module.MP2(mf)
             mp2.kernel()
             if total_energy:
                 energies.append(mf.e_tot + mp2.e_corr)
@@ -45,7 +56,10 @@ def run_benchmarks(mf, benchmarks, irc, filename, print_header=True,
                 energies.append(np.nan)
         elif bm == "CCSD":
             import pyscf.cc
-            cc = pyscf.cc.CCSD(mf)
+            if k_points:
+                cc = pyscf.cc.KCCSD(mf)
+            else:
+                cc = pyscf.cc.CCSD(mf)
             cc.kernel()
             #assert cc.converged
             if cc.converged:

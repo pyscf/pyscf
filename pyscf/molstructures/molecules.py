@@ -116,7 +116,10 @@ def build_methane(dCH=1.087, **kwargs):
             **kwargs)
     return mol
 
-def build_alkane(n, dCH=1.09, dCC=1.54, **kwargs):
+def build_alkane(n, dCH=1.09, dCC=1.54, numbering="atom", **kwargs):
+
+    assert numbering in ("atom", "c-units")
+    dk = 1 if (numbering == "atom") else 0
 
     atom = []
     phi = np.arccos(-1.0/3)
@@ -136,21 +139,23 @@ def build_alkane(n, dCH=1.09, dCC=1.54, **kwargs):
         y = sign * dcy/2
         z = i*dcz
         atom.append(["C%d" % k, [x, y, z]])
-        k += 1
+        k += dk
         # Hydrogen atoms on side
         dy = sign * dchc
         atom.append(["H%d" % k, [x+dchs, y+dy, z]])
-        k += 1
+        k += dk
         atom.append(["H%d" % k, [x-dchs, y+dy, z]])
-        k += 1
+        k += dk
         # Terminal Hydrogen atoms
         if (i == 0):
             atom.append(["H%d" % k, [0.0, y-dchc, z-dchs]])
-            k += 1
+            k += dk
         # Not elif, if n == 1 (Methane)
         if (i == n-1):
             atom.append(["H%d" % k, [0.0, y-sign*dchc, z+dchs]])
-            k += 1
+            k += dk
+
+        k += (1-dk)
 
     mol = gto.M(
             atom=atom,

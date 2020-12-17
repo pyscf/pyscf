@@ -1,12 +1,15 @@
 import functools
 import os
+import logging
 
 import numpy as np
 import scipy
 import scipy.optimize
 
 __all__ = [
+        "log_time",
         "has_length",
+        "orthogonalize_mo",
         "amplitudes_C2T",
         "amplitudes_T2C",
         "einsum",
@@ -18,7 +21,12 @@ __all__ = [
         "create_orbital_file",
         ]
 
+log = logging.getLogger(__name__)
+
 einsum = functools.partial(np.einsum, optimize=True)
+
+def log_time(name, time, logger=log.debug):
+    logger("Time for %s [s]: %.3f (%s)", name, t, get_time_string(t))
 
 def has_length(a, length=2):
     try:
@@ -26,6 +34,26 @@ def has_length(a, length=2):
     except TypeError:
         return False
 
+def orthogonalize_mo(mf, tol=1e-8):
+    """Orthogonalize MOs, such that C^T S C == 1."""
+    c = mf.mo_coeff
+    assert np.all(c.imag == 0)
+    chi = np.linalg.multi_dot((c.T, mf.get_ovlp(), c))
+    maxnonorth = abs(chi - np.eye(chi.shape[-1])).max()
+    log.debug("Max. abs. element of CSC-1: %.2e" % maxnonorth)
+    if maxnonorth > tol:
+        assert np.allclose(chi, chi.T)
+        e, v = np.linalg.eigh(chi)
+        assert np.all(e > 0)
+        r = einsum("ai,i,bi->ab", v, 1/np.sqrt(e), v)
+        cr = np.dot(c, r)
+        chi = np.linalg.multi_dot((cr.T, mf.get_ovlp(), cr))
+        maxnonorth = abs(chi - np.eye(chi.shape[-1])).max()
+        assert (maxnonorth <= tol)
+        ovlp = np.linalg.multi_dot((cr.T, mf.get_ovlp(), c))
+        log.debug("max(abs(diag(C'SC-1))): %.2e" % abs(np.diag(ovlp)-1).max())
+        c = cr
+    return c
 
 def amplitudes_C2T(C1, C2):
     T1 = C1.copy()
@@ -55,10 +83,10 @@ def reorder_columns(a, *args):
     assert b.shape == a.shape
     return b
 
-def get_time_string(seconds):
+def get_time_string(seconds, display_all=True):
     m, s = divmod(seconds, 60)
-    if seconds >= 3600:
-        tstr = "%.0f h, %.0f min, %.0f s" % (divmod(m, 60) + (s,))
+    if seconds >= 3600 or display_all:
+        tstr = "%.0f h %.0f min %.0f s" % (divmod(m, 60) + (s,))
     elif seconds >= 60:
         tstr = "%.0f min %.1f s" % (m, s)
     else:

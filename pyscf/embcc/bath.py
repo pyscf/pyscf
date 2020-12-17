@@ -57,7 +57,7 @@ def project_ref_orbitals(self, C_ref, C):
 
     return C, e
 
-def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8, warntol=1e-10):
+def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
     """Calculate DMET bath, occupied environment and virtual environment orbitals.
 
     If C_ref is not None, complete DMET orbital space using active transformation of reference orbitals.
@@ -92,10 +92,10 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8, warntol=1
     e, R = np.linalg.eigh(D_env)
     e, R = e[::-1], R[:,::-1]
 
-    if not (np.all(e > -warntol) and np.all(e < 1+warntol)):
-        log.error("Eigenvalues of environment DM not strictly in [0,1].")
-        log.error("Eigenvalues < 0: %s", e[e < -warntol])
-        log.error("Eigenvalues > 1: %s", e[e > 1+warntol])
+    if (e.min() < -1e-9):
+        log.warning("Min eigenvalue of env. DM = %.8e", e.min())
+    if ((e.max()-1) > 1e-9):
+        log.warning("Max eigenvalue of env. DM = %.8e", e.max())
 
     # Entanglement spectrum
     if False:
@@ -478,6 +478,7 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
 
 def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True, eris=None,
         #local_dm=True):
+        #local_dm="semi"):
         local_dm=False):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number.
 
@@ -507,15 +508,15 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     fo = np.linalg.multi_dot((c_occ.T, f, c_occ))
     fv = np.linalg.multi_dot((c_vir.T, f, c_vir))
     if canonicalize[0]:
-        fo, ro = np.linalg.eigh(fo)
+        eo, ro = np.linalg.eigh(fo)
         c_occ = np.dot(c_occ, ro)
     else:
-        fo = np.diag(fo)
+        eo = np.diag(fo)
     if canonicalize[1]:
-        fv, rv = np.linalg.eigh(fv)
+        ev, rv = np.linalg.eigh(fv)
         c_vir = np.dot(c_vir, rv)
     else:
-        fv = np.diag(fv)
+        ev = np.diag(fv)
 
     # Setup MP2 object
     nao = c_occ.shape[0]
@@ -523,55 +524,52 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
         c_occenv = np.zeros((nao, 0))
     if c_virenv is None:
         c_virenv = np.zeros((nao, 0))
-    coeffs = np.hstack((c_occenv, c_occ, c_vir, c_virenv))
-    norb = coeffs.shape[-1]
+    c_act = np.hstack((c_occ, c_vir))
+    c_all = np.hstack((c_occenv, c_act, c_virenv))
+    norb = c_all.shape[-1]
     noccenv = c_occenv.shape[-1]
     nvirenv = c_virenv.shape[-1]
     frozen = list(range(noccenv)) + list(range(norb-nvirenv, norb))
     #log.debug("Active orbitals: %d occupied and %d virtual", c_occ.shape[-1], c_vir.shape[-1])
     #log.debug("Freezing %d occupied and %d virtual orbitals with indices:\n%r", noccenv, nvirenv, frozen)
-    if self.has_pbc:
+    if self.use_pbc:
         cls = pyscf.pbc.mp.MP2
     else:
         cls = pyscf.mp.MP2
-    mp2 = cls(self.mf, mo_coeff=coeffs, frozen=frozen)
+    mp2 = cls(self.mf, mo_coeff=c_all, frozen=frozen)
 
     # Integral transformation
     t0 = MPI.Wtime()
     if eris is None:
-        if hasattr(mp2, "with_df"):
+        # For PBC [direct_init to avoid expensive Fock rebuild]
+        if self.use_pbc:
+            #eris = mp2.ao2mo()
+            mo_energy = np.hstack((eo, ev))
+            fock = np.linalg.multi_dot((c_act.T, f, c_act))
+            eris = mp2.ao2mo(direct_init=True, mo_energy=mo_energy, fock=fock)
+        # For molecular calculations with DF
+        elif hasattr(mp2, "with_df"):
             eris = mp2.ao2mo(store_eris=True)
         else:
             eris = mp2.ao2mo()
-        # Does not work for DF at the moment...
-        assert (eris.ovov is not None)
-        # For DF
-        #if eris.ovov is None:
-        #    Lov = []
-        #    p1 = 0
-        #    for istep, qov in enumerate(mp2.loop_ao2mo(eris.mo_coeff, mp2.nocc)):
-        #        p0, p1 = p1, p1 + qov.shape[0]
-        #        Lov.append(qov)
-        #    Lov = np.asarray(Lov).reshape(-1, mp2.nocc, mp2.nmo-mp2.nocc)
-        #    eris.ovov = einsum("pia,pjb->iajb", Lov, Lov)
-
-        time_ao2mo = MPI.Wtime() - t0
-        log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
+        # PySCF forgets to set this...
+        if eris.nocc is None:
+            eris.nocc = c_occ.shape[-1]
+        #log.debug("Made eris with no=%d nv=%d n=%d", c_occ.shape[-1], c_vir.shape[-1], eris.ovov[:].size)
     # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
     else:
-        raise NotImplementedError()
-        eris = self.transform_mp2_eris(eris, Co, Cv)
+        log.debug("Transforming previous eris.")
+        #raise NotImplementedError()
+        eris = self.transform_mp2_eris(eris, c_occ, c_vir)
         #eris2 = mp2.ao2mo()
+        #eris2 = mp2.ao2mo(direct_init=True, mo_energy=np.hstack((eo, ev)))
         #log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
         #assert np.allclose(eris.ovov, eris2.ovov)
-        time_mo2mo = MPI.Wtime() - t0
-        log.debug("Time for MO->MO: %s", get_time_string(time_mo2mo))
-
-    #eris.nocc = mp2.nocc
+    t = (MPI.Wtime() - t0)
+    log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
+    assert (eris.ovov is not None)
 
     t0 = MPI.Wtime()
-    #e_mp2_full, t2 = mp2.kernel(eris=eris)
-    #e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference="legacy")
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
     log.debug("Time for MP2 kernel: %s", get_time_string(MPI.Wtime()-t0))
     e_mp2_full *= self.symmetry_factor
@@ -606,42 +604,53 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
 
     # Calculate local energy
     # Project first occupied index onto local space
-    _, t2_loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)
-    e_mp2 = self.symmetry_factor * mp2.energy(t2_loc, eris)
+    _, t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)
+    e_mp2 = self.symmetry_factor * mp2.energy(t2loc, eris)
     log.debug("Local MP2 energy = %12.8g htr", e_mp2)
 
     # MP2 density matrix
-    if local_dm:
+    if local_dm is True:
         log.debug("Constructing DM from local T2 amplitudes.")
-        do = 2*(2*einsum("ik...,jk...->ij", t2_loc, t2_loc)
-                - einsum("ik...,kj...->ij", t2_loc, t2_loc))
-        dv = 2*(2*einsum("...ac,...bc->ab", t2_loc, t2_loc)
-                - einsum("...ac,...cb->ab", t2_loc, t2_loc))
-    else:
+        t2l, t2r = t2loc, t2loc
+    elif local_dm == "semi":
+        log.debug("Constructing DM from semi-local T2 amplitudes.")
+        t2l, t2r = t2loc, t2
+    elif local_dm is False:
         log.debug("Constructing DM from full T2 amplitudes.")
-        do, dv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
-        do, dv = -2*do, 2*dv
+        t2l, t2r = t2, t2
+        # This is equivalent to:
+        # do, dv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
+        # do, dv = -2*do, 2*dv
+    else:
+        raise ValueError("Unknown value for local_dm: %r" % local_dm)
+    dmo = 2*(2*einsum("ik...,jk...->ij", t2l, t2r)
+             - einsum("ik...,kj...->ij", t2l, t2r))
+    dmv = 2*(2*einsum("...ac,...bc->ab", t2l, t2r)
+             - einsum("...ac,...cb->ab", t2l, t2r))
+    if local_dm == "semi":
+        dmo = (dmo + dmo.T)/2
+        dmv = (dmv + dmv.T)/2
 
     # Rotate back to input coeffients (undo canonicalization)
     if canonicalize[0]:
         t2 = einsum("ij...,xi,yj->xy...", t2, ro, ro)
-        do = np.linalg.multi_dot((ro, do, ro.T))
-        g = eris.ovov[:].reshape((no, nv, no, nv))
-        g = einsum("iajb,xi,yj->xayb", g, ro, ro)
-        eris.ovov = g.reshape((no*nv, no*nv))
-        eris.mo_coeff = None
+        dmo = np.linalg.multi_dot((ro, dmo, ro.T))
+        #g = eris.ovov[:].reshape((no, nv, no, nv))
+        #g = einsum("iajb,xi,yj->xayb", g, ro, ro)
+        #eris.ovov = g.reshape((no*nv, no*nv))
+        #eris.mo_coeff = None
     if canonicalize[1]:
         t2 = einsum("...ab,xa,yb->...xy", t2, rv, rv)
-        dv = np.linalg.multi_dot((rv, dv, rv.T))
-        g = eris.ovov[:].reshape((no, nv, no, nv))
-        g = einsum("iajb,xa,yb->ixjy", g, rv, rv)
-        eris.ovov = g.reshape((no*nv, no*nv))
-        eris.mo_coeff = None
+        dmv = np.linalg.multi_dot((rv, dmv, rv.T))
+        #g = eris.ovov[:].reshape((no, nv, no, nv))
+        #g = einsum("iajb,xa,yb->ixjy", g, rv, rv)
+        #eris.ovov = g.reshape((no*nv, no*nv))
+        #eris.mo_coeff = None
 
-    assert np.allclose(do, do.T)
-    assert np.allclose(dv, dv.T)
+    assert np.allclose(dmo, dmo.T)
+    assert np.allclose(dmv, dmv.T)
 
-    return t2, eris, do, dv, e_mp2
+    return t2, eris, dmo, dmv, e_mp2
 
 def run_mp2_general(self, c_occ, c_vir, c_occ2=None, c_vir2=None, eris=None, canonicalize=True):
     """Run MP2 calculations for general orbitals..
@@ -794,59 +803,32 @@ def run_mp2_general(self, c_occ, c_vir, c_occ2=None, c_vir2=None, eris=None, can
 
 # ================================================================================================ #
 
-#def transform_mp2_eris(self, eris, Co, Cv):
-#    """Transform OVOV kind ERIS."""
-#    assert (eris is not None)
-#    assert (eris.ovov is not None)
-#
-#    S = self.mf.get_ovlp()
-#    Co0, Cv0 = np.hsplit(eris.mo_coeff, [eris.nocc])
-#    no0 = Co0.shape[-1]
-#    nv0 = Cv0.shape[-1]
-#    no = Co.shape[-1]
-#    nv = Cv.shape[-1]
-#
-#    transform_occ = (no != no0 or not np.allclose(Co, Co0))
-#    transform_vir = (nv != nv0 or not np.allclose(Cv, Cv0))
-#    if transform_occ:
-#        Ro = np.linalg.multi_dot((Co.T, S, Co0))
-#    if transform_vir:
-#        Rv = np.linalg.multi_dot((Cv.T, S, Cv0))
-#
-#    #govov = eris.ovov.reshape((no0, nv0, no0, nv0))
-#    # eris.ovov may be hfd5 dataset on disk -> allocate in memory with [:]
-#    govov = eris.ovov[:].reshape((no0, nv0, no0, nv0))
-#    if transform_occ and transform_vir:
-#        govov = einsum("xi,ya,zj,wb,iajb->xyzw", Ro, Rv, Ro, Rv, govov)
-#    elif transform_occ:
-#        govov = einsum("xi,zj,iajb->xazb", Ro, Ro, govov)
-#    elif transform_vir:
-#        govov = einsum("ya,wb,iajb->iyjw", Rv, Rv, govov)
-#    eris.ovov = govov.reshape((no*nv, no*nv))
-#    eris.mo_coeff = None
-#    eris.mo_energy = None
-#    return eris
-
-# ================================================================================================ #
-
 def transform_mp2_eris(self, eris, Co, Cv):
-    """Transform OVOV kind ERIS."""
+    """Transform eris of kind (ov|ov) (occupied-virtual-occupied-virtual)"""
     assert (eris is not None)
     assert (eris.ovov is not None)
 
     S = self.mf.get_ovlp()
     Co0, Cv0 = np.hsplit(eris.mo_coeff, [eris.nocc])
+    #log.debug("eris.nocc = %d", eris.nocc)
     no0 = Co0.shape[-1]
     nv0 = Cv0.shape[-1]
     no = Co.shape[-1]
     nv = Cv.shape[-1]
 
     transform_occ = (no != no0 or not np.allclose(Co, Co0))
-    transform_vir = (nv != nv0 or not np.allclose(Cv, Cv0))
     if transform_occ:
         Ro = np.linalg.multi_dot((Co.T, S, Co0))
+    else:
+        Ro = np.eye(no)
+    transform_vir = (nv != nv0 or not np.allclose(Cv, Cv0))
     if transform_vir:
         Rv = np.linalg.multi_dot((Cv.T, S, Cv0))
+    else:
+        Rv = np.eye(nv)
+    R = np.block([
+        [Ro, np.zeros((no, nv0))],
+        [np.zeros((nv, no0)), Rv]])
 
     #govov = eris.ovov.reshape((no0, nv0, no0, nv0))
     # eris.ovov may be hfd5 dataset on disk -> allocate in memory with [:]
@@ -858,10 +840,10 @@ def transform_mp2_eris(self, eris, Co, Cv):
     elif transform_vir:
         govov = einsum("ya,wb,iajb->iyjw", Rv, Rv, govov)
     eris.ovov = govov.reshape((no*nv, no*nv))
-    eris.mo_coeff = None
-    eris.mo_energy = None
+    eris.mo_coeff = np.hstack((Co, Cv))
+    eris.fock = np.linalg.multi_dot((R, eris.fock, R.T))
+    eris.mo_energy = np.diag(eris.fock)
     return eris
-
 
 # ================================================================================================ #
 
@@ -945,7 +927,8 @@ def make_mp2_bath(self,
         c_vir = c_virclst
         c_env = c_occenv
         t2, eris, dm, _, e_mp2_all = run_mp2(
-                self, c_occ, c_vir, c_occenv=None, c_virenv=c_virenv)
+                self, c_occ, c_vir, c_occenv=None, c_virenv=c_virenv,
+                local_dm=False)
         ncluster = c_occclst.shape[-1]
         nenv = c_occ.shape[-1] - ncluster
 
@@ -1091,10 +1074,12 @@ def make_mp2_bath(self,
         if e_delta_mp2 is None:
             if kind == "occupied":
                 co_act = np.hstack((c_occclst, c_bath))
-                *_, e_mp2_act = self.run_mp2(co_act, c_vir, c_occenv=c_env, c_virenv=c_virenv)
+                #*_, e_mp2_act = self.run_mp2(co_act, c_vir, c_occenv=c_env, c_virenv=c_virenv)
+                *_, e_mp2_act = self.run_mp2(co_act, c_vir, c_occenv=c_env, c_virenv=c_virenv, eris=eris)
             elif kind == "virtual":
                 cv_act = np.hstack((c_virclst, c_bath))
-                *_, e_mp2_act = self.run_mp2(c_occ, cv_act, c_occenv=c_occenv, c_virenv=c_env)
+                #*_, e_mp2_act = self.run_mp2(c_occ, cv_act, c_occenv=c_occenv, c_virenv=c_env)
+                *_, e_mp2_act = self.run_mp2(c_occ, cv_act, c_occenv=c_occenv, c_virenv=c_env, eris=eris)
 
             e_delta_mp2 = e_mp2_all - e_mp2_act
             log.debug("MP2 correction (%s): all=%.4g, active=%.4g, correction=%+.4g", kind, e_mp2_all, e_mp2_act, e_delta_mp2)

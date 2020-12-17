@@ -25,6 +25,7 @@ import pyscf.pbc.tools
 from .util import *
 from .bath import *
 from .energy import *
+from . import ccsd_t
 #from .embcc import VALID_SOLVERS
 
 __all__ = [
@@ -78,11 +79,12 @@ class Cluster:
         self.C_local = C_local
         self.C_env = C_env
 
-        # Mean-field electrons
+        # Determine number of mean-field electrons in fragment space
         S = self.mf.get_ovlp()
         dm = np.linalg.multi_dot((self.C_local.T, S, self.mf.make_rdm1(), S, self.C_local))
-        ne = np.trace(dm)
-        log.info("Mean-field electrons in fragment space=%.5f", ne)
+        self.nelec_frag = np.trace(dm)
+        log.info("Mean-field electrons in fragment space=%.5f", self.nelec_frag)
+
 
         #assert self.nlocal == len(self.indices)
         #assert (self.size == len(self.indices) or self.local_orbital_type in ("NonOrth-IAO", "PMO"))
@@ -102,6 +104,17 @@ class Cluster:
         #if not hasattr(bath_energy_tol, "__getitem__"):
         if not has_length(bath_energy_tol, 2):
             bath_energy_tol = (bath_energy_tol, bath_energy_tol)
+
+        # Relative tolerances?
+        if True:
+            if bath_tol[0] is not None:
+                bath_tol = (self.nelec_frag*bath_tol[0], bath_tol[1])
+            if bath_tol[1] is not None:
+                bath_tol = (bath_tol[0], self.nelec_frag*bath_tol[1])
+            if bath_energy_tol[0] is not None:
+                bath_energy_tol = (self.nelec_frag*bath_energy_tol[0], bath_energy_tol[1])
+            if bath_energy_tol[1] is not None:
+                bath_energy_tol = (bath_energy_tol[0], self.nelec_frag*bath_energy_tol[1])
 
         #assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
         if bath_type not in self.base.VALID_BATH_TYPES:
@@ -137,12 +150,17 @@ class Cluster:
         # Parameters needed for restart (C0, C1, C2 for CISD; T1, T2 for CCSD) are saved here
         self.restart_params = kwargs.get("restart_params", {})
 
+        # By default use PBC code if self.mol has attribute "cell"
+        #self.use_pbc = kwargs.get("use_pbc", False)
+        self.use_pbc = kwargs.get("use_pbc", self.has_pbc)
 
         self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-4)
 
         self.coupled_bath = kwargs.get("coupled_bath", False)
 
         self.nelectron_target = kwargs.get("nelectron_target", None)
+
+        self.use_energy_tol_as_delta_mp2 = kwargs.get("use_energy_tol_as_delta_mp2", False)
 
 
         #self.project_type = kwargs.get("project_type", "first-occ")
@@ -209,6 +227,8 @@ class Cluster:
 
         self.converged = False
         self.e_corr = 0.0
+        self.e_pert_t = 0.0
+        self.e_pert_t2 = 0.0
         self.e_corr_dmp2 = 0.0
 
         # For testing:
@@ -326,14 +346,16 @@ class Cluster:
     def has_pbc(self):
         return isinstance(self.mol, pyscf.pbc.gto.Cell)
 
+    #@property
+    #def madelung(self):
+    #    """Madelung constant for PBC systems."""
+    #    from pyscf.pbc import tools
+    #    mad = tools.madelung(self.mol, self.mf.kpt)
+    #    return mad
+
     @property
     def local_orbital_type(self):
         return self.base.local_orbital_type
-
-    #@property
-    #def not_indices(self):
-    #    """Indices which are NOT in the cluster, i.e. complement to self.indices."""
-    #    return np.asarray([i for i in np.arange(self.mol.nao_nr()) if i not in self.indices])
 
     @property
     def energy_factor(self):
@@ -606,7 +628,7 @@ class Cluster:
             solver = None
 
         if self.has_pbc:
-            log.debug("Cell object found -> using pbc code.")
+            log.debug("Cell object found.")
 
         if solver is None:
             log.debug("No solver")
@@ -617,7 +639,7 @@ class Cluster:
         # MP2
         # ===
         elif solver == "MP2":
-            if self.has_pbc:
+            if self.use_pbc:
                 mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
             else:
                 mp2 = pyscf.mp.MP2(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
@@ -630,37 +652,20 @@ class Cluster:
                 else:
                     eris = mp2.ao2mo()
                 log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+                #log_time("integral transformation", MPI.Wtime()-t0)
 
-                ## TEST
-                #t0 = MPI.Wtime()
-                ##eris2 = self.mf.with_df.ao2mo(mo_coeffs, kpt, compact=False)
-                #o = mo_occ > 0
-                #v = mo_occ == 0
-                #co = mo_coeff[:,o]
-                #cv = mo_coeff[:,v]
-                #eris2 = self.mf.with_df.ao2mo((co, cv, co, cv), compact=True)
-                #log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
-
-                #t0 = MPI.Wtime()
-                #print("trafo-comp")
-                #eris_test = mp2_test.ao2mo()
-                #log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
-
-                #log.debug("Difference ERI: %g", np.linalg.norm(eris.ovov - eris2))
-
-            #e_corr_full, t2 = mp2.kernel(eris=eris)
             e_corr_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
             converged = True
             e_corr_full *= self.energy_factor
             C1, C2 = None, t2
 
-            pC1, pC2 = self.get_local_amplitudes(mp2, C1, C2)
+            pC1, pC2 = self.get_local_amplitudes(mp2, C1, C2, symmetrize=True)
             e_corr = self.get_local_energy(mp2, pC1, pC2, eris=eris)
 
         # CCSD
         # ====
-        elif solver == "CCSD":
-            if self.has_pbc:
+        elif solver in ("CCSD", "CCSD(T)"):
+            if self.use_pbc:
                 cc = pyscf.pbc.cc.CCSD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
             else:
                 cc = pyscf.cc.CCSD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
@@ -671,196 +676,22 @@ class Cluster:
             # We want to reuse the integral for local energy
             if eris is None:
                 t0 = MPI.Wtime()
-                eris = cc.ao2mo()
-                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+                #eris = cc.ao2mo()
+                # [Avoid expensive Fock rebuild in PBC]
+                if self.use_pbc:
+                    c_act = mo_coeff[:,active]
+                    fock = np.linalg.multi_dot((c_act.T, self.base.get_fock(), c_act))
+                    eris = cc.ao2mo_direct(fock=fock)
+                    #eris2 = cc.ao2mo()
+                    #log.debug("Max fock diff: %e", np.amax(abs(eris.fock - eris2.fock)))
+                    #log.debug("Max mo diff: %e", np.amax(abs(eris.mo_energy - eris2.mo_energy)))
+                else:
+                    eris = cc.ao2mo()
+                t = (MPI.Wtime()-t0)
+                log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
             cc.max_cycle = 100
 
-            # Taylored CC in iterations > 1
-            #if True:
-            if self.base.tccT1 is not None:
-                log.debug("Adding tailorfunc for tailored CC.")
-
-                tcc_mix_factor = 1
-
-                # Transform to cluster basis
-                act = cc.get_frozen_mask()
-                Co = mo_coeff[:,act][:,mo_occ[act]>0]
-                Cv = mo_coeff[:,act][:,mo_occ[act]==0]
-                Cmfo = self.mf.mo_coeff[:,self.mf.mo_occ>0]
-                Cmfv = self.mf.mo_coeff[:,self.mf.mo_occ==0]
-                S = self.mf.get_ovlp()
-                Ro = np.linalg.multi_dot((Co.T, S, Cmfo))
-                Rv = np.linalg.multi_dot((Cv.T, S, Cmfv))
-
-                ttcT1, ttcT2 = self.transform_amplitudes(Ro, Rv, self.base.tccT1, self.base.tccT2)
-                #ttcT1 = 0
-                #ttcT2 = 0
-
-                # Get occupied bath projector
-                #Pbath = self.get_local_projector(Co, inverse=True)
-                ##Pbath2 = self.get_local_projector(Co)
-                ##log.debug("%r", Pbath)
-                ##log.debug("%r", Pbath2)
-                ##1/0
-                ##CSC = np.linalg.multi_dot((Co.T, S, self.C_env))
-                ##Pbath2 = np.dot(CSC, CSC.T)
-                ##assert np.allclose(Pbath, Pbath2)
-
-                ##CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_occclst, self.C_occbath))))
-                #CSC = np.linalg.multi_dot((Co.T, S, np.hstack((self.C_bath, self.C_occbath))))
-                #Pbath2 = np.dot(CSC, CSC.T)
-                #assert np.allclose(Pbath, Pbath2)
-
-                #log.debug("DIFF %g", np.linalg.norm(Pbath - Pbath2))
-                #log.debug("DIFF %g", np.linalg.norm(Pbath + Pbath2 - np.eye(Pbath.shape[-1])))
-
-                def tailorfunc(T1, T2):
-                    # Difference of bath to local amplitudes
-                    dT1 = ttcT1 - T1
-                    dT2 = ttcT2 - T2
-
-                    # Project difference amplitudes to bath-bath block in occupied indices
-                    #pT1, pT2 = self.project_amplitudes(Co, dT1, dT2, indices_T2=[0, 1])
-                    ###pT1, pT2 = self.project_amplitudes(Pbath, dT1, dT2, indices_T2=[0, 1])
-                    ###_, pT2_0 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[0])
-                    ###_, pT2_1 = self.project_amplitudes(Pbath, None, dT2, indices_T2=[1])
-                    ###pT2 += (pT2_0 + pT2_1)/2
-
-                    # Inverse=True gives the non-local (bath) part
-                    pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, inverse=True)
-
-                    #pT12, pT22 = self.get_local_amplitudes(cc, pT1, pT2, inverse=True, symmetrize=False)
-                    #assert np.allclose(pT12, pT1)
-                    #assert np.allclose(pT22, pT2)
-                    #pT1, pT2 = self.get_local_amplitudes(cc, dT1, dT2, variant="democratic", inverse=True)
-                    # Subtract to get non-local amplitudes
-                    #pT1 = dT1 - pT1
-                    #pT2 = dT2 - pT2
-
-                    log.debug("Norm of pT1=%6.2g, dT1=%6.2g, pT2=%6.2g, dT2=%6.2g", np.linalg.norm(dT1), np.linalg.norm(pT1), np.linalg.norm(dT2), np.linalg.norm(pT2))
-                    # Add projected difference amplitudes
-                    T1 += tcc_mix_factor*pT1
-                    T2 += tcc_mix_factor*pT2
-                    return T1, T2
-
-                cc.tailorfunc = tailorfunc
-
-            # Use FCI amplitudes
-            #if True:
-            #if False:
-            if self.coupled_bath:
-                log.debug("Coupling bath")
-                for x in self.loop_clusters(exclude_self=True):
-                    if not x.amplitudes:
-                        continue
-                    log.debug("Coupling bath with fragment %s with solver %s", x.name, x.solver)
-
-                #act = cc.get_frozen_mask()
-                #Co = mo_coeff[:,act][:,mo_occ[act]>0]
-                #Cv = mo_coeff[:,act][:,mo_occ[act]==0]
-                #no = Co.shape[-1]
-                #nv = Cv.shape[-1]
-
-                #T1_ext = np.zeros((no, nv))
-                #T2_ext = np.zeros((no, no, nv, nv))
-                #Pl = []
-                #Po = []
-                #Pv = []
-
-                #for x in self.loop_clusters(exclude_self=True):
-                #    if not x.amplitudes:
-                #        continue
-                #    log.debug("Amplitudes found in cluster %s with solver %s", x.name, x.solver)
-                #    #C_x_occ = x.amplitudes["C_occ"]
-                #    #C_x_vir = x.amplitudes["C_vir"]
-                #    Cx_occ = x.C_occact
-                #    Cx_vir = x.C_viract
-                #    C1x = x.amplitudes["C1"]
-                #    C2x = x.amplitudes["C2"]
-
-                #    actx = x.cc.get_frozen_mask()
-                #    assert np.allclose(Cx_occ, x.cc.mo_coeff[:,actx][x.cc.mo_occ[actx]>0])
-                #    assert np.allclose(Cx_vir, x.cc.mo_coeff[:,actx][x.cc.mo_occ[actx]==0])
-
-                #    assert Cx_occ.shape[-1] == C1x.shape[0]
-                #    assert Cx_vir.shape[-1] == C1x.shape[1]
-
-                #    T1x, T2x = amplitudes_C2T(C1x, C2x)
-
-                #    # Project to local first index
-                #    Plx = x.get_local_projector(Cx_occ)
-                #    T1x = einsum("xi,ia->xa", Plx, T1x)
-                #    T2x = einsum("xi,ijab->xjab", Plx, T2x)
-
-                #    # Transform to current basis
-                #    S = self.mf.get_ovlp()
-                #    Rox = np.linalg.multi_dot((Co.T, S, Cx_occ))
-                #    Rvx = np.linalg.multi_dot((Cv.T, S, Cx_vir))
-                #    T1x, T2x = self.transform_amplitudes(Rox, Rvx, T1x, T2x)
-
-                #    T1_ext += T1x
-                #    T2_ext += T2x
-
-                #    Plx = np.linalg.multi_dot((x.C_local.T, S, Co))
-                #    Pox = np.linalg.multi_dot((x.C_occclst.T, S, Co))
-                #    Pvx = np.linalg.multi_dot((x.C_virclst.T, S, Cv))
-                #    Pl.append(Plx)
-                #    Po.append(Pox)
-                #    Pv.append(Pvx)
-
-                #Pl = np.vstack(Pl)
-                #Pl = np.dot(Pl.T, Pl)
-                #Po = np.vstack(Po)
-                #Po = np.dot(Po.T, Po)
-                #Pv = np.vstack(Pv)
-                #Pv = np.dot(Pv.T, Pv)
-
-                #def tailorfunc(T1, T2):
-                #    # Difference amplitudes
-                #    dT1 = (T1_ext - T1)
-                #    dT2 = (T2_ext - T2)
-                #    # Project to Px
-                #    #pT1 = einsum("xi,ia->xa", Pext, dT1)
-                #    #pT2 = einsum("xi,ijab->xjab", Pext, dT2)
-                #    pT1 = einsum("xi,ya,ia->xy", Pl, Pv, dT1)
-                #    pT2 = einsum("xi,yj,za,wb,ijab->xyzw", Pl, Po, Pv, Pv, dT2)
-                #    # Symmetrize pT2
-                #    pT2 = (pT2 + pT2.transpose(1,0,3,2))/2
-                #    T1 += pT1
-                #    T2 += pT2
-                #    return T1, T2
-                S = self.mf.get_ovlp()
-
-                def tailorfunc(T1, T2):
-                    T1out = T1.copy()
-                    T2out = T2.copy()
-                    for x in self.loop_clusters(exclude_self=True):
-                        if not x.amplitudes:
-                            continue
-                        C1x, C2x = x.amplitudes["C1"], x.amplitudes["C2"]
-                        T1x, T2x = amplitudes_C2T(C1x, C2x)
-
-                        # Remove double counting
-                        # Transform to x basis [note that the sizes of the active orbitals will be changed]
-                        Ro = np.linalg.multi_dot((x.C_occact.T, S, self.C_occact))
-                        Rv = np.linalg.multi_dot((x.C_viract.T, S, self.C_viract))
-                        T1x_dc, T2x_dc = self.transform_amplitudes(Ro, Rv, T1, T2)
-                        dT1x = (T1x - T1x_dc)
-                        dT2x = (T2x - T2x_dc)
-
-                        Px = x.get_local_projector(x.C_occact)
-                        pT1x = einsum("xi,ia->xa", Px, dT1x)
-                        pT2x = einsum("xi,ijab->xjab", Px, dT2x)
-
-                        # Transform back and add
-                        pT1x, pT2x = self.transform_amplitudes(Ro.T, Rv.T, pT1x, pT2x)
-                        T1out += pT1x
-                        T2out += pT2x
-
-                    return T1out, T2out
-
-                cc.tailorfunc = tailorfunc
-
+            t0 = MPI.Wtime()
             if self.restart_solver:
                 log.debug("Running CCSD starting with parameters for: %r...", self.restart_params.keys())
                 cc.kernel(eris=eris, **self.restart_params)
@@ -868,6 +699,8 @@ class Cluster:
                 log.debug("Running CCSD...")
                 cc.kernel(eris=eris)
             log.debug("CCSD done. converged: %r", cc.converged)
+            t = (MPI.Wtime()-t0)
+            log.debug("Time for CCSD [s]: %.3f (%s)", t, get_time_string(t))
 
             if self.restart_solver:
                 self.restart_params["t1"] = cc.t1
@@ -875,14 +708,37 @@ class Cluster:
 
             converged = cc.converged
             e_corr_full = self.energy_factor*cc.e_corr
-            #C1 = cc.t1
-            #C2 = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
             C1, C2 = amplitudes_T2C(cc.t1, cc.t2)
-
-            #e_corr = self.get_local_energy(cc, C1, C2, eris=eris)
 
             pC1, pC2 = self.get_local_amplitudes(cc, C1, C2)
             e_corr = self.get_local_energy(cc, pC1, pC2, eris=eris)
+
+            # Calculate (T) contribution
+            if solver == "CCSD(T)":
+                t0 = MPI.Wtime()
+                pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2)
+                #pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2, symmetrize=True)
+                self.e_pert_t = self.energy_factor*ccsd_t.kernel_new(cc.t1, cc.t2, pT2, eris)
+
+                #t00 = MPI.Wtime()
+                #self.e_pert_t = self.energy_factor*ccsd_t.ccsd_t(cc.t1, cc.t2, pT1, pT2, eris)
+                #t01 = MPI.Wtime()
+                #self.e_pert_t = self.energy_factor*ccsd_t.kernel_new(cc.t1, cc.t2, pT2, eris)
+                #t02 = MPI.Wtime()
+                #self.e_pert_t2 = self.energy_factor*ccsd_t.kernel(cc, cc.t1, cc.t2, pT2, eris)
+                #t03 = MPI.Wtime()
+                ##log.debug("Time for (T): %.6f", (t01-t00))
+                #log.debug("Time for (T): %.6f", (t02-t01))
+                #log.debug("Time for (T): %.6f", (t03-t02))
+
+                #log.debug("Perturbative (T) energy = %.8g", self.e_pert_t)
+                #log.debug("Perturbative (T) energy = %.8g", self.e_pert_t2)
+                #log.debug("Perturbative (T) energy = %.8g", self.e_pert_t3)
+                #assert np.allclose(self.e_pert_t, e_pert_t2)
+                #log.debug("Perturbative (T) energy = %.8g", e_pert_t_test)
+                #log.debug("Perturbative (T) energy = %.8g", e_pt_slow)
+                t = (MPI.Wtime()-t0)
+                log.debug("Time for (T) [s]: %.3f (%s)", t, get_time_string(t))
 
             # Other energy variants
             if False:
@@ -924,7 +780,7 @@ class Cluster:
         elif solver == "CISD":
             # Currently not maintained
             #raise NotImplementedError()
-            if self.has_pbc:
+            if self.use_pbc:
                 ci = pyscf.pbc.ci.CISD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
             else:
                 ci = pyscf.ci.CISD(self.mf, mo_coeff=mo_coeff, mo_occ=mo_occ, frozen=frozen)
@@ -934,7 +790,8 @@ class Cluster:
             if eris is None:
                 t0 = MPI.Wtime()
                 eris = ci.ao2mo()
-                log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+                t = (MPI.Wtime() - t0)
+                log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
             ci.max_cycle = 100
 
             log.debug("Running CISD...")
@@ -1192,7 +1049,7 @@ class Cluster:
         Paramters
         ---------
         solver : str
-            Method ["MP2", "CISD", "CCSD", "FCI"]
+            Method ["MP2", "CISD", "CCSD", "CCSD(T)", "FCI"]
         ref_orbitals : dict
             Dictionary with reference orbitals.
 
@@ -1363,7 +1220,7 @@ class Cluster:
 
         t0 = MPI.Wtime()
         converged, e_corr = self.run_solver(solver, mo_coeff, mo_occ, active=active, frozen=frozen)
-        log.debug("Wall time for solver: %s", get_time_string(MPI.Wtime()-t0))
+        log.debug("Wall time for %s: %s", solver, get_time_string(MPI.Wtime()-t0))
 
         #self.converged = converged
         #self.e_corr = e_corr

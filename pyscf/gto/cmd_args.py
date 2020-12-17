@@ -48,9 +48,9 @@ if sys.version_info >= (2,7):
                             action='store_false', dest='quite', default=False,
                             help='be very quiet')
         parser.add_argument('-o', '--output',
-                            dest='output', metavar='FILE', help='write output to FILE',
+                            dest='output', metavar='FILE', help='write output to FILE')#,
                             #default=default_output)
-                            default="pyscf.log")
+                            #default="pyscf.log")
         parser.add_argument('-m', '--max-memory',
                             action='store', dest='max_memory', metavar='NUM',
                             help='maximum memory to use (in MB)')

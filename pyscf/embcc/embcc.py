@@ -30,7 +30,7 @@ class EmbCC:
     """What should this be named?"""
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
-    VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "FCI-spin0", "FCI-spin1"]
+    VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
     VALID_BATH_TYPES = [
             None, "power", "matsubara",
             "mp2-natorb",
@@ -38,6 +38,7 @@ class EmbCC:
             #"mp2-natorb-4",
             "full", "random"]
 
+    # These optionals are automatically transferred to any created cluster object
     default_options = [
             "solver",
             "bath_type",
@@ -54,18 +55,13 @@ class EmbCC:
     def __init__(self, mf,
             local_type="IAO",       # TODO: rename, fragment_type?
             solver="CCSD",
-            #bath_type="mp2-natorb",
-            bath_type=None,
+            bath_type="mp2-natorb",
             bath_size=None,
-            #bath_tol=1e-3,
             bath_tol=None,
-            #bath_energy_tol=None,
             bath_energy_tol=1e-3,
             minao="minao",
             use_ref_orbitals_dmet=True,
-            #use_ref_orbitals_bath=True,
             use_ref_orbitals_bath=False,
-            #mp2_correction=False,
             mp2_correction=True,
             maxiter=1,
             dmet_bath_tol=1e-8,
@@ -102,6 +98,7 @@ class EmbCC:
             raise ValueError("Unknown bath type: %s" % bath_type)
 
         self.mf = mf
+
         self.local_orbital_type = local_type
         self.minao = minao
 
@@ -123,12 +120,17 @@ class EmbCC:
 
         self.clusters = []
 
-        # Correlation energy and MP2 correction
+        # Correlation energy
         self.e_corr = 0.0
+        # CCSD(T) correction
+        self.e_pert_t = 0.0
+        # MP2 correction
         self.e_delta_mp2 = 0.0
 
+        # Full cluster correlation energy. Only makes sense for a single cluster, otherwise double counting!
         self.e_corr_full = 0.0
 
+        # [TESTING]
         # Global amplitudes
         self.T1 = None
         self.T2 = None
@@ -136,21 +138,23 @@ class EmbCC:
         self.tccT1 = None
         self.tccT2 = None
 
-        # Mean-field attributes
-        #t0 = MPI.Wtime()
-        #self._ovlp = self.mf.get_ovlp()
-        #self._hcore = self.mf.get_hcore()
-        ##log.debug("Time for overlap/hcore/Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
-        #log.debug("Time for overlap/hcore matrix: %s", get_time_string(MPI.Wtime()-t0))
-        t0 = MPI.Wtime()
+        # Fock matrix
         # These two fock matrices are different for loose values of cell.precision
         # Which should be used?
-        if True:
+        # (We only need Fock matrix for canonicalization, therefore not too important to be accurate for CCSD.
+        # However, what about MP2 & CCSD(T)?)
+        recalc_fock = False
+        if recalc_fock:
+            t0 = MPI.Wtime()
             self._fock = self.mf.get_fock()
+            log.debug("Time for Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
         else:
-            cs = np.dot(self.mf.mo_coeff.T, self._ovlp)
-            self_fock = np.einsum("ia,i,ib->ab", cs, self.mf.mo_energy, cs)
-        log.debug("Time for Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
+            cs = np.dot(self.mf.mo_coeff.T, self.get_ovlp())
+            self._fock = np.einsum("ia,i,ib->ab", cs, self.mf.mo_energy, cs)
+
+        # Orthogonalize insufficiently orthogonal MOs
+        # (For example as a result of k2gamma conversion with low cell.precision)
+        self.mf.mo_coeff = orthogonalize_mo(self.mf)
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
@@ -159,9 +163,9 @@ class EmbCC:
     def init_fragments(self):
         if self.local_orbital_type == "IAO":
             self.C_ao, self.C_env, self.iao_labels = self.make_iao(minao=self.minao)
-            log.debug("IAO labels:")
-            for ao in self.iao_labels:
-                log.debug("%r", ao)
+            #log.debug("IAO labels:")
+            #for ao in self.iao_labels:
+            #    log.debug("%r", ao)
             self.ao_labels = self.iao_labels
         elif self.local_orbital_type == "LAO":
             self.C_ao, self.lao_labels = self.make_lowdin_ao()
@@ -647,6 +651,13 @@ class EmbCC:
         iao_atoms : list
             Atom ID for each IAO.
         """
+        # Orthogonality of input mo_coeff
+        mo_coeff = self.mf.mo_coeff
+        norb = mo_coeff.shape[-1]
+        S = self.get_ovlp()
+        nonorthmax = abs(mo_coeff.T.dot(S).dot(mo_coeff) - np.eye(norb)).max()
+        log.debug("max(abs(CSC-1)) = %.2e" % nonorthmax)
+
         C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
         C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
         niao = C_iao.shape[-1]
@@ -654,7 +665,6 @@ class EmbCC:
 
         # Orthogonalize IAO
         #S = self.mf.get_ovlp()
-        S = self.get_ovlp()
         C_iao = pyscf.lo.vec_lowdin(C_iao, S)
 
         # Add remaining virtual space
@@ -662,7 +672,6 @@ class EmbCC:
         C_iao_mo = np.linalg.multi_dot((self.mf.mo_coeff.T, S, C_iao))
         # Get eigenvectors of projector into complement
         P_iao = np.dot(C_iao_mo, C_iao_mo.T)
-        norb = self.mf.mo_coeff.shape[-1]
         P_env = np.eye(norb) - P_iao
         e, C = np.linalg.eigh(P_env)
         # Tolerance for environment orbitals
@@ -691,12 +700,12 @@ class EmbCC:
 
         # Test orthogonality
         C = np.hstack((C_iao, C_env))
-        assert np.allclose(C.T.dot(S).dot(C) - np.eye(norb), 0, 1e-6)
+        #assert np.allclose(C.T.dot(S).dot(C) - np.eye(norb), 0, 1e-5)
+        assert (abs(C.T.dot(S).dot(C) - np.eye(norb)).max() < max(2*nonorthmax, 1e-9))
 
         return C_iao, C_env, iao_labels
 
     def make_lowdin_ao(self):
-        #S = self.mf.get_ovlp()
         S = self.get_ovlp()
         C_lao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
         lao_labels = self.mol.ao_labels(None)
@@ -722,39 +731,10 @@ class EmbCC:
         lao_labels = self.mol.ao_labels(None)
         return C_lao, lao_labels
 
-    def make_meta_lowdin_ao(self):
-        raise NotImplementedError()
+    def kernel(self, **kwargs):
 
-        #S = self.mf.get_ovlp()
-        S = self.get_ovlp()
-        C_lao = np.zeros_like(S)
-        # 1s
-        mask_1 = [0,5]
-        mask_2 = [1,2,3,4,6,7,8,9]
-        S1 = S[mask_1][:,mask_1]
-        S2 = S[mask_2][:,mask_2]
-
-        C1 = pyscf.lo.vec_lowdin(np.eye(S1.shape[-1]), S1)
-        C2 = pyscf.lo.vec_lowdin(np.eye(S2.shape[-1]), S2)
-
-        mask_1a = np.s_[:1]
-        mask_2a = np.s_[1:5]
-        mask_1b = np.s_[5:6]
-        mask_2b = np.s_[6:10]
-
-        C_lao[mask_1a,mask_1a] = C1[:1,:1]
-        C_lao[mask_1b,mask_1b] = C1[1:,1:]
-        C_lao[mask_2a,mask_2a] = C2[:4,:4]
-        C_lao[mask_2b,mask_2b] = C2[4:,4:]
-
-        C_lao = pyscf.lo.vec_lowdin(C_lao, S)
-        lao_labels = self.mol.ao_labels(None)
-        return C_lao, lao_labels
-
-
-    def run(self, **kwargs):
         if not self.clusters:
-            raise ValueError("No clusters defined for EmbCC calculation.")
+            raise ValueError("No clusters defined for calculation.")
 
         MPI_comm.Barrier()
         t_start = MPI.Wtime()
@@ -770,10 +750,14 @@ class EmbCC:
             msg = "Now running cluster %3d: %s%s." % (cluster.id, cluster.name, mpi_info)
             log.info(msg + "\n" + len(msg)*"-")
             cluster.run(**kwargs)
-            log.info("Cluster %d: %s%s is done.", cluster.id, cluster.name, mpi_info)
+            log.info("Cluster %3d: %s is done.", cluster.id, cluster.name)
 
         #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
-        results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_dmet", "e_corr_full", "e_corr_v", "e_corr_d")
+        attributes = ["converged", "e_corr", "e_pert_t",
+                #"e_pert_t2",
+                "e_delta_mp2",
+                "e_dmet", "e_corr_full", "e_corr_v", "e_corr_d"]
+        results = self.collect_results(*attributes)
         if MPI_rank == 0 and not np.all(results["converged"]):
             log.critical("converged = %s", results["converged"])
             log.critical("The following fragment(s) did not converge:")
@@ -791,6 +775,8 @@ class EmbCC:
         #log.info("EmbCC energy=%.8g", energy)
 
         self.e_corr = sum(results["e_corr"])
+        self.e_pert_t = sum(results["e_pert_t"])
+        #self.e_pert_t2 = sum(results["e_pert_t2"])
         self.e_delta_mp2 = sum(results["e_delta_mp2"])
 
         self.e_dmet = sum(results["e_dmet"]) + self.mol.energy_nuc()
@@ -804,7 +790,9 @@ class EmbCC:
             self.print_results(results)
 
         MPI_comm.Barrier()
-        log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
+        #log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
+        t_tot = (MPI.Wtime() - t_start)
+        log.info("Total wall time [s]: %.5g (%s)", t_tot, get_time_string(t_tot))
 
         if self.maxiter > 1:
             for it in range(2, self.maxiter+1):
@@ -843,7 +831,16 @@ class EmbCC:
                 MPI_comm.Barrier()
                 log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
 
+        log.info("All done.")
+
+
+
+    # Alias for kernel
+    run = kernel
+
     def collect_results(self, *attributes):
+        """Use MPI to collect results from all clusters."""
+
         log.debug("Collecting attributes %r from all clusters", (attributes,))
         clusters = self.clusters
 
@@ -865,13 +862,21 @@ class EmbCC:
         #totalfmt = "Total=%16.8g Eh"
         #for c in self.clusters:
         #    log.info(linefmt, c.name, c.solver, len(c)+c.nbath, len(c), c.nbath0, c.nbath-c.nbath0, c.nfrozen, c.e_corr_full, c.e_corr)
-        linefmt  = "%3d %20s [%8s] = %16.8g htr + %16.8g htr = %16.8g"
-        totalfmt = "Total = %16.8g htr , %16.8g htr"
+        #linefmt  = "%3d %20s [%8s] = %16.8g htr + %16.8g htr = %16.8g"
+        linefmt  = "%3d %20s (%8s) [Eh] = %16.8g + %16.8g + %16.8g = %16.8g"
         for i, cluster in enumerate(self.clusters):
             e_corr = results["e_corr"][i]
+            e_pert_t = results["e_pert_t"][i]
             e_delta_mp2 = results["e_delta_mp2"][i]
-            log.info(linefmt, cluster.id, cluster.name, cluster.solver, e_corr, e_delta_mp2, e_corr+e_delta_mp2)
-        log.info(totalfmt, self.e_corr, self.e_corr + self.e_delta_mp2)
+            e_all = e_corr + e_pert_t + e_delta_mp2
+            log.info(linefmt, cluster.id, cluster.name, cluster.solver,
+                    e_corr, e_pert_t, e_delta_mp2, e_all)
+
+        log.info("Total / +dMP2 [Eh]= %16.8g / %16.8g", self.e_corr, self.e_corr+self.e_delta_mp2)
+        if self.e_pert_t:
+            log.info("(T) [Eh]= %16.8g", self.e_pert_t)
+            #log.info("(T) [Eh]= %16.8g", self.e_pert_t2)
+            log.info("CCSD(T) / +dMP2 [Eh]= %16.8g / %16.8g", self.e_corr+self.e_pert_t, self.e_corr++self.e_pert_t+self.e_delta_mp2)
         #log.info("E(DMET) = %16.8g htr", self.e_dmet)
 
     def reset(self, mf=None, **kwargs):
@@ -926,3 +931,6 @@ class EmbCC:
                     f.write(headfmt % (cluster.id, cluster.name, cluster.size))
                     for idx in cluster.indices:
                         f.write(linefmt % labels[idx])
+
+
+
