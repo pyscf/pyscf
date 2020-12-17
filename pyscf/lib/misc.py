@@ -289,7 +289,7 @@ def map_with_prefetch(func, *iterables):
         with call_in_background(func_with_buf) as f_prefetch:
             buf0, buf1 = [None], [None]
             for istep, task in enumerate(zip(*iterables)):
-                if istep == 0
+                if istep == 0:
                     f_prefetch(buf0, *task)
                 else:
                     buf0, buf1 = buf1, buf0
