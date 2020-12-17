@@ -581,7 +581,8 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
 
         slices = [(i0, i1) for i0, i1 in lib.prange(0, nvira, blksize)]
         for istep, wwbuf in enumerate(fmap(load, lib.prange(0, nvira, blksize))):
-            p0, p1 = slices[istep]
+            i0, i1 = slices[istep]
+            off0 = i0*(i0+1)//2
             for j0, j1 in lib.prange(0, i1, blksize):
                 eri = wwbuf[tril2sq[i0:i1,j0:j1]-off0]
                 tmp = numpy.ndarray((i1-i0,nvirb,j1-j0,nvirb), buffer=loadbuf)
@@ -591,7 +592,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
                                        ctypes.c_int(nvirb))
                 contract_blk_(tmp, i0, i1, j0, j1)
             wwbuf = None
-            time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
+            time0 = log.timer_debug1('vvvv [%d:%d]'%(i0,i1), *time0)
     return Ht2.reshape(t2.shape)
 
 def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
