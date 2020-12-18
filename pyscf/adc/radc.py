@@ -2394,16 +2394,16 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
                 
         print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
         print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)  
-        #print( "Singles block: ") 
-        #for print_singles in singles_idx:
-        #    print("Occupied orbital #:", print_singles)
-        #print("Doubles block: ")
-        #for print_doubles in doubles_idx:
-        #    print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2])
-        doubles_joined = sum(doubles_idx, [])
-        doubles_unique = list(set(doubles_joined))
-        print("Singles block: ", singles_idx) 
-        print("Doubles block: ", doubles_unique) 
+        print( "Singles block: ") 
+        for print_singles in singles_idx:
+            print("Occupied orbital #:", print_singles)
+        print("Doubles block: ")
+        for print_doubles in doubles_idx:
+            print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2])
+        #doubles_joined = sum(doubles_idx, [])
+        #doubles_unique = list(set(doubles_joined))
+        #print("Singles block: ", singles_idx) 
+        #print("Doubles block: ", doubles_unique) 
     return U
 
 
