@@ -4099,7 +4099,9 @@ def eigenvector_analyze(adc, U, nroots=1):
         doubles_aaa_idx = []
         doubles_bab_idx = []
         doubles_aba_idx = []
-        doubles_bbb_idx = []  
+        doubles_bbb_idx = []
+        alpha_doubles = []
+        beta_doubles = []  
         for orb in ind_idx:
 
             if orb in range(s_a,f_a):
@@ -4114,7 +4116,7 @@ def eigenvector_analyze(adc, U, nroots=1):
                 orb_bab = orb - s_bab + 1      
                 nvir_rem = orb_bab % (nocc_a*nocc_b)
                 nvir_idx = (orb_bab - nvir_rem)/(nocc_a*nocc_b)
-                temp_doubles_bab_idx[0] = int(nvir_idx + 1)
+                temp_doubles_bab_idx[0] = int(nvir_idx + 1 + nocc_b)
                 orb_bab = nvir_rem
                 nocc_a_rem = orb_bab % nocc_b
                 nocc_a_idx = (orb_bab - nocc_a_rem)/nocc_b
@@ -4127,7 +4129,7 @@ def eigenvector_analyze(adc, U, nroots=1):
                 orb_aba = orb - s_aba + 1     
                 nvir_rem = orb_aba % (nocc_b*nocc_a)
                 nvir_idx = (orb_aba - nvir_rem)/(nocc_b*nocc_a)
-                temp_doubles_aba_idx[0] = int(nvir_idx + 1)
+                temp_doubles_aba_idx[0] = int(nvir_idx + 1 + nocc_a)
                 orb_aba = nvir_rem
                 nocc_b_rem = orb_aba % nocc_a
                 nocc_b_idx = (orb_aba - nocc_b_rem)/nocc_a
@@ -4137,10 +4139,10 @@ def eigenvector_analyze(adc, U, nroots=1):
                 temp_doubles_bab_idx = [0,0,0]
 
         for orb in ind_idx_aaa:              
-            orb_d = orb      
+            orb_d = orb     
             nvir_rem = orb_d % (nocc_a*nocc_a)
             nvir_idx = (orb_d - nvir_rem)/(nocc_a*nocc_a)
-            temp_doubles_aaa_idx[0] = int(nvir_idx + 1)
+            temp_doubles_aaa_idx[0] = int(nvir_idx + 1 + nocc_a)
             orb_d = nvir_rem
             nocc1_rem = orb_d % nocc_a
             nocc1_idx = (orb_d - nocc1_rem)/nocc_a
@@ -4150,10 +4152,10 @@ def eigenvector_analyze(adc, U, nroots=1):
             temp_doubles_aaa_idx = [0,0,0]
 
         for orb in ind_idx_bbb:              
-            orb_d = orb      
+            orb_d = orb     
             nvir_rem = orb_d % (nocc_b*nocc_b)
             nvir_idx = (orb_d - nvir_rem)/(nocc_b*nocc_b)
-            temp_doubles_bbb_idx[0] = int(nvir_idx + 1)
+            temp_doubles_bbb_idx[0] = int(nvir_idx + 1 + nocc_b)
             orb_d = nvir_rem
             nocc1_rem = orb_d % nocc_b
             nocc1_idx = (orb_d - nocc1_rem)/nocc_b
