@@ -24,24 +24,43 @@ Algebraic Diagrammatic Construction
 '''
 
 from pyscf import scf
+from pyscf import lib
 from pyscf.adc import uadc
 from pyscf.adc import radc
+
+#def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
+#    if not (frozen is None or frozen == 0):
+#        raise NotImplementedError
+#
+#    if isinstance(mf, scf.rhf.RHF):
+#        return RADC(mf, frozen, mo_coeff, mo_occ)
+#    elif isinstance(mf, scf.uhf.UHF):
+#        return UADC(mf, frozen, mo_coeff, mo_occ)
+#    elif isinstance(mf, scf.rohf.ROHF):
+#        lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
+#                        'is converted to UHF object and UADC method is called.')
+#        mf = scf.addons.convert_to_uhf(mf)
+#        return UADC(mf, frozen, mo_coeff, mo_occ)
+#    else :
+#        raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
+
 
 def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    if isinstance(mf, scf.rhf.RHF):
-        return RADC(mf, frozen, mo_coeff, mo_occ)
-    elif isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.uhf.UHF):
         return UADC(mf, frozen, mo_coeff, mo_occ)
     elif isinstance(mf, scf.rohf.ROHF):
         lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
                         'is converted to UHF object and UADC method is called.')
         mf = scf.addons.convert_to_uhf(mf)
         return UADC(mf, frozen, mo_coeff, mo_occ)
+    elif isinstance(mf, scf.rhf.RHF):
+        return RADC(mf, frozen, mo_coeff, mo_occ)
     else :
         raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
+
 
 ADC.__doc__ = uadc.UADC.__doc__
 

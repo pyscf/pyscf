@@ -46,7 +46,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p = myadc.kernel(nroots=3)
+        e,v,p,xa,xb = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.5434389897908212, 6)
         self.assertAlmostEqual(e[1], 0.5434389942222756, 6)
@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2_oneroot(self):
   
-        e,v,p = myadc.kernel()
+        e,v,p,xa,xb = myadc.kernel()
 
         self.assertAlmostEqual(e[0], 0.5434389897908212, 6)
 
@@ -68,7 +68,7 @@ class KnownValues(unittest.TestCase):
   
         myadc.method = "adc(2)-x"
         myadc.method_type = "ip"
-        e,v,p = myadc.kernel(nroots=3)
+        e,v,p,xa,xb = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.5405255355249104, 6)
         self.assertAlmostEqual(e[1], 0.5405255399061982, 6)
@@ -82,7 +82,7 @@ class KnownValues(unittest.TestCase):
   
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
-        e,v,p = myadc.kernel(nroots=3)
+        e,v,p,xa,xb = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.31694173142858517 , 6)

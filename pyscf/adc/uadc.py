@@ -55,7 +55,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if adc.compute_spec == True:
         T = adc.get_trans_moments()
-        spec_factors = adc.get_spec_factors(T, U, nroots)
+        spec_factors, X_a, X_b = adc.get_spec_factors(T, U, nroots)
     else:
         T = None
         spec_factors = None
@@ -88,7 +88,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     log.timer('ADC', *cput0)
 
-    return E, U, spec_factors
+    #return E, U, spec_factors
+    return E, U, spec_factors, X_a, X_b
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -638,16 +639,16 @@ def compute_energy(myadc, t1, t2, eris):
        t2_ab += t2_2[1]
        t2_b += t2_2[2]
 
-    #Compute MP2 correlation energy
+    #Compute MPn correlation energy
 
-    e_mp2 = 0.25 * lib.einsum('ijab,iabj', t2_a, eris_ovvo)
-    e_mp2 -= 0.25 * lib.einsum('ijab,ibaj', t2_a, eris_ovvo)
-    e_mp2 += lib.einsum('ijab,iabj', t2_ab, eris_ovVO)
-    e_mp2 += 0.25 * lib.einsum('ijab,iabj', t2_b, eris_OVVO)
-    e_mp2 -= 0.25 * lib.einsum('ijab,ibaj', t2_b, eris_OVVO)
+    e_mp = 0.25 * lib.einsum('ijab,iabj', t2_a, eris_ovvo)
+    e_mp -= 0.25 * lib.einsum('ijab,ibaj', t2_a, eris_ovvo)
+    e_mp += lib.einsum('ijab,iabj', t2_ab, eris_ovVO)
+    e_mp += 0.25 * lib.einsum('ijab,iabj', t2_b, eris_OVVO)
+    e_mp -= 0.25 * lib.einsum('ijab,ibaj', t2_b, eris_OVVO)
     cput0 = log.timer_debug1("Completed energy calculation", *cput0)
 
-    return e_mp2
+    return e_mp
 
 def contract_ladder(myadc,t_amp,vvvv_p):
 
@@ -922,15 +923,15 @@ class UADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X_a, X_b = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X_a, X_b = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
             raise NotImplementedError(self.method_type)
 
-        return e_exc, v_exc, spec_fac
+        return e_exc, v_exc, spec_fac, X_a, X_b
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -1991,84 +1992,84 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
         if eris is None:
             eris = adc.transform_integrals()
 
-            if isinstance(eris.vvvv, np.ndarray): 
+        if isinstance(eris.vvvv_p, np.ndarray): 
 
-                eris_oovv = eris.oovv
-                eris_ovvo = eris.ovvo
-                eris_OOVV = eris.OOVV
-                eris_OVVO = eris.OVVO
-                eris_OOvv = eris.OOvv
-                eris_ooVV = eris.ooVV
+            eris_oovv = eris.oovv
+            eris_ovvo = eris.ovvo
+            eris_OOVV = eris.OOVV
+            eris_OVVO = eris.OVVO
+            eris_OOvv = eris.OOvv
+            eris_ooVV = eris.ooVV
 
-                eris_vvvv = eris.vvvv_p
-                temp = np.zeros((nocc_a, eris_vvvv.shape[0]))
-                temp[:] += np.diag(eris_vvvv)
-                diag[s_aaa:f_aaa] += temp.reshape(-1)
+            eris_vvvv = eris.vvvv_p
+            temp = np.zeros((nocc_a, eris_vvvv.shape[0]))
+            temp[:] += np.diag(eris_vvvv)
+            diag[s_aaa:f_aaa] += temp.reshape(-1)
 
-                eris_VVVV = eris.VVVV_p
-                temp = np.zeros((nocc_b, eris_VVVV.shape[0]))
-                temp[:] += np.diag(eris_VVVV)
-                diag[s_bbb:f_bbb] += temp.reshape(-1)
+            eris_VVVV = eris.VVVV_p
+            temp = np.zeros((nocc_b, eris_VVVV.shape[0]))
+            temp[:] += np.diag(eris_VVVV)
+            diag[s_bbb:f_bbb] += temp.reshape(-1)
 
-                eris_vVvV = eris.vVvV_p
-                temp = np.zeros((nocc_b, eris_vVvV.shape[0]))
-                temp[:] += np.diag(eris_vVvV)
-                diag[s_bab:f_bab] += temp.reshape(-1)
+            eris_vVvV = eris.vVvV_p
+            temp = np.zeros((nocc_b, eris_vVvV.shape[0]))
+            temp[:] += np.diag(eris_vVvV)
+            diag[s_bab:f_bab] += temp.reshape(-1)
+            
+            temp = np.zeros((nocc_a, nvir_a, nvir_b))
+            temp[:] += np.diag(eris_vVvV).reshape(nvir_a,nvir_b)
+            temp = np.ascontiguousarray(temp.transpose(0,2,1))
+            diag[s_aba:f_aba] += temp.reshape(-1)
                 
-                temp = np.zeros((nocc_a, nvir_a, nvir_b))
-                temp[:] += np.diag(eris_vVvV).reshape(nvir_a,nvir_b)
-                temp = np.ascontiguousarray(temp.transpose(0,2,1))
-                diag[s_aba:f_aba] += temp.reshape(-1)
-                    
-                eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
-                eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1))
-                eris_ovov_p = eris_ovov_p.reshape(nocc_a*nvir_a, nocc_a*nvir_a)
+            eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
+            eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1))
+            eris_ovov_p = eris_ovov_p.reshape(nocc_a*nvir_a, nocc_a*nvir_a)
   
-                temp = np.zeros((eris_ovov_p.shape[0],nvir_a))
-                temp.T[:] += np.diagonal(eris_ovov_p)
-                temp = temp.reshape(nocc_a, nvir_a, nvir_a)
-                diag[s_aaa:f_aaa] += -temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
+            temp = np.zeros((eris_ovov_p.shape[0],nvir_a))
+            temp.T[:] += np.diagonal(eris_ovov_p)
+            temp = temp.reshape(nocc_a, nvir_a, nvir_a)
+            diag[s_aaa:f_aaa] += -temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
 
-                temp = np.ascontiguousarray(temp.transpose(0,2,1))
-                diag[s_aaa:f_aaa] += -temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
+            temp = np.ascontiguousarray(temp.transpose(0,2,1))
+            diag[s_aaa:f_aaa] += -temp[:,ab_ind_a[0],ab_ind_a[1]].reshape(-1)
 
-                eris_OVOV_p = np.ascontiguousarray(eris_OOVV.transpose(0,2,1,3))
-                eris_OVOV_p -= np.ascontiguousarray(eris_OVVO.transpose(0,2,3,1))
-                eris_OVOV_p = eris_OVOV_p.reshape(nocc_b*nvir_b, nocc_b*nvir_b)
+            eris_OVOV_p = np.ascontiguousarray(eris_OOVV.transpose(0,2,1,3))
+            eris_OVOV_p -= np.ascontiguousarray(eris_OVVO.transpose(0,2,3,1))
+            eris_OVOV_p = eris_OVOV_p.reshape(nocc_b*nvir_b, nocc_b*nvir_b)
   
-                temp = np.zeros((eris_OVOV_p.shape[0],nvir_b))
-                temp.T[:] += np.diagonal(eris_OVOV_p)
-                temp = temp.reshape(nocc_b, nvir_b, nvir_b)
-                diag[s_bbb:f_bbb] += -temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
+            temp = np.zeros((eris_OVOV_p.shape[0],nvir_b))
+            temp.T[:] += np.diagonal(eris_OVOV_p)
+            temp = temp.reshape(nocc_b, nvir_b, nvir_b)
+            diag[s_bbb:f_bbb] += -temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
 
-                temp = np.ascontiguousarray(temp.transpose(0,2,1))
-                diag[s_bbb:f_bbb] += -temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
+            temp = np.ascontiguousarray(temp.transpose(0,2,1))
+            diag[s_bbb:f_bbb] += -temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
 
-                temp = np.zeros((nvir_a, nocc_b, nvir_b))
-                temp[:] += np.diagonal(eris_OVOV_p).reshape(nocc_b, nvir_b)
-                temp = np.ascontiguousarray(temp.transpose(1,0,2))
-                diag[s_bab:f_bab] += -temp.reshape(-1)
+            temp = np.zeros((nvir_a, nocc_b, nvir_b))
+            temp[:] += np.diagonal(eris_OVOV_p).reshape(nocc_b, nvir_b)
+            temp = np.ascontiguousarray(temp.transpose(1,0,2))
+            diag[s_bab:f_bab] += -temp.reshape(-1)
 
-                temp = np.zeros((nvir_b, nocc_a, nvir_a))
-                temp[:] += np.diagonal(eris_ovov_p).reshape(nocc_a, nvir_a)
-                temp = np.ascontiguousarray(temp.transpose(1,0,2))
-                diag[s_aba:f_aba] += -temp.reshape(-1)
+            temp = np.zeros((nvir_b, nocc_a, nvir_a))
+            temp[:] += np.diagonal(eris_ovov_p).reshape(nocc_a, nvir_a)
+            temp = np.ascontiguousarray(temp.transpose(1,0,2))
+            diag[s_aba:f_aba] += -temp.reshape(-1)
 
-                eris_OvOv_p = np.ascontiguousarray(eris_OOvv.transpose(0,2,1,3))
-                eris_OvOv_p = eris_OvOv_p.reshape(nocc_b*nvir_a, nocc_b*nvir_a)
+            eris_OvOv_p = np.ascontiguousarray(eris_OOvv.transpose(0,2,1,3))
+            eris_OvOv_p = eris_OvOv_p.reshape(nocc_b*nvir_a, nocc_b*nvir_a)
   
-                temp = np.zeros((nvir_b, nocc_b, nvir_a))
-                temp[:] += np.diagonal(eris_OvOv_p).reshape(nocc_b,nvir_a)
-                temp = np.ascontiguousarray(temp.transpose(1,2,0))
-                diag[s_bab:f_bab] += -temp.reshape(-1)
+            temp = np.zeros((nvir_b, nocc_b, nvir_a))
+            temp[:] += np.diagonal(eris_OvOv_p).reshape(nocc_b,nvir_a)
+            temp = np.ascontiguousarray(temp.transpose(1,2,0))
+            diag[s_bab:f_bab] += -temp.reshape(-1)
 
-                eris_oVoV_p = np.ascontiguousarray(eris_ooVV.transpose(0,2,1,3))
-                eris_oVoV_p = eris_oVoV_p.reshape(nocc_a*nvir_b, nocc_a*nvir_b)
+            eris_oVoV_p = np.ascontiguousarray(eris_ooVV.transpose(0,2,1,3))
+            eris_oVoV_p = eris_oVoV_p.reshape(nocc_a*nvir_b, nocc_a*nvir_b)
 
-                temp = np.zeros((nvir_a, nocc_a, nvir_b))
-                temp[:] += np.diagonal(eris_oVoV_p).reshape(nocc_a,nvir_b)
-                temp = np.ascontiguousarray(temp.transpose(1,2,0))
-                diag[s_aba:f_aba] += -temp.reshape(-1)
+            temp = np.zeros((nvir_a, nocc_a, nvir_b))
+            temp[:] += np.diagonal(eris_oVoV_p).reshape(nocc_a,nvir_b)
+            temp = np.ascontiguousarray(temp.transpose(1,2,0))
+            diag[s_aba:f_aba] += -temp.reshape(-1)
 
     return diag
 
@@ -2164,99 +2165,100 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
 
     ###### Additional terms for the preconditioner ####
     if (method == "adc(2)-x" or method == "adc(3)"):
+
         if eris is None:
             eris = adc.transform_integrals()
 
-            if isinstance(eris.vvvv, np.ndarray): 
+        if isinstance(eris.vvvv, np.ndarray): 
 
-                eris_oooo = eris.oooo
-                eris_OOOO = eris.OOOO
-                eris_ooOO = eris.ooOO
-                eris_oovv = eris.oovv
-                eris_OOVV = eris.OOVV
-                eris_ooVV = eris.ooVV
-                eris_OOvv = eris.OOvv
-                eris_ovvo = eris.ovvo
-                eris_OVVO = eris.OVVO
+            eris_oooo = eris.oooo
+            eris_OOOO = eris.OOOO
+            eris_ooOO = eris.ooOO
+            eris_oovv = eris.oovv
+            eris_OOVV = eris.OOVV
+            eris_ooVV = eris.ooVV
+            eris_OOvv = eris.OOvv
+            eris_ovvo = eris.ovvo
+            eris_OVVO = eris.OVVO
 
-                eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
-                eris_oooo_p -= np.ascontiguousarray(eris_oooo_p.transpose(0,1,3,2))
-                eris_oooo_p = eris_oooo_p.reshape(nocc_a*nocc_a, nocc_a*nocc_a)
+            eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
+            eris_oooo_p -= np.ascontiguousarray(eris_oooo_p.transpose(0,1,3,2))
+            eris_oooo_p = eris_oooo_p.reshape(nocc_a*nocc_a, nocc_a*nocc_a)
   
-                temp = np.zeros((nvir_a,eris_oooo_p.shape[0]))
-                temp[:] += np.diagonal(eris_oooo_p)
-                temp = temp.reshape(nvir_a, nocc_a, nocc_a)
-                diag[s_aaa:f_aaa] += -temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
+            temp = np.zeros((nvir_a,eris_oooo_p.shape[0]))
+            temp[:] += np.diagonal(eris_oooo_p)
+            temp = temp.reshape(nvir_a, nocc_a, nocc_a)
+            diag[s_aaa:f_aaa] += -temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
 
-                eris_OOOO_p = np.ascontiguousarray(eris_OOOO.transpose(0,2,1,3))
-                eris_OOOO_p -= np.ascontiguousarray(eris_OOOO_p.transpose(0,1,3,2))
-                eris_OOOO_p = eris_OOOO_p.reshape(nocc_b*nocc_b, nocc_b*nocc_b)
+            eris_OOOO_p = np.ascontiguousarray(eris_OOOO.transpose(0,2,1,3))
+            eris_OOOO_p -= np.ascontiguousarray(eris_OOOO_p.transpose(0,1,3,2))
+            eris_OOOO_p = eris_OOOO_p.reshape(nocc_b*nocc_b, nocc_b*nocc_b)
   
-                temp = np.zeros((nvir_b,eris_OOOO_p.shape[0]))
-                temp[:] += np.diagonal(eris_OOOO_p)
-                temp = temp.reshape(nvir_b, nocc_b, nocc_b)
-                diag[s_bbb:f_bbb] += -temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
+            temp = np.zeros((nvir_b,eris_OOOO_p.shape[0]))
+            temp[:] += np.diagonal(eris_OOOO_p)
+            temp = temp.reshape(nvir_b, nocc_b, nocc_b)
+            diag[s_bbb:f_bbb] += -temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
 
-                eris_oOoO_p = np.ascontiguousarray(eris_ooOO.transpose(0,2,1,3))
-                eris_oOoO_p = eris_oOoO_p.reshape(nocc_a*nocc_b, nocc_a*nocc_b)
+            eris_oOoO_p = np.ascontiguousarray(eris_ooOO.transpose(0,2,1,3))
+            eris_oOoO_p = eris_oOoO_p.reshape(nocc_a*nocc_b, nocc_a*nocc_b)
   
-                temp = np.zeros((nvir_b, eris_oOoO_p.shape[0]))
-                temp[:] += np.diag(eris_oOoO_p)
-                diag[s_bab:f_bab] += -temp.reshape(-1)
-                
-                temp = np.zeros((nvir_a, eris_oOoO_p.shape[0]))
-                temp[:] += np.diag(eris_oOoO_p.T)
-                diag[s_aba:f_aba] += -temp.reshape(-1)
-                
-                eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
-                eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1))
-                eris_ovov_p = eris_ovov_p.reshape(nocc_a*nvir_a, nocc_a*nvir_a)
+            temp = np.zeros((nvir_b, eris_oOoO_p.shape[0]))
+            temp[:] += np.diag(eris_oOoO_p)
+            diag[s_bab:f_bab] += -temp.reshape(-1)
+            
+            temp = np.zeros((nvir_a, eris_oOoO_p.shape[0]))
+            temp[:] += np.diag(eris_oOoO_p.T)
+            diag[s_aba:f_aba] += -temp.reshape(-1)
+            
+            eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3))
+            eris_ovov_p -= np.ascontiguousarray(eris_ovvo.transpose(0,2,3,1))
+            eris_ovov_p = eris_ovov_p.reshape(nocc_a*nvir_a, nocc_a*nvir_a)
   
-                temp = np.zeros((nocc_a,nocc_a,nvir_a))
-                temp[:] += np.diagonal(eris_ovov_p).reshape(nocc_a,nvir_a)
-                temp = np.ascontiguousarray(temp.T)
-                diag[s_aaa:f_aaa] += temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
+            temp = np.zeros((nocc_a,nocc_a,nvir_a))
+            temp[:] += np.diagonal(eris_ovov_p).reshape(nocc_a,nvir_a)
+            temp = np.ascontiguousarray(temp.T)
+            diag[s_aaa:f_aaa] += temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
 
-                temp = np.ascontiguousarray(temp.transpose(0,2,1))
-                diag[s_aaa:f_aaa] += temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
+            temp = np.ascontiguousarray(temp.transpose(0,2,1))
+            diag[s_aaa:f_aaa] += temp[:,ij_ind_a[0],ij_ind_a[1]].reshape(-1)
 
-                eris_OVOV_p = np.ascontiguousarray(eris_OOVV.transpose(0,2,1,3))
-                eris_OVOV_p -= np.ascontiguousarray(eris_OVVO.transpose(0,2,3,1))
-                eris_OVOV_p = eris_OVOV_p.reshape(nocc_b*nvir_b, nocc_b*nvir_b)
+            eris_OVOV_p = np.ascontiguousarray(eris_OOVV.transpose(0,2,1,3))
+            eris_OVOV_p -= np.ascontiguousarray(eris_OVVO.transpose(0,2,3,1))
+            eris_OVOV_p = eris_OVOV_p.reshape(nocc_b*nvir_b, nocc_b*nvir_b)
   
-                temp = np.zeros((nocc_b,nocc_b,nvir_b))
-                temp[:] += np.diagonal(eris_OVOV_p).reshape(nocc_b,nvir_b)
-                temp = np.ascontiguousarray(temp.T)
-                diag[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
+            temp = np.zeros((nocc_b,nocc_b,nvir_b))
+            temp[:] += np.diagonal(eris_OVOV_p).reshape(nocc_b,nvir_b)
+            temp = np.ascontiguousarray(temp.T)
+            diag[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
 
-                temp = np.ascontiguousarray(temp.transpose(0,2,1))
-                diag[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
+            temp = np.ascontiguousarray(temp.transpose(0,2,1))
+            diag[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
 
-                temp = np.zeros((nocc_a, nocc_b, nvir_b))
-                temp[:] += np.diagonal(eris_OVOV_p).reshape(nocc_b, nvir_b)
-                temp = np.ascontiguousarray(temp.transpose(2,0,1))
-                diag[s_bab:f_bab] += temp.reshape(-1)
+            temp = np.zeros((nocc_a, nocc_b, nvir_b))
+            temp[:] += np.diagonal(eris_OVOV_p).reshape(nocc_b, nvir_b)
+            temp = np.ascontiguousarray(temp.transpose(2,0,1))
+            diag[s_bab:f_bab] += temp.reshape(-1)
 
-                temp = np.zeros((nocc_b, nocc_a, nvir_a))
-                temp[:] += np.diagonal(eris_ovov_p).reshape(nocc_a, nvir_a)
-                temp = np.ascontiguousarray(temp.transpose(2,0,1))
-                diag[s_aba:f_aba] += temp.reshape(-1)
+            temp = np.zeros((nocc_b, nocc_a, nvir_a))
+            temp[:] += np.diagonal(eris_ovov_p).reshape(nocc_a, nvir_a)
+            temp = np.ascontiguousarray(temp.transpose(2,0,1))
+            diag[s_aba:f_aba] += temp.reshape(-1)
 
-                eris_oVoV_p = np.ascontiguousarray(eris_ooVV.transpose(0,2,1,3))
-                eris_oVoV_p = eris_oVoV_p.reshape(nocc_a*nvir_b, nocc_a*nvir_b)
+            eris_oVoV_p = np.ascontiguousarray(eris_ooVV.transpose(0,2,1,3))
+            eris_oVoV_p = eris_oVoV_p.reshape(nocc_a*nvir_b, nocc_a*nvir_b)
   
-                temp = np.zeros((nocc_b, nocc_a, nvir_b))
-                temp[:] += np.diagonal(eris_oVoV_p).reshape(nocc_a,nvir_b)
-                temp = np.ascontiguousarray(temp.transpose(2,1,0))
-                diag[s_bab:f_bab] += temp.reshape(-1)
+            temp = np.zeros((nocc_b, nocc_a, nvir_b))
+            temp[:] += np.diagonal(eris_oVoV_p).reshape(nocc_a,nvir_b)
+            temp = np.ascontiguousarray(temp.transpose(2,1,0))
+            diag[s_bab:f_bab] += temp.reshape(-1)
 
-                eris_OvOv_p = np.ascontiguousarray(eris_OOvv.transpose(0,2,1,3))
-                eris_OvOv_p = eris_OvOv_p.reshape(nocc_b*nvir_a, nocc_b*nvir_a)
+            eris_OvOv_p = np.ascontiguousarray(eris_OOvv.transpose(0,2,1,3))
+            eris_OvOv_p = eris_OvOv_p.reshape(nocc_b*nvir_a, nocc_b*nvir_a)
 
-                temp = np.zeros((nocc_a, nocc_b, nvir_a))
-                temp[:] += np.diagonal(eris_OvOv_p).reshape(nocc_b,nvir_a)
-                temp = np.ascontiguousarray(temp.transpose(2,1,0))
-                diag[s_aba:f_aba] += temp.reshape(-1)
+            temp = np.zeros((nocc_a, nocc_b, nvir_a))
+            temp[:] += np.diagonal(eris_OvOv_p).reshape(nocc_b,nvir_a)
+            temp = np.ascontiguousarray(temp.transpose(2,1,0))
+            diag[s_aba:f_aba] += temp.reshape(-1)
 
     diag = -diag
     return diag
@@ -3838,8 +3840,14 @@ def get_spec_factors(adc, T, U, nroots=1):
     P = lib.einsum("pi,pi->i", X_a, X_a)
     P += lib.einsum("pi,pi->i", X_b, X_b)
 
-    return P
+    return P, X_a, X_b
 
+def dyson_orb(adc, X_a, X_b, nroots=1):
+
+    dyson_mo_a = np.dot(adc.mo_coeff[0],x_a).reshape(-1,nroots)
+    dyson_mo_b = np.dot(adc.mo_coeff[1],x_b).reshape(-1,nroots)
+
+    return dyson_mo_a,dyson_mo_b
 
 
 class UADCEA(UADC):

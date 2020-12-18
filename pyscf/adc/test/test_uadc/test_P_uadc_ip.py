@@ -47,7 +47,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
         myadcip = adc.uadc.UADCIP(myadc) 
-        e,v,p = myadcip.kernel(nroots=3)
+        e,v,p,xa,xb = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.38713687643570405, 6)
         self.assertAlmostEqual(e[1], 0.3871368764357055, 6)
@@ -63,7 +63,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
         myadcip = adc.uadc.UADCIP(myadc) 
-        e,v,p = myadcip.kernel(nroots=3)
+        e,v,p,xa,xb = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.3751918934459225, 6)
         self.assertAlmostEqual(e[1], 0.375191893445926,  6)
@@ -79,7 +79,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.15600026295970712, 6)
 
         myadcip = adc.uadc.UADCIP(myadc) 
-        e,v,p = myadcip.kernel(nroots=3)
+        e,v,p,xa,xb = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.3839911922956251, 6)
         self.assertAlmostEqual(e[1], 0.3839911922956276, 6)

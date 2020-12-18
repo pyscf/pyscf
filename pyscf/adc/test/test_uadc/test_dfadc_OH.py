@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(3)"
         myadc.method_type = "ea"
         
-        e,v,p = myadc.kernel(nroots=4)
+        e,v,p,xa,xb = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.03349588, 6)
         self.assertAlmostEqual(e[1], 0.17178726, 6)
@@ -89,7 +89,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
         
-        e,v,p = myadc.kernel(nroots=3)
+        e,v,p,xa,xb = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.16330973, 6)
@@ -109,7 +109,7 @@ class KnownValues(unittest.TestCase):
         myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
         myadc.method = "adc(3)"
 
-        e,v,p = myadc.kernel(nroots=3)
+        e,v,p,xa,xb = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr        
 
         self.assertAlmostEqual(e_corr, -0.1633223874, 6)
