@@ -60,6 +60,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     alpha = spec_analyze(adc, X_a, spin ="alpha")
     beta = spec_analyze(adc, X_b, spin ="beta")
 
+    F = adc.eigenvector_analyze(U, nroots)
+
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
         print ("*************************************************************")
@@ -4053,6 +4055,197 @@ def spec_analyze(adc, X, spin):
             print("HF MO", spin, index_mo[c],"Spec. Contribution", spec_Contribution[c], "Orb symmetry", sym[c],'\n')
         print("Spec. Factor" , spin, np.sum(spec_Contribution),'\n')
 
+def eigenvector_analyze(adc, U, nroots=1):
+    
+    U_thresh = 0.06
+     
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+
+    ij_a = np.tril_indices(nocc_a, k=-1)
+    ij_b = np.tril_indices(nocc_b, k=-1)
+
+    n_singles_a = nocc_a
+    n_singles_b = nocc_b
+    n_doubles_aaa = nocc_a* (nocc_a - 1) * nvir_a // 2
+    n_doubles_bab = nvir_b * nocc_a* nocc_b
+    n_doubles_aba = nvir_a * nocc_b* nocc_a
+    n_doubles_bbb = nocc_b* (nocc_b - 1) * nvir_b // 2
+
+    s_a = 0
+    f_a = n_singles_a
+    s_b = f_a
+    f_b = s_b + n_singles_b
+    s_aaa = f_b
+    f_aaa = s_aaa + n_doubles_aaa
+    s_bab = f_aaa
+    f_bab = s_bab + n_doubles_bab
+    s_aba = f_bab
+    f_aba = s_aba + n_doubles_aba
+    s_bbb = f_aba
+    f_bbb = s_bbb + n_doubles_bbb
+
+    for I in range(U.shape[0]):
+        U1 = U[I, :f_b]
+        U2 = U[I, s_aaa:]
+        U1dotU1 = np.dot(U1, U1) 
+        U2dotU2 = np.dot(U2, U2) 
+           
+        temp_aaa = np.zeros((nvir_a, nocc_a, nocc_a))
+        temp_aaa[:,ij_a[0],ij_a[1]] =  U[I,s_aaa:f_aaa].reshape(nvir_a,-1).copy()
+        temp_aaa[:,ij_a[1],ij_a[0]] = -U[I,s_aaa:f_aaa].reshape(nvir_a,-1).copy()
+        U_aaa = temp_aaa.reshape(-1).copy()
+
+        temp_bbb = np.zeros((nvir_b, nocc_b, nocc_b))
+        temp_bbb[:,ij_b[0],ij_b[1]] =  U[I,s_bbb:f_bbb].reshape(nvir_b,-1).copy()
+        temp_bbb[:,ij_b[1],ij_b[0]] = -U[I,s_bbb:f_bbb].reshape(nvir_b,-1).copy()
+        U_bbb = temp_bbb.reshape(-1).copy()
+
+
+        U_sq = U[I,:].copy()**2
+        ind_idx = np.argsort(-U_sq)
+        U_sq = U_sq[ind_idx] 
+        U_sorted = U[I,ind_idx].copy()
+
+        U_sq_aaa = U_aaa.copy()**2
+        U_sq_bbb = U_bbb.copy()**2
+        ind_idx_aaa = np.argsort(-U_sq_aaa)
+        ind_idx_bbb = np.argsort(-U_sq_bbb)
+        U_sq_aaa = U_sq_aaa[ind_idx_aaa]
+        U_sq_bbb = U_sq_bbb[ind_idx_bbb]
+        U_sorted_aaa = U_aaa[ind_idx_aaa].copy()
+        U_sorted_bbb = U_bbb[ind_idx_bbb].copy()
+
+        U_sorted = U_sorted[U_sq > U_thresh**2]
+        ind_idx = ind_idx[U_sq > U_thresh**2]
+        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > U_thresh**2]
+        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > U_thresh**2]
+        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > U_thresh**2]
+        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > U_thresh**2]
+        #ind_idx = [x+1 for x in ind_idx]
+        
+        temp_doubles_aaa_idx = [0,0,0]  
+        temp_doubles_aba_idx = [0,0,0]  
+        temp_doubles_bab_idx = [0,0,0]  
+        temp_doubles_bbb_idx = [0,0,0]  
+        singles_a_idx = []
+        singles_b_idx = []
+        doubles_aaa_idx = []
+        doubles_bab_idx = []
+        doubles_aba_idx = []
+        doubles_bbb_idx = []
+        alpha_doubles = []
+        beta_doubles = []  
+        for orb in ind_idx:
+
+            if orb in range(s_a,f_a):
+                orb_a = orb + 1
+                singles_a_idx.append(orb_a)
+           
+            if orb in range(s_b,f_b):
+                orb_b = orb - s_b + 1
+                singles_b_idx.append(orb_b)
+
+            if orb in range(s_bab,f_bab):
+                orb_bab = orb - s_bab       
+                nvir_rem = orb_bab % (nocc_a*nocc_b)
+                nvir_idx = (orb_bab - nvir_rem)/(nocc_a*nocc_b)
+                temp_doubles_bab_idx[0] = int(nvir_idx + 1 + nocc_b)
+                orb_bab = nvir_rem
+                nocc_a_rem = orb_bab % nocc_b
+                nocc_a_idx = (orb_bab - nocc_a_rem)/nocc_b
+                temp_doubles_bab_idx[1] = int(nocc_a_idx + 1)
+                temp_doubles_bab_idx[2] = int(nocc_a_rem + 1)
+                doubles_bab_idx.append(temp_doubles_bab_idx)
+                
+                ### Compact representation ###
+                beta_doubles.append(temp_doubles_bab_idx[0])
+                alpha_doubles.append(temp_doubles_bab_idx[1])
+                beta_doubles.append(temp_doubles_bab_idx[2])
+                temp_doubles_bab_idx = [0,0,0]
+          
+            if orb in range(s_aba,f_aba):
+                orb_aba = orb - s_aba     
+                nvir_rem = orb_aba % (nocc_b*nocc_a)
+                nvir_idx = (orb_aba - nvir_rem)/(nocc_b*nocc_a)
+                temp_doubles_aba_idx[0] = int(nvir_idx + 1 + nocc_a)
+                orb_aba = nvir_rem
+                nocc_b_rem = orb_aba % nocc_a
+                nocc_b_idx = (orb_aba - nocc_b_rem)/nocc_a
+                temp_doubles_aba_idx[1] = int(nocc_b_idx + 1)
+                temp_doubles_aba_idx[2] = int(nocc_b_rem + 1)
+                doubles_bab_idx.append(temp_doubles_aba_idx)
+                ### Compact representation ###
+                alpha_doubles.append(temp_doubles_aba_idx[0])
+                beta_doubles.append(temp_doubles_aba_idx[1])
+                alpha_doubles.append(temp_doubles_aba_idx[2])
+                temp_doubles_aba_idx = [0,0,0]
+
+        for orb in ind_idx_aaa:              
+            orb_d = orb     
+            nvir_rem = orb_d % (nocc_a*nocc_a)
+            nvir_idx = (orb_d - nvir_rem)/(nocc_a*nocc_a)
+            temp_doubles_aaa_idx[0] = int(nvir_idx + 1 + nocc_a)
+            orb_d = nvir_rem
+            nocc1_rem = orb_d % nocc_a
+            nocc1_idx = (orb_d - nocc1_rem)/nocc_a
+            temp_doubles_aaa_idx[1] = int(nocc1_idx + 1)
+            temp_doubles_aaa_idx[2] = int(nocc1_rem + 1)
+            doubles_aaa_idx.append(temp_doubles_aaa_idx)
+            ### Compact representation ###
+            alpha_doubles.append(temp_doubles_aaa_idx[0])
+            alpha_doubles.append(temp_doubles_aaa_idx[1])
+            alpha_doubles.append(temp_doubles_aaa_idx[2])
+         
+            temp_doubles_aaa_idx = [0,0,0]
+
+        for orb in ind_idx_bbb:              
+            orb_d = orb     
+            nvir_rem = orb_d % (nocc_b*nocc_b)
+            nvir_idx = (orb_d - nvir_rem)/(nocc_b*nocc_b)
+            temp_doubles_bbb_idx[0] = int(nvir_idx + 1 + nocc_b)
+            orb_d = nvir_rem
+            nocc1_rem = orb_d % nocc_b
+            nocc1_idx = (orb_d - nocc1_rem)/nocc_b
+            temp_doubles_bbb_idx[1] = int(nocc1_idx + 1)
+            temp_doubles_bbb_idx[2] = int(nocc1_rem + 1)
+            doubles_bbb_idx.append(temp_doubles_bbb_idx)
+            ### Compact representation ###
+            beta_doubles.append(temp_doubles_bbb_idx[0])
+            beta_doubles.append(temp_doubles_bbb_idx[1])
+            beta_doubles.append(temp_doubles_bbb_idx[2])
+            beta_doubles_bbb_idx = [0,0,0]
+
+        print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
+        print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
+        #print( "Singles block: ") 
+        #for print_singles_a in singles_a_idx:
+        #    print("Occupied alpha orbital #:", print_singles_a)
+        #for print_singles_b in singles_b_idx:
+        #    print("Occupied beta orbital #:", print_singles_b)
+        #print("Doubles block: ")
+        #for d_va,d_oa,d_oa in doubles_aaa_idx:
+        #    print("Virtual alpha Orbital-aaa #:", d_va, " Occupied alpha orbital #:",d_oa, " Occupied alpha orbital", d_oa)
+        #for d_vb,d_oa,d_ob in doubles_bab_idx:
+        #    print("Virtual beta Orbital #:", d_vb, " Occupied alpha orbital #:",d_oa, " Occupied beta orbital", d_ob)
+        #for d_va,d_ob,d_oa in doubles_aba_idx:
+        #    print("Virtual alpha Orbital #:", d_va, " Occupied beta orbital #:",d_oa, " Occupied alpha orbital", d_oa)
+        #for d_vb,d_ob,d_ob in doubles_bbb_idx:
+        #    print("Virtual beta Orbital-bbb #:", d_vb, " Occupied beta orbital #:",d_ob, " Occupied beta orbital", d_ob)
+        
+        print("Alpha singles block: ", singles_a_idx)
+        print("Beta singles block: ", singles_b_idx)   
+        
+        
+        alpha_doubles_unique = list(set(alpha_doubles))
+        beta_doubles_unique = list(set(beta_doubles))
+        
+        print("Alpha doubles block: ", alpha_doubles_unique)
+        print("Beta doubles block: ", beta_doubles_unique)
+    return U
+
 
 class UADCEA(UADC):
     '''unrestricted ADC for EA energies and spectroscopic amplitudes
@@ -4234,7 +4427,9 @@ class UADCIP(UADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors
+
     spec_analyze = spec_analyze
+    eigenvector_analyze = eigenvector_analyze
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
