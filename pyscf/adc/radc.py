@@ -582,6 +582,7 @@ class RADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
+        self.U_thresh = 1
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -2343,11 +2344,11 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
 
     #return F
 
-def eigenvector_analyze(adc, U, nroots=1):
+def eigenvector_analyze_ip(adc, U, nroots=1):
     
     nocc = adc._nocc
     nvir = adc._nvir
-    U_thresh = 0.06
+    U_thresh = adc.U_thresh
     
     n_singles = nocc
     n_doubles = nvir * nocc * nocc
@@ -2378,12 +2379,10 @@ def eigenvector_analyze(adc, U, nroots=1):
                 orb_s = orb + 1
                 singles_idx.append(orb_s)
             if orb >= n_singles:
-                orb_d = orb - n_singles + 1     
+                orb_d = orb - n_singles      
                 nvir_rem = orb_d % (nocc*nocc)
                 nvir_idx = (orb_d - nvir_rem)/(nocc*nocc)
-                temp_doubles_idx[0] = int(nvir_idx + 1)
-                if temp_doubles_idx[0] != 0:
-                    temp_doubles_idx[0] += nocc 
+                temp_doubles_idx[0] = int(nvir_idx + 1 + n_singles) 
                 orb_d = nvir_rem
                 nocc1_rem = orb_d % nocc
                 nocc1_idx = (orb_d - nocc1_rem)/nocc
@@ -2467,6 +2466,7 @@ class RADCEA(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.U_thresh = adc.U_thresh
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -2479,6 +2479,7 @@ class RADCEA(RADC):
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ea
+    #eigenvector_analyze = eigenvector_analyze_ea
     
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2564,6 +2565,7 @@ class RADCIP(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.U_thresh = adc.U_thresh
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -2576,7 +2578,7 @@ class RADCIP(RADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ip
-    eigenvector_analyze = eigenvector_analyze
+    eigenvector_analyze = eigenvector_analyze_ip
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :

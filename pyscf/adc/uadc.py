@@ -4113,7 +4113,7 @@ def eigenvector_analyze(adc, U, nroots=1):
                 singles_b_idx.append(orb_b)
 
             if orb in range(s_bab,f_bab):
-                orb_bab = orb - s_bab + 1      
+                orb_bab = orb - s_bab       
                 nvir_rem = orb_bab % (nocc_a*nocc_b)
                 nvir_idx = (orb_bab - nvir_rem)/(nocc_a*nocc_b)
                 temp_doubles_bab_idx[0] = int(nvir_idx + 1 + nocc_b)
@@ -4123,20 +4123,29 @@ def eigenvector_analyze(adc, U, nroots=1):
                 temp_doubles_bab_idx[1] = int(nocc_a_idx + 1)
                 temp_doubles_bab_idx[2] = int(nocc_a_rem + 1)
                 doubles_bab_idx.append(temp_doubles_bab_idx)
+                
+                ### Compact representation ###
+                beta_doubles.append(temp_doubles_bab_idx[0])
+                alpha_doubles.append(temp_doubles_bab_idx[1])
+                beta_doubles.append(temp_doubles_bab_idx[2])
                 temp_doubles_bab_idx = [0,0,0]
           
             if orb in range(s_aba,f_aba):
-                orb_aba = orb - s_aba + 1     
+                orb_aba = orb - s_aba     
                 nvir_rem = orb_aba % (nocc_b*nocc_a)
                 nvir_idx = (orb_aba - nvir_rem)/(nocc_b*nocc_a)
                 temp_doubles_aba_idx[0] = int(nvir_idx + 1 + nocc_a)
                 orb_aba = nvir_rem
                 nocc_b_rem = orb_aba % nocc_a
                 nocc_b_idx = (orb_aba - nocc_b_rem)/nocc_a
-                temp_doubles_bab_idx[1] = int(nocc_b_idx + 1)
-                temp_doubles_bab_idx[2] = int(nocc_b_rem + 1)
-                doubles_bab_idx.append(temp_doubles_bab_idx)
-                temp_doubles_bab_idx = [0,0,0]
+                temp_doubles_aba_idx[1] = int(nocc_b_idx + 1)
+                temp_doubles_aba_idx[2] = int(nocc_b_rem + 1)
+                doubles_bab_idx.append(temp_doubles_aba_idx)
+                ### Compact representation ###
+                alpha_doubles.append(temp_doubles_aba_idx[0])
+                beta_doubles.append(temp_doubles_aba_idx[1])
+                alpha_doubles.append(temp_doubles_aba_idx[2])
+                temp_doubles_aba_idx = [0,0,0]
 
         for orb in ind_idx_aaa:              
             orb_d = orb     
@@ -4149,6 +4158,11 @@ def eigenvector_analyze(adc, U, nroots=1):
             temp_doubles_aaa_idx[1] = int(nocc1_idx + 1)
             temp_doubles_aaa_idx[2] = int(nocc1_rem + 1)
             doubles_aaa_idx.append(temp_doubles_aaa_idx)
+            ### Compact representation ###
+            alpha_doubles.append(temp_doubles_aaa_idx[0])
+            alpha_doubles.append(temp_doubles_aaa_idx[1])
+            alpha_doubles.append(temp_doubles_aaa_idx[2])
+         
             temp_doubles_aaa_idx = [0,0,0]
 
         for orb in ind_idx_bbb:              
@@ -4162,26 +4176,38 @@ def eigenvector_analyze(adc, U, nroots=1):
             temp_doubles_bbb_idx[1] = int(nocc1_idx + 1)
             temp_doubles_bbb_idx[2] = int(nocc1_rem + 1)
             doubles_bbb_idx.append(temp_doubles_bbb_idx)
-            temp_doubles_bbb_idx = [0,0,0]
+            ### Compact representation ###
+            beta_doubles.append(temp_doubles_bbb_idx[0])
+            beta_doubles.append(temp_doubles_bbb_idx[1])
+            beta_doubles.append(temp_doubles_bbb_idx[2])
+            beta_doubles_bbb_idx = [0,0,0]
 
         print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
         print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
-        print( "Singles block: ") 
-        for print_singles_a in singles_a_idx:
-            print("Occupied alpha orbital #:", print_singles_a)
-        for print_singles_b in singles_b_idx:
-            print("Occupied beta orbital #:", print_singles_b)
-        print("Doubles block: ")
-        for d_va,d_oa,d_oa in doubles_aaa_idx:
-            print("Virtual alpha Orbital-aaa #:", d_va, " Occupied alpha orbital #:",d_oa, " Occupied alpha orbital", d_oa)
-        for d_vb,d_oa,d_ob in doubles_bab_idx:
-            print("Virtual beta Orbital #:", d_vb, " Occupied alpha orbital #:",d_oa, " Occupied beta orbital", d_ob)
-        for d_va,d_ob,d_oa in doubles_aba_idx:
-            print("Virtual alpha Orbital #:", d_va, " Occupied beta orbital #:",d_oa, " Occupied alpha orbital", d_oa)
-        for d_vb,d_ob,d_ob in doubles_bbb_idx:
-            print("Virtual beta Orbital-bbb #:", d_vb, " Occupied beta orbital #:",d_ob, " Occupied beta orbital", d_ob)
-
-    
+        #print( "Singles block: ") 
+        #for print_singles_a in singles_a_idx:
+        #    print("Occupied alpha orbital #:", print_singles_a)
+        #for print_singles_b in singles_b_idx:
+        #    print("Occupied beta orbital #:", print_singles_b)
+        #print("Doubles block: ")
+        #for d_va,d_oa,d_oa in doubles_aaa_idx:
+        #    print("Virtual alpha Orbital-aaa #:", d_va, " Occupied alpha orbital #:",d_oa, " Occupied alpha orbital", d_oa)
+        #for d_vb,d_oa,d_ob in doubles_bab_idx:
+        #    print("Virtual beta Orbital #:", d_vb, " Occupied alpha orbital #:",d_oa, " Occupied beta orbital", d_ob)
+        #for d_va,d_ob,d_oa in doubles_aba_idx:
+        #    print("Virtual alpha Orbital #:", d_va, " Occupied beta orbital #:",d_oa, " Occupied alpha orbital", d_oa)
+        #for d_vb,d_ob,d_ob in doubles_bbb_idx:
+        #    print("Virtual beta Orbital-bbb #:", d_vb, " Occupied beta orbital #:",d_ob, " Occupied beta orbital", d_ob)
+        
+        print("Alpha singles block: ", singles_a_idx)
+        print("Beta singles block: ", singles_b_idx)   
+        
+        
+        alpha_doubles_unique = list(set(alpha_doubles))
+        beta_doubles_unique = list(set(beta_doubles))
+        
+        print("Alpha doubles block: ", alpha_doubles_unique)
+        print("Beta doubles block: ", beta_doubles_unique)
     return U
 
 
