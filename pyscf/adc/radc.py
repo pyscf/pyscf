@@ -28,7 +28,7 @@ from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
-
+from pyscf import symm
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
@@ -57,6 +57,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     T = adc.get_trans_moments()
 
     spec_factors,X = adc.get_spec_factors(T, U, nroots)
+
+    F = spec_analyze(adc, X, nroots)
     F = adc.eigenvector_analyze(U, nroots)
   
     nfalse = np.shape(conv)[0] - np.sum(conv)
@@ -2336,14 +2338,6 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
 
     return P,X
 
-
-#def analyze(adc, T, U, nroots=1):
-
-    #F = adc.eigenvector_analyze(adc, U, nroots=1)
-    #adc.spec_analyze(adc, T, U, nroots=1)
-
-    #return F
-
 def eigenvector_analyze_ip(adc, U, nroots=1):
     
     nocc = adc._nocc
@@ -2406,7 +2400,36 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
         #print("Doubles block: ", doubles_unique) 
     return U
 
+def spec_analyze(adc, X, nroots):
 
+    X_2 = (X**2)*2
+
+    thresh = 0.00000001
+
+    for i in range(X_2.shape[1]):
+
+        print('\n',"ROOT", i , '\n')
+
+        sort = np.argsort(-X_2[:,i])
+        X_2_row = X_2[:,i]
+
+        X_2_row = X_2_row[sort]
+
+        sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff.orbsym]
+        sym = np.array(sym)
+
+        sym = sym[sort]
+
+        spec_Contribution = X_2_row[X_2_row > thresh]
+        index_mo = sort[X_2_row > thresh]+1
+
+        for c in range(index_mo.shape[0]):
+            #logger.info(HF MO, '%d  Spec. Contribution %.10f   Orbital symmetry %s',
+             #            index_mo[c], spec_Contribution[c], sym[c])
+
+
+            print("HF MO",index_mo[c],"Spec. Contribution", spec_Contribution[c], "Orb symmetry", sym[c], '\n')
+        print("Spec. Factor", np.sum(spec_Contribution),'\n')
 
 class RADCEA(RADC):
     '''restricted ADC for EA energies and spectroscopic amplitudes
@@ -2479,8 +2502,10 @@ class RADCEA(RADC):
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ea
+
+    spec_analyze = spec_analyze
     #eigenvector_analyze = eigenvector_analyze_ea
-    
+
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
            diag = self.ea_adc_diag()
@@ -2578,6 +2603,8 @@ class RADCIP(RADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ip
+
+    spec_analyze = spec_analyze
     eigenvector_analyze = eigenvector_analyze_ip
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):

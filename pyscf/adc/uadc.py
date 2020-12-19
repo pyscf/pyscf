@@ -21,7 +21,7 @@ Unrestricted algebraic diagrammatic construction
 '''
 import time
 import numpy as np
-from pyscf import lib
+from pyscf import lib, symm
 from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
@@ -55,7 +55,11 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     T = adc.get_trans_moments()
 
-    spec_factors = adc.get_spec_factors(T, U, nroots)
+    spec_factors, X_a, X_b = adc.get_spec_factors(T, U, nroots)
+
+    alpha = spec_analyze(adc, X_a, spin ="alpha")
+    beta = spec_analyze(adc, X_b, spin ="beta")
+
     F = adc.eigenvector_analyze(U, nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
@@ -4016,8 +4020,40 @@ def get_spec_factors(adc, T, U, nroots=1):
     P = lib.einsum("pi,pi->i", X_a, X_a)
     P += lib.einsum("pi,pi->i", X_b, X_b)
 
-    return P
+    return P, X_a, X_b
 
+def spec_analyze(adc, X, spin):
+
+    X_2 = (X.copy()**2)
+
+    thresh = 0.000000001
+
+
+    for i in range(X_2.shape[1]):
+
+        print('\n',"ROOT", i , spin, '\n')
+
+        sort = np.argsort(-X_2[:,i])
+        X_2_row = X_2[:,i]
+
+        X_2_row = X_2_row[sort]
+        if spin == "alpha":
+            sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[0].orbsym]
+            sym = np.array(sym)
+        else:
+            sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[1].orbsym]
+            sym = np.array(sym)
+
+        sym = sym[sort]
+
+
+        spec_Contribution = X_2_row[X_2_row > thresh]
+        index_mo = sort[X_2_row > thresh]+1
+
+        for c in range(index_mo.shape[0]):
+
+            print("HF MO", spin, index_mo[c],"Spec. Contribution", spec_Contribution[c], "Orb symmetry", sym[c],'\n')
+        print("Spec. Factor" , spin, np.sum(spec_Contribution),'\n')
 
 def eigenvector_analyze(adc, U, nroots=1):
     
@@ -4287,7 +4323,8 @@ class UADCEA(UADC):
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors
-    
+    spec_analyze = spec_analyze
+
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
            diag = self.ea_adc_diag()
@@ -4390,7 +4427,10 @@ class UADCIP(UADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors
+
+    spec_analyze = spec_analyze
     eigenvector_analyze = eigenvector_analyze
+
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
             diag = self.ip_adc_diag()
