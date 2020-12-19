@@ -59,7 +59,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     alpha = spec_analyze(adc, X_a, spin ="alpha")
     beta = spec_analyze(adc, X_b, spin ="beta")
-
+    print('\n')
     F = adc.eigenvector_analyze(U, nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
@@ -4031,7 +4031,9 @@ def spec_analyze(adc, X, spin):
 
     for i in range(X_2.shape[1]):
 
-        print('\n',"ROOT", i , spin, '\n')
+        print('\n')
+        logger.info(adc, 'Root %d %s', i, spin)
+        print('\n')
 
         sort = np.argsort(-X_2[:,i])
         X_2_row = X_2[:,i]
@@ -4051,9 +4053,9 @@ def spec_analyze(adc, X, spin):
         index_mo = sort[X_2_row > thresh]+1
 
         for c in range(index_mo.shape[0]):
+            logger.info(adc, 'HF %s MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', spin, index_mo[c], spec_Contribution[c], sym[c])
 
-            print("HF MO", spin, index_mo[c],"Spec. Contribution", spec_Contribution[c], "Orb symmetry", sym[c],'\n')
-        print("Spec. Factor" , spin, np.sum(spec_Contribution),'\n')
+        logger.info(adc, 'Spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 def eigenvector_analyze(adc, U, nroots=1):
     

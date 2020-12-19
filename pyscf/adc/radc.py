@@ -59,6 +59,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     spec_factors,X = adc.get_spec_factors(T, U, nroots)
 
     F = spec_analyze(adc, X, nroots)
+    print('\n')
     F = adc.eigenvector_analyze(U, nroots)
   
     nfalse = np.shape(conv)[0] - np.sum(conv)
@@ -2402,13 +2403,15 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
 
 def spec_analyze(adc, X, nroots):
 
-    X_2 = (X**2)*2
+    X_2 = (X.copy()**2)*2
 
-    thresh = 0.00000001
+    thresh = 0.000000001
 
     for i in range(X_2.shape[1]):
 
-        print('\n',"ROOT", i , '\n')
+        print('\n')
+        logger.info(adc, 'Root %d', i)
+        print('\n')
 
         sort = np.argsort(-X_2[:,i])
         X_2_row = X_2[:,i]
@@ -2424,12 +2427,10 @@ def spec_analyze(adc, X, nroots):
         index_mo = sort[X_2_row > thresh]+1
 
         for c in range(index_mo.shape[0]):
-            #logger.info(HF MO, '%d  Spec. Contribution %.10f   Orbital symmetry %s',
-             #            index_mo[c], spec_Contribution[c], sym[c])
+            if adc.verbose >= logger.INFO:
+                logger.info(adc, 'HF MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', index_mo[c], spec_Contribution[c], sym[c])
 
-
-            print("HF MO",index_mo[c],"Spec. Contribution", spec_Contribution[c], "Orb symmetry", sym[c], '\n')
-        print("Spec. Factor", np.sum(spec_Contribution),'\n')
+        logger.info(adc, 'Spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 class RADCEA(RADC):
     '''restricted ADC for EA energies and spectroscopic amplitudes
