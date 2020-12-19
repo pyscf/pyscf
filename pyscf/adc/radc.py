@@ -58,7 +58,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     spec_factors,X = adc.get_spec_factors(T, U, nroots)
 
-    F = spec_analyze(adc, X, nroots)
+    #F = spec_analyze(adc, X, nroots)
     F = adc.eigenvector_analyze(U, nroots)
   
     nfalse = np.shape(conv)[0] - np.sum(conv)
@@ -2362,42 +2362,49 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
                    
         U_sorted = U_sorted[U_sq > U_thresh**2]
         ind_idx = ind_idx[U_sq > U_thresh**2]
-      
-        #ind_idx = [x+1 for x in ind_idx]
+             
 
         temp_doubles_idx = [0,0,0]  
         singles_idx = []
         doubles_idx = []
-        for orb in ind_idx:
-            if orb < n_singles:
-                orb_s = orb + 1
-                singles_idx.append(orb_s)
-            if orb >= n_singles:
-                orb_d = orb - n_singles      
-                nvir_rem = orb_d % (nocc*nocc)
-                nvir_idx = (orb_d - nvir_rem)/(nocc*nocc)
-                temp_doubles_idx[0] = int(nvir_idx + 1 + n_singles) 
-                orb_d = nvir_rem
-                nocc1_rem = orb_d % nocc
-                nocc1_idx = (orb_d - nocc1_rem)/nocc
-                temp_doubles_idx[1] = int(nocc1_idx + 1)
-                temp_doubles_idx[2] = int(nocc1_rem + 1)
+        singles_val = []
+        doubles_val = []
+        iter_num = 0
+        print(ind_idx)
+        print(nocc)
+        print(nvir)        
+        for orb_idx in ind_idx:
+            
+            if orb_idx < n_singles:
+                orb_s_idx = orb_idx + 1
+                singles_idx.append(orb_s_idx)
+                singles_val.append(U_sorted[iter_num])
+            if orb_idx >= n_singles:
+                orb_d_idx = orb_idx - n_singles
+                      
+                a_rem = orb_d_idx % (nocc*nocc)
+                a_idx = (orb_d_idx )//(nocc*nocc)
+                temp_doubles_idx[0] = int(a_idx + 1 + n_singles) 
+                j_rem = a_rem % nocc
+                i_idx = (a_rem)//nocc
+                temp_doubles_idx[1] = int(i_idx + 1)
+                temp_doubles_idx[2] = int(j_rem + 1)
                 doubles_idx.append(temp_doubles_idx)
+                doubles_val.append(U_sorted[iter_num])
                 temp_doubles_idx = [0,0,0]
-          
+                
+            iter_num += 1      
+           
                 
         print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
-        print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)  
+        print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)
         print( "Singles block: ") 
-        for print_singles in singles_idx:
-            print("Occupied orbital #:", print_singles)
+        for idx,print_singles in enumerate(singles_idx):
+            print("Occupied orbital #:", print_singles, "amplitude: ", singles_val[idx])
         print("Doubles block: ")
-        for print_doubles in doubles_idx:
-            print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2])
-        #doubles_joined = sum(doubles_idx, [])
-        #doubles_unique = list(set(doubles_joined))
-        #print("Singles block: ", singles_idx) 
-        #print("Doubles block: ", doubles_unique) 
+        for idx,print_doubles in enumerate(doubles_idx):
+            print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2], "amplitude: ", doubles_val[idx])
+        print(doubles_val)
     return U
 
 def spec_analyze(adc, X, nroots):
