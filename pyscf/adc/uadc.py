@@ -4135,15 +4135,22 @@ def eigenvector_analyze(adc, U, nroots=1):
         doubles_bab_idx = []
         doubles_aba_idx = []
         doubles_bbb_idx = []  
+        singles_a_val = []
+        singles_b_val = []
+        doubles_bab_val = []
+        doubles_aba_val = []  
+        iter_idx = 0
         for orb in ind_idx:
 
             if orb in range(s_a,f_a+1):
                 orb_a = orb + 1
                 singles_a_idx.append(orb_a)
-           
+                singles_a_val.append(U_sorted[iter_idx])
+               
             if orb in range(s_b,f_b+1):
                 orb_b = orb - s_b + 1
                 singles_b_idx.append(orb_b)
+                singles_b_val.append(U_sorted[iter_idx])
 
             if orb in range(s_bab,f_bab+1):
                 orb_bab = orb - s_bab       
@@ -4156,6 +4163,7 @@ def eigenvector_analyze(adc, U, nroots=1):
                 temp_doubles_bab_idx[2] = int(j_rem + 1)
                 doubles_bab_idx.append(temp_doubles_bab_idx)
                 temp_doubles_bab_idx = [0,0,0]
+                doubles_bab_val.append(U_sorted[iter_idx])
           
             if orb in range(s_aba,f_aba+1):
                 orb_aba = orb - s_aba     
@@ -4169,7 +4177,10 @@ def eigenvector_analyze(adc, U, nroots=1):
                 temp_doubles_aba_idx[2] = int(nocc_b_rem + 1)
                 doubles_bab_idx.append(temp_doubles_aba_idx)
                 temp_doubles_aba_idx = [0,0,0]
+                doubles_bab_val.append(U_sorted[iter_idx])
 
+            iter_idx += 1
+             
         for orb_aaa in ind_idx_aaa:              
             nvir_rem = orb_aaa % (nocc_a*nocc_a)
             nvir_idx = orb_aaa//(nocc_a*nocc_a)
@@ -4195,19 +4206,19 @@ def eigenvector_analyze(adc, U, nroots=1):
         print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
         print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
         print( "Singles block: ") 
-        for print_singles_a in singles_a_idx:
-            print("Occupied alpha orbital #:", print_singles_a)
-        for print_singles_b in singles_b_idx:
-            print("Occupied beta orbital #:", print_singles_b)
+        for idx,print_singles_a in enumerate(singles_a_idx):
+            print("Occupied alpha orbital #:", print_singles_a, "amplitude: ", singles_a_val[idx])
+        for idx,print_singles_b in enumerate(singles_b_idx):
+            print("Occupied beta orbital #:", print_singles_b, "amplitude: ", singles_b_val[idx])
         print("Doubles block: ")
-        for d_va,d_oa,d_oa in doubles_aaa_idx:
-            print("Virtual alpha Orbital-aaa #:", d_va, " Occupied alpha orbital #:",d_oa, " Occupied alpha orbital", d_oa)
-        for d_vb,d_oa,d_ob in doubles_bab_idx:
-            print("Virtual beta Orbital #:", d_vb, " Occupied alpha orbital #:",d_oa, " Occupied beta orbital", d_ob)
-        for d_va,d_ob,d_oa in doubles_aba_idx:
-            print("Virtual alpha Orbital #:", d_va, " Occupied beta orbital #:",d_oa, " Occupied alpha orbital", d_oa)
-        for d_vb,d_ob,d_ob in doubles_bbb_idx:
-            print("Virtual beta Orbital-bbb #:", d_vb, " Occupied beta orbital #:",d_ob, " Occupied beta orbital", d_ob)
+        for idx,print_aaa in enumerate(doubles_aaa_idx):
+            print("Virtual alpha Orbital-aaa #:", print_aaa[0], " Occupied alpha orbital #:",print_aaa[1], " Occupied alpha orbital", print_aaa[2], "amplitude: ", U_sorted_aaa[idx])
+        for idx,print_bab in enumerate(doubles_bab_idx):
+            print("Virtual beta Orbital #:", print_bab[0], " Occupied alpha orbital #:",print_bab[1], " Occupied beta orbital", print_bab[2], "amplitude: ", doubles_bab_val[idx])
+        for idx,print_aba in enumerate(doubles_aba_idx):
+            print("Virtual alpha Orbital #:", print_aba[0], " Occupied beta orbital #:",print_aba[1], " Occupied alpha orbital", print_aba[2], "amplitude: ", doubles_aba_val[idx])
+        for idx,print_bbb in enumerate(doubles_bbb_idx):
+            print("Virtual beta Orbital-bbb #:", print_bbb[0], " Occupied beta orbital #:",print_bbb[1], " Occupied beta orbital", print_bbb[2],"amplitude: ", U_sorted_bbb[idx])
         print(U_sorted)
     
     return U
