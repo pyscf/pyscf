@@ -29,6 +29,7 @@ from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
 from pyscf import symm
+import pandas as pd 
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
@@ -2383,10 +2384,10 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
                 orb_d_idx = orb_idx - n_singles
                       
                 a_rem = orb_d_idx % (nocc*nocc)
-                a_idx = (orb_d_idx )//(nocc*nocc)
+                a_idx = (orb_d_idx - a_rem )//(nocc*nocc)
                 temp_doubles_idx[0] = int(a_idx + 1 + n_singles) 
                 j_rem = a_rem % nocc
-                i_idx = (a_rem)//nocc
+                i_idx = (a_rem - j_rem)//nocc
                 temp_doubles_idx[1] = int(i_idx + 1)
                 temp_doubles_idx[2] = int(j_rem + 1)
                 doubles_idx.append(temp_doubles_idx)
@@ -2395,9 +2396,9 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
                 
             iter_num += 1      
            
-                
-        print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
+        #print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
         print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)
+        logger.info('%s root %d    Singles norm  = %.4f    Doubles norm = %.4f', I, U1dotU1, U2dotU2)
         print( "Singles block: ") 
         for idx,print_singles in enumerate(singles_idx):
             print("Occupied orbital #:", print_singles, "amplitude: ", singles_val[idx])
