@@ -28,7 +28,7 @@ from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
-
+from pyscf import symm
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
@@ -68,6 +68,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     #    spec_factors = None
     #    X =  None
 
+    F = spec_analyze(adc, X, nroots)
+    print('\n')
+    F = adc.eigenvector_analyze(U, nroots)
+  
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
         print ("*************************************************************")
@@ -605,6 +609,7 @@ class RADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_properties = True
+        self.U_thresh = 1
 
         self.E = None
         self.U = None
@@ -2343,6 +2348,97 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
 
     return P,X
 
+def eigenvector_analyze_ip(adc, U, nroots=1):
+    
+    nocc = adc._nocc
+    nvir = adc._nvir
+    U_thresh = adc.U_thresh
+    
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+    
+    
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+        U1dotU1 = np.dot(U1, U1) 
+        U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+       
+        U_sq = U[I,:].copy()**2
+        ind_idx = np.argsort(-U_sq)
+        U_sq = U_sq[ind_idx] 
+        U_sorted = U[I,ind_idx].copy()
+        
+                   
+        U_sorted = U_sorted[U_sq > U_thresh**2]
+        ind_idx = ind_idx[U_sq > U_thresh**2]
+      
+        #ind_idx = [x+1 for x in ind_idx]
+
+        temp_doubles_idx = [0,0,0]  
+        singles_idx = []
+        doubles_idx = []
+        for orb in ind_idx:
+            if orb < n_singles:
+                orb_s = orb + 1
+                singles_idx.append(orb_s)
+            if orb >= n_singles:
+                orb_d = orb - n_singles      
+                nvir_rem = orb_d % (nocc*nocc)
+                nvir_idx = (orb_d - nvir_rem)/(nocc*nocc)
+                temp_doubles_idx[0] = int(nvir_idx + 1 + n_singles) 
+                orb_d = nvir_rem
+                nocc1_rem = orb_d % nocc
+                nocc1_idx = (orb_d - nocc1_rem)/nocc
+                temp_doubles_idx[1] = int(nocc1_idx + 1)
+                temp_doubles_idx[2] = int(nocc1_rem + 1)
+                doubles_idx.append(temp_doubles_idx)
+                temp_doubles_idx = [0,0,0]
+          
+                
+        print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
+        print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)  
+        #print( "Singles block: ") 
+        #for print_singles in singles_idx:
+        #    print("Occupied orbital #:", print_singles)
+        #print("Doubles block: ")
+        #for print_doubles in doubles_idx:
+        #    print("Virtual orbital #:", print_doubles[0], " Occupied orbitals #:", print_doubles[1], "and", print_doubles[2])
+        doubles_joined = sum(doubles_idx, [])
+        doubles_unique = list(set(doubles_joined))
+        print("Singles block: ", singles_idx) 
+        print("Doubles block: ", doubles_unique) 
+    return U
+
+def spec_analyze(adc, X, nroots):
+
+    X_2 = (X.copy()**2)*2
+    thresh = 0.000000001
+
+    for i in range(X_2.shape[1]):
+
+        print('\n')
+        logger.info(adc, 'Root %d', i)
+        print('\n')
+
+        sort = np.argsort(-X_2[:,i])
+        X_2_row = X_2[:,i]
+
+        X_2_row = X_2_row[sort]
+
+        sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff.orbsym]
+        sym = np.array(sym)
+
+        sym = sym[sort]
+
+        spec_Contribution = X_2_row[X_2_row > thresh]
+        index_mo = sort[X_2_row > thresh]+1
+
+        for c in range(index_mo.shape[0]):
+            if adc.verbose >= logger.INFO:
+                logger.info(adc, 'HF MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', index_mo[c], spec_Contribution[c], sym[c])
+
+        logger.info(adc, 'Spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 def dyson_orb(adc, X, nroots=1):
 
@@ -2471,6 +2567,7 @@ class RADCEA(RADC):
         self.U = None
         self.P = None
         self.X = None
+        self.U_thresh = adc.U_thresh
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -2486,6 +2583,9 @@ class RADCEA(RADC):
     renormalize_eigenvectors = renormalize_eigenvectors_ea
     compute_dyson_orb = dyson_orb    
     get_properties = get_properties
+
+    spec_analyze = spec_analyze
+    #eigenvector_analyze = eigenvector_analyze_ea
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2576,6 +2676,7 @@ class RADCIP(RADC):
         self.U = None
         self.P = None
         self.X = None
+        self.U_thresh = adc.U_thresh
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -2591,6 +2692,9 @@ class RADCIP(RADC):
     renormalize_eigenvectors = renormalize_eigenvectors_ip
     dyson_orb = dyson_orb
     get_properties = get_properties
+
+    spec_analyze = spec_analyze
+    eigenvector_analyze = eigenvector_analyze_ip
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
