@@ -53,23 +53,20 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     U = np.array(U)
 
-<<<<<<< HEAD
     if adc.compute_spec == True:
         T = adc.get_trans_moments()
         spec_factors, X_a, X_b = adc.get_spec_factors(T, U, nroots)
     else:
         T = None
         spec_factors = None
-=======
-    T = adc.get_trans_moments()
+        X_a = None
+        X_b = None
 
-    spec_factors, X_a, X_b = adc.get_spec_factors(T, U, nroots)
 
     alpha = spec_analyze(adc, X_a, spin ="alpha")
     beta = spec_analyze(adc, X_b, spin ="beta")
     print('\n')
     F = adc.eigenvector_analyze(U, nroots)
->>>>>>> 7d52c027f32d347544121e1e5d673c2534d07d7c
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
@@ -3857,14 +3854,13 @@ def get_spec_factors(adc, T, U, nroots=1):
 
     return P, X_a, X_b
 
-<<<<<<< HEAD
 def dyson_orb(adc, X_a, X_b, nroots=1):
 
     dyson_mo_a = np.dot(adc.mo_coeff[0],x_a).reshape(-1,nroots)
     dyson_mo_b = np.dot(adc.mo_coeff[1],x_b).reshape(-1,nroots)
 
     return dyson_mo_a,dyson_mo_b
-=======
+
 def spec_analyze(adc, X, spin):
 
     X_2 = (X.copy()**2)
@@ -4090,7 +4086,6 @@ def eigenvector_analyze(adc, U, nroots=1):
         print("Alpha doubles block: ", alpha_doubles_unique)
         print("Beta doubles block: ", beta_doubles_unique)
     return U
->>>>>>> 7d52c027f32d347544121e1e5d673c2534d07d7c
 
 
 class UADCEA(UADC):
