@@ -4210,9 +4210,9 @@ def eigenvector_analyze_ea(adc, U, nroots=1):
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         print( "Singles block: ") 
         for idx,print_singles_a in enumerate(singles_a_idx):
-            logger.info(adc, 'vir_alpha(i) = %2d | amplitude = %7.4f', print_singles_a, singles_a_val[idx])
+            logger.info(adc, 'vir_alpha(a) = %2d | amplitude = %7.4f', print_singles_a, singles_a_val[idx])
         for idx,print_singles_b in enumerate(singles_b_idx):
-            logger.info(adc, 'vir_beta(i) = %3d | amplitude = %7.4f', print_singles_b, singles_b_val[idx])
+            logger.info(adc, 'vir_beta(a) = %3d | amplitude = %7.4f', print_singles_b, singles_b_val[idx])
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         print("Doubles block: ")
         if doubles_aaa_idx != []:
