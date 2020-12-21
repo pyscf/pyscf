@@ -50,17 +50,23 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
-    conv, E, U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
+    conv, adc.E, adc.U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
-    U = np.array(U)
+    #U = np.array(U)
 
-    if adc.compute_spec == True:
-        T = adc.get_trans_moments()
-        spec_factors,X = adc.get_spec_factors(T, U, nroots)
-    else:
-        T = None
-        spec_factors = None
-        X = None
+    #if adc.compute_spec == True:
+    #    T = adc.get_trans_moments()
+    #    spec_factors,X = adc.get_spec_factors(T, U, nroots)
+    #else:
+    #    T = None
+    #    spec_factors = None
+    #    X = None
+
+    if adc.compute_properties == True:
+        adc.P,adc.X = adc.get_properties(nroots)
+    #else :
+    #    spec_factors = None
+    #    X =  None
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
@@ -68,14 +74,14 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
         print ("*************************************************************")
 
-    if adc.compute_spec == True:
+    if adc.compute_properties == True:
 
         if adc.verbose >= logger.INFO:
             if nroots == 1:
                 logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-                             adc.method, 0, E, E*27.2114, spec_factors, conv)
+                             adc.method, 0, adc.E, adc.E*27.2114, adc.P, conv)
             else :
-                for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
+                for n, en, pn, convn in zip(range(nroots), adc.E, adc.P, conv):
                     logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
                               adc.method, n, en, en*27.2114, pn, convn)
 
@@ -84,14 +90,14 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         if adc.verbose >= logger.INFO:
             if nroots == 1:
                 logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    conv = %s',
-                             adc.method, 0, E, E*27.2114, conv)
+                             adc.method, 0, adc.E, adc.E*27.2114, conv)
             else :
-                for n, en, convn in zip(range(nroots), E, conv):
+                for n, en, convn in zip(range(nroots), adc.E, conv):
                     logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f  conv = %s',
                               adc.method, n, en, en*27.2114, convn)
     log.timer('ADC', *cput0)
 
-    return E, U, spec_factors, X
+    return adc.E, adc.U, adc.P, adc.X
 
 
 
@@ -598,8 +604,13 @@ class RADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-        self.compute_spec = True
+        self.compute_properties = True
 
+        self.E = None
+        self.U = None
+        self.P = None
+        self.X = None
+       
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mol', 'mo_energy', 'max_memory', 'incore_complete', 'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
         self._keys = set(self.__dict__.keys()).union(keys)
@@ -2340,6 +2351,63 @@ def dyson_orb(adc, X, nroots=1):
     return dyson_mo
 
 
+def renormalize_eigenvectors_ea(adc, nroots=1):
+
+    U = np.array(adc.U)
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nvir
+    n_doubles = nocc * nvir * nvir
+
+    U = U.reshape(nroots,-1)
+
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nocc,nvir,nvir)
+        UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        U[I,:] /= np.sqrt(UdotU)
+    
+    return U
+
+
+def renormalize_eigenvectors_ip(adc, nroots=1):
+
+    U = np.array(adc.U)
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+
+    U = U.reshape(nroots,-1)
+
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+        UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        U[I,:] /= np.sqrt(UdotU)
+
+    return U
+
+
+def get_properties(adc, nroots=1):
+
+    #Transition moments
+    T = adc.get_trans_moments()
+
+    #Spectroscopic amplitudes
+    U = adc.renormalize_eigenvectors(nroots)
+    X = np.dot(T, U.T).reshape(-1, nroots)
+
+    #Spectroscopic factors
+    P = 2.0*lib.einsum("pi,pi->i", X, X)
+
+    return P,X
+    
+
 class RADCEA(RADC):
     '''restricted ADC for EA energies and spectroscopic amplitudes
 
@@ -2398,7 +2466,11 @@ class RADCEA(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.compute_spec = adc.compute_spec
+        self.compute_properties = adc.compute_properties
+        self.E = None
+        self.U = None
+        self.P = None
+        self.X = None
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -2411,7 +2483,9 @@ class RADCEA(RADC):
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ea
+    renormalize_eigenvectors = renormalize_eigenvectors_ea
     compute_dyson_orb = dyson_orb    
+    get_properties = get_properties
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2497,7 +2571,11 @@ class RADCIP(RADC):
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.compute_spec = adc.compute_spec
+        self.compute_properties = adc.compute_properties
+        self.E = None
+        self.U = None
+        self.P = None
+        self.X = None
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -2510,8 +2588,9 @@ class RADCIP(RADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors_ip
-    #analyze = analyze
+    renormalize_eigenvectors = renormalize_eigenvectors_ip
     dyson_orb = dyson_orb
+    get_properties = get_properties
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
