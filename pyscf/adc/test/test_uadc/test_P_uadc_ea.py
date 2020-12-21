@@ -47,7 +47,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.14132152692445013, 6)
 
         myadcea = adc.uadc.UADCEA(myadc) 
-        e,v,p = myadcea.kernel(nroots=3)
+        e,v,p,xa,xb = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.018742831458017323, 6)
         self.assertAlmostEqual(e[1], -0.018742831458015467, 6)
@@ -61,7 +61,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(2)-x"
         myadc.kernel_gs()
         myadcea = adc.uadc.UADCEA(myadc) 
-        e,v,p = myadcea.kernel(nroots=3)
+        e,v,p,xa,xb = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.03555509265158591, 6)
         self.assertAlmostEqual(e[1], -0.035555092651584234, 6)
@@ -77,7 +77,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.15600026295977562, 6)
 
         myadcea = adc.uadc.UADCEA(myadc) 
-        e,v,p = myadcea.kernel(nroots=3)
+        e,v,p,xa,xb = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0],-0.023863148551389757, 6)
         self.assertAlmostEqual(e[1],-0.023863148551388515, 6)
