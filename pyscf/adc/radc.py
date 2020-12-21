@@ -52,25 +52,13 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     conv, adc.E, adc.U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
-    #U = np.array(U)
-
-    #if adc.compute_spec == True:
-    #    T = adc.get_trans_moments()
-    #    spec_factors,X = adc.get_spec_factors(T, U, nroots)
-    #else:
-    #    T = None
-    #    spec_factors = None
-    #    X = None
-
     if adc.compute_properties == True:
         adc.P,adc.X = adc.get_properties(nroots)
-    #else :
-    #    spec_factors = None
-    #    X =  None
 
-    F = spec_analyze(adc, X, nroots)
-    print('\n')
-    F = adc.eigenvector_analyze(U, nroots)
+    if adc.analyze == True:
+
+        adc.eigenvector_analyze(U, nroots)
+        adc.spec_analyze(adc, X, nroots)
   
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:
@@ -2348,7 +2336,7 @@ def get_spec_factors_ip(adc, T, U, nroots=1):
 
     return P,X
 
-def eigenvector_analyze_ip(adc, U, nroots=1):
+def eigenvector_analyze_ip(adc, nroots=1):
     
     nocc = adc._nocc
     nvir = adc._nvir
@@ -2356,7 +2344,8 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
     
     n_singles = nocc
     n_doubles = nvir * nocc * nocc
-    
+
+    U = np.array(adc.U)    
     
     for I in range(U.shape[0]):
         U1 = U[I, :n_singles]
@@ -2395,7 +2384,6 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
                 doubles_idx.append(temp_doubles_idx)
                 temp_doubles_idx = [0,0,0]
           
-                
         print("Root ",I, "Singles norm: ", U1dotU1, " Doubles norm: ", U2dotU2)
         print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)  
         #print( "Singles block: ") 
@@ -2439,6 +2427,7 @@ def spec_analyze(adc, X, nroots):
                 logger.info(adc, 'HF MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', index_mo[c], spec_Contribution[c], sym[c])
 
         logger.info(adc, 'Spec. Factor sum = %10.10f', np.sum(spec_Contribution))
+
 
 def dyson_orb(adc, X, nroots=1):
 
