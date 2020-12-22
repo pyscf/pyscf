@@ -613,7 +613,7 @@ class RADC(lib.StreamObject):
         self.compute_properties = True
         self.U_thresh = 0.05
         self.spec_thresh = 1e-8
-        self.analyze = True
+        self.analyze = False
 
         self.E = None
         self.U = None
