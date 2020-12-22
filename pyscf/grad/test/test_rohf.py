@@ -50,7 +50,7 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_uhf_grad(self):
+    def test_finite_diff_rohf_grad(self):
         mf = scf.ROHF(mol)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()

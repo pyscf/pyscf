@@ -26,6 +26,17 @@ from pyscf import lib
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import uhf as uhf_grad
 
+def make_rdm1e(mf_grad, mo_energy, mo_coeff, mo_occ):
+    '''Energy weighted density matrix'''
+    mf = mf_grad.base
+    dm = mf.make_rdm1(mo_coeff, mo_occ)
+    fock = mf.get_fock(dm=dm)
+    fa, fb = fock.focka, fock.fockb
+    mocc_a = mo_coeff[:,mo_occ>0 ]
+    mocc_b = mo_coeff[:,mo_occ==2]
+    rdm1e_a = reduce(numpy.dot, (mocc_a, mocc_a.conj().T, fa, mocc_a, mocc_a.conj().T))
+    rdm1e_b = reduce(numpy.dot, (mocc_b, mocc_b.conj().T, fb, mocc_b, mocc_b.conj().T))
+    return numpy.array((rdm1e_a, rdm1e_b))
 
 class Gradients(rhf_grad.Gradients):
     '''Non-relativistic restricted open-shell Hartree-Fock gradients
@@ -33,17 +44,7 @@ class Gradients(rhf_grad.Gradients):
 
     get_veff = uhf_grad.get_veff
 
-    def make_rdm1e(self, mo_energy, mo_coeff, mo_occ):
-        '''Energy weighted density matrix'''
-        mf = self.base
-        dm = mf.make_rdm1(mo_coeff, mo_occ)
-        fock = mf.get_fock(dm=dm)
-        fa, fb = fock.focka, fock.fockb
-        mocc_a = mo_coeff[:,mo_occ>0 ]
-        mocc_b = mo_coeff[:,mo_occ==2]
-        rdm1e_a = reduce(numpy.dot, (mocc_a, mocc_a.conj().T, fa, mocc_a, mocc_a.conj().T))
-        rdm1e_b = reduce(numpy.dot, (mocc_b, mocc_b.conj().T, fb, mocc_b, mocc_b.conj().T))
-        return numpy.array((rdm1e_a, rdm1e_b))
+    make_rdm1e = make_rdm1e
 
     grad_elec = uhf_grad.grad_elec
 

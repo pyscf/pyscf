@@ -24,6 +24,7 @@ from pyscf import lib
 from pyscf.scf import addons
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import rohf as rohf_grad
+from pyscf.grad import uhf as uhf_grad
 from pyscf.grad import uks as uks_grad
 
 
@@ -33,9 +34,9 @@ class Gradients(rks_grad.Gradients):
 
     get_veff = uks_grad.get_veff
 
-    make_rdm1e = rohf_grad.Gradients.make_rdm1e
+    make_rdm1e = rohf_grad.make_rdm1e
 
-    grad_elec = rohf_grad.Gradients.grad_elec
+    grad_elec = uhf_grad.grad_elec
 
 Grad = Gradients
 

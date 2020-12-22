@@ -37,7 +37,7 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_uhf_grad(self):
+    def test_finite_diff_roks_grad(self):
         mf = scf.ROKS(mol)
         mf.xc = 'b3lypg'
         mf.conv_tol = 1e-14
