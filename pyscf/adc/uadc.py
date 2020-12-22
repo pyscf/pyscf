@@ -179,7 +179,6 @@ def compute_amplitudes(myadc, eris):
     del (v2e_oOvV)
     del (D2_ab)
 
-    t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
 
     D1_a = e_a[:nocc_a][:None].reshape(-1,1) - e_a[nocc_a:].reshape(-1)
     D1_b = e_b[:nocc_b][:None].reshape(-1,1) - e_b[nocc_b:].reshape(-1)
@@ -376,8 +375,6 @@ def compute_amplitudes(myadc, eris):
         t2_2_ab = t2_2_ab/D2_ab
         del (D2_ab)
 
-        t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
-        
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
     if (myadc.method == "adc(3)"):
@@ -440,7 +437,6 @@ def compute_amplitudes(myadc, eris):
  
         if isinstance(eris.ovvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-            chnk_size = 10
         else :
             chnk_size = nocc_a
 
@@ -472,7 +468,6 @@ def compute_amplitudes(myadc, eris):
 
         if isinstance(eris.OVVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-            chnk_size = 10
         else :
             chnk_size = nocc_b
         a = 0
@@ -503,7 +498,6 @@ def compute_amplitudes(myadc, eris):
 
         if isinstance(eris.ovVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-            chnk_size = 10
         else :
             chnk_size = nocc_a
         a = 0
@@ -527,7 +521,6 @@ def compute_amplitudes(myadc, eris):
 
         if isinstance(eris.OVvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-            chnk_size = 10
         else :
             chnk_size = nocc_b
         a = 0
@@ -611,19 +604,25 @@ def compute_amplitudes(myadc, eris):
 
         t1_3 = (t1_3_a, t1_3_b)
 
-    t1 = (t1_2, t1_3)
-    t2 = (t2_1, t2_2)
     del (D1_a, D1_b) 
 
     if not isinstance(eris.oooo, np.ndarray):
-        t2_1_a = radc_ao2mo.write_dataset(t2[0][0])
-        t2_1_ab = radc_ao2mo.write_dataset(t2[0][1])
-        t2_1_b = radc_ao2mo.write_dataset(t2[0][2])
+        t2_1_a = radc_ao2mo.write_dataset(t2_1_a)
+        t2_1_ab = radc_ao2mo.write_dataset(t2_1_ab)
+        t2_1_b = radc_ao2mo.write_dataset(t2_1_b)
 
         if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-            t2_2_a = radc_ao2mo.write_dataset(t2[1][0])
-            t2_2_ab = radc_ao2mo.write_dataset(t2[1][1])
-            t2_2_b = radc_ao2mo.write_dataset(t2[1][2])
+            t2_2_a = radc_ao2mo.write_dataset(t2_2_a)
+            t2_2_ab = radc_ao2mo.write_dataset(t2_2_ab)
+            t2_2_b = radc_ao2mo.write_dataset(t2_2_b)
+
+    t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
+
+    if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+        t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
+        
+    t1 = (t1_2, t1_3)
+    t2 = (t2_1, t2_2)
 
     cput0 = log.timer_debug1("Completed amplitude calculation", *cput0)
 
@@ -647,15 +646,15 @@ def compute_energy(myadc, t1, t2, eris):
     eris_OVVO = eris.OVVO
     eris_ovVO = eris.ovVO
 
-    t2_a  = t2[0][0].copy()
-    t2_ab  = t2[0][1].copy()
-    t2_b  = t2[0][2].copy()
+    t2_a  = t2[0][0][:].copy()
+    t2_ab  = t2[0][1][:].copy()
+    t2_b  = t2[0][2][:].copy()
 
     if (myadc.method == "adc(3)"):
-       t2_2 = t2[1]
-       t2_a += t2_2[0]
-       t2_ab += t2_2[1]
-       t2_b += t2_2[2]
+       
+       t2_a += t2[1][0][:].copy()
+       t2_ab += t2[1][1][:].copy()
+       t2_b += t2[1][2][:].copy()
 
     #Compute MPn correlation energy
 
@@ -678,7 +677,6 @@ def contract_ladder(myadc,t_amp,vvvv_p):
     t_amp_t = np.ascontiguousarray(t_amp.reshape(nocc_a*nocc_b,-1).T)
     t = np.zeros((nvir_a,nvir_b, nocc_a*nocc_b))
     chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-    chnk_size = 10
 
     a = 0
     if isinstance(vvvv_p, list):
@@ -718,7 +716,6 @@ def contract_ladder_antisym(myadc,t_amp,vvvv_d):
 
     t = np.zeros((nvir,nvir, nocc*nocc))
     chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-    chnk_size = 10
 
     a = 0
     if isinstance(vvvv_d, list):
@@ -997,7 +994,9 @@ def get_imds_ea(adc, eris=None):
     t2 = adc.t2
 
     t1_2_a, t1_2_b = t1[0]
-    t2_1_a, t2_1_ab, t2_1_b = t2[0]
+    t2_1_a = t2[0][0][:]
+    t2_1_ab = t2[0][1][:]
+    t2_1_b = t2[0][2][:]
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
@@ -1091,12 +1090,13 @@ def get_imds_ea(adc, eris=None):
     M_ab_b -=        lib.einsum('mldb,mdal->ab',t2_1_ab, eris_ovVO,optimize=True)
 
     cput0 = log.timer_debug1("Completed M_ab second-order terms ADC(2) calculation", *cput0)
+    del t2_1_a, t2_1_ab, t2_1_b
 
     #Third-order terms
 
     if(method =='adc(3)'):
 
-        t2_2_a, t2_2_ab, t2_2_b = t2[1]
+        #t2_2_a, t2_2_ab, t2_2_b = t2[1]
 
         eris_oovv = eris.oovv
         eris_OOVV = eris.OOVV
@@ -1112,7 +1112,6 @@ def get_imds_ea(adc, eris=None):
         
         if isinstance(eris.ovvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_a
 
@@ -1132,7 +1131,6 @@ def get_imds_ea(adc, eris=None):
 
         if isinstance(eris.OVvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_b
 
@@ -1150,7 +1148,6 @@ def get_imds_ea(adc, eris=None):
 
         if isinstance(eris.OVVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_b
         a = 0
@@ -1169,7 +1166,6 @@ def get_imds_ea(adc, eris=None):
 
         if isinstance(eris.ovVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_a
         a = 0
@@ -1186,6 +1182,11 @@ def get_imds_ea(adc, eris=None):
 
         cput0 = log.timer_debug1("Completed M_ab ovvv ADC(3) calculation", *cput0)
 
+        t2_2_a = t2[1][0][:]
+        t2_2_ab = t2[1][1][:]
+        t2_2_b = t2[1][2][:]
+
+
         M_ab_a -= 0.5 *  lib.einsum('lmad,lbdm->ab',t2_2_a, eris_ovvo,optimize=True)
         M_ab_a += 0.5 *  lib.einsum('lmad,ldbm->ab',t2_2_a, eris_ovvo,optimize=True)
         M_ab_a -=        lib.einsum('lmad,lbdm->ab',t2_2_ab, eris_ovVO,optimize=True)
@@ -1201,6 +1202,10 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.5 *  lib.einsum('lmbd,ladm->ab',t2_2_b, eris_OVVO,optimize=True)
         M_ab_b += 0.5 *  lib.einsum('lmbd,ldam->ab',t2_2_b, eris_OVVO,optimize=True)
         M_ab_b -=        lib.einsum('mldb,mdal->ab',t2_2_ab, eris_ovVO,optimize=True)
+
+        t2_1_a = t2[0][0][:]
+        t2_1_ab = t2[0][1][:]
+        t2_1_b = t2[0][2][:]
 
         M_ab_a += lib.einsum('l,lmbd,lmad->ab',e_occ_a, t2_1_a, t2_2_a, optimize=True)
         M_ab_a += lib.einsum('l,lmbd,lmad->ab',e_occ_a, t2_1_ab, t2_2_ab, optimize=True)
@@ -1265,6 +1270,8 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.25*lib.einsum('b,lmad,lmbd->ab',e_vir_b, t2_1_b, t2_2_b, optimize=True)
         M_ab_b -= 0.25*lib.einsum('b,mlda,mldb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
         M_ab_b -= 0.25*lib.einsum('b,lmda,lmdb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
+
+        del t2_2_a, t2_2_ab, t2_2_b
 
         M_ab_a -= lib.einsum('lned,mlbd,nmae->ab',t2_1_a, t2_1_a, eris_oovv, optimize=True)
         M_ab_a += lib.einsum('lned,mlbd,maen->ab',t2_1_a, t2_1_a, eris_ovvo, optimize=True)
@@ -1481,7 +1488,6 @@ def get_imds_ea(adc, eris=None):
             a = 0
             temp = np.zeros((nvir_a,nvir_a))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
             for p in range(0,nvir_a,chnk_size):
                 vvvv = dfadc.get_vvvv_antisym_df(adc, eris.Lvv, p, chnk_size) 
                 k = vvvv.shape[0]
@@ -1500,7 +1506,6 @@ def get_imds_ea(adc, eris=None):
             a = 0
             temp = np.zeros((nvir_b,nvir_b))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
             for p in range(0,nvir_b,chnk_size):
                 VVVV = dfadc.get_vvvv_antisym_df(adc, eris.LVV, p, chnk_size) 
                 k = VVVV.shape[0]
@@ -1519,7 +1524,6 @@ def get_imds_ea(adc, eris=None):
             a = 0
             temp = np.zeros((nvir_a,nvir_a))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
             for p in range(0,nvir_a,chnk_size):
                 eris_vVvV = dfadc.get_vVvV_df(adc, eris.Lvv, eris.LVV, p, chnk_size) 
                 k = eris_vVvV.shape[0]
@@ -1541,10 +1545,10 @@ def get_imds_ea(adc, eris=None):
                 a += k
             M_ab_b  += temp    
             del (temp)            
+            del t2_1_a, t2_1_ab, t2_1_b
 
     M_ab = (M_ab_a, M_ab_b)
-    
-
+     
     cput0 = log.timer_debug1("Completed M_ab ADC(3) calculation", *cput0)
     return M_ab
 
@@ -1562,7 +1566,10 @@ def get_imds_ip(adc, eris=None):
     t2 = adc.t2
 
     t1_2_a, t1_2_b = t1[0]
-    t2_1_a, t2_1_ab, t2_1_b = t2[0]
+
+    t2_1_a = t2[0][0][:]
+    t2_1_ab = t2[0][1][:]
+    t2_1_b = t2[0][2][:]
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
@@ -1585,15 +1592,11 @@ def get_imds_ip(adc, eris=None):
     if eris is None:
         eris = adc.transform_integrals()
 
-    #eris_ovov = eris.ovov
-    #eris_OVOV = eris.OVOV
-    #eris_ovOV = eris.ovOV
-    #eris_OVov = eris.OVov
-
     eris_ovvo = eris.ovvo
     eris_OVVO = eris.OVVO
     eris_ovVO = eris.ovVO
     eris_OVvo = eris.OVvo
+
     # i-j block
     # Zeroth-order terms
 
@@ -1658,7 +1661,7 @@ def get_imds_ip(adc, eris=None):
 
     if (method == "adc(3)"):
 
-        t2_2_a, t2_2_ab, t2_2_b = t2[1]
+        #t2_2_a, t2_2_ab, t2_2_b = t2[1]
         eris_oovv = eris.oovv
         eris_OOVV = eris.OOVV
         eris_ooVV = eris.ooVV
@@ -1690,6 +1693,10 @@ def get_imds_ip(adc, eris=None):
         M_ij_b += lib.einsum('ld,ldij->ij',t1_2_b, eris_OVOO, optimize=True)
         M_ij_b -= lib.einsum('ld,idlj->ij',t1_2_b, eris_OVOO, optimize=True)
         M_ij_b += lib.einsum('ld,ldij->ij',t1_2_a, eris_ovOO, optimize=True)
+
+        t2_2_a = t2[1][0][:]
+        t2_2_ab = t2[1][1][:]
+        t2_2_b = t2[1][2][:]
 
         M_ij_a += 0.5* lib.einsum('ilde,jdel->ij',t2_2_a, eris_ovvo, optimize=True)
         M_ij_a -= 0.5* lib.einsum('ilde,jedl->ij',t2_2_a, eris_ovvo, optimize=True)
@@ -1770,6 +1777,8 @@ def get_imds_ip(adc, eris=None):
         M_ij_b -= 0.25 *  lib.einsum('j,ilde,jlde->ij',e_occ_b,t2_1_b, t2_2_b,optimize=True)
         M_ij_b -= 0.25 *  lib.einsum('j,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
         M_ij_b -= 0.25 *  lib.einsum('j,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
+
+        del t2_2_a, t2_2_ab, t2_2_b
 
         M_ij_a -= lib.einsum('lmde,jldf,mefi->ij',t2_1_a, t2_1_a, eris_ovvo,optimize = True)
         M_ij_a += lib.einsum('lmde,jldf,mife->ij',t2_1_a, t2_1_a, eris_oovv,optimize = True)
@@ -1915,9 +1924,11 @@ def get_imds_ip(adc, eris=None):
         M_ij_b -= lib.einsum('nled,mled,nmji->ij',t2_1_ab, t2_1_ab, eris_ooOO, optimize = True)
         M_ij_b -= 0.5 * lib.einsum('lnde,lmde,nmji->ij',t2_1_a, t2_1_a, eris_ooOO, optimize = True)
 
+    del t2_1_a, t2_1_ab, t2_1_b
 
     M_ij = (M_ij_a, M_ij_b)
     cput0 = log.timer_debug1("Completed M_ab ADC(3) calculation", *cput0)
+
 
     return M_ij
 
@@ -2097,6 +2108,8 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
 #            temp[:] += np.diagonal(eris_oVoV_p).reshape(nocc_a,nvir_b)
 #            temp = np.ascontiguousarray(temp.transpose(1,2,0))
 #            diag[s_aba:f_aba] += -temp.reshape(-1)
+#        else :
+#           raise Exception("Precond not available for out-of-core and density-fitted algo")
 
     return diag
 
@@ -2286,6 +2299,8 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
 #            temp[:] += np.diagonal(eris_OvOv_p).reshape(nocc_b,nvir_a)
 #            temp = np.ascontiguousarray(temp.transpose(2,1,0))
 #            diag[s_aba:f_aba] += temp.reshape(-1)
+#        else :
+#           raise Exception("Precond not available for out-of-core and density-fitted algo")
 
     diag = -diag
     return diag
@@ -2304,7 +2319,6 @@ def ea_contract_r_vvvv_antisym(myadc,r2,vvvv_d):
 
     r2_vvvv = np.zeros((nocc,nvir,nvir))
     chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-    chnk_size = 10
     a = 0
     if isinstance(vvvv_d,list):
         for dataset in vvvv_d:
@@ -2334,7 +2348,6 @@ def ea_contract_r_vvvv(myadc,r2,vvvv_d):
     r2 = r2.reshape(-1,nvir_1*nvir_2)
     r2_vvvv = np.zeros((nocc_1,nvir_1,nvir_2))
     chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-    chnk_size = 10
 
     a = 0
     if isinstance(vvvv_d, list):
@@ -2365,9 +2378,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         raise NotImplementedError(adc.method)
 
     method = adc.method
-
-    t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
-    t1_2_a, t1_2_b = adc.t1[0]
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
@@ -2473,7 +2483,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
         if isinstance(eris.ovvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_a
 
@@ -2498,7 +2507,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
         if isinstance(eris.OVvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_b
 
@@ -2520,7 +2528,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
         if isinstance(eris.OVVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_b
         a = 0
@@ -2543,7 +2550,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
         if isinstance(eris.ovVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-            chnk_size = 10
         else :
             chnk_size = nocc_a
         a = 0
@@ -2573,8 +2579,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 ############### ADC(3) iab - jcd block ############################
 
         if (method == "adc(2)-x" or method == "adc(3)"):
-
-               t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
 
                eris_oovv = eris.oovv
                eris_OOVV = eris.OOVV
@@ -2717,8 +2721,12 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                eris_OVoo = eris.OVoo
 
 ############### ADC(3) a - ibc block and ibc-a coupling blocks ########################
+               t2_1_a = adc.t2[0][0][:]
+               t2_1_ab = adc.t2[0][1][:]
+               t2_1_b = adc.t2[0][2][:]
 
                t2_1_a_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]
+
                r_aaa = r_aaa.reshape(nocc_a,-1)
                temp = 0.5*lib.einsum('lmp,jp->lmj',t2_1_a_t,r_aaa)
                del (t2_1_a_t)
@@ -2755,7 +2763,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                if isinstance(eris.ovvv, type(None)):
                    chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-                   chnk_size = 10
                else :
                    chnk_size = nocc_a
 
@@ -2794,7 +2801,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                if isinstance(eris.OVVV, type(None)):
                    chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-                   chnk_size = 10
                else :
                    chnk_size = nocc_b
                a = 0
@@ -2833,7 +2839,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                if isinstance(eris.OVvv, type(None)):
                    chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-                   chnk_size = 10
                else :
                    chnk_size = nocc_b
 
@@ -2881,7 +2886,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                if isinstance(eris.ovVV, type(None)):
                    chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
-                   chnk_size = 10
                else :
                    chnk_size = nocc_a
                a = 0
@@ -2976,6 +2980,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                s[s_aba:f_aba] += temp.reshape(-1)
                cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
 
+               del t2_1_a, t2_1_ab, t2_1_b
         return s
         del temp_1_1
         del temp_1_2
@@ -2995,9 +3000,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         raise NotImplementedError(adc.method)
 
     method = adc.method
-
-    t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
-    t1_2_a, t1_2_b = adc.t1[0]
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
@@ -3143,8 +3145,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
         if (method == "adc(2)-x" or method == "adc(3)"):
 
-               t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
-
                eris_oooo = eris.oooo
                eris_OOOO = eris.OOOO
                eris_ooOO = eris.ooOO
@@ -3258,7 +3258,9 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                eris_OVoo = eris.OVoo
 
 ################ ADC(3) i - kja and ajk - i block ############################
-
+               t2_1_a = adc.t2[0][0][:]
+               t2_1_ab = adc.t2[0][1][:]
+               t2_1_b = adc.t2[0][2][:]
 
                if isinstance(eris.ovvv, type(None)):
                    chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
@@ -3494,6 +3496,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp_1 = -lib.einsum('jbl,lkab->ajk',temp,t2_1_ab,optimize=True)
                s[s_aba:f_aba] -= temp_1.reshape(-1)
                cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
+               del t2_1_a, t2_1_ab, t2_1_b
 
         s *= -1.0
 
@@ -3509,8 +3512,11 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
     method = adc.method
 
-    t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
+    #t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
     t1_2_a, t1_2_b = adc.t1[0]
+    t2_1_a = adc.t2[0][0][:]
+    t2_1_ab = adc.t2[0][1][:]
+    t2_1_b = adc.t2[0][2][:]
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
@@ -3573,7 +3579,9 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
         if(method=='adc(2)-x'or method=='adc(3)'):
 
-            t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
+            t2_2_a = adc.t2[1][0][:]
+            t2_2_ab = adc.t2[1][1][:]
+            t2_2_b = adc.t2[1][2][:]
 
             if orb < nocc_a:
 
@@ -3632,7 +3640,9 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
         if(method=='adc(2)-x'or method=='adc(3)'):
 
-            t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
+            t2_2_a = adc.t2[1][0][:]
+            t2_2_ab = adc.t2[1][1][:]
+            t2_2_b = adc.t2[1][2][:]
 
             if orb < nocc_b:
 
@@ -3675,8 +3685,10 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
     method = adc.method
 
-    t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
     t1_2_a, t1_2_b = adc.t1[0]
+    t2_1_a = adc.t2[0][0][:]
+    t2_1_ab = adc.t2[0][1][:]
+    t2_1_b = adc.t2[0][2][:]
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
@@ -3740,7 +3752,9 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
         if(method=='adc(2)-x'or method=='adc(3)'):
 
-            t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
+            t2_2_a = adc.t2[1][0][:]
+            t2_2_ab = adc.t2[1][1][:]
+            t2_2_b = adc.t2[1][2][:]
 
             if orb >= nocc_a:
                 t2_2_t = t2_2_a[ij_ind_a[0],ij_ind_a[1],:,:]
@@ -3794,7 +3808,9 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
         if(method=='adc(2)-x'or method=='adc(3)'):
 
-            t2_2_a, t2_2_ab, t2_2_b = adc.t2[1]
+            t2_2_a = adc.t2[1][0][:]
+            t2_2_ab = adc.t2[1][1][:]
+            t2_2_b = adc.t2[1][2][:]
 
             if orb >= nocc_b:
                 t2_2_t = t2_2_b[ij_ind_b[0],ij_ind_b[1],:,:]
