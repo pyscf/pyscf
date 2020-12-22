@@ -63,8 +63,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         X_b = None
 
 
-#    alpha = spec_analyze(adc, X_a, spin ="alpha")
-#    beta = spec_analyze(adc, X_b, spin ="beta")
+    alpha = spec_analyze(adc, X_a, spin ="alpha")
+    beta = spec_analyze(adc, X_b, spin ="beta")
 #    print('\n')
 #    F = adc.eigenvector_analyze(U, nroots)
 
@@ -3901,31 +3901,39 @@ def spec_analyze(adc, X, spin):
 
     for i in range(X_2.shape[1]):
 
-        print('\n')
-        logger.info(adc, 'Root %d %s', i, spin)
-        print('\n')
 
         sort = np.argsort(-X_2[:,i])
         X_2_row = X_2[:,i]
 
         X_2_row = X_2_row[sort]
-        if spin == "alpha":
-            sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[0].orbsym]
-            sym = np.array(sym)
-        else:
-            sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[1].orbsym]
-            sym = np.array(sym)
 
-        sym = sym[sort]
+        if adc.mol.symmetry == False:
+            sym = np.repeat(['A'], X_2_row.shape[0])
+        else:
+            if spin == "alpha":
+                sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[0].orbsym]
+                sym = np.array(sym)
+            else:
+                sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[1].orbsym]
+                sym = np.array(sym)
+
+            sym = sym[sort]
 
 
         spec_Contribution = X_2_row[X_2_row > thresh]
         index_mo = sort[X_2_row > thresh]+1
 
+        if np.sum(spec_Contribution) == 0.0:
+            continue
+
+        print('\n')
+        logger.info(adc, 'Root %d %s', i, spin)
+        print('\n')
+
         for c in range(index_mo.shape[0]):
             logger.info(adc, 'HF %s MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', spin, index_mo[c], spec_Contribution[c], sym[c])
 
-        logger.info(adc, 'Spec. Factor sum = %10.10f', np.sum(spec_Contribution))
+        logger.info(adc, 'Partial spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 
 def eigenvector_analyze_ea(adc, U, nroots=1):
