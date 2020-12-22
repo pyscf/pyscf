@@ -541,20 +541,8 @@ def analyze(myadc):
 
     myadc._adc_es.eigenvector_analyze()
  
-    if myadc._adc_es.compute_properties == True:
+    if myadc.compute_properties == True:
         myadc._adc_es.spec_analyze()
-
-
-#def analyze(myadc):
-#
-#    if myadc.method_type == "ea":
-#        RADCEA(myadc).eigenvector_analyze()
-#    else: 
-#        RADCIP(myadc).eigenvector_analyze()
-#
-#    if adc.compute_properties == True:
-#
-#            adc.spec_analyze()
 
 
 def compute_dyson_orb(myadc,X):
@@ -796,8 +784,8 @@ class RADC(lib.StreamObject):
     def analyze(self):
         self._adc_es.eigenvector_analyze()    
 
-        if myadc._adc_es.compute_properties == True:
-            myadc._adc_es.spec_analyze()
+        if self.compute_properties == True:
+            self._adc_es.spec_analyze()
          
 
 def get_imds_ea(adc, eris=None):
@@ -2491,11 +2479,14 @@ def spec_analyze(adc):
         X_2_row = X_2[:,i]
 
         X_2_row = X_2_row[sort]
+        
+        if adc.mol.symmetry == False:
+            sym = np.repeat(['A'], X_2_row.shape[0])
+        else:
+            sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff.orbsym]
+            sym = np.array(sym)
 
-        sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff.orbsym]
-        sym = np.array(sym)
-
-        sym = sym[sort]
+            sym = sym[sort]
 
         spec_Contribution = X_2_row[X_2_row > thresh]
         index_mo = sort[X_2_row > thresh]+1
@@ -2503,7 +2494,7 @@ def spec_analyze(adc):
         for c in range(index_mo.shape[0]):
             logger.info(adc, 'HF MO   %3.d | Spec. Contribution   %10.8f | Orbital symmetry   %s', index_mo[c], spec_Contribution[c], sym[c])
 
-        logger.info(adc, 'Spec. Factor sum = %10.8f', np.sum(spec_Contribution))
+        logger.info(adc, 'Partial spec. Factor sum = %10.8f', np.sum(spec_Contribution))
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
 
 
@@ -2564,18 +2555,6 @@ def get_properties(adc, nroots=1):
 
     return P,X
 
-
-#def get_analysis(adc):
-#
-#    adc.eigenvector_analyze()
-#
-#    if adc.compute_properties == True:
-#
-#        if not adc.mol.symmetry == False:
-#            adc.spec_analyze()
-#        else :
-#            raise Exception("Symmetry of orbitals not available for spectroscopic analysis")
-    
 
 class RADCEA(RADC):
     '''restricted ADC for EA energies and spectroscopic amplitudes
