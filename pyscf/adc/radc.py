@@ -92,8 +92,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
             print("----------------------------------------------------------------------------------------------------------------------------------------------")   
     log.timer('ADC', *cput0)
 
-    if adc.analyze == True:
-        adc.get_analysis()
+    #if adc.analyze == True:
+    #    adc.get_analysis()
 
     return adc.E, adc.U, adc.P, adc.X
 
@@ -534,6 +534,26 @@ def density_matrix(myadc, T=None):
     return dm
 
 
+def analyze(myadc):
+
+    myadc._adc_es.eigenvector_analyze()
+ 
+    if myadc._adc_es.compute_properties == True:
+        myadc._adc_es.spec_analyze()
+
+
+#def analyze(myadc):
+#
+#    if myadc.method_type == "ea":
+#        RADCEA(myadc).eigenvector_analyze()
+#    else: 
+#        RADCIP(myadc).eigenvector_analyze()
+#
+#    if adc.compute_properties == True:
+#
+#            adc.spec_analyze()
+
+
 def compute_dyson_orb(myadc,X):
      
     nroots = X.shape[1]
@@ -613,7 +633,7 @@ class RADC(lib.StreamObject):
         self.compute_properties = True
         self.U_thresh = 0.05
         self.spec_thresh = 1e-8
-        self.analyze = False
+        #self.analyze = False
 
         self.E = None
         self.U = None
@@ -628,6 +648,7 @@ class RADC(lib.StreamObject):
     compute_energy = compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
     make_rdm1 = density_matrix 
+    analyze = analyze
     compute_dyson_orb = compute_dyson_orb   
  
     def dump_flags(self, verbose=None):
@@ -729,14 +750,14 @@ class RADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, x = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac, x = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
             raise NotImplementedError(self.method_type)
-
+        self._adc_es = adc_es
         return e_exc, v_exc, spec_fac, x
 
     def _finalize(self):
@@ -746,10 +767,14 @@ class RADC(lib.StreamObject):
         return self
     
     def ea_adc(self, nroots=1, guess=None, eris=None):
-        return RADCEA(self).kernel(nroots, guess, eris)
+        adc_es = RADCEA(self)
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
     
     def ip_adc(self, nroots=1, guess=None, eris=None):
-        return RADCIP(self).kernel(nroots, guess, eris)
+        adc_es = RADCIP(self)
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
 
     def density_fit(self, auxbasis=None, with_df = None):
         if with_df is None:
@@ -765,6 +790,12 @@ class RADC(lib.StreamObject):
             self.with_df = with_df
         return self
 
+    def analyze(self):
+        self._adc_es.eigenvector_analyze()    
+
+        if myadc._adc_es.compute_properties == True:
+            myadc._adc_es.spec_analyze()
+         
 
 def get_imds_ea(adc, eris=None):
 
@@ -2531,16 +2562,16 @@ def get_properties(adc, nroots=1):
     return P,X
 
 
-def get_analysis(adc):
-
-    adc.eigenvector_analyze()
-
-    if adc.compute_properties == True:
-
-        if not adc.mol.symmetry == False:
-            adc.spec_analyze()
-        else :
-            raise Exception("Symmetry of orbitals not available for spectroscopic analysis")
+#def get_analysis(adc):
+#
+#    adc.eigenvector_analyze()
+#
+#    if adc.compute_properties == True:
+#
+#        if not adc.mol.symmetry == False:
+#            adc.spec_analyze()
+#        else :
+#            raise Exception("Symmetry of orbitals not available for spectroscopic analysis")
     
 
 class RADCEA(RADC):
@@ -2608,7 +2639,7 @@ class RADCEA(RADC):
         self.X = None
         self.U_thresh = adc.U_thresh
         self.spec_thresh = adc.spec_thresh
-        self.analyze = adc.analyze
+        #self.analyze = adc.analyze
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -2622,9 +2653,10 @@ class RADCEA(RADC):
     get_trans_moments = get_trans_moments
     renormalize_eigenvectors = renormalize_eigenvectors_ea
     get_properties = get_properties
-    get_analysis = get_analysis
+    #get_analysis = get_analysis
     spec_analyze = spec_analyze
     eigenvector_analyze = eigenvector_analyze_ea
+    analyze = analyze
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2717,7 +2749,7 @@ class RADCIP(RADC):
         self.X = None
         self.U_thresh = adc.U_thresh
         self.spec_thresh = adc.spec_thresh
-        self.analyze = adc.analyze
+        #self.analyze = adc.analyze
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -2731,9 +2763,10 @@ class RADCIP(RADC):
     get_trans_moments = get_trans_moments
     renormalize_eigenvectors = renormalize_eigenvectors_ip
     get_properties = get_properties
-    get_analysis = get_analysis
+    #get_analysis = get_analysis
     spec_analyze = spec_analyze
     eigenvector_analyze = eigenvector_analyze_ip
+    analyze = analyze
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :

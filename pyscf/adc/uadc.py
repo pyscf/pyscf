@@ -62,7 +62,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         X_a = None
         X_b = None
 
-
 #    alpha = spec_analyze(adc, X_a, spin ="alpha")
 #    beta = spec_analyze(adc, X_b, spin ="beta")
 #    print('\n')
