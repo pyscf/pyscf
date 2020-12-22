@@ -782,7 +782,7 @@ class call_in_background(object):
             ntasks = len(self.fns)
 
             global_import_lock = False
-            if sys.version_info < (3, 4):
+            if sys.version_info < (3, 6):
                 import imp
                 global_import_lock = imp.lock_held()
 
