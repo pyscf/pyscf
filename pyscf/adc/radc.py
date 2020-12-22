@@ -524,11 +524,23 @@ def analyze(myadc):
     myadc.analyze_eigenvector()
  
     if myadc.compute_properties == True:
+
+        logger.info(myadc, "\n*************************************************************")
+        logger.info(myadc, "                Spectroscopic factors analysis summary")
+        logger.info(myadc, "*************************************************************")
+
         myadc.analyze_spec_factor()
 
 
-def compute_dyson_orb(myadc,X):
+def compute_dyson_orb(myadc):
      
+    X = myadc.X
+
+    if X is None:
+        U = np.array(myadc.U)
+        nroots = U.shape[0]
+        P,X = myadc.get_properties(nroots)
+
     nroots = X.shape[1]
     dyson_mo = np.dot(myadc.mo_coeff,X).reshape(-1,nroots)
 
@@ -620,8 +632,6 @@ class RADC(lib.StreamObject):
     compute_energy = compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
     make_rdm1 = density_matrix 
-    analyze = analyze
-    compute_dyson_orb = compute_dyson_orb   
  
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -763,7 +773,11 @@ class RADC(lib.StreamObject):
         return self
 
     def analyze(self):
-        self._adc_es.analyze()    
+        self._adc_es.analyze()
+
+    def compute_dyson_orb(self):   
+
+        self._adc_es.compute_dyson_orb() 
          
 
 def get_imds_ea(adc, eris=None):
@@ -937,7 +951,6 @@ def get_imds_ea(adc, eris=None):
         M_ab += 2. * lib.einsum('mena,nbem->ab',temp_t2_v_1, eris_ovvo, optimize=True)
         M_ab += lib.einsum('nbme,mean->ab',temp_t2_v_1, eris_ovvo, optimize=True)
         del temp_t2_v_1
-        cput0 = log.timer_debug1("Completed first set of intermediates small integrals", *cput0)
 
         temp_t2_v_2 = lib.einsum('nled,mlbd->nemb',t2_1, t2_1,optimize=True)
         M_ab += 2. * lib.einsum('nemb,nmae->ab',temp_t2_v_2, eris_oovv, optimize=True)
@@ -947,7 +960,6 @@ def get_imds_ea(adc, eris=None):
         M_ab -= 4. * lib.einsum('mena,nbem->ab',temp_t2_v_2, eris_ovvo, optimize=True)
         M_ab -= lib.einsum('nemb,neam->ab',temp_t2_v_2, eris_ovvo, optimize=True)
         del temp_t2_v_2
-        cput0 = log.timer_debug1("Completed second set of intermediates small integrals", *cput0)
 
         temp_t2_v_3 = lib.einsum('lned,lmbd->nemb',t2_1, t2_1,optimize=True)
         M_ab -= lib.einsum('nemb,maen->ab',temp_t2_v_3, eris_ovvo, optimize=True)
@@ -955,43 +967,36 @@ def get_imds_ea(adc, eris=None):
         M_ab += 2. * lib.einsum('mena,nmeb->ab',temp_t2_v_3, eris_oovv, optimize=True)
         M_ab -= lib.einsum('mena,nbem->ab',temp_t2_v_3, eris_ovvo, optimize=True)
         del temp_t2_v_3
-        cput0 = log.timer_debug1("Completed third set of intermediates small integrals", *cput0)
 
         temp_t2_v_4 = lib.einsum('lnae,nmde->lmad',t2_1, eris_oovv,optimize=True)
         M_ab -= lib.einsum('mlbd,lmad->ab',t2_1, temp_t2_v_4,optimize=True)
         M_ab += 2. * lib.einsum('lmbd,lmad->ab',t2_1, temp_t2_v_4,optimize=True)
         del temp_t2_v_4
-        cput0 = log.timer_debug1("Completed fourth set of intermediates small integrals", *cput0)
 
         temp_t2_v_5 = lib.einsum('nlae,nmde->lamd',t2_1, eris_oovv,optimize=True)
         M_ab += 2. * lib.einsum('mlbd,lamd->ab',t2_1, temp_t2_v_5, optimize=True)
         M_ab -= lib.einsum('lmbd,lamd->ab',t2_1, temp_t2_v_5, optimize=True)
         del temp_t2_v_5
-        cput0 = log.timer_debug1("Completed fifth set of intermediates small integrals", *cput0)
 
         temp_t2_v_6 = lib.einsum('lnae,nedm->ladm',t2_1, eris_ovvo,optimize=True)
         M_ab += 2. * lib.einsum('mlbd,ladm->ab',t2_1, temp_t2_v_6, optimize=True)
         M_ab -= 4. * lib.einsum('lmbd,ladm->ab',t2_1, temp_t2_v_6, optimize=True)
         del temp_t2_v_6
-        cput0 = log.timer_debug1("Completed sixth set of intermediates small integrals", *cput0)
 
         temp_t2_v_7 = lib.einsum('nlae,nedm->ladm',t2_1, eris_ovvo,optimize=True)
         M_ab -= lib.einsum('mlbd,ladm->ab',t2_1, temp_t2_v_7, optimize=True)
         M_ab += 2. * lib.einsum('lmbd,ladm->ab',t2_1, temp_t2_v_7, optimize=True)
         del temp_t2_v_7
-        cput0 = log.timer_debug1("Completed seventh set of intermediates small integrals", *cput0)
 
         temp_t2_v_8 = lib.einsum('lned,mled->mn',t2_1, t2_1,optimize=True)
         M_ab += 2.* lib.einsum('mn,nmab->ab',temp_t2_v_8, eris_oovv, optimize=True)
         M_ab -= lib.einsum('mn,nbam->ab', temp_t2_v_8, eris_ovvo, optimize=True)
         del temp_t2_v_8
-        cput0 = log.timer_debug1("Completed eigth set of intermediates small integrals", *cput0)
 
         temp_t2_v_9 = lib.einsum('nled,mled->mn',t2_1, t2_1,optimize=True)
         M_ab -= 4.* lib.einsum('mn,nmab->ab',temp_t2_v_9, eris_oovv, optimize=True)
         M_ab += 2. * lib.einsum('mn,nbam->ab',temp_t2_v_9, eris_ovvo, optimize=True)
         del temp_t2_v_9
-        cput0 = log.timer_debug1("Completed ninth set of intermediates small integrals", *cput0)
 
         temp_t2_v_10 = lib.einsum('noad,nmol->mlad',t2_1, eris_oooo,optimize=True)
         M_ab -= 0.25*lib.einsum('mlbd,mlad->ab',t2_1, temp_t2_v_10, optimize=True)
@@ -1000,7 +1005,6 @@ def get_imds_ea(adc, eris=None):
         M_ab -= 0.25*lib.einsum('lmbd,lmad->ab',t2_1, temp_t2_v_10, optimize=True)
         M_ab -= lib.einsum('mlbd,mlad->ab',t2_1, temp_t2_v_10, optimize=True)
         del temp_t2_v_10
-        cput0 = log.timer_debug1("Completed tenth set of intermediates small integrals", *cput0)
 
         temp_t2_v_11 = lib.einsum('onad,nmol->mlad',t2_1, eris_oooo,optimize=True)
         M_ab += 0.25*lib.einsum('mlbd,mlad->ab',t2_1, temp_t2_v_11, optimize=True)
@@ -1008,7 +1012,6 @@ def get_imds_ea(adc, eris=None):
         M_ab -= 0.25*lib.einsum('mlbd,lmad->ab',t2_1, temp_t2_v_11, optimize=True)
         M_ab += 0.25*lib.einsum('lmbd,lmad->ab',t2_1, temp_t2_v_11, optimize=True)
         del temp_t2_v_11
-        cput0 = log.timer_debug1("Completed eleventh set of intermediates small integrals", *cput0)
         log.timer_debug1("Completed M_ab ADC(3) small integrals calculation")
 
         log.timer_debug1("Starting M_ab vvvv ADC(3) calculation")
@@ -1664,7 +1667,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     if M_ab is None:
         M_ab = adc.get_imds()
     
-    time0 = time.time()
     #Calculate sigma vector
     def sigma_(r):
         cput0 = (time.clock(), time.time())
@@ -1708,8 +1710,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
         s[s2:f2] +=  D_iab * r2.reshape(-1)
 
-        cput0 = log.timer_debug1("completed sigma vector ADC(2) calculation", *cput0)
-
 ############### ADC(3) iab - jcd block ############################
 
 
@@ -1742,7 +1742,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                s[s2:f2] -= 0.5*lib.einsum('jwyi,jwx->ixy',eris_ovvo,r2,optimize = True).reshape(-1)
 
             #print("Calculating additional terms for adc(3)")
-        cput0 = log.timer_debug1("completed sigma vector ADC(2)-x calculation", *cput0)
 
         if (method == "adc(3)"):
 
@@ -1851,7 +1850,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp  += lib.einsum('lxd,ilyd->ixy',temp_2_1,t2_1,optimize=True)
                temp  -= lib.einsum('lxd,ildy->ixy',temp_2_1,t2_1,optimize=True)
                s[s2:f2] += temp.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
               
                del (t2_1)
                del (temp)
@@ -1859,8 +1857,8 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                del (temp_1_1)
                del (temp_2_1)
 
+        cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
         return s
-        cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
 
     return sigma_
 
@@ -1938,7 +1936,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 ################ ADC(2) ajk - bil block ############################
 
         s[s2:f2] += D_aij * r2.reshape(-1)
-        cput0 = log.timer_debug1("completed sigma vector ADC(2) calculation", *cput0)
 
 ############### ADC(3) ajk - bil block ############################
 
@@ -1967,7 +1964,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                s[s2:f2] -= 0.5*lib.einsum('jabi,bik->ajk',eris_ovvo,r2,optimize = True).reshape(-1)
                s[s2:f2] += 0.5*lib.einsum('jabi,bki->ajk',eris_ovvo,r2,optimize = True).reshape(-1)
                
-        cput0 = log.timer_debug1("completed sigma vector ADC(2)-x calculation", *cput0)
         if (method == "adc(3)"):
 
                eris_ovoo = eris.ovoo
@@ -2064,11 +2060,12 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp  = -lib.einsum('i,iblj->jbl',r1,eris_ovoo,optimize=True)
                temp_1 = -lib.einsum('jbl,klba->ajk',temp,t2_1,optimize=True)
                s[s2:f2] -= temp_1.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
+
                del temp
                del temp_1
                del temp_2
 
+        cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
         s *= -1.0
 
         return s
@@ -2275,8 +2272,6 @@ def ip_compute_trans_moments(adc, orb):
 
 def get_trans_moments(adc):
 
-    cput0 = (time.clock(), time.time())
-    log = logger.Logger(adc.stdout, adc.verbose)
     nmo  = adc.nmo
 
     T = []
@@ -2287,7 +2282,6 @@ def get_trans_moments(adc):
             T.append(T_a)
 
     T = np.array(T)
-    cput0 = log.timer_debug1("Completed trans moments calculation", *cput0)
     return T
 
 
@@ -2450,9 +2444,6 @@ def analyze_spec_factor(adc):
     #thresh = 0.000000001
     thresh = adc.spec_thresh
 
-    print ("*************************************************************")
-    print (" Spectroscopic factors analysis summary")
-    print ("*************************************************************")
     for i in range(X_2.shape[1]):
 
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
@@ -2621,6 +2612,7 @@ class RADCEA(RADC):
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector_ea
     analyze = analyze
+    compute_dyson_orb = compute_dyson_orb
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2729,6 +2721,7 @@ class RADCIP(RADC):
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector_ip
     analyze = analyze
+    compute_dyson_orb = compute_dyson_orb
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
