@@ -424,15 +424,15 @@ def compute_amplitudes(myadc, eris):
 
         t1_3 = t1_3/D1
 
-    t1 = (t1_2, t1_3)
-    t2 = (t2_1, t2_2)
-
     if not isinstance(eris.oooo, np.ndarray):
-        t2_1 = radc_ao2mo.write_dataset(t2[0])
+        t2_1 = radc_ao2mo.write_dataset(t2_1)
         if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-            t2_2 = radc_ao2mo.write_dataset(t2[1])
+            t2_2 = radc_ao2mo.write_dataset(t2_2)
 
     cput0 = log.timer_debug1("Completed amplitude calculation", *cput0)
+
+    t1 = (t1_2, t1_3)
+    t2 = (t2_1, t2_2)
 
     return t1, t2
 
