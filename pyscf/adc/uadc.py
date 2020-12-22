@@ -63,10 +63,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         X_b = None
 
 
-#    alpha = spec_analyze(adc, X_a, spin ="alpha")
-#    beta = spec_analyze(adc, X_b, spin ="beta")
-#    print('\n')
-#    F = adc.eigenvector_analyze(U, nroots)
+    alpha = spec_analyze(adc, X_a, spin ="alpha")
+    beta = spec_analyze(adc, X_b, spin ="beta")
+    print('\n')
+    F = adc.eigenvector_analyze(U, nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
     if nfalse >= 1:

@@ -57,39 +57,40 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         adc.P,adc.X = adc.get_properties(nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
+
+    logger.info(adc, "\n*************************************************************")
+    logger.info(adc, "                  ADC calculation summary")
+    logger.info(adc, "*************************************************************")
+
     if nfalse >= 1:
-        print ("*************************************************************")
-        print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
-        print ("*************************************************************")
+        logger.info(adc, "*************************************************************")
+        logger.info(adc, " WARNING : ", "Davidson iterations for ", nfalse, "root(s) not converged")
+        logger.info(adc, "*************************************************************")
 
-    if adc.compute_properties == True:
+    for n in range(nroots):
+        print_string = ('%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
+        if adc.compute_properties == True:
+            print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
+        print_string += ("|  conv = %s" % conv[n])
+        logger.info(adc, print_string)
 
-        if adc.verbose >= logger.INFO:
-            print ("*************************************************************")
-            print (" ADC calculation summary")
-            print ("*************************************************************")
-            print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-            if nroots == 1:
-                logger.info(adc, '%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  |  Spec factors = %10.8f  |  conv = %s',
-                             adc.method, 0, adc.E, adc.E*27.2114, adc.P, conv)
-            else :
-                for n, en, pn, convn in zip(range(nroots), adc.E, adc.P, conv):
-                    logger.info(adc, '%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  |  Spec factors = %10.8f  |  conv = %s',
-                              adc.method, n, en, en*27.2114, pn, convn)
-            print("----------------------------------------------------------------------------------------------------------------------------------------------")   
+#    if adc.compute_properties == True:
+#            if nroots == 1:
+#                logger.info(adc, '%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  |  Spec factors = %10.8f  |  conv = %s',
+#                             adc.method, 0, adc.E, adc.E*27.2114, adc.P, conv)
+#            else :
+#                for n, en, pn, convn in zip(range(nroots), adc.E, adc.P, conv):
+#                    logger.info(adc, '%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  |  Spec factors = %10.8f  |  conv = %s',
+#                              adc.method, n, en, en*27.2114, pn, convn)
+#    else : 
+#            if nroots == 1:
+#                logger.info(adc, '%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  |  conv = %s',
+#                             adc.method, 0, adc.E, adc.E*27.2114, conv)
+#            else :
+#                for n, en, convn in zip(range(nroots), adc.E, conv):
+#                    logger.info(adc, '%s root %d  |  Energy (Eh) = %.10f |   Energy (eV) = %.8f |  conv = %s',
+#                              adc.method, n, en, en*27.2114, convn)
 
-    else : 
-
-        if adc.verbose >= logger.INFO:
-            print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-            if nroots == 1:
-                logger.info(adc, '%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  |  conv = %s',
-                             adc.method, 0, adc.E, adc.E*27.2114, conv)
-            else :
-                for n, en, convn in zip(range(nroots), adc.E, conv):
-                    logger.info(adc, '%s root %d  |  Energy (Eh) = %.10f |   Energy (eV) = %.8f |  conv = %s',
-                              adc.method, n, en, en*27.2114, convn)
-            print("----------------------------------------------------------------------------------------------------------------------------------------------")   
     log.timer('ADC', *cput0)
 
     if adc.analyze == True:
@@ -611,7 +612,7 @@ class RADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_properties = True
-        self.U_thresh = 0.05
+        self.evec_print_tol = 0.05
         self.spec_thresh = 1e-8
         self.analyze = False
 
@@ -2295,16 +2296,16 @@ def eigenvector_analyze_ea(adc):
     
     nocc = adc._nocc
     nvir = adc._nvir
+    evec_print_tol = adc.evec_print_tol
+
+    logger.info(adc, "Number of occupied orbitals = %d", nocc)
+    logger.info(adc, "Number of virtual orbitals =  %d", nvir)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
 
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
     
     U = np.array(adc.U)
-    U_thresh = adc.U_thresh
-    
-    print ("*************************************************************")
-    print (" Eigenvectors analysis summary")
-    print ("*************************************************************")
     
     for I in range(U.shape[0]):
         U1 = U[I, :n_singles]
@@ -2317,8 +2318,8 @@ def eigenvector_analyze_ea(adc):
         U_sq = U_sq[ind_idx] 
         U_sorted = U[I,ind_idx].copy()
                    
-        U_sorted = U_sorted[U_sq > U_thresh**2]
-        ind_idx = ind_idx[U_sq > U_thresh**2]
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
 
         temp_doubles_idx = [0,0,0]  
         singles_idx = []
@@ -2350,17 +2351,23 @@ def eigenvector_analyze_ea(adc):
                 
             iter_num += 1 
      
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | Occupied orbitals = %2d | Virtual orbitals = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc, nvir)
-        print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print( "Singles block: ") 
-        for idx,print_singles in enumerate(singles_idx):
-            logger.info(adc,'vir(a) = %2d | amplitude = %7.4f',print_singles, singles_val[idx])
-        print("Doubles block: ")
-        for idx,print_doubles in enumerate(doubles_idx):
-            logger.info(adc,'occ(i) = %2d | vir(a) = %2d | vir(b) = %2d | amplitude = %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_val[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")  
+        logger.info(adc,'%s | root %d | norm(1p)  = %6.4f | norm(1h2p) = %6.4f ',adc.method ,I, U1dotU1, U2dotU2)
+
+        if singles_val:
+            logger.info(adc, "\n1p(b) block: ") 
+            logger.info(adc, "    a      U(a)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_val[idx])
+
+        if doubles_val:
+            logger.info(adc, "\n1h2p block: ") 
+            logger.info(adc, "    i     a     b      U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_val[idx])
+
+        logger.info(adc, "\n*************************************************************\n")
  
     return U
 
@@ -2374,11 +2381,11 @@ def eigenvector_analyze_ip(adc):
     n_doubles = nvir * nocc * nocc
 
     U = np.array(adc.U)    
-    U_thresh = adc.U_thresh
+    evec_print_tol = adc.evec_print_tol
     
-    print ("*************************************************************")
-    print (" Eigenvectors analysis summary")
-    print ("*************************************************************")
+#    print ("*************************************************************")
+#    print (" Eigenvectors analysis summary")
+#    print ("*************************************************************")
      
     for I in range(U.shape[0]):
         U1 = U[I, :n_singles]
@@ -2391,8 +2398,8 @@ def eigenvector_analyze_ip(adc):
         U_sq = U_sq[ind_idx] 
         U_sorted = U[I,ind_idx].copy()
         
-        U_sorted = U_sorted[U_sq > U_thresh**2]
-        ind_idx = ind_idx[U_sq > U_thresh**2]
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
              
         temp_doubles_idx = [0,0,0]  
         singles_idx = []
@@ -2423,18 +2430,18 @@ def eigenvector_analyze_ip(adc):
                 
             iter_num += 1 
 
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
+#        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | Occupied orbitals = %2d | Virtual orbitals = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc, nvir)
-        print("Obitals # contributing to eigenvectors components with abs value > ", U_thresh)
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
+        print("Obitals # contributing to eigenvectors components with abs value > ", evec_print_tol)
+#        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         print( "Singles block: ") 
         for idx,print_singles in enumerate(singles_idx):
             logger.info(adc,'occ(i) = %2d | amplitude = %6.4f',print_singles, singles_val[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")  
+#        print("----------------------------------------------------------------------------------------------------------------------------------------------")  
         print("Doubles block: ")
         for idx,print_doubles in enumerate(doubles_idx):
             logger.info(adc,'vir(a) = %2d | occ(i) = %2d | occ(j) = %2d | amplitude = %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_val[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")  
+#        print("----------------------------------------------------------------------------------------------------------------------------------------------")  
  
 
 def spec_analyze(adc):
@@ -2533,6 +2540,10 @@ def get_properties(adc, nroots=1):
 
 def get_analysis(adc):
 
+    logger.info(adc, "\n*************************************************************")
+    logger.info(adc, "                Eigenvector analysis summary")
+    logger.info(adc, "*************************************************************")
+
     adc.eigenvector_analyze()
 
     if adc.compute_properties == True:
@@ -2606,7 +2617,7 @@ class RADCEA(RADC):
         self.U = None
         self.P = None
         self.X = None
-        self.U_thresh = adc.U_thresh
+        self.evec_print_tol = adc.evec_print_tol
         self.spec_thresh = adc.spec_thresh
         self.analyze = adc.analyze
 
@@ -2715,7 +2726,7 @@ class RADCIP(RADC):
         self.U = None
         self.P = None
         self.X = None
-        self.U_thresh = adc.U_thresh
+        self.evec_print_tol = adc.evec_print_tol
         self.spec_thresh = adc.spec_thresh
         self.analyze = adc.analyze
 
