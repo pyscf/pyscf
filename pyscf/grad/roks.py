@@ -22,14 +22,20 @@ Non-relativistic ROKS analytical nuclear gradients
 
 from pyscf import lib
 from pyscf.scf import addons
+from pyscf.grad import rks as rks_grad
+from pyscf.grad import rohf as rohf_grad
 from pyscf.grad import uks as uks_grad
 
 
-class Gradients(uks_grad.Gradients):
+class Gradients(rks_grad.Gradients):
     '''Non-relativistic ROHF gradients
     '''
-    def __init__(self, mf):
-        uks_grad.Gradients.__init__(self, addons.convert_to_uhf(mf))
+
+    get_veff = uks_grad.get_veff
+
+    make_rdm1e = rohf_grad.Gradients.make_rdm1e
+
+    grad_elec = rohf_grad.Gradients.grad_elec
 
 Grad = Gradients
 
@@ -55,30 +61,35 @@ if __name__ == '__main__':
     e0 = mf.scf()
     g = mf.Gradients()
     print(g.kernel())
-#[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
-# [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]
-# [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
+#[[  0.    0.               0.0529837158]
+# [  0.    0.0673568416    -0.0264979200]
+# [  0.   -0.0673568416    -0.0264979200]]
     g.grid_response = True
     print(g.kernel())
+#[[  0.    0.               0.0529917556]
+# [  0.    0.0673570505    -0.0264958778]
+# [  0.   -0.0673570505    -0.0264958778]]
 
     mf.xc = 'b88,p86'
     e0 = mf.scf()
     g = Gradients(mf)
     print(g.kernel())
-#[[ -8.20194970e-16  -2.04319288e-15   2.44405835e-02]
-# [  4.36709255e-18   2.73690416e-02  -1.22232039e-02]
-# [  3.44483899e-17  -2.73690416e-02  -1.22232039e-02]]
+#[[  0.    0.               0.0516999634]
+# [  0.    0.0638666270    -0.0258541362]
+# [  0.   -0.0638666270    -0.0258541362]]
     g.grid_response = True
     print(g.kernel())
+#[[  0.    0.               0.0516940546]
+# [  0.    0.0638566430    -0.0258470273]
+# [  0.   -0.0638566430    -0.0258470273]]
 
     mf.xc = 'b3lypg'
     e0 = mf.scf()
     g = Gradients(mf)
     print(g.kernel())
-#[[ -3.59411142e-16  -2.68753987e-16   1.21557501e-02]
-# [  4.04977877e-17   2.11112794e-02  -6.08181640e-03]
-# [  1.52600378e-16  -2.11112794e-02  -6.08181640e-03]]
-
+#[[  0.    0.               0.0395990911]
+# [  0.    0.0586841789    -0.0198038250]
+# [  0.   -0.0586841789    -0.0198038250]]
 
     mol = gto.Mole()
     mol.atom = [
@@ -95,14 +106,13 @@ if __name__ == '__main__':
     mf.kernel()
     print(Gradients(mf).kernel())
 # sum over z direction non-zero, due to meshgrid response
-#[[ 0  0  -2.68934738e-03]
-# [ 0  0   2.69333577e-03]]
+#[[ 0  0   -0.1479101538]
+# [ 0  0    0.1479140846]]
     mf = dft.ROKS(mol)
     mf.grids.prune = None
     mf.grids.level = 6
     mf.conv_tol = 1e-14
     mf.kernel()
     print(Gradients(mf).kernel())
-#[[ 0  0  -2.68931547e-03]
-# [ 0  0   2.68911282e-03]]
-
+#[[ 0  0   -0.1479101105]
+# [ 0  0    0.1479099093]]

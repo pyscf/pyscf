@@ -218,7 +218,7 @@ def as_scanner(td_grad, state=1):
         return TDSCF_GradScanner(td_grad)
 
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
 
     cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
     cphf_conv_tol = getattr(__config__, 'grad_tdrhf_Gradients_cphf_conv_tol', 1e-8)
