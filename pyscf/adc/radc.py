@@ -81,6 +81,9 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     else : 
 
         if adc.verbose >= logger.INFO:
+            print ("*************************************************************")
+            print (" ADC calculation summary")
+            print ("*************************************************************")
             print("----------------------------------------------------------------------------------------------------------------------------------------------")   
             if nroots == 1:
                 logger.info(adc, '%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  |  conv = %s',
