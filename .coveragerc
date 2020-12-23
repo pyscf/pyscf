@@ -13,6 +13,11 @@ omit = */dmrgscf/*
     */semiempirical/*
     */extras/*
     */future/*
+    */pbc/grad/*
+    */pbc/geomopt/*
+    */pbc/eph/*
+    */pbc/mpicc/*
+    */pbc/mpitools/*
     */gen_*_param.py
 disable_warnings = include-ignored
 
