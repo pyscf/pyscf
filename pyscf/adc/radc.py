@@ -776,7 +776,6 @@ class RADC(lib.StreamObject):
         self._adc_es.analyze()
 
     def compute_dyson_orb(self):   
-
         self._adc_es.compute_dyson_orb() 
          
 

@@ -771,6 +771,42 @@ def density_matrix_so(myadc, T=None):
     return dm
 
 
+def analyze(myadc):
+
+    logger.info(myadc, "\n*************************************************************")
+    logger.info(myadc, "                Eigenvector analysis summary")
+    logger.info(myadc, "*************************************************************")
+
+    myadc.eigenvector_analyze()
+ 
+    if myadc.compute_properties == True:
+
+        logger.info(myadc, "\n*************************************************************")
+        logger.info(myadc, "                Spectroscopic factors analysis summary")
+        logger.info(myadc, "*************************************************************")
+
+        myadc.spec_analyze()
+
+
+def compute_dyson_orb(myadc):
+     
+    X_a = myadc.X_a
+    X_b = myadc.X_b
+
+    if X_a is None:
+        U = np.array(myadc.U)
+        nroots = U.shape[0]
+        P,X_a,X_b = myadc.get_properties(nroots)
+
+    nroots = X_a.shape[1]
+    dyson_mo_a = np.dot(myadc.mo_coeff[0],X_a).reshape(-1,nroots)
+    dyson_mo_b = np.dot(myadc.mo_coeff[1],X_b).reshape(-1,nroots)
+
+    dyson_mo = (dyson_mo_a,dyson_mo_b)
+
+    return dyson_mo
+
+
 class UADC(lib.StreamObject):
     '''Ground state calculations
 
@@ -838,10 +874,14 @@ class UADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
 
-        self.compute_mpn_energy = True
+        self.compute_properties = True
         self.U_thresh = 0.05
 
-        self.compute_spec = True
+        self.E = None
+        self.U = None
+        self.P = None
+        self.X_a = None
+        self.X_b = None
 
         
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
@@ -953,14 +993,15 @@ class UADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, X_a, X_b = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X_a, X_b, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac, X_a, X_b = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X_a, X_b, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
             raise NotImplementedError(self.method_type)
 
+        self._adc_es = adc_es
         return e_exc, v_exc, spec_fac, X_a, X_b
 
     def _finalize(self):
@@ -970,10 +1011,14 @@ class UADC(lib.StreamObject):
         return self
     
     def ea_adc(self, nroots=1, guess=None, eris=None):
-        return UADCEA(self).kernel(nroots, guess, eris)
-    
+        adc_es = UADCEA(self)
+        e_exc, v_exc, spec_fac, xa, xb = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, xa, xb, adc_es
+
     def ip_adc(self, nroots=1, guess=None, eris=None):
-        return UADCIP(self).kernel(nroots, guess, eris)
+        adc_es = UADCIP(self)
+        e_exc, v_exc, spec_fac, xa, xb = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, xa, xb, adc_es
 
     def density_fit(self, auxbasis=None, with_df=None):
         if with_df is None:
@@ -989,6 +1034,11 @@ class UADC(lib.StreamObject):
             self.with_df = with_df
         return self
 
+    def analyze(self):
+        self._adc_es.analyze()
+
+    def compute_dyson_orb(self):   
+        self._adc_es.compute_dyson_orb() 
 
 def get_imds_ea(adc, eris=None):
 
@@ -3956,8 +4006,10 @@ def spec_analyze(adc, X, spin):
         logger.info(adc, 'Partial spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 
-def eigenvector_analyze_ea(adc, U, nroots=1):
+def eigenvector_analyze_ea(adc):
     
+    U = np.array(adc.U)
+
     U_thresh = adc.U_thresh
      
     nocc_a = adc.nocc_a
@@ -4134,8 +4186,10 @@ def eigenvector_analyze_ea(adc, U, nroots=1):
     
     return U
 
-def eigenvector_analyze_ip(adc, U, nroots=1):
+def eigenvector_analyze_ip(adc):
     
+    U = np.array(adc.U)
+
     U_thresh = adc.U_thresh
      
     nocc_a = adc.nocc_a
@@ -4313,79 +4367,28 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
     return U
 
 
-def renormalize_eigenvectors_ea(adc, nroots=1):
-
-    U = np.array(adc.U)
-
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    n_singles = nvir
-    n_doubles = nocc * nvir * nvir
-
-    U = U.reshape(nroots,-1)
-
-    for I in range(U.shape[0]):
-        U1 = U[I, :n_singles]
-        U2 = U[I, n_singles:].reshape(nocc,nvir,nvir)
-        UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-        U[I,:] /= np.sqrt(UdotU)
-    
-    return U
-
-
-def renormalize_eigenvectors_ip(adc, nroots=1):
-
-    U = np.array(adc.U)
-
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    n_singles = nocc
-    n_doubles = nvir * nocc * nocc
-
-    U = U.reshape(nroots,-1)
-
-    for I in range(U.shape[0]):
-        U1 = U[I, :n_singles]
-        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
-        UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-        U[I,:] /= np.sqrt(UdotU)
-
-    return U
-
-
 def get_properties(adc, nroots=1):
 
     #Transition moments
     T = adc.get_trans_moments()
+    
+    T_a = T[0]
+    T_b = T[1]
+
+    T_a = np.array(T_a)
+    T_b = np.array(T_b)
+
+    U = np.array(adc.U)
 
     #Spectroscopic amplitudes
-    U = adc.renormalize_eigenvectors(nroots)
-    X = np.dot(T, U.T).reshape(-1, nroots)
+    X_a = np.dot(T_a, U.T).reshape(-1,nroots)
+    X_b = np.dot(T_b, U.T).reshape(-1,nroots)
 
     #Spectroscopic factors
-    P = 2.0*lib.einsum("pi,pi->i", X, X)
+    P = lib.einsum("pi,pi->i", X_a, X_a)
+    P += lib.einsum("pi,pi->i", X_b, X_b)
 
-    return P,X
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return P, X_a, X_b
 
 
 class UADCEA(UADC):
@@ -4452,12 +4455,14 @@ class UADCEA(UADC):
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
 
-        self.compute_mpn_energy = True
         self.U_thresh = adc.U_thresh
-        self.compute_spec = adc.compute_spec
 
-
-
+        self.compute_properties = adc.compute_properties
+        self.E = adc.E
+        self.U = adc.U
+        self.P = adc.P
+        self.X_a = adc.X_a
+        self.X_b = adc.X_b
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -4471,6 +4476,9 @@ class UADCEA(UADC):
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors
     spec_analyze = spec_analyze
+    get_properties = get_properties
+    analyze = analyze
+    compute_dyson_orb = compute_dyson_orb
     
     eigenvector_analyze = eigenvector_analyze_ea
 
@@ -4564,10 +4572,14 @@ class UADCIP(UADC):
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
 
-        self.compute_mpn_energy = True
         self.U_thresh = adc.U_thresh
 
-        self.compute_spec = adc.compute_spec
+        self.compute_properties = adc.compute_properties
+        self.E = adc.E
+        self.U = adc.U
+        self.P = adc.P
+        self.X_a = adc.X_a
+        self.X_b = adc.X_b
 
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
@@ -4581,9 +4593,12 @@ class UADCIP(UADC):
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
     get_spec_factors = get_spec_factors
+    get_properties = get_properties
 
     spec_analyze = spec_analyze
     eigenvector_analyze = eigenvector_analyze_ip
+    analyze = analyze
+    compute_dyson_orb = compute_dyson_orb
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
