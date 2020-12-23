@@ -49,18 +49,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
-    conv, E, U = lib.linalg_helper.davidson1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
+    conv, adc.E, adc.U = lib.linalg_helper.davidson1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
-    U = np.array(U)
-
-    if adc.compute_spec == True:
-        T = adc.get_trans_moments()
-        spec_factors, X_a, X_b = adc.get_spec_factors(T, U, nroots)
-    else:
-        T = None
-        spec_factors = None
-        X_a = None
-        X_b = None
+    if adc.compute_properties == True:
+        adc.P,adc.X_a,adc.X_b = adc.get_properties(nroots)
 
 #    alpha = spec_analyze(adc, X_a, spin ="alpha")
 #    beta = spec_analyze(adc, X_b, spin ="beta")
@@ -69,35 +61,53 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 #    F = adc.eigenvector_analyze(U, nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
+
+    logger.info(adc, "\n*************************************************************")
+    logger.info(adc, "                  ADC calculation summary")
+    logger.info(adc, "*************************************************************")
+
     if nfalse >= 1:
-        print ("*************************************************************")
-        print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
-        print ("*************************************************************")
+        logger.info(adc, "*************************************************************")
+        logger.info(adc, " WARNING : ", "Davidson iterations for ", nfalse, "root(s) not converged")
+        logger.info(adc, "*************************************************************")
 
-    if adc.compute_spec == True:
+    for n in range(nroots):
+        print_string = ('%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
+        if adc.compute_properties == True:
+            print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
+        print_string += ("|  conv = %s" % conv[n])
+        logger.info(adc, print_string)
 
-        if adc.verbose >= logger.INFO:
-            if nroots == 1:
-                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-                             adc.method, 0, E, E*27.2114, spec_factors, conv)
-            else :
-                for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
-                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-                              adc.method, n, en, en*27.2114, pn, convn)
-    else:
-        if adc.verbose >= logger.INFO:
-            if nroots == 1:
-                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
-                             adc.method, 0, E, E*27.2114, conv)
-            else :
-                for n, en, convn in zip(range(nroots), E, conv):
-                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
-                              adc.method, n, en, en*27.2114, convn)
+
+#    if nfalse >= 1:
+#        print ("*************************************************************")
+#        print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
+#        print ("*************************************************************")
+#
+#    if adc.compute_spec == True:
+#
+#        if adc.verbose >= logger.INFO:
+#            if nroots == 1:
+#                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+#                             adc.method, 0, E, E*27.2114, spec_factors, conv)
+#            else :
+#                for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
+#                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
+#                              adc.method, n, en, en*27.2114, pn, convn)
+#    else:
+#        if adc.verbose >= logger.INFO:
+#            if nroots == 1:
+#                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
+#                             adc.method, 0, E, E*27.2114, conv)
+#            else :
+#                for n, en, convn in zip(range(nroots), E, conv):
+#                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
+#                              adc.method, n, en, en*27.2114, convn)
 
     log.timer('ADC', *cput0)
 
     #return E, U, spec_factors
-    return E, U, spec_factors, X_a, X_b
+    return adc.E, adc.U, adc.P, adc.X_a, adc.X_b
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -4301,6 +4311,81 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
     
     return U
+
+
+def renormalize_eigenvectors_ea(adc, nroots=1):
+
+    U = np.array(adc.U)
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nvir
+    n_doubles = nocc * nvir * nvir
+
+    U = U.reshape(nroots,-1)
+
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nocc,nvir,nvir)
+        UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        U[I,:] /= np.sqrt(UdotU)
+    
+    return U
+
+
+def renormalize_eigenvectors_ip(adc, nroots=1):
+
+    U = np.array(adc.U)
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nocc
+    n_doubles = nvir * nocc * nocc
+
+    U = U.reshape(nroots,-1)
+
+    for I in range(U.shape[0]):
+        U1 = U[I, :n_singles]
+        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+        UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        U[I,:] /= np.sqrt(UdotU)
+
+    return U
+
+
+def get_properties(adc, nroots=1):
+
+    #Transition moments
+    T = adc.get_trans_moments()
+
+    #Spectroscopic amplitudes
+    U = adc.renormalize_eigenvectors(nroots)
+    X = np.dot(T, U.T).reshape(-1, nroots)
+
+    #Spectroscopic factors
+    P = 2.0*lib.einsum("pi,pi->i", X, X)
+
+    return P,X
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class UADCEA(UADC):
