@@ -295,14 +295,15 @@ def _response_dm1(mycc, Xvo, eris=None):
     return dm1
 
 def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
-# dm2 = ccsd_rdm._make_rdm2(mycc, None, d2, with_dm1=False)
-# dm2 = numpy.einsum('pi,ijkl->pjkl', mo_coeff, dm2)
-# dm2 = numpy.einsum('pj,ijkl->ipkl', mo_coeff, dm2)
-# dm2 = numpy.einsum('pk,ijkl->ijpl', mo_coeff, dm2)
-# dm2 = numpy.einsum('pl,ijkl->ijkp', mo_coeff, dm2)
-# dm2 = dm2 + dm2.transpose(1,0,2,3)
-# dm2 = dm2 + dm2.transpose(0,1,3,2)
-# return ao2mo.restore(4, dm2*.5, nmo)
+    # dm2 = ccsd_rdm._make_rdm2(mycc, None, d2, with_dm1=False)
+    # dm2 = numpy.einsum('pi,ijkl->pjkl', mo_coeff, dm2)
+    # dm2 = numpy.einsum('pj,ijkl->ipkl', mo_coeff, dm2)
+    # dm2 = numpy.einsum('pk,ijkl->ijpl', mo_coeff, dm2)
+    # dm2 = numpy.einsum('pl,ijkl->ijkp', mo_coeff, dm2)
+    # dm2 = dm2 + dm2.transpose(1,0,2,3)
+    # dm2 = dm2 + dm2.transpose(0,1,3,2)
+    # return ao2mo.restore(4, dm2*.5, nmo)
+
     log = logger.Logger(mycc.stdout, mycc.verbose)
     time1 = time.clock(), time.time()
     if fsave is None:
@@ -414,7 +415,7 @@ def _load_block_tril(h5dat, row0, row1, nao, out=None):
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
 
     grad_elec = grad_elec
 

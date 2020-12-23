@@ -123,10 +123,10 @@ def as_scanner(grad_ci, state=0):
 
     return CISD_GradScanner(grad_ci)
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
     def __init__(self, myci):
         self.state = 0  # of which the gradients to be computed.
-        rhf_grad.GradientsBasics.__init__(self, myci)
+        rhf_grad.GradientsMixin.__init__(self, myci)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
