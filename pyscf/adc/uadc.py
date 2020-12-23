@@ -78,35 +78,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         print_string += ("|  conv = %s" % conv[n])
         logger.info(adc, print_string)
 
-
-#    if nfalse >= 1:
-#        print ("*************************************************************")
-#        print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
-#        print ("*************************************************************")
-#
-#    if adc.compute_spec == True:
-#
-#        if adc.verbose >= logger.INFO:
-#            if nroots == 1:
-#                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-#                             adc.method, 0, E, E*27.2114, spec_factors, conv)
-#            else :
-#                for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
-#                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-#                              adc.method, n, en, en*27.2114, pn, convn)
-#    else:
-#        if adc.verbose >= logger.INFO:
-#            if nroots == 1:
-#                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
-#                             adc.method, 0, E, E*27.2114, conv)
-#            else :
-#                for n, en, convn in zip(range(nroots), E, conv):
-#                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
-#                              adc.method, n, en, en*27.2114, convn)
-
     log.timer('ADC', *cput0)
 
-    #return E, U, spec_factors
     return adc.E, adc.U, adc.P, adc.X_a, adc.X_b
 
 
@@ -873,10 +846,8 @@ class UADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-
         self.compute_properties = True
         self.U_thresh = 0.05
-
         self.E = None
         self.U = None
         self.P = None
@@ -3048,7 +3019,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp  = lib.einsum('lxd,ilyd->ixy',temp_1_3,t2_1_ab,optimize=True)
                temp  += lib.einsum('lxd,ilyd->ixy',temp_2_3,t2_1_a,optimize=True)
                s[s_aba:f_aba] += temp.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
+               cput0 = log.timer_debug1("completed sigma vector ADC(n) calculation", *cput0)
 
                del t2_1_a, t2_1_ab, t2_1_b
         return s
@@ -3565,7 +3536,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp  = -lib.einsum('i,iblj->jbl',r_b,eris_OVoo,optimize=True)
                temp_1 = -lib.einsum('jbl,lkab->ajk',temp,t2_1_ab,optimize=True)
                s[s_aba:f_aba] -= temp_1.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
+               cput0 = log.timer_debug1("completed sigma vector ADC(n) calculation", *cput0)
                del t2_1_a, t2_1_ab, t2_1_b
 
         s *= -1.0
@@ -3937,24 +3908,6 @@ def get_trans_moments(adc):
     return (T_a, T_b)
 
    
-def get_spec_factors(adc, T, U, nroots=1):
-
-
-    T_a = T[0]
-    T_b = T[1]
-
-    T_a = np.array(T_a)
-    X_a = np.dot(T_a, U.T).reshape(-1,nroots)
-    del T_a
-    T_b = np.array(T_b)
-    X_b = np.dot(T_b, U.T).reshape(-1,nroots)
-    del T_b
-
-    P = lib.einsum("pi,pi->i", X_a, X_a)
-    P += lib.einsum("pi,pi->i", X_b, X_b)
-
-    return P, X_a, X_b
-
 def dyson_orb(adc, X_a, X_b, nroots=1):
 
     dyson_mo_a = np.dot(adc.mo_coeff[0],x_a).reshape(-1,nroots)
@@ -4474,7 +4427,6 @@ class UADCEA(UADC):
     get_diag = ea_adc_diag
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
-    get_spec_factors = get_spec_factors
     spec_analyze = spec_analyze
     get_properties = get_properties
     analyze = analyze
@@ -4592,7 +4544,6 @@ class UADCIP(UADC):
     matvec = ip_adc_matvec
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
-    get_spec_factors = get_spec_factors
     get_properties = get_properties
 
     spec_analyze = spec_analyze
