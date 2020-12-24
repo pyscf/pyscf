@@ -116,8 +116,8 @@ def get_jk(mol, dm, hermi=0,
     dms = numpy.vstack((dmaa, dmbb, dmab))
     if dm.dtype == numpy.complex128:
         dms = numpy.vstack((dms.real, dms.imag))
-        hermi = 0
 
+    hermi = 0  # The off-diagonal blocks are not hermitian
     j1, k1 = jkbuild(mol, dms, hermi, with_j, with_k, omega)
     if with_j: j1 = j1.reshape(-1,n_dm,nao,nao)
     if with_k: k1 = k1.reshape(-1,n_dm,nao,nao)

@@ -272,7 +272,7 @@ def _index_frozen_active(frozen_mask, mo_occ):
     VF = numpy.where((~frozen_mask) & (mo_occ==0))[0] # virtual frozen orbitals
     return OA, VA, OF, VF
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
 
     grad_elec = grad_elec
 

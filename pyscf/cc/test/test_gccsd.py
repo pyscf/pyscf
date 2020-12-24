@@ -216,6 +216,43 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2+dm2.transpose(2,1,0,3)       ).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2+dm2.transpose(0,3,2,1)       ).max(), 0, 9)
 
+    def test_rdm_real1(self):
+        numpy.random.seed(1)
+        mol = gto.M(
+            atom = 'H 0 0 0; F 0 0 1.1',
+            basis = '321g',
+            spin = 2)
+        myhf = mol.GHF()
+        hcoreX = myhf.get_hcore()
+        # a small random potential to break the Sz symmetry:
+        pot = (numpy.random.random(hcoreX.shape) - 0.5) * 3e-2
+        pot = pot + pot.T
+        hcoreX += pot
+        myhf.get_hcore = lambda *args: hcoreX
+        myhf.kernel()
+        mycc = myhf.CCSD().run()
+        mycc.solve_lambda()
+        rdm1 = mycc.make_rdm1(ao_repr=False)
+        rdm2 = mycc.make_rdm2(ao_repr=False)
+
+        # integrals in MO basis 
+        nao = mol.nao
+        C_ao_mo = myhf.mo_coeff
+        hcore = reduce(numpy.dot, (C_ao_mo.conj().T, myhf.get_hcore(), C_ao_mo))
+        mo_a = C_ao_mo[:nao]
+        mo_b = C_ao_mo[nao:]
+        eri  = ao2mo.kernel(myhf._eri, mo_a)
+        eri += ao2mo.kernel(myhf._eri, mo_b)
+        eri1 = ao2mo.kernel(myhf._eri, (mo_a, mo_a, mo_b, mo_b))
+        eri += eri1
+        eri += eri1.T
+        eri1 = None
+        eri_s1 = ao2mo.restore(1, eri, nao*2)
+        E_ref = myhf.energy_nuc()
+        E_ref += numpy.einsum('pq, qp ->', hcore, rdm1)
+        E_ref += 0.5 * numpy.einsum('pqrs, pqrs ->', eri_s1, rdm2)
+        self.assertAlmostEqual(E_ref, mycc.e_tot, 7)
+
     def test_rdm_complex(self):
         mol = gto.M()
         mol.verbose = 0
