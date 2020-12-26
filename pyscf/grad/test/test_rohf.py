@@ -21,12 +21,13 @@ from pyscf import grad
 mol = gto.Mole()
 mol.verbose = 5
 mol.output = '/dev/null'
-mol.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-mol.charge = -1
-mol.spin = 1
+mol.atom = '''
+    O     0.   0.       0.
+    H     0.8  0.3      0.2
+    H     0.   -0.757   0.587
+    H     0.   0.757    0.587'''
+mol.charge = 0
+mol.spin = 3
 mol.build()
 
 mol1 = gto.Mole()
@@ -49,33 +50,37 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_uhf_grad(self):
-        mf = scf.UHF(mol)
+    def test_finite_diff_rohf_grad(self):
+        mf = scf.ROHF(mol)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
-        g = grad.UHF(mf).kernel()
+        g = grad.ROHF(mf).kernel()
         mf_scanner = mf.as_scanner()
 
         e1 = mf_scanner('''O    0.   0.       0.
-                        1    0.   -0.758   0.587
-                        1    0.   0.757    0.587''')
+                        H     0.8  0.3      0.2
+                        H    0.   -0.758   0.587
+                        H    0.   0.757    0.587''')
         e2 = mf_scanner('''O    0.   0.       0.
-                        1    0.   -0.756   0.587
-                        1    0.   0.757    0.587''')
-        self.assertAlmostEqual(g[1,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
+                        H     0.8  0.3      0.2
+                        H    0.   -0.756   0.587
+                        H    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[2,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
 
         e1 = mf_scanner('''O    0.   0.       0.
-                        1    0.   -0.7571  0.587
-                        1    0.   0.757    0.587''')
+                        H     0.8  0.3      0.2
+                        H    0.   -0.7571  0.587
+                        H    0.   0.757    0.587''')
         e2 = mf_scanner('''O    0.   0.       0.
-                        1    0.   -0.7569 0.587
-                        1    0.   0.757    0.587''')
-        self.assertAlmostEqual(g[1,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
+                        H     0.8  0.3      0.2
+                        H    0.   -0.7569 0.587
+                        H    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
 
-        mf = scf.UHF(mol1)
+        mf = scf.ROHF(mol1)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
-        g = grad.UHF(mf).kernel()
+        g = grad.ROHF(mf).kernel()
         mf_scanner = mf.as_scanner()
 
         e1 = mf_scanner('''
@@ -103,8 +108,6 @@ H             -0.43459905    0.65805058   -0.00861418''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
 
 
-
 if __name__ == "__main__":
-    print("Full Tests for UHF Gradients")
+    print("Full Tests for ROHF Gradients")
     unittest.main()
-

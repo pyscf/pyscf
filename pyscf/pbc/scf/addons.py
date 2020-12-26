@@ -397,7 +397,8 @@ def convert_to_ghf(mf, out=None):
                 for k in range(nkpts):
                     if is_rhf:
                         mo_a = mo_b = mf.mo_coeff[k]
-                        ea = eb = mf.mo_energy[k]
+                        ea = getattr(mf.mo_energy[k], 'mo_ea', mf.mo_energy[k])
+                        eb = getattr(mf.mo_energy[k], 'mo_eb', mf.mo_energy[k])
                         occa = mf.mo_occ[k] > 0
                         occb = mf.mo_occ[k] == 2
                         orbspin = mol_addons.get_ghf_orbspin(ea, mf.mo_occ[k], True)

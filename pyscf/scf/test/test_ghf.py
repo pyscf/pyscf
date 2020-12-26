@@ -155,6 +155,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref - v).max(), 0, 12)
         self.assertAlmostEqual(numpy.linalg.norm(v), 560.3785699368684, 9)
 
+        d1 = numpy.random.random((nao,nao))
+        d2 = numpy.random.random((nao,nao))
+        d = numpy.array((d1+d1.conj().T, d2+d2.conj().T))
+        vj = numpy.einsum('ijkl,xji->xkl', eri, d)
+        vk = numpy.einsum('ijkl,xjk->xil', eri, d)
+        ref = vj - vk
+        v = mf.get_veff(mol, d)
+        self.assertAlmostEqual(abs(ref - v).max(), 0, 12)
+        self.assertAlmostEqual(numpy.linalg.norm(v), 607.5489445471493, 9)
+
     def test_get_jk(self):
         nao = mol.nao_nr()*2
         numpy.random.seed(1)

@@ -271,7 +271,16 @@ def map_with_prefetch(func, *iterables):
     '''
     Apply function to an task and prefetch the next task
     '''
-    if ThreadPoolExecutor is not None:
+    global_import_lock = False
+    if sys.version_info < (3, 6):
+        import imp
+        global_import_lock = imp.lock_held()
+
+    if global_import_lock:
+        for task in zip(*iterables):
+            yield func(*task)
+
+    elif ThreadPoolExecutor is not None:
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = None
             for task in zip(*iterables):
@@ -812,7 +821,7 @@ class call_in_background(object):
             ntasks = len(self.fns)
 
             global_import_lock = False
-            if sys.version_info < (3, 4):
+            if sys.version_info < (3, 6):
                 import imp
                 global_import_lock = imp.lock_held()
 
