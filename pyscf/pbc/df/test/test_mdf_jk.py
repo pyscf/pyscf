@@ -61,8 +61,8 @@ class KnownValues(unittest.TestCase):
         vj, vk = mf.get_jk(cell, dm)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 46.698950904264514, 8)
-        self.assertAlmostEqual(ek1, 31.724297945923094, 8)
+        self.assertAlmostEqual(ej1, 48.2837895391989, 5)  # ref from rsjk
+        self.assertAlmostEqual(ek1, 32.3033084452672, 8)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()
@@ -85,6 +85,7 @@ class KnownValues(unittest.TestCase):
         ek1 = numpy.einsum('ij,ji->', vk, dm)
         self.assertAlmostEqual(ej1, 241.29955504573206+0j, 8)
         self.assertAlmostEqual(ek1, 691.76854602384913+0j, 8)
+
 
     def test_jk_hermi0(self):
         numpy.random.seed(12)

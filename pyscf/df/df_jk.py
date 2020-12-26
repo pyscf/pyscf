@@ -232,7 +232,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             vj += numpy.einsum('ip,px->ix', rho, eri1)
 
     elif getattr(dm, 'mo_coeff', None) is not None:
-#TODO: test whether dm.mo_coeff matching dm
+        #TODO: test whether dm.mo_coeff matching dm
         mo_coeff = numpy.asarray(dm.mo_coeff, order='F')
         mo_occ   = numpy.asarray(dm.mo_occ)
         nmo = mo_occ.shape[-1]

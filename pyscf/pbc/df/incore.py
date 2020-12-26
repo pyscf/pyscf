@@ -133,8 +133,8 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     intor = cell._add_suffix(intor)
     pcell = copy.copy(cell)
     pcell._atm, pcell._bas, pcell._env = \
-    atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
-                                 cell._atm, cell._bas, cell._env)
+            atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
+                                         cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
     ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
@@ -149,19 +149,16 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     kptj = kptij_lst[:,1]
     if gamma_point(kptij_lst):
         kk_type = 'g'
-        dtype = numpy.double
         nkpts = nkptij = 1
         kptij_idx = numpy.array([0], dtype=numpy.int32)
         expkL = numpy.ones(1)
     elif is_zero(kpti-kptj):  # j_only
         kk_type = 'k'
-        dtype = numpy.complex128
         kpts = kptij_idx = numpy.asarray(kpti, order='C')
         expkL = numpy.exp(1j * numpy.dot(kpts, Ls.T))
         nkpts = nkptij = len(kpts)
     else:
         kk_type = 'kk'
-        dtype = numpy.complex128
         kpts = unique(numpy.vstack([kpti,kptj]))[0]
         expkL = numpy.exp(1j * numpy.dot(kpts, Ls.T))
         wherei = numpy.where(abs(kpti.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
