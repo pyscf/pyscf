@@ -19,6 +19,8 @@ from pyscf.pbc.dft import roks
 from pyscf.pbc.dft import krks
 from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft import kroks
+from pyscf.pbc.dft import krkspu
+from pyscf.pbc.dft import kukspu
 
 UKS = uks.UKS
 ROKS = roks.ROKS
@@ -26,6 +28,9 @@ ROKS = roks.ROKS
 KRKS = krks.KRKS
 KUKS = kuks.KUKS
 KROKS = kroks.KROKS
+
+KRKSpU = krkspu.KRKSpU
+KUKSpU = kukspu.KUKSpU
 
 def RKS(cell, *args, **kwargs):
     if cell.spin == 0:
