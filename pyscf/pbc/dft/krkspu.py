@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,8 +38,8 @@ from pyscf import lo
 from pyscf.lo import iao
 from pyscf.pbc import gto as pgto
 
-def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, \
-        kpts=None, kpts_band=None):
+def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+             kpts=None, kpts_band=None):
     """
     Coulomb + XC functional + Hubbard U terms.
 
@@ -63,14 +63,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, \
     if kpts is None: kpts = ks.kpts
 
     # J + V_xc
-    vxc = krks.get_veff(ks, cell=cell, dm=dm, dm_last=dm_last, \
-            vhf_last=vhf_last, hermi=hermi, kpts=kpts, kpts_band=kpts_band)
-    
+    vxc = krks.get_veff(ks, cell=cell, dm=dm, dm_last=dm_last,
+                        vhf_last=vhf_last, hermi=hermi, kpts=kpts,
+                        kpts_band=kpts_band)
+
     # V_U
     C_ao_lo = ks.C_ao_lo
     ovlp = ks.get_ovlp()
     nkpts = len(kpts)
-    nlo = C_ao_lo.shape[-1] 
+    nlo = C_ao_lo.shape[-1]
 
     rdm1_lo  = np.zeros((nkpts, nlo, nlo), dtype=np.complex128)
     for k in range(nkpts):
@@ -86,8 +87,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, \
             for l in lab:
                 lab_string += "%9s" %(l.split()[-1])
             lab_sp = lab[0].split()
-            logger.info(ks, "local rdm1 of atom %s: ", \
-                    " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
+            logger.info(ks, "local rdm1 of atom %s: ",
+                        " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
             U_mesh = np.ix_(idx, idx)
             P_loc = 0.0
             for k in range(nkpts):
@@ -95,20 +96,20 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1, \
                 C_k = C_ao_lo[k][:, idx]
                 P_k = rdm1_lo[k][U_mesh]
                 SC = np.dot(S_k, C_k)
-                vxc[k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k) \
-                        * (val * 0.5), SC.conj().T)
+                vxc[k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k)
+                               * (val * 0.5), SC.conj().T)
                 E_U += (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace() * 0.5)
                 P_loc += P_k
             P_loc = P_loc.real / nkpts
             logger.info(ks, "%s\n%s", lab_string, P_loc)
             logger.info(ks, "-" * 79)
-    
-    E_U *= weight 
+
+    E_U *= weight
     if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
         logger.warn(ks, "E_U (%s) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U)
     return vxc
-    
+
 def energy_elec(ks, dm_kpts=None, h1e_kpts=None, vhf=None):
     """
     Electronic energy for KRKSpU.
@@ -125,8 +126,8 @@ def energy_elec(ks, dm_kpts=None, h1e_kpts=None, vhf=None):
     ks.scf_summary['coul'] = vhf.ecoul.real
     ks.scf_summary['exc'] = vhf.exc.real
     ks.scf_summary['E_U'] = vhf.E_U.real
-    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s  EU = %s', e1, vhf.ecoul,\
-            vhf.exc, vhf.E_U)
+    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s  EU = %s', e1, vhf.ecoul,
+                 vhf.exc, vhf.E_U)
     return tot_e.real, vhf.ecoul + vhf.exc + vhf.E_U
 
 def set_U(ks, U_idx, U_val):
@@ -156,8 +157,8 @@ def set_U(ks, U_idx, U_val):
     logger.debug(ks, 'U indices and values: ')
     for idx, val in zip(ks.U_idx, ks.U_val):
         ks.U_lab.append(lo_labels[idx])
-        logger.debug(ks, '%6s [%.6g eV] ==> %-100s', format_idx(idx), \
-                val * HARTREE2EV, "".join(lo_labels[idx]))
+        logger.debug(ks, '%6s [%.6g eV] ==> %-100s', format_idx(idx),
+                     val * HARTREE2EV, "".join(lo_labels[idx]))
     logger.info(ks, "-" * 79)
 
 def make_minao_lo(ks, minao_ref):
@@ -169,14 +170,14 @@ def make_minao_lo(ks, minao_ref):
     kpts = ks.kpts
     nkpts = len(kpts)
     ovlp = ks.get_ovlp()
-    C_ao_minao, labels = proj_ref_ao(cell, minao=minao_ref, kpts=kpts, \
-            return_labels=True)
+    C_ao_minao, labels = proj_ref_ao(cell, minao=minao_ref, kpts=kpts,
+                                     return_labels=True)
     for k in range(nkpts):
         C_ao_minao[k] = lo.vec_lowdin(C_ao_minao[k], ovlp[k])
     labels = np.asarray(labels)
-    
+
     C_ao_lo = np.zeros((nkpts, nao, nao), dtype=np.complex128)
-    for idx, lab in zip(ks.U_idx, ks.U_lab):                    
+    for idx, lab in zip(ks.U_idx, ks.U_lab):
         idx_minao = [i for i, l in enumerate(labels) if l in lab]
         assert len(idx_minao) == len(idx)
         C_ao_sub = C_ao_minao[:, :, idx_minao]
@@ -187,7 +188,7 @@ def proj_ref_ao(mol, minao='minao', kpts=None, return_labels=False):
     """
     Get a set of reference AO spanned by the calculation basis.
     Not orthogonalized.
-    
+
     Args:
         return_labels: if True, return the labels as well.
     """
@@ -203,7 +204,7 @@ def proj_ref_ao(mol, minao='minao', kpts=None, return_labels=False):
         s1cd_k = la.cho_factor(s1[k])
         s2cd_k = la.cho_factor(s2[k])
         C_ao_lo[k] = la.cho_solve(s1cd_k, s12[k])
-    
+
     if return_labels:
         labels = pmol.ao_labels()
         return C_ao_lo, labels
@@ -228,25 +229,25 @@ class KRKSpU(krks.KRKS):
     RKSpU class adapted for PBCs with k-point sampling.
     """
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
-                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'), \
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
                  U_idx=[], U_val=[], C_ao_lo='minao', **kwargs):
         """
         DFT+U args:
-            U_idx: can be 
+            U_idx: can be
                    list of list: each sublist is a set of LO indices to add U.
-                   list of string: each string is one kind of LO orbitals, 
+                   list of string: each string is one kind of LO orbitals,
                                    e.g. ['Ni 3d', '1 O 2pz'], in this case,
                                    LO should be aranged as ao_labels order.
                    or a combination of these two.
             U_val: a list of effective U [in eV], i.e. U-J in Dudarev's DFT+U.
                    each U corresponds to one kind of LO orbitals, should have
                    the same length as U_idx.
-            C_ao_lo: LO coefficients, can be 
+            C_ao_lo: LO coefficients, can be
                      np.array, shape ((spin,), nkpts, nao, nlo),
                      string, in 'minao'.
-        
+
         Kwargs:
-            minao_ref: reference for minao orbitals, default is 'MINAO'. 
+            minao_ref: reference for minao orbitals, default is 'MINAO'.
         """
         try:
             krks.KRKS.__init__(self, cell, kpts, xc=xc, exxdiv=exxdiv)
@@ -255,10 +256,10 @@ class KRKSpU(krks.KRKS):
             krks.KRKS.__init__(self, cell, kpts)
             self.xc = xc
             self.exxdiv = exxdiv
-        
+
         set_U(self, U_idx, U_val)
-        
-        if isinstance(C_ao_lo, str): 
+
+        if isinstance(C_ao_lo, str):
             if C_ao_lo == 'minao':
                 minao_ref = kwargs.get("minao_ref", "MINAO")
                 self.C_ao_lo = make_minao_lo(self, minao_ref)
@@ -291,12 +292,12 @@ if __name__ == '__main__':
     cell.verbose = 7
     cell.build()
     kmesh = [2, 1, 1]
-    kpts = cell.make_kpts(kmesh, wrap_around=True) 
+    kpts = cell.make_kpts(kmesh, wrap_around=True)
     #U_idx = ["2p", "2s"]
     #U_val = [5.0, 2.0]
     U_idx = ["1 C 2p"]
     U_val = [5.0]
-    
+
     mf = KRKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao',
             minao_ref='gth-szv')
     mf.conv_tol = 1e-10

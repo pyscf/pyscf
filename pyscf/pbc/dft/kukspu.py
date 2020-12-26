@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,23 +39,24 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if cell is None: cell = ks.cell
     if dm is None: dm = ks.make_rdm1()
     if kpts is None: kpts = ks.kpts
-    
+
     # J + V_xc
-    vxc = kuks.get_veff(ks, cell=cell, dm=dm, dm_last=dm_last, \
-            vhf_last=vhf_last, hermi=hermi, kpts=kpts, kpts_band=kpts_band)
-    
+    vxc = kuks.get_veff(ks, cell=cell, dm=dm, dm_last=dm_last,
+                        vhf_last=vhf_last, hermi=hermi, kpts=kpts,
+                        kpts_band=kpts_band)
+
     # V_U
     C_ao_lo = ks.C_ao_lo
     ovlp = ks.get_ovlp()
     nkpts = len(kpts)
     nlo = C_ao_lo.shape[-1]
-     
+
     rdm1_lo  = np.zeros((2, nkpts, nlo, nlo), dtype=np.complex128)
     for s in range(2):
         for k in range(nkpts):
             C_inv = np.dot(C_ao_lo[s, k].conj().T, ovlp[k])
             rdm1_lo[s, k] = mdot(C_inv, dm[s][k], C_inv.conj().T)
-    
+
     E_U = 0.0
     weight = 1.0 / nkpts
     logger.info(ks, "-" * 79)
@@ -65,8 +66,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             for l in lab:
                 lab_string += "%9s" %(l.split()[-1])
             lab_sp = lab[0].split()
-            logger.info(ks, "local rdm1 of atom %s: ", \
-                    " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
+            logger.info(ks, "local rdm1 of atom %s: ",
+                        " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
             U_mesh = np.ix_(idx, idx)
             for s in range(2):
                 P_loc = 0.0
@@ -75,15 +76,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                     C_k = C_ao_lo[s, k][:, idx]
                     P_k = rdm1_lo[s, k][U_mesh]
                     SC = np.dot(S_k, C_k)
-                    vxc[s, k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k * 2.0) \
-                            * (val * 0.5), SC.conj().T)
+                    vxc[s, k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k * 2.0)
+                                      * (val * 0.5), SC.conj().T)
                     E_U += (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace())
                     P_loc += P_k
                 P_loc = P_loc.real / nkpts
                 logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P_loc)
             logger.info(ks, "-" * 79)
-    
-    E_U *= weight 
+
+    E_U *= weight
     if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
         logger.warn(ks, "E_U (%s) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U)
@@ -107,8 +108,8 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     mf.scf_summary['exc'] = vhf.exc.real
     mf.scf_summary['E_U'] = vhf.E_U.real
 
-    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s  EU = %s', \
-            e1, vhf.ecoul, vhf.exc, vhf.E_U)
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s  EU = %s',
+                 e1, vhf.ecoul, vhf.exc, vhf.E_U)
     return tot_e.real, vhf.ecoul + vhf.exc + vhf.E_U
 
 class KUKSpU(kuks.KUKS):
@@ -116,25 +117,25 @@ class KUKSpU(kuks.KUKS):
     UKSpU class adapted for PBCs with k-point sampling.
     """
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
-                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'), \
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
                  U_idx=[], U_val=[], C_ao_lo='minao', **kwargs):
         """
         DFT+U args:
-            U_idx: can be 
+            U_idx: can be
                    list of list: each sublist is a set of LO indices to add U.
-                   list of string: each string is one kind of LO orbitals, 
+                   list of string: each string is one kind of LO orbitals,
                                    e.g. ['Ni 3d', '1 O 2pz'], in this case,
                                    LO should be aranged as ao_labels order.
                    or a combination of these two.
             U_val: a list of effective U [in eV], i.e. U-J in Dudarev's DFT+U.
                    each U corresponds to one kind of LO orbitals, should have
                    the same length as U_idx.
-            C_ao_lo: LO coefficients, can be 
+            C_ao_lo: LO coefficients, can be
                      np.array, shape ((spin,), nkpts, nao, nlo),
                      string, in 'minao'.
-        
+
         Kwargs:
-            minao_ref: reference for minao orbitals, default is 'MINAO'. 
+            minao_ref: reference for minao orbitals, default is 'MINAO'.
         """
         try:
             kuks.KUKS.__init__(self, cell, kpts, xc=xc, exxdiv=exxdiv)
@@ -143,10 +144,10 @@ class KUKSpU(kuks.KUKS):
             kuks.KUKS.__init__(self, cell, kpts)
             self.xc = xc
             self.exxdiv = exxdiv
-        
+
         set_U(self, U_idx, U_val)
-        
-        if isinstance(C_ao_lo, str): 
+
+        if isinstance(C_ao_lo, str):
             if C_ao_lo == 'minao':
                 minao_ref = kwargs.get("minao_ref", "MINAO")
                 pmol = kwargs.get("pmol", None)
@@ -186,12 +187,12 @@ if __name__ == '__main__':
     cell.verbose = 7
     cell.build()
     kmesh = [2, 1, 1]
-    kpts = cell.make_kpts(kmesh, wrap_around=True) 
+    kpts = cell.make_kpts(kmesh, wrap_around=True)
     #U_idx = ["2p", "2s"]
     #U_val = [5.0, 2.0]
     U_idx = ["1 C 2p"]
     U_val = [5.0]
-    
+
     mf = KUKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, minao_ref='gth-szv')
     mf.conv_tol = 1e-10
     print (mf.U_idx)

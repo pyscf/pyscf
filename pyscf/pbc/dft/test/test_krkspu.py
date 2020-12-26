@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,10 +36,10 @@ class KnownValues(unittest.TestCase):
         cell.verbose = 7
         cell.build()
         kmesh = [2, 1, 1]
-        kpts = cell.make_kpts(kmesh, wrap_around=True) 
+        kpts = cell.make_kpts(kmesh, wrap_around=True)
         U_idx = ["1 C 2p"]
         U_val = [5.0]
-        
+
         mf = pdft.KRKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao',
                 minao_ref='gth-szv')
         mf.conv_tol = 1e-10
