@@ -2346,22 +2346,21 @@ def analyze_eigenvector_ea(adc):
         logger.info(adc,'%s | root %d | norm(1p)  = %6.4f | norm(1h2p) = %6.4f ',adc.method ,I, U1dotU1, U2dotU2)
 
         if singles_val:
-            logger.info(adc, "\n1p(b) block: ") 
-            logger.info(adc, "    a      U(a)")
+            logger.info(adc, "\n1p block: ") 
+            logger.info(adc, "     a     U(a)")
             logger.info(adc, "------------------")
             for idx, print_singles in enumerate(singles_idx):
                 logger.info(adc, '  %4d   %7.4f', print_singles, singles_val[idx])
 
         if doubles_val:
             logger.info(adc, "\n1h2p block: ") 
-            logger.info(adc, "    i     a     b      U(i,a,b)")
+            logger.info(adc, "     i     a     b     U(i,a,b)")
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_idx):
                 logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_val[idx])
 
         logger.info(adc, "\n*************************************************************\n")
  
-    return U
 
 
 def analyze_eigenvector_ip(adc):
@@ -2371,14 +2370,13 @@ def analyze_eigenvector_ip(adc):
     
     n_singles = nocc
     n_doubles = nvir * nocc * nocc
-
-    U = np.array(adc.U)    
     evec_print_tol = adc.evec_print_tol
     
-#    print ("*************************************************************")
-#    print (" Eigenvectors analysis summary")
-#    print ("*************************************************************")
-     
+    logger.info(adc, "Number of occupied orbitals = %d", nocc)
+    logger.info(adc, "Number of virtual orbitals =  %d", nvir)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
+    U = np.array(adc.U)  
+  
     for I in range(U.shape[0]):
         U1 = U[I, :n_singles]
         U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
@@ -2422,19 +2420,24 @@ def analyze_eigenvector_ip(adc):
                 
             iter_num += 1 
 
-#        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | Occupied orbitals = %2d | Virtual orbitals = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc, nvir)
-        print("Obitals # contributing to eigenvectors components with abs value > ", evec_print_tol)
-#        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print( "Singles block: ") 
-        for idx,print_singles in enumerate(singles_idx):
-            logger.info(adc,'occ(i) = %2d | amplitude = %6.4f',print_singles, singles_val[idx])
-#        print("----------------------------------------------------------------------------------------------------------------------------------------------")  
-        print("Doubles block: ")
-        for idx,print_doubles in enumerate(doubles_idx):
-            logger.info(adc,'vir(a) = %2d | occ(i) = %2d | occ(j) = %2d | amplitude = %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_val[idx])
-#        print("----------------------------------------------------------------------------------------------------------------------------------------------")  
- 
+        logger.info(adc,'%s | root %d | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',adc.method ,I, U1dotU1, U2dotU2)
+
+        if singles_val:
+            logger.info(adc, "\n1h block: ") 
+            logger.info(adc, "     i     U(i)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_val[idx])
+
+        if doubles_val:
+            logger.info(adc, "\n2h1p block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_val[idx])
+
+        logger.info(adc, "\n*************************************************************\n")
+
 
 def analyze_spec_factor(adc):
 
