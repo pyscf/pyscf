@@ -58,7 +58,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 #    beta = spec_analyze(adc, X_b, spin ="beta")
 #
 #    print('\n')
-#    F = adc.eigenvector_analyze(U, nroots)
+#    F = adc.analyze_eigenvector(U, nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
@@ -750,7 +750,7 @@ def analyze(myadc):
     logger.info(myadc, "                Eigenvector analysis summary")
     logger.info(myadc, "*************************************************************")
 
-    myadc.eigenvector_analyze()
+    myadc.analyze_eigenvector()
  
     if myadc.compute_properties == True:
 
@@ -847,7 +847,7 @@ class UADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_properties = True
-        self.U_thresh = 0.05
+        self.evec_print_tol = 0.05
         self.E = None
         self.U = None
         self.P = None
@@ -3959,17 +3959,19 @@ def spec_analyze(adc, X, spin):
         logger.info(adc, 'Partial spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 
-def eigenvector_analyze_ea(adc):
-    
-    U = np.array(adc.U)
+def analyze_eigenvector_ea(adc):
 
-    U_thresh = adc.U_thresh
-     
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
     nvir_a = adc.nvir_a
     nvir_b = adc.nvir_b
+    evec_print_tol = adc.evec_print_tol
 
+    logger.info(adc, "Number of alpha occupied orbitals = %d", nocc_a)
+    logger.info(adc, "Number of beta occupied orbitals = %d", nocc_b)
+    logger.info(adc, "Number of alpha virtual orbitals =  %d", nvir_a)
+    logger.info(adc, "Number of beta virtual orbitals =  %d", nvir_b)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
     ab_a = np.tril_indices(nvir_a, k=-1)
     ab_b = np.tril_indices(nvir_b, k=-1)
 
@@ -3992,6 +3994,8 @@ def eigenvector_analyze_ea(adc):
     f_aba = s_aba + n_doubles_aba
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
+
+    U = np.array(adc.U)
 
     for I in range(U.shape[0]):
         U1 = U[I, :f_b]
@@ -4024,12 +4028,12 @@ def eigenvector_analyze_ea(adc):
         U_sorted_aaa = U_aaa[ind_idx_aaa].copy()
         U_sorted_bbb = U_bbb[ind_idx_bbb].copy()
 
-        U_sorted = U_sorted[U_sq > U_thresh**2]
-        ind_idx = ind_idx[U_sq > U_thresh**2]
-        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > U_thresh**2]
-        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > U_thresh**2]
-        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > U_thresh**2]
-        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > U_thresh**2]
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
+        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > evec_print_tol**2]
+        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > evec_print_tol**2]
+        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > evec_print_tol**2]
+        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > evec_print_tol**2]
         
         temp_doubles_aaa_idx = [0,0,0]  
         temp_doubles_aba_idx = [0,0,0]  
@@ -4107,48 +4111,68 @@ def eigenvector_analyze_ea(adc):
             temp_doubles_bbb_idx[2] = int(a_rem + 1 + nocc_b)
             doubles_bbb_idx.append(temp_doubles_bbb_idx)
             temp_doubles_bbb_idx = [0,0,0]
+        
+        doubles_aaa_val = list(U_sorted_aaa)
+        doubles_bbb_val = list(U_sorted_bbb)
+        
+        logger.info(adc,'%s | root %d | norm(1p)  = %6.4f | norm(1h2p) = %6.4f ',adc.method ,I, U1dotU1, U2dotU2)
 
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | occ_alpha = %2d | occ_beta = %2d | vir_alpha = %2d | vir_beta = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc_a, nocc_b, nvir_a, nvir_b)
-        print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print( "Singles block: ") 
-        for idx,print_singles_a in enumerate(singles_a_idx):
-            logger.info(adc, 'vir_alpha(a) = %2d | amplitude = %7.4f', print_singles_a, singles_a_val[idx])
-        for idx,print_singles_b in enumerate(singles_b_idx):
-            logger.info(adc, 'vir_beta(a) = %3d | amplitude = %7.4f', print_singles_b, singles_b_val[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print("Doubles block: ")
-        if doubles_aaa_idx != []:
-            print("---------------- (alpha|alpha|alpha) ----------------")
-        for idx,print_aaa in enumerate(doubles_aaa_idx):
-            logger.info(adc, 'occ_alpha(i) = %2d | vir_alpha(a) = %2d | vir_alpha(b) = %2d | amplitude = %7.4f', print_aaa[0], print_aaa[1], print_aaa[2], U_sorted_aaa[idx])
-        if doubles_bab_idx != []:
-            print("---------------- (beta|alpha|beta) ----------------")
-        for idx,print_bab in enumerate(doubles_bab_idx):
-            logger.info(adc, 'occ_beta(i) = %3d | vir_alpha(a) = %2d | vir_beta(b) = %3d | amplitude = %7.4f', print_bab[0], print_bab[1], print_bab[2], doubles_bab_val[idx])
-        if doubles_aba_idx != []:
-            print("---------------- (alpha|beta|alpha) ----------------")
-        for idx,print_aba in enumerate(doubles_aba_idx):
-            logger.info(adc, 'occ_alpha(i) = %2d | vir_beta(a) = %3d | vir_alpha(b) = %2d | amplitude = %7.4f', print_aba[0], print_aba[1], print_aba[2], doubles_aba_val[idx])
-        if doubles_bbb_idx != []:
-            print("---------------- (beta|beta|beta) ----------------")
-        for idx,print_bbb in enumerate(doubles_bbb_idx):
-            logger.info(adc, 'occ_beta(i) = %3d | vir_beta(a) = %3d | vir_beta(b) = %3d | amplitude = %7.4f', print_bbb[0], print_bbb[1], print_bbb[2], U_sorted_bbb[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-    
-    return U
+        if singles_a_val:
+            logger.info(adc, "\n1p(alpha) block: ") 
+            logger.info(adc, "     a     U(a)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_a_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_a_val[idx])
 
-def eigenvector_analyze_ip(adc):
-    
-    U = np.array(adc.U)
+        if singles_b_val:
+            logger.info(adc, "\n1p(beta) block: ") 
+            logger.info(adc, "     a     U(a)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_b_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_b_val[idx])
 
-    U_thresh = adc.U_thresh
-     
+        if doubles_aaa_val:
+            logger.info(adc, "\n1h2p(alpha|alpha|alpha) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aaa_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_aaa_val[idx])
+
+        if doubles_bab_val:
+            logger.info(adc, "\n1h2p(beta|alpha|beta) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bab_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_bab_val[idx])
+
+        if doubles_aba_val:
+            logger.info(adc, "\n1h2p(alpha|beta|alpha) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aba_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_aba_val[idx])
+
+        if doubles_bbb_val:
+            logger.info(adc, "\n1h2p(beta|beta|beta) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bbb_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_bbb_val[idx])
+        logger.info(adc, "\n*************************************************************\n")
+
+def analyze_eigenvector_ip(adc):
+
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
     nvir_a = adc.nvir_a
     nvir_b = adc.nvir_b
+    evec_print_tol = adc.evec_print_tol
+
+    logger.info(adc, "Number of alpha occupied orbitals = %d", nocc_a)
+    logger.info(adc, "Number of beta occupied orbitals = %d", nocc_b)
+    logger.info(adc, "Number of alpha virtual orbitals =  %d", nvir_a)
+    logger.info(adc, "Number of beta virtual orbitals =  %d", nvir_b)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
 
     ij_a = np.tril_indices(nocc_a, k=-1)
     ij_b = np.tril_indices(nocc_b, k=-1)
@@ -4172,6 +4196,8 @@ def eigenvector_analyze_ip(adc):
     f_aba = s_aba + n_doubles_aba
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
+
+    U = np.array(adc.U)
 
     for I in range(U.shape[0]):
         U1 = U[I, :f_b]
@@ -4204,12 +4230,12 @@ def eigenvector_analyze_ip(adc):
         U_sorted_aaa = U_aaa[ind_idx_aaa].copy()
         U_sorted_bbb = U_bbb[ind_idx_bbb].copy()
 
-        U_sorted = U_sorted[U_sq > U_thresh**2]
-        ind_idx = ind_idx[U_sq > U_thresh**2]
-        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > U_thresh**2]
-        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > U_thresh**2]
-        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > U_thresh**2]
-        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > U_thresh**2]
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
+        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > evec_print_tol**2]
+        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > evec_print_tol**2]
+        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > evec_print_tol**2]
+        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > evec_print_tol**2]
         
         temp_doubles_aaa_idx = [0,0,0]  
         temp_doubles_aba_idx = [0,0,0]  
@@ -4253,9 +4279,9 @@ def eigenvector_analyze_ip(adc):
           
             if orb in range(s_aba,f_aba):
                 orb_aba = orb - s_aba     
-                nvir_rem = orb_aba % (nocc_b*nocc_a)
-                nvir_idx = (orb_aba - vir_rem)//(nocc_b*nocc_a)
-                temp_doubles_aba_idx[0] = int(nvir_idx + 1 + nocc_a)
+                vir_rem = orb_aba % (nocc_b*nocc_a)
+                vir_idx = (orb_aba - vir_rem)//(nocc_b*nocc_a)
+                temp_doubles_aba_idx[0] = int(vir_idx + 1 + nocc_a)
                 j_rem = vir_rem % nocc_a
                 i_idx = (vir_rem - j_rem)//nocc_a
                 temp_doubles_aba_idx[1] = int(i_idx + 1)
@@ -4280,17 +4306,17 @@ def eigenvector_analyze_ip(adc):
         for orb_bbb in ind_idx_bbb:                
             vir_rem = orb_bbb % (nocc_b*nocc_b)
             vir_idx = (orb_bbb - vir_rem)//(nocc_b*nocc_b)
-            temp_doubles_bbb_idx[0] = int(nvir_idx + 1 + nocc_b)
+            temp_doubles_bbb_idx[0] = int(vir_idx + 1 + nocc_b)
             j_rem = vir_rem % nocc_b
             i_idx = (vir_rem - j_rem)//nocc_b
             temp_doubles_bbb_idx[1] = int(i_idx + 1)
             temp_doubles_bbb_idx[2] = int(j_rem + 1)
             doubles_bbb_idx.append(temp_doubles_bbb_idx)
             temp_doubles_bbb_idx = [0,0,0]
-
+        """
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | occ_alpha = %2d | occ_beta = %2d | vir_alpha = %2d | vir_beta = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc_a, nocc_b, nvir_a, nvir_b)
-        print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
+        print("Obitals contributing to eigenvectors components with abs value > ", evec_print_tol)  
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         print( "Singles block: ") 
         for idx,print_singles_a in enumerate(singles_a_idx):
@@ -4316,8 +4342,53 @@ def eigenvector_analyze_ip(adc):
         for idx,print_bbb in enumerate(doubles_bbb_idx):
             logger.info(adc, 'vir_beta(i) = %3d | occ_beta(a) = %3d | occ_beta(b) = %3d | amplitude = %7.4f', print_bbb[0], print_bbb[1], print_bbb[2], U_sorted_bbb[idx])
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-    
-    return U
+        """      
+        doubles_aaa_val = list(U_sorted_aaa)
+        doubles_bbb_val = list(U_sorted_bbb)
+        
+        logger.info(adc,'%s | root %d | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',adc.method ,I, U1dotU1, U2dotU2)
+
+        if singles_a_val:
+            logger.info(adc, "\n1h(alpha) block: ") 
+            logger.info(adc, "     i     U(i)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_a_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_a_val[idx])
+
+        if singles_b_val:
+            logger.info(adc, "\n1h(beta) block: ") 
+            logger.info(adc, "     i     U(i)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_b_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_b_val[idx])
+
+        if doubles_aaa_val:
+            logger.info(adc, "\n2h1p(alpha|alpha|alpha) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aaa_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_aaa_val[idx])
+
+        if doubles_bab_val:
+            logger.info(adc, "\n2h1p(beta|alpha|beta) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bab_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bab_val[idx])
+
+        if doubles_aba_val:
+            logger.info(adc, "\n2h1p(alpha|beta|alpha) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aba_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_aba_val[idx])
+
+        if doubles_bbb_val:
+            logger.info(adc, "\n2h1p(beta|beta|beta) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bbb_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bbb_val[idx])
 
 
 def get_properties(adc, nroots=1):
@@ -4408,7 +4479,7 @@ class UADCEA(UADC):
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
 
-        self.U_thresh = adc.U_thresh
+        self.evec_print_tol = adc.evec_print_tol
 
         self.compute_properties = adc.compute_properties
         self.E = adc.E
@@ -4432,7 +4503,7 @@ class UADCEA(UADC):
     analyze = analyze
     compute_dyson_orb = compute_dyson_orb
     
-    eigenvector_analyze = eigenvector_analyze_ea
+    analyze_eigenvector = analyze_eigenvector_ea
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -4524,7 +4595,7 @@ class UADCIP(UADC):
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
 
-        self.U_thresh = adc.U_thresh
+        self.evec_print_tol = adc.evec_print_tol
 
         self.compute_properties = adc.compute_properties
         self.E = adc.E
@@ -4547,7 +4618,7 @@ class UADCIP(UADC):
     get_properties = get_properties
 
     spec_analyze = spec_analyze
-    eigenvector_analyze = eigenvector_analyze_ip
+    analyze_eigenvector = analyze_eigenvector_ip
     analyze = analyze
     compute_dyson_orb = compute_dyson_orb
 
