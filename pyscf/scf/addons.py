@@ -418,7 +418,7 @@ def canonical_orth_(S, thr=1e-7):
     X = numpy.dot(numpy.diag(normlz), X)
     return X
 
-def partial_cholesky_orth_(S, cholthr=1e-9, canthr=1e-7):
+def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
     '''Partial Cholesky orthogonalization for curing overcompleteness.
 
     References:
@@ -492,7 +492,7 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
         def eigh(h, s):
-            x = partial_cholesky_orth_(s, threshold, cholesky_threshold)
+            x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
