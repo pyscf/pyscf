@@ -150,7 +150,7 @@ if(NOT DISABLE_DFT)
 #    ENABLE_LIBXC AND BUILD_LIBXC)
 if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
-    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
+    #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
     URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
