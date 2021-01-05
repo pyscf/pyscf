@@ -827,7 +827,7 @@ class UADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-
+        self.spec_thresh = 1e-8
         self.compute_mpn_energy = True
         self.U_thresh = 0.05
 
@@ -3896,7 +3896,8 @@ def spec_analyze(adc, X, spin):
 
     X_2 = (X.copy()**2)
 
-    thresh = 0.000000001
+  #  thresh = 0.000000001
+    thresh = adc.spec_thresh
 
 
     for i in range(X_2.shape[1]):
@@ -4356,6 +4357,7 @@ class UADCEA(UADC):
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.spec_thresh = adc.spec_thresh
 
         self.compute_mpn_energy = True
         self.U_thresh = adc.U_thresh
@@ -4468,6 +4470,7 @@ class UADCIP(UADC):
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.spec_thresh = adc.spec_thresh
 
         self.compute_mpn_energy = True
         self.U_thresh = adc.U_thresh
