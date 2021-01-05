@@ -763,12 +763,16 @@ class DMRGCI(lib.StreamObject):
 
     def restart_scheduler_(self):
         def callback(envs):
-            if (envs['norm_gorb'] < self.dmrg_switch_tol or
-                ('norm_ddm' in envs and envs['norm_ddm'] < self.dmrg_switch_tol*10)):
+            info_str = ""
+            self._restart = False
+            if (envs['norm_gorb'] < self.dmrg_switch_tol):
                 self._restart = True
-                logger.info(self, "Restart DMRG from previous iteration")
-            else :
-                self._restart = False
+                info_str += "Orb grad < dmrg_switch_tol "
+            if 'norm_ddm' in envs and envs['norm_ddm'] < self.dmrg_switch_tol*10:
+                self._restart = True
+                info_str += "Norm_ddm < dmrg_switch_tol*10 "
+            if self._restart:
+                logger.debug(self, "%s, set DMRG restart", info_str)
         return callback
 
 # Block code also allows non-spin-adapted calculation. S^2 is not available in
