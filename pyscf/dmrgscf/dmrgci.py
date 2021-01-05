@@ -126,7 +126,7 @@ class DMRGCI(lib.StreamObject):
         else:
             self.runtimeDir = '.'
         self.maxIter = 20
-        self.approx_maxIter = 4
+        self.approx_maxIter = 6
         self.twodot_to_onedot = 15
         self.dmrg_switch_tol = 1e-3
         self.nroots = 1
