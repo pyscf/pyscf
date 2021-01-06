@@ -755,7 +755,7 @@ def analyze(myadc):
     if myadc.compute_properties == True:
 
         logger.info(myadc, "\n*************************************************************")
-        logger.info(myadc, "                Spectroscopic factors analysis summary")
+        logger.info(myadc, "            Spectroscopic factors analysis summary")
         logger.info(myadc, "*************************************************************")
 
         myadc.spec_analyze()
@@ -3923,6 +3923,8 @@ def spec_analyze(adc):
     X_a = adc.X_a
     X_b = adc.X_b
 
+    logger.info(adc, "Print spectroscopic factors > %E\n", adc.spec_thresh)
+
     X_tot = (X_a, X_b)
 
     for iter_idx, X in enumerate(X_tot):
@@ -3964,14 +3966,16 @@ def spec_analyze(adc):
             if np.sum(spec_Contribution) == 0.0:
                 continue
 
-            print('\n')
-            logger.info(adc, 'Root %d %s', i, spin)
-            print('\n')
+            logger.info(adc, '\n%s |Root %d %s\n', adc.method, i, spin)
+            logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
+            logger.info(adc, "-----------------------------------------------------------")
 
             for c in range(index_mo.shape[0]):
-                logger.info(adc, 'HF %s MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', spin, index_mo[c], spec_Contribution[c], sym[c])
+                logger.info(adc, '     %3.d          %10.8f                %s', index_mo[c], spec_Contribution[c], sym[c])
+                #logger.info(adc, 'HF %s MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', spin, index_mo[c], spec_Contribution[c], sym[c])
 
-            logger.info(adc, 'Partial spec. Factor sum = %10.10f', np.sum(spec_Contribution))
+            logger.info(adc, '\nPartial spec. Factor sum = %10.8f', np.sum(spec_Contribution))
+            logger.info(adc, "\n*************************************************************\n")
 
 
 def analyze_eigenvector_ea(adc):
