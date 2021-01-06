@@ -526,7 +526,7 @@ def analyze(myadc):
     if myadc.compute_properties == True:
 
         logger.info(myadc, "\n*************************************************************")
-        logger.info(myadc, "                Spectroscopic factors analysis summary")
+        logger.info(myadc, "            Spectroscopic factors analysis summary")
         logger.info(myadc, "*************************************************************")
 
         myadc.analyze_spec_factor()
@@ -2446,11 +2446,13 @@ def analyze_spec_factor(adc):
     #thresh = 0.000000001
     thresh = adc.spec_thresh
 
+
+    logger.info(adc, "Print spectroscopic factors > %E\n", adc.spec_thresh)
+
     for i in range(X_2.shape[1]):
 
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        logger.info(adc, 'Root %d', i)
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
+        #logger.info(adc, 'Root %d', i)
+        logger.info(adc,'%s | root %d \n',adc.method ,i)
 
         sort = np.argsort(-X_2[:,i])
         X_2_row = X_2[:,i]
@@ -2467,12 +2469,15 @@ def analyze_spec_factor(adc):
 
         spec_Contribution = X_2_row[X_2_row > thresh]
         index_mo = sort[X_2_row > thresh]+1
+        logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
+        logger.info(adc, "-----------------------------------------------------------")
 
         for c in range(index_mo.shape[0]):
-            logger.info(adc, 'HF MO   %3.d | Spec. Contribution   %10.8f | Orbital symmetry   %s', index_mo[c], spec_Contribution[c], sym[c])
+            logger.info(adc, '     %3.d          %10.8f                %s', index_mo[c], spec_Contribution[c], sym[c])
 
-        logger.info(adc, 'Partial spec. Factor sum = %10.8f', np.sum(spec_Contribution))
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
+        logger.info(adc, '\nPartial spec. Factor sum = %10.8f', np.sum(spec_Contribution))
+
+        logger.info(adc, "\n*************************************************************\n")
 
 
 

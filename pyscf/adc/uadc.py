@@ -54,8 +54,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if adc.compute_properties == True:
         adc.P,adc.X_a,adc.X_b = adc.get_properties(nroots)
 
-#    alpha = spec_analyze(adc, X_a, spin ="alpha")
-#    beta = spec_analyze(adc, X_b, spin ="beta")
+#        alpha = spec_analyze(adc, adc.X_a, spin ="alpha")
+#        beta = spec_analyze(adc, adc.X_b, spin ="beta")
 #
 #    print('\n')
 #    F = adc.analyze_eigenvector(U, nroots)
@@ -3918,49 +3918,60 @@ def dyson_orb(adc, X_a, X_b, nroots=1):
 
     return dyson_mo_a,dyson_mo_b
 
-def spec_analyze(adc, X, spin):
+def spec_analyze(adc):
 
-    X_2 = (X.copy()**2)
+    X_a = adc.X_a
+    X_b = adc.X_b
 
-  #  thresh = 0.000000001
-    thresh = adc.spec_thresh
+    X_tot = (X_a, X_b)
 
-
-    for i in range(X_2.shape[1]):
-
-
-        sort = np.argsort(-X_2[:,i])
-        X_2_row = X_2[:,i]
-
-        X_2_row = X_2_row[sort]
-
-        if adc.mol.symmetry == False:
-            sym = np.repeat(['A'], X_2_row.shape[0])
+    for iter_idx, X in enumerate(X_tot):
+        if iter_idx == 0:
+            spin = "alpha"
         else:
-            if spin == "alpha":
-                sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[0].orbsym]
-                sym = np.array(sym)
+            spin = "beta"
+
+        X_2 = (X.copy()**2)
+
+  #     thresh = 0.000000001
+        thresh = adc.spec_thresh
+
+
+        for i in range(X_2.shape[1]):
+
+
+            sort = np.argsort(-X_2[:,i])
+            X_2_row = X_2[:,i]
+
+            X_2_row = X_2_row[sort]
+
+            if adc.mol.symmetry == False:
+                sym = np.repeat(['A'], X_2_row.shape[0])
             else:
-                sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[1].orbsym]
-                sym = np.array(sym)
+                if spin == "alpha":
+                    sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[0].orbsym]
+                    sym = np.array(sym)
+                else:
+                    sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff[1].orbsym]
+                    sym = np.array(sym)
 
-            sym = sym[sort]
+                sym = sym[sort]
 
 
-        spec_Contribution = X_2_row[X_2_row > thresh]
-        index_mo = sort[X_2_row > thresh]+1
+            spec_Contribution = X_2_row[X_2_row > thresh]
+            index_mo = sort[X_2_row > thresh]+1
 
-        if np.sum(spec_Contribution) == 0.0:
-            continue
+            if np.sum(spec_Contribution) == 0.0:
+                continue
 
-        print('\n')
-        logger.info(adc, 'Root %d %s', i, spin)
-        print('\n')
+            print('\n')
+            logger.info(adc, 'Root %d %s', i, spin)
+            print('\n')
 
-        for c in range(index_mo.shape[0]):
-            logger.info(adc, 'HF %s MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', spin, index_mo[c], spec_Contribution[c], sym[c])
+            for c in range(index_mo.shape[0]):
+                logger.info(adc, 'HF %s MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', spin, index_mo[c], spec_Contribution[c], sym[c])
 
-        logger.info(adc, 'Partial spec. Factor sum = %10.10f', np.sum(spec_Contribution))
+            logger.info(adc, 'Partial spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 
 def analyze_eigenvector_ea(adc):
