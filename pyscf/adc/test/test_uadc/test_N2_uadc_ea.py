@@ -89,7 +89,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.31694173142858517 , 6)
 
         myadc.method_type = "ea"
-        e,v,p,xa,xb = myadc.ea_adc(nroots=3)
+        e,v,p,xa,xb,adc_es = myadc.ea_adc(nroots=3)
+        myadc.analyze()
 
         self.assertAlmostEqual(e[0], 0.09836545519294707, 6)
         self.assertAlmostEqual(e[1], 0.09836545535648182, 6)

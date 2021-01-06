@@ -54,12 +54,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if adc.compute_properties == True:
         adc.P,adc.X_a,adc.X_b = adc.get_properties(nroots)
 
-#        alpha = spec_analyze(adc, adc.X_a, spin ="alpha")
-#        beta = spec_analyze(adc, adc.X_b, spin ="beta")
-#
-#    print('\n')
-#    F = adc.analyze_eigenvector(U, nroots)
-
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
     logger.info(adc, "\n*************************************************************")
@@ -3022,10 +3016,12 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp  = lib.einsum('lxd,ilyd->ixy',temp_1_3,t2_1_ab,optimize=True)
                temp  += lib.einsum('lxd,ilyd->ixy',temp_2_3,t2_1_a,optimize=True)
                s[s_aba:f_aba] += temp.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(n) calculation", *cput0)
 
                del t2_1_a, t2_1_ab, t2_1_b
+
+        cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
         return s
+
         del temp_1_1
         del temp_1_2
         del temp_1_3
@@ -3539,9 +3535,9 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp  = -lib.einsum('i,iblj->jbl',r_b,eris_OVoo,optimize=True)
                temp_1 = -lib.einsum('jbl,lkab->ajk',temp,t2_1_ab,optimize=True)
                s[s_aba:f_aba] -= temp_1.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(n) calculation", *cput0)
                del t2_1_a, t2_1_ab, t2_1_b
 
+        cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
         s *= -1.0
 
         return s
