@@ -85,6 +85,7 @@ class KnownValues(unittest.TestCase):
 
         myadcip = adc.radc.RADCIP(myadc) 
         e,v,p,x = myadcip.kernel(nroots=4)
+        myadcip.analyze()
 
         self.assertAlmostEqual(e[0], 0.4481211042230935, 6)
         self.assertAlmostEqual(e[1], 0.5316292617891758, 6)

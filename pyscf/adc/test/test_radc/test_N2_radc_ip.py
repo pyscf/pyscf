@@ -46,7 +46,8 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p,x = myadc.ip_adc(nroots=3)
+        e,v,p,x,es = myadc.ip_adc(nroots=3)
+        es.analyze()
 
         self.assertAlmostEqual(e[0], 0.5434389910483670, 6)
         self.assertAlmostEqual(e[1], 0.6240296243595950, 6)

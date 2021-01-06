@@ -24,14 +24,16 @@ myadc.kernel_gs()
 #IP-RADC(2) for 3 roots
 myadc.verbose = 4
 myadcip = adc.radc.RADCIP(myadc)
-eip,vip,pip = myadcip.kernel(nroots=3)
+eip,vip,pip,xip = myadcip.kernel(nroots=3)
 
 #EA-RADC(3) for 3 roots
 myadc.method = "adc(3)"
 myadc.kernel_gs()
 myadcea = adc.radc.RADCEA(myadc)
-eea,vea,pea = myadcea.kernel(nroots=3)
+eea,vea,pea,xea = myadcea.kernel(nroots=3)
 
 #IP/EA-RADC(3) for 1 root
-eip,vip,pip = myadc.ip_adc()
-eea,vea,pea = myadc.ea_adc()
+eip,vip,pip,xip,adc_es = myadc.ip_adc()
+adc_es.analyze()
+eea,vea,pea,xea,adc_es = myadc.ea_adc()
+adc_es.analyze()

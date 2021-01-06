@@ -49,55 +49,38 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
-    conv, E, U = lib.linalg_helper.davidson1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
+    conv, adc.E, adc.U = lib.linalg_helper.davidson1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
-    U = np.array(U)
+    if adc.compute_properties == True:
+        adc.P,adc.X_a,adc.X_b = adc.get_properties(nroots)
 
-    if adc.compute_spec == True:
-        T = adc.get_trans_moments()
-        spec_factors, X_a, X_b = adc.get_spec_factors(T, U, nroots)
-    else:
-        T = None
-        spec_factors = None
-        X_a = None
-        X_b = None
-
-
-    alpha = spec_analyze(adc, X_a, spin ="alpha")
-    beta = spec_analyze(adc, X_b, spin ="beta")
+#    alpha = spec_analyze(adc, X_a, spin ="alpha")
+#    beta = spec_analyze(adc, X_b, spin ="beta")
+#
 #    print('\n')
-#    F = adc.eigenvector_analyze(U, nroots)
+#    F = adc.analyze_eigenvector(U, nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
+
+    logger.info(adc, "\n*************************************************************")
+    logger.info(adc, "                  ADC calculation summary")
+    logger.info(adc, "*************************************************************")
+
     if nfalse >= 1:
-        print ("*************************************************************")
-        print (" WARNING : ", "Davidson iterations for ",nfalse, "root(s) not converged")
-        print ("*************************************************************")
+        logger.info(adc, "*************************************************************")
+        logger.info(adc, " WARNING : ", "Davidson iterations for ", nfalse, "root(s) not converged")
+        logger.info(adc, "*************************************************************")
 
-    if adc.compute_spec == True:
-
-        if adc.verbose >= logger.INFO:
-            if nroots == 1:
-                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-                             adc.method, 0, E, E*27.2114, spec_factors, conv)
-            else :
-                for n, en, pn, convn in zip(range(nroots), E, spec_factors, conv):
-                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f    Spec factors = %.8f    conv = %s',
-                              adc.method, n, en, en*27.2114, pn, convn)
-    else:
-        if adc.verbose >= logger.INFO:
-            if nroots == 1:
-                logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
-                             adc.method, 0, E, E*27.2114, conv)
-            else :
-                for n, en, convn in zip(range(nroots), E, conv):
-                    logger.info(adc, '%s root %d    Energy (Eh) = %.10f    Energy (eV) = %.8f   conv = %s',
-                              adc.method, n, en, en*27.2114, convn)
+    for n in range(nroots):
+        print_string = ('%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
+        if adc.compute_properties == True:
+            print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
+        print_string += ("|  conv = %s" % conv[n])
+        logger.info(adc, print_string)
 
     log.timer('ADC', *cput0)
 
-    #return E, U, spec_factors
-    return E, U, spec_factors, X_a, X_b
+    return adc.E, adc.U, adc.P, adc.X_a, adc.X_b
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -761,6 +744,42 @@ def density_matrix_so(myadc, T=None):
     return dm
 
 
+def analyze(myadc):
+
+    logger.info(myadc, "\n*************************************************************")
+    logger.info(myadc, "                Eigenvector analysis summary")
+    logger.info(myadc, "*************************************************************")
+
+    myadc.analyze_eigenvector()
+ 
+    if myadc.compute_properties == True:
+
+        logger.info(myadc, "\n*************************************************************")
+        logger.info(myadc, "                Spectroscopic factors analysis summary")
+        logger.info(myadc, "*************************************************************")
+
+        myadc.spec_analyze()
+
+
+def compute_dyson_orb(myadc):
+     
+    X_a = myadc.X_a
+    X_b = myadc.X_b
+
+    if X_a is None:
+        U = np.array(myadc.U)
+        nroots = U.shape[0]
+        P,X_a,X_b = myadc.get_properties(nroots)
+
+    nroots = X_a.shape[1]
+    dyson_mo_a = np.dot(myadc.mo_coeff[0],X_a).reshape(-1,nroots)
+    dyson_mo_b = np.dot(myadc.mo_coeff[1],X_b).reshape(-1,nroots)
+
+    dyson_mo = (dyson_mo_a,dyson_mo_b)
+
+    return dyson_mo
+
+
 class UADC(lib.StreamObject):
     '''Ground state calculations
 
@@ -829,9 +848,14 @@ class UADC(lib.StreamObject):
         self.with_df = None
         self.spec_thresh = 1e-8
         self.compute_mpn_energy = True
-        self.U_thresh = 0.05
-
         self.compute_spec = True
+        self.compute_properties = True
+        self.evec_print_tol = 0.05
+        self.E = None
+        self.U = None
+        self.P = None
+        self.X_a = None
+        self.X_b = None
 
         
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
@@ -943,14 +967,15 @@ class UADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, X_a, X_b = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X_a, X_b, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac, X_a, X_b = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X_a, X_b, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
             raise NotImplementedError(self.method_type)
 
+        self._adc_es = adc_es
         return e_exc, v_exc, spec_fac, X_a, X_b
 
     def _finalize(self):
@@ -960,10 +985,14 @@ class UADC(lib.StreamObject):
         return self
     
     def ea_adc(self, nroots=1, guess=None, eris=None):
-        return UADCEA(self).kernel(nroots, guess, eris)
-    
+        adc_es = UADCEA(self)
+        e_exc, v_exc, spec_fac, xa, xb = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, xa, xb, adc_es
+
     def ip_adc(self, nroots=1, guess=None, eris=None):
-        return UADCIP(self).kernel(nroots, guess, eris)
+        adc_es = UADCIP(self)
+        e_exc, v_exc, spec_fac, xa, xb = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, xa, xb, adc_es
 
     def density_fit(self, auxbasis=None, with_df=None):
         if with_df is None:
@@ -979,6 +1008,11 @@ class UADC(lib.StreamObject):
             self.with_df = with_df
         return self
 
+    def analyze(self):
+        self._adc_es.analyze()
+
+    def compute_dyson_orb(self):   
+        self._adc_es.compute_dyson_orb() 
 
 def get_imds_ea(adc, eris=None):
 
@@ -1239,66 +1273,74 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.5*lib.einsum('d,mlda,mldb->ab', e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
         M_ab_b -= 0.5*lib.einsum('d,lmda,lmdb->ab', e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
 
-        M_ab_a -= 0.25*lib.einsum('a,lmbd,lmad->ab',e_vir_a, t2_1_a, t2_2_a, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('a,lmbd,lmad->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('a,mlbd,mlad->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
+        M_ab_t = lib.einsum('lmbd,lmad->ab', t2_1_ab,t2_2_ab, optimize=True)
+        M_ab_a -= 0.5*lib.einsum('a,ab->ab',e_vir_a, M_ab_t, optimize=True)
+        M_ab_a -= 0.5*lib.einsum('a,ba->ab',e_vir_a, M_ab_t, optimize=True)
+        M_ab_a -= 0.5*lib.einsum('b,ab->ab',e_vir_a, M_ab_t, optimize=True)
+        M_ab_a -= 0.5*lib.einsum('b,ba->ab',e_vir_a, M_ab_t, optimize=True)
+        del M_ab_t
 
-        M_ab_b -= 0.25*lib.einsum('a,lmbd,lmad->ab',e_vir_b, t2_1_b, t2_2_b, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('a,mldb,mlda->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('a,lmdb,lmda->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
+        M_ab_t = lib.einsum('mldb,mlda->ab', t2_1_ab,t2_2_ab, optimize=True)
+        M_ab_b -= 0.5*lib.einsum('a,ab->ab',e_vir_b, M_ab_t, optimize=True)
+        M_ab_b -= 0.5*lib.einsum('a,ba->ab',e_vir_b, M_ab_t, optimize=True)
+        M_ab_b -= 0.5*lib.einsum('b,ab->ab',e_vir_b, M_ab_t, optimize=True)
+        M_ab_b -= 0.5*lib.einsum('b,ba->ab',e_vir_b, M_ab_t, optimize=True)
+        del M_ab_t
 
-        M_ab_a -= 0.25*lib.einsum('a,lmad,lmbd->ab',e_vir_a, t2_1_a, t2_2_a, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('a,lmad,lmbd->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('a,mlad,mlbd->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
+        M_ab_t = lib.einsum('lmbd,lmad->ab', t2_1_a,t2_2_a, optimize=True)
+        M_ab_a -= 0.25*lib.einsum('a,ab->ab',e_vir_a, M_ab_t, optimize=True)
+        M_ab_a -= 0.25*lib.einsum('a,ba->ab',e_vir_a, M_ab_t, optimize=True)
+        M_ab_a -= 0.25*lib.einsum('b,ab->ab',e_vir_a, M_ab_t, optimize=True)
+        M_ab_a -= 0.25*lib.einsum('b,ba->ab',e_vir_a, M_ab_t, optimize=True)
+        del M_ab_t
 
-        M_ab_b -= 0.25*lib.einsum('a,lmad,lmbd->ab',e_vir_b, t2_1_b, t2_2_b, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('a,mlda,mldb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('a,lmda,lmdb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
-
-        M_ab_a -= 0.25*lib.einsum('b,lmbd,lmad->ab',e_vir_a, t2_1_a, t2_2_a, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('b,lmbd,lmad->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('b,mlbd,mlad->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
-
-        M_ab_b -= 0.25*lib.einsum('b,lmbd,lmad->ab',e_vir_b, t2_1_b, t2_2_b, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('b,mldb,mlda->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('b,lmdb,lmda->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
-
-        M_ab_a -= 0.25*lib.einsum('b,lmad,lmbd->ab',e_vir_a, t2_1_a, t2_2_a, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('b,lmad,lmbd->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_a -= 0.25*lib.einsum('b,mlad,mlbd->ab',e_vir_a, t2_1_ab, t2_2_ab, optimize=True)
-
-        M_ab_b -= 0.25*lib.einsum('b,lmad,lmbd->ab',e_vir_b, t2_1_b, t2_2_b, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('b,mlda,mldb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
-        M_ab_b -= 0.25*lib.einsum('b,lmda,lmdb->ab',e_vir_b, t2_1_ab, t2_2_ab, optimize=True)
+        M_ab_t = lib.einsum('lmbd,lmad->ab', t2_1_b,t2_2_b, optimize=True)
+        M_ab_b -= 0.25*lib.einsum('a,ab->ab',e_vir_b, M_ab_t, optimize=True)
+        M_ab_b -= 0.25*lib.einsum('a,ba->ab',e_vir_b, M_ab_t, optimize=True)
+        M_ab_b -= 0.25*lib.einsum('b,ab->ab',e_vir_b, M_ab_t, optimize=True)
+        M_ab_b -= 0.25*lib.einsum('b,ba->ab',e_vir_b, M_ab_t, optimize=True)
+        del M_ab_t
 
         del t2_2_a, t2_2_ab, t2_2_b
 
-        M_ab_a -= lib.einsum('lned,mlbd,nmae->ab',t2_1_a, t2_1_a, eris_oovv, optimize=True)
-        M_ab_a += lib.einsum('lned,mlbd,maen->ab',t2_1_a, t2_1_a, eris_ovvo, optimize=True)
-        M_ab_a += lib.einsum('nled,mlbd,nmae->ab',t2_1_ab, t2_1_ab, eris_oovv, optimize=True)
-        M_ab_a -= lib.einsum('nled,mlbd,maen->ab',t2_1_ab, t2_1_ab, eris_ovvo, optimize=True)
         M_ab_a -= lib.einsum('lnde,mlbd,neam->ab',t2_1_ab, t2_1_a, eris_OVvo, optimize=True)
         M_ab_a += lib.einsum('lned,mlbd,neam->ab',t2_1_b, t2_1_ab, eris_OVvo, optimize=True)
         M_ab_a += lib.einsum('lned,lmbd,nmae->ab',t2_1_ab, t2_1_ab, eris_OOvv, optimize=True)
 
-        M_ab_b -= lib.einsum('lned,mlbd,nmae->ab',t2_1_b, t2_1_b, eris_OOVV, optimize=True)
-        M_ab_b += lib.einsum('lned,mlbd,maen->ab',t2_1_b, t2_1_b, eris_OVVO, optimize=True)
-        M_ab_b += lib.einsum('lnde,lmdb,nmae->ab',t2_1_ab, t2_1_ab, eris_OOVV, optimize=True)
-        M_ab_b -= lib.einsum('lnde,lmdb,maen->ab',t2_1_ab, t2_1_ab, eris_OVVO, optimize=True)
+        M_ab_t = lib.einsum('lned,mlbd->nemb', t2_1_a,t2_1_a, optimize=True)
+        M_ab_a -= lib.einsum('nemb,nmae->ab',M_ab_t, eris_oovv, optimize=True)
+        M_ab_a += lib.einsum('nemb,maen->ab',M_ab_t, eris_ovvo, optimize=True)
+        M_ab_a -= lib.einsum('name,nmeb->ab',M_ab_t, eris_oovv, optimize=True)
+        M_ab_a += lib.einsum('name,nbem->ab',M_ab_t, eris_ovvo, optimize=True)
+        del M_ab_t
+
+        M_ab_t = lib.einsum('lned,mlbd->nemb', t2_1_b,t2_1_b, optimize=True)
+        M_ab_b -= lib.einsum('nemb,nmae->ab',M_ab_t, eris_OOVV, optimize=True)
+        M_ab_b += lib.einsum('nemb,maen->ab',M_ab_t, eris_OVVO, optimize=True)
+        M_ab_b -= lib.einsum('name,nmeb->ab',M_ab_t, eris_OOVV, optimize=True)
+        M_ab_b += lib.einsum('name,nbem->ab',M_ab_t, eris_OVVO, optimize=True)
+        del M_ab_t
+
+        M_ab_t = lib.einsum('nled,mlbd->nemb', t2_1_ab,t2_1_ab, optimize=True)
+        M_ab_a += lib.einsum('nemb,nmae->ab',M_ab_t, eris_oovv, optimize=True)
+        M_ab_a -= lib.einsum('nemb,maen->ab',M_ab_t, eris_ovvo, optimize=True)
+        del M_ab_t
+
+        M_ab_t = lib.einsum('lnde,lmdb->nemb', t2_1_ab,t2_1_ab, optimize=True)
+        M_ab_b += lib.einsum('nemb,nmae->ab',M_ab_t, eris_OOVV, optimize=True)
+        M_ab_b -= lib.einsum('nemb,maen->ab',M_ab_t, eris_OVVO, optimize=True)
+        del M_ab_t
+
         M_ab_b -= lib.einsum('nled,mlbd,neam->ab',t2_1_ab, t2_1_b, eris_ovVO, optimize=True)
         M_ab_b += lib.einsum('lned,lmdb,neam->ab',t2_1_a, t2_1_ab, eris_ovVO, optimize=True)
         M_ab_b += lib.einsum('nlde,mldb,nmae->ab',t2_1_ab, t2_1_ab, eris_ooVV, optimize=True)
 
-        M_ab_a -= lib.einsum('mled,lnad,nmeb->ab',t2_1_a, t2_1_a, eris_oovv, optimize=True)
-        M_ab_a += lib.einsum('mled,lnad,nbem->ab',t2_1_a, t2_1_a, eris_ovvo, optimize=True)
         M_ab_a += lib.einsum('mled,nlad,nmeb->ab',t2_1_ab, t2_1_ab, eris_oovv, optimize=True)
         M_ab_a -= lib.einsum('mled,nlad,nbem->ab',t2_1_ab, t2_1_ab, eris_ovvo, optimize=True)
         M_ab_a += lib.einsum('lmed,lnad,nmeb->ab',t2_1_ab, t2_1_ab, eris_OOvv, optimize=True)
         M_ab_a -= lib.einsum('mled,nlad,nbem->ab',t2_1_b, t2_1_ab, eris_ovVO, optimize=True)
         M_ab_a += lib.einsum('lmde,lnad,nbem->ab',t2_1_ab, t2_1_a, eris_ovVO, optimize=True)
 
-        M_ab_b -= lib.einsum('mled,lnad,nmeb->ab',t2_1_b, t2_1_b, eris_OOVV, optimize=True)
-        M_ab_b += lib.einsum('mled,lnad,nbem->ab',t2_1_b, t2_1_b, eris_OVVO, optimize=True)
         M_ab_b += lib.einsum('lmde,lnda,nmeb->ab',t2_1_ab, t2_1_ab, eris_OOVV, optimize=True)
         M_ab_b -= lib.einsum('lmde,lnda,nbem->ab',t2_1_ab, t2_1_ab, eris_OVVO, optimize=True)
         M_ab_b += lib.einsum('mlde,nlda,nmeb->ab',t2_1_ab, t2_1_ab, eris_ooVV, optimize=True)
@@ -1746,66 +1788,68 @@ def get_imds_ip(adc, eris=None):
         M_ij_b -= 0.5*lib.einsum('l,ljed,lied->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
         M_ij_b -= 0.5*lib.einsum('l,ljed,lied->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
 
-        M_ij_a -= 0.25 *  lib.einsum('i,ilde,jlde->ij',e_occ_a,t2_1_a, t2_2_a,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('i,ilde,jlde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('i,ilde,jlde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
+        M_ij_t = lib.einsum('ilde,jlde->ij', t2_1_a,t2_2_a, optimize=True)
+        M_ij_a -= 0.25 *  lib.einsum('i,ij->ij',e_occ_a, M_ij_t, optimize=True) 
+        M_ij_a -= 0.25 *  lib.einsum('i,ji->ij',e_occ_a, M_ij_t, optimize=True) 
+        M_ij_a -= 0.25 *  lib.einsum('j,ij->ij',e_occ_a, M_ij_t, optimize=True) 
+        M_ij_a -= 0.25 *  lib.einsum('j,ji->ij',e_occ_a, M_ij_t, optimize=True) 
+        del M_ij_t
 
-        M_ij_b -= 0.25 *  lib.einsum('i,ilde,jlde->ij',e_occ_b,t2_1_b, t2_2_b,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('i,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('i,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
+        M_ij_t = lib.einsum('ilde,jlde->ij', t2_1_b, t2_2_b, optimize=True)
+        M_ij_b -= 0.25 *  lib.einsum('i,ij->ij',e_occ_b, M_ij_t, optimize=True) 
+        M_ij_b -= 0.25 *  lib.einsum('i,ji->ij',e_occ_b, M_ij_t, optimize=True) 
+        M_ij_b -= 0.25 *  lib.einsum('j,ij->ij',e_occ_b, M_ij_t, optimize=True) 
+        M_ij_b -= 0.25 *  lib.einsum('j,ji->ij',e_occ_b, M_ij_t, optimize=True) 
+        del M_ij_t
 
-        M_ij_a -= 0.25 *  lib.einsum('i,jlde,ilde->ij',e_occ_a,t2_1_a, t2_2_a,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('i,jlde,ilde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('i,jlde,ilde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
+        M_ij_t = lib.einsum('ilde,jlde->ij', t2_1_ab, t2_2_ab, optimize=True)
+        M_ij_a -= 0.5 *  lib.einsum('i,ij->ij',e_occ_a, M_ij_t, optimize=True) 
+        M_ij_a -= 0.5 *  lib.einsum('i,ji->ij',e_occ_a, M_ij_t, optimize=True) 
+        M_ij_a -= 0.5 *  lib.einsum('j,ij->ij',e_occ_a, M_ij_t, optimize=True) 
+        M_ij_a -= 0.5 *  lib.einsum('j,ji->ij',e_occ_a, M_ij_t, optimize=True) 
+        del M_ij_t
 
-        M_ij_b -= 0.25 *  lib.einsum('i,jlde,ilde->ij',e_occ_b,t2_1_b, t2_2_b,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('i,ljed,lied->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('i,ljed,lied->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
-
-        M_ij_a -= 0.25 *  lib.einsum('j,jlde,ilde->ij',e_occ_a,t2_1_a, t2_2_a,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('j,jlde,ilde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('j,jlde,ilde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
-
-        M_ij_b -= 0.25 *  lib.einsum('j,jlde,ilde->ij',e_occ_b,t2_1_b, t2_2_b,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('j,ljed,lied->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('j,ljed,lied->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
-
-        M_ij_a -= 0.25 *  lib.einsum('j,ilde,jlde->ij',e_occ_a,t2_1_a, t2_2_a,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('j,ilde,jlde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_a -= 0.25 *  lib.einsum('j,ilde,jlde->ij',e_occ_a,t2_1_ab, t2_2_ab,optimize=True)
-
-        M_ij_b -= 0.25 *  lib.einsum('j,ilde,jlde->ij',e_occ_b,t2_1_b, t2_2_b,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('j,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
-        M_ij_b -= 0.25 *  lib.einsum('j,lied,ljed->ij',e_occ_b,t2_1_ab, t2_2_ab,optimize=True)
+        M_ij_t = lib.einsum('lied,ljed->ij', t2_1_ab, t2_2_ab, optimize=True)
+        M_ij_b -= 0.5 *  lib.einsum('i,ij->ij',e_occ_b, M_ij_t, optimize=True) 
+        M_ij_b -= 0.5 *  lib.einsum('i,ji->ij',e_occ_b, M_ij_t, optimize=True) 
+        M_ij_b -= 0.5 *  lib.einsum('j,ij->ij',e_occ_b, M_ij_t, optimize=True) 
+        M_ij_b -= 0.5 *  lib.einsum('j,ji->ij',e_occ_b, M_ij_t, optimize=True) 
+        del M_ij_t
 
         del t2_2_a, t2_2_ab, t2_2_b
 
-        M_ij_a -= lib.einsum('lmde,jldf,mefi->ij',t2_1_a, t2_1_a, eris_ovvo,optimize = True)
-        M_ij_a += lib.einsum('lmde,jldf,mife->ij',t2_1_a, t2_1_a, eris_oovv,optimize = True)
+        M_ij_t = lib.einsum('lmde,jldf->mejf', t2_1_a, t2_1_a, optimize=True)
+        M_ij_a -= lib.einsum('mejf,mefi->ij',M_ij_t, eris_ovvo, optimize=True) 
+        M_ij_a -= lib.einsum('mejf,mefi->ji',M_ij_t, eris_ovvo, optimize=True) 
+        M_ij_a += lib.einsum('mejf,mife->ij',M_ij_t, eris_oovv, optimize=True) 
+        M_ij_a += lib.einsum('mejf,mife->ji',M_ij_t, eris_oovv, optimize=True) 
+        del M_ij_t
+
+        M_ij_t = lib.einsum('lmde,jldf->mejf', t2_1_b, t2_1_b, optimize=True)
+        M_ij_b -= lib.einsum('mejf,mefi->ij',M_ij_t, eris_OVVO, optimize=True) 
+        M_ij_b -= lib.einsum('mejf,mefi->ji',M_ij_t, eris_OVVO, optimize=True) 
+        M_ij_b += lib.einsum('mejf,mife->ij',M_ij_t, eris_OOVV, optimize=True) 
+        M_ij_b += lib.einsum('mejf,mife->ji',M_ij_t, eris_OOVV, optimize=True) 
+        del M_ij_t
+
         M_ij_a += lib.einsum('mled,jlfd,mefi->ij',t2_1_ab, t2_1_ab, eris_ovvo ,optimize = True)
         M_ij_a -= lib.einsum('mled,jlfd,mife->ij',t2_1_ab, t2_1_ab, eris_oovv ,optimize = True)
         M_ij_a -= lib.einsum('lmde,jldf,mefi->ij',t2_1_ab, t2_1_a, eris_OVvo,optimize = True)
         M_ij_a -= lib.einsum('mlde,jldf,mife->ij',t2_1_ab, t2_1_ab, eris_ooVV ,optimize = True)
         M_ij_a += lib.einsum('lmde,jlfd,mefi->ij',t2_1_b, t2_1_ab, eris_OVvo ,optimize = True)
 
-        M_ij_b -= lib.einsum('lmde,jldf,mefi->ij',t2_1_b, t2_1_b, eris_OVVO,optimize = True)
-        M_ij_b += lib.einsum('lmde,jldf,mife->ij',t2_1_b, t2_1_b, eris_OOVV,optimize = True)
         M_ij_b += lib.einsum('lmde,ljdf,mefi->ij',t2_1_ab, t2_1_ab, eris_OVVO,optimize = True)
         M_ij_b -= lib.einsum('lmde,ljdf,mife->ij',t2_1_ab, t2_1_ab, eris_OOVV,optimize = True)
         M_ij_b -= lib.einsum('mled,jldf,mefi->ij',t2_1_ab, t2_1_b, eris_ovVO,optimize = True)
         M_ij_b -= lib.einsum('lmed,ljfd,mife->ij',t2_1_ab, t2_1_ab, eris_OOvv ,optimize = True)
         M_ij_b += lib.einsum('lmde,ljdf,mefi->ij',t2_1_a, t2_1_ab, eris_ovVO ,optimize = True)
 
-        M_ij_a -= lib.einsum('lmde,ildf,mefj->ij',t2_1_a, t2_1_a, eris_ovvo ,optimize = True)
-        M_ij_a += lib.einsum('lmde,ildf,mjfe->ij',t2_1_a, t2_1_a, eris_oovv ,optimize = True)
         M_ij_a += lib.einsum('mled,ilfd,mefj->ij',t2_1_ab, t2_1_ab, eris_ovvo ,optimize = True)
         M_ij_a -= lib.einsum('mled,ilfd,mjfe->ij',t2_1_ab, t2_1_ab, eris_oovv ,optimize = True)
         M_ij_a -= lib.einsum('lmde,ildf,mefj->ij',t2_1_ab, t2_1_a, eris_OVvo,optimize = True)
         M_ij_a -= lib.einsum('mlde,ildf,mjfe->ij',t2_1_ab, t2_1_ab, eris_ooVV ,optimize = True)
         M_ij_a += lib.einsum('lmde,ilfd,mefj->ij',t2_1_b, t2_1_ab, eris_OVvo ,optimize = True)
 
-        M_ij_b -= lib.einsum('lmde,ildf,mefj->ij',t2_1_b, t2_1_b, eris_OVVO ,optimize = True)
-        M_ij_b += lib.einsum('lmde,ildf,mjfe->ij',t2_1_b, t2_1_b, eris_OOVV ,optimize = True)
         M_ij_b += lib.einsum('lmde,lidf,mefj->ij',t2_1_ab, t2_1_ab, eris_OVVO ,optimize = True)
         M_ij_b -= lib.einsum('lmde,lidf,mjfe->ij',t2_1_ab, t2_1_ab, eris_OOVV ,optimize = True)
         M_ij_b -= lib.einsum('mled,ildf,mefj->ij',t2_1_ab, t2_1_b, eris_ovVO,optimize = True)
@@ -2978,7 +3022,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp  = lib.einsum('lxd,ilyd->ixy',temp_1_3,t2_1_ab,optimize=True)
                temp  += lib.einsum('lxd,ilyd->ixy',temp_2_3,t2_1_a,optimize=True)
                s[s_aba:f_aba] += temp.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
+               cput0 = log.timer_debug1("completed sigma vector ADC(n) calculation", *cput0)
 
                del t2_1_a, t2_1_ab, t2_1_b
         return s
@@ -3495,7 +3539,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp  = -lib.einsum('i,iblj->jbl',r_b,eris_OVoo,optimize=True)
                temp_1 = -lib.einsum('jbl,lkab->ajk',temp,t2_1_ab,optimize=True)
                s[s_aba:f_aba] -= temp_1.reshape(-1)
-               cput0 = log.timer_debug1("completed sigma vector ADC(3) calculation", *cput0)
+               cput0 = log.timer_debug1("completed sigma vector ADC(n) calculation", *cput0)
                del t2_1_a, t2_1_ab, t2_1_b
 
         s *= -1.0
@@ -3867,24 +3911,6 @@ def get_trans_moments(adc):
     return (T_a, T_b)
 
    
-def get_spec_factors(adc, T, U, nroots=1):
-
-
-    T_a = T[0]
-    T_b = T[1]
-
-    T_a = np.array(T_a)
-    X_a = np.dot(T_a, U.T).reshape(-1,nroots)
-    del T_a
-    T_b = np.array(T_b)
-    X_b = np.dot(T_b, U.T).reshape(-1,nroots)
-    del T_b
-
-    P = lib.einsum("pi,pi->i", X_a, X_a)
-    P += lib.einsum("pi,pi->i", X_b, X_b)
-
-    return P, X_a, X_b
-
 def dyson_orb(adc, X_a, X_b, nroots=1):
 
     dyson_mo_a = np.dot(adc.mo_coeff[0],x_a).reshape(-1,nroots)
@@ -3937,15 +3963,19 @@ def spec_analyze(adc, X, spin):
         logger.info(adc, 'Partial spec. Factor sum = %10.10f', np.sum(spec_Contribution))
 
 
-def eigenvector_analyze_ea(adc, U, nroots=1):
-    
-    U_thresh = adc.U_thresh
-     
+def analyze_eigenvector_ea(adc):
+
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
     nvir_a = adc.nvir_a
     nvir_b = adc.nvir_b
+    evec_print_tol = adc.evec_print_tol
 
+    logger.info(adc, "Number of alpha occupied orbitals = %d", nocc_a)
+    logger.info(adc, "Number of beta occupied orbitals = %d", nocc_b)
+    logger.info(adc, "Number of alpha virtual orbitals =  %d", nvir_a)
+    logger.info(adc, "Number of beta virtual orbitals =  %d", nvir_b)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
     ab_a = np.tril_indices(nvir_a, k=-1)
     ab_b = np.tril_indices(nvir_b, k=-1)
 
@@ -3968,6 +3998,8 @@ def eigenvector_analyze_ea(adc, U, nroots=1):
     f_aba = s_aba + n_doubles_aba
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
+
+    U = np.array(adc.U)
 
     for I in range(U.shape[0]):
         U1 = U[I, :f_b]
@@ -4000,12 +4032,12 @@ def eigenvector_analyze_ea(adc, U, nroots=1):
         U_sorted_aaa = U_aaa[ind_idx_aaa].copy()
         U_sorted_bbb = U_bbb[ind_idx_bbb].copy()
 
-        U_sorted = U_sorted[U_sq > U_thresh**2]
-        ind_idx = ind_idx[U_sq > U_thresh**2]
-        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > U_thresh**2]
-        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > U_thresh**2]
-        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > U_thresh**2]
-        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > U_thresh**2]
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
+        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > evec_print_tol**2]
+        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > evec_print_tol**2]
+        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > evec_print_tol**2]
+        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > evec_print_tol**2]
         
         temp_doubles_aaa_idx = [0,0,0]  
         temp_doubles_aba_idx = [0,0,0]  
@@ -4083,46 +4115,68 @@ def eigenvector_analyze_ea(adc, U, nroots=1):
             temp_doubles_bbb_idx[2] = int(a_rem + 1 + nocc_b)
             doubles_bbb_idx.append(temp_doubles_bbb_idx)
             temp_doubles_bbb_idx = [0,0,0]
+        
+        doubles_aaa_val = list(U_sorted_aaa)
+        doubles_bbb_val = list(U_sorted_bbb)
+        
+        logger.info(adc,'%s | root %d | norm(1p)  = %6.4f | norm(1h2p) = %6.4f ',adc.method ,I, U1dotU1, U2dotU2)
 
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | occ_alpha = %2d | occ_beta = %2d | vir_alpha = %2d | vir_beta = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc_a, nocc_b, nvir_a, nvir_b)
-        print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print( "Singles block: ") 
-        for idx,print_singles_a in enumerate(singles_a_idx):
-            logger.info(adc, 'vir_alpha(a) = %2d | amplitude = %7.4f', print_singles_a, singles_a_val[idx])
-        for idx,print_singles_b in enumerate(singles_b_idx):
-            logger.info(adc, 'vir_beta(a) = %3d | amplitude = %7.4f', print_singles_b, singles_b_val[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print("Doubles block: ")
-        if doubles_aaa_idx != []:
-            print("---------------- (alpha|alpha|alpha) ----------------")
-        for idx,print_aaa in enumerate(doubles_aaa_idx):
-            logger.info(adc, 'occ_alpha(i) = %2d | vir_alpha(a) = %2d | vir_alpha(b) = %2d | amplitude = %7.4f', print_aaa[0], print_aaa[1], print_aaa[2], U_sorted_aaa[idx])
-        if doubles_bab_idx != []:
-            print("---------------- (beta|alpha|beta) ----------------")
-        for idx,print_bab in enumerate(doubles_bab_idx):
-            logger.info(adc, 'occ_beta(i) = %3d | vir_alpha(a) = %2d | vir_beta(b) = %3d | amplitude = %7.4f', print_bab[0], print_bab[1], print_bab[2], doubles_bab_val[idx])
-        if doubles_aba_idx != []:
-            print("---------------- (alpha|beta|alpha) ----------------")
-        for idx,print_aba in enumerate(doubles_aba_idx):
-            logger.info(adc, 'occ_alpha(i) = %2d | vir_beta(a) = %3d | vir_alpha(b) = %2d | amplitude = %7.4f', print_aba[0], print_aba[1], print_aba[2], doubles_aba_val[idx])
-        if doubles_bbb_idx != []:
-            print("---------------- (beta|beta|beta) ----------------")
-        for idx,print_bbb in enumerate(doubles_bbb_idx):
-            logger.info(adc, 'occ_beta(i) = %3d | vir_beta(a) = %3d | vir_beta(b) = %3d | amplitude = %7.4f', print_bbb[0], print_bbb[1], print_bbb[2], U_sorted_bbb[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-    
-    return U
+        if singles_a_val:
+            logger.info(adc, "\n1p(alpha) block: ") 
+            logger.info(adc, "     a     U(a)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_a_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_a_val[idx])
 
-def eigenvector_analyze_ip(adc, U, nroots=1):
-    
-    U_thresh = adc.U_thresh
-     
+        if singles_b_val:
+            logger.info(adc, "\n1p(beta) block: ") 
+            logger.info(adc, "     a     U(a)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_b_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_b_val[idx])
+
+        if doubles_aaa_val:
+            logger.info(adc, "\n1h2p(alpha|alpha|alpha) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aaa_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_aaa_val[idx])
+
+        if doubles_bab_val:
+            logger.info(adc, "\n1h2p(beta|alpha|beta) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bab_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_bab_val[idx])
+
+        if doubles_aba_val:
+            logger.info(adc, "\n1h2p(alpha|beta|alpha) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aba_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_aba_val[idx])
+
+        if doubles_bbb_val:
+            logger.info(adc, "\n1h2p(beta|beta|beta) block: ") 
+            logger.info(adc, "     i     a     b     U(i,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bbb_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_bbb_val[idx])
+        logger.info(adc, "\n*************************************************************\n")
+
+def analyze_eigenvector_ip(adc):
+
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
     nvir_a = adc.nvir_a
     nvir_b = adc.nvir_b
+    evec_print_tol = adc.evec_print_tol
+
+    logger.info(adc, "Number of alpha occupied orbitals = %d", nocc_a)
+    logger.info(adc, "Number of beta occupied orbitals = %d", nocc_b)
+    logger.info(adc, "Number of alpha virtual orbitals =  %d", nvir_a)
+    logger.info(adc, "Number of beta virtual orbitals =  %d", nvir_b)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
 
     ij_a = np.tril_indices(nocc_a, k=-1)
     ij_b = np.tril_indices(nocc_b, k=-1)
@@ -4146,6 +4200,8 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
     f_aba = s_aba + n_doubles_aba
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
+
+    U = np.array(adc.U)
 
     for I in range(U.shape[0]):
         U1 = U[I, :f_b]
@@ -4178,12 +4234,12 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
         U_sorted_aaa = U_aaa[ind_idx_aaa].copy()
         U_sorted_bbb = U_bbb[ind_idx_bbb].copy()
 
-        U_sorted = U_sorted[U_sq > U_thresh**2]
-        ind_idx = ind_idx[U_sq > U_thresh**2]
-        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > U_thresh**2]
-        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > U_thresh**2]
-        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > U_thresh**2]
-        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > U_thresh**2]
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
+        U_sorted_aaa = U_sorted_aaa[U_sq_aaa > evec_print_tol**2]
+        U_sorted_bbb = U_sorted_bbb[U_sq_bbb > evec_print_tol**2]
+        ind_idx_aaa = ind_idx_aaa[U_sq_aaa > evec_print_tol**2]
+        ind_idx_bbb = ind_idx_bbb[U_sq_bbb > evec_print_tol**2]
         
         temp_doubles_aaa_idx = [0,0,0]  
         temp_doubles_aba_idx = [0,0,0]  
@@ -4227,9 +4283,9 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
           
             if orb in range(s_aba,f_aba):
                 orb_aba = orb - s_aba     
-                nvir_rem = orb_aba % (nocc_b*nocc_a)
-                nvir_idx = (orb_aba - vir_rem)//(nocc_b*nocc_a)
-                temp_doubles_aba_idx[0] = int(nvir_idx + 1 + nocc_a)
+                vir_rem = orb_aba % (nocc_b*nocc_a)
+                vir_idx = (orb_aba - vir_rem)//(nocc_b*nocc_a)
+                temp_doubles_aba_idx[0] = int(vir_idx + 1 + nocc_a)
                 j_rem = vir_rem % nocc_a
                 i_idx = (vir_rem - j_rem)//nocc_a
                 temp_doubles_aba_idx[1] = int(i_idx + 1)
@@ -4254,17 +4310,17 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
         for orb_bbb in ind_idx_bbb:                
             vir_rem = orb_bbb % (nocc_b*nocc_b)
             vir_idx = (orb_bbb - vir_rem)//(nocc_b*nocc_b)
-            temp_doubles_bbb_idx[0] = int(nvir_idx + 1 + nocc_b)
+            temp_doubles_bbb_idx[0] = int(vir_idx + 1 + nocc_b)
             j_rem = vir_rem % nocc_b
             i_idx = (vir_rem - j_rem)//nocc_b
             temp_doubles_bbb_idx[1] = int(i_idx + 1)
             temp_doubles_bbb_idx[2] = int(j_rem + 1)
             doubles_bbb_idx.append(temp_doubles_bbb_idx)
             temp_doubles_bbb_idx = [0,0,0]
-
+        """
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | occ_alpha = %2d | occ_beta = %2d | vir_alpha = %2d | vir_beta = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc_a, nocc_b, nvir_a, nvir_b)
-        print("Obitals contributing to eigenvectors components with abs value > ", U_thresh)  
+        print("Obitals contributing to eigenvectors components with abs value > ", evec_print_tol)  
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
         print( "Singles block: ") 
         for idx,print_singles_a in enumerate(singles_a_idx):
@@ -4290,8 +4346,77 @@ def eigenvector_analyze_ip(adc, U, nroots=1):
         for idx,print_bbb in enumerate(doubles_bbb_idx):
             logger.info(adc, 'vir_beta(i) = %3d | occ_beta(a) = %3d | occ_beta(b) = %3d | amplitude = %7.4f', print_bbb[0], print_bbb[1], print_bbb[2], U_sorted_bbb[idx])
         print("----------------------------------------------------------------------------------------------------------------------------------------------")   
+        """      
+        doubles_aaa_val = list(U_sorted_aaa)
+        doubles_bbb_val = list(U_sorted_bbb)
+        
+        logger.info(adc,'%s | root %d | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',adc.method ,I, U1dotU1, U2dotU2)
+
+        if singles_a_val:
+            logger.info(adc, "\n1h(alpha) block: ") 
+            logger.info(adc, "     i     U(i)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_a_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_a_val[idx])
+
+        if singles_b_val:
+            logger.info(adc, "\n1h(beta) block: ") 
+            logger.info(adc, "     i     U(i)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_b_idx):
+                logger.info(adc, '  %4d   %7.4f', print_singles, singles_b_val[idx])
+
+        if doubles_aaa_val:
+            logger.info(adc, "\n2h1p(alpha|alpha|alpha) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aaa_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_aaa_val[idx])
+
+        if doubles_bab_val:
+            logger.info(adc, "\n2h1p(beta|alpha|beta) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bab_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bab_val[idx])
+
+        if doubles_aba_val:
+            logger.info(adc, "\n2h1p(alpha|beta|alpha) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_aba_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_aba_val[idx])
+
+        if doubles_bbb_val:
+            logger.info(adc, "\n2h1p(beta|beta|beta) block: ") 
+            logger.info(adc, "     i     j     a     U(i,j,a)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_bbb_idx):
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bbb_val[idx])
+
+
+def get_properties(adc, nroots=1):
+
+    #Transition moments
+    T = adc.get_trans_moments()
     
-    return U
+    T_a = T[0]
+    T_b = T[1]
+
+    T_a = np.array(T_a)
+    T_b = np.array(T_b)
+
+    U = np.array(adc.U)
+
+    #Spectroscopic amplitudes
+    X_a = np.dot(T_a, U.T).reshape(-1,nroots)
+    X_b = np.dot(T_b, U.T).reshape(-1,nroots)
+
+    #Spectroscopic factors
+    P = lib.einsum("pi,pi->i", X_a, X_a)
+    P += lib.einsum("pi,pi->i", X_b, X_b)
+
+    return P, X_a, X_b
 
 
 class UADCEA(UADC):
@@ -4359,12 +4484,14 @@ class UADCEA(UADC):
         self.with_df = adc.with_df
         self.spec_thresh = adc.spec_thresh
 
-        self.compute_mpn_energy = True
-        self.U_thresh = adc.U_thresh
-        self.compute_spec = adc.compute_spec
+        self.evec_print_tol = adc.evec_print_tol
 
-
-
+        self.compute_properties = adc.compute_properties
+        self.E = adc.E
+        self.U = adc.U
+        self.P = adc.P
+        self.X_a = adc.X_a
+        self.X_b = adc.X_b
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -4376,10 +4503,12 @@ class UADCEA(UADC):
     get_diag = ea_adc_diag
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
-    get_spec_factors = get_spec_factors
     spec_analyze = spec_analyze
+    get_properties = get_properties
+    analyze = analyze
+    compute_dyson_orb = compute_dyson_orb
     
-    eigenvector_analyze = eigenvector_analyze_ea
+    analyze_eigenvector = analyze_eigenvector_ea
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -4472,10 +4601,14 @@ class UADCIP(UADC):
         self.with_df = adc.with_df
         self.spec_thresh = adc.spec_thresh
 
-        self.compute_mpn_energy = True
-        self.U_thresh = adc.U_thresh
+        self.evec_print_tol = adc.evec_print_tol
 
-        self.compute_spec = adc.compute_spec
+        self.compute_properties = adc.compute_properties
+        self.E = adc.E
+        self.U = adc.U
+        self.P = adc.P
+        self.X_a = adc.X_a
+        self.X_b = adc.X_b
 
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
@@ -4488,10 +4621,12 @@ class UADCIP(UADC):
     matvec = ip_adc_matvec
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
-    get_spec_factors = get_spec_factors
+    get_properties = get_properties
 
     spec_analyze = spec_analyze
-    eigenvector_analyze = eigenvector_analyze_ip
+    analyze_eigenvector = analyze_eigenvector_ip
+    analyze = analyze
+    compute_dyson_orb = compute_dyson_orb
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :

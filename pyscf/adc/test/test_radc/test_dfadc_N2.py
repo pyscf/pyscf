@@ -102,6 +102,7 @@ class KnownValues(unittest.TestCase):
         myadc.method_type = "ea"
 
         e,v,p,x = myadc.kernel(nroots=4)
+        myadc.analyze()
 
         self.assertAlmostEqual(e[0], 0.14260766, 6)
         self.assertAlmostEqual(e[1], 0.14260766, 6)

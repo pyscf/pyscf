@@ -46,7 +46,8 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p,x = myadc.ea_adc(nroots=3)
+        e,v,p,x,es = myadc.ea_adc(nroots=3)
+        es.analyze()        
 
         self.assertAlmostEqual(e[0], 0.0961781923822576, 6)
         self.assertAlmostEqual(e[1], 0.1258326916409743, 6)
@@ -71,7 +72,7 @@ class KnownValues(unittest.TestCase):
         myadc.method_type = "ea"
         
         e,v,p,x = myadc.kernel(nroots=4)
-        e_corr = myadc.e_corr        
+        e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.32201692499346535, 6)
 

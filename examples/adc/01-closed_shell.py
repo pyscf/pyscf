@@ -22,14 +22,15 @@ myadc = adc.ADC(mf)
 
 #IP-RADC(2) for 1 root
 myadc.verbose = 6
-eip,vip,pip = myadc.kernel()
+eip,vip,pip,xip = myadc.kernel()
 
 #EA-RADC(2)-x for 1 root
 myadc.method = "adc(2)-x"
 myadc.method_type = "ea"
-eea,vea,pea = myadc.kernel()
+eea,vea,pea,xea = myadc.kernel()
 
 #EA-RADC(3) for 3 roots
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
-eea,vea,pea = myadc.kernel(nroots = 3)
+eea,vea,pea,xea = myadc.kernel(nroots = 3)
+myadc.analyze()
