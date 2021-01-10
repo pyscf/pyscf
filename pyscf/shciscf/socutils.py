@@ -436,12 +436,16 @@ def get_fso2e_bp1c(mol, dm, atomlist):
     return hso1e
 
 
-def writeGTensorIntegrals(mc, atomlist=None):
+def writeGTensorIntegrals(mc, atomlist=None, origin=None):
     mol = mc.mol
     ncore, ncas = mc.ncore, mc.ncas
     nb = mol.nao_nr()
+
+    if (origin is not None):
+        mol.set_common_origin(origin)
+
     if atomlist is None:
-        h1ao = mol.intor('cint1e_cg_irxp_sph', comp=3)
+        h1ao = mol.intor('int1e_cg_irxp_sph', comp=3, hermi=2)
     else:
         h1ao = numpy.zeros((3, nb, nb))
         aoslice = mc.mol.aoslice_by_atom()
@@ -455,6 +459,7 @@ def writeGTensorIntegrals(mc, atomlist=None):
                 jshl_start = aoslice[jatom, 0]
                 ishl_end = aoslice[iatom, 1]
                 jshl_end = aoslice[jatom, 1]
+
                 h1ao[:, iao_start: iao_end, jao_start: jao_end]\
                     += mol.intor('cint1e_cg_irxp_sph', 3, shls_slice=[ishl_start, ishl_end, jshl_start, jshl_end]).reshape(3, iao_end-iao_start, jao_end-jao_start)
 
@@ -514,41 +519,43 @@ def writeSOCIntegrals(mc,
     if (has_ecp):
         hso1e += xmol.intor('ECPso')
 
-    # two electron terms
-    logger.note(xmol, "Start calculating two-electron contribution to SOC integrals, be patient.")
-    if (pictureChange2e == "bp"):
-        hso1e += -factor * get_fso2e_bp(xmol, dm)
-    elif (pictureChange2e == "bp1c"):
-        hso1e += -factor * get_fso2e_bp1c(xmol, dm, atomlist)
-    elif (pictureChange2e == "x2c_old"):
-        pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
-        hso1e += -factor * get_fso2e_x2c_original(xmol, x, rp, pLL, pLS, pSS)
-    elif (pictureChange2e == "x2c"):
-        pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
-        #hso1e += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)
-        hso1e[0] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[0]
-        hso1e[1] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[1]
-        hso1e[2] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[2]
-    elif (pictureChange2e == "x2c1c"):
-        pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
-        hso1e += -factor * get_fso2e_x2c1c(xmol, x, rp, pLL, pLS, pSS)
-    elif (pictureChange2e == "none"):
-        hso1e += 0.0
-    else:
-        print(pictureChange2e, "not a valid option")
-        exit(0)
 
-    # MF 1 electron term
-    if (pictureChange1e == "bp"):
-        hso1e += factor * get_wso(xmol)
-    elif (pictureChange1e == "x2c1"):
-        wso = factor * get_wso(xmol)
-        hso1e += get_hso1e(wso, x, rp)
-    elif (pictureChange1e == "none"):
-        hso1e += 0.0
-    else:
-        print(pictureChange1e, "not a valid option")
-        exit(0)
+    if (not has_ecp):
+        # two electron terms
+        logger.note(xmol, "Start calculating two-electron contribution to SOC integrals, be patient.")
+        if (pictureChange2e == "bp"):
+            hso1e += -factor * get_fso2e_bp(xmol, dm)
+        elif (pictureChange2e == "bp1c"):
+            hso1e += -factor * get_fso2e_bp1c(xmol, dm, atomlist)
+        elif (pictureChange2e == "x2c_old"):
+            pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
+            hso1e += -factor * get_fso2e_x2c_original(xmol, x, rp, pLL, pLS, pSS)
+        elif (pictureChange2e == "x2c"):
+            pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
+            #hso1e += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)
+            hso1e[0] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[0]
+            hso1e[1] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[1]
+            hso1e[2] += -factor * get_fso2e_x2c(xmol, x, rp, pLL, pLS, pSS)[2]
+        elif (pictureChange2e == "x2c1c"):
+            pLL, pLS, pSS = get_p(dm / 2.0, x, rp)
+            hso1e += -factor * get_fso2e_x2c1c(xmol, x, rp, pLL, pLS, pSS)
+        elif (pictureChange2e == "none"):
+            hso1e += 0.0
+        else:
+            print(pictureChange2e, "not a valid option")
+            exit(0)
+
+            # MF 1 electron term
+        if (pictureChange1e == "bp"):
+            hso1e += factor * get_wso(xmol)
+        elif (pictureChange1e == "x2c1"):
+            wso = factor * get_wso(xmol)
+            hso1e += get_hso1e(wso, x, rp)
+        elif (pictureChange1e == "none"):
+            hso1e += 0.0
+        else:
+            print(pictureChange1e, "not a valid option")
+            exit(0)
 
     h1ao = numpy.zeros((3, nc, nc))
     if (uncontract):

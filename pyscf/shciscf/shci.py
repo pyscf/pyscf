@@ -200,6 +200,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.io = True
         self.nroots = 1
         self.nPTiter = 0
+        self.DoSpinRDM = False
         self.DoRDM = True
         self.DoTRDM = False
         self.DoSOC = False
