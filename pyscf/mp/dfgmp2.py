@@ -103,8 +103,12 @@ class DFGMP2(dfmp2.DFMP2):
         naux = with_df.get_naoaux()
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
+        if orbspin is None:
+            fac = 2
+        else:
+            fac = 1
         blksize = int(min(naux, max(with_df.blockdim,
-                                    (max_memory*1e6/8-nocc*nvir**2*2)/(2*nocc*nvir))))
+                                    (max_memory*1e6/8-nocc*nvir**2*2)/(fac*nocc*nvir))))
         if orbspin is None:
             for eri1 in with_df.loop(blksize=blksize):
                 Lova = _ao2mo.nr_e2(eri1, moa, ijslice, aosym='s2', out=Lova)
