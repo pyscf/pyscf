@@ -71,7 +71,7 @@ def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = mf.to_ghf()
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-GMP2')
+        return dfgmp2.DFGMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return gmp2.GMP2(mf, frozen, mo_coeff, mo_occ)
 GMP2.__doc__ = gmp2.GMP2.__doc__
