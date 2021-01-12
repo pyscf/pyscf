@@ -215,9 +215,7 @@ class KnownValues(unittest.TestCase):
         emp2, t2 = pt.kernel()
         self.assertAlmostEqual(emp2, -0.09624851692896723, 9)
 
-        dm = gmf.get_init_guess() + 0j
-        dm[0,:] += .1j
-        dm[:,0] -= .1j
+        dm = gmf.get_init_guess() + .1j
         gmf.kernel(dm0=dm)
         pt = mp.GMP2(gmf).density_fit()
         emp2, t2 = pt.kernel()
