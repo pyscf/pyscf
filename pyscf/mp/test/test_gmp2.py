@@ -216,10 +216,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(emp2, -0.09624851692896723, 9)
 
         dm = gmf.get_init_guess() + .1j
+        dm = 0.5*(dm + dm.T.conj())
+        gmf.conv_tol = 1e-9
         gmf.kernel(dm0=dm)
         pt = mp.GMP2(gmf).density_fit()
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.12884823204824902, 9)
+        self.assertAlmostEqual(emp2, -0.12884823204824902, 8)
 
 
 if __name__ == "__main__":
