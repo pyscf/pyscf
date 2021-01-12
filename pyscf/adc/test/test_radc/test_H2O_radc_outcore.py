@@ -97,6 +97,7 @@ class KnownValues(unittest.TestCase):
         myadc.max_memory = 10
 
         e,v,p,x = myadc.kernel(nroots=3)
+        myadc.analyze()
       
         self.assertAlmostEqual(e[0], 0.4777266577555, 6)
         self.assertAlmostEqual(e[1], 0.5619000705967, 6)

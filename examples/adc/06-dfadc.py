@@ -42,3 +42,7 @@ myadc.verbose = 6
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
 eea,vea,pea,xea = myadc.kernel(nroots = 3)
+
+# Compute properties
+myadc.compute_properties = True
+myadc.analyze()

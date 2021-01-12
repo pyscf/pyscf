@@ -29,8 +29,14 @@ myadc.method = "adc(2)-x"
 myadc.method_type = "ea"
 eea,vea,pea,xea = myadc.kernel()
 
-#EA-RADC(3) for 3 roots
+#Get EA-RADC(2)-x eigenevector analysis only
+myadc.compute_properties = False
+myadc.analyze()
+
+#EA-RADC(3) for 3 roots and properties
+myadc.compute_properties = True
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
 eea,vea,pea,xea = myadc.kernel(nroots = 3)
 myadc.analyze()
+

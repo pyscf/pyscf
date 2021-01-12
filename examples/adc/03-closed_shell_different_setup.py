@@ -32,8 +32,11 @@ myadc.kernel_gs()
 myadcea = adc.radc.RADCEA(myadc)
 eea,vea,pea,xea = myadcea.kernel(nroots=3)
 
+#Analyze eigenvectors only
+myadcea.compute_properties = False
+myadcea.analyze()
+
 #IP/EA-RADC(3) for 1 root
 eip,vip,pip,xip,adc_es = myadc.ip_adc()
-adc_es.analyze()
 eea,vea,pea,xea,adc_es = myadc.ea_adc()
-adc_es.analyze()
+

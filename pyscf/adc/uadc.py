@@ -49,10 +49,12 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
-    conv, adc.E, adc.U = lib.linalg_helper.davidson1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
+    conv, adc.E, U = lib.linalg_helper.davidson1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
-    if adc.compute_properties == True:
-        adc.P,adc.X_a,adc.X_b = adc.get_properties(nroots)
+    adc.U = np.array(U).T.copy()
+
+    if adc.compute_properties:
+        adc.P,adc.X = adc.get_properties(nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
@@ -67,14 +69,14 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     for n in range(nroots):
         print_string = ('%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
-        if adc.compute_properties == True:
+        if adc.compute_properties:
             print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
         print_string += ("|  conv = %s" % conv[n])
         logger.info(adc, print_string)
 
     log.timer('ADC', *cput0)
 
-    return adc.E, adc.U, adc.P, adc.X_a, adc.X_b
+    return adc.E, adc.U, adc.P, adc.X
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -83,6 +85,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
     e_corr = myadc.compute_energy(t1, t2, eris)
 
     return e_corr, t1, t2
+
 
 def compute_amplitudes(myadc, eris):
 
@@ -128,6 +131,9 @@ def compute_amplitudes(myadc, eris):
     D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
 
     t2_1_a = v2e_oovv/D2_a
+    if not isinstance(eris.oooo, np.ndarray):
+        t2_1_a_data = radc_ao2mo.write_dataset(t2_1_a)
+
     del (v2e_oovv)
     del (D2_a)
 
@@ -141,6 +147,8 @@ def compute_amplitudes(myadc, eris):
     D2_b = D2_b.reshape((nocc_b,nocc_b,nvir_b,nvir_b))
 
     t2_1_b = v2e_OOVV/D2_b
+    if not isinstance(eris.oooo, np.ndarray):
+        t2_1_b_data = radc_ao2mo.write_dataset(t2_1_b)
     del (v2e_OOVV)
     del (D2_b)
 
@@ -153,9 +161,10 @@ def compute_amplitudes(myadc, eris):
     D2_ab = D2_ab.reshape((nocc_a,nocc_b,nvir_a,nvir_b))
 
     t2_1_ab = v2e_oOvV/D2_ab
+    if not isinstance(eris.oooo, np.ndarray):
+        t2_1_ab_data = radc_ao2mo.write_dataset(t2_1_ab)
     del (v2e_oOvV)
     del (D2_ab)
-
 
     D1_a = e_a[:nocc_a][:None].reshape(-1,1) - e_a[nocc_a:].reshape(-1)
     D1_b = e_b[:nocc_b][:None].reshape(-1,1) - e_b[nocc_b:].reshape(-1)
@@ -174,6 +183,9 @@ def compute_amplitudes(myadc, eris):
     else :
         chnk_size = nocc_a
 
+    if not isinstance(t2_1_a, np.ndarray):
+        t2_1_a = t2_1_a_data[:]
+
     a = 0
     for p in range(0,nocc_a,chnk_size):
         if getattr(myadc, 'with_df', None):
@@ -181,16 +193,24 @@ def compute_amplitudes(myadc, eris):
         else :
             eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
         k = eris_ovvv.shape[0]
-
         t1_2_a += 0.5*lib.einsum('kdac,ikcd->ia',eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
         t1_2_a -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
         del eris_ovvv
         a += k
 
+    t1_2_a -= 0.5*lib.einsum('lcki,klac->ia',eris_ovoo,t2_1_a,optimize=True)
+    t1_2_a += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo,t2_1_a,optimize=True)
+
+    if not isinstance(t2_1_a, np.ndarray):
+        del t2_1_a
+
     if isinstance(eris.OVvv, type(None)):
         chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
     else :
         chnk_size = nocc_b
+
+    if not isinstance(t2_1_a, np.ndarray):
+        t2_1_ab = t2_1_ab_data[:]
 
     a = 0
     for p in range(0,nocc_b,chnk_size):
@@ -201,22 +221,6 @@ def compute_amplitudes(myadc, eris):
         k = eris_OVvv.shape[0]
         t1_2_a += lib.einsum('kdac,ikcd->ia',eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
         del eris_OVvv
-        a += k
-
-    if isinstance(eris.OVVV, type(None)):
-        chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
-    else :
-        chnk_size = nocc_b
-    a = 0
-    for p in range(0,nocc_b,chnk_size):
-        if getattr(myadc, 'with_df', None):
-            eris_OVVV = dfadc.get_ovvv_a_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
-        else :
-            eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
-        k = eris_OVVV.shape[0]
-        t1_2_b += 0.5*lib.einsum('kdac,ikcd->ia',eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-        t1_2_b -= 0.5*lib.einsum('kcad,ikcd->ia',eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-        del eris_OVVV
         a += k
 
     if isinstance(eris.ovVV, type(None)):
@@ -234,12 +238,37 @@ def compute_amplitudes(myadc, eris):
         del eris_ovVV
         a += k
 
-    t1_2_a -= 0.5*lib.einsum('lcki,klac->ia',eris_ovoo,t2_1_a,optimize=True)
-    t1_2_a += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo,t2_1_a,optimize=True)
     t1_2_a -= lib.einsum('lcki,klac->ia',eris_OVoo,t2_1_ab,optimize=True)
+    t1_2_b -= lib.einsum('lcki,lkca->ia',eris_ovOO,t2_1_ab)
+
+    if not isinstance(t2_1_a, np.ndarray):
+        del t2_1_ab
+
+    if isinstance(eris.OVVV, type(None)):
+        chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
+    else :
+        chnk_size = nocc_b
+
+    if not isinstance(t2_1_b, np.ndarray):
+        t2_1_b = t2_1_b_data[:]
+
+    a = 0
+    for p in range(0,nocc_b,chnk_size):
+        if getattr(myadc, 'with_df', None):
+            eris_OVVV = dfadc.get_ovvv_a_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+        else :
+            eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
+        k = eris_OVVV.shape[0]
+        t1_2_b += 0.5*lib.einsum('kdac,ikcd->ia',eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+        t1_2_b -= 0.5*lib.einsum('kcad,ikcd->ia',eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+        del eris_OVVV
+        a += k
+
     t1_2_b -= 0.5*lib.einsum('lcki,klac->ia',eris_OVOO,t2_1_b,optimize=True)
     t1_2_b += 0.5*lib.einsum('kcli,klac->ia',eris_OVOO,t2_1_b,optimize=True)
-    t1_2_b -= lib.einsum('lcki,lkca->ia',eris_ovOO,t2_1_ab)
+
+    if not isinstance(t2_1_a, np.ndarray):
+        del t2_1_b
 
     t1_2_a = t1_2_a/D1_a
     t1_2_b = t1_2_b/D1_b
@@ -268,14 +297,23 @@ def compute_amplitudes(myadc, eris):
             temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]).reshape(nocc_a*nocc_a,-1)
             t2_2_temp = np.dot(temp,eris_vvvv.T).reshape(nocc_a,nocc_a,-1)
             del eris_vvvv
-        elif isinstance(eris.vvvv_p, list): 
+        elif isinstance(eris.vvvv_p, list):
+            t2_1_a = t2_1_a_data[:] 
             t2_2_temp = contract_ladder_antisym(myadc,t2_1_a, eris.vvvv_p)
+            del t2_1_a
         else:
+            t2_1_a = t2_1_a_data[:] 
             t2_2_temp = contract_ladder_antisym(myadc,t2_1_a, eris.Lvv)
+            del t2_1_a
 
         t2_2_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))   
         t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]] = t2_2_temp    
-        t2_2_a[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2_2_temp    
+        t2_2_a[:,:,ab_ind_a[1],ab_ind_a[0]] = -t2_2_temp   
+      
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_1_a = t2_1_a_data[:]
+            t2_1_ab = t2_1_ab_data[:]
+ 
         t2_2_a += 0.5*lib.einsum('kilj,klab->ijab', eris_oooo, t2_1_a,optimize=True)
         t2_2_a -= 0.5*lib.einsum('kjli,klab->ijab', eris_oooo, t2_1_a,optimize=True)
 
@@ -289,6 +327,10 @@ def compute_amplitudes(myadc, eris):
         del (temp)
         del (temp_1)
 
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_1_a
+            del t2_1_ab
+
         t2_2_temp = None
         if isinstance(eris.VVVV_p, np.ndarray):
             eris_VVVV = eris.VVVV_p
@@ -296,16 +338,24 @@ def compute_amplitudes(myadc, eris):
             t2_2_temp = np.dot(temp,eris_VVVV.T).reshape(nocc_b,nocc_b,-1)
             del eris_VVVV
         elif isinstance(eris.VVVV_p, list) : 
+            t2_1_b = t2_1_b_data[:].copy() 
             t2_2_temp = contract_ladder_antisym(myadc,t2_1_b,eris.VVVV_p)
+            del t2_1_b
         else :
+            t2_1_b = t2_1_b_data[:].copy() 
             t2_2_temp = contract_ladder_antisym(myadc,t2_1_b,eris.LVV)
+            del t2_1_b
 
         t2_2_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))   
         t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]] = t2_2_temp    
         t2_2_b[:,:,ab_ind_b[1],ab_ind_b[0]] = -t2_2_temp    
+
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_1_b = t2_1_b_data[:]
+            t2_1_ab = t2_1_ab_data[:]
+
         t2_2_b += 0.5*lib.einsum('kilj,klab->ijab', eris_OOOO, t2_1_b,optimize=True)
         t2_2_b -= 0.5*lib.einsum('kjli,klab->ijab', eris_OOOO, t2_1_b,optimize=True)
-    
         del (t2_2_temp)
 
         temp = lib.einsum('kcbj,kica->ijab',eris_OVVO,t2_1_b,optimize=True)
@@ -314,18 +364,30 @@ def compute_amplitudes(myadc, eris):
 
         t2_2_b += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
         t2_2_b += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
-
         del (temp)
         del (temp_1)
+
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_1_b
+            del t2_1_ab
 
         if isinstance(eris.vVvV_p, np.ndarray):
             temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
             eris_vVvV = eris.vVvV_p
             t2_2_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
         elif isinstance(eris.vVvV_p, list):
+            t2_1_ab = t2_1_ab_data[:].copy() 
             t2_2_ab = contract_ladder(myadc,t2_1_ab,eris.vVvV_p)
+            del t2_1_ab
         else :
+            t2_1_ab = t2_1_ab_data[:].copy() 
             t2_2_ab = contract_ladder(myadc,t2_1_ab,(eris.Lvv,eris.LVV))
+            del t2_1_ab
+
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_1_a = t2_1_a_data[:]
+            t2_1_b = t2_1_b_data[:]
+            t2_1_ab = t2_1_ab_data[:]
 
         t2_2_ab += lib.einsum('kilj,klab->ijab',eris_ooOO,t2_1_ab,optimize=True)
         t2_2_ab += lib.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_a,optimize=True)
@@ -337,19 +399,30 @@ def compute_amplitudes(myadc, eris):
         t2_2_ab += lib.einsum('kcai,kjcb->ijab',eris_ovvo,t2_1_ab,optimize=True)
         t2_2_ab -= lib.einsum('kiac,kjcb->ijab',eris_oovv,t2_1_ab,optimize=True)
 
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_1_a 
+            del t2_1_b 
+            del t2_1_ab
+
         D2_a = d_ij_a.reshape(-1,1) - d_ab_a.reshape(-1)
         D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
         t2_2_a = t2_2_a/D2_a
+        if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+            t2_2_a_data = radc_ao2mo.write_dataset(t2_2_a)
         del (D2_a)
 
         D2_b = d_ij_b.reshape(-1,1) - d_ab_b.reshape(-1)
         D2_b = D2_b.reshape((nocc_b,nocc_b,nvir_b,nvir_b))
         t2_2_b = t2_2_b/D2_b
+        if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+            t2_2_b_data = radc_ao2mo.write_dataset(t2_2_b)
         del (D2_b)
 
         D2_ab = d_ij_ab.reshape(-1,1) - d_ab_ab.reshape(-1)
         D2_ab = D2_ab.reshape((nocc_a,nocc_b,nvir_a,nvir_b))
         t2_2_ab = t2_2_ab/D2_ab
+        if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+            t2_2_ab_data = radc_ao2mo.write_dataset(t2_2_ab)
         del (D2_ab)
 
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
@@ -363,6 +436,11 @@ def compute_amplitudes(myadc, eris):
         eris_ovOO = eris.ovOO
 
         t1_3 = (None,)
+
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_1_a = t2_1_a_data[:]
+            t2_1_b = t2_1_b_data[:]
+            t2_1_ab = t2_1_ab_data[:]
 
         t1_3_a = lib.einsum('d,ilad,ld->ia',e_a[nocc_a:],t2_1_a,t1_2_a,optimize=True)
         t1_3_a += lib.einsum('d,ilad,ld->ia',e_b[nocc_b:],t2_1_ab,t1_2_b,optimize=True)
@@ -388,6 +466,11 @@ def compute_amplitudes(myadc, eris):
         t1_3_b -= 0.5*lib.einsum('i,ilad,ld->ia',e_b[:nocc_b],t2_1_b, t1_2_b,optimize=True)
         t1_3_b -= 0.5*lib.einsum('i,lida,ld->ia',e_b[:nocc_b],t2_1_ab,t1_2_a,optimize=True)
  
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_1_a 
+            del t2_1_b 
+            del t2_1_ab
+
         t1_3_a += lib.einsum('ld,iadl->ia',t1_2_a,eris_ovvo,optimize=True)
         t1_3_a -= lib.einsum('ld,ladi->ia',t1_2_a,eris_ovvo,optimize=True)
         t1_3_a += lib.einsum('ld,iadl->ia',t1_2_b,eris_ovVO,optimize=True)
@@ -411,7 +494,12 @@ def compute_amplitudes(myadc, eris):
         t1_3_b -= 0.5*lib.einsum('lmad,mdli->ia',t2_2_b,eris_OVOO,optimize=True)
         t1_3_b += 0.5*lib.einsum('lmad,ldmi->ia',t2_2_b,eris_OVOO,optimize=True)
         t1_3_b -=     lib.einsum('mlda,mdli->ia',t2_2_ab,eris_ovOO,optimize=True)
- 
+
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_1_a = t2_1_a_data[:]
+            t2_2_a = t2_2_a_data[:]
+            t2_1_ab = t2_1_ab_data[:]
+
         if isinstance(eris.ovvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
         else :
@@ -443,6 +531,16 @@ def compute_amplitudes(myadc, eris):
             del eris_ovvv
             a += k
 
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_1_a 
+            del t2_2_a 
+            del t2_1_ab
+
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_1_b = t2_1_b_data[:]
+            t2_2_b = t2_2_b_data[:]
+            t2_1_ab = t2_1_ab_data[:]
+
         if isinstance(eris.OVVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
         else :
@@ -472,6 +570,17 @@ def compute_amplitudes(myadc, eris):
             t1_3_b[a:a+k] += 0.25*lib.einsum('lmef,ifde,lmad->ia',t2_1_b,eris_OVVV,t2_1_b,optimize=True)
             del eris_OVVV
             a += k
+
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_1_b 
+            del t2_2_b 
+            del t2_1_ab
+
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_2_ab = t2_2_ab_data[:]
+            t2_1_a = t2_1_a_data[:]
+            t2_1_b = t2_1_b_data[:]
+            t2_1_ab = t2_1_ab_data[:]
 
         if isinstance(eris.ovVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
@@ -519,6 +628,8 @@ def compute_amplitudes(myadc, eris):
 
             del eris_OVvv
             a += k
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_2_ab 
  
         t1_3_a += 0.25*lib.einsum('inde,lamn,lmde->ia',t2_1_a,eris_ovoo,t2_1_a,optimize=True)
         t1_3_a -= 0.25*lib.einsum('inde,maln,lmde->ia',t2_1_a,eris_ovoo,t2_1_a,optimize=True)
@@ -579,24 +690,25 @@ def compute_amplitudes(myadc, eris):
         t1_3_a = t1_3_a/D1_a
         t1_3_b = t1_3_b/D1_b
 
+        if not isinstance(eris.oooo, np.ndarray):
+            del t2_1_a 
+            del t2_1_b 
+            del t2_1_ab
+
         t1_3 = (t1_3_a, t1_3_b)
 
     del (D1_a, D1_b) 
 
-    if not isinstance(eris.oooo, np.ndarray):
-        t2_1_a = radc_ao2mo.write_dataset(t2_1_a)
-        t2_1_ab = radc_ao2mo.write_dataset(t2_1_ab)
-        t2_1_b = radc_ao2mo.write_dataset(t2_1_b)
-
-        if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-            t2_2_a = radc_ao2mo.write_dataset(t2_2_a)
-            t2_2_ab = radc_ao2mo.write_dataset(t2_2_ab)
-            t2_2_b = radc_ao2mo.write_dataset(t2_2_b)
-
-    t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
+    if isinstance(eris.oooo, np.ndarray):
+        t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
+    else :
+        t2_1 = (t2_1_a_data , t2_1_ab_data, t2_1_b_data)
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-        t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
+        if isinstance(eris.oooo, np.ndarray):
+            t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
+        else :
+            t2_2 = (t2_2_a_data , t2_2_ab_data, t2_2_b_data)
         
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
@@ -629,9 +741,9 @@ def compute_energy(myadc, t1, t2, eris):
 
     if (myadc.method == "adc(3)"):
        
-       t2_a += t2[1][0][:].copy()
-       t2_ab += t2[1][1][:].copy()
-       t2_b += t2[1][2][:].copy()
+       t2_a += t2[1][0][:]
+       t2_ab += t2[1][1][:]
+       t2_b += t2[1][2][:]
 
     #Compute MPn correlation energy
 
@@ -746,28 +858,27 @@ def analyze(myadc):
 
     myadc.analyze_eigenvector()
  
-    if myadc.compute_properties == True:
+    if myadc.compute_properties:
 
         logger.info(myadc, "\n*************************************************************")
         logger.info(myadc, "            Spectroscopic factors analysis summary")
         logger.info(myadc, "*************************************************************")
 
-        myadc.spec_analyze()
+        myadc.analyze_spec_factor()
 
 
-def compute_dyson_orb(myadc):
+def compute_dyson_mo(myadc):
      
-    X_a = myadc.X_a
-    X_b = myadc.X_b
+    X_a = myadc.X[0]
+    X_b = myadc.X[1]
 
     if X_a is None:
-        U = np.array(myadc.U)
-        nroots = U.shape[0]
+        nroots = myadc.U.shape[1]
         P,X_a,X_b = myadc.get_properties(nroots)
 
     nroots = X_a.shape[1]
-    dyson_mo_a = np.dot(myadc.mo_coeff[0],X_a).reshape(-1,nroots)
-    dyson_mo_b = np.dot(myadc.mo_coeff[1],X_b).reshape(-1,nroots)
+    dyson_mo_a = np.dot(myadc.mo_coeff[0],X_a)
+    dyson_mo_b = np.dot(myadc.mo_coeff[1],X_b)
 
     dyson_mo = (dyson_mo_a,dyson_mo_b)
 
@@ -840,17 +951,15 @@ class UADC(lib.StreamObject):
         self.method = "adc(2)"
         self.method_type = "ip"
         self.with_df = None
-        self.spec_thresh = 1e-8
         self.compute_mpn_energy = True
         self.compute_spec = True
         self.compute_properties = True
-        self.evec_print_tol = 0.05
+        self.evec_print_tol = 0.1
+        self.spec_thresh_print_tol = 0.1
         self.E = None
         self.U = None
         self.P = None
-        self.X_a = None
-        self.X_b = None
-
+        self.X = (None,)
         
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mol', 'mo_energy_b', 'max_memory', 'scf_energy', 'e_tot', 't1', 'frozen', 'mo_energy_a', 'chkfile', 'max_space', 't2', 'mo_occ', 'max_cycle'))
 
@@ -961,16 +1070,16 @@ class UADC(lib.StreamObject):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, X_a, X_b, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac, X_a, X_b, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
             raise NotImplementedError(self.method_type)
 
         self._adc_es = adc_es
-        return e_exc, v_exc, spec_fac, X_a, X_b
+        return e_exc, v_exc, spec_fac, X
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -980,13 +1089,13 @@ class UADC(lib.StreamObject):
     
     def ea_adc(self, nroots=1, guess=None, eris=None):
         adc_es = UADCEA(self)
-        e_exc, v_exc, spec_fac, xa, xb = adc_es.kernel(nroots, guess, eris)
-        return e_exc, v_exc, spec_fac, xa, xb, adc_es
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
 
     def ip_adc(self, nroots=1, guess=None, eris=None):
         adc_es = UADCIP(self)
-        e_exc, v_exc, spec_fac, xa, xb = adc_es.kernel(nroots, guess, eris)
-        return e_exc, v_exc, spec_fac, xa, xb, adc_es
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
 
     def density_fit(self, auxbasis=None, with_df=None):
         if with_df is None:
@@ -1005,8 +1114,9 @@ class UADC(lib.StreamObject):
     def analyze(self):
         self._adc_es.analyze()
 
-    def compute_dyson_orb(self):   
-        self._adc_es.compute_dyson_orb() 
+    def compute_dyson_mo(self):   
+        return self._adc_es.compute_dyson_mo() 
+
 
 def get_imds_ea(adc, eris=None):
 
@@ -1121,10 +1231,7 @@ def get_imds_ea(adc, eris=None):
     del t2_1_a, t2_1_ab, t2_1_b
 
     #Third-order terms
-
     if(method =='adc(3)'):
-
-        #t2_2_a, t2_2_ab, t2_2_b = t2[1]
 
         eris_oovv = eris.oovv
         eris_OOVV = eris.OOVV
@@ -1214,7 +1321,6 @@ def get_imds_ea(adc, eris=None):
         t2_2_ab = t2[1][1][:]
         t2_2_b = t2[1][2][:]
 
-
         M_ab_a -= 0.5 *  lib.einsum('lmad,lbdm->ab',t2_2_a, eris_ovvo,optimize=True)
         M_ab_a += 0.5 *  lib.einsum('lmad,ldbm->ab',t2_2_a, eris_ovvo,optimize=True)
         M_ab_a -=        lib.einsum('lmad,lbdm->ab',t2_2_ab, eris_ovVO,optimize=True)
@@ -1294,7 +1400,6 @@ def get_imds_ea(adc, eris=None):
         M_ab_b -= 0.25*lib.einsum('b,ab->ab',e_vir_b, M_ab_t, optimize=True)
         M_ab_b -= 0.25*lib.einsum('b,ba->ab',e_vir_b, M_ab_t, optimize=True)
         del M_ab_t
-
         del t2_2_a, t2_2_ab, t2_2_b
 
         M_ab_a -= lib.einsum('lnde,mlbd,neam->ab',t2_1_ab, t2_1_a, eris_OVvo, optimize=True)
@@ -1407,7 +1512,6 @@ def get_imds_ea(adc, eris=None):
             M_ab_a -= 2*0.25*lib.einsum('mlad,mlbd->ab',  temp_t2a_vvvv, t2_1_a, optimize=True)
             M_ab_a -= 2*0.25*lib.einsum('mlaf,mlbf->ab', t2_1_a, temp_t2a_vvvv, optimize=True)
             del (temp_t2a_vvvv)
-            
 
         if isinstance(eris.VVVV_p,np.ndarray):
             eris_VVVV = radc_ao2mo.unpack_eri_2(eris.VVVV_p, nvir_b)
@@ -1697,7 +1801,6 @@ def get_imds_ip(adc, eris=None):
 
     if (method == "adc(3)"):
 
-        #t2_2_a, t2_2_ab, t2_2_b = t2[1]
         eris_oovv = eris.oovv
         eris_OOVV = eris.OOVV
         eris_ooVV = eris.ooVV
@@ -2518,7 +2621,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
 ############ ADC(2) a - ibc and ibc - a coupling blocks #########################
 
-
         if isinstance(eris.ovvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
         else :
@@ -2605,7 +2707,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         
         s[s_aba:f_aba] += temp.reshape(-1)
         del temp
-
 
 ############### ADC(2) iab - jcd block ############################
 
@@ -3552,7 +3653,6 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
     method = adc.method
 
-    #t2_1_a, t2_1_ab, t2_1_b = adc.t2[0]
     t1_2_a, t1_2_b = adc.t1[0]
     t2_1_a = adc.t2[0][0][:]
     t2_1_ab = adc.t2[0][1][:]
@@ -3610,7 +3710,6 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_bab:f_bab] += t2_1_ab_t[:,orb,:,:].reshape(-1)
 
         else :
-
             T[s_a:f_a] += idn_vir_a[(orb-nocc_a), :]
             T[s_a:f_a] -= 0.25*lib.einsum('klc,klac->a',t2_1_a[:,:,(orb-nocc_a),:], t2_1_a, optimize = True)
             T[s_a:f_a] -= 0.25*lib.einsum('klc,klac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
@@ -3811,27 +3910,47 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_a:
-                T[s_a:f_a] += 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_a[:,orb,:,:]), t2_2_a, optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_ab[orb,:,:,:]), t2_2_ab, optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('kcd,ikcd->i',np.ascontiguousarray(t2_1_ab[orb,:,:,:]), t2_2_ab, optimize = True)
+                     
+                t2_1_a_tmp = np.ascontiguousarray(t2_1_a[:,orb,:,:])
+                t2_1_ab_tmp = np.ascontiguousarray(t2_1_ab[orb,:,:,:])
 
-                T[s_a:f_a] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_a,  np.ascontiguousarray(t2_2_a[:,orb,:,:]),optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[orb,:,:,:]),optimize = True)
-                T[s_a:f_a] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[orb,:,:,:]),optimize = True)
+                T[s_a:f_a] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_a_tmp, t2_2_a, optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1_ab_tmp, t2_2_ab, optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1_ab_tmp, t2_2_ab, optimize = True)
+       
+                del t2_1_a_tmp, t2_1_ab_tmp
+
+                t2_2_a_tmp = np.ascontiguousarray(t2_2_a[:,orb,:,:])
+                t2_2_ab_tmp = np.ascontiguousarray(t2_2_ab[orb,:,:,:])
+
+                T[s_a:f_a] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_a,  t2_2_a_tmp,optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1_ab, t2_2_ab_tmp,optimize = True)
+                T[s_a:f_a] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1_ab, t2_2_ab_tmp,optimize = True)
+
+                del t2_2_a_tmp, t2_2_ab_tmp
             else:
-                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',np.ascontiguousarray(t2_1_a[:,:,(orb-nocc_a),:]), t1_2_a,optimize = True)
-                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',np.ascontiguousarray(t2_1_ab[:,:,(orb-nocc_a),:]), t1_2_b,optimize = True)
+                t2_1_a_tmp =  np.ascontiguousarray(t2_1_a[:,:,(orb-nocc_a),:])
+                t2_1_ab_tmp = np.ascontiguousarray(t2_1_ab[:,:,(orb-nocc_a),:])
+
+                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_a_tmp, t1_2_a,optimize = True)
+                T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_ab_tmp, t1_2_b,optimize = True)
                 T[s_a:f_a] += t1_3_a[:,(orb-nocc_a)]
+                del t2_1_a_tmp, t2_1_ab_tmp
 
 ######## spin = beta  ############################################
     else:
 ######## ADC(2) 1h part  ############################################
 
         if orb < nocc_b:
+            
+            t2_1_b_tmp = np.ascontiguousarray(t2_1_b[:,orb,:,:])
+            t2_1_ab_tmp = np.ascontiguousarray(t2_1_ab[:,orb,:,:])
+
             T[s_b:f_b] = idn_occ_b[orb, :]
-            T[s_b:f_b]+= 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_b[:,orb,:,:]), t2_1_b, optimize = True)
-            T[s_b:f_b]-= 0.25*lib.einsum('kdc,kidc->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_1_ab, optimize = True)
-            T[s_b:f_b]-= 0.25*lib.einsum('kcd,kicd->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_1_ab, optimize = True)
+            T[s_b:f_b]+= 0.25*lib.einsum('kdc,ikdc->i',t2_1_b_tmp, t2_1_b, optimize = True)
+            T[s_b:f_b]-= 0.25*lib.einsum('kdc,kidc->i',t2_1_ab_tmp, t2_1_ab, optimize = True)
+            T[s_b:f_b]-= 0.25*lib.einsum('kcd,kicd->i',t2_1_ab_tmp, t2_1_ab, optimize = True)
+            del t2_1_b_tmp, t2_1_ab_tmp
         else :
             T[s_b:f_b] += t1_2_b[:,(orb-nocc_b)]
 
@@ -3868,17 +3987,33 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_b:
-                T[s_b:f_b] += 0.25*lib.einsum('kdc,ikdc->i',np.ascontiguousarray(t2_1_b[:,orb,:,:]), t2_2_b, optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kdc,kidc->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_2_ab, optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kcd,kicd->i',np.ascontiguousarray(t2_1_ab[:,orb,:,:]), t2_2_ab, optimize = True)
 
-                T[s_b:f_b] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_b, np.ascontiguousarray(t2_2_b[:,orb,:,:]),optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kicd,kcd->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[:,orb,:,:]),optimize = True)
-                T[s_b:f_b] -= 0.25*lib.einsum('kidc,kdc->i',t2_1_ab, np.ascontiguousarray(t2_2_ab[:,orb,:,:]),optimize = True)
+                t2_1_b_tmp = np.ascontiguousarray(t2_1_b[:,orb,:,:])
+                t2_1_ab_tmp = np.ascontiguousarray(t2_1_ab[:,orb,:,:])
+
+                T[s_b:f_b] += 0.25*lib.einsum('kdc,ikdc->i',t2_1_b_tmp, t2_2_b, optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kdc,kidc->i',t2_1_ab_tmp, t2_2_ab, optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kcd,kicd->i',t2_1_ab_tmp, t2_2_ab, optimize = True)
+
+                del t2_1_b_tmp, t2_1_ab_tmp
+
+                t2_2_b_tmp = np.ascontiguousarray(t2_2_b[:,orb,:,:])
+                t2_2_ab_tmp = np.ascontiguousarray(t2_2_ab[:,orb,:,:])
+
+                T[s_b:f_b] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_b,  t2_2_b_tmp ,optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kicd,kcd->i',t2_1_ab, t2_2_ab_tmp,optimize = True)
+                T[s_b:f_b] -= 0.25*lib.einsum('kidc,kdc->i',t2_1_ab, t2_2_ab_tmp,optimize = True)
+                
+                del t2_2_b_tmp, t2_2_ab_tmp
+
             else:
-                T[s_b:f_b] += 0.5*lib.einsum('ikc,kc->i',np.ascontiguousarray(t2_1_b[:,:,(orb-nocc_b),:]), t1_2_b,optimize = True)
-                T[s_b:f_b] += 0.5*lib.einsum('kic,kc->i',np.ascontiguousarray(t2_1_ab[:,:,:,(orb-nocc_b)]), t1_2_a,optimize = True)
+                t2_1_b_tmp  = np.ascontiguousarray(t2_1_b[:,:,(orb-nocc_b),:])
+                t2_1_ab_tmp = np.ascontiguousarray(t2_1_ab[:,:,:,(orb-nocc_b)])
+
+                T[s_b:f_b] += 0.5*lib.einsum('ikc,kc->i',t2_1_b_tmp, t1_2_b,optimize = True)
+                T[s_b:f_b] += 0.5*lib.einsum('kic,kc->i',t2_1_ab_tmp, t1_2_a,optimize = True)
                 T[s_b:f_b] += t1_3_b[:,(orb-nocc_b)]
+                del t2_1_b_tmp, t2_1_ab_tmp
 
     return T
 
@@ -3907,19 +4042,12 @@ def get_trans_moments(adc):
     return (T_a, T_b)
 
    
-def dyson_orb(adc, X_a, X_b, nroots=1):
+def analyze_spec_factor(adc):
 
-    dyson_mo_a = np.dot(adc.mo_coeff[0],x_a).reshape(-1,nroots)
-    dyson_mo_b = np.dot(adc.mo_coeff[1],x_b).reshape(-1,nroots)
+    X_a = adc.X[0]
+    X_b = adc.X[1]
 
-    return dyson_mo_a,dyson_mo_b
-
-def spec_analyze(adc):
-
-    X_a = adc.X_a
-    X_b = adc.X_b
-
-    logger.info(adc, "Print spectroscopic factors > %E\n", adc.spec_thresh)
+    logger.info(adc, "Print spectroscopic factors > %E\n", adc.spec_thresh_print_tol)
 
     X_tot = (X_a, X_b)
 
@@ -3931,12 +4059,9 @@ def spec_analyze(adc):
 
         X_2 = (X.copy()**2)
 
-  #     thresh = 0.000000001
-        thresh = adc.spec_thresh
-
+        thresh = adc.spec_thresh_print_tol
 
         for i in range(X_2.shape[1]):
-
 
             sort = np.argsort(-X_2[:,i])
             X_2_row = X_2[:,i]
@@ -3955,7 +4080,6 @@ def spec_analyze(adc):
 
                 sym = sym[sort]
 
-
             spec_Contribution = X_2_row[X_2_row > thresh]
             index_mo = sort[X_2_row > thresh]+1
 
@@ -3968,7 +4092,6 @@ def spec_analyze(adc):
 
             for c in range(index_mo.shape[0]):
                 logger.info(adc, '     %3.d          %10.8f                %s', index_mo[c], spec_Contribution[c], sym[c])
-                #logger.info(adc, 'HF %s MO %3.d  Spec. Contribution %10.10f Orbital symmetry %s', spin, index_mo[c], spec_Contribution[c], sym[c])
 
             logger.info(adc, '\nPartial spec. Factor sum = %10.8f', np.sum(spec_Contribution))
             logger.info(adc, "\n*************************************************************\n")
@@ -4010,22 +4133,22 @@ def analyze_eigenvector_ea(adc):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    U = np.array(adc.U)
+    U = adc.U
 
-    for I in range(U.shape[0]):
+    for I in range(U.shape[1]):
         U1 = U[I, :f_b]
         U2 = U[I, f_b:]
         U1dotU1 = np.dot(U1, U1) 
         U2dotU2 = np.dot(U2, U2) 
            
-        temp_aaa = np.zeros((nocc_b, nvir_b, nvir_b))
-        temp_aaa[:,ab_a[0],ab_a[1]] =  U[I,s_aaa:f_aaa].reshape(nocc_a,-1).copy()
-        temp_aaa[:,ab_a[1],ab_a[0]] = -U[I,s_aaa:f_aaa].reshape(nocc_a,-1).copy()
+        temp_aaa = np.zeros((nocc_a, nvir_a, nvir_a))
+        temp_aaa[:,ab_a[0],ab_a[1]] =  U[s_aaa:f_aaa,I].reshape(nocc_a,-1).copy()
+        temp_aaa[:,ab_a[1],ab_a[0]] = -U[s_aaa:f_aaa,I].reshape(nocc_a,-1).copy()
         U_aaa = temp_aaa.reshape(-1).copy()
 
         temp_bbb = np.zeros((nocc_b, nvir_b, nvir_b))
-        temp_bbb[:,ab_b[0],ab_b[1]] =  U[I,s_bbb:f_bbb].reshape(nocc_b,-1).copy()
-        temp_bbb[:,ab_b[1],ab_b[0]] = -U[I,s_bbb:f_bbb].reshape(nocc_b,-1).copy()
+        temp_bbb[:,ab_b[0],ab_b[1]] =  U[s_bbb:f_bbb,I].reshape(nocc_b,-1).copy()
+        temp_bbb[:,ab_b[1],ab_b[0]] = -U[s_bbb:f_bbb,I].reshape(nocc_b,-1).copy()
         U_bbb = temp_bbb.reshape(-1).copy()
 
 
@@ -4175,6 +4298,7 @@ def analyze_eigenvector_ea(adc):
                 logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_bbb_val[idx])
         logger.info(adc, "\n*************************************************************\n")
 
+
 def analyze_eigenvector_ip(adc):
 
     nocc_a = adc.nocc_a
@@ -4212,29 +4336,28 @@ def analyze_eigenvector_ip(adc):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    U = np.array(adc.U)
+    U = adc.U
 
-    for I in range(U.shape[0]):
-        U1 = U[I, :f_b]
-        U2 = U[I, f_b:]
+    for I in range(U.shape[1]):
+        U1 = U[:f_b,I]
+        U2 = U[f_b:,I]
         U1dotU1 = np.dot(U1, U1) 
         U2dotU2 = np.dot(U2, U2) 
            
         temp_aaa = np.zeros((nvir_a, nocc_a, nocc_a))
-        temp_aaa[:,ij_a[0],ij_a[1]] =  U[I,s_aaa:f_aaa].reshape(nvir_a,-1).copy()
-        temp_aaa[:,ij_a[1],ij_a[0]] = -U[I,s_aaa:f_aaa].reshape(nvir_a,-1).copy()
+        temp_aaa[:,ij_a[0],ij_a[1]] =  U[s_aaa:f_aaa,I].reshape(nvir_a,-1).copy()
+        temp_aaa[:,ij_a[1],ij_a[0]] = -U[s_aaa:f_aaa,I].reshape(nvir_a,-1).copy()
         U_aaa = temp_aaa.reshape(-1).copy()
 
         temp_bbb = np.zeros((nvir_b, nocc_b, nocc_b))
-        temp_bbb[:,ij_b[0],ij_b[1]] =  U[I,s_bbb:f_bbb].reshape(nvir_b,-1).copy()
-        temp_bbb[:,ij_b[1],ij_b[0]] = -U[I,s_bbb:f_bbb].reshape(nvir_b,-1).copy()
+        temp_bbb[:,ij_b[0],ij_b[1]] =  U[s_bbb:f_bbb,I].reshape(nvir_b,-1).copy()
+        temp_bbb[:,ij_b[1],ij_b[0]] = -U[s_bbb:f_bbb,I].reshape(nvir_b,-1).copy()
         U_bbb = temp_bbb.reshape(-1).copy()
 
-
-        U_sq = U[I,:].copy()**2
+        U_sq = U[:,I].copy()**2
         ind_idx = np.argsort(-U_sq)
         U_sq = U_sq[ind_idx] 
-        U_sorted = U[I,ind_idx].copy()
+        U_sorted = U[ind_idx,I].copy()
 
         U_sq_aaa = U_aaa.copy()**2
         U_sq_bbb = U_bbb.copy()**2
@@ -4328,36 +4451,7 @@ def analyze_eigenvector_ip(adc):
             temp_doubles_bbb_idx[2] = int(j_rem + 1)
             doubles_bbb_idx.append(temp_doubles_bbb_idx)
             temp_doubles_bbb_idx = [0,0,0]
-        """
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        logger.info(adc,'%s | root %d | Singles norm  = %6.4f | Doubles norm = %6.4f | occ_alpha = %2d | occ_beta = %2d | vir_alpha = %2d | vir_beta = %2d',adc.method ,I, U1dotU1, U2dotU2, nocc_a, nocc_b, nvir_a, nvir_b)
-        print("Obitals contributing to eigenvectors components with abs value > ", evec_print_tol)  
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print( "Singles block: ") 
-        for idx,print_singles_a in enumerate(singles_a_idx):
-            logger.info(adc, 'occ_alpha(i) = %2d | amplitude = %7.4f', print_singles_a, singles_a_val[idx])
-        for idx,print_singles_b in enumerate(singles_b_idx):
-            logger.info(adc, 'occ_beta(i) = %3d | amplitude = %7.4f', print_singles_b, singles_b_val[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        print("Doubles block: ")
-        if doubles_aaa_idx != []:
-            print("---------------- (alpha|alpha|alpha) ----------------")
-        for idx,print_aaa in enumerate(doubles_aaa_idx):
-            logger.info(adc, 'vir_alpha(i) = %2d | occ_alpha(a) = %2d | occ_alpha(b) = %2d | amplitude = %7.4f', print_aaa[0], print_aaa[1], print_aaa[2], U_sorted_aaa[idx])
-        if doubles_bab_idx != []:
-            print("---------------- (beta|alpha|beta) ----------------")
-        for idx,print_bab in enumerate(doubles_bab_idx):
-            logger.info(adc, 'vir_beta(i) = %3d | occ_alpha(a) = %2d | occ_beta(b) = %3d | amplitude = %7.4f', print_bab[0], print_bab[1], print_bab[2], doubles_bab_val[idx])
-        if doubles_aba_idx != []:
-            print("---------------- (alpha|beta|alpha) ----------------")
-        for idx,print_aba in enumerate(doubles_aba_idx):
-            logger.info(adc, 'vir_alpha(i) = %2d | occ_beta(a) = %3d | occ_alpha(b) = %2d | amplitude = %7.4f', print_aba[0], print_aba[1], print_aba[2], doubles_aba_val[idx])
-        if doubles_bbb_idx != []:
-            print("---------------- (beta|beta|beta) ----------------")
-        for idx,print_bbb in enumerate(doubles_bbb_idx):
-            logger.info(adc, 'vir_beta(i) = %3d | occ_beta(a) = %3d | occ_beta(b) = %3d | amplitude = %7.4f', print_bbb[0], print_bbb[1], print_bbb[2], U_sorted_bbb[idx])
-        print("----------------------------------------------------------------------------------------------------------------------------------------------")   
-        """      
+
         doubles_aaa_val = list(U_sorted_aaa)
         doubles_bbb_val = list(U_sorted_bbb)
         
@@ -4417,17 +4511,19 @@ def get_properties(adc, nroots=1):
     T_a = np.array(T_a)
     T_b = np.array(T_b)
 
-    U = np.array(adc.U)
+    U = adc.U
 
     #Spectroscopic amplitudes
-    X_a = np.dot(T_a, U.T).reshape(-1,nroots)
-    X_b = np.dot(T_b, U.T).reshape(-1,nroots)
+    X_a = np.dot(T_a, U).reshape(-1,nroots)
+    X_b = np.dot(T_b, U).reshape(-1,nroots)
+
+    X = (X_a,X_b)
 
     #Spectroscopic factors
     P = lib.einsum("pi,pi->i", X_a, X_a)
     P += lib.einsum("pi,pi->i", X_b, X_b)
 
-    return P, X_a, X_b
+    return P, X
 
 
 class UADCEA(UADC):
@@ -4493,16 +4589,14 @@ class UADCEA(UADC):
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.spec_thresh = adc.spec_thresh
-
+        self.spec_thresh_print_tol = adc.spec_thresh_print_tol
         self.evec_print_tol = adc.evec_print_tol
 
         self.compute_properties = adc.compute_properties
         self.E = adc.E
         self.U = adc.U
         self.P = adc.P
-        self.X_a = adc.X_a
-        self.X_b = adc.X_b
+        self.X = adc.X
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -4514,10 +4608,10 @@ class UADCEA(UADC):
     get_diag = ea_adc_diag
     compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
-    spec_analyze = spec_analyze
+    analyze_spec_factor = analyze_spec_factor
     get_properties = get_properties
     analyze = analyze
-    compute_dyson_orb = compute_dyson_orb
+    compute_dyson_mo = compute_dyson_mo
     
     analyze_eigenvector = analyze_eigenvector_ea
 
@@ -4610,17 +4704,14 @@ class UADCIP(UADC):
         self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
-        self.spec_thresh = adc.spec_thresh
-
+        self.spec_thresh_print_tol = adc.spec_thresh_print_tol
         self.evec_print_tol = adc.evec_print_tol
 
         self.compute_properties = adc.compute_properties
         self.E = adc.E
         self.U = adc.U
         self.P = adc.P
-        self.X_a = adc.X_a
-        self.X_b = adc.X_b
-
+        self.X = adc.X
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -4634,10 +4725,10 @@ class UADCIP(UADC):
     get_trans_moments = get_trans_moments
     get_properties = get_properties
 
-    spec_analyze = spec_analyze
+    analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector_ip
     analyze = analyze
-    compute_dyson_orb = compute_dyson_orb
+    compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :

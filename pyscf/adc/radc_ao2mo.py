@@ -16,7 +16,6 @@
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
-import os
 import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
@@ -180,7 +179,6 @@ def transform_integrals_outcore(myadc):
 
 
 ### DF integral transformation for integrals in Chemists' notation###
-#@profile
 def transform_integrals_df(myadc):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
@@ -218,8 +216,6 @@ def transform_integrals_df(myadc):
     eris.Lov = eris.Lov.reshape(naux,nocc*nvir)
     Lvo = Lvo.reshape(naux,nocc*nvir)
     eris.Lvv = eris.Lvv.reshape(naux,nvir*nvir)
-
-    #Lvv_p = lib.pack_tril(eris.Lvv)
 
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')

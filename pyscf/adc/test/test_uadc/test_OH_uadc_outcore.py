@@ -48,7 +48,7 @@ class KnownValues(unittest.TestCase):
   
         myadc.max_memory = 50
         myadc.method_type = "ea"
-        e,v,p,xa,xb = myadc.kernel(nroots=3)
+        e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.16402828164387806, 6)
@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(2)-x"
 
         myadc.method_type = "ip"
-        e,v,p,xa,xb = myadc.kernel(nroots=3)
+        e,v,p,x = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.4389083582117278, 6)
         self.assertAlmostEqual(e[1], 0.45720829251439343, 6)
@@ -89,7 +89,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.17616203329072136, 6)
 
         myadc.method_type = "ea"
-        e,v,p,xa,xb = myadc.kernel(nroots=3)
+        e,v,p,x = myadc.kernel(nroots=3)
+        myadc.analyze()
 
         self.assertAlmostEqual(e[0], -0.045097652872531736, 6)
         self.assertAlmostEqual(e[1], 0.03004291636971322, 6)

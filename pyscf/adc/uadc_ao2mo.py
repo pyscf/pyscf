@@ -123,13 +123,11 @@ def transform_integrals_outcore(myadc):
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc_a,nvir_a,nvir_a,nocc_a), 'f8', chunks=(nocc_a,1,nvir_a,nocc_a))
     eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc_a,nvir_a,nvpair_a), 'f8')
 
-
     eris.OOOO = eris.feri1.create_dataset('OOOO', (nocc_b,nocc_b,nocc_b,nocc_b), 'f8')
     eris.OOVV = eris.feri1.create_dataset('OOVV', (nocc_b,nocc_b,nvir_b,nvir_b), 'f8', chunks=(nocc_b,nocc_b,1,nvir_b))
     eris.OVOO = eris.feri1.create_dataset('OVOO', (nocc_b,nvir_b,nocc_b,nocc_b), 'f8', chunks=(nocc_b,1,nocc_b,nocc_b))
     eris.OVVO = eris.feri1.create_dataset('OVVO', (nocc_b,nvir_b,nvir_b,nocc_b), 'f8', chunks=(nocc_b,1,nvir_b,nocc_b))
     eris.OVVV = eris.feri1.create_dataset('OVVV', (nocc_b,nvir_b,nvpair_b), 'f8')
-
 
     eris.ooOO = eris.feri1.create_dataset('ooOO', (nocc_a,nocc_a,nocc_b,nocc_b), 'f8')
     eris.ooVV = eris.feri1.create_dataset('ooVV', (nocc_a,nocc_a,nvir_b,nvir_b), 'f8', chunks=(nocc_a,nocc_a,1,nvir_b))
@@ -137,12 +135,10 @@ def transform_integrals_outcore(myadc):
     eris.ovVO = eris.feri1.create_dataset('ovVO', (nocc_a,nvir_a,nvir_b,nocc_b), 'f8', chunks=(nocc_a,1,nvir_b,nocc_b))
     eris.ovVV = eris.feri1.create_dataset('ovVV', (nocc_a,nvir_a,nvpair_b), 'f8')
 
-
     eris.OOvv = eris.feri1.create_dataset('OOvv', (nocc_b,nocc_b,nvir_a,nvir_a), 'f8', chunks=(nocc_b,nocc_b,1,nvir_a))
     eris.OVoo = eris.feri1.create_dataset('OVoo', (nocc_b,nvir_b,nocc_a,nocc_a), 'f8', chunks=(nocc_b,1,nocc_a,nocc_a))
     eris.OVvo = eris.feri1.create_dataset('OVvo', (nocc_b,nvir_b,nvir_a,nocc_a), 'f8', chunks=(nocc_b,1,nvir_a,nocc_a))
     eris.OVvv = eris.feri1.create_dataset('OVvv', (nocc_b,nvir_b,nvpair_a), 'f8')
-
 
     cput1 = time.clock(), time.time()
     mol = myadc.mol
@@ -218,8 +214,6 @@ def transform_integrals_outcore(myadc):
 
         if chnk_size <= 0 :
             chnk_size = 1
-
-        chnk_size = 10
 
         for p in range(0,vir_a.shape[1],chnk_size):
 
@@ -395,49 +389,39 @@ def transform_integrals_df(myadc):
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc_a,nocc_a,nvir_a,nvir_a), 'f8', chunks=(nocc_a,nocc_a,1,nvir_a))
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc_a,nvir_a,nocc_a,nocc_a), 'f8', chunks=(nocc_a,1,nocc_a,nocc_a))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc_a,nvir_a,nvir_a,nocc_a), 'f8', chunks=(nocc_a,1,nvir_a,nocc_a))
-    #eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc_a,nvir_a,nvir_pair_a), 'f8')
 
     eris.oooo[:] = lib.ddot(Loo.T, Loo).reshape(nocc_a,nocc_a,nocc_a,nocc_a)
     eris.ovoo[:] = lib.ddot(eris.Lov.T, Loo).reshape(nocc_a,nvir_a,nocc_a,nocc_a)
     eris.oovv[:] = lib.unpack_tril(lib.ddot(Loo.T, Lvv_p)).reshape(nocc_a,nocc_a,nvir_a,nvir_a)
     eris.ovvo[:] = lib.ddot(eris.Lov.T, Lvo).reshape(nocc_a,nvir_a,nvir_a,nocc_a)
-    #eris.ovvv[:] = lib.ddot(Lov.T, Lvv_p).reshape(nocc_a,nvir_a,nvir_pair_a)
-
 
     eris.OOOO = eris.feri1.create_dataset('OOOO', (nocc_b,nocc_b,nocc_b,nocc_b), 'f8')
     eris.OOVV = eris.feri1.create_dataset('OOVV', (nocc_b,nocc_b,nvir_b,nvir_b), 'f8', chunks=(nocc_b,nocc_b,1,nvir_b))
     eris.OVOO = eris.feri1.create_dataset('OVOO', (nocc_b,nvir_b,nocc_b,nocc_b), 'f8', chunks=(nocc_b,1,nocc_b,nocc_b))
     eris.OVVO = eris.feri1.create_dataset('OVVO', (nocc_b,nvir_b,nvir_b,nocc_b), 'f8', chunks=(nocc_b,1,nvir_b,nocc_b))
-    #eris.OVVV = eris.feri1.create_dataset('OVVV', (nocc_b,nvir_b,nvir_pair_b), 'f8')
 
     eris.OOOO[:] = lib.ddot(LOO.T, LOO).reshape(nocc_b,nocc_b,nocc_b,nocc_b)
     eris.OVOO[:] = lib.ddot(eris.LOV.T, LOO).reshape(nocc_b,nvir_b,nocc_b,nocc_b)
     eris.OOVV[:] = lib.unpack_tril(lib.ddot(LOO.T, LVV_p)).reshape(nocc_b,nocc_b,nvir_b,nvir_b)
     eris.OVVO[:] = lib.ddot(eris.LOV.T, LVO).reshape(nocc_b,nvir_b,nvir_b,nocc_b)
-    #eris.OVVV[:] = lib.ddot(LOV.T, LVV_p).reshape(nocc_b,nvir_b,nvir_pair_b)
 
     eris.ooOO = eris.feri1.create_dataset('ooOO', (nocc_a,nocc_a,nocc_b,nocc_b), 'f8')
     eris.ooVV = eris.feri1.create_dataset('ooVV', (nocc_a,nocc_a,nvir_b,nvir_b), 'f8', chunks=(nocc_a,nocc_a,1,nvir_b))
     eris.ovOO = eris.feri1.create_dataset('ovOO', (nocc_a,nvir_a,nocc_b,nocc_b), 'f8', chunks=(nocc_a,1,nocc_b,nocc_b))
     eris.ovVO = eris.feri1.create_dataset('ovVO', (nocc_a,nvir_a,nvir_b,nocc_b), 'f8', chunks=(nocc_a,1,nvir_b,nocc_b))
-    #eris.ovVV = eris.feri1.create_dataset('ovVV', (nocc_a,nvir_a,nvir_pair_b), 'f8')
 
     eris.ooOO[:] = lib.ddot(Loo.T, LOO).reshape(nocc_a,nocc_a,nocc_b,nocc_b)
     eris.ooVV[:] = lib.unpack_tril(lib.ddot(Loo.T, LVV_p)).reshape(nocc_a,nocc_a,nvir_b,nvir_b)
     eris.ovOO[:] = lib.ddot(eris.Lov.T, LOO).reshape(nocc_a,nvir_a,nocc_b,nocc_b)
     eris.ovVO[:] = lib.ddot(eris.Lov.T, LVO).reshape(nocc_a,nvir_a,nvir_b,nocc_b)
-    #eris.ovVV[:] = lib.ddot(Lov.T, LVV_p).reshape(nocc_a,nvir_a,nvir_pair_b)
-
 
     eris.OOvv = eris.feri1.create_dataset('OOvv', (nocc_b,nocc_b,nvir_a,nvir_a), 'f8', chunks=(nocc_b,nocc_b,1,nvir_a))
     eris.OVoo = eris.feri1.create_dataset('OVoo', (nocc_b,nvir_b,nocc_a,nocc_a), 'f8', chunks=(nocc_b,1,nocc_a,nocc_a))
     eris.OVvo = eris.feri1.create_dataset('OVvo', (nocc_b,nvir_b,nvir_a,nocc_a), 'f8', chunks=(nocc_b,1,nvir_a,nocc_a))
-    #eris.OVvv = eris.feri1.create_dataset('OVvv', (nocc_b,nvir_b,nvir_pair_a), 'f8')
 
     eris.OOvv[:] = lib.unpack_tril(lib.ddot(LOO.T, Lvv_p)).reshape(nocc_b,nocc_b,nvir_a,nvir_a)  
     eris.OVoo[:] = lib.ddot(eris.LOV.T, Loo).reshape(nocc_b,nvir_b,nocc_a,nocc_a)
     eris.OVvo[:] = lib.ddot(eris.LOV.T, Lvo).reshape(nocc_b,nvir_b,nvir_a,nocc_a)
-    #eris.OVvv[:] = lib.ddot(LOV.T, Lvv_p).reshape(nocc_b,nvir_b,nvir_pair_a)
 
     eris.Lov = eris.Lov.reshape(naux,nocc_a,nvir_a)
     eris.LOV = eris.LOV.reshape(naux,nocc_b,nvir_b)

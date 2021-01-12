@@ -29,7 +29,6 @@ from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
 from pyscf import symm
-import pandas as pd 
 
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
@@ -51,9 +50,11 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
-    conv, adc.E, adc.U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
+    conv, adc.E, U = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
-    if adc.compute_properties == True:
+    adc.U = np.array(U).T.copy()
+
+    if adc.compute_properties:
         adc.P,adc.X = adc.get_properties(nroots)
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
@@ -69,7 +70,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     for n in range(nroots):
         print_string = ('%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
-        if adc.compute_properties == True:
+        if adc.compute_properties:
             print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
         print_string += ("|  conv = %s" % conv[n])
         logger.info(adc, print_string)
@@ -472,7 +473,6 @@ def contract_ladder(myadc,t_amp,vvvv):
             t[a:a+k] = np.dot(vvvv_p,t_amp).reshape(-1,nvir,nocc*nocc)
             del (vvvv_p)
             a += k
-            #print("Buffer number", a, flush=True)
     else :
         raise Exception("Unknown vvvv type") 
 
@@ -523,7 +523,7 @@ def analyze(myadc):
 
     myadc.analyze_eigenvector()
  
-    if myadc.compute_properties == True:
+    if myadc.compute_properties:
 
         logger.info(myadc, "\n*************************************************************")
         logger.info(myadc, "            Spectroscopic factors analysis summary")
@@ -532,17 +532,16 @@ def analyze(myadc):
         myadc.analyze_spec_factor()
 
 
-def compute_dyson_orb(myadc):
+def compute_dyson_mo(myadc):
      
     X = myadc.X
 
     if X is None:
-        U = np.array(myadc.U)
-        nroots = U.shape[0]
+        nroots = myadc.U.shape[1]
         P,X = myadc.get_properties(nroots)
 
     nroots = X.shape[1]
-    dyson_mo = np.dot(myadc.mo_coeff,X).reshape(-1,nroots)
+    dyson_mo = np.dot(myadc.mo_coeff,X)
 
     return dyson_mo
 
@@ -616,8 +615,8 @@ class RADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_properties = True
-        self.evec_print_tol = 0.05
-        self.spec_thresh = 1e-8
+        self.evec_print_tol = 0.1
+        self.spec_thresh_print_tol = 0.1
 
         self.E = None
         self.U = None
@@ -775,8 +774,8 @@ class RADC(lib.StreamObject):
     def analyze(self):
         self._adc_es.analyze()
 
-    def compute_dyson_orb(self):   
-        self._adc_es.compute_dyson_orb() 
+    def compute_dyson_mo(self):   
+        return self._adc_es.compute_dyson_mo() 
          
 
 def get_imds_ea(adc, eris=None):
@@ -878,7 +877,6 @@ def get_imds_ea(adc, eris=None):
             a += k
 
         cput0 = log.timer_debug1("Completed M_ab ovvv ADC(3) calculation", *cput0)
-
         t2_2 = t2[1][:]
 
         M_ab -= 0.5 *  lib.einsum('lmad,lbdm->ab',t2_2, eris_ovvo,optimize=True)
@@ -1085,7 +1083,6 @@ def get_imds_ea(adc, eris=None):
             M_ab += 0.25*lib.einsum('lmad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
             M_ab -= 0.25*lib.einsum('lmad,lmbd->ab', temp_t2_vvvv, t2_1, optimize=True)
             M_ab -= lib.einsum('mlad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
-          
             del (temp_t2_vvvv)
 
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
@@ -1109,12 +1106,10 @@ def get_imds_ea(adc, eris=None):
                     del eris_vvvv
                     a += k
             else :
-
                 for p in range(0,nvir,chnk_size):
 
                     vvvv = dfadc.get_vvvv_df(adc, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
                     k = vvvv.shape[0]
-
                     temp[a:a+k] -= lib.einsum('mldf,mled,aebf->ab',t2_1, t2_1,  vvvv, optimize=True)
                     temp[a:a+k] += lib.einsum('mldf,lmed,aebf->ab',t2_1, t2_1,  vvvv, optimize=True)
                     temp[a:a+k] += lib.einsum('lmdf,mled,aebf->ab',t2_1, t2_1,  vvvv, optimize=True)
@@ -1214,8 +1209,6 @@ def get_imds_ip(adc, eris=None):
 
     if (method == "adc(3)"):
       
-            #t2_2 = t2[1]
-      
             eris_oovv = eris.oovv
             eris_ovoo = eris.ovoo
             eris_oooo = eris.oooo
@@ -1227,7 +1220,6 @@ def get_imds_ip(adc, eris=None):
             M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
             M_ij -= lib.einsum('ld,idlj->ij',t1_2, eris_ovoo,optimize=True)
             M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
-
             t2_2 = t2[1][:]
 
             M_ij += 0.5* lib.einsum('ilde,jdel->ij',t2_2, eris_ovvo,optimize=True)
@@ -1235,7 +1227,6 @@ def get_imds_ip(adc, eris=None):
             M_ij -= 0.5* lib.einsum('ilde,jedl->ij',t2_2, eris_ovvo,optimize=True)
             M_ij += 0.5* lib.einsum('lide,jedl->ij',t2_2, eris_ovvo,optimize=True)
             M_ij += lib.einsum('ilde,jdel->ij',t2_2, eris_ovvo,optimize=True)
-
 
             M_ij += 0.5* lib.einsum('jlde,ledi->ij',t2_2, eris_ovvo,optimize=True)
             M_ij -= 0.5* lib.einsum('ljde,ledi->ij',t2_2, eris_ovvo,optimize=True)
@@ -1286,7 +1277,6 @@ def get_imds_ip(adc, eris=None):
             M_ij += 0.5 * lib.einsum('j,ij->ij',e_occ, M_ij_t_1, optimize=True)
             M_ij += 0.5 * lib.einsum('j,ji->ij',e_occ, M_ij_t_1, optimize=True)
             del M_ij_t_1
-
 
             if isinstance(eris.vvvv, np.ndarray):
                 eris_vvvv = eris.vvvv
@@ -1453,7 +1443,6 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     # Compute precond in p1-p1 block
 
     M_ab_diag = np.diagonal(M_ab)
-
     diag[s1:f1] = M_ab_diag.copy()
 
     # Compute precond in 2p1h-2p1h block
@@ -1541,7 +1530,6 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
 
     # Compute precond in h1-h1 block
     M_ij_diag = np.diagonal(M_ij)
-
     diag[s1:f1] = M_ij_diag.copy()
 
     # Compute precond in 2p1h-2p1h block
@@ -1626,7 +1614,6 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
 
-
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -1710,7 +1697,6 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         s[s2:f2] +=  D_iab * r2.reshape(-1)
 
 ############### ADC(3) iab - jcd block ############################
-
 
         if (method == "adc(2)-x" or method == "adc(3)"):
 
@@ -2143,11 +2129,9 @@ def ea_compute_trans_moments(adc, orb):
         t1_3 = adc.t1[1]
 
         if orb < nocc:
-
             T[s1:f1] += 0.5*lib.einsum('kac,ck->a',t2_1[:,orb,:,:], t1_2.T,optimize = True)
             T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize = True)
             T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize = True)
-
             T[s1:f1] -= t1_3[orb,:]
 
         else:
@@ -2272,9 +2256,7 @@ def ip_compute_trans_moments(adc, orb):
 def get_trans_moments(adc):
 
     nmo  = adc.nmo
-
     T = []
-
     for orb in range(nmo):
 
             T_a = adc.compute_trans_moments(orb)
@@ -2296,19 +2278,18 @@ def analyze_eigenvector_ea(adc):
 
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
-    
-    U = np.array(adc.U)
-    
-    for I in range(U.shape[0]):
-        U1 = U[I, :n_singles]
-        U2 = U[I, n_singles:].reshape(nocc,nvir,nvir)
+    U = adc.U
+
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nocc,nvir,nvir)
         U1dotU1 = np.dot(U1, U1) 
         U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
        
-        U_sq = U[I,:].copy()**2
+        U_sq = U[:,I].copy()**2
         ind_idx = np.argsort(-U_sq)
         U_sq = U_sq[ind_idx] 
-        U_sorted = U[I,ind_idx].copy()
+        U_sorted = U[ind_idx,I].copy()
                    
         U_sorted = U_sorted[U_sq > evec_print_tol**2]
         ind_idx = ind_idx[U_sq > evec_print_tol**2]
@@ -2362,7 +2343,6 @@ def analyze_eigenvector_ea(adc):
         logger.info(adc, "\n*************************************************************\n")
  
 
-
 def analyze_eigenvector_ip(adc):
     
     nocc = adc._nocc
@@ -2371,22 +2351,22 @@ def analyze_eigenvector_ip(adc):
     n_singles = nocc
     n_doubles = nvir * nocc * nocc
     evec_print_tol = adc.evec_print_tol
+    U = adc.U
     
     logger.info(adc, "Number of occupied orbitals = %d", nocc)
     logger.info(adc, "Number of virtual orbitals =  %d", nvir)
     logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
-    U = np.array(adc.U)  
   
-    for I in range(U.shape[0]):
-        U1 = U[I, :n_singles]
-        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nvir,nocc,nocc)
         U1dotU1 = np.dot(U1, U1) 
         U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
        
-        U_sq = U[I,:].copy()**2
+        U_sq = U[:,I].copy()**2
         ind_idx = np.argsort(-U_sq)
         U_sq = U_sq[ind_idx] 
-        U_sorted = U[I,ind_idx].copy()
+        U_sorted = U[ind_idx,I].copy()
         
         U_sorted = U_sorted[U_sq > evec_print_tol**2]
         ind_idx = ind_idx[U_sq > evec_print_tol**2]
@@ -2443,20 +2423,16 @@ def analyze_spec_factor(adc):
 
     X = adc.X
     X_2 = (X.copy()**2)*2
-    #thresh = 0.000000001
-    thresh = adc.spec_thresh
+    thresh = adc.spec_thresh_print_tol
 
-
-    logger.info(adc, "Print spectroscopic factors > %E\n", adc.spec_thresh)
+    logger.info(adc, "Print spectroscopic factors > %E\n", adc.spec_thresh_print_tol)
 
     for i in range(X_2.shape[1]):
 
-        #logger.info(adc, 'Root %d', i)
         logger.info(adc,'%s | root %d \n',adc.method ,i)
 
         sort = np.argsort(-X_2[:,i])
         X_2_row = X_2[:,i]
-
         X_2_row = X_2_row[sort]
         
         if adc.mol.symmetry == False:
@@ -2476,14 +2452,10 @@ def analyze_spec_factor(adc):
             logger.info(adc, '     %3.d          %10.8f                %s', index_mo[c], spec_Contribution[c], sym[c])
 
         logger.info(adc, '\nPartial spec. Factor sum = %10.8f', np.sum(spec_Contribution))
-
         logger.info(adc, "\n*************************************************************\n")
 
 
-
 def renormalize_eigenvectors_ea(adc, nroots=1):
-
-    U = np.array(adc.U)
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -2491,20 +2463,18 @@ def renormalize_eigenvectors_ea(adc, nroots=1):
     n_singles = nvir
     n_doubles = nocc * nvir * nvir
 
-    U = U.reshape(nroots,-1)
+    U = adc.U.reshape(-1,nroots)
 
-    for I in range(U.shape[0]):
-        U1 = U[I, :n_singles]
-        U2 = U[I, n_singles:].reshape(nocc,nvir,nvir)
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nocc,nvir,nvir)
         UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-        U[I,:] /= np.sqrt(UdotU)
+        U[:,I] /= np.sqrt(UdotU)
     
     return U
 
 
 def renormalize_eigenvectors_ip(adc, nroots=1):
-
-    U = np.array(adc.U)
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -2512,13 +2482,13 @@ def renormalize_eigenvectors_ip(adc, nroots=1):
     n_singles = nocc
     n_doubles = nvir * nocc * nocc
 
-    U = U.reshape(nroots,-1)
+    U = adc.U.reshape(-1,nroots)
 
-    for I in range(U.shape[0]):
-        U1 = U[I, :n_singles]
-        U2 = U[I, n_singles:].reshape(nvir,nocc,nocc)
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nvir,nocc,nocc)
         UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-        U[I,:] /= np.sqrt(UdotU)
+        U[:,I] /= np.sqrt(UdotU)
 
     return U
 
@@ -2530,7 +2500,7 @@ def get_properties(adc, nroots=1):
 
     #Spectroscopic amplitudes
     U = adc.renormalize_eigenvectors(nroots)
-    X = np.dot(T, U.T).reshape(-1, nroots)
+    X = np.dot(T, U).reshape(-1, nroots)
 
     #Spectroscopic factors
     P = 2.0*lib.einsum("pi,pi->i", X, X)
@@ -2602,7 +2572,7 @@ class RADCEA(RADC):
         self.P = None
         self.X = None
         self.evec_print_tol = adc.evec_print_tol
-        self.spec_thresh = adc.spec_thresh
+        self.spec_thresh_print_tol = adc.spec_thresh_print_tol
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy', 'max_memory', 't1', 'max_space', 't2', 'max_cycle'))
 
@@ -2619,7 +2589,7 @@ class RADCEA(RADC):
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector_ea
     analyze = analyze
-    compute_dyson_orb = compute_dyson_orb
+    compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
        if diag is None :
@@ -2711,7 +2681,7 @@ class RADCIP(RADC):
         self.P = None
         self.X = None
         self.evec_print_tol = adc.evec_print_tol
-        self.spec_thresh = adc.spec_thresh
+        self.spec_thresh_print_tol = adc.spec_thresh_print_tol
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -2728,7 +2698,7 @@ class RADCIP(RADC):
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector_ip
     analyze = analyze
-    compute_dyson_orb = compute_dyson_orb
+    compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
