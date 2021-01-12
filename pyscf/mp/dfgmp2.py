@@ -52,9 +52,9 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         t2 = None
 
     orbspin = eris.orbspin
-    Lova = np.empty((naux, nocc*nvir))
+    Lova = np.empty((naux, nocc*nvir), dtype=mo_coeff.dtype)
     if orbspin is None:
-        Lovb = np.empty((naux, nocc*nvir))
+        Lovb = np.empty((naux, nocc*nvir), dtype=mo_coeff.dtype)
 
     p1 = 0
     for qova, qovb in mp.loop_ao2mo(mo_coeff, nocc, orbspin):
@@ -69,55 +69,79 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     emp2 = 0
     for i in range(nocc):
+        gi = np.dot(Lova[:,i*nvir:(i+1)*nvir].T, Lova)
         if orbspin is None:
-            buf  = np.dot(Lova[:,i*nvir:(i+1)*nvir].T, Lova)
-            buf += np.dot(Lovb[:,i*nvir:(i+1)*nvir].T, Lovb)
-            buf += np.dot(Lova[:,i*nvir:(i+1)*nvir].T, Lovb)
-            buf += np.dot(Lovb[:,i*nvir:(i+1)*nvir].T, Lova)
-        else:
-            buf = np.dot(Lova[:,i*nvir:(i+1)*nvir].T, Lova)
-        gi = np.array(buf, copy=False).reshape(nvir,nocc,nvir)
+            gi += np.dot(Lovb[:,i*nvir:(i+1)*nvir].T, Lovb)
+            gi += np.dot(Lova[:,i*nvir:(i+1)*nvir].T, Lovb)
+            gi += np.dot(Lovb[:,i*nvir:(i+1)*nvir].T, Lova)
+        gi = gi.reshape(nvir,nocc,nvir)
         gi = gi.transpose(1,0,2) - gi.transpose(1,2,0)
-        t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
+        t2i = np.conj(gi/lib.direct_sum('jb+a->jba', eia, eia[i]))
         emp2 += np.einsum('jab,jab', t2i, gi) * .25
         if with_t2:
             t2[i] = t2i
-
-    return emp2, t2
+    return emp2.real, t2
 
 
 class DFGMP2(dfmp2.DFMP2):
     def loop_ao2mo(self, mo_coeff, nocc, orbspin):
         nao, nmo = mo_coeff.shape
+        complex_orb = mo_coeff.dtype == np.complex
         if orbspin is None:
-            moa = np.asarray(mo_coeff[:nao//2], order='F')
-            mob = np.asarray(mo_coeff[nao//2:], order='F')
+            moa = mo_coeff[:nao//2]
+            mob = mo_coeff[nao//2:]
         else:
-            moa = np.asarray(mo_coeff[:nao//2]+mo_coeff[nao//2:], order='F')
+            moa = mo_coeff[:nao//2] + mo_coeff[nao//2:]
+
+        if complex_orb:
+            moa_RR = moa.real
+            moa_II = moa.imag
+            moa_RI = np.concatenate((moa.real[:,:nocc], moa.imag[:,nocc:]), axis=1)
+            moa_IR = np.concatenate((moa.imag[:,:nocc], moa.real[:,nocc:]), axis=1)
+            if orbspin is None:
+                mob_RR = mob.real
+                mob_II = mob.imag
+                mob_RI = np.concatenate((mob.real[:,:nocc], mob.imag[:,nocc:]), axis=1)
+                mob_IR = np.concatenate((mob.imag[:,:nocc], mob.real[:,nocc:]), axis=1)
 
         ijslice = (0, nocc, nocc, nmo)
         Lova = Lovb = None
+        if complex_orb:
+            Lova_RR = Lova_II = Lova_RI = Lova_IR = None
+            Lovb_RR = Lovb_II = Lovb_RI = Lovb_IR = None
         with_df = self.with_df
 
         nvir = nmo - nocc
         naux = with_df.get_naoaux()
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.9-mem_now)
+        fac = 1
+        if complex_orb:
+            fac = 6
         if orbspin is None:
-            fac = 2
-        else:
-            fac = 1
+            fac *= 2
         blksize = int(min(naux, max(with_df.blockdim,
                                     (max_memory*1e6/8-nocc*nvir**2*2)/(fac*nocc*nvir))))
-        if orbspin is None:
-            for eri1 in with_df.loop(blksize=blksize):
+
+        for eri1 in with_df.loop(blksize=blksize):
+            if complex_orb:
+                Lova_RR = _ao2mo.nr_e2(eri1, moa_RR, ijslice, aosym='s2', out=Lova_RR)
+                Lova_II = _ao2mo.nr_e2(eri1, moa_II, ijslice, aosym='s2', out=Lova_II)
+                Lova_RI = _ao2mo.nr_e2(eri1, moa_RI, ijslice, aosym='s2', out=Lova_RI)
+                Lova_IR = _ao2mo.nr_e2(eri1, moa_IR, ijslice, aosym='s2', out=Lova_IR)
+                Lova = Lova_RR + Lova_II + 1j * (Lova_RI - Lova_IR)
+            else:
                 Lova = _ao2mo.nr_e2(eri1, moa, ijslice, aosym='s2', out=Lova)
-                Lovb = _ao2mo.nr_e2(eri1, mob, ijslice, aosym='s2', out=Lovb)
-                yield Lova, Lovb
-        else:
-            for eri1 in with_df.loop(blksize=blksize):
-                Lova = _ao2mo.nr_e2(eri1, moa, ijslice, aosym='s2', out=Lova)
-                yield Lova, None
+            if orbspin is None:
+                if complex_orb:
+                    Lovb_RR = _ao2mo.nr_e2(eri1, mob_RR, ijslice, aosym='s2', out=Lovb_RR)
+                    Lovb_II = _ao2mo.nr_e2(eri1, mob_II, ijslice, aosym='s2', out=Lovb_II)
+                    Lovb_RI = _ao2mo.nr_e2(eri1, mob_RI, ijslice, aosym='s2', out=Lovb_RI)
+                    Lovb_IR = _ao2mo.nr_e2(eri1, mob_IR, ijslice, aosym='s2', out=Lovb_IR)
+                    Lovb = Lovb_RR + Lovb_II + 1j * (Lovb_RI - Lovb_IR)
+                else:
+                    Lovb = _ao2mo.nr_e2(eri1, mob, ijslice, aosym='s2', out=Lovb)
+            yield Lova, Lovb
 
     def ao2mo(self, mo_coeff=None):
         eris = gmp2._PhysicistsERIs()
@@ -164,4 +188,12 @@ if __name__ == "__main__":
 
     mf = scf.RHF(mol).density_fit().run()
     mymp = mp.GMP2(mf)
+    mymp.kernel()
+
+    mf = scf.GHF(mol)
+    dm = mf.get_init_guess() + 0j
+    dm[0,:] += .1j
+    dm[:,0] -= .1j
+    mf.kernel(dm0=dm)
+    mymp = DFGMP2(mf)
     mymp.kernel()
