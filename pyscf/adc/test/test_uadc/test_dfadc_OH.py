@@ -23,7 +23,6 @@ from pyscf import scf
 from pyscf import adc
 from pyscf import df
 
-
 r = 0.969286393
 mol = gto.Mole()
 mol.atom = [
@@ -64,6 +63,8 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_dfadc3(self):
   
+        mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
+        mf.kernel()
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
         myadc.method = "adc(3)"
@@ -81,8 +82,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.77604385, 6)
         self.assertAlmostEqual(p[3], 0.20823964, 6)
 
+
     def test_ip_dfadc3_dif_aux_basis(self):
-  
+
+        mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
+        mf.kernel()
         myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
         myadc.max_memory = 2
         myadc.method = "adc(3)"
@@ -101,6 +105,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.58692581, 6)
         self.assertAlmostEqual(p[2], 0.35111056, 6)
       
+
     def test_hf_dfadc3_ip(self):
   
         mf = scf.UHF(mol).run()
