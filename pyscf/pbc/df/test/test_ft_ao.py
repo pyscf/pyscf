@@ -212,12 +212,65 @@ class KnowValues(unittest.TestCase):
         kpti, kptj = kpts = numpy.random.random((2,3))
         Gv = cell.get_Gv([11]*3)
         q = numpy.random.random(3)
-        dat = ft_ao._ft_aopair_kpts(cell, Gv, q=q, kptjs=kpts)
+        dat = ft_ao.ft_aopair_kpts(cell, Gv, q=q, kptjs=kpts)
         self.assertAlmostEqual(finger(dat[0]), (2.3753953914129382-2.5365192689115088j), 9)
         self.assertAlmostEqual(finger(dat[1]), (2.4951510097641840-3.1990956672116355j), 9)
         dat = ft_ao.ft_aopair(cell, Gv)
         self.assertAlmostEqual(finger(dat), (1.2534723618134684+1.830086071817564j), 9)
 
+    def test_ft_aoao1(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 5
+        n = 15
+        cell.mesh = numpy.array([n,n,n])
+        cell.atom = '''C    1.3    .2       .3
+                       C     .1    .1      1.1
+                       '''
+        cell.basis = {'C': [[1, (0.6, 1)]]}
+        cell.unit = 'B'
+        cell.build(0,0)
+
+        ao2 = ft_ao.ft_aopair(cell, cell.Gv)
+        nao = cell.nao_nr()
+        coords = cell.get_uniform_grids()
+        aoR = cell.pbc_eval_gto('GTOval', coords)
+        aoR2 = numpy.einsum('ki,kj->kij', aoR.conj(), aoR)
+        ngrids = aoR.shape[0]
+
+        ao2ref = [tools.fft(aoR2[:,i,j], cell.mesh) * cell.vol/ngrids
+                  for i in range(nao) for j in range(nao)]
+        ao2ref = numpy.array(ao2ref).reshape(6,6,-1).transpose(2,0,1)
+        self.assertAlmostEqual(abs(ao2ref - ao2).max(), 0, 6)
+
+        aoG = ft_ao.ft_ao(cell, cell.Gv)
+        aoref = [tools.fft(aoR[:,i], cell.mesh) * cell.vol/ngrids
+                 for i in range(nao)]
+        self.assertAlmostEqual(abs(numpy.array(aoref).T - aoG).max(), 0, 6)
+
+    def test_ft_aopair_bvk(self):
+        from pyscf.pbc.tools import k2gamma
+        n = 2
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 4
+        cell.mesh = numpy.array([n,n,n])
+        cell.atom = '''C    1.3    .2       .3
+                       C     .1    .1      1.1
+                       '''
+        cell.basis = 'ccpvdz'
+        cell.unit = 'B'
+        cell.build()
+
+        kpts = cell.make_kpts([2,2,2])
+        Gv, Gvbase, kws = cell.get_Gv_weights()
+        b = cell.reciprocal_vectors()
+        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
+        bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+
+        ref = ft_ao.ft_aopair_kpts(cell, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase, kptjs=kpts)
+        aopair = ft_ao.ft_aopair_kpts(cell, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase,
+                                      kptjs=kpts, bvk_kmesh=bvk_kmesh)
+        self.assertAlmostEqual(abs(ref - aopair).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(aopair), (-5.735639500461687-12.425151458809875j), 8)
 
 if __name__ == '__main__':
     print('Full Tests for ft_ao')

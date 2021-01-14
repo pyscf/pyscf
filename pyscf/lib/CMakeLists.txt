@@ -89,7 +89,7 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v4.0.6
+    GIT_TAG v4.0.7
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
@@ -139,6 +139,7 @@ add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
 add_subdirectory(semiempirical)
+add_subdirectory(agf2)
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)

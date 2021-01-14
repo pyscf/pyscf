@@ -1098,8 +1098,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
     if s is None: s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
 
-    c = orth.restore_ao_character(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_method, s=s)
     c_inv = numpy.dot(orth_coeff.conj().T, s)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = reduce(numpy.dot, (c_inv, dm, c_inv.T.conj()))

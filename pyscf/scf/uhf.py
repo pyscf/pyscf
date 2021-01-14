@@ -572,8 +572,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     log = logger.new_logger(mol, verbose)
     if isinstance(dm_ao, numpy.ndarray) and dm_ao.ndim == 2:
         dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
-    c = orth.restore_ao_character(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_method, s=s)
     c_inv = numpy.dot(orth_coeff.conj().T, s)
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.conj().T))
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.conj().T))
@@ -591,8 +590,7 @@ def mulliken_meta_spin(mol, dm_ao, verbose=logger.DEBUG,
     log = logger.new_logger(mol, verbose)
     if isinstance(dm_ao, numpy.ndarray) and dm_ao.ndim == 2:
         dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
-    c = orth.restore_ao_character(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_method, s=s)
     c_inv = numpy.dot(orth_coeff.conj().T, s)
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.conj().T))
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.conj().T))

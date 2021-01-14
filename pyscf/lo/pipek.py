@@ -84,9 +84,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
             proj[i] = (csc + csc.conj().T) * .5
 
     elif method in ('lowdin', 'meta-lowdin'):
-        c = orth.restore_ao_character(mol, 'ANO')
-        #csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth_local_ao_coeff))
-        csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth.orth_ao(mol, method, c, s=s)))
+        csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth.orth_ao(mol, method, 'ANO', s=s)))
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
             proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].conj().T)
 
